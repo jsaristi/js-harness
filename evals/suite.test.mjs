@@ -119,18 +119,20 @@ test('--summary reads a recorded run: it takes --name and nothing else', () => {
 // Made up for these tests: the commit of the checkout whose `js-harness init` lays out the workspace.
 const COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const CHECKOUT = path.join('/', 'checkout');
-const STACK = { claude: '2.1.284 (Claude Code)', gentleAi: '2.4.0', engram: '2.1.0', engramPlugin: '0.1.5', codegraph: '1.6.2', jsHarness: COMMIT };
+const STACK = { claude: '2.1.284 (Claude Code)', engram: '2.1.0', engramPlugin: '0.1.5', codegraph: '1.6.2', jsHarness: COMMIT };
 const RUN = { model: EVAL_MODEL, permissionMode: 'bypassPermissions', stack: STACK };
 
 test('a resumed run that differs in a version, the model or the permission mode is named change by change', () => {
   assert.deepEqual(diffRun(RUN, { ...RUN, stack: { ...STACK } }), []);
   assert.deepEqual(diffRun(RUN, { ...RUN, stack: { ...STACK, engramPlugin: '0.1.6' } }), [{ field: 'engram plugin', recorded: '0.1.5', current: '0.1.6' }]);
-  assert.deepEqual(diffRun(RUN, { ...RUN, permissionMode: 'acceptEdits', stack: { ...STACK, claude: '2.2.0 (Claude Code)', gentleAi: null } }), [
+  assert.deepEqual(diffRun(RUN, { ...RUN, permissionMode: 'acceptEdits', stack: { ...STACK, claude: '2.2.0 (Claude Code)', engram: null } }), [
     { field: 'claude', recorded: '2.1.284 (Claude Code)', current: '2.2.0 (Claude Code)' },
-    { field: 'gentle-ai', recorded: '2.4.0', current: null },
+    { field: 'engram', recorded: '2.1.0', current: null },
     { field: 'permission mode', recorded: 'bypassPermissions', current: 'acceptEdits' },
   ]);
   assert.deepEqual(diffRun({ ...RUN, stack: { ...STACK, engram: null } }, { ...RUN, stack: { ...STACK, engram: null } }), [], 'an unreadable version is the same unreadable version');
+  // F8 S11: a run recorded with gentle-ai in its stack resumes on one without it, since gentle-ai left the stack.
+  assert.deepEqual(diffRun({ ...RUN, stack: { ...STACK, gentleAi: '2.4.0' } }, RUN), []);
   assert.deepEqual(diffRun(RUN, { ...RUN, model: 'claude-other' }), [{ field: 'model', recorded: EVAL_MODEL, current: 'claude-other' }]);
 });
 
@@ -154,14 +156,14 @@ test('a resumed run on another codegraph or another js-harness commit is named, 
 /** A fake machine for the stack probes: a home with the plugin record, and a `spawn` that answers `<tool> version`,
  * and git's questions about the checkout: `commit` for `rev-parse HEAD` (null: git fails) and `changes` for
  * `status` (null: git fails). */
-function stackMachine({ plugin = '0.1.5', gentleAi = 'gentle-ai 2.4.0', engram = 'engram v2.1.0', codegraph = '1.6.2', commit = COMMIT, changes = '' } = {}) {
+function stackMachine({ plugin = '0.1.5', engram = 'engram v2.1.0', codegraph = '1.6.2', commit = COMMIT, changes = '' } = {}) {
   const home = tmp('stack-home');
   if (plugin !== null) write(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'engram@engram': [{ scope: 'user', version: plugin }], 'codex@openai-codex': [{ version: '9.9.9' }] } }));
   const calls = [];
   const spawn = (command, args) => {
     calls.push([command, args]);
     const name = String(command).split(' ')[0];
-    const text = name === 'git' ? (args.includes('rev-parse') ? (commit === null ? null : `${commit}`) : changes) : { 'gentle-ai': gentleAi, engram, codegraph }[name];
+    const text = name === 'git' ? (args.includes('rev-parse') ? (commit === null ? null : `${commit}`) : changes) : { engram, codegraph }[name];
     return text === undefined ? { error: Object.assign(new Error('ENOENT'), { code: 'ENOENT' }) } : text === null ? { status: 1, stdout: '' } : { status: 0, stdout: text === '' ? '' : `${text}\n` };
   };
   return { home, spawn, calls };
@@ -170,11 +172,11 @@ function stackMachine({ plugin = '0.1.5', gentleAi = 'gentle-ai 2.4.0', engram =
 /** The tools a stack probe asked, in order. */
 const asked = (machine) => machine.calls.map(([command, args]) => (command === 'git' ? `git ${args.filter((arg) => !arg.startsWith('-') && arg !== CHECKOUT)[0]}` : command));
 
-test('the stack is the CLI, gentle-ai, engram, the engram plugin, codegraph and the js-harness commit, each read where it is written down', () => {
+test('the stack is the CLI, engram, the engram plugin, codegraph and the js-harness commit, each read where it is written down', () => {
   const machine = stackMachine();
   const stack = readStack({ claude: CLAUDE, home: machine.home, spawn: machine.spawn, platform: 'linux', root: CHECKOUT, probeClaude: (command) => (command === CLAUDE ? '2.1.284 (Claude Code)' : null) });
   assert.deepEqual(stack, STACK);
-  assert.deepEqual(asked(machine), ['gentle-ai', 'engram', 'codegraph', 'git rev-parse', 'git status'], 'no other tool is asked');
+  assert.deepEqual(asked(machine), ['engram', 'codegraph', 'git rev-parse', 'git status'], 'no other tool is asked');
   const git = machine.calls.filter(([command]) => command === 'git').map(([, args]) => args);
   assert.ok(git.every((args) => args[0] === '-C' && args[1] === CHECKOUT), 'git is asked about the checkout whose init lays out the workspace');
   assert.ok(git[1].includes('--untracked-files=no'), 'a file git does not track is not what init runs');
@@ -200,8 +202,8 @@ test('by default the js-harness commit is the one of this checkout', () => {
 });
 
 test('a version that cannot be read is null, never a guess', () => {
-  const missing = stackMachine({ plugin: null, gentleAi: null, engram: 'no version here', codegraph: null, commit: null });
-  assert.deepEqual(readStack({ claude: CLAUDE, home: missing.home, spawn: missing.spawn, platform: 'linux', root: CHECKOUT, probeClaude: () => null }), { claude: null, gentleAi: null, engram: null, engramPlugin: null, codegraph: null, jsHarness: null });
+  const missing = stackMachine({ plugin: null, engram: 'no version here', codegraph: null, commit: null });
+  assert.deepEqual(readStack({ claude: CLAUDE, home: missing.home, spawn: missing.spawn, platform: 'linux', root: CHECKOUT, probeClaude: () => null }), { claude: null, engram: null, engramPlugin: null, codegraph: null, jsHarness: null });
   const broken = stackMachine();
   write(path.join(broken.home, '.claude', 'plugins', 'installed_plugins.json'), 'not json');
   assert.equal(readStack({ claude: CLAUDE, home: broken.home, spawn: broken.spawn, platform: 'linux', probeClaude: () => null }).engramPlugin, null);
@@ -583,10 +585,10 @@ test('a resumed run whose stack or permission mode changed refuses to continue, 
   assert.equal(await suiteMain(runArgv(m), ENV, cut.deps), 1);
   const before = fs.readFileSync(resultsFile(m), 'utf8');
 
-  const upgraded = depsFor(m, { readStack: () => ({ ...STACK, engramPlugin: '0.1.6', gentleAi: null }) });
+  const upgraded = depsFor(m, { readStack: () => ({ ...STACK, engramPlugin: '0.1.6', engram: null }) });
   assert.equal(await suiteMain(runArgv(m), ENV, upgraded.deps), 1);
   assert.match(upgraded.io.err, /engram plugin: 0\.1\.5 -> 0\.1\.6/);
-  assert.match(upgraded.io.err, /gentle-ai: 2\.4\.0 -> unknown/);
+  assert.match(upgraded.io.err, /engram: 2\.1\.0 -> unknown/);
   assert.match(upgraded.io.err, /--name/, 'it says to use a new name for a new run');
   assert.deepEqual(upgraded.deps.runTrial.asked, []);
 
@@ -847,7 +849,7 @@ test('--summary takes --agent too, so a recorded Codex run can be read', () => {
   assert.throws(() => parseArgs(['--agent', 'codex', '--summary', '--name', 'screen', '--codex', CODEX], { taskIds: TASKS }), usageError(/--summary .*--codex/));
 });
 
-const CODEX_STACK = { codex: 'codex-cli 0.159.1', gentleAi: '2.4.0', engram: '2.1.0', codegraph: '1.6.2', jsHarness: COMMIT };
+const CODEX_STACK = { codex: 'codex-cli 0.159.1', engram: '2.1.0', codegraph: '1.6.2', jsHarness: COMMIT };
 const CODEX_RUN = { agent: 'codex', model: 'gpt-6.1-sol', permissionMode: 'dangerously-bypass-approvals-and-sandbox', stack: CODEX_STACK };
 
 test('a resumed Codex run that differs in the agent, the model or a version is named change by change', () => {
@@ -863,7 +865,7 @@ test('a resumed Codex run that differs in the agent, the model or a version is n
   assert.deepEqual(diffRun(RUN, { ...RUN, agent: 'claude' }), [], 'and naming it changes nothing');
 });
 
-test('the Codex stack is the CLI asked under a sandbox environment in a throwaway home of the work root, with gentle-ai, engram, codegraph and the js-harness commit as for Claude Code', async () => {
+test('the Codex stack is the CLI asked under a sandbox environment in a throwaway home of the work root, with engram, codegraph and the js-harness commit as for Claude Code', async () => {
   const tools = stackMachine();
   const workRoot = path.join(tmp('stack-work'), 'not-there-yet');
   const probes = [];
@@ -877,7 +879,7 @@ test('the Codex stack is the CLI asked under a sandbox environment in a throwawa
     allocatePort: async () => 41000, releasePort: (port) => released.push(port),
   });
   assert.deepEqual(stack, CODEX_STACK);
-  assert.deepEqual(asked(tools), ['gentle-ai', 'engram', 'codegraph', 'git rev-parse', 'git status'], 'no other tool is asked');
+  assert.deepEqual(asked(tools), ['engram', 'codegraph', 'git rev-parse', 'git status'], 'no other tool is asked');
   assert.equal(probes.length, 1);
   const [{ command, env, there, login }] = probes;
   assert.equal(command, CODEX);
@@ -890,11 +892,11 @@ test('the Codex stack is the CLI asked under a sandbox environment in a throwawa
 });
 
 test('a Codex version that cannot be read is null, and the throwaway home and its port are given back whatever the probe does', async () => {
-  const tools = stackMachine({ gentleAi: null, engram: 'no version here', codegraph: 'no version here', changes: null });
+  const tools = stackMachine({ engram: 'no version here', codegraph: 'no version here', changes: null });
   const workRoot = tmp('stack-work');
   const released = [];
   const ports = { allocatePort: async () => 41001, releasePort: (port) => released.push(port) };
-  assert.deepEqual(await readCodexStack({ codex: CODEX, workRoot, spawn: tools.spawn, platform: 'linux', probeCodex: () => null, ...ports }), { codex: null, gentleAi: null, engram: null, codegraph: null, jsHarness: null });
+  assert.deepEqual(await readCodexStack({ codex: CODEX, workRoot, spawn: tools.spawn, platform: 'linux', probeCodex: () => null, ...ports }), { codex: null, engram: null, codegraph: null, jsHarness: null });
   await assert.rejects(readCodexStack({ codex: CODEX, workRoot, spawn: tools.spawn, platform: 'linux', probeCodex: () => { throw new Error('the probe exploded'); }, ...ports }), /the probe exploded/);
   assert.deepEqual(fs.readdirSync(workRoot), []);
   assert.deepEqual(released, [41001, 41001]);

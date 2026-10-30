@@ -55,6 +55,15 @@ test('minimal-with is taken only for what minimal\'s flags let in, and says why 
   assert.throws(() => parseArm('minimal-with-mcp-a_mcp-b', 'claude'), (err) => err instanceof ArmError && /one component/.test(err.message));
 });
 
+test('rule-<id> is a family of either agent: current-without takes one rule\'s text out, minimal-with refuses it', () => {
+  for (const agent of ['claude', 'codex']) {
+    assert.deepEqual(parseArm('current-without-rule-questions-one-place', agent), { base: 'current', direction: 'without', components: ['rule-questions-one-place'] });
+    assert.deepEqual(parseArm('current-without-rule-a_rule-b', agent).components, ['rule-a', 'rule-b']);
+    assert.match('current-without-rule-a_rule-b', RUNNER_NAME);
+  }
+  assert.throws(() => parseArm('minimal-with-rule-questions-one-place', 'claude'), (err) => err instanceof ArmError && /holds no rule's text/.test(err.message));
+});
+
 test('every arm name the list offers is a name the runner accepts as a trial key and a file name', () => {
   for (const agent of ['claude', 'codex']) {
     const names = armNames(agent);

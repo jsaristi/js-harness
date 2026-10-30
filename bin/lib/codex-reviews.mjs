@@ -10,6 +10,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { gitDirs } from './project.mjs';
 import { endsUnterminated } from './jsonl-tail.mjs';
+import { lensCandidate } from './lens-candidate.mjs';
 
 export const CODEX_REVIEW_SCHEMA = 'js-harness.codex-review/v1';
 
@@ -89,6 +90,15 @@ export function readJsonLines(root, name, deps = {}) {
  * path. Throws when `root` is not inside a git repository: there is no honest place to write. */
 export function appendCodexReview(root, record, deps = {}) {
   return appendJsonLine(root, 'codex-reviews.jsonl', record, deps);
+}
+
+/** `record` with the subject hash of its range `base..head` (`./lens-candidate.mjs`), the identity the Claude lens
+ * records carry too, so a check covers with it only while that range still hashes so (odd/tasks/f8-s1-reviews.md, T4;
+ * diet section 10, item 6). The hash is asked of git itself, never of a caller's stand-in, since it is evidence; a
+ * range git cannot diff leaves the record as it was, and a record without one covers as records always did. */
+export function withSubjectHash(root, record) {
+  const candidate = lensCandidate(root, { base: record.base, head: record.head });
+  return candidate.error ? record : { ...record, subjectHash: candidate.subjectHash };
 }
 
 /** Every record in the file, oldest first. A missing file, a blank line or a line that is not a

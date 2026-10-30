@@ -1,13 +1,11 @@
-// The `init` engine: writes the committed per-project files (harness.json, AGENTS.md, the
-// pre-commit gate), runs `codegraph init`, and records everything in a project manifest so T3's
-// `uninstall` can restore the repo exactly — see odd/tasks/project-init.md, "T2 design". Like
-// manifest.mjs's install/sync engine, this stays pure-ish over injectable `deps`
-// (`spawn`/`platform`/`writeFile`/`rm`/`open`/`write`/`close`) so tests never touch a real home, a
-// real `codegraph`, or this repo itself — `rm` in particular lets a test make one specific removal
-// fail (a rollback, or the best-effort `.codegraph/` cleanup) without any OS-specific trick to
-// reproduce it. `open`/`write`/`close` are the manifest's own exclusive-create write, injected
-// separately from the general `writeFile` so a test (or `writeManifestAtomic` itself) can tell the
-// exclusive create failing apart from something failing after it succeeded — see there.
+// The `init` engine: writes the committed per-project files (harness.json, AGENTS.md, the pre-commit gate), runs
+// `codegraph init`, and records everything in a project manifest so T3's `uninstall` can restore the repo exactly — see
+// odd/tasks/project-init.md, "T2 design". Like manifest.mjs's install/sync engine, this stays pure-ish over injectable
+// `deps` (`spawn`/`platform`/`writeFile`/`rm`/`open`/`write`/`close`) so tests never touch a real home, a real
+// `codegraph`, or this repo itself — `rm` in particular lets a test make one specific removal fail (a rollback, or the
+// best-effort `.codegraph/` cleanup) without any OS-specific trick to reproduce it. `open`/`write`/`close` are the
+// manifest's own exclusive-create write, injected separately from the general `writeFile` so a test (or
+// `writeManifestAtomic` itself) can tell the exclusive create failing apart from something failing after it succeeded.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -15,18 +13,25 @@ import { spawnSync } from 'node:child_process';
 import { sha256, writeManifestAtomic } from './manifest.mjs';
 import { tools } from './stack.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './project-functions.mjs';
-import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, planFunctions, settingLabel } from './project-apply.mjs';
+import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, planFunctions, settingLabel, settingPending, valueAt } from './project-apply.mjs';
 import { EXCLUDED, addExclude, isValidExcludeRecord, undoExclude } from './project-exclude.mjs';
+import { FAILURES_TEMPLATE, TEMPLATE_BLOCK_MARK, agentsFile, claudeFile, renderBlock } from './project-template.mjs';
+import { localDay } from './flaky.mjs';
+import { addImport, oneFile } from './claude-import.mjs';
+
+export { FAILURES_TEMPLATE };
+export { staleManifestMessage, invalidHarnessJsonMessage, howToPinClause, cleanupClause } from './project-messages.mjs';
 
 /** The format of the project manifest this copy reads and writes. A manifest carries it once it holds what an
  * older copy cannot undo: format 1 its `settings`, which a copy older than the switches does not know, and
- * format 2 its `exclude`, the line of `.atl/` (./project-exclude.mjs). Such a copy deletes a manifest it does not
- * understand and leaves the rest behind, which is why a copy that reads a format greater than its own undoes
- * nothing. A copy already installed that knows no format cannot be made to refuse. */
-export const MANIFEST_FORMAT = 2;
+ * format 2 its `exclude`, the line of `.atl/` (./project-exclude.mjs), format 3 the style and the denies every clone
+ * holds (`SETTINGS_KEYS`, `format`). Such a copy deletes a manifest it does not understand and leaves the rest behind,
+ * which is why a copy that reads a format greater than its own undoes nothing. A copy already installed that knows no
+ * format cannot be made to refuse. */
+export const MANIFEST_FORMAT = 3;
 
 /** The format `manifest` needs for what it holds (`MANIFEST_FORMAT`), or `undefined` where any copy reads it. */
-const formatFor = (manifest) => (manifest.exclude ? 2 : manifest.settings ? 1 : undefined);
+const formatFor = (manifest) => Math.max(manifest.exclude ? 2 : 0, ...(manifest.settings ?? []).map((record) => SETTINGS_KEYS[record.key]?.format ?? 1), manifest.settings ? 1 : 0) || undefined;
 
 /** Resolves the git top-level of `cwd`, or `null` outside a git repository (missing `git`, a
  * non-zero exit, or any thrown spawn error all count as "not a repo" here). Callers must check
@@ -347,7 +352,7 @@ function resolveHookContainment(root, hookPath, gitBases = {}) {
 /** The clone's exclude file as git names it, `{ file }`, or `{ file, reason }` where it is not to be written: a link on
  * its way, or a real path outside the working tree and git dirs, would send the line to another file (Codex P2 on
  * dea129b..118f479). `file` is null where git names none. */
-function excludeFile(root, spawn) {
+export function excludeFile(root, spawn) {
   const file = resolveGitPath(root, 'info/exclude', spawn);
   if (!file) return { file: null, reason: 'git did not name the exclude file' };
   const gitBases = gitDirs(root, spawn);
@@ -357,62 +362,24 @@ function excludeFile(root, spawn) {
   return { file };
 }
 
-/** The base `AGENTS.md` template `init` writes when a project has none of its own: short (this
- * file loads on every turn — see "T2 design"), titled with the project's own folder name. Placeholder
- * prompts are left in angle brackets for the project to fill in. The harness's lines are in their marked block. */
-export function agentsTemplate(root) {
-  const name = path.basename(path.resolve(root));
-  const body = templateBlock();
-  return `<!-- Written by \`js-harness init\`. This file loads on every turn: keep it short. -->
-# ${name}
+/** The base `AGENTS.md` template `init` writes when a project has none of its own (`agentsFile`): with `split`, the
+ * reviewer's half of the harness's lines, since `CLAUDE.md` holds the rest (odd/tasks/f8-s3-split.md, S3); without it,
+ * the whole block, for a project whose own `CLAUDE.md` does not hold the harness's half. */
+export const agentsTemplate = (root, { split = true } = {}) => agentsFile(root, split ? agentsBlock() : templateBlock());
+/** The base `CLAUDE.md` template `init` writes beside it (`claudeFile`), with the half Claude works from. */
+export const claudeTemplate = () => claudeFile(claudeBlock());
+/** `text` with the harness's block rendered as `body`, the whole block unless given (`renderBlock`). */
+export const renderTemplateBlock = (text, body = templateBlock()) => renderBlock(text, body);
 
-## What this project is
-<what this project does, and who it is for, in one or two lines>
-
-## How it works
-<where the work lives: the code, the data, the documents>. The single command that checks a change:
-\`<command>\`.
-
-${templateBlockMark(body)}
-${body}${TEMPLATE_BLOCK_END}
-
-## Constraints
-- <a real constraint> — <the reason behind it>
-
-A constraint the gate must hold gets an id in docs/rules.json (\`js-harness rules\`).
-`;
-}
-
-/** The mark that ends the harness's block of `AGENTS.md`. */
-const TEMPLATE_BLOCK_END = '<!-- js-harness block end -->';
-/** The mark that opens it, carrying the hash of its lines: lines that no longer match it were edited. */
-const TEMPLATE_BLOCK_MARK = /^<!-- js-harness block ([0-9a-f]{12}): .*-->\r?$/m;
-/** The hash a block's mark carries: of its lines with LF line ends, so a checkout with CRLF ones reads as unedited. */
-const blockHash = (body) => sha256(body.replace(/\r\n/g, '\n')).slice(0, 12);
-const templateBlockMark = (body) => `<!-- js-harness block ${blockHash(body)}: sync renders the lines to the end mark again while they are unedited -->`;
-
-/** `text`, an `AGENTS.md`, with the harness's block rendered as this version writes it: `{ text, state }`. The state
- * is `rendered` when the block's lines matched the hash of its mark and differed from this version's, `current` when
- * they are this version's already, `edited` when they no longer match their mark (or the block has no end mark), and
- * `none` when the file has no block. Every line outside the block is kept, and the file's line ends with them. */
-export function renderTemplateBlock(text) {
-  const opened = TEMPLATE_BLOCK_MARK.exec(text);
-  if (opened === null) return { text, state: 'none' };
-  const after = opened.index + opened[0].length;
-  const from = after + (text.startsWith('\n', after) ? 1 : 0);
-  const to = text.indexOf(TEMPLATE_BLOCK_END, from);
-  if (to === -1 || blockHash(text.slice(from, to)) !== opened[1]) return { text, state: 'edited' };
-  const body = templateBlock();
-  if (text.slice(from, to).replace(/\r\n/g, '\n') === body) return { text, state: 'current' };
-  const lineEnd = text.includes('\r\n') ? '\r\n' : '\n';
-  const block = `${templateBlockMark(body)}\n${body}`.replace(/\n/g, lineEnd);
-  return { text: text.slice(0, opened.index) + block + text.slice(to), state: 'rendered' };
-}
-
-/** The harness's lines of the base `AGENTS.md` template: the ones that hold in any project, whose wording is the
- * owner's yes (odd/tasks/rule-hierarchy.md, T9). They sit in a marked block that `sync` renders again while the project
- * has not edited them (`renderTemplateBlock`, T16f). */
+/** The harness's lines that hold in any project, whose wording is the owner's yes (odd/tasks/rule-hierarchy.md, T9):
+ * the whole block, the two halves of the split as an `AGENTS.md` written before it holds them. They sit in a marked
+ * block that `sync` renders again while the project has not edited them (`renderTemplateBlock`, T16f). */
 export function templateBlock() {
+  return `${agentsBlock()}\n${claudeBlock()}`;
+}
+
+/** The half of the harness's lines a reviewer needs, the block of a split `AGENTS.md`: what good looks like. */
+export function agentsBlock() {
   return `## What good looks like
 Work here is done properly, not to comply: no shortcut; under the agreed protocols; nothing stated
 that was not checked; what is passed on is complete and true; and each mistake leaves a control, of
@@ -421,13 +388,16 @@ line of this file or a protocol.
 
 A finding arrives with the evidence that proves it, and every claim is checked, assumed or not known,
 as \`js-harness-protocols\` section 6 says.
-Where the Codex review is off (\`js-harness functions\`), gentle-ai's assessment decides when a change
-is reviewed.
+Where the Codex review is off (\`js-harness functions\`), the Claude lens review stays on: the merge
+door asks for its record before a change lands.
+`;
+}
 
-## Working with the owner
-The owner decides spend outside the plan, anything installed or changed on a machine, a product
-choice, what cannot be undone, a change of the plan or of its order, a new protocol, and a report
-published outside this project. Ask those one at a time, never while work runs, naming which it is, as \`rule:questions-one-place\` says.
+/** The half of the harness's lines Claude works from, the block of the `CLAUDE.md` `init` writes: working with the owner. */
+export function claudeBlock() {
+  return `## Working with the owner
+The owner decides what \`rule:owner-decisions\` lists (\`js-harness-protocols\` section 1). Ask those
+one at a time, never while work runs, naming which it is, as \`rule:questions-one-place\` says.
 Everything else is decided and its cost said, as \`js-harness-protocols\` section 1 says, and the work goes on.
 
 Near \`rule:context-pause\` of its window a session writes its state and keeps working; the host
@@ -442,30 +412,12 @@ first passes two readers that did not write it: one attacks its claims, one look
 missing. The owner gets the improved version, with what each reader changed and what stays
 unguaranteed.
 
+A moment's page is the one \`js-harness stretch\` or \`js-harness report\` makes from the records,
+never drawn by hand (\`rule:reports-spanish-visual\`).
+
 A reply ends in one of the five states of \`js-harness-protocols\` section 2.
 `;
 }
-
-/** The empty failures register `init` writes as `docs/FAILURES.md` when a project has none: what an entry is and how
- * one is written, with no class and no entry, since the classes are the project's own. `js-harness failures` and the
- * gate's `failures` row read it (`bin/lib/failures.mjs`); it parses with no fault. */
-export const FAILURES_TEMPLATE = `<!-- Written by \`js-harness init\`. -->
-# Failures
-
-What went wrong in this project: one entry per failure, with each time it was seen and the control
-that corrects it. A failure is work that went wrong in a way a control could prevent. A test that
-fails and is fixed inside its own task is not one: the gate is that control, working.
-
-A class is declared under "## Classes" as a list item: the id in backticks, then what it means. A
-failure is a "### <id>" entry under "## Entries", in the alphabetical order of the ids, with
-"- Class:" and one "- Seen:" line each time it happens, then the "- Control:" that corrects it. Its
-state is never written: \`js-harness failures\` computes it, and \`js-harness failures check
---settled\` exits 1 while an entry is not settled.
-
-## Classes
-
-## Entries
-`;
 
 /** The code `init` offers a project named `name`, its folder: the initials of its words, four at most, or the first two
  * letters of a name of one word, in capitals ("js-harness" is JH, "billing" BI); `null` for a name with no letter or
@@ -769,10 +721,10 @@ function codegraphStep(root, spawn, platform, actions) {
 }
 
 /** What the switches of the project at `root` ask of this clone (bin/lib/project-apply.mjs), read from its
- * working tree: `{ resolved, plan }`, or `{ errors }` when `harness.json` or its `"functions"` cannot be
- * read, which applies nothing. */
-function functionsPlan(root, spawn) {
-  const { errors, resolved } = functionsOf(harnessOfTree(root), workingTree(gitIn(root, spawn)));
+ * working tree, or `declared`, a preset's: `{ resolved, plan }`, or `{ errors }` when `harness.json` or its
+ * `"functions"` cannot be read, which applies nothing. */
+function functionsPlan(root, spawn, declared = null) {
+  const { errors, resolved } = functionsOf(declared ? { declared: { functions: declared } } : harnessOfTree(root), workingTree(gitIn(root, spawn)));
   if (errors.length > 0) return { errors };
   return { resolved, plan: planFunctions(resolved, { indexPresent: fs.existsSync(codegraphDirPath(root)) }) };
 }
@@ -814,8 +766,8 @@ function codegraphWhereWanted(root, spawn, platform, actions, functions) {
  * `clone` is the fresh-clone setup `sync` runs (T4 design): the same gate, codegraph and manifest,
  * but `harness.json` and an existing `AGENTS.md` are committed files, recorded as `kept` and never
  * written, so the manifest's `files` holds only what this clone wrote and `uninstall` there removes
- * only that. */
-function writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, clone = false) {
+ * only that. `preset` is the `"functions"` an `init --preset` writes into `harness.json` (F8 S11, L9). */
+function writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, { clone = false, preset = null, today = localDay() } = {}) {
   const createdPaths = [];
   const createdDirs = [];
   const reportedDirs = [];
@@ -828,7 +780,7 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     const actions = [];
     const files = [];
     // The switches are read before anything is written, from the project as it stands.
-    const functions = functionsPlan(root, spawn);
+    const functions = functionsPlan(root, spawn, preset);
     if (functions.errors) actions.push(functionsProblem(functions.errors));
 
     // harness.json: the pin — computed now (its content never depends on anything written after
@@ -838,7 +790,7 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     // (odd/tasks/session-title.md, S5): his answer of 2026-10-19, "la idea es que tenga el udentificador del proyecto".
     const harnessJsonPath = path.join(root, 'harness.json');
     const code = codeOfName(path.basename(root));
-    const harnessJsonContent = JSON.stringify({ version, ...(code !== null && { code }), reply: true }, null, 2) + '\n';
+    const harnessJsonContent = JSON.stringify({ version, ...(code !== null && { code }), reply: true, ...(preset && { functions: preset }) }, null, 2) + '\n';
     const harnessJsonRel = toRepoRelative(root, harnessJsonPath);
     const harnessJsonHash = sha256(harnessJsonContent);
     if (clone) {
@@ -850,22 +802,30 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
       actions.push(wrote(harnessJsonRel, harnessJsonHash));
     }
 
-    // AGENTS.md: only when the project has none of its own. `isOccupied` (not `fs.existsSync`)
-    // so a dangling symlink there is kept, not silently written through (T2d item 1).
+    // AGENTS.md only when the project has none of its own (`isOccupied`: a dangling link is kept, not written through,
+    // T2d item 1), and CLAUDE.md, the split of odd/tasks/f8-s3-split.md (S3), only when it has neither: one with its own
+    // CLAUDE.md gets the whole block in AGENTS.md, and one with its own AGENTS.md is moved to the split by the migration.
     const agentsPath = path.join(root, 'AGENTS.md');
     const agentsRel = toRepoRelative(root, agentsPath);
+    const claudePath = path.join(root, 'CLAUDE.md');
+    const claudeRel = toRepoRelative(root, claudePath);
+    const ownClaude = isOccupied(claudePath);
+    if (ownClaude) actions.push(kept(claudeRel, clone ? 'committed' : 'exists'));
     if (isOccupied(agentsPath)) {
       actions.push(kept(agentsRel, clone ? 'committed' : 'exists'));
     } else if (clone) {
       // T4 design: sync never creates an AGENTS.md (init does, once); a clone without one only reports it.
       actions.push({ kind: 'skip', path: agentsRel, reason: 'not in this clone; sync does not create one' });
     } else {
-      const content = agentsTemplate(root);
-      createdPaths.push(agentsPath);
-      writeFile(agentsPath, content, 'utf8');
-      const hash = sha256(content);
-      files.push({ path: agentsRel, sha256: hash });
-      actions.push(wrote(agentsRel, hash));
+      const written = [[agentsPath, agentsRel, agentsTemplate(root, { split: !ownClaude })]];
+      if (!ownClaude) written.push([claudePath, claudeRel, claudeTemplate()]);
+      for (const [target, rel, content] of written) {
+        createdPaths.push(target);
+        writeFile(target, content, 'utf8');
+        const hash = sha256(content);
+        files.push({ path: rel, sha256: hash });
+        actions.push(wrote(rel, hash));
+      }
     }
 
     // The failures register, empty, under the same terms as AGENTS.md: only when the project has none, and
@@ -936,6 +896,9 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     };
     if (settingsRecords.length > 0) manifest.settings = settingsRecords;
     if (exclude) manifest.exclude = exclude;
+    // The day the rules' controls are owed from (`coverageRecord`, ./project-rules-read.mjs), which no copy needs a
+    // format to keep or undo. Never in a clone: dated today, a project older than its rules would owe them all at once.
+    if (!clone) manifest.coverage = { baseline: today, release: version };
     if (formatFor(manifest)) manifest.format = formatFor(manifest);
 
     // T2c Codex P1 + R3-rollback-deletes-preexisting-manifest: `manifestFilePath` is guaranteed
@@ -948,11 +911,12 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     createdPaths.push(manifestFilePath);
     writeManifestAtomic(manifestFilePath, manifest, manifestDeps);
 
-    // harness.json: written last, only once the manifest that already lists it is safely on disk
-    // (T2e item 1). A failure here rolls back everything, the manifest included.
+    // harness.json last, once the manifest that lists it is on disk (T2e item 1): a failure here rolls everything back.
+    // Past any rollback, the project's own CLAUDE.md imports the AGENTS.md written here (odd/tasks/claude-md-block.md).
     if (!clone) {
       createdPaths.push(harnessJsonPath);
       writeFile(harnessJsonPath, harnessJsonContent, 'utf8');
+      if (ownClaude && files.some((file) => file.path === agentsRel)) actions.push(...addImport(root, { spawn, writeFile }));
     }
 
     return { code: 0, root, actions, manifest, manifestPath: manifestFilePath };
@@ -1064,6 +1028,8 @@ function alreadyInitialized(root, harnessJsonPath, manifestFilePath, spawn, plat
  * - `{ code: 0, root, actions, manifest, manifestPath }` — a fresh project: `actions` is in report
  *   order (`wrote`/`kept`/`ran`/`skip`/`problem`), `manifest` is exactly what was written to
  *   `manifestPath`.
+ * `deps.today`, a day written YYYY-MM-DD, is the coverage baseline a fresh project's manifest records (today on
+ * this machine's calendar when not given).
  * Throws `InitWriteError` when a write step fails after the first — see `writeProject` and
  * `alreadyInitialized`. */
 export function initProject(cwd, version, deps = {}) {
@@ -1100,7 +1066,7 @@ export function initProject(cwd, version, deps = {}) {
     return { code: 1, staleManifest: true, manifestPath: manifestFilePath };
   }
 
-  return writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps);
+  return writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, { preset: deps.functions, today: deps.today });
 }
 
 /** Resolves one `files`/`dirs` manifest entry back to its absolute path: repo-relative against
@@ -1111,7 +1077,7 @@ export function initProject(cwd, version, deps = {}) {
  * must not call this: an entry claiming `gitDir: true` with a non-absolute `path` would resolve
  * relative to `process.cwd()` here, which is exactly the escape `isValidManifestEntry` exists to
  * catch first. */
-function resolveManifestEntryPath(root, entry) {
+export function resolveManifestEntryPath(root, entry) {
   const segments = entry.path.split('/');
   return entry.gitDir ? path.resolve(segments.join(path.sep)) : path.join(root, ...segments);
 }
@@ -1121,7 +1087,7 @@ function resolveManifestEntryPath(root, entry) {
  * endings on checkout (`core.autocrlf`, a `.gitattributes` rule), but `init` itself only ever writes
  * LF (`PRE_COMMIT_HOOK`, `agentsTemplate`, harness.json's `JSON.stringify(...) + '\n'`), so the
  * recorded hash is always for LF content — never the reverse, so no other direction needs checking. */
-function matchesRecordedHash(content, expectedHash) {
+export function matchesRecordedHash(content, expectedHash) {
   if (sha256(content) === expectedHash) return true;
   return sha256(content.replace(/\r\n/g, '\n')) === expectedHash;
 }
@@ -1204,7 +1170,7 @@ function isValidManifestShape(manifest, root, gitBases) {
   if (manifest.scope !== undefined && manifest.scope !== 'functions') return false;
   if (manifest.settings !== undefined) {
     if (manifest.format === undefined || !Array.isArray(manifest.settings)) return false;
-    if (!manifest.settings.every(isValidSettingsRecord)) return false;
+    if (!manifest.settings.every((record) => isValidSettingsRecord(record) && (SETTINGS_KEYS[record.key].format ?? 1) <= manifest.format)) return false;
   }
   // The line of `.atl/`, with the format that says a copy knows it; its file is asked of git again, never read from here.
   if (manifest.exclude !== undefined && !(manifest.format >= 2 && isValidExcludeRecord(manifest.exclude))) return false;
@@ -1501,41 +1467,6 @@ export function uninstallProject(cwd, deps = {}) {
 
 // --- T4: `sync` in a project (see odd/tasks/project-init.md, "T4 design") ---
 
-/** The refusal `init` and `sync` share for a manifest that survives without `harness.json` (T2c item 1):
- * this clone was initialized before, then lost `harness.json`, so neither builds on the stale record. */
-export function staleManifestMessage(manifestPath) {
-  return (
-    `this clone was initialized before (manifest: ${manifestPath}) but harness.json is missing: ` +
-    'restore harness.json, or run js-harness uninstall first'
-  );
-}
-
-/** The refusal `sync` and `status` share for a `harness.json` whose pin cannot be used (T4 design, T5
- * design): the file and the reason `readPin` gave, without a claim about writes — `sync` adds its own. */
-export function invalidHarnessJsonMessage(harnessJsonPath, reason) {
-  return `cannot read the pin from ${harnessJsonPath}: ${reason}`;
-}
-
-/** How a project with no pin gets one, the clause `status` and `sync` share (install-update T6): the
- * pin is one line written by hand, since no command writes into a `harness.json` that already exists.
- * `version` is the running js-harness, never a value read from the project. */
-export function howToPinClause(version) {
-  return `add "version": "${version}" to harness.json and commit it`;
-}
-
-/** What an `InitWriteError`'s best-effort rollback actually left behind, in one clause — never
- * overclaiming "nothing was left behind" when something could not be removed (T2c
- * R3-nothing-left-behind-overclaims). Shared by `init` and `sync`, which both throw `InitWriteError`.
- * `.codegraph/` is part of the same rollback as everything else whenever the failed run is the one that
- * created it (T2e item 2), so a failure to remove it shows up in `notRemoved` like any other path. The
- * one case where `.codegraph/` is deliberately left untouched (a retry whose directory already existed,
- * still truthfully owned by the older, unrewritten manifest) is not a removal failure at all, so it never
- * reaches `notRemoved` and needs no disclosure here. */
-export function cleanupClause(err) {
-  if (err.notRemoved.length === 0) return 'nothing was left behind';
-  return `could not remove: ${err.notRemoved.join(', ')}`;
-}
-
 /** Writes the recorded pre-commit gate again when it is gone (T4 design: "a recorded hook that is
  * gone is written again (when its path is free and still contained)"). The entry is the `files` record
  * whose file is named `pre-commit`; anything already at its path — the hook itself, an edited copy, a
@@ -1596,7 +1527,7 @@ function syncRecorded(root, version, manifestFilePath, spawn, platform, writeFil
 
 /** The project manifest at `manifestFilePath`, validated before anything is touched: `{ manifest, gitBases }`,
  * or the refusal (`malformedManifest`, `newerManifest`) to return as it is. */
-function readRecorded(root, manifestFilePath, spawn) {
+export function readRecorded(root, manifestFilePath, spawn) {
   let manifest;
   try {
     manifest = JSON.parse(fs.readFileSync(manifestFilePath, 'utf8'));
@@ -1656,7 +1587,7 @@ function updateRecorded(root, manifest, gitBases, steps) {
     if (functions.plan) {
       const before = next.settings ?? [];
       const applied = applySettings(root, before, functions.plan.settings);
-      writtenSettings = applied.records.filter((record) => !before.includes(record));
+      writtenSettings = applied.written;
       actions.push(...applied.actions);
       setSettings(next, applied.records);
     }
@@ -1778,7 +1709,7 @@ function removeRecordedIndex(root, manifest, rm, actions) {
 /** Where a repository keeps what `init` leaves: the committed `harness.json` and this clone's project
  * manifest (under the git dir, resolved the way git itself does), and whether each is there. Occupied
  * counts a dangling link as present, like every other check in this module (see `isOccupied`). */
-function projectFiles(root, spawn) {
+export function projectFiles(root, spawn) {
   const harnessJsonPath = path.join(root, 'harness.json');
   const manifestFilePath =
     resolveGitPath(root, 'js-harness/manifest.json', spawn) ?? path.join(root, '.git', 'js-harness', 'manifest.json');
@@ -1798,7 +1729,7 @@ function projectFiles(root, spawn) {
  * smuggle shell or escape sequences through it (T4c, R1-001); the same holds for a reason, so those are fixed text or an error
  * code, never the parser's message (which quotes the file's own bytes). The one reading `syncProject`
  * and `projectLocation` share. */
-function readPin(harnessJsonPath) {
+export function readPin(harnessJsonPath) {
   let text;
   try {
     text = fs.readFileSync(harnessJsonPath, 'utf8');
@@ -1907,42 +1838,62 @@ export function syncProject(cwd, version, deps = {}) {
   if (pin !== version) return { code: 1, pinMismatch: true, pin, version };
 
   if (!manifestPresent) {
-    const result = writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, true);
+    const result = writeProject(root, version, spawn, platform, writeFile, rm, manifestFilePath, manifestDeps, { clone: true });
     return syncTemplateBlock(root, { ...result, version, setUp: true }, writeFile, lstat);
   }
   return syncTemplateBlock(root, syncRecorded(root, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps), writeFile, lstat);
 }
 
-/** `result`, a sync that set the clone up or brought it to its pin, with the harness's block of its `AGENTS.md` rendered
- * again when the project has not edited it (`renderTemplateBlock`, odd/tasks/rule-hierarchy.md, T16f): a `rendered`
- * action, and no longer up to date. An edited block is a `kept` action, said on every sync, and writes nothing. The file
- * is a committed one, so git is what undoes the write; no manifest records it. A refusal is returned as it is. */
+/** `result`, a sync that set the clone up or brought it to its pin, with the harness's block of its `AGENTS.md` and its
+ * `CLAUDE.md` rendered again when the project has not edited it (`renderTemplateBlock`, odd/tasks/rule-hierarchy.md,
+ * T16f): a `rendered` action each, and no longer up to date. A project whose `CLAUDE.md` holds a block has the split
+ * (odd/tasks/f8-s3-split.md, S3), and each file gets its half; any other, or a link, keeps the whole block in `AGENTS.md`,
+ * and one file under both names keeps it under the name that is no link (odd/tasks/claude-md-block.md, D1): no line is
+ * lost. An edited block is a `kept` action, said on every sync. Git undoes these committed files; no manifest records it. */
 function syncTemplateBlock(root, result, writeFile, lstat = fs.lstatSync) {
   if (result.code !== 0) return result;
-  const agents = path.join(root, 'AGENTS.md');
-  let text;
+  const claude = blockFileOf(root, 'CLAUDE.md', lstat);
+  const agents = blockFileOf(root, 'AGENTS.md', lstat);
+  if (oneFile(root)) return renderBlockIn(root, ...(agents.link ? ['CLAUDE.md', claude] : ['AGENTS.md', agents]), templateBlock(), result, writeFile);
+  const split = !claude.link && claude.text !== undefined && TEMPLATE_BLOCK_MARK.test(claude.text);
+  let synced = renderBlockIn(root, 'AGENTS.md', agents, split ? agentsBlock() : templateBlock(), result, writeFile);
+  if (split) synced = renderBlockIn(root, 'CLAUDE.md', claude, claudeBlock(), synced, writeFile);
+  return synced;
+}
+
+/** The file `name` of `root` as a block can be rendered in: `{ text }`, `{ link: true, text }` for a link (read, never
+ * written through: git holds the link, not its target, so it could not give the target back; Codex, 2026-10-17), or
+ * `{}` when there is no regular file to read. */
+function blockFileOf(root, name, lstat) {
+  const file = path.join(root, name);
+  let link;
   try {
-    // A link is not written through: git holds the link, not its target, so it could not give the target back
-    // (Codex, 2026-10-17).
-    const stat = lstat(agents);
-    if (stat.isSymbolicLink()) return { ...result, actions: [...result.actions, kept('AGENTS.md', 'it is a link, so sync does not write through it')] };
-    if (!stat.isFile()) return result;
-    text = fs.readFileSync(agents, 'utf8');
+    const stat = lstat(file);
+    if (!stat.isSymbolicLink() && !stat.isFile()) return {};
+    link = stat.isSymbolicLink();
+    return { ...(link && { link }), text: fs.readFileSync(file, 'utf8') };
   } catch {
-    return result; // No AGENTS.md, or none that can be read: there is no block to render.
+    return link ? { link } : {}; // No file, or none that can be read: there is no block to render.
   }
-  const rendered = renderTemplateBlock(text);
+}
+
+/** `result` with the block of the file `name` rendered as `body`, as `syncTemplateBlock` says. */
+function renderBlockIn(root, name, file, body, result, writeFile) {
+  if (result.code !== 0) return result;
+  if (file.link) return { ...result, actions: [...result.actions, kept(name, 'it is a link, so sync does not write through it')] };
+  if (file.text === undefined) return result;
+  const rendered = renderTemplateBlock(file.text, body);
   if (rendered.state === 'edited') {
-    return { ...result, actions: [...result.actions, kept('AGENTS.md', "its block of the harness's lines was edited, so sync does not render it again")] };
+    return { ...result, actions: [...result.actions, kept(name, "its block of the harness's lines was edited, so sync does not render it again")] };
   }
   if (rendered.state !== 'rendered') return result;
   try {
-    writeFile(agents, rendered.text, 'utf8');
+    writeFile(path.join(root, name), rendered.text, 'utf8');
   } catch (err) {
     // The sync did not finish, so it exits non-zero and is not up to date.
-    return { ...result, code: 1, upToDate: false, actions: [...result.actions, { kind: 'problem', path: 'AGENTS.md', reason: `its block of the harness's lines could not be rendered again (${err.message})` }] };
+    return { ...result, code: 1, upToDate: false, actions: [...result.actions, { kind: 'problem', path: name, reason: `its block of the harness's lines could not be rendered again (${err.message})` }] };
   }
-  return { ...result, actions: [...result.actions, { kind: 'rendered', path: 'AGENTS.md' }], upToDate: false };
+  return { ...result, actions: [...result.actions, { kind: 'rendered', path: name }], upToDate: false };
 }
 
 /** Runs `js-harness functions apply` against the git repository at `cwd`'s top-level: makes this clone what
@@ -1986,11 +1937,6 @@ export function applyProjectFunctions(cwd, version, deps = {}) {
 /** The switch a settings key belongs to, for the words of a difference. */
 const SWITCH_OF_KEY = { paste: 'codeMap', languageServer: 'languageServer' };
 
-/** The value at `pointer` of `data`, or `undefined`. */
-function valueAt(data, pointer) {
-  return pointer.reduce((object, key) => (object !== null && typeof object === 'object' && Object.hasOwn(object, key) ? object[key] : undefined), data);
-}
-
 /** The JSON of `file`, or `fallback` where it is not there or cannot be read: a read-only report reports no
  * failure of its own. A byte-order mark is no part of the JSON. */
 function jsonOr(file, fallback) {
@@ -2023,8 +1969,8 @@ export function clonePending(cwd, { spawn = spawnSync } = {}) {
 
   const settings = jsonOr(path.join(root, ...SETTINGS_FILE.split('/')), {});
   for (const key of plan.settings) {
-    const { pointer, value } = SETTINGS_KEYS[key];
-    if (valueAt(settings, pointer) === undefined) say(SWITCH_OF_KEY[key], `${settingLabel(pointer)} is not ${JSON.stringify(value)}`);
+    const pending = settingPending(key, settings);
+    if (pending !== null) SWITCH_OF_KEY[key] ? say(SWITCH_OF_KEY[key], pending) : lines.push(`every clone: ${pending}`);
   }
   const records = Array.isArray(manifest?.settings) ? manifest.settings.filter(isValidSettingsRecord) : [];
   for (const record of records) {

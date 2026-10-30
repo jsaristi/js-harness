@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as channel from './channel.mjs';
+import { appendRecord, recordFileOf } from './background.mjs';
 
 // Every test writes under a home of its own in the temp folder: nothing here reads or writes the real
 // home, and the transcripts are synthetic.
@@ -164,6 +165,14 @@ test('the text of a question is one line, not empty, of 2000 characters at most'
   questionRefusedIn(questionJson({ text: 'two\nlines' }), /the text of a question is one line/);
   questionRefusedIn(questionJson({ text: 'x'.repeat(2001) }), /the text of a question has 2001 characters, 2000 at most/);
   assert.equal(channel.questionFieldsOf(questionJson({ text: 'x'.repeat(2000) })).text.length, 2000);
+});
+
+test('the text of a question carries no "Pregunta <n>:" of its own: the record numbers it, and a number guessed by hand named another (docs/FAILURES.md, question-numbered-by-hand)', () => {
+  for (const text of ['Pregunta 94: Which budget?', '  pregunta 7 : Which budget?', 'Pregunta 12. Which budget?', 'PREGUNTA 3 - Which budget?']) {
+    questionRefusedIn(questionJson({ text }), /the text of a question starts with its own "Pregunta <n>": drop it; the record numbers the question and prints the prefix to ask it with/);
+  }
+  assert.equal(channel.questionFieldsOf(questionJson({ text: 'Una pregunta: Which budget?' })).text, 'Una pregunta: Which budget?', 'the word alone, not at the start or with no number, is no prefix');
+  assert.equal(channel.questionFieldsOf(questionJson({ text: 'Preguntas 5 y 6 se parecen: ¿cuál?' })).text, 'Preguntas 5 y 6 se parecen: ¿cuál?');
 });
 
 test('the options of a question are a list of six at most, each a label and a description and no other key, and no two share a label', () => {
@@ -732,7 +741,7 @@ test('nextSessionNumber is one past the highest number of the code the project d
   channel.appendNotice(home, SLUG, note({ to: '32' }));
   assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 33 });
   assert.deepEqual(channel.nextSessionNumber(home, 'C--other', { code: 'JH' }), { code: 'JH', number: 1 });
-  // A caller that names no code would get a number counted from the notices alone: it is refused (gentle-ai, R3).
+  // A caller that names no code would get a number counted from the notices alone: it is refused (a review, R3).
   assert.throws(() => channel.nextSessionNumber(home, SLUG), /needs the project's code/);
   assert.throws(() => channel.nextSessionNumber(home, SLUG, { code: '' }), /needs the project's code/);
 
@@ -757,6 +766,19 @@ test('nextSessionNumber says which source it could not read, so a guess is not t
   // A torn line of the record may hold the highest number too: it is said, not dropped (Codex, P2).
   fs.appendFileSync(channel.recordPath(home, SLUG), '{"schema":"js-harness.channel-notice/v1","from":{"title":"JH 32 · t\n', 'utf8');
   assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 6, unavailable: [`record ${channel.recordPath(home, SLUG)} (1 line not readable as a notice or a reading)`] });
+}));
+
+// JH 68 and JH 69 were started with sessions start and had sent nothing yet, and --next-number printed JH 68 (2026-10-28).
+test('nextSessionNumber counts the titles sessions start recorded, of a removed session too, and of this project only', withHome((home) => {
+  const root = 'C:\\proj';
+  appendRecord(home, { event: 'started', at: AT, id: 'aaaa1111', title: 'JH 68 · stack', root, cwd: root });
+  appendRecord(home, { event: 'started', at: AT, id: 'bbbb2222', title: 'JH 69 · records', root, cwd: root });
+  appendRecord(home, { event: 'removed', at: AT, id: 'bbbb2222' });
+  appendRecord(home, { event: 'started', at: AT, id: 'cccc3333', title: 'JH 90 · another project', root: 'C:\\other', cwd: 'C:\\other' });
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 70 });
+  // A line of that record it cannot read may hold the highest number: it is said, not dropped.
+  fs.appendFileSync(recordFileOf(home), '{"schema":"js-harness.background-session/v1","event":"started","title":"JH 75\n', 'utf8');
+  assert.deepEqual(channel.nextSessionNumber(home, SLUG, { code: 'JH' }), { code: 'JH', number: 70, unavailable: [`background sessions ${recordFileOf(home)} (1 line not readable as an entry)`] });
 }));
 
 // --- where a notice is run from ---

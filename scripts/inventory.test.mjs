@@ -235,7 +235,6 @@ const CLASS_CASES = [
   ['scripts/helper.mjs', 'internal', 'e'],
   ['evals/run.mjs', 'internal', 'e'],
   ['.github/workflows/ci.yml', 'internal', 'e'],
-  ['.circleci/config.yml', 'internal', 'e'],
   ['bin/check.test.mjs', 'internal', 'b'],
   ['README.md', 'live', 'e'],
   ['AGENTS.md', 'live', 'e'],

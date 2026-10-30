@@ -20,6 +20,8 @@ export function backgroundDir(home) {
 
 export const recordFileOf = (home) => path.join(backgroundDir(home), 'sessions.jsonl');
 export const briefsDirOf = (home) => path.join(backgroundDir(home), 'briefs');
+// The starts whose line the record would not take after claude ran, each in a file of its own (`strandEntry`).
+export const strandedDirOf = (home) => path.join(backgroundDir(home), 'stranded');
 
 /** The section the copy of a brief closes with: a background session has no screen anybody watches, and a question
  * it asks with the question tool waits unseen, so it reports where the lead reads. */
@@ -45,11 +47,17 @@ export function startPrompt(copy) {
   return `Your brief is in ${copy}: read it whole before anything else, and do the work it gives you. Its last section says how you report.`;
 }
 
-/** The arguments of `claude` that start the session. `--add-dir` lets it read its brief's copy without a prompt; it
- * takes several folders, so it comes first and `-n` ends it. */
-export function startArgs({ title, briefs, worktree, model, effort, remoteControl, prompt }) {
+/** The one-line prompt a background session resumed after its job stopped starts with: it keeps its conversation, and
+ * is told why it was stopped and where its brief is. */
+export function resumePrompt(copy) {
+  return `Your background job stopped (a restart of the machine ends every one) and js-harness sessions start --resume resumed it. Your brief is in ${copy}: go on from where your work stands, checked against your feature document and git, and report as its last section says.`;
+}
+
+/** The arguments of `claude` that start the session, or resume the conversation `resume` (a session id) in a new job.
+ * `--add-dir` lets it read its brief's copy without a prompt; it takes several folders, so `-n` ends it. */
+export function startArgs({ title, briefs, worktree, model, effort, remoteControl, prompt, resume }) {
   return [
-    '--bg', '--add-dir', briefs, '-n', title,
+    '--bg', ...(resume === undefined ? [] : ['--resume', resume]), '--add-dir', briefs, '-n', title,
     ...(worktree === undefined ? [] : ['-w', worktree]),
     ...(model === undefined ? [] : ['--model', model]),
     ...(effort === undefined ? [] : ['--effort', effort]),
@@ -65,12 +73,13 @@ export function idOfStart(stdout) {
 }
 
 /** A runner of the Claude CLI found on the PATH of `env` (`resolveClaude`), or null when there is none: `run(args, {
- * cwd })` gives `{ status, stdout, stderr, error }`. A `.cmd` shim runs as one command line through the shell. */
-export function claudeRunner({ env = process.env, platform = process.platform, spawn = spawnSync, timeout = 60000 } = {}) {
+ * cwd, input })` gives `{ status, stdout, stderr, error }`, `input` what the CLI reads on stdin (the lens review hands
+ * it its block so). A `.cmd` shim runs as one command line through the shell. */
+export function claudeRunner({ env = process.env, platform = process.platform, spawn = spawnSync, timeout = 60000, maxBuffer = 1024 * 1024 } = {}) {
   const claude = resolveClaude({ env, platform });
   if (claude === null) return null;
-  return (args, { cwd } = {}) => {
-    const options = { cwd, env, encoding: 'utf8', windowsHide: true, timeout };
+  return (args, { cwd, input } = {}) => {
+    const options = { cwd, env, encoding: 'utf8', windowsHide: true, timeout, maxBuffer, ...(input !== undefined && { input }) };
     const result = claude.shell
       ? spawn(windowsCommandLine(quoteWindowsArg(claude.path), args), [], { ...options, shell: true })
       : spawn(claude.path, args, options);
@@ -120,19 +129,93 @@ export function appendRecord(home, entry) {
   fs.appendFileSync(file, `${cut ? '\n' : ''}${JSON.stringify({ schema: BACKGROUND_SCHEMA, ...entry })}\n`);
 }
 
+/** Keeps the start `entry` of a session that runs, whose line the record would not take, in a file of its own under
+ * `strandedDirOf(home)`: `readRecord` reads it as a line of the record, so `sessions stop` and the machine uninstall
+ * undo it, and the removal of the session closes it (`closeEntry`). Its path, or throws. */
+export function strandEntry(home, entry) {
+  const file = path.join(strandedDirOf(home), `${entry.id}.json`);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  // Whole or not at all: a file cut midway would name no id, and no stop could close it (the verifier on 62315e6..7f068b9).
+  fs.writeFileSync(`${file}.tmp`, `${JSON.stringify({ schema: BACKGROUND_SCHEMA, ...entry })}\n`);
+  fs.renameSync(`${file}.tmp`, file);
+  return file;
+}
+
+/** The end of a start's words when the record would not take its `entry` and claude did not undo it: where its entry is
+ * kept (`strandEntry`), or, when that fails too, the commands that remove it. */
+export function strandedWords(home, entry) {
+  try {
+    return `, and its entry is kept in ${strandEntry(home, entry)}: js-harness sessions stop ${entry.id} removes it, and so does js-harness uninstall machine`;
+  } catch (err) {
+    return `, and nothing records it (${err.code ?? err.message}): claude stop ${entry.id} and claude rm ${entry.id} remove it`;
+  }
+}
+
+/** Records that the job `job` was removed: a `removed` line, and its stranded file deleted. A stranded job is closed by
+ * either, so only when both fail does it throw; any other throws when the line cannot be appended. */
+function closeEntry(home, job, now) {
+  const stranded = typeof job.stranded === 'string' ? job.stranded : null;
+  try {
+    appendRecord(home, { event: 'removed', at: new Date(now()).toISOString(), id: job.id });
+  } catch (err) {
+    if (stranded === null) throw err;
+    fs.rmSync(stranded, { force: true });
+    return;
+  }
+  try {
+    if (stranded !== null) fs.rmSync(stranded, { force: true });
+  } catch {
+    // The line closes it: a file left behind is read as removed.
+  }
+}
+
 /** The sessions the record under `home` holds, those started and not removed: `{ sessions }`, a list of their start
- * entries, oldest first; `{ none: true }` when there is no record; `{ unavailable }` when it could not be read. A line
- * that is not an entry of this schema is skipped and counted (`skipped`). */
+ * entries, oldest first, and `started`, every start entry it holds, of removed sessions too; `resumedAs`, from the id
+ * of each of those sessions a recorded resume replaced to the entry of the job that resumed it, which shares its
+ * worktree and brief, so the two are undone together (`resumedChain`); `{ none: true }` when there is no record;
+ * `{ unavailable }` when it could not be read. A line that is not an entry of this schema is skipped and counted
+ * (`skipped`). The stranded starts (`strandEntry`) are read after the lines, each marked with its file (`stranded`),
+ * unless a line records its removal; a stranded file that is not such an entry is skipped and counted too. A record
+ * that could not be read gives them all the same, as `{ unavailable, stranded }`: each is a session that runs and that
+ * the record does not hold, so `sessions stop` and the machine uninstall undo it without the record (Codex P2 on
+ * 62315e6..e16b577). */
 export function readRecord(home, { readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
-  let text;
+  let strandedNames = [];
+  try {
+    strandedNames = fs.readdirSync(strandedDirOf(home)).filter((name) => name.endsWith('.json'));
+  } catch (err) {
+    if (err.code !== 'ENOENT') return { unavailable: `${strandedDirOf(home)}: ${err.code ?? err.message}` };
+  }
+  /** The stranded starts whose removal is not in `removed`, and how many files are not such a start. */
+  const strandedOf = (removed) => {
+    const entries = [];
+    let unread = 0;
+    for (const name of strandedNames) {
+      const file = path.join(strandedDirOf(home), name);
+      let entry;
+      try {
+        entry = JSON.parse(readFile(file));
+      } catch {
+        unread += 1;
+        continue;
+      }
+      if (entry?.schema !== BACKGROUND_SCHEMA || entry.event !== 'started' || typeof entry.id !== 'string') unread += 1;
+      else if (!removed.has(entry.id)) entries.push({ ...entry, stranded: file });
+    }
+    return { entries, unread };
+  };
+  let text = null;
   try {
     text = readFile(recordFileOf(home));
   } catch (err) {
-    return err.code === 'ENOENT' ? { none: true, sessions: [] } : { unavailable: err.code ?? err.message };
+    if (err.code !== 'ENOENT') return { unavailable: err.code ?? err.message, stranded: strandedOf(new Set()).entries };
   }
+  if (text === null && strandedNames.length === 0) return { none: true, sessions: [], started: [], resumedAs: new Map() };
   const open = new Map();
+  const started = [];
+  const removed = new Set();
   let skipped = 0;
-  for (const line of text.split(/\r?\n/)) {
+  for (const line of (text ?? '').split(/\r?\n/)) {
     if (line.trim() === '') continue;
     let entry;
     try {
@@ -142,11 +225,46 @@ export function readRecord(home, { readFile = (file) => fs.readFileSync(file, 'u
       continue;
     }
     if (entry?.schema !== BACKGROUND_SCHEMA || typeof entry.id !== 'string') skipped += 1;
-    else if (entry.event === 'started') open.set(entry.id, entry);
-    else if (entry.event === 'removed') open.delete(entry.id);
-    else skipped += 1;
+    else if (entry.event === 'started') {
+      open.set(entry.id, entry);
+      started.push(entry);
+    } else if (entry.event === 'removed') {
+      open.delete(entry.id);
+      removed.add(entry.id);
+    } else skipped += 1;
   }
-  return { sessions: [...open.values()], skipped };
+  const stranded = strandedOf(removed);
+  skipped += stranded.unread;
+  for (const entry of stranded.entries) {
+    open.set(entry.id, entry);
+    started.push(entry);
+  }
+  const resumedAs = new Map([...open.values()].filter((entry) => open.has(entry.resumedFrom)).map((entry) => [entry.resumedFrom, entry]));
+  return { sessions: [...open.values()], started, resumedAs, skipped };
+}
+
+/** The jobs the recorded job `entry` resumed, the last one first, read from `started` (readRecord's). */
+export function resumedChain(started, entry) {
+  const chain = [];
+  const seen = new Set([entry.id]);
+  for (let at = entry; typeof at.resumedFrom === 'string' && !seen.has(at.resumedFrom);) {
+    seen.add(at.resumedFrom);
+    const from = at.resumedFrom;
+    at = started.findLast((item) => item.id === from);
+    if (at === undefined) break;
+    chain.push(at);
+  }
+  return chain;
+}
+
+/** Why `id`, a session `resumedAs` (readRecord's) names, is not acted on alone: the job that resumed it, the last one. */
+export function resumedNote(resumedAs, id, act) {
+  let last = resumedAs.get(id);
+  for (const seen = new Set([id]); resumedAs.has(last.id) && !seen.has(last.id);) {
+    seen.add(last.id);
+    last = resumedAs.get(last.id);
+  }
+  return `${id} was resumed as ${last.id}: ${act(last.id)}`;
 }
 
 /** The recorded session `given` names: its id, or the start of its session id, eight characters or more. */
@@ -154,28 +272,66 @@ export function recordedNamed(sessions, given) {
   return sessions.find((entry) => entry.id === given || (given.length >= 8 && String(entry.sessionId ?? '').startsWith(given))) ?? null;
 }
 
+/** The folder of the worktree a recorded session works in, or null for one started without a worktree: where claude
+ * makes a worktree of that name, under the main checkout `root`. claude agents lists a session it just started in the
+ * folder it was started from, so a record written before 2026-10-28 holds the main checkout as its `worktreePath`,
+ * which may bear the worktree's name. */
+export function worktreeOf(entry, platform = process.platform) {
+  if (typeof entry.worktree !== 'string' || entry.worktree === '') return null;
+  const checkout = typeof entry.root === 'string' && typeof entry.worktreePath === 'string' && within(entry.worktreePath, entry.root, platform) && within(entry.root, entry.worktreePath, platform);
+  if (typeof entry.worktreePath === 'string' && path.basename(entry.worktreePath) === entry.worktree && !checkout) return entry.worktreePath;
+  return typeof entry.root === 'string' ? path.join(entry.root, '.claude', 'worktrees', entry.worktree) : null;
+}
+
+/** The sessions `sessions start` recorded for the project at `root`, those not removed, by the folder each works in:
+ * `{ items }`, each `{ id, folder }`, its session id and its worktree, or the folder it was started in when it has none;
+ * `held`, how many sessions of the project it holds, with a session id or not; and `unknown`, null or why it may hold
+ * one more, in words: it could not be read (`unavailable`, with no items), or it holds lines it skipped, any of which
+ * may be one (R3-002). claude writes a session's transcript under the folder it works in, so one in a worktree is not
+ * among the main checkout's. */
+export function recordedFolders(home, root, { readFile, platform = process.platform } = {}) {
+  const record = readRecord(home, { readFile });
+  if (record.unavailable !== undefined) return { items: [], held: 0, unavailable: record.unavailable, unknown: `could not be read (${record.unavailable})` };
+  const ours = record.sessions.filter((entry) => typeof entry.root === 'string' && within(entry.root, root, platform) && within(root, entry.root, platform));
+  const items = ours.filter((entry) => typeof entry.sessionId === 'string').map((entry) => ({ id: entry.sessionId, folder: worktreeOf(entry) ?? entry.cwd ?? entry.root }));
+  const skipped = record.skipped ?? 0;
+  return { items, held: ours.length, unknown: skipped > 0 ? `holds ${skipped} line${skipped === 1 ? '' : 's'} it could not read` : null };
+}
+
 const lostSaid = (result) => result.status !== 0 && /no job matching/i.test(saidBy(result));
 
 /** Stops and removes the recorded session `entry` with `claude stop` and `claude rm`, deletes the copy of its brief,
- * then records the removal: `{ outcome: 'removed', worktreeKept }`, or `'gone'` when claude no longer knows it, or
- * `{ outcome: 'kept', why }` when claude refused or the brief could not be deleted, which keeps it recorded, so a
- * second run finishes it. `worktreeKept` is the session's worktree when it is still there: claude keeps one that
- * holds uncommitted changes (odd/tasks/background-sessions.md, L10). */
+ * then records the removal: `{ outcome: 'removed', worktreeKept, worktreeGone }`, or `'gone'` when claude no longer
+ * knows it, or `{ outcome: 'kept', why }` when claude refused or the brief could not be deleted, which keeps it
+ * recorded, so a second run finishes it. `worktreeKept` is the session's worktree when it is still there: claude keeps
+ * one that holds uncommitted changes (odd/tasks/background-sessions.md, L10); `worktreeGone` is the one it removed;
+ * `worktreeMissing` one that was not there before the stop, which claude never made or something else removed (R3-004).
+ * The jobs it resumed (`resumedChain`) are undone with it, after it: they share its worktree and brief. */
 export function undoSession(entry, { home, run, now }) {
-  const stopped = run(['stop', entry.id]);
-  if ((stopped.error || stopped.status !== 0) && !lostSaid(stopped)) return { outcome: 'kept', why: `claude stop ${entry.id}: ${saidBy(stopped)}` };
-  const removed = run(['rm', entry.id]);
-  if ((removed.error || removed.status !== 0) && !lostSaid(removed)) return { outcome: 'kept', why: `claude rm ${entry.id}: ${saidBy(removed)}` };
-  if (typeof entry.brief === 'string') {
+  let stopped;
+  let removed;
+  const record = readRecord(home);
+  const chain = [entry, ...resumedChain(record.started ?? [], entry)];
+  const worktree = worktreeOf(entry);
+  const was = worktree !== null && fs.existsSync(worktree);
+  for (const job of chain) {
+    const stop = run(['stop', job.id]);
+    if ((stop.error || stop.status !== 0) && !lostSaid(stop)) return { outcome: 'kept', why: `claude stop ${job.id}: ${saidBy(stop)}` };
+    const rm = run(['rm', job.id]);
+    if ((rm.error || rm.status !== 0) && !lostSaid(rm)) return { outcome: 'kept', why: `claude rm ${job.id}: ${saidBy(rm)}` };
+    if (job === entry) [stopped, removed] = [stop, rm];
+  }
+  for (const brief of new Set(chain.map((job) => job.brief).filter((brief) => typeof brief === 'string'))) {
     try {
-      fs.rmSync(entry.brief, { force: true });
+      fs.rmSync(brief, { force: true });
     } catch (err) {
-      return { outcome: 'kept', why: `its brief ${entry.brief} could not be deleted (${err.code ?? err.message})` };
+      return { outcome: 'kept', why: `its brief ${brief} could not be deleted (${err.code ?? err.message})` };
     }
   }
-  appendRecord(home, { event: 'removed', at: new Date(now()).toISOString(), id: entry.id });
-  const worktreeKept = typeof entry.worktreePath === 'string' && fs.existsSync(entry.worktreePath) ? entry.worktreePath : null;
-  return { outcome: lostSaid(stopped) && lostSaid(removed) ? 'gone' : 'removed', worktreeKept };
+  // The jobs it resumed first: a record cut between the two still names them through this one, which a retry undoes.
+  for (const job of [...chain.slice(1), entry]) closeEntry(home, job, now);
+  const kept = worktree !== null && fs.existsSync(worktree);
+  return { outcome: lostSaid(stopped) && lostSaid(removed) ? 'gone' : 'removed', worktreeKept: kept ? worktree : null, worktreeGone: was && !kept ? worktree : null, worktreeMissing: worktree !== null && !was ? worktree : null };
 }
 
 /** A session at work: busy, or waiting on something (a permission prompt). */
@@ -185,20 +341,25 @@ export const atWork = (agent) => agent?.status === 'busy' || agent?.status === '
  * is kept; once none is left and every line of the record was read, the folder goes. `{ undone, kept, removedDir,
  * failed }`, each kept one with `settle`: `'at-work'`, `'refused'` (claude refused) or `'unknown'` (claude agents
  * could not say whether it is at work). A line that is not an entry may name a session that still runs, so it keeps the
- * folder and fails. */
+ * folder and fails. A record that could not be read fails too, after its stranded starts are undone. */
 export function undoBackground(home, { run, now = Date.now } = {}) {
   const record = readRecord(home);
-  if (record.unavailable !== undefined) return { undone: [], kept: [], failed: `${recordFileOf(home)} could not be read (${record.unavailable}): the background sessions it records are not undone; run js-harness uninstall machine again` };
+  const unread = record.unavailable === undefined ? null : `${recordFileOf(home)} could not be read (${record.unavailable}): the background sessions it records are not undone; run js-harness uninstall machine again`;
+  const sessions = unread === null ? record.sessions : record.stranded ?? [];
+  const resumedAs = record.resumedAs ?? new Map();
+  if (unread !== null && sessions.length === 0) return { undone: [], kept: [], failed: unread };
   const undone = [];
   const kept = [];
-  if (record.sessions.length > 0) {
+  if (sessions.length > 0) {
     let agents;
     try {
       agents = listAgents(run);
     } catch (err) {
-      return { undone, kept: record.sessions.map((entry) => ({ entry, settle: 'unknown', why: `it cannot be told whether it is at work: ${err.message}` })), failed: null };
+      return { undone, kept: sessions.map((entry) => ({ entry, settle: 'unknown', why: `it cannot be told whether it is at work: ${err.message}` })), failed: unread };
     }
-    for (const entry of record.sessions) {
+    for (const entry of sessions) {
+      // A job a resume replaced is undone with the job that resumed it, or kept with it.
+      if (resumedAs.has(entry.id)) continue;
       const agent = agents.find((item) => item.id === entry.id);
       if (atWork(agent)) {
         kept.push({ entry, settle: 'at-work', why: `it is ${agent.status ?? agent.state}` });
@@ -209,6 +370,7 @@ export function undoBackground(home, { run, now = Date.now } = {}) {
       else undone.push({ entry, outcome: done.outcome, worktreeKept: done.worktreeKept });
     }
   }
+  if (unread !== null) return { undone, kept, removedDir: null, failed: unread };
   const dir = backgroundDir(home);
   if (record.skipped > 0) {
     const lines = `${record.skipped} line${record.skipped === 1 ? '' : 's'} of ${recordFileOf(home)} ${record.skipped === 1 ? 'is not an entry' : 'are not entries'} it can read`;

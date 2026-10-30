@@ -344,13 +344,13 @@ test('a ready notice the land would leave out is refused with the land\'s reason
   const asked = [];
   const landChecks = async (pr, cwd) => {
     asked.push([pr, cwd]);
-    return ['PR 360: its body has no gentle-ai line.'];
+    return ['PR 360 is a draft.'];
   };
   const { code, out, err } = await runNotify(machine, ['--to', 'orchestrator', '--kind', 'ready', '--pr', '360', 'T1 is ready'], { landChecks });
   assert.equal(code, 1);
   assert.deepEqual(asked, [[360, machine.worktree]]);
   assert.deepEqual(out, []);
-  assert.match(err.join('\n'), /pull request 360 is not ready to land: PR 360: its body has no gentle-ai line\. Not recorded\./);
+  assert.match(err.join('\n'), /pull request 360 is not ready to land: PR 360 is a draft\. Not recorded\./);
   assert.deepEqual(recorded(machine).notices, []);
 }));
 
@@ -407,7 +407,7 @@ function landRun(view, { ghStatus = 0, fetchStatus = 0 } = {}) {
   return { run, calls };
 }
 
-const READY_VIEW = { number: 360, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'gentle-ai: approved\nRisk: none', headRefOid: 'head0sha' };
+const READY_VIEW = { number: 360, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'Risk: none', headRefOid: 'head0sha' };
 
 test('readyProblems asks the land\'s reviewEvidence about the head against fetched origin/main, and passes what passes', async () => {
   const { run, calls } = landRun(READY_VIEW);
@@ -424,14 +424,14 @@ test('readyProblems asks the land\'s reviewEvidence about the head against fetch
 
 test('readyProblems gives pullRequestProblems\' words, and reads UNKNOWN mergeable as the land does', async () => {
   const evidence = () => ({ pass: true, detail: 'covered' });
-  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, body: 'Risk: none' }).run, evidence }), ['PR 360: its body has no gentle-ai line.']);
+  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, isDraft: true }).run, evidence }), ['PR 360 is a draft.']);
   assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, mergeable: 'UNKNOWN' }).run, evidence }), []);
   assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, mergeable: 'CONFLICTING' }).run, evidence }), ['PR 360 is not mergeable (CONFLICTING).']);
 });
 
 test('readyProblems gives reviewEvidence\'s detail when the reviews do not cover the head', async () => {
-  const evidence = () => ({ pass: false, detail: 'commit abc1234 has no gentle-ai line on its branch' });
-  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun(READY_VIEW).run, evidence }), ['PR 360: commit abc1234 has no gentle-ai line on its branch.']);
+  const evidence = () => ({ pass: false, detail: 'commit abc1234 has no Codex review record' });
+  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun(READY_VIEW).run, evidence }), ['PR 360: commit abc1234 has no Codex review record.']);
 });
 
 test('readyProblems says so when gh or the fetch does not answer', async () => {

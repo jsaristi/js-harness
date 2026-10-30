@@ -14,7 +14,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { endsUnterminated } from './jsonl-tail.mjs';
-import { isSelf, roleNamed, roleOfTitle, sessionFacts } from './sessions.mjs';
+import { isSelf, projectSlug, roleNamed, roleOfTitle, sessionFacts } from './sessions.mjs';
+import { readRecord, recordFileOf } from './background.mjs';
 
 export const NOTICE_SCHEMA = 'js-harness.channel-notice/v1';
 export const OPENING_SCHEMA = 'js-harness.channel-opening/v1';
@@ -193,12 +194,18 @@ function isQuestionNumber(value) {
   return Number.isSafeInteger(value) && value >= 1;
 }
 
+/** A question's text that numbers itself: the record gives the number only once it is written, so a session that
+ * wrote the prefix by hand guessed it, and JH 62's guess named another question (docs/FAILURES.md,
+ * question-numbered-by-hand). */
+const HAND_NUMBERED = /^pregunta\s+\d+\s*[:.\-–—]/i;
+
 /** The fields of a question as a notice keeps them, checked: `text` one line of `QUESTION_TEXT_MAX`, `options`
  * a list of at most `QUESTION_OPTIONS_MAX` (the recommended one first; an empty list is a question with nothing
  * to tap), no two with one label, and `waits` one line. It is the one check of a question, whether it comes
  * from standard input (`questionFieldsOf`) or from a caller (`newNotice`). Throws a `ChannelInputError`. */
 function checkedQuestion({ text, options, waits }) {
   const line = oneLine(text, QUESTION_TEXT_MAX, 'the text of a question');
+  if (HAND_NUMBERED.test(line)) throw new ChannelInputError('the text of a question starts with its own "Pregunta <n>": drop it; the record numbers the question and prints the prefix to ask it with');
   if (!Array.isArray(options)) throw new ChannelInputError('the options of a question are a list, the recommended one first');
   if (options.length > QUESTION_OPTIONS_MAX) throw new ChannelInputError(`a question has ${options.length} options, ${QUESTION_OPTIONS_MAX} at most`);
   const checked = options.map(optionOf);
@@ -616,10 +623,15 @@ export function nextSessionNumber(home, slug, { code, readdir = (dir) => fs.read
   } catch (err) {
     if (err.code !== 'ENOENT') unavailable.push(`openings ${dir} (${err.code ?? err.message})`);
   }
+  // A session `sessions start` started holds its number before it sends a notice: its title is in that record.
+  const background = readRecord(home, { readFile });
+  if (background.unavailable) unavailable.push(`background sessions ${recordFileOf(home)} (${background.unavailable})`);
+  else if (background.skipped > 0) unavailable.push(`background sessions ${recordFileOf(home)} (${background.skipped} line${background.skipped === 1 ? '' : 's'} not readable as an entry)`);
   const titles = [
     ...record.notices.map((notice) => notice.from?.title),
     ...record.readings.map((reading) => reading.title),
     ...openings.map((opening) => opening.title),
+    ...(background.started ?? []).filter((entry) => typeof entry.root === 'string' && projectSlug(entry.root) === slug).map((entry) => entry.title),
   ].map((title) => roleOfTitle(title)).filter(Boolean);
   const numbers = [
     ...titles.filter((title) => title.code === code && title.role === 'work').map((title) => title.number),

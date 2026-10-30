@@ -1,0 +1,172 @@
+// The Rules block of the user's own Claude file, `~/.claude/CLAUDE.md` (F8 S10, odd/tasks/f8-s10-port.md, T7): his
+// answer to question 99 (G12) was that `install` writes his nine Rules lines there, as his answer D7 left them, in a
+// small recorded block that `uninstall` undoes, and touches nothing else of `~/.claude`; so his other projects keep
+// them once the global file that had them is gone. It is the marked block of ./project-template.mjs: rendered again while it
+// is unedited, and his once he edits it. The text around it is his or the global file's and is never changed.
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { renameOver } from './atomic-write.mjs';
+import { markedBlock, removeBlock, renderBlock } from './project-template.mjs';
+import { recordWith, sameFile } from './permissions.mjs';
+
+/** His nine Rules lines, word for word as his answer D7 left them. The root `CLAUDE.md` of this repo keeps the same
+ * lines under "Kept from the global file", and a test holds the two together. */
+export const RULES_LINES = [
+  'One question at a time; keep doing what does not depend on the answer.',
+  'Verify a claim before building on it.',
+  "Prefer the agent's native file-reading, search, and editing tools. When shell commands are necessary, use tools available on the current platform; do not require a specific package manager.",
+  'Do not present option menus, exhaustive lists, or multiple approaches unless there is a real fork with meaningful tradeoffs.',
+  'Never add "Co-Authored-By" or AI attribution to commits. Use conventional commits only.',
+  'If user is wrong, explain WHY with evidence. If you were wrong, acknowledge with proof.',
+  'Verify technical claims before stating them. If unsure, investigate first.',
+  'Ask before destructive git operations, publishing, or irreversible file changes.',
+  'Preserve human control: user decisions beat agent momentum.',
+];
+
+/** The block's lines: a heading and the nine lines as a list. */
+export const rulesBody = () => `## Rules\n${RULES_LINES.map((line) => `- ${line}`).join('\n')}\n`;
+
+const rulesFile = (home) => path.join(home, '.claude', 'CLAUDE.md');
+
+/** The texts install puts before the block; a record edited by hand to another one is read as none (the independent
+ * verifier of T7, L20: a separator such as his own line would take that line out). */
+const SEPARATORS = new Set(['', '\n', '\r\n', '\n\n', '\r\n\r\n']);
+const separatorOf = (record) => (SEPARATORS.has(record?.separator) ? record.separator : '');
+
+/** Writes `text` to `target` through a fresh sibling renamed over it, so a write that fails partway leaves the file as
+ * it was (the verifier, L20). The sibling is created exclusively under a random name, so nothing already there is
+ * written through, and the rename is tried again while Windows holds the file; the sibling
+ * is removed when the write or the rename fails, but not when it was already there (`EEXIST`), since it is not ours.
+ * The sibling takes the mode of the file it replaces, so a private file stays private (Codex on cca493e..b27d063). */
+function writeWhole(target, text, writeFile = fs.writeFileSync) {
+  const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  let mode = null;
+  try {
+    mode = fs.statSync(target).mode & 0o7777;
+  } catch {
+    // A file not there yet takes the default mode.
+  }
+  try {
+    // Created with the mode already, which the umask can only narrow, so a private text is never readable by others
+    // for a moment (Codex's recheck on 6df890e..4e28ec3); the chmod then gives it the exact mode.
+    writeFile(tmp, text, { encoding: 'utf8', flag: 'wx', ...(mode !== null && { mode }) });
+    if (mode !== null) fs.chmodSync(tmp, mode);
+    renameOver(tmp, target);
+  } catch (err) {
+    if (err.code !== 'EEXIST') fs.rmSync(tmp, { force: true });
+    throw err;
+  }
+}
+
+/** `before`, the text a removed block followed, without the line ends install put there: at most as many as
+ * `separator` holds, either kind, and never the last one when `rest`, text after the block, follows, so no two of his
+ * lines are joined (the verifier, L20). */
+function withoutSeparator(before, rest, separator) {
+  let left = (separator.match(/\n/g) ?? []).length;
+  if (rest !== '') left = Math.min(left, (before.match(/(?:\r?\n)+$/)?.[0].match(/\n/g) ?? []).length - 1);
+  let text = before;
+  for (; left > 0; left -= 1) {
+    const end = text.match(/\r?\n$/);
+    if (!end) break;
+    text = text.slice(0, -end[0].length);
+  }
+  return text;
+}
+
+/** The file `file` names: itself, or the one it links to, so his `CLAUDE.md` linked into a dotfiles repository stays a
+ * link and the block goes into the file it names (Codex on cca493e..b27d063). A link to nothing throws (`ENOENT`):
+ * nothing is written through it. */
+function realPlace(file) {
+  let link;
+  try {
+    link = fs.lstatSync(file).isSymbolicLink();
+  } catch (err) {
+    if (err.code === 'ENOENT') return file;
+    throw err;
+  }
+  return link ? fs.realpathSync(file) : file;
+}
+
+/** The text of `file` and whether it was there; a file that is not there reads as empty, any other error throws. */
+function readText(file) {
+  try {
+    return { text: fs.readFileSync(file, 'utf8'), existed: true };
+  } catch (err) {
+    if (err.code === 'ENOENT') return { text: '', existed: false };
+    throw err;
+  }
+}
+
+/** Puts the Rules block in the user's `CLAUDE.md` under `home`: at its end when it has none, with a line end before it
+ * when the text does not end with one and a blank line otherwise (none in an empty file); its lines again when it holds
+ * an unedited block of other lines. Returns `{ held, record, keep }`: `held` is `{ status, path }`, `written`,
+ * `updated`, `already`, `edited` (a block whose lines he changed, left as they are), or `skipped` with a `reason` (a
+ * file that cannot be read or written), and then nothing is written. `record`, what `uninstall` undoes, is
+ * `{ path, createdFile, separator }`, the text put before the block; `previous`'s when this writes no new block, and
+ * none for an edited block nothing recorded. `keep(write)` runs the caller's write of the manifest, and puts the file
+ * back when it throws. */
+export function holdRulesBlock(home, previous) {
+  const target = rulesFile(home);
+  const skipped = (reason) => ({ held: { status: 'skipped', path: target, reason }, record: previous ?? null, keep: recordWith(null) });
+  let place;
+  let read;
+  try {
+    place = realPlace(target);
+    read = readText(place);
+  } catch (err) {
+    return skipped(`not readable (${err.code ?? err.message})`);
+  }
+  const { text, existed } = read;
+  const body = rulesBody();
+  const rendered = renderBlock(text, body, 'rules');
+  const record = { path: target, createdFile: previous?.createdFile === true || !existed, separator: separatorOf(previous) };
+  if (rendered.state === 'current') return { held: { status: 'already', path: target }, record, keep: recordWith(null) };
+  if (rendered.state === 'edited') return { held: { status: 'edited', path: target }, record: previous ?? null, keep: recordWith(null) };
+  let next = rendered.text;
+  if (rendered.state === 'none') {
+    const lineEnd = text.includes('\r\n') ? '\r\n' : '\n';
+    record.separator = text === '' ? '' : text.endsWith('\n') ? lineEnd : lineEnd + lineEnd;
+    next = `${text}${record.separator}${`${markedBlock(body, 'rules')}\n`.replace(/\n/g, lineEnd)}`;
+  }
+  try {
+    fs.mkdirSync(path.dirname(place), { recursive: true });
+    writeWhole(place, next);
+  } catch (err) {
+    return skipped(`not writable (${err.code ?? err.message})`);
+  }
+  const putBack = () => (existed ? writeWhole(place, text) : fs.rmSync(place, { force: true }));
+  const status = rendered.state === 'none' ? 'written' : 'updated';
+  return { held: { status, path: target }, record, keep: recordWith(putBack) };
+}
+
+/** Takes out of the user's `CLAUDE.md` what `record` says `install` wrote: the block and the text it put before it,
+ * and the file when install made it and nothing else is left. Returns `{ status, path }`: `released`; `gone` when
+ * there is no block or no file; `edited` when its lines were changed, left as his; `kept` with a `reason` when the
+ * record names another file than the one under `home`, left as it is; `failed` with a `code` when the file cannot be
+ * read or written, and then the caller keeps the record for a run again. */
+export function releaseRulesBlock(record, home, { writeFile = fs.writeFileSync, removeFile = fs.rmSync } = {}) {
+  const at = rulesFile(home);
+  if (!sameFile(record.path, at)) return { status: 'kept', path: String(record.path), reason: "the record names another file than the user's CLAUDE.md" };
+  let place;
+  let read;
+  try {
+    place = realPlace(at);
+    read = readText(place);
+  } catch (err) {
+    return { status: 'failed', path: at, code: err.code ?? err.message };
+  }
+  const out = removeBlock(read.text, 'rules');
+  if (!read.existed || out.state === 'none') return { status: 'gone', path: at };
+  if (out.state === 'edited') return { status: 'edited', path: at };
+  const rest = out.text.slice(out.at);
+  const text = withoutSeparator(out.text.slice(0, out.at), rest, separatorOf(record)) + rest;
+  try {
+    // A file install made goes once empty, but never a link he put there since: the file it names keeps his text.
+    if (record.createdFile === true && text === '' && place === at) removeFile(at);
+    else writeWhole(place, text, writeFile);
+  } catch (err) {
+    return { status: 'failed', path: at, code: err.code ?? 'unknown error' };
+  }
+  return { status: 'released', path: at };
+}

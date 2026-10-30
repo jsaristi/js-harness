@@ -1680,7 +1680,7 @@ test('a real check started by a real gate, in the same home, runs its sensors in
   const checkout = makeTmpDir();
   try {
     fs.cpSync(path.dirname(dispatcher), path.join(checkout, 'bin'), { recursive: true, filter: (source) => !source.endsWith('.test.mjs') });
-    // No gentle-ai and no git: an empty PATH leaves both rows of `check` saying they found none.
+    // No git: an empty PATH leaves `check` no program to ask, so the rows that would ask git get no answer.
     const noPrograms = path.join(checkout, 'no-programs');
     fs.mkdirSync(noPrograms);
     const env = { ...outsideAGate(['node_test_context', 'path']), PATH: noPrograms };

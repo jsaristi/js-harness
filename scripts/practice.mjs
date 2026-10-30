@@ -20,14 +20,14 @@ import {
   uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem, channelEnv, channelStepProblem, channelRecord, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, PRACTICE_RULES, practiceRuleFiles, listWithout,
   HOST_STEP, hostEnv, redacted, readHostStream, hostCallProblems, hostCost, ALWAYS_RUN, secondInitProblem, TEMPLATE_SECTIONS, templateLinesProblem, uninstallExpected,
 } from './practice-lib.mjs';
-import { agentsTemplate } from '../bin/lib/project.mjs';
+import { agentsTemplate, claudeTemplate } from '../bin/lib/project.mjs';
 import { estimateTokens } from '../bin/lib/payload.mjs';
 import { TOKEN_BUDGET } from '../bin/check.mjs';
 import { classifyAgentFailure } from '../evals/agent-output.mjs';
 import { killByPath } from '../evals/runner.mjs';
 
 // A hung child fails its step instead of hanging the run. Five minutes holds the slowest honest step: a
-// commit whose hook runs `check`, which runs the project's tests and asks gentle-ai twice. On Windows the
+// commit whose hook runs `check`, which runs the project's tests and reads its review records. On Windows the
 // timeout ends the child itself and not what the child started, so a hung grandchild may outlive the run.
 const CHILD_TIMEOUT_MS = 5 * 60 * 1000;
 const CHILD_OUTPUT_LIMIT = 16 * 1024 * 1024;
@@ -468,7 +468,8 @@ const STEPS = {
     const { branch, commit, dirty } = ctx.candidate;
     fs.appendFileSync(path.join(project, RUN_LOG), `- ${ctx.date} js-harness ${commit}${dirty ? ' (dirty tree)' : ''} of ${branch}\n`);
     // Explicit paths, never `-A`: the index of codegraph (`.codegraph/`) must not be committed.
-    expectOk(git(ctx, project, 'add', '--', RUN_LOG, 'harness.json', 'AGENTS.md'), 'git add');
+    const claude = fs.existsSync(path.join(project, 'CLAUDE.md')) ? ['CLAUDE.md'] : [];
+    expectOk(git(ctx, project, 'add', '--', RUN_LOG, 'harness.json', 'AGENTS.md', ...claude), 'git add');
     const before = head(ctx);
     const result = commitWithRows(ctx, project, '-m', `practice: run of js-harness ${commit}`);
     assertThat(!result.error && result.status === 0, `the commit did not pass: ${ended(result)}`);
@@ -595,13 +596,14 @@ const STEPS = {
     assertThat(fs.existsSync(hook), `${hook} is missing after the second js-harness init`);
     const differs = porcelain(ctx, '--untracked-files=no');
     const agentsText = readIfThere(path.join(project, 'AGENTS.md'))?.toString('utf8');
-    const problem = secondInitProblem(differs, agentsText, agentsTemplate(project));
+    const claudeText = readIfThere(path.join(project, 'CLAUDE.md'))?.toString('utf8');
+    const problem = secondInitProblem(differs, agentsText, agentsTemplate(project), claudeText, claudeTemplate());
     assertThat(problem === null, problem);
     // The one change accepted, AGENTS.md rewritten to this candidate's template, is committed as its owner would, so
     // the steps after this one find the project clean (the host step refuses an AGENTS.md that differs from HEAD).
     let templated = '';
     if (differs !== '') {
-      expectOk(git(ctx, project, 'add', '--', 'AGENTS.md'), 'git add AGENTS.md');
+      expectOk(git(ctx, project, 'add', '--', 'AGENTS.md', ...(claudeText === undefined ? [] : ['CLAUDE.md'])), 'git add AGENTS.md');
       const committed = git(ctx, project, ...GIT_IDENTITY, 'commit', '-m', "practice: AGENTS.md of the candidate's template");
       assertThat(!committed.error && committed.status === 0, `the commit of the candidate's AGENTS.md template did not pass: ${ended(committed)}\n${tail(committed.output)}`);
       templated = `; AGENTS.md took this candidate's template and was committed as ${short(head(ctx))}`;
@@ -613,8 +615,11 @@ const STEPS = {
     const { project } = ctx.layout;
     // The step before ran `init` again on a project `uninstall` had emptied, so AGENTS.md is the one the installed copy
     // wrote, not one committed by an earlier candidate.
-    const agentsText = readIfThere(path.join(project, 'AGENTS.md'))?.toString('utf8');
-    const template = agentsTemplate(project);
+    // Since the split (odd/tasks/f8-s3-split.md, S3) the template is two files, read as one: AGENTS.md, then the
+    // CLAUDE.md that imports it, as Claude loads them.
+    const written = ['AGENTS.md', 'CLAUDE.md'].map((name) => readIfThere(path.join(project, name))?.toString('utf8'));
+    const agentsText = written[0] === undefined ? undefined : written.map((text) => text ?? '').join('');
+    const template = agentsTemplate(project) + claudeTemplate();
     const tokens = estimateTokens(template);
     const problem = templateLinesProblem({ agentsText, template, tokens, budget: TOKEN_BUDGET });
     assertThat(problem === null, problem);

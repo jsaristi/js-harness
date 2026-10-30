@@ -1,5 +1,5 @@
 # The whole suite on Windows, once a day, off the land's path (odd/tasks/commit-gates-first.md, S5 and R1): the
-# gates run on Linux (gate.yml, CircleCI), so nothing else tests what ships on the system it is mostly used on.
+# gates run on Linux (gate.yml, a commit's and the merge queue's), so nothing else tests what ships on the system it is mostly used on.
 # `js-harness windows-daily` reads the latest scheduled run and tells the lead the failing test names of a red one.
 #
 # It runs on its schedule and by hand (`gh workflow run windows-daily.yml`), never for a push or a pull request, so
@@ -31,7 +31,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # v4.4.0, with the node the gates run (cimg/node:24.21.0).
+      # v4.4.0, with the node the gates run (gate.yml).
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24.21.0

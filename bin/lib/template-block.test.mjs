@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { agentsTemplate, templateBlock, renderTemplateBlock } from './project.mjs';
+import { agentsBlock, agentsTemplate, claudeBlock, claudeTemplate, templateBlock, renderTemplateBlock } from './project.mjs';
 import { sha256 } from './manifest.mjs';
 
 // The rule ids a text names, sorted and once each (odd/tasks/instruction-homes.md, N48): a text that names a rule the other does
@@ -19,24 +19,26 @@ const withBlock = (body, { head = '# project\n\nOur own line.\n\n', tail = '\n##
 test('the template holds the harness\'s lines in a block whose mark carries their hash, the owner\'s sections in it', () => {
   const body = templateBlock();
   for (const section of ['## What good looks like', '## Working with the owner']) assert.ok(body.includes(`${section}\n`), section);
-  const text = agentsTemplate('/tmp/demo');
+  const text = agentsTemplate('/tmp/demo', { split: false });
   assert.ok(text.includes(`${mark(body)}\n${body}${END}\n`), text);
   assert.ok(text.indexOf('## What this project is') < text.indexOf(mark(body)), 'the project\'s own sections come before the block');
   assert.ok(text.indexOf(END) < text.indexOf('## Constraints'), 'the constraints, the project\'s own, come after it');
 });
 
-test('the block says gentle-ai\'s assessment decides when a change is reviewed, names no risk tier, and holds no copy of the test-first line or the five states', () => {
+test('the block says the lens review stays on where the Codex review is off, names no risk tier, and holds no copy of the test-first line or the five states', () => {
   const body = templateBlock();
-  assert.match(body.replace(/\s+/g, ' '), /gentle-ai's assessment decides when a change is reviewed/);
+  assert.match(body.replace(/\s+/g, ' '), /Where the Codex review is off \(`js-harness functions`\), the Claude lens review stays on: the merge door asks for its record/);
   assert.doesNotMatch(body, /medium or high risk/, 'no tier is named');
   assert.doesNotMatch(body, /A behavior change arrives with the test/, 'the test-first line lives in AGENTS.md');
   assert.doesNotMatch(body, /cut \(a new session/, 'the closing states live in protocol 2');
   assert.ok(body.includes('`js-harness-protocols` section 2'), 'the block names the protocol that holds the states');
 });
 
-test('the shipped block and this repo\'s AGENTS.md name the same rule ids', () => {
-  const agents = readFileSync(fileURLToPath(new URL('../../AGENTS.md', import.meta.url)), 'utf8');
-  assert.ok(ruleIdsOf(agents).length > 0, 'AGENTS.md names a rule');
+// Since the split (odd/tasks/f8-s3-split.md, S1), this repo's lines are its AGENTS.md and the CLAUDE.md that imports it.
+test('the shipped block and this repo\'s AGENTS.md and CLAUDE.md name the same rule ids', () => {
+  const read = (name) => readFileSync(fileURLToPath(new URL(`../../${name}`, import.meta.url)), 'utf8');
+  const agents = read('AGENTS.md') + read('CLAUDE.md');
+  assert.ok(ruleIdsOf(agents).length > 0, 'AGENTS.md or CLAUDE.md names a rule');
   assert.deepEqual(ruleIdsOf(templateBlock()), ruleIdsOf(agents));
 });
 
@@ -62,4 +64,39 @@ test('a file checked out with Windows line ends keeps them, and its unedited blo
   const rendered = renderTemplateBlock(crlf);
   assert.equal(rendered.state, 'rendered');
   assert.equal(rendered.text, withBlock(templateBlock()).replace(/\n/g, '\r\n'));
+});
+
+// F8 S3 (odd/tasks/f8-s3-split.md, S3): init ships the split. AGENTS.md keeps what a reviewer needs and CLAUDE.md, which
+// imports it, keeps how Claude works with the owner; the whole block stays what older projects hold, byte for byte, so a
+// project not yet moved keeps every line (sync renders the whole block where the project has no CLAUDE.md block).
+// The bytes moved on purpose three times: his answer to question 104 (odd/tasks/f8-s11-complements.md, L14) changed one
+// line, the ideas he approved on 2026-10-28 (odd/tasks/visual-pages.md, spec 3, idea 3: the pages ship to every project
+// through init) added the paragraph that names the page of each moment (T7), and his list of 2026-10-30
+// (odd/tasks/instruction-homes.md, T4) made the owner's line name `rule:owner-decisions` instead of repeating it.
+test('the whole block is the two halves, and stays the bytes every project holds today', () => {
+  assert.equal(templateBlock(), `${agentsBlock()}\n${claudeBlock()}`);
+  assert.equal(sha256(templateBlock()), '5870201ed7ea73bd879f813eae1a96de5689c4e4f243fbd2d330956784c85bad');
+  assert.ok(agentsBlock().startsWith('## What good looks like\n'));
+  assert.ok(claudeBlock().startsWith('## Working with the owner\n'));
+  assert.doesNotMatch(agentsBlock(), /Working with the owner/);
+});
+
+test('the split AGENTS.md holds the reviewer\'s block and CLAUDE.md imports it and holds the owner\'s block', () => {
+  const agents = agentsTemplate('/tmp/demo');
+  assert.ok(agents.includes(`${mark(agentsBlock())}\n${agentsBlock()}${END}\n`), agents);
+  assert.doesNotMatch(agents, /## Working with the owner/);
+  const claude = claudeTemplate();
+  assert.match(claude, /^<!--.*-->\n@AGENTS\.md\n/);
+  assert.ok(claude.includes(`${mark(claudeBlock())}\n${claudeBlock()}${END}\n`), claude);
+  assert.ok(claude.replace(/\s+/g, ' ').includes('A reply ends in one of the five states'));
+  const legacy = agentsTemplate('/tmp/demo', { split: false });
+  assert.ok(legacy.includes(`${mark(templateBlock())}\n${templateBlock()}${END}\n`), legacy);
+});
+
+test('renderTemplateBlock renders the body it is given: each file of the split its own half', () => {
+  const agents = renderTemplateBlock(withBlock(OLD), agentsBlock());
+  assert.deepEqual(agents, { text: withBlock(agentsBlock()), state: 'rendered' });
+  const claude = renderTemplateBlock(withBlock(OLD), claudeBlock());
+  assert.deepEqual(claude, { text: withBlock(claudeBlock()), state: 'rendered' });
+  assert.equal(renderTemplateBlock(withBlock(agentsBlock()), agentsBlock()).state, 'current');
 });

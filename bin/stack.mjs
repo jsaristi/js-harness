@@ -1,5 +1,5 @@
 // `js-harness stack`: which of the tools the harness requires are missing on this machine for this project, in the
-// order `stack install` runs them, each with its command and its exact undo; the person's own steps (gentle-ai's
+// order `stack install` runs them, each with its command and its exact undo; the person's own steps (a tool's
 // installer, logins, prerequisites) and the optional tools are named and never run. Read-only. See
 // odd/tasks/stack-install.md (D5, D8). `js-harness stack install` runs those installs, each shown, then asked, then
 // recorded before it starts so `uninstall machine` can undo it exactly (D4, D6, D7).
@@ -268,12 +268,14 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
     if (stillMissing) error(`${tool} ${dimension}: the command exited 0 and the probe still finds it missing; it stays recorded, so uninstall machine judges it`);
     else if (state === 'ok') log(`${tool} ${dimension}: done`);
     else {
+      // Read again at the end of the run, when a slow first start may have passed (F8 S13: 18 s for a new codex.exe).
       unverified.push(record);
+      if (applies !== null) unread.push({ record, row, childEnv });
       error(`${tool} ${dimension}: the command exited 0 and the probe cannot tell whether it worked; it stays recorded, so uninstall machine judges it`);
     }
   }
   // A record left unread is read once the probe can, so its undo applies to what the command left and not to whatever
-  // answers by the time of the uninstall, which never runs the undo of a record still unread (T7, gentle-ai R1-001).
+  // answers by the time of the uninstall, which never runs the undo of a record still unread (T7, review R1-001).
   if (unread.length > 0) {
     const end = readNow();
     for (const { record, row, childEnv } of unread) {

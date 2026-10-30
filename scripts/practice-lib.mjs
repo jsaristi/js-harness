@@ -339,17 +339,15 @@ const FALLBACK_HOOK_COMMAND = 'js-harness backup --session-start || exit 0';
 const RULES_HOOK_COMMAND = 'js-harness rules --hook || exit 0';
 
 /** The matcher of the guard hook, as `bin/lib/manifest.mjs` spells it: anchored, so that each tool is a whole name. The same test holds the two together. */
-const GUARD_HOOK_MATCHER = '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$';
+const GUARD_HOOK_MATCHER = '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Read|Write|Edit|MultiEdit|NotebookEdit|Grep|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$';
 
-/** The entries `install` grafts on the hooks file of each host, in the order it writes them, each as the event
- * it hangs from, its matcher (none for the pause entry) and its command, and the hosts that get it: the doctor's
- * at the start of a session and the resume hook's after a compaction or a clear, for both hosts; the pause entry after a
- * tool call, for Claude Code only, since a Codex session has no transcript the pause is read from, and the same command
- * after a WebFetch that failed, for Claude Code only, since WebFetch is its tool; the guard's before a tool call and the
- * share check's at a stop, for Claude Code only; and the reply check's at a stop, for both hosts, since it reads only the
- * reply's text. The test holds
- * this list to what `bin/lib/manifest.mjs` declares (`entryComponents`), so a journey cannot go on passing against
- * an install that changed. */
+/** The entries `install` grafts on the hooks file of each host, in the order it writes them, each as the event it hangs
+ * from, its matcher (none for the pause entry), its command and the hosts that get it: the doctor's and the resume hook's
+ * for both hosts; the pause entry after a tool call and after a failed WebFetch, the guard's, the share check's and the
+ * template gate's for Claude Code only, since what they read (a transcript, WebFetch, the tools named) is Claude Code's;
+ * the reply check's at a stop for both hosts, since it reads only the reply's text. The test holds this list to what
+ * `bin/lib/manifest.mjs` declares (`entryComponents`), so a journey cannot go on passing against an install that
+ * changed. */
 export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook', hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'SessionStart', matcher: 'compact|clear|startup', command: 'js-harness resume --hook', hosts: Object.freeze(['claude', 'codex']) }),
@@ -363,6 +361,8 @@ export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'SubagentStart', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'Stop', command: REPLY_HOOK_COMMAND, hosts: Object.freeze(['claude', 'codex']) }),
   Object.freeze({ event: 'Stop', command: BACKUP_HOOK_COMMAND, hosts: Object.freeze(['claude', 'codex']) }),
+  Object.freeze({ event: 'PreToolUse', matcher: '^(Artifact|ArtifactData|AskUserQuestion|mcp__visualize__show_widget)$', command: 'js-harness template gate --hook || exit 0', hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'PostToolUse', matcher: '^(Artifact|ArtifactData|AskUserQuestion|mcp__visualize__show_widget)$', command: 'js-harness template gate --shown || exit 0', hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'SessionStart', matcher: 'startup|resume|clear|compact', command: FALLBACK_HOOK_COMMAND, hosts: Object.freeze(['claude', 'codex']) }),
 ]);
 
@@ -518,10 +518,10 @@ export const JOURNEY = Object.freeze([
  * from the commit, but for an `AGENTS.md` that is exactly the candidate's template (`template`). `init` writes the
  * template of the copy that runs it, and the project committed the one of an earlier candidate, so a candidate that
  * changes the template shows it here once; the next run's `commit-passes` commits it. */
-export function secondInitProblem(porcelainText, agentsText, template) {
-  const lines = porcelainText.split('\n').filter(Boolean);
-  const onlyTemplate = lines.length === 1 && lines[0] === ' M AGENTS.md' && agentsText === template;
-  return lines.length === 0 || onlyTemplate ? null : `tracked files differ after the second js-harness init:\n${lines.join('\n')}`;
+export function secondInitProblem(porcelainText, agentsText, template, claudeText, claudeTemplate) {
+  const lines = porcelainText.split('\n').filter(Boolean); // AGENTS.md, and CLAUDE.md since the split (odd/tasks/f8-s3-split.md, S3)
+  const templated = (line) => (line === ' M AGENTS.md' && agentsText === template) || (line === ' M CLAUDE.md' && claudeText !== undefined && claudeText === claudeTemplate);
+  return lines.every(templated) ? null : `tracked files differ after the second js-harness init:\n${lines.join('\n')}`;
 }
 
 /** The sorted `git status --porcelain` lines the practice project should show after `uninstall`, from the lines it
@@ -549,7 +549,7 @@ export function uninstallExpected(before, manifestText) {
     if (entry.createdDir === true) recorded.add(entry.path.replace(/\/[^/]*$/, ''));
   }
   const gone = (line) => line.startsWith('?? ') && recorded.has(line.slice(3).replace(/\/+$/, ''));
-  return [...before.filter((line) => !gone(line)), ' D AGENTS.md', ' D harness.json'].sort();
+  return [...before.filter((line) => !gone(line)), ' D AGENTS.md', ...(manifest.files?.some?.((entry) => entry?.path === 'CLAUDE.md') ? [' D CLAUDE.md'] : []), ' D harness.json'].sort(); // CLAUDE.md since the split, S3
 }
 
 /** The sections `agentsTemplate` gained with the lines that hold in any project (odd/tasks/rule-hierarchy.md, T9), whose

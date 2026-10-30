@@ -1,0 +1,676 @@
+# visual-pages
+
+Branch `feat/visual-pages`, from main (62315e61). Runner: `node --test`. Session JH 79.
+
+## Goal
+The harness shows its moments as pages a command makes from the records: the departure and return of a stretch with
+the percent of the planned met, the map by phase and a timeline; the close of a feature; the change of a phase; and
+the status report; each page keeps its numbers so the next one compares with it, and a live board left unsent is
+named to the lead at its next reply.
+
+## Why
+His words of 2026-10-28 to the lead (session 0f71b2c6-cbce-43ca-a031-276a4b2c381f, lines 12054, 12220, 12237,
+checked with `js-harness sessions --quote`), quoted under Specs. The two pages he liked that evening
+(https://claude.ai/artifact/HuGDpq6jebQTFqjaDEXx4H, https://claude.ai/artifact/NXkguUN8eUjktfwowVnbXB) were drawn
+by hand: the lead read the roadmap, the F8 plan, the merges and the notices, and inferred the percent, the before
+and after of each step and the timeline. A page drawn by hand is a page no one can check, and the next one cannot
+compare with it. The board went stale the same day: by the lead's brief, 121 rows waited at 23:15Z, the oldest from
+01:37Z, because only the lead's memory sends them.
+
+## Done when
+- `npm run check` exits 0
+- `node --test bin/lib/pages.test.mjs bin/stretch.test.mjs bin/lib/stretch.test.mjs bin/lib/stretch-moments.test.mjs bin/lib/stretch-render.test.mjs bin/report.test.mjs bin/lib/report.test.mjs bin/lib/report-pages.test.mjs bin/reply.test.mjs bin/lib/stale-board.test.mjs bin/sessions-live.test.mjs bin/sessions-background.test.mjs bin/lib/sessions-running.test.mjs` exits 0
+- `node bin/js-harness.mjs stretch --help` exits 0
+- `node bin/js-harness.mjs report --help` exits 0
+- `node bin/js-harness.mjs report phase --json` exits 0
+- The stretch return, a feature close, the phase page and the status report made on this machine from the real
+  records and published (by hand); the stretch from a stretch record written for the absence of 2026-10-28 in a
+  scratch home, since no stretch was opened for it, said so on the page
+
+## In scope / Out of scope
+- In: `bin/lib/pages.mjs` (new, the pure renderer), `bin/lib/pages-record.mjs` (new, the page record),
+  `bin/stretch.mjs`, `bin/lib/stretch*.mjs`, `bin/report.mjs`, `bin/lib/report*.mjs`, `bin/reply.mjs` and a new
+  `bin/lib/stale-board.mjs` (the Stop hook's check), `bin/sessions-live.mjs`, `bin/sessions-background.mjs`, a new
+  `bin/lib/sessions-running.mjs`, `docs/live-board.html` (the running block, which the lead's addition implies),
+  `bin/lib/project.mjs` (init's line), their tests, the rule changes through `js-harness rules change`
+  (`bin/lib/manifest.mjs`, `bin/lib/rules-data.mjs`, `docs/RULES.md`, `docs/rule-sources.json`), this document, one
+  ROADMAP line, a session summary.
+- Out: credentials, `~/.claude`, `~/.codex`, gentle-ai config; the installed copy (not refreshed); the live board's
+  published artifact (the lead republishes the page after the merge); evals; any new recorder of work: the pages
+  read the records that exist and say what they do not hold.
+
+## Constraints
+- A number on a page comes from the command's JSON; the page is that JSON rendered. Nothing on it is typed by the
+  lead, except the sections no record holds, which come from a notes file the page labels as the lead's.
+- What no record holds is named on the page as not measured, never inferred; an unknown is never shown as a zero.
+- A state a document reports and a state a check proves are shown apart: the roadmap's prose is shown as what it says.
+- Zero dependencies; the page record lives under the throughput folder, which `uninstall` keeps and names.
+- High-risk items (CLAUDE.md, Task Size): the Stop hook runs at every stop of every session where a project turned
+  the reply check on, and fails open; `claudeBlock` is text `sync` renders into projects. Both get their tests first
+  and the slice's reviews; no other verifier.
+
+## Ask me before
+Nothing beyond the standing rules: the design passed two blind readers before code (rule:double-review), and his
+words already decide the feature ("te apruebo las ideas que me diste para que los apliques", line 12237).
+
+## Specs
+1. The percent of the planned that was met, the map, chronological or by phase, complete and detailed, and a check
+   of what advanced: "añadamos esto mas al protocolo, entre todo lo que teniamos que porcentaje se cumplio y ademas
+   quiero que me muestres el mapa y como cronologico o de fases bien completo y detallado y me checkees lo que se
+   avanzo" (line 12054).
+2. The harness shows almost everything this way, to guide the user and keep a record, because what is not measured
+   cannot be improved: "quiero que el arnes muestre casi todo asi ya que es mas grafico y es muchisimo mejor para
+   guiar tanto al usuario como para que vayamos llevando un registro por que lo que no se mide no se puede mejorar y
+   ademas el usuario no queda perdido quiero que protocolicemos todo esto" (line 12220).
+3. The board goes stale when the lead moves to another session, and the ideas proposed are approved: "si pero cada
+   que el orquestador se pasa a otra sesion al parecer el tablero se elimina y queda desactualizado en la version
+   vieja osea no lo vuelve a generar ni actualizar ni absolutamente nada y te apruebo las ideas que me diste para que
+   los apliques" (line 12237).
+4. The lead's addition of 23:43Z, decided by the lead after he said the board read "todo está quieto" while JH 78 ran
+   paid evals (his words are in the lead's transcript; the brief carries them, not their line): `sessions start`
+   writes the start row itself, and running work (an eval batch, a gate, a review) shows on the board without a
+   notice.
+5. The board opens with the last three things done and how long ago, as a mini context: "en el tablero muestrame al
+   inicio las ultimas 3 cosas que se han hecho y hace cuanto tiempo para tener un mini contexto" (transcript
+   0f71b2c6, line 13105, 2026-10-29T00:59:10Z, checked with `js-harness sessions --quote`; sent by the lead at 01:03Z).
+6. The status list the lead showed him, as colored cards at the board's top: "queria que añadieras ese artefacto asi
+   al tablero al inicio antes de \"lo que te toca\"" (transcript 0f71b2c6, line 13589, 2026-10-29T01:28:44Z, checked
+   with `js-harness sessions --quote`; "ese artefacto" is the lead's inline status list of 01:05Z, as the lead's
+   message of ~01:31Z describes it).
+7. Each session's card says who works on what and the approximate time of its task: "colocame en el tablero de quien
+   trabaja y en que y el tiempo aproximado de la tarea" (transcript 0f71b2c6, line 14289, 2026-10-29T02:16:52Z,
+   checked with `js-harness sessions --quote`; sent by the lead at 02:17Z).
+9. The stretch's return says, beside each goal not met, failure and item not finished, why, how it was or can be
+   fixed, and why not if it is not: "necesito que me digas por que fallo o no se pudo hacer lo falto o fallo y como se
+   soluciona o se soluciono" (transcript 0f71b2c6, line 18034) and "en la hoja donde muestres que fallo ahi colocame
+   lo que te pido de como se soluciono o como se puede solucionar y por que no se ha solucionado si es el caso" (line
+   18171), both 2026-10-29, checked with `js-harness sessions --quote`, sent by the lead at 03:18Z and 03:27Z: from
+   the records only, a notice or commit that says it, else "no registrado"; then the closed stretch of
+   2026-10-29T03:06:28.748Z regenerated by the command.
+
+## Design
+
+### What the lead had to infer by hand, which the command computes
+Read from the two model pages: the percent of goals met and of queued work done; the sessions that worked outside
+the plan; the roadmap's total before and after the absence (95/106 then 95/107); each F8 step's state at departure
+and now; the timeline of merges, questions, failures and the return; the pull requests a session delivered. Each
+is a fact of git (the roadmap at a commit, the merges of main), of the channel record (the notices), of the
+background record (the starts) or of the stretch record. What the lead wrote as prose (why G2 was late, the cost of
+a pnpm lock) stays the lead's, in the notes file.
+
+### One renderer (`bin/lib/pages.mjs`) and one page record (`bin/lib/pages-record.mjs`)
+`pages.mjs` is pure: a page's parts in, one HTML fragment in Spanish out, starting with `<title>`; the Artifact tool
+wraps a fragment in a document at publish time and the desktop's visual tool takes it whole, so one output serves
+both. Its colour tokens are scoped to the page's wrapper class (a fragment shown inside a host page must not change
+the host's `:root`), with a dark set under `prefers-color-scheme`. It holds only the parts the pages below use, each
+added with the first page that needs it: `badNews`, `tiles` (a big number, a meter, a caption; an unknown share is
+"sin medir", never 0 %), `table`, `timeline`, `chain` and `pill`, and `pages-sections.mjs` builds the sections the
+pages share from them (the shares, the map, a plan, the timeline). Every text from a record is escaped. Times are
+shown in UTC with their `Z`, as the records keep them. `stretch-render.mjs` keeps its two renders and its own bars,
+and puts them inside a page.
+
+`pages-record.mjs` keeps a page's numbers: `<home>/.js-harness/throughput/<project>/pages.jsonl`, one line a page
+made at a moment, `{ schema: 'js-harness.page/v1', kind, subject, at, head, numbers }`: `subject` the stretch id,
+the feature document's path or `map`; `head` the commit of the default branch read; `numbers` the page's counts
+(the map by phase, the plan steps, the shares). A page whose kind, subject and head equal the last line's is not
+appended again. Append only; a cut last line is ended first, as the stretch record does. Where git holds the
+"before" (a stretch's opening head, a feature's first merge, a status report's `--mark` head), the page reads git;
+the record is the "before" only of the phase page, which has no other.
+
+### The map and the plan steps, at a commit (`bin/lib/report-git.mjs`, `bin/lib/report-pages.mjs`)
+`momentAt(commit)` (report-git) reads the roadmap that commit holds: its map through `mapOf` (phases `{ title, done,
+total, open }` and the total) and its plans through `planOf` (report-pages, pure): each `## <name> plan` section,
+its `### ` headings in order as steps, each with:
+- `said`: its `- **State:**` text as written, with `reported`, a word read from its first words (`done`, `built`,
+  `in progress`, `designed`, `to do`, else `other`), shown as "dice la hoja de ruta", never as proof;
+- `documents`: the feature documents the step's text names (`odd/tasks/<x>.md`), each with its task checkboxes
+  done/total at that commit, which is the state the roadmap itself says to read ("a step's state is read in its
+  feature document"); a step that names none shows only `said`.
+Before and after are two commits: a step whose document gained done tasks, or whose reported state went forward,
+advanced; one whose state went back went back ("retrocedió"); one whose prose alone changed is "texto cambiado"; the
+map's phases compare by title. A before git cannot read (the commit, its listing or a document) is said with why and
+every step and phase is "sin medir", never "nuevo". A roadmap with no plan section gives no chain.
+
+### Stretch: the shares, the map and the timeline
+`stretch status` and `close` (not the live board's `boardStretch`, which must stay cheap) add three blocks, computed
+by a pure module (`bin/lib/stretch-moments.mjs`) from what `bin/stretch.mjs` reads. `open` now records `head`, the
+default branch's commit at the opening; a stretch opened before this records none, and its head is reconstructed
+with `git rev-list --first-parent -1 --before=<openedAt> <ref>` (the ref `report` uses, `paceRef`), labelled as
+reconstructed.
+
+- `goals` and `work`, each share `{ met, of, unknown }` (the page computes the percent), its denominator said:
+  - goals met: of all goals, those met at the last check; a goal never checked is `unknown`, not unmet;
+  - goals met in time: of the goals met, those whose first check that found them met is at or before `returnAt`;
+    a met goal with no check before `returnAt` is `unknown`, so a stretch whose goals ran only at `close` after the
+    return reads "sin medir", and the rule asks for `status --goals` before the return when the lead is awake;
+  - work done: of the items that do not wait for the user, those `finished`; the others listed by state;
+  - outside the plan: a count, not a share: the work sessions (`roleOfTitle` gives a number) whose first notice
+    falls inside the stretch and that are no item's session, each with its first and last notice; notices with no
+    title counted apart; the lead's own notices are not work.
+  A share over nothing is `null`, shown as "nada que medir".
+- `map` and `plans`: `momentAt` at the opening head and at the default branch now, compared.
+- `timeline`: oldest first, cut to the stretch: each pull request merged on the default branch's first-parent line
+  (grouped by number, at its last merge), the notices `opened`, `ready`, `closed`, `waiting`, `question` and
+  `answer`, the failures the measure already holds, and the stretch's events (open, each goal check, close).
+
+`close` appends the page record; `open` shows the map at the opening, so the departure says what exists now.
+
+### The feature's close (`report feature <doc>`)
+From the feature document and git:
+- promised and delivered: the numbered items under `## Specs` and the commands under `## Done when` (`doneWhen`,
+  `bin/lib/contract.mjs`), read by section; its tasks done/total (`tasksOf`); the done-when commands listed as not
+  run by the page (one may be the gate, which takes the lock: `contract run` is the lead's);
+- its pull requests: the merges of the default branch's first-parent line whose source branch, with an owner prefix
+  removed, is one the document names (`Branch \`x\`` at its head, the lines before its first section) or `--branch`,
+  or a slice of one (`<branch>-…`, a guess the page names as such), or named by `--pr <n>`, both repeatable; grouped
+  by number; each one's commits the union of `M^1..M^2` over its merges, as hashes. A history whose merges name no
+  pull request gives `{ unknown }` with why;
+- time: real from the oldest of those commits to the last merge; estimated from a closed or open stretch item whose
+  session is the document's (`Session JH <n>` at its head), else "sin estimado registrado";
+- reviews: coverage, the Codex reviews (`codex-reviews.jsonl`) and lens reviews (`lens-reviews.jsonl`) whose head is
+  one of those commits, by outcome; attempts, the Codex runs (`codex-review-runs.jsonl`) by run id; a review of a
+  rebased head is not found and the page says so. The gentle-ai lines of the log are not counted: main's sweep (F8
+  S11) refuses a file under `bin` that names the tool, and the page counts what the records hold;
+- spend: the Codex runs' `usage.inputTokens` and `cachedInputTokens` apart, only from runs whose tokens were read from
+  the rollout files (`usageSource: rollout`), any other run counted as unmeasured; a skip (`--unavailable`) covers no
+  commit and is counted apart;
+  the lens results' `costUsd` and tokens; evals and the session's own tokens "sin medir";
+- failures: the failed gates inside its span whose folder is its worktree, `.claude/worktrees/<document name>` of the
+  main checkout, or a slice's (`<document name>-…`, as its branches are matched); the gate log is the machine's, so a
+  folder of that name in another project is not its; a gate log
+  that cannot be read is said, never shown as no failure;
+- the map: at the first parent of the earliest merge of all its pull requests and at the last merge.
+`--record` appends the page record (subject: the document's path).
+
+### The phase's change (`report phase`)
+The whole map at the default branch now against the last `phase` page of the record (or `--since <commit>`; with
+neither, the page says it has no before): each phase's share before and now, the phases that closed, the plan steps
+with before and after as above, and what is next: the first plan step whose reported state is not done, and the
+open phases with what is left. `--record` appends it.
+
+### The status report (`report --html <file> [--notes <file>]`)
+The six sections of `rule:status-report` as a page: 1 what landed (the pull requests, grouped), 2 the sessions (each
+one's last notice), 4 the map, with the map at the head the last `--mark` recorded as before, and 5 the open
+questions; 3 (his decisions and what they changed) and 6 (what the lead proposes) are no record's, so they come
+from `--notes` (`{ badNews: [text], decisions: [{ text, changed }], waits: [{ what, why }], proposals: [{ step, why
+}] }`), each labelled "del orquestador"; with no notes each says that no record holds it. `--json` gives the data.
+
+### The stale board (spec 3): a reminder at the lead's next reply
+What happened, checked: the cursor (`<home>/.js-harness/channel/live/D--js-harness.json`) still names the board of
+the brief (`.../LAMAVwx92GosturPiuKbTD`), so the board was not replaced; its rows went unsent, which is what the
+user saw as a board "eliminado" and old. The three places the brief names, weighed:
+- the resume after a compaction runs only after a compaction, never for a new lead in another session, his case;
+- `wait --notice-to orchestrator` and the heartbeat run only when the lead runs them, and a lead that forgot the
+  board forgets them too;
+- the Stop hook runs at every reply of every session of a project with the reply check on, a new or compacted lead
+  included; a reply is already shown when it runs, so it is a reminder that turns the lead back for one more turn,
+  not a prevention; and it fails open (a record it cannot read lets the stop through).
+Chosen: the Stop hook, as its own check (`bin/lib/stale-board.mjs`), beside the reply and wake checks:
+- it acts only where the project has a board: the cursor file exists and holds a `url`; with none, nothing;
+- the lead is the session whose newest notice in the channel record, by `from.id` equal to the payload's
+  `session_id`, has a title of the orchestrator's role: `roleOfTitle` gives `orchestrator`, or the title's first
+  word after the code is `ORQ` (a handover title such as `JH ORQ nueva · ...`); a session that sent no notice is
+  not taken for the lead;
+- it fires when rows wait (`pendingRows` with the cursor) and the oldest waited longer than the board's check holds
+  (`CHECK_MINUTES`, 45, exported from `bin/sessions-live.mjs`), so a fresh notice does not interrupt a reply;
+- it skips a reply that closes on a decision or a question (the user must read it first) and a payload with no
+  `background_tasks` (Codex, which cannot send `ArtifactData`);
+- it warns once a pending set: its reason carries a marker and the oldest row's id, and a transcript that already
+  holds that marker with that id is not warned again; a newer oldest row (the lead sent some) warns again;
+- its reason names the count, the oldest row's time, the board's link and the two commands to send them.
+Its cost: at each stop where the reply check is on, one read of the cursor (a missing file ends it) and of the
+channel record; the lead's transcript is searched only when the lead is about to be warned. The resume and the
+heartbeat are left as they are, to keep one home.
+
+### The start row and the running work (spec 4)
+- `sessions start` appends an `opened` notice once claude accepted the session (`started` recorded), `from` the new
+  session's title and `sessionId` (else its job id), stamped with the time before it launched claude and with the
+  text "started by sessions start: <title>". The board takes a session's latest row by time (`docs/live-board.html`,
+  line 260), so a notice the child sends later is the newer one; the child's own `opened` still comes, as its
+  first fact of its own. `sessions` reads a session's state in the record's order, so the row is written only while
+  the record holds no notice of that session; its `worktree` is the absolute path, as `placeOf` records one. A start
+  whose notice cannot be appended says so on standard error and keeps the start.
+- `sessions live --out` puts `running` into `board-checked.json`: `{ at, until, items }`, sampled at that check and
+  held until the next (`until`), each item `{ kind, pid, since, where }`: the gates as `findGates` reads them from
+  the listing (a gate running and one waiting for the lock are not told apart; `where` its worktree where the command
+  line names one), and among the machine's node processes the Codex and lens
+  reviews (`bin/codex-review.mjs`, `bin/lens-review.mjs`, or the dispatcher's `codex-review`/`lens-review`) and the
+  eval batches (`evals/suite.mjs`), matched by argument as `findGates` matches a gate, so a test file of the same
+  name is none (`bin/lib/sessions-running.mjs`). `since` is the process's start, unknown where the listing gives
+  none. A listing that fails gives `{ unavailable }`. `docs/live-board.html` shows it as "en curso a las HH:MM".
+
+### The last three things done (spec 5)
+`docs/live-board.html` opens, above everything else, with the three newest rows of its `events` collection whose
+kind says something was done (`closed`, a session's work finished; `ready`, a pull request ready), newest first,
+each with its session, its text cut to one line, and how long ago it was, counted by the page from the row's time
+against the viewer's clock and recounted at each repaint, every 30 seconds ("hace 12 min", "hace 3 h"). The rows
+are the board's own, so no command changes; with none, the block says "Nada terminado todavía en el tablero". Merges are not rows of the
+board (they live in git), so a pull request shows here by its `ready`, not by its merge; the stale-board check is
+what keeps these rows current.
+
+### The status list (spec 6)
+Above "Lo último que se hizo", "Cómo va": one card an item of `board/summary.status`, the shape
+`[{ state: 'done' | 'working' | 'waiting', titulo, texto }]` the lead fills on each wake (a title such as
+"Hecho · PR 629 integrado", one plain sentence): an outline icon drawn inline (Tabler's circle-check, loader and
+hourglass shapes), the title in bold, the sentence under it; green for done, amber for working, blue for waiting
+(the page's `ok`, `wait` and `run` tokens), and a muted legend "Verde: hecho · Ámbar: en curso · Azul: esperando".
+An item of another state or with no title is left out (`statusItems`); with none, the block hides.
+
+### The time of each session's task (spec 7)
+Each card of a session still at work ("Quién trabaja y en qué") keeps its last notice, which says what it is on, and
+adds one line, "Lleva 1 h 20 min en esto · estimado 1,5–2 h" (`taskTimeText`): how long it has been on its task,
+counted from its newest `opened` row on the board, else from its oldest row the board holds, said as such; and the
+task's estimate, from `board/summary.estimates` (`[{ session: 'JH 79', horas: [low, high] }]`, the lead's, filled
+on each wake), else from the open stretch item whose `session` is the card's (its corrected hours), else "sin
+estimado". A session is named by its code and number, so "JH 7" is not "JH 79". An estimate that is not two numbers
+is none; no number is made up.
+
+### Shipping to every project (spec 2)
+The commands are the harness's, so every project that installs it has them. `init`'s `CLAUDE.md` block
+(`claudeBlock`, `bin/lib/project.mjs`) gains one line naming the moments and the pages, so a project's sessions
+know when to make one; `sync` renders it again into an unedited block.
+
+### The rules
+No new rule: the moments amend the two that already hold them (AGENTS.md: amend before adding), on
+`rule/visual-moments`, through `js-harness rules change`, quoting his words of 2026-10-28:
+- `reports-spanish-visual`: at a stretch's departure and return, a feature's close, a phase's change and a status
+  report, the page is the one the command makes from the records (`stretch`, `report feature`, `report phase`,
+  `report --html`), never drawn by hand; the live board stays the continuous view, and a pull request appears
+  inside its feature's page;
+- `away-autonomy`: the return shows the shares of the planned met, the map before and after and the timeline, and
+  before the return the lead checks the goals (`stretch status --goals`) so their time is known.
+
+### Slices
+Chained pull requests, each with its reviews: A the renderer, the record and the stretch's moments; B the stale
+board, the start row and the running work; C the report's pages and init's line; D the rule change, stacked.
+Slice A came to 1,666 changed lines, so it went up as three stacked pull requests, each on its parent's branch: #643
+the design (`feat/visual-pages-design`), #644 the renderer (`feat/visual-pages-renderer`), #645 the stretch and the
+review fixes (`feat/visual-pages`). None is under 400: the design's second commit rewrites the first, the renderer
+is one commit, and the fixes touch both the renderer and the stretch. Slice B, 721 lines, stacks on #645 as two:
+the stale-board guard, T4 (`feat/visual-pages-b`, 9b36b5b5), and the board's start row, running work, last things
+done and status cards, T5, T5b and T5c (`feat/visual-pages-board`).
+
+### Why, and how it is fixed (spec 9)
+The return gains a section, "Qué faltó, por qué y cómo se arregla", one row for each goal not met, failure and item
+not finished, with four cells: what, why, how it was or can be fixed, why it is not fixed. A cell says only what a
+record says, with its source beside it, else "no registrado". Two kinds of record fill them:
+- Derived, no one writes them. A failure's why is what its record names (the gate's result and failing tests, the
+  land's exit, the Codex run). A session's failed gate was fixed when a later gate of that session passed; the cell
+  names that gate's end. A land or a Codex run is never fixed by the record alone: theirs name no pull request or
+  range, so a later pass may be another's. A goal's why is its command's exit. An item's why
+  is its state with its last record's time, and its session's last `waiting` or `question` notice inside the stretch,
+  quoted.
+- Explained: `js-harness stretch explain <goal or item id> --source <commit or notice> [--why <text>] [--fix <text>]
+  [--fixed | --open <why not>]` appends an `explain` event to the stretch, open or the last closed one, or the one
+  `--stretch <id>` names. The source is required and checked: a commit git knows in the project, or a notice of the
+  channel by its `at`. The page shows each text with its source. An explained cell wins over a derived one, and
+  explanations add up: a later one replaces the cells it gives and keeps the rest. A goal and an item may share an
+  id, so the event records which it names (`goal:<id>` or `item:<id>` when the bare id names both).
+
+A closed stretch is shown again by `js-harness stretch show [--stretch <id>] [--json] [--html <file>]`: the return
+measured at its close from the records written by then, from its own checks (no goal runs again), the map and
+timeline read at its close time; it
+records no page numbers, since the close already did. Searched first: `stretch status` and `close` act only on the
+open stretch; `notify --kind note` carries no target and lies outside the surface; nothing else names a goal's why.
+
+## Tasks
+- [x] T1 (kind: design) this document, read by two blind readers (rule:double-review), in ee595c7c and the revision after them. Spec 1-4. Route: inline, readers delegated.
+- [x] T2 (kind: build) `bin/lib/pages.mjs`, `bin/lib/pages-record.mjs`, the map and plan at a commit. Spec 1, 2. Route: inline. 35c8d1fd and the review fixes.
+- [x] T3 (kind: build) `stretch status`/`close`: met, map, timeline; `open` records its head. Spec 1. Route: inline. 8a412b79 and the review fixes.
+- [x] T4 (kind: build) the stale-board check in the Stop hook. Spec 3. Route: inline. Slice B.
+- [x] T5 (kind: build) the start row and the running work on the board. Spec 4. Route: inline. Slice B.
+- [x] T5b (kind: build) the last three things done, each with how long ago, at the top of the live board. Spec 5. Route: inline. Slice B.
+- [x] T5c (kind: build) the lead's status list as colored cards at the top of the live board. Spec 6. Route: inline. Slice B.
+- [x] T5d (kind: build) each session card's time on its task and its estimate. Spec 7. Route: inline. Slice B.
+- [x] T5e (kind: build) follow-up of Codex's open P2 (L10): `recordOfRows` (`bin/lib/sessions.mjs`) keeps a session's
+  status and place by record order, so a session's notice appended between `sessions start`'s read of the record and
+  its append of the start row is behind that row; the fix is to keep the newer by `at` (ties by record order). Outside
+  this brief's surface for `bin/lib/sessions.mjs`; the lead's decision of 02:33Z: a follow-up after this feature, not
+  in slice B (it changes how shared board code orders status), and named in the slice B PR as the one Codex finding
+  left open. Spec 4. Route: inline. Done by JH 85 on `fix/records-follow-ups`, in the commit "fix(sessions): keep a
+  session's newer state by its time".
+- [x] T5f (kind: build) follow-up, a defect found landing #644 (L16), outside this brief's surface: the merge queue
+  (`bin/merge-queue.mjs:318`) passes `reviewCoverage` the pull request's head as the tip, so a record whose head lies
+  past it covers; the pre-push check (`bin/lib/codex-review-rows.mjs:58`) passes main's merge, which that record's
+  head is not past. The first pull request of a stack, landed alone after a review over the stack, passes the queue
+  and is refused at push. The fix is one tip for both. Cost about 25 minutes on 2026-10-29. Route: inline. Done by
+  PR 663 (JH 83, merged as acc2c6ff): the door asks the push's rows of the head merged onto main; its test "a record
+  whose head lies past the pull request covers it at its head and not merged" is this case (JH 84 checked, 2026-10-29).
+- [x] T6 (kind: build) `report feature`, `report phase`, `report --html --notes`. Spec 1, 2. Route: inline. `report
+  phase` in the slice C commit "feat(report): the phase page". Landed as #651, #652 and #654.
+- [x] T6a (kind: build) follow-up of Codex's recheck of `report feature` (96ff534..91c9f20): its finding 4, the failed
+  gates of the feature's slice worktrees left out, fixed in d8e0a122; Codex reads C3 again from 95d5231e (`--again`).
+  Route: inline.
+- [x] T10 (kind: build) each page command calls `recordRendered` once (L17), through `bin/lib/pages-rendered.mjs`, the
+  seam its tests stub; the departure carries the map and the timeline; the plan's titles as written. Spec 8. Route:
+  inline. The seam and `report phase`'s call in the same commit; the `report` calls in slice C; the stretch's in
+  slice E3 (`feat/visual-pages-e3`): open, status, close and show put each page they write under
+  stretch-departure, stretch-status or stretch-return. The departure's map by phase came in slice A's
+  `mapNowSection`; its timeline is the lanes on the hour scale with the return marked, which is all that exists at
+  the opening; the usage says the titles reach the pages as written.
+- [x] T7 (kind: build) init's line. Spec 2. Route: inline. The block init writes names the page of each moment and
+  its command, under `rule:reports-spanish-visual`; this repo's CLAUDE.md names the rule in its Reporting sentence,
+  the one line the lead's note of 09:11Z widened the surface to.
+- [x] T8 (kind: build) the rule changes on `rule/visual-moments`. Spec 1, 2. Route: inline. Landed as #655.
+- [x] T9 (kind: verify) the four pages from the real records, published; reviews on each slice. Route: inline. The
+  return of the real stretch of 2026-10-29T03:06:28.748Z took the place of the scratch-home stretch of 2026-10-28:
+  a real record exists now, so none was written by hand.
+- [x] T11 (kind: build) the return's why and fix, `stretch explain` and `stretch show`, then the stretch of
+  2026-10-29T03:06:28.748Z shown again. Spec 9. Route: inline. Slice E, about 510 lines, as two stacked pull
+  requests: E1 (`feat/visual-pages-e`, on #655) the pure part, the failures' fix, `problemsOf` and the page's section;
+  E2 (`feat/visual-pages-e2`) `stretch explain` and `stretch show`.
+- [x] T11a (kind: docs) the stretch entries of `README.md` and `js-harness help` (`bin/js-harness.mjs`) name only open,
+  bind, status and close; both lie outside this brief's surface, so `explain` and `show` are said in the command's
+  own usage until a session that owns them adds a line. Route: inline. The lead's note of 11:03Z widened the surface to
+  those two entries.
+- [x] T12 (kind: build) a failure is explainable like a goal or an item. Spec 9, from the lead's note of 11:00Z: the
+  four failures of the 03:06Z stretch still read "no registrado" because `explain` took only a goal or an item.
+  `stretch explain failure:<time>` names one by its start, in full or by the minute the return shows, among the
+  failures measured to the close; a minute two start in is refused with the full time of each. A failure's row is
+  named by its start, so an explanation reaches that failure alone. Route: inline, `feat/visual-pages-t12`.
+- [x] T13 (kind: build) follow-up of JH 85 (its summary's "Left"): the return's failures say why from their own records,
+  a failed land "land exit N: <said>" and a failed Codex run "Codex review failed: <reason>" (`stretchLost`,
+  `bin/lib/stretch.mjs`), the bare words when the record holds none. Spec 9. Route: inline, JH 87 on
+  `fix/pages-follow-ups`, the commit "fix(stretch): say why a land or a Codex run failed".
+- [x] T14 (kind: build) his words, 0f71b2c6 line 21871, 2026-10-29T14:00Z: "Colocame en ese regreso del tramo de hace
+  cuanto se genero". The return (and the open stretch's status page) says "Generada el <UTC time>" from the time the
+  command wrote it (`emit`, `bin/stretch.mjs`), and a script in the page (`page`'s `generatedAt`, `bin/lib/pages.mjs`)
+  counts "hace N min" where the page is shown and again each minute, so a later look stays true; with no script the
+  time alone. Route: inline, JH 87, the commit "feat(stretch): say when the return page was made".
+- [x] T15 (kind: docs) the comment beside the start row (`bin/sessions-background.mjs`) still said a notice appended
+  between the read and the append is behind that row; since T5e the board keeps the newer by time, so it is not. JH
+  85's "Left". Route: inline, JH 87, the commit "docs(sessions): say why the start row stays behind a newer notice".
+- [x] T16 (kind: build) his words, 0f71b2c6 line 21816, 2026-10-29T13:57Z: "siempre colocame las preguntas aca y cuando
+  hayan preguntas viejas que no he respondido, colocamelas en el tablero como todo o tareas para yo podertelas pedir
+  por que me queda muy dificil adivinar o estar pendiente de todas las sesiones". `sessions live --out` puts every
+  question of the record nothing closed into `board/summary.questions` (`openQuestions`, `bin/sessions-live.mjs`),
+  each with its number and the line he sends, "hazme la pregunta N"; the board lists them under "Lo que te toca"
+  (`yoursItems`, `docs/live-board.html`), so the lead writes none by hand. The line he sends is answered with
+  `js-harness template ask N`; the orchestrator's block (`bin/lib/manifest.mjs`) does not say so yet, outside this
+  brief's surface, sent to the lead. Route: inline, JH 87, the commit "feat(board): list the open questions from the
+  record".
+
+## Log
+- L1. 2026-10-28, the lead's brief for JH 79: his words of lines 12054, 12220 and 12237, the four ideas he approved
+  (pages made by a command from the records, keeping their numbers; pages at moments, not per pull request; shipped
+  to every project through `init`; the stale board made impossible to miss), the two model pages, and at 23:43Z the
+  start row and the running work.
+- L2. 2026-10-29, his three lines read with `js-harness sessions --quote` (23:03:40Z, 23:09:30Z, 23:14:33Z).
+- L3. 2026-10-29, searched before adding: `stretch` (plan, measure, departure and return renders; no percent, map or
+  timeline), `report` (four sections of facts as lines, `--mark` records the head it read), `progress` (the roadmap
+  and features by checkbox; the F8 plan's steps are prose, not counted), `sessions live` (rows from notices, the
+  board's summary with the open stretch), the Stop hook (`bin/reply.mjs`, the reply and wake checks), `findGates`
+  (running gates from the process list), `claudeBlock` (init's lines), and the rules `reports-spanish-visual`,
+  `status-report`, `live-board` and `away-autonomy`. None renders a page from the map or keeps a page's numbers.
+- L4. 2026-10-29, double review of the design (rule:double-review), two blind readers given the document and the
+  records. Claude, 5.5/10: blockers, eval batches start from `evals/suite.mjs` (`runner.mjs` is a library) and a
+  substring match takes test files; the guard would fire in a project with no board (no cursor gives the last 24
+  hours of rows); the roadmap's `State` lines lag the merges (S1 records fix and S11 read "in progress" with their
+  pull requests merged) and the roadmap says a step's state is in its feature document; no stretch record exists, so
+  the return page cannot come from one; "on time" is the goals', not the items'. Should-fix: the hook's cost was
+  misstated (the wake check returns early; the role needs a title); the guard nags (once a stop), cannot help a
+  Codex lead, and misses a handover title (`ORQ nueva`); the "eliminado" half not investigated; "before" by kind
+  mixes features and duplicates git; the opening commit needs `--first-parent`; pull requests have two merges each
+  (#642, #638, #637); lens spend is in `lens-reviews.jsonl` results, not the runs; "+5" is a count; the moments would
+  cost every board check; the start row's provenance and duplicate; the running block is a snapshot; `## Next` is
+  stale; a new rule where two exist; high-risk items and slices unnamed; a done-when that fails off the rule branch.
+  Codex, 5/10: blockers, a reported state is not a proven one (S3 "built" lacks its fixed-load check); shares need
+  denominators and unknowns apart from failures; the guard is a post-reply reminder that fails open, not a guarantee;
+  the running block is sampled only at a check. Should-fix: freeze the opening head; page identity by subject and
+  precedence over `--mark`; "outside the plan" is activity, by stable identity, without the lead; the start row's
+  ordering against the child's notices; the lead's recognition and the warning's suppression; pull requests by
+  normalized branch, hashes and explicit selection; review coverage apart from attempts, unknown usage counted;
+  `parseFeature` holds no specs or done-when; POSIX listings have no start time; build no framework first; prose
+  changed is not progress. Taken in, all, as the design above now says; the board was checked not replaced (the
+  cursor names the brief's board). Not taken: reading a step's state only from merges of a named branch (steps name
+  documents more reliably than branches; the document counts are the roadmap's own rule).
+
+- L5. 2026-10-29, slice A reviewed over 62315e61..8a412b79. Codex (4 parts, 688,206 input tokens): four P2, taken
+  in: the bad-news box shared the class of a failure dot; a fence holding a shorter marker broke the plan reader (now
+  `tokenize`); a feature document git failed to read passed for one not there; an unreadable opening read as an
+  empty plan, every step new. Claude lenses (3, about 266k input tokens): one warning, taken in: a step whose state
+  went back read as advanced. gentle-ai (medium; resilience, readability, reliability; lineage
+  review-e0f80354d78ba720): approved with warnings, all taken in or the same as above, plus `headBefore` telling a
+  git failure from no commit, the design names that drifted (`mapAt`, `planAt`, `percent`, `bars`), the Spanish of
+  the empty share and of the lead's failures, and a test of the return page's bad news. Not taken: a test of a failed
+  page-record write (its append is the stretch record's, tested there). The `review-*` agent types ran no tool here
+  (0 tool uses, three times); the lenses ran as general agents on opus.
+- L6. 2026-10-29, spec 5 from the lead (his line 13105): the last three things done at the board's top, in slice B.
+- L7. 2026-10-29, spec 6 from the lead (his line 13589): the status list as colored cards at the board's top, in
+  slice B (T5c). The session was compacted by the host at ~01:33Z and resumed from this document. Codex on
+  54747bc..2bd3bc7: correct (0.96), no findings (65,799 input tokens). Slice A went up as the stacked chain #643,
+  #644, #645 (Slices above); #643 announced ready.
+- L8. 2026-10-29, slice B reviewed over 2bd3bc7..b70ac68. Claude lenses (risk, resilience, reliability): 0 findings,
+  128,262 input tokens. Codex: the first run stopped on "Selected model is at capacity" (82,682 input tokens, no
+  record); run once more, 2 parts, 587,101 input tokens (472,320 cached): two P2 in the start row, taken in: its
+  `worktree` was the name given, not the absolute path readers hand to git; and, since `sessions` reads a session's
+  state in the record's order, a row appended after the session's own notice would replace its newer state (now
+  written only while the record holds no notice of that session). gentle-ai (medium; reliability; lineage
+  review-7c6f3a36e3078389): approved, two warnings and a suggestion, all taken in: the running line past its `until`
+  read as live with a growing "desde hace"; the test did not prove the start row is stamped before claude ran (the
+  fake now records when it ran); the warning's send steps did not name the Spanish fields of a row.
+- L9. 2026-10-29, spec 7 from the lead (his line 14289, checked): each card's time on its task and its estimate, in
+  slice B (T5d), on `feat/visual-pages-board`; the estimate's lead field is `board/summary.estimates`.
+- L10. 2026-10-29, the fixes and T5d reviewed over b70ac68..ca23a62. Claude lenses (reliability, resilience): 0
+  findings, 27,690 input tokens. Codex recheck (67,973 input tokens): the worktree P2 fixed; the order P2 not fixed,
+  since a session's notice appended between the read of the record and the append still lands behind the start row.
+  The window is now the read and the append alone (the place is read before); the session takes seconds to boot and
+  write, so the case is narrow but real. Its fix (T5e) is in `recordOfRows`, outside this brief's surface: asked of
+  the lead, not done here unless the lead says so.
+- L11. 2026-10-29 02:33Z, the lead: T5e stays a follow-up, out of slice B; 1c039be0's narrowing is enough for this
+  slice. #643 landed (main 837cedd); #644 retargeted to main. The lens on 1c039be0 found nothing (8,813 input tokens).
+- L12. 2026-10-29, Codex over 67e6230..1f61e01 (`--again`, 167,443 input tokens): one P2, taken in: an estimate of
+  `[null, null]`, `''` or `false` read as 0 hours through `Number`, a made-up "estimado 0 h"; only two numbers are an
+  estimate now, and the stretch's hours or "sin estimado" follow.
+- L13. 2026-10-29, gentle-ai over b70ac68d..ca23a627 (reliability, lineage review-3aafcdd1541ce20e): approved and
+  acknowledged, three warnings and a suggestion: the start-row race (T5e, the lead's follow-up); the blank estimate
+  read as 0 (fixed in c6d97b82); the start row with no worktree and its branch untested, and an estimate named by the
+  code alone ("JH") matching every session, both taken in the commit after c6d97b82.
+
+- L14. 2026-10-29, spec 8 from him (transcript 0f71b2c6, line 14721, 02:46:58Z, checked with `js-harness sessions
+  --quote`): "me mostraste las coasas diferente a como habiamos planeado, no entiendo por que nuestros protocolos no
+  quedan estandarizados? sera que menos protocolo y siempre generamos un eval o un template para que siempre muestre
+  las cosas como quiero? y que asi se estandarice y no muestre algo diferente cada vez. dime como lo tengo que pedir
+  por que siempre equivocas y siento es que yo no te pido las cosas paras que el arnes funcione como debe". The lead
+  had redrawn the departure by hand, inline, with no map. The lead asks (to place in a slice): 1) each moment's
+  command writes the whole page and records its hash in the page record, and a check (Stop hook `bin/reply.mjs` or
+  the reply-state check) refuses a reply at a moment unless the page shown or published is that file unchanged;
+  2) the departure (`stretch open`) carries the map by phase and the timeline at the opening; 3) the plan's item
+  titles go in as written, the help saying the lead writes them in Spanish. Not yet answered to the lead: proposed
+  slice C (with T6), as T10.
+- L15. 2026-10-29, gentle-ai over ca23a627..71d626c5 (reliability, lineage review-8ed9074b0701c90f): approved and
+  acknowledged, three suggestions, none taken: a three-number or string estimate now reads as none (the stretch
+  writes `corrected` by arithmetic, so numbers, `bin/lib/stretch.mjs:126`); the place is read on every start
+  (`placeOf` catches every failure and returns null, `bin/lib/channel.mjs:652-663`); the branch 'main' depends on
+  the fixture (it runs `git init -b main`, `bin/sessions-background.test.mjs:90`).
+- L16. 2026-10-29 03:00Z, the lead: landing #644 alone was refused at push, 35c8d1fd with no record, though the queue
+  counted it ready. Read in the code: its commit was reviewed inside Codex `c8ee437..8a412b7` and the lenses'
+  `62315e6..8a412b7`, and the two count against different tips (T5f). The lead chose the free path: #645 retargeted
+  to main with head 2bd3bc72, carrying #644's commit; #644 closes as included when #645 lands; T5f an open follow-up.
+- L17. 2026-10-29 ~03:20Z, the lead: T10 builds no hash gate of its own. JH 80 (Templates, `odd/tasks/templates.md`
+  on `origin/feat/templates` at db5f7409, sections "The two records" and "The gates") owns the one gate for every
+  output that reaches him, pages included: `renderedFile(home, slug)`, `recordRendered(file, {template, path, at,
+  head})` hashing the written file, six template ids and the refusal text. T10 shrinks to one `recordRendered` call a
+  page command, behind a seam the tests stub, the tests that prove the call is made, and the departure's map,
+  timeline and titles as written; built against that contract, its code landing with JH 80's build.
+- L18. 2026-10-29 ~03:30Z: slice B goes as one pull request carrying `feat/visual-pages-b` (9b36b5b5, 312 lines) and
+  this branch (625), 933 in all. 9b36b5b5's reviews ran over 2bd3bc7..b70ac68, so `feat/visual-pages-b` landed alone
+  would be refused at push as #644 was (T5f); splitting it would pay its reviews again (Codex about 180k input tokens,
+  estimated). Slice A's PR carries a fix of gentle-ai's warning on 2bd3bc72 (e05a86e2), reviewed by Codex, the lens
+  and gentle-ai.
+
+## Next step
+JH 79, worktree `D:\js-harness\.claude\worktrees\visual-pages`. Slice A: #643 landed (main 837cedd); #645,
+carrying #644, landed (main 96b917a).
+- The design commit, reviewed by gentle-ai (low, docs) as ee595c7c, landed on main through #643.
+- gentle-ai: 62315e61..8a412b79 approved (medium, lineage review-e0f80354d78ba720).
+- gentle-ai: 54747bc6 approved (medium, lineage review-a3c20007ce0c6f70); two warnings, fixed in the commit after it.
+  Its warnings: the in-time caption, and the git failures at the opening and now untested. Codex rechecked 54747bc6:
+  4 of 4 fixed; the lenses found nothing.
+- gentle-ai: 2bd3bc72 approved (medium, lineage review-9342779d8a486aab); its warning fixed in the commit after it.
+  The warning: the in-time caption claimed none met when no goal was planned or reviewed; its suggestion, the plans
+  when git fails now, was taken there too.
+- gentle-ai: e05a86e2 approved (medium, lineage review-1bf6dda7ac7d0c09); one suggestion, not taken.
+  The suggestion: a test of goals partly reviewed with none met; that case says "ninguna meta cumplida todavía",
+  which holds. Codex on e05a86e2: correct (0.96); the reliability lens found nothing.
+- gentle-ai: 2bd3bc72..b70ac68d approved (medium, lineage review-7c6f3a36e3078389), with 9b36b5b5 in it.
+- gentle-ai: b70ac68d..ca23a627 approved (medium, lineage review-3aafcdd1541ce20e).
+- gentle-ai: ca23a627..71d626c5 approved (medium, lineage review-8ed9074b0701c90f).
+- Slice B: one PR, #647 (`feat/visual-pages-board`, L18), fully reviewed (L15). State at ~04:45Z: origin/main merged
+  into it as 02e68ec3. Its reviews: Codex correct (0.99, 59,929 input tokens); the reliability lens found nothing.
+  gentle-ai did not review it: its range holds main's 53 files, each reviewed in its own pull request, and the
+  merge's own writing is the 3-line fixture Codex read. Pushed; ready sent.
+- gentle-ai: daa51f84 approved (medium, lineage review-4204ae195c698200), no findings: three test comments reworded,
+  since main's sweep refused a file naming the tool (#647's land red on Actions, run 40825306670). Codex on it alone:
+  correct (0.99). Main merged in again as 78bfe423, covered by main's own records; gentle-ai did not review it, for
+  the reason given above for 02e68ec3.
+- Seen ~06:10Z: a first merge, 279d6e74, came before daa51f84 had a Codex record, so Codex read the whole range with
+  main's code in it (4 parts, 497,298 input tokens) and left 4 findings on JH 80's template code, which pre-push
+  refused as owed. That merge was rebuilt, unpushed, as 78bfe423 after a record of daa51f84 alone. A branch commit
+  gets its record before main is merged over it.
+- gentle-ai: 598174f0..a0d1e5d1 approved (medium, lineage review-720626bd7150e47c); findings fixed after it.
+- gentle-ai: 3279ea8e approved (medium, lineage review-57a8e9c4cb257169); its warning fixed in the commit after it.
+- d800cb96: Codex correct (0.95); the reliability lens found nothing. gentle-ai: not reviewed (`operation_timeout`
+  on the status twice, ~05:40Z).
+- C2, d800cb96..14907efb (the status page): Codex incorrect (0.96, two P2: an unconfirmed answer said as an answer,
+  and no notes said as nothing waits), fixed in fd734292, Codex's recheck 2 of 2 fixed; the reliability and
+  resilience lenses found nothing on C2, reliability nothing on the fix.
+- gentle-ai: d800cb96..fd734292 approved (medium, lineage review-00598536ad2a9722), the status page with the fix of
+  Codex's two findings: one warning, a relative --notes read from the process folder while --html is written under
+  --cwd, fixed in 6fc7f8ae; one suggestion, the map-before and unwritable-page paths of report.mjs untested, not taken
+  (the map before is the phase page's tested `readMap`; the guarded write is the phase page's shape).
+- gentle-ai: 6fc7f8ae approved (medium, lineage review-c5e4c7139595b966), no findings; Codex correct (0.98); the
+  reliability lens found nothing.
+- C3, 95d5231e..287d76ec (`report feature`, on `feat/visual-pages-c3`, local): lenses reliability and resilience
+  found nothing. gentle-ai: 287d76ec approved (medium, lineage review-31273a212f04c03d) with 4 warnings to fix.
+  Codex: incorrect in both parts (0.97, 0.98), 6 findings, its output kept in the job tmp `codex-c3-full.txt`. Next:
+  fix both sets test-first, then Codex recheck `--base 287d76ec`, the lens and gentle-ai, push, PR stacked on #652.
+  T7 moved to slice D: the rules check refuses its paragraph unless it names a `rule:<id>`, which D creates (patch in
+  the job tmp `t7-init-line.patch`).
+- C3's fixes, ~08:00Z. 91c9f206 fixed the ten; Codex's recheck (89,149 input tokens): 5 of 6 fixed, the slice
+  worktrees' gates still left out, fixed in d8e0a122 (T6a). Codex read C3 again from 95d5231e (`--again`, 3 parts,
+  553,125 input tokens): two P2, unknown reviews and spend shown as zeros and a fence indented under a spec, fixed in
+  8d051cc6; its recheck (42,498): 2 of 2 fixed, correct (0.97). The reliability lens found nothing on each of the three
+  fixes.
+- gentle-ai: 287d76ec..4ccc2584 approved (medium, lineage review-b4f5251b65d0e161): two warnings and a suggestion, all
+  taken in 8d051cc6 (the indented fence, the unknown path tested end to end, the failures section saying which
+  worktrees it counts).
+- gentle-ai: 8d051cc6 approved (medium, lineage review-0d9cf00ce2f01b5f): one suggestion, a test of an HTML comment
+  under `## Specs`, not taken: comment stripping is `tokenize`'s, tested in `bin/lib/progress.test.mjs`.
+- State at ~08:55Z: #654 (C3) landed. Slice D on `rule/visual-moments` (local, unpushed, main merged in):
+  69f6216d reports-spanish-visual (Codex correct 0.9, reliability lens nothing, gentle-ai approved, lineage
+  review-3296cd4e14584f34, its warning, the 2026-10-26 quotation dropped from the source, fixed in the next docs
+  commit); then away-autonomy's commit (return shows share met, map, timeline; goals run before the return), not yet
+  reviewed. Next: Codex and the lens on away-autonomy's commit (`--base` the docs commit before it), gentle-ai from
+  69f6216d, push, PR against main. Then T7 (the init line can name `rule:reports-spanish-visual` only if this repo's
+  CLAUDE.md names it too: template-block.test.mjs; CLAUDE.md is outside the brief's surface, so ask the lead), then
+  spec 9 below as slice E, then T10's departure.
+- 0bc60aa0..024be874 (the source fix 156738e2, away-autonomy 378275d2, this state): Codex correct (0.94, 79k input
+  tokens); the reliability lens found nothing.
+- gentle-ai: 0bc60aa0..024be874 approved (medium, lineage review-2aba38fa75ad836e): one suggestion, not taken: that
+  nothing in the candidate shows `stretch status --goals` exists; it does, `js-harness stretch --help` lists
+  `status [--goals]`.
+- Slice E, a7b6ae42..f30d360e (E1 4b85503f, E2 f30d360e): the reliability and readability lenses found nothing
+  (46,602 input tokens). Codex: incorrect (0.92, 0.98; 407,320 input tokens, 2 parts), two P2: an explanation reached
+  a goal and an item that share an id, and `show` measured a closed stretch with records written after its close.
+  gentle-ai (medium, lineage review-7d6c066c403cf990): correction required, its critical finding the same as Codex's
+  second; two warnings, explanations that did not add up and a land or Codex run taken as fixed by any later pass.
+  All four fixed together in d572699b, test first.
+- d572699b: Codex's recheck 3 of 3 fixed, correct (0.96, 46,608 input tokens); the reliability lens (10,874) warned
+  that explain events without a kind would be ignored, not taken: no version without the kind ever ran, and the real
+  record holds no explain event (`grep -c '"explain"'` on stretches.jsonl: 0).
+- gentle-ai: a7b6ae42..d572699b approved (medium, lineage review-7d6c066c403cf990), after its refuter, a correction
+  plan of 125 lines and its targeted validation of d572699b.
+- Seen ~10:30Z: #658 (E1 alone) was refused at the land's push, 4b85503f with no record of its own: E1 and E2 were
+  reviewed as one range ending at f30d360e, and a stacked slice lands at its own tip. Covered exactly: Codex
+  a7b6ae42..4b85503f (`--again`) correct (0.84, 124,484 input tokens); the reliability and readability lenses
+  (44,683), one warning not taken, the why section filled by nothing in E1, which is E2's wiring by design. gentle-ai
+  not run again on E1 alone: its code is inside the approved range above. Prevention: each slice of a stack gets
+  reviews whose range ends at its own tip, never one range over the stack.
+- State at ~10:50Z: #655 and #658 landed. #659 (E2) retargeted to main, ready sent. Slice E3 is d2e7a9ad on
+  `feat/visual-pages-e3` (local, unpushed, stacked on E2's eb4c2098): Codex correct (0.91, 78,007); its lens run
+  (reliability, resilience, run 5f61f391) was cut when the lead refreshed the installed copy at ~10:43Z and left no
+  record: run it once more, then gentle-ai from eb4c2098 (status gave the start; run its granted), push, PR on #659.
+  Left after E3: T7 (waits on the lead: CLAUDE.md outside the surface), T11a (README/help, outside the surface), T9.
+- E3 reviews: the lenses rerun once over eb4c2098..d2e7a9ad, reliability and resilience with nothing (25,309 tokens).
+- gentle-ai: eb4c2098..d2e7a9ad approved (medium, lineage review-bb275768fa2ff4d8): two suggestions, not taken: that
+  the `--json` run checks its record message stays off stdout, and that the unrecorded case checks the page file
+  exists. Both are assertions on what the code already does and its tests already reach; a new commit would cost a
+  third Codex and lens round for no behavior change.
+- T7 is d0a1c365, after two refusals of the gate read before each new try: the long paragraph broke the template's
+  budget (787 of 750 estimated tokens) and `project.mjs`'s ceiling of 2034 lines; moving the block functions out
+  broke `wording-is-the-need`, whose phrases the rules check reads in `project.mjs`, so the failures template moved
+  instead. Codex 7b6d3f39..60e17fb0 correct (0.95, 64,107 input tokens); the lenses reliability and readability
+  found nothing (25,843).
+- gentle-ai: 7b6d3f39..60e17fb0 approved (medium, lineage review-9affe131e336c6a8), no findings.
+- T12 is f45da73f and T11a 7e9ae874, on `feat/visual-pages-t12` stacked on T7. The lenses reliability and resilience
+  over 8b0e339f..7e9ae874 (40,441 input tokens): reliability nothing; resilience one warning, not taken: that
+  `explainTarget` matches a closed stretch's failures up to now. `measure` ends at `stretch.closedAt ?? now`
+  (`bin/stretch.mjs:262`) and the stretch `explain` names carries its `closedAt` (`:188`), so it matches to the close.
+- Codex on 8b0e339f..7e9ae874 (116,907 input tokens): incorrect (0.97), one P2: two failures cut to the same start,
+  as two that began before the opening are, share a name and neither can be explained. Taken, test-first: a second and
+  later failure that starts at the same instant is named `<start>#2`, `#3` (`failuresOf`, shared by the page and
+  `explain`), and a shared start is refused with each one's name and what it was. No record was written: this
+  document was edited while Codex read, after the rule of not doing so was already in this log. Prevention: nothing
+  is edited from a review's start to its end; the next review starts only after this commit.
+- Codex on 8b0e339f..fc5cb241 (159,124 input tokens): incorrect (0.98), one P2: the `#2` names came from the list's
+  order, so while a stretch is open a failure measured later at the same start took another's name and its
+  explanation. The lenses on fc5cb241 found nothing (26,492). Taken, test-first: a failure is named by the start its
+  own record holds (`began`, which `clippedTo` keeps), never by its place, so two cut to the opening differ and a later
+  one takes no name; `#n` is gone.
+- 3504d75e: Codex recheck fixed and correct (0.94, 41,570 input tokens). The lenses (32,146): three warnings, not taken.
+  Two say explanations recorded under the old names are orphaned: those names and failure explanations never reached
+  main, and the real `stretches.jsonl` holds 0 failure explanations among its 5 `explain` events (`grep -c`). The
+  third says two failures whose records start in the same millisecond share one name: the refusal lists each, and
+  one explanation then reaches both, a case no record has shown.
+- gentle-ai: 8b0e339f..a40d85e7 approved (medium, lineage review-99b44b35659578df), one warning, taken in the next
+  commit: the usage and the README promised a shared start is always refused, while two failures whose records start
+  in the same millisecond are accepted together; the text now says so. Its first result was refused at admission
+  (evidence said code outside the patch "could not be inspected"); the same reviewer rewrote it as out of scope.
+- 4ba61a5b (the text fix): Codex correct (0.96, 61,391 input tokens); the readability lens found nothing (4,271).
+- gentle-ai: a40d85e7..4ba61a5b approved (medium, lineage review-673b5907691d27bb), no findings.
+- #666 landed at 13:10Z as 27fc4f9 without 5f8768c, pushed after its ready; the queue's next run landed it again at
+  5f8768c (main d90caad, 13:19Z), so PR #667, which carried it, was closed.
+- T9, 13:25Z, with the branch's code (main d90caad; the installed copy predates T12): `stretch explain` gave the
+  03:06Z stretch's four failures their why and fix, each from a record: 04:09Z land exit 4 from the lead's notice
+  04:17:45Z (Actions run 40816256353 red on #632's sweep test; #648 landed alone, #632 at 04:33Z); 05:44Z land exit 1
+  from commit 0fbba0f0 (#649 moved main past the installed copy 5e36e82, and the land refused to run older code, as
+  its record in `lands.jsonl` says; the 05:45Z land ran); 05:45Z land exit 4 from the lead's notice 05:55:44Z (run
+  40825306670 red on three comments of #647, reworded in daa51f84, landed 06:24Z); 06:52Z Codex failed from commit
+  83d2f1b1 (JH 80 committed its state while part 1 of 4 ran; rerun 06:55Z, four parts reviewed). The item
+  `visual-b`, already explained as fixed in its text, got `--fixed`. `stretch show --html` then left "no registrado"
+  only on the item `templates`' why-not, which no record says.
+- The four pages, made by the commands from the real records and published: the stretch return
+  (https://claude.ai/artifact/2NbRkxz9tyCJy1MCdEJKsU, version 2), the phase page
+  (https://claude.ai/artifact/Rxf3wL6dsYmf6AbEe9LhZ4; no before, since no phase page was recorded), the status report
+  (https://claude.ai/artifact/BKtRtp4b3ZCX5yJUs3YsFb, no `--mark`: the cut is the lead's) and the feature close
+  (`report feature odd/tasks/visual-pages.md --branch feat/visual-pages --branch rule/visual-moments --record`,
+  https://claude.ai/artifact/7C6FKQJk2ccpH9q2ndu9po: 17 of 19 tasks, T5e and T5f the follow-ups left; 13 h real
+  against 3.5-6.5 h estimated; 41 Codex runs, 4,804,708 input tokens; the lenses 1,093,107 input tokens, US$ 3).
+- Follow-up, not done (outside the surface, `bin/lib/throughput.mjs`): a failed land's record holds its own reason
+  (`said`) and a failed Codex run its `reason`, but `landFacts` and `codexFacts` drop both, so the return shows only
+  "land exit 1" or "Codex review failed" until an explanation is written. Carrying them would explain most such
+  failures from the record alone.
+- State at ~13:00Z: #664 (T7) landed 12:27Z. T12+T11a is PR #666 (`feat/visual-pages-t12`, on main), ready sent
+  12:58Z. Left: T9. Once #666 lands, record the 03:06Z stretch's four failures with the branch or installed
+  `stretch explain failure:<HH:MM> --stretch 2026-10-29T03:06:28.748Z --source notice:<at>`, from these notices:
+  the 04:09Z land, the lead's 04:17:45Z (Actions run 40816256353 red on the sweep test) and 04:22:04Z (648 landed
+  alone); the 05:44Z and 05:45Z lands, the queue's 05:42:48Z (647 CONFLICTING) and the lead's 05:55:44Z (run
+  40825306670 red, three comments of #647) and 05:56:55Z (647 to draft); the 06:52Z Codex failure, its record still to
+  find (`.git/js-harness` Codex run log). Then `stretch show --html`, publish as an Artifact, `docs/sessions/`
+  summary, ROADMAP line, `notify --kind closed --summary`.
+- Seen ~11:05Z: the lead's answer to T7 (09:11Z, surface widened to one CLAUDE.md line) sat unread for two hours while
+  the work went on as if T7 still waited. Fixed: T7 done on `feat/visual-pages-t7`, stacked on E3. Prevention: before
+  writing "waits on the lead" into a state line, read the channel's notices to this session since the question.
+- Spec 9, from the lead's note of 03:18, his words verified: 0f71b2c6 line 18034 ("necesito que me digas por que fallo
+  o no se pudo hacer lo falto o fallo y como se soluciona o se soluciono") and 18171 ("en la hoja donde muestres que
+  fallo ahi colocame lo que te pido de como se soluciono o como se puede solucionar y por que no se ha solucionado si
+  es el caso"). The stretch return page, beside each goal not met, failure and item not finished: why, how it was or
+  can be fixed, and why not if not; from the records only (a notice or commit that says it), else "no registrado";
+  then regenerate the closed stretch of 2026-10-29T03:06:28.748Z from the command. Estimate sent: 2.5-3.5 h.
+- State at ~08:00Z: #651 (C1) landed 06:54Z; #652 (C2) is on main, ready sent 07:23Z. C3 is `feat/visual-pages-c3`,
+  to push and open on #652's branch.
+- State at ~06:40Z: #647 (slice B) landed (06:29Z). Slice C goes as two chained pull requests: C1, #651
+  (`feat/visual-pages-c1`: d800cb96 with main merged in, 498 lines, the phase page and the rendered-record seam), and
+  C2 (`feat/visual-pages-c`: the status page and its fixes, stacked on C1). Then C3: `report feature` and T7's init
+  line (names `report feature`, so it lands with it). Then slice D (T8), T9. T10's departure map/timeline still open.

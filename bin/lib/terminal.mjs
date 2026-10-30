@@ -1,4 +1,4 @@
-// The terminal layer of the TUI (odd/tasks/tui-gentle-level.md, S1-S3), after gentle-ai's Bubble Tea design and
+// The terminal layer of the TUI (odd/tasks/tui-gentle-level.md, S1-S3), after a Bubble Tea design and
 // with no dependency: a key parser that reads every key of a chunk, a frame laid out to the window and repainted
 // whole, and a guard that always gives the terminal back. Only the guard touches a stream; the rest takes strings.
 

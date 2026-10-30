@@ -212,7 +212,7 @@ function fakeChild({ stdout, status, piped }) {
 }
 
 /** The fakes of one run. `spawn` is real git, a `codex --version` that answers `probe`, and anything else
- * (`gentle-ai`) recorded in `tools` and answered with the exit code `init`. `spawnAsync` is the review: it
+ * (`codegraph`) recorded in `tools` and answered with the exit code `init`. `spawnAsync` is the review: it
  * shows the diff of the checkout's last commit (unless `shows` is false), leaves the rollout file of a review
  * with `findings` in its home when it has one and is not ephemeral (`said` is the text of its answer, in
  * place of one built from the findings; `ran`, the model and the effort that file says the session ran
@@ -427,7 +427,7 @@ test('--dry-run prints the checkout, the argv of the review and where the readin
   assert.ok(real.out.includes(path.join(m.parent, CHECKOUT_NAME)), real.out);
   assert.match(real.out, /git clone/);
   const index = await run(['--cell', 'lean-codegraph:real', '--dry-run'], m, nothingStarts(), { configToml: m.configToml });
-  assert.match(index.out, /gentle-ai codegraph init --cwd /);
+  assert.match(index.out, /codegraph init --yes \. in /);
   assert.deepEqual([entries(m.readings), entries(m.parent), entries(m.tmp)], [[], [], []], 'nothing was made');
   assert.equal(fs.existsSync(m.homes), false);
 });
@@ -901,10 +901,10 @@ test('a cell whose later part could not be launched is not a review of the range
 
 // --- the CodeGraph cell ---
 
-/** How `gentle-ai codegraph init` is started for `checkout` on this host. */
-const initWith = (checkout) => {
-  const args = ['codegraph', 'init', '--cwd', checkout];
-  return PLATFORM === 'win32' ? { command: windowsCommandLine('gentle-ai', args), args: [] } : { command: 'gentle-ai', args };
+/** How `codegraph init` is started in `checkout` on this host, as `init` starts it. */
+const initWith = () => {
+  const args = ['init', '--yes', '.'];
+  return PLATFORM === 'win32' ? { command: windowsCommandLine('codegraph', args), args: [] } : { command: 'codegraph', args };
 };
 
 test('lean-codegraph adds the CodeGraph server of the user\'s configuration to the lean argv, and builds the index of the clone first when it has none', async () => {
@@ -916,6 +916,8 @@ test('lean-codegraph adds the CodeGraph server of the user\'s configuration to t
   assert.equal(result.code, 0, result.err);
   assert.deepEqual(fake.order, ['tool', 'review'], 'the index is built before the review that uses it');
   assert.deepEqual(fake.tools.map(launched), [initWith(clone)]);
+  // As `init` runs it: codegraph writes no telemetry queue or update cache under the home (Codex P2 on eef7e095).
+  assert.equal(fake.tools[0].opts.env.DO_NOT_TRACK, '1');
   assert.deepEqual(launched(fake.calls[0]), launchedWith(leanCell(m.repository.base, 'codex', { extraConfig: CODEGRAPH })));
   assert.deepEqual([reading(m, 'lean-codegraph', 'real').session, reading(m, 'lean-codegraph', 'real').effort], ['lean', 'medium']);
   // No other cell builds an index or names the server.
@@ -938,7 +940,7 @@ test('lean-codegraph builds no index where the checkout already holds one, and r
   const failing = fakeCodex({ init: 3 });
   const result = await run(['--cell', 'lean-codegraph:real'], m, failing, { configToml: m.configToml });
   assert.equal(result.code, 1);
-  assert.match(result.err, /gentle-ai codegraph init.*exited 3/);
+  assert.match(result.err, /`codegraph init --yes \.` in .*exited 3/);
   assert.match(result.err, /the index could not be built/);
   assert.equal(failing.calls.length, 0, 'no review without the index it is there to measure');
   assert.deepEqual(entries(m.readings), []);

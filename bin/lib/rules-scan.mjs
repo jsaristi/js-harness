@@ -10,8 +10,8 @@ const NOT_IN_FORCE = new Set(['bin/lib/rules-data.mjs', 'docs/rule-sources.json'
 const HISTORY_LINE = /^## (?:Progress|Log)\r?$/;
 const FEATURE_DOCUMENT = /^odd\/tasks\/[^/]+\.md$/;
 // The texts in force by their path, the ones `rules check` reads (bin/rules.mjs, `readAll`): the code under bin/, its
-// tests left out, the roadmap, the spec, the feature documents, AGENTS.md and README.md.
-const TEXT_IN_FORCE = /^(?:bin\/(?:[^/]+\/)*[^/]+\.mjs|docs\/(?:ROADMAP|SPEC)\.md|odd\/tasks\/[^/]+\.md|AGENTS\.md|README\.md)$/;
+// tests left out, the roadmap, the spec, the feature documents, AGENTS.md, CLAUDE.md and README.md.
+const TEXT_IN_FORCE = /^(?:bin\/(?:[^/]+\/)*[^/]+\.mjs|docs\/(?:ROADMAP|SPEC)\.md|odd\/tasks\/[^/]+\.md|AGENTS\.md|CLAUDE\.md|README\.md)$/;
 
 /** True when the file at `path`, from the top of the repository, is a text in force: one of those `rules check`
  * reads, and not a home of the list or a quoting text. */

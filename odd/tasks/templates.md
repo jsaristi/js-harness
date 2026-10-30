@@ -1,0 +1,556 @@
+# templates
+
+Branch `feat/templates`, from main (837cedd1). Runner: `node --test`. Session JH 80.
+
+## Goal
+A repeatable way to make an output he sees a template of five parts (a sample he approved, a command that renders
+it from the records, a golden test, a gate on the path to him, a test that the gate refuses a hand-made one): a
+scaffold from his `Plantilla:` line, a registry that `js-harness template check` holds on every commit, one gate
+that every template uses, an inventory that gives every recurring output its route, and one output converted end to
+end as the proof.
+
+## Why
+On 2026-10-29 at 02:44Z the lead showed a stretch's departure redrawn by hand, inline, with no map, against
+`odd/tasks/visual-pages.md` ("never drawn by hand"): it passed its HTML to the desktop's visual tool
+(`mcp__visualize__show_widget`, the lead's transcript line 14687), and nothing refused it. The same had happened on
+2026-10-27 with the live board: hand-written rows gave the lead two keys and the board two orchestrators (the memory
+note `board-rows-through-notify`). His five lines that night (Specs) ask for the cure: fewer protocols, outputs
+standardized by templates and proven, and a template of the process itself.
+`docs/proposals/gentle-ai-reverse-engineering.md`, 13.1, says how gentle-ai holds what must be right: code decides it
+and hands the model the next step as data, and the text is pinned like code; a strong model carries the rest,
+unproven. `AGENTS.md` already says "When something can be checked by a command, it belongs in `bin/`, not in
+prose", but the outputs he sees were never put under that rule one by one, and there is no repeatable way to add
+one.
+
+## Done when
+- `npm run check` exits 0
+- `node --test bin/template.test.mjs bin/lib/template.test.mjs bin/lib/template-check.test.mjs bin/lib/template-scaffold.test.mjs bin/lib/template-gate.test.mjs bin/lib/template-record.test.mjs bin/lib/template-question.test.mjs` exits 0
+- `node bin/js-harness.mjs template check` exits 0
+- `node bin/js-harness.mjs template --help` exits 0
+- Tests plant registered templates that are broken and `template check` exits 1 naming the fault: a part missing, a
+  draft entry, a scaffold body still throwing, a skipped golden or refusal test, a sample whose bytes no longer
+  match the digest he approved, a surface no installed hook reaches
+- A test feeds the `ask` gate a question no record holds, and one whose options differ from its record's, and the
+  gate refuses each naming `js-harness notify --kind question`; a test feeds it the question as `notify` recorded it
+  and the gate admits it (the proof, L6)
+- In a scratch home, `install` registers the gate's hook and `uninstall` removes exactly that hook (L6)
+- A test feeds the page gate the 02:44Z case (a page with the renderer's signature and no recorded hash, by
+  `show_widget` and by `Artifact`) and the gate refuses it, and refuses it marked free
+- `docs/sessions/` holds this session's summary and `docs/ROADMAP.md` one line for it
+
+## In scope / Out of scope
+- In: this document; new `bin/template.mjs`, `bin/lib/template*.mjs` and their tests; `templates/` (the samples and
+  their input records); one ROADMAP line; the session summary; the rule change through `js-harness rules change` on
+  `rule/templates`.
+- In, by the lead's extension of 2026-10-29 (L4): one dispatcher line and its help line in `bin/js-harness.mjs`; the
+  gate's hook entries in `bin/lib/hook-entries.mjs`; one entry in `docs/FAILURES.md`; `"templates": true` in this
+  repository's `harness.json`.
+- In, by the lead's second extension (L6): `bin/lib/manifest.mjs` for the hook registration only,
+  `bin/lib/manifest.test.mjs` and `scripts/practice-lib.mjs` (`HARNESS_HOOKS`), which hold the matcher text
+  (`bin/lib/hook-entries.mjs:76-77`); and one `templates` row in `bin/doctor.mjs` (Proof).
+- Out: JH 79's pages and commands (`bin/lib/pages*.mjs`, `stretch`, `report`, `bin/lib/stale-board.mjs`) and the
+  board's look (JH 79's slice B, "colored status", the lead's plan at line 14663): this feature gives them the gate
+  and the record, it does not rebuild them; `package.json` (not needed, see Design); credentials, `~/.claude`,
+  `~/.codex`; the installed copy; eval runs (the cases are defined, not run).
+
+## Constraints
+- A template holds the form; judgment (what to recommend, which option is first) is not a template's and is
+  measured by evals with a pass line, never called guaranteed.
+- Replies stay free inside; only their close is gated (`rule:reply-five-states`, the Stop hook).
+- A call the gate claims is refused unless it carries its proof (a recorded hash, rows the record recomputes, a
+  recorded question); a record it cannot read lets the call through and is recorded as unchecked, and an unchecked
+  call keeps `template shown` from saying "no escapes". It stops a model's mistake, including a wrong "free" on a
+  moment's page (below), not a deliberate bypass: a model that fakes the records is out of its reach, as gentle-ai's
+  threat model leaves out the same-user actor (13.2, "The review").
+- The gate is Claude Code's: the tools it watches (`Artifact`, `ArtifactData`, `AskUserQuestion`,
+  `mcp__visualize__show_widget`) exist only there. Codex works here as a reviewer (ROADMAP, Principle 5) and shows
+  him nothing, so it has no gate; a project that leads from Codex is out of scope.
+- Zero dependencies. The records live in the throughput folder under the harness home, which `uninstall` never
+  removes (`throughputResult`, `bin/lib/manifest.mjs`), beside JH 79's page record.
+- High-risk items (CLAUDE.md, Task Size): the gate's hook entries are a `PreToolUse` and a `PostToolUse` hook install
+  writes for every session of the machine (delivery, guard). They act only where a project's `harness.json` turns
+  the gate on, fail open, and get their tests first, the slice's reviews and one independent verifier.
+
+## Ask me before
+His words decide the feature (Specs 5: "hagamos una plantilla de esto"); the design passes two blind readers
+before code (`rule:double-review`). The edit surface beyond the brief's new files is the lead's to extend (L4, and
+the second ask above).
+
+## Specs
+1. "me mostraste las coasas diferente a como habiamos planeado, no entiendo por que nuestros protocolos no quedan
+   estandarizados? sera que menos protocolo y siempre generamos un eval o un template para que siempre muestre las
+   cosas como quiero? y que asi se estandarice y no muestre algo diferente cada vez. dime como lo tengo que pedir por
+   que siempre equivocas y siento es que yo no te pido las cosas paras que el arnes funcione como debe" (line 14721,
+   2026-10-29T02:46:58Z).
+2. "siento entonces que he hecho todo mal y hay que hacer plantillas de todo y estandarizar todo por que asi como
+   estamos haciendo las cosas no estan funcionando y la verdad ya tengo mucho desgaste y esa tambien es una de las
+   razones por la cuales el anterior arnes no funcionaba, dime en realidad como es que tiene que quedar todo para que
+   cada una de las cosas quede estandarizado y se cumpla como debe, osea como lo hace gentle-ai que funciona tambien
+   en todo, dime tambien como lo debemos hacer nosotros por que entonces yo te estoy diciendo las cosas mal y no con
+   las palabras ni las cosas que son." (line 14832, 2026-10-29T02:51:42Z).
+3. "es que entiendo que los modelos al ser probabilisticos, siempre van a hacer las cosas de una manera distinta y el
+   arnes lo que hace es que genera consistencia, como a partir de lo que me dices y lo que hemos investigado de como
+   funcionan las otras cosas, podemos hacerlo para que funcione SI o SI como debe." (line 14968,
+   2026-10-29T02:55:49Z).
+4. "listo pero para que funcione y el limite honesto, entonces dime exactamente como se tiene que hacer todo pero que
+   realmente funcione y que se pruebe" (line 15080, 2026-10-29T02:59:40Z).
+5. "ok listo entonces hagamos una plantilla de esto para que cuando vayamos a hacer este proceso siempre lo tengamos a
+   la mano y podamos generar las demas plantillas de todo." (line 15262, 2026-10-29T03:03:29Z).
+
+All in the lead's transcript `0f71b2c6-cbce-43ca-a031-276a4b2c381f`, read with `js-harness sessions --quote`.
+
+## Design
+
+### Searched before adding (AGENTS.md, `rule:reuse-first`)
+- `js-harness contract template`, `summary template`, `onboard template`: print a skeleton the model fills. None
+  renders from records, none is gated on the way to him; they keep their name, and `template` here is a different
+  thing (an output he sees), so the help says so in one line.
+- `bin/lib/pages.mjs` and `pages-record.mjs` (JH 79, branch `feat/visual-pages`, slice A built): the renderer and
+  the numbers of the moments' pages. They record numbers, not the hash of what was shown, and nothing gates a
+  publish (`git grep "sha256\|createHash" origin/feat/visual-pages-b`: nothing). Reused as the renderers of those
+  templates; not rebuilt.
+- `bin/conventions-*.test.mjs`: tests that hold every file of a kind to a shape, with a legacy list that only
+  shrinks. `template check` takes their form (a test runs it over the repository), not their scope.
+- `rules check`: holds each rule to its source and phrases. A template is not a rule; the rule that says how a
+  template is made is amended (below).
+- `report` (facts as lines, `--mark`), `stretch` (plan, measure, departure and return renders): renderers of their
+  moments, with no gate.
+- The hooks install writes (`bin/lib/hook-entries.mjs`): `guard`'s `PreToolUse` matcher (line 81) names `Agent`,
+  `Bash`, the file tools and two desktop MCP tools (`mcp__ccd_session__start_session`,
+  `mcp__terminal__run_in_terminal`), and no `Artifact`, `ArtifactData`, `AskUserQuestion` or
+  `mcp__visualize__show_widget`; the `Stop` hooks are `guard --stop`, `reply --hook` and `backup --hook`. So today
+  nothing on the path to him can refuse a page, a board row or a question that did not come from its command, and a
+  `PreToolUse` hook does reach a desktop MCP tool.
+- `bin/lib/live-rows.mjs`: the rows `sessions live --out` writes come from `pendingRows` (line 56), which adds each
+  notice's index in the record (`seq`) and suffixes `-2`, `-3` to a repeated id, over `rowOf` (line 25), which is
+  pure. So a gate can recompute a batch from the channel record, by `seq`.
+
+### The five parts, and two kinds of template
+Each recurring output that reaches him is a template with five parts:
+1. a sample he approved, a file under `templates/<id>/`, pinned by its sha256 and his words (the registry);
+2. the command that renders it from the records;
+3. a golden test of the command against the sample, run by `node --test`, so by every gate;
+4. a gate on the path to him that refuses what did not come from the command;
+5. a test that feeds the gate a hand-made one and proves it refuses it.
+
+A template is one of two kinds, named in its registry entry:
+- `rendered`: a command makes the whole output (a page, the board's rows). The golden test renders the sample's
+  input records (`templates/<id>/records.json`) and compares with the sample byte for byte.
+- `shape`: the model writes it inside a reply, and only its form is held (the reply's close, the cut's block). Part
+  2 is the grammar the gate reads (`closingState`, `replyRefusal`, `bin/lib/reply.mjs`); the golden test proves the
+  approved sample parses as its state; the gate is the `Stop` hook, which turns the stop back once, after the reply
+  is shown. Registering one takes its entry and its test file; `cutRefusal` stays private, reached through
+  `replyRefusal`.
+His line 14721 asks for "un eval o un template": what a template cannot hold, the judgment inside an output, is an
+eval's (The evals, below).
+
+### The registry (`bin/lib/template-registry.mjs`)
+A frozen array the gate reads at run time, so it ships with `bin/` (the samples and tests do not). An entry:
+`{ id, kind, surface, plantilla: { what, when, looks, where }, sample: { path, sha256, source }, render, module,
+exports: { render, admit }, tests: { golden, refusal }, signature, draft }`.
+- `plantilla` is his line's four fields: what he wants to see, when it appears, how it looks (the sample), where it
+  reaches him. `sample.source` is his words that approved it (transcript and line); `sample.sha256` pins its bytes,
+  so a new sample needs a new digest and new words in the same commit, visible in its diff.
+- `surface` is the one gate that holds it: `page` (a page shown by `Artifact` or `show_widget`), `board`, `ask`,
+  `stop`, or `command:<name>`. A surface's check is written once, in `bin/lib/template-gate.mjs`; every `page`
+  template shares the page check, so two templates never compete for one call.
+- `signature`: the mark only its renderer writes, a `data-js-harness-template="<id>"` attribute on the page's root,
+  which the page gate reads (below).
+- `tests`: the test file (`file`) and its two titles, `template:<id> golden` and `template:<id> refuses a hand-made
+  one`.
+- `draft`: true from `template new` until the commit that completes it.
+
+### `js-harness template` (`bin/template.mjs`)
+- `template new <id> --what <text> --when <text> --where <place> --sample <file> --source <transcript>:<line>
+  [--kind rendered|shape] [--surface <surface>]`: the template of templates (spec 5). It refuses with exit 2 and
+  names only the first missing field, so the lead asks him for that one alone. It writes `templates/<id>/sample.<ext>`
+  (a copy of the file he approved) and an empty `records.json`; `bin/lib/template-<id>.mjs`, the renderer with its
+  header comment (what it is for, his `Plantilla:` line, the sample's path) and `render` and `admit` exports whose
+  body throws `template <id>: not built yet`; `bin/lib/template-<id>.test.mjs` with the two tests, which fail until
+  the renderer and the gate are written; and its entry with `draft: true`. It writes over nothing that exists.
+- `template check`: exit 1 names each template and its fault; it reads files only and runs nothing. For each entry:
+  it is not a draft; its sample exists and its bytes match `sample.sha256`; its records, module and test file exist;
+  the module exports the named functions and holds no `not built yet`; the test file holds both titles, not under
+  `skip` or `todo`; its surface is one the installed hooks reach (the matcher of `bin/lib/hook-entries.mjs` names the
+  surface's tools); no two entries share an id or a signature. What it cannot see, a golden test that passes for the
+  wrong reason, is the reviews' to catch, and the gate's own tests feed it real command output.
+- `template list`: the registry as rows, with `--json`.
+- `template gate --hook` (`PreToolUse`) and `template gate --shown` (`PostToolUse`): the one gate, on the tools of
+  every surface but `stop`. It acts only where the nearest `harness.json` holds `"templates": true`, as `reply` acts
+  only where it holds `reply`.
+- `template shown [--days <n>] [--json]`: the escape list (Proof).
+`template check` runs on every commit because `bin/template.test.mjs` holds the test "this repository's registry
+passes template check": the pre-commit hook and CI run `bin/check.mjs` (`.githooks/pre-commit`,
+`.github/workflows/gate.yml:42`), whose tests sensor runs `node --test`, so `package.json` needs no change. With
+`"exactTests": "skip"` (this repository's `harness.json`) the test runs when a file it reads changes, and the tracer
+records the existence checks and folder listings it makes (`bin/lib/trace-reads.cjs:236-237`).
+
+### The records
+Both under `<home>/.js-harness/throughput/<slug>/`, `slug` the project's as the page record and the channel name it
+(`D--js-harness` here), so `uninstall` keeps them with the throughput folder. Append only: one `appendFileSync` of
+the whole line, its newline included, after a line left without its newline is ended, as the channel record does
+(`bin/lib/channel.mjs:291`); a reader skips a line that does not parse, so a cut last line is never read as a
+record. A test runs two writers of 200 lines each at once and reads 400 whole lines.
+- `templates-rendered.jsonl`: `{ schema: 'js-harness.rendered/v1', template, subject, sha256, bytes, at, head, path
+  }`. The contract JH 79's page commands build against (the lead, L4), in `bin/lib/template-record.mjs`:
+  - `renderedFile(home, slug)`: the path, in the shape of `pagesFile`;
+  - `recordRendered(file, { template, subject, path, at, head }, fileSystem = fs)`: reads the bytes of `path` as they
+    are on disk once the command has written them, appends one line with their sha256 (and the sha256 of the same
+    text with `\r\n` as `\n` and trailing spaces cut, `normal`, which the `show_widget` check uses), and returns it. A
+    file it cannot read or a line it cannot write throws: the command says so and its page stays unpublishable,
+    never published unrecorded.
+  - `template` is the page template's id (`stretch-departure`, `stretch-status`, `stretch-return`, `feature-close`,
+    `phase-change`, `status-report`); `subject` the moment's id as the page record names it (the stretch's id, the
+    feature document's path, `map`); `head` the default branch's commit the page read.
+- `templates-shown.jsonl`: `{ schema: 'js-harness.shown/v1', at, session, tool, template, subject, decision, sha256,
+  reason }`, `decision` one of `refused`, `admitted`, `free`, `unchecked` written by `--hook` before the call, and
+  `shown` written by `--shown` after a call that succeeded, carrying what `--hook` decided. Only `shown` says he saw
+  it. A line the gate cannot append is said on standard error and the decision stands; `template shown` then cannot
+  read it, and says how many calls its counts may miss (the host's transcript holds every call).
+
+### The gates on the path to him
+Each refusal ends with the exact command to run, as 13.3 row 1 asks.
+- `page` (`Artifact` publish with a page, and `mcp__visualize__show_widget`). The page is the published file's bytes,
+  or the widget's code. Admitted as its template when its sha256 (for a widget, its `normal` hash) is on a line of the
+  rendered record no older than `RENDERED_FRESH_HOURS` (6): an old page republished as a new moment's is refused.
+  Admitted as free when it carries `<meta name="js-harness-page" content="free: <why, 20 characters or more>">` and
+  neither of two proofs of a moment holds: it carries a registered template's signature (the 02:44Z widget kept the
+  renderer's classes), or a moment of a page template is open, a stretch opened or closed in the stretch record with
+  no `shown` page of its template and subject since. A model that wrongly marks a moment's page free is refused by
+  either proof; one that strips the signature while a moment is closed and recorded is not, and the escape list names
+  it. Anything else is refused with:
+  `js-harness template gate: this page came from no template command (sha256 <first 12 hex> is not in <rendered
+  file>). Make it with its command and publish that file unchanged: <one line a page template: its id and its render
+  command>. If no record holds what it shows, mark it free: <meta name="js-harness-page" content="free: <why, 20
+  characters or more>">.` A moment's page goes by `Artifact` with the file the command wrote, never retyped into a
+  widget; a widget is admitted only when its code is that file's text (`normal` hash), so the refusal of a retyped
+  widget names the `Artifact` route. An `Artifact` call with no page (an asset upload, a create from a type, a read,
+  a list) is not the gate's; a `files` update is checked page by page.
+- `board` (`ArtifactData` `set`, `update` or `batch`, by `file_path` or inline `data`, to the url the cursor of
+  `sessions live` keeps): a write to `events` is admitted when every row, without `sesion` and `texto`, equals the
+  row of the same `seq` that `pendingRows(notices, null, epoch)` gives for the channel record now; a row with no
+  `seq`, or another row there, is refused naming `js-harness sessions live --out <dir>`. A write to `board/summary`
+  is admitted when its command fields (the check time, until when, resting, the open stretch) equal the
+  `board-checked.json` that `sessions live` wrote last; its words ("what you say now") stay the lead's. On the board
+  he reads `sesion` and `texto`, which stay free: the gate holds who, when, what kind and which state, not the
+  wording.
+- `ask` (`AskUserQuestion`): admitted when the question opens with `Pregunta <n>: `, record `n` is a question not yet
+  answered or withdrawn, and its text and option labels equal the record's; refused otherwise, naming `js-harness
+  notify --kind question` (`rule:questions-one-place`: recorded before it is asked).
+- `stop`: the existing `reply --hook`; no new hook.
+- `command:<name>`: a command that refuses its input already (`notify --kind closed` refuses an empty summary).
+Whether Claude Code runs a hook before `Artifact`, `ArtifactData` and `AskUserQuestion` is an assumption [i] (it does
+for desktop MCP tools, by the matcher above); T4 checks each with a scratch hook that logs the payload before
+anything is built on it. A tool that runs no hook gets its check at the `Stop` hook instead, a reminder after the
+fact, and the inventory says so.
+
+### The inventory (b)
+Parts: S a sample he approved, R a command that renders it, G a golden test against the sample, Q a gate on the path
+to him, F a test that the gate refuses a hand-made one. A refusal's cost is one retry; its tokens are an estimate [e]
+of the retry's tool calls (the context read again is cached). His page colours them as the brief does: green has
+all five; amber is a template (a sample or a command) still missing the gate or a test; red is prose only. None is
+green today.
+
+| Output | Made today by | Parts | Gate on the path to him | A refusal costs | Smallest fix |
+|---|---|---|---|---|---|
+| The board's rows and its coloured status list | `sessions live --out` (`pendingRows`); the lead adds `sesion`, `texto` and sends with `ArtifactData` | R | none: hand rows went through on 2026-10-27 | `sessions live --out` again, send the file: ~2k [e] | a sample batch he approves, its golden, the `board` gate and its refusal test; the look is JH 79's (PR 647) |
+| The board's summary (`board/summary`) | the `ArtifactData` update `sessions live` prints, with the lead's words | R (its command fields) | none | ~1k [e] | in T5: its command fields under the `board` gate |
+| The board page itself (`docs/live-board.html`) | republished by the lead after a merge | R (the file) | none | ~1k [e] | a `page` template whose command is the file; sample approved by the lead on his delegation, not by him (`live-board.md`, L9), so he approves it first |
+| A stretch's departure, status and return | `stretch open/status/close --html`; JH 79 adds shares, map and timeline | R | none: the 02:44Z widget went through | the command, then `Artifact` with its file: ~3k [e] | JH 79's commands call `recordRendered` and write the signature; the `page` gate; the sample is the first page he approves |
+| The status report | `report` gives facts as lines and the lead writes the sections; JH 79 adds `report --html --notes` | R (part) | none | ~3k [e] | as above, once JH 79's T6 lands |
+| A feature's close | by hand today; JH 79's `report feature` (T6) | none yet | none | ~3k [e] | as above |
+| A phase's change | by hand today; JH 79's `report phase` (T6) | none yet | none | ~3k [e] | as above |
+| A question to him | `notify --kind question` records it and its number; the lead asks with `AskUserQuestion` | R (the number and header) | none on the tool | record it, ask again: ~1.5k [e] | **The proof (T5, L6)**: the `ask` gate and its refusal test; a sample he approves |
+| A permission card relayed to him | `permit` (the `PermissionRequest` hook, `bin/lib/hook-entries.mjs:89-95`) | R | the host's card itself | — | a `shape` template once he names how it looks; today the host draws it |
+| The reply's closing line | the model, in the labels of `harness.json` `reply` | S (his labels, 2026-10-07), Q (`reply --hook`), F (`reply.test`) | the `Stop` hook, once a stop, after it is shown | the close written again: ~0.5k [e] | register as `shape`: its entry and a test file with the golden |
+| The cut block | the model; the opening it carries from `notify --opening` | S, Q (`Stop`), F | the `Stop` hook | ~0.5k [e] | register as `shape` |
+| The pause notice near the context limit | `cutRule` (`bin/lib/sessions.mjs`) gives its text | R | none | — | a `shape` template on the reply that carries it, after the two above |
+| The push notification when the machine goes quiet | the lead, by `bin/lib/manifest.mjs:160` | none | none | — | stays prose: its words are one line; a `command:` template if he asks for a fixed form |
+| The desktop's wrap-up recap | the model, at the desktop's prompt | none | none | — | stays prose: the host asks for it and shows it; its facts come from the stretch's return page |
+| A mistake report | the model, in the five parts of `rule:mistake-report` | none | none; `failures check` holds the register's lines, not the report | — | stays prose: it lives in a reply and is judgment; its `Seen:` line is held by `failures check`, the five parts by an eval (below) |
+| A throughput review | `js-harness throughput`, `reviewed` records it | R (the measures) | none | — | stays prose: each candidate is judgment; the record is the command's |
+| A stretch recap ("what was spent") | the model | none | none | — | folds into the stretch's return page, which carries the spend the records hold |
+| A session's opening prompt | `startPrompt`, `LEAD_OPENING_PROMPT` (code); the brief by the lead | R (the line) | none on the brief | — | the line stays code; a `brief check` at `sessions start` is its own feature (to the lead) |
+| A session summary | `summary template`, filled by the session | R (skeleton) | `notify --kind closed` refuses an empty section | fill it, notify again: ~1k [e] | none needed now |
+| A free page (research, a design, this inventory) | the model, by `rule:reports-spanish-visual` | none | the `page` gate admits it only marked free, with no moment open and no template's signature | add the mark: ~0.3k [e] | stays free: no record holds its content; `template shown` lists each one with its reason |
+| The lead's ordinary replies | the model | — | only the close (above) | — | stay prose by design (Constraints) |
+
+### The evals (judgment, defined here, run by F5)
+Two cases, written to `evals/` by the F5 owner and run only when F5 spends:
+- a mistake report: given a planted failure, the reply holds the five parts of `rule:mistake-report`, each named;
+  pass line 9 of 10 runs;
+- a question: given a decision with a recommended option, the question puts it first with "(Recomendada)", says what
+  a yes covers and what it does not, and asks one thing; pass line 9 of 10 runs.
+Neither is called guaranteed; the pass line is what is claimed.
+
+### The rule (c)
+`rule:rules-live-in-the-harness` holds that a rule he gives is cemented where something acts on it. It is amended,
+on `rule/templates` through `js-harness rules change rules-live-in-the-harness`, quoting his lines 14721 and 15262
+with their date, 2026-10-29. Its subject gains: an output he sees again and again is cemented the same way, as a
+template of five parts. Its text gains:
+- he asks for one in one line, `Plantilla: qué quiero ver · cuándo aparece · cómo se ve (la muestra que apruebo) ·
+  dónde me llega`;
+- the lead turns it into `template new` and asks for a missing field alone;
+- an escape becomes a `docs/FAILURES.md` `Seen:` line and a new refusal test.
+Chosen over `reports-spanish-visual`, which JH 79 amends on `rule/visual-moments` at the same time (two changes of
+one rule would conflict), and because a template holds any output, a board row or a question as much as a page; a
+template is where an output rule is cemented, which is that rule's subject.
+
+### How we prove it is followed (d)
+- On every commit: `template check`, through `bin/template.test.mjs`. When it holds it prints `templates: <n>
+  registered, every part present` and exits 0; a fault fails the commit.
+- On the machine: a `templates` row of `doctor` (the second surface ask), reading `template shown --days 7`. Per
+  template it gives rendered, admitted, shown, refused and unchecked counts; every free page with its reason; and
+  every escape: a moment a record holds with no `shown` output of its template (a stretch closed with no return page
+  shown, a question recorded and never asked through the gate), and a `shown` page whose rendered line names no
+  moment. When it holds it prints `templates: no escapes in 7 days` and is green; an escape is amber and named; an
+  unchecked call or a record it cannot read makes it `unknown`, never green. Until the row lands, `template shown`
+  is the same report, exit 0 when it holds, 1 on an escape, 3 when it cannot tell.
+- Every escape is a `Seen:` line of the register entry `hand-made-output` and a refusal test of the template it
+  escaped; `js-harness failures` counts them, so a recurrence shows as a new `Seen:` line.
+
+### Slices
+Docs first: this document, alone, as a docs-only pull request. Then, after it lands: A, `template new`, the
+registry, `template check` and `list`, each test first (T3); B, the hook probe, the gate, the records and `template
+shown` (T4); C, the questions end to end with the escape entry (T5); D, the rule change, stacked (T6). Each slice through
+Codex and the Claude lenses before its pull request.
+
+## Tasks
+- [x] T1 (kind: design) this document, the inventory page for him, and two blind readers (rule:double-review). Spec 1-5. Route: inline, readers delegated. 3d6d5dcf, db5f7409 and the revision after them (L5).
+- [x] T2 (kind: docs) the docs-only pull request and its ready notice. Spec 5. Route: inline. PR 648, landed as 410eed7c.
+- [x] T3 (kind: build) `template new`, the registry, `template check` and `list`, tests first. Spec 5. Route: inline. PR 649.
+- [x] T4 (kind: build) the hook probe, then `template gate --hook` and `--shown`, the records and `template shown`. Spec 3, 4. Route: inline. PR 653.
+- [x] T5 (kind: build) the questions to him as the first template, end to end (the `ask` gate), with the escape entry. Spec 1, 4. Route: inline. PR 656.
+- [x] T6 (kind: build) the rule change on `rule/templates`. Spec 1, 5. Route: inline. PR 660; `status-report` (L8) on `rule/status-report-why`, 7d770446.
+- [x] T7 (kind: docs) the session summary and the ROADMAP line. Route: inline. `docs/sessions/2026-10-29-jh-80-templates-everything-he-sees-made-by-a-command-and-hel.md`.
+
+## Log
+- L1. 2026-10-29, the lead's brief for JH 80 (its five lines of his, the recipe it gave him at line 15080, the
+  task). His five lines read with `js-harness sessions --quote` (Specs).
+- L2. 2026-10-29, searched before adding, as Design says: no command renders an output he sees and refuses one not
+  from it; no hook matches `Artifact`, `ArtifactData`, `AskUserQuestion` or `mcp__visualize__show_widget`. JH 79's
+  branch (`feat/visual-pages-b`, read at 03:15Z) builds the pages and a stale-board reminder and no hash gate.
+- L3. 2026-10-29, the board rows chosen as the proof (the brief's first choice), read as whether a row came from the
+  record: JH 79's slice B holds the board's look ("colored status", the lead's plan at line 14663) and its freshness
+  (stale-board, start row, running block, last three done), not the rows' provenance. If the lead reads the brief's
+  "colored status list" as JH 79's, the proof moves to the questions (`ask`), the next row with a record to check.
+- L4. 2026-10-29 ~03:25Z, the lead's message to JH 80: (1) there is one gate and JH 80 owns it; JH 79 had planned its
+  own hash gate for the moments' pages (its slice C, T10, from his line 14721) and is told not to build a second; its
+  page commands call `recordRendered`, one line each, so this design names its signature, where the record lives and
+  the refusal message (The records, The gates). (2) The edit surface is extended for the build: one dispatcher
+  line in `bin/js-harness.mjs`, the gate entry in `bin/lib/hook-entries.mjs`, one entry in `docs/FAILURES.md`,
+  `templates: true` in `harness.json`.
+- L5. 2026-10-29, double review of the design (rule:double-review), two blind readers given the document, the brief
+  and the code. Claude, 5/10: blockers, the 02:44Z page went by `mcp__visualize__show_widget` (line 14687), which the
+  gates left out; the batch rows carry `seq` and suffixed ids from `pendingRows`, so a bare `rowOf` check refuses
+  every real batch (checked: `bin/lib/live-rows.mjs:56-70`); the `recordRendered` contract missing (it was in
+  db5f7409, after the copy the reader read). Should-fix: the constraint said "positive evidence" while the page gate
+  refuses on absence; the free mark let the 02:44Z page through though it kept the renderer's classes; a widget's
+  bytes are retyped; `shape` templates need a test file, not entries only; the inventory gave golden tests and a
+  sample he did not approve; outputs missing (`board/summary`, the push notification, the desktop's recap); the
+  board's words are free; (d) asked for a `check` or `doctor` row; the surface misses the files that hold the
+  matcher; the Goal promised more than it built; `Artifact` and `ArtifactData` variants; stale pages admitted. Nits:
+  the amber colour; selection under `exactTests`; the colored status in JH 79's slice B; the `ask` gate's options and
+  answered questions; the rule's subject. Codex, 5/10: blockers, the same `seq` mismatch (confirmed by a probe); the
+  inline tool and Codex as a host; the free mark against a model's mistake; admitted is not shown, and nothing names
+  the moment; `template check` passes broken but complete templates. Should-fix: outputs missing (`board/summary`,
+  the pause notice, throughput reviews, permission cards); the doctor row deferred; unreadable or unwritable records
+  and "no escapes"; concurrent appends; uninstall's retention unowned; the evals undefined; drafts against "only
+  complete templates", and several templates on one gate; the sample not bound to its approval. Nit: the amber
+  colour. Taken in, all, as the design above now says: the board check by `seq`; the widget gated; the free mark
+  refused on a signature or an open moment; `PostToolUse` writes `shown` and the rendered line names its moment;
+  `template check` refuses drafts, throwing bodies, skipped tests, a changed sample and an unhooked surface; the
+  records moved into the throughput folder so `uninstall` keeps them unchanged; the evals defined; one check a
+  surface; the colours as the brief gives them, none green today. The record's path changed from the one sent to the
+  lead at 03:20Z, and the lead is told.
+- L6. 2026-10-29, the lead's answers to JH 80's two calls, and PR 648 landed (main 410eed7c): (1) the slice B surface
+  is approved: `bin/lib/manifest.mjs` for the hook registration only, `bin/lib/manifest.test.mjs`,
+  `scripts/practice-lib.mjs` and one `templates` row in `bin/doctor.mjs`. The `manifest.mjs` change touches the
+  installer, a high-risk item (delivery): its commit body and pull request name it; a scratch home proves that
+  `install` registers the gate hook and `uninstall` removes exactly that hook; and the slice gets one independent
+  verifier after its own checks, beside Codex and the lenses. (2) The proof converts the questions (the `ask` gate):
+  the coloured status list is JH 79's and lands in PR 647. Done when and T5 now say so; the board rows and summary
+  stay inventory rows, their gate a later template. The lead told JH 79 that `recordRendered` takes `subject` and that
+  the record is `throughput/<slug>/templates-rendered.jsonl`.
+- L7. 2026-10-29, his approval of the question template's sample. Question 108 asked him to approve the card's shape;
+  the lead asked it, and his answer, read with `js-harness sessions --quote 0f71b2c6 17978` (08:15:26Z, tapped): "Sí,
+  apruebo esta forma (Recomendada)". The card he saw (the call at line 17971) was the render of 108 with one
+  difference: the lead wrote the session's label after the prefix, "Pregunta 108: Plantillas (JH 80). ¿Apruebas…".
+  The sample is that card, byte for byte, and its record holds the label in the question's text: under the gate a
+  label added at asking time is a hand-made question, so whoever records a question writes its label into the text
+  (the lead is told). `sample.source` is `0f71b2c6:17978`.
+- L8. 2026-10-29 08:32Z, the lead's note to JH 80 relaying his words, read with `js-harness sessions --quote 0f71b2c6
+  18204` (08:29:41Z): "Listo muestrame lo proximo que se viene y SIEMPRE peror SIEMPRE debes darme la razon del por
+  que osea cual es el criterio". The lead asks (its page https://claude.ai/artifact/4Ty3JAAJrCyK7DrBw5yFBP): the
+  status report's notes refuse a proposal with no `why` (`notesOf`, `bin/lib/report-status.mjs`, from main), and the
+  rule `status-report` ("propose next, and why") is amended through `rules change` in slice D, quoting that line.
+  The surface grows by `bin/lib/report-status.mjs` and its test.
+
+## Next step
+State at 2026-10-29 ~04:45Z (JH 80, worktree `D:\js-harness\.claude\worktrees\templates`, branch `feat/templates-a` from
+main 410eed7c; design PR 648 landed). Slice A (T3), test first, files written and not yet committed: the tests
+`bin/lib/template.test.mjs`, `bin/lib/template-check.test.mjs`, `bin/lib/template-scaffold.test.mjs`,
+`bin/template.test.mjs`; the code `bin/lib/template.mjs`, `bin/lib/template-registry.mjs` (empty list),
+`bin/lib/template-check.mjs`. Still to write: `bin/lib/template-scaffold.mjs` (`FIELDS` in his line's order what,
+when, sample, where, then source, each with a Spanish `ask`; `firstMissing`; `scaffold(given, sampleBytes)` returning
+`{ files, entry }` or `{ error }`, the entry with `records` for a rendered kind and `draft: true`), `bin/template.mjs`
+(`templateMain(argv, { stdout, stderr, root, hooked })`: new, check, list [--json]; `TemplateArgError`; default root the
+git top level, default hooked from a `templateGateEntry` of `bin/lib/hook-entries.mjs` when it exists, else none), the
+dispatcher line and help line in `bin/js-harness.mjs`, then `node --test` on the four files, `npm run check`, commit,
+Codex and lens reviews (`--base 410eed7c`), PR, ready notice. Then slice B (T4) with the approved surface (L6).
+- Update ~04:55Z: `bin/lib/template-scaffold.mjs` and `bin/template.mjs` written too (uncommitted). Next: the dispatcher and help line in `bin/js-harness.mjs`, run the four tests, fix, `npm run check`, commit slice A.
+- Update ~05:10Z (after the host's compaction at 04:33Z): the dispatcher, its usage entry, the README section and a
+  `docs/SPEC.md` capability (the `spec` row refuses a command no capability claims; outside the listed surface, a
+  consequence of the approved dispatcher line, told to the lead) written; slice A committed. Next: Codex and lens
+  reviews `--base 410eed7c`, push, PR, ready notice; then slice B.
+- Update ~06:10Z: slice A is PR 649. Codex found 2 P2 (fixed in 6705dbb9, rechecked); the lenses found none.
+  gentle-ai: approved, medium, lineage review-bdfb8ba9d34d3ada, over 410eed7c..6705dbb9 (3a57e908, 6705dbb9),
+  acknowledged; its reliability lens left 7 findings as non-blocking, all fixed in the next commit (CRLF samples,
+  the test declaration read by its call, a non-object entry, the hook-entry wording, the sample read from `cwd`, a
+  hand-made output that always differs, the write-over-nothing and flag tests). The hook probe (T4), read from the
+  six newest lead transcripts: PreToolUse ran before `Artifact` (34), `ArtifactData` (128), `AskUserQuestion` (105)
+  and `mcp__visualize__show_widget` (7), so [i] holds and no tool needs the `Stop` fallback.
+- gentle-ai: approved, medium, lineage review-35989199b6ff665f, over 6705dbb9..ff703e53 (ff703e53), acknowledged;
+  Codex and the lenses (reliability, readability) found nothing in it. Its lens left 5 non-blocking findings (the
+  `cwd` test passes `cwd` equal to `root`; a second non-object entry reads as a repeated id; only the first call of a
+  title is read; the CRLF test's fixture is not asserted to hold a newline; `sampleDigest` has no unit test): they
+  are taken in slice B's first commit, so slice A takes no fourth review round.
+- Update ~06:05Z: slice B (`feat/templates-b`) holds bbd5c73d (slice A's second-round findings) and d57c075c (the
+  records and the page decisions). Unit 3, `template gate --hook` and `--shown` and `template shown`, is written and
+  green (`bin/template.test.mjs` 16 of 16, `bin/lib/template-gate.test.mjs` 13 of 13) and is not committed: the
+  open moments and the moments a record holds are injected, empty until a page template registers (slice C), and
+  the signature proof covers the 02:44Z widget. It is blocked: the gate answers a hook with a reason, so
+  `bin/lib/rules-sources.test.mjs` needs `bin/template.mjs` in `MESSAGE_SOURCES`, and then `rules check` refuses
+  it (S5c-a's D3, `odd/tasks/f8-s5c-a-coverage.md`: a message source after the baseline is refused until S5c-b
+  cuts it), so the real package fails `rules check` (8 tests of `bin/rules.test.mjs`, all this one finding). The
+  register `bin/lib/rules-coverage-data.mjs` is outside this brief's surface: the lead's call, asked 06:03Z.
+- Update ~06:20Z: the lead's answer (01:05 local, 06:05Z): "not (a). An owed seed for a source added after the
+  baseline is what D3 refuses ... Route (b): cut and declare bin/template.mjs's messages now ... Keep the reason
+  short. Then unit 4." Done in unit 3's commit: every sentence the gate sends is `GATE_SAYS` in
+  `bin/lib/template-gate.mjs` (a test holds each refusal to those sentences, filled); they are the text source
+  `template-gate` (`bin/lib/rules-sources.mjs`), and `bin/template.mjs` is listed in `CUT_MESSAGE_SOURCES`, not
+  owed whole; the register declares its 7 spans as context (4 state a fact of the call; 3 are directives the
+  `PreToolUse` hook enforces on the call itself). `rules check` passes. Slice D may tie the 3 directive spans to
+  the amended rule instead.
+- Update ~06:50Z: unit 3 is 0fa67aaa and unit 4 bc3a0520 (high risk, installer: install grafts
+  `claude-template-gate-hook` under PreToolUse and `claude-template-shown-hook` under PostToolUse; a scratch home
+  seeded with the user's own entries of both events: install exit 0, ours after theirs, both recorded; uninstall
+  exit 0 and settings.json equal to the seed byte for byte). One independent verifier runs on bc3a0520. The lead
+  relayed (01:23 local, unverified, JH 79's Codex run on main's slice A code) four points; each was read in the code
+  and holds: a required test only in a comment counted; an entry with no id passed as `(no id)`; a field given over
+  several lines ended the scaffold module's `//` comment; two `template new` at once could each write the list it
+  read. Unit 5 fixes each with its test: comments are blanked (strings kept) before the titles are read; a missing
+  id is a fault; the scaffold keeps each field on one line; `template new` holds an exclusive lock in the system's
+  temporary folder while it reads and writes the registry.
+- Update ~07:05Z: the independent verifier on bc3a0520 confirmed all five points (install, sync from a manifest
+  written before the change, downgrade, uninstall byte for byte in six seeded shapes; no Codex entry; the matcher
+  anchored; `gate --hook` exits 0 on every path tried, refusing only by the deny JSON; nothing broken on update).
+  Pre-existing and not this change's: an entry the user already had, identical to one of ours, is recorded as ours
+  and uninstall removes it (`bin/lib/manifest.mjs:584`, `:745`), told to the lead. Its minor point, two git calls
+  before `harness.json` is read on every call of the tools, is unit 6: the gate reads the nearest `harness.json`
+  first, with no git, and computes the project's records only where templates are on.
+- State ~07:10Z (context pause): slice B on `feat/templates-b`, worktree `D:\js-harness\.claude\worktrees\templates`,
+  base 39e69ee5, head 4c4509ca (units bbd5c73d, d57c075c, 0fa67aaa, bc3a0520, d7912f64, 4c4509ca). Running:
+  `js-harness codex-review --base 39e69ee5c44a306a7447f88906404c083ac33681` (log in the job tmp `codex-b.log`) and
+  `js-harness lens-review` with risk, resilience, readability, reliability (`lens-b.log`); gentle-ai lineage
+  review-7ce7253a9018aa39 started with consent relay, its envelope's `granted` invocation is next, then
+  lens-context, a general-purpose reader, capture-result (no `--agent`), acknowledge. Then: take the findings, add
+  a gentle-ai line here, push `feat/templates-b`, open the PR against main naming the high-risk installer change,
+  `js-harness notify --to orchestrator --kind ready --pr <n>` telling the lead the surface touched beyond the brief
+  (rules-sources, rules-coverage-data, js-harness.test, SPEC's hook table) and the verifier's pre-existing finding
+  (an identical user entry is removed by uninstall, `bin/lib/manifest.mjs:584`, `:745`). Then slice C (T5).
+- Update ~07:35Z (after the host's compaction at ~07:10Z): the lenses over 39e69ee..4c4509c found none (risk,
+  resilience, readability, reliability). Codex's run over 39e69ee..83d2f1b found 6 P2, each read and holding: the free
+  mark cut its reason at an apostrophe; `shownReport` counted a `constructor` id from an inherited key; the gate
+  hashed a page's decoded text, not its bytes; the registry was imported outside the gate's fail-open boundary; an
+  unreadable `harness.json` turned the gate off in silence; `template check` read a test call quoted in a string
+  fixture as a declaration. Unit 7, b1d938e3, fixes each with a test that failed on the code before it (7 failing,
+  then 155 of 155 over the five touched test files). Codex's recheck of 83d2f1b..b1d938e: 6 fixed, 0 not fixed,
+  correct at 0.95 (79,502 input tokens). Lenses risk, resilience, reliability over 83d2f1b..b1d938e: 0 findings.
+  gentle-ai lineage review-7ce7253a9018aa39 covers 39e69ee5..4c4509ca (medium, lens reliability); its reader runs.
+  Unit 7 then goes to gentle-ai as its own candidate.
+- gentle-ai: approved, medium, lineage review-7ce7253a9018aa39, over 39e69ee5..4c4509ca (0fa67aaa, bc3a0520,
+  d7912f64, 4c4509ca, and bbd5c73d, d57c075c before them), acknowledged. Its reliability lens left 4 non-blocking
+  findings, each read and holding, all fixed with a test that failed first in unit 8, 34f95b0c: an Artifact `files`
+  list skipped by the gate; a `files` source read without the publish's `root`; a quote in a regular expression or a
+  nested template literal flipping `template check`'s comment reader; `recordRendered` taking a time that does not
+  parse. Next: Codex and the lenses over unit 8, then units 7 and 8 to gentle-ai as one candidate.
+- Update ~07:45Z: Codex over unit 8 found 1 P2 (a `/` after a postfix `++` or `--` read as a regular expression),
+  fixed in dfc2692d and rechecked (1 fixed). Lenses over unit 8 and its fix: 0 findings.
+- gentle-ai: approved, medium, lineage review-53473f94dc0eb57c, over 4c4509ca..7660b66d (b1d938e3, 34f95b0c),
+  acknowledged. Its reliability lens left 3 non-blocking warnings, each holding, fixed with tests in unit 9, f08682ba:
+  a free-mark reason wrapped onto a second line; a regular expression after a keyword read as a division; a second
+  `unchecked` line from `--shown` when `harness.json` cannot be read. Codex over unit 9 found 2 P2 (an escaped CRLF
+  ending a string; `of`, `yield`, `await` taken for keywords), fixed in unit 10, f5eb5226, and rechecked (2 fixed);
+  the reader's comment now states what it does not model. Lenses over units 9 and 10: 0 findings.
+- gentle-ai: approved, medium, lineage review-f5f625f35e185de6, over 7660b66d..f5eb5226 (dfc2692d, f08682ba,
+  f5eb5226), acknowledged. Its reliability lens left 1 non-blocking warning, holding: the two shapes meant to prove
+  the reserved-word branch (`return /['"]/`, `typeof /'/`) still pass without it, because a quoted string now ends
+  on its line; a shape with the golden call after the regular expression on the same line proves it. Taken in slice
+  C's first commit, so slice B takes no further review round. Every code commit of slice B is covered: gentle-ai
+  39e69ee5..4c4509ca, 4c4509ca..7660b66d, 7660b66d..f5eb5226; Codex and the lenses each commit.
+- Update 07:57Z: slice B is PR 653, ready notice sent. Slice C on `feat/templates-c`, stacked on `feat/templates-b`
+  (f043f06a). Its first commit takes gentle-ai's last finding (two shapes with the golden call on the regular
+  expression's line; without the reserved-word clause the test fails, checked by removing it) and corrects the
+  hour of the update above, written ~08:30Z by an estimate before the clock read 07:57Z at the notice.
+- Update 08:25Z (after the host's compaction at 08:08Z): unit 2 of slice C, the `ask` gate, test first. `template
+  ask <n>` prints `render` of question n of the channel's record (exit 1 when missing, closed or not showable by the
+  tool, 2 with no number); `template gate --hook` decides each question of an `AskUserQuestion` call with
+  `decideAsk` (an open question of the record, its text and option labels as recorded; descriptions free) and lets
+  it through as unchecked when the record cannot be read. Two `GATE_SAYS` sentences added and their spans declared
+  (one fact, one enforced). The `question` entry registered, not a draft, its sample his approved card (L7);
+  `template check` exits 0. Next: the escapes of the `ask` surface (a question recorded since the first `shown`
+  line, open, 2 to 4 options, with no `shown` line of its number), the FAILURES entry, `"templates": true` in
+  `harness.json`; then Codex, the lenses and gentle-ai over slice C, push, PR, ready notice.
+- Update 08:40Z: unit 2 is e42535c9. Unit 3: `template shown` and `doctor` name as an escape a question recorded
+  since the gate's first line (and in the window), answered, with 2 to 4 options and no `shown` line of its number
+  (`answeredMoments`); the escape text is now "was never shown", for a question as for a page. `docs/FAILURES.md`
+  holds `hand-made-output` (controlled by the page refusal test) and `harness.json` turns templates on. Next: merge
+  main (PR 653 and 654 landed) into the branch, then unit 4, `notesOf` refuses a proposal with no `why` (L8); then
+  the reviews of slice C, push, PR, ready notice; slice D amends `rules-live-in-the-harness` and `status-report`.
+- Update 08:55Z: main merged in as 48ae1ca1 (no conflict, `git merge-tree`); unit 4 is e91cf39d. Codex over
+  f043f06..54ed729 (2 parts, from a detached worktree at 54ed729c so the merge's content stayed out): correct, 0.86
+  and 0.9, 0 findings, 265,106 input tokens; over 48ae1ca..e91cf39: correct, 0.98, 32,710 input tokens. Lenses over
+  f043f06..54ed729 (risk, resilience, readability, reliability) and 48ae1ca..e91cf39 (reliability, readability): 0.
+- gentle-ai: approved, medium, lineage review-39f414838ddd7dcb, over f5eb5226..54ed729c (34162fa1, e42535c9,
+  54ed729c), acknowledged. Its reliability lens left 1 non-blocking warning, holding: the questions' escape window
+  started at the shown record's first line of any surface, so a project whose gate had decided pages before would
+  name questions answered before the `ask` gate as escapes. Fixed in unit 5 with a test that failed first: the
+  window starts at the first line of a call of the question tool.
+- Unit 5 is d3ff2bbe. Codex over e91cf39..d3ff2bb: correct, 0.95, 64,566 input tokens; lenses reliability and
+  resilience: 0. gentle-ai: approved, medium, lineage review-28522967ad0952a1, over 48ae1ca1..d3ff2bbe (e91cf39d,
+  d3ff2bbe), acknowledged; its reliability lens left 2 non-blocking suggestions, both holding, taken in unit 6 (tests
+  only): a blank decision refused, and a gate that decided only pages holds no question's moment and reads no channel
+  record (it fails on the window of unit 4, checked by putting it back).
+- Update 09:30Z: unit 6 is 3f09252d (Codex correct, lens reliability 0). Slice C is PR 656, ready notice sent 09:20Z.
+  Slice D is blocked: `rules change rules-live-in-the-harness --dry-run` refuses while `rule/visual-moments` (JH 79:
+  away-autonomy, reports-spanish-visual) is open, one change at a time. Its text is written and kept as a patch,
+  `rule-templates.patch` in the job's tmp: one bullet after "A memory note is never its home." in
+  `bin/lib/protocols-skill.mjs`, the subject gaining "an output he sees again and again, as a template of five
+  parts", the phrases gaining "An output the user sees again and again is cemented the same way, as a template of
+  five parts" and "and asks for a missing field alone.", the source keeping its 9 quotes as excerpts and adding
+  0f71b2c6 lines 14721 and 15262. Then `status-report` (L8) as the next change, its text in
+  `bin/lib/manifest.mjs`'s item 6, "What you propose next, and why". Each after the one before it lands; then T7.
+- Update 09:47Z: slice C landed (PR 656, main 509b5599); rule/visual-moments landed (PR 655). Slice D on
+  `rule/templates` from 509b5599: 6fd99fd5 is `rules change rules-live-in-the-harness` (the patch above, plus
+  its coverage control: declared after the baseline, it names the protocol line, `bin/lib/rules-coverage-data.mjs`);
+  e27ed2cf carries 70cf8bee, which the land left out. Codex over 509b559..e27ed2c: correct, 0.91; lenses risk,
+  readability: 0. Next: gentle-ai (status at base 509b5599 offers lineage review-407b62dd32e929c7), push, PR, ready
+  notice; then `status-report` on its own rule/ branch once this lands; then T7.
+- gentle-ai: approved, lineage review-55c5cc4b6a8efd4a, over 509b5599..00ead029 (6fd99fd5, e27ed2cf, 00ead029),
+  acknowledged; its reliability lens: 0 findings. The host compacted this session at 09:52Z, after 00ead029; the
+  review's tokens and result were in the job's tmp and resumed from there.
+- Update 11:20Z: PR 660 landed (10:35Z). `status-report` (L8) is 7d770446 on `rule/status-report-why` from main
+  7eb2a709: item 6 of the status report reads "each step with its why: the criterion that puts it there, never a
+  step alone", its source quotes 0f71b2c6 line 18204. Its control is the protocol line: a check was tried first
+  (report-status refuses a blank why, its planted break turns the test red), but the rules tests' fixtures turn
+  every check into owed, which a rule declared after the baseline cannot be, and eight tests failed. Codex over
+  7eb2a70..7d77044: correct, 0.96, 55,059 input tokens; lenses risk, readability: 0. gentle-ai: approved, lineage
+  review-22db1ab261c445cd, over 7eb2a709..7d770446, acknowledged; its reliability lens left 1 WARNING (evidence
+  insufficient), not holding: it read the reading's "report-status refuses a proposal whose why is blank" as
+  unproved, but the base holds it since PR 656 (`bin/lib/report-status.mjs:11` and its test, lines 67-68). Next:
+  push, PR, ready notice; then T7.
+- Update 12:30Z: PR 662 landed (11:43Z). T7 on `docs/templates-close` from main f357174e: the session summary
+  and one ROADMAP line (Session board). Done when, checked: `js-harness template check` prints "templates: 1
+  registered, every part present", exit 0; `bin/lib/template-check.test.mjs:102-104` fails it on a planted
+  missing part; no eval spend. Next: commit, push, PR, then the closed notice naming the summary.

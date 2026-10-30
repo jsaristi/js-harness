@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SWITCHES, programFile, readFunctions, resolveFunctions, typeScriptFile } from './functions.mjs';
+import { PRESETS, SWITCHES, presetFunctions, programFile, readFunctions, resolveFunctions, typeScriptFile } from './functions.mjs';
 
-const DEFAULTS = { codeMap: 'auto', languageServer: 'auto', codexReview: 'auto', pushUnasked: 'auto' };
+const DEFAULTS = { codeMap: 'auto', languageServer: 'auto', codexReview: 'auto', pushUnasked: 'auto', lensReview: 'auto', engramPlugin: 'auto' };
 
 test('a harness.json with no "functions" is every switch at its default, with no error', () => {
   assert.deepEqual(readFunctions({ version: '0.1.0' }), { values: DEFAULTS, declared: {}, errors: [] });
@@ -57,10 +57,20 @@ test('pushing unasked is on only where the project declares it on, whatever its 
   assert.deepEqual(resolved.pushUnasked, { value: 'on', declared: 'on', because: 'declared in harness.json' });
 });
 
+test('the Claude lens review is off where the project says nothing, and on only where it declares it (odd/tasks/f8-s1-reviews.md, L9)', () => {
+  const because = 'a commit asks for a lens record only where the project turns the lens review on';
+  for (const tree of [{ paths: ['src/fetch.py'] }, { unknown: 'git failed' }]) {
+    assert.deepEqual(resolveFunctions(DEFAULTS, tree).lensReview, { value: 'off', declared: 'auto', because });
+  }
+  assert.deepEqual(resolveFunctions({ ...DEFAULTS, lensReview: 'on' }, { paths: [] }).lensReview, { value: 'on', declared: 'on', because: 'declared in harness.json' });
+  // A value that cannot be read is on, as every check is: nothing is turned off by a file nobody could read.
+  assert.equal(readFunctions({ functions: { lensReview: 'yes' } }).values.lensReview, 'on');
+});
+
 test('a name that is no switch is an error, so a misspelt switch is never a silent default', () => {
   const read = readFunctions({ functions: { codexreview: 'off' } });
   assert.deepEqual(read.errors, [
-    'harness.json "functions" holds "codexreview", which is no switch; the switches are "codeMap", "languageServer", "codexReview", "pushUnasked"',
+    'harness.json "functions" holds "codexreview", which is no switch; the switches are "codeMap", "languageServer", "codexReview", "pushUnasked", "lensReview", "engramPlugin"',
   ]);
   assert.deepEqual(read.values, DEFAULTS);
 });
@@ -69,7 +79,7 @@ test('a "functions" that is not an object is an error and every switch is read a
   for (const functions of ['off', ['codexReview'], null, 3]) {
     const read = readFunctions({ functions });
     assert.deepEqual(read.errors, [`harness.json "functions" must be an object; it is ${JSON.stringify(functions)}`]);
-    assert.deepEqual(read.values, { codeMap: 'on-demand', languageServer: 'on', codexReview: 'on', pushUnasked: 'off' });
+    assert.deepEqual(read.values, { codeMap: 'on-demand', languageServer: 'on', codexReview: 'on', pushUnasked: 'off', lensReview: 'on', engramPlugin: 'on' });
   }
 });
 
@@ -131,13 +141,15 @@ test('auto for the language server goes by TypeScript, not by any program', () =
 });
 
 test('a declared value is the answer whatever the files are', () => {
-  const values = { codeMap: 'always', languageServer: 'on', codexReview: 'off', pushUnasked: 'on' };
+  const values = { codeMap: 'always', languageServer: 'on', codexReview: 'off', pushUnasked: 'on', lensReview: 'on', engramPlugin: 'off' };
   for (const paths of [[], ['src/fetch.py', 'web/app.ts']]) {
     assert.deepEqual(resolveFunctions(values, { paths }), {
       codeMap: { value: 'always', declared: 'always', because: 'declared in harness.json' },
       languageServer: { value: 'on', declared: 'on', because: 'declared in harness.json' },
       codexReview: { value: 'off', declared: 'off', because: 'declared in harness.json' },
       pushUnasked: { value: 'on', declared: 'on', because: 'declared in harness.json' },
+      lensReview: { value: 'on', declared: 'on', because: 'declared in harness.json' },
+      engramPlugin: { value: 'off', declared: 'off', because: 'declared in harness.json' },
     });
   }
 });
@@ -159,8 +171,46 @@ test('a name every object inherits is no switch either: an error, never a crash'
   for (const name of ['constructor', 'toString', '__proto__']) {
     const read = readFunctions(JSON.parse(`{ "functions": { "${name}": "off" } }`));
     assert.deepEqual(read.errors, [
-      `harness.json "functions" holds "${name}", which is no switch; the switches are "codeMap", "languageServer", "codexReview", "pushUnasked"`,
+      `harness.json "functions" holds "${name}", which is no switch; the switches are "codeMap", "languageServer", "codexReview", "pushUnasked", "lensReview", "engramPlugin"`,
     ]);
     assert.deepEqual(read.values, DEFAULTS);
+  }
+});
+
+test('the engram plugin is on where the project says nothing, and off only where it declares it (F8 S11, L9)', () => {
+  const because = 'the engram plugin is part of every preset until the project turns it off';
+  for (const tree of [{ paths: [] }, { paths: ['src/fetch.py'] }, { unknown: 'git failed' }]) {
+    assert.deepEqual(resolveFunctions(DEFAULTS, tree).engramPlugin, { value: 'on', declared: 'auto', because });
+  }
+  assert.deepEqual(resolveFunctions({ ...DEFAULTS, engramPlugin: 'off' }, { paths: [] }).engramPlugin, { value: 'off', declared: 'off', because: 'declared in harness.json' });
+  assert.equal(readFunctions({ functions: { engramPlugin: 'no' } }).values.engramPlugin, 'on');
+});
+
+test('every preset turns both reviews on; lean turns the code map off (G14, F8 S11 L9)', () => {
+  assert.deepEqual(Object.keys(PRESETS), ['complete', 'lean', 'custom']);
+  assert.deepEqual(presetFunctions('complete'), { functions: { codexReview: 'on', lensReview: 'on' } });
+  assert.deepEqual(presetFunctions('lean'), { functions: { codexReview: 'on', lensReview: 'on', codeMap: 'off' } });
+  for (const name of Object.keys(PRESETS)) {
+    const { functions } = presetFunctions(name);
+    assert.deepEqual(readFunctions({ functions }).errors, [], name);
+  }
+});
+
+test('custom starts from complete and may add or drop codegraph and the engram plugin, nothing else', () => {
+  assert.deepEqual(presetFunctions('custom'), presetFunctions('complete'));
+  assert.deepEqual(presetFunctions('custom', { codegraph: 'off', engramPlugin: 'off' }), {
+    functions: { codexReview: 'on', lensReview: 'on', codeMap: 'off', engramPlugin: 'off' },
+  });
+  assert.deepEqual(presetFunctions('custom', { codegraph: 'on', engramPlugin: 'on' }), {
+    functions: { codexReview: 'on', lensReview: 'on', codeMap: 'on-demand', engramPlugin: 'on' },
+  });
+  assert.deepEqual(presetFunctions('custom', { codegraph: 'yes' }), { error: 'codegraph must be on or off; it is "yes"' });
+});
+
+test('a preset that is none, or a choice given to a preset that takes none, is an error', () => {
+  assert.deepEqual(presetFunctions('full'), { error: 'no preset "full"; the presets are complete, lean, custom' });
+  assert.deepEqual(presetFunctions('constructor'), { error: 'no preset "constructor"; the presets are complete, lean, custom' });
+  for (const name of ['complete', 'lean']) {
+    assert.deepEqual(presetFunctions(name, { engramPlugin: 'off' }), { error: `only the custom preset chooses codegraph or the engram plugin; ${name} is fixed` });
   }
 });

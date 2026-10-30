@@ -1,0 +1,10 @@
+{
+  "name": "tk",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"tests/**/*.spec.mjs\"",
+    "test:all": "node --test \"tests/**/*.spec.mjs\" \"integration/**/*.spec.mjs\""
+  }
+}

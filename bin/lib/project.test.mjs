@@ -15,6 +15,9 @@ import {
   gitDirsAndCommits,
   agentsTemplate,
   templateBlock,
+  agentsBlock,
+  claudeBlock,
+  claudeTemplate,
   runCodegraphInit,
   InitWriteError,
   codeOfName,
@@ -25,6 +28,9 @@ import { parseRegister } from './failures.mjs';
 import { checkFailures } from '../failures.mjs';
 import { estimateTokens } from './payload.mjs';
 import { TOKEN_BUDGET } from '../check.mjs';
+import { coverageRecord } from './project-rules-read.mjs';
+import { localDay } from './flaky.mjs';
+import { importHealth } from './claude-import.mjs';
 
 // T2e item 8 (R3-tests-depend-on-host-git-config): every test here runs a real `git` (only
 // `codegraph` is ever faked), so a real `git init`/`commit`/`worktree add` must not silently pick
@@ -176,13 +182,16 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
 
     assert.equal(spawn.codegraphCalls.length, 1);
 
-    // Four files (the failures register among them), the push check of a project with code (its Codex review is
-    // on), and the two keys of this clone's settings a project of JavaScript with no TypeScript asks for.
+    // Five files (the failures register and CLAUDE.md among them), the push check of a project with code (its Codex
+    // review is on), the style and the denies every clone holds (odd/tasks/f8-s10-port.md, T5), and the two keys of
+    // this clone's settings a project of JavaScript with no TypeScript asks for.
     const wroteActions = result.actions.filter((a) => a.kind === 'wrote');
     const ranActions = result.actions.filter((a) => a.kind === 'ran');
-    assert.equal(wroteActions.length, 7);
-    assert.deepEqual(wroteActions.slice(4).map((a) => a.path), [
+    assert.equal(wroteActions.length, 10);
+    assert.deepEqual(wroteActions.slice(5).map((a) => a.path), [
       '.git/hooks/pre-push',
+      '.claude/settings.local.json#/outputStyle',
+      '.claude/settings.local.json#/permissions/deny',
       '.claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK',
       '.claude/settings.local.json#/enabledPlugins/typescript-lsp@claude-plugins-official',
     ]);
@@ -190,11 +199,11 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
     // And the line of .atl/ in the clone's exclude file (bin/lib/project-exclude.mjs).
     assert.deepEqual(result.actions.filter((a) => a.kind === 'excluded'), [{ kind: 'excluded', path: '.git/info/exclude', line: '.atl/' }]);
 
-    // Manifest contents and hashes: format 2, since it records that line.
+    // Manifest contents and hashes: format 3, since it records the style and the denies every clone holds.
     assert.equal(result.manifest.version, '0.1.0');
-    assert.equal(result.manifest.format, 2);
-    assert.deepEqual(result.manifest.settings.map((record) => record.key), ['paste', 'languageServer']);
-    assert.equal(result.manifest.files.length, 5);
+    assert.equal(result.manifest.format, 3);
+    assert.deepEqual(result.manifest.settings.map((record) => record.key), ['outputStyle', 'denies', 'paste', 'languageServer']);
+    assert.equal(result.manifest.files.length, 6);
     for (const file of result.manifest.files) {
       const abs = path.join(root, ...file.path.split('/'));
       assert.equal(sha256(fs.readFileSync(abs, 'utf8')), file.sha256);
@@ -214,6 +223,31 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
       fs.realpathSync(result.manifestPath),
       fs.realpathSync(path.join(root, '.git', 'js-harness', 'manifest.json')),
     );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// F8 S5c-a, L5 (odd/tasks/f8-s5c-a-coverage.md): a new project's manifest dates the rules' controls from the day
+// `init` ran, in the record `coverageRecord` reads, so `rules check` there asks a control of every rule from then on.
+test('initProject records the day it ran and the release that ran it as the coverage baseline', () => {
+  const root = makeTmpRepo();
+  try {
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', today: '2026-10-29' });
+    assert.equal(result.code, 0);
+    assert.deepEqual(result.manifest.coverage, { baseline: '2026-10-29', release: '0.1.0' });
+    assert.deepEqual(coverageRecord(root), { baseline: '2026-10-29', release: '0.1.0' });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject dates the coverage baseline the day it runs (`localDay`) when no day is given', () => {
+  const root = makeTmpRepo();
+  try {
+    const before = localDay();
+    const { baseline } = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' }).manifest.coverage;
+    assert.ok([before, localDay()].includes(baseline), `${baseline} is the day init ran`);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1906,12 +1940,12 @@ test('agentsTemplate titles the doc with the folder name and stays short', () =>
 // odd/tasks/rule-hierarchy.md, T9: the lines of this repository's AGENTS.md that hold in any project (items 1 to 4
 // and 6 of "`AGENTS.md`, rewritten"), worded for any owner. Read with the wrapping undone, so a line may wrap anywhere.
 test('agentsTemplate carries the lines that hold in any project', () => {
-  const text = agentsTemplate('project').replace(/\s+/g, ' ');
+  const text = (agentsTemplate('project') + claudeTemplate()).replace(/\s+/g, ' ');
   // Item 1: the six principles once, with the meaning of done.
   assert.match(text, /Work here is done properly, not to comply: no shortcut; under the agreed protocols; nothing stated that was not checked; what is passed on is complete and true; and each mistake leaves a control, of the smallest kind that does the job\./);
   assert.match(text, /A rule is not recorded until it has its place in a check, a line of this file or a protocol\./);
   // Item 2: what is the owner's, asked one at a time; the rest is decided and goes on.
-  assert.match(text, /The owner decides spend outside the plan, anything installed or changed on a machine, a product choice, what cannot be undone, a change of the plan or of its order, a new protocol, and a report published outside this project\./);
+  assert.match(text, /The owner decides what `rule:owner-decisions` lists \(`js-harness-protocols` section 1\)\./);
   assert.match(text, /Ask those one at a time, never while work runs, naming which it is, as `rule:questions-one-place` says\./);
   // Item 3: the owner's wording is the need.
   assert.match(text, /The owner's wording is the need, not the specification: an answer to a proposal of theirs says the need that was understood, what would be done differently from their words and why, and what it costs or is not known; only then is it recorded\./);
@@ -1925,9 +1959,9 @@ test('agentsTemplate carries the lines that hold in any project', () => {
 });
 
 // The double review (odd/tasks/rule-hierarchy.md, T18a): a copy of the rule whose home is the protocols
-// skill, kept because a project's AGENTS.md is read by hosts that load no skill.
-test('agentsTemplate asks for two readers before a design is built or a proposal reaches the owner', () => {
-  const text = agentsTemplate('project').replace(/\s+/g, ' ');
+// skill, kept because a project's CLAUDE.md is read by hosts that load no skill.
+test('claudeTemplate asks for two readers before a design is built or a proposal reaches the owner', () => {
+  const text = claudeTemplate().replace(/\s+/g, ' ');
   assert.match(text, /A design before it is built, and a plan, an analysis with figures or a protocol put to the owner, first passes two readers that did not write it: one attacks its claims, one looks only for what is missing\./);
   assert.match(text, /The owner gets the improved version, with what each reader changed and what stays unguaranteed\./);
 });
@@ -1941,11 +1975,11 @@ test('agentsTemplate serves a project with code and one without', () => {
   assert.doesNotMatch(template, /A behavior change arrives with the test/, 'AGENTS.md keeps the test-first line; the block does not');
 });
 
-// His answer to question 4 (odd/tasks/on-demand-functions.md, S9): with the Codex review off, gentle-ai's assessment
-// decides when a change is reviewed, naming no tier (N6, his answer of 2026-10-24).
+// His answer to question 104 (odd/tasks/f8-s11-complements.md, L14, 2026-10-28), in place of his answer to question 4
+// of odd/tasks/on-demand-functions.md: with the Codex review off, the Claude lens review stays on, naming no tier.
 test('agentsTemplate writes the rule of a project whose Codex review is off', () => {
   const template = agentsTemplate('project');
-  assert.match(template, /^Where the Codex review is off \(`js-harness functions`\), gentle-ai's assessment decides when a change\nis reviewed\.$/m);
+  assert.match(template, /^Where the Codex review is off \(`js-harness functions`\), the Claude lens review stays on: the merge\ndoor asks for its record before a change lands\.$/m);
 });
 
 // --- runCodegraphInit spawn shape ---
@@ -2932,12 +2966,15 @@ test('syncProject sets a fresh clone up: the hook, codegraph init and a manifest
     assert.equal(fs.readFileSync(path.join(root, 'harness.json'), 'utf8'), harnessBefore);
     assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), agentsBefore);
 
-    // The two hooks, and the two keys of this clone's own settings (a clone applies its switches for itself).
+    // The two hooks, the style and the denies every clone holds, and the two keys of this clone's own settings (a
+    // clone applies its switches for itself).
     assert.deepEqual(
       result.actions.filter((a) => a.kind === 'wrote').map((a) => a.path),
       [
         '.git/hooks/pre-commit',
         '.git/hooks/pre-push',
+        '.claude/settings.local.json#/outputStyle',
+        '.claude/settings.local.json#/permissions/deny',
         '.claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK',
         '.claude/settings.local.json#/enabledPlugins/typescript-lsp@claude-plugins-official',
       ],
@@ -2955,6 +2992,9 @@ test('syncProject sets a fresh clone up: the hook, codegraph init and a manifest
     ]);
     assert.deepEqual(onDisk.codegraph, { createdDir: true, status: 'ok' });
     assert.deepEqual(onDisk.dirs, []);
+    // No coverage baseline: a clone of a project older than its rules would date them all today and owe a control of
+    // each at once (F8 S5c-a, odd/tasks/f8-s5c-a-coverage.md), so only `init` dates a project.
+    assert.equal(onDisk.coverage, undefined);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -3645,7 +3685,8 @@ test('syncProject renders an unedited block of the harness\'s lines in AGENTS.md
     assert.equal(first.code, 0);
     assert.equal(first.upToDate, false);
     assert.deepEqual(first.actions, [{ kind: 'rendered', path: 'AGENTS.md' }]);
-    assert.equal(fs.readFileSync(agents, 'utf8'), block(templateBlock()));
+    // init wrote the split, so AGENTS.md takes the reviewer's half (odd/tasks/f8-s3-split.md, S3).
+    assert.equal(fs.readFileSync(agents, 'utf8'), block(agentsBlock()));
 
     const second = syncProject(root, '0.1.0', syncDeps());
     assert.equal(second.upToDate, true);
@@ -3658,7 +3699,7 @@ test('syncProject renders an unedited block of the harness\'s lines in AGENTS.md
     assert.equal(third.upToDate, true);
     assert.equal(fs.readFileSync(agents, 'utf8'), edited);
 
-    // A block sync cannot write again is a failed sync, not an up-to-date one (gentle-ai R3 and R4 on cf820d2).
+    // A block sync cannot write again is a failed sync, not an up-to-date one (review findings R3 and R4 on cf820d2).
     fs.writeFileSync(agents, block(old), 'utf8');
     const refused = (file, ...rest) => {
       if (file === agents) throw new Error('EACCES');
@@ -3718,4 +3759,337 @@ test('syncProject reads AGENTS.md with lstat, so a link is kept on a machine tha
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+// A CLAUDE.md that is a link is no split (odd/tasks/claude-md-block.md, D1): read through a link to AGENTS.md it shows
+// AGENTS.md's own block, and splitting then drops Claude's half. The first test makes a real link, which needs
+// privileges on Windows, so it skips there and runs on CI's Linux; the second reads CLAUDE.md through the injected
+// lstat as a link, so it runs on every machine.
+test('syncProject keeps the whole block in AGENTS.md through a CLAUDE.md that links to it', (t) => {
+  const root = makeTmpRepo('js-harness-project-split-claude-link-');
+  const block = (lines) => `<!-- js-harness block ${sha256(lines).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->\n${lines}<!-- js-harness block end -->\n`;
+  const text = block('## What good looks like\nAn older line of the harness.\n');
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const agents = path.join(root, 'AGENTS.md');
+    fs.writeFileSync(agents, text, 'utf8');
+    fs.rmSync(path.join(root, 'CLAUDE.md'));
+    try {
+      fs.symlinkSync('AGENTS.md', path.join(root, 'CLAUDE.md'), 'file');
+    } catch (err) {
+      if (err.code === 'EPERM' || err.code === 'EACCES') return t.skip('symlinks need privileges on this machine');
+      throw err;
+    }
+    const result = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(result.code, 0);
+    assert.equal(fs.readFileSync(agents, 'utf8'), block(templateBlock()));
+    assert.ok(fs.lstatSync(path.join(root, 'CLAUDE.md')).isSymbolicLink());
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncProject reads CLAUDE.md with lstat, so a link is no split on a machine that cannot make one', () => {
+  const root = makeTmpRepo('js-harness-project-split-claude-lstat-');
+  const block = (lines) => `<!-- js-harness block ${sha256(lines).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->\n${lines}<!-- js-harness block end -->\n`;
+  const text = block('## What good looks like\nAn older line of the harness.\n');
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const agents = path.join(root, 'AGENTS.md');
+    const claude = path.join(root, 'CLAUDE.md');
+    fs.writeFileSync(agents, text, 'utf8');
+    fs.writeFileSync(claude, text, 'utf8'); // what a link to AGENTS.md reads as
+    const lstat = (file, ...rest) => (file === claude ? { isSymbolicLink: () => true, isFile: () => false } : fs.lstatSync(file, ...rest));
+    const result = syncProject(root, '0.1.0', syncDeps({ lstat }));
+    assert.equal(result.code, 0);
+    assert.deepEqual(result.actions, [{ kind: 'rendered', path: 'AGENTS.md' }]);
+    assert.equal(fs.readFileSync(agents, 'utf8'), block(templateBlock()));
+    assert.equal(fs.readFileSync(claude, 'utf8'), text);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// One file under both names is the same loss the other way round (the independent verifier on 00afb013): rendering
+// Claude's half into it drops the reviewer's. A hard link needs no privilege, so the first test runs on every machine;
+// the second makes AGENTS.md a link to CLAUDE.md, so it skips on Windows and runs on CI's Linux.
+test('syncProject keeps the whole block in one file under both names: a hard link renders it once', () => {
+  const root = makeTmpRepo('js-harness-project-split-hard-link-');
+  const block = (lines) => `<!-- js-harness block ${sha256(lines).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->\n${lines}<!-- js-harness block end -->\n`;
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const agents = path.join(root, 'AGENTS.md');
+    fs.writeFileSync(agents, block('## What good looks like\nAn older line of the harness.\n'), 'utf8');
+    fs.rmSync(path.join(root, 'CLAUDE.md'));
+    fs.linkSync(agents, path.join(root, 'CLAUDE.md'));
+    const result = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(result.code, 0);
+    assert.deepEqual(result.actions, [{ kind: 'rendered', path: 'AGENTS.md' }]);
+    assert.equal(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), block(templateBlock()));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncProject renders the whole block in a CLAUDE.md that AGENTS.md links to', (t) => {
+  const root = makeTmpRepo('js-harness-project-split-agents-link-');
+  const block = (lines) => `<!-- js-harness block ${sha256(lines).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->\n${lines}<!-- js-harness block end -->\n`;
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const claude = path.join(root, 'CLAUDE.md');
+    fs.writeFileSync(claude, block('## What good looks like\nAn older line of the harness.\n'), 'utf8');
+    fs.rmSync(path.join(root, 'AGENTS.md'));
+    try {
+      fs.symlinkSync('CLAUDE.md', path.join(root, 'AGENTS.md'), 'file');
+    } catch (err) {
+      if (err.code === 'EPERM' || err.code === 'EACCES') return t.skip('symlinks need privileges on this machine');
+      throw err;
+    }
+    const result = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(result.code, 0);
+    assert.deepEqual(result.actions, [{ kind: 'rendered', path: 'CLAUDE.md' }]);
+    assert.equal(fs.readFileSync(claude, 'utf8'), block(templateBlock()));
+    assert.ok(fs.lstatSync(path.join(root, 'AGENTS.md')).isSymbolicLink());
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// --- F8 S3: init ships the CLAUDE.md/AGENTS.md split (odd/tasks/f8-s3-split.md, S3) ---
+
+test('initProject in a project with neither file writes the split: AGENTS.md for a reviewer, CLAUDE.md importing it; uninstall removes both', () => {
+  const root = makeTmpRepo('js-harness-project-split-');
+  try {
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(result.code, 0);
+    assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), agentsTemplate(root));
+    assert.equal(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), claudeTemplate());
+    const recorded = result.manifest.files.find((file) => file.path === 'CLAUDE.md');
+    assert.deepEqual(recorded, { path: 'CLAUDE.md', sha256: sha256(claudeTemplate()) });
+    assert.ok(result.actions.some((action) => action.kind === 'wrote' && action.path === 'CLAUDE.md'));
+
+    const removed = uninstallProject(root, { spawn: spawnSync });
+    assert.equal(removed.code, 0);
+    assert.deepEqual(removed.actions.find((action) => action.path === 'CLAUDE.md'), { kind: 'removed', path: 'CLAUDE.md' });
+    assert.equal(fs.existsSync(path.join(root, 'CLAUDE.md')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject leaves a project with its own AGENTS.md without a CLAUDE.md: moving it is the migration\'s', () => {
+  const root = makeTmpRepo('js-harness-project-split-agents-');
+  try {
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), '# ours\n', 'utf8');
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(result.code, 0);
+    assert.equal(fs.existsSync(path.join(root, 'CLAUDE.md')), false);
+    assert.ok(!result.actions.some((action) => action.path === 'CLAUDE.md'));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/** What init says of a CLAUDE.md of the project's that git could not give back (odd/tasks/claude-md-block.md, D2). */
+const NOT_WRITTEN = 'git could not give it back byte for byte (it is untracked, changed, marked to skip, or not the bytes a checkout writes), so init does not write it: add the line @AGENTS.md at its top, or Claude never loads AGENTS.md';
+
+test('initProject keeps a project\'s own CLAUDE.md and gives its new AGENTS.md the whole block, so no line is lost', () => {
+  const root = makeTmpRepo('js-harness-project-split-claude-');
+  try {
+    fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# ours\n', 'utf8');
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(result.code, 0);
+    assert.equal(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), '# ours\n');
+    assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), agentsTemplate(root, { split: false }));
+    assert.deepEqual(result.actions.find((action) => action.path === 'CLAUDE.md'), { kind: 'kept', path: 'CLAUDE.md', reason: 'exists' });
+    assert.ok(!result.manifest.files.some((file) => file.path === 'CLAUDE.md'));
+    // Untracked, git could not give it back, so init says the step (odd/tasks/claude-md-block.md, D2).
+    assert.deepEqual(result.actions.filter((action) => action.path === 'CLAUDE.md').slice(1), [{ kind: 'skip', path: 'CLAUDE.md', reason: NOT_WRITTEN }]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// --- A project's own CLAUDE.md imports the AGENTS.md init writes (odd/tasks/claude-md-block.md, S2 and D2) ---
+
+/** A repository whose own CLAUDE.md holds `text`, committed. */
+function ownClaudeRepo(prefix, text) {
+  const root = makeTmpRepoWithCommit(prefix);
+  fs.writeFileSync(path.join(root, 'CLAUDE.md'), text);
+  spawnSync('git', ['add', 'CLAUDE.md'], { cwd: root, encoding: 'utf8' });
+  assert.equal(spawnSync('git', ['commit', '-q', '-m', 'ours'], { cwd: root, encoding: 'utf8' }).status, 0);
+  return root;
+}
+
+test('initProject adds the import at the top of a committed CLAUDE.md of the project\'s, so doctor\'s claude-import row is ok; git gives it back', () => {
+  const ours = '# ours\r\n\r\n- a line of the project\'s\r\n';
+  const root = ownClaudeRepo('js-harness-project-own-claude-import-', ours);
+  try {
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(result.code, 0);
+    const claude = path.join(root, 'CLAUDE.md');
+    assert.equal(fs.readFileSync(claude, 'utf8'), `@AGENTS.md\r\n\r\n${ours}`);
+    assert.deepEqual(result.actions.at(-1), { kind: 'imported', path: 'CLAUDE.md', line: '@AGENTS.md' });
+    assert.ok(!result.manifest.files.some((file) => file.path === 'CLAUDE.md'));
+    assert.deepEqual(importHealth(root, { mainCheckout: null }), { state: 'ok', fix: [] });
+    assert.equal(spawnSync('git', ['checkout', '--', 'CLAUDE.md'], { cwd: root, encoding: 'utf8' }).status, 0);
+    assert.equal(fs.readFileSync(claude, 'utf8'), ours);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject leaves a CLAUDE.md of the project\'s with a change not committed as it is, and says the line to add', () => {
+  const root = ownClaudeRepo('js-harness-project-own-claude-changed-', '# ours\n');
+  try {
+    fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# ours, edited\n');
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(result.code, 0);
+    assert.equal(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), '# ours, edited\n');
+    assert.deepEqual(result.actions.at(-1), { kind: 'skip', path: 'CLAUDE.md', reason: NOT_WRITTEN });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// The independent verifier's two findings on 00afb013 (odd/tasks/claude-md-block.md, L5): an empty `git status` is no
+// proof git gives the bytes back.
+test('initProject leaves a CLAUDE.md as it is where a checkout would write other bytes: autocrlf, or a file marked to skip', () => {
+  const crlf = makeTmpRepoWithCommit('js-harness-project-own-claude-autocrlf-');
+  const skipped = ownClaudeRepo('js-harness-project-own-claude-skip-worktree-', '# ours\n');
+  try {
+    // With autocrlf, a working copy in LF reads as clean, yet a checkout gives it back in CRLF.
+    spawnSync('git', ['config', 'core.autocrlf', 'true'], { cwd: crlf, encoding: 'utf8' });
+    fs.writeFileSync(path.join(crlf, 'CLAUDE.md'), '# ours\n');
+    spawnSync('git', ['add', 'CLAUDE.md'], { cwd: crlf, encoding: 'utf8' });
+    assert.equal(spawnSync('git', ['commit', '-q', '-m', 'ours'], { cwd: crlf, encoding: 'utf8' }).status, 0);
+    const first = initProject(crlf, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(fs.readFileSync(path.join(crlf, 'CLAUDE.md'), 'utf8'), '# ours\n');
+    assert.deepEqual(first.actions.at(-1), { kind: 'skip', path: 'CLAUDE.md', reason: NOT_WRITTEN });
+    // A change git is told not to see: status is empty, and the change is not git's to give back.
+    spawnSync('git', ['update-index', '--skip-worktree', 'CLAUDE.md'], { cwd: skipped, encoding: 'utf8' });
+    fs.writeFileSync(path.join(skipped, 'CLAUDE.md'), '# ours, edited\n');
+    const second = initProject(skipped, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(fs.readFileSync(path.join(skipped, 'CLAUDE.md'), 'utf8'), '# ours, edited\n');
+    assert.deepEqual(second.actions.at(-1), { kind: 'skip', path: 'CLAUDE.md', reason: NOT_WRITTEN });
+  } finally {
+    fs.rmSync(crlf, { recursive: true, force: true });
+    fs.rmSync(skipped, { recursive: true, force: true });
+  }
+});
+
+test('initProject leaves a claude.md git tracks under that name as it is, where the file system finds it as CLAUDE.md', (t) => {
+  const root = makeTmpRepoWithCommit('js-harness-project-own-claude-case-');
+  try {
+    fs.writeFileSync(path.join(root, 'claude.md'), '# ours\n');
+    if (!fs.existsSync(path.join(root, 'CLAUDE.md'))) return t.skip('this file system tells the two names apart');
+    spawnSync('git', ['add', 'claude.md'], { cwd: root, encoding: 'utf8' });
+    assert.equal(spawnSync('git', ['commit', '-q', '-m', 'ours'], { cwd: root, encoding: 'utf8' }).status, 0);
+    fs.writeFileSync(path.join(root, 'claude.md'), '# ours, edited\n');
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(fs.readFileSync(path.join(root, 'claude.md'), 'utf8'), '# ours, edited\n');
+    assert.deepEqual(result.actions.at(-1), { kind: 'skip', path: 'CLAUDE.md', reason: NOT_WRITTEN });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject writes nothing through a CLAUDE.md that is a link: none to say for one to AGENTS.md, the line for any other', (t) => {
+  const root = makeTmpRepoWithCommit('js-harness-project-own-claude-link-');
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-own-claude-link-target-'));
+  try {
+    try {
+      fs.symlinkSync('AGENTS.md', path.join(root, 'CLAUDE.md'), 'file');
+    } catch (err) {
+      if (err.code === 'EPERM' || err.code === 'EACCES') return t.skip('symlinks need privileges on this machine');
+      throw err;
+    }
+    // A link to the AGENTS.md init writes: Claude loads it through the link.
+    const first = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.deepEqual(first.actions.filter((action) => action.path === 'CLAUDE.md'), [{ kind: 'kept', path: 'CLAUDE.md', reason: 'exists' }]);
+    assert.ok(fs.lstatSync(path.join(root, 'CLAUDE.md')).isSymbolicLink());
+    // A link elsewhere: its target is not the project's to write, so the line is said.
+    assert.equal(uninstallProject(root, { spawn: spawnSync }).code, 0);
+    fs.rmSync(path.join(root, 'CLAUDE.md'));
+    fs.writeFileSync(path.join(outside, 'shared.md'), '# shared\n');
+    fs.symlinkSync(path.join(outside, 'shared.md'), path.join(root, 'CLAUDE.md'), 'file');
+    const second = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(fs.readFileSync(path.join(outside, 'shared.md'), 'utf8'), '# shared\n');
+    assert.deepEqual(second.actions.at(-1), { kind: 'skip', path: 'CLAUDE.md', reason: 'it is a link, so init does not write it: add the line @AGENTS.md at its top, or Claude never loads AGENTS.md' });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test('initProject writes nothing into a CLAUDE.md that imports AGENTS.md already, nor into one beside an AGENTS.md of the project\'s', () => {
+  const importing = ownClaudeRepo('js-harness-project-own-claude-importing-', '# ours\n\n@AGENTS.md\n');
+  const both = ownClaudeRepo('js-harness-project-own-claude-both-', '# ours\n');
+  try {
+    const first = initProject(importing, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(fs.readFileSync(path.join(importing, 'CLAUDE.md'), 'utf8'), '# ours\n\n@AGENTS.md\n');
+    assert.deepEqual(first.actions.filter((action) => action.path === 'CLAUDE.md'), [{ kind: 'kept', path: 'CLAUDE.md', reason: 'exists' }]);
+    // With its own AGENTS.md the harness's lines are in neither file: moving it is the migration's (D3 of S12).
+    fs.writeFileSync(path.join(both, 'AGENTS.md'), '# ours too\n');
+    const second = initProject(both, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(fs.readFileSync(path.join(both, 'CLAUDE.md'), 'utf8'), '# ours\n');
+    assert.deepEqual(second.actions.filter((action) => action.path === 'CLAUDE.md'), [{ kind: 'kept', path: 'CLAUDE.md', reason: 'exists' }]);
+  } finally {
+    fs.rmSync(importing, { recursive: true, force: true });
+    fs.rmSync(both, { recursive: true, force: true });
+  }
+});
+
+test('initProject says the import it could not write, and the project is still set up', () => {
+  const root = ownClaudeRepo('js-harness-project-own-claude-refused-', '# ours\n');
+  const claude = path.join(root, 'CLAUDE.md');
+  const writeFile = (file, ...rest) => {
+    if (file === claude) throw new Error('EACCES');
+    return fs.writeFileSync(file, ...rest);
+  };
+  try {
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile });
+    assert.equal(result.code, 0);
+    assert.ok(fs.existsSync(path.join(root, 'harness.json')));
+    assert.deepEqual(result.actions.at(-1), { kind: 'problem', path: 'CLAUDE.md', reason: 'the line @AGENTS.md could not be added at its top (EACCES): add it by hand; git checkout -- CLAUDE.md gives the file back' });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncProject renders each file of the split its own half, and a project not moved keeps its whole block', () => {
+  const root = makeTmpRepo('js-harness-project-split-sync-');
+  const mark = (body) => `<!-- js-harness block ${sha256(body).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->`;
+  const block = (body, head = '# project\n\n') => `${head}${mark(body)}\n${body}<!-- js-harness block end -->\n`;
+  const old = '## What good looks like\nAn older line of the harness.\n';
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const agents = path.join(root, 'AGENTS.md');
+    const claude = path.join(root, 'CLAUDE.md');
+    fs.writeFileSync(agents, block(old), 'utf8');
+    fs.writeFileSync(claude, block(old, '@AGENTS.md\n\n'), 'utf8');
+    const split = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(split.code, 0);
+    assert.deepEqual(split.actions, [{ kind: 'rendered', path: 'AGENTS.md' }, { kind: 'rendered', path: 'CLAUDE.md' }]);
+    assert.equal(fs.readFileSync(agents, 'utf8'), block(agentsBlock()));
+    assert.equal(fs.readFileSync(claude, 'utf8'), block(claudeBlock(), '@AGENTS.md\n\n'));
+
+    // A project whose CLAUDE.md holds no block of the harness has not moved: its AGENTS.md keeps every line.
+    fs.writeFileSync(claude, '# ours\n', 'utf8');
+    fs.writeFileSync(agents, block(old), 'utf8');
+    const legacy = syncProject(root, '0.1.0', syncDeps());
+    assert.deepEqual(legacy.actions, [{ kind: 'rendered', path: 'AGENTS.md' }]);
+    assert.equal(fs.readFileSync(agents, 'utf8'), block(templateBlock()));
+    assert.equal(fs.readFileSync(claude, 'utf8'), '# ours\n');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// odd/tasks/visual-pages.md, T7: every project init writes is told that the page of a moment is the one a command makes
+// from the records, which commands make them, and the rule it answers to; the template's token budget keeps it short.
+test('the CLAUDE.md block names the commands that make a moment\'s page from the records, and its rule', () => {
+  const text = claudeBlock();
+  for (const command of ['js-harness stretch', 'js-harness report']) assert.ok(text.includes(command), `the block names ${command}`);
+  assert.match(text, /never drawn by hand \(`rule:reports-spanish-visual`\)/);
 });

@@ -20,6 +20,7 @@ test('readClaudeOutput reads a successful result: no stop, parsed, not failed, a
     parsed: true,
     failed: false,
     usage: { inputTokens: 60, outputTokens: 5, turns: 4, usage, costUsd: 0.5, modelUsage: null, subagents: null, subagentStats: null },
+    reply: 'ok',
   });
 });
 
@@ -40,6 +41,7 @@ test('readClaudeOutput reads output that is no result as unparsed, with every co
     parsed: false,
     failed: false,
     usage: { inputTokens: null, outputTokens: null, turns: null, usage: null, costUsd: null, modelUsage: null, subagents: null, subagentStats: null },
+    reply: null,
   });
 });
 
@@ -246,6 +248,7 @@ test('readCodexOutput reads a completed turn: no stop, parsed, not failed, and t
     parsed: true,
     failed: false,
     usage: { inputTokens: 1000, outputTokens: 50, turns: null, usage: [USAGE], costUsd: null, modelUsage: null, subagents: null, cachedInputTokens: 800, cacheWriteInputTokens: null, reasoningOutputTokens: 20 },
+    reply: 'done',
   });
 });
 

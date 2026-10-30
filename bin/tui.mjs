@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Zero-dependency TUI, after gentle-ai's Bubble Tea design (odd/tasks/tui-gentle-level.md): rendering and key
+// Zero-dependency TUI, after a Bubble Tea design (odd/tasks/tui-gentle-level.md): rendering and key
 // handling are pure (state + key -> state), so they are unit-tested without a terminal. Only `runTui`/`tuiMain`
 // below touch real stdin/stdout, through the terminal layer (bin/lib/terminal.mjs) and child runs
 // (bin/lib/run-child.mjs).
@@ -294,7 +294,7 @@ function resultKey(state, key, { columns = 80, rows = 24 }) {
 /**
  * Pure reducer: (state, key token) -> { state, effect }. `effect` is null, `{ type: 'run', command }`,
  * `{ type: 'cancel' }` or `{ type: 'quit' }` — the shell performs it, the reducer never does. While a command runs,
- * only ctrl+c is read, and it cancels the command. Esc is Back, as in gentle-ai: it leaves the Uninstall submenu
+ * only ctrl+c is read, and it cancels the command. Esc is Back: it leaves the Uninstall submenu
  * (`state.parent` holds the menu it was opened from) and does nothing on the main menu; q and ctrl+c quit.
  * `size` is the window's `{ columns, rows }`, for scrolling the result screen's log.
  */

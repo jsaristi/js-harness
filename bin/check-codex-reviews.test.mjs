@@ -13,6 +13,8 @@ import { CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs'
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-review-runs.mjs';
 import { priorLine } from './lib/codex-review-recheck.mjs';
 import { gitDirs } from './lib/project.mjs';
+import { lensCandidate } from './lib/lens-candidate.mjs';
+import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
 let configDir;
@@ -152,6 +154,11 @@ function record(root, base, head, extra = {}) {
     outcome: 'reviewed',
     ...extra,
   });
+  // A push asks for the Claude lenses' record too (odd/tasks/f8-s1-reviews.md, T4): a range Codex reviewed here was
+  // reviewed by the lenses as well, unless the test says otherwise with a Codex outcome of its own.
+  if (extra.outcome !== undefined) return;
+  const { subjectHash } = lensCandidate(root, { base, head });
+  if (subjectHash) appendLensReview(root, { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, run: startLensRun(root, { base, head, subjectHash }), reviewedAt: '2026-09-29T00:00:00.000Z', outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }] });
 }
 
 const short = (root, rev) => git(root, 'rev-parse', '--short', rev);
@@ -1660,7 +1667,7 @@ test('the same throw under the push check is not swallowed: check --push fails l
   await assert.rejects(runCheck(['--push', '--cwd', root, '--home', home], { spawn: gitThatBreaksTheRecords() }), /result\.stdout\.trim is not a function/);
 });
 
-test('check --push runs only the codex-review row and fails on an uncovered commit', async () => {
+test('check --push runs only the two review rows, Codex and the Claude lenses, and fails on an uncovered commit', async () => {
   const { root, head, home } = projectWithUnreviewedCommit();
   const { code, output } = await runCheck(['--push', '--cwd', root, '--home', home]);
   assert.equal(code, 1);
@@ -1668,7 +1675,8 @@ test('check --push runs only the codex-review row and fails on an uncovered comm
   assert.ok(output.includes(`js-harness codex-review --base ${short(root, head)}^`), output);
   // The budget, payload and test rows read the working tree, not the pushed commit.
   assert.doesNotMatch(output, /budget|payload|tests/);
-  assert.equal(output.split('\n').filter((l) => /^(PASS|FAIL|INFO) /.test(l)).length, 1, output);
+  const rows = output.split('\n').filter((l) => /^(PASS|FAIL|INFO) /.test(l));
+  assert.deepEqual(rows.map((l) => l.split(/\s+/)[1]), ['codex-review', 'lens-review'], output);
 });
 
 test('check --push needs no AGENTS.md: the budget row does not run', async () => {

@@ -12,6 +12,7 @@ import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
 import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
 import { appendNotice, channelDir, newNotice, recordPath } from './lib/channel.mjs';
 import { initProject } from './lib/project.mjs';
+import { renderBlock } from './lib/project-template.mjs';
 import { remoteDir, remoteFiles } from './lib/remote.mjs';
 import { shownWord } from './lib/package-manager.mjs';
 import { hygieneDir, journalPath, memoryLocation, purgeMarker } from './lib/memory-hygiene.mjs';
@@ -118,6 +119,147 @@ test('installMain then uninstallMain give a Claude settings file with no hooks k
     assert.equal(await installMain(['--home', home]), 0);
     assert.equal(await uninstallMain(['--global', '--home', home]), 0);
     assert.equal(fs.readFileSync(settings, 'utf8'), seeded, 'the empty PostToolUse and SessionStart lists install made are taken back too');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// F8 S10, T8: an installed skill he changed survives install and sync, which say so and how to take this version's.
+test('installMain and syncMain leave an installed skill he changed and say so, as uninstall does', async () => {
+  const home = makeTmpHome();
+  try {
+    assert.equal(await installMain(['--home', home]), 0);
+    const skill = readManifest(home).files.find((record) => record.path.includes(`${path.sep}skills${path.sep}`)).path;
+    fs.writeFileSync(skill, 'his own skill', 'utf8');
+    const note = `kept (modified by you) ${skill}: this version's text was not written; move the file away and run js-harness sync to take it`;
+    for (const run of [() => installMain(['--home', home]), () => syncMain(['--global', '--home', home])]) {
+      const { code, outLines, errLines } = await captureConsole(run);
+      assert.equal(code, 0);
+      assert.ok(outLines.includes(note), outLines.join('\n'));
+      assert.equal(errLines.some((line) => line.includes(skill)), false, errLines.join('\n'));
+      assert.equal(fs.readFileSync(skill, 'utf8'), 'his own skill');
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// F8 S10, T4: what install does with the permissions is said, and a settings file it could not hold them in goes to
+// stderr; uninstall says what it took out, and one it could not write fails it with what to do.
+test('installMain and uninstallMain say what they did with the permissions, and a failure goes to stderr', async () => {
+  const home = makeTmpHome();
+  try {
+    const settings = userSettingsPath(home);
+    const installed = await captureConsole(() => installMain(['--home', home]));
+    assert.equal(installed.code, 0);
+    assert.ok(installed.outLines.includes(`wrote the permissions js-harness holds into ${settings}`), installed.outLines.join('\n'));
+    const again = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(again.outLines.includes(`the permissions js-harness holds are already in ${settings}`), again.outLines.join('\n'));
+
+    const writeFile = (file, ...rest) => {
+      if (file === settings) throw Object.assign(new Error('EBUSY: resource busy'), { code: 'EBUSY' });
+      return fs.writeFileSync(file, ...rest);
+    };
+    const failed = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { writeFile }));
+    assert.equal(failed.code, 1);
+    assert.ok(failed.errLines.includes(`could not take the permission entries install wrote out of ${settings} (EBUSY): they are still recorded; once that file can be read and written, run js-harness uninstall --global again, or remove them by hand`), failed.errLines.join('\n'));
+    const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(removed.code, 0);
+    assert.ok(removed.outLines.includes(`took 25 permission entries install wrote out of ${settings}`), removed.outLines.join('\n'));
+
+    fs.mkdirSync(path.dirname(settings), { recursive: true });
+    fs.writeFileSync(settings, JSON.stringify({ permissions: { defaultMode: 'bypassPermissions' } }));
+    await captureConsole(() => installMain(['--home', home]));
+    fs.writeFileSync(settings, '{}');
+    const restored = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(restored.outLines.includes(`put back defaultMode "bypassPermissions" in ${settings}, adopted at an earlier install; to keep it out, set "permissions.defaultMode" to "default"`), restored.outLines.join('\n'));
+
+    fs.writeFileSync(settings, '{ not json');
+    const skipped = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(skipped.errLines.includes(`skipped the permissions in ${settings}: malformed JSON; js-harness doctor shows the entries missing`), skipped.errLines.join('\n'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// A review of 8c684535..c9f3efd9: the message of a record that names another file sends the user to that file,
+// the one the record says install wrote, not to the user settings; a file it could not read or write says so before a run again.
+test('uninstallMain sends a permissions record it cannot clear to its own file, and an unreadable one to be fixed first', async () => {
+  const home = makeTmpHome();
+  try {
+    const settings = userSettingsPath(home);
+    assert.equal(await installMain(['--home', home]), 0);
+    const good = fs.readFileSync(settings, 'utf8');
+    fs.writeFileSync(settings, '{ not json');
+    const failed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(failed.code, 1);
+    assert.ok(failed.errLines.some((line) => line.startsWith(`could not take the permission entries install wrote out of ${settings} (`) && line.endsWith('): they are still recorded; once that file can be read and written, run js-harness uninstall --global again, or remove them by hand')), failed.errLines.join('\n'));
+
+    fs.writeFileSync(settings, good);
+    assert.equal(await installMain(['--home', home]), 0);
+    const file = path.join(home, '.js-harness', 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const elsewhere = path.join(home, 'elsewhere.json');
+    manifest.permissions.path = elsewhere;
+    fs.writeFileSync(file, JSON.stringify(manifest));
+    const kept = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(kept.code, 1);
+    assert.ok(kept.errLines.includes(`left the permission entries install wrote as they are (the record names another file than the user settings): they are no longer recorded; remove them by hand from ${elsewhere}, the file the record names`), kept.errLines.join('\n'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// F8 S10, T7: what install and uninstall do with the Rules block of the user's CLAUDE.md is said; a block he edited is
+// his and does not fail the uninstall, and one that could not be taken out goes to stderr and fails it.
+test('installMain and uninstallMain say what they did with the Rules block, and a failure goes to stderr', async () => {
+  const home = makeTmpHome();
+  try {
+    const file = path.join(home, '.claude', 'CLAUDE.md');
+    const installed = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(installed.outLines.includes(`wrote the Rules block into ${file}`), installed.outLines.join('\n'));
+    const again = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(again.outLines.includes(`the Rules block is already in ${file}`), again.outLines.join('\n'));
+
+    const writeFile = (target, ...rest) => {
+      if (String(target).startsWith(file)) throw Object.assign(new Error('EBUSY: resource busy'), { code: 'EBUSY' });
+      return fs.writeFileSync(target, ...rest);
+    };
+    fs.appendFileSync(file, '# mine\n');
+    const failed = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { writeFile }));
+    assert.equal(failed.code, 1);
+    assert.ok(failed.errLines.includes(`could not take the Rules block out of ${file} (EBUSY): it is still recorded; once that file can be read and written, run js-harness uninstall --global again, or remove it by hand`), failed.errLines.join('\n'));
+    const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(removed.code, 0);
+    assert.ok(removed.outLines.includes(`took the Rules block out of ${file}`), removed.outLines.join('\n'));
+
+    await captureConsole(() => installMain(['--home', home]));
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('- Verify a claim before building on it.', '- Verify every claim.'));
+    const edited = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(edited.outLines.includes(`left the Rules block in ${file} as it is: its lines were edited, so they are yours`), edited.outLines.join('\n'));
+    const keptEdited = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(keptEdited.code, 0);
+    assert.ok(keptEdited.outLines.includes(`kept the Rules block in ${file} (modified by you)`), keptEdited.outLines.join('\n'));
+
+    // A review of T7's slice: the two lines no test of the command said, `updated` and `kept` with its exit code.
+    fs.writeFileSync(file, '');
+    await captureConsole(() => installMain(['--home', home]));
+    fs.writeFileSync(file, renderBlock(fs.readFileSync(file, 'utf8'), '## Rules\n- An older line.\n', 'rules').text);
+    const updated = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(updated.outLines.includes(`rendered the Rules block in ${file} again with this version's lines`), updated.outLines.join('\n'));
+    const manifestFile = path.join(home, '.js-harness', 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+    const elsewhere = path.join(home, 'elsewhere.md');
+    manifest.rulesBlock.path = elsewhere;
+    fs.writeFileSync(manifestFile, JSON.stringify(manifest));
+    const keptOther = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.equal(keptOther.code, 1);
+    assert.ok(keptOther.errLines.includes(`left the Rules block install wrote as it is (the record names another file than the user's CLAUDE.md): it is no longer recorded; remove it by hand from ${elsewhere}, the file the record names`), keptOther.errLines.join('\n'));
+
+    fs.rmSync(file);
+    fs.mkdirSync(file);
+    const skipped = await captureConsole(() => installMain(['--home', home]));
+    assert.ok(skipped.errLines.some((line) => line.startsWith(`skipped the Rules block in ${file}: not readable (`)), skipped.errLines.join('\n'));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -379,7 +521,7 @@ test('installMain says which hook each entry it registers is, and uninstallMain 
     const actual = installed.outLines.filter((line) => line.startsWith('registered hook entry'));
     assert.deepEqual(actual, registeredLines);
     // The guard's line in full, its matcher included, as one literal.
-    assert.ok(actual.includes(`registered hook entry in ${settings}: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$)`));
+    assert.ok(actual.includes(`registered hook entry in ${settings}: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Read|Write|Edit|MultiEdit|NotebookEdit|Grep|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$)`));
     const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.equal(removed.code, 0);
     assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), entryComponents.map((component) => `removed hook entry from ${component.target(home)}`).sort());
@@ -674,7 +816,10 @@ test('uninstallMain says a setting it could not write back, with the error code 
     };
     const { code, outLines, errLines } = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { writeFile }));
     assert.equal(code, 1, 'a setting left in place is not a clean uninstall');
-    assert.deepEqual(errLines, [`could not put crossSessionInbound back in ${settings} (EPERM): it is still recorded; run js-harness uninstall --global again, or set it back by hand`]);
+    assert.deepEqual(errLines, [
+      `could not take the permission entries install wrote out of ${settings} (EPERM): they are still recorded; once that file can be read and written, run js-harness uninstall --global again, or remove them by hand`,
+      `could not put crossSessionInbound back in ${settings} (EPERM): it is still recorded; run js-harness uninstall --global again, or set it back by hand`,
+    ]);
     assert.equal(outLines.some((line) => line.includes('modified by you') && line.includes(settings)), false, outLines.join('\n'));
 
     // The record is kept, so a run again, once the file can be written, puts the setting back and passes.
@@ -1889,7 +2034,7 @@ test('syncMain and uninstallMain --cwd refuse a project manifest of a newer form
       const { code, errLines } = await captureConsole(main);
       assert.equal(code, 1);
       assert.ok(
-        errLines.some((l) => l.includes('in format 99, and this copy reads format 2') && l.includes('run that version of js-harness')),
+        errLines.some((l) => l.includes('in format 99, and this copy reads format 3') && l.includes('run that version of js-harness')),
         errLines.join('\n'),
       );
     }
@@ -2142,7 +2287,7 @@ test('uninstallMain says a task the user edited stays recorded while the remote 
   }
 });
 
-test('uninstallMain names the throughput snapshots it keeps, and the gentle-ai review starts beside them when there are any', async () => {
+test('uninstallMain names the throughput snapshots it keeps, and the review starts an earlier js-harness kept beside them when there are any', async () => {
   const home = makeTmpHome();
   try {
     const folder = path.join(home, '.js-harness', 'throughput');
@@ -2152,11 +2297,11 @@ test('uninstallMain names the throughput snapshots it keeps, and the gentle-ai r
     assert.deepEqual(snapshots.outLines, [`kept ${folder}: 1 day snapshot of the throughput review, the only copy of the gates of days the gate log has rotated away; remove the folder by hand to drop them`]);
     fs.writeFileSync(path.join(folder, 'C--proj', 'review-starts.jsonl'), '');
     const starts = await captureConsole(() => uninstallMain(['--global', '--home', home]));
-    assert.deepEqual(starts.outLines, [`kept ${folder}: 1 day snapshot of the throughput review, the only copy of the gates of days the gate log has rotated away, and the gentle-ai review starts of 1 project, the only record of when those reviews began; remove the folder by hand to drop them`]);
+    assert.deepEqual(starts.outLines, [`kept ${folder}: 1 day snapshot of the throughput review, the only copy of the gates of days the gate log has rotated away, and the review starts an earlier js-harness recorded for 1 project, the only record of when those reviews began; remove the folder by hand to drop them`]);
     // A folder that could not be listed is named with what it may hold.
     const listDir = (dir, ...rest) => (path.resolve(dir).startsWith(path.resolve(folder)) ? (() => { throw Object.assign(new Error('denied'), { code: 'EACCES' }); })() : fs.readdirSync(dir, ...rest));
     const unlisted = await captureConsole(() => uninstallMain(['--global', '--home', home], {}, { listDir }));
-    assert.deepEqual(unlisted.outLines, [`kept ${folder}: the day snapshots of the throughput review, the only copy of the gates of days the gate log has rotated away, and any gentle-ai review starts recorded there; remove the folder by hand to drop them`]);
+    assert.deepEqual(unlisted.outLines, [`kept ${folder}: the day snapshots of the throughput review, the only copy of the gates of days the gate log has rotated away, and any review starts an earlier js-harness recorded there; remove the folder by hand to drop them`]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `ed860a29fed2`. In force: 64 (39 of Sebastián, 25 of the project). Retired: 2.
+Hash `96ea160b1ccc`. In force: 66 (40 of Sebastián, 26 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -12,10 +12,10 @@ A session says when it finished and where to return, watches its context, and a 
 - Home: `bin/lib/manifest.mjs`.
 - Since 2026-10-22. Row: reports. Source: his words of 2026-09-28, 2026-10-07, 2026-10-07, 2026-10-10, 2026-10-10, 2026-10-11, 2026-10-12, checked by the command on 2026-10-22.
 
-### ask-before-away
-Before he leaves, the lead asks for everything the stretch needs, and while he is away repeats nothing: "- Before the user leaves, ask in that reply for everything the stretch will need: the decisions in the queue, the sessions to open and their permission mode, what the machine and the plan's limits allow."
+### away-autonomy
+Once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure, led by the migration's share now and the share expected at the return, with its goals, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his waits in the relief file for his return: "- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back, and write to your relief file that they are away, with the time."
 - Home: `bin/lib/manifest.mjs`.
-- Since 2026-10-22. Row: reports. Source: his words of 2026-10-11, 2026-10-11, checked by the command on 2026-10-22.
+- Since 2026-10-29. Row: reports. Source: his words of 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-29, 2026-10-29, 2026-10-29, checked by the command on 2026-10-29.
 
 ### background-task-declared
 A background task says what it is for and what ends it, and is stopped when its condition resolves: "A background task a session starts (a wait, a watch, a timer) says in its description what it is for and what ends it, and the session writes it to its state with who stops it; when its condition resolves another way, it is stopped in that same step."
@@ -46,10 +46,10 @@ The share of its context window at which a session pauses, writes its state and 
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-12.
 
 ### double-review
-A design before it is built, and what reaches the user to decide, passes two read-only readers that did not write it: "- A design before it is built, and a plan, a design, an analysis with figures, a protocol or a change of the charter that reaches the user, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing."
+A proposal that changes one of his decisions passes two read-only readers that did not write it: "- A proposal that changes one of the user's decisions, whether a design before it is built, a plan, an analysis with figures, a protocol or a change of the charter, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing."
 - Home: `bin/lib/protocols-skill.mjs`.
 - Looked at again on 2026-11-16.
-- Since 2026-10-16. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-11, 2026-10-16, checked by the command on 2026-10-16.
+- Since 2026-10-27. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-11, 2026-10-27, checked by the command on 2026-10-27.
 
 ### fixed-load-budget
 The fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns: 100,000 tokens.
@@ -61,10 +61,20 @@ What the lead does alone and tells him after, and what stays his, asked one at a
 - Home: `bin/lib/manifest.mjs`.
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-09, 2026-10-11, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-10, 2026-10-15, 2026-10-15, 2026-10-24, checked by the command on 2026-10-22.
 
+### live-board
+The harness never works as a black box: work sessions write each event as a notice (a session starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends them to the live board, a page that updates by itself, and points every reply to it: "- Every event of your work reaches the user's live board as a notice: \`js-harness notify --to orchestrator\` with \`opened\` when you start, \`note\` when a step of your plan finishes, a pull request opens or merges, a decision is made or you report spend, and \`ready\` and \`closed\` as below."
+- Home: `bin/lib/manifest.mjs`.
+- Since 2026-10-27. Row: reports. Source: his words of 2026-10-27, 2026-10-27, 2026-10-27, 2026-10-27, checked by the command on 2026-10-27.
+
 ### mistake-report
 A mistake is reported with what it was, its fix, what prevents it, how it enters the harness and how it is proven later: "What stops it from happening again: a check before a line, a line before a protocol."
 - Home: `bin/lib/protocols-skill.mjs`.
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-10, 2026-10-10, checked by the command on 2026-10-22.
+
+### owner-decisions
+What is the owner's to decide, asked one at a time; everything else is decided and its cost said: "- Ask only what is the user's (\`rule:owner-decisions\`): spend outside the plan, anything irreversible, a product choice, anything published, any credential, a change of a protocol, a security or system setting, anything installed or changed on a machine, a change of the plan or of its order, and a report published outside the project."
+- Home: `bin/lib/protocols-skill.mjs`.
+- Since 2026-10-30. Row: reports. Source: his words of 2026-10-30, checked by the command on 2026-10-30.
 
 ### question-context
 Every question to the user opens with what it is for: the work it serves and what its answer changes: "- Every question opens with what it is for: the work it belongs to, by the name the user knows (the project, the feature, the session), and what its answer changes."
@@ -98,9 +108,9 @@ When the user asks what was done, the lead's status report shows each section th
 - Since 2026-10-24. Row: reports. Source: his words of 2026-10-20, checked by the command on 2026-10-24.
 
 ### reports-spanish-visual
-What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in Spanish as a graphic, didactic page, an Artifact with diagrams, bars and cards, never a raw English markdown file; the repository's English document stays the source: "- What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in their language as a visual, didactic page (\`rule:reports-spanish-visual\`): an Artifact with diagrams, bars and cards, never a raw markdown file; the repository's English document stays the source."
+What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in Spanish as a graphic, didactic page, an Artifact with diagrams, bars and cards, never a raw English markdown file; the repository's English document stays the source; at a stretch's departure and return, a feature's close, a phase's change and a status report, the page is the one a command makes from the records, never drawn by hand: "- What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in their language as a visual, didactic page (\`rule:reports-spanish-visual\`): an Artifact with diagrams, bars and cards, never a raw markdown file; the repository's English document stays the source."
 - Home: `bin/lib/protocols-skill.mjs`.
-- Since 2026-10-26. Row: reports. Source: his words of 2026-10-26, checked by the command on 2026-10-26.
+- Since 2026-10-29. Row: reports. Source: his words of 2026-10-26, 2026-10-28, 2026-10-28, 2026-10-28, checked by the command on 2026-10-29.
 
 ### restart-announce
 Before the user restarts or updates, or asks for a pause for one, the lead pauses every session at a safe point, and only then tells them in capitals: "- Then tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!!"
@@ -129,9 +139,9 @@ About how many changed lines a commit that will be reviewed stays under: 1,200 c
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
 ### rules-live-in-the-harness
-A rule he gives is cemented in the harness where something acts on it, never only in memory: "- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`AGENTS.md\`, a protocol."
+A rule he gives is cemented in the harness where something acts on it, never only in memory; an output he sees again and again, as a template of five parts: "- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`CLAUDE.md\` or \`AGENTS.md\`, a protocol."
 - Home: `bin/lib/protocols-skill.mjs`.
-- Since 2026-10-22. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, checked by the command on 2026-10-22.
+- Since 2026-10-29. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, 2026-10-26, 2026-10-26, 2026-10-26, 2026-10-28, 2026-10-28, checked by the command on 2026-10-29.
 
 ### session-effort
 The effort a session runs at: high.
@@ -168,9 +178,9 @@ The way a session opens another in this repository, so that the user can see eve
 - Since 2026-10-15. Row: reports, against the failure `session-opened-unseen`. Source: his words of 2026-10-24, checked by the command on 2026-10-24.
 
 ### status-report
-Asked how the work goes, the lead reports everything since the last report, in detail: "## The status report When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well."
+Asked how the work goes, the lead reports everything since the last report, in detail, and each step it proposes next with its why: "## The status report When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well."
 - Home: `bin/lib/manifest.mjs`.
-- Since 2026-10-22. Row: reports. Source: his words of 2026-10-20, checked by the command on 2026-10-22.
+- Since 2026-10-29. Row: reports. Source: his words of 2026-10-20, 2026-10-29, checked by the command on 2026-10-29.
 
 ### subagent-effort
 The effort every sub-agent is launched with: high.
@@ -203,12 +213,6 @@ His wording is the need, not the specification: the agent recommends what is bes
 - Home: `bin/lib/project.mjs`.
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-08, 2026-10-10, checked by the command on 2026-10-22.
 
-### work-sessions-private-windows
-The most work sessions open at one time when only Windows is used: 3 sessions.
-- Of this repository only: not in force in a project that installs the harness.
-- Read by: none.
-- Since 2026-10-24. Row: reports. Source: his words of 2026-10-24, checked by the command on 2026-10-24.
-
 ### work-sessions-private-wsl
 The most work sessions open at one time in a private repository used with WSL: 6 sessions.
 - Of this repository only: not in force in a project that installs the harness.
@@ -233,14 +237,20 @@ How long a commit gate sent to GitHub waits for its run to end, from the push, b
 - Read by: `bin/lib/ci-gate.mjs`.
 - Since 2026-10-16. Row: reports. Source: design, `odd/tasks/commit-gates-first.md`.
 
+### claude-md-budget
+The most estimated tokens the root CLAUDE.md may hold, since Claude pays it with the AGENTS.md it imports on every turn: 3,200 estimated tokens.
+- Was: 2,500 estimated tokens until 2026-10-27.
+- Read by: `bin/lib/claude-md-budget.mjs`.
+- Since 2026-10-27. Row: reports. Source: design, `odd/tasks/f8-directives.md`.
+
 ### contract-run-timeout
 How long each done-when command of a contract run may run, unless the run says otherwise: 30 minutes. The flag `--timeout` overrides it for one run.
-- Read by: `bin/contract.mjs`.
+- Read by: `bin/contract.mjs`, `bin/stretch.mjs`.
 - Since 2026-10-14. Row: reports. Source: design, `odd/tasks/task-contract.md`.
 
 ### control-phrase-min
 The shortest phrase by which a control or a rule in prose is found in its file: 12 characters.
-- Read by: `bin/lib/failures.mjs`, `bin/lib/memory-feedback-guard.mjs`, `bin/lib/rules.mjs`.
+- Read by: `bin/lib/failures.mjs`, `bin/lib/memory-feedback-guard.mjs`, `bin/lib/rules-coverage.mjs`, `bin/lib/rules.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/rule-hierarchy.md`.
 
 ### gate-log-command
@@ -317,7 +327,7 @@ How long one sensor of the gate may run before it is stopped and the commit refu
 
 ### session-stall
 How long a work session that holds handed work may make no commit, send no notice and run no gate before the board and the lead's heartbeat name it stalled: 60 minutes. The flag `--stall` overrides it for one run.
-- Read by: `bin/lib/manifest.mjs`, `bin/loop.mjs`, `bin/sessions.mjs`.
+- Read by: `bin/lib/manifest.mjs`, `bin/lib/stretch.mjs`, `bin/loop.mjs`, `bin/sessions.mjs`.
 - Since 2026-10-16. Row: reports. Source: design, `odd/tasks/stalled-sessions.md`.
 
 ### throughput-backfill-days
@@ -352,6 +362,10 @@ How long js-harness wait waits before it says the time ran out, unless --for say
 
 ## Retired
 
+### ask-before-away
+Before he leaves, the lead asks for everything the stretch needs, and while he is away repeats nothing. Retired on 2026-10-27: read `away-autonomy` instead.
+- Source: his words of 2026-10-27, 2026-10-11, checked by the command on 2026-10-27.
+
 ### reply-four-states
 A reply ends in one of five states, and a question is his decision alone, explained before it is asked. Retired on 2026-10-24: read `reply-five-states` instead.
 - Source: his words of 2026-10-07, 2026-10-03, 2026-10-03, 2026-10-07, 2026-10-10, 2026-10-08, 2026-10-08, 2026-10-11, 2026-10-20, checked by the command on 2026-10-24.
@@ -360,3 +374,8 @@ A reply ends in one of five states, and a question is his decision alone, explai
 The most work sessions open at one time. Retired on 2026-10-24: read `work-sessions-public`, `work-sessions-private-wsl`, `work-sessions-private-windows` instead.
 - Was: 3 sessions until 2026-10-24.
 - Source: his words of 2026-10-24, checked by the command on 2026-10-24.
+
+### work-sessions-private-windows
+The most work sessions open at one time when only Windows is used. Retired on 2026-10-30: no rule replaces it.
+- Was: 3 sessions until 2026-10-30.
+- Source: his words of 2026-10-30, checked by the command on 2026-10-30.

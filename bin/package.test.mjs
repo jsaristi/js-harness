@@ -28,3 +28,14 @@ test('the package declares no script that runs when it is installed', () => {
   const found = installTime.filter((name) => pkg.scripts && name in pkg.scripts);
   assert.deepEqual(found, []);
 });
+
+// The two ported skills are under Apache-2.0, whose section 4(a) asks that whoever receives them gets a copy of the
+// license: the package ships the notices that hold it (odd/tasks/f8-s10-port.md, T3).
+test('the package ships THIRD_PARTY_NOTICES.md, which holds the Apache-2.0 text and the MIT notice of what it ports', () => {
+  assert.ok(pkg.files.includes('THIRD_PARTY_NOTICES.md'));
+  const notices = fs.readFileSync(path.join(path.dirname(pkgPath), 'THIRD_PARTY_NOTICES.md'), 'utf8');
+  assert.match(notices, /Apache License\s+Version 2\.0, January 2004/);
+  assert.match(notices, /END OF TERMS AND CONDITIONS/);
+  assert.match(notices, /MIT License, Copyright \(c\) 2025 Gentleman Programming/);
+  for (const ported of ['bin/lib/lens-prompts.mjs', 'bin/lib/ported-skills.mjs']) assert.ok(notices.includes(ported), ported);
+});

@@ -4,9 +4,9 @@
 // odd/tasks/commit-gates-first.md), and `windows-daily.yml`, the whole suite on Windows once a day
 // (odd/tasks/commit-gates-first.md, R1). What bounds them is held here, because a public repository is read and
 // forked by anyone. The gate:
-// - it runs for a push to a `gate/` branch and for nothing else, so a pull request starts no run (the merge
-//   queue's CircleCI run tests main as it will be, odd/tasks/merge-queue.md S4), `pull_request_target` never
-//   hands a fork's code this repository's token, and a fork starts nothing here: a push needs write access;
+// - it runs for a push to a `gate/` branch (a commit's gate) or a `queue/` branch (the merge queue's candidate,
+//   main as it will be: odd/tasks/merge-queue.md S4, odd/tasks/drop-circleci.md S2) and for nothing else, so a
+//   pull request starts no run, `pull_request_target` never hands a fork's code this repository's token, and a fork starts nothing here: a push needs write access;
 // - its token can only read, and it names no secret;
 // - each action is pinned by commit, so a moved tag cannot change what runs; one job, a fixed runner, a bound.
 // Zero deps: the file is read as text, by the few shapes it is allowed to take.
@@ -50,10 +50,10 @@ test('the repository holds two GitHub workflows, the gate and the daily Windows 
   assert.equal(fs.existsSync(path.join(ROOT, '.github', 'actions')), false, 'no local action for a workflow to run');
 });
 
-test('the gate runs for a push to a gate/ branch and for nothing else', () => {
+test('the gate runs for a push to a gate/ or a queue/ branch and for nothing else', () => {
   const lines = workflowLines();
   assert.deepEqual(level(lines), ['name: gate', 'on:', 'permissions:', 'jobs:']);
-  assert.deepEqual(below(lines, 'on:').map((line) => line.text), ['push:', 'branches:', "- 'gate/**'"]);
+  assert.deepEqual(below(lines, 'on:').map((line) => line.text), ['push:', 'branches:', "- 'gate/**'", "- 'queue/**'"]);
 });
 
 test('its token reads the contents and nothing more, and no secret is named', () => {
@@ -91,8 +91,9 @@ test('a secret is found in either form an expression can name it', () => {
 
 test('the shapes a workflow must not take are refused', () => {
   // The reader above is the guard: a trigger added beside `push`, or a pull request event, changes `on:`.
-  const pullRequest = workflowLines("name: gate\non:\n  push:\n    branches:\n      - 'gate/**'\n  pull_request_target:\npermissions:\n  contents: read\njobs:\n");
-  assert.notDeepEqual(below(pullRequest, 'on:').map((line) => line.text), ['push:', 'branches:', "- 'gate/**'"]);
+  // The fixture is the gate's `on:` with one trigger added, so that trigger is all that differs.
+  const pullRequest = workflowLines("name: gate\non:\n  push:\n    branches:\n      - 'gate/**'\n      - 'queue/**'\n  pull_request_target:\npermissions:\n  contents: read\njobs:\n");
+  assert.notDeepEqual(below(pullRequest, 'on:').map((line) => line.text), ['push:', 'branches:', "- 'gate/**'", "- 'queue/**'"]);
 });
 
 // The daily Windows suite (odd/tasks/commit-gates-first.md, S5 and R1): it runs on its schedule and by hand, never
@@ -124,8 +125,8 @@ test('the daily Windows suite is one bounded job on an exact Windows image, with
   assert.doesNotMatch(text, /persist-credentials:\s*true/);
 });
 
-/** The node versions a text names: each `node-version:` value and each `cimg/node:<tag>`, in order. */
-const nodeVersions = (text) => [...text.matchAll(/node-version:\s*([\d.]+)|cimg\/node:([\d.]+)/g)].map((match) => match[1] ?? match[2]);
+/** The node versions a text sets up: each `node-version:` value, in order. */
+const nodeVersions = (text) => [...text.matchAll(/node-version:\s*([\d.]+)/g)].map((match) => match[1]);
 
 // C-e-1: `engines` names the Node major the gate runs, and the README and the guide say the same. The check is equality,
 // not "not above": a minimum below the gate's major promises a Node that no run tests (the defect of 2026-10-24, when
@@ -142,16 +143,18 @@ test('engines names the Node major the gate runs, and the README and the guide s
   }
 });
 
-// C-e-14: both workflows say their node is the one the CircleCI image runs, so a bump of one without the other fails here.
-test('the workflows set up the node of the CircleCI image, and say so', () => {
-  const [image, ...others] = nodeVersions(fs.readFileSync(path.join(ROOT, '.circleci', 'config.yml'), 'utf8'));
-  assert.match(image ?? '', /^\d+\.\d+\.\d+$/);
-  assert.deepEqual(others, [], 'one cimg/node image in .circleci/config.yml');
-  for (const file of [GATE, DAILY]) {
-    const versions = nodeVersions(fs.readFileSync(file, 'utf8'));
-    assert.ok(versions.length >= 2, `${path.basename(file)} names its node and the image`);
-    assert.deepEqual(versions, versions.map(() => image), path.basename(file));
-  }
-  // The control: a workflow one patch behind the image is caught.
-  assert.notDeepEqual(nodeVersions('# cimg/node:24.21.0\nnode-version: 24.20.0'), ['24.21.0', '24.21.0']);
+// C-e-14: the daily suite tests the node the gate runs, so a bump of one without the other fails here. Until
+// 2026-10-27 both were held to the node of CircleCI's image (odd/tasks/drop-circleci.md).
+test('the daily Windows suite sets up the exact node the gate sets up', () => {
+  const [gateNode, ...more] = nodeVersions(fs.readFileSync(GATE, 'utf8'));
+  assert.match(gateNode ?? '', /^\d+\.\d+\.\d+$/, 'the gate sets up an exact node');
+  assert.deepEqual(more, [], 'the gate sets up one node');
+  assert.deepEqual(nodeVersions(fs.readFileSync(DAILY, 'utf8')), [gateNode]);
+  // The control: a workflow one patch behind is caught.
+  assert.notDeepEqual(nodeVersions('node-version: 24.20.0'), ['24.21.0']);
+});
+
+// S3 of odd/tasks/drop-circleci.md: every test runs on GitHub Actions, and no CircleCI configuration comes back unnoticed.
+test('the repository holds no CircleCI configuration', () => {
+  assert.equal(fs.existsSync(path.join(ROOT, '.circleci')), false);
 });

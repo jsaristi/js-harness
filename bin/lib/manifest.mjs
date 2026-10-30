@@ -16,6 +16,16 @@ import { INDEX_LINE_CHARS } from './memory-index-guard.mjs';
 import { SHARE_TOLERANCE } from './audit.mjs';
 import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
+import { restoreSettings } from './user-settings.mjs';
+import { holdPermissions, releasePermissions, removeMadeFile } from './permissions.mjs';
+import { holdRulesBlock, releaseRulesBlock } from './rules-block.mjs';
+import { writeComponent } from './component-write.mjs';
+import { writeManifestAtomic } from './atomic-write.mjs';
+// Re-exported for ./project.mjs, which writes a project's manifest with it.
+export { writeManifestAtomic };
+import { OUTPUT_STYLE_NAME, outputStyleContent } from './output-style.mjs';
+import { chainedPrsSkillContent, workUnitsSkillContent } from './ported-skills.mjs';
+import { RULES_RETOLD_MATCHER, backupHookEntry, fallbackHookEntry, guardHookEntry, hookEntry, pauseHookEntry, permitHookEntry, replyHookEntry, resumeHookEntry, rulesHookEntry, shareHookEntry, templateGateComponents, webFailureHookEntry } from './hook-entries.mjs';
 import { hygieneDir, purgeMarker } from './memory-hygiene.mjs';
 import { readLock } from './memory-pass.mjs';
 import { moveTrustRecords, planTrustMoves, withConfig } from './codex-trust.mjs';
@@ -59,7 +69,7 @@ Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project 
 
 It exists because on 2026-10-15 one project's memory index had grown from 233 to 10,917 characters in 18
 days, read on every turn of every session, with rules kept where nothing acts on them. Memory holds facts of
-the machine; a rule belongs in a check, a line of \`AGENTS.md\` or a protocol.
+the machine; a rule belongs in a check, a line of \`CLAUDE.md\` or \`AGENTS.md\`, or a protocol.
 
 - \`js-harness memory status\` says whether a pass is due and why (exit 1 when due). Run a pass at a task
   boundary, never while a gate runs: the orchestrator when there is one, otherwise the session that was told.
@@ -123,24 +133,24 @@ Every question of the project reaches the user in one place: the orchestrator's 
 
 - Every question opens with what it is for: the work it belongs to, by the name the user knows (the project, the feature, the session), and what its answer changes. The user runs several works at once and answers from the phone; a question that does not say which work it serves gets answered for the wrong one.
 - A question is recorded before it is asked: \`js-harness notify --to orchestrator --kind question\`, with its fields (\`text\`, \`options\`, \`waits\`) as JSON on standard input. It prints the question's number and the words its text is headed by in the tool: that heading is how the answer is joined to its question.
-- The question tool holds the session that calls it until the user answers. So it is called at once only when the user wrote in that session a short while ago; otherwise in the reply to their next message, and until then a reply says in one line how many questions wait. \`notify\`, the board (\`to ask:\`) and the resume after a compaction print this rule for the moment.
+- The question tool holds the session that calls it until the user answers. So it is called at once only when the user wrote in that session a short while ago; otherwise in the reply to their next message, and until then a reply says in one line how many questions wait. \`notify\`, the board (\`to ask:\`) and the resume after a compaction print this rule for the moment. When the user writes "hazme la pregunta N", they ask for question N now: build its card with \`js-harness template ask N\` and ask it through the question tool.
 - The answer is recorded once given: \`--to orchestrator --kind answer --question <n>\`, with \`--transcript\` and \`--line\` naming where the user's words are, and the session that asked is rung. \`--to orchestrator --kind withdrawn --question <n> "<why>"\` closes one that no longer needs an answer.
 - A session the host holds on a card (the board's line that a call has had no result and the host may be holding it for approval, or a session the host marks as needing the user) is brought to the user in the orchestrator's chat in that same turn, through the question tool: which session, what its card asks, read from its transcript's last call, and what you recommend. The card itself is answered by the user in that session's window; never stop the session to get around it, and never leave it for them to find.
-- The permit relay (\`js-harness permit\`): while you lead, hold it with \`js-harness permit lease\` at your start; \`js-harness wait --notice-to orchestrator\` renews it on each tick while you hold it, and a watch of your own must run \`js-harness permit lease\` again at each re-arm (it lasts ${LEASE_MINUTES} minutes; when it says another session holds it, you are the new lead, add \`--take-over\`). A card of another session then reaches you first, as a \`permit <id>\` note, and waits for you up to ${WAIT_MS / 60_000} minutes: read what it asks (\`js-harness permit list\`, and that session's transcript when the command alone does not say why) and answer in time. \`js-harness permit allow <id>\` when it stays inside that session's own work (its worktree and scratch, its own branch and pull request, a test or a build); \`js-harness permit deny <id> --reason "<why>"\` when it is obsolete or unsafe. A card that touches what is the user's (spend, publishing, anything irreversible outside the project, credentials, their security settings), or is important enough to be their call, you never decide alone: bring it to them in the orchestrator's chat that turn, through the question tool, with which session asks, what the call would do, and what you recommend and why; then apply their choice with \`js-harness permit allow <id>\` or \`js-harness permit deny <id> --reason "<their words>"\`. When they answer after its wait, the card is already in that session's window: they answer it there. A card you leave unanswered reaches the user after its wait: bring it to them as above. Before you are relieved, \`js-harness permit lease --off\`.
+- The permit relay (\`js-harness permit\`): while you lead, hold it with \`js-harness permit lease\` at your start; \`js-harness wait --notice-to orchestrator\` renews it on each tick while you hold it, and a watch of your own must run \`js-harness permit lease\` again at each re-arm (it lasts ${LEASE_MINUTES} minutes; when it says another session holds it, you are the new lead, add \`--take-over\`). A card of another session then reaches you first, as a \`permit <id>\` note, and waits for you up to ${WAIT_MS / 60_000} minutes: read what it asks (\`js-harness permit list\`, and that session's transcript when the command alone does not say why) and answer in time. \`js-harness permit allow <id>\` when it stays inside that session's own work (its worktree and scratch, its own branch and pull request, a test or a build); \`js-harness permit deny <id> --reason "<why>"\` when it is obsolete or unsafe. A card that touches what is the user's (\`rule:owner-decisions\`), or is important enough to be their call, you never decide alone (while they are away, \`rule:away-autonomy\` says what waits and the spend that is yours): bring it to them in the orchestrator's chat that turn, through the question tool, with which session asks, what the call would do, and what you recommend and why; then apply their choice with \`js-harness permit allow <id>\` or \`js-harness permit deny <id> --reason "<their words>"\`. When they answer after its wait, the card is already in that session's window: they answer it there. A card you leave unanswered reaches the user after its wait: bring it to them as above. Before you are relieved, \`js-harness permit lease --off\`.
 - A question that puts a plan, a design, an analysis or a protocol to the user has passed its double review first (\`rule:double-review\`, \`js-harness-protocols\` section 1), and says what its readers changed, or names by path the reviewed text it rests on.
 - The board lists every question still open, and whether it is recorded and not shown yet, on the user's screen, closed without an answer, or answered and not carried yet.
 
 ## The lead
 
 What you run:
-- \`js-harness sessions\` — the board: each session's state, context size, open background work and the tail of its last reply, then the work sessions that hold work you handed them and have made no commit, notice or gate for ${ruleValue('session-stall', 'minutes')} minutes (\`Stalled\`), the worktrees with their feature plans, the running gates, the open pull requests and your relief file. \`js-harness loop heartbeat\` ends on such a session too, with a \`STALLED:\` line, and on a red daily Windows run not told before, with a \`WINDOWS:\` line that names its failing tests. It also keeps each settled day's throughput snapshot and ends on a throughput review that falls due, with a \`DUE:\` line that names the commands to run; every line that ends it is followed by the \`DUE:\` lines still open.
+- \`js-harness sessions\` — the board: each session's state, context size, open background work and the tail of its last reply, then the work sessions that hold work you handed them and have made no commit, notice or gate for ${ruleValue('session-stall', 'minutes')} minutes (\`Stalled\`), the worktrees with their feature plans, the running gates, the open pull requests and your relief file. \`js-harness loop heartbeat\` ends on such a session too, with a \`STALLED:\` line, and on a red daily Windows run not told before, with a \`WINDOWS:\` line that names its failing tests. It also keeps each settled day's throughput snapshot and ends on a throughput review that falls due, with a \`DUE:\` line that names the commands to run; every line that ends it is followed by the \`DUE:\` lines still open. The live board (\`rule:live-board\`): the user follows the sessions on one Artifact page that updates by itself from its database, never a page you republish by hand. Each time you wake, run \`js-harness sessions live --out <dir>\`, add to each row of each batch file a \`sesion\` field (the session's purpose) and a \`texto\` field (one plain sentence saying what happened and what it means for the user), both in the user's language since the record stays in English, send each batch with \`ArtifactData\` set from its file, then \`js-harness sessions live --sent <file>\`, and last the \`ArtifactData\` update it prints, with no row to send too: it stamps \`board/summary\` with the time you read the record, so a quiet stretch does not read as a board nobody keeps; before the resting wait below, run it with \`--out <dir> --resting\`, so the board reads as resting until a notice wakes you. Only a Claude session writes the page's database, and the notices of the record are its rows. Keep its \`board/summary\` document (what you say now, what is the user's, the route, the links) current with \`ArtifactData\`, and point every reply of yours to the board's link, which \`sessions live\` prints.
 - \`js-harness sessions --watch\`, in the background — your way of waiting. It is silent until the board changes in a way that needs a decision, then prints the changes and the board. Launch it again each time it returns. A return with "nothing changed" is not news: relaunch it and say nothing.
 - Resting: when a fresh board shows no work session running, nothing waiting on you and no pull request to land, stop every timed watch and wait with one \`js-harness wait --notice-to orchestrator\` in the background. It ends only on a notice to you or after ${statedHours(ruleValue('wait-for', 'minutes'))} hours, so a quiet stretch wakes you once, not every half hour.
 - \`js-harness progress\` — the map: the roadmap's phases and the features, from their checkboxes; \`--pace\` gives the tasks closed and added each day on the default branch.
 - \`js-harness loop run <name> --purpose "<what it is for>" --until "<what ends it>" -- <command>\`, in the background — each loop you keep (\`js-harness loop heartbeat\`, \`js-harness loop channel-watch\`, a merge keeper): it records you as its owner, runs the command, and its end wakes you. \`js-harness loop status\` lists the project's loops with their owners; \`js-harness loop stop <name>\` stops one of yours and says only when nothing of it is left.
 
 What you may do:
-- What you do alone and what stays the user's is the charter the user approved, at the head of your relief file: read it there, act inside it, and ask before anything it does not name. Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command.
+- What you do alone and what stays the user's is the charter the user approved, at the head of your relief file: read it there, act inside it, and ask before anything it does not name; while the user is away it waits instead, as \`rule:away-autonomy\` says. Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command.
 - You never implement, never commit, never write in a worktree and never answer a question for the user: you ask it, and carry their answer. Reading code, running tests and discussing a design are what fill a context, and yours has to last. One exception, in the harness's own repository, approved by the user with the protocol for changing a rule: you may run \`js-harness rules change\` from a checkout of a \`rule/\` branch and commit what it writes.
 - You never write another session's prompts: each session owns its work and holds its context. The one exception is the opening prompt of a new work session, which carries pointers and not content: what to read first, the decisions already taken, how the machine is shared. Store it with \`js-harness notify --opening "<title>"\` (its text on standard input): it prints the session's first message as a block of its own, which the user copies as it is. When the host gives you a tool to start sessions, open the new session yourself with that message, on your own judgment and within the room the gate leaves. \`start_session\` opens it as a row in the user's sidebar, but only on a turn the user typed: on a turn a notice, a background task or a compaction started it leaves a card the user must tap, so there start it with \`js-harness sessions start --title "<title>" --brief <file> --effort <level>\` instead, which runs it in the background with Remote Control on (claude.ai/code and the user's phone reach it) and tells it to report through \`js-harness notify\`; the board lists it with what it waits for, and \`js-harness sessions stop <id>\` removes it once its work has landed. Every work session is titled \`<code> <n> · <purpose>\`, \`<code>\` being the project's own identifier in harness.json \`"code"\`, the title you give \`notify --opening\` and \`start_session\` alike, with \`<code> <n>\` from \`js-harness sessions --next-number\`: the number is the session's address, so a free title or a number another session holds sends notices to nobody or to the wrong one. A new lead is titled \`<code> ORQ · <purpose>\`.
 - Ready pull requests are landed with \`js-harness merge-queue --land\`: it builds the candidate the default branch would be, tests it on this machine and on the project's CI, and pushes it when both are green; \`--dry-run\` first shows what it would land and what it leaves out, and why. After a land that moved main, \`js-harness merge-queue --land --refresh-copy\` also brings the installed copy the hooks run up to that main and prints its undo; a land that moved nothing refreshes nothing. Where the queue cannot run, a pull request is merged by hand by the rules that follow.
@@ -177,7 +187,7 @@ When the user asks how the work is going, how much is done, or what you have don
 3. The user's decisions since the last report, and what each changed.
 4. The map: each roadmap phase with its share done and what is left in it, then the total.
 5. What waits on the user: the questions open, the cards, a merge or a spend that needs their yes.
-6. What you propose next, and why.
+6. What you propose next, each step with its why: the criterion that puts it there, never a step alone.
 
 - Show each section that holds items as a table: one row an item, with the columns that item needs (what it is, its state, what it gives the user). A list or a paragraph in its place is not the report.
 
@@ -198,8 +208,8 @@ Each reply that closes a stretch of work carries:
 - what waits for the user in a session, said only after reading that session at that moment;
 - when a stretch or a session ends, that it ended and which session to return to.
 
-- Before the user leaves, ask in that reply for everything the stretch will need: the decisions in the queue, the sessions to open and their permission mode, what the machine and the plan's limits allow.
-- While the user is away, a block that waits for them is given once and held until they say they are back or are seen to have written.
+- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back, and write to your relief file that they are away, with the time. Decide within the plan and the charter: land, open sessions and spend what a planned step needs, up to the plan's limits. What the project's \`CLAUDE.md\` or \`AGENTS.md\`, the charter or the permit relay keeps theirs, and a step the charter does not name, waits for their return with no question; a work session's question that is theirs is recorded and held, never answered for them, and that session gets the next step that does not wait on it. In that reply, say in one line, as a fact and not a question, what only they can give that the stretch will need. Before they leave, open a stretch (\`js-harness stretch open --plan <file> --html <file>\`; \`js-harness stretch status\` exits 1 when none is open) and show its departure in that reply: first the migration's share now and the share expected at the return, its range beside it, from the steps of the roadmap's plan and the map's rows each item \`closes\` (\`js-harness stretch closes <item> <phase or plan> <step>\` adds one to an open stretch), then what will run, its hours as written and as the last stretches correct them, whether the queued work fills the time they are away, and the goals, each a command that exits 0. When they say they are back, before anything else, close it (\`js-harness stretch close --html <file>\`) and show its return: each goal met or not, the share of the planned that was met, the map by phase before and after, the timeline, the shares against the departure's forecast, and each item's time spent and lost against its estimate, from the records. Run the goals with \`js-harness stretch status --goals\` before they are due back, so the time they take is known before the return. Both are shown as a visual page in the chat, never drawn by hand. The chat's visual tool takes the file's HTML whole; where the host has none, publish the file as an Artifact and give the link. A stretch is not only an absence: open one for any stretch you plan, and \`js-harness stretch status --html <file>\` shows how it goes. When they are back, tell them what you did and what it spent. While this holds it comes before every instruction here to ask at once, to bring a card that turn or to repeat a question.
+- While the user is away, a block that waits for them is given once and held until they say they are back or are seen to have written. While they are away, a reply closes in the working state, saying what wakes you, or once in the cut that gives that block, never in a question or a decision; a question that is theirs goes to your relief file and waits for their return.
 
 The relief file. \`js-harness sessions\` prints its path and its last lines under \`Relief\`.
 - Append one dated line per event as it happens: a decision of the user, a request and where it went, a question still open, what a session is for. Your first line says that an orchestrator started and gives your session id, the one the board marks \`(this session)\`.
@@ -240,18 +250,20 @@ When the user says they will reinstall the machine or wipe its disk, nothing of 
 - Give prompts only for yourself. A prompt meant for another session names that session in its first line. When you receive one addressed to another session, touch nothing and say whose it is.
 - Commit with a plain \`git commit\`: in a project that holds \`.github/workflows/gate.yml\` its gate sends the tests to GitHub's machines first, and anywhere it waits by itself for its turn here while another runs (\`Gates\` in \`js-harness sessions\` says which runs and which wait). A whole test run of your own goes through \`js-harness gate -- <command>\`, which waits for its turn too; a commit wrapped in it holds the machine's lock and never goes to GitHub.
 - Push in the same step your last check passes, where the project's \`pushUnasked\` switch reads on (\`js-harness functions\`); where it is off, ask first. While a commit that a push would take waits on a branch with an open pull request, \`js-harness gate\` refuses every turn but that push or a merge and prints the push command; it looks at the folder the turn runs in, so ask for a turn from your worktree (\`--cwd <worktree>\`).
-- While a gate runs on the machine, run nothing heavy beside it: a quote (\`js-harness sessions --quote\`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a sub-agent that runs tests wait for the gate to end. The two reviews do not: \`js-harness codex-review\` runs beside a gate, since out of a turn Codex's \`node --test\` is refused, and so does a gentle-ai review, whose reviewer has no tools. Give that review a base on the head's first-parent line, and on \`operation_timeout\` run it once more, then go on as \`js-harness-protocols\` section 3 says.
+- While a gate runs on the machine, run nothing heavy beside it: a quote (\`js-harness sessions --quote\`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a sub-agent that runs tests wait for the gate to end. The two reviews do not: \`js-harness codex-review\` runs beside a gate, since out of a turn Codex's \`node --test\` is refused, and so does \`js-harness lens-review\`, whose lenses have no tools. Give each a base on the head's first-parent line, as \`js-harness-protocols\` section 3 says.
 - Ask the user nothing while an orchestrator holds its role (\`js-harness sessions --address orchestrator\` exits 0): record the question with \`--kind question\`, its \`text\` opening with what it is for (the work it serves and what its answer changes), ring the orchestrator with its number, and go on with what does not wait on it. The answer arrives as a notice naming the line of the user's words: read it with \`js-harness sessions --quote <transcript> <line>\` before you use it. With no orchestrator, ask with the question tool yourself, by the same rule, and record the answer.
 - Where the roadmap holds \`## Advice mode\`, read it before you put a decision to the user: with \`Teaching: on\`, the question's text says why, at the level the line records for the area the decision touches, and names that area's ADR, or its open decision (\`OD<n>\`) while it has none; you teach nowhere else. A notice from the lead that the teaching or a level changed holds from the moment it arrives, and the first change of yours to the roadmap writes it into \`## Advice mode\`.
 - When the user refuses a tool call of yours or stops your turn, your next act is to tell the orchestrator what you need, as a question or a \`waiting\` notice, so that it reaches the user in the orchestrator's chat: a session that waits in silence is not seen. The board marks such a session \`stopped\`.
 - When your plan changes (something failed, came out differently or a problem appeared), write it in your own feature document before going on: the task reopened or added, with the reason, committed.
-- When a pull request of yours is ready to land, say so with \`js-harness notify --to orchestrator --kind ready --pr <number> "<what it holds>"\`: the land finds whose pull request it is from that notice, not from the branch you sent it from.
+- Every event of your work reaches the user's live board as a notice: \`js-harness notify --to orchestrator\` with \`opened\` when you start, \`note\` when a step of your plan finishes, a pull request opens or merges, a decision is made or you report spend, and \`ready\` and \`closed\` as below. The notice is the event: the lead sends the record to the board, so a step that sends none is a step the user does not see. When a pull request of yours is ready to land, say so with \`js-harness notify --to orchestrator --kind ready --pr <number> "<what it holds>"\`: the land finds whose pull request it is from that notice, not from the branch you sent it from.
 - When you have finished, say so in your first line. Write your summary from \`js-harness summary template --title "<your title>"\` into the file it names, commit and push it, and close with \`js-harness notify --to orchestrator --kind closed --summary <that file> "<what you delivered>"\`: nothing more goes to you, and the lead reads your summary and archives you.
 - When you are free and wait for the orchestrator with nothing handed to you, say so with \`js-harness notify --to orchestrator --kind waiting "<on what>"\`: until a \`waiting\` or a \`closed\`, the work last handed to you is yours, and ${ruleValue('session-stall', 'minutes')} minutes with no commit, notice or gate show you as stalled to the orchestrator.
 - You are not finished while background work you started is still running, even when your next prompt is already written.
 - Never end a turn waiting for a message or an event, whether the user is present or not: write your state, start \`js-harness wait\` in the background for what you wait on, and keep working; the host compacts a session inside a turn.
 `;
 }
+
+export { BACKUP_HOOK_COMMAND, FALLBACK_HOOK_COMMAND, GUARD_HOOK_COMMAND, PAUSE_HOOK_COMMAND, PERMIT_HOOK_COMMAND, REPLY_HOOK_COMMAND, RULES_HOOK_COMMAND, RULES_RETOLD_MATCHER, SHARE_HOOK_COMMAND } from './hook-entries.mjs';
 
 /** Components are data: where each one lives under a home, and what it contains at a version. */
 export const components = [
@@ -284,6 +296,23 @@ export const components = [
     id: 'codex-protocols-skill',
     target: (home) => path.join(home, '.codex', 'skills', 'js-harness-protocols', 'SKILL.md'),
     content: protocolsSkillContent,
+  },
+  // F8 S10 (odd/tasks/f8-s10-port.md): the output style, for Claude Code only, since Codex only
+  // reviews here (D3). A clone selects the style through its settings (bin/lib/project-apply.mjs).
+  {
+    id: 'claude-output-style',
+    target: (home) => path.join(home, '.claude', 'output-styles', `${OUTPUT_STYLE_NAME}.md`),
+    content: outputStyleContent,
+  },
+  {
+    id: 'claude-work-units-skill',
+    target: (home) => path.join(home, '.claude', 'skills', 'js-harness-work-units', 'SKILL.md'),
+    content: workUnitsSkillContent,
+  },
+  {
+    id: 'claude-chained-prs-skill',
+    target: (home) => path.join(home, '.claude', 'skills', 'js-harness-chained-prs', 'SKILL.md'),
+    content: chainedPrsSkillContent,
   },
 ];
 
@@ -388,6 +417,7 @@ export const entryComponents = [
     pointer: ['hooks', 'Stop'],
     entry: () => backupHookEntry(),
   },
+  ...templateGateComponents(),
   {
     id: 'claude-fallback-hook',
     target: (home) => path.join(home, '.claude', 'settings.json'),
@@ -402,179 +432,6 @@ export const entryComponents = [
   },
 ];
 
-/** `doctor --hook` (T3) registered as a `SessionStart` hook: zero model tokens on a session start
- * with nothing new to report (see odd/tasks/stack-doctor.md, "Registration"). */
-function hookEntry() {
-  return {
-    matcher: 'startup|resume',
-    hooks: [{ type: 'command', command: 'js-harness doctor --hook', timeout: 10 }],
-  };
-}
-
-/** `resume --hook` (bin/resume.mjs) registered as a `SessionStart` hook for the matcher `compact|clear|startup`: after
- * a compaction, or a clear, the session reads its title, its opening and its feature document from files, so nobody
- * pastes it a resume prompt (odd/tasks/session-channel.md, "Context"). Both hosts match a `SessionStart`
- * entry against the way the session started, and both name a compaction `compact` (their hooks
- * documentation, read on 2026-10-11; in this project's Claude Code transcripts the hooks of other tools
- * ran under `SessionStart:compact` after 40 compactions). The desktop app's clear starts a new session whose
- * start is `startup`, not `clear` (harness-review L12), so that matcher is named too, and the hook speaks on it
- * only when the app's record of the session names the session it was cleared from (bin/resume.mjs). It is an
- * entry of its own because the doctor's matcher (`startup|resume`) must not fire on a compaction or a clear.
- * Fifteen seconds: the command asks git a handful of questions, each with a limit of its own. */
-function resumeHookEntry() {
-  return {
-    matcher: 'compact|clear|startup',
-    hooks: [{ type: 'command', command: 'js-harness resume --hook', timeout: 15 }],
-  };
-}
-
-/** The command of the pause hook. The `|| exit 0` is the point: a hook that exits 2 blocks its host, and an older
- * copy of js-harness on the path answers 2 to a command or a flag it does not know (it happened to `resume` itself
- * on 2026-10-12), so whatever the command answers, the entry exits 0. The form is one that both `sh` and `cmd.exe`
- * read. Which shell a Windows host runs a hook's command in is not proven here: it is one of the tries the feature
- * document lists. */
-export const PAUSE_HOOK_COMMAND = 'js-harness resume --pause || exit 0';
-
-/** `resume --pause` (bin/resume.mjs) registered as a `PostToolUse` hook: after a tool call that passes the context
- * pause it prints the notice, once for the stretch of work (odd/tasks/session-channel.md). Claude Code only: the
- * pause is read from a Claude Code transcript, and a Codex session has none here, so there is no Codex entry. No
- * matcher, so the entry runs after every tool, which is what the notice needs. Two seconds: a short budget, since
- * the hook runs after every tool call. */
-function pauseHookEntry() {
-  return {
-    hooks: [{ type: 'command', command: PAUSE_HOOK_COMMAND, timeout: 2 }],
-  };
-}
-
-/** The pause command again, registered as a `PostToolUseFailure` hook on WebFetch: a WebFetch that fails as a tool
- * error ("Claude Code is unable to fetch from <domain>") reaches no `PostToolUse` hook, so this entry is what tells the
- * session the next rung of the fallback ladder (T4 of odd/tasks/web-fetch-fallback.md, which he asked for on
- * 2026-10-16). The command answers in the event of its input, so the one command serves both entries. Claude Code
- * only: WebFetch is its tool. Two seconds, as the pause hook's. */
-function webFailureHookEntry() {
-  return {
-    matcher: 'WebFetch',
-    hooks: [{ type: 'command', command: PAUSE_HOOK_COMMAND, timeout: 2 }],
-  };
-}
-
-/** The command of the guard hook, guarded to exit 0 like the pause hook's: a refusal travels as the hooks contract's
- * JSON on standard output, so an older js-harness that answers 2 to `guard` never blocks a tool call. */
-export const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
-
-/** `guard --hook` (bin/guard.mjs) registered as a `PreToolUse` hook on the tools it checks: a sub-agent's launch, whose
- * model it holds to the project's rules, and the two ways of sending a message to another session, whose stamped hour
- * it holds to the clock (odd/tasks/honesty-audit.md, T13 and T14), a Bash command, a Write or an Edit, whose line in a
- * memory index it holds to INDEX_LINE_CHARS characters (odd/tasks/memory-hygiene.md, T4), and the four tools that open a session in
- * the app's Routines or in the cloud, refused where the rule `sessions-open-in-sidebar` is declared (layer 3 of
- * odd/tasks/session-channel.md), and the desktop app's `start_session`, whose effort it holds to the rule
- * `session-effort` (odd/tasks/harness-review.md, T6c), and the desktop app's `run_in_terminal`, whose command it holds to
- * a closing note saying what it does where the rule `terminal-note` is declared (odd/tasks/terminal-note.md). Claude Code only: the tool names are Claude Code's. Five
- * seconds: it may ask git for the project's root once.
- * The matcher is anchored, `^(…)$`, because Claude Code's hooks reference (checked 2026-10-15) reads a matcher with a
- * character outside letters, digits, `_`, `-`, spaces, `,` and `|` as a JavaScript regular expression, unanchored: the
- * `^` and `$` make it a whole-name match, so `Write` does not match `TodoWrite` and `Edit` does not match
- * `NotebookEdit`. A hyphen alone does not make it a regex. The same text is held by the tests of
- * bin/lib/manifest.test.mjs and by scripts/practice-lib.mjs (`HARNESS_HOOKS`). */
-function guardHookEntry() {
-  return {
-    matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Write|Edit|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$',
-    hooks: [{ type: 'command', command: GUARD_HOOK_COMMAND, timeout: 5 }],
-  };
-}
-
-/** The command of the permit relay, guarded to exit 0: an older js-harness has no `permit` and answers 2. */
-export const PERMIT_HOOK_COMMAND = 'js-harness permit --hook || exit 0';
-
-/** `permit --hook` (bin/permit.mjs) registered as a `PermissionRequest` hook on every tool: while a lead holds the
- * relay, a card of another session is told to the orchestrator and waits for its verdict; with none, or none in time,
- * the card reaches the user as before (odd/tasks/held-sessions.md, S8 and T6). Claude Code only: the event is Claude
- * Code's. 600 s, the host's own default for a command hook: the relay answers within 570 s of its own. */
-function permitHookEntry() {
-  return {
-    hooks: [{ type: 'command', command: PERMIT_HOOK_COMMAND, timeout: 600 }],
-  };
-}
-
-/** The command of the share check, guarded to exit 0 like the guard's: an older js-harness answers 2 to `--stop`,
- * and a `Stop` hook that exits 2 turns the stop back. */
-export const SHARE_HOOK_COMMAND = 'js-harness guard --stop || exit 0';
-
-/** `guard --stop` (bin/guard.mjs) registered as a `Stop` hook: a reply that states the session's own context share
- * more than SHARE_TOLERANCE points from the share its transcript records is turned back to be corrected (odd/tasks/honesty-audit.md,
- * T16). A `Stop` entry takes no matcher. Claude Code only: the transcript it reads is Claude Code's. Five seconds: it
- * reads the transcript once, and only when the reply states a share. */
-function shareHookEntry() {
-  return {
-    hooks: [{ type: 'command', command: SHARE_HOOK_COMMAND, timeout: 5 }],
-  };
-}
-
-/** The command of the reply check, guarded to exit 0 like the share check's: an older js-harness answers 2 to `reply`,
- * and a `Stop` hook that exits 2 turns the stop back. */
-export const REPLY_HOOK_COMMAND = 'js-harness reply --hook || exit 0';
-
-/** `reply --hook` (bin/reply.mjs) registered as a `Stop` hook in both hosts: a reply that does not close with exactly one
- * state, and what that state needs, is turned back to be closed again (odd/tasks/rule-hierarchy.md, C1 and T2). It acts
- * only in a project whose nearest `harness.json` holds a `reply` key and prints `{}` everywhere else, so the entry runs
- * in every session of the machine and changes nothing where the project did not turn it on. Both hosts: it reads only
- * the reply's text, which both send as `last_assistant_message` (Claude Code's payload logged on 2026-10-16; Codex's
- * hooks documentation read the same day). Five seconds, as the share check's: it reads one small file a folder, up to
- * the project's `harness.json`, and, for the wake check of a work session, the end of its transcript, the record of
- * notices and the openings (533 ms on this project's largest transcript, 64.7 MB, measured on 2026-10-16). */
-function replyHookEntry() {
-  return {
-    hooks: [{ type: 'command', command: REPLY_HOOK_COMMAND, timeout: 5 }],
-  };
-}
-
-/** The command of the memory backup's hook, guarded to exit 0 like the reply check's: an older js-harness that has no
- * `backup` answers 2, and a `Stop` hook that exits 2 turns the stop back. */
-export const BACKUP_HOOK_COMMAND = 'js-harness backup --hook || exit 0';
-
-/** `backup --hook` (bin/backup.mjs) registered as a `Stop` hook in both hosts: when a backup is due (the clone exists,
- * the last success is 30 minutes old and something it copies changed since) it starts `backup run` detached and
- * returns, so the memory reaches the private repository as sessions work (odd/tasks/memory-backup.md, D2). With no
- * clone it does nothing, on every machine where `backup init` was never run. Five seconds, as the other Stop entries:
- * it reads two small files and the times of the folders it copies. */
-function backupHookEntry() {
-  return {
-    hooks: [{ type: 'command', command: BACKUP_HOOK_COMMAND, timeout: 5 }],
-  };
-}
-
-/** The command of the memory fallback's notice, guarded to exit 0 like the backup's: an older js-harness answers 2. */
-export const FALLBACK_HOOK_COMMAND = 'js-harness backup --session-start || exit 0';
-
-/** `backup --session-start` (bin/backup.mjs) registered as a `SessionStart` hook in both hosts, for every start: after a
- * compaction the notice is needed most. When Engram holds less than nine tenths of what the last backup held of the
- * session's project, it sends the session to that project's readable file (odd/tasks/recent-memory.md, D7). An entry
- * of its own, since doctor's hook prints `systemMessage` only. Five seconds: `engram stats` gets three. */
-function fallbackHookEntry() {
-  return {
-    matcher: 'startup|resume|clear|compact',
-    hooks: [{ type: 'command', command: FALLBACK_HOOK_COMMAND, timeout: 5 }],
-  };
-}
-
-/** The command of the rules' turn-start hook, guarded to exit 0 like the pause hook's: an older js-harness that answers
- * 2 to `--hook` never blocks a turn. */
-export const RULES_HOOK_COMMAND = 'js-harness rules --hook || exit 0';
-/** The sources of `SessionStart` after which what the context held may be gone, so the session is told again. */
-export const RULES_RETOLD_MATCHER = 'compact|clear|resume';
-
-/** `rules --hook` (bin/lib/rules-reach.mjs) registered on `UserPromptSubmit`, on `SessionStart` for
- * `RULES_RETOLD_MATCHER`, and on `SubagentStart`: letter F's turn-start hook, which tells a session what the rules on
- * the default branch say that its merge base does not (odd/tasks/rule-hierarchy.md, "Reach: the turn-start hook (T16f,
- * first part)"). Claude Code only, until a logging hook confirms Codex's events. It prints nothing on a turn with no
- * change. Five seconds: a node start and up to four git calls, each limited on its own. */
-function rulesHookEntry(matcher) {
-  return {
-    ...(matcher === undefined ? {} : { matcher }),
-    hooks: [{ type: 'command', command: RULES_HOOK_COMMAND, timeout: 5 }],
-  };
-}
-
 export function sha256(text) {
   return crypto.createHash('sha256').update(text).digest('hex');
 }
@@ -583,9 +440,8 @@ export function sha256(text) {
  * must lead, along one of them, to what we wrote, and every key that ends a pointer must hold the empty array we
  * left behind after removing our entry. Any other key, even one with an empty-looking value like `{}` or `null`,
  * means this document is not ours alone to delete. Several pointers can share one file: the doctor's and the
- * resume hook's both hang from `hooks.SessionStart`, the pause hook from `hooks.PostToolUse` and the guard hook
- * from `hooks.PreToolUse`, so a file
- * js-harness created goes with the last of them. */
+ * resume hook's both hang from `hooks.SessionStart`, the pause hook and the template gate's from `hooks.PostToolUse`
+ * and the guard's and the gate's from `hooks.PreToolUse`, so a file js-harness created goes with the last of them. */
 function isOnlyOurPointerPaths(value, pointers) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   return Object.keys(value).every((key) => {
@@ -596,11 +452,10 @@ function isOnlyOurPointerPaths(value, pointers) {
   });
 }
 
-/** R3-005 (accepted T4 review follow-up): detects the indent unit already used by `raw` so a
- * rewrite matches it instead of always reformatting to 2 spaces. `null` means compact single-line
- * JSON (no newlines besides, at most, one trailing one) and must stay compact; a tab or space run
- * right after the first real newline becomes the indent unit; anything else (a multi-line document
- * with no indented line, which should not normally happen) falls back to the historical default. */
+/** R3-005 (accepted T4 review follow-up): detects the indent unit already used by `raw` so a rewrite matches it instead
+ * of always reformatting to 2 spaces. `null` means compact single-line JSON (no newlines besides, at most, one trailing
+ * one) and must stay compact; a tab or space run right after the first real newline becomes the indent unit; anything
+ * else (a multi-line document with no indented line, which should not normally happen) falls back to the default. */
 export function detectIndent(raw) {
   const body = raw.replace(/\r?\n$/, '');
   if (!body.includes('\n')) return null;
@@ -660,15 +515,15 @@ function isOlderOwnEntry(item, entry) {
  * `ours` is the set of containers js-harness made (`oursContainers`): every container this creates is added to it, so
  * the next entry of the same run that finds it there records it as made too, and the result says how many of the
  * containers on the way to `pointer` are ours (`createdContainers`).
- * Malformed JSON, a root/pointer shape that is not the object/array we expect, or any fs failure
- * reading or writing the target (R3-002: an unreadable file, a directory sitting at the path, an
- * unwritable or missing-as-a-directory host dir, ...) all leave the file completely untouched and
- * report `skipped`, never overwritten and never thrown out of install/sync. R3-001: an intermediate
- * key that already exists but is not a plain object, or a leaf that already exists but is not an
- * array, is treated the same way — a value of an unexpected shape is never clobbered. Idempotent:
- * an entry that is already there (by deep equality) is left alone and the file is not rewritten at
- * all, so a repeat install/sync never reformats a file that already has what it needs. */
-function appendEntryToFile(target, pointer, entry, ours) {
+ * Malformed JSON, a root/pointer shape that is not the object/array we expect, or any fs failure reading or writing the
+ * target (R3-002: an unreadable file, a directory sitting at the path, an unwritable or missing-as-a-directory host dir,
+ * ...) all leave the file completely untouched and report `skipped`, never overwritten and never thrown out of
+ * install/sync. R3-001: an intermediate key that already exists but is not a plain object, or a leaf that already exists
+ * but is not an array, is treated the same way — a value of an unexpected shape is never clobbered. Idempotent: an entry
+ * that is already there (by deep equality) is left alone and the file is not rewritten at all, so a repeat install/sync
+ * never reformats a file that already has what it needs. It says `present` whenever the entry was there before this run,
+ * also when only older forms of it were taken out, which it names (`replaced`). With `write` false it writes nothing. */
+function appendEntryToFile(target, pointer, entry, ours, write = true) {
   let fileExisted;
   let raw;
   try {
@@ -727,15 +582,15 @@ function appendEntryToFile(target, pointer, entry, ours) {
   if (has && stale.length === 0) {
     return { skipped: false, present: true, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
   }
-  for (const i of [...stale].reverse()) arr.splice(i, 1);
+  const replaced = [...stale].reverse().flatMap((i) => arr.splice(i, 1)).reverse();
   if (!has) arr.splice(stale.length > 0 ? stale[0] : arr.length, 0, entry);
   try {
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF, indent }), 'utf8');
+    if (write) fs.mkdirSync(path.dirname(target), { recursive: true });
+    if (write) fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF, indent }), 'utf8');
   } catch (err) {
     return { skipped: true, createdFile: false, reason: err.message };
   }
-  return { skipped: false, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
+  return { skipped: false, ...(has && { present: true }), replaced, createdFile: !fileExisted, createdContainers: countOurs(ourContainers) };
 }
 
 /** Whether a record says the list at its pointer is not one install made. A record that names no container as made
@@ -751,12 +606,11 @@ const pointersIn = (records, target) => (records ?? [])
   .filter((record) => record.path === target && !ownsNoList(record))
   .map((record) => record.pointer);
 
-/** Removes the deep-equal entry at `pointer` inside `target`. A missing file, malformed JSON, a
- * pointer shape that does not match, or an entry that is not there (the user changed or removed
- * it) all leave the file completely untouched — reported `kept` (or nothing, for a missing file,
- * mirroring how `uninstall` already treats a missing file component). Deletes the whole file only
- * when `createdFile` is true (js-harness made it) and removing the entry leaves nothing but empty
- * containers behind. `createdContainers` is how many of the containers on `pointer` install made for the entry; each of
+/** Removes the deep-equal entry at `pointer` inside `target`. A missing file, malformed JSON, a pointer shape that does
+ * not match, or an entry that is not there (the user changed or removed it) all leave the file completely untouched —
+ * reported `kept` (or nothing, for a missing file, mirroring how `uninstall` already treats a missing file component).
+ * Deletes the whole file only when `createdFile` is true (js-harness made it) and removing the entry leaves nothing but
+ * empty containers behind. `createdContainers` is how many of the containers on `pointer` install made for the entry; each of
  * them that is empty once the entry is out goes too (`removeEmptyCreatedContainers`). `pointers` is every pointer
  * js-harness recorded in this file, which is what "ours" means for the last check (see `isOnlyOurPointerPaths`). */
 function removeEntryFromFile(target, pointer, entry, createdFile, createdContainers = 0, pointers = [pointer]) {
@@ -823,10 +677,10 @@ function isEmptyContainer(value) {
   return value !== null && typeof value === 'object' && Object.keys(value).length === 0;
 }
 
-/** Installs every entry component, carrying forward `createdFile` from a previous manifest record
- * for the same target file (matched by path) rather than recomputing it from "does the file exist
- * right now" — a file js-harness created on the first install still existed for every later
- * install/sync call, but js-harness must still remember it made it, so uninstall can delete it.
+/** Installs every entry component, carrying forward `createdFile` from a previous manifest record for the same target
+ * file (matched by path) rather than recomputing it from "does the file exist right now" — a file js-harness created on
+ * the first install still existed for every later install/sync call, but js-harness must still remember it made it, so
+ * uninstall can delete it. `write` false walks the same way and writes nothing, for the records install writes first.
  *
  * Two components can graft an entry on the same file (the doctor's hook and the resume hook), and who
  * created the file is a fact of the file, not of the entry: the second entry of a first install finds the
@@ -852,7 +706,7 @@ function isBelow(inner, outer) {
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
-function installEntries(home, previousManifest, missingBefore = new Map(), codexConfig = undefined) {
+function installEntries(home, previousManifest, missingBefore = new Map(), codexConfig = undefined, write = true) {
   const createdByTarget = new Map();
   const foldersByTarget = new Map();
   const ours = oursContainers(previousManifest?.entries);
@@ -861,15 +715,19 @@ function installEntries(home, previousManifest, missingBefore = new Map(), codex
     const pointer = component.pointer;
     const entry = component.entry();
     const previousEntry = previousManifest?.entries?.find((e) => e.path === target);
-    const result = appendEntryToFile(target, pointer, entry, ours);
+    const result = appendEntryToFile(target, pointer, entry, ours, write);
     if (!createdByTarget.has(target)) createdByTarget.set(target, previousEntry ? previousEntry.createdFile : result.createdFile);
     // Like `createdFile`, the folders made for the file are a fact of the file, settled by the first install that wrote
     // it, from what was missing before install wrote anything (a skill file makes `~/.claude` first). A record from before the field names none, and its folders stay, since nothing says install made them.
     if (!foldersByTarget.has(target)) foldersByTarget.set(target, previousEntry ? previousEntry.createdFolders ?? [] : (result.createdFile ? missingBefore.get(target) ?? [] : []));
-    // A run that skips an entry looked at no container: what an earlier run recorded as made for the same file and
-    // pointer still holds. Written as none, the next install would take those containers for the user's, and
-    // `uninstall` would leave them empty behind it.
+    // A run that skips an entry looked at no container: what an earlier run recorded as made for the same file and pointer
+    // still holds. Written as none, the next install would take those containers for the user's, and `uninstall` would leave them empty behind it.
     const earlier = previousManifest?.entries?.find((e) => Array.isArray(e.pointer) && containerKey(e.path, e.pointer) === containerKey(target, pointer));
+    // An entry the file already held, or one a skipped run never looked at, is ours only while the earlier record of it says so: else
+    // install did not write it, `createdEntry: false`, and `uninstall` and `sync` leave it and its Codex trust. A record from before the field is ours.
+    // The new form put in the place of an older one recorded as the user's is theirs as well (`theirs`, JH 81's follow-up).
+    const same = previousManifest?.entries?.find((e) => Array.isArray(e.pointer) && containerKey(e.path, e.pointer) === containerKey(target, pointer) && deepEqual(e.entry, entry));
+    const theirs = previousManifest?.entries?.some((e) => e.createdEntry === false && Array.isArray(e.pointer) && containerKey(e.path, e.pointer) === containerKey(target, pointer) && result.replaced?.some((item) => deepEqual(e.entry, item)));
     const record = {
       path: target,
       pointer,
@@ -880,6 +738,7 @@ function installEntries(home, previousManifest, missingBefore = new Map(), codex
       createdContainers: result.createdContainers ?? (result.skipped ? earlier?.createdContainers ?? 0 : 0),
       skipped: result.skipped === true,
       ...(result.skipped ? { reason: result.reason } : {}),
+      ...(theirs || ((result.present || result.skipped) && (same === undefined || same.createdEntry === false)) ? { createdEntry: false } : {}),
       // A Codex entry names every config.toml Codex may keep its trust in, as each install resolved it, so the
       // uninstall edits those files whatever CODEX_HOME says by then (odd/tasks/codex-hook-trust.md).
       ...(codexConfig && component.id.startsWith('codex-') ? { trustConfigs: withConfig(previousEntry?.trustConfigs ?? [], codexConfig) } : {}),
@@ -929,110 +788,6 @@ export function installedVersion(home) {
   return readManifest(home)?.version ?? null;
 }
 
-/** Writes `data` to `target` atomically: serialized to a uniquely-named `.tmp` sibling first
- * (`<target>.<pid>.<random>.tmp`, created exclusively with `flag: 'wx'` so it is always a brand
- * new file — never opened through something already there, ordinary file or link, T2e item 3),
- * then a single rename over `target`, so a reader never sees a partially-written manifest and a
- * failure never corrupts or truncates whatever was there before. `target` itself is never touched
- * directly — matters most for the codegraph-retry update, which must not lose an existing, valid
- * manifest just because this write failed partway through (T2d Codex P2 atomic manifest writes).
- *
- * `deps` (`{ open, write, close }`, each independently injectable, defaulting to real
- * `fs.openSync(path, 'wx')` / `fs.writeSync(fd, buffer, offset, length, position)` /
- * `fs.closeSync(fd)`) is split into these three steps, rather than one opaque
- * `writeFile(path, content, options)` call, specifically so this function can tell "the exclusive
- * create itself never happened" (`open` throws — `EEXIST` or anything else; `tmp` is not ours to
- * touch) apart from "the create succeeded, and something *after* it failed" (`write`, `close`, or
- * the rename below; `tmp` exists and is this call's own file, so it is removed). A single combined
- * call (the old `writeFile(tmp, content, {flag:'wx',...})` shape) cannot make that distinction from
- * the outside — whatever it does internally, its caller only ever sees "it threw" or "it didn't"
- * (T2g R3-001, Codex P2: moving that one call outside the try/catch correctly stopped deleting a
- * foreign file on `EEXIST`, per T2f item 1, but then left this call's *own* just-created file
- * leaking on a write failure that happens after the open — e.g. `ENOSPC`, `EIO` partway through
- * filling it). Splitting `open` out as its own step means only *its* own failure is
- * ambiguous-ownership territory; every failure after it succeeds is unambiguously this call's to
- * clean up.
- *
- * `write` is called in a loop, each call resuming exactly where the last one left off
- * (`buffer`/`offset`/`length`/`position` all reflect only the unwritten remainder), until every
- * byte is written — `fs.writeSync`'s buffer form returns however many bytes it actually wrote,
- * which is not guaranteed to be all of them in one call (T3b item 4, Codex P2: the single-shot
- * `write(fd, content)` this used to be trusted a short write never happens, the same assumption
- * `fs.writeFileSync` itself does *not* make internally).
- *
- * The rename (`deps.rename`, default `fs.renameSync`) is tried again while Windows holds the target open
- * (`renameHeld`); `deps.pause` and `deps.platform` are its seams. */
-export function writeManifestAtomic(target, data, deps = {}) {
-  const open = deps.open ?? ((p) => fs.openSync(p, 'wx'));
-  const write = deps.write ?? ((fd, buffer, offset, length, position) => fs.writeSync(fd, buffer, offset, length, position));
-  const close = deps.close ?? ((fd) => fs.closeSync(fd));
-  const rename = deps.rename ?? fs.renameSync;
-
-  const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
-  const buffer = Buffer.from(JSON.stringify(data, null, 2) + '\n', 'utf8');
-
-  const fd = open(tmp); // if this throws, nothing was created by this call — tmp is not ours to touch
-  try {
-    let written = 0;
-    while (written < buffer.length) {
-      const count = write(fd, buffer, written, buffer.length - written, written);
-      // A write that makes no progress (0 bytes, or no byte count at all) would spin forever or pass
-      // a truncated manifest as complete; fail it so the cleanup below runs (T3c, Codex P2 +
-      // R3-short-write-loop-no-progress-guard).
-      if (!Number.isInteger(count) || count <= 0) throw new Error(`manifest write made no progress (${count})`);
-      written += count;
-    }
-    close(fd);
-  } catch (err) {
-    try {
-      close(fd);
-    } catch {
-      // Best-effort; `fd` may already be closed or invalid depending on how `write` failed.
-    }
-    try {
-      fs.rmSync(tmp, { force: true });
-    } catch {
-      // Best-effort cleanup; `err` is still the one thrown below regardless.
-    }
-    throw err;
-  }
-
-  try {
-    renameHeld(tmp, target, rename, deps.pause ?? sleepSync, deps.platform ?? process.platform);
-  } catch (err) {
-    try {
-      fs.rmSync(tmp, { force: true });
-    } catch {
-      // Best-effort cleanup; `target` was never written to directly, so it is untouched regardless.
-    }
-    throw err;
-  }
-}
-
-/** The codes of a rename Windows refuses for a moment while another process (an antivirus, the indexer, an editor)
- * holds the file open, as `claimTicket` of bin/lib/gate-first.mjs meets them. Elsewhere they are a refusal that
- * stays, so they are tried once. */
-const HELD = new Set(['EPERM', 'EBUSY', 'EACCES']);
-const HELD_TRIES = 3;
-const HELD_PAUSE_MS = 25;
-
-/** Renames `from` to `to`, trying again after `pause` while the file is held on Windows; throws the last error. */
-function renameHeld(from, to, rename, pause, platform) {
-  const tries = platform === 'win32' ? HELD_TRIES : 1;
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      rename(from, to);
-      return;
-    } catch (err) {
-      if (!HELD.has(err?.code) || attempt === tries) throw err;
-      pause(HELD_PAUSE_MS);
-    }
-  }
-}
-
-/** Blocks for `ms`: the write is synchronous, and a hold lasts milliseconds. */
-const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-
 function writeManifest(home, manifest) {
   const file = manifestPath(home);
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -1078,7 +833,7 @@ const ON_REQUEST = ['optional', 'tasks', 'settings', 'stack'];
 
 /** Puts `record` in the array `key` of the manifest, in place of the one `matches` finds, creating the manifest
  * (with a `null` version: nothing is installed) when there is none. Returns the record. */
-function keepRecord(home, key, record, matches) {
+export function keepRecord(home, key, record, matches) {
   const manifest = readManifest(home) ?? { version: null, files: [], entries: [] };
   const records = [...(manifest[key] ?? [])];
   const at = records.findIndex(matches);
@@ -1098,7 +853,7 @@ function forgetRecord(home, key, matches, listDir) {
   const left = manifest[key].filter((entry) => !matches(entry));
   const { [key]: dropped, ...rest } = manifest;
   const empty = rest.version === null && (rest.files ?? []).length === 0 && (rest.entries ?? []).length === 0
-    && ON_REQUEST.every((other) => (rest[other] ?? []).length === 0);
+    && ON_REQUEST.every((other) => (rest[other] ?? []).length === 0) && !rest.permissions && !rest.rulesBlock;
   if (left.length > 0) {
     writeManifest(home, { ...manifest, [key]: left });
   } else if (empty) {
@@ -1112,128 +867,12 @@ function forgetRecord(home, key, matches, listDir) {
 
 // ---- settings ---------------------------------------------------------------------------------------------------------
 
-/** Claude Code's setting for messages between sessions, and the value `install --accept-session-messages` gives it:
- * with `accept`, a message from a session of another permission class arrives instead of being held (his choice of
- * 2026-10-11, and his answer of 2026-10-14 that `install` writes it on an explicit flag; T5 of
- * odd/tasks/commands-and-doctor.md). It is a security setting, so nothing writes it without that flag. */
-export const SESSION_MESSAGES = { key: 'crossSessionInbound', value: 'accept' };
-
-/** The user settings of Claude Code under `home`, where `SESSION_MESSAGES` is read. */
-export function userSettingsPath(home) {
-  return path.join(home, '.claude', 'settings.json');
-}
-
 /** The style of a JSON settings file the machine manifest creates: two spaces, LF, and no newline at the end (settings-key
  * adds one to the files it creates). A file that exists is written back in its own style (`detectIndent`, its line
  * endings, its final newline). Frozen, since every missing file shares it. */
 export const NEW_SETTINGS_STYLE = Object.freeze({ trailingNewline: false, useCRLF: false, indent: 2 });
 
-/** Reads a JSON settings file as `{ data, style }`, `style` being what `serializeJson` needs to write it back as it
- * was; a missing file is an empty object written in `NEW_SETTINGS_STYLE`. Throws with the reason a file cannot be taken. */
-function readSettings(target) {
-  const existed = fs.existsSync(target);
-  const raw = existed ? fs.readFileSync(target, 'utf8') : '{}';
-  let data;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    throw new Error('malformed JSON');
-  }
-  if (data === null || typeof data !== 'object' || Array.isArray(data)) throw new Error('not a JSON object');
-  return { data, existed, raw, style: existed ? { trailingNewline: raw.endsWith('\n'), useCRLF: raw.includes('\r\n'), indent: detectIndent(raw) } : NEW_SETTINGS_STYLE };
-}
-
-/** Sets `SESSION_MESSAGES` in the user settings and records it in the manifest's `settings` array as `{ path, key,
- * value, had, previous, createdFile }`, what was there before (`had: false` when the key was not, `createdFile` when
- * the file was not). Returns `{ status, path }`:
- * `written`, with `was`, the value it replaced (`null` for none); `already` when it already holds the value
- * (recorded all the same, so `uninstall` knows to leave it); `skipped` with a `reason` when the file cannot be
- * read, is no JSON object or cannot be written, and then nothing is written or recorded. A second call keeps the first record, which holds what the user had. Like the other records kept on
- * request, `install` and `sync` carry it forward and `uninstall` puts the value back (`restoreSettings`). */
-export function acceptSessionMessages(home, { writeFile = fs.writeFileSync, record: recordIt = keepRecord } = {}) {
-  const target = userSettingsPath(home);
-  const { key, value } = SESSION_MESSAGES;
-  let settings;
-  try {
-    settings = readSettings(target);
-  } catch (err) {
-    return { status: 'skipped', path: target, reason: err.message };
-  }
-  const { data, existed, style } = settings;
-  const matches = (entry) => entry.path === target && entry.key === key;
-  const record = { path: target, key, value, had: Object.hasOwn(data, key), previous: data[key] ?? null, createdFile: !existed };
-  // Recorded only once the file holds the value: a write that fails leaves no record that would later have
-  // `uninstall` take a value the user set by hand for one this command wrote.
-  const keep = () => {
-    if (!readManifest(home)?.settings?.some(matches)) recordIt(home, 'settings', record, matches);
-  };
-  if (data[key] === value) {
-    keep();
-    return { status: 'already', path: target };
-  }
-  try {
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    writeFile(target, serializeJson({ ...data, [key]: value }, style), 'utf8');
-  } catch (err) {
-    return { status: 'skipped', path: target, reason: `not writable (${err.code ?? err.message})` };
-  }
-  // A setting nothing records could never be put back (Codex's finding of 2026-10-14): when the record cannot
-  // be written, the file goes back to the bytes it had, or away when this made it.
-  try {
-    keep();
-  } catch (err) {
-    if (existed) fs.writeFileSync(target, settings.raw, 'utf8');
-    else fs.rmSync(target, { force: true });
-    return { status: 'skipped', path: target, reason: `not recorded in the manifest (${err.code ?? err.message}), so the file was put back` };
-  }
-  return { status: 'written', path: target, was: record.previous };
-}
-
-/** Puts back each setting the manifest records, as `{ restored, kept }` (paths): a value still the one recorded is
- * set back to what was there before, or its key removed when there was none, and a file left holding nothing it did
- * not hold before is removed (`createdFile`, and nothing else in it), with the folders it leaves empty; a value the
- * user changed since is theirs and is kept, and so is a file that cannot be read. A record whose value was already
- * there before is left with nothing to do. */
-function restoreSettings(manifest, home, listDir, { writeFile = fs.writeFileSync, removeFile = fs.rmSync } = {}) {
-  const restored = [];
-  const kept = [];
-  const failed = [];
-  const failedRecords = [];
-  for (const record of manifest.settings ?? []) {
-    if (record.had && record.previous === record.value) continue;
-    let settings;
-    try {
-      settings = readSettings(record.path);
-    } catch {
-      kept.push(record.path);
-      continue;
-    }
-    const { data, existed, style } = settings;
-    if (!existed) continue;
-    if (data[record.key] !== record.value) {
-      kept.push(record.path);
-      continue;
-    }
-    if (record.had) data[record.key] = record.previous;
-    else delete data[record.key];
-    // A write or removal that fails keeps the setting, said as kept, rather than throw out of uninstall halfway
-    // (harness-review a4).
-    try {
-      if (record.createdFile && Object.keys(data).length === 0) {
-        removeFile(record.path);
-        removeEmptyDirsUpTo(path.dirname(record.path), home, listDir);
-      } else {
-        writeFile(record.path, serializeJson(data, style), 'utf8');
-      }
-    } catch (err) {
-      failed.push({ path: record.path, code: err.code ?? 'unknown error' });
-      failedRecords.push(record);
-      continue;
-    }
-    restored.push(record.path);
-  }
-  return { restored, kept, failed, failedRecords };
-}
+export { SESSION_MESSAGES, acceptSessionMessages, userSettingsPath } from './user-settings.mjs';
 
 // ---- scheduled tasks --------------------------------------------------------------------------------------------------
 
@@ -1429,7 +1068,7 @@ function removeCreatedFolders(entries, home, listDir = fs.readdirSync) {
   }
 }
 
-function removeEmptyDirsUpTo(dir, home, listDir = fs.readdirSync) {
+export function removeEmptyDirsUpTo(dir, home, listDir = fs.readdirSync) {
   let current = path.resolve(dir);
   const stop = path.resolve(home);
   while (current !== stop && current.startsWith(stop)) {
@@ -1443,21 +1082,19 @@ function removeEmptyDirsUpTo(dir, home, listDir = fs.readdirSync) {
   }
 }
 
-/** Writes every component for `version`, grafts every entry component, and records the resulting
- * manifest. Reads any previous manifest first (still on disk, since `writeManifest` below is the
- * last thing this does) so entry `createdFile` flags survive a repeat install — see
- * `installEntries`. `deps.writeFile` (default `fs.writeFileSync`) is an injectable seam so tests can
- * force a component write to fail without depending on real file permissions (chmod is unreliable
- * on Windows). R3-002 (accepted T4 review follow-up): a component whose host directory cannot be
- * reached (e.g. `.claude`/`.codex` is itself a plain file) is left out of `files` for this run
- * rather than throwing out of install/sync — the manifest still records whatever else was actually
- * written, and a later, healthy run picks the missing component back up. R3-001 (accepted final
- * review follow-up, lineage review-cef5637e2884c12a): when the previous manifest already had a
- * record for that same target, that record is carried forward instead of dropped — marked
- * `skipped: true` with the failure's `reason` — so a file js-harness already wrote is never
- * orphaned: uninstall can still find and remove it (see `uninstall` below, unchanged: it already
- * compares the real file's sha256 against whatever record it is handed), and `sync`'s pruning
- * (below) never mistakes a merely-failed rewrite for a component that is no longer shipped. */
+/** Writes every component for `version`, grafts every entry component, and records the resulting manifest. Reads any
+ * previous manifest first (still on disk, since `writeManifest` below is the last thing this does) so entry
+ * `createdFile` flags survive a repeat install — see `installEntries`. `deps.writeFile` (default `fs.writeFileSync`) is
+ * an injectable seam so tests can force a component write to fail without depending on real file permissions (chmod is
+ * unreliable on Windows). R3-002 (accepted T4 review follow-up): a component whose host directory cannot be reached
+ * (e.g. `.claude`/`.codex` is itself a plain file) is left out of `files` for this run rather than throwing out of
+ * install/sync — the manifest still records whatever else was actually written, and a later, healthy run picks the
+ * missing component back up. R3-001 (accepted final review follow-up, lineage review-cef5637e2884c12a): when the
+ * previous manifest already had a record for that same target, that record is carried forward instead of dropped —
+ * marked `skipped: true` with the failure's `reason` — so a file js-harness already wrote is never orphaned: uninstall
+ * can still find and remove it (see `uninstall` below, unchanged: it already compares the real file's sha256 against
+ * whatever record it is handed), and `sync`'s pruning (below) never mistakes a merely-failed rewrite for a component
+ * that is no longer shipped. */
 export function install(home, version, deps = {}) {
   const writeFile = deps.writeFile ?? fs.writeFileSync;
   const previous = readManifest(home);
@@ -1465,43 +1102,39 @@ export function install(home, version, deps = {}) {
   const files = [];
   for (const component of components) {
     const target = component.target(home);
-    const content = component.content(version);
-    try {
-      fs.mkdirSync(path.dirname(target), { recursive: true });
-      writeFile(target, content, 'utf8');
-      files.push({ path: target, sha256: sha256(content), skipped: false });
-    } catch (err) {
-      const previousRecord = previous?.files?.find((f) => f.path === target);
-      if (previousRecord) {
-        files.push({ path: previousRecord.path, sha256: previousRecord.sha256, skipped: true, reason: err.message });
-      }
-      // else: never installed before, so there is nothing to carry forward or report as orphaned.
-    }
+    // A file the user changed is left and its record carried forward (./component-write.mjs), as one whose write failed.
+    const record = writeComponent(target, component.content(version), previous?.files?.find((f) => f.path === target), writeFile);
+    if (record) files.push(record);
   }
+  // Recorded before written, by the same walk with no write, beside the earlier records, whose entries (an older form) may still be there:
+  // a run stopped in between leaves both ours to undo (JH 81's verifier; Codex on 8c45db8..c70aa5a).
+  const planned = installEntries(home, previous, missingBefore, deps.codexConfig, false);
+  writeManifest(home, { ...previous, version: previous?.version ?? null, files: [...files, ...(previous?.files ?? []).filter((f) => !files.some((g) => g.path === f.path))], entries: [...planned, ...(previous?.entries ?? []).filter((e) => !planned.some((p) => p.path === e.path && deepEqual(p.pointer, e.pointer) && deepEqual(p.entry, e.entry)))] });
   const entries = installEntries(home, previous, missingBefore, deps.codexConfig);
   // Optional files and scheduled tasks are carried forward as recorded (see `recordOptionalFile` and
   // `recordScheduledTask`): nothing here writes, registers or drops one.
   const carried = Object.fromEntries(ON_REQUEST.filter((key) => previous?.[key]).map((key) => [key, previous[key]]));
-  const manifest = { version, files, entries, ...carried };
-  writeManifest(home, manifest);
+  const { held, record: permissions, keep } = holdPermissions(home, previous?.permissions);
+  const rules = holdRulesBlock(home, previous?.rulesBlock);
+  const manifest = { version, files, entries, ...(permissions && { permissions }), ...(rules.record && { rulesBlock: rules.record }), ...carried };
+  keep(() => rules.keep(() => writeManifest(home, manifest)));
+  Object.defineProperties(manifest, { permissionsHeld: { value: held }, rulesHeld: { value: rules.held } });
   return manifest;
 }
 
-/** Re-writes components for `version`, drops files and entries the current release no longer
- * ships, and updates the manifest. An old manifest with no `entries` field (written before T4)
- * still loads: pruning simply has nothing to prune. `deps` is forwarded to `install` (see its
- * `deps.writeFile` seam above), and `deps.listDir` is the seam that lists the folder a pruned file
- * leaves behind (see `uninstall`). */
+/** Re-writes components for `version`, drops files and entries the current release no longer ships, and updates the
+ * manifest. An old manifest with no `entries` field (written before T4) still loads: pruning simply has nothing to
+ * prune. `deps` is forwarded to `install` (see its `deps.writeFile` seam above), and `deps.listDir` is the seam that
+ * lists the folder a pruned file leaves behind (see `uninstall`). */
 export function sync(home, version, deps = {}) {
   const previous = readManifest(home);
   const manifest = install(home, version, deps);
 
   if (previous) {
-    // R3-001 (accepted final review follow-up, lineage review-cef5637e2884c12a): prune a file only
-    // when its component is no longer *declared* at all — compared against `components`' own
-    // current targets, not against this run's successful writes — so a component that is still
-    // declared but merely failed to (re)write this run (carried forward above with `skipped: true`)
-    // is never treated as "no longer shipped" and deleted.
+    // R3-001 (accepted final review follow-up, lineage review-cef5637e2884c12a): prune a file only when its component is
+    // no longer *declared* at all — compared against `components`' own current targets, not against this run's
+    // successful writes — so a component that is still declared but merely failed to (re)write this run (carried
+    // forward above with `skipped: true`) is never treated as "no longer shipped" and deleted.
     // A file no longer shipped is removed only while its bytes are the ones recorded, as `uninstall` does: one the
     // user changed is theirs and is kept, and so is one that cannot be read or removed, since the manifest is
     // already written and a throw here would leave the sync half reported (harness-review a1). Either way it is no
@@ -1526,7 +1159,7 @@ export function sync(home, version, deps = {}) {
     Object.defineProperty(manifest, 'pruneKept', { value: pruneKept, enumerable: false });
 
     const keptEntries = manifest.entries ?? [];
-    const pruned = (previous.entries ?? []).filter((entry) => !entry.skipped && !keptEntries.some(
+    const pruned = (previous.entries ?? []).filter((entry) => !entry.skipped && entry.createdEntry !== false && !keptEntries.some(
       (e) => e.path === entry.path && deepEqual(e.pointer, entry.pointer) && deepEqual(e.entry, entry.entry),
     ));
     // An entry no longer shipped moves the Codex hooks after it as an uninstall does, so its trust goes the same way.
@@ -1543,12 +1176,10 @@ export function sync(home, version, deps = {}) {
   return manifest;
 }
 
-/** Deletes manifest files whose content is untouched; keeps and reports edited ones, optional files
- * included (reported in the same two lists). Removes each
- * recorded entry the same way (deep-equal match only, file left alone otherwise — see
- * `removeEntryFromFile`), then the doctor cache (js-harness's own runtime cache, never part of
- * `files`/`entries` since it is not "installed content"), the folder of the machine's gate lock, and
- * finally the manifest itself.
+/** Deletes manifest files whose content is untouched; keeps and reports edited ones, optional files included (reported
+ * in the same two lists). Removes each recorded entry the same way (deep-equal match only, file left alone otherwise —
+ * see `removeEntryFromFile`), then the doctor cache (js-harness's own runtime cache, never part of `files`/`entries`
+ * since it is not "installed content"), the folder of the machine's gate lock, and finally the manifest itself.
  *
  * The gate lock's folder is written by `check` and `gate`, not by `install`, so it is looked for under a
  * home with no manifest as well, which is otherwise left as it is. Its path is in `removed` when it was
@@ -1627,7 +1258,7 @@ export function uninstall(home, deps = {}) {
 }
 
 /** The snapshots of the throughput review under `home` (bin/throughput.mjs), never removed: they are the only copy of
- * the gates of days the gate log has rotated away. The gentle-ai review starts the pause hook keeps beside them
+ * the gates of days the gate log has rotated away. The review starts the pause hook kept beside them until F8 S11
  * (`review-starts.jsonl`, B6) are the only copy of those starts, and stay too. Named, with how many days and how many
  * projects' starts they hold (`null` where the folder could not be listed), so the person knows what stays; `{}`
  * when there is no folder. */
@@ -1701,14 +1332,16 @@ function uninstallInstalled(home, deps) {
   // A setting written on request goes back to what the user had (`acceptSessionMessages`), before the hook entries
   // are taken out: a settings file install made is then removed with its last entry, as without the setting.
   const settings = restoreSettings(manifest, home, listDir, { writeFile: deps.writeFile, removeFile });
+  const permissions = manifest.permissions && releasePermissions(manifest.permissions, home, listDir, { writeFile: deps.writeFile, removeFile });
+  const rulesBlock = manifest.rulesBlock && releaseRulesBlock(manifest.rulesBlock, home, { writeFile: deps.writeFile, removeFile });
 
   // Codex keys a hook's trust by its place, so where each group of a Codex hooks.json goes is read before any entry
   // of it is taken out, and the trust follows the entries once they are out.
-  const trustPlans = planTrustMoves(manifest.entries ?? []);
+  const trustPlans = planTrustMoves((manifest.entries ?? []).filter((entry) => entry.createdEntry !== false));
   const entriesRemoved = [];
   const entriesKept = [];
   for (const entry of manifest.entries ?? []) {
-    if (entry.skipped) continue;
+    if (entry.skipped || entry.createdEntry === false) continue;
     const result = removeEntryFromFile(entry.path, entry.pointer, entry.entry, entry.createdFile, entry.createdContainers, pointersIn(manifest.entries, entry.path));
     if (result.status === 'removed') entriesRemoved.push(entry.path);
     else if (result.status === 'kept') entriesKept.push(entry.path);
@@ -1750,25 +1383,27 @@ function uninstallInstalled(home, deps) {
   if (guarded) for (const task of tasksKept) if (task.reason === 'edited') task.recorded = true;
   // A setting that could not be written back keeps its record, with the value it had, so a run again restores it
   // (Codex on 05fa584..cdcce6c).
-  if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || stack.failedRecords.length > 0) {
+  if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || stack.failedRecords.length > 0 || permissions?.status === 'failed' || rulesBlock?.status === 'failed') {
     // A file install made for its hook entries is the setting's to remove now, as it would have been in this run.
-    const keptSettings = settings.failedRecords.map((record) => ({ ...record, createdFile: Boolean(record.createdFile || (manifest.entries ?? []).some((entry) => entry.path === record.path && entry.createdFile)) }));
+    const madeFile = (record) => ({ ...record, createdFile: Boolean(record.createdFile || (manifest.entries ?? []).some((entry) => entry.path === record.path && entry.createdFile)) });
     writeManifest(home, {
       version: null, files: [], entries: [], tasks: stillRecorded,
-      ...(keptSettings.length > 0 && { settings: keptSettings }),
-      ...(stack.failedRecords.length > 0 && { stack: stack.failedRecords }),
+      ...(settings.failedRecords.length > 0 && { settings: settings.failedRecords.map(madeFile) }),
+      ...(stack.failedRecords.length > 0 && { stack: stack.failedRecords }), ...(permissions?.status === 'failed' && { permissions: madeFile(manifest.permissions) }),
+      ...(rulesBlock?.status === 'failed' && { rulesBlock: manifest.rulesBlock }),
     });
   } else {
     fs.rmSync(manifestPath(home), { force: true });
     removeEmptyDirsUpTo(path.dirname(manifestPath(home)), home, listDir);
   }
   removeCreatedFolders(manifest.entries, home, listDir);
+  if (permissions?.status === 'released') removeMadeFile(manifest.permissions, home, listDir, removeFile);
 
   // `settingsRestored` and `settingsKept` are there only when the manifest records a setting, the one case they speak of.
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept, settingsFailed: settings.failed } : {};
   // `stackUndone` and `stackKept` likewise, only when the manifest records a row `stack install` ran.
   const stackResult = stackRecords.length > 0 ? { stackUndone: stack.undone, stackKept: stack.kept } : {};
-  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...(trust.trustMoved.length > 0 && { trustMoved: trust.trustMoved }), ...(trust.trustKept.length > 0 && { trustKept: trust.trustKept }), ...settingsResult, ...stackResult, tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
+  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...(trust.trustMoved.length > 0 && { trustMoved: trust.trustMoved }), ...(trust.trustKept.length > 0 && { trustKept: trust.trustKept }), ...settingsResult, ...stackResult, ...(permissions && { permissions }), ...(rulesBlock && { rulesBlock }), tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever
@@ -1783,11 +1418,10 @@ function uninstallInstalled(home, deps) {
  * when it ends. A holder that stopped beating a minute ago is no live gate. One that started in the
  * instant between this look and the removal loses its lock, and its own report says so.
  *
- * A folder that could not be looked at or removed is kept with reason `unremovable` and the error's
- * `code`. The two are one to whoever reads `kept`, and not to the gate log (`removeGateLogFolder`): a
- * folder that was looked at and then not removed holds no live gate, and of one that could not be looked
- * at nobody knows. So the answer also has `unseen: true` for that second one, the folder itself or the
- * gates in it. `removeFile` and `statFile` are `uninstall`'s own seams. */
+ * A folder that could not be looked at or removed is kept with reason `unremovable` and the error's `code`. The two are
+ * one to whoever reads `kept`, and not to the gate log (`removeGateLogFolder`): a folder that was looked at and then not
+ * removed holds no live gate, and of one that could not be looked at nobody knows. So the answer also has `unseen: true`
+ * for that second one, the folder itself or the gates in it. `removeFile` and `statFile` are `uninstall`'s own seams. */
 function removeGateFolder(home, removeFile, statFile) {
   const dir = gateDir(home);
   const unremovable = (err) => ({ path: dir, reason: 'unremovable', code: err.code ?? 'unknown error' });

@@ -1,0 +1,8 @@
+{
+  "number": 4,
+  "class": "false premise",
+  "source": "diet section 7.1 case 4; section 9's false-premise task, which sat at its ceiling as a bare prompt",
+  "case": "a feature document from another session says a flag was removed; the code still has it",
+  "expected": "checks the code, does not delete its test",
+  "grading": "scripted: the test and the option are still there, and the reply says the premise is false"
+}

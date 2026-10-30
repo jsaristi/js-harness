@@ -16,10 +16,11 @@ import { readManifest } from './manifest.mjs';
 import { entryPlaces, snakeEvent, trustedPlaces } from './codex-trust.mjs';
 import { takeSnapshot } from './process-tree.mjs';
 import { isLoginLauncher, launcherStart, locate, lookUpProcesses, readState, remoteFiles, remoteId, remoteStartCommand } from './remote.mjs';
-import { INSTALL_NEWEST } from './version.mjs';
+import { INSTALL_NEWEST, compareSemver } from './version.mjs';
 import { MEMORY_RULES_FIX, memoryRulesState } from './memory-rules.mjs';
 import { SESSION_CLASSES_FIX, sessionClassesState } from './session-classes.mjs';
 import { PNPM_LOCK_FIX, pnpmLockState } from './pnpm-lock.mjs';
+import { desktopDir } from './backup.mjs';
 
 const SEMVER_RE = /(\d+\.\d+\.\d+)/;
 // R3-001 (accepted T1 review follow-up): a hung probe must never block `doctor` — kill it and
@@ -113,96 +114,23 @@ export function claudeJsonMcpServer(home, name, projectRoot) {
   return { state: entry ? 'ok' : 'missing', entry };
 }
 
+/** Whether Claude Code turns context7 off for the project `project`: `/mcp` writes `projects[<root>].disabledMcpServers`
+ * into `<home>/.claude.json` (odd/tasks/f8-s11-complements.md, L5), keyed with forward slashes on Windows. `missing`
+ * where it lists context7, `unknown` for malformed JSON, else `ok`. */
+function context7ProjectState(home, project) {
+  const { found, data } = readJsonFile(path.join(home, '.claude.json'));
+  if (!found) return 'ok';
+  if (data === undefined) return 'unknown';
+  const entry = data?.projects?.[project] ?? data?.projects?.[project.replaceAll('\\', '/')];
+  return Array.isArray(entry?.disabledMcpServers) && entry.disabledMcpServers.includes('context7') ? 'missing' : 'ok';
+}
+
 /** `<home>/.claude/settings.json` `enabledPlugins["<id>"]`. */
 function claudeEnabledPlugin(home, pluginId) {
   const { found, data } = readJsonFile(path.join(home, '.claude', 'settings.json'));
   if (!found) return 'missing';
   if (data === undefined) return 'unknown';
   return data?.enabledPlugins?.[pluginId] === true ? 'ok' : 'missing';
-}
-
-/** `<home>/.gentle-ai/state.json` `installed_agents` membership. */
-function gentleAiInstalledAgent(home, agent) {
-  const { found, data } = readJsonFile(path.join(home, '.gentle-ai', 'state.json'));
-  if (!found) return 'missing';
-  if (data === undefined) return 'unknown';
-  return Array.isArray(data?.installed_agents) && data.installed_agents.includes(agent) ? 'ok' : 'missing';
-}
-
-// Where each host keeps its hooks, relative to the home.
-const HOST_HOOKS_FILES = {
-  claude: ['.claude', 'settings.json'],
-  codex: ['.codex', 'hooks.json'],
-};
-// `gentle-ai <command>` where a command can start, and nowhere else: at the start of the hook
-// command, after a separator (`;`, `&`, `|`, `(`, `{`, a newline), or right after the opening quote
-// of a shell's command-string flag (`-Command '`, `-c "`). Then an optional quote, an optional path
-// ending in `/` or `\`, the bare or `.exe` binary, an optional closing quote and the command word.
-// Anything else (`echo gentle-ai x`, `my-gentle-ai x`, text inside a quoted message) is left
-// unclassified on purpose: doctor makes no claim about a hook it cannot read as a call.
-const GENTLE_AI_CALL_RE =
-  /(?:^|[;&|({\n]|-[Cc](?:ommand)?\s+["'])\s*["']?(?:[^\s"']*[\\/])?gentle-ai(?:\.exe)?["']?\s+([A-Za-z][\w-]*)/g;
-
-/** Every hook command in a hooks config (`hooks.<Event>[].hooks[].command`, the shape both hosts
- * use), as `{ event, command }`. A missing or malformed file, or a shape that does not match,
- * contributes nothing: this is read-only evidence gathering, so it never throws. */
-function hookCommands(filePath) {
-  const hooks = readJsonFile(filePath).data?.hooks;
-  if (!hooks || typeof hooks !== 'object') return [];
-  const found = [];
-  for (const [event, groups] of Object.entries(hooks)) {
-    for (const group of Array.isArray(groups) ? groups : []) {
-      for (const hook of Array.isArray(group?.hooks) ? group.hooks : []) {
-        if (typeof hook?.command === 'string') found.push({ event, command: hook.command });
-      }
-    }
-  }
-  return found;
-}
-
-/** The commands `gentle-ai help` lists: inside a section whose header line names `COMMANDS` (it ends
- * at the next unindented line), a line indented by exactly two spaces is a command line and its
- * first word is the command; deeper lines continue the one above. Other sections, such as `USAGE`,
- * are never read, so help that is only partly understood yields nothing. This is the only thing
- * ever run to learn them: probing a hook's own command could execute it. `null` when help cannot be
- * run or yields no command lines, so the caller makes no claim without evidence. */
-function gentleAiListedCommands(deps) {
-  const result = spawnProbe('gentle-ai', ['help'], deps);
-  if (!result || result.error || probeTimedOut(result) || result.status !== 0) return null;
-  const listed = new Set();
-  let inCommands = false;
-  for (const line of String(result.stdout ?? '').split(/\r?\n/)) {
-    if (/^\S/.test(line)) inCommands = line.includes('COMMANDS');
-    const match = inCommands ? /^ {2}([A-Za-z][\w-]*)(?:\s|$)/.exec(line) : null;
-    if (match) listed.add(match[1]);
-  }
-  return listed.size > 0 ? listed : null;
-}
-
-/** Per configured host, one fix line for each hook that runs a `gentle-ai` command `gentle-ai
- * help` does not list (gentle-ai 4 removed `sdd-*` but `sync` left its hooks behind). `help` is
- * spawned at most once, and only when some hook calls gentle-ai at all. */
-function deadGentleAiHooks(deps, cells) {
-  const withCalls = [];
-  for (const [host, parts] of Object.entries(HOST_HOOKS_FILES)) {
-    if (cells[host] !== 'ok') continue;
-    const hooks = hookCommands(path.join(deps.home, ...parts)).filter(({ command }) =>
-      command.match(GENTLE_AI_CALL_RE),
-    );
-    if (hooks.length > 0) withCalls.push({ host, file: `~/${parts.join('/')}`, hooks });
-  }
-  const listed = withCalls.length > 0 ? gentleAiListedCommands(deps) : null;
-  const dead = {};
-  for (const { host, file, hooks } of withCalls) {
-    for (const { event, command } of hooks) {
-      const unlisted = [...command.matchAll(GENTLE_AI_CALL_RE)].map((m) => m[1]).find((word) => !listed?.has(word));
-      if (!listed || !unlisted) continue;
-      (dead[host] ??= []).push(
-        `remove the hook "${command}" (${event}) from ${file}: "gentle-ai help" lists no "${unlisted}" command`,
-      );
-    }
-  }
-  return dead;
 }
 
 /** context7 has no CLI: its installed version comes from how Claude Code has it registered. A
@@ -269,13 +197,18 @@ function codexLoginState(deps) {
   return result && !result.error && result.status === 0 ? 'ok' : 'missing';
 }
 
-const GENTLE_AI_UPGRADE_FIX = ['gentle-ai upgrade', 'gentle-ai sync'];
-
 const ENGRAM_PLUGIN = 'engram@engram';
 // The catalog first: on 2026-10-20 the installed plugin's commit was the marketplace clone's HEAD, 21 commits behind
 // the refs Claude Code had fetched, its catalog still naming 0.1.12. Both commands verified by `--help` that day,
 // neither run (odd/tasks/engram-plugin-lag.md, D3).
 const ENGRAM_PLUGIN_UPDATE_FIX = ['claude plugin marketplace update engram', `claude plugin update ${ENGRAM_PLUGIN}`];
+/** Where engram's README installs its binary from (v3.6.0, "Install"): its releases, or Homebrew on a Mac. It has no
+ * package on npm or pnpm, so the line is the person's to follow (odd/tasks/f8-s11-complements.md, L3 and L4). */
+export const ENGRAM_INSTALL =
+  'install engram from https://github.com/Gentleman-Programming/engram/releases (on a Mac: brew install gentleman-programming/tap/engram)';
+/** engram's own setup of Claude Code: the plugin's marketplace, the plugin, and the MCP entry, which it reads back and
+ * never writes over one with another command (engram v3.6.0, `internal/setup/setup.go`, `installClaudeCode`). */
+export const ENGRAM_SETUP_CLAUDE = 'engram setup claude-code';
 
 /** The global install of `spec` as the machine's package manager runs it: `resolveStackPm` decides it, as `planStack` does,
  * so a pnpm machine is told `pnpm add -g` and never `npm` (the stack rule). npm keeps `i -g`, the line doctor always
@@ -299,42 +232,9 @@ function installLine(spec, { env, platform = process.platform }) {
  * twice. `when`, when given, decides whether a tool is shown at all (`probeStack` leaves out a tool
  * whose `when` says no). Adding a tool never touches
  * `probeTool`/`probeStack` below, the same split `components` uses in manifest.mjs. Commands
- * verified on this machine 2026-09-26 (`codex mcp add --help`, `claude mcp add --help`, `gentle-ai
- * --help`) — see odd/tasks/stack-doctor.md. */
+ * verified on this machine 2026-09-26 (`codex mcp add --help`, `claude mcp add --help`) — see odd/tasks/stack-doctor.md;
+ * engram's own read in its v3.6.0 source on 2026-10-28 (odd/tasks/f8-s11-complements.md, L3). */
 export const tools = [
-  {
-    id: 'gentle-ai',
-    installed: (deps) => probeVersionCommand('gentle-ai', ['version'], deps),
-    // A configured host whose hooks call a command `gentle-ai help` no longer lists is `stale`;
-    // `staleHooks` (its fix lines per host) is internal: `probeTool` never copies it into the row.
-    configured: (deps) => {
-      const cells = {
-        claude: gentleAiInstalledAgent(deps.home, 'claude-code'),
-        codex: gentleAiInstalledAgent(deps.home, 'codex'),
-      };
-      const staleHooks = deadGentleAiHooks(deps, cells);
-      for (const host of Object.keys(staleHooks)) cells[host] = 'stale';
-      return Object.keys(staleHooks).length > 0 ? { ...cells, staleHooks } : cells;
-    },
-    project: () => 'n/a',
-    // `gentle-ai upgrade` cannot cross a Go major (v4 lives at a new module path, so from 3.7.0 it
-    // upgraded engram and left gentle-ai behind): then the fix is `go install` for that path. It
-    // needs the latest version, which is only known once `doctor` has resolved it, so `doctor`
-    // applies it on top of `fix.upToDate`. Unknown or unparseable versions keep `fix.upToDate`.
-    upToDateFix: (installed, latest) => {
-      const [from, to] = [installed, latest].map((v) => SEMVER_RE.exec(v ?? '')?.[1]);
-      const [fromMajor, toMajor] = [from, to].map((v) => v?.split('.')[0]);
-      if (!from || !to || Number(toMajor) <= Number(fromMajor)) return GENTLE_AI_UPGRADE_FIX;
-      const module = `github.com/gentleman-programming/gentle-ai/v${toMajor}/cmd/gentle-ai`;
-      return [`go install ${module}@v${to}`, 'gentle-ai sync'];
-    },
-    fix: (_deps, configured) => ({
-      installed: 'see https://github.com/Gentleman-Programming/gentle-ai',
-      claude: configured?.staleHooks?.claude ?? 'gentle-ai install',
-      codex: configured?.staleHooks?.codex ?? 'gentle-ai install',
-      upToDate: GENTLE_AI_UPGRADE_FIX,
-    }),
-  },
   {
     id: 'engram',
     installed: (deps) => probeVersionCommand('engram', ['version'], deps),
@@ -343,30 +243,46 @@ export const tools = [
       codex: hasCodexMcpServer(codexHomeOf(deps), 'engram') ? 'ok' : 'missing',
     }),
     project: () => 'n/a',
+    // engram's own commands (F8 S11): its binary from its releases, and `engram setup` for each host, which writes the
+    // MCP entry with the binary's absolute path (and, in Claude Code, the plugin).
     fix: () => ({
-      installed: 'gentle-ai upgrade',
-      claude: 'gentle-ai sync',
-      codex: 'gentle-ai sync',
-      upToDate: 'gentle-ai upgrade',
+      installed: ENGRAM_INSTALL,
+      claude: ENGRAM_SETUP_CLAUDE,
+      codex: 'engram setup codex',
+      upToDate: ENGRAM_INSTALL,
     }),
   },
   {
-    // engram's Claude Code plugin, whose hooks run in every Claude session: shown only while it is installed and
-    // enabled, so a machine without it sees no row and no gap. Its latest version is the one the engram binary's
-    // own release tag ships (`LOCAL_SOURCES` in latest.mjs), not the newest plugin: an update of the binary alone
-    // left the plugin two versions behind on 2026-10-20 (odd/tasks/engram-plugin-lag.md).
+    // engram's Claude Code plugin, whose hooks run in every Claude session: a row on every machine since F8 S11, which
+    // installs it with engram's own setup, so a missing or disabled plugin is a gap. Its latest version is the one the
+    // engram binary's own release tag ships (`LOCAL_SOURCES` in latest.mjs), not the newest plugin: an update of the
+    // binary alone left the plugin two versions behind on 2026-10-20 (odd/tasks/engram-plugin-lag.md).
     id: 'engram-plugin',
-    when: ({ home }) => pluginInstalledVersion(home, ENGRAM_PLUGIN).state === 'ok' && claudeEnabledPlugin(home, ENGRAM_PLUGIN) === 'ok',
+    // Shown unless the project's engramPlugin switch is off (a custom preset that drops it, F8 S11 L9).
+    when: (deps) => deps.functions?.engramPlugin?.value !== 'off',
     installed: ({ home }) => pluginInstalledVersion(home, ENGRAM_PLUGIN),
     configured: ({ home }) => ({ claude: claudeEnabledPlugin(home, ENGRAM_PLUGIN), codex: 'n/a' }),
     project: () => 'n/a',
     // The versions go in the fix, since the row shows only the installed one: `rows` holds the engram binary's.
-    upToDateFix: (installed, latest, rows = []) => {
-      if (!installed || !latest) return ENGRAM_PLUGIN_UPDATE_FIX;
+    upToDateFix: (installed, latest, rows = [], { home, platform = process.platform } = {}) => {
       const binary = rows.find((row) => row.id === 'engram')?.version;
+      // No latest with a binary version is a tag the marketplace clone lacks: since 2026-10-27 Claude Code clones it
+      // shallow, without tags (odd/tasks/doctor-rows.md, `## Engram plugin`). Fetching that one tag lets doctor read it.
+      if (installed && !latest && binary && home) {
+        const clone = path.join(home, '.claude', 'plugins', 'marketplaces', 'engram');
+        return [
+          `the plugin engram v${binary} ships cannot be read from tag v${binary} of Claude Code's engram marketplace clone, which it clones shallow, without tags; fetch that tag into the clone, then run doctor again:`,
+          `git -C ${shownWord(clone, platform)} fetch --depth 1 origin tag v${binary}`,
+        ];
+      }
+      if (!installed || !latest) return ENGRAM_PLUGIN_UPDATE_FIX;
+      // Ahead of the binary's tag is doctor's `mismatch` (row 11): the binary moves, not the plugin.
+      if (compareSemver(installed, latest) > 0) {
+        return [`plugin ${installed} is ahead of ${latest}, the plugin engram v${binary} ships, so the two serve different protocols; update the engram binary, then restart Claude Code:`, ENGRAM_INSTALL];
+      }
       return [`plugin ${installed} is behind ${latest}, the plugin engram v${binary} ships; update it, then restart Claude Code:`, ...ENGRAM_PLUGIN_UPDATE_FIX];
     },
-    fix: () => ({ upToDate: ENGRAM_PLUGIN_UPDATE_FIX }),
+    fix: () => ({ installed: ENGRAM_SETUP_CLAUDE, claude: `claude plugin enable ${ENGRAM_PLUGIN}`, upToDate: ENGRAM_PLUGIN_UPDATE_FIX }),
   },
   {
     id: 'codegraph',
@@ -388,7 +304,7 @@ export const tools = [
       installed: installLine('@colbymchenry/codegraph', { env, platform }),
       claude: 'claude mcp add -s user codegraph -- codegraph serve --mcp',
       codex: 'codex mcp add codegraph -- codegraph serve --mcp',
-      project: `gentle-ai codegraph init --cwd ${project || '<project root>'}`,
+      project: `codegraph init --yes ${project ? shownWord(project, platform) : '<project root>'}`,
       upToDate: installLine('@colbymchenry/codegraph', { env, platform }),
     }),
   },
@@ -399,12 +315,15 @@ export const tools = [
       claude: claudeJsonMcpServer(deps.home, 'context7', deps.project).state,
       codex: hasCodexMcpServer(codexHomeOf(deps), 'context7') ? 'ok' : 'missing',
     }),
-    project: () => 'n/a',
+    // Required in every project (G11): a gap where Claude Code turns it off for this one (F8 S11, L6).
+    project: ({ home, project }) => (project ? context7ProjectState(home, project) : 'n/a'),
     // No `installed` fix: context7 has no CLI of its own to install — being registered nowhere
     // already shows up as both `claude` and `codex` gaps, each with its own registration command.
     fix: () => ({
       claude: 'claude mcp add -s user --transport http context7 https://mcp.context7.com/mcp',
       codex: 'codex mcp add context7 --url https://mcp.context7.com/mcp',
+      // No command turns a user-scope server back on for one project (L5): `/mcp` does, inside it.
+      project: 'in a Claude Code session in this project, run /mcp and enable context7',
       // Hosted context7 is never `outdated` (see doctor.mjs's computeUpToDate) — this only fires
       // for a self-run registration, whose fix is reinstalling pinned to npm's newest version.
       upToDate: 'claude mcp add -s user context7 -- npx -y @upstash/context7-mcp@latest',
@@ -450,11 +369,8 @@ export const tools = [
   },
 ];
 
-// Where the desktop app keeps its config, under the home, on the platforms it has one this reads.
-const DESKTOP_APP_CONFIG = {
-  win32: ['AppData', 'Roaming', 'Claude', 'config.json'],
-  darwin: ['Library', 'Application Support', 'Claude', 'config.json'],
-};
+// The platforms whose desktop app config this reads: its folder is `desktopDir`'s.
+const DESKTOP_APP_PLATFORMS = new Set(['win32', 'darwin']);
 
 /** The account identifier at `keys` in the JSON file at `filePath`, or `null` when it cannot be had: no file,
  * one that cannot be read or parsed, or anything at that key but a non-blank string. Nothing else of the file
@@ -468,15 +384,15 @@ function accountIdentifier(filePath, keys) {
 /** Whether the Claude Code CLI and the desktop app are signed into the same account: a session opened from
  * the phone runs on this machine only when they are, and when they are not the phone just says the session is
  * not available. The CLI's identifier is `oauthAccount.accountUuid` in `<home>/.claude.json`, the app's is
- * `lastKnownAccountUuid` in its `config.json`; both paths come from `home`, never from the environment, so a
- * fixture home is read and nothing else. `ok` when both are there and equal (compared without letter case:
+ * `lastKnownAccountUuid` in the `config.json` of its folder (`desktopDir`, which follows the folder the app moved on
+ * Windows); both paths come from `home`, never from the environment, so a fixture home is read and nothing else. `ok` when both are there and equal (compared without letter case:
  * they are hexadecimal), `mismatch` when both are there and differ, `unknown` when either is missing, which
  * it always is on a platform with no known app config. Only the state is returned: that `config.json` also
  * holds token caches, and neither identifier is ever printed, stored or put in a row. */
 function claudeAccountState({ home, platform = process.platform }) {
-  const appConfig = Object.hasOwn(DESKTOP_APP_CONFIG, platform) ? DESKTOP_APP_CONFIG[platform] : null;
   const cli = accountIdentifier(path.join(home, '.claude.json'), ['oauthAccount', 'accountUuid']);
-  const app = appConfig ? accountIdentifier(path.join(home, ...appConfig), ['lastKnownAccountUuid']) : null;
+  // An empty env: `desktopDir` then places AppData under `home`, as the check's contract above says.
+  const app = DESKTOP_APP_PLATFORMS.has(platform) ? accountIdentifier(path.join(desktopDir(home, {}, platform), 'config.json'), ['lastKnownAccountUuid']) : null;
   if (cli === null || app === null) return 'unknown';
   return cli === app ? 'ok' : 'mismatch';
 }

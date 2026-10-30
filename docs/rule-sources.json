@@ -60,22 +60,93 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "siempre que te avise que me vaya a ausentar pideme lo que necesitas o lo que crees que vas a necesitar para que puedas trabajar por una horas sin problema y asi avancemos, la idea de esto es añadirlo al harness para que se vuelva aun mas inteligente",
+        "quote": "no me pidas permiso y que voy a estar ausente si te digo que te dejo solo debes tener la mayor autonomia",
+        "date": "2026-10-27",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 1478
+      },
+      {
+        "quote": "Recuerda, siempre que te avise que me vaya a ausentar pideme lo que necesitas o lo que crees que vas a necesitar para que puedas trabajar por una horas sin problema y asi avancemos, la idea de esto es añadirlo al harness para que se vuelva aun mas inteligente.",
         "date": "2026-10-11",
         "session": "130317af-a818-419c-a3de-3a21335db0a8",
         "line": 576
-      },
-      {
-        "quote": "si te he dicho que te voy a dejar solo o me voy a ausentar, no repitas y repitas los mismos comando y prompts hasta que yo diga que regrese o veas que te he hablado para que no desperdiciemos tokens necesarios",
-        "date": "2026-10-11",
-        "session": "130317af-a818-419c-a3de-3a21335db0a8",
-        "line": 3332
       }
     ],
-    "reading": "When he says he is leaving, the lead asks in that reply for everything it needs or expects to need to work for hours without him; while he is away it repeats no command, prompt or block, holding each once until he says he is back or is seen to have written, so no tokens are spent on repeats.",
-    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "reading": "On 2026-10-11 he asked that, whenever he says he will be away, the lead ask him for what it needs or expects to need to work for hours without trouble. On 2026-10-27, after the lead closed its reply listing approvals and a spend that waited for him, he answered that it should not ask him for permission, and that once he says he leaves it alone it must have the greatest autonomy. The ask before he leaves was in practice the permission he now declined, so the rule leaves: its aim, hours of work without trouble, stays in rule:away-autonomy, which has the lead say in that reply, as a fact and not a question, what only he can give; its second half, a block given once and held while he is away, moved there whole.",
+    "accepted": "Not put to him as a reading: he is away and said not to ask him; the lead's brief for JH 63 carried the words, and two readers (rule:double-review) read this reading; it is his to correct when he is back.",
     "checked": {
-      "date": "2026-10-22",
+      "date": "2026-10-27",
+      "by": "command"
+    }
+  },
+  "away-autonomy": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Listo te voy a dejar trabajando solo y cuando vuelvas me informas de todo lo que has avanzado, si quieres metemos algo antes al protocolo donde me digas antes de irme que es todo lo que s eva a hacer cuantas horas aproximadamente se va a utilizar y me dices cuanto tiempo vas a aestar trabajando o queda de trabajo para ver si las horas que me voy van a estar todas ya en cola de trabajo",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 8017
+      },
+      {
+        "quote": "Me lo puedes mostrar un con artefacto dentro del chat bien visual siempre",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 8139
+      },
+      {
+        "quote": "Excelente me va a gustando este protocolo, me gustaria añadir que si te digo que me voy 8 horas me digas la meta que se va a tener para dentro de las 8 horas para que cuando vuelva y te diga que ya volvi y me muestres lo que hemos avanzado, me muestres un artefacto en el chat donde me checkes lo que se hizo y lo que no y miramos si se cumplieron las metas",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 8213
+      },
+      {
+        "quote": "y muestrame asi como la visualizacion de salida el tiempo que se demoro y lo que fallo y el tiempo en barra de cuanto se gasto y fallo asi como me mostraste la primera visualizacion e incluso en comparativa con los tiempos estimados",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 8264
+      },
+      {
+        "quote": "Excelente, quiero que volvamos esto un protocolo del arnes y que nos sirva para ir miediendo en tiempo real nuestro flujo de trabajo, que te parece? o como crees que podemos hacerlo mejor?",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 8296
+      },
+      {
+        "quote": "añadamos esto mas al protocolo, entre todo lo que teniamos que porcentaje se cumplio y ademas quiero que me muestres el mapa y como cronologico o de fases bien completo y detallado y me checkees lo que se avanzo",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 12054
+      },
+      {
+        "quote": "si pero cada que el orquestador se pasa a otra sesion al parecer el tablero se elimina y queda desactualizado en la version vieja osea no lo vuelve a generar ni actualizar ni absolutamente nada y te apruebo las ideas que me diste para que los apliques",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 12237
+      },
+      {
+        "quote": "añadele al artefacto que tanto avanzaremos osea cuanto porcentaje avanzaremos en el tiempo que me voy a ausentar.",
+        "date": "2026-10-29",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 23408
+      },
+      {
+        "quote": "tambien que diga en que porcentaje total vamos y a cuanto aproximadamente llegariamos",
+        "date": "2026-10-29",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 23526
+      },
+      {
+        "quote": "si pero me refiero a que como el proyecto lo vamos a tener que volver amigrar todo y completo es a eso no a lo que ya veniamos haciendo que es el proyecto antiguo que ya cambio de rumbo",
+        "date": "2026-10-29",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 23561
+      }
+    ],
+    "reading": "Earlier on 2026-10-28 he asked (lines 8017 to 8296) that before he leaves the lead shows what will run, its hours and its goals, always as a visual artifact in the chat, and that when he is back it shows what was done and what was not against the goals, with each item's time, failures and spend, as a harness protocol measured in real time. Later that day, adding to the protocol of his absence, he asked that its return say what share of everything that was planned was met and show the map, by phase and in time, complete and detailed, checking what advanced (line 12054), and he approved the lead's ideas (line 12237), among them that the return shows the percent of the plan met, the map by phase and a timeline, made by a command from the records. So the return of a stretch shows, beside each goal and each item's time, the share of the planned that was met, the map by phase before and after, and the timeline; and the lead runs the goals with stretch status --goals before he is due back, so the time a goal takes is known before the return and does not hold it. On 2026-10-29 the rule-away-autonomy eval case showed that the five reply states let a stretch with something waiting for him close as a question, against this rule's ask nothing: every trial, with the rule and without it, closed asking him (odd/tasks/f8-s5c-a-coverage.md, L21). So while he is away a reply closes in the working state, or once in the cut that gives the block that waits for him, and a question that is his goes to the relief file and waits for his return; the five states themselves do not change. On 2026-10-29 he asked that the departure say how far the stretch will advance while he is away, as a percentage (line 23408), with the total share now and about where it would reach (line 23526), and made clear that the share he means is the migration's, the project being migrated whole, not the old project that changed course (line 23561). So the departure leads with the migration's share now, counted by the steps of the roadmap's plan, and the share expected at the return with its range, then the map's; the lead names what each item closes (stretch closes), checks with stretch status that a stretch is open before he leaves, and the return shows the shares against that forecast.",
+    "accepted": "He asked for the first additions over five messages (lines 8017 to 8296) and chose in question 103 to build them; He approved the lead's ideas in his own words at line 12237 ('te apruebo las ideas que me diste para que los apliques'); the lead's brief for JH 79 carried his words and the ideas, and the design (odd/tasks/visual-pages.md, 'The rules') passed two blind readers (rule:double-review); the reading is his to correct when he reads the pull request. Tapped, not quoted: Pregunta 111 (lead transcript 0f71b2c6-cbce-43ca-a031-276a4b2c381f, line 21669, 2026-10-29T13:54Z, Sí, agrégalo (Recomendada)), which put this one addition to him: a reply closes in the working state while he is away and the question stays recorded for his return, made with rules change and reviewed by Codex and the lenses, changing neither the five states nor any other rule. The additions of 2026-10-29 are his own words at lines 23408, 23526 and 23561, relayed by the lead to JH 89 with the order to keep them in this rule, and built in PR 675 (odd/tasks/stretch-forecast.md); the reading is his to correct when he reads the pull request.",
+    "checked": {
+      "date": "2026-10-29",
       "by": "command"
     }
   },
@@ -99,6 +170,10 @@
   "ci-gate-bound": {
     "kind": "design",
     "path": "odd/tasks/commit-gates-first.md"
+  },
+  "claude-md-budget": {
+    "kind": "design",
+    "path": "odd/tasks/f8-directives.md"
   },
   "codex-review-floor": {
     "kind": "words",
@@ -180,22 +255,22 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "Siempre me gustaria hacewr asi una doble revision con mejora quiero añadirlo al harness siempre obtenes mejores resultados",
+        "quote": "Siempre me gustaria hacewr asi una doble revision con mejora quiero añadirlo al harness siempre obtenes mejores resultados, Sí, aprobado el protocolo revisado.",
         "date": "2026-10-11",
         "session": "130317af-a818-419c-a3de-3a21335db0a8",
         "line": 470
       },
       {
-        "quote": "siempre tenemos que hacer una doble revision a todo para que salga sin errores por favor cementa esto",
-        "date": "2026-10-16",
-        "session": "e152c9d8-53bc-4366-8fa5-526b1576bcb6",
-        "line": 14210
+        "quote": "si",
+        "date": "2026-10-27",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 7461
       }
     ],
-    "reading": "\"A todo\" covers everything. Code keeps its two reviewers that did not write it (Codex at every push; gentle-ai when its assessment makes a review due). Text has none, so a design before it is built, and a plan, a design, an analysis with figures, a protocol or a change of the charter that reaches him, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing (odd/tasks/rule-hierarchy.md, \"The double review (T18)\").",
-    "accepted": "Question 12, put to him by the lead with the question tool on 2026-10-16: \"Sí, así (Recomendada)\", tapped (e152c9d8-53bc-4366-8fa5-526b1576bcb6.jsonl, line 15242).",
+    "reading": "\"A todo\" covers everything. Code keeps its two reviewers that did not write it (Codex at every push; gentle-ai when its assessment makes a review due). Text has none, so a design before it is built, and a plan, a design, an analysis with figures, a protocol or a change of the charter that reaches him, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing (odd/tasks/rule-hierarchy.md, \"The double review (T18)\"). His answer D5 of the diet (docs/proposals/harness-diet.md): the double review is narrowed to proposals that change one of his decisions, whether a design, a plan, an analysis with figures, a protocol or a change of the charter; a design or report that changes none of them reaches him without the two readers.",
+    "accepted": "He typed \"si\" at line 7461 of e41d1e8d, answering the lead's question at line 7454, which asked him to write that he narrows the double review to the proposals that change one of his decisions; that question is the reading he accepted.",
     "checked": {
-      "date": "2026-10-16",
+      "date": "2026-10-27",
       "by": "command"
     }
   },
@@ -297,6 +372,41 @@
       "by": "command"
     }
   },
+  "live-board": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Mantenme informado de que hemos estado cambiando y como vamos avanzando",
+        "date": "2026-10-27",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 4186
+      },
+      {
+        "quote": "tu como arnes siempre debes mostrarle al usuario que se esta haciendo por que recuerda que eres como una caja negra, no se que esta pasando por atras",
+        "date": "2026-10-27",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 4186
+      },
+      {
+        "quote": "Esto se podria hacer de una forma dinamica para estar informado en tiempo real?",
+        "date": "2026-10-27",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 4325
+      },
+      {
+        "quote": "debes colocar aproximadamente cuando dudara una tarea y tratar de actualizarlo a partir de esa tarea o de nuevas cosas que vayan apareciendo y tambien cada cierto tiempo para ver que algo a cambiado",
+        "date": "2026-10-27",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 4409
+      }
+    ],
+    "reading": "He wrote it to the lead while he watched several sessions at once and felt lost (\"veo la pantalla y quedo completamente perdido\"), after the lead had published a status page by hand; the second line, sent while the lead worked, asks for it to be live, and the third asks that it say about how long a task will take and update on each task, on what comes up, and every so often. The harness shows him what is being done, always: every work session writes each event as a channel notice (it starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends the record to the live board, an Artifact on the shared db that updates by itself (js-harness sessions live), and every reply of the lead points to the board. Only a Claude session can write the board's db, through ArtifactData; no command or hook reaches it (odd/tasks/live-board.md, S4). The estimates and the timed push he asked for in the third line are proposed and wait for his yes.",
+    "accepted": "Messages he typed to the lead, sent as he wrote them, each confirmed with js-harness sessions --quote; the reading is the lead's brief to the session that built it.",
+    "checked": {
+      "date": "2026-10-27",
+      "by": "command"
+    }
+  },
   "memory-feedback-home": {
     "kind": "design",
     "path": "odd/tasks/memory-feedback-home.md"
@@ -329,6 +439,23 @@
     "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
     "checked": {
       "date": "2026-10-22",
+      "by": "command"
+    }
+  },
+  "owner-decisions": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Lo que decido yo es una sola lista, en una regla: gasto fuera del plan, todo lo irreversible, las decisiones de producto, publicar, credenciales, cambios de protocolo, ajustes de seguridad o del sistema, lo que se instale o cambie en una máquina, un cambio del plan o de su orden, y un informe publicado fuera del proyecto; los demás textos nombran esa regla.",
+        "date": "2026-10-30",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 30759
+      }
+    ],
+    "reading": "What he decides is one list, in one rule, the union of the lists the texts held apart: spend outside the plan, anything irreversible, a product choice, anything published, any credential, a change of a protocol, a security or system setting, anything installed or changed on a machine, a change of the plan or of its order, and a report published outside the project. Its home is js-harness-protocols section 1, where a session asks; CLAUDE.md, the init block, protocol 7 and the orchestrator's permit relay name rule:owner-decisions instead of repeating the list. A project's CLAUDE.md may add to it; everything else is decided and its cost said.",
+    "accepted": "He chose the union in question 62 (lead transcript 0f71b2c6-cbce-43ca-a031-276a4b2c381f, line 28485, tapped \"Una lista, la unión (Recomendada)\"), and typed the list itself at line 30759 (2026-10-30T14:00Z) in answer to question 113, which asked for his own words for this change (odd/tasks/instruction-homes.md, S18, S19, L13); the reading is his to correct when he reads the pull request.",
+    "checked": {
+      "date": "2026-10-30",
       "by": "command"
     }
   },
@@ -571,12 +698,30 @@
         "date": "2026-10-26",
         "session": "4b935d4a-cbb8-47fe-a059-22a7c5bae931",
         "line": 2645
+      },
+      {
+        "quote": "añadamos esto mas al protocolo, entre todo lo que teniamos que porcentaje se cumplio y ademas quiero que me muestres el mapa y como cronologico o de fases bien completo y detallado y me checkees lo que se avanzo",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 12054
+      },
+      {
+        "quote": "quiero que el arnes muestre casi todo asi ya que es mas grafico y es muchisimo mejor para guiar tanto al usuario como para que vayamos llevando un registro por que lo que no se mide no se puede mejorar y ademas el usuario no queda perdido quiero que protocolicemos todo esto, que te parece o ocurre en que mas puede ir, sera que en cada entrega? ya sea de un pr o de una funcionalidad o que crees que podemos mejorarlo mucho mas? osea yo se que es una carga adicional al arnes, pero esa es un funcion y ademas es una guia al usuario",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 12220
+      },
+      {
+        "quote": "si pero cada que el orquestador se pasa a otra sesion al parecer el tablero se elimina y queda desactualizado en la version vieja osea no lo vuelve a generar ni actualizar ni absolutamente nada y te apruebo las ideas que me diste para que los apliques",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 12237
       }
     ],
-    "reading": "He wrote it to the lead right after it sent him the 773-line English docs/proposals/harness-diet.md, and the lead had delivered the F8 research as a Spanish visual Artifact: anything he reads to understand or decide reaches him in Spanish and as a graphic, didactic page (an Artifact with diagrams, bars and cards), never as a raw English markdown file. Repository artifacts stay in English; the page is the Spanish visual rendering and the English document stays the source of truth. Written in js-harness-protocols section 6, the handoff, which speaks of the user's language because the skill ships to every user.",
-    "accepted": "A message he typed to the lead, sent as he wrote it; the reading is the lead's brief to this session.",
+    "reading": "On 2026-10-26, right after the lead sent him a 773-line English proposal, he asked that it always reach him in Spanish and graphic and didactic, so he can understand it visually (line 2645 of 4b935d4a): anything he reads to understand or decide reaches him in Spanish as a graphic, didactic page, an Artifact with diagrams, bars and cards, never a raw English markdown file, the repository document staying the English source. On 2026-10-28 he asked that the harness show almost everything this way, as graphic pages, because it guides the user better and keeps a record, since what is not measured cannot be improved (line 12220); that at a return it say what share of everything planned was met and show the map, by phase and in time, complete and detailed, checking what advanced (line 12054); and, seeing the live board left stale when the lead moved to another session, he approved the ideas the lead gave him (line 12237): the pages are made by a command from the records, never by hand, keeping their numbers so the next page compares with them and saying what the records cannot tell; they appear at a stretch's departure and return, a feature's close, a phase's change and a status report, a pull request inside its feature's page, the live board staying the continuous view; and they ship to every project through init. So the rule that already holds his pages names those moments and the commands that make them (js-harness stretch, report feature, report phase, report --html), and says the page is shown or published as the command wrote it.",
+    "accepted": "His 2026-10-26 words are a message he typed to the lead, sent as he wrote it. He approved the lead's ideas in his own words at line 12237 ('te apruebo las ideas que me diste para que los apliques'); the lead's brief for JH 79 carried his words and the ideas, and the design (odd/tasks/visual-pages.md, 'The rules') passed two blind readers (rule:double-review); the reading is his to correct when he reads the pull request.",
     "checked": {
-      "date": "2026-10-26",
+      "date": "2026-10-29",
       "by": "command"
     }
   },
@@ -697,46 +842,76 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "todo lo que estamos implementando es para el harnes y estamos haciendo doogfooding",
+        "quote": "listo recuerda que todo lo que estamos implementando es para el harnes y estamos haciendo doogfooding, ademas antes de continua, queria decirte que ya salio haiku 5.5 y tambien tenemos sonnet 5.5 por si no lo sabias y no eras conciente",
         "date": "2026-10-07",
         "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
         "line": 7178
       },
       {
-        "quote": "todo lo que queda en memoria se olvida, siempre pero SIEMPRe y ten en cuenta esta directiva, TODO debe quedar guardado y cementado en el harness osea en la documentacion pero tambien en los archivos donde debe ir para que el harness funcione bien aqui y en cualquier otra parte que se instale",
+        "quote": "recuerda que todo lo que queda en memoria se olvida, siempre pero SIEMPRe y ten en cuenta esta directiva, TODO debe quedar guardado y cementado en el harness osea en la documentacion pero tambien en los archivos donde debe ir para que el harness funcione bien aqui y en cualquier otra parte que se instale",
         "date": "2026-10-08",
         "session": "593da809-8949-48b0-a2ea-48b490f58f0e",
         "line": 555
       },
       {
-        "quote": "Tienes que ser conciente que este es el proyecto del desarrollo del harness y tambien ayudarme con ese criterio y el criterio de lo que pasaria si este harnes ya estuviera en produccion y como \"funcionaria\" con otros proyectos para lo cual lo estamos desarrollando.",
+        "quote": "1. no tuve buena atencion por que necesito mejor comunicacion contigo y la forma en como me explicas el avance 2. la idea es solucionar esto nosotros ya sea creandolo o basandose en otras soluciones 3. no tengo problema en aumentar el plan y tener varios planes maximos 4. en este caso es por que estamos armando el harness y estamos en el proyecto del harness pero recuerda que la idea es que en otros proyectos donde instalemos el harness esto no se puede hacer ya que es fijo y ya tendremos un metodo que desarrollaremos apra cada proyectos con su propio roadmap y arquitectura y ademas de specs, pero por ahora estamos haciendo doogfooding y ademas estamos puliendo en tiempo real y viendo a medida que van saliendo las necesidades como abordarlas, testearlas, probarlas e implementarlas o corregirlas ademas de optimizarlas. Tienes que ser conciente que este es el proyecto del desarrollo del harness y tambien ayudarme con ese criterio y el criterio de lo que pasaria si este harnes ya estuviera en produccion y como \"funcionaria\" con otros proyectos para lo cual lo estamos desarrollando.",
         "date": "2026-10-09",
         "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
         "line": 11284
       },
       {
-        "quote": "la idea es solucionar esto nosotros ya sea creandolo o basandose en otras soluciones",
+        "quote": "1. no tuve buena atencion por que necesito mejor comunicacion contigo y la forma en como me explicas el avance 2. la idea es solucionar esto nosotros ya sea creandolo o basandose en otras soluciones 3. no tengo problema en aumentar el plan y tener varios planes maximos 4. en este caso es por que estamos armando el harness y estamos en el proyecto del harness pero recuerda que la idea es que en otros proyectos donde instalemos el harness esto no se puede hacer ya que es fijo y ya tendremos un metodo que desarrollaremos apra cada proyectos con su propio roadmap y arquitectura y ademas de specs, pero por ahora estamos haciendo doogfooding y ademas estamos puliendo en tiempo real y viendo a medida que van saliendo las necesidades como abordarlas, testearlas, probarlas e implementarlas o corregirlas ademas de optimizarlas. Tienes que ser conciente que este es el proyecto del desarrollo del harness y tambien ayudarme con ese criterio y el criterio de lo que pasaria si este harnes ya estuviera en produccion y como \"funcionaria\" con otros proyectos para lo cual lo estamos desarrollando.",
         "date": "2026-10-09",
         "session": "729ed66b-83fe-4cf2-809a-2edf5c5c4462",
         "line": 11284
       },
       {
-        "quote": "Me gusta lo que estas haciendo de medir todo, sobre todo ahora, ver y analizar problemas o cosas a mejorar con todo hasta en esta misma sesion y las otras sesiones y la comunicaciones todo para que mejoremos el harness",
+        "quote": "Me gusta lo que estas haciendo de medir todo, sobre todo ahora, ver y analizar problemas o cosas a mejorar con todo hasta en esta misma sesion y las otras sesiones y la comunicaciones todo para que mejoremos el harness y tambien ver que errores salen para que el harness no vaya a quedar con errores y aun asi despues probarlos en carpetas de pruebas como si estuviera instalado y ver como funciona y si funciona como es",
         "date": "2026-10-10",
         "session": "4a8db1c5-ba2e-4c72-86b0-1a75ff29bee5",
         "line": 1315
       },
       {
-        "quote": "este harnes tiene prohibido que utilicemos Claude.md solo Agents.md",
+        "quote": "Para un momento, este harnes tiene prohibido que utilicemos Claude.md solo Agents.md",
         "date": "2026-10-15",
         "session": "987548fe-5062-4dd4-9b92-7a246494198f",
         "line": 1270
+      },
+      {
+        "quote": "pero me dices que pasemos cosas a Agents.md pero si solo vamos a utilizar antropic los modelos entonces vamos a utilizar solo Claude.md si o no?",
+        "date": "2026-10-26",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 1665
+      },
+      {
+        "quote": "si pero codex es un revisor externo no mas y se usa para revisar lo que hacemos y cuando manejemos un proyecto es para revisar el codigo",
+        "date": "2026-10-26",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 1697
+      },
+      {
+        "quote": "Excelente me parece excelente eso asi",
+        "date": "2026-10-26",
+        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
+        "line": 1733
+      },
+      {
+        "quote": "me mostraste las coasas diferente a como habiamos planeado, no entiendo por que nuestros protocolos no quedan estandarizados? sera que menos protocolo y siempre generamos un eval o un template para que siempre muestre las cosas como quiero? y que asi se estandarice y no muestre algo diferente cada vez. dime como lo tengo que pedir por que siempre equivocas y siento es que yo no te pido las cosas paras que el arnes funcione como debe",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 14721
+      },
+      {
+        "quote": "ok listo entonces hagamos una plantilla de esto para que cuando vayamos a hacer este proceso siempre lo tengamos a la mano y podamos generar las demas plantillas de todo.",
+        "date": "2026-10-28",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 15262
       }
     ],
-    "reading": "Everything built here is for the harness, used on itself: every rule he gives is cemented in the harness, in its documents and in the files that make it act, here and in every project that installs it, because what stays in memory is forgotten. Each proposal is judged both as this project's development and as the harness in production in other projects; a gap is solved by building it, ourselves or on another solution; problems seen in any session are measured and analysed as findings to improve the harness; and the harness never uses CLAUDE.md, only AGENTS.md (odd/tasks/memory-hygiene.md). The guard's refusal of a feedback note without a home (rule:memory-feedback-home) is its sensor.",
-    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "reading": "Everything built here is for the harness, used on itself: every rule he gives is cemented in the harness, in its documents and in the files that make it act, here and in every project that installs it, because what stays in memory is forgotten. Each proposal is judged both as this project's development and as the harness in production in other projects; a gap is solved by building it, ourselves or on another solution; problems seen in any session are measured and analysed as findings to improve the harness. Since the models are Anthropic's and Codex is only an outside reviewer of what is done and of a project's code, Claude works from a root CLAUDE.md that imports AGENTS.md, and AGENTS.md keeps what a reviewer needs (diet D3, F8's S3): a rule's prose home is a line of either file, no longer AGENTS.md alone. The guard's refusal of a feedback note without a home (rule:memory-feedback-home) is its sensor. An output he sees again and again is cemented the same way, so a model's taste cannot reach him: a template of five parts (the sample he approved, the command that renders it from the records, a golden test, a gate on the path to him, and a test that the gate refuses a hand-made one), asked for in one line, \"Plantilla: qué quiero ver · cuándo aparece · cómo se ve (la muestra que apruebo) · dónde me llega\", a missing field asked alone, and every escape a FAILURES sighting and a new refusal test (odd/tasks/templates.md).",
+    "accepted": "He accepted the split in his own typed words at line 1733 of e41d1e8d (\"Excelente me parece excelente eso asi\"), after asking at line 1665 whether only CLAUDE.md would be used and saying at line 1697 that Codex is only an outside reviewer. The templates: after the recipe the lead gave him at line 15080 of 0f71b2c6, he asked for it in his own typed words at line 15262 (\"ok listo entonces hagamos una plantilla de esto ...\"), and approved the first template's sample, question 108, at line 17978.",
     "checked": {
-      "date": "2026-10-22",
+      "date": "2026-10-29",
       "by": "command"
     }
   },
@@ -928,12 +1103,18 @@
         "date": "2026-10-20",
         "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
         "line": 8945
+      },
+      {
+        "quote": "Listo muestrame lo proximo que se viene y SIEMPRE peror SIEMPRE debes darme la razon del por que osea cual es el criterio",
+        "date": "2026-10-29",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 18204
       }
     ],
-    "reading": "When he asks how it goes or how much is done, the lead answers with everything since the last report, in detail: what landed in plain words, each session's state, his decisions, the map per phase with what is left, what waits on him and what it proposes; never only that all goes well. The orchestrator skill's \"The status report\" carries it, with its tables (rule:report-table).",
-    "accepted": "Not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried it out of a memory note of the same subject, and it is his to correct.",
+    "reading": "When he asks how it goes or how much is done, the lead answers with everything since the last report, in detail: what landed in plain words, each session's state, his decisions, the map per phase with what is left, what waits on him and what it proposes; never only that all goes well. Every step it proposes next carries its why, the criterion that puts it there; a step with no reason is not a proposal. The orchestrator skill's \"The status report\" carries it, with its tables (rule:report-table), and `report-status` refuses a proposal whose why is blank.",
+    "accepted": "His words of 2026-10-29 (0f71b2c6, line 18204) ask for the criterion with every next step, ALWAYS; the reading carries them as written, relayed by the lead and checked against the transcript.",
     "checked": {
-      "date": "2026-10-22",
+      "date": "2026-10-29",
       "by": "command"
     }
   },
@@ -1079,16 +1260,16 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "si solo utilizando windows solo 3",
-        "date": "2026-10-24",
-        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
-        "line": 27593
+        "quote": "Retira la regla de máximo 3 sesiones de trabajo en Windows; el número de sesiones se decide caso por caso.",
+        "date": "2026-10-30",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 30812
       }
     ],
-    "reading": "When only Windows is used the most work sessions open at one time is 3: his words, typed while the session worked (line 27593), split from the one value work-sessions held.",
-    "accepted": "Typed by him, queued while the session worked (line 27593); no question was asked, so there is no tap.",
+    "reading": "The cap of three work sessions open at one time when only Windows is used is retired with no successor: the number of sessions is decided case by case. The caps for a public repository and for a private one used with WSL stay as they are.",
+    "accepted": "He chose to retire it in question 71 (lead transcript 0f71b2c6-cbce-43ca-a031-276a4b2c381f, line 28610, tapped \"Retirarla\"), and typed the retirement itself at line 30812 (2026-10-30T14:04Z) in answer to question 114, which asked for his own words for this change (odd/tasks/instruction-homes.md, S20, S21, L13); the reading is his to correct when he reads the pull request.",
     "checked": {
-      "date": "2026-10-24",
+      "date": "2026-10-30",
       "by": "command"
     }
   },

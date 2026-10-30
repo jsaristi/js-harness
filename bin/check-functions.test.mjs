@@ -101,10 +101,23 @@ test('a clone that is not what its switches ask is told so, one line a differenc
   assert.equal(row.detail, 'this clone is not what its switches ask: js-harness functions apply makes it so');
   assert.deepEqual(row.lines, [
     'codeMap on-demand: no code map index here (.codegraph)',
+    'every clone: .claude/settings.local.json#/outputStyle is not "js-harness"',
+    'every clone: .claude/settings.local.json#/permissions/deny lacks 24 of the 24 entries js-harness holds',
     'codeMap on-demand: .claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK is not "1"',
     'languageServer off: .claude/settings.local.json#/enabledPlugins/typescript-lsp@claude-plugins-official is not false',
     'codexReview on: no push check in the pre-push hook',
   ]);
+});
+
+test('a deny list that holds the user\'s own entries and not all of the harness\'s is a difference', (t) => {
+  const root = repo(t, { 'bin/a.mjs': '', 'harness.json': '{}\n' });
+  applyProjectFunctions(root, '0.1.0', { spawn: fakeCodegraph, platform: 'linux' });
+  const file = path.join(root, '.claude', 'settings.local.json');
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  data.permissions.deny = ['Bash(curl:*)', ...data.permissions.deny.slice(2)];
+  fs.writeFileSync(file, JSON.stringify(data));
+  const [row] = checkFunctionsPending(root);
+  assert.deepEqual(row.lines, ['every clone: .claude/settings.local.json#/permissions/deny lacks 2 of the 24 entries js-harness holds']);
 });
 
 test('a key the harness wrote that a switch no longer wants is a difference too', (t) => {
@@ -208,52 +221,11 @@ test('the debt row is one line where the review is off', async (t) => {
   });
 });
 
-/** A gentle-ai that answers `mode status` with `mode` and `assess` with a medium change not due. */
-function gentleAi(mode, risk = 'medium') {
-  return (cmd, args) => {
-    if (args.includes('mode')) return { status: 0, stdout: JSON.stringify({ status: { effective: mode, source: 'global' } }) };
-    const assessed = {
-      schema: 'gentle-ai.review-assessment/v1',
-      risk,
-      changed_paths: 2,
-      changed_lines: 40,
-      review_due: false,
-      review_due_reason: 'under_budget',
-      reasons: [],
-    };
-    return { status: 0, stdout: JSON.stringify(assessed) };
-  };
-}
-
-test('with the Codex review off, a medium change is due for gentle-ai review (S9)', async (t) => {
-  const { checkReview } = await import('./check.mjs');
-  const off = repo(t, { 'bin/a.mjs': '', 'harness.json': '{ "functions": { "codexReview": "off" } }\n' });
-  assert.equal(
-    checkReview(off, { spawn: gentleAi('on') }).detail,
-    'medium risk, 2 paths, 40 lines: review due (medium risk and the Codex review is off here)',
-  );
-  const on = repo(t, { 'bin/a.mjs': '' });
-  assert.equal(checkReview(on, { spawn: gentleAi('on') }).detail, 'medium risk, 2 paths, 40 lines: review not due (under_budget)');
-  assert.equal(
-    checkReview(off, { spawn: gentleAi('on', 'passive') }).detail,
-    'passive risk, 2 paths, 40 lines: review not due (under_budget)',
-  );
-});
-
-test('with the Codex review off, a high change gentle-ai calls not due is due too (S9: high and medium)', async (t) => {
-  const { checkReview } = await import('./check.mjs');
-  const off = repo(t, { 'bin/a.mjs': '', 'harness.json': '{ "functions": { "codexReview": "off" } }\n' });
-  assert.equal(
-    checkReview(off, { spawn: gentleAi('on', 'high') }).detail,
-    'high risk, 2 paths, 40 lines: review due (high risk and the Codex review is off here)',
-  );
-});
-
-test('with gentle-ai review off and the Codex review off, the row says no review reads the code', async (t) => {
-  const { checkReview } = await import('./check.mjs');
-  const off = repo(t, { 'bin/a.mjs': '', 'harness.json': '{ "functions": { "codexReview": "off" } }\n' });
-  assert.equal(
-    checkReview(off, { spawn: gentleAi('off') }).detail,
-    'RDD is off (global), so no review was assessed, and the Codex review is off here: no review reads this project\'s code',
-  );
+// With the Codex review off, the Claude lenses are the one review (odd/tasks/f8-s1-reviews.md, T5), and the row says
+// their debt there too. Its cases are in lib/lens-review-rows.test.mjs.
+test('with the Codex review off, the review row says the lenses are the one review (S9)', async (t) => {
+  const { checkReviewDebt } = await import('./check.mjs');
+  const root = pushed(t);
+  commit(root, { 'bin/b.mjs': 'y\n', 'harness.json': '{ "functions": { "codexReview": "off", "lensReview": "on" } }\n' });
+  assert.match(checkReviewDebt(root).detail, /^no Claude lens record for 1 of 1 code commit since origin\/main; the Codex review is off here, so the lenses are the one review, and no push is refused for it$/);
 });

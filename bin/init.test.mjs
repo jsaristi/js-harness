@@ -109,6 +109,35 @@ test('initMain on a fresh repo writes the four actions and exits 0', async () =>
   }
 });
 
+test('initMain says the import it added to a committed CLAUDE.md of the project\'s, and how git takes it back', async () => {
+  const root = makeTmpRepo();
+  const home = makeTmpHome();
+  withCodegraphSkipped(root);
+  const git = (...args) => assert.equal(spawnSync('git', args, { cwd: root, encoding: 'utf8' }).status, 0);
+  try {
+    fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# ours\n', 'utf8');
+    git('add', 'CLAUDE.md');
+    git('-c', 'user.email=js-harness-test@example.invalid', '-c', 'user.name=js-harness test', 'commit', '-q', '-m', 'ours');
+    let stdout = '';
+    const origLog = console.log;
+    console.log = (msg) => {
+      stdout += `${msg}\n`;
+    };
+    let code;
+    try {
+      code = await initMain(['--cwd', root, '--home', home], process.env, {});
+    } finally {
+      console.log = origLog;
+    }
+    assert.equal(code, 0);
+    assert.match(stdout, /^added @AGENTS\.md at the top of CLAUDE\.md; git checkout -- CLAUDE\.md takes it back$/m);
+    assert.equal(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n\n# ours\n');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('initMain does not point at onboard in a project that has a roadmap already', async () => {
   const root = makeTmpRepo();
   const home = makeTmpHome();
@@ -383,6 +412,109 @@ test('initMain reports a codegraph failure on stderr and still exits 0', async (
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+/** `initMain` with `args` in a fresh repository holding a program, its console captured, with git real and every
+ * other command recorded and never run, and `userHome` the home whose `.claude.json` it reads (F8 S11, L9). */
+async function initWithPreset(t, args, { claudeJson } = {}) {
+  const root = withProgram(makeTmpRepo('js-harness-init-preset-'));
+  const userHome = makeTmpHome();
+  t.after(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(userHome, { recursive: true, force: true });
+  });
+  if (claudeJson) fs.writeFileSync(path.join(userHome, '.claude.json'), JSON.stringify(claudeJson));
+  const ran = [];
+  const spawn = (cmd, words, opts) => {
+    if (cmd === 'git') return spawnSync('git', words, opts);
+    ran.push([cmd, ...words].join(' '));
+    // A codegraph init that ran writes its index, as the real one does.
+    fs.mkdirSync(path.join(root, '.codegraph'), { recursive: true });
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  const out = [];
+  const err = [];
+  const { log, error } = console;
+  console.log = (line) => out.push(line);
+  console.error = (line) => err.push(line);
+  let code;
+  try {
+    code = await initMain(['--cwd', root, ...args], process.env, { spawn, platform: 'linux', userHome });
+  } finally {
+    Object.assign(console, { log, error });
+  }
+  const manifestPath = out.find((line) => line.startsWith('manifest: ')).slice('manifest: '.length);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  // The text files init wrote, by its manifest: the settings key a switch writes is a clone's own and no file here.
+  const texts = manifest.files.map((entry) => fs.readFileSync(entry.gitDir ? entry.path : path.join(root, entry.path), 'utf8'));
+  const harness = JSON.parse(fs.readFileSync(path.join(root, 'harness.json'), 'utf8'));
+  return { code, out, err, ran, texts, harness };
+}
+
+/** The lines of `texts` that name a tool `pattern` matches. */
+const naming = (texts, pattern) => texts.flatMap((text) => text.split('\n')).filter((line) => pattern.test(line));
+const CODEGRAPH = /codegraph/i;
+const ENGRAM_PLUGIN = /engram@engram|engram plugin|engram-plugin/i;
+
+test('init --preset complete declares both reviews, runs codegraph init and leaves the rest to its defaults', async (t) => {
+  const { code, ran, harness } = await initWithPreset(t, ['--preset', 'complete'], { claudeJson: { mcpServers: { context7: { type: 'http' } } } });
+  assert.equal(code, 0);
+  assert.deepEqual(harness.functions, { codexReview: 'on', lensReview: 'on' });
+  assert.deepEqual(ran, ['codegraph init --yes .']);
+});
+
+test('init --preset lean writes no line naming codegraph and never runs it (row 17)', async (t) => {
+  const { code, ran, texts, harness } = await initWithPreset(t, ['--preset', 'lean']);
+  assert.equal(code, 0);
+  assert.deepEqual(harness.functions, { codexReview: 'on', lensReview: 'on', codeMap: 'off' });
+  assert.deepEqual(ran, []);
+  assert.deepEqual(naming(texts, CODEGRAPH), []);
+});
+
+test('init --preset custom that drops codegraph and the engram plugin writes no line naming either (row 17)', async (t) => {
+  const { code, ran, texts, harness } = await initWithPreset(t, ['--preset', 'custom', '--codegraph', 'off', '--engram-plugin', 'off']);
+  assert.equal(code, 0);
+  assert.deepEqual(harness.functions, { codexReview: 'on', lensReview: 'on', codeMap: 'off', engramPlugin: 'off' });
+  assert.deepEqual(ran, []);
+  assert.deepEqual(naming(texts, CODEGRAPH), []);
+  assert.deepEqual(naming(texts, ENGRAM_PLUGIN), []);
+});
+
+test('init with no preset writes the harness.json it always wrote, with no "functions"', async (t) => {
+  const { code, harness } = await initWithPreset(t, []);
+  assert.equal(code, 0);
+  assert.equal('functions' in harness, false);
+});
+
+test('init with a preset names context7 as required where Claude Code has it nowhere, and is silent where it has it', async (t) => {
+  const required = 'context7 is required by every preset and Claude Code has it nowhere: js-harness stack install registers it';
+  assert.ok((await initWithPreset(t, ['--preset', 'lean'])).out.includes(required));
+  const registered = await initWithPreset(t, ['--preset', 'lean'], { claudeJson: { mcpServers: { context7: { type: 'http' } } } });
+  assert.equal(registered.out.includes(required), false);
+});
+
+test('init refuses a preset that is none, or a choice of codegraph without the custom preset, and writes nothing', async (t) => {
+  for (const [args, message] of [
+    [['--preset', 'full'], 'no preset "full"; the presets are complete, lean, custom'],
+    [['--preset', 'lean', '--codegraph', 'on'], 'only the custom preset chooses codegraph or the engram plugin; lean is fixed'],
+    [['--codegraph', 'off'], 'only the custom preset chooses codegraph or the engram plugin; give --preset custom'],
+    [['--preset', 'custom', '--engram-plugin', 'maybe'], 'engramPlugin must be on or off; it is "maybe"'],
+  ]) {
+    const root = makeTmpRepo();
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const err = [];
+    const { error } = console;
+    console.error = (line) => err.push(line);
+    let code;
+    try {
+      code = await initMain(['--cwd', root, ...args], process.env, {});
+    } finally {
+      console.error = error;
+    }
+    assert.equal(code, 2, args.join(' '));
+    assert.equal(err.join('\n'), `${message}\n\nUsage: js-harness init [--cwd <path>] [--home <path>] [--preset complete|lean|custom [--codegraph on|off] [--engram-plugin on|off]]`);
+    assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
   }
 });
 

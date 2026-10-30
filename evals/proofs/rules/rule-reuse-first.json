@@ -1,0 +1,26 @@
+{
+  "format": 1,
+  "case": "rule-reuse-first",
+  "rules": [
+    "reuse-first"
+  ],
+  "digests": {
+    "case": "054763aa3d2a26d90bff5732d74b9be4a5d8585baa888fdf6373c376ac5c564c",
+    "rules": "5a16f0945086140d3f09204e20f256aba0349ad35aaf57edef67ef6cc5969d05"
+  },
+  "date": "2026-10-29",
+  "commit": "12d2ca5fe8e3cb64e42dd31e250ec031edb8082f",
+  "current": {
+    "run": "f8-s5c-a-cases-reuse-2",
+    "arm": "current",
+    "trials": 2,
+    "score": 0.7142857142857143
+  },
+  "without": {
+    "run": "f8-s5c-a-cases-reuse-2",
+    "arm": "current-without-rule-reuse-first",
+    "trials": 2,
+    "score": 0.7142857142857143
+  },
+  "costUsd": 1.9959782000000001
+}

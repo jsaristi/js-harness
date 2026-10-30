@@ -7,8 +7,8 @@ import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, checkReview, runSensor, takeGateTurn, claimOf, main } from './check.mjs';
-import { SENSOR_SILENCE_MS, SENSOR_TIMEOUT_MS, TOKEN_BUDGET } from './check.mjs';
+import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, runSensor, takeGateTurn, claimOf, main } from './check.mjs';
+import { SENSOR_SILENCE_MS, SENSOR_TIMEOUT_MS, TOKEN_BUDGET, CLAUDE_MD_BUDGET, checkClaudeBudget } from './check.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
@@ -26,6 +26,33 @@ test('estimateTokens divides length by 4, rounding up', () => {
   assert.equal(estimateTokens('abcd'), 1);
   assert.equal(estimateTokens('abcde'), 2);
   assert.equal(estimateTokens('a'.repeat(6000)), 1500);
+});
+
+// F8 S3 (docs/proposals/harness-diet.md, D3): Claude works from a root CLAUDE.md that imports AGENTS.md, and pays it
+// on every turn too, so it has a budget of its own, rule:claude-md-budget. A project with no CLAUDE.md has no row.
+test('checkClaudeBudget passes at exactly its limit, fails one token over, and counts a CRLF checkout as LF', () => {
+  const dir = makeTmpDir();
+  try {
+    const file = path.join(dir, 'CLAUDE.md');
+    fs.writeFileSync(file, 'a'.repeat(CLAUDE_MD_BUDGET * 4));
+    assert.deepEqual(checkClaudeBudget(dir), [{ name: 'claude-md budget', pass: true, detail: `${CLAUDE_MD_BUDGET} estimated tokens (budget ${CLAUDE_MD_BUDGET})` }]);
+    fs.writeFileSync(file, 'a'.repeat((CLAUDE_MD_BUDGET + 1) * 4));
+    assert.equal(checkClaudeBudget(dir)[0].pass, false);
+    fs.writeFileSync(file, `${'a'.repeat(79)}
+`.repeat(Math.floor((CLAUDE_MD_BUDGET * 4) / 80)));
+    assert.equal(checkClaudeBudget(dir)[0].pass, true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkClaudeBudget gives no row where the project has no CLAUDE.md', () => {
+  const dir = makeTmpDir();
+  try {
+    assert.deepEqual(checkClaudeBudget(dir), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('checkBudget passes at exactly the token limit', () => {
@@ -930,6 +957,25 @@ test('checkPayload reports each host with its sources, a missing one and its hoo
   }
 });
 
+// F8 S3 (odd/tasks/f8-s3-split.md, S8): a CLAUDE.md that a claudeMdExcludes glob matches does not load, so its row says so.
+test('checkPayload shows a CLAUDE.md that claudeMdExcludes keeps out as excluded and leaves it out of the total', () => {
+  const dir = makeTmpDir();
+  const home = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400)); // 100 tokens
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'CLAUDE.md'), 'a'.repeat(8000)); // 2000 tokens, excluded
+    fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', 'settings.json'), JSON.stringify({ claudeMdExcludes: ['**/.claude/CLAUDE.md'] }));
+    const [claude] = checkPayload(dir, home);
+    assert.match(claude.detail, /^100 estimated tokens/);
+    assert.ok(claude.lines.some((line) => /global CLAUDE\.md +excluded \(claudeMdExcludes\)/.test(line)), claude.lines.join('\n'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('checkPayload prefixes a plugin hook with its plugin id and leaves a settings hook as it was', () => {
   const dir = makeTmpDir();
   const home = makeTmpDir();
@@ -978,14 +1024,6 @@ test('main passes with a large machine payload when AGENTS.md is within budget',
 
 // --- home precedence: --home flag, then env.JS_HARNESS_HOME, then os.homedir() (matches doctor.mjs) ---
 
-/** Stands in for gentle-ai being absent, so a test that reaches the review row never spawns the real one. */
-const gentleAiNotFound = () => ({
-  status: null,
-  stdout: '',
-  stderr: '',
-  error: Object.assign(new Error('spawnSync gentle-ai ENOENT'), { code: 'ENOENT' }),
-});
-
 /** What the sampler of `runCheck` reads: a machine with under one of its eight logical processors busy. */
 const QUIET_LOAD = { busy: 0.4, processors: 8, share: 0.05, sampleMs: 1000 };
 const QUIET_LOAD_ROW = 'INFO  load  0.4 of 8 logical processors busy before the sensors (5%, 1 s sample)';
@@ -1010,7 +1048,7 @@ const watchedNobody = () => ({ end: async () => ({ seconds: 0, busiest: [] }) })
  * A gate also watches who spends the processor over its run, which starts PowerShell on Windows at its
  * start and at its end. A run that hands it no watch (`deps.watchBusiest`) is given one that finds nobody,
  * so no test starts a process for it and none keeps a line of it. */
-async function runCheck(argv, env, deps = { gentleAi: gentleAiNotFound }) {
+async function runCheck(argv, env, deps = {}) {
   let output = '';
   let errOutput = '';
   const originalLog = console.log;
@@ -1499,223 +1537,20 @@ test('main runs the failures row first, before budget, when the project keeps a 
   }
 });
 
-// --- review row: whether the pending change is due a gentle-ai review, informational and fail-open ---
+// --- review row: the debt of both reviews, informational; the row itself is tested in lib/lens-review-rows.test.mjs ---
 
-const MODE_ON = JSON.stringify({
-  schema: 'gentle-ai.review-mode/v1',
-  operation: 'status',
-  scope: 'both',
-  status: { schema: 'gentle-ai.rdd-mode-status/v1', global: 'on', clone_local: '', effective: 'on', source: 'global' },
-});
-const MODE_OFF = MODE_ON.replace('"effective":"on"', '"effective":"off"').replace('"source":"global"', '"source":"clone_local"');
-const assessment = (over = {}) =>
-  JSON.stringify({
-    schema: 'gentle-ai.review-assessment/v1',
-    risk: 'medium',
-    reasons: [{ code: 'executable_change', path: 'bin/check.mjs' }],
-    changed_paths: 3,
-    changed_lines: 442,
-    candidate: { kind: 'current-changes', consumed: false },
-    review_due: true,
-    review_due_reason: 'slice_budget_reached',
-    ...over,
-  });
+/** What a process that succeeded answers, printing `stdout`. */
 const ok = (stdout) => ({ status: 0, stdout, stderr: '' });
-const spawnFailure = (code, message) => ({ status: null, stdout: '', stderr: '', error: Object.assign(new Error(message), { code }) });
 
-/** A stand-in for `spawnSync` that answers `gentle-ai review mode status` and `... assess` and records calls. */
-function fakeGentleAi({ mode = ok(MODE_ON), assess = ok(assessment()) } = {}) {
-  const calls = [];
-  const spawn = (program, args, options) => {
-    calls.push({ program, args, options });
-    return args.includes('assess') ? assess : mode;
-  };
-  return Object.assign(spawn, { calls });
-}
-const assessCalls = (spawn) => spawn.calls.filter((call) => call.args.includes('assess'));
-
-test('checkReview runs mode status then assess as gentle-ai, without a shell, in cwd', () => {
-  const spawn = fakeGentleAi();
-  checkReview('/proj', { spawn, timeout: 1234 });
-  assert.equal(spawn.calls.length, 2);
-  assert.deepEqual(spawn.calls[0].args, ['review', 'mode', 'status', '--cwd', '/proj', '--json']);
-  assert.deepEqual(spawn.calls[1].args, ['review', 'assess', '--cwd', '/proj', '--json']);
-  for (const call of spawn.calls) {
-    assert.equal(call.program, 'gentle-ai');
-    assert.equal(call.options.encoding, 'utf8');
-    assert.equal(call.options.timeout, 1234);
-    assert.ok(!call.options.shell);
-  }
-});
-
-test('checkReview says gentle-ai was not found, and assesses nothing', () => {
-  const spawn = fakeGentleAi({ mode: spawnFailure('ENOENT', 'spawnSync gentle-ai ENOENT') });
-  const row = checkReview('/proj', { spawn });
-  assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
-  assert.match(row.detail, /gentle-ai was not found/);
-  assert.match(row.detail, /not assessed/);
-  assert.equal(assessCalls(spawn).length, 0);
-});
-
-// Fail-open covers a schema-tagged envelope of the wrong shape too: it must neither throw nor print
-// `undefined` as if it were an assessment.
-test('checkReview skips reasons that are not objects, or have no string code, instead of throwing', () => {
-  const spawn = fakeGentleAi({ assess: ok(assessment({ reasons: [null, 'x', { path: 'a.mjs' }, { code: 7 }, { code: 'executable_change', path: 'a.mjs' }] })) });
-  const row = checkReview('/proj', { spawn });
-  assert.equal(row.pass, true);
-  assert.deepEqual(row.lines.filter((line) => !line.startsWith('next:')), ['executable_change a.mjs']);
-});
-
-// gentle-ai also answers `changed_paths: 0`, high and due when it cannot build the candidate at all;
-// only its explicit "no pending changes" reason means a clean tree.
-test('checkReview reports an unassessable candidate as a failure, not as a clean tree', () => {
-  const unassessable = assessment({
-    risk: 'high',
-    changed_paths: 0,
-    changed_lines: 0,
-    review_due_reason: 'high_risk',
-    reasons: [{ code: 'unassessable', detail: 'open .git/index: Access is denied.' }],
-  });
-  const row = checkReview('/proj', { spawn: fakeGentleAi({ assess: { status: 1, stdout: unassessable, stderr: 'Error: denied' } }) });
-  assert.equal(row.pass, true);
-  assert.doesNotMatch(row.detail, /no pending change/);
-  assert.match(row.detail, /could not assess/);
-  assert.ok(row.lines.includes('unassessable open .git/index: Access is denied.'), row.lines.join('\n'));
-});
-
-test('checkReview reports an assessment missing its fields as having no assessment', () => {
-  for (const over of [{ risk: undefined }, { changed_lines: '442' }, { review_due: 'yes' }, { review_due_reason: 3 }]) {
-    const row = checkReview('/proj', { spawn: fakeGentleAi({ assess: ok(assessment(over)) }) });
-    assert.equal(row.pass, true);
-    assert.match(row.detail, /gave no assessment \(unexpected shape\)/, JSON.stringify(over));
-  }
-});
-
-test('checkReview reports RDD off with its source and does not run assess', () => {
-  const spawn = fakeGentleAi({ mode: ok(MODE_OFF) });
-  const row = checkReview('/proj', { spawn });
-  assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
-  assert.match(row.detail, /RDD is off \(clone_local\)/);
-  assert.match(row.detail, /no review was assessed/);
-  assert.equal(assessCalls(spawn).length, 0);
-});
-
-test('checkReview still assesses when the mode is unknown (non-zero exit, bad JSON or a timeout)', () => {
-  const unknown = [
-    { status: 1, stdout: '', stderr: 'boom' },
-    ok('not json'),
-    ok(JSON.stringify({ status: { effective: 'maybe' } })),
-    spawnFailure('ETIMEDOUT', 'spawnSync gentle-ai ETIMEDOUT'),
-  ];
-  for (const mode of unknown) {
-    const spawn = fakeGentleAi({ mode });
-    const row = checkReview('/proj', { spawn });
-    assert.equal(assessCalls(spawn).length, 1);
-    assert.match(row.detail, /review due \(slice_budget_reached\)/);
-  }
-});
-
-test('checkReview reports no pending change instead of the clean tree high risk', () => {
-  const clean = assessment({
-    risk: 'high',
-    reasons: [{ code: 'unassessable', detail: 'the review assess candidate has no pending changes' }],
-    changed_paths: 0,
-    changed_lines: 0,
-    review_due: true,
-    review_due_reason: 'high_risk',
-  });
-  // gentle-ai exits non-zero on a clean tree but still prints the JSON.
-  const row = checkReview('/proj', { spawn: fakeGentleAi({ assess: { status: 1, stdout: clean, stderr: 'Error: no pending changes' } }) });
-  assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
-  assert.match(row.detail, /no pending change to assess/);
-  assert.doesNotMatch(row.detail, /high|due/);
-  assert.equal(row.lines, undefined);
-});
-
-test('checkReview says a due review is due, with its risk, size and reason', () => {
-  const row = checkReview('/proj', { spawn: fakeGentleAi() });
-  assert.equal(row.detail, 'medium risk, 3 paths, 442 lines: review due (slice_budget_reached)');
-  assert.equal(row.pass, true);
-  assert.equal(row.info, true);
-});
-
-test('checkReview says a review is not due, and uses the singular for one path', () => {
-  const assess = ok(assessment({ changed_paths: 1, changed_lines: 1, review_due: false, review_due_reason: 'under_budget' }));
-  const row = checkReview('/proj', { spawn: fakeGentleAi({ assess }) });
-  assert.equal(row.detail, 'medium risk, 1 path, 1 line: review not due (under_budget)');
-  assert.equal(row.lines.some((line) => line.startsWith('next:')), false);
-});
-
-test('checkReview lists each reason, and the next command only when a review is due', () => {
-  const reasons = [
-    { code: 'executable_change', path: 'bin/check.mjs' },
-    { code: 'unassessable', detail: 'could not read a file' },
-  ];
-  const next_transition = { command: 'gentle-ai review status --cwd /proj --base-ref abc' };
-  const due = checkReview('/proj', { spawn: fakeGentleAi({ assess: ok(assessment({ reasons, next_transition })) }) });
-  assert.deepEqual(due.lines, [
-    'executable_change bin/check.mjs',
-    'unassessable could not read a file',
-    'next: gentle-ai review status --cwd /proj --base-ref abc',
-  ]);
-  const notDue = checkReview('/proj', {
-    spawn: fakeGentleAi({ assess: ok(assessment({ reasons, next_transition, review_due: false, review_due_reason: 'under_budget' })) }),
-  });
-  assert.deepEqual(notDue.lines, ['executable_change bin/check.mjs', 'unassessable could not read a file']);
-  const noCommand = checkReview('/proj', { spawn: fakeGentleAi({ assess: ok(assessment({ reasons, next_transition: {} })) }) });
-  assert.equal(noCommand.lines.some((line) => line.startsWith('next:')), false);
-});
-
-test('checkReview gives no assessment when assess prints nothing usable, and stays INFO and passing', () => {
-  const timeout = spawnFailure('ETIMEDOUT', 'spawnSync gentle-ai ETIMEDOUT');
-  const cases = [
-    { status: 2, stdout: '', stderr: 'Error: something broke' },
-    ok('not json'),
-    ok(JSON.stringify({ schema: 'something-else/v1', risk: 'high' })),
-    ok('null'),
-    timeout,
-    spawnFailure('EPERM', 'spawn EPERM'),
-  ];
-  for (const assess of cases) {
-    const row = checkReview('/proj', { spawn: fakeGentleAi({ assess }) });
-    assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
-    assert.match(row.detail, /^gentle-ai review assess gave no assessment \(.+\)$/);
-  }
-  const row = checkReview('/proj', { spawn: fakeGentleAi({ assess: timeout }) });
-  assert.match(row.detail, /timed out/);
-});
-
-test('checkReview tolerates a spawn that throws', () => {
-  const row = checkReview('/proj', {
-    spawn: () => {
-      throw new Error('kaboom');
-    },
-  });
-  assert.deepEqual([row.name, row.pass, row.info], ['review', true, true]);
-  assert.match(row.detail, /no assessment/);
-});
-
-test('main prints the review row as INFO and still exits 0 when assess says high and due', async () => {
+test('main runs the review row after the sensor rows, and it asks no gentle-ai', async () => {
   const dir = sensorProject({ tests: exits(0) });
   try {
-    const high = assessment({ risk: 'high', review_due_reason: 'high_risk', next_transition: { command: 'gentle-ai review status --cwd x' } });
-    const gentleAi = fakeGentleAi({ assess: { status: 1, stdout: high, stderr: 'Error: due' } });
-    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_HOME: dir }, { gentleAi });
+    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_HOME: dir }, { git: notARepository });
     assert.equal(code, 0, output);
-    assert.match(output, /^INFO {2}review {2}high risk, 3 paths, 442 lines: review due \(high_risk\)/m);
-    assert.match(output, /next: gentle-ai review status --cwd x/);
-    assert.deepEqual(gentleAi.calls[0].args.slice(-3), ['--cwd', dir, '--json']);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('main runs the review row after the sensor rows', async () => {
-  const dir = sensorProject({ tests: exits(0) });
-  try {
-    const { output } = await runCheck(['--cwd', dir], { JS_HARNESS_HOME: dir }, { gentleAi: fakeGentleAi() });
     const at = (text) => output.indexOf(text);
     assert.ok(at('PASS  tests') !== -1 && at('PASS  tests') < at('INFO  review'), output);
+    assert.match(output, /^INFO {2}review {2}cannot tell what waits for a review: cannot resolve HEAD to a commit$/m);
+    assert.doesNotMatch(output, /gentle-ai/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1730,25 +1565,14 @@ test('main prints the codex-review row last, as information, and runs its git th
       asked.push(`${cmd} ${args.join(' ')}`);
       return { status: 128, stdout: '', stderr: 'fatal: not a git repository' };
     };
-    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_HOME: dir }, { gentleAi: fakeGentleAi(), git });
+    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_HOME: dir }, { git });
     assert.equal(code, 0, output);
     const rows = output.split('\n').filter((line) => /^(PASS|FAIL|INFO) {2}/.test(line));
     assert.match(rows.at(-2), /^INFO {2}review /);
     assert.match(rows.at(-1), /^INFO {2}codex-review {2}cannot tell how much code waits for a Codex review: /);
-    // The questions of this row, and before them the one a gate asks of its working tree before its sensors,
+    // The questions of these rows, and before them the one a gate asks of its working tree before its sensors,
     // and the names of its files, which the switches of harness.json "functions" are resolved from.
     assert.ok(asked.some((line) => line.startsWith('git rev-parse ')) && asked.every((line) => /^git (rev-parse|--no-optional-locks status|ls-files) /.test(line)), asked.join('\n'));
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('main exits 0 with a review row when gentle-ai is missing', async () => {
-  const dir = sensorProject({ tests: exits(0) });
-  try {
-    const { code, output } = await runCheck(['--cwd', dir], { JS_HARNESS_HOME: dir });
-    assert.equal(code, 0, output);
-    assert.match(output, /^INFO {2}review {2}gentle-ai was not found/m);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1757,14 +1581,12 @@ test('main exits 0 with a review row when gentle-ai is missing', async () => {
 test('main runs no review row when it is the inner run, or a push', async () => {
   const dir = sensorProject({ tests: exits(0) });
   try {
-    const gentleAi = fakeGentleAi();
-    const inner = await runCheck(['--cwd', dir], { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir }, { gentleAi });
-    // Anchored to the row's name: the inner run does print the `codex-review` row, which asks gentle-ai nothing.
+    const inner = await runCheck(['--cwd', dir], { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_HOME: dir }, { git: notARepository });
+    // Anchored to the row's name: the inner run does print the `codex-review` row.
     assert.doesNotMatch(inner.output, /^(PASS|FAIL|INFO) {2}review /m);
     assert.match(inner.output, /^INFO {2}codex-review /m);
-    const push = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_HOME: dir }, { gentleAi });
+    const push = await runCheck(['--push', '--cwd', dir], { JS_HARNESS_HOME: dir }, { git: notARepository });
     assert.doesNotMatch(push.output, /^(PASS|FAIL|INFO) {2}review /m);
-    assert.equal(gentleAi.calls.length, 0);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1777,8 +1599,8 @@ test('main runs no review row when it is the inner run, or a push', async () => 
 /** What a sensor that passed answers, for a `deps.spawn` that runs none. */
 const sensorRan = () => ({ status: 0, signal: null, stdout: '', stderr: '' });
 const notARepository = () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' });
-/** The `deps` of a gate whose sensors are stand-ins and which starts neither gentle-ai nor git. */
-const gateDeps = (over = {}) => ({ gentleAi: gentleAiNotFound, git: notARepository, spawn: sensorRan, ...over });
+/** The `deps` of a gate whose sensors are stand-ins and which starts no git. */
+const gateDeps = (over = {}) => ({ git: notARepository, spawn: sensorRan, ...over });
 
 /** A stand-in for `takeGateLock` that takes the lock at once and keeps what it was asked. */
 function lockTakenAtOnce() {
@@ -1879,7 +1701,7 @@ test('main takes the gate lock in its home for an hour at most, and --wait and -
 
 test('main takes no gate lock with no sensor to run, as the inner run, or on a push', async () => {
   const take = lockTakenAtOnce();
-  const deps = { gentleAi: gentleAiNotFound, git: notARepository, takeGateLock: take };
+  const deps = { git: notARepository, takeGateLock: take };
   const home = makeTmpDir();
   const projects = { none: makeTmpDir(), optedOut: sensorProject({}), broken: makeTmpDir(), sensors: sensorProject({ tests: exits(9) }) };
   try {
@@ -2364,8 +2186,8 @@ test('two check processes that share a home run their sensors one after the othe
     return dir;
   });
   // The mark of a gate that runs this file would make these two inner checks, which run no sensor, and
-  // the mark of its held lock would make them gates that take none. No gentle-ai and no git either: an
-  // empty PATH leaves both rows saying they found none. And no sample of the load, which no stand-in
+  // the mark of its held lock would make them gates that take none. No git either: an empty PATH leaves
+  // the review rows saying they cannot tell. And no sample of the load, which no stand-in
   // reaches in a process of its own: a second each, of a machine this suite itself keeps busy. The switch
   // of the gate log is dropped: a gate that runs this file with its log off would keep these two from
   // writing the log this test reads.
@@ -2403,7 +2225,7 @@ test('two check processes that share a home run their sensors one after the othe
     // The whole bound, or what is left of it on a machine so slow that a second of it was spent by then.
     assert.match(said, /\) to finish, for (60 minutes|59 min \d+ s) at most\n$/);
     assert.match(gateRows(b.stdout.replace(/\r\n/g, '\n')).join('\n'), /^INFO {2}gate {2}waited \d+ s for the machine's gate lock before the sensors ran$/);
-    assert.match(b.stdout, /^INFO {2}review {2}gentle-ai was not found/m);
+    assert.match(b.stdout, /^INFO {2}review {2}cannot tell what waits for a review/m);
     assert.equal(fs.existsSync(gateLockDir(home)), false);
 
     // The log of the home they share says the same of the two, each in its own two lines of the real
@@ -2996,7 +2818,7 @@ test('no load is sampled and no load row printed where no gate runs a sensor: a 
     const rows = await checkSensors(dir, { spawn: sensorRan, sampleLoad });
     assert.deepEqual(rows.map((row) => row.name), ['tests']);
 
-    const deps = { gentleAi: gentleAiNotFound, git: notARepository, takeGateLock: lockTakenAtOnce(), sampleLoad };
+    const deps = { git: notARepository, takeGateLock: lockTakenAtOnce(), sampleLoad };
     const argv = ['--cwd', dir, '--home', home];
     const silent = {
       inner: await runCheck(argv, { JS_HARNESS_CHECK_INNER: '1' }, deps),
@@ -3736,7 +3558,7 @@ test('nothing is written to the gate log where no gate runs a sensor: a caller t
   try {
     const log = capturedLog();
     await checkSensors(dir, { spawn: sensorRan, ...log.deps });
-    const deps = { gentleAi: gentleAiNotFound, git: notARepository, takeGateLock: lockTakenAtOnce(), ...log.deps };
+    const deps = { git: notARepository, takeGateLock: lockTakenAtOnce(), ...log.deps };
     const argv = ['--cwd', dir, '--home', home];
     await runCheck(argv, { JS_HARNESS_CHECK_INNER: '1' }, deps);
     await runCheck(argv, { JS_HARNESS_CHECK_INNER: '1', JS_HARNESS_GATE_HELD: '1' }, deps);
@@ -3939,9 +3761,9 @@ const stoppedRow = (rows, lock = LOCK_NOT_TAKEN) =>
 
 /** Stand-ins for all a gate does after its static rows, each counting how it was asked: the lock, which
  * cannot be taken, so that a gate which asks for it runs its sensors without it and does not wait; the
- * sample of the load; the sensors; git; gentle-ai. */
+ * sample of the load; the sensors; git. */
 function afterStaticRows(over = {}) {
-  const asked = { lock: 0, load: 0, sensors: 0, git: [], gentleAi: 0 };
+  const asked = { lock: 0, load: 0, sensors: 0, git: [] };
   const deps = {
     takeGateLock: async () => {
       asked.lock += 1;
@@ -3959,17 +3781,13 @@ function afterStaticRows(over = {}) {
       asked.git.push(`${program} ${args.join(' ')}`);
       return notARepository();
     },
-    gentleAi: () => {
-      asked.gentleAi += 1;
-      return gentleAiNotFound();
-    },
     ...over,
   };
   return { asked, deps };
 }
-const NOTHING_ASKED = { lock: 0, load: 0, sensors: 0, git: [], gentleAi: 0 };
+const NOTHING_ASKED = { lock: 0, load: 0, sensors: 0, git: [] };
 
-test('a gate whose static row fails stops before its sensors: it asks for no lock, samples no load, runs no sensor, asks neither git nor gentle-ai, and one FAIL row named gate says so, after which no row comes', () => withGate({ tests: 'run-tests', lint: 'run-lint' }, async (dir, home) => {
+test('a gate whose static row fails stops before its sensors: it asks for no lock, samples no load, runs no sensor, asks no git, and one FAIL row named gate says so, after which no row comes', () => withGate({ tests: 'run-tests', lint: 'run-lint' }, async (dir, home) => {
   const argv = ['--cwd', dir, '--home', home];
   overBudget(dir);
   const log = capturedLog();
@@ -3990,7 +3808,7 @@ test('a gate whose static row fails stops before its sensors: it asks for no loc
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
   const passing = await runCheck(argv, {}, deps);
   assert.equal(passing.code, 0, passing.output);
-  assert.deepEqual({ ...asked, git: asked.git.length > 0 }, { lock: 1, load: 1, sensors: 2, git: true, gentleAi: 1 });
+  assert.deepEqual({ ...asked, git: asked.git.length > 0 }, { lock: 1, load: 1, sensors: 2, git: true });
   assert.deepEqual(namesOf(passing.output), [...STATIC_ROWS, 'gate', 'load', 'tests', 'lint', 'review', 'codex-review']);
   assert.match(gateRows(passing.output)[0], /^INFO {2}gate {2}the sensors ran without the machine's gate lock, /);
 }));
@@ -4088,10 +3906,10 @@ test('a push and the inner check are as they were beside a failing static row: n
   // A push computes no static row at all: its one row is the one it always had.
   const pushed = afterStaticRows();
   const push = await runCheck(['--push', ...argv], {}, pushed.deps);
-  assert.deepEqual(namesOf(push.output), ['codex-review']);
+  assert.deepEqual(namesOf(push.output), ['codex-review', 'lens-review']);
   // A push asks git through `deps.spawn` (`checkCodexReviews`), which this stand-in counts with the sensors,
-  // so what is asserted of it is what a push never asks for: the lock, the load, gentle-ai.
-  assert.deepEqual([pushed.asked.lock, pushed.asked.load, pushed.asked.gentleAi], [0, 0, 0]);
+  // so what is asserted of it is what a push never asks for: the lock, the load.
+  assert.deepEqual([pushed.asked.lock, pushed.asked.load], [0, 0]);
   assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
 }));
 
@@ -4324,7 +4142,7 @@ test('nothing is asked about the working tree where no gate runs a sensor: a cal
     const rows = await checkSensors(dir, { spawn: sensorRan, git });
     assert.deepEqual(rows.map((row) => row.name), ['tests']);
 
-    const deps = { gentleAi: gentleAiNotFound, takeGateLock: lockTakenAtOnce(), spawn: sensorRan, ...capturedLog().deps };
+    const deps = { takeGateLock: lockTakenAtOnce(), spawn: sensorRan, ...capturedLog().deps };
     const argv = ['--cwd', dir, '--home', home];
     const silent = {
       inner: await runCheck(argv, { JS_HARNESS_CHECK_INNER: '1' }, { ...deps, git }),
@@ -4682,8 +4500,7 @@ function hookedRepo() {
   const sensor = `"${process.execPath}" -e "require('fs').writeFileSync('${marker}', '')"`;
   writeJson(repo, 'harness.json', { sensors: { tests: sensor }, documents: ['docs/', 'notes.md'] });
   git(repo, ...commitAs, '-m', 'a sensor that leaves a marker', '--', 'harness.json');
-  // The hook leaves on PATH the folder of git and nothing else, so its gate starts no gentle-ai of this
-  // machine unless one sits beside git. Nothing here reads the review row, which says either.
+  // The hook leaves on PATH the folder of git and nothing else. Nothing here reads the review row.
   const hooks = path.join(home, 'hooks');
   writeFile(hooks, 'pre-commit', `#!/bin/sh\ngit=$(command -v git)\nPATH="\${git%/*}"\nexec "${slashes(process.execPath)}" "${slashes(path.join(checkout, 'bin', 'check.mjs'))}"\n`);
   fs.chmodSync(path.join(hooks, 'pre-commit'), 0o755);
@@ -4877,7 +4694,7 @@ function sameTreeRepo(declared = { sameTree: 'skip' }) {
     sensor.during?.();
     return sensor.answer();
   };
-  const gate = (env = {}, deps = {}) => runCheck(['--cwd', repo, '--home', home], { JS_HARNESS_GATE_LOAD: 'off', ...env }, { gentleAi: gentleAiNotFound, spawn, ...deps });
+  const gate = (env = {}, deps = {}) => runCheck(['--cwd', repo, '--home', home], { JS_HARNESS_GATE_LOAD: 'off', ...env }, { spawn, ...deps });
   const remove = () => {
     for (const dir of [repo, home]) fs.rmSync(dir, { recursive: true, force: true });
   };

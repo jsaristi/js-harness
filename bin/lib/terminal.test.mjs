@@ -106,7 +106,7 @@ const LONG_PROMPT = "Remove everything js-harness keeps on this machine: the who
 
 test('no laid-out row is wider than the width, and no frame is taller than the height', () => {
   const sections = {
-    top: ['js-harness 0.97.0  (update available: 0.98.0)', '  gentle-ai       4.2.0     missing codex'],
+    top: ['js-harness 0.97.0  (update available: 0.98.0)', '  engram          4.2.0     missing codex'],
     body: Array.from({ length: 40 }, (_, i) => `${i === 30 ? '>' : ' '} Item number ${i} with a label long enough to wrap`),
     focus: 30,
     bottom: ['', LONG_PROMPT],

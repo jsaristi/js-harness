@@ -5,10 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
 import * as queue from './merge-queue.mjs';
-import { circleciState, failedRows, failingTests, landingLines, localSuite, mergeQueueMain, staleBin, tellLeftOut } from './merge-queue.mjs';
+import { actionsState, failedRows, failingTests, landingLines, localSuite, mergeQueueMain, staleBin, tellLeftOut } from './merge-queue.mjs';
 import { appendNotice, newNotice, NOTICE_TEXT_MAX, readNotices } from './lib/channel.mjs';
+import { checkCodexReviews } from './lib/codex-review-rows.mjs';
 import { appendGateEvent } from './lib/gate-log.mjs';
-import { gentleAiEvidence } from './lib/gentle-ai-evidence.mjs';
+import { lensCandidate } from './lib/lens-candidate.mjs';
+import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 import { declarationOf } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
@@ -74,7 +76,7 @@ const queueRepo = repoTemplate((top) => {
   return { main, heads };
 });
 
-const pr = (number, branch, head, over = {}) => ({ number, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'gentle-ai: passive', headRefOid: head, headRefName: branch, ...over });
+const pr = (number, branch, head, over = {}) => ({ number, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'Risk: none', headRefOid: head, headRefName: branch, ...over });
 
 /** A runner that runs git for real and answers gh with `prs`, as GitHub does: `gh pr list --base <b>` lists the pull
  * requests based on b only, and `--limit <n>` the first n of them (`prs` in GitHub's order, newest first). `gh.view()` answers `gh repo view`, `gh.edit(args)` answers `gh pr edit`, each a
@@ -177,9 +179,9 @@ test('a pull request whose code commits have no Codex review record is left out,
 
 test('with no pull request ready the queue says so and exits 0 having built nothing', async () => {
   const { root, heads } = makeQueueRepo();
-  const { code, out } = await dryRun(root, [pr(1, 'feat/a', heads['feat/a'], { body: 'no checks' })]);
+  const { code, out } = await dryRun(root, [pr(1, 'feat/a', heads['feat/a'], { isDraft: true })]);
   assert.equal(code, 0);
-  assert.deepEqual(out, ['PR 1 is left out: PR 1: its body has no gentle-ai line.', 'No pull request is ready to merge: nothing was built.']);
+  assert.deepEqual(out, ['PR 1 is left out: PR 1 is a draft.', 'No pull request is ready to merge: nothing was built.']);
   assert.equal(git(root, 'worktree', 'list').split('\n').length, 1);
 });
 
@@ -192,28 +194,29 @@ test('no mode, or an unknown flag, is a usage error (exit 2)', async () => {
   assert.match(out.join('\n'), /^Usage: js-harness merge-queue --dry-run/m);
 });
 
-/** A runner for `--land`: git for real, `gh pr list` from `prs`, and the check runs of a commit from `checks`,
- * one answer a call (the last repeats); `onChecks(call)` runs before each answer. */
+/** A runner for `--land`: git for real, `gh pr list` from `prs`, and the workflow runs of a commit from `checks`,
+ * one answer a call (the last repeats); `onChecks(call)` runs before each answer. A run that names no branch or sha
+ * takes the ones the land asked for. */
 function landRunner(prs, checks, onChecks = () => {}, gh = {}) {
   const base = runner(prs, gh);
   let asked = 0;
   const run = (command, args, options) => {
-    if (command === 'gh' && args[0] === 'api' && /\/check-runs$/.test(args[1])) {
+    if (command === 'gh' && args[0] === 'api' && /\/actions\/runs\?/.test(args[1])) {
       base.calls.push([command, ...args].join(' '));
       onChecks(asked);
-      const answer = checks[Math.min(asked, checks.length - 1)];
+      const query = new URLSearchParams(args[1].split('?')[1]);
+      const answer = checks[Math.min(asked, checks.length - 1)].map((one) => ({ head_branch: query.get('branch'), head_sha: query.get('head_sha'), ...one }));
       asked += 1;
-      return { status: 0, stdout: JSON.stringify({ check_runs: answer }) };
+      return { status: 0, stdout: JSON.stringify({ workflow_runs: answer }) };
     }
-    if (command === 'gh' && args[0] === 'api' && /\/status$/.test(args[1])) return { status: 0, stdout: JSON.stringify({ statuses: [] }) };
     return base.run(command, args, options);
   };
   return { run, calls: base.calls };
 }
 
-const circle = (status, conclusion = null) => ({ name: 'check', status, conclusion, app: { slug: 'circleci-checks' }, html_url: 'https://app.circleci.com/x' });
+const workflowRun = (status, conclusion = null, more = {}) => ({ id: 1, name: 'gate', path: '.github/workflows/gate.yml', status, conclusion, html_url: 'https://github.com/o/r/actions/runs/1', ...more });
 
-async function land(root, prs, { suite = () => ({ ok: true }), checks = [[circle('completed', 'success')]], onChecks, wrap = (run) => run, env, cwd = root, gh } = {}) {
+async function land(root, prs, { suite = () => ({ ok: true }), checks = [[workflowRun('completed', 'success')]], onChecks, wrap = (run) => run, env, cwd = root, gh } = {}) {
   const { run, calls } = landRunner(prs, checks, onChecks, gh);
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', cwd], { run: wrap(run), covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line), ...(env && { env }) });
@@ -343,9 +346,9 @@ test('--land: a retarget gh refuses is said, and the land still exits 0 with mai
   assert.ok(out.includes('Could not retarget PR 2 to main (refused by the test): it stays on feat/a until it is retargeted by hand.'), out.join('\n'));
 });
 
-test('--land: the candidate green locally and on CircleCI becomes main, by fast-forward, and its queue branch is removed', async () => {
+test('--land: the candidate green locally and on GitHub Actions becomes main, by fast-forward, and its queue branch is removed', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
-  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { checks: [[circle('in_progress')], [circle('completed', 'success')]] });
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { checks: [[workflowRun('in_progress')], [workflowRun('completed', 'success')]] });
   assert.equal(code, 0, out.join('\n'));
   const landed = git(origin, 'rev-parse', 'main');
   assert.notEqual(landed, main);
@@ -355,7 +358,7 @@ test('--land: the candidate green locally and on CircleCI becomes main, by fast-
   assert.equal(out.at(-1), `Landed: main ${main.slice(0, 7)} is now ${landed.slice(0, 7)}, with PR 1, PR 2.`);
 });
 
-test('--land: a candidate red locally pushes no main, and the queue branch that started CircleCI is removed', async () => {
+test('--land: a candidate red locally pushes no main, and the queue branch that started its GitHub Actions run is removed', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
   const { code, out, calls } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { suite: () => ({ ok: false, said: 'npm run test exited 1' }) });
   assert.equal(code, 4, out.join('\n'));
@@ -365,23 +368,23 @@ test('--land: a candidate red locally pushes no main, and the queue branch that 
   assert.match(out.at(-1), /^The candidate is red on this machine \(npm run test exited 1\): main was not pushed\.$/);
 });
 
-test('--land: a candidate red on CircleCI leaves main as it was', async () => {
+test('--land: a candidate red on GitHub Actions leaves main as it was', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
-  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { checks: [[circle('completed', 'failure')]] });
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { checks: [[workflowRun('completed', 'failure')]] });
   assert.equal(code, 4, out.join('\n'));
   assert.equal(git(origin, 'rev-parse', 'main'), main);
   assert.ok(!remoteBranches(origin).some((name) => name.startsWith('queue/')));
-  assert.match(out.at(-1), /^The candidate is red on CircleCI \(check: failure, https:\/\/app\.circleci\.com\/x\): main was not pushed\.$/);
+  assert.match(out.at(-1), /^The candidate is red on GitHub Actions \(gate: failure, https:\/\/github\.com\/o\/r\/actions\/runs\/1\): main was not pushed\.$/);
 });
 
-// Harness review b2, 2026-10-18: a CircleCI that never answered judged nothing, so it is no red (4) but 5.
-test('--land: a candidate CircleCI gave no result for leaves main as it was, and exits 5, not red', async () => {
+// Harness review b2, 2026-10-18: a CI run that never answered judged nothing, so it is no red (4) but 5.
+test('--land: a candidate GitHub Actions gave no result for leaves main as it was, and exits 5, not red', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
-  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { checks: [[circle('in_progress')]] });
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { checks: [[workflowRun('in_progress')]] });
   assert.equal(code, 5, out.join('\n'));
   assert.equal(git(origin, 'rev-parse', 'main'), main);
   assert.deepEqual(queueBranches(origin), []);
-  assert.equal(out.at(-1), 'CircleCI gave no result for the candidate in 30 minutes: main was not pushed.');
+  assert.equal(out.at(-1), 'GitHub Actions gave no result for the candidate in 30 minutes: main was not pushed.');
 });
 
 test('--land: a main that moved while the candidate was tested is not overwritten', async () => {
@@ -505,6 +508,30 @@ test('--land: a push of main that reports a failure, while origin\'s main is the
   assert.equal(out.at(-1), `Landed: main ${main.slice(0, 7)} is now ${landed.slice(0, 7)}, with PR 1.`);
 });
 
+test('--land: a push of main the pre-push hook refuses says the hook\'s failing rows, not only git\'s line (PR 658, 2026-10-29)', async () => {
+  const { root, origin, main, heads } = makeQueueRepo();
+  // Git for Windows hands the hook's standard output to the push's (seen on 2.54): the rows are there, git's line on stderr.
+  const said = [
+    'PASS  tests        ok',
+    'FAIL  codex-review  1 of 2 code commits since origin/main have no Codex review record',
+    '      4b85503 feat(stretch): the return says why',
+    'FAIL  lens-review  1 of 2 code commits since origin/main have no complete Claude lens record',
+    '',
+    'not a row: a sensor\'s output after the block',
+  ].join('\n');
+  const wrap = failingGit((args) => args[0] === 'push' && args.includes('origin') && args.at(-1).endsWith(':refs/heads/main'), () => ({ status: 1, stdout: said, stderr: "error: failed to push some refs to 'origin'\n" }));
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { wrap });
+  assert.equal(code, 1, out.join('\n'));
+  assert.equal(git(origin, 'rev-parse', 'main'), main);
+  assert.deepEqual(out.at(-1).split('\n'), [
+    "merge-queue: could not push main: error: failed to push some refs to 'origin'. The pre-push hook said:",
+    '  FAIL  codex-review  1 of 2 code commits since origin/main have no Codex review record',
+    '    4b85503 feat(stretch): the return says why',
+    '  FAIL  lens-review  1 of 2 code commits since origin/main have no complete Claude lens record',
+  ], out.join('\n'));
+  assert.ok(!out.some((line) => line.includes('not a row')), out.join('\n'));
+});
+
 test('--land: a bisection whose reset fails stops, tests nothing more and pushes nothing (verifier, 2026-10-14)', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
   const seen = [];
@@ -522,23 +549,37 @@ test('--land: a bisection whose reset fails stops, tests nothing more and pushes
   assert.match(out.join('\n'), /could not reset the candidate to the merge of PR 1 \(fatal: refused by the test\)/);
 });
 
-test('CircleCI is green only when every run of it succeeded: a skipped or neutral run is no run of the suite (Codex, 2026-10-14)', () => {
-  const run = (conclusion) => ({ name: 'check', status: 'completed', conclusion, app: { slug: 'circleci-checks' } });
-  assert.equal(circleciState([run('success')], []).state, 'green');
-  assert.equal(circleciState([run('skipped')], []).state, 'pending');
-  assert.equal(circleciState([run('neutral')], []).state, 'pending');
-  assert.equal(circleciState([run('success'), run('skipped')], []).state, 'pending');
-  assert.equal(circleciState([], [{ context: 'ci/circleci: check', state: 'success' }]).state, 'green');
-  assert.equal(circleciState([], []).state, 'pending');
+test('GitHub Actions is green only when the gate\'s run succeeded: a skipped or neutral run is no run of the suite (Codex, 2026-10-14)', () => {
+  const at = { branch: 'queue/x', sha: 'a'.repeat(40) };
+  const run = (conclusion, more = {}) => workflowRun('completed', conclusion, { head_branch: at.branch, head_sha: at.sha, ...more });
+  assert.equal(actionsState([run('success')], at).state, 'green');
+  assert.equal(actionsState([run('skipped')], at).state, 'pending');
+  assert.equal(actionsState([run('neutral')], at).state, 'pending');
+  assert.equal(actionsState([workflowRun('in_progress', null, { head_branch: at.branch, head_sha: at.sha })], at).state, 'pending');
+  assert.equal(actionsState([run('failure')], at).state, 'red');
+  assert.equal(actionsState([], at).state, 'pending');
 });
 
-test('--land: a read of CircleCI that fails is asked again, never taken for an empty answer (Codex, 2026-10-14)', async () => {
+// Codex, 2026-10-27, on 87c6f87: the land waits for gate.yml on its queue branch and its candidate, and no other run
+// decides it, as a windows-daily.yml run dispatched by hand on a queue/* ref would.
+test('only the gate workflow\'s newest run on the queue branch and the candidate decides the land', () => {
+  const at = { branch: 'queue/x', sha: 'a'.repeat(40) };
+  const run = (conclusion, more = {}) => workflowRun('completed', conclusion, { head_branch: at.branch, head_sha: at.sha, ...more });
+  const daily = { path: '.github/workflows/windows-daily.yml', name: 'windows-daily' };
+  assert.equal(actionsState([run('failure', daily), run('success')], at).state, 'green');
+  assert.equal(actionsState([run('success', daily)], at).state, 'pending');
+  assert.equal(actionsState([run('success', { head_branch: 'gate/y' })], at).state, 'pending');
+  assert.equal(actionsState([run('success', { head_sha: 'b'.repeat(40) })], at).state, 'pending');
+  assert.equal(actionsState([run('failure', { id: 1 }), run('success', { id: 2 })], at).state, 'green', 'the newer run counts: a re-run keeps its id, so a newer id is the run of another push');
+  assert.equal(actionsState([run('success', { id: 2 }), run('failure', { id: 1 })], at).state, 'green', 'whatever order GitHub lists them in');
+});
+
+test('--land: a read of GitHub Actions that fails is asked again, never taken for an empty answer (Codex, 2026-10-14)', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
   let reads = 0;
-  const base = landRunner([pr(1, 'feat/a', heads['feat/a'])], [[circle('completed', 'success')]]);
+  const base = landRunner([pr(1, 'feat/a', heads['feat/a'])], [[workflowRun('completed', 'success')]]);
   const run = (command, args, options) => {
-    if (command === 'gh' && args[0] === 'api' && /\/check-runs$/.test(args[1]) && (reads += 1) === 1) return { status: 1, stdout: '', stderr: 'HTTP 502' };
-    if (command === 'gh' && args[0] === 'api' && /\/status$/.test(args[1])) return { status: 0, stdout: JSON.stringify({ statuses: [{ context: 'ci/circleci: check', state: 'success' }] }) };
+    if (command === 'gh' && args[0] === 'api' && /\/actions\/runs\?/.test(args[1]) && (reads += 1) === 1) return { status: 1, stdout: '', stderr: 'HTTP 502' };
     return base.run(command, args, options);
   };
   let slept = 0;
@@ -744,29 +785,37 @@ test('the main worktree is made beside the candidate, and removed with it: on su
     redSeen.push(fs.existsSync(args[0]));
     return passes();
   };
-  const failed = await land(red.root, [pr(1, 'feat/a', red.heads['feat/a'])], { checks: [[circle('completed', 'failure')]], wrap: (run) => withDoor(run, redDoor, []) });
+  const failed = await land(red.root, [pr(1, 'feat/a', red.heads['feat/a'])], { checks: [[workflowRun('completed', 'failure')]], wrap: (run) => withDoor(run, redDoor, []) });
   assert.equal(failed.code, 4, failed.out.join('\n'));
   assert.deepEqual(redSeen, [true]);
-  assert.equal(git(red.root, 'worktree', 'list').split('\n').length, 1, 'no worktree is left after the red CircleCI');
+  assert.equal(git(red.root, 'worktree', 'list').split('\n').length, 1, 'no worktree is left after the red GitHub Actions');
   assert.deepEqual(fs.readdirSync(path.join(red.root, '.git', 'js-harness')), ['lands.jsonl'], 'only the land record is left (odd/tasks/land-unattended.md, B2), neither the candidate nor main');
 });
 
-// gentle-ai's evidence on the pull request's own branch, and the coverage commit by commit (odd/tasks/rule-hierarchy.md,
+// The reviews of the pull request's own commits, and the coverage commit by commit (odd/tasks/rule-hierarchy.md,
 // "The merge door (T16e)", items 5 and 6). These runs read the Codex records and the branch for real: no `covered` stub.
 
 const REVIEWED_AT = '2026-10-16T12:00:00.000Z';
 
-/** Appends to the Codex review records of the clone at `root` one review of `base..head`. */
-function writeRecord(root, { base, head }) {
+/** Appends to the Codex review records of the clone at `root` one review of `base..head`, and to its lens records one
+ * whose outcome is `lens` (`reviewed`, `unavailable` with a reason, or none when `null`). */
+function writeRecord(root, { base, head, lens = 'reviewed' }) {
   fs.mkdirSync(path.join(root, '.git', 'js-harness'), { recursive: true });
   const rec = { schema: 'js-harness.codex-review/v1', base, head, reviewedAt: REVIEWED_AT, outcome: 'reviewed' };
   fs.appendFileSync(path.join(root, '.git', 'js-harness', 'codex-reviews.jsonl'), `${JSON.stringify(rec)}\n`, 'utf8');
+  if (lens) writeLensRecord(root, { base, head, outcome: lens });
 }
 
-/** makeQueueRepo with a branch feat/g of two commits: g.txt (code), then odd/tasks/g.md, whose second line is
- * `line({ code, short, main })`. With `codex` on, main's harness.json turns the Codex review on and a record covers
- * main..feat/g. `{ root, origin, main, code, head }`. */
-function makeEvidenceRepo(line, { codex = true } = {}) {
+/** Appends to the lens records of the clone at `root` one of `base..head` with `outcome`, as `lens-review` writes it. */
+function writeLensRecord(root, { base, head, outcome }) {
+  const { subjectHash } = lensCandidate(root, { base, head });
+  const said = outcome === 'reviewed' ? { results: [{ lens: 'risk', outcome: 'complete', findings: [] }] } : { reason: 'the plan is out of turns' };
+  appendLensReview(root, { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, run: startLensRun(root, { base, head, subjectHash }), reviewedAt: REVIEWED_AT, outcome, ...said });
+}
+
+/** makeQueueRepo with a branch feat/g of two commits: g.txt (code), then odd/tasks/g.md, a note. With `codex` on, main's harness.json turns the Codex review on and, with
+ * `record` too, a record covers main..feat/g, and a lens record whose outcome is `lens` (`writeRecord`). `{ root, origin, main, code, head }`. */
+function makeEvidenceRepo({ codex = true, lens = 'reviewed', record = true } = {}) {
   const made = makeQueueRepo();
   const { root } = made;
   const commit = (file, text, message) => {
@@ -778,87 +827,111 @@ function makeEvidenceRepo(line, { codex = true } = {}) {
   };
   let main = made.main;
   if (codex) {
-    main = commit('harness.json', `${JSON.stringify({ functions: { codexReview: 'on' } })}\n`, 'main turns the Codex review on');
+    main = commit('harness.json', `${JSON.stringify({ functions: { codexReview: 'on', lensReview: 'on' } })}\n`, 'main turns the Codex and lens reviews on');
     git(root, 'push', '--quiet', 'origin', 'HEAD:main');
   }
   git(root, 'checkout', '--quiet', '-b', 'feat/g', main);
   const code = commit('g.txt', 'g\n', 'feat/g code');
-  const head = commit('odd/tasks/g.md', `# G\n${line({ code, short: code.slice(0, 7), main })}\n`, 'feat/g evidence');
+  const head = commit('odd/tasks/g.md', '# G\n- notes\n', 'feat/g evidence');
   git(root, 'push', '--quiet', 'origin', 'feat/g');
   git(root, 'checkout', '--quiet', '--detach', main);
-  if (codex) writeRecord(root, { base: main, head });
+  if (codex && record) writeRecord(root, { base: main, head, lens });
   return { ...made, main, code, head };
 }
 
-/** `--dry-run` with no `covered` stub and the cut-over at `cutover`: `{ code, out }`. */
-async function dryRunEvidence(root, prs, cutover = '2000-01-01T00:00:00Z') {
+/** `--dry-run` with no `covered` stub: `{ code, out }`. */
+async function dryRunEvidence(root, prs) {
   const { run } = runner(prs);
   const out = [];
-  const code = await mergeQueueMain(['--dry-run', '--cwd', root], { run, cutover, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  const code = await mergeQueueMain(['--dry-run', '--cwd', root], { run, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   return { code, out };
 }
 
-const noEvidence = (short) => `PR 1 is left out: no written gentle-ai evidence for ${short} on this branch: name it, or its range, on a gentle-ai line of its feature document.`;
-
-test('a code commit named by its short hash on a gentle-ai line of the branch\'s feature document is ready, and the coverage is printed commit by commit', async () => {
-  const { root, main, code, head } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short} approved`);
+test('a code commit its Codex and lens records cover is ready, and the coverage is printed commit by commit', async () => {
+  const { root, main, code, head } = makeEvidenceRepo();
   const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
   assert.equal(exit, 0, out.join('\n'));
   assert.deepEqual(out.slice(0, 3), [
     'PR 1, commit by commit:',
-    `  ${code.slice(0, 7)} feat/g code: Codex ${main.slice(0, 7)}..${head.slice(0, 7)} reviewed ${REVIEWED_AT.slice(0, 10)}; gentle-ai odd/tasks/g.md:2`,
+    `  ${code.slice(0, 7)} feat/g code: Codex ${main.slice(0, 7)}..${head.slice(0, 7)} reviewed ${REVIEWED_AT.slice(0, 10)}`,
     `Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/g).`,
   ]);
 });
 
-test('a commit named only on a line that does not say gentle-ai, or named nowhere, leaves the pull request out', async () => {
-  for (const line of [({ short }) => `- reviewed ${short}`, () => '- gentle-ai: approved']) {
-    const { root, code, head } = makeEvidenceRepo(line);
-    const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
-    assert.equal(exit, 0, out.join('\n'));
-    assert.deepEqual(out, [noEvidence(code.slice(0, 7)), 'No pull request is ready to merge: nothing was built.']);
-  }
-});
-
-test('a range a..b on a gentle-ai line holds a and every commit git lists for a..b', async () => {
-  const ranges = [({ short, main }) => `- gentle-ai: \`${main.slice(0, 7)}..${short}\` approved`, ({ code }) => `- gentle-ai: ${code}..${code} approved`];
-  for (const line of ranges) {
-    const { root, main, head } = makeEvidenceRepo(line);
-    const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
-    assert.equal(exit, 0, out.join('\n'));
-    assert.ok(out.includes(`Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/g).`), out.join('\n'));
-  }
-});
-
-test('a hash on a gentle-ai line that is no commit of the branch leaves it out, and says a rebase changes the hashes', async () => {
-  const { root, code, main, head } = makeEvidenceRepo(({ main: base }) => `- gentle-ai: ${base.slice(0, 7)} approved`);
-  const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
-  assert.equal(out[0], `${noEvidence(code.slice(0, 7)).replace(/\.$/, '')}; ${main.slice(0, 7)} on odd/tasks/g.md:2 is no commit of this branch: a rebase changes the hashes, so name the new ones.`);
-});
-
-test('a range whose end is no commit of the branch holds nothing, and the hint names that end', async () => {
-  const { root, code, main, head } = makeEvidenceRepo(({ short, main: base }) => `- gentle-ai: ${short}..${base.slice(0, 7)} approved`);
-  const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
-  assert.equal(out[0], `${noEvidence(code.slice(0, 7)).replace(/\.$/, '')}; ${main.slice(0, 7)} on odd/tasks/g.md:2 is no commit of this branch: a rebase changes the hashes, so name the new ones.`);
-});
-
-test('a code commit made before the cut-over asks for no line, and its coverage line says so', async () => {
-  const { root, main, code, head } = makeEvidenceRepo(() => '- no line of the review here');
-  const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)], '2999-01-01T00:00:00Z');
+test('a record whose head lies past the pull request covers it at its head and not merged: the door refuses it before a candidate, as the push does', async () => {
+  // PR 658 (2026-10-29): feat/g was reviewed as main..D, then reset to its parent C. At C as the tip the record
+  // covers C, since D lies past it; merged into main, the tip the push of main checks, nothing lies past it.
+  const { root, main, code, head } = makeEvidenceRepo({ record: false });
+  git(root, 'checkout', '--quiet', '--detach', head);
+  fs.writeFileSync(path.join(root, 'g2.txt'), 'g2\n', 'utf8');
+  git(root, 'add', 'g2.txt');
+  git(root, 'commit', '--quiet', '-m', 'feat/g more code, reset away');
+  const past = git(root, 'rev-parse', 'HEAD');
+  writeRecord(root, { base: main, head: past });
+  git(root, 'checkout', '--quiet', '--detach', main);
+  git(root, 'merge', '--quiet', '--no-ff', '--no-verify', '-m', 'Merge pull request #1 from feat/g', head);
+  const pushed = checkCodexReviews(root, git(root, 'rev-parse', 'HEAD'));
+  git(root, 'checkout', '--quiet', '--detach', main);
+  assert.equal(pushed.pass, false, 'the push of main with the pull request merged is refused');
+  assert.deepEqual(pushed.lines?.[0], `${code.slice(0, 7)} feat/g code`);
+  const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
   assert.equal(exit, 0, out.join('\n'));
-  assert.equal(out[1], `  ${code.slice(0, 7)} feat/g code: Codex ${main.slice(0, 7)}..${head.slice(0, 7)} reviewed ${REVIEWED_AT.slice(0, 10)}; gentle-ai not asked, committed before the cut-over`);
+  assert.match(out[0], /^PR 1 is left out: 1 of 1 code commit since origin\/main have no Codex review record/, out.join('\n'));
+  assert.ok(!out.some((line) => line.startsWith('Candidate:')), out.join('\n'));
 });
 
-test('with the Codex review off, a code commit is one that changes a file that is not Markdown, and it still needs its line', async () => {
-  const named = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short}`, { codex: false });
-  const ready = await dryRunEvidence(named.root, [pr(1, 'feat/g', named.head)]);
-  assert.equal(ready.out[1], `  ${named.code.slice(0, 7)} feat/g code: the Codex review is off; gentle-ai odd/tasks/g.md:2`, ready.out.join('\n'));
-  const bare = makeEvidenceRepo(() => '- nothing', { codex: false });
-  const refused = await dryRunEvidence(bare.root, [pr(1, 'feat/g', bare.head)]);
-  assert.equal(refused.out[0], noEvidence(bare.code.slice(0, 7)), refused.out.join('\n'));
+test('a code commit no complete lens record covers leaves the pull request out (odd/tasks/f8-s1-reviews.md, T5)', async () => {
+  const { root, head } = makeEvidenceRepo({ lens: null });
+  const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
+  assert.match(out[0], /^PR 1 is left out: lens review: 1 of 1 code commit since origin\/main have no complete Claude lens record/);
 });
 
-test('a pull request of documents alone asks for no gentle-ai line and prints no coverage', async () => {
+test('a lens skip leaves the pull request out until a review of the same commits pays it (S7)', async () => {
+  const { root, main, head } = makeEvidenceRepo({ lens: 'unavailable' });
+  const skipped = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
+  assert.match(skipped.out[0], new RegExp(`^PR 1 is left out: it holds a lens review skip, which owes a review before it lands: unavailable ${main.slice(0, 7)}\\.\\.${head.slice(0, 7)}: the plan is out of turns`));
+  writeLensRecord(root, { base: main, head, outcome: 'reviewed' });
+  const paid = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
+  assert.ok(paid.out.includes(`Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/g).`), paid.out.join('\n'));
+});
+
+test('with the Codex review off, a code commit is one that changes a file that is not Markdown, and it lands on its lens record alone (L11, L14)', async () => {
+  const { root, main, code, head } = makeEvidenceRepo({ codex: false });
+  const unreviewed = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
+  assert.match(unreviewed.out[0], /^PR 1 is left out: lens review: 1 of 1 code commit since origin\/main have no complete Claude lens record/);
+  writeLensRecord(root, { base: main, head, outcome: 'reviewed' });
+  const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
+  assert.equal(exit, 0, out.join('\n'));
+  assert.equal(out[1], `  ${code.slice(0, 7)} feat/g code: the Codex review is off`, out.join('\n'));
+  assert.ok(!out.some((line) => /gentle-ai/i.test(line)), out.join('\n'));
+});
+
+test('a pull request that turns the Codex review on is read onto the candidate so far: a sibling\'s code with no Codex record leaves it out, as the push of the whole candidate refuses it (JH 83\'s verifier, finding 2)', async () => {
+  // Each alone on main passes: feat/g with the Codex review off and its lens record, feat/h on its own two records.
+  // Merged together the review is on, and feat/g's commit has no Codex record: the push of main refuses the two.
+  const { root, main, code, head } = makeEvidenceRepo({ codex: false });
+  writeLensRecord(root, { base: main, head, outcome: 'reviewed' });
+  git(root, 'checkout', '--quiet', '-b', 'feat/h', main);
+  fs.writeFileSync(path.join(root, 'harness.json'), `${JSON.stringify({ functions: { codexReview: 'on', lensReview: 'on' } })}\n`, 'utf8');
+  git(root, 'add', 'harness.json');
+  git(root, 'commit', '--quiet', '-m', 'feat/h turns the Codex review on');
+  git(root, 'push', '--quiet', 'origin', 'feat/h');
+  const on = git(root, 'rev-parse', 'HEAD');
+  writeRecord(root, { base: main, head: on });
+  git(root, 'checkout', '--quiet', '--detach', main);
+  git(root, 'merge', '--quiet', '--no-ff', '--no-verify', '-m', 'Merge pull request #1 from feat/g', head);
+  git(root, 'merge', '--quiet', '--no-ff', '--no-verify', '-m', 'Merge pull request #2 from feat/h', on);
+  const pushed = checkCodexReviews(root, git(root, 'rev-parse', 'HEAD'));
+  git(root, 'checkout', '--quiet', '--detach', main);
+  assert.equal(pushed.pass, false, 'the push of main with both merged is refused');
+  assert.deepEqual(pushed.lines?.[0], `${code.slice(0, 7)} feat/g code`);
+  const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head), pr(2, 'feat/h', on)]);
+  assert.equal(exit, 0, out.join('\n'));
+  assert.ok(out.some((line) => /^PR 2 is left out: 1 of 2 code commits since origin\/main have no Codex review record/.test(line)), out.join('\n'));
+  assert.ok(out.includes(`Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/g).`), out.join('\n'));
+});
+
+test('a pull request of documents alone prints no coverage', async () => {
   const { root, main } = makeQueueRepo();
   git(root, 'checkout', '--quiet', '-b', 'feat/docs', main);
   fs.mkdirSync(path.join(root, 'odd', 'tasks'), { recursive: true });
@@ -873,8 +946,8 @@ test('a pull request of documents alone asks for no gentle-ai line and prints no
   assert.equal(out[0], `Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/docs).`);
 });
 
-test('a merge of main into the branch, with an edit written in it, asks for no gentle-ai line', async () => {
-  const { root, code, head } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short}`);
+test('a merge of main into the branch, with an edit written in it, lands on the records that cover it', async () => {
+  const { root, code, head } = makeEvidenceRepo();
   // main moves, and the branch merges it with a line written in the merge itself.
   git(root, 'checkout', '--quiet', '-b', 'moved', 'origin/main');
   fs.writeFileSync(path.join(root, 'm.txt'), 'm\n', 'utf8');
@@ -896,18 +969,8 @@ test('a merge of main into the branch, with an edit written in it, asks for no g
   assert.ok(out.some((one) => one.startsWith(`  ${code.slice(0, 7)} feat/g code:`)), out.join('\n'));
 });
 
-test('the gentle-ai lines are read from the repository\'s root when the queue runs in a folder below it', () => {
-  const { root, main, code, head } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short}`);
-  const below = path.join(root, 'odd', 'tasks');
-  fs.mkdirSync(below, { recursive: true });
-  const codeCommits = [{ id: code, shortId: code.slice(0, 7), parentCount: 1 }];
-  const evidence = gentleAiEvidence(below, { main, head, codeCommits, cutover: '2000-01-01T00:00:00Z' });
-  assert.deepEqual(evidence.missing, []);
-  assert.equal(evidence.where.get(code), 'odd/tasks/g.md:2');
-});
-
 test('with the Codex review off, a Markdown file whose name git quotes is no code', async () => {
-  const { root, main, code } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short}`, { codex: false });
+  const { root, main, code } = makeEvidenceRepo({ codex: false });
   // Written to the index alone, NTFS's guard off: Windows names no file with a double quote, and git quotes such a name.
   git(root, 'checkout', '--quiet', 'feat/g');
   const scratch = path.join(root, '.git', 'quoted-blob');
@@ -920,33 +983,15 @@ test('with the Codex review off, a Markdown file whose name git quotes is no cod
   git(root, 'push', '--quiet', 'origin', 'feat/g');
   const head = git(root, 'rev-parse', 'HEAD');
   git(root, 'checkout', '--quiet', '--detach', main);
+  writeLensRecord(root, { base: main, head, outcome: 'reviewed' });
   // The evidence alone is asserted: Windows cannot write the file into the candidate, which a merge then says.
   const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
-  assert.deepEqual(out.slice(0, 2), ['PR 1, commit by commit:', `  ${code.slice(0, 7)} feat/g code: the Codex review is off; gentle-ai odd/tasks/g.md:2`], out.join('\n'));
-});
-
-test('with the Codex review off, a merge of another branch with an edit written in it needs its own line', async () => {
-  const { root } = makeEvidenceRepo(({ short }) => `- gentle-ai: ${short}`, { codex: false });
-  git(root, 'checkout', '--quiet', '-b', 'sibling', 'origin/main');
-  fs.writeFileSync(path.join(root, 's.txt'), 's\n', 'utf8');
-  git(root, 'add', 's.txt');
-  git(root, 'commit', '--quiet', '-m', 'sibling code');
-  git(root, 'checkout', '--quiet', 'feat/g');
-  git(root, 'merge', '--quiet', '--no-ff', '--no-commit', 'sibling');
-  fs.writeFileSync(path.join(root, 's.txt'), 's, edited in the merge\n', 'utf8');
-  git(root, 'add', 's.txt');
-  git(root, 'commit', '--quiet', '-m', 'merge sibling');
-  git(root, 'push', '--quiet', 'origin', 'feat/g');
-  const merged = git(root, 'rev-parse', 'HEAD');
-  git(root, 'checkout', '--quiet', '--detach', 'origin/main');
-  const sibling = git(root, 'rev-parse', 'sibling');
-  const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', merged)]);
-  assert.equal(out[0], noEvidence(`${merged.slice(0, 7)}, ${sibling.slice(0, 7)}`), out.join('\n'));
+  assert.deepEqual(out.slice(0, 2), ['PR 1, commit by commit:', `  ${code.slice(0, 7)} feat/g code: the Codex review is off`], out.join('\n'));
 });
 
 // A land of documents alone (the throughput plan's item 7, 2026-10-16): the suite is not run on this machine for a
 // candidate whose every changed path is a document that main's harness.json declares, as a commit of documents alone runs
-// no suite; CircleCI still runs the whole gate on it.
+// no suite; GitHub Actions still runs the whole gate on it.
 
 /** makeQueueRepo, with main declaring documents in harness.json (`declared`, an object, or a text written as it is) and
  * holding docs/kept.md, and four branches on it: feat/doc adds docs/a.md and feat/doc2 adds odd/tasks/b.md, documents
@@ -993,9 +1038,9 @@ async function landCounted(root, prs, options = {}) {
   return { code, out, suites };
 }
 
-const DOCUMENTS_LINE = 'Every path the candidate changes is a document main\'s harness.json declares: the suite does not run on this machine, as for a commit of documents alone; CircleCI runs the whole gate on it.';
+const DOCUMENTS_LINE = 'Every path the candidate changes is a document main\'s harness.json declares: the suite does not run on this machine, as for a commit of documents alone; GitHub Actions runs the whole gate on it.';
 
-test('--land: a candidate of documents alone runs no suite on this machine, says so, and lands on CircleCI\'s green', async () => {
+test('--land: a candidate of documents alone runs no suite on this machine, says so, and lands on GitHub Actions\'s green', async () => {
   const { root, origin, main, heads } = makeDocumentsRepo();
   const suites = [];
   const { code, out } = await land(root, [pr(1, 'feat/doc', heads['feat/doc']), pr(2, 'feat/doc2', heads['feat/doc2'])], { suite: (dir) => suites.push(dir) && { ok: true } });
@@ -1007,13 +1052,13 @@ test('--land: a candidate of documents alone runs no suite on this machine, says
   assert.equal(out.at(-1), `Landed: main ${main.slice(0, 7)} is now ${landed.slice(0, 7)}, with PR 1, PR 2.`);
 });
 
-test('--land: a candidate of documents alone that CircleCI turns red is not landed', async () => {
+test('--land: a candidate of documents alone that GitHub Actions turns red is not landed', async () => {
   const { root, origin, main, heads } = makeDocumentsRepo();
-  const { code, out, suites } = await landCounted(root, [pr(1, 'feat/doc', heads['feat/doc'])], { checks: [[circle('completed', 'failure')]] });
+  const { code, out, suites } = await landCounted(root, [pr(1, 'feat/doc', heads['feat/doc'])], { checks: [[workflowRun('completed', 'failure')]] });
   assert.equal(code, 4, out.join('\n'));
   assert.deepEqual(suites, [], 'no suite ran on this machine');
   assert.ok(out.includes(DOCUMENTS_LINE), out.join('\n'));
-  assert.ok(out.some((line) => line.startsWith('The candidate is red on CircleCI')), out.join('\n'));
+  assert.ok(out.some((line) => line.startsWith('The candidate is red on GitHub Actions')), out.join('\n'));
   assert.equal(git(origin, 'rev-parse', 'main'), main);
 });
 
@@ -1133,7 +1178,7 @@ function makeRuleRepo(lines, { sources } = {}) {
 }
 
 async function landRule(made, { args = ['--land'], suite = () => ({ ok: true }), wrap = (run) => run, onChecks } = {}) {
-  const { run } = landRunner([pr(1, 'rule/a', made.head)], [[circle('completed', 'success')]], onChecks);
+  const { run } = landRunner([pr(1, 'rule/a', made.head)], [[workflowRun('completed', 'success')]], onChecks);
   const out = [];
   const code = await mergeQueueMain([...args, '--cwd', made.root], { run: wrap(run), env: made.env, covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   return { code, out };
@@ -1150,7 +1195,7 @@ test('--land of a rule/ branch appends one line that confirms the newest proposa
   assert.ok(out.includes(`Relief: ${added[0]}`), out.join('\n'));
 });
 
-/** A push to origin's main from another clone, at the first read of CircleCI: the land then exits 3. */
+/** A push to origin's main from another clone, at the first read of GitHub Actions: the land then exits 3. */
 const moveMainOf = (origin) => (call) => {
   if (call !== 0) return;
   const other = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-other-'));
@@ -1372,7 +1417,7 @@ const landSaid = ({ startedAt, endedAt, session, phases, ...rest }) => {
   return { ...rest, phases: phases.map(({ startedAt: _, seconds: __, ...phase }) => phase) };
 };
 
-test('--land writes one land record: the pull requests it looked at, each left out with its reason, its phases, CircleCI and what landed (odd/tasks/land-unattended.md, B2)', async () => {
+test('--land writes one land record: the pull requests it looked at, each left out with its reason, its phases, GitHub Actions and what landed (odd/tasks/land-unattended.md, B2)', async () => {
   const { root, origin, main, heads } = makeQueueRepo();
   const prs = [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b']), pr(3, 'feat/c', heads['feat/c']), pr(4, 'feat/d', heads['feat/d'], { isDraft: true })];
   const { code, out } = await land(root, prs);
@@ -1388,8 +1433,8 @@ test('--land writes one land record: the pull requests it looked at, each left o
       { pr: 4, reason: 'not-ready', said: 'PR 4 is a draft.', told: null },
       { pr: 3, reason: 'conflict', said: 'it conflicts with the candidate so far in a.txt.', files: ['a.txt'], told: null },
     ],
-    phases: [{ phase: 'suite', ok: true }, { phase: 'circleci', ok: true }, { phase: 'push', ok: true }],
-    circleci: { state: 'green', name: 'check', conclusion: 'success', url: 'https://app.circleci.com/x' },
+    phases: [{ phase: 'suite', ok: true }, { phase: 'actions', ok: true }, { phase: 'push', ok: true }],
+    actions: { state: 'green', name: 'gate', conclusion: 'success', url: 'https://github.com/o/r/actions/runs/1' },
     candidate: landed,
     landed: [1, 2],
     removed: [],
@@ -1405,16 +1450,16 @@ test('a bisected land records each suite run and the pull request that turned th
   assert.equal(code, 0, out.join('\n'));
   const [record] = landsOf(root).map(landSaid);
   assert.deepEqual(record.leftOut, [{ pr: 2, reason: 'red', said: 'FAIL  tests  1 failed', told: null }]);
-  assert.deepEqual(record.phases, [{ phase: 'suite', ok: false }, { phase: 'circleci', ok: null }, { phase: 'suite', ok: true }, { phase: 'suite', ok: true }, { phase: 'circleci', ok: true }, { phase: 'push', ok: true }]);
+  assert.deepEqual(record.phases, [{ phase: 'suite', ok: false }, { phase: 'actions', ok: null }, { phase: 'suite', ok: true }, { phase: 'suite', ok: true }, { phase: 'actions', ok: true }, { phase: 'push', ok: true }]);
   assert.deepEqual(record.landed, [1]);
 });
 
-test('a land whose suite did not run records exit 5, a suite and a CircleCI phase that are neither green nor red, a dropped CircleCI run, and nothing landed', async () => {
+test('a land whose suite did not run records exit 5, a suite and a GitHub Actions phase that are neither green nor red, a dropped GitHub Actions run, and nothing landed', async () => {
   const { root, heads } = makeQueueRepo();
   const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { suite: () => ({ ok: false, notRun: true, said: 'gate: nothing ran' }) });
   assert.equal(code, 5, out.join('\n'));
   const [record] = landsOf(root).map(landSaid);
-  assert.deepEqual([record.exit, record.phases, record.landed, record.circleci, record.said], [5, [{ phase: 'suite', ok: null }, { phase: 'circleci', ok: null }], [], { state: 'dropped', name: null, conclusion: null, url: null }, out.at(-1)]);
+  assert.deepEqual([record.exit, record.phases, record.landed, record.actions, record.said], [5, [{ phase: 'suite', ok: null }, { phase: 'actions', ok: null }], [], { state: 'dropped', name: null, conclusion: null, url: null }, out.at(-1)]);
 });
 
 test('--dry-run writes no land record, and a land whose record cannot be written keeps its exit and says so', async () => {
@@ -1435,7 +1480,7 @@ test('a land of one pull request red on this machine records it as left out red,
   assert.deepEqual([record.exit, record.leftOut, record.landed], [4, [{ pr: 1, reason: 'red', said: 'npm run test exited 1', told: null }], []]);
 });
 
-test('--land starts CircleCI with the local suite: the queue branch of the candidate is on origin while the suite runs (odd/tasks/land-unattended.md, D)', async () => {
+test('--land starts its GitHub Actions run with the local suite: the queue branch of the candidate is on origin while the suite runs (odd/tasks/land-unattended.md, D)', async () => {
   const { root, origin, heads } = makeQueueRepo();
   const during = [];
   const suite = (dir) => {
@@ -1446,10 +1491,10 @@ test('--land starts CircleCI with the local suite: the queue branch of the candi
   assert.equal(code, 0, out.join('\n'));
   const landed = git(origin, 'rev-parse', 'main');
   assert.deepEqual(during, [[landed]], 'one queue branch, the candidate, pushed before the suite ran');
-  assert.deepEqual(queueBranches(origin), [], 'and removed after CircleCI answered');
+  assert.deepEqual(queueBranches(origin), [], 'and removed after GitHub Actions answered');
   const [record] = landsOf(root);
   const at = (name) => Date.parse(record.phases.find((phase) => phase.phase === name).startedAt);
-  assert.ok(at('circleci') <= at('suite'), 'the CircleCI phase starts no later than the suite phase');
+  assert.ok(at('actions') <= at('suite'), 'the GitHub Actions phase starts no later than the suite phase');
 });
 
 test('a land red on this machine removes its queue branch before it bisects, and the shorter candidate gets its own (odd/tasks/land-unattended.md, D)', async () => {
@@ -1614,7 +1659,7 @@ test('--land stops before it builds anything when the merge-queue it runs from i
   const { root, origin, self } = guardedRepo('export const queue = 2;\n');
   fs.writeFileSync(self, 'export const queue = 1;\n', 'utf8');
   const main = git(origin, 'rev-parse', 'main');
-  const { run, calls } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[circle('completed', 'success')]]);
+  const { run, calls } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[workflowRun('completed', 'success')]]);
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 1, out.join('\n'));
@@ -1626,7 +1671,7 @@ test('--land stops before it builds anything when the merge-queue it runs from i
 test('the land guard reads a merge-queue with Windows line ends as origin/main\'s, and lands', async () => {
   const { root, origin, self } = guardedRepo('export const queue = 2;\n');
   fs.writeFileSync(self, 'export const queue = 2;\r\n', 'utf8');
-  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[circle('completed', 'success')]]);
+  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[workflowRun('completed', 'success')]]);
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 0, out.join('\n'));
@@ -1639,7 +1684,7 @@ const MODULES = { 'merge-queue.mjs': 'export const queue = 2;\n', 'check.mjs': '
 test('the land guard passes when every bin/ file the running copy holds is origin/main\'s, subfolders and Windows line ends aside (C-b-5)', async () => {
   const { root, origin, self, dir } = guardedBinRepo(MODULES);
   writeCopy(dir, { ...MODULES, 'lib/refresh-copy.mjs': MODULES['lib/refresh-copy.mjs'].replace('\n', '\r\n') });
-  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[circle('completed', 'success')]]);
+  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[workflowRun('completed', 'success')]]);
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 0, out.join('\n'));
@@ -1650,7 +1695,7 @@ test('the land guard refuses a stale bin/ module the running copy holds, names t
   const stale = Object.fromEntries(Object.keys(MODULES).map((name) => [name, `export const old = 1; // ${name}\n`]));
   writeCopy(dir, { ...stale, 'merge-queue.mjs': MODULES['merge-queue.mjs'] });
   const main = git(origin, 'rev-parse', 'main');
-  const { run, calls } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[circle('completed', 'success')]]);
+  const { run, calls } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[workflowRun('completed', 'success')]]);
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 1, out.join('\n'));
@@ -1662,7 +1707,7 @@ test('the land guard refuses a stale bin/ module the running copy holds, names t
 test('the land guard refuses a bin/ file origin/main holds that the running copy lacks, and one the copy holds that main does not (C-b-5)', async () => {
   const { root, origin, self, dir } = guardedBinRepo({ ...MODULES, 'lib/new.mjs': 'export const added = 1;\n' });
   writeCopy(dir, { 'merge-queue.mjs': MODULES['merge-queue.mjs'], 'check.mjs': MODULES['check.mjs'], 'gate.mjs': MODULES['gate.mjs'], 'lib/refresh-copy.mjs': MODULES['lib/refresh-copy.mjs'], 'lib/worktrees.mjs': MODULES['lib/worktrees.mjs'], 'removed.mjs': 'export const gone = 1;\n' });
-  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[circle('completed', 'success')]]);
+  const { run } = landRunner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))], [[workflowRun('completed', 'success')]]);
   const out = [];
   const code = await mergeQueueMain(['--land', '--cwd', root], { run, self, covered: () => ({ pass: true }), suite: () => ({ ok: true }), sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 1, out.join('\n'));
@@ -1844,15 +1889,20 @@ test('a land keeps a landed worktree of the Orca app, under orca/workspaces', as
 
 // T4 (S5b): `--land --refresh-copy` refreshes the installed copy after a land that moved main, through `refreshCopy`
 // (bin/lib/refresh-copy.mjs), which is passed here as a stand-in so no package manager runs.
-async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', '--refresh-copy'] } = {}) {
-  const { run } = landRunner(prs, [[circle('completed', 'success')]]);
+async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', '--refresh-copy'], agents = () => [] } = {}) {
+  const { run } = landRunner(prs, [[workflowRun('completed', 'success')]]);
   const out = [];
   const asked = [];
+  let at = Date.now();
   const code = await mergeQueueMain([...args, '--cwd', root], {
     run,
     covered: () => ({ pass: true }),
     suite: () => ({ ok: true }),
-    sleep: async () => {},
+    now: () => at,
+    sleep: async (ms) => {
+      at += ms ?? 0;
+    },
+    listAgents: agents,
     stdout: (line) => out.push(line),
     stderr: (line) => out.push(line),
     refreshCopy: async (opts) => {
@@ -1863,14 +1913,22 @@ async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', 
   return { code, out, asked };
 }
 
-test('--refresh-copy is a mode of --land: alone or with --dry-run it is a usage error, and the usage names it', async () => {
+test('--refresh-copy is a mode of --land or a mode alone: with --dry-run or --prune it is a usage error, and the usage names both', async () => {
   const out = [];
   const io = { run: runner([]).run, stdout: (line) => out.push(line), stderr: (line) => out.push(line) };
-  assert.equal(await mergeQueueMain(['--refresh-copy'], io), 2);
   assert.equal(await mergeQueueMain(['--dry-run', '--refresh-copy'], io), 2);
+  assert.equal(await mergeQueueMain(['--prune', '--refresh-copy'], io), 2);
   const usage = [];
   assert.equal(await mergeQueueMain(['--help'], { stdout: (line) => usage.push(line) }), 0);
-  assert.match(usage.join('\n'), /\[--refresh-copy\]/);
+  assert.match(usage.join('\n'), /--land \[--refresh-copy\] \| --refresh-copy \|/);
+});
+
+// S4 of odd/tasks/lead-manual-steps.md: alone, it refreshes the copy now and lands nothing.
+test('--refresh-copy alone runs the refresh of the copy now, in the folder --cwd names, and lands nothing', async () => {
+  const asked = [];
+  const io = { run: () => { throw new Error('no land runs'); }, stdout: () => {}, stderr: () => {}, refreshNow: async (args) => { asked.push(args); return 75; } };
+  assert.equal(await mergeQueueMain(['--refresh-copy', '--cwd', '/repo'], io), 75);
+  assert.deepEqual(asked.map(({ refreshCopy, land, cwd }) => ({ refreshCopy, land, cwd })), [{ refreshCopy: true, land: false, cwd: '/repo' }]);
 });
 
 test('--land --refresh-copy asks for the refresh after a land, with the sha main was pushed to, and the land stands', async () => {
@@ -1898,6 +1956,27 @@ test('--land --refresh-copy whose refresh throws still records the land with its
   assert.ok(out.some((line) => /refresh failed: .*boom/.test(line)), out.join('\n'));
   const record = fs.readFileSync(path.join(root, '.git', 'js-harness', 'lands.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line)).at(-1);
   assert.equal(record.exit, 0);
+});
+
+// A refresh under a session in the middle of a run breaks its hooks (2026-10-28): the refresh waits for the project's
+// sessions to be between runs, and refreshes nothing when one is still at work after the wait.
+test('--land --refresh-copy waits for the project\'s sessions to be between runs, and refreshes nothing while one still runs', async () => {
+  const { root, heads } = makeQueueRepo();
+  const running = (status, folder = root) => [{ kind: 'background', cwd: path.join(folder, '.claude', 'worktrees', 'a'), sessionId: 'aaaa1111', name: 'JH 7 · a', status }];
+  const listings = [running('busy'), running('busy'), running('idle')];
+  const waited = await landRefreshing(root, [pr(1, 'feat/a', heads['feat/a'])], { agents: () => listings.shift() ?? running('idle') });
+  assert.equal(waited.code, 0, waited.out.join('\n'));
+  assert.equal(waited.asked.length, 1);
+  assert.ok(waited.out.some((line) => /waiting for JH 7 · a \(busy\) to be between runs/.test(line)), waited.out.join('\n'));
+
+  const again = makeQueueRepo();
+  const busy = await landRefreshing(again.root, [pr(1, 'feat/a', again.heads['feat/a'])], { agents: () => running('busy', again.root) });
+  assert.equal(busy.code, 75, busy.out.join('\n'));
+  assert.equal(busy.asked.length, 0, 'nothing was refreshed');
+  assert.ok(busy.out.some((line) => line.startsWith('Landed: main ')), 'the land stands');
+  assert.ok(busy.out.some((line) => /still in the middle of a run: JH 7 · a \(busy\): nothing was refreshed/.test(line)), busy.out.join('\n'));
+  // A land run from a copy behind main is refused before it lands (`staleBin`), so the copy cannot bring itself up.
+  assert.ok(busy.out.some((line) => /a land run from that copy is refused while main's bin\/ differs from it: run js-harness merge-queue --refresh-copy from a checkout at origin\/main once only waits run from the copy$/.test(line)), busy.out.join('\n'));
 });
 
 test('--land --refresh-copy with nothing ready asks the refresh that nothing landed, so it refreshes nothing', async () => {

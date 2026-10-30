@@ -20,9 +20,9 @@ const noopFetch = async () => {
   throw new Error('network disabled in tests');
 };
 
-// Every looked-up tool but gentle-ai, cached as "looked up, nothing found": a fresh cache with a key
+// Every looked-up tool but engram, cached as "looked up, nothing found": a fresh cache with a key
 // for every row (a `null` counts as present) is what "nothing left to refetch" looks like.
-const NULL_VERSIONS = { engram: null, codegraph: null, context7: null, 'typescript-lsp': null, codex: null };
+const NULL_VERSIONS = { codegraph: null, context7: null, 'typescript-lsp': null, codex: null };
 
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-doctor-home-'));
@@ -35,7 +35,6 @@ function writeJson(filePath, data) {
 
 /** A fully "healthy" fixture home: every tool installed and configured everywhere it applies. */
 function seedHealthyHome(home) {
-  writeJson(path.join(home, '.gentle-ai', 'state.json'), { installed_agents: ['claude-code', 'codex'] });
   writeJson(path.join(home, '.claude.json'), {
     mcpServers: {
       engram: { command: 'engram' },
@@ -51,10 +50,10 @@ function seedHealthyHome(home) {
     'utf8',
   );
   writeJson(path.join(home, '.claude', 'settings.json'), {
-    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true },
+    enabledPlugins: { 'typescript-lsp@claude-plugins-official': true, 'engram@engram': true },
   });
   writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), {
-    plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }] },
+    plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }], 'engram@engram': [{ version: '0.1.19' }] },
   });
 }
 
@@ -114,7 +113,7 @@ test('doctorMain prints one line per tool and exits 0 on a fully healthy fixture
     seedHealthyHome(home);
     fs.mkdirSync(path.join(project, '.codegraph'));
     const spawn = fakeSpawn({
-      versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' },
+      versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' },
       gitToplevel: project,
       codexLogin: 'in',
     });
@@ -122,11 +121,13 @@ test('doctorMain prints one line per tool and exits 0 on a fully healthy fixture
     const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
 
     assert.equal(code, 0);
-    for (const id of ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex']) {
+    for (const id of ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex']) {
       assert.match(output, new RegExp(id));
     }
     assert.match(output, /codex\s+0\.130\.0\s+n\/a\s+ok\s+n\/a/);
-    assert.match(output, /3\.7\.0/);
+    assert.match(output, /\nengram\s+2\.2\.1\s+ok\s+ok\s+n\/a/);
+    assert.match(output, /\nengram-plugin\s+0\.1\.19\s+ok\s+n\/a\s+n\/a/);
+    assert.doesNotMatch(output, /gentle-ai/);
     assert.match(output, /hosted/);
     assert.doesNotMatch(output, /\nFix:/, 'a fully healthy fixture must report no gaps');
   } finally {
@@ -140,7 +141,7 @@ test("doctorMain --json prints a parseable array with the six tool ids, then the
   const project = makeTmpHome();
   try {
     seedHealthyHome(home);
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' } });
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
 
@@ -148,7 +149,7 @@ test("doctorMain --json prints a parseable array with the six tool ids, then the
     const rows = JSON.parse(output);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'hook-commands', 'pnpm-lock', 'js-harness'],
+      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'hook-commands', 'pnpm-lock', 'js-harness'],
     );
     for (const row of rows) {
       // Network is disabled and there is no cache, so every real lookup fails open to `unknown` —
@@ -172,7 +173,7 @@ function seedEngramPluginLag(home, { gitShow }) {
     plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }], 'engram@engram': [{ version: '0.1.12' }] },
   });
   fs.mkdirSync(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram', '.git'), { recursive: true });
-  const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 3.5.1' } });
+  const spawn = fakeSpawn({ versions: { engram: 'engram 3.5.1' } });
   const shown = [];
   const git = async (args) => {
     shown.push(args[3]);
@@ -207,6 +208,30 @@ test('doctorMain --offline shows the engram plugin outdated against the plugin t
   }
 });
 
+// Row 11 (odd/tasks/f8-s11-complements.md, S6): the binary and the plugin serve different protocol versions both ways.
+// Behind is the fixture above, `outdated`; ahead, a plugin newer than the one the binary's tag ships, is this one.
+test('doctorMain --offline shows the engram plugin as a mismatch when it is ahead of the plugin the engram binary\'s tag ships', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const manifest = JSON.stringify({ plugins: [{ name: 'engram', version: '0.1.10' }] });
+    const { spawn, git } = seedEngramPluginLag(home, { gitShow: () => ({ status: 0, stdout: manifest, stderr: '' }) });
+
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--offline'], {}, { spawn, git, fetch: noopFetch });
+
+    assert.equal(code, 0);
+    assert.match(output, /\nengram-plugin\s+0\.1\.12\s+ok\s+n\/a\s+n\/a\s+mismatch\n/);
+    assert.match(
+      output,
+      / {2}engram-plugin \(upToDate\):\n {4}plugin 0\.1\.12 is ahead of 0\.1\.10, the plugin engram v3\.5\.1 ships, so the two serve different protocols; update the engram binary, then restart Claude Code:\n {4}install engram from /,
+    );
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 test('doctorMain fails open to unknown for the engram plugin when the clone cannot answer, and shows no gap for it', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
@@ -220,6 +245,9 @@ test('doctorMain fails open to unknown for the engram plugin when the clone cann
     const row = JSON.parse(output).find((r) => r.id === 'engram-plugin');
     assert.equal(row.upToDate, 'unknown');
     assert.deepEqual(row.gaps, []);
+    // Its fix says what lets doctor tell: the binary's tag fetched into the clone under the home doctor was given.
+    assert.match(row.fix.upToDate.at(-1), /^git -C .+ fetch --depth 1 origin tag v3\.5\.1$/);
+    assert.ok(row.fix.upToDate.at(-1).includes(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram')), row.fix.upToDate.at(-1));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -239,7 +267,11 @@ test('doctorMain names the fix commands for gaps and never recommends codegraph 
     assert.match(output, /Fix:/);
     assert.match(output, /codegraph \(installed\): npm i -g @colbymchenry\/codegraph/);
     assert.doesNotMatch(output, /codegraph upgrade/);
-    assert.match(output, /gentle-ai \(claude\): gentle-ai install/);
+    // engram and its plugin are named with engram's own commands (F8 S11), never gentle-ai's.
+    assert.match(output, /  engram \(claude\): engram setup claude-code\n/);
+    assert.match(output, /  engram \(codex\): engram setup codex\n/);
+    assert.match(output, /  engram-plugin \(installed\): engram setup claude-code\n/);
+    assert.doesNotMatch(output, /gentle-ai/);
     assert.match(output, /  codex \(installed\): npm i -g @openai\/codex\n/);
     // Not installed, so there is nothing to be logged in for: no `codex` gap for this row.
     assert.match(output, /codex\s+missing\s+n\/a\s+n\/a\s+n\/a/);
@@ -251,44 +283,12 @@ test('doctorMain names the fix commands for gaps and never recommends codegraph 
   }
 });
 
-test('doctorMain shows a stale gentle-ai cell and prints one fix line per dead hook', async () => {
-  const home = makeTmpHome();
-  const project = makeTmpHome();
-  try {
-    seedHealthyHome(home);
-    // The hook is declared in the Claude settings next to the plugins the healthy seed enables.
-    const settingsPath = path.join(home, '.claude', 'settings.json');
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-    settings.hooks = {
-      PreToolUse: [{ hooks: [{ type: 'command', command: 'gentle-ai sdd-preflight-hook --agent claude-code' }] }],
-    };
-    writeJson(settingsPath, settings);
-    const base = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 4.0.0' } });
-    const spawn = (cmd, args, opts) =>
-      [cmd, ...args].join(' ') === 'gentle-ai help'
-        ? { status: 0, stdout: 'COMMANDS\n  sync         Sync agent configs\n', stderr: '' }
-        : base(cmd, args, opts);
-
-    const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--offline'], {}, { spawn, fetch: noopFetch });
-
-    assert.equal(code, 0);
-    assert.match(output, /gentle-ai\s+4\.0\.0\s+stale\s+ok/);
-    assert.match(
-      output,
-      /  gentle-ai \(claude\):\n    remove the hook "gentle-ai sdd-preflight-hook --agent claude-code" \(PreToolUse\) from ~\/\.claude\/settings\.json: /,
-    );
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-    fs.rmSync(project, { recursive: true, force: true });
-  }
-});
-
 test('doctorMain prints a header row above the tool table, aligned with the column widths', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
     seedHealthyHome(home);
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' } });
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
 
@@ -316,7 +316,7 @@ test('doctorMain prints exactly the Codex mcp add command when codegraph is miss
       'utf8',
     );
     const spawn = fakeSpawn({
-      versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' },
+      versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' },
       gitToplevel: project,
     });
 
@@ -341,7 +341,7 @@ test("doctorMain's codegraph project fix carries the actual resolved project roo
     seedHealthyHome(home);
     // No .codegraph/ in the project: codegraph's project dimension is a gap.
     const spawn = fakeSpawn({
-      versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' },
+      versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' },
       gitToplevel: project,
     });
 
@@ -367,23 +367,23 @@ test('doctorMain --json exposes each row\'s fix map and a gaps array of {dimensi
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
-    // Empty home + no git repo: gentle-ai's installed/claude/codex are all `missing`.
+    // Empty home + no git repo: engram's installed/claude/codex are all `missing`.
     const spawn = fakeSpawn({});
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
 
     assert.equal(code, 0);
     const rows = JSON.parse(output);
-    const gentleAi = rows.find((r) => r.id === 'gentle-ai');
-    assert.equal(typeof gentleAi.fix, 'object');
-    assert.ok(Array.isArray(gentleAi.gaps));
+    const engram = rows.find((r) => r.id === 'engram');
+    assert.equal(typeof engram.fix, 'object');
+    assert.ok(Array.isArray(engram.gaps));
     assert.deepEqual(
-      gentleAi.gaps.map((g) => g.dimension).sort(),
+      engram.gaps.map((g) => g.dimension).sort(),
       ['claude', 'codex', 'installed'],
     );
-    for (const gap of gentleAi.gaps) {
+    for (const gap of engram.gaps) {
       assert.equal(gap.state, 'missing');
-      assert.equal(gap.fix, gentleAi.fix[gap.dimension]);
+      assert.equal(gap.fix, engram.fix[gap.dimension]);
     }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -396,7 +396,7 @@ test('doctorMain resolves --home from JS_HARNESS_HOME when the flag is absent', 
   const project = makeTmpHome();
   try {
     seedHealthyHome(home);
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' } });
 
     const { code, output } = await runDoctor(
       ['--cwd', project, '--json'],
@@ -406,7 +406,7 @@ test('doctorMain resolves --home from JS_HARNESS_HOME when the flag is absent', 
 
     assert.equal(code, 0);
     const rows = JSON.parse(output);
-    assert.equal(rows.find((r) => r.id === 'gentle-ai').claude, 'ok');
+    assert.equal(rows.find((r) => r.id === 'engram').claude, 'ok');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -492,7 +492,7 @@ function seedHealthyWithAccounts(home, project, accounts) {
   fs.mkdirSync(path.join(project, '.codegraph'));
   if (accounts) seedAccounts(home, accounts);
   const spawn = fakeSpawn({
-    versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' },
+    versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' },
     gitToplevel: project,
     codexLogin: 'in',
   });
@@ -651,7 +651,7 @@ test('the account check has no latest version: it is never looked up, and never 
   try {
     const deps = seedHealthyWithAccounts(home, project, { cli: CLI_ACCOUNT, app: APP_ACCOUNT });
     const checkedAt = new Date().toISOString();
-    writeCache(home, { latest: { checkedAt, versions: { 'gentle-ai': '3.7.0', ...NULL_VERSIONS } }, notified: null });
+    writeCache(home, { latest: { checkedAt, versions: { engram: '3.7.0', ...NULL_VERSIONS } }, notified: null });
     const urls = [];
     const fetchImpl = async (url) => {
       urls.push(url);
@@ -1087,50 +1087,23 @@ test('doctorMain keeps the codex row when harness.json cannot be read: every swi
 
 // --- T6b: a fix with several steps is a list, printed one command per line ---
 
-// gentle-ai 3.7.0 is installed while GitHub's latest is v99.0.0: a major behind, so its upToDate fix is a list.
-const GO_INSTALL = 'go install github.com/gentleman-programming/gentle-ai/v99/cmd/gentle-ai@v99.0.0';
-
-/** A fetch answering GitHub's gentle-ai latest release with v99.0.0, and every other URL with a failure. */
-async function gentleAiBehind(url) {
-  return url.includes('Gentleman-Programming/gentle-ai')
-    ? { ok: true, json: async () => ({ tag_name: 'v99.0.0' }) }
-    : { ok: false };
-}
-
+// The engram plugin behind the one its binary's tag ships has a list `upToDate` fix (its JSON form is the test of
+// doctorMain --json below, "gives an outdated engram plugin its fix"); the Codex CLI missing has a one-step one.
 test('doctorMain prints a one-step fix on the gap line and a multi-step fix as a header plus indented lines', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
-    // gentle-ai behind by a major (a list `upToDate` fix); the Codex CLI missing (a one-step `installed` fix).
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const manifest = JSON.stringify({ plugins: [{ name: 'engram', version: '0.1.14' }] });
+    const { spawn, git } = seedEngramPluginLag(home, { gitShow: () => ({ status: 0, stdout: manifest, stderr: '' }) });
 
-    const { output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: gentleAiBehind });
+    const { output } = await runDoctor(['--home', home, '--cwd', project, '--offline'], {}, { spawn, git, fetch: noopFetch });
 
-    assert.match(output, new RegExp(`\\n  gentle-ai \\(upToDate\\):\\n    ${GO_INSTALL}\\n    gentle-ai sync\\n`));
+    assert.match(output, /\n  engram-plugin \(upToDate\):\n    plugin 0\.1\.12 is behind 0\.1\.14[^\n]*\n    claude plugin marketplace update engram\n    claude plugin update engram@engram\n/);
     assert.match(output, /\n  codex \(installed\): npm i -g @openai\/codex\n/);
-    // Once each command has its own line there is no `;` joining commands anywhere in the section.
-    assert.doesNotMatch(output.slice(output.indexOf('Fix:')), /;/);
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-    fs.rmSync(project, { recursive: true, force: true });
-  }
-});
-
-test('doctorMain --json carries a multi-step fix as an array, in the row fix map and in the gap', async () => {
-  const home = makeTmpHome();
-  const project = makeTmpHome();
-  try {
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
-
-    const { output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: gentleAiBehind });
-
-    const rows = JSON.parse(output);
-    const steps = [GO_INSTALL, 'gentle-ai sync'];
-    const gentle = rows.find((r) => r.id === 'gentle-ai');
-    assert.deepEqual(gentle.fix.upToDate, steps);
-    assert.deepEqual(gentle.gaps.find((g) => g.dimension === 'upToDate').fix, steps);
-    assert.equal(rows.find((r) => r.id === 'codex').fix.installed, 'npm i -g @openai/codex');
-    assert.equal(typeof rows.find((r) => r.id === 'codegraph').fix.installed, 'string');
+    // Each command has its own line: none of the section's lines joins two with `;` or `&&`.
+    const commands = output.slice(output.indexOf('Fix:')).split('\n').filter((line) => /^ {4}(claude|codex|npm|engram|codegraph) /.test(line));
+    assert.ok(commands.length >= 2, output);
+    for (const line of commands) assert.doesNotMatch(line, /;|&&/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -1160,7 +1133,7 @@ test('doctorMain reports a recorded hook command that the copy on the path does 
         },
       ],
     });
-    const base = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    const base = fakeSpawn({ versions: { engram: 'engram 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
     // The copy on the path is one that predates `resume`: it answers 2 to the command, as it did on 2026-10-12.
     const spawn = (cmd, args, opts) =>
       [cmd, ...args].join(' ') === 'js-harness resume --pause'
@@ -1203,11 +1176,11 @@ test('an online run refetches when a fresh cache has no key for a network row, a
     // A minute old: still fresh, and a restamp can never land on the same millisecond.
     const freshAt = new Date(Date.now() - 60_000).toISOString();
     writeCache(home, {
-      latest: { checkedAt: freshAt, versions: { 'gentle-ai': '3.7.0', codegraph: null, context7: null } },
+      latest: { checkedAt: freshAt, versions: { codex: '0.130.0', codegraph: null, context7: null } },
       notified: null,
     });
     const spawn = fakeSpawn({
-      versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1' },
+      versions: { engram: 'engram 2.2.1' },
       codexLogin: 'in',
     });
     const fetchImpl = async (url) =>
@@ -1218,7 +1191,7 @@ test('an online run refetches when a fresh cache has no key for a network row, a
     assert.equal(JSON.parse(output).find((r) => r.id === 'engram').upToDate, 'ok');
     const cache = readCache(home);
     assert.equal(cache.latest.versions.engram, '2.2.1');
-    assert.equal(cache.latest.versions['gentle-ai'], '3.7.0', 'a failed lookup keeps what was cached for it');
+    assert.equal(cache.latest.versions.codex, '0.130.0', 'a failed lookup keeps what was cached for it');
     assert.notEqual(cache.latest.checkedAt, freshAt, 'the refetch succeeded for one row, so the cache is stamped again');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -1232,7 +1205,7 @@ test('--offline never refetches for a network row the cache predates: it stays u
   try {
     seedHealthyHome(home);
     writeCache(home, { latest: { checkedAt: new Date().toISOString(), versions: {} }, notified: null });
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' }, codexLogin: 'in' });
     let fetchCalled = false;
     const fetchImpl = async () => {
       fetchCalled = true;
@@ -1242,7 +1215,7 @@ test('--offline never refetches for a network row the cache predates: it stays u
     const { output } = await runDoctor(['--home', home, '--cwd', project, '--json', '--offline'], {}, { spawn, fetch: fetchImpl });
 
     assert.equal(fetchCalled, false);
-    assert.equal(JSON.parse(output).find((r) => r.id === 'gentle-ai').upToDate, 'unknown');
+    assert.equal(JSON.parse(output).find((r) => r.id === 'engram').upToDate, 'unknown');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -1325,10 +1298,10 @@ test('a plugin installed after a run cached null for it is compared at once, onl
     seedHealthyHome(home);
     seedTypeScriptMarketplace(home);
     writeCache(home, {
-      latest: { checkedAt: new Date().toISOString(), versions: { ...NULL_VERSIONS, 'gentle-ai': '3.7.0' } },
+      latest: { checkedAt: new Date().toISOString(), versions: { ...NULL_VERSIONS, engram: '3.7.0' } },
       notified: null,
     });
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' }, codexLogin: 'in' });
 
     const online = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch });
     assert.equal(JSON.parse(online.output).find((r) => r.id === 'typescript-lsp').upToDate, 'ok');
@@ -1347,14 +1320,14 @@ test('a fresh cache with a key for every network row is not refetched, whatever 
   const home = makeTmpHome();
   try {
     const checkedAt = new Date().toISOString();
-    writeCache(home, { latest: { checkedAt, versions: { 'gentle-ai': '3.7.0', codex: null } }, notified: null });
+    writeCache(home, { latest: { checkedAt, versions: { engram: '3.7.0', codex: null } }, notified: null });
     let fetchCalled = false;
     const fetchImpl = async () => {
       fetchCalled = true;
       throw new Error('must not be called');
     };
     const rows = [
-      { id: 'gentle-ai', version: '3.7.0' },
+      { id: 'engram', version: '3.7.0' },
       { id: 'typescript-lsp', version: '1.0.0' },
       { id: 'codex', version: '0.130.0' },
     ];
@@ -1408,13 +1381,13 @@ test('a local answer never hides an outage: a failing network row alongside it k
     };
     const rows = [
       { id: 'typescript-lsp', version: '1.0.0' },
-      { id: 'gentle-ai', version: '3.7.0' },
+      { id: 'engram', version: '3.7.0' },
     ];
 
     const versions = await resolveLatestVersions(rows, { home, offline: false, fetch: failingFetch, now: () => new Date() });
 
     assert.equal(versions['typescript-lsp'], '1.0.0');
-    assert.equal(versions['gentle-ai'], null);
+    assert.equal(versions.engram, null);
     assert.equal(readCache(home).latest.checkedAt, staleCheckedAt);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -1425,13 +1398,13 @@ test('a cached null counts as present: an outage never retriggers the refetch on
   const home = makeTmpHome();
   try {
     const checkedAt = new Date().toISOString();
-    writeCache(home, { latest: { checkedAt, versions: { 'gentle-ai': null } }, notified: null });
+    writeCache(home, { latest: { checkedAt, versions: { engram: null } }, notified: null });
     let fetchCalls = 0;
     const fetchImpl = async () => {
       fetchCalls += 1;
       throw new Error('offline');
     };
-    const rows = [{ id: 'gentle-ai', version: '3.7.0' }];
+    const rows = [{ id: 'engram', version: '3.7.0' }];
 
     await resolveLatestVersions(rows, { home, offline: false, fetch: fetchImpl, now: () => new Date() });
 
@@ -1452,13 +1425,13 @@ test('a refetch for a missing key that fails everywhere leaves checkedAt alone a
       fetchCalls += 1;
       throw new Error('offline');
     };
-    const rows = [{ id: 'gentle-ai', version: '3.7.0' }];
+    const rows = [{ id: 'engram', version: '3.7.0' }];
     const deps = { home, offline: false, fetch: fetchImpl, now: () => new Date() };
 
     await resolveLatestVersions(rows, deps);
     assert.equal(fetchCalls, 1);
     assert.equal(readCache(home).latest.checkedAt, checkedAt, 'no lookup succeeded, so the stamp does not move');
-    assert.equal(readCache(home).latest.versions['gentle-ai'], null);
+    assert.equal(readCache(home).latest.versions.engram, null);
 
     await resolveLatestVersions(rows, deps);
     assert.equal(fetchCalls, 1, 'the key is now present, so a still-fresh cache is not refetched again');
@@ -1496,38 +1469,15 @@ test('doctorMain marks a tool ok when its installed version is at least the fetc
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' } });
     const fetchImpl = async (url) =>
-      url.includes('gentle-ai') ? { ok: true, json: async () => ({ tag_name: 'v3.7.0' }) } : { ok: false };
+      url.includes('Gentleman-Programming/engram') ? { ok: true, json: async () => [{ tag_name: 'v3.7.0' }] } : { ok: false };
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: fetchImpl });
 
     assert.equal(code, 0);
     const rows = JSON.parse(output);
-    assert.equal(rows.find((r) => r.id === 'gentle-ai').upToDate, 'ok');
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-    fs.rmSync(project, { recursive: true, force: true });
-  }
-});
-
-test('doctorMain gives gentle-ai a go install fix when the latest release crosses a major', async () => {
-  const home = makeTmpHome();
-  const project = makeTmpHome();
-  try {
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
-    const fetchImpl = async (url) =>
-      url.includes('gentle-ai') ? { ok: true, json: async () => ({ tag_name: 'v4.0.0' }) } : { ok: false };
-
-    const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: fetchImpl });
-
-    assert.equal(code, 0);
-    assert.match(output, /gentle-ai\s.*outdated/);
-    assert.match(
-      output,
-      /Fix:\n(.*\n)*  gentle-ai \(upToDate\):\n    go install github\.com\/gentleman-programming\/gentle-ai\/v4\/cmd\/gentle-ai@v4\.0\.0\n    gentle-ai sync\n/,
-    );
-    assert.doesNotMatch(output, /gentle-ai \(upToDate\):\n    gentle-ai upgrade/);
+    assert.equal(rows.find((r) => r.id === 'engram').upToDate, 'ok');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -1538,15 +1488,15 @@ test('doctorMain marks a tool outdated and lists its fix when the fetched latest
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 4.0.0' } });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 4.0.0' } });
     const fetchImpl = async (url) =>
-      url.includes('gentle-ai') ? { ok: true, json: async () => ({ tag_name: 'v4.1.0' }) } : { ok: false };
+      url.includes('Gentleman-Programming/engram') ? { ok: true, json: async () => [{ tag_name: 'v4.1.0' }] } : { ok: false };
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: fetchImpl });
 
     assert.equal(code, 0);
-    assert.match(output, /gentle-ai\s.*outdated/);
-    assert.match(output, /Fix:\n(.*\n)*  gentle-ai \(upToDate\):\n    gentle-ai upgrade\n    gentle-ai sync\n/);
+    assert.match(output, /\nengram\s.*outdated/);
+    assert.match(output, /Fix:\n(.*\n)*  engram \(upToDate\): install engram from https:\/\/github\.com\/Gentleman-Programming\/engram\/releases /);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -1558,10 +1508,10 @@ test('doctorMain --offline reads only the cache and never calls fetch', async ()
   const project = makeTmpHome();
   try {
     writeCache(home, {
-      latest: { checkedAt: new Date(0).toISOString(), versions: { 'gentle-ai': '9.9.9' } },
+      latest: { checkedAt: new Date(0).toISOString(), versions: { engram: '9.9.9' } },
       notified: null,
     });
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' } });
     let fetchCalled = false;
     const fetchImpl = async () => {
       fetchCalled = true;
@@ -1577,7 +1527,7 @@ test('doctorMain --offline reads only the cache and never calls fetch', async ()
     assert.equal(code, 0);
     assert.equal(fetchCalled, false);
     const rows = JSON.parse(output);
-    assert.equal(rows.find((r) => r.id === 'gentle-ai').upToDate, 'outdated');
+    assert.equal(rows.find((r) => r.id === 'engram').upToDate, 'outdated');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -1589,10 +1539,10 @@ test('doctorMain skips fetching when the cache was checked within the last 6 hou
   const project = makeTmpHome();
   try {
     writeCache(home, {
-      latest: { checkedAt: new Date().toISOString(), versions: { 'gentle-ai': '3.7.0', ...NULL_VERSIONS } },
+      latest: { checkedAt: new Date().toISOString(), versions: { engram: '3.7.0', ...NULL_VERSIONS } },
       notified: null,
     });
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' } });
     const urls = [];
     const fetchImpl = async (url) => {
       urls.push(url);
@@ -1615,21 +1565,21 @@ test('doctorMain refetches and updates the cache when it is stale, storing a fre
   const project = makeTmpHome();
   try {
     writeCache(home, {
-      latest: { checkedAt: new Date(0).toISOString(), versions: { 'gentle-ai': '1.0.0' } },
+      latest: { checkedAt: new Date(0).toISOString(), versions: { engram: '1.0.0' } },
       notified: null,
     });
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' } });
     const fetchImpl = async (url) =>
-      url.includes('gentle-ai') ? { ok: true, json: async () => ({ tag_name: 'v4.0.0' }) } : { ok: false };
+      url.includes('Gentleman-Programming/engram') ? { ok: true, json: async () => [{ tag_name: 'v4.0.0' }] } : { ok: false };
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: fetchImpl });
 
     assert.equal(code, 0);
     const rows = JSON.parse(output);
-    assert.equal(rows.find((r) => r.id === 'gentle-ai').upToDate, 'outdated');
+    assert.equal(rows.find((r) => r.id === 'engram').upToDate, 'outdated');
 
     const cache = readCache(home);
-    assert.equal(cache.latest.versions['gentle-ai'], '4.0.0');
+    assert.equal(cache.latest.versions.engram, '4.0.0');
     assert.notEqual(cache.latest.checkedAt, new Date(0).toISOString());
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -1642,12 +1592,12 @@ test('a failed fetch for one tool keeps its previously cached version; a success
   const project = makeTmpHome();
   try {
     writeCache(home, {
-      latest: { checkedAt: new Date(0).toISOString(), versions: { engram: '2.0.0', 'gentle-ai': '1.0.0' } },
+      latest: { checkedAt: new Date(0).toISOString(), versions: { engram: '2.0.0', codex: '1.0.0' } },
       notified: null,
     });
     const spawn = fakeSpawn({});
     const fetchImpl = async (url) => {
-      if (url.includes('gentle-ai')) throw new Error('offline for this tool only');
+      if (url.includes('@openai/codex')) throw new Error('offline for this tool only');
       if (url.includes('Gentleman-Programming/engram')) return { ok: true, json: async () => [{ tag_name: 'v2.2.1' }] };
       return { ok: false };
     };
@@ -1656,7 +1606,7 @@ test('a failed fetch for one tool keeps its previously cached version; a success
     assert.equal(code, 0);
 
     const cache = readCache(home);
-    assert.equal(cache.latest.versions['gentle-ai'], '1.0.0', 'kept: this tool could not be refreshed');
+    assert.equal(cache.latest.versions.codex, '1.0.0', 'kept: this tool could not be refreshed');
     assert.equal(cache.latest.versions.engram, '2.2.1', 'refreshed: this tool succeeded');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -1689,14 +1639,14 @@ test('doctorMain still prints the report and exits 0 when the cache cannot be wr
   const project = makeTmpHome();
   try {
     fs.writeFileSync(home, 'this is a file, not a home directory', 'utf8');
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' } });
     const fetchImpl = async (url) =>
-      url.includes('gentle-ai') ? { ok: true, json: async () => ({ tag_name: 'v3.7.0' }) } : { ok: false };
+      url.includes('Gentleman-Programming/engram') ? { ok: true, json: async () => [{ tag_name: 'v3.7.0' }] } : { ok: false };
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: fetchImpl });
 
     assert.equal(code, 0);
-    assert.match(output, /gentle-ai/);
+    assert.match(output, /\nengram\s+3\.7\.0/);
   } finally {
     fs.rmSync(parent, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -1712,10 +1662,10 @@ test('doctorMain keeps the old checkedAt (and retries next run) when a refetch f
   try {
     const staleCheckedAt = new Date(0).toISOString();
     writeCache(home, {
-      latest: { checkedAt: staleCheckedAt, versions: { 'gentle-ai': '1.0.0' } },
+      latest: { checkedAt: staleCheckedAt, versions: { engram: '1.0.0' } },
       notified: null,
     });
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' } });
     const alwaysFailFetch = async () => {
       throw new Error('offline');
     };
@@ -1725,21 +1675,21 @@ test('doctorMain keeps the old checkedAt (and retries next run) when a refetch f
 
     const afterFirstRun = readCache(home);
     assert.equal(afterFirstRun.latest.checkedAt, staleCheckedAt, 'checkedAt must not move on a total failure');
-    assert.equal(afterFirstRun.latest.versions['gentle-ai'], '1.0.0', 'the last-known version must survive');
+    assert.equal(afterFirstRun.latest.versions.engram, '1.0.0', 'the last-known version must survive');
 
     // The next run must still see the cache as stale and try the network again.
     let secondRunFetchCalled = false;
     const fetchImpl = async (url) => {
       secondRunFetchCalled = true;
-      return url.includes('gentle-ai') ? { ok: true, json: async () => ({ tag_name: 'v4.0.0' }) } : { ok: false };
+      return url.includes('Gentleman-Programming/engram') ? { ok: true, json: async () => [{ tag_name: 'v4.0.0' }] } : { ok: false };
     };
     const second = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: fetchImpl });
 
     assert.equal(second.code, 0);
     assert.equal(secondRunFetchCalled, true, 'a run after a total failure must retry the network');
     const rows = JSON.parse(second.output);
-    assert.equal(readCache(home).latest.versions['gentle-ai'], '4.0.0', 'the retried fetch must now be reflected');
-    assert.equal(rows.find((r) => r.id === 'gentle-ai').upToDate, 'outdated');
+    assert.equal(readCache(home).latest.versions.engram, '4.0.0', 'the retried fetch must now be reflected');
+    assert.equal(rows.find((r) => r.id === 'engram').upToDate, 'outdated');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -1834,7 +1784,7 @@ test('R3-003: resolveLatestVersions keeps the cache stale for a mixed row set (h
     writeCache(home, { latest: { checkedAt: staleCheckedAt, versions: {} }, notified: null });
     const rows = [
       { id: 'context7', version: 'hosted' },
-      { id: 'gentle-ai', version: '1.0.0' },
+      { id: 'engram', version: '1.0.0' },
     ];
     const failingFetch = async () => {
       throw new Error('offline');
@@ -1865,7 +1815,7 @@ test('doctorMain shows the pnpm-lock row stale for a global bin lock left over i
     // The time doctor reads back is the one the file system kept: ext4 under WSL loses a millisecond of leftAt
     // about one time in three, so the expected line is built from the stored time, not from leftAt.
     const stored = new Date(fs.statSync(lockPath).mtimeMs);
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project], { PNPM_HOME: pnpmHome }, { spawn, fetch: noopFetch });
 
@@ -1891,7 +1841,7 @@ test('doctorMain shows the pnpm-lock row n/a, with no gap, when the env it is gi
   try {
     seedHealthyHome(home);
     fs.mkdirSync(path.join(project, '.codegraph'));
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
 
     const { output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
 
@@ -1911,7 +1861,7 @@ test('doctorMain shows the unseen row ok, with no gap, when the check has nothin
   try {
     seedHealthyHome(home);
     fs.mkdirSync(path.join(project, '.codegraph'));
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, unseen: () => [] });
 
@@ -1929,7 +1879,7 @@ test('doctorMain shows the unseen row stale when there is something to clear: it
   const project = makeTmpHome();
   try {
     seedHealthyHome(home);
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
     const unseen = () => ['enabled scheduled task jh-wake runs in this project'];
 
     const table = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, unseen });
@@ -1966,7 +1916,7 @@ test('the unseen row reads no transcript: its fix names the app record, and the 
       { type: 'custom-title', sessionId: 'c-1', customTitle: 'From the transcript' },
       { type: 'user', uuid: 'c-1-1', timestamp: now, cwd: project, gitBranch: 'main', isSidechain: false, turnOrigin: 'scheduled', entrypoint: 'claude-desktop', message: { role: 'user', content: 'hola' } },
     ].map((line) => JSON.stringify(line)).join('\n') + '\n');
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
     let readerCalls = 0;
     const readFacts = () => {
       readerCalls += 1;
@@ -1991,7 +1941,7 @@ test('doctorMain shows the unseen row unknown, and lists no fix for it, when the
   const project = makeTmpHome();
   try {
     seedHealthyHome(home);
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
     const unseen = () => {
       throw new Error('the sessions folder is busy');
     };
@@ -2014,7 +1964,7 @@ test('doctorMain records the first host reading as reviewed, and shows a staged 
   const project = makeTmpHome();
   try {
     seedHealthyHome(home);
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
     const host = () => ({ found: true, desktop: '2.37337.1', staged: '2.42304.0', code: '2.1.295' });
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, host });
@@ -2036,7 +1986,7 @@ test('a host update since the reviewed versions is stale, with the versions and 
   try {
     seedHealthyHome(home);
     writeCache(home, { ...readCache(home), host: { reviewed: { desktop: '2.37337.1', code: '2.1.295', at: '2026-10-15T00:00:00.000Z' } } });
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
     const host = () => ({ found: true, desktop: '2.42304.0', staged: '2.42304.0', code: '2.1.299' });
     // A project without the rule remote-control-yes is told to ask before turning Remote Control back on.
     const asking = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, host });
@@ -2083,7 +2033,7 @@ test('a stack tool updated since the reviewed versions is stale, named by the ho
   const project = makeTmpHome();
   try {
     seedHealthyHome(home);
-    const spawnWith = (claude) => fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', claude: `${claude} (Claude Code)\n` }, gitToplevel: project, codexLogin: 'in' });
+    const spawnWith = (claude) => fakeSpawn({ versions: { engram: 'engram 3.7.0', claude: `${claude} (Claude Code)\n` }, gitToplevel: project, codexLogin: 'in' });
     const deps = (claude) => ({ spawn: spawnWith(claude), fetch: noopFetch, stackUpdate: true });
 
     const first = await runDoctor(['--home', home, '--cwd', project], {}, deps('2.1.296'));
@@ -2091,7 +2041,7 @@ test('a stack tool updated since the reviewed versions is stale, named by the ho
     const baseline = readCache(home).stack.reviewed.versions;
     assert.equal(baseline.claude, '2.1.296', 'the first reading is the reviewed one');
     assert.equal(baseline.codex, '0.130.0');
-    assert.equal(baseline['gentle-ai'], undefined, 'gentle-ai has the gentle-ai-sync row');
+    assert.equal(baseline.engram, '3.7.0', 'every tool of the stack is read, since no tool has a row of its own (F8 S11)');
 
     const table = await runDoctor(['--home', home, '--cwd', project], {}, deps('2.1.299'));
     assert.match(table.output, /^stack-update\s+stale\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
@@ -2128,7 +2078,7 @@ test('--stack-reviewed keeps the reviewed version of a tool whose probe failed t
     seedHealthyHome(home);
     writeCache(home, { ...readCache(home), stack: { reviewed: { versions: { claude: '2.1.290', codex: '0.120.0' }, at: '2026-10-09T00:00:00.000Z' } } });
     // The Claude CLI does not answer: only the codex update is reviewed, and claude's baseline stays for its own review.
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
     const reviewed = await runDoctor(['--home', home, '--cwd', project, '--stack-reviewed'], {}, { spawn, fetch: noopFetch, stackUpdate: true });
     assert.equal(reviewed.code, 0);
     const { versions } = readCache(home).stack.reviewed;
@@ -2172,7 +2122,7 @@ test('the host check reads the home doctor was given, and --host-reviewed --json
   const project = makeTmpHome();
   try {
     seedHealthyHome(home);
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
     const homes = [];
     const host = (given) => {
       homes.push(given);
@@ -2194,58 +2144,41 @@ test('the host check reads the home doctor was given, and --host-reviewed --json
   }
 });
 
-// The gentle-ai-sync row (bin/lib/gentle-ai-update.mjs) is added only when the caller hands doctor the snapshot
-// reader, as the dispatcher does; the version is the gentle-ai row's own.
-test('a gentle-ai version since the reviewed one is stale with the CLAUDE.md diff step, until --gentle-ai-reviewed --json records it', async () => {
+
+// Seen 2026-10-30 by the lead: the two flags in one call recorded only the host review (odd/tasks/doctor-rows.md, S3).
+test('--host-reviewed --stack-reviewed in one call records both reviews, and --json prints both records in one object', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   try {
     seedHealthyHome(home);
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
-    const homes = [];
-    const snapshot = { at: '2026-10-16T04:45:56.400Z', dir: path.join(home, '.gentle-ai', 'backups', 'first'), entry: 'files/h/.claude/CLAUDE.md' };
-    const gentleAiSnapshots = (given) => {
-      homes.push(given);
-      return [snapshot];
-    };
-    const now = () => new Date('2026-10-16T12:00:00.000Z');
-    const deps = { spawn, fetch: noopFetch, gentleAiSnapshots, now };
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0', claude: '2.1.299 (Claude Code)\n' }, gitToplevel: project, codexLogin: 'in' });
+    const host = () => ({ found: true, desktop: '2.42304.0', staged: null, code: '2.1.299' });
+    const now = () => new Date('2026-10-30T15:00:00.000Z');
+    const deps = { spawn, fetch: noopFetch, host, now, stackUpdate: true };
 
-    const baseline = await runDoctor(['--home', home, '--cwd', project], {}, deps);
-    assert.match(baseline.output, /^gentle-ai-sync\s+3\.7\.0\s+ok\s+n\/a\s+n\/a\s+n\/a$/m);
-    assert.deepEqual(readCache(home).gentleAi.reviewed, { version: '3.7.0', at: '2026-10-16T12:00:00.000Z' });
+    const both = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed', '--stack-reviewed'], {}, deps);
+    assert.equal(both.code, 0);
+    const lines = both.output.trimEnd().split('\n');
+    assert.deepEqual(lines[0], 'Recorded Claude Desktop 2.42304.0 and its Code tab CLI 2.1.299 as reviewed.');
+    assert.match(lines[1], /^Recorded (.+, )?claude 2\.1\.299(, .+)? as reviewed\.$/);
+    assert.equal(lines.length, 2);
+    assert.deepEqual(readCache(home).host.reviewed, { desktop: '2.42304.0', code: '2.1.299', at: '2026-10-30T15:00:00.000Z' });
+    assert.equal(readCache(home).stack.reviewed.versions.claude, '2.1.299');
 
-    writeCache(home, { ...readCache(home), gentleAi: { reviewed: { version: '3.6.0', at: '2026-10-16T04:00:00.000Z' } } });
-    const table = await runDoctor(['--home', home, '--cwd', project], {}, deps);
-    assert.match(table.output, /^gentle-ai-sync\s+3\.7\.0\s+stale\s+n\/a\s+n\/a\s+n\/a$/m);
-    const posix = (file) => file.replace(/\\/g, '/');
-    const steps = [
-      '  gentle-ai-sync (claude):',
-      '    gentle-ai 3.6.0 → 3.7.0 since the last review; review the update:',
-      '    read the gentle-ai release notes from 3.6.0 to 3.7.0 (https://github.com/Gentleman-Programming/gentle-ai/releases)',
-      `    diff the global CLAUDE.md, which gentle-ai rewrites on sync, against its copy from before the first sync since the review: diff -u <(cd '${posix(snapshot.dir)}' && tar -xzOf snapshot.tar.gz 'files/h/.claude/CLAUDE.md') '${posix(path.join(home, '.claude', 'CLAUDE.md'))}'`,
-      "    check each change against the project's AGENTS.md for conflicts: a rule that contradicts it, or a tool it mandates that this machine lacks",
-      '    report the changes and any conflict to the user',
-      '    then record the review: js-harness doctor --gentle-ai-reviewed',
-    ].join('\n');
-    assert.ok(table.output.includes(`\n${steps}\n`), table.output);
-    assert.equal(readCache(home).gentleAi.reviewed.version, '3.6.0', 'a report records nothing while the update is unreviewed');
-
-    const recorded = await runDoctor(['--home', home, '--cwd', project, '--gentle-ai-reviewed', '--json'], {}, deps);
-    assert.equal(recorded.code, 0);
-    assert.deepEqual(JSON.parse(recorded.output), { reviewed: { version: '3.7.0', at: '2026-10-16T12:00:00.000Z' } });
-    const text = await runDoctor(['--home', home, '--cwd', project, '--gentle-ai-reviewed'], {}, deps);
-    assert.equal(text.output, 'Recorded gentle-ai 3.7.0 as reviewed.\n');
-    assert.match((await runDoctor(['--home', home, '--cwd', project], {}, deps)).output, /^gentle-ai-sync\s+3\.7\.0\s+ok/m);
-    assert.deepEqual([...new Set(homes)], [home]);
-    assert.ok(readCache(home).host === undefined, 'no host record is written without the host check');
+    // The order of the flags does not matter, and --json prints one object that parses, keyed by review.
+    const json = await runDoctor(['--home', home, '--cwd', project, '--stack-reviewed', '--host-reviewed', '--json'], {}, deps);
+    assert.equal(json.code, 0);
+    const printed = JSON.parse(json.output);
+    assert.deepEqual(Object.keys(printed), ['host', 'stack']);
+    assert.deepEqual(printed.host, { reviewed: readCache(home).host.reviewed });
+    assert.deepEqual(printed.stack, { reviewed: readCache(home).stack.reviewed });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
   }
 });
 
-test('--gentle-ai-reviewed with no readable gentle-ai version records nothing and exits 1; without the snapshot reader doctor shows no gentle-ai-sync row', async () => {
+test('--host-reviewed --stack-reviewed records the review it can when the other records nothing, and exits 1', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();
   const errors = [];
@@ -2253,17 +2186,14 @@ test('--gentle-ai-reviewed with no readable gentle-ai version records nothing an
   console.error = (line) => errors.push(line);
   try {
     seedHealthyHome(home);
-    const spawn = fakeSpawn({ gitToplevel: project, codexLogin: 'in' });
-    const deps = { spawn, fetch: noopFetch, gentleAiSnapshots: () => [] };
-    const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--gentle-ai-reviewed'], {}, deps);
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0', claude: '2.1.299 (Claude Code)\n' }, gitToplevel: project, codexLogin: 'in' });
+    const host = () => ({ found: true, desktop: null, staged: null, code: '2.1.299' });
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed', '--stack-reviewed'], {}, { spawn, fetch: noopFetch, host, stackUpdate: true });
     assert.equal(code, 1);
-    assert.equal(output, '');
-    assert.deepEqual(errors, ['js-harness doctor: could not read the gentle-ai version: nothing was recorded.']);
-    assert.equal('gentleAi' in readCache(home), false);
-
-    const plain = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
-    assert.doesNotMatch(plain.output, /gentle-ai-sync/);
-    assert.equal('gentleAi' in readCache(home), false);
+    assert.deepEqual(errors, ['js-harness doctor: could not read the running Claude Desktop version: nothing was recorded.']);
+    assert.match(output, /^Recorded (.+, )?claude 2\.1\.299(, .+)? as reviewed\.\n$/);
+    assert.equal('host' in readCache(home), false);
+    assert.equal(readCache(home).stack.reviewed.versions.claude, '2.1.299');
   } finally {
     console.error = original;
     fs.rmSync(home, { recursive: true, force: true });
@@ -2279,7 +2209,7 @@ test('--host-reviewed with no readable desktop version records nothing and exits
   console.error = (line) => errors.push(line);
   try {
     seedHealthyHome(home);
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
     const host = () => ({ found: true, desktop: null, staged: null, code: '2.1.295' });
     const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed'], {}, { spawn, fetch: noopFetch, host });
     assert.equal(code, 1);
@@ -2310,7 +2240,7 @@ test("doctorMain names an installed copy whose unscoped rules differ from main's
   const project = makeTmpHome();
   try {
     seedHealthyHome(home);
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' } });
     const { id, list } = mainAhead();
     const fetchImpl = async (url) => {
       if (url === MAIN_LIST_URL) return { ok: true, status: 200, text: async () => writeRules(list) };
@@ -2339,7 +2269,7 @@ test("an online doctor asks for main's list while the latest versions are still 
   const project = makeTmpHome();
   try {
     seedHealthyHome(home);
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' } });
     // Each lookup of a latest version waits for main's list to be asked, or gives up after a second: run one after
     // the other, every lookup gives up before main's list is asked.
     let mainAsked;
@@ -2370,7 +2300,7 @@ test("doctor --offline and the hook read no main list outside the harness's chec
   const project = makeTmpHome();
   try {
     seedHealthyHome(home);
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0' } });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' } });
     const urls = [];
     const fetchImpl = async (url) => {
       urls.push(url);
@@ -2396,7 +2326,7 @@ test("in the harness's checkout the hook tells a copy behind main once, and agai
     fs.writeFileSync(path.join(project, 'bin', 'lib', 'rules-data.mjs'), writeRules(RULES));
     let onMain = mainAhead(1).list;
     const base = fakeSpawn({
-      versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' },
+      versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' },
       gitToplevel: project,
       codexLogin: 'in',
     });
@@ -2426,7 +2356,7 @@ test('doctorMain shows the memory-backup row stale with its reason, and n/a wher
   const project = makeTmpHome();
   try {
     seedHealthyHome(home);
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
     const stale = () => ({ state: 'stale', fix: ['memory backup: last success never; last failure 2026-10-19T08:00:00.000Z: git push failed: run js-harness backup status'] });
 
     const { output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, backup: stale });
@@ -2441,6 +2371,63 @@ test('doctorMain shows the memory-backup row stale with its reason, and n/a wher
   }
 });
 
+// The permissions row (odd/tasks/f8-s10-port.md, T4): a deny install holds that went missing is a gap, with each entry.
+test('doctorMain shows the permissions row stale with each missing entry, and n/a where nothing is installed', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const stale = () => ({ state: 'stale', fix: ['permissions: 1 entry missing from settings.json: run js-harness install', 'deny Read(.env)'] });
+    const { output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, permissions: stale });
+    assert.match(output, /^permissions\s+n\/a\s+stale\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.ok(output.includes('    deny Read(.env)'), output);
+
+    const off = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, permissions: () => ({ state: 'n/a', fix: [] }) });
+    assert.match(off.output, /^permissions\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+    const broken = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, permissions: () => { throw new Error('boom'); } });
+    assert.match(broken.output, /^permissions\s+n\/a\s+unknown\s+n\/a\s+n\/a\s+n\/a$/m);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// The claude-import row (the reverse-engineering document, 13.3 row 16; odd/tasks/f8-s13-rehearsal.md, T8): the
+// project's own cell, a gap with each file above the project that loads beside its CLAUDE.md.
+test('doctorMain shows the claude-import row in the project cell, a gap with each file above the project', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const seen = [];
+    const above = (root, at) => {
+      seen.push([root, at]);
+      return { state: 'mismatch', fix: ['claude-import: 1 file above the project loads into every session in it, beside its CLAUDE.md: move it or remove it', '/planted/CLAUDE.md'] };
+    };
+    const { output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, imports: above });
+    assert.match(output, /^claude-import\s+n\/a\s+n\/a\s+n\/a\s+mismatch\s+n\/a$/m);
+    assert.ok(output.includes('  claude-import (project):\n    claude-import: 1 file above the project'), output);
+    assert.ok(output.includes('    /planted/CLAUDE.md'), output);
+    // The home goes along, so his own settings' claudeMdExcludes count.
+    assert.deepEqual(seen, [[project, home]]);
+
+    const green = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, imports: () => ({ state: 'ok', fix: [] }) });
+    assert.match(green.output, /^claude-import\s+n\/a\s+n\/a\s+n\/a\s+ok\s+n\/a$/m);
+    const broken = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, imports: () => { throw new Error('boom'); } });
+    assert.match(broken.output, /^claude-import\s+n\/a\s+n\/a\s+n\/a\s+unknown\s+n\/a$/m);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorCommand gives the claude-import row its check', async () => {
+  const source = fs.readFileSync(new URL('./doctor.mjs', import.meta.url), 'utf8');
+  assert.match(source, /imports: \(project, home\) => importHealth\(project, \{ home \}\)/);
+});
+
 // The worktrees row (odd/tasks/land-unattended.md, T10): the worktrees on branches origin/main already holds, clean
 // and idle, which no land removed, counted with the command that removes them. Counting asks a `git status` of each,
 // so the hook, run at every session start, does not ask.
@@ -2450,7 +2437,7 @@ test('doctorMain shows the worktrees row stale, naming the command that removes 
   try {
     seedHealthyHome(home);
     fs.mkdirSync(path.join(project, '.codegraph'));
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
     const worktrees = () => [{ path: 'D:/w/one', branch: 'feat/one' }, { path: 'D:/w/two', branch: 'feat/two' }];
 
     const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, worktrees });
@@ -2470,7 +2457,7 @@ test('doctorMain shows the worktrees row ok with none, unknown when it cannot te
   try {
     seedHealthyHome(home);
     fs.mkdirSync(path.join(project, '.codegraph'));
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
 
     const none = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, worktrees: () => [] });
     assert.match(none.output, /^worktrees\s+n\/a\s+n\/a\s+n\/a\s+ok\s+n\/a$/m);
@@ -2489,6 +2476,63 @@ test('doctorMain shows the worktrees row ok with none, unknown when it cannot te
   }
 });
 
+// The review-skips row (odd/tasks/f8-s1-reviews.md, T5; S7: a skip is listed by `check` and `doctor`): the skips of both
+// reviews that still owe one, read only by the interactive report, as the worktrees row is.
+test('doctorMain lists the review skips that still owe a review, ok with none, unknown when it cannot tell, and its hook never reads them', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const run = (reviewSkips, flags = []) => runDoctor([...flags, '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, reviewSkips });
+
+    const owed = await run(() => ['lens: unavailable 1234567..89abcde: the plan is out of turns']);
+    assert.match(owed.output, /^review-skips\s+n\/a\s+n\/a\s+n\/a\s+stale\s+n\/a$/m);
+    assert.ok(owed.output.includes('  review-skips (project):\n    1 review skip still owes a review, and a pull request that holds a lens skip does not land: run the review it skipped\n    lens: unavailable 1234567..89abcde: the plan is out of turns\n'), owed.output);
+    assert.match((await run(() => [])).output, /^review-skips\s+n\/a\s+n\/a\s+n\/a\s+ok\s+n\/a$/m);
+    assert.match((await run(() => null)).output, /^review-skips\s+n\/a\s+n\/a\s+n\/a\s+unknown\s+n\/a$/m);
+
+    let asked = false;
+    const hook = await run(() => { asked = true; return []; }, ['--hook']);
+    assert.equal(hook.code, 0);
+    assert.equal(asked, false, 'the hook read the review skips');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// The templates row (odd/tasks/templates.md, "Proof"): `template shown --days 7` on the machine, read only by the
+// interactive report, as the review-skips row is: ok when no escape and no unchecked call, stale with each escape, unknown
+// when a call went unchecked or the records cannot be read, n/a where the project does not turn templates on.
+test('doctorMain shows the templates row: each escape, unknown on an unchecked call, n/a where templates are off, and its hook never reads it', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const run = (templates, flags = []) => runDoctor([...flags, '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, templates });
+
+    const escaped = await run(() => ({ days: 7, escapes: ['the moment s-8 of stretch-return shows no page'], unchecked: 0 }));
+    assert.match(escaped.output, /^templates\s+n\/a\s+n\/a\s+n\/a\s+stale\s+n\/a$/m);
+    assert.ok(escaped.output.includes('  templates (project):\n    1 escape in 7 days: js-harness template shown names it\n    the moment s-8 of stretch-return shows no page\n'), escaped.output);
+    assert.match((await run(() => ({ days: 7, escapes: [], unchecked: 0 }))).output, /^templates\s+n\/a\s+n\/a\s+n\/a\s+ok\s+n\/a$/m);
+    assert.match((await run(() => ({ days: 7, escapes: [], unchecked: 2 }))).output, /^templates\s+n\/a\s+n\/a\s+n\/a\s+unknown\s+n\/a$/m);
+    assert.match((await run(() => { throw new Error('no record'); })).output, /^templates\s+n\/a\s+n\/a\s+n\/a\s+unknown\s+n\/a$/m);
+    assert.match((await run(() => null)).output, /^templates\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+
+    let asked = false;
+    const hook = await run(() => { asked = true; return null; }, ['--hook']);
+    assert.equal(hook.code, 0);
+    assert.equal(asked, false, 'the hook read the templates records');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // The clean row (odd/tasks/clean.md, S8): the last measure of the regenerable leftovers, a gap once its total reaches
 // the threshold, named in the hook's notice; a due measure is started in the background, never run in the hook.
 test('doctorMain shows the clean row stale past the threshold, names its size in the hook, and starts a due measure', async () => {
@@ -2497,7 +2541,7 @@ test('doctorMain shows the clean row stale past the threshold, names its size in
   try {
     seedHealthyHome(home);
     fs.mkdirSync(path.join(project, '.codegraph'));
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 3.7.0', engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
     const started = [];
     const clean = { start: (where) => started.push(where) };
 
@@ -2528,18 +2572,18 @@ test('doctor takes an empty JS_HARNESS_HOME as unset: its cache is read from the
   const home = makeTmpHome();
   const saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
   try {
-    // A fresh cache under the user home says gentle-ai is at 9.9.9; the fake gentle-ai is 4.2.0, so the row is outdated.
+    // A fresh cache under the user home says engram is at 9.9.9; the fake engram is 4.2.0, so the row is outdated.
     fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
-    fs.writeFileSync(path.join(home, '.js-harness', 'doctor.json'), JSON.stringify({ latest: { checkedAt: '2099-01-01T00:00:00.000Z', versions: { 'gentle-ai': '9.9.9' } } }));
+    fs.writeFileSync(path.join(home, '.js-harness', 'doctor.json'), JSON.stringify({ latest: { checkedAt: '2099-01-01T00:00:00.000Z', versions: { engram: '9.9.9' } } }));
     // os.homedir() reads these: the empty JS_HARNESS_HOME falls back to the user home, not to the working directory.
     process.env.HOME = home;
     process.env.USERPROFILE = home;
-    const spawn = fakeSpawn({ versions: { 'gentle-ai': 'gentle-ai 4.2.0' } });
+    const spawn = fakeSpawn({ versions: { engram: 'engram 4.2.0' } });
 
     const { output } = await runDoctor(['--cwd', work, '--json', '--offline'], { JS_HARNESS_HOME: '' }, { spawn, fetch: noopFetch });
 
-    const gentleAi = JSON.parse(output).find((row) => row.id === 'gentle-ai');
-    assert.equal(gentleAi.upToDate, 'outdated');
+    const engram = JSON.parse(output).find((row) => row.id === 'engram');
+    assert.equal(engram.upToDate, 'outdated');
     assert.equal(fs.existsSync(path.join(work, '.js-harness')), false);
   } finally {
     for (const key of ['HOME', 'USERPROFILE']) {

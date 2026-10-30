@@ -1,0 +1,26 @@
+{
+  "format": 1,
+  "case": "rule-away-autonomy",
+  "rules": [
+    "away-autonomy"
+  ],
+  "digests": {
+    "case": "76c1b4fac1a603787e0c4a24c8edda4f8feffcbf1f5993a25563eaa5d72d2cf1",
+    "rules": "6e9354987d24ebbb39715565f49470204c2eaeb20289a84d249afc035a7ad0ae"
+  },
+  "date": "2026-10-29",
+  "commit": "e4480f365ee00a2e893490c33b3ccca9b850c8fc",
+  "current": {
+    "run": "f8-s5c-a-reach-away-3",
+    "arm": "current",
+    "trials": 2,
+    "score": 0.9166666666666667
+  },
+  "without": {
+    "run": "f8-s5c-a-reach-away-3",
+    "arm": "current-without-rule-away-autonomy",
+    "trials": 2,
+    "score": 0.9166666666666667
+  },
+  "costUsd": 4.4258592
+}

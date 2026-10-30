@@ -32,10 +32,29 @@ export const RULES = [
     "subject": "before he leaves, the lead asks for everything the stretch needs, and while he is away repeats nothing",
     "owner": "sebastian",
     "since": "2026-10-22",
+    "retired": "2026-10-27",
+    "successors": [
+      "away-autonomy"
+    ]
+  },
+  {
+    "id": "away-autonomy",
+    "subject": "once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure, led by the migration's share now and the share expected at the return, with its goals, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his waits in the relief file for his return",
+    "owner": "sebastian",
+    "since": "2026-10-29",
     "path": "bin/lib/manifest.mjs",
     "phrases": [
-      "Before the user leaves, ask in that reply for everything the stretch will need",
-      "While the user is away, a block that waits for them is given once and held until they say they are back"
+      "When the user says they leave you alone or will be away, ask nothing and seek no permission",
+      "waits for their return with no question",
+      "While this holds it comes before every instruction here to ask at once",
+      "While the user is away, a block that waits for them is given once and held until they say they are back or are seen to have written",
+      "Before they leave, open a stretch",
+      "When they say they are back, before anything else, close it",
+      "the share of the planned that was met, the map by phase before and after, the timeline",
+      "before they are due back, so the time they take is known before the return",
+      "Both are shown as a visual page in the chat, never drawn by hand",
+      "a reply closes in the working state, saying what wakes you, or once in the cut that gives that block",
+      "first the migration's share now and the share expected at the return"
     ]
   },
   {
@@ -57,6 +76,20 @@ export const RULES = [
     "unit": "minutes",
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\b(?:runs?|jobs?)\\b.{0,60}\\b(?:not done|cancelled|stopped)\\b.{0,15}\\b(?:after|within|past)\\s+{amount}"
+    ]
+  },
+  {
+    "id": "claude-md-budget",
+    "subject": "the most estimated tokens the root CLAUDE.md may hold, since Claude pays it with the AGENTS.md it imports on every turn",
+    "owner": "project",
+    "since": "2026-10-27",
+    "value": 3200,
+    "unit": "estimated tokens",
+    "was": [
+      {
+        "value": 2500,
+        "until": "2026-10-27"
+      }
     ]
   },
   {
@@ -135,9 +168,9 @@ export const RULES = [
   },
   {
     "id": "double-review",
-    "subject": "a design before it is built, and what reaches the user to decide, passes two read-only readers that did not write it",
+    "subject": "a proposal that changes one of his decisions passes two read-only readers that did not write it",
     "owner": "sebastian",
-    "since": "2026-10-16",
+    "since": "2026-10-27",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
       "first passes two read-only readers that did not write it",
@@ -217,6 +250,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "live-board",
+    "subject": "the harness never works as a black box: work sessions write each event as a notice (a session starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends them to the live board, a page that updates by itself, and points every reply to it",
+    "owner": "sebastian",
+    "since": "2026-10-27",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "Every event of your work reaches the user's live board as a notice",
+      "point every reply of yours to the board's link"
+    ]
+  },
+  {
     "id": "memory-feedback-home",
     "subject": "where a rule he states lives: a feedback note of the project's Claude Code memory folder is written only when it names the rule's home in the repository, and js-harness guard refuses it otherwise",
     "owner": "project",
@@ -249,6 +293,25 @@ export const RULES = [
     "phrases": [
       "What stops it from happening again: a check before a line, a line before a protocol.",
       "How it will be proven later that it has not come back"
+    ]
+  },
+  {
+    "id": "owner-decisions",
+    "subject": "what is the owner's to decide, asked one at a time; everything else is decided and its cost said",
+    "owner": "sebastian",
+    "since": "2026-10-30",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "spend outside the plan",
+      "anything irreversible",
+      "a product choice",
+      "anything published",
+      "any credential",
+      "a change of a protocol",
+      "a security or system setting",
+      "anything installed or changed on a machine",
+      "a change of the plan or of its order",
+      "a report published outside the project"
     ]
   },
   {
@@ -336,12 +399,15 @@ export const RULES = [
   },
   {
     "id": "reports-spanish-visual",
-    "subject": "what the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in Spanish as a graphic, didactic page, an Artifact with diagrams, bars and cards, never a raw English markdown file; the repository's English document stays the source",
+    "subject": "what the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in Spanish as a graphic, didactic page, an Artifact with diagrams, bars and cards, never a raw English markdown file; the repository's English document stays the source; at a stretch's departure and return, a feature's close, a phase's change and a status report, the page is the one a command makes from the records, never drawn by hand",
     "owner": "sebastian",
-    "since": "2026-10-26",
+    "since": "2026-10-29",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
-      "reaches them in their language as a visual, didactic page"
+      "reaches them in their language as a visual, didactic page",
+      "the page is the one a command makes from the records",
+      "never drawn by hand, shown or published as the command wrote it",
+      "the live board stays the continuous view, and a pull request appears inside its feature's page"
     ]
   },
   {
@@ -450,13 +516,15 @@ export const RULES = [
   },
   {
     "id": "rules-live-in-the-harness",
-    "subject": "a rule he gives is cemented in the harness where something acts on it, never only in memory",
+    "subject": "a rule he gives is cemented in the harness where something acts on it, never only in memory; an output he sees again and again, as a template of five parts",
     "owner": "sebastian",
-    "since": "2026-10-22",
+    "since": "2026-10-29",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
       "A rule is recorded only where something acts on it",
-      "A memory note is never its home."
+      "A memory note is never its home.",
+      "An output the user sees again and again is cemented the same way, as a template of five parts",
+      "and asks for a missing field alone."
     ]
   },
   {
@@ -559,13 +627,14 @@ export const RULES = [
   },
   {
     "id": "status-report",
-    "subject": "asked how the work goes, the lead reports everything since the last report, in detail",
+    "subject": "asked how the work goes, the lead reports everything since the last report, in detail, and each step it proposes next with its why",
     "owner": "sebastian",
-    "since": "2026-10-22",
+    "since": "2026-10-29",
     "path": "bin/lib/manifest.mjs",
     "phrases": [
       "When the user asks how the work is going, how much is done, or what you have done",
-      "the answer is a report of everything since the last report, in detail: never a line that all goes well."
+      "the answer is a report of everything since the last report, in detail: never a line that all goes well.",
+      "6. What you propose next, each step with its why: the criterion that puts it there, never a step alone."
     ]
   },
   {
@@ -707,8 +776,15 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-24",
-    "value": 3,
-    "unit": "sessions"
+    "unit": "sessions",
+    "was": [
+      {
+        "value": 3,
+        "until": "2026-10-30"
+      }
+    ],
+    "retired": "2026-10-30",
+    "successors": []
   },
   {
     "id": "work-sessions-private-wsl",

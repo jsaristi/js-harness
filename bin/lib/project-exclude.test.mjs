@@ -52,7 +52,7 @@ test('init adds .atl/ to the clone exclude file once, records it, and git then l
     assert.deepEqual(lines(dir), [EXCLUDED]);
     assert.ok(ignoresAtl(dir));
     assert.deepEqual(manifestOf(result).exclude, { line: EXCLUDED, separator: false, createdFile: false, createdDir: false });
-    assert.equal(manifestOf(result).format, 2);
+    assert.equal(manifestOf(result).format, 3);
     assert.ok(result.actions.some((action) => action.kind === 'excluded' && action.path === '.git/info/exclude'));
     // A second init finds the project initialized and writes nothing: the line stays one.
     assert.equal(initProject(dir, '0.1.0').alreadyInitialized, true);
@@ -125,7 +125,7 @@ test('sync keeps the record and its format, so uninstall still takes the line ba
     assert.equal(syncProject(dir, '0.2.0').code, 0);
     const synced = manifestOf(result);
     assert.equal(synced.version, '0.2.0');
-    assert.deepEqual([synced.format, synced.exclude?.line], [2, EXCLUDED]);
+    assert.deepEqual([synced.format, synced.exclude?.line], [3, EXCLUDED]);
     assert.equal(uninstallProject(dir).code, 0);
     assert.equal(read(excludeOf(dir)), '# mine\n');
   } finally {
@@ -232,9 +232,10 @@ test('init writes no line through a link that sends the exclude file outside the
 /** A project as `init` left it before the exclude line: no line in the exclude file, no record, no format. */
 function initializedBefore(dir) {
   const result = initProject(dir, '0.1.0');
-  const { exclude, format, ...manifest } = manifestOf(result);
-  // A manifest with keys of the settings was format 1 then.
-  fs.writeFileSync(result.manifestPath, JSON.stringify(manifest.settings ? { ...manifest, format: 1 } : manifest));
+  const { exclude, format, settings, ...manifest } = manifestOf(result);
+  // A manifest with keys of the settings was format 1 then, and held no style or denies (format 3).
+  const older = settings?.filter((record) => !['outputStyle', 'denies'].includes(record.key));
+  fs.writeFileSync(result.manifestPath, JSON.stringify(older?.length ? { ...manifest, settings: older, format: 1 } : manifest));
   undoExclude(excludeOf(dir), exclude);
   return result;
 }

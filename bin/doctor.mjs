@@ -22,16 +22,19 @@ import { GAP_STATES, gapList, gapDigest } from './lib/digest.mjs';
 import { harnessRulesRow } from './lib/rules-installed.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { hostNotice, hostUpdateRow, readHostVersions, readProjectRulesText } from './lib/host-update.mjs';
-import { claudeMdSnapshots, gentleAiNotice, gentleAiUpdateRow } from './lib/gentle-ai-update.mjs';
+import { owedSkipLines } from './lib/lens-review-rows.mjs';
 import { worktreesInMain } from './lib/worktrees.mjs';
 import { backupHealth } from './backup.mjs';
+import { templatesHealth } from './template.mjs';
+import { permissionsHealth } from './lib/permissions.mjs';
+import { importHealth } from './lib/claude-import.mjs';
 import { backgroundMeasure, cleanNotice, cleanRow } from './lib/clean.mjs';
 import { harnessHome } from './lib/home.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
 const DIMENSIONS = ['installed', 'claude', 'codex', 'project', 'upToDate'];
-export const USAGE = 'Usage: js-harness doctor [--home <path>] [--cwd <path>] [--json] [--offline] [--hook] [--host-reviewed] [--gentle-ai-reviewed] [--stack-reviewed]';
+export const USAGE = 'Usage: js-harness doctor [--home <path>] [--cwd <path>] [--json] [--offline] [--hook] [--host-reviewed] [--stack-reviewed]';
 
 // R3-003 (accepted T1 review follow-up): a flag with no value (end of argv, or immediately
 // followed by another `--flag`) is a usage error, not a silently-swallowed token.
@@ -45,7 +48,7 @@ function requireValue(argv, i, flag) {
 
 // Every flag `doctor` takes, for `unknownArgument`: a flag it does not know is refused before the
 // report, which writes its cache under the home (T1 of odd/tasks/commands-and-doctor.md).
-const KNOWN = { valued: ['--home', '--cwd'], bare: ['--json', '--offline', '--hook', '--host-reviewed', '--gentle-ai-reviewed', '--stack-reviewed'] };
+const KNOWN = { valued: ['--home', '--cwd'], bare: ['--json', '--offline', '--hook', '--host-reviewed', '--stack-reviewed'] };
 
 function parseArgs(argv, env) {
   const unknown = unknownArgument(argv, KNOWN);
@@ -96,12 +99,15 @@ function rowGaps(row) {
  * account one or the remote server one, not a tool): it has no version at all. Every other tool
  * compares its installed version against the fetched/cached latest, and is `unknown` whenever
  * either side is missing or unparseable (never `n/a`, since every other tool does have a
- * latest-version source). */
+ * latest-version source). The engram plugin's latest is the one its binary's tag ships, so a plugin ahead of it
+ * serves another protocol than the binary: `mismatch` (row 11, odd/tasks/f8-s11-complements.md, S6). */
 function computeUpToDate(row, latestVersion) {
   if (row.installed === 'n/a') return 'n/a';
   if (row.id === 'context7' && row.version === 'hosted') return 'n/a';
   if (row.installed !== 'ok' || !latestVersion) return 'unknown';
-  return compareSemver(row.version, latestVersion) >= 0 ? 'ok' : 'outdated';
+  const order = compareSemver(row.version, latestVersion);
+  if (order > 0 && row.id === 'engram-plugin') return 'mismatch';
+  return order >= 0 ? 'ok' : 'outdated';
 }
 
 /** Resolves each row's latest version: from the cache alone in `--offline` mode or while it is
@@ -202,32 +208,26 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   ]);
   const rows = localRows.map((row) => {
     const latest = latestVersions[row.id];
-    // A tool's fix can depend on the latest version (gentle-ai's, across a Go major) and on another row (the engram
-    // plugin's names the engram binary's version).
-    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest, localRows);
+    // A tool's fix can depend on the latest version and on another row (the engram plugin's names the engram binary's
+    // version).
+    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest, localRows, { home, platform });
     const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
     return { ...row, upToDate: computeUpToDate(row, latest), fix };
   });
   const withUnseenOnly = deps.unseen ? [...rows, rules, await unseenRow(deps.unseen, project)] : [...rows, rules];
   // Counting asks a `git status` of each worktree: the interactive report only, never the hook of every session start.
-  const withUnseen = deps.worktrees && interactive ? [...withUnseenOnly, worktreesRow(deps.worktrees, project)] : withUnseenOnly;
+  const withTrees = deps.worktrees && interactive ? [...withUnseenOnly, worktreesRow(deps.worktrees, project)] : withUnseenOnly;
+  // Reading the skips asks git for the branch's commits and their records: the interactive report only, as above.
+  const withSkips = deps.reviewSkips && interactive ? [...withTrees, reviewSkipsRow(deps.reviewSkips, project)] : withTrees;
+  // The templates' records are read by the interactive report only, as the skips are.
+  const withUnseen = deps.templates && interactive ? [...withSkips, templatesRow(deps.templates, project, home)] : withSkips;
   const withBackup = deps.backup ? [...withUnseen, backupRow(deps.backup, home, now)] : withUnseen;
-  const withHost = deps.host ? [...withBackup, hostRow(deps.host, home, now, project)] : withBackup;
+  const withImport = deps.imports ? [...withBackup, importRow(deps.imports, project, home)] : withBackup;
+  const withPermissions = deps.permissions ? [...withImport, permissionsRow(deps.permissions, home)] : withImport;
+  const withHost = deps.host ? [...withPermissions, hostRow(deps.host, home, now, project)] : withPermissions;
   const withStack = deps.stackUpdate ? [...withHost, stackRow(readStackVersions(rows, { home, spawn, platform }), home, now)] : withHost;
   // The clean row reads the last measure; a due one is started detached, never run here (odd/tasks/clean.md, S8).
-  const withClean = deps.clean ? [...withStack, cleanRow({ home, now, start: deps.clean.start })] : withStack;
-  if (!deps.gentleAiSnapshots) return withClean;
-  const gentleAi = rows.find((row) => row.id === 'gentle-ai')?.version ?? null;
-  return [...withClean, gentleAiRow(gentleAi, deps.gentleAiSnapshots, home, now)];
-}
-
-/** The gentle-ai-sync row (bin/lib/gentle-ai-update.mjs): the gentle-ai version against the one last reviewed,
- * recorded like the host-update row's, so a sync that rewrote the global CLAUDE.md stays a gap until reviewed. */
-function gentleAiRow(version, snapshots, home, now) {
-  const cache = readCache(home);
-  const { row, record } = gentleAiUpdateRow({ version, reviewed: cache.gentleAi?.reviewed ?? null, snapshots: version ? snapshots(home) : [], home, now });
-  if (record) writeCache(home, { ...cache, gentleAi: { reviewed: record } });
-  return row;
+  return deps.clean ? [...withStack, cleanRow({ home, now, start: deps.clean.start })] : withStack;
 }
 
 /** The versions the stack-update row watches: the tools of `rows` and the Claude CLI on PATH. */
@@ -281,6 +281,32 @@ function backupRow(backup, home, now) {
   }
 }
 
+/** The permissions row (odd/tasks/f8-s10-port.md, T4): an entry `install` holds in the user's Claude settings that is
+ * missing, the denies that keep a session off credentials among them, is a gap the hook announces, with each entry;
+ * `n/a` where js-harness is not installed. Fails open to `unknown`. */
+function permissionsRow(permissions, home) {
+  const row = { id: 'permissions', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'n/a', upToDate: 'n/a', fix: {} };
+  try {
+    const health = permissions(home);
+    return { ...row, claude: health.state, fix: health.fix.length ? { claude: health.fix } : {} };
+  } catch {
+    return { ...row, claude: 'unknown' };
+  }
+}
+
+/** The claude-import row (bin/lib/claude-import.mjs; the reverse-engineering document, 13.3 row 16): the project's root
+ * CLAUDE.md imports AGENTS.md and no CLAUDE.md above the project loads beside it, a gap with each file otherwise. It
+ * reads a few files, so the hook asks it too. Fails open to `unknown`. */
+function importRow(imports, project, home) {
+  const row = { id: 'claude-import', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'n/a', upToDate: 'n/a', fix: {} };
+  try {
+    const health = imports(project, home);
+    return { ...row, project: health.state, fix: health.fix.length ? { project: health.fix } : {} };
+  } catch {
+    return { ...row, project: 'unknown' };
+  }
+}
+
 /** The worktrees row (odd/tasks/land-unattended.md, T10): the worktrees on branches origin/main holds, clean and idle,
  * that no land removed, a gap with the command that removes them and each one; `unknown` when git cannot say. */
 function worktreesRow(worktrees, project) {
@@ -297,16 +323,56 @@ function worktreesRow(worktrees, project) {
   return { ...row, project: 'stale', fix: { project: [`${count} on branches origin/main holds, clean and idle: js-harness merge-queue --prune removes them`, ...found.map((tree) => `${tree.path} (${tree.branch})`)] } };
 }
 
-/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, host-update, clean and gentle-ai-sync rows. Their checks are
- * given only here, so `doctorMain` alone keeps the rows its callers give it. */
+/** The review-skips row (odd/tasks/f8-s1-reviews.md, T5): the skips of both reviews on the branch that still owe a
+ * review (`owedSkipLines`), `stale` with each while any does, since the door refuses a pull request that holds a lens
+ * skip. `ok` with none, `unknown` when they cannot be read. */
+function reviewSkipsRow(reviewSkips, project) {
+  const row = { id: 'review-skips', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'ok', upToDate: 'n/a', fix: {} };
+  let found;
+  try {
+    found = reviewSkips(project);
+  } catch {
+    found = null;
+  }
+  if (!Array.isArray(found)) return { ...row, project: 'unknown' };
+  if (found.length === 0) return row;
+  const count = `${found.length} review skip${found.length === 1 ? ' still owes' : 's still owe'} a review`;
+  return { ...row, project: 'stale', fix: { project: [`${count}, and a pull request that holds a lens skip does not land: run the review it skipped`, ...found] } };
+}
+
+/** The templates row (odd/tasks/templates.md, "Proof"): what `template shown` reports for the last days, `stale` with
+ * each escape, `unknown` while a call went unchecked or the records cannot be read, since then no escape can be ruled
+ * out, `ok` with neither, and `n/a` where the project's `harness.json` does not hold `"templates": true` (`null`). */
+function templatesRow(templates, project, home) {
+  const row = { id: 'templates', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'ok', upToDate: 'n/a', fix: {} };
+  let found;
+  try {
+    found = templates(project, home);
+  } catch {
+    return { ...row, project: 'unknown' };
+  }
+  if (found === null) return { ...row, project: 'n/a' };
+  if (found.escapes.length > 0) {
+    const count = `${found.escapes.length} escape${found.escapes.length === 1 ? '' : 's'} in ${found.days} days`;
+    return { ...row, project: 'stale', fix: { project: [`${count}: js-harness template shown names it`, ...found.escapes] } };
+  }
+  return found.unchecked > 0 ? { ...row, project: 'unknown' } : row;
+}
+
+/** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, templates, claude-import,
+ * permissions, host-update, stack-update and clean rows. Their checks are given only here, so `doctorMain` alone keeps the rows its
+ * callers give it. */
 export function doctorCommand(argv) {
   return doctorMain(argv, process.env, {
     unseen: async (cwd) => (await import('./unseen.mjs')).unseenToClear(cwd),
     host: (home) => readHostVersions({ home }),
-    gentleAiSnapshots: (home) => claudeMdSnapshots(home),
     stackUpdate: true,
     worktrees: (cwd) => worktreesInMain({ cwd }),
+    reviewSkips: (cwd) => owedSkipLines(cwd),
+    templates: (project, home) => templatesHealth(project, home),
     backup: (home, now) => backupHealth(home, now),
+    permissions: (home) => permissionsHealth(home),
+    imports: (project, home) => importHealth(project, { home }),
     clean: { start: backgroundMeasure(process.env, argv) },
   });
 }
@@ -332,9 +398,8 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
     return 2;
   }
   const { home, cwd, json, offline } = parsed;
-  if (argv.includes('--host-reviewed')) return recordHostReview(home, json, deps);
-  if (argv.includes('--gentle-ai-reviewed')) return recordGentleAiReview(home, json, deps);
-  if (argv.includes('--stack-reviewed')) return recordStackReview({ home, cwd, json }, deps);
+  const reviewed = recordReviews(argv, { home, cwd, json }, deps);
+  if (reviewed !== null) return reviewed;
   const rows = await buildReport({ home, cwd, offline, interactive: true, env }, deps);
 
   if (json) {
@@ -362,53 +427,52 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
   return 0;
 }
 
+/** `doctor --host-reviewed` and `--stack-reviewed`, alone or both in one call, which records both (seen 2026-10-30:
+ * the second flag was dropped, odd/tasks/doctor-rows.md S3). Prints the line of each review recorded, or with
+ * `--json` the record written: `{ reviewed }` for one flag, `{ host: { reviewed }, stack: { reviewed } }` for both.
+ * A review that records nothing says why on stderr and the call exits 1, the other still recorded. `null` when
+ * neither flag is given. */
+function recordReviews(argv, { home, cwd, json }, deps) {
+  const asked = [
+    ['host', '--host-reviewed', () => recordHostReview(home, deps)],
+    ['stack', '--stack-reviewed', () => recordStackReview({ home, cwd }, deps)],
+  ].filter(([, flag]) => argv.includes(flag));
+  if (asked.length === 0) return null;
+  const recorded = asked.map(([key, , record]) => [key, record()]).filter(([, result]) => result !== null);
+  if (json && recorded.length > 0) {
+    const records = recorded.map(([key, { reviewed }]) => [key, { reviewed }]);
+    console.log(JSON.stringify(asked.length === 1 ? records[0][1] : Object.fromEntries(records)));
+  }
+  if (!json) for (const [, { line }] of recorded) console.log(line);
+  return recorded.length === asked.length ? 0 : 1;
+}
+
 /** `doctor --host-reviewed`: records the Claude Desktop and Code tab CLI versions read now as reviewed, the last step
- * of the review the host-update row lists; with `--json` it prints `{ reviewed }`, the record written. With no
- * running version read it records nothing and exits 1. */
-function recordHostReview(home, json, deps) {
+ * of the review the host-update row lists, and returns `{ reviewed, line }`, the record written and the line that
+ * says so. With no running version read it records nothing and returns `null`. */
+function recordHostReview(home, deps) {
   const versions = deps.host ? deps.host(home) : { desktop: null };
   if (!versions.desktop) {
     console.error('js-harness doctor: could not read the running Claude Desktop version: nothing was recorded.');
-    return 1;
+    return null;
   }
   const now = deps.now ?? (() => new Date());
   const reviewed = { desktop: versions.desktop, code: versions.code, at: now().toISOString() };
   writeCache(home, { ...readCache(home), host: { reviewed } });
-  if (json) {
-    console.log(JSON.stringify({ reviewed }));
-    return 0;
-  }
-  console.log(`Recorded Claude Desktop ${versions.desktop}${versions.code ? ` and its Code tab CLI ${versions.code}` : ''} as reviewed.`);
-  return 0;
-}
-
-/** `doctor --gentle-ai-reviewed`: records the installed gentle-ai version as reviewed, the last step of the review
- * the gentle-ai-sync row lists; with `--json` it prints `{ reviewed }`, the record written. With no version read it
- * records nothing and exits 1. */
-function recordGentleAiReview(home, json, deps) {
-  const probe = tools.find((tool) => tool.id === 'gentle-ai').installed({ spawn: deps.spawn ?? spawnSync, platform: deps.platform ?? process.platform, home });
-  if (!probe.version) {
-    console.error('js-harness doctor: could not read the gentle-ai version: nothing was recorded.');
-    return 1;
-  }
-  const now = deps.now ?? (() => new Date());
-  const reviewed = { version: probe.version, at: now().toISOString() };
-  writeCache(home, { ...readCache(home), gentleAi: { reviewed } });
-  console.log(json ? JSON.stringify({ reviewed }) : `Recorded gentle-ai ${probe.version} as reviewed.`);
-  return 0;
+  return { reviewed, line: `Recorded Claude Desktop ${versions.desktop}${versions.code ? ` and its Code tab CLI ${versions.code}` : ''} as reviewed.` };
 }
 
 /** `doctor --stack-reviewed`: records the versions of the stack's tools and of the Claude CLI read now as reviewed, the
- * last step of the review the stack-update row lists; with `--json` it prints `{ reviewed }`, the record written. With
- * no version read it records nothing and exits 1. */
-function recordStackReview({ home, cwd, json }, deps) {
+ * last step of the review the stack-update row lists, and returns `{ reviewed, line }` as above. With no version read
+ * it records nothing and returns `null`. */
+function recordStackReview({ home, cwd }, deps) {
   const spawn = deps.spawn ?? spawnSync;
   const platform = deps.platform ?? process.platform;
   const rows = probeStack({ home, project: resolveProjectRoot(cwd, spawn), spawn, platform, interactive: false, functions: {} });
   const versions = readStackVersions(rows, { home, spawn, platform });
   if (Object.keys(versions).length === 0) {
     console.error('js-harness doctor: could not read the version of any tool of the stack: nothing was recorded.');
-    return 1;
+    return null;
   }
   const now = deps.now ?? (() => new Date());
   // A tool whose probe failed this time keeps the version reviewed before: dropped, its next reading would join the
@@ -417,8 +481,7 @@ function recordStackReview({ home, cwd, json }, deps) {
   const reviewed = { versions: { ...cache.stack?.reviewed.versions, ...versions }, at: now().toISOString() };
   writeCache(home, { ...cache, stack: { reviewed } });
   const named = Object.entries(versions).map(([id, version]) => `${id} ${version}`).join(', ');
-  console.log(json ? JSON.stringify({ reviewed }) : `Recorded ${named} as reviewed.`);
-  return 0;
+  return { reviewed, line: `Recorded ${named} as reviewed.` };
 }
 
 /** `doctor --hook`: a `SessionStart` hook, at zero model tokens when nothing changed. Computes the
@@ -434,12 +497,11 @@ export async function hookMain(argv, env = process.env, deps = {}) {
     const rows = await buildReport({ home, cwd, offline: false, env }, deps);
 
     const gaps = gapList(rows);
-    // A host or gentle-ai update is named in the notice, which stays a `systemMessage`: no model tokens (docs/ROADMAP.md,
+    // A host or stack update is named in the notice, which stays a `systemMessage`: no model tokens (docs/ROADMAP.md,
     // Decided). Its versions enter the digest, so another update before the review is recorded is a new notice (Codex,
     // 2026-10-15).
     const host = [
       hostNotice(rows.find((row) => row.id === 'host-update')),
-      gentleAiNotice(rows.find((row) => row.id === 'gentle-ai-sync')),
       stackNotice(rows.find((row) => row.id === 'stack-update')),
       cleanNotice(rows.find((row) => row.id === 'clean')),
     ]

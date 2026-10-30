@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RUNNABLE, planStack, packageWords, prefixBinOf } from './stack-install.mjs';
+import { RUNNABLE, planStack, packageWords, prefixBinOf, ENGRAM_UNDO } from './stack-install.mjs';
 import path from 'node:path';
 
 const ON = { codeMap: { value: 'auto' }, codexReview: { value: 'on' }, languageServer: { value: 'on' } };
@@ -14,13 +14,31 @@ function row(id, cells = {}) {
 }
 
 function rows(overrides = {}) {
-  return ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex'].map((id) => row(id, overrides[id]));
+  return ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex'].map((id) => row(id, overrides[id]));
 }
 
 const plan = (overrides, extra = {}) => planStack({ rows: rows(overrides), functions: ON, prerequisites: PREREQS_OK, pm: PNPM, platform: 'linux', ...extra });
 
-test('RUNNABLE holds the four rows of D2, in their order', () => {
-  assert.deepEqual(RUNNABLE.map((r) => `${r.tool}.${r.dimension}`), ['codex.installed', 'codegraph.installed', 'codegraph.claude', 'codegraph.codex']);
+test('RUNNABLE holds the rows of D2 and context7\'s two registrations (F8 S11), in their order', () => {
+  assert.deepEqual(RUNNABLE.map((r) => `${r.tool}.${r.dimension}`), ['codex.installed', 'codegraph.installed', 'codegraph.claude', 'codegraph.codex', 'context7.claude', 'context7.codex']);
+});
+
+// G11 (diet register): context7 is always on, so a missing registration is installed, not offered.
+test('context7 is required: each missing registration is planned with its command and its exact undo', () => {
+  const p = plan({ context7: { installed: 'missing', claude: 'missing', codex: 'missing' } });
+  assert.deepEqual(p.mandatory, [
+    { tool: 'context7', dimension: 'claude', kind: 'registration', env: {}, run: ['claude', 'mcp', 'add', '-s', 'user', '--transport', 'http', 'context7', 'https://mcp.context7.com/mcp'], undo: ['claude', 'mcp', 'remove', '-s', 'user', 'context7'] },
+    { tool: 'context7', dimension: 'codex', kind: 'registration', env: {}, run: ['codex', 'mcp', 'add', 'context7', '--url', 'https://mcp.context7.com/mcp'], undo: ['codex', 'mcp', 'remove', 'context7'] },
+  ]);
+  assert.deepEqual(p.optional, []);
+  assert.deepEqual(p.manual, [], 'its installed cell has no command of its own: the registrations are the install');
+});
+
+test('context7 in Codex is planned only while Codex is wanted', () => {
+  const functions = { ...ON, codexReview: { value: 'off' } };
+  const withoutCodex = rows({ context7: { claude: 'missing', codex: 'missing' } }).filter((r) => r.id !== 'codex');
+  const p = planStack({ rows: withoutCodex, functions, prerequisites: PREREQS_OK, pm: PNPM, platform: 'linux' });
+  assert.deepEqual(p.mandatory.map((r) => `${r.tool}.${r.dimension}`), ['context7.claude']);
 });
 
 test('a stack with no gap plans nothing', () => {
@@ -84,55 +102,51 @@ test('a runnable row in another gap state is not run: it is a manual step with d
   assert.deepEqual(p.manual, [{ tool: 'codegraph', dimensions: ['installed'], why: 'outdated: stack install runs only what is missing', steps: ['fix codegraph'], undo: [] }]);
 });
 
-test('gentle-ai is his step: named with gentle-ai\'s own install and undo, never planned to run (F1)', () => {
-  const p = plan({ 'gentle-ai': { installed: 'missing', claude: 'missing', codex: 'missing' } });
-  assert.deepEqual(p.mandatory, []);
-  assert.equal(p.manual.length, 1);
-  const [step] = p.manual;
-  assert.equal(step.tool, 'gentle-ai');
+// F8 S11 (odd/tasks/f8-s11-complements.md, L4): engram's own commands write more than one thing and read back their
+// own entry, so they stay his step, each named with its undo; nothing of engram is run.
+test('engram is his step: engram\'s own install and setup per dimension, each with its undo, never run', () => {
+  const fix = { installed: 'install engram from its releases', claude: 'engram setup claude-code', codex: 'engram setup codex' };
+  const [step] = plan({ engram: { installed: 'missing', claude: 'missing', codex: 'missing', fix } }).manual;
+  assert.equal(step.tool, 'engram');
   assert.deepEqual(step.dimensions, ['installed', 'claude', 'codex']);
   assert.match(step.why, /your step/);
-  assert.deepEqual(step.steps, ['go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@latest', 'gentle-ai install --agents claude-code,codex']);
-  assert.deepEqual(step.undo, ['gentle-ai uninstall --agents claude-code,codex --yes', 'gentle-ai restore <the backup id gentle-ai install printed>']);
+  assert.doesNotMatch(step.why, /gentle-ai/);
+  assert.deepEqual(step.steps, ['install engram from its releases', 'engram setup claude-code', 'engram setup codex']);
+  assert.deepEqual(step.undo, [...ENGRAM_UNDO.claude, ...ENGRAM_UNDO.codex, ...ENGRAM_UNDO.installed]);
 });
 
-test('gentle-ai configured for one host only names that host', () => {
-  const [step] = plan({ 'gentle-ai': { claude: 'missing' } }).manual;
-  assert.deepEqual(step.dimensions, ['claude']);
-  assert.deepEqual(step.steps, ['gentle-ai install --agents claude-code']);
-  assert.deepEqual(step.undo, ['gentle-ai uninstall --agents claude-code --yes', 'gentle-ai restore <the backup id gentle-ai install printed>']);
+test('engram\'s undo for a host is engram\'s own uninstall of what its setup wrote there', () => {
+  assert.deepEqual(ENGRAM_UNDO.claude, ['claude plugin uninstall engram@engram', 'claude plugin marketplace remove engram', 'claude mcp remove engram --scope user']);
+  assert.deepEqual(ENGRAM_UNDO.codex.slice(0, 3), ['codex plugin remove engram@engram', 'codex plugin marketplace remove engram', 'codex mcp remove engram']);
+  // An older engram or gentle-ai pointed Codex's instruction settings at those files: they go before the files do
+  // (Codex review of ac0725d..cea68ea, P2), or Codex is left reading files that are not there.
+  const settings = ENGRAM_UNDO.codex.findIndex((step) => /model_instructions_file/.test(step) && /experimental_compact_prompt_file/.test(step));
+  const files = ENGRAM_UNDO.codex.findIndex((step) => /^delete engram-instructions\.md/.test(step));
+  assert.ok(settings >= 0 && settings < files, ENGRAM_UNDO.codex.join('\n'));
+  const [step] = plan({ engram: { codex: 'missing' } }).manual;
+  assert.deepEqual(step.undo, ENGRAM_UNDO.codex, 'one host gap names that host\'s undo alone');
 });
 
-test('gentle-ai in a gap state other than missing keeps doctor\'s fix, not the installer (Codex on 553900a..12e46c4)', () => {
-  const fix = { installed: 'fix gentle-ai', claude: 'remove the stale hook from settings.json', codex: 'codex fix gentle-ai' };
-  const [step] = plan({ 'gentle-ai': { claude: 'stale', fix } }).manual;
-  assert.equal(step.tool, 'gentle-ai');
-  assert.deepEqual(step.dimensions, ['claude']);
-  assert.match(step.why, /^stale/);
-  assert.deepEqual(step.steps, ['remove the stale hook from settings.json']);
-  assert.deepEqual(step.undo, []);
+test('a missing engram plugin is his step: engram setup alone, since it installs and enables it', () => {
+  const fix = { installed: 'engram setup claude-code', claude: 'claude plugin enable engram@engram' };
+  const [step] = plan({ 'engram-plugin': { installed: 'missing', claude: 'missing', codex: 'n/a', fix } }).manual;
+  assert.equal(step.tool, 'engram-plugin');
+  assert.deepEqual(step.dimensions, ['installed', 'claude']);
+  assert.deepEqual(step.steps, ['engram setup claude-code']);
+  assert.deepEqual(step.undo, ['claude plugin uninstall engram@engram', 'claude plugin marketplace remove engram']);
 });
 
-test('gentle-ai missing in one host and stale in another names both, each with its own step', () => {
-  const fix = { installed: 'fix gentle-ai', claude: 'claude fix gentle-ai', codex: 'remove the stale hook' };
-  const steps = plan({ 'gentle-ai': { claude: 'missing', codex: 'stale', fix } }).manual.filter((s) => s.tool === 'gentle-ai');
-  assert.deepEqual(steps.map((s) => s.dimensions), [['claude'], ['codex']]);
-  assert.deepEqual(steps[0].steps, ['gentle-ai install --agents claude-code']);
-  assert.deepEqual(steps[1].steps, ['remove the stale hook']);
-});
-
-test('engram is named as brought by gentle-ai\'s installer, with doctor\'s fix per dimension', () => {
-  const [step] = plan({ engram: { installed: 'missing', codex: 'missing' } }).manual;
-  assert.equal(step.tool, 'engram');
-  assert.deepEqual(step.dimensions, ['installed', 'codex']);
-  assert.match(step.why, /gentle-ai/);
-  assert.deepEqual(step.steps, ['fix engram', 'codex fix engram']);
+test('an installed engram plugin that is disabled is enabled, and its undo disables it', () => {
+  const fix = { installed: 'engram setup claude-code', claude: 'claude plugin enable engram@engram' };
+  const [step] = plan({ 'engram-plugin': { claude: 'missing', codex: 'n/a', fix } }).manual;
+  assert.deepEqual(step.steps, ['claude plugin enable engram@engram']);
+  assert.deepEqual(step.undo, ['claude plugin disable engram@engram']);
 });
 
 test('a fix shared by two dimensions is named once', () => {
-  const engram = { claude: 'missing', codex: 'missing', fix: { claude: 'gentle-ai sync', codex: 'gentle-ai sync' } };
+  const engram = { claude: 'missing', codex: 'missing', fix: { claude: 'engram setup', codex: 'engram setup' } };
   const [step] = plan({ engram }).manual;
-  assert.deepEqual(step.steps, ['gentle-ai sync']);
+  assert.deepEqual(step.steps, ['engram setup']);
 });
 
 test('a Codex CLI that is not logged in is a step for him, never run', () => {
@@ -145,14 +159,11 @@ test('a missing prerequisite is named, never installed', () => {
   assert.deepEqual(p.manual, [{ tool: 'gh', dimensions: ['installed'], why: 'a prerequisite: install it yourself', steps: ['install the GitHub CLI (https://cli.github.com), then gh auth login'], undo: [] }]);
 });
 
-test('optional tools are listed with doctor\'s fix, never run', () => {
-  const p = plan({ context7: { claude: 'missing' }, 'typescript-lsp': { installed: 'missing', codex: 'n/a' } });
+test('the optional tool is listed with doctor\'s fix, never run', () => {
+  const p = plan({ 'typescript-lsp': { installed: 'missing', codex: 'n/a' } });
   assert.deepEqual(p.mandatory, []);
   assert.deepEqual(p.manual, []);
-  assert.deepEqual(p.optional, [
-    { tool: 'context7', dimensions: ['claude'], steps: ['claude fix context7'] },
-    { tool: 'typescript-lsp', dimensions: ['installed'], steps: ['fix typescript-lsp'] },
-  ]);
+  assert.deepEqual(p.optional, [{ tool: 'typescript-lsp', dimensions: ['installed'], steps: ['fix typescript-lsp'] }]);
 });
 
 test('an unknown state is no gap: nothing is planned for it', () => {

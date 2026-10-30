@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './latest.mjs';
 import { withoutAutoMaintenance } from './git-fixture.testkit.mjs';
 
@@ -17,7 +18,6 @@ function writeJson(filePath, data) {
 }
 
 const ROWS = [
-  { id: 'gentle-ai', version: '3.7.0' },
   { id: 'engram', version: '2.2.1' },
   { id: 'codegraph', version: '1.6.0' },
   { id: 'context7', version: null },
@@ -25,13 +25,10 @@ const ROWS = [
   { id: 'codex', version: null },
 ];
 
-test('gentle-ai fetches its GitHub releases/latest tag_name and engram its releases list, each stripped of a leading v', async () => {
+test('engram fetches its releases list, stripped of a leading v, and no lookup is made for a tool the stack has not', async () => {
   const calls = [];
   const fetchImpl = async (url) => {
     calls.push(url);
-    if (url.includes('Gentleman-Programming/gentle-ai')) {
-      return { ok: true, json: async () => ({ tag_name: 'v3.8.0' }) };
-    }
     if (url.includes('Gentleman-Programming/engram')) {
       return { ok: true, json: async () => [{ tag_name: 'v2.3.0', draft: false, prerelease: false }] };
     }
@@ -40,10 +37,11 @@ test('gentle-ai fetches its GitHub releases/latest tag_name and engram its relea
   const home = makeTmpHome();
   try {
     const versions = await fetchLatestVersions(ROWS, { fetch: fetchImpl, home });
-    assert.equal(versions['gentle-ai'], '3.8.0');
     assert.equal(versions.engram, '2.3.0');
-    assert.ok(calls.some((u) => u === 'https://api.github.com/repos/Gentleman-Programming/gentle-ai/releases/latest'));
     assert.ok(calls.some((u) => u === 'https://api.github.com/repos/Gentleman-Programming/engram/releases?per_page=30'));
+    // F8 S11: gentle-ai left the stack, so its releases are never asked for (S9's idea watch reads them, after S2).
+    assert.equal(calls.some((u) => /gentle-ai/.test(u)), false);
+    assert.equal(isLookupAttempted({ id: 'gentle-ai', version: '4.3.1' }), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -241,7 +239,6 @@ test('a failed fetch (network error) resolves to null instead of throwing', asyn
   const home = makeTmpHome();
   try {
     const versions = await fetchLatestVersions(ROWS, { fetch: fetchImpl, home });
-    assert.equal(versions['gentle-ai'], null);
     assert.equal(versions.engram, null);
     assert.equal(versions.codegraph, null);
   } finally {
@@ -254,7 +251,7 @@ test('a non-200 response resolves to null instead of throwing', async () => {
   const home = makeTmpHome();
   try {
     const versions = await fetchLatestVersions(ROWS, { fetch: fetchImpl, home });
-    assert.equal(versions['gentle-ai'], null);
+    assert.equal(versions.engram, null);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -265,7 +262,7 @@ test('a malformed JSON body (missing the expected field) resolves to null', asyn
   const home = makeTmpHome();
   try {
     const versions = await fetchLatestVersions(ROWS, { fetch: fetchImpl, home });
-    assert.equal(versions['gentle-ai'], null);
+    assert.equal(versions.engram, null);
     assert.equal(versions.codegraph, null);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -308,24 +305,24 @@ test('every tool lookup runs concurrently, not one at a time', async () => {
   const started = [];
   const resolvers = {};
   const fetchImpl = async (url) => {
-    const id = url.includes('gentle-ai') ? 'gentle-ai' : url.includes('Gentleman-Programming/engram') ? 'engram' : 'codegraph';
+    const id = url.includes('Gentleman-Programming/engram') ? 'engram' : url.includes('codex') ? 'codex' : 'codegraph';
     started.push(id);
     return new Promise((resolve) => {
       resolvers[id] = resolve;
     });
   };
   const rows = [
-    { id: 'gentle-ai', version: '3.7.0' },
     { id: 'engram', version: '2.2.1' },
     { id: 'codegraph', version: '1.6.0' },
+    { id: 'codex', version: '0.130.0' },
   ];
   const home = makeTmpHome();
   try {
     const promise = fetchLatestVersions(rows, { fetch: fetchImpl, home });
     // Let every synchronous-until-first-await branch run before any of them resolves.
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual([...started].sort(), ['codegraph', 'engram', 'gentle-ai']);
-    resolvers['gentle-ai']({ ok: true, json: async () => ({ tag_name: 'v1.0.0' }) });
+    assert.deepEqual([...started].sort(), ['codegraph', 'codex', 'engram']);
+    resolvers.codex({ ok: true, json: async () => ({ version: '1.0.0' }) });
     resolvers.engram({ ok: true, json: async () => [{ tag_name: 'v1.0.0' }] });
     resolvers.codegraph({ ok: true, json: async () => ({ version: '1.0.0' }) });
     await promise;
@@ -341,7 +338,6 @@ test('every tool lookup runs concurrently, not one at a time', async () => {
 test('isLocalSource is true for the marketplace-backed typescript-lsp row and false for network rows', () => {
   assert.equal(isLocalSource({ id: 'typescript-lsp', version: '1.0.0' }), true);
   assert.equal(isLocalSource({ id: 'codex', version: '0.130.0' }), false);
-  assert.equal(isLocalSource({ id: 'gentle-ai', version: '3.7.0' }), false);
   assert.equal(isLocalSource({ id: 'some-future-tool', version: '1.0.0' }), false);
 });
 
@@ -372,7 +368,7 @@ test('readLocalLatestVersions returns one entry per local-source row only, null 
   try {
     writeJson(marketplaceFile(home, 'claude-plugins-official'), { plugins: [{ name: 'typescript-lsp', version: '1.0.1' }] });
     const rows = [
-      { id: 'gentle-ai', version: '3.7.0' },
+      { id: 'engram', version: '3.6.0' },
       { id: 'typescript-lsp', version: '1.0.0' },
       { id: 'codex', version: '0.130.0' },
     ];
@@ -436,6 +432,38 @@ test('engram-plugin reads null when the clone lacks the binary\'s tag, when ther
     assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.6.0'), { home }), { 'engram-plugin': null });
     assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS(null), { home }), { 'engram-plugin': null });
     assert.deepEqual(await readLocalLatestVersions([{ id: 'engram-plugin', version: '0.1.12' }], { home }), { 'engram-plugin': null });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Since 2026-10-27 Claude Code clones the engram marketplace shallow, main alone, with no tag (odd/tasks/doctor-rows.md,
+// `## Engram plugin`): the read is null, and the fix doctor names, fetching the binary's tag, makes it answer.
+test('engram-plugin reads null from a shallow clone with no tags, and the version once the binary\'s tag is fetched into it', async () => {
+  const home = makeTmpHome();
+  try {
+    const origin = path.join(home, 'origin');
+    const clone = path.join(home, '.claude', 'plugins', 'marketplaces', 'engram');
+    const env = { ...process.env, GIT_CONFIG_GLOBAL: path.join(home, 'no-gitconfig'), GIT_CONFIG_NOSYSTEM: '1' };
+    const git = (...args) => {
+      const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { encoding: 'utf8', env });
+      assert.equal(result.status, 0, result.stderr);
+    };
+    const manifest = (version) => writeJson(path.join(origin, '.claude-plugin', 'marketplace.json'), { name: 'engram', plugins: [{ name: 'engram', version }] });
+    fs.mkdirSync(origin, { recursive: true });
+    withoutAutoMaintenance(() => {
+      git('-C', origin, 'init', '-q', '-b', 'main');
+      manifest('0.1.19');
+      git('-C', origin, 'add', '.');
+      git('-C', origin, 'commit', '-q', '-m', 'release');
+      git('-C', origin, 'tag', 'v3.6.0');
+      manifest('0.1.20');
+      git('-C', origin, 'commit', '-q', '-am', 'main moves on');
+      git('clone', '-q', '--depth', '1', '--no-tags', '--single-branch', pathToFileURL(origin).href, clone);
+    });
+    assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.6.0'), { home }), { 'engram-plugin': null });
+    withoutAutoMaintenance(() => git('-C', clone, 'fetch', '-q', '--depth', '1', 'origin', 'tag', 'v3.6.0'));
+    assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.6.0'), { home }), { 'engram-plugin': '0.1.19' });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

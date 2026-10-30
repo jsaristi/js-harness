@@ -17,7 +17,6 @@ import { readNotices, recordPath } from './lib/channel.mjs';
 import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { jsonLinesPath } from './lib/codex-reviews.mjs';
 import { gitDirs } from './lib/project.mjs';
-import { liveLineages, readReviewEnds, readReviewStarts, reviewStartsFile } from './lib/review-starts.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import {
   addDays,
@@ -32,7 +31,6 @@ import {
   landFacts,
   lastSettledDay,
   questionFacts,
-  reviewFacts,
   parseCommitTimes,
   parseMergeFiles,
   parseMerges,
@@ -301,47 +299,19 @@ function appendOnlyFacts(day, ctx) {
   } catch (err) {
     facts.unavailable.lands = err.message;
   }
-  // gentle-ai's store and the recorded starts are read once a run (B6): there is a terminal record per review ever
-  // acknowledged, too many to read again for each day.
-  ctx.reviews ??= (() => {
-    try {
-      return { record: ctx.readReviews(ctx.root, ctx.home, ctx.slug) };
-    } catch (err) {
-      return { unavailable: err.message };
-    }
-  })();
-  if (ctx.reviews.unavailable) facts.unavailable.reviews = ctx.reviews.unavailable;
-  else {
-    const { startsUnavailable, ...record } = ctx.reviews.record;
-    if (startsUnavailable) facts.unavailable['review starts'] = startsUnavailable;
-    facts.reviews = reviewFacts(record, bounds);
-  }
   return facts;
-}
-
-/** The record of the project's gentle-ai reviews (B6): gentle-ai's terminal records and live lineages in the store
- * under the git common dir, and the starts the pause hook kept under the harness home. A store that cannot be read
- * throws its code; a starts file that cannot be read is said apart (`startsUnavailable`), since the acknowledgements
- * do not need it. */
-function readReviewRecord(root, home, slug, run, fileSystem) {
-  const { commonGitDir } = gitDirs(root, run);
-  if (!commonGitDir) throw new Error('no git common dir');
-  const record = {
-    ends: readReviewEnds(commonGitDir, { fileSystem }),
-    live: liveLineages(commonGitDir, { fileSystem }).map((one) => one.lineage),
-  };
-  try {
-    return { ...record, starts: readReviewStarts(reviewStartsFile(home, slug), { fileSystem }) };
-  } catch (err) {
-    return { ...record, starts: [], startsUnavailable: err.message };
-  }
 }
 
 /** The merge queue's land records (`<git common dir>/js-harness/lands.jsonl`): none where the file is not there, a
  * machine where no land ran, and a throw where it is there and cannot be read, so its row says so instead of none. A
  * line that does not parse is left out. */
-function readLandRecord(root, run, fileSystem) {
-  const file = jsonLinesPath(root, 'lands.jsonl', { spawn: run });
+export function readLandRecord(root, run, fileSystem) {
+  return readRecordLines(jsonLinesPath(root, 'lands.jsonl', { spawn: run }), fileSystem);
+}
+
+/** The JSON objects of the record `file` the same way: none where `file` is `null` (no repository) or not there, a
+ * throw where it is there and cannot be read. */
+export function readRecordLines(file, fileSystem) {
   if (!file) return [];
   let text;
   try {
@@ -702,7 +672,6 @@ export async function throughputMain(
     fileSystem = fs,
     readCodexRuns = (root) => readCodexReviewRuns(root, { spawn: run }),
     readLands = (root) => readLandRecord(root, run, fileSystem),
-    readReviews = (root, home, slug) => readReviewRecord(root, home, slug, run, fileSystem),
     timezoneOffset = () => new Date().getTimezoneOffset(),
   } = {},
 ) {
@@ -718,7 +687,7 @@ export async function throughputMain(
   const home = harnessHome({ given: parsed.flags.home, env, cwd: defaultCwd, homedir });
   const root = mainCheckout(run, cwd);
   const slug = projectSlug(root);
-  const ctx = { root, home, slug, folder: snapshotFolder(home, slug), timezoneOffset, now, run, fileSystem, readCodexRuns, readLands, readReviews, out: stdout, err: stderr };
+  const ctx = { root, home, slug, folder: snapshotFolder(home, slug), timezoneOffset, now, run, fileSystem, readCodexRuns, readLands, out: stdout, err: stderr };
   try {
     if (parsed.verb === 'snapshot') return snapshot(ctx, parsed.flags);
     if (parsed.verb === 'status') return status(ctx);

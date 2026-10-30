@@ -347,11 +347,12 @@ export function parseArgs(argv, { taskIds = [], tasksDir = 'the tasks directory'
 
 // ---- what a run was --------------------------------------------------------------------------------------------------
 
-/** The versions a run of each agent records as its stack, as `[key in the document, name in a message]`. */
+/** The versions a run of each agent records as its stack, as `[key in the document, name in a message]`. A run
+ * recorded before F8 S11 also holds `gentleAi`, which left the stack: it is kept in the file and compared no more. */
 const WORKSPACE_FIELDS = [['codegraph', 'codegraph'], ['jsHarness', 'js-harness commit']];
 const STACK_FIELDS = {
-  claude: [['claude', 'claude'], ['gentleAi', 'gentle-ai'], ['engram', 'engram'], ['engramPlugin', 'engram plugin'], ...WORKSPACE_FIELDS],
-  codex: [['codex', 'codex'], ['gentleAi', 'gentle-ai'], ['engram', 'engram'], ...WORKSPACE_FIELDS],
+  claude: [['claude', 'claude'], ['engram', 'engram'], ['engramPlugin', 'engram plugin'], ...WORKSPACE_FIELDS],
+  codex: [['codex', 'codex'], ['engram', 'engram'], ...WORKSPACE_FIELDS],
 };
 
 /** What differs between the run a results file recorded (`recorded`) and the one about to continue it
@@ -484,8 +485,8 @@ const readInstalledPlugin = (home, pluginId) => {
   }
 };
 
-/** The stack the `current` arm is measured on, `{ claude, gentleAi, engram, engramPlugin, codegraph, jsHarness }`,
- * each `null` when it cannot be read (never a guess). gentle-ai, engram and codegraph are asked the way `doctor`
+/** The stack the `current` arm is measured on, `{ claude, engram, engramPlugin, codegraph, jsHarness }`,
+ * each `null` when it cannot be read (never a guess). engram and codegraph are asked the way `doctor`
  * asks (`bin/lib/stack.mjs`), the plugin is read from the record Claude Code keeps of what it installed, and the CLI
  * is asked for its own `--version` under the sandbox switches (no updater runs). The last two are what lays out a
  * trial's workspace (`initWorkspace`): codegraph builds its index, and `js-harness init` of the checkout at `root`
@@ -496,7 +497,6 @@ export function readStack({
   const installed = (id) => installedVersion(id, { spawn, platform });
   return {
     claude: probeClaude(claude) ?? null,
-    gentleAi: installed('gentle-ai'),
     engram: installed('engram'),
     engramPlugin: readInstalledPlugin(home, 'engram@engram'),
     ...readWorkspaceStack({ spawn, platform, root }),
@@ -535,8 +535,8 @@ function readWorkspaceCommit({ spawn, root }) {
 
 const VERSION_HOME_PREFIX = 'js-harness-suite-codex-version-';
 
-/** The stack a Codex run is measured on, `{ codex, gentleAi, engram, codegraph, jsHarness }`, each `null` when it
- * cannot be read (never a guess). gentle-ai, engram, codegraph and the js-harness commit are read as for Claude Code
+/** The stack a Codex run is measured on, `{ codex, engram, codegraph, jsHarness }`, each `null` when it
+ * cannot be read (never a guess). engram, codegraph and the js-harness commit are read as for Claude Code
  * (`readStack`): they are the same programs, and the same checkout lays out the workspace, under both hosts. There is
  * no engram plugin field: the engram plugin's version is read from a record Claude Code keeps
  * (`installed_plugins.json`), and Codex keeps none of that kind: what its home holds of a plugin is a directory of
@@ -572,7 +572,6 @@ export async function readCodexStack({
   }
   return {
     codex: version,
-    gentleAi: installedVersion('gentle-ai', { spawn, platform }),
     engram: installedVersion('engram', { spawn, platform }),
     ...readWorkspaceStack({ spawn, platform, root }),
   };

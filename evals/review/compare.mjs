@@ -444,18 +444,20 @@ function buildSeeded({ spawn, env, tmpdir, range }) {
 // How long the index of a checkout may take to build: a clone of this repository, once.
 const INDEX_TIMEOUT_MS = 10 * 60 * 1000;
 
-/** Builds the CodeGraph index of `checkout` when it holds none, with the command that initializes one for
- * a project root. `gentle-ai` may be a shim on Windows, so it is started as Codex is, through a shell. */
+/** Builds the CodeGraph index of `checkout` when it holds none, with the command `init` runs in a project root
+ * (bin/lib/project.mjs, `runCodegraphInit`). `codegraph` may be a shim on Windows, so it is started as Codex is,
+ * through a shell. */
 function ensureIndex({ spawn, env, platform, checkout, log }) {
   if (fs.existsSync(path.join(checkout, '.codegraph'))) return;
-  const args = ['codegraph', 'init', '--cwd', checkout];
-  const options = { cwd: checkout, env, encoding: 'utf8', timeout: INDEX_TIMEOUT_MS, windowsHide: true };
-  log(`Building the CodeGraph index of ${checkout}: gentle-ai ${args.join(' ')}`);
-  const ran = platform === 'win32' ? spawn(windowsCommandLine('gentle-ai', args), [], { ...options, shell: true }) : spawn('gentle-ai', args, options);
+  const args = ['init', '--yes', '.'];
+  // DO_NOT_TRACK, as `runCodegraphInit` sets it: codegraph then writes no telemetry queue or update cache under the home.
+  const options = { cwd: checkout, env: { ...env, DO_NOT_TRACK: '1' }, encoding: 'utf8', timeout: INDEX_TIMEOUT_MS, windowsHide: true };
+  log(`Building the CodeGraph index of ${checkout}: codegraph ${args.join(' ')} in ${checkout}`);
+  const ran = platform === 'win32' ? spawn(windowsCommandLine('codegraph', args), [], { ...options, shell: true }) : spawn('codegraph', args, options);
   if (ran?.error || ran?.status !== 0) {
     const said = String(ran?.stderr ?? '').trim().split(/\r?\n/)[0];
     const how = ran?.error ? `could not be run (${ran.error.message})` : `exited ${ran?.status ?? `on ${ran?.signal ?? 'no status'}`}`;
-    throw new Error(`\`gentle-ai ${args.join(' ')}\` ${how}${said ? `: ${said}` : ''}. The cell measures a review with an index, so it is not run without one.`);
+    throw new Error(`\`codegraph ${args.join(' ')}\` in ${checkout} ${how}${said ? `: ${said}` : ''}. The cell measures a review with an index, so it is not run without one.`);
   }
 }
 
@@ -501,7 +503,7 @@ const REPO_ROOT = path.resolve(fileURLToPath(new URL('../../', import.meta.url))
  * the usage on a bad command line.
  *
  * `deps` (all optional) injects `log` and `error`; `env`, `platform` and `homedir`, as `codexReviewMain`
- * takes them; `spawn`, the synchronous one (git, `gentle-ai`, and the review's own git and probe);
+ * takes them; `spawn`, the synchronous one (git, `codegraph`, and the review's own git and probe);
  * `review`, more `deps` for `codexReviewMain` (its `spawnAsync`, for one); `repoRoot`, the repository the
  * real range is cloned from; `checkoutParent`, where the clone goes; `tmpdir`, where the seeded repository
  * is built; `readingsDir`; `ranges`, in place of `RANGES`; `configToml`, the user's Codex configuration, in
@@ -594,7 +596,7 @@ export async function compareMain(argv = process.argv.slice(2), deps = {}) {
     log(range.seeded
       ? `Checkout: the seeded repository, built by evals/review/seeded.mjs in a new folder, ${checkout}; removed after the cell unless --keep-checkout.`
       : `Checkout: git clone ${repoRoot} ${clone}, then detached at ${range.head}; a clone and not a worktree, so its record and run log stay in its own git folder; removed after the cell unless --keep-checkout.`);
-    if (config.codegraph) log(`Index: gentle-ai codegraph init --cwd ${checkout}, when ${path.join(checkout, '.codegraph')} is missing.`);
+    if (config.codegraph) log(`Index: codegraph init --yes . in ${checkout}, when ${path.join(checkout, '.codegraph')} is missing.`);
     log(`Command: js-harness codex-review ${command.join(' ')}`);
     log(`Codex argv: ${JSON.stringify(codexArgv)}`);
     log(`Reading: ${file} (${recorded ? 'recorded: --force replaces it' : 'missing'})`);

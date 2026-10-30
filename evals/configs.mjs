@@ -292,10 +292,18 @@ export function minimalWithConfig({ name, seed, ...options } = {}) {
  * (async) function, fills after the shared preparation (`prepareSandbox`); without one the home is as bare
  * as the minimal arm's. The seam is separate because building the home from the real configuration is its
  * own piece of work (`home.mjs`). An arm of one component (`evals/arms.mjs`) is this config under its own
- * `name`, with a seed that takes its component out. */
+ * `name`, with a seed that takes its component out. The current arm and each arm without a rule keep their
+ * trials' transcripts (`SUBAGENT_TRANSCRIPTS`): a rule's text lives in a skill, and only the transcript shows whether
+ * a trial loaded it (`odd/tasks/f8-s5c-a-coverage.md`, L21). */
 export function currentConfig({ seed, name = 'current', ...options } = {}) {
-  return buildConfig(name, options, [], seed);
+  const config = buildConfig(name, options, DESKTOP_FLAGS, seed);
+  return name === 'current' || name.startsWith('current-without-rule-') ? { ...config, transcripts: SUBAGENT_TRANSCRIPTS } : config;
 }
+
+/** The setting sources a desktop session passes (diet section 7, C3: "evals load what a desktop session loads"),
+ * named so the current arm states them instead of relying on the CLI's default, which is the same list today. A
+ * desktop worktree session also passes `--project-config-root`; a trial workspace is no worktree, so it is not. */
+const DESKTOP_FLAGS = ['--setting-sources', 'user,project,local'];
 
 // ---- the subagent configs --------------------------------------------------------------------------
 // What `odd/tasks/subagent-model-routing.md` measures: the same orchestrator with its subagents forced onto
@@ -343,7 +351,51 @@ export function subagentPin(name) {
 const SUBAGENT_TRANSCRIPTS = {
   keep: ({ home, dest }) => keepTranscripts({ projectsDir: path.join(sandboxPaths(home).CLAUDE_CONFIG_DIR, 'projects'), dest }),
   summarize: ({ dir, usage }) => trialListCost({ dir, modelUsage: usage.modelUsage }),
+  reply: ({ dir }) => lastReply(dir),
 };
+
+/** The last text the main thread of the session kept in `dir` wrote, or `null` when it wrote none: what the Stop hook
+ * reads as the reply that ends a turn, for a trial cut by its timeout before it printed a result
+ * (`odd/tasks/f8-s5c-a-coverage.md`, L35). Only the session files at the top of `dir` are the main thread's: a
+ * subagent's sit in `<session>/subagents/` (`transcript-usage.mjs`), and a sidechain line is a subagent's too. A line
+ * Claude Code made up itself (`<synthetic>`) is no reply. It writes a line per content block of a message, so the text
+ * blocks of each message are gathered first, by its id, and the last message is the one whose latest line is latest:
+ * of two sessions (one resumed under another name), the later one's is the reply whatever their names and however
+ * their times overlap. A message with no timestamp is later than those before it. A line that is not JSON is passed
+ * over. */
+export function lastReply(dir) {
+  if (!fs.existsSync(dir)) return null;
+  const messages = [];
+  const byId = new Map();
+  for (const file of fs.readdirSync(dir).filter((name) => name.endsWith('.jsonl')).sort()) {
+    for (const text of fs.readFileSync(path.join(dir, file), 'utf8').split('\n')) {
+      let line;
+      try {
+        line = JSON.parse(text);
+      } catch {
+        continue;
+      }
+      const message = line?.message;
+      if (line?.type !== 'assistant' || line.isSidechain === true || !Array.isArray(message?.content) || message.model === '<synthetic>') continue;
+      const texts = message.content.filter((block) => block?.type === 'text' && typeof block.text === 'string').map((block) => block.text);
+      if (texts.length === 0) continue;
+      let entry = typeof message.id === 'string' ? byId.get(message.id) : undefined;
+      if (entry === undefined) {
+        entry = { at: NaN, texts: [] };
+        messages.push(entry);
+        if (typeof message.id === 'string') byId.set(message.id, entry);
+      }
+      entry.texts.push(...texts);
+      const at = Date.parse(line.timestamp);
+      if (Number.isFinite(at) && !(at <= entry.at)) entry.at = at;
+    }
+  }
+  let last = null;
+  for (const entry of messages) {
+    if (last === null || !Number.isFinite(entry.at) || !Number.isFinite(last.at) || entry.at >= last.at) last = entry;
+  }
+  return last === null ? null : last.texts.join('\n\n');
+}
 
 /** One of the six subagent configs: the minimal arm exactly (its flags, its sandbox, no seed, the same main
  * model and effort), plus the two things under test. The delegation mode goes after the minimal flags as

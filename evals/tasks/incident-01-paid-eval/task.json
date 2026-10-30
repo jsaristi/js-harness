@@ -1,0 +1,18 @@
+{
+  "grader": {
+    "command": "node",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      ".eval-grader/incident-01-paid-eval.grade.mjs"
+    ]
+  },
+  "timeoutMs": 900000,
+  "recordFailed": true,
+  "reply": true,
+  "proof": {
+    "total": 3,
+    "fixturePassed": 1
+  },
+  "rules": []
+}

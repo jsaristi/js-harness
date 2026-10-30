@@ -70,7 +70,7 @@ test('npm test reads the words npm hands its script, its aliases, and the packag
     assert.equal(testRunFiles(`npm test --prefix ${other}`, noTest), 0);
     assert.equal(testRunFiles(`npm --prefix=${other} test a.mjs`, noTest), 1);
     assert.equal(testRunFiles(`npm --prefix ${noTest} test`, project), null);
-    // The value of an option of npm's own is npm's, not a word it hands the script (gentle-ai on the guard slice).
+    // The value of an option of npm's own is npm's, not a word it hands the script (a review of the guard slice).
     assert.equal(testRunFiles('npm test --loglevel silent', project), 0);
     assert.equal(testRunFiles('npm --loglevel silent test a.mjs', project), 1);
     assert.equal(testRunFiles('npm test --omit dev --node-options --max-old-space-size=99', project), 0);
@@ -289,14 +289,14 @@ test('a board read waits for another gate: js-harness sessions is refused while 
   assert.equal(testRunWarning('js-harness gate -- js-harness sessions', { env: {}, holder: held, cwd: process.cwd() }), null);
 });
 
-// Codex and gentle-ai on b2c6ba8..100331f: a board read hidden behind a shell or wsl.exe is one, and a word that only
+// Codex and another review of b2c6ba8..100331f: a board read hidden behind a shell or wsl.exe is one, and a word that only
 // names the script, a one-entry flag in any of its forms, or the help is none.
 test('a board read is found behind sh -c and wsl.exe, and an echo, --help or --opening=<title> is no board read', () => {
   const warn = (command, holder = held) => testRunWarning(command, { env: {}, holder, cwd: process.cwd() });
   for (const command of ['sh -c "js-harness sessions --watch"', 'bash -lc "cd x && js-harness sessions"', 'wsl.exe -- js-harness sessions', 'node bin/js-harness.mjs sessions --json']) {
     assert.match(warn(command) ?? '', /^js-harness sessions reads the board outside a turn/, command);
   }
-  for (const command of ['echo bin/js-harness.mjs sessions', 'js-harness sessions --help', 'js-harness sessions -h', 'js-harness sessions --opening=Audit', 'js-harness sessions --peek "Audit"', 'js-harness sessions --measures', 'node bin/js-harness.mjs sessions --peek "Audit"', 'sh -c "js-harness sessions --quote x"']) {
+  for (const command of ['echo bin/js-harness.mjs sessions', 'js-harness sessions --help', 'js-harness sessions -h', 'js-harness sessions --opening=Audit', 'js-harness sessions --peek "Audit"', 'js-harness sessions --measures', 'node bin/js-harness.mjs sessions --peek "Audit"', 'sh -c "js-harness sessions --quote x"', 'js-harness sessions live --out x', 'node bin/js-harness.mjs sessions live --sent x.json']) {
     assert.equal(warn(command), null, command);
   }
   const batch = () => ({ cwd: 'D:\\js-harness-worktrees\\evals', batch: true });

@@ -86,8 +86,10 @@ test('-v and version print the version alone on one line, as --version does, and
   assert.match(run(['--help']).stdout, /^js-harness --version \(or -v, or version\) /m);
 });
 
-test('the merge-queue help says each code commit needs its gentle-ai line on its branch, and the coverage is printed commit by commit (T16e, slice b)', () => {
-  assert.match(run(['--help']).stdout, /merge-queue .*Each code commit made after the cut-over is named, by its hash or a range a\.\.b that holds it, on a gentle-ai line its pull request adds to a feature document \(odd\/tasks\), and the queue prints each code commit's Codex record and that line\./);
+test('the merge-queue help says ready asks each code commit for its review records, prints the coverage commit by commit, and asks for no gentle-ai line (F8 S11, L11)', () => {
+  const help = run(['--help']).stdout;
+  assert.match(help, /merge-queue .*Ready asks each code commit for the review records its project's switches ask \(a Codex record, a complete Claude lens record\), and the queue prints each code commit's Codex record\./);
+  assert.doesNotMatch(help.split('\n').find((line) => line.startsWith('  merge-queue')), /gentle-ai/);
 });
 
 test('the merge-queue help says a landed rule/ branch confirms its proposal in the relief file, and the check help says a push reports the row rules (T16e, slice c)', () => {
@@ -101,7 +103,7 @@ test('the merge-queue help says each pull request merged into the candidate pass
 });
 
 test('the merge-queue help says a candidate of documents alone runs no suite on this machine (the throughput plan\'s item 7)', () => {
-  assert.match(run(['--help']).stdout, /merge-queue .*A candidate whose every changed path is a document main's harness\.json declares runs no suite on this machine, and CircleCI's run is its test\./);
+  assert.match(run(['--help']).stdout, /merge-queue .*A candidate whose every changed path is a document main's harness\.json declares runs no suite on this machine, and its GitHub Actions run is its test\./);
 });
 
 test('the backup help says run exports the js-harness project unless the scope of its config is all (launch audit C-backup-3)', () => {
@@ -297,10 +299,15 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
       // `unseen` and `host-update` are the rows the dispatcher wires in (doctor's `unseen` and `host` dependencies):
       // last, after the checks. `host-update` is there on any machine, `n/a` where no Claude Desktop folder is, and so
       // is `stack-update`, whatever tools it reads. `js-harness`, the harness's own rules against main's, comes right
-      // after the checks, for every caller. `worktrees` (odd/tasks/land-unattended.md, T10) follows `unseen`, and
-      // `memory-backup` (odd/tasks/memory-backup.md) follows it. `clean` (odd/tasks/clean.md) follows `stack-update`.
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'memory-backup', 'host-update', 'stack-update', 'clean', 'gentle-ai-sync'],
+      // after the checks, for every caller. `worktrees` (odd/tasks/land-unattended.md, T10) follows `unseen`, then
+      // `review-skips` (odd/tasks/f8-s1-reviews.md, T5), `templates` (odd/tasks/templates.md), and
+      // `memory-backup` (odd/tasks/memory-backup.md) follows it, then `claude-import` (odd/tasks/f8-s13-rehearsal.md, T8)
+      // and `permissions` (odd/tasks/f8-s10-port.md, T4).
+      // `clean` (odd/tasks/clean.md) follows `stack-update`.
+      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'review-skips', 'templates', 'memory-backup', 'claude-import', 'permissions', 'host-update', 'stack-update', 'clean'],
     );
+    // A temp home has no install: nothing holds the permissions, and that is no gap.
+    assert.equal(rows.find((r) => r.id === 'permissions').claude, 'n/a');
     // The host check reads the app folder under `--home`, never this machine's own (gentle-ai review of PR 242):
     // a temp home has no Claude Desktop folder, so the row is n/a and nothing is recorded in its cache.
     const host = rows.find((r) => r.id === 'host-update');
@@ -312,6 +319,8 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
     assert.equal(rows.find((r) => r.id === 'worktrees').project, 'unknown');
     // A temp home was never set up for a backup: no gap.
     assert.equal(rows.find((r) => r.id === 'memory-backup').claude, 'n/a');
+    // The temp folder holds a harness.json and no AGENTS.md: no project to load, so no gap.
+    assert.equal(rows.find((r) => r.id === 'claude-import').project, 'n/a');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(cwd, { recursive: true, force: true });

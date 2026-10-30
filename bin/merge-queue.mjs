@@ -8,48 +8,52 @@
 // builds and prints the candidate; `--land` tests it and moves the default branch to it (`landCandidate`), then
 // retargets the open pull requests stacked on a branch it landed (`retargetStacked`).
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { removableWorktrees } from './lib/worktrees.mjs';
-import { allDocuments, checkCodexReviews, codexReviewOffAt, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
+import { allDocuments, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
 import { GATE_NOT_RUN } from './gate.mjs';
+import { CI_WORKFLOW } from './lib/ci-gate.mjs';
 import { appendNotice, appendRelief, newNotice, NOTICE_TEXT_MAX, readNotices, reliefPath } from './lib/channel.mjs';
 import { gatesOf, readGateLog } from './lib/gate-log.mjs';
-import { COMMIT_FORMAT, gitOut, loggedCommits, reviewCoverage } from './lib/codex-review-coverage.mjs';
-import { evidenceRefusal, gentleAiEvidence, GENTLE_AI_CUTOVER } from './lib/gentle-ai-evidence.mjs';
+import { reviewEvidence } from './lib/merge-queue-reviews.mjs';
 import { defaultBranchOf } from './lib/default-branch.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
-import { REFRESH_FAILED, refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
+import { refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
+import { refreshAfterLand } from './lib/merge-queue-refresh.mjs';
+import { staleBin, UNSHIPPED_GLOBS } from './lib/merge-queue-stale-bin.mjs';
+import { refreshNowRun } from './lib/merge-queue-refresh-now.mjs';
+import { pnpmBinDir } from './update.mjs';
+import { claudeRunner, listAgents } from './lib/background.mjs';
 import { harnessHome } from './lib/home.mjs';
 
-export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refresh-copy] | --prune [--cwd <path>]
+// Where `notify --kind ready` has read it from (bin/notify.mjs), and where the tests read the copy guard.
+export { reviewEvidence, staleBin, UNSHIPPED_GLOBS };
+
+export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refresh-copy] | --refresh-copy | --prune [--cwd <path>]
 
 Builds the candidate the default branch would be: origin's default branch (what origin's HEAD names, else what gh names)
-with each ready pull request merged into it in order of number. Ready means open, not a draft, mergeable, based on the default branch, a gentle-ai line in its body, a Codex
-review record for every code commit, and no conflict with the candidate so far. A pull request GitHub
+with each ready pull request merged into it in order of number. Ready means open, not a draft, mergeable, based on the default branch, a Codex
+review record and a complete Claude lens record (no lens skip) for every code commit, and no conflict with the candidate so far. A pull request GitHub
 has not yet computed (mergeable UNKNOWN) is decided by its merge into the candidate. It names each pull
 request it leaves out and why. Each pull request merged into the candidate passes main's rule rows first (check --door), and one that fails leaves the batch.
-Each code commit committed after the cut-over (${GENTLE_AI_CUTOVER}) needs gentle-ai's evidence on its own branch: its
-hash (seven characters or more), or a range a..b that holds it (a and what git rev-list a..b lists), on a line the
-pull request adds to a feature document (odd/tasks/<name>.md) that says gentle-ai; a merge of main needs none. For
-each ready pull request the queue prints, commit by commit, the Codex record that covers it and that line.
+For each ready pull request the queue prints, commit by commit, the Codex record that covers it.
 
 --dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends.
 --land tests the candidate: the whole suite on this machine under the gate lock, its gate first in the
 line by a gate-first ticket for the running session (js-harness gate first; with no session id or a
-refused ticket it waits its turn, and says which), and at the same time CircleCI's run of a queue/*
+refused ticket it waits its turn, and says which), and at the same time GitHub Actions' run (.github/workflows/gate.yml) of a queue/*
 branch pushed for it before the suite starts. The branch is removed once the candidate is red or
-untested on this machine, or once CircleCI answered. A candidate red or untested here still spends
-that CircleCI run, and a land killed before it ends leaves its branch on origin for a hand to remove. When
+untested on this machine, or once GitHub Actions answered. A candidate red or untested here still spends
+that GitHub Actions run, and a land killed before it ends leaves its branch on origin for a hand to remove. When
 both are green, main is pushed as the
 candidate, by fast-forward from the main it was built from. A candidate whose every changed path is a
 document main's harness.json declares runs no suite on this machine, as a commit of documents alone
-runs none, and CircleCI's run is its test. A candidate red on this machine is
+runs none, and its GitHub Actions run is its test. A candidate red on this machine is
 bisected: the pull request that turns it red is left out and named, and the rest is landed. The
 pre-push hook refuses every other push of main. For each landed rule/ pull request and each rule it
 changed in bin/lib/rules-data.mjs, the relief file gains one line, "rule:<id> landed on main <sha> from
@@ -57,19 +61,30 @@ changed in bin/lib/rules-data.mjs, the relief file gains one line, "rule:<id> la
 declaration hash is the landed head's that no later landing confirms; one with no such line is named. --dry-run and a land that does not move main
 write none. A gate that ran nothing (no turn in time, or a waiting push took it) or was stopped before it
 ended is no red: main is not pushed, and nothing is bisected. Exit 0 landed or nothing to land, 4 red,
-3 main moved meanwhile (main not pushed), 5 the suite did not run or CircleCI gave no result in 30 minutes
+3 main moved meanwhile (main not pushed), 5 the suite did not run or GitHub Actions gave no result in 30 minutes
 (main not pushed), 1 anything else.
 --land --refresh-copy, after a land that moved main, also brings the installed copy the hooks run up to that main
 (odd/tasks/harness-review.md, T4): under the gate lock, the Claude settings are backed up (the newest five kept under
 <home>/.js-harness/refresh-backups), main is installed with pnpm add -g by its sha in up to three tries, the copy is
-verified by its --version (the version main's package.json names) and by the sha its shim names, then js-harness
-install and js-harness doctor run, and the stale pnpm state is pruned. The undo is printed. A land that moved nothing
-refreshes nothing and says so. Exit 6 when the copy is not verified or a step after the install fails (the landing
-stands), 75 when the gate lock was not obtained (nothing refreshed).
+verified by its --version (the version main's package.json names), by the sha its shim names and by its bin/, file by
+file against main's, the tests aside; pnpm's global package.json is backed up beside the settings (the newest five
+kept). Then js-harness install and js-harness doctor run, and the stale pnpm state is pruned. The undo is printed. A
+land that moved nothing refreshes nothing and says so. Exit 6 when the copy is not verified or a step after the install
+fails (the landing stands), 75 when the gate lock was not obtained or a session of the project was still at work after
+30 minutes (nothing refreshed): the refresh first waits for every session claude agents lists busy or waiting to be
+between runs.
+--refresh-copy alone, run from a checkout (odd/tasks/lead-manual-steps.md), brings the installed copy up to origin's
+default branch now, landing nothing; exit 0 when the copy already names it, 1 when main or pnpm's bin folder cannot be
+read. It reads the processes that run from the copy (Windows): a js-harness wait or quiet --wait, with what it started,
+is a wait, and anything else (a gate, a review, an eval batch) refuses it, exit 75, after three looks ten seconds apart,
+stopping nothing. Under the gate lock it looks again, stops every wait by pid and creation time (75 when one survives),
+and refreshes as above. Then each work session whose wait was stopped, the one session whose transcript (of any
+project) holds that wait still open, gets a note in its project's channel with its wait to run again, and every other
+stopped wait is printed with it. It can wait up to an hour for the gate lock: run it in the background.
 A landed pull request whose branch moved during the land is named after the landing: its new commits
 are not in main, so it needs another run of the queue.
 Each --land appends one JSON line to <git common dir>/js-harness/lands.jsonl: the pull requests it looked at, each
-one left out with its reason, the time of each suite run, of CircleCI (from the push of its queue branch, so it spans the local
+one left out with its reason, the time of each suite run, of GitHub Actions (from the push of its queue branch, so it spans the local
 suite, to its answer or the branch's removal) and of the push, what landed, and its exit.
 A land tells the work session of each pull request it left out why, the failing tests of a red included, by a
 note to that session's number in the channel; the session is the one whose newest ready notice names the pull
@@ -95,7 +110,7 @@ const RETARGET_LIMIT = 1000;
  * dry run and found its git directory; `said` keeps the last line the land printed. */
 function landLog({ now, session }) {
   const iso = (ms) => new Date(ms).toISOString();
-  const record = { v: 1, startedAt: iso(now()), endedAt: null, session, main: null, considered: [], leftOut: [], phases: [], circleci: null, candidate: null, landed: [], removed: [], exit: null, said: null };
+  const record = { v: 1, startedAt: iso(now()), endedAt: null, session, main: null, considered: [], leftOut: [], phases: [], actions: null, candidate: null, landed: [], removed: [], exit: null, said: null };
   return {
     record,
     file: null,
@@ -147,33 +162,32 @@ function parseArgs(argv) {
     else if (argv[at] === '--cwd' && at + 1 < argv.length) args.cwd = argv[(at += 1)];
     else return null;
   }
-  // One mode, named: a run that pushes main is never what a bare command does. --refresh-copy is a part of --land.
-  if (args.refreshCopy && !args.land) return null;
+  // One mode, named: a run that pushes main is never what a bare command does. --refresh-copy is a part of --land, or
+  // a mode of its own when it comes alone.
+  if (args.refreshCopy && !args.land) return args.dryRun || args.prune ? null : args;
   return [args.dryRun, args.land, args.prune].filter(Boolean).length === 1 ? args : null;
 }
 
-/** How long the queue waits for CircleCI's result on a candidate, and how often it asks. */
+/** How long the queue waits for GitHub Actions' result on a candidate, and how often it asks. */
 const CI_WAIT_MS = 30 * 60_000;
 const CI_POLL_MS = 30_000;
 const RED = new Set(['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure', 'stale']);
 
-/** CircleCI's result on the commit `sha`, from GitHub: its check runs (the CircleCI GitHub app) and its
- * statuses (`ci/circleci...`, the OAuth integration). `{ state: 'green' | 'red' | 'pending', name, conclusion,
- * url }`; pending while it has posted nothing or something is still running. */
-export function circleciState(checkRuns, statuses) {
-  const runs = (checkRuns ?? []).filter((one) => /circleci/i.test(one?.app?.slug ?? ''));
-  const posted = (statuses ?? []).filter((one) => /^ci\/circleci/i.test(one?.context ?? ''));
-  const redRun = runs.find((one) => one.status === 'completed' && RED.has(one.conclusion));
-  if (redRun) return { state: 'red', name: redRun.name, conclusion: redRun.conclusion, url: redRun.html_url };
-  const redStatus = posted.find((one) => one.state === 'failure' || one.state === 'error');
-  if (redStatus) return { state: 'red', name: redStatus.context, conclusion: redStatus.state, url: redStatus.target_url };
-  const all = runs.length + posted.length;
-  // Every run a success: a skipped or neutral run is no run of the suite, and green is the suite passing (Codex, 2026-10-14).
-  const done = runs.every((one) => one.status === 'completed' && one.conclusion === 'success') && posted.every((one) => one.state === 'success');
-  if (!(all > 0 && done)) return { state: 'pending' };
-  // Named as a red is, so the land record keeps the build that passed (odd/tasks/land-unattended.md, B2).
-  const [run] = runs;
-  return run ? { state: 'green', name: run.name, conclusion: run.conclusion, url: run.html_url } : { state: 'green', name: posted[0].context, conclusion: posted[0].state, url: posted[0].target_url };
+/** GitHub Actions' result on the candidate: the newest run of .github/workflows/gate.yml (`CI_WORKFLOW`) for the push
+ * of `branch`, its `queue/*` branch, at the commit `sha` (odd/tasks/drop-circleci.md, S2). No other workflow's run
+ * decides it, as a windows-daily.yml run dispatched by hand on that branch would (Codex, 2026-10-27). A re-run keeps its
+ * run's id and GitHub reports its latest attempt, so the newest id is the newest push's run. `{ state: 'green' | 'red' | 'pending', name, conclusion, url }`; pending while there is no such run or it
+ * is still running. */
+export function actionsState(workflowRuns, { branch, sha }) {
+  const [run] = (workflowRuns ?? [])
+    .filter((one) => one?.path === CI_WORKFLOW && one.head_branch === branch && one.head_sha === sha)
+    .sort((a, b) => b.id - a.id);
+  if (run?.status !== 'completed') return { state: 'pending' };
+  // Named either way, so the land record keeps the run that decided it (odd/tasks/land-unattended.md, B2).
+  const named = { name: run.name, conclusion: run.conclusion, url: run.html_url };
+  if (RED.has(run.conclusion)) return { state: 'red', ...named };
+  // A skipped or neutral run is no run of the suite: green is the suite passing (Codex, 2026-10-14).
+  return run.conclusion === 'success' ? { state: 'green', ...named } : { state: 'pending' };
 }
 
 /** The rows of `status` (`FAIL`, `INFO`) in a `check` `output`. `check` prints its rows as one block, then each failed
@@ -292,51 +306,9 @@ export function localSuite(run, place, { env = process.env, say = () => {} } = {
   return { ok: done.ok, notRun: false, said, ...(failing.length > 0 && { failing }) };
 }
 
-/** The commits of `main..head` read in `cwd` that change a file that is not Markdown, newest first
- * (`{ id, shortId, parentCount, subject }`): the code commits of a project whose Codex review is off. A merge changes
- * the files it leaves as none of its parents has them (`--diff-merges=combined`), which is where an edit made in it
- * is; whether it needs a line is `gentleAiEvidence`'s call. `null` when git does not answer. */
-function markdownlessCommits(cwd, main, head) {
-  // The log `reviewCoverage` reads, by the same reader: names as git has them (`-z`), no signature before a commit.
-  const log = gitOut(spawnSync, cwd, ['log', '-z', '--diff-merges=combined', '--root', '--no-show-signature', '--no-relative', '--no-renames', '--name-only', `--format=${COMMIT_FORMAT}`, `${main}..${head}`]);
-  const commits = log === null ? null : loggedCommits(log);
-  return commits === null ? null : commits.filter((commit) => commit.files.some((file) => !/\.md$/i.test(file)));
-}
-
-/** Whether the pull request at `head` is ready by its reviews, read in `cwd` against `main` (odd/tasks/rule-hierarchy.md,
- * "The merge door (T16e)", items 5 and 6): `{ pass, detail }` as `checkCodexReviews` gives it, refused when a code commit
- * committed after `cutover` has no gentle-ai line on its branch (`gentleAiEvidence`), and, when it passes, `lines`: one
- * for each code commit, with the Codex record that covers it and the gentle-ai line that names it, so the lead reads the
- * coverage commit by commit and needs no look of their own. */
-export function reviewEvidence(cwd, main, head, { cutover = GENTLE_AI_CUTOVER } = {}) {
-  const codex = checkCodexReviews(cwd, head);
-  if (!codex.pass) return codex;
-  const off = codexReviewOffAt(cwd, head);
-  const coverage = off ? null : reviewCoverage(cwd, { from: main, tip: head });
-  const codeCommits = off ? markdownlessCommits(cwd, main, head) : coverage.unknown ? null : coverage.codeCommits;
-  if (codeCommits === null) return { pass: false, detail: 'its code commits could not be read' };
-  const evidence = gentleAiEvidence(cwd, { main, head, codeCommits, cutover });
-  if (evidence.unknown) return { pass: false, detail: 'its gentle-ai lines could not be read' };
-  const refusal = evidenceRefusal(evidence);
-  if (refusal !== null) return { pass: false, detail: refusal };
-  const due = new Set(evidence.due.map((commit) => commit.id));
-  const lines = codeCommits.map((commit) => {
-    const record = coverage?.covers.find(({ covered }) => covered.has(commit.id))?.rec;
-    const codexSaid = off ? 'the Codex review is off'
-      : record ? `Codex ${record.base.slice(0, 7)}..${record.head.slice(0, 7)} ${record.outcome} ${record.reviewedAt.slice(0, 10)}`
-        : 'no Codex record read for it';
-    const named = evidence.where.get(commit.id);
-    // A due commit no line names refused above, so one that is not named here is not due: a merge of main, or older.
-    const notAsked = commit.parentCount > 1 ? 'a merge of main' : 'committed before the cut-over';
-    const gentleSaid = named ? `gentle-ai ${named}` : `gentle-ai not asked, ${notAsked}`;
-    return `${commit.shortId} ${commit.subject}: ${codexSaid}; ${gentleSaid}`;
-  });
-  return { pass: true, detail: codex.detail, lines };
-}
-
 /** Whether every path the candidate at `place` changes against `main` is a document that main's harness.json, in
  * main's worktree `mainPlace`, declares (`discoverDocuments`): then the suite does not run on this machine, as for a
- * commit of documents alone, and CircleCI's run of the whole gate is the candidate's test (the throughput plan's item 7,
+ * commit of documents alone, and the GitHub Actions run of the whole gate is the candidate's test (the throughput plan's item 7,
  * 2026-10-16). Main's declaration, never the candidate's: a pull request cannot widen what counts as a document for
  * itself, and its harness.json is a path that is no document. A git that does not answer, a declaration that does not
  * parse, or an empty change runs the suite. */
@@ -348,7 +320,7 @@ function documentsAlone(gitIn, place, main, mainPlace) {
   return diff.ok && allDocuments(diff.out.split('\0').filter(Boolean), documents);
 }
 
-const DOCUMENTS_ALONE = 'Every path the candidate changes is a document main\'s harness.json declares: the suite does not run on this machine, as for a commit of documents alone; CircleCI runs the whole gate on it.';
+const DOCUMENTS_ALONE = 'Every path the candidate changes is a document main\'s harness.json declares: the suite does not run on this machine, as for a commit of documents alone; GitHub Actions runs the whole gate on it.';
 
 /** Whether main's check.mjs has the merge door (odd/tasks/rule-hierarchy.md, "The merge door (T16e)"): its source names
  * the `'--door'` flag. Read once per batch from main's worktree; a main without the file has no door yet. */
@@ -556,30 +528,33 @@ function retargetStacked({ run, cwd, defaultBranch, landedPrs, stdout }) {
 }
 
 /** `--land`: the candidate at `place`, built on `main` (the sha of origin's default branch `defaultBranch`), tested on this
- * machine and on CircleCI at once, and the default branch moved to it when both are green (S6, S7). Its CircleCI run is
- * that of a `queue/*` branch pushed for it before the local suite starts (odd/tasks/land-unattended.md, D) and removed
- * as soon as its answer no longer matters: once the candidate is red or untested here, or once CircleCI answered. The
+ * machine and on GitHub Actions at once, and the default branch moved to it when both are green (S6, S7). Its GitHub
+ * Actions run is gate.yml's on a `queue/*` branch pushed for it before the local suite starts (odd/tasks/land-unattended.md,
+ * D; odd/tasks/drop-circleci.md, S2) and removed as soon as its answer no longer matters: once the candidate is red or
+ * untested here, or once GitHub Actions answered. The
  * branch moves by fast-forward only, leased on the `main` the candidate was built from: a branch that moved in between
  * is left as it is (exit 3). Red anywhere is exit 4. `retarget` runs after a land, for the pull requests stacked on it. */
 async function landCandidate({ run, gitIn, place, main, defaultBranch, door, merged, suite, sleep, stdout, fail, landed, retarget, log }) {
   const candidate = gitIn(place, 'rev-parse', 'HEAD').out.trim();
   if (!candidate) return fail('could not read the candidate.');
   log.record.candidate = candidate;
-  // CircleCI starts with the local suite, not after it: the two ran in series, about 2.8 minutes a land. The cost
-  // is one CircleCI run spent on each candidate this machine turns red or does not test. Main still waits for both greens.
-  // `--no-verify`: the branch is the candidate's run on CircleCI, and no hook judges it; main's push is judged.
+  // The CI run starts with the local suite, not after it: the two ran in series, about 2.8 minutes a land. The cost
+  // is one GitHub Actions run spent on each candidate this machine turns red or does not test. Main still waits for both greens.
+  // `--no-verify`: the branch is the candidate's run on GitHub Actions, and no hook judges it; main's push is judged.
   const branch = `queue/${new Date().toISOString().replace(/[-:]/g, '').replace(/\..*$/, '')}-${candidate.slice(0, 7)}`;
   if (!gitIn(place, 'push', '--quiet', '--no-verify', 'origin', `${candidate}:refs/heads/${branch}`).ok) return fail(`could not push ${branch}.`);
-  const ciEnded = log.phase('circleci');
+  // A record before 2026-10-27 names this phase and its top-level field `circleci`. The throughput command counts each
+  // phase by its name, old and new (bin/lib/throughput.test.mjs), and nothing reads the field.
+  const ciEnded = log.phase('actions');
   let ci = { state: 'pending' };
   let [asked, dropped] = [false, false];
-  // Removes the queue branch once, and ends the CircleCI phase: `dropped` when its answer was not waited for.
+  // Removes the queue branch once, and ends the GitHub Actions phase: `dropped` when its answer was not waited for.
   const drop = () => {
     if (dropped) return;
     dropped = true;
     ciEnded(ci.state === 'green' ? true : ci.state === 'red' ? false : null);
     const state = !asked ? 'dropped' : ci.state === 'pending' ? 'none' : ci.state;
-    log.record.circleci = { state, name: ci.name ?? null, conclusion: ci.conclusion ?? null, url: ci.url ?? null };
+    log.record.actions = { state, name: ci.name ?? null, conclusion: ci.conclusion ?? null, url: ci.url ?? null };
     const removed = gitIn(place, 'push', '--quiet', '--no-verify', 'origin', '--delete', branch);
     // Named, never silent: a queue branch origin keeps runs nothing more, and only a hand removes it.
     if (!removed.ok) stdout(`Could not remove ${branch} from origin (${removed.err.split('\n')[0] || 'git gave no reason'}): remove it by hand.`);
@@ -642,29 +617,26 @@ async function landCandidate({ run, gitIn, place, main, defaultBranch, door, mer
     if (!local.skipped) stdout(`The candidate ${candidate.slice(0, 7)} is green on this machine.`);
     asked = true;
     for (let waited = 0; waited <= CI_WAIT_MS; waited += CI_POLL_MS) {
-      const read = (what) => {
-        try {
-          return JSON.parse(answer(run, 'gh', ['api', `repos/{owner}/{repo}/commits/${candidate}/${what}`], place).out);
-        } catch {
-          return null;
-        }
-      };
-      // A read that fails is asked again at the next turn, never taken for an empty answer (Codex, 2026-10-14).
-      const [checks, statuses] = [read('check-runs')?.check_runs, read('status')?.statuses];
-      ci = Array.isArray(checks) && Array.isArray(statuses) ? circleciState(checks, statuses) : { state: 'pending' };
+      let runs = null;
+      try {
+        runs = JSON.parse(answer(run, 'gh', ['api', `repos/{owner}/{repo}/actions/runs?head_sha=${candidate}&branch=${encodeURIComponent(branch)}&event=push`], place).out).workflow_runs;
+      } catch {
+        // A read that fails is asked again at the next turn, never taken for an empty answer (Codex, 2026-10-14).
+      }
+      ci = Array.isArray(runs) ? actionsState(runs, { branch, sha: candidate }) : { state: 'pending' };
       if (ci.state !== 'pending') break;
       await sleep(CI_POLL_MS);
     }
     drop();
     if (ci.state === 'red') {
-      stdout(`The candidate is red on CircleCI (${ci.name}: ${ci.conclusion}, ${ci.url}): main was not pushed.`);
+      stdout(`The candidate is red on GitHub Actions (${ci.name}: ${ci.conclusion}, ${ci.url}): main was not pushed.`);
       return 4;
     }
     if (ci.state !== 'green') {
-      stdout(`CircleCI gave no result for the candidate in ${CI_WAIT_MS / 60_000} minutes: main was not pushed.`);
+      stdout(`GitHub Actions gave no result for the candidate in ${CI_WAIT_MS / 60_000} minutes: main was not pushed.`);
       return 5; // no answer judged nothing: not red (harness review b2)
     }
-    stdout(`The candidate ${candidate.slice(0, 7)} is green on CircleCI.`);
+    stdout(`The candidate ${candidate.slice(0, 7)} is green on GitHub Actions.`);
     // The one push of main the pre-push hook lets through: it says it is the queue's (S9).
     const pushEnded = log.phase('push');
     const pushed = answer(run, 'git', ['push', '--quiet', `--force-with-lease=refs/heads/${defaultBranch}:${main}`, 'origin', `${candidate}:refs/heads/${defaultBranch}`], place, TIMEOUT_MS, { JS_HARNESS_MERGE_QUEUE: '1' });
@@ -679,7 +651,12 @@ async function landCandidate({ run, gitIn, place, main, defaultBranch, door, mer
         stdout('Main moved while the candidate was tested: nothing was pushed to main; run the queue again.');
         return 3;
       } else {
-        return fail(`could not push main: ${pushed.err.split('\n')[0] || 'git gave no reason'}.`);
+        // The pre-push hook's reason, its check's failing rows, is in what git printed before its own line: on the
+        // push's standard output where Git for Windows hands it the hook's (2.54), else on its error (PR 658, 2026-10-29).
+        const hook = [pushed.out, pushed.err].flatMap((output) => rowsAndLines(output, 'FAIL'));
+        if (hook.length === 0) return fail(`could not push main: ${pushed.err.split('\n')[0] || 'git gave no reason'}.`);
+        const said = hook.flatMap(({ row, lines }) => [`  ${row}`, ...lines.map((line) => `    ${line}`)]);
+        return fail([`could not push main: ${pushed.err.split('\n').at(-1) || 'git gave no reason'}. The pre-push hook said:`, ...said].join('\n'));
       }
     }
     log.record.landed = merged.map((pr) => pr.number);
@@ -781,6 +758,10 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
     return 2;
   }
   if (args.prune) return pruneRun(args, { ...deps, stdout: printOut, stderr: printErr });
+  if (args.refreshCopy && !args.land) {
+    const versionOf = (sha) => versionAt(sha, args.cwd, deps.run ?? spawnSync);
+    return (deps.refreshNow ?? refreshNowRun)(args, { ...deps, env, now, stdout: printOut, stderr: printErr, answer, versionOf, pnpmBinDir });
+  }
   // Every line the run prints passes through the land's record, which keeps the last as its `said`.
   const log = landLog({ now, session: env.CLAUDE_CODE_SESSION_ID || null });
   const stdout = (line) => {
@@ -803,29 +784,14 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
   }
   let exit = code;
   if (args.refreshCopy) {
-    // After the land and its removals, as the lead ran update-copy.sh after a land. Only a refresh that fails changes
-    // the exit (REFRESH_FAILED, GATE_NOT_RUN): the landing it follows already stands.
-    const landed = code === 0 && (log.landedBranches?.size ?? 0) > 0;
-    const sha = landed ? log.record.candidate : null;
-    let refreshed;
-    try {
-      refreshed = await (deps.refreshCopy ?? refreshInstalledCopy)({
-        landed,
-        sha,
-        version: landed ? versionAt(sha, args.cwd, deps.run ?? spawnSync) : null,
-        home: harnessHomeOf(env),
-        cwd: args.cwd,
-        env,
-        session: env.CLAUDE_CODE_SESSION_ID || null,
-        stdout: printOut,
-        stderr: printErr,
-      });
-    } catch (err) {
-      // A refresh that threw still lets the land record below be written: main has moved whatever the refresh did.
-      printErr(`refresh failed: ${err.message}`);
-      refreshed = REFRESH_FAILED;
-    }
-    exit = refreshed === 0 ? code : refreshed;
+    // After the land and its removals, as the lead ran update-copy.sh after a land, once the project's sessions are
+    // between runs. Only a refresh that fails or waits in vain changes the exit: the landing it follows already stands.
+    const run = deps.run ?? spawnSync;
+    const list = deps.listAgents ?? (() => listAgents(claudeRunner({ env, timeout: 15000 })));
+    exit = await refreshAfterLand({
+      code, log, refresh: deps.refreshCopy ?? refreshInstalledCopy, versionOf: (sha) => versionAt(sha, args.cwd, run), home: harnessHomeOf(env), cwd: args.cwd, env, run, list,
+      now, sleep: deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))), stdout: printOut, stderr: printErr,
+    });
   }
   if (log.file && log.record.leftOut.length > 0) {
     // After the land's own last line, and not as its `said`: telling is no part of what the land did. A notice
@@ -861,74 +827,7 @@ function versionAt(sha, cwd, run) {
   }
 }
 
-/** The files under `dir`, as paths relative to it with forward slashes. */
-function copyFiles(dir, folder = '') {
-  return fs.readdirSync(path.join(dir, folder), { withFileTypes: true }).flatMap((entry) => {
-    const rel = folder ? `${folder}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) return copyFiles(dir, rel);
-    return entry.isFile() ? [rel] : [];
-  });
-}
-
-/**
- * The bin/ files package.json `files` leaves out of an installed copy: the globs of its `!bin/` negations. A path
- * main holds that such a glob matches is no stale path when the copy lacks it. The test in merge-queue.test.mjs reads
- * package.json and fails if the two disagree.
- */
-export const UNSHIPPED_GLOBS = ['*.test.mjs', '*.testkit.mjs'];
-const unshipped = (repoPath) =>
-  UNSHIPPED_GLOBS.some((glob) => new RegExp(`(^|/)${glob.replace(/\./g, '\\.').replace(/\*/g, '[^/]*')}$`).test(repoPath));
-
-/** The git blob id of `bytes`, as `git hash-object` gives it: the sha1 of `blob <length>`, a NUL and the bytes. */
-const blobId = (bytes) => createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
-
-/**
- * The bin/ paths the running copy and `main` do not agree on (sorted). One `git ls-tree` gives the blob id of each bin/ path of
- * `main`, and a file of the copy whose id is that one is the same file, with no more git call. The bytes are hashed with line ends
- * as LF, which is how a checkout on this machine holds them, so a blob stored with CRLF misses at the first look and is judged
- * further: `git show main:<path>` with line ends aside, as before. A path on one side only is stale. The running copy's bin/ is the
- * folder of `self`. An unreadable file is not proven different, and an unreadable listing refuses nothing, as before the guard;
- * a main without bin/merge-queue.mjs holds no queue to guard, so nothing is compared.
- */
-export function staleBin(self, main, gitIn) {
-  const dir = path.dirname(self);
-  const listed = gitIn('ls-tree', '-r', main, '--', 'bin');
-  if (!listed.ok) return [];
-  const onMain = new Map();
-  for (const line of listed.out.split('\n')) {
-    const entry = /^\S+ \S+ ([0-9a-f]+)\t(.+)$/.exec(line);
-    if (entry) onMain.set(entry[2], entry[1]);
-  }
-  if (!onMain.has('bin/merge-queue.mjs')) return [];
-  let local;
-  try {
-    local = copyFiles(dir);
-  } catch {
-    return [];
-  }
-  const copied = new Set(local.map((rel) => `bin/${rel}`));
-  const stale = [];
-  for (const rel of local) {
-    const repoPath = `bin/${rel}`;
-    if (!onMain.has(repoPath)) {
-      stale.push(repoPath);
-      continue;
-    }
-    let mine = null;
-    try {
-      mine = fs.readFileSync(path.join(dir, rel)).toString('utf8').replace(/\r\n/g, '\n');
-    } catch {
-      continue;
-    }
-    if (blobId(Buffer.from(mine, 'utf8')) === onMain.get(repoPath)) continue;
-    const theirs = gitIn('show', `${main}:${repoPath}`);
-    if (theirs.ok && mine !== theirs.out.replace(/\r\n/g, '\n')) stale.push(repoPath);
-  }
-  for (const repoPath of onMain.keys()) if (!copied.has(repoPath) && !unshipped(repoPath)) stale.push(repoPath);
-  return stale.sort();
-}
-
-async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTLE_AI_CUTOVER, suite = null, env = process.env, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), self = fileURLToPath(import.meta.url), stdout, stderr, log }) {
+async function queueRun(args, { run = spawnSync, covered = null, suite = null, env = process.env, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), self = fileURLToPath(import.meta.url), stdout, stderr, log }) {
   const cwd = args.cwd;
   const fail = (line) => {
     stderr(`merge-queue: ${line}`);
@@ -957,7 +856,7 @@ async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTL
       return fail(`${self} is not origin/${defaultBranch}'s bin/ (differs: ${named}): a land run from it would run code main no longer has. Land from a checkout at origin/${defaultBranch}.`);
     }
   }
-  const isCovered = covered ?? ((head) => reviewEvidence(cwd, main, head, { cutover }));
+  const isCovered = covered ?? ((head, onto) => reviewEvidence(cwd, main, head, onto));
   let listed;
   try {
     listed = JSON.parse(answer(run, 'gh', ['pr', 'list', '--state', 'open', '--base', defaultBranch, '--limit', '100', '--json', 'number,state,isDraft,mergeable,baseRefName,body,headRefOid,headRefName'], cwd).out);
@@ -966,8 +865,10 @@ async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTL
   }
   if (!Array.isArray(listed)) return fail('could not list the open pull requests.');
 
-  // In order of number: the oldest pull request first, so that a newer one never jumps a queue it joined later.
+  // In order of number: the oldest pull request first, so that a newer one never jumps a queue it joined later. Each
+  // one's reviews are read onto the candidate so far (`onto`), since the push of main reads the candidate whole.
   const candidates = [];
+  let onto = main;
   const ordered = [...listed].sort((a, b) => a.number - b.number);
   log.record.considered = ordered.map((pr) => pr.number);
   for (const pr of ordered) {
@@ -978,16 +879,14 @@ async function queueRun(args, { run = spawnSync, covered = null, cutover = GENTL
       leaveOut(log, stdout, pr, 'not-ready', problems.join(' '));
       continue;
     }
-    const coverage = isCovered(pr.headRefOid);
-    if (!coverage?.pass) {
-      leaveOut(log, stdout, pr, 'review', `${String(coverage?.detail ?? 'its Codex review records could not be read').replace(/\.$/, '')}.`);
-      continue;
-    }
-    if (coverage.lines?.length) {
-      stdout(`PR ${pr.number}, commit by commit:`);
-      for (const line of coverage.lines) stdout(`  ${line}`);
-    }
+    const coverage = isCovered(pr.headRefOid, onto);
+    const files = onto !== main && coverage?.conflicted?.length ? coverage.conflicted : null;
+    if (files) leaveOut(log, stdout, pr, 'conflict', `it conflicts with the candidate so far in ${files.join(', ')}.`, { files });
+    else if (!coverage?.pass) leaveOut(log, stdout, pr, 'review', `${String(coverage?.detail ?? 'its Codex review records could not be read').replace(/\.$/, '')}.`);
+    if (files || !coverage?.pass) continue;
+    for (const line of coverage.lines?.length ? [`PR ${pr.number}, commit by commit:`, ...coverage.lines.map((said) => `  ${said}`)] : []) stdout(line);
     candidates.push(pr);
+    onto = coverage.tip ?? onto;
   }
   if (candidates.length === 0) {
     stdout('No pull request is ready to merge: nothing was built.');

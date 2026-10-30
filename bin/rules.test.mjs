@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { rulesMain } from './rules.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { rulesHash, writeRules } from './lib/rules.mjs';
+import { controlFaults, readCoverageText, writeCoverage } from './lib/rules-coverage.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 
 const PACKAGE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -24,12 +25,46 @@ const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
 const IN_FORCE = RULES.filter((rule) => !Object.hasOwn(rule, 'retired'));
 const SCANNED = IN_FORCE.filter((rule) => Array.isArray(rule.patterns)).map((rule) => `${rule.id} 0`);
 const PATTERNS_LINE = `patterns: ${SCANNED.length === 0 ? 'none' : SCANNED.join(', ')}; unscanned: ${IN_FORCE.length - SCANNED.length}`;
-const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | change <id> [--dry-run | --check-source] | --hook]';
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] | --hook]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
-/** The home file of each rule in prose, as the package holds it, so that its phrases are found in a project of these tests. */
-const HOMES = Object.fromEntries(RULES.filter((rule) => rule.path !== undefined)
-  .map((rule) => [rule.path, fs.readFileSync(path.join(PACKAGE, ...rule.path.split('/')), 'utf8')]));
+/** The coverage register `text` (the package's) with every check owed, since a project of these tests holds none of the
+ * files a check names, so that directive coverage adds no line to them. A line or a protocol stays: its file is a rule's
+ * home, which these projects hold. The baseline moves to the day the last of `rules` was declared, since a rule
+ * declared after the baseline cannot be owed. */
+function owedRegister(text = fs.readFileSync(path.join(PACKAGE, 'bin', 'lib', 'rules-coverage-data.mjs'), 'utf8'), rules = RULES) {
+  const { register } = readCoverageText(text);
+  const baseline = rules.map((rule) => rule.since).reduce((last, since) => (since > last ? since : last), register.baseline);
+  const owed = { level: 'owed', since: baseline };
+  const unchecked = (control) => (control.level === 'check' ? owed : control);
+  const controls = Object.fromEntries(Object.entries(register.controls)
+    .map(([id, control]) => [id, Array.isArray(control) ? control.map((item) => ({ of: item.of, ...unchecked(item) })) : unchecked(control)]));
+  return writeCoverage({ ...register, baseline, controls });
+}
+
+/** The home file of each rule in prose, as the package holds it, so that its phrases are found in a project of these tests,
+ * and the package's coverage register, its controls all owed. */
+const HOMES = {
+  ...Object.fromEntries(RULES.filter((rule) => rule.path !== undefined)
+    .map((rule) => [rule.path, fs.readFileSync(path.join(PACKAGE, ...rule.path.split('/')), 'utf8')])),
+  'bin/lib/rules-coverage-data.mjs': owedRegister(),
+};
+
+// docs/sessions/2026-10-29-jh-80-templates-everything-he-sees-made-by-a-command-and-hel.md, line 56: the fixture owed
+// every check since the register's baseline, which a rule declared after it cannot be, so no test here could run with
+// a check control on such a rule.
+test('the fixture owes the check of a rule declared after the baseline, and every control it gives is well formed', () => {
+  const { register } = readCoverageText(fs.readFileSync(path.join(PACKAGE, 'bin', 'lib', 'rules-coverage-data.mjs'), 'utf8'));
+  const late = { ...RULES.find((rule) => !Object.hasOwn(rule, 'retired')), id: 'declared-late', since: '2099-01-01' };
+  const check = { level: 'check', test: 'bin/rules.test.mjs', break: { path: 'bin/rules.mjs', find: 'rulesMain', replace: 'rulesMainBroken' } };
+  const given = writeCoverage({ ...register, controls: { ...register.controls, [late.id]: check } });
+  const rules = [...RULES, late];
+  const fixture = readCoverageText(owedRegister(given, rules)).register;
+  const faults = rules.filter((rule) => !Object.hasOwn(rule, 'retired'))
+    .flatMap((rule) => controlFaults(fixture.controls[rule.id], { baseline: fixture.baseline, ruleSince: rule.since }).map((fault) => `${rule.id}: ${fault}`));
+  assert.deepEqual(faults, []);
+  assert.equal(fixture.controls[late.id].level, 'owed');
+});
 
 /** The package's register, whose entries the rules' `failure` keys name. */
 const REGISTER = fs.readFileSync(path.join(PACKAGE, 'docs', 'FAILURES.md'), 'utf8');
@@ -269,7 +304,7 @@ test('a flag, or a second word, is a usage error: exit 2, with the message and t
 test('the usage names the applied form, and a word after applied is a usage error', async () => {
   await inProject(BASE(), async (dir) => {
     assert.deepEqual(await run(['applied', 'extra'], dir), { code: 2, out: [], err: [`unknown argument: extra\n\n${USAGE}`] });
-    assert.match(USAGE, /\| applied \| change <id> \[--dry-run \| --check-source\] \| --hook\]$/);
+    assert.match(USAGE, /\| applied \| coverage [^|]*(?:\| [^|]*)*\| change <id> \[--dry-run \| --check-source\] \| --hook\]$/);
   });
 });
 

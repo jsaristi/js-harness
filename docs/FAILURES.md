@@ -52,8 +52,11 @@ A session stopped and asked him for a yes on a step that was not one of the thin
 - Seen: 2026-10-10 — relief file, line 119 — the orchestrator called the deferral of a test "his to
   accept" and JH 3 asked him; his words and the withdrawal at line 124; also
   odd/tasks/session-board.md:1598-1608
-- Control: protocol — bin/lib/protocols-skill.mjs — "Ask only what is the user's; the project's" — since
-  2026-10-17
+- Control: protocol — bin/lib/protocols-skill.mjs — "Decide everything else, say what it costs, and go on." — since
+  2026-10-30
+- Was: protocol — bin/lib/protocols-skill.mjs — "Ask only what is the user's; the project's" — replaced on
+  2026-10-30: section 1's first line now holds the list of `rule:owner-decisions` instead of sending the reader to the
+  project's files (odd/tasks/instruction-homes.md, T4), and keeps its last sentence
 - Was: owed — odd/tasks/rule-hierarchy.md — "The reply check: `bin/lib/reply.mjs`,
   `bin/reply.mjs`"; that task landed as pull request 282, and the reply check turns back a reply with no
   state or a decision while work runs, not a yes asked on a step that is not his, so the control is the
@@ -121,6 +124,15 @@ one runs.
 - Was: protocol — bin/lib/manifest.mjs — "a whole test suite, a measure, a read of the board and
   a sub-agent that runs tests wait for the gate to end" — replaced on 2026-10-23:
   it was seen again on 2026-10-15, after it; guard --hook now refuses the read while another gate holds the lock
+
+### brief-waived-review-lines
+A lead's brief for code work waived the feature document, whose gentle-ai lines the merge door asks
+for every code commit while gentle-ai reviews (until F8's S2).
+- Class: delivery
+- Seen: 2026-10-28 — odd/tasks/board-follow-ups.md, L2 — the brief for JH 72 said "no feature
+  document needed"; the merge door then refused PR 636, and JH 72 added per-slice gentle-ai reviews
+  afterwards. The prevention: a lead's brief for code work never waives the feature document's
+  gentle-ai lines before S2
 
 ### broken-wait-script
 A private script written to wait or to check was broken, kept running, and reported a state that was
@@ -207,6 +219,9 @@ session's claim.
   was claimed in a message and written in a document of another branch; the merge queue now asks
   for it on the pull request's own branch (odd/tasks/rule-hierarchy.md, "The merge door (T16e)",
   item 5)
+- Seen: 2026-10-28 — odd/tasks/f8-s10-port.md, L22 — the style probe scored 5 of 5 on replies it had not
+  read, which only said the prompt was cut at its first space; read before it was reported, and the
+  rerun counts a reply only when it answers
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### citations-test-reads-clock
@@ -264,6 +279,15 @@ of it and recorded nothing.
 - Control: check — bin/lib/codex-review-home.test.mjs — "gives the login a second name there: the
   same file, not a copy" — since 2026-10-09
 
+### command-handed-untested
+A command he was handed to run on his machine had not been run first, and it broke what it wrote.
+- Class: wrong-information
+- Seen: 2026-10-30 — relief file, line 1963 — the lead gave him `pnpm config set minimumReleaseAgeExclude "a,b"
+  --global` untested; pnpm 12 wrote a string, his `config.yaml` no longer parsed and every pnpm and npm command
+  failed; the lead rewrote it as a YAML list and read it back with `pnpm config get`
+- Control: owed — odd/tasks/instruction-homes.md — "a command handed to him that writes his configuration is run
+  first against a scratch configuration"
+
 ### command-run-for-help
 A session ran a command it did not know, to read its help, and the command acted.
 - Class: rule-not-acting
@@ -279,6 +303,16 @@ A session ran a command it did not know, to read its help, and the command acted
   went to wait and was stopped before it ran anything (claimed)
 - Control: check — bin/writing-flags.test.mjs — "exits 2, names the flag and writes nothing" — since
   2026-10-14
+
+### commit-attribution-from-host
+A session wrote the host's attribution lines into a commit message, which this repo's own rule
+forbids: the host's reminder asks for them, and its own text says the user's instructions come first.
+- Class: rule-not-acting
+- Seen: 2026-10-29 — JH 88, its first commit of feat/lead-manual-steps — the message carried
+  `Co-Authored-By` and `Claude-Session`; the commit was stopped while its pre-commit gate waited for
+  the gate lock, so none was made, and it was made again without them
+- Control: protocol — bin/lib/rules-block.mjs — "or AI attribution to commits. Use conventional
+  commits only" — since 2026-10-29
 
 ### commit-too-large-to-review
 A commit passed the gate and was too large for the reviewer, so it went unreviewed or was remade at
@@ -366,6 +400,9 @@ machine for nothing.
 - Class: machine
 - Seen: 2026-10-10 — relief file, line 83 — the third run, 03:21 to 03:41 (claimed); also
   odd/tasks/session-board.md:1350-1351
+- Seen: 2026-10-27 — odd/tasks/f8-s1-reviews.md, L9 — JH 62 ran a failed commit again to read its failing
+  test, a second CI run of about 165 s, when the first run's output, cut by `tail`, already pointed at the
+  failure; the name of the failing test is on the gate's `✖ failing tests:` lines, read from the first run
 
 ### doctor-lock-mtime-ms
 A test of `bin/doctor.test.mjs`, "doctorMain shows the pnpm-lock row stale for a global bin lock left over
@@ -403,6 +440,61 @@ gate for a change that held no code.
 - Seen: 2026-10-14 — relief file, line 741 — at 05:40 documents commits still took a whole gate
 - Control: check — bin/check.test.mjs — "a merge of the trunk into a branch of documents runs no
   sensor when the merge differs from the side it merges only in documents" — since 2026-10-14
+
+### door-covers-past-tip
+The merge queue's door called a pull request's commit covered by a record whose head lies past the
+pull request's head, a cover that holds only while that head is the tip; the push of main checks the
+candidate's merge, past which nothing lies, and refused it after a whole land, whose refusal then
+printed only git's "failed to push some refs".
+- Class: tool
+- Seen: 2026-10-29 — the channel, the lead's notice at 03:01Z and JH 79's answer at 03:04Z — the land
+  of 644 and 646, green here and on GitHub Actions, refused at the push: 35c8d1fd of PR 644 lay in
+  Codex c8ee437..8a412b7 and lens 62315e6..8a412b7, whose head 8a412b7 was past PR 644's own head,
+  the first of a stack landed alone; about 25 minutes lost
+- Seen: 2026-10-30 — `odd/tasks/f8-s12-migration.md` L18 (JH 93) — a chain cut at `1488343e`, `abe05fd3` and
+  `5058d55e`, inside Codex and lens `24c47ca..09ae012`, passed the pre-push hook at each cut and opened PRs 690-692;
+  `notify --kind ready --pr 690` refused it as the door does; the three were folded into 693, about 10 minutes lost
+- Seen: 2026-10-29 — the lead's land log `land-658-660.log` and notice at 10:29Z — the door printed
+  "4b85503f ...: Codex a7b6ae4..f30d360 reviewed"; feat/visual-pages-e was reviewed to f30d360 and
+  its PR then ended at 4b85503f, its parent, so the push of the candidate b5236e3 refused 4b85503f
+  for both records (reproduced on the records as they stood at 10:25Z: covered at the tip 4b85503f,
+  uncovered at b5236e3)
+- Control: check — bin/merge-queue.test.mjs — "a record whose head lies past the pull request covers
+  it at its head and not merged: the door refuses it before a candidate, as the push does" — since
+  2026-10-29
+
+### door-reads-pr-alone
+The merge queue's door read each pull request merged onto main alone, while the push of main reads
+the whole candidate: a sibling that turned the Codex review on, or took a `-codex-review` mark off,
+let another's code pass the door and then fail the push.
+- Class: tool
+- Seen: 2026-10-29 — PR 663's body, "Finding 2", and
+  docs/sessions/2026-10-29-jh-83-merge-door-reads-review-coverage-like-pre-push.md, "Left" — found by
+  JH 83's independent verifier reading `reviewEvidence`; no land had hit it yet
+- Control: check — bin/merge-queue.test.mjs — "a pull request that turns the Codex review on is read
+  onto the candidate so far" — since 2026-10-29
+
+### edit-during-review
+A tracked file was edited in the worktree while Codex reviewed it, so the run read a tree that was
+not the committed range, wrote no record and had to be run again.
+- Class: delivery
+- Seen: 2026-10-27 — this entry's own commit (JH 66, lens reader) — `docs/FAILURES.md` edited during
+  the Codex review of `d6867d8..484df03`; 68,470 input tokens spent on a run that recorded nothing
+- Seen: 2026-10-28 — `odd/tasks/f8-s1-reviews.md` L16 (JH 69, T7) — a tracked file edited during the
+  Codex review of `9e167848..d153e61e` (run b2dfaa03 in `codex-review-runs.jsonl`); 79,701 input tokens spent
+  on a run that recorded nothing, and the review ran again
+- Seen: 2026-10-28 — `odd/tasks/f8-s5c-a-coverage.md` L6 (JH 73) — a test file written to fix a lens finding
+  during the Codex review of `947ac91..62f4a62`; 353,663 input tokens spent on two parts of 8, nothing recorded
+- Seen: 2026-10-29 — `odd/tasks/stretch-forecast.md` L5 (JH 89) — `docs/FAILURES.md` edited for T6 during the
+  Codex review of `b60053a..5aed8af`; 181,101 input tokens spent on part 1 of 2, nothing recorded, run again
+- Seen: 2026-10-30 — `odd/tasks/f8-s13-rehearsal.md` L12 (JH 90) — `docs/ROADMAP.md` committed during the Codex
+  review of `bb6223b..1a21375`, with the lenses running beside it; 58,369 input tokens spent on part 1 of 3,
+  nothing recorded, run again
+- Seen: 2026-10-30 — `odd/tasks/f8-s12-migration.md` L11 (JH 93) — that document and `docs/ROADMAP.md` edited
+  during the Codex review of `24c47ca..09ae012`, after the lenses had finished; 226,291 input tokens spent on part 3
+  of 3, nothing recorded, that part run again (parts 1 and 2 kept)
+- Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
+  leaves no record: the tree is no longer the committed range" — since 2026-10-12
 
 ### engram-listener-unseen-at-kill
 A gate failed on one test of `evals/isolation-probe.test.mjs` (line 1734), "the probe stops what the
@@ -481,6 +573,27 @@ it, in a change that touched nothing of the evals.
 - Control: check — evals/configs.test.mjs — "the fixture commit starts no git maintenance: nothing of
   it writes in the workspace once prepare has returned" — since 2026-10-15
 
+### failure-cause-dropped
+The facts the pages read of a stretch left out the words that say why a land or a Codex review
+failed: `landFacts` dropped a land record's `said`, and `codexFacts` a run's `reason`, so a failure
+read as an exit code or an outcome alone.
+- Class: unseen-state
+- Seen: 2026-10-29 — docs/sessions/2026-10-29-jh-79-visual-pages-the-harness-shows-its-moments-as-pages.md,
+  "Left" — found closing visual pages; `stretch explain` was the only way to say why
+- Control: check — bin/lib/throughput.test.mjs — "a land keeps the last line it said, and a Codex run
+  the reason it was logged with" — since 2026-10-29
+
+### fixture-refuses-late-check
+The rules tests' fixture owed every check since the coverage register's baseline, which a rule
+declared after the baseline cannot be, so a check control on such a rule turned eight tests red and
+a weaker control was chosen to keep them green.
+- Class: tool
+- Seen: 2026-10-29 — docs/sessions/2026-10-29-jh-80-templates-everything-he-sees-made-by-a-command-and-hel.md,
+  line 56 — a check-level control broke 8 tests of `bin/rules.test.mjs` and
+  `bin/rules-coverage.test.mjs`; PR 662 used a protocol control instead
+- Control: check — bin/rules.test.mjs — "the fixture owes the check of a rule declared after the
+  baseline" — since 2026-10-29
+
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
 was not made. Since 2026-10-11 a gate on a loaded machine names what loads it under its load row
@@ -557,6 +670,18 @@ change. The free titles of 2026-10-19 came before the title guard existed; these
   free title that the repository's guard refused
 - Control: check — bin/lib/session-title-guard.test.mjs — "behind a project whose list declares
   session-title, a free title is refused as here" — since 2026-10-25
+
+### hand-made-output
+An output he sees again and again reached him made by hand, in a shape other than the one planned,
+where a command should have made it; each escape `template shown` names is one more `- Seen:` line.
+- Class: rule-not-acting
+- Seen: 2026-10-27 — odd/tasks/memory-notes.md, "Moved out of memory" (claimed; the lead's own, from its memory note
+  board-rows-through-notify) — hand-written rows of the live board gave the lead two `session` keys, so the board
+  showed two orchestrators; his words: "necesito que hagas las cosas bien"
+- Seen: 2026-10-29 — the lead's transcript `0f71b2c6`, lines 14687 and 14721 — the 02:44Z page went
+  by `mcp__visualize__show_widget`, retyped, not the planned one; his words at 14721 (odd/tasks/templates.md, Specs)
+- Control: check — bin/template.test.mjs — "gate --hook refuses a hand-made page by Artifact with the
+  hooks contract" — since 2026-10-29
 
 ### heavy-run-beside-gate
 A test run or a count started while a gate, or a batch that measures durations, was running.
@@ -663,6 +788,18 @@ exactly.
 - Control: check — bin/lib/project.test.mjs — "runCodegraphInit runs codegraph with DO_NOT_TRACK=1, so it
   writes nothing under the home, on every platform" — since 2026-10-14
 
+### install-stop-strands-entries
+An install that stopped after it wrote its hook entries and before it wrote its manifest left them
+named by no record; the next install took them for the user's, and `uninstall` left live hooks of
+a removed tool in the host files.
+- Class: tool
+- Seen: 2026-10-29 — docs/sessions/2026-10-29-jh-81-uninstall-keeps-a-users-hook-entry.md, "A lost
+  manifest" and "Follow-ups" — found by JH 81's independent verifier on PR 657; reproduced by JH 84
+  on main `8c45db81`, the Claude settings left with every hook of ours after install, install and
+  uninstall
+- Control: check — bin/lib/manifest.test.mjs — "an install that stops before its manifest is
+  written leaves its entries recorded as its own, and uninstall takes them out" — since 2026-10-29
+
 ### installed-copy-stale
 The command on PATH was an old copy with no way to tell: the version reads 0.1.0 before and after,
 and the installed skill named commands that copy did not have.
@@ -697,6 +834,20 @@ repository has.
   of 07:50 named it and the session reported it without looking at whose it was
 - Control: check — bin/lib/project-apply.test.mjs — "a project with JavaScript and no TypeScript: the
   paste off, the plugin off, an index made, the push check wired" — since 2026-10-14
+
+### lens-refusal-unread
+A Claude lens answer was refused as "not one JSON object" and neither the run's output nor its
+record showed why: the reader parsed the whole text, so a line before or after the object was
+enough, and the record keeps only the answer's first 300 characters. Whether the refused answers
+held such a line or a broken object was never read; a rerun of the same range answered clean.
+- Class: unseen-state
+- Seen: 2026-10-27 — odd/tasks/f8-s1-reviews.md:164-168 (L10) — readability on
+  `4834997f..023eceb9`; its answer was not kept, and a run alone after it was complete
+- Seen: 2026-10-27 — `lens-reviews.jsonl` in the git directory, the incomplete runs of 23:09:08Z and
+  23:10:12Z over `d6867d8..d90cd20` (JH 65) — risk, then reliability, each answer starting as the
+  object; the range was recorded as a skip, which holds its pull request at the merge door
+- Control: check — bin/lib/lens-result.test.mjs — "an answer that is not one complete object is still
+  refused, and says what it holds" — since 2026-10-27
 
 ### linux-probe-misnames-process
 On Linux the probe of a port named the process that listened by `ps -o comm=`, which answered the
@@ -952,6 +1103,15 @@ everything waiting on it, waited behind the measure.
 - Control: check — bin/gate.test.mjs — "gate refuses a turn while a commit that a push takes now waits
   on a branch with an open pull request" — since 2026-10-14
 
+### question-numbered-by-hand
+A session wrote the `Pregunta <n>: ` prefix of a question by hand, guessing the next number, and `notify`
+gave the question another, so the text he would see named a question that does not exist.
+- Class: wrong-information
+- Seen: 2026-10-27 — odd/tasks/f8-s1-reviews.md, L13 — JH 62 sent "Pregunta 94: ..." and `notify` recorded
+  it as question 98 (its reply: `prefix: "Pregunta 98: "`); corrected by a note to the orchestrator at 21:42Z
+- Control: check — bin/lib/channel.test.mjs — "the record numbers it, and a number guessed by hand named another" — since 2026-10-27
+- Was: owed — odd/tasks/f8-s1-reviews.md — "numbered by hand before `notify` gave it 98"
+
 ### question-tool-holds-asker
 The question tool holds the session that asks until he answers, so a question asked while he was
 away held the lead, and the merges it owed, for seven hours.
@@ -964,6 +1124,17 @@ away held the lead, and the merges it owed, for seven hours.
 - Was: owed — odd/tasks/session-channel.md — "T17 Questions to him go through the question tool and
   through the orchestrator" — replaced on 2026-10-16: T17 was found delivered and checked off
   (odd/tasks/session-channel.md, Progress of 2026-10-15)
+
+### record-order-over-time
+The board read a session's state and place by the order of the channel record, and `sessions start`
+appends a session's first row with the time of its launch, after a notice the session may have
+appended since the start read the record: that notice lands behind the row, and the board shows the
+session as just opened.
+- Class: unseen-state
+- Seen: 2026-10-29 — odd/tasks/visual-pages.md, L10 — Codex's recheck over `b70ac68..ca23a62`; left
+  open by the lead's decision (L11) and fixed as T5e
+- Control: check — bin/lib/sessions.test.mjs — "states and places by when they were written, and
+  record order only for a tie" — since 2026-10-29
 
 ### record-states-wrong-fact
 A record held a fact that was not true when written or stopped being true, and was read later as it
@@ -988,6 +1159,18 @@ stood.
   document names a commit, and that commit is reachable from HEAD" — replaced on 2026-10-17: T6 built
   the check in the row citations (odd/tasks/commands-and-doctor.md, L10)
 
+### refresh-wait-false-way-out
+`merge-queue --land --refresh-copy`, when sessions were still at work after its wait, said that the
+next land with `--refresh-copy` brings the installed copy up; a land run from that copy is refused
+before it lands while main's `bin/` differs from it, so it refreshes nothing.
+- Class: wrong-information
+- Seen: 2026-10-29 — bin/lib/merge-queue-refresh.mjs:88 on main `8c45db81` — read by JH 84 against
+  `staleBin` (bin/merge-queue.mjs:902-908) and the "Nothing landed" path of `refreshCopy`
+  (bin/lib/refresh-copy.mjs:222-225); the same day three lands from the installed copy were refused
+  as behind main (the land record, 05:44Z, 11:04Z and 13:37Z), none of them after a refresh
+- Control: check — bin/merge-queue.test.mjs — "a land run from that copy is refused while main" —
+  since 2026-10-29
+
 ### refusal-in-system-words
 A path helper let a system error through, so a run was refused in the system's words and not in
 the harness's.
@@ -1011,7 +1194,7 @@ as one candidate (odd/tasks/drop-github-gate.md, "Why").
   `main` again. In place since 14:23, outside the repository: his decision to take the exchange (the
   lead's transcript ffe99ebf, line 5394), a code pull request merged on a green run on GitHub against
   the `main` it lands on, by the lead's script (relief file, line 764)
-- Control: check — bin/merge-queue.test.mjs — "--land: the candidate green locally and on CircleCI
+- Control: check — bin/merge-queue.test.mjs — "--land: the candidate green locally and on GitHub Actions
   becomes main, by fast-forward, and its queue branch is removed" — since 2026-10-15
 
 ### reopen-tested-old-base
@@ -1109,6 +1292,15 @@ this entry, so the lands it turned red have no cause.
   Codex runs of every day of the window together" — since 2026-10-17
 - Was: owed — odd/tasks/throughput-review.md — "Unit 4: section 7"; that task is checked off (49de368c),
   and the daily throughput table now names the failing tests of each day's gates
+
+### scratch-run-opened-browser
+A run in a scratch home started a command that opened a browser on his screen, and it outlived the run.
+- Class: machine
+- Seen: 2026-10-30 — odd/tasks/f8-s13-rehearsal.md, L5 — walk 1's `stack install --tool context7` ran the
+  scratch Codex CLI's `codex mcp add context7 --url ...`, which left context7's OAuth login running and Brave open at
+  its page; found only when the scratch root could not be removed, its tree (8 processes) stopped by hand
+- Control: check — scripts/rehearsal.test.mjs — "openedBrowsers names a browser started under a scratch process,
+  and none of his own" — since 2026-10-30
 
 ### script-ate-backslashes
 Text with backslashes written through a shell script lost them, and a commit carries the broken
@@ -1222,6 +1414,20 @@ already stale.
   (2026-10-23) moved the states into protocol 2 of js-harness-protocols, and PR 560 (8b525bce) left
   AGENTS.md only the pointer "End each reply in one of the five states of `js-harness-protocols`"
 
+### status-report-without-facts
+The status report reached him without the migration's share or whether the last stretch met its goals, and with
+three sections saying no record holds them: the page read neither the plan's steps nor the stretch's record, and
+nothing warned the lead that a report marked without notes leaves sections 3, 5 and 6 empty.
+- Class: tool
+- Seen: 2026-10-30 — lead transcript 0f71b2c6, line 25223 — "no aparecio en el como vamos, ni el mapa
+  ni los porcentajes si se cumplio la meta"; the lead sent the report without notes and without the
+  stretch (brief JH 91, odd/tasks/report-stretch-share.md)
+- Seen: 2026-10-30 — lead transcript 0f71b2c6, line 26049 — "En la pagina como vamos no me aparece lo
+  que me dices": the report page buried the numbers he asked for in section 4, below every commit of
+  8 PRs and the sessions table, where his phone never reached them (brief JH 92)
+- Control: check — bin/lib/report-status.test.mjs — "the numbers head the page before section 1: the
+  migration now and at the cut, the map, the stretch goals each sí or no" — since 2026-10-30
+
 ### stop-read-as-refusal
 The app words a turn stopped by another session as his refusal of a tool call, so the stopped
 session believed he had rejected it and asked for his word.
@@ -1265,6 +1471,16 @@ an untracked path makes the review assessment answer "unassessable".
   PowerShell with a stripped environment is not known, and nobody owns finding it (claimed)
 - Control: check — bin/check.test.mjs — "checkSensor on Windows points the module analysis cache of
   PowerShell into the throwaway home" — since 2026-10-12
+
+### stretch-not-opened
+He left with no stretch opened, though `rule:away-autonomy` asks for the departure, with its goals, in
+the reply before he leaves; so the return had no goals to check and no forecast to measure against.
+- Class: rule-not-acting
+- Seen: 2026-10-29 — the lead's note to JH 89 at 16:33Z (claimed; the lead's own) — he was away about
+  an hour with no stretch open; the stretch record holds none between the close at 08:11:36Z and the
+  open at 16:07:51Z (`stretches.jsonl` under the throughput folder, read by JH 89)
+- Control: protocol — bin/lib/manifest.mjs — "exits 1 when none is open) and show its departure in that reply" — since
+  2026-10-29
 
 ### taskstop-leaves-work-alive
 Stopping a background task of the host ends its shell and not what that shell started, so the work
@@ -1353,6 +1569,17 @@ was not so.
   reading; JH 8's measure found two Windows services (PcaSvc since about 17:00, and the antivirus)
   taking two to three of the eight processors while a check runs (odd/tasks/gate-wait.md, Progress);
   a gate now names the processes that spent the processor before its command
+- Seen: 2026-10-20 — odd/tasks/memory-notes.md, "Moved out of memory" (claimed; the lead's own, from its memory note
+  one-sample-is-not-a-diagnosis) — after one OpenSSL success the lead told him and three sessions that Schannel made
+  `git ls-remote` fail; three OpenSSL fetches a minute later failed too, the path to github.com was flaky while
+  api.github.com answered, and it corrected itself to him and to every session
+- Seen: 2026-10-30 — odd/tasks/f8-s13-rehearsal.md, L5 and L7 — JH 90 offered the lead D3 on a cause marked
+  assumed (a 30 s timeout that killed only the shell); the walk's own log already refuted it, since `stack install`
+  passed its exit check and a timeout exits 1 (`bin/stack.mjs:245-250`); the lead chose on it, and was told the
+  correction before anything was built on it
+- Seen: 2026-10-30 — odd/tasks/f8-s13-rehearsal.md, run 8 — JH 90 told the lead that `lens-review --plan` leaves out
+  the lens prompt, unread; `bin/lens-review.mjs:221` counts it, and the session corrected the notice within a minute,
+  before the lead answered or anything was built on it
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting
@@ -1398,6 +1625,27 @@ was made; the rule "never two gates" was kept by hand.
   evening at odd/tasks/codex-review-cost.md:661-666 ("may have been two gates at once")
 - Control: check — bin/check.test.mjs — "two check processes that share a home run their sensors one
   after the other, and the second says whose gate it waits for" — since 2026-10-11
+
+### uninstall-took-user-entry
+A hook entry the user's host file already held, identical to one of ours, was recorded as ours by
+`install`, and `uninstall` took it out of the user's file.
+- Class: tool
+- Seen: 2026-10-29 — bin/lib/manifest.mjs:583-585 and :744 on main `4b1a7b71` — found by JH 80's
+  independent verifier on PR 653; a scratch home seeded with our own Claude and Codex entries came
+  back with `"SessionStart": []` after install, install and uninstall
+- Control: check — bin/lib/manifest.test.mjs — "an entry the Codex hooks.json already held,
+  identical to ours, keeps its place and its trust through install and uninstall" — since 2026-10-29
+
+### update-took-user-entry
+A hook entry recorded as the user's, equal to an older form of ours, was taken out by an update's
+cleanup of older forms, and the new form in its place was recorded as ours, so `uninstall` took
+the user's hook out.
+- Class: tool
+- Seen: 2026-10-29 — docs/sessions/2026-10-29-jh-81-uninstall-keeps-a-users-hook-entry.md,
+  "Follow-ups" — named by JH 81 at `isOlderOwnEntry`; reproduced by JH 84 on main `8c45db81`, the
+  record of the new form without `createdEntry: false`
+- Control: check — bin/lib/manifest.test.mjs — "equal to an older form of ours stays theirs when an
+  update puts the new form in its place" — since 2026-10-29
 
 ### upgrade-cannot-work
 `js-harness upgrade` cannot bring a copy up to date, and the hint it gives on a version mismatch
@@ -1466,3 +1714,12 @@ context until it has to be relieved.
   stale once T4 was checked off; replaced on 2026-10-15 by the tests T4 left, merged in pull
   request 65 (2026-10-11): bin/sessions.test.mjs:2095 holds the watch quiet for a notice to
   another role and for its own, and :2080 wakes it for a notice to the orchestrator
+
+### written-question-buried
+A question he had to answer in writing was put at the end of long reports, so it did not read as a question and
+waited.
+- Class: asked-of-him
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 30745 — question 113 needed his typed words, so it could
+  not go through the question tool; the lead left it at the end of long reports and repeated it four times without
+  it reading as a question, then sent it alone in a block to copy, and he answered at line 30759
+- Control: owed — odd/tasks/instruction-homes.md — "a question he answers in writing goes alone in its message"

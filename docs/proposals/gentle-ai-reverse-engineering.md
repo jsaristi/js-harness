@@ -1,0 +1,1191 @@
+# gentle-ai, reverse-engineered: what we copy, what goes, what we take over
+
+Status: proposal, 2026-10-26 (seventh pass: corrected after two blind grades, section 12), part of F8 (`docs/ROADMAP.md`). It answers his request of the same
+day, quoted in full in section 8, and his change of direction the same evening (the section below).
+Section 13 (2026-10-28, read at gentle-ai v4.3.1) answers his later request: how gentle-ai is built
+so a model works well inside it, and which of those mechanisms we adopt, adapt or drop.
+It sits beside [the harness diet](harness-diet.md) ("the diet" below), which stays the plan of
+record; this document holds the matrix, the TUI and the idea watch (S9).
+
+Sources: the installed binary gentle-ai 4.2.0 (`gentle-ai --help`); its source, read-only, at tag
+v4.2.0 and `main` 2b56327e ("G" below); what it, Orca and herdr installed on this machine
+(`~/.claude`, `~/.claude.json`, `~/.codex`, `~/.gentle-ai`, `~/.orca`, `~/.herdr`, read only); and
+this repo. "H" is `~/.claude/CLAUDE.md`. Each claim is marked **[c]** when checked with the path,
+line or command cited, or **[i]** when inferred. Nothing outside the repository was changed. Dates
+are local (America/Bogota).
+
+IDs: **G1-G14** are his decisions raised here; **D1-D9** are the diet's. Both live in one register,
+[the diet's section 1](harness-diet.md#1-what-is-his-to-decide); section 7 below gives the G
+decisions' reasons.
+
+## Direction: replace, not exclude (2026-10-26)
+
+His words (transcript `e41d1e8d-8264-45a4-b16c-f9279f7b6076` line 2272, 2026-10-27T01:21Z, that is
+20:21 on 2026-10-26 local, read with `js-harness sessions --quote`):
+
+> "no Orca ni Herdr lovamos a volver a utilizar y gentle-ai tampoco la idea es copiar la forma de
+> funcionar con sus complementos osea traernos codegraph, context7 y engram y nuestro arnes
+> fusionado de gentle con js-harnes mas funcionalidades de nuestras caracteristicas con ajustado a
+> nuestras necesidades etc etc"
+
+What it means (the lead's reading, which this document follows):
+- **gentle-ai, Orca and herdr leave his machine.** js-harness becomes the one harness: gentle-ai's
+  way of working copied and fused with ours, adjusted to our needs, plus our own features.
+- **The complements stay, and js-harness installs and manages them directly:** codegraph,
+  context7 and engram, with the engram plugin. Our stack already composes them
+  (`bin/lib/stack.mjs`, the `engram`, `engram-plugin`, `codegraph` and `context7` rows) [c].
+  gentle-ai's row leaves the stack.
+- **gentle-ai's repository stays a source of ideas** we read on each release, never an installed
+  dependency (section 5).
+- **Codex stays the external reviewer** (his answer to D3).
+
+Two more of his words the same evening settle the review and the scope (same transcript):
+
+> "revision siempre, ya que siempre necesitamos una segunda opinion con un segundo modelo pero
+> tambien una revision del mismo claude por que asi nos aseguramos criterio y solidez" (line 2351,
+> 2026-10-27T01:28Z)
+
+> "recuerda que todo este mismo trabajo es como va a trabajar el arnes en los proyectos" (line
+> 2382, 2026-10-27T01:29Z)
+
+- **Two reviews on every candidate, always** (G9, answered). A candidate is a work-unit commit or a
+  slice, never the whole branch. It gets Codex as the second model (`js-harness codex-review`, as
+  today) and a Claude review: gentle-ai's four lenses (risk, resilience, readability, reliability)
+  ported as our own reviewers under our names, one to four picked by what the change touched, each
+  run in a fresh context. Neither is skipped by a risk tier. gentle-ai's Stop-hook nagging leaves
+  with its engine; our pre-push gate checks that both records exist for the same commit range. Section 3 has the
+  review row: S1 ports the lens prompts and builds the runner that feeds them (the candidate as a
+  commit range, an input packager, validation, launch and auth, records, invalidation, skips as a
+  debt; diet §10, "S1, the Claude lens runner").
+- **What this plan decides for this repo is how js-harness works in every project it sets up:**
+  the `CLAUDE.md`/`AGENTS.md` split, the two reviews, the copied way of working, the complements
+  installed and managed by js-harness, the TUI, and no gentle-ai, Orca or herdr. Section 11 walks a
+  project from `init` to its first reviewed slice. S13 rehearses all of it on a scratch project
+  before his projects move or anything is removed, and a short smoke test repeats it after removal
+  (diet §10).
+
+**Only what serves us.** His words (line 2646, 2026-10-27T01:51Z): "ok entonces copiamos e
+implementamos solo lo que nos sirve el resto no". So every gentle-ai piece is either copied because
+it serves a named need of ours, stated beside it, or not taken. Nothing is copied for completeness
+or for parity with gentle-ai. Section 3 states the need on every "copy" row; a row without one is
+"drop".
+
+**Removal is machine-wide.** gentle-ai's, Orca's and herdr's hooks and global files serve every
+project on this machine, not only this one. So nothing is removed until js-harness's replacements
+are installed and his listed projects are moved onto them by the migration S12 builds (today
+neither `init` nor `update` refreshes an initialized project: section 11). Then S2: writers
+quiesced, one full backup, a restore drill that proves engram answers, each removal asked first
+(diet §10).
+
+**An interim exclusion first.** S3 adds `claudeMdExcludes` for gentle-ai's global file in this
+repo's settings, so the ~30.7k it loads every turn is saved at once, months before removal. It is
+undone by reverting that commit; S2 reverts it once the file holds only G12's Rules block.
+
+**Landing.** This plan lives on branches (PRs 593 and 594); new sessions read `main`. It takes
+effect for other sessions only once he reads and lands those PRs. The TUI's slice 1 is PR
+jsaristi/js-harness#596, open and not merged, its real-console walk left to him.
+
+Before and after:
+
+| | Before | After |
+|---|---|---|
+| Layers | host → gentle-ai (installer, 91.6 KB of always-on prose, hooks, persona, review engine) → engines (engram, codegraph, context7, its review CLI) → js-harness | host → js-harness (workflow, persona, checks, hooks, review flow, stack) → engram, codegraph, context7 |
+| Hook entries in `~/.claude/settings.json` | 32 from five owners | 14 from two: js-harness 13, codegraph 1 |
+| Always-on text | H (30.7k tokens), `gentleman.md`, 14 skill and 8 agent descriptions | `CLAUDE.md` and `AGENTS.md` of the project, our own style, the skills we copied |
+
+What the earlier passes built for an installed gentle-ai, and is now **superseded**: S2 as a
+permanent exclusion of H by `claudeMdExcludes` (it returns only as S3's interim step, which S2
+reverts); S9a's installed-file diff, same-version drift check, re-added-hook detection, `--accept`,
+and the watch's way-back commands (S2 keeps one undo: `go install
+github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v4.2.0` and the backup); option (e) of the TUI and its stale-row warning; the S0 probe of gentle-ai's
+review hooks; S1 as a driver of gentle-ai's review engine. Section 9 keeps the record of why each
+existed.
+
+## 0. The answer, short
+
+- **Copy only what serves us, then remove gentle-ai.** Its ODD sizing test, its feature document's
+  order and its delegation by named reason go into the root `CLAUDE.md`; test-first is already
+  ours and the Risk line drops; the voice is not copied (our own style, neutral Spanish with tú);
+  two of its 14 skills and its four lens reviewers are copied under our names with their license
+  notices, each for a stated need (section 3); its presets become our own (G14). Its review engine,
+  hooks, telemetry and installer leave.
+- **Two reviews on every slice, always:** Codex, and Claude's lens reviewers in a fresh context
+  (his answer, above). The pre-push gate checks both records of the same commit range; a skip lets
+  the push through as a debt the merge path collects (G13).
+- **Take over the complements:** the stack's rows for engram, the engram plugin, codegraph and
+  context7 get their own install and registration commands instead of `gentle-ai sync`/`upgrade`.
+- **Remove gentle-ai, Orca and herdr last,** with writers quiesced, after a backup whose restore
+  drill proves engram answers, each with an undo, each only after he says yes at that moment
+  (diet §10, S2). The first turn then loads about 75.8k, against 105.5k
+  today (section 6).
+- **The TUI** ports gentle-ai's design to zero-dependency Node; every screen of theirs is native or
+  excluded (section 4.6). Slice 1 is PR jsaristi/js-harness#596, open and not merged; the rest has a
+  completion boundary and a dependency map (section 4.7).
+- **Following gentle-ai** becomes an idea watch: each release's source diff, by area, classified
+  adopt-into-ours, adapt or ignore, and recorded. Nothing is installed (section 5).
+
+## 1. What gentle-ai is
+
+"The deterministic engineering environment for the AI agent you already use": it configures an
+agent, never ships one, and gives it "memory, a workflow, and evidence" (G `README.md`) [c]. It
+targets 17 hosts (the README badge says 18) [c]; on this machine it manages Claude Code, Codex and
+Antigravity (`~/.gentle-ai/state.json`, `installed_agents`) [c].
+
+**Design ideas worth copying** [c, G `docs/intended-usage.md:10-28`]:
+1. **The ODD feature document.** Small work stays inline and leaves no artifact; large work gets
+   one `odd/tasks/<feature>.md` with specs that quote the user verbatim, a task list and a log.
+   This repo already uses the folder and most of the format (diet §3 row 1: 77 of 111 docs carry
+   `## Specs`).
+2. **Delegate for a named reason, not for size.** A subagent is spawned for a map, a parallel
+   writer or a verifier of a named high-risk item. It matches Cognition's "one writer, read-only
+   helpers" (diet §6).
+3. **Review of a frozen candidate, driven by data, not prose.** Its review engine
+   (`reviewtransaction`, 36.8k source lines and 39.3k test lines) returns the next command as data
+   (`next_transition`). The idea survives removal: our review flow (S1) is driven by
+   `codex-review` records and the pre-push refusal, not by remembered prose.
+4. **Prompts pinned by tests.** Prompt text has sha256 goldens and drift ratchets
+   (`agentguidance/routing_golden_test.go:30`, `assets/orchestrator_drift_ratchet_test.go:83`)
+   [c]. Our copied text gets the same: `rules check` already pins rule text; the S3 and S10 lines
+   get a golden test.
+
+**Tuned for other hosts or models, not for Claude Code on Opus 5.5** (so not copied as written):
+- One orchestrator template serves 11 hosts: v4.2.0 changed the same lines in all 11
+  (`git diff --stat v4.1.0 v4.2.0 -- internal/assets`) [c]. The wording is for the weakest host:
+  `MANDATORY` 8 times and "never" 90 times in H [c, grep].
+- The routing numbers (3 calls, 10k tokens, 100 lines) were measured on Pi benches at n=1
+  (G `README.md`, "Measured") [c].
+- The Lossless Blocking Prompt envelope and its Spanish ordinal aliases exist for hosts without a
+  native question tool; Claude Code has one [c, H].
+- Explicit verification gates and `MANDATORY` emphasis, which the Opus 5 guide says cause
+  over-verification (diet §5) [c].
+- Leftovers of v3: model presets still name `sdd-propose` and `sdd-archive`
+  (`internal/model/claude_model.go:133-150`), and telemetry still counts `sdd_phase_runs` [c].
+
+## 2. What leaves, and what it costs today
+
+**The global file.** H is 92.6 KB in 613 lines; 91.6 KB of it is gentle-ai's [c, byte count per
+marker block]. Claude Code counts it at 30.7k tokens (diet §2); it loads in every subagent except
+the built-in Explore and Plan.
+
+| Block | KB |
+|---|---:|
+| `orchestrator` (delegation 25.6, review lifecycle 27.9) | 53.5 |
+| `agent-routing` (ODD), with `remote-authorization` inside | 29.2 |
+| `codegraph-guidance` | 4.1 |
+| `engram-protocol` | 2.6 |
+| `persona` (it holds his Rules list) | 2.2 |
+| **Total** | **91.6** |
+
+His Rules list lives inside gentle-ai's `persona` block, so removing gentle-ai removes it from
+every project on the machine. The diet's A.1 lines carry it into this repo (S3); his other projects
+are G12.
+
+**Beside it:**
+- The output style `gentleman.md`, 7.1 KB, about 1.8k tokens per request [c].
+- The descriptions of its 14 skills, 1,941 characters, about 0.5k tokens by chars/4, and of its 8
+  agents in `~/.claude/agents` (`jd-fix-agent`, `jd-judge-a`, `jd-judge-b`, `review-readability`,
+  `review-refuter`, `review-reliability`, `review-resilience`, `review-risk`), 1,197 characters,
+  about 0.3k [c, frontmatter measured 2026-10-26].
+- **Telemetry is on by default.** `gentle-ai telemetry status` answers "enabled (source:
+  default)" [c]. It is remote and opt-out, and on each `Stop` its Claude adapter reads up to 512 KB
+  of the transcript (G `internal/telemetry/runtime_claude.go:16`) [c]. It leaves with gentle-ai.
+
+**Every hook, by event and owner** [c, `~/.claude/settings.json` read 2026-10-26: 32 command
+entries]. Each entry is a process start on Windows on every firing, even when the script exits at
+once.
+
+| Event | gentle-ai | js-harness | Orca | herdr | codegraph | Total |
+|---|---:|---:|---:|---:|---:|---:|
+| `SessionStart` | 1 (`review stop-hook`) | 4 (`doctor`, `resume`, `rules`, `backup`) | 1 | 1 | | 7 |
+| `Stop` | 2 (`review stop-hook`, telemetry, async) | 3 (`guard --stop`, `reply`, `backup`) | 1 | | | 6 |
+| `UserPromptSubmit` | 1 (skill-registry refresh, through PowerShell) | 1 (`rules`) | 1 | | 1 (`prompt-hook`) | 4 |
+| `SubagentStop` | 1 (telemetry, async) | | 1 | | | 2 |
+| `SubagentStart` | | 1 (`rules`) | 1 | | | 2 |
+| `PreToolUse` | | 1 (`guard`) | 1 (`*`) | | | 2 |
+| `PostToolUse` | | 1 (`resume --pause`) | 1 (`*`) | | | 2 |
+| `PostToolUseFailure` | | 1 (`resume --pause`) | 1 (`*`) | | | 2 |
+| `PermissionRequest` | | 1 (`permit`) | 1 (`*`) | | | 2 |
+| `PostCompact`, `StopFailure`, `TeammateIdle` | | | 1 each | | | 3 |
+| **Total** | **5** | **13** | **12** | **1** | **1** | **32** |
+
+- **Orca's twelve** all run `~/.orca/agent-hooks/claude-hook.cmd`. It exits at once unless Orca's
+  variables (`ORCA_AGENT_HOOK_PORT`, `ORCA_AGENT_HOOK_TOKEN`, `ORCA_PANE_KEY`) are set [c, the
+  script], so outside Orca it costs a `cmd.exe` start on every tool call (`PreToolUse` and
+  `PostToolUse` match `*`) and does nothing.
+- **herdr's one** runs `~/.claude/hooks/herdr-agent-state.ps1` through PowerShell on
+  `SessionStart`; the script says "installed by herdr" and exits unless `HERDR_ENV` is 1 [c].
+- `~/.codex/hooks.json` holds 3 gentle-ai entries, 1 herdr entry and 5 of ours [c].
+- **codegraph's prompt hook** stays: it is the complement's own, and silenced here by
+  `CODEGRAPH_NO_PROMPT_HOOK=1`, though it still starts on every prompt.
+- The engram plugin's prompt hook comes on top, from a plugin (D8).
+
+After removal: 14 entries, js-harness 13 and codegraph 1.
+
+## 3. The matrix, for replacement
+
+Verdicts: **copy** (port into js-harness, saying where, and only for the need stated: line 2646), **take over** (a complement js-harness now
+installs and registers itself), **keep ours**, **drop**.
+
+| Function | gentle-ai | js-harness today | Verdict, and where it goes |
+|---|---|---|---|
+| ODD workflow and feature document | 29.2 KB `agent-routing` prose; `odd/tasks/<feature>.md` | contract first (`js-harness contract`), `odd/tasks/` | **Copy** only the sizing test (small or large) and the feature document's order (header, `## Specs` quoting him, `## Tasks`, `## Log`) into the root `CLAUDE.md` (S3 and S10); the format stays checked by `contract`. **Need:** large work must survive a new session or a compaction (`AGENTS.md`: the feature document is the handoff), and once gentle-ai's text is gone nothing tells a session when to open one or in what order |
+| Delegation by named reason | 25.6 KB of triggers, written twice (H:219, H:546) | `rule:subagent-*` rules | **Copy** the A.1 lines (122, 224, 227) into `CLAUDE.md`; the rest drops. **Need:** subagents cost tokens and parallel writers collide; these lines keep spawning to a named reason, beside `rule:subagent-*` |
+| Test-first and the Risk line | ODD protocol text | `AGENTS.md`, "What good looks like" | Test-first: **keep ours** (`AGENTS.md` already says it). Risk line: **drop**: no tier decides anything now that both reviews run on every slice (G9), so no need is left |
+| Review | Go engine (RDD), consent envelope, risk tiers, `review-*` agents, stop-hook, 27.9 KB of lifecycle prose | `codex-review` per slice, pre-push refusal, a `check` row that asks gentle-ai the risk tier | **Drop** the engine, its tiers, its consent and its prose. **Keep** Codex per slice. **Copy** the four lens prompts as our own reviewers (G9, answered: both reviews on every candidate), ported at S1 with the runner S1 builds (diet §10, "S1, the Claude lens runner"): the candidate is a commit range with a subject hash; an input packager feeds the tool-less prompts in place of gentle-ai's provider binding; the lens-selection rule (one to four lenses by consequence of what the range touched, as gentle-ai's "Lens selection" reads); each lens launched in a fresh headless run on his plan's CLI login; validation, where a result that does not echo the hash or cover every path is incomplete and rejected; per-lens records (range, hash, lens, findings, outcome, tokens, duration) beside Codex's, which gains the same range and hash; invalidation when an amend or rebase changes the head commit or the hash. The pre-push hook refuses a code commit without a complete record of both, or a recorded skip; a skip is a debt that `check` and `doctor` list and the merge path refuses until it has its review (G13). `AGENTS.md`'s review paragraph and `check`'s `review` row are rewritten there |
+| Persona and output style | `persona` block plus `gentleman.md` | none | **Write our own**, not a copy: a short output style named `js-harness` by default (G10n) that sets neutral Spanish with tú; nothing of its voice is copied, neither voseo, Rioplatense register, mentor persona nor "Gentleman" branding (G10, answered, line 2466). **Need:** his replies keep one register, neutral Spanish with tú, once `gentleman.md` leaves; today that file is what sets it (S10) |
+| His Rules list | inside the `persona` block | none | **Copy** (diet A.1 and D7) into `CLAUDE.md`; for his other projects, G12. **Need:** they are his own rules, which live inside gentle-ai's block today and would leave with it |
+| Skills (14) | `~/.claude/skills` | 3 js-harness skills | **Copy two, drop twelve** (table below; G8) |
+| Agents (8) | `~/.claude/agents` | none | **Copy** the four `review-*` lens agents under our names, ported at S1 and rewritten to read our packaged input: today they are tool-less and read only gentle-ai's provider-built binding and context (`~/.claude/agents/review-risk.md`, "Input") [c]. **Need:** the Claude review he asked for on every slice (G9, line 2351); **drop** `review-refuter` (the lens findings go to the session, and Codex is the second opinion) and the three `jd-*` agents with `judgment-day` |
+| Memory | installs engram, writes its block | `memory` hygiene, `backup`, `MEMORY.md` rules | **Take over** engram and its plugin (stack rows, S11); the policy stays ours; the block drops, engram's MCP instructions remain. **His memory stays:** `~/.engram/engram.db` (69 MB) is backed up before any removal, and the restore drill must return a known observation through `mem_search`. Neither of gentle-ai's Engram scopes reaches it: in 4.2.0 the default scope is global, which removes engram's registrations and the `engram-protocol` block; the project scope deletes `<workspace>/.engram`, never `~/.engram` (`internal/components/uninstall/service.go:158`, `:991-1008`) [c]. S2 re-registers engram right after the uninstall |
+| Code graph | community tool, guidance block | stack row, `functions apply` | **Take over** the install and registration (S11); `codegraph init` replaces `gentle-ai codegraph init` in the row's fix; the block drops |
+| context7 | registers it | stack row (hosted MCP), optional | **Take over** (S11), and make it required: always enabled in projects (G11, answered, line 2466). `init` enables it, `doctor` flags a project where it is disabled, and this repo turns it on (it is disabled here today) |
+| Hooks (5) | review, telemetry, skill registry | 13 | **Drop** all five (S2) |
+| Telemetry | remote, opt-out, on | local measures only | **Drop**, with gentle-ai (G1, closed) |
+| Skill registry and `.atl/` | a hook on every prompt | none | **Drop** (G4, closed) |
+| Permissions | its `permissions` component writes 24 `permissions.deny` entries into `~/.claude/settings.json` (`rm -rf` on `/` and `~`; Read and Edit of `.env`, `.ssh`, `.credentials`, Keychains, `.aws/credentials` and more) | `guard` PreToolUse | **Keep and take over** (it was missing from the plan). js-harness owns the deny list: `install` writes it at user level, recorded so `uninstall` undoes exactly it; `init` applies it to the project's settings; a `doctor` row flags an entry missing; `guard` checks the same paths. gentle-ai's uninstall removes the whole `permissions` object, not only the denies (`internal/components/uninstall/service.go:1010-1015`, checked on the v4.2.0 tag) [c]; today the object holds 1 `allow` entry, `defaultMode: bypassPermissions` and the 24 denies [c]. So S10 takes over the whole object, and S2 backs it up, re-applies it right after the uninstall and checks it equal to the backup (S10, S2) |
+| Backups, state, managed ownership | snapshots before writes | the manifest and four uninstall kinds | **Keep ours**; gentle-ai's own backup is used once, by its uninstall in S2 |
+| Install, update, sync, uninstall | its own | `install`, `update`, `upgrade`, `uninstall`, `stack` | **Keep ours**; gentle-ai's uninstall runs once (S2) |
+| Presets | `full-gentleman`, `ecosystem-only`, `minimal`, `custom` (`internal/model/types.go:205-208`, `docs/components.md:159-162`) [lead, checked] | none | **Copy the idea**. **Need:** `init` today sets each function on its own (`js-harness functions`); a preset sets them in one choice when a project is set up. `install` and `init` offer our own presets: **complete** (engram, codegraph, context7, the two reviews, the `CLAUDE.md`/`AGENTS.md` split), **lean** (the same without codegraph) and **custom** (may add or drop codegraph and the engram plugin, never context7 or the reviews), shown in the TUI as a multi-select (slice 2). Every preset keeps context7 (G11) and both reviews (G9). Names by default (G14, S11) |
+| Doctor | bounded version probes | aggregates the stack | **Keep ours**; the `gentle-ai` and `gentle-ai-sync` rows leave (S11) |
+| GGA | Gentleman Guardian Angel v2.10.1, a separate binary at `~/bin/gga`: "Provider-agnostic code review using AI" on staged files through a git pre-commit hook; not installed in this repo [lead, checked] | none | **Drop.** The two reviews per slice cover it; a third review per commit adds cost. S2 removes `~/bin/gga`, after checking each of his projects for its hook (`gga uninstall` in each repo that has it) (G6, closed) |
+| Theme | "Gentleman Kanagawa theme overlay" (`docs/components.md:20`) | none | **Drop**: cosmetic and branded. Our TUI gets its own small palette that honours `NO_COLOR` (slice 5) |
+| Multi-host | 17 hosts, 3 here | Claude Code; Codex for reviews | **Keep ours narrow.** Removal covers Codex too: `~/.codex/AGENTS.md` is 109 KB with 35 gentle-ai mentions, `~/.codex/skills` holds eight of its skills and `_shared`, and `~/.codex/hooks.json` 3 of its entries (lead, checked 2026-10-26). Codex as reviewer keeps working through `codex-review`'s lean home, which does not read `~/.codex/AGENTS.md` |
+| Model routing | `claude_phase_assignments` | `rule:subagent-*-model`, `contract modes` | **Keep ours** |
+| Evals | `bench/` in Go | `evals/`, S0 and S8 | **Keep ours**; borrow the before/after table for the S0 report |
+| TUI | Bubble Tea, 48 screens at v4.2.0 | `bin/tui.mjs` | **Copy the design**, not the code (section 4). **Need:** his request for a TUI as capable as gentle-ai's (section 8) |
+
+**The 14 skills** (G8). Copies live in this repo's `skills/` and are installed by `js-harness
+install`, recorded so `uninstall` removes them; names and text carry no gentle-ai or Gentleman
+mark (G `TRADEMARKS.md:3-9, 39`) [c].
+
+| Skill | Verdict | Reason |
+|---|---|---|
+| `work-unit-commits` | copy | **Need:** every slice gets two reviews (G9), so a slice must be one reviewable unit with its tests and docs; `js-harness-protocols` section 3 names the unit but not how to cut one |
+| `chained-pr` | copy | **Need:** two reviews per slice cost limits by size (diet D2), so a change over about 400 lines is split into stacked slices; section 3 of `js-harness-protocols` covers merging them, not splitting |
+| `branch-pr` | drop | no named need: sessions already open PRs with `gh`, and its issue-first check is gentle-ai's own policy |
+| `comment-writer` | drop | no named need: review findings are answered in the session, not as public comments |
+| `cognitive-doc-design` | drop | no named need: our docs and his pages already have their own rules (`js-harness-protocols` section 8, `rule:reports-spanish-visual`) |
+| `skill-creator` | drop | no named need: js-harness generates its skills from code (`bin/lib/protocols-skill.mjs`) |
+| `judgment-day` | drop | the Claude lens review runs on every slice (G9), so an on-demand dual review adds nothing |
+| `skill-improver` | drop | no named need |
+| `skill-registry` | drop | its hook and `.atl/` leave |
+| `issue-creation` | drop | not his flow; PRs are |
+| `systemic-issue-triage` | drop | a maintainer's triage of gentle-ai's own issues |
+| `rdd-defect-workflow` | drop | RDD leaves |
+| `go-testing` | drop | no Go here |
+| `gentle-ai-bench` | drop | gentle-ai's own bench |
+
+**License.** The repository's `LICENSE` is MIT (G `LICENSE:1`) [c], but 13 of the 14 skills declare
+`license: Apache-2.0` in their frontmatter and `skill-registry` declares MIT [c]. Since the two
+disagree, each copy follows the stricter one: it keeps its `license:` line, says at its top that it
+is adapted from gentle-ai and what changed, and the repo ships a `THIRD_PARTY_NOTICES` file with
+the MIT notice and the Apache-2.0 text [i: that this satisfies both; it is the usual reading of
+both licenses]. The marks "Gentle AI", "gentle-ai" and "Engram" are claimed as trademarks
+(`TRADEMARKS.md`) [c]: our copies use our names. Running engram itself, by its name, is ordinary
+use of the tool, not a copy.
+
+## 4. The TUI
+
+### 4.1 Theirs
+
+Running `gentle-ai` with no arguments opens it (`gentle-ai --help`) [c]. It is Bubble Tea v1.3.10,
+bubbles and lipgloss (G `go.mod:7-13`). Sizes, each with its version [c]:
+
+| | v4.2.0 (installed) | `main` 2b56327e |
+|---|---:|---:|
+| `Screen` constants, `ScreenUnknown` included | 48 | 49 (adds `ScreenShellInstall`) |
+| `.go` files under `internal/tui` | 87 (42 source, 45 test) | 131 (59 source, 72 test) |
+| lines, source / test | 11,615 / 14,623 | 14,928 / 17,965 |
+
+One `Model` struct holds the whole state; `Screen` is a closed enum (v4.2.0
+`internal/tui/model.go:578-634`); `View()` dispatches to pure render functions; every backend call
+runs in a goroutine that returns a typed message, and install progress streams through a lossless
+queue whose messages carry a run id, so results of a stale run are dropped (`model.go:316-375`,
+`:1360`) [c]. Keys: arrows or j/k, Enter, Space to toggle, Esc for Back, q and ctrl+c to quit, and
+only those two while an operation runs [c, `model.go:1809-1990`]. Its confirm screens open with the
+cursor on the destructive row (`:2205`, `:2688`, `:2723`) [c].
+
+### 4.2 Ours, and why it does not behave like theirs
+
+`bin/tui.mjs` (544 lines; `node --test bin/tui.test.mjs` runs 88 tests, all passing, 2026-10-26)
+already has the right split: a pure `handleKey(state, key) → {state, effect}` and
+`render(state) → lines`, with a thin I/O shell [c]. Six causes keep it from behaving like
+gentle-ai's:
+
+1. **No alternate screen and no size model.** It erases by counting logical lines, and nothing reads
+   `stdout.columns`, `rows` or `resize` [c, grep]. A line wider than the terminal (the Everything
+   confirm is about 260 characters, `:60`) wraps into rows that were not counted, so the menu
+   duplicates or shifts [i: from the code, not run in a real console].
+2. **Commands block the TUI and print over it.** They run in-process and synchronously
+   (`spawnSync` in `update.mjs:74`, the package manager in upgrade); nothing animates; their output
+   scrolls the screen and the menu is redrawn underneath (`:374`, `:416`) [c]. Raw mode stays on
+   while a command runs [c], so a child that inherits the console gets it raw [i].
+3. **Keys are read one chunk at a time.** Two keys in one chunk, SS3 arrows, PgUp/PgDn, Home/End,
+   Space and Tab are ignored (`:211-223`) [c]. Esc on the main menu quits (`:247`) [c].
+4. **Slow work before the first draw:** `git ls-remote` and the doctor probes run before anything
+   appears (`:504`, `:525`) [c].
+5. **Missing pieces:** color, multi-select, scrolling, a result screen, detail screens [c].
+6. **No test drives a real console:** the tests use fake streams, and `scripts/tui-walk.mjs` drives
+   pipes, where `setRawMode` does not exist [c].
+
+**Causes 1 and 2 are defects in shipped behaviour** (the TUI shipped with "Install and update",
+merged 2026-09-26). Under the scope freeze a defect in shipped behaviour may become a task (ROADMAP,
+"Scope frozen"). Slice 1, which fixes them, was built in session JH 56
+(`local_1a67ff71-ea47-44e4-a7d8-7f4f8be744ca`) and is PR jsaristi/js-harness#596, open and not
+merged, its real-console walk left to him.
+
+One thing ours does better: confirmation is an explicit y/N where anything else means no
+(`:238-239`) [c]. Keep it.
+
+### 4.3 What we need from theirs
+
+Needed: alternate screen with full-frame redraw and resize; async runs with spinner, streamed log
+and locked keys; a result screen with the exit code; a real key parser; a Doctor detail screen with
+each row's fix command; multi-select for `functions`, `stack install` and the skills `install`
+writes; a review of what `install`/`init` will write before it writes; scrollable read-only views
+of our own (`progress`, `sessions`, `codex-meter`, `failures`); a small palette that honours
+`NO_COLOR`. Since gentle-ai leaves, nothing is delegated to its TUI: what we need is native, the rest
+is excluded (4.6).
+
+### 4.4 Four ways to get there
+
+| Option | Cost | Zero dependencies | Windows | License and trademark | Upstream updates |
+|---|---|---|---|---|---|
+| **(a) Port the design to zero-dependency Node** | the six slices of 4.6: about 1.35k code lines plus tests [i] | kept | Node puts the console in VT mode on Windows 10 1809+; this machine is 19044 [i] | ideas are free; no logo or rose art (G `internal/tui/styles/logo.go:9`) | read their screen catalog per release (section 5) |
+| **(b) Node with a library** (ink, blessed, terminal-kit) | fewer lines | **breaks** `AGENTS.md:16`; `package.json` has no `dependencies` [c] | ink is good; blessed is unmaintained [i] | MIT | unrelated |
+| **(c) Fork their Go TUI** | 11.6k source lines at v4.2.0 welded to their internals (G `internal/app/app.go:13-30`); Go toolchain and per-OS release builds | breaks it | good | MIT, but forks "must use distinct primary names and branding" (G `TRADEMARKS.md:39`) [c] | worst: every release conflicts |
+| **(d) Add our screens inside theirs** | needs an upstream PR: `Screen` and Community Tools are closed enums | n/a | n/a | their brand | theirs; and gentle-ai leaves |
+
+The earlier option (e), a menu item that opened gentle-ai's own TUI, is gone with gentle-ai.
+
+### 4.5 Recommendation and slice 1
+
+**(a)** (G2). It keeps the repo's one hard rule, it grows the reducer/render split we already have,
+and no release of theirs can break it.
+
+**Slice 1, about 400 code lines, tests first, touching only `bin/tui.mjs` and its tests** (PR
+jsaristi/js-harness#596, open, not merged; the real-console walk is his):
+1. **Terminal guard:** enter the alternate screen and hide the cursor; restore raw mode, cursor and
+   main screen on quit, error, SIGINT and exit.
+2. **Frame model:** repaint the whole frame each time and redraw on `resize`. Ordinary lines are
+   clipped to `columns`; **warnings and confirm texts wrap, never clip**. If a warning does not fit
+   in `rows`, it scrolls, and its confirm key works only once the whole text has been shown
+   (cause 1).
+3. **Key parser:** split chunks into keys (CSI and SS3 arrows, PgUp/PgDn, Home/End, Space, Tab, a
+   lone Esc after a short timeout); Esc means Back, q quits (cause 3).
+4. **Run screen:** each command runs as a child (`node bin/js-harness.mjs <cmd>`) with piped
+   output; a spinner ticks, the output fills a scrollable log, keys other than ctrl+c are locked,
+   and it ends on a result screen (cause 2). Outcomes: **done** (exit 0), **failed** (its exit
+   code), **cancelled** (ctrl+c: the child's process tree is killed, `taskkill /T` on Windows, the
+   TUI waits for it to exit, then reports), **could not start**. Quitting during a run asks first;
+   the terminal guard also kills a running child on error.
+5. **Action-level authorization, unchanged.** `stack install`'s `Run it? [y/N]` for each row
+   (`bin/stack.mjs:223-241`) is shown in the run screen and only the key pressed is sent, as today's
+   relay does (a `bin/tui.test.mjs` test asserts it). The TUI never substitutes `--yes --tool <id>`:
+   `--tool` selects every mandatory dimension of that tool (`:208`) and `--yes` skips each row's
+   question.
+6. **First draw before slow work:** draw at once, then fill in the update check and the stack block
+   (cause 4).
+
+**Acceptance.** Unit tests, written first, with frame-level assertions (every screen at 40, 80 and
+120 columns and a short height; no line wider than `columns`; no frame taller than `rows`; every
+warning's full text present), and a manual walk checklist recorded with its results in the TUI
+feature document: in Windows Terminal and in conhost, open; resize to 40 columns and back; Doctor;
+Update; `stack install` answering one y and one N; ctrl+c during a run (cancelled, no child left);
+Esc back; q out; the terminal usable afterwards. Risk: item 6 partly applies, since no test drives a
+real console.
+
+### 4.6 Every screen of theirs, and where it goes
+
+Dispositions: **native** (ours, in the slice named) or **excluded** (not for this harness);
+**deferred** is native later. The 48 v4.2.0 constants, plus `main`'s one:
+
+| Their screens (v4.2.0 `model.go:578-634`) | Disposition |
+|---|---|
+| `Unknown` | n/a (sentinel) |
+| `Welcome`, `UpdatePrompt` | native: our menu and update banner exist; slice 1 draws them first |
+| `Detection`, `DependencyTree` | native: the Doctor detail screen (slice 3) and the install preview (slice 6) |
+| `Installing`, `Complete` | native: the run and result screens (slice 1) |
+| `Review` (what an install will write) | native: the install and `init` preview (slice 6) |
+| `SkillPicker`, `CommunityTools`, `CommunityToolInstalling`, `CommunityToolResult` | native: multi-select over the skills we ship and the stack's tools (slice 2), run through the run screen |
+| `Upgrade`, `Sync`, `UpgradeSync` | native: our Update and Upgrade items exist; the complements update through `stack` (slice 2) |
+| `UninstallMode`, `Uninstall`, `UninstallComponents`, `UninstallConfirm`, `UninstallResult` | native: our four uninstall kinds exist |
+| `UninstallEngramScope` | excluded: engram's data is never ours to remove |
+| `Backups`, `RestoreConfirm`, `RestoreResult`, `DeleteConfirm`, `DeleteResult`, `RenameBackup` | deferred: native backups are "Later" |
+| `Preset` | native: our presets (complete, lean, custom; G14) as a multi-select (slice 2) |
+| `Agents`, `Persona` | excluded: one host, one style file |
+| `ClaudeModelPicker`, `KiroModelPicker`, `CodexModelPicker`, `ModelPicker`, `ModelConfig` | excluded: our routing is `rule:subagent-*-model` |
+| `InstallReviewMode`, `ReviewMode`, `ReviewStoreResetConfirm`, `ReviewStoreResetResult` | excluded: RDD leaves |
+| `AgentBuilderEngine`, `…Prompt`, `…Generating`, `…Preview`, `…Installing`, `…Complete` | excluded: no agent builder |
+| `OpenCodeBackground`, `PiBackground`, `OpenCodeSDKConfirm` | excluded: hosts we do not run |
+| `ShellInstall` (`main` only) | excluded |
+
+Cross-cutting pieces: alternate screen, resize, key parser, run ids → slice 1; multi-select →
+slice 2; colour → slice 5; their logo and rose art → excluded (trademark); their confirm cursor on
+the destructive row → not copied.
+
+**The slices, in order** [sizes i]:
+
+| # | Slice | Code lines |
+|---|---|---:|
+| 1 | Terminal guard, frame model, key parser, run screen with outcomes, action-level relay, first draw (4.5) | ~400 |
+| 2 | Multi-select for `functions`, `stack install` (the complements) and the skills `install` writes; each selected action still asks its own y/N | ~250 |
+| 3 | Doctor detail screen: each row, its evidence and its fix command | ~150 |
+| 4 | Scrollable read-only views: `progress`, `sessions`, `codex-meter`, `failures` | ~250 |
+| 5 | Palette that honours `NO_COLOR` | ~100 |
+| 6 | Preview of what `install` and `init` will write, before they write | ~200 |
+| later | Native backups | ~200 |
+
+About 1.35k code lines through slice 6, plus tests; each slice is a work unit with its own walk.
+
+### 4.7 Completion boundary and dependency map
+
+**Done** when slices 1-6 are merged, each with its real-console walk recorded by him, and every
+screen of 4.6 is native, excluded or deferred as listed there. Native backups stay "later", outside
+the boundary. Slice 1 is PR jsaristi/js-harness#596; every later slice builds on its frame, key
+parser and run screen, so none starts before it merges.
+
+| Slice | Depends on, besides slice 1 | Can start |
+|---|---|---|
+| 2 Multi-select | S11's presets (G14) and the stack rows for engram and context7 | after S11 |
+| 3 Doctor detail | the `doctor` rows S1 (review debt), S10 (permissions) and S11 (complements) add; it shows whatever rows exist | after slice 1 |
+| 4 Read-only views | the commands it shows exist today | after slice 1 |
+| 5 Palette | slice 1's frame only | after slice 1 |
+| 6 Install and `init` preview | S12's migration, whose writes the preview lists | after S12 |
+
+Slices 3, 4 and 5 can run beside F8 in their own session; when is G3.
+
+## 5. The idea watch (S9)
+
+gentle-ai's repository stays a source of ideas, read on each release; nothing is installed.
+
+**On each stable release**, against the last release read:
+1. **The source diff by area.** On a pinned clone (`~/.js-harness/upstream/gentle-ai`, fetch only,
+   recorded in the machine manifest so `uninstall machine` removes it; never built or run), it
+   buckets `git diff --numstat v<last read> v<new>` by an `AREAS` table of real repository paths:
+
+   | Area (paths in the gentle-ai repository) | What we look for |
+   |---|---|
+   | `internal/assets/*/orchestrator.md`, `internal/assets/skills/_shared/odd-*`, `internal/components/agentguidance/**` (prompt text is Go literals, so the asset digest misses it) | workflow ideas: against our `CLAUDE.md` lines and diet §3, §5 |
+   | `internal/reviewtransaction/**`, `internal/reviewerprovider/**`, `internal/providercontractbundle/**`, `internal/consentenvelope/**`, `internal/components/reviewassets/**`, `contracts/**` | review ideas: against our review flow (S1) and lens agents |
+   | `internal/assets/claude/output-style-*`, `internal/assets/claude/persona-*`, `internal/components/persona/**` | voice changes: against our style's copy |
+   | `internal/assets/skills/**`, `skills/**`, `internal/components/skills/**` | changes to the two skills we copied, by name |
+   | `internal/assets/claude/agents/**` | changes to the four lens prompts we ported at S1 |
+   | `internal/components/permissions/**` | changes to the permission defaults we took over (S10) |
+   | `internal/components/mcp/**` | how they register MCP servers (engram, context7), against our stack rows |
+   | `internal/components/engram/**`, `internal/components/agenthooks/**`, `internal/components/telemetryruntime/**`, `internal/telemetry*/**` | how they install and wire the complements we now own |
+   | `internal/tui/**` | screens and behaviour to port (section 4) |
+   | `internal/backup/**`, `internal/state/**`, `internal/managedownership/**`, `internal/components/filemerge/**`, `internal/components/uninstall/**`, `internal/update/**`, `internal/cli/**` | install and undo ideas against our manifest |
+   | `internal/shellinstaller/**`, `internal/opencode/**`, `internal/components/{gga,theme}/**`, `internal/assets/{antigravity,codex,cursor,gemini,generic,hermes,kimi,kiro,qwen,windsurf,opencode}/**`, `bench/**`, `e2e/**`, `testdata/**`, `docs/**`, `odd/**`, `README.md`, `.goreleaser.yaml` | ignore (`bench` and `docs` read for evidence) |
+
+   **Unmatched paths are never dropped**: a changed path that matches no row is listed as
+   `unmatched` and classified by hand; the row it earns is added to `AREAS` in the same commit.
+2. **A verdict per change**: **adopt-into-ours** (becomes a task in the roadmap, measured by its own
+   step like any change), **adapt** (the idea, rewritten for our needs), or **ignore**, each with its
+   evidence (file, lines).
+3. **The record.** A release with any verdict other than `ignore` gets its own section in
+   `odd/tasks/gentle-ai-update-check.md`, committed. Releases with only `ignore` are batched: one
+   line each, committed with the next non-`ignore` record or at month end.
+
+**Where it lives.** `bin/lib/gentle-ai-update.mjs` today watches the *installed* version and its
+backups (`:36-39`, `:57-75`) [c]. After S2 that has nothing to read: the module becomes the idea
+watch, which reads the newest stable tag by `git ls-remote --tags` and the last one read from the
+record, and the `doctor` row says "N releases not yet read". It spends no eval money: an adopted
+idea is measured when its own step lands.
+
+**Pace.** 23 stable releases between 2026-09-01 and 2026-10-15 and three majors in 11 weeks
+(`git tag` on the clone) [c]; unreleased `main` carries 322 commits and +57.6k lines, +8.8k in
+`internal/tui` (`git diff --shortstat v4.2.0 HEAD`) [c]. Track stable releases; read `main` only
+for the TUI.
+
+## 6. The target, and the order
+
+**Layers, bottom to top:**
+1. **Host (Claude Code):** skills, hooks, `/goal`, Monitor, SendMessage, compaction, permissions.
+   We build on it, never beside it (diet §6).
+2. **js-harness:** the workflow text (`CLAUDE.md`, importing `AGENTS.md`), our output style, our
+   skills, checks and hooks (`check`, `guard`, `reply`, `resume`, the rules delta, `backup`), the
+   review flow (Codex and the Claude lenses on every slice), the session commands, `doctor` and
+   `stack`, the idea watch, the TUI.
+3. **Complements, installed and registered by js-harness's `stack`:** engram (and its plugin),
+   codegraph, context7.
+4. **Records:** the repo is canonical (roadmap, `odd/tasks/`, `docs/RULES.md`); engram and
+   `MEMORY.md` mirror it or point to it.
+
+**What a turn loads after removal** (diet D4): 105.5k today − 30.7k (H) − 0.5k and 0.3k (gentle-ai's
+skill and agent descriptions, chars/4) + 1.8k (the S3 lines, Claude's count) ≈ **75.8k**, with our
+style the same size as `gentleman.md` (1.8k). A shorter style lowers it; each copied skill adds back
+its description, under 0.1k each. The S10 port adds to `CLAUDE.md` only what the A.1 lines do not
+already hold, and S3's budget row counts it.
+
+**What removal breaks in js-harness, and fixes first (S1, S11):** 32 source files and 51 test files
+under `bin/` name gentle-ai [c, `grep -rl`]; the heaviest are `bin/lib/stack.mjs` (28 lines),
+`bin/lib/gentle-ai-update.mjs` (16), `bin/check.mjs` (16, its `review` row runs `gentle-ai review
+mode status`, `:1721-1733`), `bin/doctor.mjs` (15) and `bin/lib/stack-install.mjs` (12).
+`AGENTS.md` names gentle-ai on 7 lines (4, 19, 25, 30, 51, 57, 59). The stack's fixes for engram
+(`gentle-ai upgrade`, `gentle-ai sync`) and codegraph's project fix (`gentle-ai codegraph init`)
+point at the tool that leaves. Under `evals/`, 20 files name it (`grep -rl gentle-ai evals`) [c],
+among them `evals/arms.mjs:23-47` (the arms that load its block) and `evals/home.mjs:238` (which
+copies `.gentle-ai/state.json` into the eval home); S11 sweeps `bin/` and `evals/` together. The
+`bin/` counts take a file as a test by its `*.test.mjs` name.
+
+**The order** (diet §10, seventh pass): S0 baseline → **S3** (the `CLAUDE.md`/`AGENTS.md` split,
+D3, and an interim `claudeMdExcludes` of gentle-ai's global file in this repo that banks ~30.7k at
+once; undone by reverting its commit) → **S1** (both reviews on every slice, G9: the lens prompts
+ported and their runner built) → **S10** (port: our style, the ODD sizing text, two skills, the
+whole `permissions` object) → **S11** (the stack takes over engram, codegraph and context7, with
+presets; `bin/` and `evals/` stop naming gentle-ai) → **S13's rehearsal** (a scratch project from
+`init` to its first reviewed slice, comparing only the files js-harness owns) → **S12** (the
+migration of an existing project built, tested on a copy of an old one, then his listed projects
+moved) → **S2** (writers quiesced, one full backup and a restore drill that proves engram answers,
+then gentle-ai, Orca and herdr removed, each asked first; the interim exclusion reverted; a short
+smoke test on the scratch project; every session restarts) → measure → S4a, S4b, S5, S6, S7 → S8.
+S9, the idea watch, any time after S2. Every step says what reaches a project (section 11).
+
+**The TUI is its own feature,** not an F8 step: slice 1 is PR jsaristi/js-harness#596, open and not
+merged, its walk left to him; the rest is bounded and mapped in section 4.7 and waits for G3.
+
+## 7. His decisions raised here (G1-G14)
+
+Each is one question, asked at the step the register names (diet §1), with the recommended default
+first. Four are closed by his words of 2026-10-26 ("gentle-ai tampoco", line 2272); G9 by line
+2351; G10 and G11 by line 2466: "la 7 la voz hazlo en neutro osea que no copiemos eso y el context7
+siempre va a encendido en los proyectos, de resto rodo me parece excelente y que esta bien y que lo
+coloquemos todo" (2026-10-27T01:34Z, 20:34 local on the 26th).
+
+Which are **blocking** and which are taken **by default** is in the diet's register (§1): a
+blocking one (G3, G7, G12) is asked before its step, one at a time; a by-default one (G2, G8, G10n,
+G14) is taken by the lead with the default below and recorded, and he can reverse it.
+
+- **G1. Telemetry.** Closed: it leaves with gentle-ai.
+- **G2. TUI approach.** Default: **(a)**, the design ported to zero-dependency Node. (b) breaks the
+  zero-dependency rule; (e) is gone.
+- **G3. TUI priority against F8.** Blocking. Slice 1 (the shipped defects) is PR
+  jsaristi/js-harness#596, open and not merged, its real-console walk left to him. Open: the rest
+  (section 4.7). Default: **beside F8, in its own session, after #596 merges**; asked then.
+- **G4. The skill-registry prompt hook.** Closed: it leaves with gentle-ai.
+- **G5. gentle-ai skills to hide here.** Closed: replaced by G8, since nothing of theirs stays
+  installed.
+- **G6. GGA.** Closed: it leaves with gentle-ai; `~/bin/gga` and any project hook of it go at S2.
+- **G7. Recurring certification spend.** Blocking (spend). The idea watch spends nothing per
+  release, and an adopted idea is measured by its own step. What costs is certification rerun on
+  each new model or CLI update (diet §7.2). Default: **at most one certification a week, batching
+  updates, about $25 each, at most $100 a month**, outside F8's $200 envelope. Asked after S8.
+- **G8. Which skills to copy.** Default: **the two of section 3 that serve a stated need**
+  (`work-unit-commits`, `chained-pr`), by his rule of line 2646; the four lens agents are copied by
+  G9, at S1. By default: taken at S10 and recorded.
+- **G9. The review.** **Answered** (line 2351): both reviews on every candidate, always. Codex is
+  the second model; the Claude review runs our copies of the four lenses, one to four picked by what
+  the change touched, each in a fresh context; no risk tier skips either. Its cost per slice is
+  measured at S1 and counted in the plan's spend line (diet D2).
+- **G10. The persona.** **Answered** (line 2466): our own style, our own name, neutral Spanish
+  with tú; gentle-ai's voseo and Rioplatense register are not copied. Installed at user level by
+  `js-harness install` and recorded, so every project gets it. Its name is taken by default
+  (G10n): **`js-harness`**, recorded at S10; he can change it.
+- **G11. context7.** **Answered** (line 2466): always enabled in projects. `init` enables it, a
+  `doctor` row flags a project where it is disabled, and this repo turns it on: today it is
+  disabled here (`~/.claude.json`, `projects["D:/js-harness"].disabledMcpServers`; `claude mcp
+  list`) [c]. Its instructions then load every turn; S3's budget row counts them.
+- **G12. What his other projects load once H is gone.** Removal takes his Rules list and ODD text
+  out of every project. Default: **`js-harness install` writes one small block of his Rules lines
+  (as D7 settles them) into `~/.claude/CLAUDE.md`, recorded so `uninstall` removes exactly it**;
+  each project gets the rest from `js-harness init` (S12).
+- **G13. When a review cannot run.** Decided by the lead (2026-10-26), for his "revision siempre":
+  `--unavailable <reason>` (for either reviewer) lets the push through, but the skip is a **debt**:
+  a `check` row and a `doctor` row list each skip without a later complete review, and the merge
+  path (`js-harness merge-queue`) refuses a PR whose commits hold one. All three are **to build**
+  at S1.
+- **G14. The presets' names.** By default. Copied from gentle-ai's presets idea. Default:
+  **complete** (engram, codegraph, context7, the two reviews, the split), **lean** (the same
+  without codegraph), **custom** (may add or drop codegraph and the engram plugin, never context7
+  or the reviews). Taken at S11 and recorded.
+
+## 8. His request, verbatim
+
+"hagamos una investigacion mucho mas profunda de lo que va lo que no, lo que vamos unir con lo que
+tenemos nosotros y como debe quedar bien y en orden mejor dicho todo, y necesito traerme todo el
+sistema completo de tui que tiene gentle-ai por que el de nosotros es muy sencillo y no funciona
+como el de gentle-ai osea debemos tambien a medida que gentle-ai se actualice por que es una buena
+base, poderlo analizar y ver que se puede mejorar frente nuestra investigacion y necesidades y
+mejoras que nosotros apliquemos osea es una una ingenieria inversa tambien y ademas con nuestra
+mejora y necesidades" (2026-10-26, relayed by the lead).
+
+Read as needs, not as a spec: (1) a verdict per component and the target, in order (sections 3
+and 6); (2) a TUI as capable as gentle-ai's, every screen accounted for (section 4.6); (3) a
+repeatable re-analysis on each gentle-ai update (section 5). His direction of the same evening (top
+of this document) changes the verdicts from exclude to replace.
+
+## 9. Grades
+
+The third blind grade of the package (the diet's fourth pass with this document) gave Claude 6.4
+and Codex 7.0. The fifth pass then split S9, put S9a before S2, took a full hook inventory, made one
+decision register, mapped every TUI screen, and named the paid checkpoints. Most of what it built
+for an installed gentle-ai is superseded by the direction above; the hook inventory, the register,
+the TUI map and the checkpoints carry over.
+
+The sixth pass was graded blind in turn: **Claude 6.4, Codex 6.0**. The seventh pass (section 12)
+is the one correction batch after it; a recheck limited to its items follows.
+
+## 10. Sixth pass: replace (2026-10-26)
+
+His direction change, not a grade, drove this pass. What changed: a "Direction" section at the top
+with his words; the matrix redone as copy, take over, keep or drop, with a verdict per skill and
+agent and the license each copy carries; the TUI without option (e), every screen native or
+excluded, six slices; S9 turned into an idea watch that installs nothing; the order rebuilt around
+porting first and removing last; the permission deny list kept and taken over; presets copied as an
+idea (G14); GGA and the theme dropped; and, by his rule of line 2646, a stated need on every "copy"
+(four skills and the Risk line moved to drop); the first-turn load recomputed (≈75.8k); four G decisions closed
+by his words and new ones G8-G13. Then, from his later words the same evening: G9 answered (two
+reviews on every slice, always), G10 and G11 answered (neutral voice; context7 always on in
+projects), removal planned machine-wide with a full backup, a restore drill and a cut point, Codex's
+side and engram's data covered, and section 11 added: how a project works with js-harness.
+
+## 11. How a project works with js-harness
+
+His words: "recuerda que todo este mismo trabajo es como va a trabajar el arnes en los proyectos"
+(line 2382). What this plan decides here is what every project gets. A project's whole life with
+js-harness, from nothing to its first reviewed slice; each write is recorded so it can be undone
+(`uninstall project`, `uninstall machine`, or git). Items marked **to build** do not exist yet;
+the step that builds each is named.
+
+### 11.1 From `init` to the first reviewed slice
+
+| # | He runs | What it writes or does | Undone by | Built at |
+|---|---|---|---|---|
+| 1 | `js-harness install` (once per machine), with a preset (G14) | our skills and the four lens agents (ported at S1, reading our packaged input) under `~/.claude`; the whole `permissions` object we took over (the 24 denies among it); our output style (neutral voice, G10); the small Rules block in `~/.claude/CLAUDE.md` (G12); the session hooks (13 today); the Codex review home. All in the machine manifest | `uninstall machine` | skills and hooks exist; lens agents **to build** (S1); style, Rules block and permissions **to build** (S10) |
+| 2 | `js-harness stack install` | engram and its plugin, codegraph and context7, each installed and registered by js-harness itself, each asked y/N, each with its undo printed and recorded | `uninstall machine` (undoes what `stack install` ran) | codegraph exists; engram and context7 as required rows **to build** (S11) |
+| 3 | `js-harness init` in the project | `harness.json`, `AGENTS.md` (what a reviewer needs), the root `CLAUDE.md` importing `@AGENTS.md` with the kept lines (S3), `docs/FAILURES.md`, the pre-commit gate, the pre-push check, the codegraph index (`codegraph init`), context7 enabled for the project (G11), the deny list in the project's settings, the project's output style choice | `uninstall project` | most exist; `CLAUDE.md`, context7 and style **to build** (S3, S11, S10) |
+| 4 | a session opens | it loads the project's `CLAUDE.md` and `AGENTS.md`, our style and skill descriptions, engram's, codegraph's and context7's instructions: about 75.8k on the first turn here (section 6), less in a small project | — | measured at S3, at S13 and after S2 |
+| 5 | he asks for a feature | the session sizes it; large work opens `odd/tasks/<feature>.md` with the task contract first (`js-harness contract template`), specs quoting him, tasks and a log, mirrored in engram | git | exists |
+| 6 | the session commits a work unit | pre-commit runs `check` | — | exists |
+| 7 | the slice is reviewed | `js-harness codex-review --base <boundary>` records Codex's review; the Claude lens runner packages the slice's commit range, runs one to four picked lenses in fresh contexts, rejects an incomplete result and records each complete one with the range's subject hash (diet §10, S1) | records live in the git common dir | Codex exists (it gains the range and hash at S1); the runner **to build** (S1) |
+| 8 | he pushes | pre-push refuses a code commit not covered by a complete Codex record and a complete Claude record of the same head commit and subject hash, or by a recorded skip; an amend or rebase changes the head commit and the range is unreviewed again. A skip is a debt: `check` and `doctor` list it, and the merge path refuses the PR until it has its review (G13) | — | Codex half exists; the Claude half, invalidation and the debt rows **to build** (S1) |
+| 9 | updates | `js-harness update`/`upgrade` bring the harness; `stack` brings the complements. An initialized project is **not** refreshed today: `update` only reports a newer release (`bin/update.mjs:373-397`) and `init` again writes nothing but a codegraph retry (`bin/lib/project.mjs:1062-1091`) [c]; the migration S12 builds brings it to the current version, keeping his edits | the manifests | harness update exists; complements **to build** (S11); the migration **to build** (S12) |
+
+Nothing of gentle-ai, Orca or herdr takes part at any step.
+
+### 11.2 Moving a project that used gentle-ai (S12)
+
+Every project on this machine read gentle-ai's global file and ran its hooks. After S13's rehearsal
+and before removal, each listed project is moved, one at a time, by him or a session he names:
+1. **The migration S12 builds** (neither `init` nor `update` refreshes an initialized project
+   today) brings the project to step 3 above: it reads the version its manifest recorded, writes
+   what later versions add (the `CLAUDE.md` split, context7, the deny list, the two-review
+   pre-push check), keeps his edits (a file he changed is merged or left with a note, never
+   overwritten) and records each write so `uninstall project` undoes exactly it. It is tested
+   first on a copy of a project initialized by an old release.
+2. A read-only scan lists what gentle-ai left in the project: `.atl/` (the skill registry), its
+   review store under the git common dir, and any `odd/` documents. Documents stay (they are the
+   project's); `.atl/` and the review store go by git or by hand, each named first [i: the exact
+   per-project paths come from gentle-ai's source and are confirmed by the scan].
+3. A session started there shows, in `/context`, the project `CLAUDE.md` and no gentle-ai block
+   (after S2).
+The list is frozen in the feature document before the first move: projects with a js-harness
+manifest or with a Claude Code session in the last 30 days (`~/.claude/projects`). A project not
+moved keeps working after removal, only without ODD text until the migration runs there.
+
+### 11.3 Day to day, once gentle-ai is gone
+
+Short, and checked on S13's scratch project before his projects move, and again by the smoke test
+after removal. S13 compares, before and after each step, only the files js-harness owns (the paths
+its manifests record), never feature work or review records:
+- **Starting:** `js-harness init` once per project; `js-harness` with no arguments opens the TUI:
+  the stack's state, Doctor with each row's fix, Update, and the run screen for anything it starts.
+- **Working:** ask for the outcome; large work gets its feature document; each work unit is a
+  commit with its tests.
+- **Reviews:** each slice gets Codex and the Claude lenses; their records sit beside the repo's git
+  data, `js-harness throughput` counts them per day, the pre-push gate says which slice is
+  missing one, and `check` and `doctor` list each skip still owed its review.
+- **When something is off:** `js-harness doctor` names the row and its fix; `js-harness
+  uninstall project` undoes `init` exactly.
+
+## 12. Seventh pass: graded and corrected (2026-10-26)
+
+Blind grades of the sixth pass: Claude 6.4, Codex 6.0. Each finding was checked against its source
+before anything changed; the diet's section 19 has the whole list. Here:
+- **Order:** the lens prompts are ported in S1, which builds their runner; S13 rehearses on a
+  scratch project before S12 and S2, comparing only js-harness's files, with a smoke test after
+  removal (sections 6, 11).
+- **Removal:** writers quiesced first; the whole `permissions` object backed up and restored (its
+  removal checked on the v4.2.0 tag); the complements' MCP entries backed up; a restore drill that
+  must answer `mem_search`; the EngramScope framing corrected; the undo path with the module's
+  `/v4/cmd/` path (sections 0, 3).
+- **Interim exclusion:** S3 excludes gentle-ai's global file in this repo; S2 reverts it (top,
+  section 6).
+- **Existing projects:** `update` and a repeated `init` write nothing today; the migration is a
+  capability S12 builds (section 11).
+- **Reviews:** a commit-range candidate, incomplete results rejected, invalidation on a changed
+  hash, skips as a debt the merge path enforces (sections 3, 7, 11).
+- **Only what serves:** the Risk line and the voice are not copied; the presets are ours (complete,
+  lean, custom), every one with context7 and both reviews (sections 0, 3, 4.6, 7).
+- **His load:** the register splits blocking from by-default decisions; G10n's default is
+  `js-harness` (section 7).
+- **The TUI:** slice 1 is PR jsaristi/js-harness#596, open and not merged, its walk left to him;
+  section 4.7 gives the completion boundary and the dependency map.
+- **The idea watch:** `AREAS` gains the Claude agents, permissions and MCP paths (section 5).
+- **`evals/`:** 20 files name gentle-ai and S11 sweeps them with `bin/` (section 6).
+- **Rejected:** Claude's count of 31 source and 52 test files under `bin/` (taking a test by its
+  `*.test.mjs` name gives 32 and 51), and its 21 files under `evals/` (`grep -rl gentle-ai evals`
+  gives 20).
+
+Limited recheck of `18785956`: Claude 7.4, Codex 8.0. The residuals (the review identity now
+holds the head commit too, the GitHub web merge named as open, who runs S2's first steps, per-entry
+failure assignment) are fixed in the diet's section 19 and sections 3 and 11 here.
+
+## 13. How it works, and what we copy of the way it works (2026-10-28)
+
+His request (transcript `0f71b2c6-cbce-43ca-a031-276a4b2c381f` line 6030, 2026-10-28T06:29Z, read
+with `js-harness sessions --quote`, his typed answer to question 101):
+
+> "tambien me gustaria saber como hace gentle-ai para funcionar tan bien y ser una arnes que no se
+> equivoca osea debe tener las cosas estructuradas para funcionar muy bien todo el tiempo, osea sus
+> directrices con muchisimas y aun asi funciona todo, quiero no solo copiar las directivas que nos
+> funcionen sino tambien ver como trabaja y copiarlo para que nuestro arnes funcione igual o
+> muchisimo mejor que el de gentle-ai, hazme una investigacion profunda por favor."
+
+Read as a need: sections 3 and 5 say *which* pieces we copy; this section says *how gentle-ai is
+built* so a model works inside it, and which of those mechanisms js-harness adopts, adapts or
+drops. The same answer confirms the direction: gentle-ai leaves his machine (S2) and its
+repository is only read for ideas (S9, section 5).
+
+**Sources for this section.** "G" here is gentle-ai at tag v4.3.1 (commit `2dba7784`), cloned
+read-only into a `mktemp -d` folder; "E" is engram's `main` (`v3.6.0-19-gee1d5ad`), cloned the
+same way; "H" is the installed `~/.claude/CLAUDE.md` written by gentle-ai 4.3.1 (`gentle-ai
+version`) [c]. Four read-only explorers mapped one area each; every claim they returned that this
+section uses was rechecked here against the file and line cited, and one path was corrected
+(the module budget test lives in `internal/components/agentguidance/`, not `internal/assets/`).
+Nothing outside this repository was changed.
+
+### 13.1 The answer, short
+
+gentle-ai does not work because the model obeys 93 KB of rules. It works for three reasons, in
+order of weight, and the third has a cost.
+
+1. **What must be right is decided by code, and the model is handed the next step as data.** The
+   review is the clearest case. The CLI returns `next_transition` and the parent "runs that command
+   verbatim" (G `docs/review-integration.md:146-148`) [c]. Consent arrives as two ready commands
+   whose bytes are compared with the renderer's own and never parsed from what the caller sends
+   (G `internal/cli/review_consent_contract.go:285-288`) [c]. The lens reviewer is a process the
+   code starts, `claude --print --tools "" --setting-sources ""` with a fixed system prompt, in an
+   empty folder (G `internal/reviewerprovider/claude_adapter.go:29-43`) [c]. Its answer counts only
+   when it echoes the candidate's `subject_hash` and inspected every path of the frozen manifest
+   (G `internal/reviewtransaction/artifact_admission.go:399`) [c]. So, inside a review
+   transaction, the model only routes. The code fixes the procedure, not whether a review is used:
+   review never decides delivery, and the threat model leaves tampering out (13.2, "The review").
+   The same pattern shows in a smaller place: engram's text writes the heading
+   `## Key Learnings:` and gentle-ai's `## Key Learnings`, and engram's parser accepts both
+   (E `internal/store/store.go:13770`) [c], so code absorbs the inconsistent prose.
+2. **The prose is maintained like code, so it stays consistent release after release.** One
+   canonical source of each section (`internal/assets/skills/_shared/odd-orchestrator-sections.md`,
+   224 lines) is expanded into each host's file by placeholders, and a render that leaves a
+   `{{GENTLE_AI_` placeholder fails (G `internal/components/agentguidance/orchestrator.go:197-278`)
+   [c]. Tests pin the result: 128 test functions in 32 files under `internal/assets` alone (33
+   `_test.go` files, one of them a helper) [c, `grep -c "^func Test"`], with sha256 goldens, required and banned phrases, byte ceilings and a
+   cap on how many versions of each section the 12 hosts may carry (G
+   `internal/assets/orchestrator_drift_ratchet_test.go:21-26`) [c]. These tests keep the text
+   *consistent*; they say themselves that they do not prove a model follows it: "This proves
+   shipped policy text, not live model compliance" (G
+   `internal/assets/orchestrator_evidence_budget_test.go:8`) [c].
+3. **A strong model carries the rest, and that costs context** [i: the inference this section
+   rests on]. No gate of gentle-ai's runs a model on its shipped prompt. Its organic E2E runs a
+   real agent "with no prompt", so "this suite does not cover the shipped orchestrator prompt" (G
+   `docs/testing-agents-deterministically.md:64`) [c]; its bench calls no model (G
+   `bench/README.md:10`) [c]. So past the code paths nothing but the model's judgment keeps a
+   session on track. What that costs is measured: 30.7k tokens every turn (diet §2), and in the
+   diet's small eval the same score as a slim arm at 3.1× the cost (diet §9). That eval cannot
+   show the model *tolerates* the text: all 18 runs passed, so the tasks sat at the ceiling (diet
+   §9) [c]. The ten contradiction pairs of diet §3 come mostly from stacking js-harness on
+   gentle-ai, and one is gentle-ai against itself (row 7); where a check settles a pair the
+   sightings drop, and the rest is a coin toss (diet §3, last paragraph) [c].
+
+So "it never fails" is partly how it looks from outside. Section 13.4 lists what failed here, with
+the register's entries. **Where js-harness can do much better:** keep (1) and (2), which we have
+in part, and replace (3) with what gentle-ai does not have: every directive tied to a check or an
+eval case that runs a real model (`rules check`, `docs/FAILURES.md` controls, the evals of the
+diet's section 7), and a much smaller text that loads every turn.
+
+### 13.2 The mechanisms, one by one
+
+**Directives: structure and loading.**
+- *Marker blocks in one global file.* Install replaces only the text between
+  `<!-- gentle-ai:<id> -->` and its closing marker (G `orchestrator.go:502-503`) [c]. H is 92,915
+  bytes with six blocks; `orchestrator` alone is about 53.7 KB (`wc -c`, marker grep) [c]. The
+  per-host render takes Claude's 18,713-byte asset to about 53.6 KB rendered (G
+  `testdata/orchestrator-module-baseline.json:2`) [c]. Almost all of it loads on every turn: the
+  opt-in `--claude-orchestrator-modules` moves 6,166 bytes to files read on demand (G
+  `orchestrator_module_budget_test.go:33-35`), and that test "proves nothing about whether or when"
+  Claude reads them (`:45`) [c].
+- *Skills on demand by a trigger.* A test holds each skill's frontmatter: `name` equals its
+  folder, `description` is one quoted line with `Trigger:` and at most 160 characters (G
+  `internal/assets/skills_frontmatter_test.go:14-24,67-80`) [c]. That one line is what Claude
+  always sees, so it is what decides loading [i]. The body has a written ceiling of 1000 tokens
+  (G `docs/skill-style-guide.md:34`) that no test holds: `issue-creation` is 1,792 words and
+  `branch-pr` 9,190 bytes [c, `wc`].
+- *A skill registry refreshed by a hook on every prompt*, and the parent passes exact skill paths
+  to a sub-agent, which reports how it resolved them (H:488, H:496) [c]. Already dropped (G4); the host's own skill list does the loading here.
+- *ODD as a resume test, not a count.* Small when the work "could be resumed from the original
+  request and `git diff` alone"; large only when that fails (H:516, H:529-531) [c]. Large work
+  gets `odd/tasks/<feature>.md`; workers "read the document until `## Log`" and report which
+  `S#` they covered (H:581) [c]: a handoff by reference, never by paraphrase. Nothing in Go
+  validates the document's shape [c, explorer's grep for `## Log` in Go: only
+  `review_defect_report.go` and `routing.go`]. Ours does: `js-harness contract check`.
+- *Sub-agents get no packaged context*, only the prompt the parent writes, with edit surfaces and
+  checks named (H:428-432) [c]. The phase model presets still use `sdd-*` keys and no `sdd-*`
+  agent ships for Claude (G `internal/model/claude_model.go:135-151`;
+  `internal/assets/claude/agents/` holds only `jd-*` and `review-*`) [c], so ODD's explorer and
+  writer get no per-phase routing, only the preset's `default` (Sonnet, `claude_model.go:150`) [c].
+- *Guidance is refused where the host would not load it*: install fails closed with
+  `ErrUnloadableGuidance`, "the exact failure this component exists to prevent" (G
+  `internal/components/agentguidance/inject.go:38-41`) [c]. Hash-pinned text is worth nothing in
+  a file the host never reads.
+- *Text gated by what is installed*: review clauses reach only hosts that support review, and a
+  render that leaks one fails (G `internal/components/agentguidance/routing.go:42-54`,
+  `orchestrator.go:262-278`) [c]. A prompt never advertises an operation the host cannot run.
+- *Verification apart from review*: a verifier for high-risk work gets the whole feature
+  document, the baseline commit and the probe commands, one correction batch and one recheck,
+  and the parent re-runs one reported command before delivery (H:235-241) [c]. Two reviews do
+  not replace an observed command.
+
+**Self-checks.**
+- *Text pinned by hash, phrase and size*, as in 13.1 (2). Ratchets only shrink: the per-section
+  variant caps, a dead-code ratchet that freezes 230 unreachable functions
+  (G `scripts/deadcode-ratchet.sh:2-18`), and a 4,096-byte module overhead ceiling to "raise only
+  as a reviewed decision, never to make a failing run pass" (G
+  `orchestrator_module_budget_test.go:17-22`) [c].
+- *A bench of the CLI's friction*, about 108 journeys, scored on seven measures it refuses to
+  combine into one (prompts to the human, manual tokens, commands to finish, blocks, recovery
+  round trips, model runs, stderr bytes), with no model called (G `bench/README.md:7-11,108-127`)
+  [c]. It measures how hard the tool is to drive, not whether the prompt works.
+- *CI on every PR* (`gofmt`, `go test ./...`, the bench, the dead-code ratchet, Windows and macOS
+  runtime jobs, two Windows tests 100 times each to catch a flake, G `.github/workflows/ci.yml:322`) and
+  a PR policy: over 400 changed lines fails without a `size:exception` label, and a PR needs an
+  approved issue (G `.github/workflows/pr-check.yml:21`, `CONTRIBUTING.md:26-36`) [c].
+- *A release preflight that checks what PR CI does not.* A stable tag must point at the exact
+  `origin/main` commit with CI green on it, the configs must equal copies built into the code,
+  and `go mod tidy -diff` must leave the tree unchanged (G `scripts/release-preflight.sh:55`,
+  `internal/releasepolicy/policy.go:22-60`) [c]. **v4.3.0 failed exactly there:** a PTY test
+  imported `charmbracelet/x/term` directly, so tidy moved it out of the indirect block, and "the
+  release preflight's module-immutability check refused the untidy go.mod" (G commit `800be5ab3`)
+  [c]; v4.3.1 is that one-line fix. No PR workflow runs the tidy check [c, explorer's grep over
+  `.github`; i that a PR-time check would have caught it sooner]. The lesson is general: **a check
+  that runs only at release finds its defect only at release.**
+
+**The review.** 13.1 (1) holds its core. Beside it:
+- *The candidate is frozen and re-checked live*: its target is a sha256 over base tree, candidate
+  tree and paths digest (G `internal/reviewtransaction/snapshot.go:1737-1757`), rebuilt from git
+  and compared before each step (`:425-458`) [c, explorer; spot-checked].
+- *The refuter* takes every severe inferential finding, must answer each with concrete proof, and
+  a missing or duplicate answer escalates the batch; one refuter batch and one bounded correction,
+  never a loop (G `internal/reviewtransaction/transaction.go:619-672`) [c, explorer].
+- *The Stop hook nudges once*: it blocks the stop only when a high-risk candidate is due and
+  differs from the session's baseline, once per session and candidate, and stays silent when
+  `stop_hook_active` is set (G `internal/cli/review_stop_hook.go:166`, `:222`) [c].
+- *Its stated threat model leaves the model out*: it excludes "a malicious same-user local actor"
+  and review never decides delivery (G `docs/review-authority-threat-model.md`;
+  `docs/review-integration.md:294-296`) [c]. `review capture-result --input` still reaches the
+  admitter without the runtime frozen at the start being checked, so a result the model wrote
+  itself might be admitted; only prose forbids it (G `internal/cli/review_artifact.go:163-176`)
+  [i: read, not run].
+
+**Engram.**
+- *One protocol source rendered per host*, slim for Claude Code with engram 1.4.0 or later (G
+  `internal/components/engram/protocol.go:22,122-127`) [c]. Slim relies on engram's MCP
+  instructions as "the redundant channel that makes slimming … safe" (`protocol.go:18-20`) [c].
+  The slim block also names the SessionStart hook, but the hook prints its protocol only when the
+  mode is not slim (E `plugin/claude-code/scripts/session-start.sh:173-178`) [c]: in slim mode
+  Claude Code gets the protocol only through the MCP instructions, a shorter text (E
+  `internal/mcp/mcp.go:373-428`) [c].
+- *Memory comes back by itself, bounded*: SessionStart fetches the project's recent context,
+  capped at 16,384 bytes and 20 pinned items (E `session-start.sh:164`), and the
+  post-compaction hook does the same after a compaction (E
+  `plugin/claude-code/scripts/post-compaction.sh:43-49`) [c]. The selection is by recency, not by the task [c, explorer]. Passive capture takes
+  only sub-agent output (E `plugin/claude-code/scripts/subagent-stop.sh:13-31`); a parent reply is
+  not captured (E `session-start.sh:219-223`) [c].
+- *The two sources now disagree*: gentle-ai says save "IMMEDIATELY and WITHOUT BEING ASKED" and
+  that the summary "is NOT optional" (G `internal/assets/engram/protocol.md:25,133`) [c]; engram's
+  `main` says "Ordinary task completion does not require a summary" (E `session-start.sh:216`)
+  [c]; the installed engram still serves the older "MANDATORY" text (this session's MCP
+  instructions) [c].
+- *One hook enforces anything*: a PreToolUse hook on engram's writing tools confirms the session
+  and blocks the write when it cannot (E `cmd/engram/hook_claude.go:47,124-148`, plugin
+  `hooks/hooks.json` `onFailure: block`) [c, explorer]. Saves upsert by `topic_key` and dedupe by
+  hash within 15 minutes in the store (E `internal/store/store.go:4317-4393`) [c, explorer].
+  Conflict judging returns `judgment_required` and waits for `mem_judge`; nothing forces it (E
+  `internal/mcp/mcp.go:1703-1758`) [c, explorer].
+  The save nudge is a no-op under Windows Git Bash (E `user-prompt-submit.sh:26-31`) [c,
+  explorer], so it is likely off on this machine [i].
+
+**Sync and ownership.**
+- *Marker rewrite with repair*: `InjectMarkdownSection` replaces inside markers, strips unpaired
+  markers and drops duplicate pairs (G `internal/components/filemerge/section.go:236-372`) [c,
+  explorer]. An edit he makes inside a block is overwritten silently [c: no hash of the block].
+- *A snapshot before every write*, a tar.gz with a manifest whose absent entries are deleted on
+  restore, five kept (G `internal/backup/restore.go:215-316`, `retention.go:15`) [c]. Its targets
+  are a hand list kept apart from the write paths, and one write had no snapshot (issue #1794, G
+  `internal/cli/sync.go:775-779`) [c, explorer].
+- *A byte-ownership ledger, narrowly*: orchestrator modules and review assets refuse a file
+  "modified or not owned by Gentle AI" by its sha256 (G
+  `internal/components/agentguidance/orchestrator_module_install.go:176-181`) [c, explorer]. The
+  general manifest with user and managed extents (G `internal/state/manifest.go:40-82`) has no
+  caller outside its package [c, `grep -rn "state\.ReadManifest|state\.WriteManifestAtomic|OwnedExtent"`:
+  none]. The lock covers `state.json` only, not the file writes of a sync (G
+  `internal/statecoord/statecoord.go:27-41`) [c, explorer].
+- **Ours does more on the way out, not on the way in.** Our manifest records the sha256 of every
+  file `install` writes, and `uninstall` and `sync`'s pruning leave a file whose bytes changed
+  (`bin/lib/manifest.mjs:1251`, `:1891`, reason `edited`) [c]. But `install`, which `sync` calls,
+  writes every component without reading what is there (`bin/lib/manifest.mjs:1196-1207`,
+  `:1232-1234`) [c]: an edit he made to a file we installed is overwritten silently, as
+  gentle-ai's marker blocks do.
+
+### 13.3 What we adopt, adapt or drop
+
+Cost is effort on our side, with no eval spend unless the row says so [i: estimates].
+
+| # | Mechanism | Evidence | Verdict | Cost | Lands | The check that proves it works for us |
+|---|---|---|---|---|---|---|
+| 1 | The tool hands the model its next step as data, bound to the state it was issued for | G `docs/review-integration.md:146-173`; consent bytes compared, G `internal/cli/review_consent_contract.go:285-293` | **Adapt.** A refusal of `check`, `check --push`, `lens-review`, `codex-review` or the merge door that has a next step ends with the exact command, carrying the commit range it was computed for; a terminal refusal says it has none. A command whose range no longer matches the head is refused, not rerun | a convention test plus one line per refusal | S4b (replace prose with checks) | a `bin/conventions-*.test.mjs` row that fails on a refusal with a next step but no runnable command, its legacy list reaching 0; a test that a printed command refuses once the head moved |
+| 2 | Code starts the reviewer, tool-less and fresh; the answer counts only by hash and full coverage | G `internal/reviewerprovider/claude_adapter.go:29-43`, `internal/reviewtransaction/artifact_admission.go:399` | **Keep ours**: S1 built the same intent (`bin/lens-review.mjs:53`, `:63`, a `mkdtemp` folder; `bin/lib/lens-result.mjs:97`) [c]. Flag parity is not checked: ours uses `--safe-mode`, theirs `--setting-sources ""` and `--permission-mode dontAsk` [i: that both drop the same settings] | a probe | S5, beside the skill loads | one headless lens run in a scratch home with a planted user hook shows the hook did not fire |
+| 3 | The records a review writes cannot be written by the model | gentle-ai's gap: `--input` reaches the admitter (G `internal/cli/review_artifact.go:163-176`) [i] | **Adapt; ours has the same gap.** Our records live under the git common dir (`bin/lib/lens-reviews.mjs:4`, `bin/lib/codex-reviews.mjs:46`) and `guard` names neither (`grep -n "lens-reviews\|codex-reviews" bin/lib/guard.mjs`: nothing) [c]. Two parts: **prevention**, `guard` refusing a file tool or shell write to those paths outside the worktree; **provenance**, a lens record admitted only when it names a run line written first by the command, as Codex's records already do (`bin/lib/codex-review-runs.mjs:9-11`) [c]. Prevention stops an accident; provenance is what refuses a well-shaped forged record | about 100 lines and tests | an S1 defect task after S10 merges (S10 owns `bin/guard.mjs` now) | a `guard` test denies an Edit, a Write and a `>>` to either record; a test appends a well-shaped lens record with no run line and `check --push` does not count it |
+| 4 | Prose pinned like code: hash goldens, required phrases, size ceilings | G `internal/assets/orchestrator_evidence_budget_test.go:8`, `internal/components/agentguidance/orchestrator_module_budget_test.go:17-35` | **Adopt** for text we copy or ship: the style, the two skills, the lens prompts. A change to them changes its pin in the same commit | a test each, about 30 lines | S10 (style, skills); lens prompts with the first S10 slice that touches them | the test fails when the text changes and the pin does not |
+| 5 | One canonical section expanded into 12 hosts, with a drift cap | G `internal/assets/orchestrator_drift_ratchet_test.go:21-26` | **Drop**: one host; Codex reads `AGENTS.md` only as a reviewer | none | — | — |
+| 6 | Ratchets that only shrink | G `scripts/deadcode-ratchet.sh:2-18`, `orchestrator_module_budget_test.go:22` | **Keep ours**: the conventions' legacy lists only shrink (`AGENTS.md`), `claude-md-budget` rises only by his answer (question 97) | none | done | `npm run check` |
+| 7 | Skill frontmatter held by a test; body ceiling written but not held | G `internal/assets/skills_frontmatter_test.go:14-24`; `docs/skill-style-guide.md:34` against 1,792 words | **Adopt the lint and hold the body ceiling they do not**: one-line description with its trigger first, a length limit, and the body under S5's 3k | a test over `skills/` and the generated skills | S5 | the test; then S5's measure, the protocols skill loads in ≤ 3 of 10 sessions |
+| 8 | Skill registry hook on every prompt | H; G `internal/components/agenthooks/skill_registry.go:79-86` | **Drop** (G4) | none | S2 | the S4a hook-count row stays at 14 |
+| 9 | Resume-test sizing; handoff by reference; workers report the `S#` they covered | H:516, H:529-531, H:581 | **Keep ours** (the directives pass wrote it into `CLAUDE.md`; `contract check` validates the document, which gentle-ai never does) and **adapt** the report: a writer's brief names the `S#` and its return says which it covered | a line in the orchestrator skill's brief | S7 (writer prompts) | in S7's 5 Sonnet writer slices, each return names its `S#`; ≤ 1 unrequested file |
+| 10 | Hooks as the only hard enforcement, each firing once and never looping | G `internal/cli/review_stop_hook.go:166`; E `cmd/engram/hook_claude.go:124-148` | **Keep ours**: `reply` and `guard` already honour `stop_hook_active` (`bin/reply.mjs:9`, `bin/guard.mjs:199`) [c]; the pre-push refusal is stricter than a nudge | none | done | the existing hook tests |
+| 11 | Engram's protocol, one source per host, slim mode, two texts that disagree; memory brought back at start and after compaction | G `internal/assets/engram/protocol.md:25,133`; E `plugin/claude-code/scripts/session-start.sh:154-178,216`, `post-compaction.sh:43-49` | **Adapt at S11**: js-harness writes no engram text of its own; the protocol and the context recovery come from engram alone (its MCP instructions and plugin), and our memory policy stays in `CLAUDE.md` by `rule:<id>`. A `doctor` row flags a binary and plugin that serve different protocol versions | a stack row's fix, a `doctor` row and two fixtures | S11, rehearsed at S13 | after S2, `/context` holds one engram text; the `doctor` row turns red on a planted version mismatch; on S13's scratch project a session start and a compaction each bring back a planted observation within 16,384 bytes |
+| 12 | Snapshot before write, absent entries deleted on restore; ownership by hash | G `internal/backup/restore.go:215-316`; `internal/components/agentguidance/orchestrator_module_install.go:176-181` | **Keep ours** on the way out (`bin/lib/manifest.mjs:1891`); **adapt** on the way in: `install` and `sync` leave a file we installed whose bytes changed and say so, as `uninstall` does, instead of overwriting it (`:1196-1207`); **adopt** the snapshot with absent entries for S2's one full backup | about 60 lines and tests for `install`; inside S2's own work for the backup | S10, which changes `install` now (the lead's call, 2026-10-28); S12 applies the same rule to a project; S2 | a scratch-home test: an edited installed skill survives `install` and `sync` with a note; S2's restore drill puts back a deleted planted file and removes a created one |
+| 13 | Release preflight; the v4.3.0 lesson | G `scripts/release-preflight.sh:55`, commit `800be5ab3` | **Adapt**: our release check, `scripts/release-proof.mjs`, is "NOT part of `npm run check`" (`:5`) [c]. Every tag runs it on the tagged commit before the tag is announced, and any part of it fast enough runs in the gate | a release step, minutes per tag [i]; no model spend | S8, then every release | the release record of each tag names a `release-proof` run on that commit, exit 0; S8 checks the first |
+| 14 | A bench of separate measures never combined | G `bench/README.md:108-127` | **Adapt** for S8's report: one row per measure with its own pass line, no composite score. **Keep ours** for what theirs lacks: evals that run a real model on our text | none | S8 | each of S8's 17 measures is read against its own threshold, frozen before the baseline |
+| 15 | PR size and issue-first policy | G `.github/workflows/pr-check.yml:21`; `CONTRIBUTING.md:26-36` | **Keep ours** for size (`chained-pr`, copied at S10; `lens-review` refuses a range past its input limit and asks for smaller ranges, `bin/lens-review.mjs:191-192`); **drop** issue-first (`branch-pr` dropped, section 3) | none | S10 | the existing control of `commit-too-large-to-review` (`docs/FAILURES.md`) |
+| 16 | Guidance refused where the host would not load it | G `internal/components/agentguidance/inject.go:38-41` | **Adapt**: `init` and `doctor` check that the project's root `CLAUDE.md` imports `AGENTS.md` and that nothing above it turns the import off (the fragile cases of diet §4) | a `doctor` row | S12 (migration), rehearsed at S13 | on S13's scratch project, a `CLAUDE.md` planted above it turns the row red; `/context` names both files when it is green |
+| 17 | Text gated by what is installed | G `internal/components/agentguidance/routing.go:42-54` | **Adapt** for our presets (G14): a project on the lean preset gets no codegraph lines | a test per preset | S11 | a test renders each preset's files and finds no line naming a tool the preset leaves out |
+| 18 | Verification apart from review: baseline, probe commands, one recheck; the parent re-runs one reported command | H:235-241 | **Keep ours**: the task contract's done-when commands (`js-harness contract run`) and `CLAUDE.md`'s "checked in one thing before anything builds on it" | none | done | `contract check` on every feature document; the lead's merge reruns the contract |
+
+### 13.4 What fails, or costs, despite all this
+
+- **Context.** H loads 30.7k tokens every turn by Claude's count, and in every sub-agent but
+  Explore and Plan (diet §2). It grew from ≈17.6k by wire capture on 2026-09-26
+  (`docs/origin.md:41`) to 23.0k by chars/4 on 2026-10-26 (diet §2): the two methods differ, so
+  the growth is real but its size is approximate. In the diet's small eval
+  the current arm scored the same as the slim arm at 3.1× the cost, $3.82 against $1.25 for 9
+  runs each, with 8-9 turns against 4-6 on the commit task (diet §9) [c, the diet's table].
+- **Contradictions inside it.** On lens selection (diet §3, row 7); the persona block calls the
+  injected skill list "authoritative" while the orchestrator says not to treat it as complete
+  (H:53, H:454) [c]; the delegation triggers are written twice (H:218 and H:546 in the 4.3.1
+  file; H:219 in section 3's 4.2.0 file) [c]. The other pairs of diet §3 come from stacking
+  js-harness on it.
+- **Its review tool, seen here** (`docs/FAILURES.md`): `operation_timeout` left candidates
+  unreviewed on at least five days (`review-tool-timeout`); a 2,540-line commit hit
+  `lens_context_budget_exceeded` (`commit-too-large-to-review`); `review assess` sized 26,343 lines
+  after `main` was merged in (`assessment-counts-main`); an untracked folder made the assessment
+  "unassessable" (`stray-folder-untracked`); a design document passed gentle-ai and still dropped
+  his decisions (`design-not-faithful`) [c, the register's `Seen:` lines].
+- **Gaps in the mechanisms themselves**, from 13.2: a user edit inside a marker block is
+  overwritten silently (and so is a file our `install` wrote, 13.2); the ownership manifest has no
+  caller; the sync lock covers `state.json` only; the slim engram mode carries the protocol only
+  through the MCP instructions; the skill body ceiling is not held; ODD's helpers get no
+  per-phase routing; `--input` may admit a self-written result [i].
+- **Pace.** v4.2.0 to v4.3.1 changed 584 files, +57,955 and −3,975 lines (`git diff --shortstat
+  v4.2.0 v4.3.1`) [c]; section 5's watch reads it by area for that reason.
+
+### 13.5 What this changes in F8
+
+No step moves and nothing is spent. The new work is small and goes into steps that already exist:
+row 1 into S4b; row 2's probe into S5; row 3 as an S1 defect task once S10 merges; rows 4, 12 and
+15 into S10 (row 12 now, by the lead's call of 2026-10-28); row 7 into S5; row 9 into S7; rows 11 and 17
+into S11; row 16 into S12; row 12's backup into S2; rows 13 and 14 into S8. Rows 3, 12 and 13
+fix a gap in shipped behaviour, so they meet the scope freeze; the others refine a step already
+planned.
+
+### 13.6 Graded
+
+Two blind readers graded the first draft of this section: a Claude reader that attacked its
+claims (it opened over 60 references and recomputed the figures) and Codex, which looked for what
+is missing. **Claude 7.5, Codex 7.5.** Every finding was checked against its source before this
+one correction batch:
+- **Overstated, now narrowed:** "the model only routes" holds inside a review transaction (13.1);
+  "tolerates" is marked inferred, with the eval's ceiling (13.1); the ten pairs are mostly ours
+  stacked on gentle-ai (13.1, 13.4); slim mode keeps the MCP channel (13.2); "ours does more"
+  holds only on the way out, since `install` overwrites (13.2, row 12).
+- **Wrong figures, fixed:** 32 test files, not 33; two Windows tests, not one; the 17.6k-to-30.7k
+  growth compared two methods (13.4).
+- **Moved:** the Key Learnings colon is no contradiction (engram's parser takes both); it now
+  illustrates (1).
+- **Added:** state-bound next steps (row 1); flag parity as unchecked (row 2); provenance beside
+  prevention, and the git-common-dir path (row 3); engram's bounded context recovery and capture
+  limits (13.2, row 11); load checks (row 16); capability-gated text (row 17); verification apart
+  from review (row 18); a runnable check for rows 13-15; full paths and lines where a reference
+  was short.
+
+## 14. Directive coverage: every directive tied to its proof (2026-10-28)
+
+His words (transcript `0f71b2c6`, line 6690, 2026-10-28T09:23Z, read with `js-harness sessions
+--quote`): "recuerda que este proyecto es el que construye los otros proyectos por eso debe quedar
+completamente preciso es la herramienta de herramientas." Section 13.1's main lesson is that
+gentle-ai tests that its text stays the same, never that a model follows it. No step of F8 ties
+our directives to proof (the lead searched the diet and ROADMAP). The lead relays his approval,
+"Listo, añadámosla", as a planned step, not an option; eval spend beyond the plan's limits stays
+his (D2). Design only: nothing here is built. The working record is
+`odd/tasks/directive-coverage.md`.
+
+### 14.1 What we ship today, and what proves it
+
+Counted on main `86491fa`. "Held by code" means a command or hook refuses or acts when the
+directive is broken, not that code reads or prints it; "eval" means a case in `evals/tasks` runs a
+real model against it. A rule that bundles several obligations counts as held only for the ones
+its holder checks: `reply-five-states` asks for a close and for a question explained first
+(`bin/lib/rules-data.mjs:343-351`), and its hook checks only the close (`bin/lib/reply.mjs:1-3`).
+
+| Source | Directives | Held by code | Eval case | Neither |
+|---|---:|---:|---:|---:|
+| Rules list, values (`bin/lib/rules-data.mjs`) | 46 | at most 42: 4 are `Read by: none` (`docs/RULES.md:214,220,226,295`) [c]; of the rest, some readers only print the value into skill text (`bin/lib/manifest.mjs:50,51,58`), not counted apart [i] | 0 | at least 4 [c] |
+| Rules list, prose | 20 | 1 in part (`reply-five-states`: the close), and parts of `questions-one-place` (`bin/lib/reply.mjs:114,165,172`), of the rule that a session ending with work held must have it running (`bin/lib/stop-wake.mjs`) and of the reporting rules (`bin/report.mjs`, `bin/sessions.mjs`) [i, mapped by behaviour] | about 2 (`incident-01`, `-03`) [i] | about 16 [i] |
+| `CLAUDE.md` and `AGENTS.md` | about 120 to 135 sentences in all, descriptive ones included, by the splitter used (two readers' counts: 120, 128 with headings, 134) [i]; 2,687 words over 196 hard-wrapped lines [c]; the instructions among them are fewer, not counted [i] | about 25 (those that name a refusing command: the gate, pre-push, `contract check`, the reply hook, `guard`, the budgets) [i] | about 10 (`incident-02`, `-05`, `-06`, `-07`, `-09`, `-10`, `doc-goal`, `commit-no-attribution`, `false-premise-flag`, `honest-unknown`) [i] | most of the rest [i] |
+| Skills `js-harness-protocols`, `-orchestrator`, `js-harness` (333 lines) | 38 rule phrases from 19 prose rules live there (26 in `manifest.mjs`, 12 in `protocols-skill.mjs`) [c]; the other lines not counted | as the rules | as the rules | not counted |
+| Not counted at all: the ported skills `js-harness-work-units` and `-chained-prs` (`bin/lib/manifest.mjs:306-314`), the output style (`bin/lib/output-style.mjs:20-33`), the texts hooks send the agent (`bin/resume.mjs:95-99`, `bin/lib/web-block.mjs:21-23`, the reply and guard messages), and what `init` writes beyond the `CLAUDE.md` block and `AGENTS.md`, such as `FAILURES_TEMPLATE` (`bin/lib/project.mjs:420`) | unknown | unknown | unknown | unknown |
+| `docs/FAILURES.md` controls | 82 | 70 (`Control: check`) [c] | 0 named | 12 (8 protocol, 2 measured, 1 line, 1 owed) [c] |
+
+What the counts show:
+- **Values are mostly read, not refused.** A "Read by" line means a file calls `ruleValue(id)`;
+  `rules check` refuses only a reader whose rule is renamed or retired (`bin/rules.mjs:355`), so it
+  proves the link, not the behaviour [c]. Four values have no reader at all.
+- **Prose is held by its text.** The prose rules are held by phrase presence (`rules check` finds
+  the phrase in its file), which is gentle-ai's kind of test: it proves the text is there, not that
+  it is followed. The partial holders above enforce behaviour without naming the rule's id, so a
+  search for ids cannot find them; the mapping has to be made by behaviour, rule by rule [i].
+- **Nothing links a directive to its eval case.** Of the 19 tasks, the 10 incident cases (run twice
+  as 20 trials, `evals/incident-score.mjs:20`) name what they test in prose, in `case.json`'s
+  `source`; the 5 directive and 4 capability tasks have no `case.json` and name nothing [c]. No
+  case names a rule id, so no command can say which directive has no case.
+- **The sources are not even listed.** Several channels that instruct the agent (the last row but
+  one) are in no count, so "no gap" today could leave shipped instructions out. The first thing the
+  mechanism does is list every source and replace these estimates with exact counts.
+
+### 14.2 The mechanism
+
+One register, the one we have, and its vocabulary reused (searched before designing: `bin/lib/rules.mjs`,
+`rules change`, `bin/lib/failures.mjs`, `evals/task-proof.mjs`, `evals/without.mjs`). The rules
+list already gives an id, a home, a source in his words and a check (`AGENTS.md`, "A rule lives
+where something acts on it"); the failure register already has `Control` levels (`check`, `line`,
+`protocol`, `measured`, `owed`), a `Proof` field and computed states such as `owed, stale` and
+`control lost` (`bin/lib/failures.mjs:12-29`); `evals/task-proof.mjs` already proves each task
+against its untouched fixture and its reference; `evals/without.mjs` already builds an arm without
+a component. Five additions:
+
+1. **Every source is listed.** A source is any text the harness ships or sends to an agent: each
+   manifest output (`bin/lib/manifest.mjs`), each file `init` writes (`bin/lib/project.mjs`) and
+   each producer of a hook message. A test lists them from the code, so a new output or message
+   producer that is not a source fails.
+2. **Every obligation is declared, by span.** A source is cut into spans (a sentence, a list item, a
+   table row), each with its text's hash, never by line, so a rewrap changes nothing. A span either
+   names `rule:<id>`, sits inside a rule's phrases, or is listed as context with its hash and a
+   one-line reason in the register; a changed context span reopens until it is listed again. A
+   command can hold that the listing exists and is current, not that it is justified: each new
+   context listing is part of its commit's diff, so the slice's Codex and lens reviews read it, and
+   `rules coverage` prints every context span so it can be read again. A rule that bundles
+   obligations lists them, and each carries its own control. A span keeps its id across a wording
+   edit that keeps its rule, so an edit does not reopen a seeded debt; only a new span is new.
+3. **Every obligation names its control.** This extends the failure register's grammar
+   (`bin/lib/failures.mjs:55-57`) and says so, rather than copying it: `check`, `line`, `protocol`
+   and `measured` keep their meaning, a hook is a `check` whose path is the hook, and two things
+   are new. One is the level `eval` (a case in `evals/tasks`). The other is a date on `owed`, which
+   the register's `owed` does not carry (`bin/lib/failures.mjs:127`). A `check` names a test plus a
+   planted break: a patch that `rules coverage --prove` applies in a scratch copy, where the test
+   must go red; a proof that names only a file is refused. `rules check` refuses an obligation with
+   no control, a proof that names a test or case that does not exist, and an `owed` dated after the
+   baseline, save the one move 14.3 admits; `owed` only shrinks, like the conventions'
+   legacy lists.
+4. **Every eval case names its rules** (`rules: [<id>]` in `task.json`), and `rules check` holds
+   that each id exists. The proof that a case can tell the rule apart is a paid run, so it does not
+   live in `task-proof.mjs`, which runs no model and runs on every gate (`evals/task-proof.mjs:1-4`).
+   The suite runs the case on the current arm and on an arm with that rule's text taken out. That
+   arm is new code: `without.mjs` takes out whole components, not one rule's text
+   (`evals/without.mjs:1-11`). The without-rule arm must score below the current arm, and the result
+   is recorded under `evals/proofs/`. `tasks.test.mjs` then checks, for free, that each case naming
+   a rule has a current record. Its grader scores what the model did (files, commands, the reply's
+   acts), never whether the prompt's text is present.
+5. **A coverage report**, `js-harness rules coverage` (and `--json`): per source, how many
+   obligations are held by code, by an eval case, owed, context or not declared, and which.
+   `check` shows its totals as an INFO row; `rules coverage --strict` exits 1 on a gap the pass
+   line forbids.
+
+**Bootstrap.** S5c-a cannot refuse undeclared spans before S5c-b declares them. So S5c-a lands
+with every span it finds seeded as `owed`, dated that day, as the baseline; from then on only a new
+gap is refused, and S5c-b closes the seeded list. S13 rehearses the mechanism with that debt, not
+full coverage.
+
+### 14.3 Every project gets the same
+
+Projects already get `docs/rules.json`, which `rules check` holds (each phrase still in its file,
+each sensor declared, no rule deleted) (`js-harness rules --help`) [c]. The list is the project's:
+the harness never writes it (`bin/lib/project-rules.mjs:1-4`) [c]. Built on that:
+- **What the harness writes into a project** (the `CLAUDE.md` block, `AGENTS.md`,
+  `FAILURES_TEMPLATE`, the settings it selects) is covered by the harness's own register. Its proofs
+  stay in the harness and are bound to the bytes the release wrote. The project's `rules coverage`
+  finds each span's proof by the release named in the project's manifest record and the span's
+  hash, in the coverage record the installed harness ships for that release. A project that edits
+  that text breaks the binding, and the span moves to the project's side as `owed`, dated at the
+  edit. That is the one late `owed` the refusal admits: the record names the harness span and
+  release it came from, so a new gap cannot pass as a move.
+- **The project's own rules** get the same `Control` field, optional in `docs/rules.json` and
+  required by `rules check` once the project's baseline is set. `init` sets the baseline at
+  creation, adds the coverage row to the project's gate and writes one example case under `evals/`.
+  Each file is recorded in the manifest for an exact undo.
+- **S12's migration** writes nothing into the project's list. It records the project's baseline
+  date in the harness's own record of the project, and `rules coverage` there lists every rule
+  without a control as `owed` from that date. The gate reports on day one, refuses only gaps opened
+  after the baseline, and the project closes its list at its own pace.
+- **Its eval cases** run through the harness's runner against the project's own folder (to build:
+  the runner reads only `evals/tasks` here), on the eval token, never on a copied login (diet §9).
+  A project's runs are that project's spend, not F8's: each is asked and reported like any eval
+  spend.
+
+### 14.4 Cost
+
+Estimates [i]:
+- **Build:** about 300 lines and tests for the sources list, the spans, the control field, the
+  refusal, `--prove` and the report, in `bin/lib/rules.mjs` and a new `bin/lib/rules-coverage.mjs`;
+  about 100 for the without-rule arm, its record under `evals/proofs/` and the free check in
+  `tasks.test.mjs`; about 150 for `init`, S12 and the project binding; about 150 for the project
+  eval runner. Declaring and seeding the spans of 14.1: about a session.
+- **New eval cases:** only for behaviour no check can hold (a judgment, a question that is his).
+  About 15 to 25 cases, written like the incident set, at one to two hours each.
+- **Eval spend**, at one price for every line: $0.56 to $0.65 a trial. $0.56 is the current
+  arm's measured cost in the S3 run, $11.22 for 20 trials (diet §7.1, line 636; the $0.42 there
+  averages in the cheaper arm without `CLAUDE.md`). $0.65 is the envelope's own ~$13 for the
+  incident set's 20 trials (the diet's section 1, D2, the table at lines 152-164). Script grading
+  is free. Like the envelope, these are API-equivalent and draw on his Max plan's limits, not on
+  money (D2).
+  - proving the 15 to 25 new cases, on both arms, twice each: 60 to 100 trials, about $34 to $65;
+  - S5c-a's own "incident set no worse" rerun: 20 trials, about $13;
+  - a full run at S8 on the current arm only, about 40 cases twice: 80 trials, about $45 to $52;
+  - per change: the cases that name the rules it touches, about 1 to 3 cases twice, $1 to $4.
+  So F8 spends about $95 to $130 more than the envelope's forecast of about $200 (D2's table),
+  and each recurring certification grows from about $25 to about $70 to $80. That overrun is his:
+  it goes to him, through the lead, with this estimate when S5c-a starts, before any of it runs.
+
+### 14.5 Where it enters F8, and its pass line
+
+In two parts, so S13 rehearses it and S12 ships it, and S8 certifies it. The order of F8's step 4
+becomes: … S11 → **S5c-a** → S13 → S12 → S2 → S4a, S4b, S5, **S5c-b**, S6, S7 → S8.
+- **S5c-a, the mechanism** (items 1 to 5, the bootstrap, `init` and the project binding), after
+  S11 and before S13. S13's scratch project then shows it; S12's migration carries it.
+- **S5c-b, the filling**, beside S5's rule pass, which classifies every rule and every register
+  control: each span declared, each seeded `owed` closed by a check or an eval case. S5's pass
+  line says "65 of 65" from `docs/rule-sources.json` (diet lines 794 and 919), while
+  `bin/lib/rules-data.mjs` holds 66 live rules on `86491fa` [c]. S5 counts from the register on the
+  day it runs, not from a number written in the diet.
+
+**Pass line**, each a command that exits 0:
+- `js-harness rules coverage --strict` on main: every source listed, 0 undeclared spans, 0
+  obligations without a control or a dated `owed`; at S8 the same command with `owed` at most 10%
+  of the live obligations (a constant in code, not a number in prose);
+- `js-harness rules coverage --prove`: every planted break turns its test red;
+- `node --test evals/tasks.test.mjs`: every case names its rules, and each one that does has a
+  current record under `evals/proofs/` where its arm without them scored below its current arm;
+- on S13's scratch project, a planted directive without a control makes `js-harness rules check`
+  exit 1: the step's probe test (S13's rehearsal test, run with `node --test`) plants it and
+  passes only on that exit;
+- `node evals/incident-score.mjs <run a> <run b>` on S5c-a's rerun, against S0's frozen line
+  (`odd/tasks/f8-s0-baseline.md`), as every measured step is: no worse.

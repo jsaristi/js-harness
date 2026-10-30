@@ -1,0 +1,18 @@
+{
+  "grader": {
+    "command": "node",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      ".eval-grader/rule-reuse-first.grade.mjs"
+    ]
+  },
+  "timeoutMs": 900000,
+  "proof": {
+    "total": 7,
+    "fixturePassed": 1
+  },
+  "rules": [
+    "reuse-first"
+  ]
+}

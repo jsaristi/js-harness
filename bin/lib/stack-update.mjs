@@ -3,22 +3,18 @@
 // is a gap until its review is recorded (`doctor --stack-reviewed`), so the session hook names it at the next start
 // instead of a measurement finding it on the version it was not planned for (docs/FAILURES.md, cli-updated-itself:
 // engram moved to 3.3.0 and the native updater replaced `claude` on PATH, each seen only when a run was about to start).
-// gentle-ai has a row of its own (bin/lib/gentle-ai-update.mjs), and the Claude Desktop app and its Code tab CLI the
-// host-update row (bin/lib/host-update.mjs). Nothing here throws.
+// The Claude Desktop app and its Code tab CLI have the host-update row (bin/lib/host-update.mjs). Nothing here throws.
 
 /** A version as a tool prints it: digits first, so `hosted` and other words are no version. */
 const VERSION = /^\d+(?:\.\d+)*(?:[-+][\w.-]+)?$/;
 
-/** The ids of tools whose update another row of `doctor` already watches. */
-const OWN_ROW = new Set(['gentle-ai']);
-
-/** `{ id: version }` of the tools `rows` read as installed with a version, gentle-ai left to its own row, and the Claude
- * CLI on PATH as `claude` when its version was read. */
+/** `{ id: version }` of the tools `rows` read as installed with a version, and the Claude CLI on PATH as `claude` when
+ * its version was read. */
 export function stackVersions(rows, claude) {
   const versions = {};
   if (claude) versions.claude = claude;
   for (const row of rows) {
-    if (row.installed === 'ok' && !OWN_ROW.has(row.id) && VERSION.test(String(row.version ?? ''))) versions[row.id] = row.version;
+    if (row.installed === 'ok' && VERSION.test(String(row.version ?? ''))) versions[row.id] = row.version;
   }
   return Object.fromEntries(Object.entries(versions).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }

@@ -145,7 +145,7 @@ test('the functions of a project whose harness.json cannot be read: the error, e
   assert.deepEqual(errors, ['harness.json is not valid JSON: x']);
   assert.deepEqual(
     Object.fromEntries(Object.entries(resolved).map(([name, { value }]) => [name, value])),
-    { codeMap: 'on-demand', languageServer: 'on', codexReview: 'on', pushUnasked: 'off' },
+    { codeMap: 'on-demand', languageServer: 'on', codexReview: 'on', pushUnasked: 'off', lensReview: 'on', engramPlugin: 'on' },
   );
 });
 

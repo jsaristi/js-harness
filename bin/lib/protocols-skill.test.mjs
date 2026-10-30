@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { protocolsSkillContent, PROTOCOLS } from './protocols-skill.mjs';
 import { RULES } from './rules-data.mjs';
-import { agentsTemplate } from './project.mjs';
+import { claudeTemplate } from './project.mjs';
 
 const TEXT = protocolsSkillContent('0.1.0');
 
@@ -16,12 +16,11 @@ function sections(text) {
   return found;
 }
 
-test('section 3 gives a gentle-ai review a base on the first-parent line, and says what a timeout leaves', () => {
+test('section 3 gives a review a base on the first-parent line, and sends a session to no gentle-ai review (F8 S11, L11)', () => {
   const text = protocolsSkillContent();
   assert.ok(text.includes('a base on the head\'s first-parent line'));
-  assert.ok(text.includes('`js-harness guard` refuses such a base'));
-  assert.ok(text.includes('When a gentle-ai command ends with `operation_timeout`, run that same command once more'));
-  assert.ok(text.includes('the words "not reviewed", and Codex reviews the range'));
+  assert.ok(text.includes('a debt that `check` lists until a review pays it'));
+  assert.doesNotMatch(text, /gentle-ai/);
 });
 
 test('the protocols skill has a one-line description a host can read, with the version', () => {
@@ -79,10 +78,10 @@ test('the protocol for changing a rule opens with the stale 73 percent, and its 
 
 // One home for every rule: the skill names a rule by its id and never restates its value, and every id it names is
 // declared, so that a rule changed by `js-harness rules change` reaches this text with nothing to carry by hand.
-test('protocol 3 sends every slice of code through Codex, whether gentle-ai reviewed it or not, as AGENTS.md says', () => {
+test('protocol 3 sends every slice of code through Codex and the Claude lenses where their switches are on', () => {
   const protocol3 = sections(TEXT)[2].lines.join('\n');
-  assert.match(protocol3, /every slice of code goes through Codex, whether gentle-ai reviewed it or not/);
-  assert.doesNotMatch(protocol3, /each approved slice/, 'Codex does not wait for gentle-ai\'s approval');
+  assert.match(protocol3, /every slice of code goes through Codex where the project's `codexReview` switch is on/);
+  assert.match(protocol3, /through the Claude lenses where its `lensReview` switch is on/);
 });
 
 test('protocol 1 pushes unasked only where the project\'s pushUnasked switch reads on, and asks before a push elsewhere', () => {
@@ -127,12 +126,12 @@ test('a session runs the installed js-harness, and its branch\'s copy only to te
 test('a proposal reaches the user only after two readers, and a handoff names the rule', () => {
   const squash = (text) => text.replace(/\s+/g, ' ');
   const [asking, , , , , handoff] = sections(TEXT).map((section) => squash(section.lines.join('\n')));
-  assert.match(asking, /A design before it is built, and a plan, a design, an analysis with figures, a protocol or a change of the charter that reaches the user, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing\./);
+  assert.match(asking, /A proposal that changes one of the user's decisions, whether a design before it is built, a plan, an analysis with figures, a protocol or a change of the charter, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing\./);
   assert.match(asking, /A second round reads only the first round's blockers; what is still open after it goes to the user as unguaranteed, never a third round\./);
   assert.match(asking, /Not for a question of fact \(a figure or an outcome looked up, nothing proposed\), nor for a step or a choice whose reviewed text the question names by path\./);
   assert.ok(handoff.includes('- A plan or a design handed on has passed its double review first (`rule:double-review`, section 1).'), handoff);
   assert.ok(handoff.includes('- What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in their language as a visual, didactic page (`rule:reports-spanish-visual`)'), handoff);
-  assert.ok(squash(agentsTemplate('project')).includes('one attacks its claims, one looks only for what is missing'));
+  assert.ok(squash(claudeTemplate()).includes('one attacks its claims, one looks only for what is missing'));
 });
 
 test('the protocols skill ships to every user of the harness, so it speaks of the user', () => {

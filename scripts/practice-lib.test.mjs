@@ -11,7 +11,8 @@ import { recordPath } from '../bin/lib/channel.mjs';
 import { entryComponents } from '../bin/lib/manifest.mjs';
 import { OPENING_TOOLS as GUARD_OPENING_TOOLS } from '../bin/lib/guard.mjs';
 import { gateLogDir } from '../bin/lib/gate-log.mjs';
-import { agentsTemplate } from '../bin/lib/project.mjs';
+import { agentsTemplate, claudeTemplate } from '../bin/lib/project.mjs';
+import { estimateTokens } from '../bin/lib/payload.mjs';
 
 // No test here starts a process, reads the clock or touches the disk: every fact is handed in, and the
 // platform is a parameter, so the Windows and the POSIX behaviour are both proven on any machine.
@@ -831,6 +832,9 @@ const doctor = group('startup|resume', 'js-harness doctor --hook');
 const resume = group('compact|clear|startup', 'js-harness resume --hook');
 const PAUSE = 'js-harness resume --pause || exit 0';
 const pause = group(undefined, PAUSE);
+const TEMPLATE_MATCHER = '^(Artifact|ArtifactData|AskUserQuestion|mcp__visualize__show_widget)$';
+const SHOWN = 'js-harness template gate --shown || exit 0';
+const shown = group(TEMPLATE_MATCHER, SHOWN);
 const RULES_HOOK = 'js-harness rules --hook || exit 0';
 const rulesStart = group('compact|clear|resume', RULES_HOOK);
 const rulesTurn = group(undefined, RULES_HOOK);
@@ -847,7 +851,7 @@ test('hostHooksProblem finds none in a Codex file that holds its seeded entry an
 });
 
 test('hostHooksProblem finds none in a Claude Code file right after install: the seeded entry, the doctor and resume entries, then the pause entry once', () => {
-  assert.equal(hostHooksProblem(claudeHooksFile([pause], seeded, doctor, resume), SEEDED, 'claude'), null);
+  assert.equal(hostHooksProblem(claudeHooksFile([pause, shown], seeded, doctor, resume), SEEDED, 'claude'), null);
 });
 
 test('hostHooksProblem says what it expected and what it found: an entry missing, written twice, with another matcher or command, or out of place', () => {
@@ -874,7 +878,7 @@ test('hostHooksProblem says what it expected and what it found: an entry missing
 });
 
 test('hostHooksProblem holds the turn-start entries of the rules at the end of their Claude Code lists, and none in Codex', () => {
-  const file = (lists) => JSON.stringify({ hooks: { SessionStart: [seeded, doctor, resume, rulesStart, fallback], PostToolUse: [pause], UserPromptSubmit: [rulesTurn], SubagentStart: [rulesTurn], ...lists } });
+  const file = (lists) => JSON.stringify({ hooks: { SessionStart: [seeded, doctor, resume, rulesStart, fallback], PostToolUse: [pause, shown], UserPromptSubmit: [rulesTurn], SubagentStart: [rulesTurn], ...lists } });
   assert.equal(hostHooksProblem(file({ UserPromptSubmit: [group(undefined, 'echo theirs'), rulesTurn] }), SEEDED, 'claude'), null);
   assert.equal(hostHooksProblem(file({ UserPromptSubmit: [] }), SEEDED, 'claude'), `expected "${RULES_HOOK}" (no matcher) once, at the end of hooks.UserPromptSubmit; found: no entry`);
   assert.equal(hostHooksProblem(file({ SubagentStart: undefined }), SEEDED, 'claude'), 'the file holds no list at hooks.SubagentStart');
@@ -891,9 +895,10 @@ test('hostHooksProblem says so for a host file that is not one: no JSON, no hook
   assert.ok(hostHooksProblem('{"hooks":{"SessionStart":[null,7,{"hooks":"x"}]}}', SEEDED, 'codex').endsWith('found: not an entry | not an entry | no command (no matcher)'));
 });
 
-// The pause entry is the one `PostToolUse` entry of Claude Code: once, with no matcher, at the end of its list, so a
-// user's own entry before it stays first. What is expected is spelled once here, and what is found follows it.
-const expectedPause = `expected "${PAUSE}" (no matcher) once, at the end of hooks.PostToolUse; found: `;
+// The pause entry and the template gate's are the `PostToolUse` entries of Claude Code: once each, the pause's with no
+// matcher, at the end of its list, so a user's own entry before them stays first. What is expected is spelled once
+// here, and what is found follows it.
+const expectedPause = `expected "${PAUSE}" (no matcher), then "${SHOWN}" (matcher ${TEMPLATE_MATCHER}) once, at the end of hooks.PostToolUse; found: `;
 
 test('hostHooksProblem says the pause entry is missing from a Claude Code file, when its PostToolUse list is empty or absent', () => {
   assert.equal(hostHooksProblem(claudeHooksFile([], seeded, doctor, resume), SEEDED, 'claude'), `${expectedPause}no entry`);
@@ -908,8 +913,8 @@ test('hostHooksProblem says the pause entry is wrong in a Claude Code file when 
 
 test('hostHooksProblem keeps a user\'s own PostToolUse entry first: the pause entry must come after it, not before', () => {
   const userPost = group(undefined, 'echo user-post-hook');
-  assert.equal(hostHooksProblem(claudeHooksFile([userPost, pause], seeded, doctor, resume), SEEDED, 'claude'), null);
-  assert.equal(hostHooksProblem(claudeHooksFile([pause, userPost], seeded, doctor, resume), SEEDED, 'claude'), `${expectedPause}"${PAUSE}" (no matcher) | "echo user-post-hook" (no matcher)`);
+  assert.equal(hostHooksProblem(claudeHooksFile([userPost, pause, shown], seeded, doctor, resume), SEEDED, 'claude'), null);
+  assert.equal(hostHooksProblem(claudeHooksFile([pause, shown, userPost], seeded, doctor, resume), SEEDED, 'claude'), `${expectedPause}"${PAUSE}" (no matcher) | "${SHOWN}" (matcher ${TEMPLATE_MATCHER}) | "echo user-post-hook" (no matcher)`);
 });
 
 test('hostHooksProblem finds the pause entry where Codex has none, and finds none in a Codex file without it', () => {
@@ -1266,6 +1271,15 @@ test('after a second init, only an AGENTS.md that is the candidate template may 
   assert.equal(secondInitProblem(' M AGENTS.md', template, template), null);
   assert.equal(secondInitProblem(' M AGENTS.md', '# edited\n', template), 'tracked files differ after the second js-harness init:\n M AGENTS.md');
   assert.equal(secondInitProblem(' M AGENTS.md\n M add.mjs', template, template), 'tracked files differ after the second js-harness init:\n M AGENTS.md\n M add.mjs');
+  // Since the split, CLAUDE.md too, and only as this candidate's template (odd/tasks/f8-s3-split.md, S3).
+  assert.equal(secondInitProblem(' M AGENTS.md\n M CLAUDE.md', template, template, '@AGENTS.md\n', '@AGENTS.md\n'), null);
+  assert.equal(secondInitProblem(' M CLAUDE.md', template, template, '# edited\n', '@AGENTS.md\n'), 'tracked files differ after the second js-harness init:\n M CLAUDE.md');
+  assert.equal(secondInitProblem(' M CLAUDE.md', template, template), 'tracked files differ after the second js-harness init:\n M CLAUDE.md');
+});
+
+test('uninstall is expected to delete the committed CLAUDE.md when init recorded writing it', () => {
+  const manifest = JSON.stringify({ files: [{ path: 'AGENTS.md' }, { path: 'CLAUDE.md' }, { path: 'harness.json' }] });
+  assert.deepEqual(uninstallExpected([], manifest), [' D AGENTS.md', ' D CLAUDE.md', ' D harness.json']);
 });
 
 // The step `template-lines` (odd/tasks/rule-hierarchy.md, T12): the AGENTS.md the installed `init` wrote is the
@@ -1293,8 +1307,8 @@ test('templateLinesProblem finds nothing wrong with the template, as init wrote 
 });
 
 test("templateLinesProblem finds the five states in the template init writes today, so the step and the template agree", () => {
-  const template = agentsTemplate('project');
-  assert.equal(templateLinesProblem({ agentsText: template, template, tokens: 0, budget: 1500 }), null);
+  const template = agentsTemplate('project') + claudeTemplate();
+  assert.equal(templateLinesProblem({ agentsText: template, template, tokens: estimateTokens(template), budget: 1500 }), null);
 });
 
 test('templateLinesProblem names a project with no AGENTS.md, and one whose AGENTS.md is not the template', () => {

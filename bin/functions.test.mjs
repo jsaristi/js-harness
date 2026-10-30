@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { functionsMain } from './functions.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
+import { PERMISSIONS_DENY } from './lib/deny-paths.mjs';
 
 // A real git runs here: not the host's configuration, nor the repository of a commit's hook (see
 // bin/lib/project.test.mjs).
@@ -54,6 +55,8 @@ test('a project with a program and no switches: each switch, what it resolves to
       'languageServer  off        auto: no file of the project is TypeScript',
       'codexReview     on         auto: src/fetch.py is a program',
       'pushUnasked     off        auto: the project asks until its owner turns it on',
+      'lensReview      off        auto: a commit asks for a lens record only where the project turns the lens review on',
+      'engramPlugin    on         auto: the engram plugin is part of every preset until the project turns it off',
     ].join('\n'),
     err: '',
   });
@@ -68,6 +71,8 @@ test('a project with no program: every function of code is off, and it says why'
       'languageServer  off        auto: no file of the project is TypeScript',
       'codexReview     off        auto: no file of the project is a program',
       'pushUnasked     off        auto: the project asks until its owner turns it on',
+      'lensReview      off        auto: a commit asks for a lens record only where the project turns the lens review on',
+      'engramPlugin    on         auto: the engram plugin is part of every preset until the project turns it off',
     ].join('\n'),
   );
 });
@@ -101,6 +106,8 @@ test('--json prints the same as one object', async (t) => {
       languageServer: { value: 'off', declared: 'auto', because: 'no file of the project is TypeScript' },
       codexReview: { value: 'on', declared: 'auto', because: 'src/fetch.py is a program' },
       pushUnasked: { value: 'off', declared: 'auto', because: 'the project asks until its owner turns it on' },
+      lensReview: { value: 'off', declared: 'auto', because: 'a commit asks for a lens record only where the project turns the lens review on' },
+      engramPlugin: { value: 'on', declared: 'auto', because: 'the engram plugin is part of every preset until the project turns it off' },
     },
   });
 });
@@ -156,6 +163,9 @@ async function run(cwd, ...argv) {
 
 const settingsOf = (root) => JSON.parse(fs.readFileSync(path.join(root, '.claude', 'settings.local.json'), 'utf8'));
 
+// What every clone holds whatever its switches (odd/tasks/f8-s10-port.md, T5): the output style and the denies.
+const ALWAYS = { outputStyle: 'js-harness', permissions: { deny: PERMISSIONS_DENY } };
+
 test('apply in a project with no pin writes what the switches ask, in a manifest of its own that uninstall undoes', async (t) => {
   const root = repo(t, { 'bin/a.mjs': 'x', 'harness.json': '{ "sensors": [] }\n' });
   const applied = await run(root, 'apply');
@@ -163,10 +173,13 @@ test('apply in a project with no pin writes what the switches ask, in a manifest
   assert.deepEqual(applied.out, [
     'wrote .git/hooks/pre-push',
     'ran codegraph init',
+    'wrote .claude/settings.local.json#/outputStyle',
+    'wrote .claude/settings.local.json#/permissions/deny',
     'wrote .claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK',
     'wrote .claude/settings.local.json#/enabledPlugins/typescript-lsp@claude-plugins-official',
   ]);
   assert.deepEqual(settingsOf(root), {
+    ...ALWAYS,
     env: { CODEGRAPH_NO_PROMPT_HOOK: '1' },
     enabledPlugins: { 'typescript-lsp@claude-plugins-official': false },
   });
@@ -185,13 +198,19 @@ test('apply in a project with no pin writes what the switches ask, in a manifest
 });
 
 test('apply where nothing is to be written writes no manifest', async (t) => {
-  // The map always on with its index already there, the plugin on, no push check: nothing to write.
+  // The map always on with its index already there, the plugin on, no push check, and the style and the denies
+  // already held: nothing to write.
   const root = repo(t, {
     'notes.md': 'x',
+    '.claude/settings.local.json': `${JSON.stringify(ALWAYS)}
+`,
     '.codegraph/index.db': 'x',
     'harness.json': '{ "functions": { "codeMap": "always", "languageServer": "on", "codexReview": "off" } }\n',
   });
-  assert.deepEqual(await run(root, 'apply'), { code: 0, out: ['functions: this clone already is what its switches ask'], err: [] });
+  assert.deepEqual(await run(root, 'apply'), { code: 0, out: ['functions: this clone already is what its switches ask'], err: [
+    'kept .claude/settings.local.json#/outputStyle (already holds this value)',
+    'kept .claude/settings.local.json#/permissions/deny (already holds this value)',
+  ] });
   assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness')), false);
 });
 
@@ -216,7 +235,7 @@ test('set writes the switch into harness.json in its own layout, and applies it'
     'removed .claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK',
   ]);
   assert.equal(fs.readFileSync(path.join(root, 'harness.json'), 'utf8'), '{\r\n\t"sensors": [],\r\n\t"functions": {\r\n\t\t"codeMap": "always"\r\n\t}\r\n}\r\n');
-  assert.deepEqual(settingsOf(root), { enabledPlugins: { 'typescript-lsp@claude-plugins-official': false } });
+  assert.deepEqual(settingsOf(root), { ...ALWAYS, enabledPlugins: { 'typescript-lsp@claude-plugins-official': false } });
 });
 
 test('set refuses a switch or a value the table does not have, and writes nothing', async (t) => {
@@ -229,7 +248,7 @@ test('set refuses a switch or a value the table does not have, and writes nothin
   assert.deepEqual(await run(root, 'set', 'paste', 'off'), {
     code: 1,
     out: [],
-    err: ['paste is no switch; the switches are codeMap, languageServer, codexReview, pushUnasked'],
+    err: ['paste is no switch; the switches are codeMap, languageServer, codexReview, pushUnasked, lensReview, engramPlugin'],
   });
   assert.equal(fs.readFileSync(path.join(root, 'harness.json'), 'utf8'), '{}\n');
 });

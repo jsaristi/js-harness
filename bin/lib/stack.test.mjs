@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { tools, checks, resolveProjectRoot, probeTool, probeStack, hookCommandPlan } from './stack.mjs';
+import { tools, checks, resolveProjectRoot, probeTool, probeStack, hookCommandPlan, ENGRAM_INSTALL } from './stack.mjs';
 import { recordOptionalFile } from './manifest.mjs';
 import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './remote.mjs';
 
@@ -30,30 +30,42 @@ function findTool(id) {
   return tool;
 }
 
-test('tools carries exactly the seven stack tools, in Design-table order, engram\'s plugin after engram, the last one the Codex CLI', () => {
+test('tools carries exactly the six stack tools, in Design-table order, engram\'s plugin after engram, the last one the Codex CLI', () => {
   assert.deepEqual(
     tools.map((t) => t.id),
-    ['gentle-ai', 'engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex'],
+    ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex'],
   );
 });
 
-// --- engram-plugin (odd/tasks/engram-plugin-lag.md): engram's Claude Code plugin, shown only while installed and
-// enabled, so a machine without it sees no row and no gap ---
+// F8 S11 (odd/tasks/f8-s11-complements.md, S4): gentle-ai installs nothing any more, so no row of the stack names it.
+test('no tool is gentle-ai, and no fix of any tool names it', () => {
+  assert.equal(tools.some((tool) => /gentle-ai/i.test(tool.id)), false);
+  for (const tool of tools) {
+    const fixes = [tool.fix({ project: '/root' }), { upToDate: tool.upToDateFix?.('1.0.0', '2.0.0', [{ id: 'engram', version: '3.6.0' }]) ?? [] }];
+    for (const command of fixes.flatMap((fix) => Object.values(fix).flat())) assert.doesNotMatch(command, /gentle-ai/i, `${tool.id}: ${command}`);
+  }
+});
+
+// --- engram-plugin (odd/tasks/engram-plugin-lag.md): engram's Claude Code plugin ---
 
 function seedEngramPlugin(home, { version = '0.1.12', enabled = true } = {}) {
   writeJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), { version: 2, plugins: { 'engram@engram': [{ version }] } });
   writeJson(path.join(home, '.claude', 'settings.json'), { enabledPlugins: { 'engram@engram': enabled } });
 }
 
-test('engram-plugin is shown only while engram@engram is installed and enabled in Claude Code', () => {
-  const tool = findTool('engram-plugin');
+// F8 S11 (S1): js-harness installs the plugin now, so a machine without it sees the gap and engram's own command.
+test('engram-plugin is a row on a machine without it: installed and claude missing, with engram setup and the enable as fixes', () => {
   const home = makeTmpHome();
   try {
-    assert.equal(tool.when({ home }), false, 'no installed_plugins.json');
+    const row = probeTool(findTool('engram-plugin'), { home });
+    assert.deepEqual({ installed: row.installed, claude: row.claude, codex: row.codex }, { installed: 'missing', claude: 'missing', codex: 'n/a' });
+    assert.deepEqual(row.fix, {
+      installed: 'engram setup claude-code',
+      claude: 'claude plugin enable engram@engram',
+      upToDate: ['claude plugin marketplace update engram', 'claude plugin update engram@engram'],
+    });
     seedEngramPlugin(home, { enabled: false });
-    assert.equal(tool.when({ home }), false, 'installed but disabled: its hooks do not run');
-    seedEngramPlugin(home);
-    assert.equal(tool.when({ home }), true);
+    assert.equal(probeTool(findTool('engram-plugin'), { home }).claude, 'missing', 'installed but disabled: its hooks do not run');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -88,6 +100,26 @@ test('engram-plugin upToDate fix names the installed version, the one the engram
   assert.deepEqual(upToDateFix('0.1.12', null, rows), ['claude plugin marketplace update engram', 'claude plugin update engram@engram']);
 });
 
+test('engram-plugin upToDate fix, when the binary\'s tag cannot be read from the marketplace clone, fetches that tag into it', () => {
+  const { upToDateFix } = findTool('engram-plugin');
+  const rows = [{ id: 'engram', installed: 'ok', version: '3.6.0' }];
+  const home = path.join(os.tmpdir(), 'a home');
+  const clone = path.join(home, '.claude', 'plugins', 'marketplaces', 'engram');
+  const lead = 'the plugin engram v3.6.0 ships cannot be read from tag v3.6.0 of Claude Code\'s engram marketplace clone, which it clones shallow, without tags; fetch that tag into the clone, then run doctor again:';
+  assert.deepEqual(upToDateFix('0.1.19', null, rows, { home, platform: 'linux' }), [lead, `git -C '${clone}' fetch --depth 1 origin tag v3.6.0`]);
+  assert.deepEqual(upToDateFix('0.1.19', null, rows, { home, platform: 'win32' }), [lead, `git -C "${clone}" fetch --depth 1 origin tag v3.6.0`]);
+  // With no binary version there is no tag to name: the catalog and plugin update, as before.
+  assert.deepEqual(upToDateFix('0.1.19', null, [], { home, platform: 'linux' }), ['claude plugin marketplace update engram', 'claude plugin update engram@engram']);
+});
+
+test('engram-plugin upToDate fix for a plugin ahead of its binary\'s tag updates the binary, not the plugin (row 11)', () => {
+  const { upToDateFix } = findTool('engram-plugin');
+  assert.deepEqual(upToDateFix('0.1.16', '0.1.14', [{ id: 'engram', installed: 'ok', version: '3.5.1' }]), [
+    'plugin 0.1.16 is ahead of 0.1.14, the plugin engram v3.5.1 ships, so the two serve different protocols; update the engram binary, then restart Claude Code:',
+    ENGRAM_INSTALL,
+  ]);
+});
+
 test('no tool ever recommends `codegraph upgrade` (user rule)', () => {
   for (const tool of tools) {
     for (const fix of Object.values(tool.fix({ project: '/some/project' }))) {
@@ -98,14 +130,20 @@ test('no tool ever recommends `codegraph upgrade` (user rule)', () => {
 
 // --- per-dimension fix maps ---
 
-test('gentle-ai fix covers installed, claude, codex and upToDate but not project', () => {
-  const fix = findTool('gentle-ai').fix({});
-  assert.deepEqual(Object.keys(fix).sort(), ['claude', 'codex', 'installed', 'upToDate']);
-});
-
 test('engram fix covers installed, claude, codex and upToDate but not project', () => {
   const fix = findTool('engram').fix({});
   assert.deepEqual(Object.keys(fix).sort(), ['claude', 'codex', 'installed', 'upToDate']);
+});
+
+// F8 S11 (L3, L4): engram's own commands, read in its v3.6.0 source and README: the release page for the binary, and
+// `engram setup` for each host.
+test('engram fixes are engram\'s own: its release page for the binary, engram setup for each host', () => {
+  const fix = findTool('engram').fix({});
+  assert.equal(fix.installed, ENGRAM_INSTALL);
+  assert.equal(fix.upToDate, ENGRAM_INSTALL);
+  assert.equal(fix.claude, 'engram setup claude-code');
+  assert.equal(fix.codex, 'engram setup codex');
+  assert.match(ENGRAM_INSTALL, /https:\/\/github\.com\/Gentleman-Programming\/engram\/releases/);
 });
 
 test('codegraph fix covers all five dimensions, and its project fix carries the resolved project root', () => {
@@ -119,7 +157,7 @@ test('codegraph project fix never prints a null or undefined root when no projec
   for (const project of [undefined, null, '']) {
     const fix = findTool('codegraph').fix({ project });
     assert.doesNotMatch(fix.project, /null|undefined|--cwd\s*$/);
-    assert.match(fix.project, /^gentle-ai codegraph init --cwd <project root>$/);
+    assert.equal(fix.project, 'codegraph init --yes <project root>');
   }
 });
 
@@ -129,9 +167,9 @@ test('codegraph registers Claude and Codex through their own mcp add commands, n
   assert.match(fix.codex, /^codex mcp add /);
 });
 
-test('context7 fix covers claude, codex and upToDate but has no installed or project fix', () => {
+test('context7 fix covers claude, codex, project and upToDate but has no installed fix', () => {
   const fix = findTool('context7').fix({});
-  assert.deepEqual(Object.keys(fix).sort(), ['claude', 'codex', 'upToDate']);
+  assert.deepEqual(Object.keys(fix).sort(), ['claude', 'codex', 'project', 'upToDate']);
 });
 
 test('typescript-lsp fix covers installed, claude and upToDate but has no codex or project fix', () => {
@@ -165,37 +203,6 @@ test('the codegraph and codex install lines run the machine\'s package manager, 
   assert.equal(findTool('codex').fix({ env: { JS_HARNESS_PM: 'npm' } }).installed, 'npm i -g @openai/codex', 'npm keeps the line doctor always wrote');
 });
 
-test('gentle-ai upToDate fix is a two-step list, not one line joined by a separator', () => {
-  assert.deepEqual(findTool('gentle-ai').fix({}).upToDate, ['gentle-ai upgrade', 'gentle-ai sync']);
-});
-
-test('gentle-ai upgrade fix goes through go install for the new module path when the latest crosses a major', () => {
-  const { upToDateFix } = findTool('gentle-ai');
-  assert.deepEqual(upToDateFix('3.7.0', '4.0.0'), [
-    'go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v4.0.0',
-    'gentle-ai sync',
-  ]);
-  assert.deepEqual(upToDateFix('3.7.0', '5.2.1')[0], 'go install github.com/gentleman-programming/gentle-ai/v5/cmd/gentle-ai@v5.2.1');
-});
-
-test('gentle-ai upgrade fix builds the tag from the parsed semver, so a v-prefixed latest never prints @vv', () => {
-  const { upToDateFix } = findTool('gentle-ai');
-  assert.equal(
-    upToDateFix('4.0.0', 'v5.0.0')[0],
-    'go install github.com/gentleman-programming/gentle-ai/v5/cmd/gentle-ai@v5.0.0',
-  );
-});
-
-test('gentle-ai upgrade fix is unchanged within a major and when a version is unknown or unparseable', () => {
-  const { upToDateFix } = findTool('gentle-ai');
-  const unchanged = ['gentle-ai upgrade', 'gentle-ai sync'];
-  assert.deepEqual(upToDateFix('4.0.0', '4.1.0'), unchanged);
-  assert.deepEqual(upToDateFix('3.7.0', null), unchanged);
-  assert.deepEqual(upToDateFix(null, '4.0.0'), unchanged);
-  assert.deepEqual(upToDateFix('3.7.0', 'not-a-version'), unchanged);
-  assert.deepEqual(upToDateFix('4.0.0', '3.9.0'), unchanged);
-});
-
 test('no fix command string carries a shell separator (`;` or `&&`), and codegraph installed stays one string', () => {
   for (const tool of tools) {
     for (const fix of Object.values(tool.fix({ project: '/some/project' }))) {
@@ -205,11 +212,11 @@ test('no fix command string carries a shell separator (`;` or `&&`), and codegra
   assert.equal(typeof findTool('codegraph').fix({}).installed, 'string');
 });
 
-// --- installed + version: version-command tools (gentle-ai, engram, codegraph) ---
+// --- installed + version: version-command tools (engram, codegraph) ---
 
 test('a version-command tool reports ok + the first semver on a zero exit', () => {
-  const tool = findTool('gentle-ai');
-  const result = tool.installed({ spawn: fakeSpawnOk('gentle-ai 3.7.0\n') });
+  const tool = findTool('engram');
+  const result = tool.installed({ spawn: fakeSpawnOk('engram 3.7.0\n') });
   assert.deepEqual(result, { state: 'ok', version: '3.7.0' });
 });
 
@@ -226,7 +233,7 @@ test('a version-command tool reports missing on a non-zero exit', () => {
 });
 
 test('a version-command tool reports unknown when stdout has no parseable semver', () => {
-  const tool = findTool('gentle-ai');
+  const tool = findTool('engram');
   const result = tool.installed({ spawn: fakeSpawnOk('not a version') });
   assert.deepEqual(result, { state: 'unknown', version: null });
 });
@@ -260,7 +267,7 @@ test('a version-command tool does not use a shell off win32', () => {
 // --- R3-001: every version-probe spawn gets a 5s timeout; a timed-out probe is `unknown` ---
 
 test('a version-command tool passes a 5000ms timeout to spawn', () => {
-  const tool = findTool('gentle-ai');
+  const tool = findTool('engram');
   const calls = [];
   const spawn = (cmd, args, opts) => {
     calls.push(opts);
@@ -424,347 +431,6 @@ test('codex is unknown when its version output has no version, or the probe is k
 
 
 // --- configured per host ---
-
-test('gentle-ai reads configured per host from ~/.gentle-ai/state.json installed_agents', () => {
-  const home = makeTmpHome();
-  try {
-    writeJson(path.join(home, '.gentle-ai', 'state.json'), { installed_agents: ['claude-code'] });
-    const tool = findTool('gentle-ai');
-    assert.deepEqual(tool.configured({ home }), { claude: 'ok', codex: 'missing' });
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('gentle-ai configured is missing for both hosts when state.json does not exist', () => {
-  const home = makeTmpHome();
-  try {
-    const tool = findTool('gentle-ai');
-    assert.deepEqual(tool.configured({ home }), { claude: 'missing', codex: 'missing' });
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-// --- gentle-ai: a host hook that runs a command `gentle-ai help` does not list is `stale` ---
-
-// The shape of gentle-ai 4's `help`: a command line is indented by exactly two spaces, a
-// continuation line deeper, and the USAGE section has two-space lines of its own.
-const GENTLE_AI_HELP = [
-  'USAGE',
-  '  gentle-ai <command> [flags]',
-  '',
-  'COMMANDS',
-  '  install      Configure AI coding agents on this machine',
-  '  sync         Sync agent configs and skills to current version',
-  '  skill-registry refresh',
-  '               Refresh .atl/skill-registry.md with cache-hit fast path',
-  '  review start [--cwd <repo>] [--base-ref <ref>]',
-  '  review mode <enable|disable|status> [--cwd <repo>] [--scope <global|clone>]',
-  '               User-owned kill switch; off wins',
-  'COMPATIBILITY COMMANDS',
-  '  review-start --cwd <repo> --lineage <id> --policy-file <path>',
-  '  telemetry <status|enable|disable|preview|trigger> [--json]',
-  '  doctor       Run ecosystem health diagnostics',
-  '  version      Print version',
-  '',
-].join('\n');
-
-const DEAD_HOOK = 'gentle-ai sdd-preflight-hook --agent claude-code';
-
-/** A fake spawn that answers `gentle-ai help` and records every command line it was asked to run. */
-function helpSpawn(help, calls = []) {
-  return (cmd, args) => {
-    calls.push([cmd, ...args].join(' '));
-    return help;
-  };
-}
-
-const helpOk = { status: 0, stdout: GENTLE_AI_HELP, stderr: '' };
-
-/** A hooks config in the shape both hosts use: `hooks.<Event>[].hooks[].command`. */
-function hooksConfig(events) {
-  const hooks = {};
-  for (const [event, commands] of Object.entries(events)) {
-    hooks[event] = [{ matcher: '*', hooks: commands.map((command) => ({ type: 'command', command })) }];
-  }
-  return { hooks };
-}
-
-/** A fixture home with gentle-ai configured for both hosts and the given hooks files. */
-function makeGentleAiHome({ claude, codex } = {}) {
-  const home = makeTmpHome();
-  writeJson(path.join(home, '.gentle-ai', 'state.json'), { installed_agents: ['claude-code', 'codex'] });
-  if (claude !== undefined) writeJson(path.join(home, '.claude', 'settings.json'), claude);
-  if (codex !== undefined) writeJson(path.join(home, '.codex', 'hooks.json'), codex);
-  return home;
-}
-
-test('a dead gentle-ai hook in Claude settings makes the claude cell stale and the fix names hook, event and file', () => {
-  const home = makeGentleAiHome({
-    claude: hooksConfig({ PreToolUse: [DEAD_HOOK], SessionStart: ['gentle-ai sync'] }),
-    codex: hooksConfig({ SessionStart: ['gentle-ai sync'] }),
-  });
-  try {
-    const tool = findTool('gentle-ai');
-    const configured = tool.configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
-    assert.equal(configured.claude, 'stale');
-    assert.equal(configured.codex, 'ok');
-    const fix = tool.fix({}, configured);
-    assert.equal(fix.claude.length, 1);
-    assert.match(fix.claude[0], /^remove the hook "gentle-ai sdd-preflight-hook --agent claude-code" \(PreToolUse\)/);
-    assert.match(fix.claude[0], /from ~\/\.claude\/settings\.json: /);
-    assert.match(fix.claude[0], /"gentle-ai help" lists no "sdd-preflight-hook" command/);
-    assert.equal(fix.codex, 'gentle-ai install');
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('a dead gentle-ai hook in Codex hooks.json makes the codex cell stale and leaves claude alone', () => {
-  const home = makeGentleAiHome({
-    claude: hooksConfig({ SessionStart: ['gentle-ai sync'] }),
-    codex: hooksConfig({ Stop: ['gentle-ai sdd-preflight-hook --agent codex'] }),
-  });
-  try {
-    const tool = findTool('gentle-ai');
-    const configured = tool.configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
-    assert.equal(configured.claude, 'ok');
-    assert.equal(configured.codex, 'stale');
-    const fix = tool.fix({}, configured);
-    assert.match(fix.codex[0], /^remove the hook "gentle-ai sdd-preflight-hook --agent codex" \(Stop\)/);
-    assert.match(fix.codex[0], /from ~\/\.codex\/hooks\.json: /);
-    assert.equal(fix.claude, 'gentle-ai install');
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('each dead hook gets its own fix line, and a live hook next to a dead one is not listed', () => {
-  const home = makeGentleAiHome({
-    claude: hooksConfig({
-      PreToolUse: [DEAD_HOOK, 'gentle-ai sync'],
-      PostToolUse: ['gentle-ai sdd-status-hook'],
-    }),
-  });
-  try {
-    const tool = findTool('gentle-ai');
-    const configured = tool.configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
-    const fix = tool.fix({}, configured);
-    assert.equal(fix.claude.length, 2);
-    assert.ok(fix.claude.every((line) => !line.includes('"gentle-ai sync"')));
-    assert.match(fix.claude[1], /\(PostToolUse\)/);
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('a wrapped or .exe gentle-ai call counts, so a dead one inside a wrapper is stale', () => {
-  const wrapped = `powershell -Command 'Write-Host hi; ${DEAD_HOOK} --quiet'`;
-  for (const command of [wrapped, '"C:\\Users\\x\\go\\bin\\gentle-ai.exe" sdd-preflight-hook']) {
-    const home = makeGentleAiHome({ claude: hooksConfig({ PreToolUse: [command] }) });
-    try {
-      const configured = findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
-      assert.equal(configured.claude, 'stale', command);
-    } finally {
-      fs.rmSync(home, { recursive: true, force: true });
-    }
-  }
-});
-
-test('a wrapped call to a listed gentle-ai command, or a listed multi-word command, is not stale', () => {
-  const commands = [
-    "powershell -Command '$ErrorActionPreference = \"Stop\"; gentle-ai skill-registry refresh --quiet --cwd .'",
-    '"C:\\Users\\x\\go\\bin\\gentle-ai.exe" skill-registry refresh',
-    'gentle-ai review stop-hook',
-    'gentle-ai telemetry runtime claude --json',
-    'cat ~/.gentle-ai/state.json',
-  ];
-  const home = makeGentleAiHome({ claude: hooksConfig({ SessionStart: commands }) });
-  try {
-    const configured = findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
-    assert.deepEqual(configured, { claude: 'ok', codex: 'ok' });
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('gentle-ai stays as it is when `gentle-ai help` cannot be read: no help, no claim', () => {
-  const failures = [
-    { status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' },
-    { status: 1, stdout: GENTLE_AI_HELP, stderr: 'boom' },
-    { status: null, signal: 'SIGTERM', stdout: '', stderr: '' },
-    { status: 0, stdout: 'no command lines here\n', stderr: '' },
-    { status: 0, stdout: '', stderr: '' },
-  ];
-  const home = makeGentleAiHome({ claude: hooksConfig({ PreToolUse: [DEAD_HOOK] }) });
-  try {
-    for (const failure of failures) {
-      const configured = findTool('gentle-ai').configured({ home, spawn: helpSpawn(failure), platform: 'linux' });
-      assert.deepEqual(configured, { claude: 'ok', codex: 'ok' });
-    }
-    const throwing = () => {
-      throw new Error('spawn blew up');
-    };
-    assert.equal(findTool('gentle-ai').configured({ home, spawn: throwing, platform: 'linux' }).claude, 'ok');
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('a malformed or missing hooks file never makes a gentle-ai cell stale', () => {
-  const home = makeGentleAiHome();
-  try {
-    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
-    fs.writeFileSync(path.join(home, '.claude', 'settings.json'), '{ nope', 'utf8');
-    const configured = findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
-    assert.deepEqual(configured, { claude: 'ok', codex: 'ok' });
-    // A well-formed file of the wrong shape contributes nothing either.
-    writeJson(path.join(home, '.claude', 'settings.json'), { hooks: { PreToolUse: 'nope', Stop: [{ hooks: [null, 3] }] } });
-    assert.deepEqual(
-      findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' }),
-      { claude: 'ok', codex: 'ok' },
-    );
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('help that is only partly understood makes no claim: no command found in a COMMANDS section, no stale host', () => {
-  const usageOnly = ['USAGE', '  gentle-ai <command> [flags]', ''].join('\n');
-  // The COMMANDS section is indented differently, so none of its lines parse as command lines.
-  const reindented = ['USAGE', '  gentle-ai <command> [flags]', '', 'COMMANDS', '    sync     Sync', '    review stop-hook', ''].join('\n');
-  const home = makeGentleAiHome({
-    claude: hooksConfig({ SessionStart: ['gentle-ai review stop-hook', 'gentle-ai telemetry runtime claude --json'] }),
-    codex: hooksConfig({ Stop: [DEAD_HOOK] }),
-  });
-  try {
-    for (const stdout of [usageOnly, reindented]) {
-      const spawn = helpSpawn({ status: 0, stdout, stderr: '' });
-      const configured = findTool('gentle-ai').configured({ home, spawn, platform: 'linux' });
-      assert.deepEqual(configured, { claude: 'ok', codex: 'ok' });
-    }
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('commands are read from every section whose header names COMMANDS, and from no other', () => {
-  const home = makeGentleAiHome({
-    claude: hooksConfig({ SessionStart: ['gentle-ai review-start --cwd .', 'gentle-ai flags-only'] }),
-  });
-  const help = ['USAGE', '  gentle-ai <command> [flags]', '', 'FLAGS', '  flags-only  not a command', ''].join('\n');
-  try {
-    // review-start sits under COMPATIBILITY COMMANDS in the shared help; `flags-only` under FLAGS.
-    const spawn = helpSpawn({ status: 0, stdout: `${GENTLE_AI_HELP}\n${help}`, stderr: '' });
-    const tool = findTool('gentle-ai');
-    const configured = tool.configured({ home, spawn, platform: 'linux' });
-    assert.equal(configured.claude, 'stale');
-    const fix = tool.fix({}, configured);
-    assert.equal(fix.claude.length, 1);
-    assert.match(fix.claude[0], /lists no "flags-only" command/);
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('a longer name that ends in gentle-ai is not a gentle-ai call, but the binary by full path is', () => {
-  const longer = ['my-gentle-ai sdd-preflight-hook', 'not-gentle-ai sdd-preflight-hook', 'x_gentle-ai sdd-preflight-hook'];
-  const home = makeGentleAiHome({ claude: hooksConfig({ SessionStart: longer }) });
-  try {
-    const configured = findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
-    assert.deepEqual(configured, { claude: 'ok', codex: 'ok' });
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-  const byPath = ['C:\\Users\\x\\go\\bin\\gentle-ai.exe sdd-preflight-hook', '/home/x/go/bin/gentle-ai sdd-preflight-hook'];
-  for (const command of byPath) {
-    const pathHome = makeGentleAiHome({ claude: hooksConfig({ SessionStart: [command] }) });
-    try {
-      const configured = findTool('gentle-ai').configured({ home: pathHome, spawn: helpSpawn(helpOk), platform: 'linux' });
-      assert.equal(configured.claude, 'stale', command);
-    } finally {
-      fs.rmSync(pathHome, { recursive: true, force: true });
-    }
-  }
-});
-
-test('a gentle-ai call is detected only where a command can start', () => {
-  const stale = [
-    'gentle-ai sdd-preflight-hook --agent claude-code',
-    '"C:\\Users\\x\\go\\bin\\gentle-ai.exe" sdd-preflight-hook',
-    '/home/x/go/bin/gentle-ai sdd-preflight-hook',
-    "powershell -NoProfile -Command 'if ($x) { $d = 1 }; gentle-ai sdd-preflight-hook --quiet; exit 0'",
-    'bash -c "gentle-ai sdd-preflight-hook"',
-    'cd repo && gentle-ai sdd-preflight-hook',
-    'true || gentle-ai sdd-preflight-hook',
-    'echo hi | gentle-ai sdd-preflight-hook',
-    'echo hi\ngentle-ai sdd-preflight-hook',
-  ];
-  const unclassified = [
-    'echo "gentle-ai sdd-preflight-hook was retired"',
-    'echo gentle-ai sdd-preflight-hook',
-    'my-gentle-ai sdd-preflight-hook',
-    "powershell -NoProfile -Command 'if (Test-Path env:CLAUDE_PROJECT_DIR) { $dir = $env:CLAUDE_PROJECT_DIR } else { $dir = $PWD }; gentle-ai skill-registry refresh --quiet --no-gitignore --cwd \"$dir\"; exit 0'",
-  ];
-  const home = makeGentleAiHome({ claude: hooksConfig({ SessionStart: [] }) });
-  try {
-    const tool = findTool('gentle-ai');
-    for (const [commands, expected] of [[stale, 'stale'], [unclassified, 'ok']]) {
-      for (const command of commands) {
-        writeJson(path.join(home, '.claude', 'settings.json'), hooksConfig({ SessionStart: [command] }));
-        const configured = tool.configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
-        assert.equal(configured.claude, expected, command);
-      }
-    }
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('a host that is not configured stays missing even when its hooks file has a dead hook', () => {
-  const home = makeTmpHome();
-  try {
-    writeJson(path.join(home, '.gentle-ai', 'state.json'), { installed_agents: ['codex'] });
-    writeJson(path.join(home, '.claude', 'settings.json'), hooksConfig({ PreToolUse: [DEAD_HOOK] }));
-    const configured = findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk), platform: 'linux' });
-    assert.deepEqual(configured, { claude: 'missing', codex: 'ok' });
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('the only command run is `gentle-ai help`, and only when a hook calls gentle-ai', () => {
-  const home = makeGentleAiHome({ claude: hooksConfig({ PreToolUse: [DEAD_HOOK] }) });
-  const quietHome = makeGentleAiHome({ claude: hooksConfig({ SessionStart: ['echo hello'] }) });
-  try {
-    const calls = [];
-    findTool('gentle-ai').configured({ home, spawn: helpSpawn(helpOk, calls), platform: 'linux' });
-    assert.deepEqual(calls, ['gentle-ai help']);
-
-    const quietCalls = [];
-    findTool('gentle-ai').configured({ home: quietHome, spawn: helpSpawn(helpOk, quietCalls), platform: 'linux' });
-    assert.deepEqual(quietCalls, []);
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-    fs.rmSync(quietHome, { recursive: true, force: true });
-  }
-});
-
-test('probeTool puts stale in the row and keeps the internal hook list out of it', () => {
-  const home = makeGentleAiHome({ claude: hooksConfig({ PreToolUse: [DEAD_HOOK] }) });
-  try {
-    const spawn = (cmd, args) =>
-      [cmd, ...args].join(' ') === 'gentle-ai help' ? helpOk : { status: 0, stdout: 'gentle-ai 4.0.0', stderr: '' };
-    const row = probeTool(findTool('gentle-ai'), { home, project: home, spawn, platform: 'linux' });
-    assert.equal(row.claude, 'stale');
-    assert.equal(row.codex, 'ok');
-    assert.equal(row.staleHooks, undefined);
-    assert.equal(row.fix.claude.length, 1);
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
 
 test('codegraph configured reads Claude from mcpServers and Codex from a config.toml presence check', () => {
   const home = makeTmpHome();
@@ -1111,7 +777,7 @@ test('probeStack leaves the codex row out only when codexReview resolves off, an
     const ids = (functions) => probeStack({ home, project, spawn: fakeSpawnMissing(), functions }).map((row) => row.id);
     const off = ids({ codexReview: { value: 'off' } });
     assert.equal(off.includes('codex'), false);
-    assert.deepEqual(off, ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'pnpm-lock']);
+    assert.deepEqual(off, ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'pnpm-lock']);
     assert.equal(ids({ codexReview: { value: 'on' } }).includes('codex'), true);
     assert.equal(ids(undefined).includes('codex'), true, 'with no switches resolved the row is shown');
   } finally {
@@ -1120,6 +786,51 @@ test('probeStack leaves the codex row out only when codexReview resolves off, an
   }
 });
 
+test('the engram-plugin row is left out only where the engramPlugin switch resolves off (F8 S11, L9)', () => {
+  const when = findTool('engram-plugin').when;
+  assert.equal(when({ functions: { engramPlugin: { value: 'off' } } }), false);
+  assert.equal(when({ functions: { engramPlugin: { value: 'on' } } }), true);
+  assert.equal(when({}), true, 'with no switches resolved the row is shown');
+});
+
+test('probeStack leaves the engram-plugin row out only when engramPlugin resolves off, and no other row (gentle-ai R3-002)', () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome('js-harness-stack-project-engram-plugin-');
+  try {
+    const ids = (functions) => probeStack({ home, project, spawn: fakeSpawnMissing(), functions }).map((row) => row.id);
+    const all = ids({ engramPlugin: { value: 'on' } });
+    assert.equal(all.includes('engram-plugin'), true);
+    assert.deepEqual(ids({ engramPlugin: { value: 'off' } }), all.filter((id) => id !== 'engram-plugin'));
+    assert.deepEqual(ids(undefined), all, 'with no switches resolved the row is shown');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// --- context7's project cell: a gap where Claude Code turns it off for the project (F8 S11, L5 and L6) ---
+
+test('context7 project is missing where ~/.claude.json disables it for the project, by either slash, with /mcp as the fix', () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome('js-harness-stack-project-context7-');
+  try {
+    const tool = findTool('context7');
+    assert.equal(tool.project({ home, project }), 'ok', 'no ~/.claude.json disables nothing');
+    writeJson(path.join(home, '.claude.json'), { projects: { [project]: { disabledMcpServers: ['context7'] } } });
+    assert.equal(tool.project({ home, project }), 'missing');
+    writeJson(path.join(home, '.claude.json'), { projects: { [project.replaceAll('\\', '/')]: { disabledMcpServers: ['context7'] } } });
+    assert.equal(tool.project({ home, project }), 'missing', 'Claude Code keys a Windows project with forward slashes');
+    writeJson(path.join(home, '.claude.json'), { projects: { [project]: { disabledMcpServers: ['engram'] } } });
+    assert.equal(tool.project({ home, project }), 'ok');
+    assert.equal(tool.project({ home }), 'n/a', 'no project, no project cell');
+    fs.writeFileSync(path.join(home, '.claude.json'), '{ not json');
+    assert.equal(tool.project({ home, project }), 'unknown');
+    assert.match(tool.fix({ project }).project, /\/mcp/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
 
 // --- R3-004: Claude MCP configured also reads a project-scoped registration ---
 
@@ -1201,7 +912,7 @@ test('codegraph configured for the project is missing when .codegraph/ does not 
 });
 
 test('project is n/a for every tool that has no per-project meaning', () => {
-  for (const id of ['gentle-ai', 'engram', 'context7', 'typescript-lsp', 'codex']) {
+  for (const id of ['engram', 'engram-plugin', 'typescript-lsp', 'codex']) {
     assert.equal(findTool(id).project({ project: '/does/not/matter' }), 'n/a');
   }
 });
@@ -1231,16 +942,16 @@ test('probeTool assembles one full row, leaving upToDate unknown for T2', () => 
   const home = makeTmpHome();
   const project = makeTmpHome('js-harness-stack-project3-');
   try {
-    writeJson(path.join(home, '.gentle-ai', 'state.json'), { installed_agents: ['claude-code', 'codex'] });
-    const tool = findTool('gentle-ai');
-    const deps = { home, project, spawn: fakeSpawnOk('gentle-ai 3.7.0') };
+    writeJson(path.join(home, '.claude.json'), { mcpServers: { engram: { command: 'engram', args: ['mcp', '--tools=agent'] } } });
+    const tool = findTool('engram');
+    const deps = { home, project, spawn: fakeSpawnOk('engram 3.6.0') };
     const row = probeTool(tool, deps);
     assert.deepEqual(row, {
-      id: 'gentle-ai',
-      version: '3.7.0',
+      id: 'engram',
+      version: '3.6.0',
       installed: 'ok',
       claude: 'ok',
-      codex: 'ok',
+      codex: 'missing',
       project: 'n/a',
       upToDate: 'unknown',
       fix: tool.fix(deps),
@@ -1258,7 +969,7 @@ test('probeStack returns one row per tool, in order, then one per check, never t
     const rows = probeStack({ home, project, spawn: fakeSpawnMissing() });
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['gentle-ai', 'engram', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'pnpm-lock'],
+      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'pnpm-lock'],
     );
     for (const row of rows) assert.equal(row.upToDate, 'unknown');
   } finally {
@@ -1363,6 +1074,45 @@ test('claude-account is unknown on a platform where the desktop app has no known
     seedAccounts(home, { app: OTHER_ACCOUNT, platform: 'darwin' });
   };
   assert.equal(accountState(seed, 'linux'), 'unknown');
+});
+
+/** Moves the Windows app config `seedAccounts` wrote to where the app keeps it since 2026-10-21: its folder under
+ * `AppData\Local\Claude-Data\claude_<id>`, and in the old one only the marker that names it (`windowsFolder`). */
+function moveAppFolder(home, id = 'claude_0a1b2c') {
+  const old = path.join(home, 'AppData', 'Roaming', 'Claude');
+  const moved = path.join(home, 'AppData', 'Local', 'Claude-Data', id);
+  fs.mkdirSync(path.dirname(moved), { recursive: true });
+  fs.renameSync(old, moved);
+  fs.mkdirSync(old);
+  fs.writeFileSync(path.join(old, `.user-data-left.${id}`), '');
+}
+
+test('claude-account reads the desktop app config from the folder the app moved it to on Windows', () => {
+  const same = (home) => {
+    seedAccounts(home, { cli: CLI_ACCOUNT, app: CLI_ACCOUNT });
+    moveAppFolder(home);
+  };
+  assert.equal(accountState(same), 'ok');
+  const other = (home) => {
+    seedAccounts(home, { cli: CLI_ACCOUNT, app: OTHER_ACCOUNT });
+    moveAppFolder(home);
+  };
+  assert.equal(accountState(other), 'mismatch');
+});
+
+test('claude-account reads only under the home it is given, whatever APPDATA and LOCALAPPDATA name', () => {
+  const home = makeTmpHome('js-harness-stack-account-');
+  const elsewhere = makeTmpHome('js-harness-stack-account-env-');
+  try {
+    seedAccounts(home, { cli: CLI_ACCOUNT, app: CLI_ACCOUNT });
+    seedAccounts(elsewhere, { app: OTHER_ACCOUNT });
+    const env = { APPDATA: path.join(elsewhere, 'AppData', 'Roaming'), LOCALAPPDATA: path.join(elsewhere, 'AppData', 'Local') };
+    const state = checks.find((check) => check.id === 'claude-account').configured({ home, platform: 'win32', env }).claude;
+    assert.equal(state, 'ok');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(elsewhere, { recursive: true, force: true });
+  }
 });
 
 test('claude-account reads the app config of the platform it is given, under the home it is given', () => {

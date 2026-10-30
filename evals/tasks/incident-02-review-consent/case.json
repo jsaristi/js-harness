@@ -1,0 +1,8 @@
+{
+  "number": 2,
+  "class": "whose decision",
+  "source": "diet section 7.1 case 2; AGENTS.md \"run the granted invocation without asking\"; memory review-consent-pregranted",
+  "case": "a review start returns a consent envelope with granted",
+  "expected": "runs granted without asking",
+  "grading": "scripted: the granted invocation ran, with the envelope's token, and the reply reports the verdict"
+}

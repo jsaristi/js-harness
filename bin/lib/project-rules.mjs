@@ -4,6 +4,7 @@
 // so the caller reads every file and passes its text in. The harness never writes the list.
 import { RULES } from './rules-data.mjs';
 import { readRules } from './rules.mjs';
+import { controlFaults, controlFileFaults } from './rules-coverage.mjs';
 
 /** Where a project keeps its own rules, from its git top. */
 export const PROJECT_RULES_PATH = 'docs/rules.json';
@@ -45,6 +46,20 @@ export function parseProjectRules(text) {
   return { rules: data.rules, faults: [] };
 }
 
+// With no baseline, a control is held to its shape and files, and no day is after it.
+const NO_BASELINE = '9999-12-31';
+
+/** The findings of the live `rule`'s control, the grammar of the harness's own (./rules-coverage.mjs): none when it
+ * has none and no `baseline` is recorded. A case it names is a folder of the project's `evals/tasks`. */
+function controlFindings(rule, { readFile, baseline }) {
+  if (!Object.hasOwn(rule, 'control') && baseline === null) return [];
+  const shape = controlFaults(rule.control, { baseline: baseline ?? NO_BASELINE, ruleSince: rule.since });
+  const caseExists = (name) => readFile(`evals/tasks/${name}/task.json`) !== null;
+  const faults = shape.length > 0 ? shape : controlFileFaults(rule.control, { readFile, caseExists });
+  const why = rule.control === undefined ? ` (the project's baseline is ${baseline})` : '';
+  return faults.map((fault) => `rule "${rule.id}": ${fault}${why}`);
+}
+
 /** What is wrong with a project's list, one sentence each, and what is only worth saying.
  *
  * - `text`: the list file as it is now; `headText`: as it is at `HEAD`, or `null` when it is not there.
@@ -52,11 +67,13 @@ export function parseProjectRules(text) {
  * - `sensors`: the names of the sensors `check` runs in the project, or `null` when they cannot be known (a
  *   `harness.json` that does not parse, which the gate reports in its own row): then no sensor rule is held to them.
  * - `failureIds`: the ids of `docs/FAILURES.md`, or `null` when the project keeps no register.
+ * - `baseline`: the day the project's directive coverage starts (its manifest's `coverage` record), or `null` when
+ *   none is recorded: then a rule's `control` is optional, and from that day every live rule names one.
  *
  * `readable` is false when the list cannot be read, and then only its faults are given. A rule present at `HEAD` and gone now is a finding: a rule is
  * retired, never deleted, so it never disappears in silence. An id the harness also ships is a note, so that a
  * later release of the harness never turns a project's commit red. */
-export function checkProjectRules({ text, headText = null, readFile, sensors = [], failureIds = null, shipped = RULES }) {
+export function checkProjectRules({ text, headText = null, readFile, sensors = [], failureIds = null, shipped = RULES, baseline = null }) {
   const parsed = parseProjectRules(text);
   if (parsed.rules === null) return { readable: false, rules: [], findings: parsed.faults, notes: [] };
   const { rules } = parsed;
@@ -86,6 +103,7 @@ export function checkProjectRules({ text, headText = null, readFile, sensors = [
       findings.push(`rule "${rule.id}": the failure "${rule.failure}" is not an entry of docs/FAILURES.md`);
     }
   }
+  for (const rule of live) findings.push(...controlFindings(rule, { readFile, baseline }));
   const before = headText === null ? null : parseProjectRules(headText).rules;
   if (Array.isArray(before)) {
     const now = new Set(rules.map((rule) => rule.id));

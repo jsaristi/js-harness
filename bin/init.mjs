@@ -8,8 +8,11 @@ import { currentVersion } from './install.mjs';
 import { ROADMAP_PATH } from './lib/onboard.mjs';
 import { initProject, InitWriteError, cleanupClause, staleManifestMessage } from './lib/project.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { presetFunctions } from './lib/functions.mjs';
+import { claudeJsonMcpServer } from './lib/stack.mjs';
 
-export const USAGE = 'Usage: js-harness init [--cwd <path>] [--home <path>]';
+export const USAGE =
+  'Usage: js-harness init [--cwd <path>] [--home <path>] [--preset complete|lean|custom [--codegraph on|off] [--engram-plugin on|off]]';
 
 class InitArgError extends Error {}
 
@@ -20,11 +23,15 @@ function requireValue(argv, i, flag) {
 }
 
 /** Unlike check/doctor's permissive `argv.indexOf(flag)` lookup, `init`'s usage contract (see
- * "T2 design") treats any flag besides `--cwd`/`--home` as an error rather than a silently
- * ignored token, so a typo is reported instead of quietly doing the wrong thing. */
+ * "T2 design") treats any flag besides its own as an error rather than a silently ignored token, so a
+ * typo is reported instead of quietly doing the wrong thing. A preset is read into the `"functions"` it
+ * writes here, so a wrong one writes nothing (G14, odd/tasks/f8-s11-complements.md, L9). */
 function parseArgs(argv, env) {
   let cwd;
   let home;
+  let preset;
+  const choices = {};
+  const CHOICE_FLAGS = { '--codegraph': 'codegraph', '--engram-plugin': 'engramPlugin' };
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === '--cwd') {
@@ -33,11 +40,23 @@ function parseArgs(argv, env) {
     } else if (token === '--home') {
       home = requireValue(argv, i, token);
       i++;
+    } else if (token === '--preset') {
+      preset = requireValue(argv, i, token);
+      i++;
+    } else if (Object.hasOwn(CHOICE_FLAGS, token)) {
+      choices[CHOICE_FLAGS[token]] = requireValue(argv, i, token);
+      i++;
     } else {
       throw new InitArgError(`unknown argument: ${token}`);
     }
   }
+  if (preset === undefined && Object.keys(choices).length > 0) {
+    throw new InitArgError('only the custom preset chooses codegraph or the engram plugin; give --preset custom');
+  }
+  const read = preset === undefined ? { functions: null } : presetFunctions(preset, choices);
+  if (read.error) throw new InitArgError(read.error);
   return {
+    functions: read.functions,
     cwd: cwd ?? process.cwd(),
     // `--home`/JS_HARNESS_HOME precedence matches install.mjs's parseInstallArgs, even though init writes
     // nothing under home — kept for consistency with the other commands (see "T2 design").
@@ -52,6 +71,9 @@ function logAction(action) {
       break;
     case 'excluded':
       console.log(`excluded ${action.line} in ${action.path}`);
+      break;
+    case 'imported':
+      console.log(`added ${action.line} at the top of ${action.path}; git checkout -- ${action.path} takes it back`);
       break;
     case 'ran':
       console.log(`ran ${action.path}`);
@@ -100,7 +122,7 @@ export async function initMain(argv, env = process.env, deps = {}) {
   const version = currentVersion();
   let result;
   try {
-    result = initProject(parsed.cwd, version, deps);
+    result = initProject(parsed.cwd, version, { ...deps, functions: parsed.functions });
   } catch (err) {
     // T2b Codex P1 + R3-init-partial-failure-unrecoverable: initProject has already rolled back
     // everything this run wrote (best-effort) before throwing — report what happened, never a raw
@@ -134,6 +156,10 @@ export async function initMain(argv, env = process.env, deps = {}) {
 
   for (const action of result.actions) logAction(action);
   console.log(`manifest: ${result.manifestPath}`);
+  // init writes nothing outside the repository, so a preset names context7 where Claude Code lacks it (G11, L6).
+  if (parsed.functions && claudeJsonMcpServer(deps.userHome ?? os.homedir(), 'context7', result.root).state === 'missing') {
+    console.log('context7 is required by every preset and Claude Code has it nowhere: js-harness stack install registers it');
+  }
   // A project with no plan yet is pointed at its onboarding (odd/tasks/onboarding.md, D8); init never starts it.
   if (!fs.existsSync(path.join(result.root, ROADMAP_PATH))) console.log('next: in a Claude Code or Codex session, run js-harness onboard');
   return 0;

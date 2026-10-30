@@ -10,6 +10,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { applyProjectFunctions, initProject, projectLocation, syncProject, uninstallProject, InitWriteError, MANIFEST_FORMAT } from './project.mjs';
 import { repoTemplate } from './git-fixture.testkit.mjs';
+import { PERMISSIONS_DENY } from './deny-paths.mjs';
 
 // Every git call here is real, so none may read the host's config or, under a hook, the repository being
 // committed (the same isolation as project.test.mjs).
@@ -62,6 +63,10 @@ const manifest = (root) => JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'
 const harness = (root, data) => fs.writeFileSync(path.join(root, 'harness.json'), `${JSON.stringify(data, null, 2)}\n`);
 const PASTE = '.claude/settings.local.json#/env/CODEGRAPH_NO_PROMPT_HOOK';
 const PLUGIN = '.claude/settings.local.json#/enabledPlugins/typescript-lsp@claude-plugins-official';
+// What every clone holds whatever its switches (odd/tasks/f8-s10-port.md, T5), written first.
+const STYLE = '.claude/settings.local.json#/outputStyle';
+const DENIES = '.claude/settings.local.json#/permissions/deny';
+const ALWAYS = { outputStyle: 'js-harness', permissions: { deny: PERMISSIONS_DENY } };
 
 test('init in a project with no program makes no index, says why, and turns the paste and the plugin off', (t) => {
   const root = repo(t, { 'notes.md': '# notes\n' });
@@ -76,13 +81,14 @@ test('init in a project with no program makes no index, says why, and turns the 
     reason: 'the code map is off: no file of the project is a program',
   });
   assert.deepEqual(settings(root), {
+    ...ALWAYS,
     env: { CODEGRAPH_NO_PROMPT_HOOK: '1' },
     enabledPlugins: { 'typescript-lsp@claude-plugins-official': false },
   });
   assert.deepEqual(manifest(root).codegraph, { createdDir: false, status: 'off' });
-  // Format 2: the manifest records the line of .atl/ as well (bin/lib/project-exclude.mjs).
-  assert.equal(manifest(root).format, 2);
-  assert.deepEqual(manifest(root).settings.map((record) => record.key), ['paste', 'languageServer']);
+  // Format 3: the manifest records the style and the denies every clone holds (odd/tasks/f8-s10-port.md, L13).
+  assert.equal(manifest(root).format, 3);
+  assert.deepEqual(manifest(root).settings.map((record) => record.key), ['outputStyle', 'denies', 'paste', 'languageServer']);
 });
 
 test('init in a project with TypeScript makes the index and leaves the plugin on', (t) => {
@@ -90,8 +96,8 @@ test('init in a project with TypeScript makes the index and leaves the plugin on
   const spawn = makeSpawn();
   const result = initProject(root, '0.1.0', deps(spawn));
   assert.equal(spawn.codegraphCalls, 1);
-  assert.deepEqual(result.actions.filter((a) => a.path?.startsWith('.claude/')).map((a) => [a.kind, a.path]), [['wrote', PASTE]]);
-  assert.deepEqual(settings(root), { env: { CODEGRAPH_NO_PROMPT_HOOK: '1' } });
+  assert.deepEqual(result.actions.filter((a) => a.path?.startsWith('.claude/')).map((a) => [a.kind, a.path]), [['wrote', STYLE], ['wrote', DENIES], ['wrote', PASTE]]);
+  assert.deepEqual(settings(root), { ...ALWAYS, env: { CODEGRAPH_NO_PROMPT_HOOK: '1' } });
 });
 
 test('init keeps what the settings file already holds and never overwrites a key set by hand', (t) => {
@@ -106,8 +112,9 @@ test('init keeps what the settings file already holds and never overwrites a key
     effortLevel: 'high',
     enabledPlugins: { 'typescript-lsp@claude-plugins-official': true },
     env: { CODEGRAPH_NO_PROMPT_HOOK: '1' },
+    ...ALWAYS,
   });
-  assert.deepEqual(manifest(root).settings.map((record) => record.key), ['paste']);
+  assert.deepEqual(manifest(root).settings.map((record) => record.key), ['outputStyle', 'denies', 'paste']);
 });
 
 test('uninstall puts the settings back as they were: the keys it wrote go, a file it made goes, the rest stays', (t) => {
@@ -116,6 +123,8 @@ test('uninstall puts the settings back as they were: the keys it wrote go, a fil
   const undone = uninstallProject(made, deps());
   assert.equal(undone.code, 0);
   assert.deepEqual(undone.actions.filter((a) => a.path?.startsWith('.claude/')).map((a) => [a.kind, a.path]), [
+    ['removed', STYLE],
+    ['removed', DENIES],
     ['removed', PASTE],
     ['removed', PLUGIN],
   ]);
@@ -157,8 +166,11 @@ test('a manifest that holds settings without a format, or a record of another ke
   initProject(root, '0.1.0', deps());
   // Without the line of .atl/ too, which needs the format as well, so the settings alone are judged.
   const { format, exclude, ...withoutFormat } = manifest(root);
-  assert.equal(format, 2);
+  assert.equal(format, 3);
   fs.writeFileSync(manifestPath(root), JSON.stringify(withoutFormat));
+  assert.equal(uninstallProject(root, deps()).malformedManifest, true);
+  // A record of the style or the denies in a format older than the one that knows them is no record of this copy's.
+  fs.writeFileSync(manifestPath(root), JSON.stringify({ ...withoutFormat, format: 2 }));
   assert.equal(uninstallProject(root, deps()).malformedManifest, true);
 
   const other = { ...withoutFormat, format: 1, settings: [{ ...withoutFormat.settings[0], pointer: ['env', 'PATH'] }] };
@@ -175,15 +187,16 @@ test('sync follows a switch changed in harness.json: a key no longer wanted is t
   assert.equal(synced.code, 0);
   assert.equal(synced.upToDate, false);
   assert.deepEqual(synced.actions, [{ kind: 'removed', path: PLUGIN }]);
-  assert.deepEqual(settings(root), { env: { CODEGRAPH_NO_PROMPT_HOOK: '1' } });
-  assert.deepEqual(manifest(root).settings.map((record) => record.key), ['paste']);
+  assert.deepEqual(settings(root), { ...ALWAYS, env: { CODEGRAPH_NO_PROMPT_HOOK: '1' } });
+  assert.deepEqual(manifest(root).settings.map((record) => record.key), ['outputStyle', 'denies', 'paste']);
 
   harness(root, { version: '0.1.0', functions: { codeMap: 'always', languageServer: 'on' } });
   syncProject(root, '0.1.0', deps());
-  assert.equal(fs.existsSync(path.join(root, '.claude')), false);
-  assert.equal(manifest(root).settings, undefined);
-  // The format stays for the line of .atl/, which the manifest still records.
-  assert.equal(manifest(root).format, 2);
+  // What every clone holds stays: the style and the denies (odd/tasks/f8-s10-port.md, T5), in the format a copy
+  // that knows them reads; an older copy refuses it as newer, never as malformed (L13).
+  assert.equal(manifest(root).format, 3);
+  assert.deepEqual(settings(root), ALWAYS);
+  assert.deepEqual(manifest(root).settings.map((record) => record.key), ['outputStyle', 'denies']);
   assert.equal(syncProject(root, '0.1.0', deps()).upToDate, true);
 });
 
@@ -234,6 +247,21 @@ test('init takes back the keys it wrote when the manifest cannot be written', (t
   assert.throws(() => initProject(root, '0.1.0', { ...deps(), open }), InitWriteError);
   assert.deepEqual(settings(root), { effortLevel: 'high' });
   assert.equal(fs.existsSync(path.join(root, 'harness.json')), false);
+});
+
+// Codex on d0d6807..1f607cb (P2): a sync that writes back one deny and then cannot write the manifest takes back
+// only that one; the denies the manifest on disk still records stay where they were.
+test('a sync that cannot write the manifest takes back only the denies it added, never those recorded before', (t) => {
+  const root = repo(t, { 'bin/a.mjs': '' });
+  initProject(root, '0.1.0', deps());
+  const before = settings(root);
+  fs.writeFileSync(settingsPath(root), JSON.stringify({ ...before, permissions: { deny: PERMISSIONS_DENY.slice(1) } }));
+  const open = (target) => {
+    if (target.includes('manifest.json.')) throw new Error('disk full');
+    return fs.openSync(target, 'wx');
+  };
+  assert.throws(() => syncProject(root, '0.1.0', { ...deps(), open }), InitWriteError);
+  assert.deepEqual(settings(root).permissions.deny, PERMISSIONS_DENY.slice(1));
 });
 
 const prePushPath = (root) => path.join(root, '.git', 'hooks', 'pre-push');

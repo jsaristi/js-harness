@@ -1,0 +1,18 @@
+{
+  "grader": {
+    "command": "node",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      ".eval-grader/incident-03-open-the-pr.grade.mjs"
+    ]
+  },
+  "timeoutMs": 900000,
+  "recordFailed": true,
+  "setup": true,
+  "proof": {
+    "total": 4,
+    "fixturePassed": 1
+  },
+  "rules": []
+}

@@ -62,14 +62,69 @@ absence is in L1.
   off for another project until its owner turns it on; the shipped skills and protocol 1 follow the switch.
 - S18 (N7 rule, code): one rule holds the union list of what is his to decide (spend, anything irreversible, product
   choices, publishing, credentials, a protocol change, a security or system setting); the other texts name that rule id.
+- S19 (N7, Q62 again, 2026-10-30, the lead's transcript 0f71b2c6 line 28485, tapped): asked "¿Una sola lista en una
+  regla, con la unión de todas?", he tapped "Una lista, la unión (Recomendada)". The lead's brief for JH 96 gives the
+  union as: spend outside the plan, anything irreversible, product choices, publishing, credentials, protocol changes,
+  security or system settings, anything installed or changed on a machine, a change of the plan or its order, a report
+  published outside the project.
+- S20 (N35, Q71, 2026-10-30, the lead's transcript 0f71b2c6 line 28610, tapped): asked whether the board should warn
+  above three work sessions, he tapped "Retirarla": `work-sessions-private-windows` is retired, and the number of
+  sessions is decided case by case.
+- S21 (N7 and N35, Q113 and Q114, 2026-10-30, the lead's transcript 0f71b2c6, typed): line 30759, "Lo que decido yo
+  es una sola lista, en una regla: gasto fuera del plan, todo lo irreversible, las decisiones de producto, publicar,
+  credenciales, cambios de protocolo, ajustes de seguridad o del sistema, lo que se instale o cambie en una máquina, un
+  cambio del plan o de su orden, y un informe publicado fuera del proyecto; los demás textos nombran esa regla."; line
+  30812, "Retira la regla de máximo 3 sesiones de trabajo en Windows; el número de sesiones se decide caso por caso."
 
 ## Tasks
 - [x] T1 (kind: docs) This feature document, committed first (S1-S18; b6d2d40b)
 - [x] T2 (kind: build) N12: the reply check refuses only a decision while work runs; RED (the question close refused while 1 task ran) then GREEN in `bin/lib/reply.test.mjs` (S8, S16)
 - [x] T3 (kind: build) N2: the per-project pushing switch `pushUnasked`, declared beside the other functions; RED in `functions`, `project-functions`, `functions` CLI and protocol 1 / orchestrator texts, GREEN after; js-harness declares it on (S2, S17)
-- [ ] T4 (kind: build) N7: the union list in one rule through `js-harness rules change`; `docs/RULES.md` re-rendered (S6, S18). WAITING for his typed list, deferred by the lead (L5); not retried: `rules change --dry-run` refuses the source, "line 26272 ... is a tapped answer: the option's text was written by a session, not typed by him"; the rule needs his typed words for the list (see Log L3)
-- [~] T5 (kind: docs) Text rows (S1, S3-S5, S7, S9-S14). Done: N33 (efef30d0); N6, N46, N38, N39-N42 in the init block (protocols 6 and 1 are pointed at, not restated); N1, N8, N38 in AGENTS.md; protocol 3 names every slice through Codex; N3 already held by protocol 3 (`operation_timeout`); N4, N22 (L6); N43 (L7, the orchestrator copy kept); N44 (L8). Open: the owner list in AGENTS.md and protocol 1 keep their wording (waits on T4); the orchestrator copy of the pause sentence in `bin/lib/manifest.mjs` (L7) needs the owner's typed words for `announce-finished` or the lead's decision
+- [x] T4 (kind: build) N7: the union list in one rule, `owner-decisions`, through `js-harness rules change`; `docs/RULES.md` re-rendered (S6, S18, S19, S21; L14; 665baea7, branch `rule/his-decisions`)
+- [x] T7 (kind: build) N35: retire `work-sessions-private-windows` with no successor through `js-harness rules change` (S20, S21; L17; 35399967, branch `rule/retire-work-sessions-windows`, after PR 701 landed)
+- [~] T5 (kind: docs) Text rows (S1, S3-S5, S7, S9-S14). Done: N33 (efef30d0); N6, N46, N38, N39-N42 in the init block (protocols 6 and 1 are pointed at, not restated); N1, N8, N38 in AGENTS.md; protocol 3 names every slice through Codex; N3 already held by protocol 3 (`operation_timeout`); N4, N22 (L6); N43 (L7, the orchestrator copy kept); N44 (L8). The owner list: T4 (protocol 1 holds it; CLAUDE.md, protocol 7, the init block and the permit relay name it). Open: the orchestrator copy of the pause sentence in `bin/lib/manifest.mjs` (L7) needs the owner's typed words for `announce-finished` or the lead's decision
 - [x] T6 (kind: verify) N48: a test asserts the shipped init block and AGENTS.md name the same rule ids (S15); RED then GREEN in `bin/lib/template-block.test.mjs`; the block names `rule:context-pause` and `rule:questions-one-place`, and so does AGENTS.md (L9)
+- [ ] T8 (kind: docs) The control of `command-handed-untested` (L15): a command handed to him that writes his configuration is run first against a scratch configuration and its read-back shown. Owed; the lead routes its text
+- [ ] T9 (kind: docs) The control of `written-question-buried` (L15): a question he answers in writing goes alone in its message, with its text ready to copy, never at the end of a report. Owed; the lead routes its text
+
+## Draft for T4 and T7
+Written on 2026-10-30 by JH 96, before his typed words exist, so that each change is one command and one commit once
+they do. Nothing here is in force.
+
+**T4, the rule `his-decisions`** (owner `sebastian`, a rule in prose, one phrase an item):
+- Home: `js-harness-protocols` section 1 (`bin/lib/protocols-skill.mjs`), because the skill ships to every host and
+  project and section 1 is where a session asks. Its first bullet becomes: "- Ask only what is the user's
+  (\`rule:his-decisions\`): spend outside the plan, anything irreversible, a product choice, anything published, any
+  credential, a change of a protocol, a security or system setting, anything installed or changed on a machine, a
+  change of the plan or of its order, and a report published outside the project. A project's \`CLAUDE.md\` may add
+  to it. Decide everything else, say what it costs, and go on."
+- Subject: "what is the owner's to decide, asked one at a time; everything else is decided and its cost said".
+- Phrases (each at least twelve characters, so "publishing" and "credentials" are worded "anything published" and
+  "any credential"): "spend outside the plan", "anything irreversible", "a product choice", "anything published",
+  "any credential", "a change of a protocol", "a security or system setting", "anything installed or changed on a
+  machine", "a change of the plan or of its order", "a report published outside the project".
+- The texts that name it instead of repeating it, in the same commit:
+  - `bin/lib/protocols-skill.mjs:113` (section 7): "- The user's decisions are \`rule:his-decisions\`, asked one at
+    a time (section 1). The lead assigns everything else."
+  - `bin/lib/project.mjs` `claudeBlock` (the init block): "The owner decides what \`rule:his-decisions\` lists
+    (\`js-harness-protocols\` section 1). Ask those one at a time, never while work runs, naming which it is, as
+    \`rule:questions-one-place\` says." The pinned assertions in `bin/lib/project.test.mjs` move to it, and
+    `bin/lib/template-block.test.mjs` then needs AGENTS.md or the test's own list to agree on the new id (S15).
+  - `bin/lib/manifest.mjs:139` (the permit relay): "A card that touches what is the user's (\`rule:his-decisions\`),
+    or is important enough to be their call, you never decide alone"; `bin/lib/manifest.test.mjs` moves with it.
+  - `CLAUDE.md:27`, his file, inside his answer: "He decides what \`rule:his-decisions\` lists. Everything else, keep
+    moving: ...", inside `rule:claude-md-budget`.
+- Source: his typed sentence (L13) as the quotation, line 28485 as where he accepted the union.
+
+**T7, the retirement of `work-sessions-private-windows`**: `{"retire":{"successors":[]}}`, with his typed sentence as
+the quotation. Its id stays; `docs/RULES.md` shows it under Retired with no successor. Two texts still name it and are
+read when it runs: `docs/proposals/harness-diet.md:461` and `:1050` (a proposal: named, not in force), and the retired
+`work-sessions`, whose successors list keeps it as history.
+
+**Not in this draft, N17** (the lead's note of 2026-10-30): "never ask him to look at the Codex meter" and "say it
+before he leaves" live only in `memory/codex-meter-is-readable.md`; `rule:announce-finished` holds only "the Codex
+meter, read at that moment". His typed words of 2026-10-11 ("recuerda siempre decirme lo del uso de codex", session
+130317af) are cited by the note; whether they are a quotable line was not checked. It is the lead's to route.
 
 ## Log
 - L1 (2026-10-24, the owner's standing word while he sleeps, transcript 908805db line 28784, verbatim): "Sigue solo voy a dormir, responde todas las preguntas con respuestas recomendadas, pero recuerda quiero la mejor calidad, solidez, robustes, y optimizacion al mismo tiempo osea lo mejor de lo mejor."
@@ -84,3 +139,34 @@ absence is in L1.
 - L10 (2026-10-24, the lead's answer): N39-N42. The init block's evidence line points to `js-harness-protocols` section 6 and its decide-and-go-on line to section 1, instead of restating them; the two `project.test.mjs` assertions that pinned the old wording now pin the pointers. `node --test` GREEN for `template-block.test.mjs` (6 pass) and `project.test.mjs` (157 pass, 6 skipped as before: symlink and platform guards).
 - L11 (2026-10-24): the efef30d0 message and content mismatch is left as it is; 8b525bce records it; no history rewritten (the lead's answer).
 - L12 (2026-10-24) gentle-ai: the rule/instruction-homes commits b6d2d40b..d3219d1f (f266761b..d3219d1f) assessed medium, not due (under_budget), by `gentle-ai review assess --base-ref f266761b --committed-only`; Codex: correct (0.9), recorded. N43's orchestrator copy (bin/lib/manifest.mjs:208) stays: it is the declared phrase of rule:announce-finished (the lead's answer). N7 waits for his typed list (L5).
+- L13 (2026-10-30, JH 96): his answers to Q62 and Q71 are tapped (the lead's transcript 0f71b2c6, lines 28485 and
+  28610, read with `js-harness sessions --quote`: "answer (tapped): Retirarla"). `js-harness rules change
+  work-sessions-private-windows --dry-run` with line 28610 as the quotation exits 1: "not changed: line 28610 of
+  0f71b2c6-cbce-43ca-a031-276a4b2c381f is a tapped answer: the option's text was written by a session, not typed by
+  him". Q62's line is tapped the same way, so T4 was not run either. By the lead's note (05:41 local), the two changes
+  are drafted above and a waiting notice gives the lead the sentence he must type for each:
+  - T4: "Lo que decido yo es una sola lista, en una regla: gasto fuera del plan, todo lo irreversible, las decisiones
+    de producto, publicar, credenciales, cambios de protocolo, ajustes de seguridad o del sistema, lo que se instale o
+    cambie en una máquina, un cambio del plan o de su orden, y un informe publicado fuera del proyecto; los demás
+    textos nombran esa regla."
+  - T7: "Retira la regla de máximo 3 sesiones de trabajo en Windows; el número de sesiones se decide caso por caso."
+- L14 (2026-10-30, JH 98): he typed both sentences (S21). T4 ran with line 30759 as the quotation and line 28485 as
+  where he chose the union. The id is `owner-decisions`, not the draft's `his-decisions`: the id is written into the
+  skills every project installs, and the shipped orchestrator text is held to never say "his"
+  (`bin/lib/manifest.test.mjs:3079`), which the draft's id failed. Beside the draft: protocol 7's line keeps its
+  "The user's decisions: " head, which `bin/lib/protocols-skill.test.mjs:112` pins; the init block's hash moved on
+  purpose (`bin/lib/template-block.test.mjs`); `bin/lib/project.mjs`'s line ceiling went down to 1989; the coverage
+  register ties the rule to protocol 1. `rules change` keeps one rule change open at a time across every `rule/`
+  branch (`bin/lib/rules-change-run.mjs`, "one change is open at a time"), so T7 runs on its own branch once
+  `rule/his-decisions` has landed.
+- L15 (2026-10-30, JH 98): two `- Seen:` lines owed from the lead's relief file go to `docs/FAILURES.md`, each a new
+  entry whose control is owed by an open task here (T8, T9); which text carries each is the lead's to route.
+- L16 (2026-10-30, JH 98) gentle-ai: 035e3250..e5454da4 (665baea7, e5454da4) assessed medium, not due (under_budget),
+  by `gentle-ai review assess --base-ref 035e3250 --committed-only`; the Stop hook's candidate was the branch from
+  a2b801fb, the merge of main in it, so its status was read and nothing started. Codex: correct (0.93), no findings;
+  the Claude lenses readability and reliability: 0 findings; both recorded.
+- L17 (2026-10-30, JH 98): PR 701 landed (main b2869d7); T7 ran on `rule/retire-work-sessions-windows` after merging
+  that main in (400653c3), with line 30812 as the quotation and line 28610 as where he chose it; the coverage register
+  drops the retired rule's owed control. gentle-ai: 400653c3..35399967 (35399967) assessed medium, not due
+  (under_budget), by `gentle-ai review assess --base-ref 400653c3 --committed-only`. Codex: correct (0.97), no
+  findings; the Claude lens reliability: 0 findings; both recorded.

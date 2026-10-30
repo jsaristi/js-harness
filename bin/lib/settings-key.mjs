@@ -1,7 +1,8 @@
 // One key inside a JSON settings file the harness does not own (a clone's `.claude/settings.local.json`):
 // written beside what is there, recorded so it can be undone exactly, and never written over a value
 // somebody else put there. The machine manifest's entries (bin/lib/manifest.mjs) append to arrays; a switch
-// of a project (odd/tasks/on-demand-functions.md) is a key of an object, which is this module.
+// of a project (odd/tasks/on-demand-functions.md) is a key of an object, which is this module; so is a list it adds
+// entries to beside the user's own, the denies every clone holds (odd/tasks/f8-s10-port.md, L13).
 import fs from 'node:fs';
 import path from 'node:path';
 import { NEW_SETTINGS_STYLE, detectIndent, serializeJson } from './manifest.mjs';
@@ -69,17 +70,45 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
  * made (the file, its folder, an object of the path) is the harness's for this key too, so the keys can be
  * undone in any order: whichever goes last takes with it what is then empty. */
 export function applySettingsKey(file, pointer, value, earlier = []) {
+  return writeAt(file, pointer, earlier, (holder, leaf) => {
+    if (leaf in holder) return same(holder[leaf], value) ? { state: 'kept' } : { state: 'conflict', holds: holder[leaf] };
+    holder[leaf] = value;
+    return { held: { value } };
+  });
+}
+
+/** Adds to the list at `pointer` of `file` the `entries` it lacks, after what is there (F8 S10, the denies every
+ * clone holds: odd/tasks/f8-s10-port.md, L13). As `applySettingsKey`, but a list somebody else holds entries in is
+ * shared, not a conflict: `written` records only the entries added here (with those of the record of this list in
+ * `earlier`) and `createdList`; `kept` when none is missing; `conflict` only when what stands there is no list. */
+export function applySettingsEntries(file, pointer, entries, earlier = []) {
+  const recorded = earlier.find((record) => Array.isArray(record.entries) && same(record.pointer, pointer));
+  return writeAt(file, pointer, earlier, (holder, leaf) => {
+    const list = holder[leaf];
+    if (list !== undefined && !Array.isArray(list)) return { state: 'conflict', holds: list };
+    const missing = entries.filter((entry) => !(list ?? []).includes(entry));
+    if (missing.length === 0) return { state: 'kept' };
+    holder[leaf] = [...(list ?? []), ...missing];
+    const added = [...new Set([...(recorded?.entries ?? []), ...missing])];
+    return {
+      held: { entries: added, createdList: Boolean(recorded?.createdList) || list === undefined },
+      now: { entries: missing, createdList: list === undefined },
+    };
+  });
+}
+
+/** The write both kinds share: `place(holder, leaf)` puts the key in the object that holds it and returns what the
+ * record holds of it (`{ held }`, and `now`, what this write alone added, where that differs), or the result to
+ * return with nothing written (`{ state }`). */
+function writeAt(file, pointer, earlier, place) {
   const read = readObject(file);
   if (read.reason) return { state: 'problem', reason: read.reason };
   const data = read.absent ? {} : read.data;
 
   const found = holderOf(file, data, pointer, true);
   if (found.reason) return { state: 'problem', reason: found.reason };
-  const leaf = pointer.at(-1);
-  if (leaf in found.holder) {
-    return same(found.holder[leaf], value) ? { state: 'kept' } : { state: 'conflict', holds: found.holder[leaf] };
-  }
-  found.holder[leaf] = value;
+  const placed = place(found.holder, pointer.at(-1));
+  if (placed.state) return placed;
 
   // The objects of this key's path that are the harness's, counted from the deepest up: one made just now,
   // or one an earlier key of the harness made. The count stops at the first that was somebody else's.
@@ -98,11 +127,15 @@ export function applySettingsKey(file, pointer, value, earlier = []) {
     state: 'written',
     record: {
       pointer,
-      value,
+      ...placed.held,
       createdFile: Boolean(read.absent) || earlier.some((record) => record.createdFile),
       createdDir: madeDir || earlier.some((record) => record.createdDir),
       createdContainers,
     },
+    // What this write alone did, for a run that fails before its manifest is written to undo and no more: the
+    // record above also holds what earlier runs did, which the manifest on disk still records (Codex on
+    // d0d6807..1f607cb).
+    undo: { pointer, ...(placed.now ?? placed.held), createdFile: Boolean(read.absent), createdDir: madeDir, createdContainers: found.missing },
   };
 }
 
@@ -121,6 +154,36 @@ function madeObjects(record) {
  * - `{ state: 'gone' }`: the key or the file is no longer there. Nothing to do;
  * - `{ state: 'problem', reason }`: the file can no longer be read. It is left as it is. */
 export function undoSettingsKey(file, record) {
+  return removeAt(file, record, (holder, leaf) => {
+    if (!same(holder[leaf], record.value)) return { state: 'changed', holds: holder[leaf] };
+    delete holder[leaf];
+    return null;
+  });
+}
+
+/** Undoes one `record` of `applySettingsEntries`: one copy of each entry it added comes out, and the list with
+ * them when it was made here and is empty, then what `undoSettingsKey` takes after a key. `changed` when what
+ * stands there is no longer a list; `gone` when none of the entries is left. */
+export function undoSettingsEntries(file, record) {
+  return removeAt(file, record, (holder, leaf) => {
+    const list = holder[leaf];
+    if (!Array.isArray(list)) return { state: 'changed', holds: list };
+    const left = [...list];
+    for (const entry of record.entries) {
+      const at = left.indexOf(entry);
+      if (at !== -1) left.splice(at, 1);
+    }
+    const emptied = record.createdList && left.length === 0;
+    if (left.length === list.length && !emptied) return { state: 'gone' };
+    if (emptied) delete holder[leaf];
+    else holder[leaf] = left;
+    return null;
+  });
+}
+
+/** The undo both kinds share: `take(holder, leaf)` takes the key's part out of the object that holds it and returns
+ * null, or the result to return with nothing written. */
+function removeAt(file, record, take) {
   const read = readObject(file);
   if (read.absent) return { state: 'gone' };
   if (read.reason) return { state: 'problem', reason: read.reason };
@@ -130,8 +193,8 @@ export function undoSettingsKey(file, record) {
   if (found.reason) return { state: 'problem', reason: found.reason };
   const leaf = pointer.at(-1);
   if (found.missing || !(leaf in found.holder)) return { state: 'gone' };
-  if (!same(found.holder[leaf], record.value)) return { state: 'changed', holds: found.holder[leaf] };
-  delete found.holder[leaf];
+  const stopped = take(found.holder, leaf);
+  if (stopped) return stopped;
 
   // The objects made here, from the deepest up: one that holds something of somebody else stays, and so
   // does everything above it.

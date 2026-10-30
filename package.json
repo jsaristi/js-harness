@@ -10,7 +10,8 @@
   "files": [
     "bin/",
     "!bin/**/*.test.mjs",
-    "!bin/**/*.testkit.mjs"
+    "!bin/**/*.testkit.mjs",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "check": "node bin/check.mjs",

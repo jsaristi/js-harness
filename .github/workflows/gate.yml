@@ -1,9 +1,11 @@
 # The gate of one commit on GitHub's machines, where every commit's tests go first (odd/tasks/first-version.md,
 # "Gates on CI machines"; odd/tasks/commit-gates-first.md). `check` pushes the tree it is about to commit to
 # `gate/<sha>`, reads this run's conclusion, and deletes the branch; the commit is made only on green.
+# `merge-queue --land` pushes its candidate, main with the ready pull requests merged in, to `queue/<time>-<sha>`
+# and lands it only on this run's green (odd/tasks/drop-circleci.md, S2): the run tests main as it would become.
 #
-# It runs for nothing but a push to a `gate/` branch: no pull request starts a run, and a fork can push none
-# here. The token reads and nothing more, no secret is named, and every action is pinned by commit. All of it
+# It runs for nothing but a push to a `gate/` or a `queue/` branch: no pull request starts a run, and a fork can
+# push none here. The token reads and nothing more, no secret is named, and every action is pinned by commit. All of it
 # is held by scripts/github-workflows.test.mjs. The repository is public, so its runs cost no minutes.
 name: gate
 
@@ -11,6 +13,7 @@ on:
   push:
     branches:
       - 'gate/**'
+      - 'queue/**'
 
 permissions:
   contents: read
@@ -20,7 +23,8 @@ jobs:
     runs-on: ubuntu-24.04
     # Two minutes past the rule ci-gate-bound, the longest a gate waits for this run from its push: the gate cancels
     # first, and this ends a run whose gate died; equal, the two would race and a timed-out job could read as a red.
-    # scripts/github-workflows.test.mjs holds the relation.
+    # scripts/github-workflows.test.mjs holds the relation. A queue run has the same bound; the queue waits longer
+    # for it (bin/merge-queue.mjs, CI_WAIT_MS), which leaves room for a runner to start.
     timeout-minutes: 10
     steps:
       # v4.2.2. The whole history: `check` compares the head with origin/main.
@@ -28,7 +32,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # v4.4.0, with the node the CircleCI image runs (cimg/node:24.21.0).
+      # v4.4.0, with the node windows-daily.yml sets up too (held by scripts/github-workflows.test.mjs).
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24.21.0

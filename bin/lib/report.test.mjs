@@ -62,7 +62,7 @@ test('sessionsOf groups the notices after the cut by session, with the last one 
   ]);
 });
 
-// gentle-ai review R2-004: a title is not unique, a session id is.
+// A review R2-004: a title is not unique, a session id is.
 test('two sessions that share a title are two lines, each by its title', () => {
   const notices = [
     notice({ at: '2026-10-20T09:00:00.000Z', from: FROM('JH 9 · reserve', 'aaaaaaaa-1111-4111-8111-111111111111'), text: 'first' }),
@@ -112,6 +112,68 @@ test('mapOf counts each phase of the roadmap and keeps the open steps', () => {
   assert.equal(map.done, 2);
   assert.equal(map.total, 3);
   assert.deepEqual(map.phases.map((phase) => [phase.title, phase.done, phase.total, phase.open]), [['One', 1, 2, ['b']], ['Two', 1, 1, []]]);
+});
+
+// odd/tasks/report-stretch-share.md, S1: the migration's share is the plan's steps as the stretch forecast counts them.
+test('mapOf carries each plan section\'s steps done of their total, as the stretch forecast counts them', () => {
+  const map = mapOf('# R\n\n## Checklist\n\n### One\n- [x] a\n\n## F8 plan\n\n### S0 Baseline\n- **State:** done\n\n### S3 Split\n- **State:** built\n\n### S13 Rehearsal\n- **State:** to do\n');
+  assert.deepEqual(map.plans, [{ name: 'F8 plan', done: 2, total: 3 }]);
+  assert.deepEqual(mapOf('# R\n\n## Checklist\n\n### One\n- [x] a\n').plans, []);
+});
+
+// --- the migration and the last stretch (odd/tasks/report-stretch-share.md) ---
+
+const SHARE_MAP = { done: 2, total: 3, phases: [], plans: [{ name: 'F8 plan', done: 9, total: 14 }] };
+const STRETCH = {
+  id: 's-1',
+  state: 'closed',
+  openedAt: '2026-10-20T06:00:00.000Z',
+  returnAt: '2026-10-20T11:00:00.000Z',
+  at: '2026-10-20T10:30:00.000Z',
+  hours: 5,
+  elapsedHours: 4.5,
+  goals: { checkedAt: '2026-10-20T10:30:00.000Z', met: 1, total: 2, list: [{ id: 'G1', text: 'PR 630 en main', met: true, said: 'exit 0' }, { id: 'G2', text: 'S13 hecha', met: false, said: 'exit 1' }] },
+  totals: { estimate: [6, 9], realHours: 7, lostHours: 0.5, lostShare: 0.07 },
+  forecast: {
+    named: 2,
+    total: { done: 1, total: 4, forecast: 3, low: 2, high: 3 },
+    plans: [{ name: 'F8 plan', done: 1, total: 2, forecast: 2, low: 1, high: 2 }],
+    now: { total: { done: 3, total: 5 }, plans: [{ name: 'F8 plan', done: 2, total: 2 }], forecastDone: { done: 2, of: 2 }, gained: 1 },
+  },
+};
+const shareLines = (fields) => reportLines({ cut: { at: at('2026-10-20T00:00:00Z'), source: 'last-report' }, branch: 'main', landed: [], sessions: [], questions: { answered: [], open: [] }, map: SHARE_MAP, ...fields });
+
+test('reportLines prints the migration now and at the cut, then the last stretch: each goal with its exit, its hours and its forecast against now', () => {
+  const lines = shareLines({ before: { map: { ...SHARE_MAP, plans: [{ name: 'F8 plan', done: 8, total: 14 }] } }, stretch: STRETCH });
+  const text = lines.join('\n');
+  assert.ok(lines.includes('Migration: F8 plan  9/14 steps  64%; at the cut 8/14  57%'), text);
+  assert.ok(lines.includes('Stretch s-1: closed at 2026-10-20 10:30Z, opened 2026-10-20 06:00Z; 4.5 of 5 h; goals 1 of 2 met, checked 2026-10-20 10:30Z'), text);
+  assert.ok(lines.includes('  goal G1 met (exit 0): PR 630 en main'), text);
+  assert.ok(lines.includes('  goal G2 not met (exit 1): S13 hecha'), text);
+  assert.ok(lines.includes('  estimated 6-9 h, real 7 h, lost 0.5 h'), text);
+  assert.ok(lines.includes('  forecast F8 plan: 50% at the opening, ~100% at the return (50% to 100%); now 100%'), text);
+  assert.ok(lines.includes('  forecast map: 25% at the opening, ~75% at the return (50% to 75%); now 60%; 2 of 2 forecast rows done'), text);
+  assert.ok(lines.indexOf('Migration: F8 plan  9/14 steps  64%; at the cut 8/14  57%') < lines.findIndex((line) => line.startsWith('Map: ')), 'the migration leads the map');
+});
+
+test('with no before, no plan, no stretch or a stretch that cannot be read, the lines say so in their place', () => {
+  const unknown = shareLines({ before: null, stretch: null });
+  assert.ok(unknown.includes('Migration: F8 plan  9/14 steps  64%; at the cut not known: the last report recorded no commit'), unknown.join('\n'));
+  assert.ok(unknown.includes('Stretch: none open or closed since the cut'), unknown.join('\n'));
+  const unread = shareLines({ before: { unavailable: 'c0abcdef: git show: bad object' }, stretch: { unavailable: 'EACCES' } });
+  assert.ok(unread.includes('Migration: F8 plan  9/14 steps  64%; at the cut not known: c0abcdef: git show: bad object'), unread.join('\n'));
+  assert.ok(unread.includes('Stretch: could not read: EACCES'), unread.join('\n'));
+  // A record the measure could not read leaves the hours partial, said under them.
+  const partial = shareLines({ before: null, stretch: { ...STRETCH, unread: { 'gate log': 'EACCES' } } });
+  assert.ok(partial.indexOf('  gate log could not be read: EACCES; the hours above are partial') > partial.indexOf('  estimated 6-9 h, real 7 h, lost 0.5 h'), partial.join('\n'));
+  const noPlan = shareLines({ map: { ...SHARE_MAP, plans: [] }, before: null, stretch: null });
+  assert.ok(noPlan.includes('Migration: the roadmap has no plan section'), noPlan.join('\n'));
+  const open = shareLines({ before: null, stretch: { ...STRETCH, state: 'open', goals: { checkedAt: null, met: 0, total: 1, list: [{ id: 'G1', text: 'PR 630 en main', met: null, said: null }] }, forecast: { unavailable: 'git show: bad object' } } });
+  assert.ok(open.includes('Stretch s-1: open, back at 2026-10-20 11:00Z, opened 2026-10-20 06:00Z; 4.5 of 5 h; goals 0 of 1 met, not checked yet'), open.join('\n'));
+  assert.ok(open.includes('  goal G1 not checked: PR 630 en main'), open.join('\n'));
+  assert.ok(open.includes('  forecast: the map could not be read (git show: bad object)'), open.join('\n'));
+  // A report without the new facts (the callers before this change) prints as before.
+  assert.ok(!reportLines({ cut: { at: NOW, source: 'since' }, branch: 'main', landed: [], sessions: [], questions: { answered: [], open: [] }, map: { absent: true } }).some((line) => /^(Migration|Stretch)/.test(line)));
 });
 
 // --- the text ---
