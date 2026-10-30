@@ -55,7 +55,7 @@ told him to update the engram binary while 3.6.0 was engram's latest release, ad
 - [x] T2 (kind: build) the engram plugin's ahead fix names the case that holds, both when not known — S2; inline, test
   first
 - [x] T3 (kind: docs) the roadmap's F8 task with question 123 — S1
-- [ ] T4 (kind: verify) doctor read-only here; Codex and the lenses on the code commits; `npm run check`; PR, ready
+- [x] T4 (kind: verify) doctor read-only here; Codex and the lenses on the code commits; `npm run check`; PR, ready
   notice, summary — S3
 
 ## Decisions
@@ -110,3 +110,6 @@ told him to update the engram binary while 3.6.0 was engram's latest release, ad
   (confidence 0.96)", one P2: an entrypoint that is a folder reads `ok`, and the stack test made it so with `mkdirSync`
   (127,922 input tokens, 90,880 cached). Accepted: a test of a folder entrypoint failed 1 of 8, then `isFile` in
   `codexDaemonState` and a written file in the stack test, 124 of 124.
+- L9 (reviews of the fix, `27bba80..36dbe52`): Codex, "the patch is correct (confidence 0.99)", the P2 fixed (31,491
+  input tokens); the lenses reliability and resilience, 0 findings (10,903 and 5,170 input tokens). No gentle-ai
+  review: the brief asked for Codex and the lenses.
