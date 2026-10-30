@@ -238,7 +238,14 @@ session records `tools-background.txt` from its own list either way.
   "undefined" (R3-002); check let a named CLI drop its span and accepted rows no span names (R3-003); tools took any
   read failure of the recorded list for a first capture (R3-004).
 - gentle-ai: `dad0db39` approved (review-4991b18b1d344d43, reliability).
+- L8 (2026-10-30): the fix is `98d4c7cb`; Codex over `fa2c829..98d4c7c` correct (0.9), lenses 0 findings but one
+  reliability warning, real: `check` reads the spans the file writes, so "(X to X)" at the version read skips every
+  entry. Only `doctor --host-reviewed` knows the version last reviewed, so its gate now asks each moved changelog for
+  the span from that version (`60bddd22`). `f3274d4c` renames comments that named gentle-ai, which
+  `bin/lib/gentle-ai-absence.test.mjs` refuses under `bin`; two commits had entered with it because the pre-commit
+  with tests on CI failed and a hand `npm run check` of the same code, without them, then passed as `same`
+  (gate-log 309-317): told to the lead, not fixed here. Codex over `98d4c7c..f3274d4` correct (0.92); lenses 0.
 
 ## Next step
-1. Codex and lenses on the gentle-ai fix (`--base fa2c829c`), then PR 717 out of draft and the `ready` notice.
+1. PR 717 out of draft once its CI is green, then the `ready` notice.
 2. T4 (trigger: heartbeat `HOST:` line, row fix, notice, `host-watch brief`), PR 3; then T5 (real run), T6.
