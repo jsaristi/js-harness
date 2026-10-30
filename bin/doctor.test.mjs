@@ -2145,6 +2145,62 @@ test('the host check reads the home doctor was given, and --host-reviewed --json
 });
 
 
+// Seen 2026-10-30 by the lead: the two flags in one call recorded only the host review (odd/tasks/doctor-rows.md, S3).
+test('--host-reviewed --stack-reviewed in one call records both reviews, and --json prints both records in one object', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0', claude: '2.1.299 (Claude Code)\n' }, gitToplevel: project, codexLogin: 'in' });
+    const host = () => ({ found: true, desktop: '2.42304.0', staged: null, code: '2.1.299' });
+    const now = () => new Date('2026-10-30T15:00:00.000Z');
+    const deps = { spawn, fetch: noopFetch, host, now, stackUpdate: true };
+
+    const both = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed', '--stack-reviewed'], {}, deps);
+    assert.equal(both.code, 0);
+    const lines = both.output.trimEnd().split('\n');
+    assert.deepEqual(lines[0], 'Recorded Claude Desktop 2.42304.0 and its Code tab CLI 2.1.299 as reviewed.');
+    assert.match(lines[1], /^Recorded (.+, )?claude 2\.1\.299(, .+)? as reviewed\.$/);
+    assert.equal(lines.length, 2);
+    assert.deepEqual(readCache(home).host.reviewed, { desktop: '2.42304.0', code: '2.1.299', at: '2026-10-30T15:00:00.000Z' });
+    assert.equal(readCache(home).stack.reviewed.versions.claude, '2.1.299');
+
+    // The order of the flags does not matter, and --json prints one object that parses, keyed by review.
+    const json = await runDoctor(['--home', home, '--cwd', project, '--stack-reviewed', '--host-reviewed', '--json'], {}, deps);
+    assert.equal(json.code, 0);
+    const printed = JSON.parse(json.output);
+    assert.deepEqual(Object.keys(printed), ['host', 'stack']);
+    assert.deepEqual(printed.host, { reviewed: readCache(home).host.reviewed });
+    assert.deepEqual(printed.stack, { reviewed: readCache(home).stack.reviewed });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('--host-reviewed --stack-reviewed records the review it can when the other records nothing, and exits 1', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  const errors = [];
+  const original = console.error;
+  console.error = (line) => errors.push(line);
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0', claude: '2.1.299 (Claude Code)\n' }, gitToplevel: project, codexLogin: 'in' });
+    const host = () => ({ found: true, desktop: null, staged: null, code: '2.1.299' });
+    const { code, output } = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed', '--stack-reviewed'], {}, { spawn, fetch: noopFetch, host, stackUpdate: true });
+    assert.equal(code, 1);
+    assert.deepEqual(errors, ['js-harness doctor: could not read the running Claude Desktop version: nothing was recorded.']);
+    assert.match(output, /^Recorded (.+, )?claude 2\.1\.299(, .+)? as reviewed\.\n$/);
+    assert.equal('host' in readCache(home), false);
+    assert.equal(readCache(home).stack.reviewed.versions.claude, '2.1.299');
+  } finally {
+    console.error = original;
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 test('--host-reviewed with no readable desktop version records nothing and exits 1; without the host check doctor shows no host row', async () => {
   const home = makeTmpHome();
   const project = makeTmpHome();

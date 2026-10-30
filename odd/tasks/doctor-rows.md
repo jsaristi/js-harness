@@ -51,7 +51,7 @@ review flags in one call record only the host review, silently: the lead had to 
 - [x] T1 (kind: build) S1 — `claudeAccountState` reads the app config from `desktopDir`; inline, test first (L3, L4)
 - [x] T2 (kind: build) S2 — the engram-plugin cell: cause in `## Engram plugin`, fix text for a clone with no tag;
   inline, test first (L6, L7)
-- [ ] T3 (kind: build) S3 — one call records both reviews; inline, test first
+- [x] T3 (kind: build) S3 — one call records both reviews; inline, test first (L9, L10)
 - [ ] T4 (kind: verify) Codex and the lenses on the code commits; `npm run check`; PR, ready notice, summary
 
 ## Engram plugin
@@ -93,3 +93,9 @@ out, so it is the lead's to put on the roadmap or not.
   the fix `git -C C:\Users\Oficina\.claude\plugins\marketplaces\engram fetch --depth 1 origin tag v3.6.0`. Not run.
 - L8 (open, out of scope): `README.md` names `js-harness doctor --gentle-ai-reviewed`, a flag doctor's `KNOWN` list no
   longer takes (`grep -rn gentle-ai-reviewed bin` finds nothing). Left for the lead.
+- L9 (decision): one call records both, rather than refusing the pair: the lead's need was one call. Each review
+  records or fails on its own, as alone; one that records nothing says why on stderr and the call exits 1, the other
+  still recorded. `--json` prints `{ reviewed }` for one flag, as before, and `{ host: { reviewed }, stack: { reviewed } }`
+  for both, so the output stays one JSON document.
+- L10 (red, then green): the two tests first, `node --test --test-name-pattern=reviewed bin/doctor.test.mjs` failed 2
+  of 9; after `recordReviews`, `bin/doctor.test.mjs` 95 of 95.
