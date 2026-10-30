@@ -36,6 +36,10 @@ const SURFACE_PREFIX = /^(?:\[(?:VSCode|Cloud sessions|Claude Tag|Code Review|Je
 // only when no harness area does.
 const OUTSIDE = /VS ?Code|JetBrains|Slack|Bedrock|Vertex|Foundry|gateway|macOS|\bMac\b|Linux|GNOME|\bSSH\b|Self-hosted runner|Cowork|\/claude-api|\bMDM\b|HKLM|Dvorak/i;
 const OUTSIDE_SECTIONS = ['Cowork', '3P'];
+// The Code tab named on its own ("in Cowork, Chat and Code", "Code sessions"), not Claude Code, VS Code, Visual Studio
+// Code, Code Review or Code Interpreter: an entry that names it is the Code tab's too, whatever outside word or
+// section it carries (desktop 4.4212.0 #24).
+const CODE_TAB = /(?<!Claude\s|VS\s|Visual Studio\s)\bCode\b(?!\s(?:Review|Interpreter))/;
 const WINDOWS = /Windows|PowerShell/i;
 const PHONE = /mobile|phone|\biOS\b|Android/i;
 
@@ -120,12 +124,13 @@ export function cutSpan(text, { from, to }) {
 }
 
 /** `{ areas, outside }` of an entry: the ids of the harness areas its words touch, and what places it outside the Code
- * tab (a declared surface; else, with no area, an outside word or the Cowork or 3P section), or null. */
+ * tab (a declared surface; else, with no area and no word naming the Code tab, an outside word or the Cowork or 3P
+ * section), or null. */
 export function classify(entry) {
   const areas = AREAS.filter((area) => area.pattern.test(entry.text)).map((area) => area.id);
   const prefix = SURFACE_PREFIX.exec(entry.text);
   if (prefix) return { areas, outside: prefix[0] };
-  if (areas.length > 0) return { areas, outside: null };
+  if (areas.length > 0 || CODE_TAB.test(entry.text)) return { areas, outside: null };
   const word = OUTSIDE.exec(entry.text);
   if (word) return { areas, outside: word[0] };
   if (OUTSIDE_SECTIONS.includes(entry.section)) return { areas, outside: `the ${entry.section} section` };

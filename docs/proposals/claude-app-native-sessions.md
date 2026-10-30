@@ -178,7 +178,7 @@ probe or the mod pilot), **keep**.
 
 | # | Harness piece | Host feature | Kind | Why, strictly | Saving |
 |---|---|---|---|---|---|
-| 1 | `permit` relay (`SKILL.md:29`) | none | **keep** | Section 3, point 4. Its use is low (10 relays, the last 2026-10-18), so whether he still wants it is his question, not a host replacement | — |
+| 1 | `permit` relay (`SKILL.md:29`) | none | **keep** | Section 3, point 4. Its use is low (10 relays, the last 2026-10-18), so whether he still wants it is his question, not a host replacement. CLI 2.1.309 denies a dangerous `rm` in bypass mode with a rewrite hint instead of a card, which takes nothing from the relay (`docs/host-updates/claude-desktop-4.4212.0.md`, code 2.1.309 #6) | — |
 | 2 | Codex skill copies and Codex hooks in `install` | none needed: Codex only reviews (line 33574) | **policy** | Codex never leads or works; reviews already disable hooks and skills; today its `reply` hook overwrote a reader's answer | 8 install components; no runtime tokens |
 | 3 | The lead's archive of a finished session (`SKILL.md:117`) | auto-archive on PR close (On) | **use now** (step 4 passed) | The app archived a merged session in 20 s to ~6 min (section 12, step 4). The app archives on merge, but the lead's checks (clean worktree, nothing queued, summary read, `manifest.mjs:227`) are not proven by a merge, and "running sessions don't auto-archive" while a background `wait` runs | ~150 tokens *estimate*; one lead turn per session |
 | 4 | Recap prose (`SKILL.md:94-99`) | `wrap_up` recap | **use now** | The box carries 300 characters and one question; the effort line and the Codex meter stay in the reply | ~250 *estimate* |
@@ -191,7 +191,7 @@ probe or the mod pilot), **keep**.
 | 11 | `sessions --watch` | same | **keep** | Same reasons; it also sees gates, PRs and stalls | — |
 | 12 | `notify` and the channel | `SendMessage` | **keep** | The channel is the record the board, report, stretch and land read | — |
 | 13 | `sessions` board computation | `list_sessions`, `get_usage` | **keep** | Section 3, point 1 | — |
-| 14 | Board: `sessions live` + ArtifactData by hand | mod pane; Artifacts | **probe** | The page is the only view from any browser; a mod pane lives in one session's view and does not feed the page. The rows owed by hand stay owed unless a mod can reach ArtifactData, which is [unknown] | after the pilot: most per-wake board turns on the desktop |
+| 14 | Board: `sessions live` + ArtifactData by hand | mod pane; Artifacts | **probe** | The page is the only view from any browser; a mod pane lives in one session's view and does not feed the page. The rows owed by hand stay owed unless a mod can reach ArtifactData, which is [unknown]. Desktop 4.4212.0 adds `sessionStatusLine`, one line above the message box that a program prints: a candidate for the board's line, adapt, his question (`docs/host-updates/claude-desktop-4.4212.0.md`, desktop 4.4212.0 #24) | after the pilot: most per-wake board turns on the desktop |
 | 15 | `resume --pause` per tool call | mod hooks, `$.session.usage()` | **probe** | Same notice in-engine, without a process per call | after the pilot |
 | 16 | `quiet --wait` + push | keep-awake setting | **keep** | The host keeps the PC awake; it never says when it may be turned off | — |
 | 17 | `loop` | Monitor, TaskStop | **keep** | `taskstop-leaves-work-alive` still holds | — |

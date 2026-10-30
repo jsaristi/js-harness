@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
 import { AREAS, checkReview, classify, cutSpan, diffTools, draftReview, entriesBetween, hostTools, parseChangelog, parseToolList, renderBrief, renderToolList, surfaceRefusal, watchLine, watchOpened, watchTitle } from './host-watch.mjs';
-import { reviewFileGaps } from './host-update.mjs';
+import { hostReviewRefusal, reviewFileGaps } from './host-update.mjs';
 
 // The desktop changelog as it is served in markdown (https://claude.com/docs/cowork/claude-desktop-changelog.md):
 // a bold version heading, a date, the bundled CLI, bold sections and `* ` bullets. One entry a class, and one no
@@ -340,4 +341,25 @@ test('the brief freezes the spans and names every step of the review, in order',
   }
   assert.match(brief, /a second update/);
   assert.match(brief, /without his yes/);
+});
+
+test('the gate of doctor --host-reviewed accepts the first real review, of 4.29.0 / 2.1.308 to 4.4212.0 / 2.1.309', () => {
+  const project = fileURLToPath(new URL('../..', import.meta.url));
+  assert.equal(hostReviewRefusal({ project, versions: { desktop: '4.4212.0', code: '2.1.309' }, reviewed: { desktop: '4.29.0', code: '2.1.308' } }), null);
+});
+
+// The first real review, desktop 4.4212.0 #24: a Cowork entry that names Code was drafted ignore, outside the Code tab.
+test('an entry that names Code is not placed outside by an outside word or its section; one that names Claude Code or VS Code still is', () => {
+  const entry = (text, section) => ({ id: 'desktop 4.5000.0 #9', version: '4.5000.0', section, text });
+  assert.equal(classify(entry('Added a status line above the message box in Cowork, Chat and Code.', 'Cowork')).outside, null);
+  assert.equal(classify(entry('Changed Code sessions to ask before a dev server starts over SSH.', 'Code')).outside, null);
+  assert.equal(classify(entry('Changed a setting in Claude Code managed settings, or its MDM policy.', 'General')).outside, 'MDM');
+  assert.equal(classify(entry('Fixed a VS Code panel losing its place.', 'General')).outside, 'VS Code');
+  assert.equal(classify(entry('Fixed a card in Cowork.', 'Cowork')).outside, 'Cowork');
+  // The reliability lens on deede289, R3-001 and R3-002: names that hold "Code" and are not the Code tab.
+  assert.equal(classify(entry('Fixed the VSCode panel losing its place.', 'General')).outside, 'VSCode');
+  assert.equal(classify(entry('Fixed a Visual Studio Code panel in Cowork.', 'Cowork')).outside, 'Cowork');
+  assert.equal(classify(entry('Fixed Code Review comments in Cowork.', 'Cowork')).outside, 'Cowork');
+  assert.equal(classify(entry('Fixed Code Interpreter files in Cowork.', 'Cowork')).outside, 'Cowork');
+  assert.equal(classify(entry('Fixed Claude Code managed settings under MDM.', 'General')).outside, 'MDM');
 });

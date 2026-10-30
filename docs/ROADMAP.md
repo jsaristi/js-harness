@@ -667,6 +667,10 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   tool-list diff names what was added and removed; the first real review,
   `docs/host-updates/claude-desktop-4.4212.0.md`, passes `host-watch check` (every entry of its
   span has a decided row) and the gate of `--host-reviewed`.
+- **State (2026-10-30):** the first real review is written (Desktop 4.29.0 → 4.4212.0, CLI 2.1.308 →
+  2.1.309): 113 rows, one adapt (`sessionStatusLine`, question 131), 112 ignore; it passes `host-watch
+  check` and a test runs the gate of `--host-reviewed` over it. Both tool lists are recorded as
+  baselines (the Code tab's 169 host tools, a background session's 68).
 - **Was:** the idea watch of gentle-ai releases (`bin/lib/gentle-ai-update.mjs`, the
   reverse-engineering document's section 5), planned for any time after S2. It leaves with gentle-ai
   at S2, by question 129; this entry keeps its history.

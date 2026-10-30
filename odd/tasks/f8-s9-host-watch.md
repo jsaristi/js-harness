@@ -167,13 +167,13 @@ CLI's copy. The desktop tool list: the lead is asked (a `note`) to transcribe it
 session records `tools-background.txt` from its own list either way.
 
 ## Tasks
-- [ ] T1 (kind: docs) this document, the ROADMAP's S9 and the proposal's section 8 reconciled; two blind readers grade
+- [x] T1 (kind: docs) this document, the ROADMAP's S9 and the proposal's section 8 reconciled; two blind readers grade
   the plan before code, and the plan is revised on their findings — S3, S4; inline; PR 1
-- [ ] T2 (kind: build) `bin/lib/host-watch.mjs`: parse, span, classify, draft, check, the tool-list diff; the gate's
+- [x] T2 (kind: build) `bin/lib/host-watch.mjs`: parse, span, classify, draft, check, the tool-list diff; the gate's
   hand-list refusal; tests first — S4; inline; code commit; Codex and lenses; PR 2
-- [ ] T3 (kind: build) `bin/host-watch.mjs` (`draft`, `check`, `tools`, `brief`) and the command list; tests first —
+- [x] T3 (kind: build) `bin/host-watch.mjs` (`draft`, `check`, `tools`, `brief`) and the command list; tests first —
   S4; inline; code commit; Codex and lenses; PR 2
-- [ ] T4 (kind: build) the trigger: the stale row, the notice and the heartbeat's `HOST:` line; the rendered fallback
+- [x] T4 (kind: build) the trigger: the stale row, the notice and the heartbeat's `HOST:` line; the rendered fallback
   command through the guards; tests first — S4; inline; code commit; Codex and lenses; PR 3
 - [ ] T5 (kind: verify) the real run: the excerpts, the draft decided row by row, the tool lists, `check`, the
   acceptance test, the map rows, the Spanish page, one question per `adopt` or `adapt` — S1, S3, S4; inline; docs
@@ -268,20 +268,43 @@ session records `tools-background.txt` from its own list either way.
 
 - L11 (2026-10-30): Codex over `34562cc..56c82c7` correct (0.98), the three fixed; lenses reliability, risk 0. T4
   is reviewed: `34562cc4`, `56c82c71` on `f8-s9-trigger`.
+- L12 (2026-10-30): L10's "correction to L6" is wrong and L6 stands: code 2.1.309 #6 is "Changed the dangerous `rm`
+  and `rmdir` prompt in bypass permissions mode in the Desktop app and VS Code to deny the command at once with a
+  rewrite hint". The search behind L10 split rows on `|` and missed the rows whose split differed (desktop #29, #30,
+  code #4 to #9). Every row of the review is decided: one adapt (desktop #24), 112 ignore, each with its reason;
+  `host-watch check` exits 0 over 113 rows. Desktop #24 had been drafted ignore, "outside the Code tab: Cowork",
+  though it reads "in Cowork, Chat and Code": the classifier let an outside word win over the Code tab named on its
+  own. Fixed with its test (`CODE_TAB` in `bin/lib/host-watch.mjs`); a redraft of the same span changes that row only
+  (64 to 65 open rows). The rows drafted outside were then read again; #28 (`desktopHome`, breaking) now carries its
+  evidence, "Code is not affected". Tool lists recorded as baselines: `tools-desktop.txt`, 169 host tools, from the
+  lead's capture; `tools-background.txt`, 68, this session's own. Only the Code tab has the `ccd_*`, `terminal`,
+  `scheduled-tasks`, `Claude_Browser`, `visualize` and `mcp-registry` servers; only the background session has
+  `Task*`, `SendFeedback`, `EndConversation` and the MCP resource tools. The acceptance test runs
+  `hostReviewRefusal` over the committed file for 4.29.0 / 2.1.308 → 4.4212.0 / 2.1.309 and gets `null`. Map rows 1
+  and 14 of the proposal name the entries that touch them.
+- L13 (2026-10-30): the Spanish page is https://claude.ai/artifact/NL5RU96pRQ6cwXBHkoLCNh, read back after publishing
+  (version 1793397967-278b). Its counts come from the review file: 26 rows of another surface, 12 of another platform
+  or provider, 9 of Cowork or 3P, 30 host fixes, 36 read and reasoned one by one. It is marked free under the template
+  gate: no command renders a review file yet.
+- Q 131 (2026-10-30, recorded through `notify --kind question`, asked by the lead): desktop 4.4212.0 #24, adapt:
+  whether a feature opens to show the harness's state with `sessionStatusLine` (admin rights on Windows, outside
+  the per-user undo). A yes opens that feature and asks again before anything is installed as administrator; a no
+  leaves it written on map row 14. T5 does not wait on it.
+- L14 (2026-10-30): T5's slice `cc07525..de970be` is reviewed. Codex over `9bc443e..de970be` correct (0.92); lenses
+  reliability and readability over `56c82c7..de970be`, 0 findings. gentle-ai: `review-e9d1955ee1cedd86` approved
+  (reliability) and acknowledged, with two advisory findings, both real and fixed next with their tests: R3-001,
+  `CODE_TAB` also took "Visual Studio Code", "Code Interpreter" and a "Claude Code" split by another space; R3-002,
+  the test pinned no negative case. A redraft of the real span is unchanged by the fix. PR 719 (draft) to main;
+  PR 718 landed (`c9d2ee80`).
+
+- L15 (2026-10-30): the fix of R3-001 and R3-002 is `1feb2c79`; lenses reliability and readability over
+  `de970be..1feb2c7`, 0 findings. Every commit of this feature from `6de916b7` to `1feb2c79`, 20 in all, carries
+  `Co-Authored-By` and `Claude-Session`, which `CLAUDE.md` forbids: the session's own summary of its rules, carried
+  over two compactions, listed them as required. Nothing is rewritten; later commits carry neither. Third sighting
+  of `commit-attribution-from-host` in `docs/FAILURES.md`; the `commit-msg` check is proposed to the lead. T1 to T4
+  are merged (PRs 716, 717, 718); the summary is `docs/sessions/2026-10-30-jh-109-host-watch-s9-watches-claude-releases.md`.
 
 ## Next step
-1. Push `f8-s9-trigger`; open PR 3 (base `f8-s9-probe` while PR 717 is open, else main); `ready` notice.
-2. T5, the real run, on a branch `f8-s9-review` from `f8-s9-trigger`: the draft is
-   `node bin/js-harness.mjs host-watch draft --desktop <desktop.md> --code <code.md> --from-desktop 4.29.0
-   --to-desktop 4.4212.0 --from-code 2.1.308 --to-code 2.1.309 --sources docs/host-updates/sources` over the
-   published pages (`https://claude.com/docs/cowork/claude-desktop-changelog.md`,
-   `https://code.claude.com/docs/en/changelog.md`): 113 rows, 56 to decide, 13 by hand. Decided so far: no adopt;
-   one candidate adapt, desktop 4.4212.0 #24 `sessionStatusLine` (a line above the Code tab's message box printed by
-   a program the app runs; on Windows it must sit in Program Files, set by managed settings: admin, outside the
-   per-user undo), which brings one question; desktop #28 (`desktopHome`, breaking Nov 10) ignore: "Code is not
-   affected" (desktop changelog, the `desktopHome` entry of its beta); code #49 (PowerShell hooks failing open)
-   ignore: checked, no harness hook in `~/.claude/settings.json` sets `shell`; code #33 ignore (L6). Every other
-   row: a host fix that needs no harness change.
-3. Then `tools-background.txt` from this session's own list, `tools-desktop.txt` from the lead's
-   (`~/.js-harness/research/host-watch/tools-desktop-lead.txt`, `--record`), `host-watch check` exit 0, the map
-   rows of the proposal, the Spanish page, one `notify --kind question` for #24, PR 4; T6.
+1. PR 719 (T5) to main, out of draft once Codex has reviewed `de970be..HEAD`; `ready --pr 719` to the lead.
+2. After it lands: `doctor --host-reviewed` from the main checkout records 4.4212.0 / 2.1.309 (the lead's, or this session's if it is still open).
+3. T6: the `closed` notice with the summary.
