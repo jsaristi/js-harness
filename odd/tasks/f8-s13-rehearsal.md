@@ -72,7 +72,10 @@ directive coverage and S12's migration carries it" (reverse-engineering document
   the range, PR, ready notice, summary — inline
 
 ## Walk
-Not run yet.
+- Run 1 (2026-10-30T02:04Z, `d4dd7199`, 1.3 minutes, host cost $0 of the $5 estimate): `real-home-before` PASS (19
+  of his files hashed), `install` PASS (9 files and 20 hook entries recorded, 24 denies), `stack-install` FAIL:
+  "engram setup claude-code exited 1: engram: the Claude Code plugin requires jq in PATH"; the rest skipped;
+  `real-home-after` PASS (19 of his files as they were). Two findings, L5.
 
 ## Next step
 State at the context pause (2026-10-29, branch `f8-s13-rehearsal`, worktree
@@ -129,3 +132,17 @@ summary.
   test-first in bin/doctor, its own commit; S12 reuses it. D2 yes: the two reviews run from his env with --cwd on the
   scratch project; nothing linked or copied into the scratch home, and the review records land in the scratch
   project's git dir, not this repo's." So T8 builds the row.
+- L5 (2026-10-30, evidence, walk run 1): (1) engram's Claude Code plugin needs `jq` (and `curl`) on the PATH to set
+  up; the walk's PATH had none, so the walk now links his `jq` beside `claude` (`curl` is System32's). Nothing in
+  `bin/` names `jq` as a prerequisite of his engram step (`grep -rn "\bjq\b" bin` finds only `gh --jq`), so a machine
+  without it fails at that step: owed to S12's guide. (2) The scratch Codex CLI stack installed (0.165.0) opened a
+  browser: `stack install --tool context7` runs `codex mcp add context7 --url https://mcp.context7.com/mcp`
+  (`bin/lib/stack-install.mjs`), which started context7's OAuth login and launched Brave with its profile in the
+  scratch `LOCALAPPDATA`. The process tree read after the walk: node (the scratch codex launcher) -> codex.exe ->
+  brave.exe at `https://clerk.context7.com/oauth/authorize?...`, still alive after the walk ended; killed by its tree
+  (`taskkill /PID 23452 /T /F`, 8 processes), no Brave left, nothing entered in it. Assumed, not checked: the
+  registration's 30 s timeout (`bin/lib/stack-run.mjs:12`) killed only the `.cmd` shim and left the tree. Not
+  reproduced, since a rerun opens his browser again. D3, the lead's (an installer change): (a) `stack install`
+  stops the whole tree of a timed-out run, and the walk keeps context7 out of Codex until a registration that opens
+  no browser exists, recorded owed; (b) the walk runs without `--tool context7` and row 2 records it owed to S12;
+  bin unchanged. Recommended: (a), since an orphaned login and browser on a timeout reach his real machine too.
