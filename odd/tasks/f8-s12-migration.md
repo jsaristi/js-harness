@@ -70,8 +70,8 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
 - [x] T5 (kind: docs) S8: what the walk owes about context7's OAuth in Codex, recorded — S8; the migration never
   runs `codex mcp add`: context7's Codex gap is said with doctor's fix, which warns that it opens context7's sign-in
   in a browser (`context7Gaps`, its test asserts the warning), so no run of migrate can leave a login open
-- [ ] T6 (kind: verify) Codex and the lenses on every code commit, gentle-ai lines, the independent verifier over
-  the range; PRs, ready notices, summary
+- [x] T6 (kind: verify) Codex and the lenses on every code commit, gentle-ai lines, the independent verifier over
+  the range; PRs, ready notices, summary — L9-L18; PRs 689, 693-696
 
 ## Decisions
 - D1 (2026-10-30, this session): a new command `js-harness migrate`, not a second `init` nor a `sync` flag: a second
@@ -96,9 +96,10 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
 
 ## Next step
 State at 2026-10-30 ~08:50Z (branch `f8-s12-migration`, code through H `8546b86f`, nothing pushed). Every code
-commit has Codex, the lenses and a gentle-ai line (L9-L17); the verifier ran over `24c47ca..9af1aac` (L13). Next:
-the chain of L17, pushed slice by slice (`f8-s12-migration-1` ... `-6`, then this branch), each based on main and
-landed in order, each with a ready notice; then the summary under docs/sessions/ and the closed notice.
+commit has Codex, the lenses and a gentle-ai line (L9-L17); the verifier ran over `24c47ca..9af1aac` (L13). The
+chain of L18 is open, PRs 689, 693, 694, 695 and 696, each with a ready notice, for the lead to land in order; the
+summary is under docs/sessions/. Left for S12 after this session: his project list and the moves (his), and the
+owed tests of L16 and L17.
 
 ## Log
 - L1 (2026-10-30, the lead's brief `briefs/2026-10-30T06-12-57-495Z-28130615.md`): "Then S12's building part, its
@@ -200,3 +201,11 @@ landed in order, each with a ready notice; then the summary under docs/sessions/
   reviews' fixes D and their record (328); 7 this branch, E through H and the records (about 380). Measured at the
   push, 7 held 413 (370 + 43), so it is cut at E: 7 `5529661d`, the verifier's fixes and their record (109); 8 this
   branch, F through H, the records and the summary.
+- L18 (2026-10-30): the chain is five, not eight. Slices 2-4 (PRs 690-692, cut at `1488343e`, `abe05fd3`, `5058d55e`)
+  each passed the pre-push hook, which reads the pushed commit, but `notify --kind ready --pr 690` refused 690: the
+  door reads a pull request merged onto main (`bin/lib/merge-queue-reviews.mjs:59-66`), and there a record covers
+  only up to its own head, here `09ae0126` for Codex and the lenses' `24c47ca..09ae012`
+  (`docs/FAILURES.md`, `door-covers-past-tip`). The ready notice of 693, whose head is that record's, was recorded.
+  690-692 were closed and their branches removed; 693 holds `24c47cad..09ae0126` whole (1,132 + 6 lines), as PR 686
+  held its record's range; reviewing each cut again would have cost about 600,000 tokens for code already reviewed.
+  The chain: 689 the document; 693 the scans, plan, writes and command; 694 D; 695 E; 696 this branch.

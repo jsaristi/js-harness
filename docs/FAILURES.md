@@ -439,6 +439,9 @@ printed only git's "failed to push some refs".
   of 644 and 646, green here and on GitHub Actions, refused at the push: 35c8d1fd of PR 644 lay in
   Codex c8ee437..8a412b7 and lens 62315e6..8a412b7, whose head 8a412b7 was past PR 644's own head,
   the first of a stack landed alone; about 25 minutes lost
+- Seen: 2026-10-30 — `odd/tasks/f8-s12-migration.md` L18 (JH 93) — a chain cut at `1488343e`, `abe05fd3` and
+  `5058d55e`, inside Codex and lens `24c47ca..09ae012`, passed the pre-push hook at each cut and opened PRs 690-692;
+  `notify --kind ready --pr 690` refused it as the door does; the three were folded into 693, about 10 minutes lost
 - Seen: 2026-10-29 — the lead's land log `land-658-660.log` and notice at 10:29Z — the door printed
   "4b85503f ...: Codex a7b6ae4..f30d360 reviewed"; feat/visual-pages-e was reviewed to f30d360 and
   its PR then ended at 4b85503f, its parent, so the push of the candidate b5236e3 refused 4b85503f
