@@ -172,3 +172,7 @@ notice.
     it or sync may write); `--check` named the `.atl/` line where sync keeps the exclude file (it asks `excludeFile`);
     an error of sync's part other than a write's did not name the migration's writes. The SUGGESTION does not apply:
     `inspect` validates the manifest's shape before `repairLines` reads an entry.
+- L15 (2026-10-30): reviews of F (`5529661..4e99f77`): the lenses risk, reliability and resilience, no finding (about
+  37,000 input tokens); Codex (151,544 input tokens) found F's narrowing too narrow: a `CLAUDE.md` the project
+  committed and then deleted without committing was left out of the check, so the one migrate writes would cover the
+  deletion. Fixed in commit G, test red first: a `CLAUDE.md` the migration writes is always checked.

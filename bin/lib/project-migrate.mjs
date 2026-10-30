@@ -155,6 +155,8 @@ function decide(state, version, deps) {
  * lines, which sync renders. A file of the project's with no block is neither's to write, so its state stops nothing. */
 function writable(state, decided) {
   const names = decided.pin ? ['harness.json'] : [];
+  // A CLAUDE.md it writes where there is none: a deletion git has not committed would be covered by it (Codex).
+  if (decided.claude) names.push('CLAUDE.md');
   for (const name of ['AGENTS.md', 'CLAUDE.md']) {
     const file = fileOf(state.root, name);
     if (file.state === 'file' && TEMPLATE_BLOCK_MARK.test(file.text)) names.push(name);

@@ -385,6 +385,22 @@ test("a CLAUDE.md of the project's that git ignores, with no block of the harnes
   }
 });
 
+test('a CLAUDE.md deleted and not committed is refused: the one migrate would write would cover the deletion', () => {
+  const { dir, home } = oldProject();
+  try {
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '@AGENTS.md\n');
+    commitAll(dir);
+    fs.rmSync(path.join(dir, 'CLAUDE.md'));
+    const before = tree(dir);
+    const result = migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.equal(result.code, 1);
+    assert.deepEqual(result.uncommitted, ['CLAUDE.md']);
+    assert.deepEqual(tree(dir), before);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
 test("where sync keeps the clone's exclude file as it is, the plan does not ask for its line", () => {
   const { dir, manifestPath, home } = oldProject({ pin: RUNNING });
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-migrate-info-'));
