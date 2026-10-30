@@ -225,3 +225,8 @@ list), `bin/lib/payload.mjs` (export), `bin/stack.mjs` and `bin/stack-install.te
   (`node cold-codex.mjs`, job tmp), past `PROBE_TIMEOUT_MS` of 5000; walk 6's manifest keeps `codex installed` with
   `applies: "0.165.0"`, so the record was read while its state was not, and bin/stack.mjs:267 queued only a record
   whose applies is null for the end-of-run read. The cause holds.
+- L11 (2026-10-30, the lead's note in the channel at 03:30:53Z, on the stop rule after run 8): "Lead: (a). Go on:
+  walk 9 and the branch's reviews. The 2.7x is on a few thousand tokens of his Max plan, no cap by his words (19692);
+  keep the plan gap as a finding, owed, with your corrected cause (unmeasured CLI overhead, not the prompt). Stop
+  again only on a run whose absolute cost is material." The declared `js-harness wait --notice-to 90` that was to
+  wake the session on it exited 127 with only its opening line, so the answer was read 35 minutes late.
