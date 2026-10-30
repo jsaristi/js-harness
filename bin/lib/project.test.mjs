@@ -3760,6 +3760,55 @@ test('syncProject reads AGENTS.md with lstat, so a link is kept on a machine tha
   }
 });
 
+// A CLAUDE.md that is a link is no split (odd/tasks/claude-md-block.md, D1): read through a link to AGENTS.md it shows
+// AGENTS.md's own block, and splitting then drops Claude's half. The first test makes a real link, which needs
+// privileges on Windows, so it skips there and runs on CI's Linux; the second reads CLAUDE.md through the injected
+// lstat as a link, so it runs on every machine.
+test('syncProject keeps the whole block in AGENTS.md through a CLAUDE.md that links to it', (t) => {
+  const root = makeTmpRepo('js-harness-project-split-claude-link-');
+  const block = (lines) => `<!-- js-harness block ${sha256(lines).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->\n${lines}<!-- js-harness block end -->\n`;
+  const text = block('## What good looks like\nAn older line of the harness.\n');
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const agents = path.join(root, 'AGENTS.md');
+    fs.writeFileSync(agents, text, 'utf8');
+    fs.rmSync(path.join(root, 'CLAUDE.md'));
+    try {
+      fs.symlinkSync('AGENTS.md', path.join(root, 'CLAUDE.md'), 'file');
+    } catch (err) {
+      if (err.code === 'EPERM' || err.code === 'EACCES') return t.skip('symlinks need privileges on this machine');
+      throw err;
+    }
+    const result = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(result.code, 0);
+    assert.equal(fs.readFileSync(agents, 'utf8'), block(templateBlock()));
+    assert.ok(fs.lstatSync(path.join(root, 'CLAUDE.md')).isSymbolicLink());
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncProject reads CLAUDE.md with lstat, so a link is no split on a machine that cannot make one', () => {
+  const root = makeTmpRepo('js-harness-project-split-claude-lstat-');
+  const block = (lines) => `<!-- js-harness block ${sha256(lines).slice(0, 12)}: sync renders the lines to the end mark again while they are unedited -->\n${lines}<!-- js-harness block end -->\n`;
+  const text = block('## What good looks like\nAn older line of the harness.\n');
+  try {
+    assert.equal(initProject(root, '0.1.0', syncDeps()).code, 0);
+    const agents = path.join(root, 'AGENTS.md');
+    const claude = path.join(root, 'CLAUDE.md');
+    fs.writeFileSync(agents, text, 'utf8');
+    fs.writeFileSync(claude, text, 'utf8'); // what a link to AGENTS.md reads as
+    const lstat = (file, ...rest) => (file === claude ? { isSymbolicLink: () => true, isFile: () => false } : fs.lstatSync(file, ...rest));
+    const result = syncProject(root, '0.1.0', syncDeps({ lstat }));
+    assert.equal(result.code, 0);
+    assert.deepEqual(result.actions, [{ kind: 'rendered', path: 'AGENTS.md' }]);
+    assert.equal(fs.readFileSync(agents, 'utf8'), block(templateBlock()));
+    assert.equal(fs.readFileSync(claude, 'utf8'), text);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // --- F8 S3: init ships the CLAUDE.md/AGENTS.md split (odd/tasks/f8-s3-split.md, S3) ---
 
 test('initProject in a project with neither file writes the split: AGENTS.md for a reviewer, CLAUDE.md importing it; uninstall removes both', () => {

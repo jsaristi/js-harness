@@ -192,19 +192,12 @@ function repairLines({ root, manifest, spawn }) {
 }
 
 /** The lines `sync` would render in the blocks once the migration's `CLAUDE.md` is there. Whether the project has the
- * split is read as sync reads it, through a `CLAUDE.md` that is a link (`blockFileOf`), so the plan says what it does. */
+ * split is read as sync reads it (`syncTemplateBlock`): a `CLAUDE.md` that is a link is no split
+ * (odd/tasks/claude-md-block.md, D1), so the plan says what it does. */
 function blockLines(root, decided) {
   const lines = [];
   const claudeFile = fileOf(root, 'CLAUDE.md');
-  let claudeText = claudeFile.text;
-  if (claudeFile.state === 'link') {
-    try {
-      claudeText = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
-    } catch {
-      claudeText = undefined; // A link to nothing that can be read: sync finds no block either.
-    }
-  }
-  const split = (decided.claude && !decided.claude.importOnly) || (claudeText !== undefined && TEMPLATE_BLOCK_MARK.test(claudeText));
+  const split = (decided.claude && !decided.claude.importOnly) || (claudeFile.state === 'file' && TEMPLATE_BLOCK_MARK.test(claudeFile.text));
   const agentsFile = fileOf(root, 'AGENTS.md');
   if (agentsFile.state === 'file' && renderBlock(agentsFile.text, split ? agentsBlock() : templateBlock()).state === 'rendered') {
     lines.push("AGENTS.md: its block is rendered again with this version's lines");

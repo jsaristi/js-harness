@@ -1850,13 +1850,13 @@ export function syncProject(cwd, version, deps = {}) {
 /** `result`, a sync that set the clone up or brought it to its pin, with the harness's block of its `AGENTS.md` and its
  * `CLAUDE.md` rendered again when the project has not edited it (`renderTemplateBlock`, odd/tasks/rule-hierarchy.md,
  * T16f): a `rendered` action each, and no longer up to date. A project whose `CLAUDE.md` holds a block has the split
- * (odd/tasks/f8-s3-split.md, S3), and each file gets its half; any other keeps the whole block in `AGENTS.md`, so a
- * project not yet moved loses no line. An edited block is a `kept` action, said on every sync, and writes nothing. The
- * files are committed ones, so git is what undoes the write; no manifest records it. A refusal is returned as it is. */
+ * (odd/tasks/f8-s3-split.md, S3), and each file gets its half; any other, or a link (odd/tasks/claude-md-block.md, D1),
+ * keeps the whole block in `AGENTS.md`, so no line is lost. An edited block is a `kept` action, said on every sync, and
+ * writes nothing. Git undoes the write of these committed files; no manifest records it. A refusal is returned as is. */
 function syncTemplateBlock(root, result, writeFile, lstat = fs.lstatSync) {
   if (result.code !== 0) return result;
   const claude = blockFileOf(root, 'CLAUDE.md', lstat);
-  const split = claude.text !== undefined && TEMPLATE_BLOCK_MARK.test(claude.text);
+  const split = !claude.link && claude.text !== undefined && TEMPLATE_BLOCK_MARK.test(claude.text);
   let synced = renderBlockIn(root, 'AGENTS.md', blockFileOf(root, 'AGENTS.md', lstat), split ? agentsBlock() : templateBlock(), result, writeFile);
   if (split) synced = renderBlockIn(root, 'CLAUDE.md', claude, claudeBlock(), synced, writeFile);
   return synced;

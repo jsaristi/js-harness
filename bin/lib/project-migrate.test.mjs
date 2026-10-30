@@ -479,11 +479,13 @@ test('with CLAUDE.md a link to AGENTS.md, the plan says what migrate writes, and
       throw err;
     }
     commitAll(dir);
+    const before = read(path.join(dir, 'AGENTS.md'));
     const plan = migrationPlan(dir, RUNNING, { home, today: TODAY }).pending;
     const result = migrateProject(dir, RUNNING, { home, today: TODAY });
     assert.equal(result.code, 0);
     assert.equal(plan.some((line) => line.startsWith('AGENTS.md')), result.committed.includes('AGENTS.md'), plan.join('\n'));
-    commitAll(dir);
+    // A link is no split (odd/tasks/claude-md-block.md, D1): AGENTS.md keeps its whole block, so nothing is rendered.
+    assert.equal(read(path.join(dir, 'AGENTS.md')), before);
     assert.deepEqual(migrationPlan(dir, RUNNING, { home, today: TODAY }).pending, []);
   } finally {
     cleanup(dir, home);
