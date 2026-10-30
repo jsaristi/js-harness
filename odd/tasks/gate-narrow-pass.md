@@ -81,8 +81,7 @@ question.
   --test bin/check.test.mjs bin/check-ci-gate.test.mjs bin/gate.test.mjs` 335 of 335.
 - L5 (2026-10-30, cost said): once a tree failed in one place, a pass of it in another proves nothing while the
   failure is in the log (rotated past `gate-log-size`): its gates run their sensors, a commit's on CI, as they would
-  with no `sameTree`. A failure that ran no sensor (`error`, `sensors: []`) stands against every pass of its files.
-  Both cost a run, never a proof; a tree that failed is rarely gated again unchanged.
+  with no `sameTree`. It costs a run, never a proof; a tree that failed is rarely gated again unchanged.
 
 - L6 (2026-10-30): the first commit of T1 failed its gate on CI, once: `bin/conventions-structure.test.mjs` refused
   `bin/check.mjs` at 2042 lines over its ceiling of 2031 ("move code out of it rather than into it"). `testsOnCi`,
@@ -91,5 +90,14 @@ question.
   lines and its ceiling 2010. Then `js-harness gate -- node --test bin/conventions-*.test.mjs bin/check.test.mjs
   bin/lib/rules-sources.test.mjs bin/lib/gentle-ai-absence.test.mjs`: 276 of 276.
 
+- L7 (2026-10-30): T1 is `41bfc83c` (gate on CI, 171 s; its end in the gate log is the first to name `files`,
+  `56dd1ab0...`). Lenses reliability and risk over `0910e0c..41bfc83`: 0 findings. Codex over `5754e11..41bfc83`,
+  incorrect (0.88), one P2, real: two WSL2 distributions (or two nodes) both say `ranIn: 'wsl'`, so a pass in one
+  answered a failure in the other. Fixed next, tests first: an end names `tried`, the tree key it ran under, and a
+  failure before the pass stands unless its `tried` is the pass's key; `ranIn` is no longer compared. A CI end has
+  no `tried`, so a failure there is answered by no pass here. New test in `bin/check.test.mjs`, "a tree whose
+  sensors failed in one WSL2 distribution is not proven by a pass in another ...". An `error` that ran no sensor,
+  followed by a pass under the same key, now proves the tree (L5 corrected: it ran under that key).
+
 ## Next step
-T1 and T2 committed, then `npm run check`, Codex and the lenses over the slice, the verifier, the PR.
+The fix of Codex's P2 committed, then Codex and the lenses over it, the verifier, `npm run check`, the PR.

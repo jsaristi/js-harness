@@ -1653,7 +1653,7 @@ export async function checkSensors(cwd, deps = {}, lock) {
       // A sensor that failed keeps the names of its failing tests, where its output says them (`failingTests`).
       // A skip gate's tests row keeps `skip`, never `shadow`, so S6's count (`s6Count`) never reads it.
       const failing = ({ pass, output, rerun }) => (pass && !rerun ? [] : failingTests(output));
-      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code, files });
+      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code, files, tried: files && key });
       // Beside the log, under the gate's id: a list of every file on the end line would rotate the log far sooner.
       record?.testTimes(ran.flatMap((row) => row.times ?? []));
     }

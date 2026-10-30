@@ -5288,6 +5288,31 @@ test('a pass in WSL2 proves a tree for WSL2 alone: the run on Windows of that sa
   }
 });
 
+// Codex P2 on 41bfc83c (odd/tasks/gate-narrow-pass.md): both distributions said `ranIn: 'wsl'`, so a pass in one
+// answered a failure in the other; the failure's own key is what a pass must match.
+test('a tree whose sensors failed in one WSL2 distribution is not proven by a pass in another: the next gate there runs them', async () => {
+  const { repo, home, events, remove } = sameTreeRepo({ sameTree: 'skip', sensorsInWsl: true });
+  try {
+    fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+    const switchTo = (distro) => fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), JSON.stringify({ ...UBUNTU, distro }));
+    const spawn = spawnsInTurn(reachedMirror(1), reachedMirror(0), reachedMirror(0));
+    const gate = () => runCheck(['--cwd', repo, '--home', home], { JS_HARNESS_GATE_LOAD: 'off' }, wslDeps(spawn, { git: undefined, takeGateLock: undefined }));
+    switchTo('Ubuntu');
+    assert.equal((await gate()).code, 1);
+    switchTo('Debian');
+    const other = await gate();
+    assert.equal(other.code, 0, other.output);
+    const again = await gate();
+    assert.equal(again.code, 0, again.output);
+    assert.equal(spawn.calls.length, 3, 'a pass in Debian answered a failure in Ubuntu');
+    const [failed] = events().filter((event) => event.event === 'end');
+    assert.match(failed.tried, TREE_KEY);
+    assert.match(failed.files, TREE_KEY);
+  } finally {
+    remove();
+  }
+});
+
 test('a sensor sent to WSL2 that came back on Windows proves no tree, since its key was of WSL2', async () => {
   const { repo, home, events, remove } = sameTreeRepo({ sameTree: 'skip', sensorsInWsl: true });
   try {

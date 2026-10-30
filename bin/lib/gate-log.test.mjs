@@ -705,28 +705,35 @@ test('provenBy: the proof of a tree is the last end that passed and holds its ke
 
 // JH 109, 2026-10-30 (odd/tasks/gate-narrow-pass.md, L2): the tests of a commit failed on CI, a pass of the same files
 // in the WSL mirror, where the failing test skips itself, then proved the tree, and the next commit ran nothing.
-test('provenBy: a pass is no proof where a gate of the same files failed somewhere the pass did not run, or failed after it', () => {
+test('provenBy: a pass is no proof where a gate of the same files failed under another key than the pass, or failed after it', () => {
+  // The key of the same files on Windows, or in another WSL2 distribution or under another node (`treeKey`).
+  const OTHER = 'b'.repeat(64);
   const onCi = (id, more = {}) => end(id, { result: 'fail', files: FILES, sensors: [{ name: 'tests', seconds: 200, pass: false, ranIn: 'ci' }], ...more });
-  const inWsl = (id, more = {}) => end(id, { code: KEY, files: FILES, sensors: [{ name: 'tests', seconds: 150, pass: true, timedOut: false, ranIn: 'wsl', skip: { files: 312, skipped: 214 } }], ...more });
-  const here = (id, more = {}) => end(id, { files: FILES, ...more });
+  const inWsl = (id, more = {}) => end(id, { code: KEY, files: FILES, tried: KEY, sensors: [{ name: 'tests', seconds: 150, pass: true, timedOut: false, ranIn: 'wsl', skip: { files: 312, skipped: 214 } }], ...more });
+  const here = (id, more = {}) => end(id, { files: FILES, tried: KEY, ...more });
   const refused = [
-    // The incident: red on CI, then green in the mirror.
+    // The incident: red on CI, which runs under no key, then green in the mirror.
     [onCi('g1'), inWsl('g2')],
-    // Red in the mirror after green there: the pass is not the last word of its own place.
+    // Red in the mirror after green there: the pass is not the last word of its own key.
     [inWsl('g1'), inWsl('g2', { result: 'fail', code: undefined })],
     // Red on CI after green in the mirror.
     [inWsl('g1'), onCi('g2')],
     // A timeout and an error are failures too.
     [onCi('g1', { result: 'timeout' }), inWsl('g2')],
-    [here('g1', { result: 'error', sensors: [] }), here('g2', { code: KEY })],
-    // Red on Windows, then green in the mirror: a pass in one place says nothing of another.
-    [here('g1', { result: 'fail' }), inWsl('g2')],
+    [inWsl('g1'), here('g2', { result: 'error', sensors: [] })],
+    // Red on Windows, or in another distribution of WSL2 (Codex P2 on 41bfc83c: both said `ranIn: 'wsl'`), then
+    // green here: a pass under one key says nothing of another, whatever `ranIn` says.
+    [here('g1', { result: 'fail', tried: OTHER }), inWsl('g2')],
+    [inWsl('g1', { result: 'fail', code: undefined, tried: OTHER }), inWsl('g2')],
+    // A failure that says no key it ran under.
+    [here('g1', { result: 'fail', tried: undefined }), here('g2', { code: KEY })],
   ];
   for (const events of refused) assert.equal(provenBy(events, KEY, FILES), null, JSON.stringify(events));
   const proven = [
-    // Red here, then green here: the pass ran where the failure did.
+    // Red, then green under the same key: the pass ran where the failure did.
     [here('g1', { result: 'fail', sensors: [{ name: 'tests', seconds: 3, pass: false }] }), here('g2', { code: KEY })],
     [inWsl('g1', { result: 'fail', code: undefined }), inWsl('g2')],
+    [here('g1', { result: 'error', sensors: [] }), here('g2', { code: KEY })],
     // A failure of other files, and one written with no files key (an older line), stand against nothing.
     [onCi('g1', { files: 'e'.repeat(64) }), inWsl('g2')],
     [onCi('g1', { files: undefined }), inWsl('g2')],
@@ -765,12 +772,11 @@ test('gateRecord writes the key of the tree on the end of a gate that gives one,
     written.length = 0;
     const gate = record();
     gate.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
-    gate.end({ result: 'pass', sensors: [], code, files: code });
+    gate.end({ result: 'pass', sensors: [], code, files: code, tried: code });
     return written.at(-1);
   };
-  assert.equal(ended(KEY).code, KEY);
-  assert.equal(ended(KEY).files, KEY);
-  for (const code of [undefined, null, '', 'not a key', 12]) assert.deepEqual(['code' in ended(code), 'files' in ended(code)], [false, false], String(code));
+  assert.deepEqual([ended(KEY).code, ended(KEY).files, ended(KEY).tried], [KEY, KEY, KEY]);
+  for (const code of [undefined, null, '', 'not a key', 12]) assert.deepEqual(['code' in ended(code), 'files' in ended(code), 'tried' in ended(code)], [false, false, false], String(code));
 });
 
 test('gateRecord writes a gate that ran no sensor as one line of the kind same, with the key and the gate that proved it, and nothing when either is missing', withHome(async (home) => {
