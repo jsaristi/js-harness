@@ -24,7 +24,7 @@ dollar cap. Everything else came from the lead (the feature document's Log, L1-L
   (`scripts/rehearsal-lib.mjs`, `scripts/rehearsal.test.mjs`) and the `doctor` claude-import row (D1).
 - PR #686 (ready, `f8-s13-rehearsal-1` ← `f8-s13-rehearsal-2`, `bb6223b9..ee22f206`): the walk,
   `scripts/rehearsal.mjs`, and the fixes runs 1-9 found, `bin/stack.mjs`'s end-of-run read among them (L10).
-- The third pull request (`f8-s13-rehearsal-2` ← `f8-s13-rehearsal`, `ee22f206..HEAD`): the review fixes
+- PR #687 (ready, `f8-s13-rehearsal-2` ← `f8-s13-rehearsal`, `ee22f206..HEAD`): the review fixes
   (`608a8e68`, `cf3e6a01`, `08d724a1`), walks 10 and 11, the gentle-ai records, this summary.
 - Out of the brief's edit surface, each named: `bin/lib/gentle-ai-absence.test.mjs` (its NAMED list),
   `bin/lib/payload.mjs` (an export), `bin/stack.mjs` with `bin/stack-install.test.mjs` (the lead's L10).
