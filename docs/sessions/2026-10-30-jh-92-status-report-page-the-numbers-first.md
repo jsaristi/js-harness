@@ -71,3 +71,10 @@ CLAUDE.md's resume test (one renderer, no open decision, not high risk): no feat
 - Not checked: the page on his phone itself, and as the Artifact tool wraps it; the lead's next `report --html` and
   publish is the first.
 - The installed copy is not refreshed: the lead lands and refreshes.
+
+## Cost
+- Opened 2026-10-30T03:27Z; the ready notice for PR 684 at 04:04Z, then the closed notice.
+- Reviews: Codex over 91208fb..4092996, 146,184 input tokens, and 4092996..4d7c212, 37,346; the Claude lenses,
+  38,615 and 12,193 input tokens; gentle-ai's reliability reviewer twice (one lens a commit), its tokens not printed.
+- Gate runs: one pre-commit `npm run check` per commit, five in all with the failed try of the fix commit and this
+  summary's two, plus one `npm run check` before the first commit.
