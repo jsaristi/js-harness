@@ -8,9 +8,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { agentsTemplate, initProject } from './project.mjs';
+import { agentsTemplate, claudeTemplate, initProject, uninstallProject } from './project.mjs';
 import { sha256 } from './manifest.mjs';
-import { candidateProjects, context7Gaps, gentleLeftovers, migrationPlan } from './project-migrate.mjs';
+import { candidateProjects, context7Gaps, gentleLeftovers, migrateProject, migrationPlan } from './project-migrate.mjs';
 
 let configDir;
 before(() => {
@@ -80,6 +80,44 @@ function tree(dir) {
   return out;
 }
 
+test('migrate writes the split, moves the pin and records the baseline, keeping the line the project added', () => {
+  const { dir, manifestPath, home } = oldProject();
+  try {
+    const result = migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.equal(result.code, 0, JSON.stringify(result));
+    assert.equal(read(path.join(dir, 'CLAUDE.md')), claudeTemplate());
+    // sync rendered AGENTS.md's half once CLAUDE.md held the other, and the project's line stayed.
+    assert.equal(read(path.join(dir, 'AGENTS.md')), agentsTemplate(dir) + OURS);
+    assert.equal(JSON.parse(read(path.join(dir, 'harness.json'))).version, RUNNING);
+    const manifest = JSON.parse(read(manifestPath));
+    assert.equal(manifest.version, RUNNING);
+    assert.deepEqual(manifest.coverage, { baseline: TODAY, release: RUNNING });
+    assert.deepEqual(manifest.files.find((file) => file.path === 'CLAUDE.md'), { path: 'CLAUDE.md', sha256: sha256(claudeTemplate()) });
+    // harness.json was still the bytes init wrote, so its record follows the new ones.
+    assert.equal(manifest.files.find((file) => file.path === 'harness.json').sha256, sha256(read(path.join(dir, 'harness.json'))));
+    assert.deepEqual(result.committed.sort(), ['AGENTS.md', 'CLAUDE.md', 'harness.json']);
+    for (const kind of ['pinMoved', 'wrote', 'baseline']) assert.ok(result.actions.some((action) => action.kind === kind), kind);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test('a second migrate finds nothing to write, and the plan says so', () => {
+  const { dir, home } = oldProject();
+  try {
+    assert.equal(migrateProject(dir, RUNNING, { home, today: TODAY }).code, 0);
+    commitAll(dir);
+    const before = tree(dir);
+    const again = migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.equal(again.code, 0);
+    assert.equal(again.upToDate, true, JSON.stringify(again.actions));
+    assert.deepEqual(tree(dir), before);
+    assert.deepEqual(migrationPlan(dir, RUNNING, { home, today: TODAY }).pending, []);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
 test('the plan names what migrate would write and writes nothing', () => {
   const { dir, home } = oldProject();
   try {
@@ -92,6 +130,123 @@ test('the plan names what migrate would write and writes nothing', () => {
     assert.match(said, /CLAUDE\.md: written, importing AGENTS\.md/);
     assert.match(said, /the coverage baseline: recorded as 2026-10-30/);
     assert.match(said, /AGENTS\.md: its block is rendered again/);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test('uninstall project after migrate removes the CLAUDE.md the migration wrote', () => {
+  const { dir, home } = oldProject({ pin: RUNNING });
+  try {
+    assert.equal(migrateProject(dir, RUNNING, { home, today: TODAY }).code, 0);
+    assert.equal(uninstallProject(dir).code, 0);
+    assert.equal(fs.existsSync(path.join(dir, 'CLAUDE.md')), false);
+    assert.equal(fs.existsSync(path.join(dir, 'harness.json')), false);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test('an edited block in AGENTS.md gets a CLAUDE.md that imports it alone, and AGENTS.md is left with a note', () => {
+  const edited = (dir) => agentsTemplate(dir, { split: false }).replace('Work here is done properly', 'Work here is done our way');
+  const { dir, home } = oldProject({ agents: edited });
+  try {
+    const result = migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.equal(result.code, 0);
+    const claude = read(path.join(dir, 'CLAUDE.md'));
+    assert.match(claude, /^@AGENTS\.md$/m);
+    assert.doesNotMatch(claude, /js-harness block/);
+    assert.equal(read(path.join(dir, 'AGENTS.md')), edited(dir));
+    assert.ok(result.notes.some((note) => note.path === 'AGENTS.md' && /edited/.test(note.reason)), JSON.stringify(result.notes));
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test("a CLAUDE.md of the project's is never written, and one without the import gets a note naming the line", () => {
+  const { dir, home } = oldProject();
+  try {
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '# Ours\nWe write our own.\n');
+    commitAll(dir);
+    const result = migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.equal(result.code, 0);
+    assert.equal(read(path.join(dir, 'CLAUDE.md')), '# Ours\nWe write our own.\n');
+    assert.ok(result.notes.some((note) => note.path === 'CLAUDE.md' && note.reason.includes('@AGENTS.md')), JSON.stringify(result.notes));
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test('a harness.json the project edited keeps its edit, gets its pin moved, and stays the project\'s in the record', () => {
+  const { dir, manifestPath, home } = oldProject();
+  try {
+    const recorded = JSON.parse(read(manifestPath)).files.find((file) => file.path === 'harness.json').sha256;
+    const edited = read(path.join(dir, 'harness.json')).replace('"reply": true', '"reply": true,\n  "functions": { "codeMap": "off" }');
+    fs.writeFileSync(path.join(dir, 'harness.json'), edited);
+    commitAll(dir);
+    assert.equal(migrateProject(dir, RUNNING, { home, today: TODAY }).code, 0);
+    assert.equal(read(path.join(dir, 'harness.json')), edited.replace('"version": "0.9.0"', `"version": "${RUNNING}"`));
+    assert.equal(JSON.parse(read(manifestPath)).files.find((file) => file.path === 'harness.json').sha256, recorded);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test('a pin newer than this copy is refused, and nothing is written', () => {
+  const { dir, home } = oldProject({ pin: '0.99.0' });
+  try {
+    const before = tree(dir);
+    const result = migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.deepEqual({ code: result.code, pinNewer: result.pinNewer, pin: result.pin }, { code: 1, pinNewer: true, pin: '0.99.0' });
+    assert.deepEqual(tree(dir), before);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test('a file the migration writes with an uncommitted change is refused, and nothing is written', () => {
+  const { dir, home } = oldProject();
+  try {
+    fs.appendFileSync(path.join(dir, 'AGENTS.md'), '- not committed yet\n');
+    const before = tree(dir);
+    const result = migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.equal(result.code, 1);
+    assert.deepEqual(result.uncommitted, ['AGENTS.md']);
+    assert.deepEqual(tree(dir), before);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test('a baseline that would turn a rule without a control into a finding is not recorded, and the note names it', () => {
+  const { dir, manifestPath, home } = oldProject();
+  try {
+    fs.mkdirSync(path.join(dir, 'docs'), { recursive: true });
+    const rule = { id: 'keep-it-short', subject: 'the project keeps its own line', since: '2026-10-01', path: 'AGENTS.md', phrases: ['a line the project added'] };
+    const rules = { format: 1, rules: [rule] };
+    fs.writeFileSync(path.join(dir, 'docs', 'rules.json'), JSON.stringify(rules, null, 2) + '\n');
+    commitAll(dir);
+    const result = migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.equal(result.code, 0);
+    assert.equal(JSON.parse(read(manifestPath)).coverage, undefined);
+    assert.ok(result.notes.some((note) => note.path === 'the coverage baseline' && note.reason.includes('keep-it-short')), JSON.stringify(result.notes));
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test('a write that fails takes back everything the migration wrote before it', () => {
+  const { dir, manifestPath, home } = oldProject();
+  try {
+    const before = tree(dir);
+    const manifestBefore = read(manifestPath);
+    const writeFile = (file, ...rest) => {
+      if (path.basename(file) === 'harness.json') throw new Error('disk full');
+      return fs.writeFileSync(file, ...rest);
+    };
+    assert.throws(() => migrateProject(dir, RUNNING, { home, today: TODAY, writeFile }), /disk full/);
+    assert.deepEqual(tree(dir), before);
+    assert.equal(read(manifestPath), manifestBefore);
   } finally {
     cleanup(dir, home);
   }

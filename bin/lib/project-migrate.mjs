@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { sha256, writeManifestAtomic } from './manifest.mjs';
 import { tools } from './stack.mjs';
 import { importsAgents, mainCheckoutOf } from './claude-import.mjs';
 import { checkProjectRules, PROJECT_RULES_PATH } from './project-rules.mjs';
@@ -16,6 +17,7 @@ import { isNewer } from './version.mjs';
 import { localDay } from './flaky.mjs';
 import { renderBlock, TEMPLATE_BLOCK_MARK } from './project-template.mjs';
 import {
+  InitWriteError,
   agentsBlock,
   claudeBlock,
   claudeTemplate,
@@ -25,6 +27,7 @@ import {
   projectFiles,
   readPin,
   readRecorded,
+  syncProject,
   templateBlock,
 } from './project.mjs';
 
@@ -225,6 +228,78 @@ export function migrationPlan(cwd, version, deps = {}) {
     uncommitted: uncommittedOf(state.root, state.spawn),
     leftovers: gentleLeftovers(state.root, state.spawn),
     context7: context7Gaps(state.root, deps),
+  };
+}
+
+/** Migrates the project at `cwd` to `version`: writes `CLAUDE.md`, the pin and the baseline as `decide` says and
+ * records them in the project manifest, then runs `syncProject`. Returns `{ code, root, actions, notes, leftovers,
+ * context7, committed, upToDate }`, `committed` the committed files written, which git undoes; or a refusal, with
+ * nothing written: one of `migrationPlan`'s, or `uncommitted`, the files it would write that hold a change git has not
+ * committed. A write that fails takes back every one before it and throws `InitWriteError`; one of `sync`'s throws as
+ * `sync` does, after this part is recorded. */
+export function migrateProject(cwd, version, deps = {}) {
+  const state = inspect(cwd, version, deps);
+  if (state.code) return state;
+  const { root, files } = state;
+  const uncommitted = uncommittedOf(root, state.spawn);
+  if (uncommitted.length > 0) return { code: 1, uncommitted, root };
+  const decided = decide(state, version, deps);
+  if (decided.refusal) return decided.refusal;
+
+  const writeFile = deps.writeFile ?? fs.writeFileSync;
+  const manifestDeps = { open: deps.open, write: deps.write, close: deps.close };
+  const next = JSON.parse(JSON.stringify(state.manifest));
+  const actions = [];
+  const committed = new Set();
+  const undo = [];
+  try {
+    if (decided.claude) {
+      const target = path.join(root, 'CLAUDE.md');
+      writeFile(target, decided.claude.text, 'utf8');
+      undo.push(() => fs.rmSync(target, { force: true }));
+      const hash = sha256(decided.claude.text);
+      next.files.push({ path: 'CLAUDE.md', sha256: hash });
+      actions.push({ kind: 'wrote', path: 'CLAUDE.md', sha256: hash });
+      committed.add('CLAUDE.md');
+    }
+    if (decided.pin) {
+      const { from, to, before, after } = decided.pin;
+      writeFile(files.harnessJsonPath, after, 'utf8');
+      undo.push(() => fs.writeFileSync(files.harnessJsonPath, before, 'utf8'));
+      // The record follows the new bytes only while they were the bytes init wrote (D4): an edited file stays the project's.
+      const entry = next.files.find((file) => file.path === 'harness.json');
+      if (entry && entry.sha256 === sha256(before)) entry.sha256 = sha256(after);
+      actions.push({ kind: 'pinMoved', path: 'harness.json', from, to });
+      committed.add('harness.json');
+    }
+    if (decided.baseline) {
+      next.coverage = { baseline: decided.baseline, release: version };
+      actions.push({ kind: 'baseline', day: decided.baseline });
+    }
+    if (actions.length > 0) writeManifestAtomic(files.manifestFilePath, next, manifestDeps);
+  } catch (err) {
+    const notRemoved = [];
+    for (const step of undo.reverse()) {
+      try {
+        step();
+      } catch {
+        notRemoved.push(step === undo[0] ? 'CLAUDE.md' : 'harness.json');
+      }
+    }
+    throw new InitWriteError(err.message, notRemoved);
+  }
+
+  const synced = syncProject(root, version, deps);
+  for (const action of synced.actions ?? []) if (action.kind === 'rendered') committed.add(action.path);
+  return {
+    ...synced,
+    root,
+    actions: [...actions, ...(synced.actions ?? [])],
+    notes: decided.notes,
+    leftovers: gentleLeftovers(root, state.spawn),
+    context7: context7Gaps(root, deps),
+    committed: [...committed],
+    upToDate: actions.length === 0 && synced.upToDate === true,
   };
 }
 
