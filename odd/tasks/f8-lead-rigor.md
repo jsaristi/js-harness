@@ -78,11 +78,14 @@ words, not to run the block and give the corrected one. Doctor's gate does preve
 
 ## Tasks
 - [x] T1 (kind: design) this document; two blind readers on the plan before code (L5)
-- [ ] T2 (kind: build) S3 — the Seen lines, and `failures weeks`; test first; Codex and lenses; PR 1
+- [ ] T2 (kind: build) S3 — the Seen lines, and `failures weeks`; test first; Codex and lenses; PR 1 (L7)
 - [ ] T3 (kind: build) S2 — the host review file and the `--host-reviewed` gate; test first; Codex and lenses; PR 2
 - [ ] T4 (kind: build) S1 — command blocks in the reply check; test first on real excerpts; the replay; Codex and
   lenses; PR 3
 - [ ] T5 (kind: verify) `npm run check`, ready notices, summary
+- [ ] T6 (kind: docs) F4 of `docs/audits/2026-10-30-cleanup-inventory.md`, by the lead's note (L6): the six failures
+  not settled. `two-blocks-out-of-order` done in PR 1 (its line moved to CLAUDE.md); the five others need a control
+  that holds, each a finding of its own: read after T4, and what each needs is reported to the lead
 
 ## Design
 
@@ -204,3 +207,11 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   the refusal; Sources must hold the changelogs; no file asked when nothing changed. S3: "the lead's" at the start of
   evidence often names the lead as the source of another session's mistake; the register's marker is "the lead's
   own". Order S3, S2, S1 kept; S1's run matching ships only after the replay.
+- L6 (2026-10-30 12:34 local, the lead's note to this session): "your check 1 may be T8 [of
+  odd/tasks/instruction-homes.md]; amend that task instead of a second one. Also take F4 of
+  docs/audits/2026-10-30-cleanup-inventory.md". T8 is amended to name T4 here as its carrier; F4 is T6.
+- L7 (2026-10-30, T2): RED: `weeklyCounts` did not exist and `failures weeks` read `weeks` as an entry id (exit 1);
+  GREEN after (`node --test bin/lib/failures.test.mjs bin/failures.test.mjs`, 109 pass). The planted case is the
+  sighting of line 32954 itself: `failures weeks` prints it in the week of 2026-10-26 as the lead's own (7 of 38).
+  The merge-queue mistake (S3b) gets no check here: the land took a pull request that was open as ready, which is
+  its rule; the mistake was the land run while a step of his was pending, recorded `land-took-pending-pr`.

@@ -28,7 +28,9 @@ reasons are in `odd/tasks/rule-hierarchy.md`, "The failures register".
 In the evidence, "relief file" is the orchestrator's relief file,
 `.js-harness/relief/D--js-harness.md` under his home and not in the repository, and "(claimed)"
 marks what a record only reports from a session's message. One `- Seen:` line is one occurrence;
-other places that record the same occurrence are named in its note.
+other places that record the same occurrence are named in its note. "The lead's own" in the evidence
+marks a mistake the lead made itself, which `js-harness failures weeks` counts as the lead's; "the
+lead's" alone names where a sighting was read, not who made it.
 
 ### answer-line-wrong-entry
 The line of his answer was found by a text search and taken from the wrong entry, then written to
@@ -282,11 +284,17 @@ of it and recorded nothing.
 ### command-handed-untested
 A command he was handed to run on his machine had not been run first, and it broke what it wrote.
 - Class: wrong-information
-- Seen: 2026-10-30 — relief file, line 1963 — the lead gave him `pnpm config set minimumReleaseAgeExclude "a,b"
-  --global` untested; pnpm 12 wrote a string, his `config.yaml` no longer parsed and every pnpm and npm command
-  failed; the lead rewrote it as a YAML list and read it back with `pnpm config get`
+- Seen: 2026-10-30 — relief file, line 1963 (the lead's own) — the lead gave him `pnpm config set
+  minimumReleaseAgeExclude "a,b" --global` untested; pnpm 12 wrote a string, his `config.yaml` no longer parsed and
+  every pnpm and npm command failed; the lead rewrote it as a YAML list and read it back with `pnpm config get`
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 32954 (the lead's own) — the lead handed him a `bash` block,
+  `rm -rf /d/js-harness-worktrees`, after its own runs of it were refused by the guard (lines 32882 to 32895); his
+  shell is PowerShell, where `rm` is `Remove-Item`, and he got "Remove-Item: No se encuentra un parámetro que
+  coincida con el nombre de parámetro "rf"" (line 32965); the fix then was a PowerShell command run first
 - Control: owed — odd/tasks/instruction-homes.md — "a command handed to him that writes his configuration is run
   first against a scratch configuration"
+- Proof: `js-harness failures weeks`: no sighting of this entry once the reply check refuses a command block not
+  tagged for his shell or never run (owed: odd/tasks/f8-lead-rigor.md, T4)
 
 ### command-run-for-help
 A session ran a command it did not know, to read its help, and the command acted.
@@ -594,6 +602,12 @@ a weaker control was chosen to keep them green.
 - Control: check — bin/rules.test.mjs — "the fixture owes the check of a rule declared after the
   baseline" — since 2026-10-29
 
+### flags-guessed
+A session ran a harness command with flags it guessed, instead of reading the command's usage first.
+- Class: wrong-information
+- Seen: 2026-10-30 — the lead's note to JH 106 at 17:20Z (claimed; the lead's own) — the lead guessed the flags of
+  `js-harness notify` twice before reading its usage
+
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
 was not made. Since 2026-10-11 a gate on a loaded machine names what loads it under its load row
@@ -735,6 +749,18 @@ has no owner, and the board keeps showing rows and work that nobody holds.
 - Control: check — bin/lib/sessions.test.mjs — "rosterOf: the transcripts of one title are one row,
   which says what the latest of them records" — since 2026-10-11
 
+### host-review-without-research
+A host update was recorded as reviewed after a check that nothing the harness uses broke, with no study of what the
+update brings and what the harness should adopt, adapt or ignore from it.
+- Class: rule-not-acting
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 29697 (the lead's own) — `doctor --host-reviewed
+  --stack-reviewed` recorded his Claude Desktop update at 13:12Z, though the row's fix list asks for a full account
+  of the update; he said at line 33399 that he got no clear account of how it could improve the harness; the fix
+  then: JH 105 researches the update (the lead's relief note, line 33432)
+- Control: owed — odd/tasks/f8-lead-rigor.md — "S2 — the host review file and the `--host-reviewed` gate"
+- Proof: `js-harness failures weeks`: no sighting of this entry once `--host-reviewed` refuses an update with no
+  review file (owed: odd/tasks/f8-lead-rigor.md, T3)
+
 ### hours-guessed
 Hours written in the relief file were not read from a clock.
 - Class: wrong-information
@@ -813,6 +839,14 @@ A defect already reported was written down for later instead of fixed, and a pai
 dearest part finding it again.
 - Class: delivery
 - Seen: 2026-10-08 — odd/tasks/codex-review-cost.md:234-239 — "the parent's error, to not repeat"
+
+### land-took-pending-pr
+`merge-queue --land` took a pull request that was open as ready while a step only he could do, a walk through
+the console, was still pending.
+- Class: delivery
+- Seen: 2026-10-30 — the lead's note to JH 106 at 17:20Z (claimed; the lead's own) — the land took PR 596; the lead
+  stopped it before any push (main unchanged at 04e3d29d) and turned 596 to a draft, which GitHub records at
+  17:18:12Z; its timeline has no ready-for-review event, so it was opened ready
 
 ### language-server-load
 A TypeScript language server per session works whenever tests write files, takes up to a whole
@@ -1603,7 +1637,10 @@ Two blocks were given in one reply, he sent them out of order, and it cost a ses
 - Seen: 2026-10-07 — AGENTS.md:81-82 — "two, sent out of order, once cost a session"; 2026-10-07 is
   the day of that record (the sentence, commit `9c9b00d`), and the incident itself is not later than
   it and is in no record read
-- Control: line — AGENTS.md — "two blocks out of order cost a session" — since 2026-10-23
+- Control: line — CLAUDE.md — "two blocks out of order cost a session" — since 2026-10-27
+- Was: line — AGENTS.md — "two blocks out of order cost a session" — replaced on 2026-10-27: the line moved, word
+  for word, to CLAUDE.md when the instructions were split (`b94f525f`), so the control read as lost (the cleanup
+  inventory of 2026-10-30, F4)
 - Was: line — AGENTS.md — "two blocks sent out of order cost a session" — replaced on 2026-10-23:
   the line was reworded and no longer held that phrase, so the control read as lost (launch audit,
   C-d-8)
