@@ -70,15 +70,22 @@ absence is in L1.
 - S20 (N35, Q71, 2026-10-30, the lead's transcript 0f71b2c6 line 28610, tapped): asked whether the board should warn
   above three work sessions, he tapped "Retirarla": `work-sessions-private-windows` is retired, and the number of
   sessions is decided case by case.
+- S21 (N7 and N35, Q113 and Q114, 2026-10-30, the lead's transcript 0f71b2c6, typed): line 30759, "Lo que decido yo
+  es una sola lista, en una regla: gasto fuera del plan, todo lo irreversible, las decisiones de producto, publicar,
+  credenciales, cambios de protocolo, ajustes de seguridad o del sistema, lo que se instale o cambie en una máquina, un
+  cambio del plan o de su orden, y un informe publicado fuera del proyecto; los demás textos nombran esa regla."; line
+  30812, "Retira la regla de máximo 3 sesiones de trabajo en Windows; el número de sesiones se decide caso por caso."
 
 ## Tasks
 - [x] T1 (kind: docs) This feature document, committed first (S1-S18; b6d2d40b)
 - [x] T2 (kind: build) N12: the reply check refuses only a decision while work runs; RED (the question close refused while 1 task ran) then GREEN in `bin/lib/reply.test.mjs` (S8, S16)
 - [x] T3 (kind: build) N2: the per-project pushing switch `pushUnasked`, declared beside the other functions; RED in `functions`, `project-functions`, `functions` CLI and protocol 1 / orchestrator texts, GREEN after; js-harness declares it on (S2, S17)
-- [ ] T4 (kind: build) N7: the union list in one rule through `js-harness rules change`; `docs/RULES.md` re-rendered (S6, S18, S19). WAITING for his typed list (L3, L5, L13); drafted in "Draft for T4 and T7" below, branch `rule/his-decisions`, so it lands in one commit once his sentence exists
-- [ ] T7 (kind: build) N35: retire `work-sessions-private-windows` with no successor through `js-harness rules change` (S20). WAITING for his typed words: `rules change --dry-run` refuses his tapped "Retirarla" (L13); drafted below, branch `rule/retire-work-sessions-windows` when it runs
-- [~] T5 (kind: docs) Text rows (S1, S3-S5, S7, S9-S14). Done: N33 (efef30d0); N6, N46, N38, N39-N42 in the init block (protocols 6 and 1 are pointed at, not restated); N1, N8, N38 in AGENTS.md; protocol 3 names every slice through Codex; N3 already held by protocol 3 (`operation_timeout`); N4, N22 (L6); N43 (L7, the orchestrator copy kept); N44 (L8). Open: the owner list in AGENTS.md and protocol 1 keep their wording (waits on T4); the orchestrator copy of the pause sentence in `bin/lib/manifest.mjs` (L7) needs the owner's typed words for `announce-finished` or the lead's decision
+- [x] T4 (kind: build) N7: the union list in one rule, `owner-decisions`, through `js-harness rules change`; `docs/RULES.md` re-rendered (S6, S18, S19, S21; L14; 665baea7, branch `rule/his-decisions`)
+- [ ] T7 (kind: build) N35: retire `work-sessions-private-windows` with no successor through `js-harness rules change` (S20, S21). His typed words exist (line 30812); it runs on branch `rule/retire-work-sessions-windows` once `rule/his-decisions` has landed, since one rule change is open at a time (L14)
+- [~] T5 (kind: docs) Text rows (S1, S3-S5, S7, S9-S14). Done: N33 (efef30d0); N6, N46, N38, N39-N42 in the init block (protocols 6 and 1 are pointed at, not restated); N1, N8, N38 in AGENTS.md; protocol 3 names every slice through Codex; N3 already held by protocol 3 (`operation_timeout`); N4, N22 (L6); N43 (L7, the orchestrator copy kept); N44 (L8). The owner list: T4 (protocol 1 holds it; CLAUDE.md, protocol 7, the init block and the permit relay name it). Open: the orchestrator copy of the pause sentence in `bin/lib/manifest.mjs` (L7) needs the owner's typed words for `announce-finished` or the lead's decision
 - [x] T6 (kind: verify) N48: a test asserts the shipped init block and AGENTS.md name the same rule ids (S15); RED then GREEN in `bin/lib/template-block.test.mjs`; the block names `rule:context-pause` and `rule:questions-one-place`, and so does AGENTS.md (L9)
+- [ ] T8 (kind: docs) The control of `command-handed-untested` (L15): a command handed to him that writes his configuration is run first against a scratch configuration and its read-back shown. Owed; the lead routes its text
+- [ ] T9 (kind: docs) The control of `written-question-buried` (L15): a question he answers in writing goes alone in its message, with its text ready to copy, never at the end of a report. Owed; the lead routes its text
 
 ## Draft for T4 and T7
 Written on 2026-10-30 by JH 96, before his typed words exist, so that each change is one command and one commit once
@@ -143,3 +150,14 @@ meter, read at that moment". His typed words of 2026-10-11 ("recuerda siempre de
     cambie en una máquina, un cambio del plan o de su orden, y un informe publicado fuera del proyecto; los demás
     textos nombran esa regla."
   - T7: "Retira la regla de máximo 3 sesiones de trabajo en Windows; el número de sesiones se decide caso por caso."
+- L14 (2026-10-30, JH 98): he typed both sentences (S21). T4 ran with line 30759 as the quotation and line 28485 as
+  where he chose the union. The id is `owner-decisions`, not the draft's `his-decisions`: the id is written into the
+  skills every project installs, and the shipped orchestrator text is held to never say "his"
+  (`bin/lib/manifest.test.mjs:3079`), which the draft's id failed. Beside the draft: protocol 7's line keeps its
+  "The user's decisions: " head, which `bin/lib/protocols-skill.test.mjs:112` pins; the init block's hash moved on
+  purpose (`bin/lib/template-block.test.mjs`); `bin/lib/project.mjs`'s line ceiling went down to 1989; the coverage
+  register ties the rule to protocol 1. `rules change` keeps one rule change open at a time across every `rule/`
+  branch (`bin/lib/rules-change-run.mjs`, "one change is open at a time"), so T7 runs on its own branch once
+  `rule/his-decisions` has landed.
+- L15 (2026-10-30, JH 98): two `- Seen:` lines owed from the lead's relief file go to `docs/FAILURES.md`, each a new
+  entry whose control is owed by an open task here (T8, T9); which text carries each is the lead's to route.
