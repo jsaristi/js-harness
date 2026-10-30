@@ -74,6 +74,8 @@ export function simpleCommands(text) {
     const kept = dropRedirections(words);
     if (kept.length > 0) parts.push({ words: kept, before, after: separator });
     else if (parts.length > 0 && separator !== '') parts.at(-1).after = separator;
+    // A `;` or a newline that ends the text ends the last command: its exit is the run's.
+    else if (parts.length > 0 && (parts.at(-1).after === ';' || parts.at(-1).after === '\n')) parts.at(-1).after = '';
     words = [];
     before = separator;
   };
@@ -133,26 +135,36 @@ function dropRedirections(words) {
   return kept;
 }
 
-/** Whether a part proves it succeeded, read from the exit of the whole run. */
-const proves = (part) => (part.after === '&&' || part.after === '') && part.before !== '||';
+// The separators after which the run's exit is no longer the exit of what came before them.
+const MASKS = new Set(['||', ';', '\n']);
+
+/** For each of `parts`, whether it proves it succeeded, read from the exit of the whole run: what follows it is `&&`
+ * or the end, what precedes it is not `||`, and no separator after it masks its exit (`a && b || true`). */
+const provedOf = (parts) => parts.map((part, i) => (part.after === '&&' || part.after === '') && part.before !== '||'
+  && parts.slice(i + 1).every((later) => !MASKS.has(later.after)));
 
 /** The parts a run's command holds, with whether each proves success; a part that runs PowerShell with `-Command`
  * adds the parts of its argument, proving what it proves. */
 export function runParts(command) {
   const out = [];
-  for (const part of simpleCommands(command)) {
-    const proved = proves(part);
-    out.push({ words: part.words, proved });
-    const program = part.words[0].replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
-    const flag = part.words.findIndex((w, i) => i > 0 && /^-(c|command)$/i.test(w));
-    if ((program === 'pwsh' || program === 'powershell') && flag !== -1 && part.words[flag + 1] !== undefined) {
-      for (const inner of simpleCommands(part.words.slice(flag + 1).join(' '))) out.push({ words: inner.words, proved: proved && proves(inner) });
+  const parts = simpleCommands(command);
+  provedOf(parts).forEach((proved, i) => {
+    const { words } = parts[i];
+    out.push({ words, proved });
+    const program = words[0].replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+    const flag = words.findIndex((w, j) => j > 0 && /^-(c|command)$/i.test(w));
+    if ((program === 'pwsh' || program === 'powershell') && flag !== -1 && words[flag + 1] !== undefined) {
+      const inner = simpleCommands(words.slice(flag + 1).join(' '));
+      provedOf(inner).forEach((innerProved, j) => out.push({ words: inner[j].words, proved: proved && innerProved }));
     }
-  }
+  });
   return out;
 }
 
+/** How a command is shown in a refusal. */
 const key = (words) => words.join(' ');
+/** How a command is compared: its words with their bounds, so `rm "a b"` is not `rm a b`. */
+const exact = (words) => JSON.stringify(words);
 
 /** The command blocks of a reply's fenced `blocks` (`{ start, info, body }`): `{ start, first, tag, kind, commands }`,
  * `kind` one of `ran`, `own` or `handed`, `commands` the word lists of its simple commands that are no print. */
@@ -235,10 +247,10 @@ export function runSucceeded(text, id, from) {
 function unrun(commands, runs, text, succeeded) {
   const verdict = new Map();
   return commands.filter((words) => {
-    const wanted = key(words);
+    const wanted = exact(words);
     for (const run of runs) {
       for (const part of run.parts) {
-        if (key(part.words) !== wanted || (succeeded && !part.proved)) continue;
+        if (exact(part.words) !== wanted || (succeeded && !part.proved)) continue;
         if (!succeeded) return false;
         if (!verdict.has(run.id)) verdict.set(run.id, runSucceeded(text, run.id, run.pos));
         if (verdict.get(run.id)) return false;
@@ -251,8 +263,8 @@ function unrun(commands, runs, text, succeeded) {
 /** Why the command blocks of a reply are refused, one reason a block, or `[]`. `blocks` are the reply's fenced blocks
  * (`{ start, info, body }`), `platform` the user's, `transcript` the transcript's text (or `null`), and `parse(texts)`
  * the shell's checker over the texts of the blocks that need it: `{ errors }`, one list a text, or `{ failed }` when it
- * could not run, given the `timeout` it has. */
-export function commandRefusals(blocks, { platform, transcript, parse, timeout = COMMANDS_DEADLINE_MS }) {
+ * could not run, given the `timeout` it has: what is left, when it is called, until `until` (ms on the clock `now`). */
+export function commandRefusals(blocks, { platform, transcript, parse, now = Date.now, until = now() + COMMANDS_DEADLINE_MS }) {
   const found = commandBlocks(blocks);
   if (found.length === 0) return [];
   const his = shellsOf(platform);
@@ -265,6 +277,9 @@ export function commandRefusals(blocks, { platform, transcript, parse, timeout =
       add(block, block.tag === '' ? `it is not tagged; tag it ${his[0]}` : `it is tagged ${block.tag}, which is not his shell; tag it ${his[0]} and write it for that shell`);
       continue;
     }
+    // Evidence with no transcript to match it against (Codex, a missing file) is left as it is: he does not run it,
+    // and its tag may be another shell's, which his parser would misread.
+    if (block.kind === 'ran' && !readable) continue;
     if (block.kind === 'own' || !readable) toParse.push(block);
     else {
       const missing = unrun(block.commands, runs, transcript, block.kind === 'handed');
@@ -276,7 +291,7 @@ export function commandRefusals(blocks, { platform, transcript, parse, timeout =
     }
   }
   if (toParse.length > 0) {
-    const checked = parse(toParse.map((block) => block.text), { timeout });
+    const checked = parse(toParse.map((block) => block.text), { timeout: Math.max(1, until - now()) });
     toParse.forEach((block, i) => {
       if (checked.failed) add(block, `its parser could not check it (${checked.failed})`);
       else for (const error of checked.errors[i] ?? []) add(block, error);
@@ -289,14 +304,14 @@ export function commandRefusals(blocks, { platform, transcript, parse, timeout =
 export const COMMANDS_DEADLINE_MS = 4000;
 
 // PowerShell's own reading of each text, one a line of standard input in base64 (PowerShell 5.1 and 7 read a JSON
-// array differently): its parser's errors, then each named parameter of a cmdlet or function that binds to none of
-// its parameters, an alias resolved by its `Definition` (a profile-less shell leaves `ResolvedCommand` empty) and a
-// provider's dynamic parameters counted through `-ArgumentList`. A native program is skipped. Each line it prints is
-// `<index>`, a tab, and why.
+// array differently): its parser's errors, then each named parameter of a cmdlet or an advanced function that binds
+// to none of its parameters, or to more than one by a prefix that is no full name or alias (`-f` of Remove-Item), as
+// PowerShell binds them; an alias resolved by its `Definition` (a profile-less shell leaves `ResolvedCommand` empty)
+// and a provider's dynamic parameters counted through `-ArgumentList`. A native program, and a simple function that
+// takes any name into `$args`, are skipped. Each line it prints is `<index>`, a tab, and why.
 const POWERSHELL_CHECK = String.raw`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $tab = [char]9
 $texts = @([Console]::In.ReadToEnd() -split [char]10 | Where-Object { $_.Trim() } | ForEach-Object { [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_.Trim())) })
-$common = [System.Management.Automation.Cmdlet]::CommonParameters + [System.Management.Automation.Cmdlet]::OptionalCommonParameters
 for ($i = 0; $i -lt $texts.Count; $i++) {
   $tokens = $null; $errors = $null
   $ast = [System.Management.Automation.Language.Parser]::ParseInput([string]$texts[$i], [ref]$tokens, [ref]$errors)
@@ -307,11 +322,16 @@ for ($i = 0; $i -lt $texts.Count; $i++) {
     $cmd = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($cmd -and $cmd.CommandType -eq 'Alias') { $cmd = Get-Command $cmd.Definition -ErrorAction SilentlyContinue | Select-Object -First 1 }
     if (-not $cmd -or $cmd.CommandType -notin 'Cmdlet', 'Function') { continue }
+    if ($cmd.CommandType -eq 'Function' -and -not $cmd.CmdletBinding) { continue }
     $first = $c.CommandElements | Select-Object -Skip 1 | Where-Object { $_ -is [System.Management.Automation.Language.StringConstantExpressionAst] } | Select-Object -First 1
     if ($first) { try { $withArg = Get-Command $cmd.Name -ArgumentList $first.Value -ErrorAction Stop; if ($withArg) { $cmd = $withArg } } catch { } }
-    $names = @($cmd.Parameters.Keys) + @($cmd.Parameters.Values | ForEach-Object { $_.Aliases }) + $common
+    $params = @($cmd.Parameters.Values)
     foreach ($p in $c.CommandElements | Where-Object { $_ -is [System.Management.Automation.Language.CommandParameterAst] }) {
-      if (-not @($names | Where-Object { $_ -like "$($p.ParameterName)*" }).Count) { "$i$($tab)$name has no parameter -$($p.ParameterName)" }
+      $given = $p.ParameterName
+      if (@($params | Where-Object { $_.Name -eq $given -or $_.Aliases -contains $given }).Count) { continue }
+      $hits = @($params | Where-Object { $_.Name -like "$given*" -or @($_.Aliases | Where-Object { $_ -like "$given*" }).Count })
+      if ($hits.Count -eq 0) { "$i$($tab)$name has no parameter -$given" }
+      elseif ($hits.Count -gt 1) { "$i$($tab)$($name): -$given is ambiguous, it could be $((@($hits | ForEach-Object { '-' + $_.Name }) | Sort-Object) -join ', ')" }
     }
   }
 }

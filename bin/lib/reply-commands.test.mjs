@@ -56,6 +56,41 @@ test('a run proves only the commands its exit proves: not before ||, ;, or a pip
   assert.deepEqual(proved('pwsh -NoProfile -Command "Remove-Item -Recurse D:\\x"'), ['pwsh -NoProfile -Command Remove-Item -Recurse D:\\x', 'Remove-Item -Recurse D:\\x']);
 });
 
+test('a run proves a command only when nothing after it can mask its exit: a later ||, ; or newline does; a trailing newline ends the run', () => {
+  const proved = (command) => runParts(command).filter((part) => part.proved).map((part) => part.words.join(' '));
+  assert.deepEqual(proved('npm run build && echo ok || true'), []);
+  assert.deepEqual(proved('npm run build && echo ok; true'), ['true']);
+  assert.deepEqual(proved('git status\n'), ['git status']);
+  assert.deepEqual(proved('git status;\n'), ['git status']);
+  assert.deepEqual(proved('x || y && a'), ['a']);
+});
+
+test('a handed command matches a run word for word: `rm "a b"` does not prove `rm a b`', () => {
+  const transcript = [assistant('toolu_q', 'rm "a b"'), result('toolu_q')].join('\n');
+  assert.match(refusals('```bash\nrm a b\n```', { platform: 'linux', transcript }).join('\n'), /no run of this session that succeeded holds `rm a b`/);
+  assert.deepEqual(refusals('```bash\nrm "a b"\n```', { platform: 'linux', transcript }), []);
+});
+
+test('a block inside a quote is read without its quote marks, and evidence with no transcript to match is not parsed', () => {
+  assert.deepEqual(refusals('> Lo que corrí:\n>\n> ```powershell ran\n> js-harness doctor --offline\n> ```'), []);
+  assert.deepEqual(refusals('```bash ran\nrm -rf -- ./*\n```', { transcript: null, parse: () => assert.fail('evidence is not parsed') }), []);
+});
+
+test('the parser gets the time left when it is called, not when the check began', () => {
+  let timeout = null;
+  const clock = [0, 900];
+  commandRefusals(fencedBlocks('```powershell own\ncodex\n```'), {
+    platform: 'win32', transcript: DOCTOR_RUN, until: 1000, now: () => clock.shift() ?? 900,
+    parse: (texts, options) => { timeout = options.timeout; return { errors: [[]] }; },
+  });
+  assert.ok(timeout > 0 && timeout <= 1000, `timeout ${timeout}`);
+  commandRefusals(fencedBlocks('```powershell own\ncodex\n```'), {
+    platform: 'win32', transcript: DOCTOR_RUN, until: 1000, now: () => 900,
+    parse: (texts, options) => { timeout = options.timeout; return { errors: [[]] }; },
+  });
+  assert.equal(timeout, 100);
+});
+
 test('the parser of win32 falls back to Windows PowerShell where there is no pwsh, and one that does not answer in time refuses', () => {
   const spawned = [];
   const spawn = (program, args, options) => {
@@ -73,10 +108,11 @@ test('the parser of win32 falls back to Windows PowerShell where there is no pws
 });
 
 test('real: PowerShell reads each block as he would, its parse errors and parameters that bind to nothing', { skip: process.platform !== 'win32' && 'PowerShell is checked on Windows' }, () => {
-  const texts = ['rm -rf /d/js-harness-worktrees', 'Remove-Item -Recurse -Force D:\\x', 'cd D:\\js-harness; codex', 'Get-ChildItem -File | Where-Object {', 'Remove-Item D:\\tráfico -Recurs'];
+  const texts = ['rm -rf /d/js-harness-worktrees', 'Remove-Item -Recurse -Force D:\\x', 'cd D:\\js-harness; codex', 'Get-ChildItem -File | Where-Object {', 'Remove-Item D:\\tráfico -Recurs', 'Remove-Item -LiteralPath D:\\x -f'];
   const checked = shellParser('win32')(texts, { timeout: 20000 });
   assert.equal(checked.failed, undefined, checked.failed);
   assert.deepEqual(checked.errors[0], ['rm has no parameter -rf']);
+  assert.match(checked.errors[5].join('\n'), /^Remove-Item: -f is ambiguous, it could be -(Filter|Force), -(Filter|Force)/);
   assert.deepEqual([checked.errors[1], checked.errors[2], checked.errors[4]], [[], [], []], 'a prefix of a parameter binds, as PowerShell binds it');
   assert.match(checked.errors[3].join('\n'), /^PowerShell cannot parse it: /);
 });

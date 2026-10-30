@@ -83,7 +83,7 @@ words, not to run the block and give the corrected one. Doctor's gate does preve
 - [ ] T4 (kind: build) S1 — command blocks in the reply check; test first on real excerpts; the replay; Codex and
   lenses; PR 3
 - [ ] T5 (kind: verify) `npm run check`, ready notices, summary
-- [ ] T6 (kind: docs) F4 of `docs/audits/2026-10-30-cleanup-inventory.md`, by the lead's note (L6): the six failures
+- [x] T6 (kind: docs) F4 of `docs/audits/2026-10-30-cleanup-inventory.md`, by the lead's note (L6): the six failures
   not settled. `two-blocks-out-of-order` done in PR 1 (its line moved to CLAUDE.md); the five others need a control
   that holds, each a finding of its own: read after T4, and what each needs is reported to the lead
 
@@ -243,8 +243,30 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   two (lines 32980, 33568) for `powershell` blocks of commands the session never ran, which were his to run and
   should have been tagged `own`. The check took 0.2 to 2.3 s a reply, the parser included, under the 4 s deadline.
   `command-handed-untested` moved its Control to the check, its owed line kept as `Was:`.
+- L12 (2026-10-30, T4 reviews): the lenses risk, reliability, resilience and readability on `3ed7fd4..acbd281`
+  (24-50k input tokens each): two reliability warnings. One holds: with no transcript a `ran` block went to his
+  parser, so a `bash ran` block was misread as PowerShell; now evidence with no transcript is left unchecked. One is
+  kept as designed: a parser that cannot answer refuses the block, since the brief says "never left unchecked"; the
+  cost is one rewritten close, once, as `stop_hook_active` lets the next stop through. Codex on the same range (2
+  parts, 387,294 input tokens): six P2, all fixed with a test each, RED first (5 failing): a later `||`, `;` or newline
+  masked the exit of an earlier command; `rm "a b"` matched `rm a b`; a trailing newline refused a command run alone;
+  PowerShell's ambiguous prefix (`Remove-Item -f`: Filter, Force) passed; a block inside a quote kept its `>` marks;
+  the parser's budget was taken before the transcript scan. The replay after the fixes: still 9 of 9 refused, 0.1 to
+  1.0 s a reply. gentle-ai: not run on this slice (its Stop hook offers the whole branch, no candidate here).
+- L13 (2026-10-30, T6): F4's six failures, read with `js-harness failures <id>`. `two-blocks-out-of-order` is settled
+  (PR 707). The five others need more than a line here, so each goes to the lead: `diagnostic-whole-gate` (repeated,
+  no control): the gate has named its failing tests since 2026-10-14 (`5d027a0d`) and reruns a failed file alone
+  since 2026-10-15, yet the 2026-10-27 sighting reran a commit because `tail` cut that output; this session did the
+  same in small on 2026-10-30, eight test files run twice through `js-harness gate` because a `grep | head` cut the
+  summary. `told-him-unverified` (12 sightings with the lead's of 18:50Z) and `checked-not-read` (6): their control
+  is the 2026-10-15 measurement that a general honesty audit was not worth building, seen again since, so the
+  measurement is stale and wants redoing; S1 here covers only commands handed to him. `edit-during-review` (6): its
+  check makes the review record nothing when the tree changed, which stops a wrong record but not the edit or its
+  cost (226,291 tokens lost on 2026-10-30); a review of a detached copy of the range's head would make the edit
+  harmless. `door-covers-past-tip` (3): its check refuses at the door, but on 2026-10-30 a chain cut inside a reviewed
+  range passed the pre-push hook three times; the push side does not hold the door's rule for a cut.
 
 ## Next step
-State (2026-10-30, after the compaction): PR 707 holds T2, PR 710 holds T3 (both ready notices sent). T4's code and
-docs are written and green (L11), not yet committed. Next: commit, then Codex and the lenses on the range from
-`3ed7fd47`, then PR 3 on a branch from PR 710's head, its ready notice, then T6 and T5.
+State (2026-10-30): PRs 707 (T2) and 710 (T3) are merged. T4 is `ccd7e3f9` and `acbd2816`, reviewed (L12); the fixes
+of its review are written and green, not yet committed. Next: commit them, review the fix (Codex and reliability on
+`acbd2816..`), PR 3 from main, its ready notice; T6's routing note to the lead; then T5.

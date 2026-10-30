@@ -87,24 +87,26 @@ function linesOf(text) {
   const fenced = lines.map(() => false);
   const blocks = [];
   let open = null;
+  // A block a quote holds keeps its lines without their quote marks, as it renders.
+  const bodyOf = (from, to) => lines.slice(from, to).map((raw) => (open.quoted ? raw.replace(/^\s*(?:>\s?)+/, '') : raw)).join('\n');
   lines.forEach((raw, i) => {
     // A fence a quote holds (`> ```) is a fence too; `bare` would take the quote marks off its lines.
     const line = raw.replace(/^\s*(?:>\s?)+/, '');
     const fence = /^\s*(`{3,}|~{3,})/.exec(line);
     if (open === null && fence) {
-      open = { start: i, mark: fence[1], info: line.trim().slice(fence[1].length).trim() };
+      open = { start: i, mark: fence[1], info: line.trim().slice(fence[1].length).trim(), quoted: line !== raw };
       fenced[i] = true;
       return;
     }
     if (open !== null) {
       fenced[i] = true;
       if (fence && fence[1][0] === open.mark[0] && fence[1].length >= open.mark.length && line.trim() === fence[1]) {
-        blocks.push({ start: open.start, end: i, info: open.info, body: lines.slice(open.start + 1, i).join('\n') });
+        blocks.push({ start: open.start, end: i, info: open.info, body: bodyOf(open.start + 1, i) });
         open = null;
       }
     }
   });
-  if (open !== null) blocks.push({ start: open.start, end: lines.length - 1, info: open.info, body: lines.slice(open.start + 1).join('\n') });
+  if (open !== null) blocks.push({ start: open.start, end: lines.length - 1, info: open.info, body: bodyOf(open.start + 1) });
   return { lines, fenced, blocks };
 }
 

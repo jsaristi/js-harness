@@ -100,8 +100,8 @@ function commandsOf(payload, message, { readFile, platform, parse, now, started 
         // No transcript to read (Codex sends none): every block goes to the parser instead.
       }
     }
-    const timeout = Math.max(1, COMMANDS_DEADLINE_MS - (now() - started));
-    const reasons = commandRefusals(blocks, { platform, transcript, parse: parse ?? shellParser(platform), timeout });
+    const until = started + COMMANDS_DEADLINE_MS;
+    const reasons = commandRefusals(blocks, { platform, transcript, parse: parse ?? shellParser(platform), now, until });
     return commandsWarning(reasons, platform);
   } catch (err) {
     stderr(`js-harness reply: ${err?.message ?? err}; the command-block check did not run\n`);
