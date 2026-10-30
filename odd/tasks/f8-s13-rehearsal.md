@@ -80,6 +80,15 @@ directive coverage and S12's migration carries it" (reverse-engineering document
 - Run 2 (2026-10-30 ~02:35Z, `4664012e`, host cost $0): `install` PASS; `stack-install` FAIL: "stack still lists codex",
   its manual `codex login`, which no scratch home can do since no credential enters it; the walk now takes that step
   as his, as it takes gh; `real-home-after` PASS (19 of 19); no process left, no browser. Walk 3 next.
+- Run 3 (2026-10-30T02:35Z, `df754a6d`, 1.2 minutes, host cost $0.0112 of the $5 estimate): `install`, `stack-install`
+  ("context7 in Claude as stack plans it; nothing missing but context7.codex, owed, and gh") and `init` PASS;
+  `engram-start` FAIL: "no SessionStart:startup hook printed the planted observation: 0/0B, 0/0B, 0/0B, 0/71B,
+  0/3168B". Cause, read in the kept root: the observation was saved (`engram search` in the scratch store finds it
+  under project `project`), but the walk set `ENGRAM_URL`, which engram 0.1.19's `_helpers.sh` (lines 95-99) reads
+  as an external server (`ENGRAM_MANAGED_LOCAL=0`), so `session-start.sh` started no server and its context fetch
+  found nothing; the 3168 bytes are the protocol text alone. Fix: `engramEnv` sets only the port and the data
+  folder, test first. One process left, a scratch codegraph binary under the pnpm prefix, stopped by the sweep; the
+  sweep printed only the head of its command line, so it now prints the tail. `real-home-after` PASS.
 
 ## Next step
 State at the second context pause (2026-10-30 ~02:30Z, branch `f8-s13-rehearsal`, worktree

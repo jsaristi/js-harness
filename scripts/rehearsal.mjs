@@ -69,6 +69,12 @@ export function rehearsalEnv(layout, base) {
   };
 }
 
+/** Engram's own variables for the walk: its port and its data folder in the scratch home. No ENGRAM_URL, since
+ * engram's hook reads one as an external server and then starts none, which left walk 3's start without context. */
+export function engramEnv(layout, port) {
+  return { ENGRAM_PORT: String(port), ENGRAM_DATA_DIR: path.join(layout.home, '.engram') };
+}
+
 /** The hash of every file under `root`, and `folder` for every folder, by its absolute path, following no link; `{}`
  * for a folder that is not there. Folders count, since a manifest records some and one left behind must show. */
 export function snapshotTree(root) {
@@ -234,7 +240,9 @@ function stopTrees(pick) {
     const stopped = process.platform === 'win32'
       ? spawnSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { encoding: 'utf8', windowsHide: true }).status === 0
       : (() => { try { process.kill(pid, 'SIGKILL'); return true; } catch { return false; } })();
-    return `${pid} ${stopped ? 'stopped' : 'not stopped'}: ${String(command).slice(0, 160)}`;
+    // The tail, where the arguments are: walk 3's leftover showed only the scratch root its binary sat under.
+    const text = String(command);
+    return `${pid} ${stopped ? 'stopped' : 'not stopped'}: ${text.length > 240 ? `…${text.slice(-240)}` : text}`;
   });
 }
 
@@ -274,8 +282,7 @@ function walkContext(layout, { gitDir, port, token }) {
   const kept = Object.fromEntries(Object.entries(process.env).filter(([name]) => KEPT.some((wanted) => wanted.toUpperCase() === name.toUpperCase())));
   const pathDirs = [layout.bin, layout.prefixBin, layout.prefix, gitDir, ...(windows ? [path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')] : ['/usr/bin', '/bin'])];
   const base = { ...kept, [windows ? 'Path' : 'PATH']: pathDirs.join(path.delimiter) };
-  const engram = { ENGRAM_PORT: String(port), ENGRAM_URL: `http://127.0.0.1:${port}`, ENGRAM_DATA_DIR: path.join(layout.home, '.engram') };
-  const env = { ...rehearsalEnv(layout, base), ...engram };
+  const env = { ...rehearsalEnv(layout, base), ...engramEnv(layout, port) };
   const commands = [];
   const exec = (words, { cwd = layout.project, environment = env, input, timeout = 600_000 } = {}) => {
     commands.push(words.map(String));

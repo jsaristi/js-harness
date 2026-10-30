@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { rehearsalLayout, rehearsalEnv, snapshotTree, commandWords, scratchProcesses, openedBrowsers, STEPS, HIS_SETTINGS, HIS_CLAUDE_MD } from './rehearsal.mjs';
+import { rehearsalLayout, rehearsalEnv, engramEnv, snapshotTree, commandWords, scratchProcesses, openedBrowsers, STEPS, HIS_SETTINGS, HIS_CLAUDE_MD } from './rehearsal.mjs';
 import { plantedRuleFiles, directiveProblem, recordedPaths, restoreProblems, importRowState, REHEARSAL } from './rehearsal-lib.mjs';
 
 const JS_HARNESS = fileURLToPath(new URL('../bin/js-harness.mjs', import.meta.url));
@@ -117,6 +117,12 @@ test('openedBrowsers names a browser started under a scratch process, and none o
   ];
   assert.deepEqual(openedBrowsers(processes, root, 'win32'), [{ pid: 12, command: processes[3].command }]);
   assert.deepEqual(openedBrowsers(processes.filter((p) => p.pid !== 12 && p.pid !== 13), root, 'win32'), []);
+});
+
+test('engramEnv gives engram a port and a data folder in the scratch home, and no URL', () => {
+  // Engram's hook reads an ENGRAM_URL as an external server and starts none, so walk 3's start found no context.
+  const layout = rehearsalLayout(path.join(os.tmpdir(), 'r'));
+  assert.deepEqual(engramEnv(layout, 50123), { ENGRAM_PORT: '50123', ENGRAM_DATA_DIR: path.join(layout.home, '.engram') });
 });
 
 test('the walk has one step for each id of the rehearsal, and no other', () => {
