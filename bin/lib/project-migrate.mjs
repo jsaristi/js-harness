@@ -22,6 +22,7 @@ import {
   claudeBlock,
   claudeTemplate,
   clonePending,
+  excludeFile,
   gitDirs,
   gitTopLevel,
   matchesRecordedHash,
@@ -32,9 +33,6 @@ import {
   syncProject,
   templateBlock,
 } from './project.mjs';
-
-/** The committed files the migration may write, which git must be able to give back exactly. */
-const COMMITTED = ['harness.json', 'AGENTS.md', 'CLAUDE.md'];
 
 /** The `CLAUDE.md` written beside an `AGENTS.md` whose block was edited: the import alone, so no line is said twice. */
 export const IMPORT_ONLY = `<!-- Written by \`js-harness migrate\`. Claude loads this file and the AGENTS.md it imports on every turn; AGENTS.md keeps the harness's lines, since its block was edited. -->
@@ -152,25 +150,42 @@ function decide(state, version, deps) {
   return { pin: pinWrite, claude, baseline, notes };
 }
 
-/** The committed files of `COMMITTED` that git sees changed, untracked or ignored in the project at `root`: git could
- * give none of them back. */
-function uncommittedOf(root, spawn) {
+/** The committed files the migration or sync after it may write in the project `state` read, as `decided`, which git
+ * must be able to give back exactly: `harness.json` where the pin moves, and a file holding a block of the harness's
+ * lines, which sync renders. A file of the project's with no block is neither's to write, so its state stops nothing. */
+function writable(state, decided) {
+  const names = decided.pin ? ['harness.json'] : [];
+  for (const name of ['AGENTS.md', 'CLAUDE.md']) {
+    const file = fileOf(state.root, name);
+    if (file.state === 'file' && TEMPLATE_BLOCK_MARK.test(file.text)) names.push(name);
+  }
+  return names;
+}
+
+/** The files of `names` that git sees changed, untracked or ignored in the project at `root`: git could give none of
+ * them back. */
+function uncommittedOf(root, spawn, names) {
+  if (names.length === 0) return [];
   // Every untracked file whatever the clone's config says, and no refresh of the index, which a plan must not write.
-  const args = ['--no-optional-locks', 'status', '--porcelain', '--ignored', '--untracked-files=all', '--', ...COMMITTED];
+  const args = ['--no-optional-locks', 'status', '--porcelain', '--ignored', '--untracked-files=all', '--', ...names];
   const result = spawn('git', args, { cwd: root, encoding: 'utf8' });
-  if (!result || result.error || result.status !== 0) return [...COMMITTED];
-  return result.stdout.split('\n').filter(Boolean).map((line) => line.slice(3).trim()).filter((name) => COMMITTED.includes(name));
+  if (!result || result.error || result.status !== 0) return [...names];
+  return result.stdout.split('\n').filter(Boolean).map((line) => line.slice(3).trim()).filter((name) => names.includes(name));
 }
 
 /** What `sync` repairs in the clone that `clonePending` does not read (`updateRecorded`): the pre-commit gate of a
  * manifest `functions apply` wrote or a recorded one that is gone, and the `.atl/` exclude line of a clone with no
  * record of it. */
-function repairLines({ root, manifest }) {
+function repairLines({ root, manifest, spawn }) {
   const lines = [];
   const gate = manifest.files.find((file) => file.path.split('/').pop() === 'pre-commit');
   if (manifest.scope === 'functions') lines.push('the pre-commit gate: written, as sync sets the clone up the rest of the way');
   else if (gate && !fs.existsSync(resolveManifestEntryPath(root, gate))) lines.push('the pre-commit gate: written again, since the one recorded is gone');
-  if (!manifest.exclude) lines.push(".atl/: its exclude line added to the clone's exclude file and recorded");
+  // Only where sync would write it: an exclude file behind a link, or outside the repository, sync keeps as it is.
+  if (!manifest.exclude) {
+    const target = excludeFile(root, spawn);
+    if (target.file && !target.reason) lines.push(".atl/: its exclude line added to the clone's exclude file and recorded");
+  }
   return lines;
 }
 
@@ -258,7 +273,7 @@ export function migrationPlan(cwd, version, deps = {}) {
     root: state.root,
     pending,
     notes: decided.notes,
-    uncommitted: uncommittedOf(state.root, state.spawn),
+    uncommitted: uncommittedOf(state.root, state.spawn, writable(state, decided)),
     leftovers: gentleLeftovers(state.root, state.spawn),
     context7: context7Gaps(state.root, deps),
   };
@@ -274,10 +289,10 @@ export function migrateProject(cwd, version, deps = {}) {
   const state = inspect(cwd, version, deps);
   if (state.code) return state;
   const { root, files } = state;
-  const uncommitted = uncommittedOf(root, state.spawn);
-  if (uncommitted.length > 0) return { code: 1, uncommitted, root };
   const decided = decide(state, version, deps);
   if (decided.refusal) return decided.refusal;
+  const uncommitted = uncommittedOf(root, state.spawn, writable(state, decided));
+  if (uncommitted.length > 0) return { code: 1, uncommitted, root };
 
   const writeFile = deps.writeFile ?? fs.writeFileSync;
   const removeFile = deps.removeFile ?? fs.rmSync;
@@ -327,10 +342,10 @@ export function migrateProject(cwd, version, deps = {}) {
 
   let synced;
   try {
-    synced = syncProject(root, version, deps);
+    synced = (deps.syncProject ?? syncProject)(root, version, deps);
   } catch (err) {
-    // Sync takes back only its own writes: the migration's stay, recorded, and its reader is told which.
-    if (err instanceof InitWriteError) err.migrated = actions.map((action) => (action.kind === 'baseline' ? 'the coverage baseline' : action.path));
+    // Sync takes back only its own writes, and whatever it throws, the migration's stay, recorded: its reader is told which.
+    if (err instanceof Error) err.migrated = actions.map((action) => (action.kind === 'baseline' ? 'the coverage baseline' : action.path));
     throw err;
   }
   for (const action of synced.actions ?? []) if (action.kind === 'rendered') committed.add(action.path);

@@ -87,11 +87,15 @@ function runMigrate(parsed, version, deps) {
     result = migrateProject(parsed.cwd, version, { ...deps, home: parsed.home });
   } catch (err) {
     // The migration took back what it wrote before throwing, and a failure of sync's part leaves the migration's recorded.
-    if (err instanceof InitWriteError && err.migrated?.length > 0) {
+    const stays = err?.migrated?.length > 0
+      ? `what the migration wrote before it stays, recorded: ${err.migrated.join(', ')}; commit it, then run js-harness sync once the cause is fixed`
+      : null;
+    if (err instanceof InitWriteError && stays) {
       console.error(`migrate failed in sync's part: ${err.message}; of sync's writes, ${cleanupClause(err)}`);
-      console.error(`what the migration wrote before it stays, recorded: ${err.migrated.join(', ')}; commit it, then run js-harness sync once the cause is fixed`);
+      console.error(stays);
       return 1;
     }
+    if (stays) console.error(stays); // Said before the unexpected error is thrown on, so its reader knows what to commit.
     if (err instanceof InitWriteError) {
       console.error(`migrate failed: ${err.message}; ${cleanupClause(err)}`);
       return 1;

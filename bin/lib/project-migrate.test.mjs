@@ -370,6 +370,57 @@ test('an untracked AGENTS.md is refused even where git is told not to show untra
   }
 });
 
+test("a CLAUDE.md of the project's that git ignores, with no block of the harness's, does not stop the migration", () => {
+  const { dir, home } = oldProject();
+  try {
+    const own = '@AGENTS.md\n- a line of our own\n';
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), own);
+    fs.writeFileSync(path.join(dir, '.gitignore'), 'CLAUDE.md\n');
+    commitAll(dir);
+    const result = migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.equal(result.code, 0, JSON.stringify(result.uncommitted));
+    assert.equal(read(path.join(dir, 'CLAUDE.md')), own);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test("where sync keeps the clone's exclude file as it is, the plan does not ask for its line", () => {
+  const { dir, manifestPath, home } = oldProject({ pin: RUNNING });
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-migrate-info-'));
+  try {
+    const info = path.join(dir, '.git', 'info');
+    fs.cpSync(info, outside, { recursive: true });
+    fs.rmSync(info, { recursive: true, force: true });
+    fs.symlinkSync(outside, info, 'junction');
+    const manifest = JSON.parse(read(manifestPath));
+    delete manifest.exclude;
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+    assert.ok(!migrationPlan(dir, RUNNING, { home, today: TODAY }).pending.some((line) => line.startsWith('.atl/')));
+  } finally {
+    cleanup(dir, home, outside);
+  }
+});
+
+test("any failure in sync's part, not only a write's, names what the migration wrote before it", () => {
+  const { dir, home } = oldProject();
+  try {
+    const syncProject = () => {
+      throw new TypeError('boom');
+    };
+    let thrown;
+    try {
+      migrateProject(dir, RUNNING, { home, today: TODAY, syncProject });
+    } catch (err) {
+      thrown = err;
+    }
+    assert.ok(thrown instanceof TypeError, String(thrown));
+    assert.deepEqual(thrown.migrated, ['CLAUDE.md', 'harness.json', 'the coverage baseline']);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
 test("the plan leaves git's index as it was: no stat refresh, no lock", () => {
   const { dir, home } = oldProject();
   try {

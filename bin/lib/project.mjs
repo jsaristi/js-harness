@@ -353,7 +353,7 @@ function resolveHookContainment(root, hookPath, gitBases = {}) {
 /** The clone's exclude file as git names it, `{ file }`, or `{ file, reason }` where it is not to be written: a link on
  * its way, or a real path outside the working tree and git dirs, would send the line to another file (Codex P2 on
  * dea129b..118f479). `file` is null where git names none. */
-function excludeFile(root, spawn) {
+export function excludeFile(root, spawn) {
   const file = resolveGitPath(root, 'info/exclude', spawn);
   if (!file) return { file: null, reason: 'git did not name the exclude file' };
   const gitBases = gitDirs(root, spawn);

@@ -128,6 +128,24 @@ test("a failure in sync's part says that what the migration wrote stays recorded
   }
 });
 
+test("an error of sync's part that is no write's still says what the migration wrote, then is thrown", async (t) => {
+  const { dir, home } = oldProject();
+  try {
+    const syncProject = () => {
+      throw new TypeError('boom');
+    };
+    const err = [];
+    t.mock.method(console, 'log', () => {});
+    t.mock.method(console, 'error', (text) => err.push(text));
+    await assert.rejects(migrateMain(['--cwd', dir, '--home', home], {}, { version: RUNNING, today: '2026-10-30', syncProject }), /boom/);
+    t.mock.restoreAll();
+    assert.match(err.join('\n'), /^what the migration wrote before it stays, recorded: CLAUDE\.md, harness\.json, the coverage baseline; commit it, then run js-harness sync once the cause is fixed$/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('migrate list names the folders of recent sessions read-only, and says none where there are none', async (t) => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-migrate-cli-list-'));
   try {
