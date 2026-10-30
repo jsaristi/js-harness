@@ -22,7 +22,7 @@ before anything else, and do the work it gives you. Its last section says how yo
 - Nothing committed, stashed or reset in either project; each project's changes stay uncommitted for him (L23).
 - `odd/tasks/f8-s12-migration.md`: T7 and T8 done, L19-L23 with each command, its output and the exact undo.
 - `docs/ROADMAP.md`: S12's State line reads done.
-- The PR of branch `f8-s12-moves`, docs only, with its ready notice.
+- PR 697 (`f8-s12-moves`, docs only): open, with its ready notice.
 
 ## Decisions
 - His: both projects move, `D:\harness` stays (question 112, L19).
