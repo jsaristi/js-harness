@@ -587,7 +587,12 @@ async function main(argv) {
     assertThat(program, `${name} is not on your PATH`);
     linkOrCopy(program, path.join(layout.bin, path.basename(program)));
   }
-  fs.writeFileSync(path.join(layout.bin, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'), shimContent(locate('pnpm'), process.platform), { mode: 0o755 });
+  // npm too, which the project's gate runs its tests with (walk 7's first commit found none).
+  for (const name of ['pnpm', 'npm']) {
+    const program = locate(name);
+    assertThat(program, `${name} is not on your PATH`);
+    fs.writeFileSync(path.join(layout.bin, process.platform === 'win32' ? `${name}.cmd` : name), shimContent(program, process.platform), { mode: 0o755 });
+  }
   // His own lines in the scratch home, which install grafts onto and uninstall must give back.
   fs.writeFileSync(path.join(layout.home, '.claude', 'settings.json'), HIS_SETTINGS);
   fs.writeFileSync(path.join(layout.home, '.claude', 'CLAUDE.md'), HIS_CLAUDE_MD);

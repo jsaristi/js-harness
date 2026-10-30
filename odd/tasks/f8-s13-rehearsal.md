@@ -109,6 +109,12 @@ directive coverage and S12's migration carries it" (reverse-engineering document
   "codex installed: the command exited 0 and the probe cannot tell whether it worked", now with the whole output in
   `commands.log`: no end-of-run read follows it. Cause proven and fixed in `bin/stack.mjs`, test first (L10).
   `real-home-after` PASS; no process left.
+- Run 7 (2026-10-30T03:10Z, `dc8d0e33`, 2 minutes, host cost $0.0185 of the $5 estimate): `install`, `stack-install`,
+  `init`, `engram-start` (3421 bytes), `engram-compact` (4151 bytes) and `feature` PASS; `push-main` FAIL: the first
+  commit's gate ran `npm run test` and the walk's PATH had no npm ("\"npm\" no se reconoce como un comando interno o
+  externo"); the walk now shims npm beside pnpm. `seen.hostLeftovers` holds two `codegraph.js serve --mcp` processes,
+  one after each `claude -p` session: Claude Code leaves codegraph's MCP server running when a `-p` session ends on
+  Windows, a finding for S12. `real-home-after` PASS; no other process left.
 
 ## Next step
 State at the second context pause (2026-10-30 ~02:30Z, branch `f8-s13-rehearsal`, worktree
