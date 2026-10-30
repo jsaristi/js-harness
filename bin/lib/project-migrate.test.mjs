@@ -553,7 +553,8 @@ test('context7 registered nowhere is said with each host fix, and nothing is reg
   const { dir, home } = oldProject();
   try {
     const top = git(dir, 'rev-parse', '--show-toplevel').trim();
-    const fixes = context7Gaps(top, { home }).map((gap) => gap.fix).join('\n');
+    // An empty environment, so a CODEX_HOME or CLAUDE_CONFIG_DIR of the machine's cannot reach its own config.
+    const fixes = context7Gaps(top, { home, env: {} }).map((gap) => gap.fix).join('\n');
     assert.match(fixes, /claude mcp add -s user --transport http context7/);
     assert.match(fixes, /codex mcp add context7 .*opens context7's sign-in in a browser/);
     assert.equal(fs.existsSync(path.join(home, '.claude.json')), false);
@@ -568,7 +569,7 @@ test('context7 turned off for this project is said with the /mcp fix', () => {
     const top = git(dir, 'rev-parse', '--show-toplevel').trim();
     const config = { mcpServers: { context7: { type: 'http', url: 'https://mcp.context7.com/mcp' } }, projects: { [top]: { disabledMcpServers: ['context7'] } } };
     fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify(config));
-    const gaps = context7Gaps(top, { home });
+    const gaps = context7Gaps(top, { home, env: {} });
     assert.ok(gaps.some((gap) => gap.where === 'project' && /\/mcp/.test(gap.fix)), JSON.stringify(gaps));
     assert.ok(!gaps.some((gap) => gap.where === 'claude'), 'registered for Claude, so no claude gap');
   } finally {
@@ -605,6 +606,8 @@ test('the candidates are the folders of sessions of the last 30 days and every i
   const stale = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-migrate-stale-'));
   try {
     const now = Date.parse('2026-10-30T12:00:00Z');
+    // Git names a folder by its real path (a long name for an 8.3 temp name, /private/var for /var), so both sides are.
+    const key = (...parts) => fs.realpathSync.native(path.resolve(...parts));
     const session = (folder, cwd, daysAgo) => {
       const at = path.join(claudeHome, 'projects', folder);
       fs.mkdirSync(at, { recursive: true });
@@ -617,23 +620,43 @@ test('the candidates are the folders of sessions of the last 30 days and every i
     session('stale', stale, 40);
     session('initialized', dir, 45);
     let found = candidateProjects({ claudeHome, now });
-    let by = Object.fromEntries(found.map((item) => [path.resolve(item.path), item]));
-    assert.equal(by[path.resolve(recent)].days, 2);
+    let by = Object.fromEntries(found.map((item) => [key(item.path), item]));
+    assert.equal(by[key(recent)].days, 2);
     // A session written a moment ago may carry a time a little past `now` (seen in bin/migrate.test.mjs): 0 days.
     session('ahead', recent, -0.0001);
     found = candidateProjects({ claudeHome, now });
-    by = Object.fromEntries(found.map((item) => [path.resolve(item.path), item]));
-    assert.equal(by[path.resolve(recent)].days, 0);
-    assert.equal(by[path.resolve(recent)].initialized, false);
-    assert.equal(by[path.resolve(stale)], undefined);
-    assert.deepEqual({ initialized: by[path.resolve(dir)].initialized, pin: by[path.resolve(dir)].pin }, { initialized: true, pin: RUNNING });
+    by = Object.fromEntries(found.map((item) => [key(item.path), item]));
+    assert.equal(by[key(recent)].days, 0);
+    assert.equal(by[key(recent)].initialized, false);
+    assert.equal(by[key(stale)], undefined);
+    assert.deepEqual({ initialized: by[key(dir)].initialized, pin: by[key(dir)].pin }, { initialized: true, pin: RUNNING });
     // A session in a folder inside a repository, such as a worktree's folder git no longer links, is its top level's.
     session('inside', path.join(dir, 'docs'), 1);
     found = candidateProjects({ claudeHome, now });
-    by = Object.fromEntries(found.map((item) => [path.resolve(item.path), item]));
-    assert.equal(by[path.resolve(dir, 'docs')], undefined);
-    assert.equal(by[path.resolve(dir)].days, 1);
+    by = Object.fromEntries(found.map((item) => [key(item.path), item]));
+    assert.equal(by[key(dir, 'docs')], undefined);
+    assert.equal(by[key(dir)].days, 1);
   } finally {
     cleanup(claudeHome, dir, home, recent, stale);
+  }
+});
+
+test('a session file gone between the listing and its reading is skipped, and the scan goes on', () => {
+  const claudeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-migrate-claude-'));
+  const recent = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-migrate-recent-'));
+  try {
+    const now = Date.now();
+    const at = path.join(claudeHome, 'projects', 'recent');
+    fs.mkdirSync(at, { recursive: true });
+    fs.writeFileSync(path.join(at, 'one.jsonl'), `${JSON.stringify({ type: 'user', cwd: recent })}\n`);
+    // A link whose target is gone is listed but cannot be read, as a session removed mid-scan (a junction needs no
+    // privilege on Windows; elsewhere the type is ignored and it is a plain link).
+    const target = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-migrate-gone-'));
+    fs.symlinkSync(target, path.join(at, 'gone.jsonl'), 'junction');
+    fs.rmSync(target, { recursive: true, force: true });
+    const found = candidateProjects({ claudeHome, now });
+    assert.deepEqual(found.map((item) => fs.realpathSync.native(item.path)), [fs.realpathSync.native(recent)]);
+  } finally {
+    cleanup(claudeHome, recent);
   }
 });

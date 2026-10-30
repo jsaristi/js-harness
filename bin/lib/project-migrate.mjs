@@ -403,10 +403,24 @@ export function candidateProjects({ claudeHome = path.join(os.homedir(), '.claud
   const mains = new Map();
   for (const folder of folders) {
     const at = path.join(base, folder.name);
-    for (const name of fs.readdirSync(at).filter((item) => item.endsWith('.jsonl'))) {
+    // A folder or a session that cannot be read, as one removed while this reads, names no project: the scan goes on
+    // (gentle-ai, 2026-10-30).
+    let names = [];
+    try {
+      names = fs.readdirSync(at).filter((item) => item.endsWith('.jsonl'));
+    } catch {
+      continue;
+    }
+    for (const name of names) {
       const file = path.join(at, name);
+      let modified;
+      try {
+        modified = fs.statSync(file).mtimeMs;
+      } catch {
+        continue;
+      }
       // A file written a moment ago can carry a time a little past `now`: its age is 0, never -1.
-      const age = Math.max(0, Math.floor((now - fs.statSync(file).mtimeMs) / 86_400_000));
+      const age = Math.max(0, Math.floor((now - modified) / 86_400_000));
       const cwd = cwdOf(file);
       if (cwd === null || !fs.existsSync(cwd)) continue;
       // A folder inside a repository, such as a worktree's folder git no longer links, is read as its top level.
