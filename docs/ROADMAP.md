@@ -494,7 +494,19 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   takes part; after the uninstalls every path the manifests recorded is gone or back to its bytes.
 - **Cost:** one walk, about $5 [i].
 - **Order:** after S5c-a; before S12 and S2.
-- **State:** to do.
+- **State:** walked 2026-10-30 (JH 90, `odd/tasks/f8-s13-rehearsal.md`), in review on branch `f8-s13-rehearsal`.
+  `scripts/rehearsal.mjs` walks the nine rows in a `mktemp -d` home with his logins stripped, and
+  `scripts/rehearsal.test.mjs` is its free part (it fails on a planted break and passes again, L8). Run 9 passed all
+  21 steps at a host cost of $0.0243 ($0.0907 for the nine runs, against $5): engram brought the planted observation
+  back after a start and a compaction; the import row turned red under a planted `CLAUDE.md`; a directive without a
+  control made `rules check` exit 1; 20 recorded paths gone or back to their bytes; none of gentle-ai, Orca or herdr
+  among 55 commands and 4,893 files on the PATH. The preset goes to `init` (`--preset lean`), since `install` takes
+  none. Built here, S12's row 16 among them: the `doctor` claude-import row (D1), which honours `claudeMdExcludes`;
+  `stack install` reading again at the end of the run an install its probe could not tell (a new `codex.exe` took
+  18 s to start). Owed to S12: engram's plugin needs jq on the PATH; Codex's `mcp add` of context7 opens its OAuth
+  login in a browser and outlives the run; each `claude -p` session leaves codegraph's MCP server running on
+  Windows; Claude's plugin commands leave empty `enabledPlugins` and `extraKnownMarketplaces` in his settings;
+  `lens-review --plan` puts a small range at a third of what a lens takes, the rest unmeasured CLI overhead.
 
 ### S12 Moving his projects
 - **Changes:** builds what does not exist: a migration of an initialized project, which reads the
