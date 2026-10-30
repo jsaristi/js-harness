@@ -123,3 +123,6 @@ state to show it on. The lead decides whether it goes to the roadmap.
   `codex-code-mode-host.exe`, and whose `codex-package.json` reads `version 0.166.0`, `entrypoint bin/codex.exe`.
   `daemon start` and `version` were not run here.
 - L9 (decision, within the plan): the doctor row is proposed in `## Daemon`, not built; the reasons are written there.
+- L10 (reviews of `ca64cfe..b8c1f4f`, the code commit `3de1d41` and this document): Codex, "the patch is correct
+  (confidence 0.96)", no finding, 97,544 input tokens; the Claude lenses reliability and risk, 0 findings each (7,228
+  and 14,968 input tokens). No gentle-ai review: the brief asked for Codex and the lenses.
