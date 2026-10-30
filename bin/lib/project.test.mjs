@@ -30,6 +30,7 @@ import { estimateTokens } from './payload.mjs';
 import { TOKEN_BUDGET } from '../check.mjs';
 import { coverageRecord } from './project-rules-read.mjs';
 import { localDay } from './flaky.mjs';
+import { importHealth } from './claude-import.mjs';
 
 // T2e item 8 (R3-tests-depend-on-host-git-config): every test here runs a real `git` (only
 // `codegraph` is ever faked), so a real `git init`/`commit`/`worktree add` must not silently pick
@@ -3844,6 +3845,9 @@ test('initProject leaves a project with its own AGENTS.md without a CLAUDE.md: m
   }
 });
 
+/** What init says of a CLAUDE.md of the project's that git could not give back (odd/tasks/claude-md-block.md, D2). */
+const NOT_WRITTEN = 'git could not give it back (it is untracked, ignored or holds a change not committed), so init does not write it: add the line @AGENTS.md at its top, or Claude never loads AGENTS.md';
+
 test('initProject keeps a project\'s own CLAUDE.md and gives its new AGENTS.md the whole block, so no line is lost', () => {
   const root = makeTmpRepo('js-harness-project-split-claude-');
   try {
@@ -3854,6 +3858,85 @@ test('initProject keeps a project\'s own CLAUDE.md and gives its new AGENTS.md t
     assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), agentsTemplate(root, { split: false }));
     assert.deepEqual(result.actions.find((action) => action.path === 'CLAUDE.md'), { kind: 'kept', path: 'CLAUDE.md', reason: 'exists' });
     assert.ok(!result.manifest.files.some((file) => file.path === 'CLAUDE.md'));
+    // Untracked, git could not give it back, so init says the step (odd/tasks/claude-md-block.md, D2).
+    assert.deepEqual(result.actions.filter((action) => action.path === 'CLAUDE.md').slice(1), [{ kind: 'skip', path: 'CLAUDE.md', reason: NOT_WRITTEN }]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// --- A project's own CLAUDE.md imports the AGENTS.md init writes (odd/tasks/claude-md-block.md, S2 and D2) ---
+
+/** A repository whose own CLAUDE.md holds `text`, committed. */
+function ownClaudeRepo(prefix, text) {
+  const root = makeTmpRepoWithCommit(prefix);
+  fs.writeFileSync(path.join(root, 'CLAUDE.md'), text);
+  spawnSync('git', ['add', 'CLAUDE.md'], { cwd: root, encoding: 'utf8' });
+  assert.equal(spawnSync('git', ['commit', '-q', '-m', 'ours'], { cwd: root, encoding: 'utf8' }).status, 0);
+  return root;
+}
+
+test('initProject adds the import at the top of a committed CLAUDE.md of the project\'s, so doctor\'s claude-import row is ok; git gives it back', () => {
+  const ours = '# ours\r\n\r\n- a line of the project\'s\r\n';
+  const root = ownClaudeRepo('js-harness-project-own-claude-import-', ours);
+  try {
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(result.code, 0);
+    const claude = path.join(root, 'CLAUDE.md');
+    assert.equal(fs.readFileSync(claude, 'utf8'), `@AGENTS.md\r\n\r\n${ours}`);
+    assert.deepEqual(result.actions.at(-1), { kind: 'imported', path: 'CLAUDE.md', line: '@AGENTS.md' });
+    assert.ok(!result.manifest.files.some((file) => file.path === 'CLAUDE.md'));
+    assert.deepEqual(importHealth(root, { mainCheckout: null }), { state: 'ok', fix: [] });
+    assert.equal(spawnSync('git', ['checkout', '--', 'CLAUDE.md'], { cwd: root, encoding: 'utf8' }).status, 0);
+    assert.equal(fs.readFileSync(claude, 'utf8'), ours);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject leaves a CLAUDE.md of the project\'s with a change not committed as it is, and says the line to add', () => {
+  const root = ownClaudeRepo('js-harness-project-own-claude-changed-', '# ours\n');
+  try {
+    fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# ours, edited\n');
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(result.code, 0);
+    assert.equal(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), '# ours, edited\n');
+    assert.deepEqual(result.actions.at(-1), { kind: 'skip', path: 'CLAUDE.md', reason: NOT_WRITTEN });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('initProject writes nothing into a CLAUDE.md that imports AGENTS.md already, nor into one beside an AGENTS.md of the project\'s', () => {
+  const importing = ownClaudeRepo('js-harness-project-own-claude-importing-', '# ours\n\n@AGENTS.md\n');
+  const both = ownClaudeRepo('js-harness-project-own-claude-both-', '# ours\n');
+  try {
+    const first = initProject(importing, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(fs.readFileSync(path.join(importing, 'CLAUDE.md'), 'utf8'), '# ours\n\n@AGENTS.md\n');
+    assert.deepEqual(first.actions.filter((action) => action.path === 'CLAUDE.md'), [{ kind: 'kept', path: 'CLAUDE.md', reason: 'exists' }]);
+    // With its own AGENTS.md the harness's lines are in neither file: moving it is the migration's (D3 of S12).
+    fs.writeFileSync(path.join(both, 'AGENTS.md'), '# ours too\n');
+    const second = initProject(both, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(fs.readFileSync(path.join(both, 'CLAUDE.md'), 'utf8'), '# ours\n');
+    assert.deepEqual(second.actions.filter((action) => action.path === 'CLAUDE.md'), [{ kind: 'kept', path: 'CLAUDE.md', reason: 'exists' }]);
+  } finally {
+    fs.rmSync(importing, { recursive: true, force: true });
+    fs.rmSync(both, { recursive: true, force: true });
+  }
+});
+
+test('initProject says the import it could not write, and the project is still set up', () => {
+  const root = ownClaudeRepo('js-harness-project-own-claude-refused-', '# ours\n');
+  const claude = path.join(root, 'CLAUDE.md');
+  const writeFile = (file, ...rest) => {
+    if (file === claude) throw new Error('EACCES');
+    return fs.writeFileSync(file, ...rest);
+  };
+  try {
+    const result = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', writeFile });
+    assert.equal(result.code, 0);
+    assert.ok(fs.existsSync(path.join(root, 'harness.json')));
+    assert.deepEqual(result.actions.at(-1), { kind: 'problem', path: 'CLAUDE.md', reason: 'the line @AGENTS.md could not be added at its top (EACCES): add it by hand; git checkout -- CLAUDE.md gives the file back' });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

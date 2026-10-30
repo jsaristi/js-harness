@@ -4,6 +4,7 @@
 // CLAUDE.md that lost its import, and a CLAUDE.md or CLAUDE.local.md in a folder above the project, which loads into
 // every session there unseen (the fragile cases of the same section). A linked worktree's session loads no file of
 // its main checkout (the diet's section 14.1, tested with a real `git worktree`), so those folders are left out.
+// `addImport` is the row's other side: `init` adds the import to a project's own CLAUDE.md (odd/tasks/claude-md-block.md).
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -24,6 +25,53 @@ export function importsAgents(text) {
     else if (fence === null && /^@(\.\/)?AGENTS\.md\s*$/.test(line.trim())) return true;
   }
   return false;
+}
+
+/** The line that imports AGENTS.md. */
+const IMPORT = '@AGENTS.md';
+
+/** `bytes`, a CLAUDE.md, with the import as its first line and an empty line after it, in the file's own line ends and
+ * after a UTF-8 byte order mark it opens with; `null` for one in UTF-16, where those bytes would not read as the line. */
+export function withImport(bytes) {
+  if ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff)) return null;
+  const bom = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
+  const eol = bytes.includes('\r\n') ? '\r\n' : '\n';
+  return Buffer.concat([bytes.subarray(0, bom), Buffer.from(`${IMPORT}${eol}${eol}`), bytes.subarray(bom)]);
+}
+
+/** The actions of `init` adding the import to the project's own CLAUDE.md at `root`, beside the AGENTS.md it wrote, so
+ * Claude loads the harness's lines (odd/tasks/claude-md-block.md, D2): none where it imports AGENTS.md already or is a
+ * link to it; an `imported` one where git can give the file back exactly, a regular file it tracks with no change not
+ * committed, since git is all that undoes the write; a `skip` naming the line to add anywhere else, and a `problem`
+ * where the write failed. */
+export function addImport(root, { spawn = spawnSync, writeFile = fs.writeFileSync } = {}) {
+  const file = path.join(root, 'CLAUDE.md');
+  const skip = (why) => [{ kind: 'skip', path: 'CLAUDE.md', reason: `${why}, so init does not write it: add the line ${IMPORT} at its top, or Claude never loads AGENTS.md` }];
+  let bytes;
+  try {
+    if (fs.lstatSync(file).isSymbolicLink()) {
+      if (fs.realpathSync(file) === fs.realpathSync(path.join(root, 'AGENTS.md'))) return [];
+      return importsAgents(fs.readFileSync(file, 'utf8')) ? [] : skip('it is a link');
+    }
+    if (!fs.lstatSync(file).isFile()) return skip('it is not a regular file');
+    bytes = fs.readFileSync(file);
+  } catch {
+    return skip('it cannot be read');
+  }
+  if (importsAgents(bytes.toString('utf8'))) return [];
+  // Every untracked or ignored file whatever the clone's config says, as the migration asks (`uncommittedOf`).
+  const status = spawn('git', ['--no-optional-locks', 'status', '--porcelain', '--ignored', '--untracked-files=all', '--', 'CLAUDE.md'], { cwd: root, encoding: 'utf8' });
+  if (!status || status.error || status.status !== 0 || status.stdout !== '') {
+    return skip('git could not give it back (it is untracked, ignored or holds a change not committed)');
+  }
+  const imported = withImport(bytes);
+  if (imported === null) return skip('it is in UTF-16');
+  try {
+    writeFile(file, imported);
+  } catch (err) {
+    return [{ kind: 'problem', path: 'CLAUDE.md', reason: `the line ${IMPORT} could not be added at its top (${err.message}): add it by hand; git checkout -- CLAUDE.md gives the file back` }];
+  }
+  return [{ kind: 'imported', path: 'CLAUDE.md', line: IMPORT }];
 }
 
 /** The main checkout of the linked worktree at `dir`, or `null` for a main checkout, a folder git does not know, or

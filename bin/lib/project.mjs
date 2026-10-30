@@ -19,6 +19,7 @@ import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, pla
 import { EXCLUDED, addExclude, isValidExcludeRecord, undoExclude } from './project-exclude.mjs';
 import { FAILURES_TEMPLATE, TEMPLATE_BLOCK_MARK, agentsFile, claudeFile, renderBlock } from './project-template.mjs';
 import { localDay } from './flaky.mjs';
+import { addImport } from './claude-import.mjs';
 
 export { FAILURES_TEMPLATE };
 export { staleManifestMessage, invalidHarnessJsonMessage, howToPinClause, cleanupClause } from './project-messages.mjs';
@@ -804,11 +805,9 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
       actions.push(wrote(harnessJsonRel, harnessJsonHash));
     }
 
-    // AGENTS.md: only when the project has none of its own. `isOccupied` (not `fs.existsSync`)
-    // so a dangling symlink there is kept, not silently written through (T2d item 1).
-    // With it, CLAUDE.md, the split of odd/tasks/f8-s3-split.md (S3), and only when the project has neither file: a
-    // project with its own CLAUDE.md gets the whole block in AGENTS.md, so no line is lost, and one with its own
-    // AGENTS.md is moved to the split by the migration, not here.
+    // AGENTS.md only when the project has none of its own (`isOccupied`: a dangling link is kept, not written through,
+    // T2d item 1), and CLAUDE.md, the split of odd/tasks/f8-s3-split.md (S3), only when it has neither: one with its own
+    // CLAUDE.md gets the whole block in AGENTS.md, and one with its own AGENTS.md is moved to the split by the migration.
     const agentsPath = path.join(root, 'AGENTS.md');
     const agentsRel = toRepoRelative(root, agentsPath);
     const claudePath = path.join(root, 'CLAUDE.md');
@@ -915,11 +914,12 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     createdPaths.push(manifestFilePath);
     writeManifestAtomic(manifestFilePath, manifest, manifestDeps);
 
-    // harness.json: written last, only once the manifest that already lists it is safely on disk
-    // (T2e item 1). A failure here rolls back everything, the manifest included.
+    // harness.json last, once the manifest that lists it is on disk (T2e item 1): a failure here rolls everything back.
+    // Past any rollback, the project's own CLAUDE.md imports the AGENTS.md written here (odd/tasks/claude-md-block.md).
     if (!clone) {
       createdPaths.push(harnessJsonPath);
       writeFile(harnessJsonPath, harnessJsonContent, 'utf8');
+      if (ownClaude && files.some((file) => file.path === agentsRel)) actions.push(...addImport(root, { spawn, writeFile }));
     }
 
     return { code: 0, root, actions, manifest, manifestPath: manifestFilePath };

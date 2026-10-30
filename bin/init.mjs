@@ -72,6 +72,9 @@ function logAction(action) {
     case 'excluded':
       console.log(`excluded ${action.line} in ${action.path}`);
       break;
+    case 'imported':
+      console.log(`added ${action.line} at the top of ${action.path}; git checkout -- ${action.path} takes it back`);
+      break;
     case 'ran':
       console.log(`ran ${action.path}`);
       break;
