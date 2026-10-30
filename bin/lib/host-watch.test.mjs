@@ -341,3 +341,13 @@ test('the brief freezes the spans and names every step of the review, in order',
   assert.match(brief, /a second update/);
   assert.match(brief, /without his yes/);
 });
+
+// The first real review, desktop 4.4212.0 #24: a Cowork entry that names Code was drafted ignore, outside the Code tab.
+test('an entry that names Code is not placed outside by an outside word or its section; one that names Claude Code or VS Code still is', () => {
+  const entry = (text, section) => ({ id: 'desktop 4.5000.0 #9', version: '4.5000.0', section, text });
+  assert.equal(classify(entry('Added a status line above the message box in Cowork, Chat and Code.', 'Cowork')).outside, null);
+  assert.equal(classify(entry('Changed Code sessions to ask before a dev server starts over SSH.', 'Code')).outside, null);
+  assert.equal(classify(entry('Changed a setting in Claude Code managed settings, or its MDM policy.', 'General')).outside, 'MDM');
+  assert.equal(classify(entry('Fixed a VS Code panel losing its place.', 'General')).outside, 'VS Code');
+  assert.equal(classify(entry('Fixed a card in Cowork.', 'Cowork')).outside, 'Cowork');
+});
