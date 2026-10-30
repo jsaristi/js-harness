@@ -507,6 +507,9 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   login in a browser and outlives the run; each `claude -p` session leaves codegraph's MCP server running on
   Windows; Claude's plugin commands leave empty `enabledPlugins` and `extraKnownMarketplaces` in his settings;
   `lens-review --plan` puts a small range at a third of what a lens takes, the rest unmeasured CLI overhead.
+  Reviewed whole: Codex and the lenses on every code commit, the independent verifier, gentle-ai on each slice; its
+  advisory findings that let the walk pass on what it did not see were fixed (`08d724a1`, walk 11 passed), and the
+  walk's own setup gaps stay owed in the feature document's L14 (each fails loudly, none passes falsely).
 
 ### S12 Moving his projects
 - **Changes:** builds what does not exist: a migration of an initialized project, which reads the
