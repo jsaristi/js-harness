@@ -227,10 +227,8 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   PR 1 is 707 (branch `f8-lead-rigor-1`, ready notice sent 18:05Z).
 
 ## Next step
-State at the context pause (2026-10-30, 85%): T2 and T3 done on this branch (head `fd46303` plus this commit); PR 707
-holds T2. Next: push this branch as `f8-lead-rigor-2` and open PR 2 (T3) on main, ready notice; then T4. T4's draft
-module is in `C:\Users\Oficina\.claude\jobs\01225f7c\tmp\reply-commands.mjs` (not committed; scratch): move it to
-`bin/lib/reply-commands.mjs`, export `fencedBlocks` (with each fence's `info`) from `bin/lib/reply.mjs`, write
-`bin/lib/reply-commands.test.mjs` first on the real excerpts named in S1's design, wire it in `bin/reply.mjs` with
+State (2026-10-30, 88%): PR 707 holds T2, PR 710 holds T3 (both ready notices sent). T4 started, uncommitted in the
+worktree: `bin/lib/reply.mjs` exports `fencedBlocks` (each fence's `info`), reply tests 20 pass; the draft module is
+copied to `bin/lib/reply-commands.mjs`, untested. Next: write `bin/lib/reply-commands.test.mjs` on the real excerpts named in S1's design, wire it in `bin/reply.mjs` with
 the deadline and a parser spawn (`pwsh.exe`, else `powershell.exe`; the probe script that caught `-rf` is
 `tmp/probe.ps1`, alias resolved by `Definition`), then the replay over transcript 0f71b2c6's replies, then reviews.
