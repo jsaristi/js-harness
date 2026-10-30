@@ -116,5 +116,11 @@ question.
   It found no sequence that blocks a gate for good, since `provenBy` returning `null` only runs the sensors. It also
   checked `testsOnCi`: the moved code matches the old line for line, apart from `files`.
 
+- L9 (2026-10-30): the verifier's fix is `90260996`. Codex over `1bddd47..9026099`: correct (0.93). Lenses: risk 0;
+  reliability one warning, real: `files` was set before the sensors and cleared only on the normal path, so a sensor
+  that threw left the pre-run key on the end, unchecked. Fixed next, tests first: "a gate whose sensor throws writes
+  no files key ..." failed before (`actual: [ true, false, false ]`) and passes after; `files` and `tried` are set
+  together, only where the tree did not move.
+
 ## Next step
-The verifier's fix committed, then Codex and the lenses over it, `npm run check`, the PR.
+The lens's fix committed, then Codex and the lenses over it, `npm run check`, the PR.

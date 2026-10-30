@@ -4954,6 +4954,23 @@ test('a tree whose tests failed on CI is not proven by a narrower pass here: the
   }
 });
 
+// The reliability lens on 90260996: a gate whose sensor threw wrote the files key it had before, unchecked.
+test('a gate whose sensor throws writes no files key: it never asked whether its tree moved', async () => {
+  const { gate, sensor, events, remove } = sameTreeRepo();
+  try {
+    sensor.answer = () => {
+      throw new Error('made up by the test');
+    };
+    await gate().catch(() => {});
+    const ends = events().filter((event) => event.event === 'end');
+    assert.equal(ends.length, 1);
+    assert.equal(ends[0].result, 'error');
+    assert.deepEqual(['files' in ends[0], 'tried' in ends[0], 'code' in ends[0]], [false, false, false]);
+  } finally {
+    remove();
+  }
+});
+
 test('a tree whose sensors failed here and then passed here is proven by that pass: a run as wide as the failure', async () => {
   const { gate, sensor, sensorRuns, events, remove } = sameTreeRepo();
   try {

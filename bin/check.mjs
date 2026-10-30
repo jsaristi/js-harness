@@ -1605,7 +1605,8 @@ export async function checkSensors(cwd, deps = {}, lock) {
     // (a failure on Windows is none under the key of WSL2), are written on a failure too, if the tree did not move.
     let code;
     let tried;
-    let files = key !== null ? filesNow() : null;
+    let files;
+    const filesBefore = key !== null ? filesNow() : null;
     try {
       for (const sensor of sensors) {
         // The tests sensor in shadow or skip mode, where the project says so and its suite is `node --test`
@@ -1646,8 +1647,7 @@ export async function checkSensors(cwd, deps = {}, lock) {
       // proven by their stored passing traces, which is the premise of the switch S6's count earned.
       const still = key !== null && keyNow() === key;
       if (result === 'pass' && ranWhereKeyed && !quarantined && still) code = key;
-      if (!still) files = null;
-      else if (ranWhereKeyed) tried = key;
+      if (still) [files, tried] = [filesBefore, ranWhereKeyed ? key : undefined];
     } finally {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
       // A sensor that failed keeps the names of its failing tests, where its output says them (`failingTests`).
