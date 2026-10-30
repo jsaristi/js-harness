@@ -78,7 +78,7 @@ words, not to run the block and give the corrected one. Doctor's gate does preve
 
 ## Tasks
 - [x] T1 (kind: design) this document; two blind readers on the plan before code (L5)
-- [ ] T2 (kind: build) S3 — the Seen lines, and `failures weeks`; test first; Codex and lenses; PR 1 (L7)
+- [x] T2 (kind: build) S3 — the Seen lines, and `failures weeks`; test first; Codex and lenses; PR 1 (L7, L8)
 - [ ] T3 (kind: build) S2 — the host review file and the `--host-reviewed` gate; test first; Codex and lenses; PR 2
 - [ ] T4 (kind: build) S1 — command blocks in the reply check; test first on real excerpts; the replay; Codex and
   lenses; PR 3
@@ -215,3 +215,8 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   sighting of line 32954 itself: `failures weeks` prints it in the week of 2026-10-26 as the lead's own (7 of 38).
   The merge-queue mistake (S3b) gets no check here: the land took a pull request that was open as ready, which is
   its rule; the mistake was the land run while a step of his was pending, recorded `land-took-pending-pr`.
+- L8 (2026-10-30, T2 reviews): Codex on `9b6c8ae..c90d1fb` (105,086 input tokens) found one P2, a default clock in
+  `weeklyCounts`, fixed in `6f6d4ae2`; Codex on `c90d1fb..6f6d4ae` (40,354) found it fixed and nothing else. The
+  lenses readability and reliability on the first range, and reliability on the fix: 0 findings. gentle-ai: its
+  Stop hook offered the whole branch (base `72b0a6aa`), which is no candidate here; its read-only status ended in
+  `operation_timeout` and nothing was started, so T2's commits are not reviewed by gentle-ai.
