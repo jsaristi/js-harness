@@ -58,11 +58,11 @@ removes a friction of section 7 or measures one before anything is claimed about
   what each step found."
 
 ## Tasks
-- [ ] T1 (kind: verify) step 2: the list to the lead, then `merge-queue --prune` and the empty folders; counts before
+- [x] T1 (kind: verify) step 2: the list to the lead, then `merge-queue --prune` and the empty folders; counts before
   and after — S1; inline; docs commit
 - [ ] T2 (kind: verify) step 3: one hour of process and memory samples, the measure file — S2; inline; docs commit
 - [ ] T3 (kind: verify) step 4: the auto-archive probe with a scratch session and a scratch PR — S3; inline; docs commit
-- [ ] T4 (kind: build) step 5: the skill-text trim, tests first — S4; inline; code commit through Codex and the lenses
+- [x] T4 (kind: verify) step 5: the skill-text trim, tests first — S4; inline; no line removed (L4), so no code commit
 - [ ] T5 (kind: docs) the proposal's map, the roadmap, the summary, the ready and closed notices — S5
 
 ## Step 2: the list, before anything is removed
@@ -167,3 +167,11 @@ step 2 there exactly, nothing else; touch no file; never arm a wait; your summar
   check (a `commit-msg` hook refusing those two trailers) is the next control; it is not built here (out of this
   brief's scope) and goes to the lead as a proposal. The count that proves it has not come back:
   `git log --format=%B origin/main..HEAD | grep -c Co-Authored-By` stays 1 on this branch.
+- L4 (decision, T4): step 5 removes no skill line. Rows 3 and 4's lines are phrases of his rules `session-housekeeping`
+  and `recap-effort-line` (`bin/lib/rules-data.mjs:351-359`, `:569-578`), homed in `bin/lib/manifest.mjs`, so taking
+  them out is a rule change (R1), outside question 128. Row 8's text already holds and row 9 is keep. The two "when the
+  host gives you a tool" lines stay true: this `sessions start` session has none of the desktop's session tools nor
+  `wrap_up` [checked: `ToolSearch`]. The one removable sentence (`manifest.mjs:132`, about 16 tokens a load) is dropped
+  because its gain is below the cost of a code commit's Codex and lens reviews. The proposal's step 5 finding says so.
+- L5 (evidence, T4): `node --test bin/install.test.mjs bin/lib/manifest.test.mjs` 323 of 323 pass; `js-harness rules
+  check` PASS, 70 rules, hash `96ea160b1ccc`; both exit 0 on this branch.

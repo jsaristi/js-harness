@@ -262,7 +262,7 @@ The pilot, in a real Code-tab session (not `--plugin-dir`, which proves the term
 4. **Questions.** Unchanged until row 6 is built: recorded first, AskUserQuestion under
    `rule:person-present`. After it, two-answer questions go in `wrap_up`.
 5. **Closing a turn.** Every turn that worked ends with `wrap_up`, and the reply's last line still
-   names its state for the Stop hook.
+   names its state for the Stop hook. A `sessions start` session has no `wrap_up` (step 5, below).
 6. **Pull requests.** A work session binds its PR (`get_status`, `bind_pr`), sends `ready` and its
    `closed` with the summary before the land, and stops its own waits once `closed` is sent, so the
    app can archive it on merge. Auto-fix and Merge when ready stay off for PRs the merge queue
@@ -396,6 +396,28 @@ Steps 2 to 5 ran in JH 107 on his answer to question 128 (the lead's transcript 
   "busy", held by a process [unknown which]. Found on the way, for row "Waits killed by low memory" of section 7: 111
   `node` processes of `ccstatusline`, the status line (`refreshInterval` 10), alive with no parent since 2026-10-28,
   about 4.3 GB [checked: `wmic process`]; nothing was stopped.
+- **Step 4, 2026-10-30: not run, the lead's to start.** JH 107 is a `claude --bg` session (`sessions start`), and
+  none of the desktop's session tools is in its tool list (`ToolSearch` for `start_session`, `list_sessions`,
+  `bind_pr`, `wrap_up`, `update_plan`: no match) [checked]; `start_session` also needs his typed turn. The steps and
+  the scratch session's prompt are in `odd/tasks/f8-desktop-plan.md`, section "Step 4". Row 3 stays **probe**.
+- **Step 5, 2026-10-30: no skill line removed; each row's reason.** [checked: `bin/lib/rules-data.mjs`,
+  `bin/lib/manifest.mjs`]
+  - Row 3: its line ("then archive the session with the host's tool to archive sessions, without asking") is a phrase
+    of his rule `session-housekeeping`, homed in `bin/lib/manifest.mjs`; and step 4 has not passed.
+  - Row 4: the recap's first two lines are the phrases of his rules `recap-effort-line` and `session-housekeeping`.
+    Moving them to `wrap_up` is a rule change (R1), outside question 128. The other three lines (the Codex meter,
+    what waits for him read at that moment, which session to return to) stay: the proposal keeps the meter in the
+    reply, and a `sessions start` session has no `wrap_up` to carry the rest.
+  - Row 8: the text already says it (`sessions stop <id>` "removes it once its work has landed"); the 16 stale
+    registrations were practice, not text, and step 2 lists them.
+  - Row 9: **keep** in the map; nothing to trim.
+  - Desktop-only wording: "When the host gives you a tool to start sessions" and "when the host gives it a tool to
+    archive sessions" stay true on the desktop alone, since a `sessions start` session runs without those tools. So
+    section 9's "become plain statements" is wrong for them, and section 6.5's "every turn that worked ends with
+    `wrap_up`" holds only for sessions the desktop app runs itself. "Only where the host has no question tool is a
+    question written out" (`manifest.mjs:132`) could go, at about 16 tokens a load, against a Codex review and the
+    lenses for a code commit. The gain is below the cost, so it is dropped.
+  - Section 10's ~400 and ~300 tokens of skill text are therefore 0 within his yes; what remains needs R1.
 
 ## 13. His decisions
 
