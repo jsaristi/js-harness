@@ -229,11 +229,16 @@ session records `tools-background.txt` from its own list either way.
   settings, chat fixes); CLI 2.1.309's candidates checked: transcripts `jq` could not parse — the harness readers
   already skip a bad line (`bin/lib/sessions.mjs:76-82`, `bin/audit.mjs:35-39`, `bin/lib/audit.mjs:118-124`,
   `bin/subagents.mjs:42-46`), so ignore; the bypass `rm` prompt now denied with a hint bears on map row 1 (fewer cards).
+- L7 (2026-10-30, after the host compacted the session at its pause): Codex's three findings fixed in `c0d15661`;
+  lenses reliability, risk over `c2a21b9e..c0d15661`: 0 findings; Codex over `c2a21b9..fa2c829`: all four fixed,
+  verdict correct (0.96), recorded (its first run wrote no record: the document was edited while it read). PR 717
+  opened as a draft. gentle-ai: lineage `review-4991b18b1d344d43` (reliability over `dad0db39`'s tree) approved and
+  acknowledged, with four non-blocking warnings, all real and fixed in the next commit, tests first: a side whose
+  version did not move drafted a false "no changelog entry" row (R3-001); draft with no reviewed record failed with
+  "undefined" (R3-002); check let a named CLI drop its span and accepted rows no span names (R3-003); tools took any
+  read failure of the recorded list for a first capture (R3-004).
+- gentle-ai: `dad0db39` approved (review-4991b18b1d344d43, reliability).
 
 ## Next step
-1. Fix Codex's three findings and the `\[` unescape, tests first; commit; Codex and lenses on the fix
-   (`--base dad0db39`); capture the gentle-ai reviewer result for lineage `review-4991b18b1d344d43`.
-2. Push `f8-s9-probe`, open PR 2 (base main), `ready` notice.
-3. T4 (trigger: heartbeat `HOST:` line, row fix, notice, `host-watch brief`), then T5 (real run), T6.
-- Next (2026-10-30, at compaction): RED tests are in WIP commit 86241d53 (cutSpan keeps the next newer heading line; parseChangelog unescapes \[ \] \_ \*; check refuses a span end below the version the review names and a declared source with no readable span). Make them green in bin/lib/host-watch.mjs and bin/host-watch.mjs, amend 86241d53 into a fix(host-watch) commit, then step 1 of "Next step" goes on.
-- Next (2026-10-30): Codex findings fixed in c0d15661 (green, 46 tests); its reviews run over c2a21b9e..c0d15661 (Codex; lenses reliability, risk). The gentle-ai lineage review-4991b18b1d344d43 was opened on the old tree (dad0db39); read its status before capturing anything. Then push f8-s9-probe and open PR 2.
+1. Codex and lenses on the gentle-ai fix (`--base fa2c829c`), then PR 717 out of draft and the `ready` notice.
+2. T4 (trigger: heartbeat `HOST:` line, row fix, notice, `host-watch brief`), PR 3; then T5 (real run), T6.

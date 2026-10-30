@@ -82,6 +82,17 @@ function draft(ctx, flags) {
     desktop: { from: flags['--from-desktop'] ?? reviewed.desktop, to: flags['--to-desktop'] ?? versions.desktop },
     code: { from: flags['--from-code'] ?? reviewed.code, to: flags['--to-code'] ?? versions.code },
   };
+  // What the cache or the app could not give is named with the flag that gives it (gentle-ai, R3-002).
+  if (span.desktop.from == null || span.code.from == null) {
+    ctx.stderr("js-harness host-watch: doctor's cache holds no reviewed record of the host, or none of its CLI: give the span with --from-desktop and --from-code");
+    return 1;
+  }
+  for (const [key, name] of [['desktop', 'Claude Desktop'], ['code', 'Code tab CLI']]) {
+    if (span[key].to === null || span[key].to === undefined) {
+      ctx.stderr(`js-harness host-watch: the ${name} version could not be read from the app: give it with --to-${key}`);
+      return 1;
+    }
+  }
   const texts = { desktop: read(flags['--desktop']), code: read(flags['--code']) };
   const spans = {};
   for (const key of ['desktop', 'code']) {
@@ -94,7 +105,7 @@ function draft(ctx, flags) {
   const to = { desktop: span.desktop.to, code: span.code.to };
   if (flags['--sources']) {
     fs.mkdirSync(flags['--sources'], { recursive: true });
-    for (const key of ['desktop', 'code']) fs.writeFileSync(path.join(flags['--sources'], `claude-desktop-${to.desktop}.${key}.md`), cutSpan(texts[key], span[key]));
+    for (const key of ['desktop', 'code']) if (span[key].from !== span[key].to) fs.writeFileSync(path.join(flags['--sources'], `claude-desktop-${to.desktop}.${key}.md`), cutSpan(texts[key], span[key]));
   }
   ctx.stdout(draftReview({ versions: to, reviewed: { desktop: span.desktop.from, code: span.code.from }, desktop: spans.desktop, code: spans.code }));
   return 0;
@@ -116,20 +127,27 @@ function check(ctx, file) {
   const spans = [];
   for (const [key, url] of [['desktop', DESKTOP_CHANGELOG], ['code', CODE_CHANGELOG]]) {
     const range = new RegExp(`${url.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}\\S*\\s+\\((\\d+\\.\\d+\\.\\d+) to (\\d+\\.\\d+\\.\\d+)\\)`).exec(text);
+    const named = key === 'desktop' ? desktop : /^Code tab CLI:\s*(\d+\.\d+\.\d+)/m.exec(text)?.[1];
     if (!range) {
       // A source named with no span it can read would drop its changelog from the check (Codex, 2026-10-30).
       if (text.includes(url)) {
         ctx.stderr(`js-harness host-watch: ${file} names ${url} with no span "(<from> to <to>)" check can read`);
         return 1;
       }
+      // A version the review names is held to its changelog, so its rows cannot leave with their span (gentle-ai, R3-003).
+      if (named) {
+        ctx.stderr(`js-harness host-watch: ${file} names ${key === 'desktop' ? 'Claude Desktop' : 'Code tab CLI'} ${named} and no span of ${url} under "## Sources"`);
+        return 1;
+      }
       continue;
     }
     // The span ends at the version the review names, or newer releases would pass on older research (Codex).
-    const named = key === 'desktop' ? desktop : /^Code tab CLI:\s*(\d+\.\d+\.\d+)/m.exec(text)?.[1];
     if (named && range[2] !== named) {
       ctx.stderr(`js-harness host-watch: ${file}: the ${key} changelog span ends at ${range[2]}, and the review names ${named}`);
       return 1;
     }
+    // A side that did not move has nothing to read, and draft writes no excerpt for it.
+    if (range[1] === range[2]) continue;
     const excerpt = path.join(path.dirname(file), 'sources', `claude-desktop-${desktop}.${key}.md`);
     let source;
     try {
@@ -144,10 +162,6 @@ function check(ctx, file) {
       return 1;
     }
     spans.push({ ...span, source: key });
-  }
-  if (spans.length === 0) {
-    ctx.stderr(`js-harness host-watch: ${file} names no changelog span under "## Sources" ("<url> (<from> to <to>)")`);
-    return 1;
   }
   const gaps = checkReview(text, spans);
   for (const gap of gaps) ctx.stderr(`js-harness host-watch: ${file}: ${gap}`);
@@ -170,8 +184,13 @@ function tools(ctx, flags) {
   let recorded = null;
   try {
     recorded = parseToolList(read(recordFile));
-  } catch {
-    // No list recorded for this surface yet: this capture is its baseline.
+  } catch (err) {
+    // No list recorded for this surface yet: this capture is its baseline. Any other failure is said, or --record
+    // would write a fresh baseline over a list it could not read (gentle-ai, R3-004).
+    if (err.code !== 'ENOENT') {
+      ctx.stderr(`js-harness host-watch: the recorded list ${recordFile} could not be read (${err.code ?? err.message})`);
+      return 1;
+    }
   }
   const diff = diffTools(recorded, kept);
   const left = Object.entries(others).map(([server, count]) => `${server} (${count})`);

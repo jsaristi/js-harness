@@ -87,6 +87,8 @@ export function parseChangelog(text, source) {
 export function entriesBetween({ source = null, versions, entries }, { from, to }) {
   const top = [...versions].sort(compareSemver).at(-1);
   if (!VERSION.test(String(to)) || !VERSION.test(String(from))) return { source, entries: [], missing: [], error: `a span runs between two versions, got ${from} to ${to}` };
+  // A side that did not move brings nothing: a desktop update can keep its bundled CLI (gentle-ai, R3-001).
+  if (compareSemver(from, to) === 0) return { source, entries: [], missing: [] };
   if (!top || compareSemver(top, to) < 0) return { source, entries: [], missing: [], error: `the changelog read stops at ${top ?? 'no version'}, below ${to}: read a copy that holds ${to}` };
   const within = (version) => compareSemver(version, from) > 0 && compareSemver(version, to) <= 0;
   const span = entries.filter((entry) => within(entry.version));
@@ -162,8 +164,9 @@ export function draftReview({ versions, reviewed, desktop, code }) {
     }
   }
   const sources = [];
-  if (reviewed.desktop !== versions.desktop) sources.push(`- ${DESKTOP_CHANGELOG} (${reviewed.desktop} to ${versions.desktop})`);
-  if (versions.code && reviewed.code && reviewed.code !== versions.code) sources.push(`- ${CODE_CHANGELOG} (${reviewed.code} to ${versions.code})`);
+  // Both spans are named, one that did not move too, so check holds each side to the version the review names.
+  sources.push(`- ${DESKTOP_CHANGELOG} (${reviewed.desktop} to ${versions.desktop})`);
+  if (versions.code && reviewed.code) sources.push(`- ${CODE_CHANGELOG} (${reviewed.code} to ${versions.code})`);
   return [
     `# Claude Desktop ${versions.desktop}`,
     '',
@@ -236,6 +239,11 @@ export function checkReview(text, spans) {
     const count = rows.filter((row) => at(row, 'evidence') === id).length;
     if (count === 0) gaps.push(`${id}: no row`);
     else if (count > 1) gaps.push(`${id}: ${count} rows`);
+  }
+  // A row no span names cannot be traced to the changelogs read (gentle-ai, R3-003).
+  for (const row of rows) {
+    const id = at(row, 'evidence');
+    if (id !== '' && !ids.includes(id)) gaps.push(`${id}: a row no entry of the spans names`);
   }
   const hand = handListCount(text);
   if (hand > 0) gaps.push(`the list "To classify by hand" holds ${hand} ${hand === 1 ? 'entry' : 'entries'}: decide each in its row and empty it`);

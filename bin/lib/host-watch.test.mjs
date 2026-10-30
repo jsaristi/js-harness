@@ -292,3 +292,22 @@ test('a markdown escape in an entry is read as the character it escapes, so a pu
   assert.equal(entries[0].text, "[VSCode] Fixed a mod's label");
   assert.equal(classify(entries[0]).outside, '[VSCode]');
 });
+
+// gentle-ai review-4991b18b1d344d43, R3-001: a desktop update that keeps its bundled CLI has a CLI span of nothing.
+test('a side whose version did not move has no entries and no missing version, and the draft still names its span', () => {
+  const code = entriesBetween(parseChangelog(CODE, 'code'), { from: '2.1.320', to: '2.1.320' });
+  assert.equal(code.error, undefined);
+  assert.deepEqual([code.entries, code.missing], [[], []]);
+  const desktop = entriesBetween(parseChangelog(DESKTOP, 'desktop'), { from: '4.4212.0', to: '4.5000.0' });
+  const text = draftReview({ versions: { desktop: '4.5000.0', code: '2.1.320' }, reviewed: { desktop: '4.4212.0', code: '2.1.320' }, desktop, code });
+  assert.doesNotMatch(text, /No changelog entry for Claude Code/);
+  assert.match(text, /code\.claude\.com\/docs\/en\/changelog \(2\.1\.320 to 2\.1\.320\)/);
+});
+
+// R3-003: a row no span names is research nobody can trace to the changelogs read.
+test('the check refuses a row whose evidence names no entry of the spans', () => {
+  const { desktop, code, text } = draftOfFixtures();
+  const done = decided(text);
+  const row = done.split('\n').find((line) => line.includes('| code 2.1.320 #3 |'));
+  assert.match(checkReview(done.replace(row, `${row}\n${row.replace('code 2.1.320 #3', 'code 2.1.321 #1')}`), [desktop, code]).join('\n'), /code 2\.1\.321 #1: a row no entry of the spans names/);
+});
