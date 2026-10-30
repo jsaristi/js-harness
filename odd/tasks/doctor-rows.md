@@ -52,7 +52,7 @@ review flags in one call record only the host review, silently: the lead had to 
 - [x] T2 (kind: build) S2 — the engram-plugin cell: cause in `## Engram plugin`, fix text for a clone with no tag;
   inline, test first (L6, L7)
 - [x] T3 (kind: build) S3 — one call records both reviews; inline, test first (L9, L10)
-- [ ] T4 (kind: verify) Codex and the lenses on the code commits; `npm run check`; PR, ready notice, summary
+- [x] T4 (kind: verify) Codex and the lenses on the code commits; `npm run check`; PR, ready notice, summary (L11)
 
 ## Engram plugin
 Why the cell is `unknown`: the latest version of the plugin is the one the engram binary's tag ships, read with
@@ -99,3 +99,7 @@ out, so it is the lead's to put on the roadmap or not.
   for both, so the output stays one JSON document.
 - L10 (red, then green): the two tests first, `node --test --test-name-pattern=reviewed bin/doctor.test.mjs` failed 2
   of 9; after `recordReviews`, `bin/doctor.test.mjs` 95 of 95.
+- L11 (reviews): Codex review of `65483fc..ec56696`, 1 part, recorded: correct (0.88), no finding; 118,679 input
+  tokens. The Claude lenses risk, reliability, readability and resilience over the same range, recorded: 0 findings
+  each (13,756, 13,754, 28,247 and 28,207 input tokens). The gentle-ai Stop hook offered the whole branch: only its
+  read-only status ran (`action: start`), nothing was started, as `CLAUDE.md` says for a branch-wide candidate.
