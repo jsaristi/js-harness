@@ -92,21 +92,26 @@ function linesOf(text) {
     const line = raw.replace(/^\s*(?:>\s?)+/, '');
     const fence = /^\s*(`{3,}|~{3,})/.exec(line);
     if (open === null && fence) {
-      open = { start: i, mark: fence[1] };
+      open = { start: i, mark: fence[1], info: line.trim().slice(fence[1].length).trim() };
       fenced[i] = true;
       return;
     }
     if (open !== null) {
       fenced[i] = true;
       if (fence && fence[1][0] === open.mark[0] && fence[1].length >= open.mark.length && line.trim() === fence[1]) {
-        blocks.push({ start: open.start, end: i, body: lines.slice(open.start + 1, i).join('\n') });
+        blocks.push({ start: open.start, end: i, info: open.info, body: lines.slice(open.start + 1, i).join('\n') });
         open = null;
       }
     }
   });
-  if (open !== null) blocks.push({ start: open.start, end: lines.length - 1, body: lines.slice(open.start + 1).join('\n') });
+  if (open !== null) blocks.push({ start: open.start, end: lines.length - 1, info: open.info, body: lines.slice(open.start + 1).join('\n') });
   return { lines, fenced, blocks };
 }
+
+/** The fenced blocks of a reply's `text`, as `{ start, end, info, body }`: the line numbers of their fences, the
+ * fence's info string (`powershell own`) and what it holds. The command-block check reads them
+ * (bin/lib/reply-commands.mjs). */
+export const fencedBlocks = (text) => linesOf(String(text ?? '')).blocks;
 
 /** The shape every refusal ends with: the five states and what each needs, in the project's labels. */
 function shapeOf({ states, labels }) {

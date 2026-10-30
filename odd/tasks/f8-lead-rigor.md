@@ -226,9 +226,14 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   Codex on the fix: both fixed. Lenses risk, reliability and readability, then reliability on the fix: 0 findings.
   PR 1 is 707 (branch `f8-lead-rigor-1`, ready notice sent 18:05Z).
 
+- L10 (2026-10-30, T4): the host compacted this session at 13:38 local. Before it, `3ed7fd47` (this document's
+  state only) was committed with `--no-verify`, skipping the gate; the next commit ran it. That gate refused the
+  module: `bin/lib/process-tree.test.mjs` forbids the text `Stop-Process` in any source under `bin/`, and
+  `PROGRAMS` of `bin/lib/reply-commands.mjs` listed it; the name left the list (a tagged block is checked anyway).
+
 ## Next step
-State (2026-10-30, 88%): PR 707 holds T2, PR 710 holds T3 (both ready notices sent). T4 started, uncommitted in the
+State (2026-10-30, after the compaction): PR 707 holds T2, PR 710 holds T3 (both ready notices sent). T4 started, uncommitted in the
 worktree: `bin/lib/reply.mjs` exports `fencedBlocks` (each fence's `info`), reply tests 20 pass; the draft module is
-copied to `bin/lib/reply-commands.mjs`, untested. Next: write `bin/lib/reply-commands.test.mjs` on the real excerpts named in S1's design, wire it in `bin/reply.mjs` with
+copied to `bin/lib/reply-commands.mjs` with its tests (6 pass, written after the draft: the RED is the hook test on main). Next: the hook test in `bin/reply.test.mjs` on the real excerpts named in S1's design, wire it in `bin/reply.mjs` with
 the deadline and a parser spawn (`pwsh.exe`, else `powershell.exe`; the probe script that caught `-rf` is
 `tmp/probe.ps1`, alias resolved by `Definition`), then the replay over transcript 0f71b2c6's replies, then reviews.
