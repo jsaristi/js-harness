@@ -48,7 +48,7 @@ question.
   stands against; the planted case red then green — commits: `41bfc83c`, `1bddd479`, `90260996`, `ca97c13f`
 - [x] T2 (kind: docs) spec 2: the ROADMAP's Sensors row, `docs/FAILURES.md`, the session summary — commits:
   `41bfc83c`, `1bddd479`, `ca97c13f`
-- [ ] T3 (kind: verify) Codex, the lenses, an independent verifier (L7 to L10), the PR — commit: this one
+- [x] T3 (kind: verify) Codex, the lenses, an independent verifier (L7 to L10), the PR — PR 721, `84f484e1`
 
 ## Log
 - L1 (2026-10-30, the brief as written, title): "JH 111 · gate: a pass that skipped tests must not stand for a commit".
@@ -129,5 +129,7 @@ question.
   Codex record and a lens record: `41bfc83c` (Codex incorrect, P2 fixed in `1bddd479`), `1bddd479`, `90260996`,
   `ca97c13f`.
 
+- L11 (2026-10-30): PR 721 merged into main at 23:45:59Z, merge commit `84f484e1`. T3 is done; the feature is done.
+
 ## Next step
-The PR to main, its ready notice, and the land; then the closed notice with the summary.
+Nothing: the feature is done. Open for the lead: the gate log's rotation forgets a failure (L8, sent as a note).
