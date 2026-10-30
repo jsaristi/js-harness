@@ -325,6 +325,12 @@ forbids: the host's reminder asks for them, and its own text says the user's ins
 - Seen: 2026-10-30 — JH 107, commit 09489509 of worktree-f8-desktop-plan — the message carried
   `Co-Authored-By` and `Claude-Session`, and it was pushed before the session saw it; it stays, since
   the branch is never force-pushed, and the next commits carry neither
+- Seen: 2026-10-30 — JH 109, every commit of f8-s9-host-watch from 6de916b7 to the fix of R3-001 on
+  f8-s9-review, 20 in all, those of PRs 717 and 718 merged — the session's summary of its own rules,
+  carried over two compactions, listed the attribution lines as this project's rule; it saw the
+  breach only on reading JH 107's summary; nothing is rewritten (main is never rewritten, the branch
+  never force-pushed), and the next commits carry neither. Third sighting: the protocol line did not
+  stop it, so a `commit-msg` check is the next step (`bin/`), proposed to the lead
 - Control: protocol — bin/lib/rules-block.mjs — "or AI attribution to commits. Use conventional
   commits only" — since 2026-10-29
 
