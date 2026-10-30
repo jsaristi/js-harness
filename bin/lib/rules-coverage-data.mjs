@@ -321,10 +321,6 @@ export const COVERAGE = {
       "level": "owed",
       "since": "2026-10-28"
     },
-    "work-sessions-private-windows": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
     "work-sessions-private-wsl": {
       "level": "owed",
       "since": "2026-10-28"
