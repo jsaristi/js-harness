@@ -324,10 +324,11 @@ function listProcesses() {
 }
 
 /** Stops each tree `pick` names among the machine's processes, each process checked by its creation time before
- * its kill (`stopTargets`, `killProcesses`), and says what each was. */
-function stopTrees(pick) {
-  const processes = listProcesses();
-  if (processes === null) return ['the processes could not be listed'];
+ * its kill (`stopTargets`, `killProcesses`), and says what each was. `list` is for the tests. */
+export function stopTrees(pick, list = listProcesses) {
+  const processes = list();
+  // Thrown, not returned: a line in the list read as a process stopped (the reliability lens on the walk, S13's log).
+  if (processes === null) throw new Error('the processes could not be listed, so none could be checked or stopped');
   return pick(processes.filter((p) => p.pid !== process.pid)).map(({ pid, command }) => {
     const targets = stopTargets(processes, [pid]);
     let stopped = targets.length > 0;
@@ -363,7 +364,13 @@ function guarded(step, root) {
     } catch (err) {
       failure = err;
     }
-    const browsers = stopTrees((processes) => openedBrowsers(processes, root));
+    let browsers;
+    try {
+      browsers = stopTrees((processes) => openedBrowsers(processes, root));
+    } catch (err) {
+      // The step's own failure says more than a browser check that could not run.
+      throw failure ?? err;
+    }
     if (browsers.length > 0) throw new Error(`a browser opened under the walk and was stopped: ${browsers.join('; ')}`);
     if (failure) throw failure;
     return detail;
@@ -547,7 +554,8 @@ export const STEPS = {
     const update = ctx.must(ctx.harness('update', ...ctx.at, '--repo', REPO), 'update');
     const manifest = path.join(project, '.git', 'js-harness', 'manifest.json');
     const before = [fs.readFileSync(manifest, 'utf8'), git(ctx, 'status', '--porcelain').stdout];
-    ctx.harness('init', ...ctx.at, '--cwd', project);
+    // Its exit too: one that failed before writing would read as one that writes nothing.
+    ctx.must(ctx.harness('init', ...ctx.at, '--cwd', project), 'init again');
     const after = [fs.readFileSync(manifest, 'utf8'), git(ctx, 'status', '--porcelain').stdout];
     assertThat(before[0] === after[0] && before[1] === after[1], 'init again changed the manifest or the tree');
     return `update: ${update.stdout.trim().split(/\r?\n/)[0]}; init again wrote nothing`;
@@ -570,17 +578,25 @@ export const STEPS = {
     assertThat(state() === 'ok', 'the claude-import row is not ok after init');
     const above = path.join(root, 'CLAUDE.md');
     fs.writeFileSync(above, '# planted above the project\n');
-    const red = state();
-    fs.rmSync(above);
+    let red;
+    try {
+      red = state();
+    } finally {
+      fs.rmSync(above, { force: true });
+    }
     assertThat(red === 'mismatch', `a CLAUDE.md above the project leaves the row ${red}`);
     return 'ok after init; mismatch with a CLAUDE.md planted above the project';
   },
   directive: (ctx) => {
     const { project } = ctx.layout;
     const planted = plantedRuleFiles();
-    for (const [file, text] of Object.entries(planted)) fs.writeFileSync(path.join(project, file), text);
-    const check = ctx.harness('rules', 'check');
-    for (const file of Object.keys(planted)) fs.rmSync(path.join(project, file));
+    let check;
+    try {
+      for (const [file, text] of Object.entries(planted)) fs.writeFileSync(path.join(project, file), text);
+      check = ctx.harness('rules', 'check');
+    } finally {
+      for (const file of Object.keys(planted)) fs.rmSync(path.join(project, file), { force: true });
+    }
     const problem = directiveProblem({ code: check.code, stdout: check.stdout });
     assertThat(problem === null, problem);
     return check.stdout.trim().split(/\r?\n/).join(' | ');
@@ -709,7 +725,12 @@ async function main(argv) {
     cleanup.push(`engram on ${port}: ${err.message}`);
   }
   // Nothing the walk started may outlive it: one left is stopped, named, and fails the walk.
-  const left = stopTrees((processes) => scratchProcesses(processes, layout.root));
+  let left = [];
+  try {
+    left = stopTrees((processes) => scratchProcesses(processes, layout.root));
+  } catch (err) {
+    cleanup.push(`the sweep: ${err.message}`);
+  }
   const spent = ctx.spend.reduce((sum, cost) => sum + cost, 0);
   const record = {
     date: new Date().toISOString(),
