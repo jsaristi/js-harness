@@ -129,6 +129,25 @@ for each, so a process holds them (which one is not known; audit F14 said they w
 **Worktrees: 9 → 8.** **Registrations: 18 → 18**, 16 stale until the lead's `sessions stop`; step 2's proof
 ("`sessions` shows no stale registration") passes only then.
 
+## Step 4: the probe, and why this session cannot run it
+
+This session is a `claude --bg` job (`sessions start`): `ToolSearch` for `session archive list_sessions start_session
+bind_pr` found none of the desktop's session tools, and `start_session` is refused on a turn he did not type
+(proposal, section 3, point 2). The probe needs a desktop session, so it is the lead's to start, on his next typed turn:
+
+1. The lead: `start_session` `user_asked`, `fresh`, own worktree, title `JH <n> · scratch: auto-archive probe`, with the
+   prompt below.
+2. The scratch session: `git commit --allow-empty -m "chore(probe): empty commit for the auto-archive probe"` on its
+   branch, push, open a PR titled `chore(probe): auto-archive probe, empty commit` (no file changes, so its merge leaves
+   main's tree as it was), `bind_pr` it, send `ready --pr <n>` and its `closed` with a summary, arm no `wait`, and end
+   its turn.
+3. The lead lands it (`merge-queue --land`), then reads `list_sessions include_archived` within 10 minutes of the
+   merge: the scratch session archived is a pass; still live is a fail, with what `get_session` says it holds.
+4. Either way, `git diff <main before> origin/main --stat` is empty: nothing of the probe on main.
+
+Prompt for step 1: "Scratch session for the auto-archive probe of `odd/tasks/f8-desktop-plan.md`, section Step 4. Do
+step 2 there exactly, nothing else; touch no file; never arm a wait; your summary says only what you did."
+
 ## Log
 - L1 (his request, as written: his answer to question 128, the lead's transcript
   `0f71b2c6-cbce-43ca-a031-276a4b2c381f` line 34672, read with `js-harness sessions --quote`): "Sí, arranca el plan
