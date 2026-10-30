@@ -70,6 +70,22 @@ export function rehearsalEnv(layout, base) {
   };
 }
 
+/** The task contract of the walk's one feature: `template`, as `contract template` prints it, with every
+ * placeholder filled, the task's kind among them. */
+export function filledContract(template) {
+  return template
+    .replace('<one sentence: the outcome, not the steps>', 'greet() returns a greeting for a name.')
+    .replace('<the reason — lets the model make judgment calls you didn\'t foresee>', 'The rehearsal needs one small feature to walk.')
+    .replace('- `<command>` exits 0            # executable, never prose', '- `node --test` exits 0')
+    .replace('- <observable behavior a human can check>', '- greet("Ana") is "Hello, Ana"')
+    .replace('- In: <areas it may touch>', '- In: greet.js and its test')
+    .replace('- Out: <areas it must not touch, and why>', '- Out: anything else, since the walk needs one unit')
+    .replace('- <real constraint> — because <reason>', '- No dependency — because the project has none')
+    .replace('<the few decisions that are mine: spend, irreversible, product choices>', 'Nothing.')
+    .replace('(kind: design | build | verify | docs)', '(kind: build)')
+    .replace('<the first task; its kind sets its effort and sub-agent models>', 'greet and its test');
+}
+
 /** Engram's own variables for the walk: its port and its data folder in the scratch home. No ENGRAM_URL, since
  * engram's hook reads one as an external server and then starts none, which left walk 3's start without context. */
 export function engramEnv(layout, port) {
@@ -124,6 +140,13 @@ export function scratchProcesses(processes, root, platform = process.platform) {
 
 /** The programs a login opens a page in. */
 const BROWSERS = ['brave', 'chrome', 'msedge', 'firefox', 'opera', 'iexplore', 'chromium', 'safari'];
+
+/** Whether `process` is an MCP server, which only a host session starts: one still running once its session ended
+ * was left behind by that host (walk 5). The engram server the hook starts (`engram serve`) is not one, and it must
+ * last until the compaction's session. */
+export function hostLeftover({ command }) {
+  return /(^|\s)(--)?mcp(\s|$)/i.test(String(command ?? ''));
+}
 
 /** The topmost browser process under a process whose command line holds `root`, as `{ pid, command }`: a page a
  * scratch command opened on his screen. One he started himself hangs from no scratch process. */
@@ -285,6 +308,7 @@ function walkContext(layout, { gitDir, port, token }) {
   const base = { ...kept, [windows ? 'Path' : 'PATH']: pathDirs.join(path.delimiter) };
   const env = { ...rehearsalEnv(layout, base), ...engramEnv(layout, port) };
   const commands = [];
+  const seen = {};
   const exec = (words, { cwd = layout.project, environment = env, input, timeout = 600_000 } = {}) => {
     commands.push(words.map(String));
     const [program, ...args] = commandWords(words.map(String), pathDirs, { comspec: kept.ComSpec ?? kept.COMSPEC ?? 'cmd.exe' });
@@ -301,11 +325,15 @@ function walkContext(layout, { gitDir, port, token }) {
   };
   const host = (args) => {
     const result = exec(['claude', ...args, ...HOST_ARGS], { environment: { ...env, ...HOST_SWITCHES, CLAUDE_CODE_OAUTH_TOKEN: token }, timeout: 180_000 });
+    // An MCP server the session left running would hold its files through the uninstalls: it is stopped and kept
+    // as a finding for S12.
+    const left = stopTrees((processes) => scratchProcesses(processes, layout.root).filter(hostLeftover));
+    if (left.length > 0) seen.hostLeftovers = [...(seen.hostLeftovers ?? []), ...left];
     return { ...result, stream: readHostStream(result.stdout), stderr: redacted(result.stderr, token) };
   };
   // His environment, for the slice's two reviews only (D2): their logins answer where they live.
   const his = (...args) => exec([process.execPath, JS_HARNESS, ...args], { environment: process.env, timeout: 1_800_000 });
-  return { layout, env, pathDirs, commands, exec, harness, must, host, his, at: ['--home', layout.home], spend: [], seen: {} };
+  return { layout, env, pathDirs, commands, exec, harness, must, host, his, at: ['--home', layout.home], spend: [], seen };
 }
 
 const git = (ctx, ...args) => ctx.must(ctx.exec(['git', ...args]), `git ${args.join(' ')}`);
@@ -376,17 +404,7 @@ export const STEPS = {
   },
   feature: (ctx) => {
     const { project } = ctx.layout;
-    const template = ctx.must(ctx.harness('contract', 'template'), 'contract template').stdout;
-    const filled = template
-      .replace('<one sentence: the outcome, not the steps>', 'greet() returns a greeting for a name.')
-      .replace('<the reason — lets the model make judgment calls you didn\'t foresee>', 'The rehearsal needs one small feature to walk.')
-      .replace('- `<command>` exits 0            # executable, never prose', '- `node --test` exits 0')
-      .replace('- <observable behavior a human can check>', '- greet("Ana") is "Hello, Ana"')
-      .replace('- In: <areas it may touch>', '- In: greet.js and its test')
-      .replace('- Out: <areas it must not touch, and why>', '- Out: anything else, since the walk needs one unit')
-      .replace('- <real constraint> — because <reason>', '- No dependency — because the project has none')
-      .replace('<the few decisions that are mine: spend, irreversible, product choices>', 'Nothing.')
-      .replace('<the first task; its kind sets its effort and sub-agent models>', 'greet and its test');
+    const filled = filledContract(ctx.must(ctx.harness('contract', 'template'), 'contract template').stdout);
     fs.mkdirSync(path.join(project, 'odd', 'tasks'), { recursive: true });
     fs.writeFileSync(path.join(project, 'odd', 'tasks', 'greeting.md'), `# Greeting\n\n${filled}`);
     ctx.must(ctx.harness('contract', 'check', 'odd/tasks/greeting.md'), 'contract check');

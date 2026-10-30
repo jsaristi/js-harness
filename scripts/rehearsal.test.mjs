@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { rehearsalLayout, rehearsalEnv, engramEnv, snapshotTree, commandWords, scratchProcesses, openedBrowsers, STEPS, HIS_SETTINGS, HIS_CLAUDE_MD } from './rehearsal.mjs';
+import { rehearsalLayout, rehearsalEnv, engramEnv, filledContract, snapshotTree, commandWords, scratchProcesses, openedBrowsers, hostLeftover, STEPS, HIS_SETTINGS, HIS_CLAUDE_MD } from './rehearsal.mjs';
 import { plantedRuleFiles, directiveProblem, recordedPaths, restoreProblems, importRowState, REHEARSAL } from './rehearsal-lib.mjs';
 
 const JS_HARNESS = fileURLToPath(new URL('../bin/js-harness.mjs', import.meta.url));
@@ -103,6 +103,15 @@ test('scratchProcesses names the topmost process of each tree whose command line
   assert.deepEqual(scratchProcesses([], root, 'win32'), []);
 });
 
+test('hostLeftover names an MCP server a host session left behind, and not the engram server the hook started', () => {
+  // Walk 5 left codegraph's MCP server running after its Claude sessions ended.
+  const root = 'C:\\Temp\\js-harness-rehearsal-walk-abc';
+  assert.equal(hostLeftover({ command: `node ${root}\\prefix\\codegraph.js serve --mcp --path ${root}\\project` }), true);
+  assert.equal(hostLeftover({ command: `${root}\\bin\\engram.exe mcp` }), true);
+  assert.equal(hostLeftover({ command: `${root}\\bin\\engram.exe serve` }), false);
+  assert.equal(hostLeftover({ command: null }), false);
+});
+
 test('openedBrowsers names a browser started under a scratch process, and none of his own', () => {
   // Nothing in a walk may open his browser again (L6): a step that does is stopped.
   const root = 'C:\\Temp\\js-harness-rehearsal-walk-abc';
@@ -123,6 +132,17 @@ test('engramEnv gives engram a port and a data folder in the scratch home, and n
   // Engram's hook reads an ENGRAM_URL as an external server and starts none, so walk 3's start found no context.
   const layout = rehearsalLayout(path.join(os.tmpdir(), 'r'));
   assert.deepEqual(engramEnv(layout, 50123), { ENGRAM_PORT: '50123', ENGRAM_DATA_DIR: path.join(layout.home, '.engram') });
+});
+
+test('filledContract fills every placeholder of the contract template, so contract check passes it', (t) => {
+  // Walk 5's feature step left the task's kind as the template has it, and contract check refused it.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-contract-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const template = spawnSync(process.execPath, [JS_HARNESS, 'contract', 'template'], { encoding: 'utf8' }).stdout;
+  fs.mkdirSync(path.join(root, 'odd', 'tasks'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'odd', 'tasks', 'greeting.md'), `# Greeting\n\n${filledContract(template)}`);
+  const check = spawnSync(process.execPath, [JS_HARNESS, 'contract', 'check', 'odd/tasks/greeting.md'], { cwd: root, encoding: 'utf8' });
+  assert.equal(check.status, 0, `${check.stdout}${check.stderr}`);
 });
 
 test('the walk has one step for each id of the rehearsal, and no other', () => {

@@ -96,6 +96,15 @@ directive coverage and S12's migration carries it" (reverse-engineering document
   tell. In the kept root, `codex --version` answers `codex-cli 0.165.0` in about 200 ms three times, warm; a cold first
   run past `PROBE_TIMEOUT_MS` (5 s, bin/lib/stack.mjs:27) is a guess, not checked. No process left, no browser;
   `real-home-after` PASS. The walk now keeps every command's whole output in `commands.log` under its root.
+- Run 5 (2026-10-30 ~03:00Z, `ddb28a02`, 2.3 minutes, host cost $0.0182 of the $5 estimate): `install`,
+  `stack-install` (the probe answered this time, so run 4's failure did not come back), `init`, `engram-start`
+  ("SessionStart:startup brought back s13-planted-33c3ec5e in 3421 bytes; MCP servers: codegraph, context7, engram")
+  and `engram-compact` ("SessionStart:compact brought back s13-planted-33c3ec5e in 4097 bytes") PASS; `feature` FAIL:
+  the walk's contract kept the template's "(kind: design | build | verify | docs)", which `contract check` refuses;
+  `filledContract` now fills it, tested against `contract check`. One process left: `codegraph.js serve --mcp --path
+  <scratch project>`, Claude's codegraph MCP server, running after its `claude -p` sessions ended (which session is not
+  known); the walk now stops such a server after each host session and keeps it under `seen.hostLeftovers` as a
+  finding for S12, while the final sweep still fails on any other. `real-home-after` PASS.
 
 ## Next step
 State at the second context pause (2026-10-30 ~02:30Z, branch `f8-s13-rehearsal`, worktree
