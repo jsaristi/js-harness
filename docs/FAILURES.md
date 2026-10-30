@@ -661,6 +661,21 @@ run by hand on Windows, out of a turn, sees both.
 - Control: check — evals/review/compare.test.mjs — "a cell out of a turn of the gate lock is refused before
   anything is made, with the command that runs it" — since 2026-10-15
 
+### gate-narrow-pass-stood
+A commit entered on the proof of a pass narrower than the run that had failed on its tree: its tests failed on
+GitHub's machines, a check by hand of the same tree then passed in the WSL mirror, where the failing test skips itself
+(no `.git` there), and the next commit's gate took that pass as `same` and ran nothing. The proof read only the last
+pass with the tree's key, and a gate on CI wrote no key. main was never exposed: the merge queue runs the whole gate on
+GitHub Actions.
+- Class: tool
+- Seen: 2026-10-30 — the gate log, lines 307-311 (`~/.js-harness/gate-log/log.jsonl`) — CI fail 789d081d, WSL pass
+  efdfe8aa with 214 of 312 tests skipped, `same` by it; commit 98d4c7cb entered with
+  `bin/lib/gentle-ai-absence.test.mjs` red (odd/tasks/f8-s9-host-watch.md, L8)
+- Seen: 2026-10-30 — the gate log, lines 312-316 — CI fail 08d76a43, WSL pass ecc088b0, `same` by it; commit 60bddd22
+  entered the same way; fixed in f3274d4c
+- Control: check — bin/check.test.mjs — "a tree whose tests failed on CI is not proven by a narrower pass here: the
+  next commit goes to CI again and is refused" — since 2026-10-30
+
 ### gate-ran-unseen
 "No gate runs" was said while a gate of a session that cannot notify was running.
 - Class: unseen-state

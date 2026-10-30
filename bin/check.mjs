@@ -26,7 +26,7 @@ import { cancelTicket, logTicket } from './lib/gate-first.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { watchBusiest } from './lib/machine-busiest.mjs';
 import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
-import { treeKey } from './lib/gate-tree.mjs';
+import { filesKey, treeKey } from './lib/gate-tree.mjs';
 import { addedLines, checkedOff, checkedTasks, resolveCitations, resolveTicks, taskText } from './lib/citations.mjs';
 import { flakyTestsOf, selectTests, testFilesOf } from './lib/select-tests.mjs';
 import { checkLedger, failedTestFiles, failingTests, judgeRerun, ledgerEntries, localDay } from './lib/flaky.mjs';
@@ -39,7 +39,7 @@ import { CLAUDE_MD_BUDGET, checkClaudeBudget } from './lib/claude-md-budget.mjs'
 import { compareLaunches, subagentRowLines } from './lib/subagent-check.mjs';
 import { dayOf, launchesOf } from './lib/subagent-count.mjs';
 import { readRecords, recordFolders } from './subagents.mjs';
-import { CI_WORKFLOW, ciGateWanted, runCiGate } from './lib/ci-gate.mjs';
+import { testsOnCi } from './lib/ci-gate.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, claimOf, gateLogRows, gateRow, minutes, ownTicketRows, underGateLock } from './lib/gate-turn.mjs';
 import { checkCodexReviewDebt, checkCodexReviews, checkLensReviews } from './lib/codex-review-rows.mjs';
@@ -1552,10 +1552,12 @@ export async function checkSensors(cwd, deps = {}, lock) {
   // twice and this gate keeps a record: the proof is a line of the gate log, so a gate that neither reads
   // nor writes that log has no key. `null` in every doubt, which is a gate that runs its sensors.
   const keyNow = () => (sameTree.skip && record ? treeKey(hookGit(cwd, deps.git), { sensors, place }) : null);
+  // The key of the index's files, wherever the sensors run (`filesKey`): what a failure stands against (`provenBy`).
+  const filesNow = () => (sameTree.skip && record ? filesKey(hookGit(cwd, deps.git)) : null);
   // The rows of a gate that runs no sensor because the gate log holds the proof of `key`, after its own
   // line is written; `null` when there is no key or no proof.
   const proven = (key) => {
-    const proof = key === null ? null : provenBy(readGateLog(lock.home).events, key);
+    const proof = key === null ? null : provenBy(readGateLog(lock.home).events, key, filesNow());
     if (proof === null) return null;
     record.same({ code: key, by: proof.id });
     return [sameTreeRow(sensors, proof), ...gateLogRows(record)];
@@ -1599,8 +1601,12 @@ export async function checkSensors(cwd, deps = {}, lock) {
     // The key this gate proves: the one it had before its sensors, when all of them passed and the tree
     // has that key still. A file that changed while they ran is a suite of no one tree, and proves none.
     // Asked before the end is written, which holds it, so its two git processes are in the seconds the
-    // log says the sensors took: a fraction of one.
+    // log says the sensors took: a fraction of one. `files`, and `tried` where the sensors ran where the key says
+    // (a failure on Windows is none under the key of WSL2), are written on a failure too, if the tree did not move.
     let code;
+    let tried;
+    let files;
+    const filesBefore = key !== null ? filesNow() : null;
     try {
       for (const sensor of sensors) {
         // The tests sensor in shadow or skip mode, where the project says so and its suite is `node --test`
@@ -1639,13 +1645,15 @@ export async function checkSensors(cwd, deps = {}, lock) {
       const quarantined = ran.some((row) => row.rerun);
       // A passing gate in skip mode writes the key too (odd/tasks/exact-tests.md, T4c): the files it skipped are
       // proven by their stored passing traces, which is the premise of the switch S6's count earned.
-      if (result === 'pass' && key !== null && ranWhereKeyed && !quarantined && keyNow() === key) code = key;
+      const still = key !== null && keyNow() === key;
+      if (result === 'pass' && ranWhereKeyed && !quarantined && still) code = key;
+      if (still) [files, tried] = [filesBefore, ranWhereKeyed ? key : undefined];
     } finally {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
       // A sensor that failed keeps the names of its failing tests, where its output says them (`failingTests`).
       // A skip gate's tests row keeps `skip`, never `shadow`, so S6's count (`s6Count`) never reads it.
       const failing = ({ pass, output, rerun }) => (pass && !rerun ? [] : failingTests(output));
-      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code });
+      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code, files, tried });
       // Beside the log, under the gate's id: a list of every file on the end line would rotate the log far sooner.
       record?.testTimes(ran.flatMap((row) => row.times ?? []));
     }
@@ -1660,36 +1668,7 @@ export async function checkSensors(cwd, deps = {}, lock) {
     const inTurn = `the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate took none`;
     return [gateRow(inTurn), ...(await run({ lock: 'parent', waitedMs: 0, waitedFor: [] }))];
   }
-  return (await testsOnCi(cwd, lock, deps, record)) ?? underGateLock(cwd, lock, deps, run, record);
-}
-
-/** The rows of a gate whose tests ran on GitHub's machines, where every commit's gate goes first
- * (./lib/ci-gate.mjs), or null for a gate that runs here: the project has no gate workflow, the switch keeps it
- * here, or CI gave no answer, which it says on stderr. Such a gate leaves its own record in the gate log, its
- * tests marked as run on CI and the names of those that failed there, so the measures of the lines count both. A
- * gate CI gave no answer leaves a `ci-fallback` line under `local`'s id, the record of the gate that then runs
- * here, with what the wait cost. `deps.ciGateWanted` and `deps.runCiGate` stand in for the two halves. */
-async function testsOnCi(cwd, lock, deps, local = null) {
-  const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, env: lock.env ?? process.env });
-  if (!why) return null;
-  console.error(`check: ${why}; the push of the tree being committed starts their run`);
-  const startedAt = Date.now();
-  const ci = await (deps.runCiGate ?? runCiGate)({ cwd, remote: lock.remote ?? 'origin', env: lock.env ?? process.env });
-  if (!ci.ran) {
-    console.error(`check: no answer from GitHub's machines (${ci.why}), so the tests run here`);
-    local?.ciFallback({ seconds: Math.round((Date.now() - startedAt) / 1000), reason: ci.why });
-    return null;
-  }
-  const tests = { name: 'tests', pass: ci.pass, detail: `ran on GitHub's machines in ${ci.seconds}s (${CI_WORKFLOW}): ${ci.url}`, ...(ci.output && { output: ci.output }) };
-  let at = startedAt;
-  const record = lock.log !== false && lock.home !== undefined
-    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', session: lock.session, now: () => at, ...deps.gateLog })
-    : null;
-  record?.start({ lock: 'ci', waitedMs: 0, waitedFor: [] });
-  at = Date.now();
-  const failing = ci.pass ? [] : failingTests(ci.output);
-  record?.end({ result: ci.pass ? 'pass' : 'fail', sensors: [{ name: 'tests', seconds: ci.seconds, pass: ci.pass, ranIn: 'ci', ...(failing.length > 0 && { failing }) }] });
-  return [gateRow(`the tests ran on CI: ${why}`), tests, ...gateLogRows(record)];
+  return (await testsOnCi(cwd, lock, deps, record, filesNow)) ?? underGateLock(cwd, lock, deps, run, record);
 }
 
 /** The `functions` row (odd/tasks/on-demand-functions.md): a switch of `harness.json` "functions" that cannot be
