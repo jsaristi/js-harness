@@ -69,8 +69,8 @@ directive coverage and S12's migration carries it" (reverse-engineering document
 - [x] T8 (kind: build) the `doctor` row of 13.3 row 16: the project's root `CLAUDE.md` imports `AGENTS.md` and no
   `CLAUDE.md` above it turns the import off, test first, its own commit (D1, L4) — S4; inline; `604253a6`, `430130ed`, `bb6223b9`
 - [x] T9 dropped by the lead (D3 corrected, L9): no run timed out (L7)
-- [ ] T7 (kind: docs) Codex and the lenses on every code commit, gentle-ai lines, the independent verifier over
-  the range, PR, ready notice, summary — inline
+- [x] T7 (kind: docs) Codex and the lenses on every code commit, gentle-ai lines, the independent verifier over
+  the range, PR, ready notice, summary — inline; L12-L14, #685, #686 and the third, the summary under docs/sessions/
 
 ## Walk
 - Run 1 (2026-10-30T02:04Z, `d4dd7199`, 1.3 minutes, host cost $0 of the $5 estimate): `real-home-before` PASS (19
