@@ -129,19 +129,21 @@ directive coverage and S12's migration carries it" (reverse-engineering document
   fails on any other difference. `foreign-absent` skipped after it; `real-home-after` PASS; no process left.
 
 ## Next step
-State at the second context pause (2026-10-30 ~02:30Z, branch `f8-s13-rehearsal`, worktree
-`D:js-harness.claudeworktrees8-s13-rehearsal`, HEAD after `1dacd138`, nothing pushed, no PR). Done: T1, T2,
-T3, T4 (`d4dd7199`), T6 (L8), T8; walk guards `80d2a547`; D3 closed (L9), T9 dropped. Reviews: lenses and Codex
-cover `f2110239..bb6223b9` (Codex verdict correct 0.96 on `34fc68e..bb6223b`; lenses 0 findings on
-`6e5cd3e..bb6223b`); NOT yet reviewed: `d4dd7199`, `80d2a547` (scripts/rehearsal.mjs and its test). Running: walk 2,
-`node scripts/rehearsal.mjs --keep` into `C:UsersOficina.claudejobsb7fa0ca	mpwalk-2.log`; read it, record it
-under `## Walk` (cost beside $5, stop past $7.50), remove its kept root once no process holds it. If it fails, read
-why before any rerun. Then: lens-review and codex-review of `bb6223b9..HEAD`; gentle-ai assess per slice (whole
-branch read-only: medium, not due, under_budget, 1330 lines); S13's roadmap line; the independent verifier over
-`f2110239..HEAD` (high risk); chained PRs (slice 1 `f2110239..57584e5d`, slice 2 `57584e5d..bb6223b9`, slice 3 the
-rest); ready notice; summary `docs/sessions/2026-10-30-jh-90-f8-s13-the-rehearsal-on-a-scratch-project.md`; closed
-notice. Owed to S12 for the report: engram's plugin needs jq (L5); Codex's mcp add leaves context7's login open (L7,
-L9); the brief's surfaces gained `bin/lib/gentle-ai-absence.test.mjs` (NAMED list), `bin/lib/payload.mjs` (export).
+State at 2026-10-30 ~03:35Z (branch `f8-s13-rehearsal`, worktree `D:\js-harness\.claude\worktrees\f8-s13-rehearsal`,
+HEAD `a7ad4a1c` or later, nothing pushed, no PR). Done: T1, T2, T3, T4, T6 (L8), T8; T9 dropped (L9). Walks 1-8 under
+`## Walk`, host cost $0.0664 in all against $5; walk 8 passed every step through `uninstall-machine`, and its
+`recorded-paths` failure is fixed (`200e506d`). Bin fix of this stretch: `e68e232c` (stack install, L10; the
+independent verifier must cover it). Waiting: the lead's answer on the stop rule (walk 8's lens run used 3,751 input
+tokens against a plan of about 1,393, 2.7 times; notices of 22:30 local): (a) go on with paid runs, (b) stop. On (a):
+walk 9, `node scripts/rehearsal.mjs --keep` into the job tmp's `walk-9.log`; record it; remove its kept root. Then:
+lens-review and codex-review of `bb6223b9..HEAD`; gentle-ai assess per slice; S13's roadmap line; the independent
+verifier over `f2110239..HEAD` (high risk); chained PRs (slice 1 `f2110239..57584e5d`, slice 2 `57584e5d..bb6223b9`,
+slice 3 the rest); ready notice; summary `docs/sessions/2026-10-30-jh-90-f8-s13-the-rehearsal-on-a-scratch-project.md`;
+closed notice. Owed to S12 for the report: engram's plugin needs jq (L5); Codex's mcp add leaves context7's login open
+(L7, L9); each `claude -p` session leaves codegraph's MCP server running (runs 5, 7); Claude's plugin commands leave
+empty `enabledPlugins` and `extraKnownMarketplaces` in his settings.json (run 8); a cold first start of a new codex.exe
+takes 18 s (L10); the lens plan's gap (run 8). The brief's surfaces gained `bin/lib/gentle-ai-absence.test.mjs` (NAMED
+list), `bin/lib/payload.mjs` (export), `bin/stack.mjs` and `bin/stack-install.test.mjs` (L10).
 
 ## Log
 - L1 (2026-10-29, the lead's brief `briefs/2026-10-29T19-21-42-028Z-0339f9b7.md`): "JH 90 · F8 S13: the rehearsal
