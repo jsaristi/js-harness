@@ -72,6 +72,10 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
   in a browser (`context7Gaps`, its test asserts the warning), so no run of migrate can leave a login open
 - [x] T6 (kind: verify) Codex and the lenses on every code commit, gentle-ai lines, the independent verifier over
   the range; PRs, ready notices, summary — L9-L18; PRs 689, 693-696
+- [x] T7 (kind: verify) move `D:\plataforma-preproyecto`: `migrate --check`, then `migrate`, `doctor` inside it —
+  his decision of question 112; L19, L20; branch `f8-s12-moves`
+- [x] T8 (kind: verify) move `D:\abogadaclaudiajimenez`: `init`, `migrate --check`, the import line, `doctor`
+  inside it — his decision of question 112; L19, L21-L23
 
 ## Decisions
 - D1 (2026-10-30, this session): a new command `js-harness migrate`, not a second `init` nor a `sync` flag: a second
@@ -95,6 +99,11 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
   does, `:1844`), so the two cannot be told apart, and D5's guard keeps the baseline from adding a finding.
 
 ## Next step
+State at 2026-10-30 ~10:25Z (JH 94, branch `f8-s12-moves`, docs only): both projects moved, doctor exit 0 inside
+each with `claude-import` ok (L20-L23); S12's State line reads done. Owed after S12: the finding of L22 (`init` with
+an own `CLAUDE.md` leaves the import out), the session probe in each project (L23), the owed tests of L16 and L17,
+and L13's sync symlink defect (its own session).
+
 State at 2026-10-30 ~08:50Z (branch `f8-s12-migration`, code through H `8546b86f`, nothing pushed). Every code
 commit has Codex, the lenses and a gentle-ai line (L9-L17); the verifier ran over `24c47ca..9af1aac` (L13). The
 chain of L18 is open, PRs 689, 693, 694, 695 and 696, each with a ready notice, for the lead to land in order; the
@@ -209,3 +218,59 @@ owed tests of L16 and L17.
   690-692 were closed and their branches removed; 693 holds `24c47cad..09ae0126` whole (1,132 + 6 lines), as PR 686
   held its record's range; reviewing each cut again would have cost about 600,000 tokens for code already reviewed.
   The chain: 689 the document; 693 the scans, plan, writes and command; 694 D; 695 E; 696 this branch.
+- L19 (2026-10-30 10:05Z, his decision, question 112, transcript `0f71b2c6-cbce-43ca-a031-276a4b2c381f` line 28102):
+  "Ambos proyectos". The list, frozen: `D:\plataforma-preproyecto` and `D:\abogadaclaudiajimenez` move;
+  `D:\harness` stays, a read-only reference; `D:\js-harness` and the job's scratch folder do not move (L10). The
+  installed copy (`js-harness --version` 0.97.0, main at `297efbcd`) ran every command below; nothing was committed,
+  stashed or reset in either project.
+- L20 (2026-10-30, `D:\plataforma-preproyecto`, branch `onboarding` at `cacadf0`). Before: `git status --short` held
+  only `?? .atl/`; tracked `AGENTS.md`, `harness.json`; no `CLAUDE.md`. `js-harness migrate --check --cwd
+  D:/plataforma-preproyecto`, exit 1: would write `CLAUDE.md`, the baseline 2026-10-30, the `.atl/` exclude line,
+  `AGENTS.md`'s block again, `.claude/settings.local.json`'s `outputStyle` and 24 of 24 denies; no context7 line.
+  `js-harness migrate --cwd D:/plataforma-preproyecto`, exit 0: "recorded the coverage baseline 2026-10-30", "wrote
+  CLAUDE.md", "wrote .claude/settings.local.json#/outputStyle", "wrote .claude/settings.local.json#/permissions/deny",
+  "excluded .atl/ in .git/info/exclude", "rendered the harness's lines of AGENTS.md again", "synced project at
+  0.97.0", "commit what migrate changed: AGENTS.md, CLAUDE.md"; the pin stayed 0.97.0. After: ` M AGENTS.md` (5+,
+  28-), `?? CLAUDE.md`, both left uncommitted for him; manifest format 3, `coverage` `{baseline 2026-10-30, release
+  0.97.0}`, `CLAUDE.md` in `files`. `js-harness doctor` inside it, exit 0: `claude-import` ok, `context7` ok in
+  claude, codex and project; open and his, outside the project: `codex-trust` missing (answer Codex's hook prompt),
+  `host-update` outdated. `CLAUDE.md` line 2 is `@AGENTS.md`. A second `migrate --check`, exit 1, asks only to
+  commit `AGENTS.md` and `CLAUDE.md` first.
+  Undo, exact: `git -C D:/plataforma-preproyecto checkout -- AGENTS.md`, delete `CLAUDE.md`, remove the line `.atl/`
+  from `.git/info/exclude` and the keys `outputStyle` and `permissions` from `.claude/settings.local.json`, and the
+  `coverage` key and the `CLAUDE.md` entry from `.git/js-harness/manifest.json`; or `js-harness uninstall project`
+  inside it, which undoes init and the move together, each write recorded.
+- L21 (2026-10-30, `D:\abogadaclaudiajimenez`, branch `main` at `22e25d2`, even with `origin/main`). Before: `git
+  status --short` held only `?? .codegraph/` and `?? graphify-out/`; no `AGENTS.md`, `harness.json`,
+  `docs/FAILURES.md`, `.git/js-harness/` or git hooks; `CLAUDE.md` (214 lines), `.atl/` and
+  `.claude/settings.local.json` tracked. `init` has no dry form: its plan was read in `bin/init.mjs:120-170` and
+  `bin/lib/project.mjs:795-830` (an own `CLAUDE.md` is kept and `AGENTS.md` gets the whole block); nothing it writes
+  existed. `js-harness init --cwd D:/abogadaclaudiajimenez`, exit 0: wrote `harness.json`, kept `CLAUDE.md`
+  (exists), wrote `AGENTS.md`, `docs/FAILURES.md`, `.git/hooks/pre-commit`, `.git/hooks/pre-push`; "codegraph init
+  skipped: .codegraph already exists"; wrote `.claude/settings.local.json`'s `outputStyle`, `permissions/deny` and
+  `env/CODEGRAPH_NO_PROMPT_HOOK`; excluded `.atl/` in `.git/info/exclude`; manifest format 3 with the baseline
+  2026-10-30. `js-harness migrate --check --cwd D:/abogadaclaudiajimenez`, exit 1: "commit first: AGENTS.md", a note
+  that `CLAUDE.md` "does not import AGENTS.md, so Claude never loads it: add a line `@AGENTS.md`", and `.atl/` tracked
+  ("git rm -r .atl once gentle-ai is gone"); nothing else to write. `js-harness doctor` inside it, exit 0, with
+  `claude-import` missing; also his, outside the project: `typescript-lsp` missing in claude, `codex` outdated,
+  `memory-rules` stale (four notes of this project's memory), `codex-trust` missing, `host-update` outdated.
+  Undo, exact: `js-harness uninstall project` inside it (each write recorded in `.git/js-harness/manifest.json`); by
+  hand, `git -C D:/abogadaclaudiajimenez checkout -- .claude/settings.local.json`, delete `harness.json`,
+  `AGENTS.md`, `docs/FAILURES.md`, `.git/hooks/pre-commit`, `.git/hooks/pre-push` and `.git/js-harness/`, and remove
+  the line `.atl/` from `.git/info/exclude`.
+- L22 (2026-10-30 ~10:20Z, the lead's answer to this session's `waiting` notice): "yes, add the @AGENTS.md line at
+  the top of D:/abogadaclaudiajimenez/CLAUDE.md, uncommitted, with its undo (git checkout -- CLAUDE.md) in the log;
+  it is part of the move he chose (Q112 "Ambos proyectos"). Record as a finding that init keeps an own CLAUDE.md
+  without the import, so doctor's claude-import row is red after init: a follow-up, not yours to fix." Done: the
+  lines `@AGENTS.md` and an empty one prepended, CRLF as the file is (`git diff --stat -- CLAUDE.md`: 2 insertions),
+  left uncommitted. `js-harness doctor` inside it, exit 0, `claude-import` ok, `context7` ok in claude, codex and
+  project, `codegraph` ok. `migrate --check`, exit 1, asks only to commit `AGENTS.md` first and names `.atl/`
+  tracked. Undo of this line: `git -C D:/abogadaclaudiajimenez checkout -- CLAUDE.md`.
+  Finding, owed, not this session's: `init` keeps a project's own `CLAUDE.md` that does not import `AGENTS.md` and
+  writes the whole block into `AGENTS.md` (`bin/lib/project.mjs:808-830`), so doctor's `claude-import` row is red
+  right after `init` and Claude loads none of the harness's lines until the import is added by hand.
+- L23 (2026-10-30): both projects pass: doctor exit 0 inside each with `claude-import` ok. Left for him in his
+  projects, uncommitted: in `D:\plataforma-preproyecto` `AGENTS.md` and `CLAUDE.md`; in `D:\abogadaclaudiajimenez`
+  `CLAUDE.md`, `.claude/settings.local.json`, `AGENTS.md`, `harness.json` and `docs/FAILURES.md`. Not checked here:
+  a new session in each project showing its `CLAUDE.md`, the style and context7 (the roadmap's probe), which needs a
+  session started there. Context7's OAuth in Codex stays open (S8): never started.

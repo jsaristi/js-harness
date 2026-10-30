@@ -532,10 +532,13 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **His decisions:** the project list, frozen in the feature document before the first move
   (projects with a manifest or a Claude Code session in the last 30 days); a project left out is
   his yes.
-- **State:** the migration built 2026-10-30 (JH 93, `odd/tasks/f8-s12-migration.md`), in review on branch
-  `f8-s12-migration`: `js-harness migrate`, `--check` and `migrate list`, proven on a copy of a project v0.97.0's
-  own `init` set up in a scratch home; context7 is said with doctor's fix, never registered. Left: his project list
-  and the moves.
+- **State:** done 2026-10-30 (PRs 689, 693-696 the migration, JH 93; the moves, JH 94; `odd/tasks/f8-s12-migration.md`).
+  `js-harness migrate`, `--check` and `migrate list`, proven on a copy of a project v0.97.0's own `init` set up in a
+  scratch home; context7 is said with doctor's fix, never registered. His list (question 112, "Ambos proyectos"):
+  `D:\plataforma-preproyecto` migrated, `D:\abogadaclaudiajimenez` initialized and its own `CLAUDE.md` given the
+  `@AGENTS.md` import; `D:\harness` stays, a read-only reference. Doctor exits 0 inside each with `claude-import` ok;
+  the changes stay uncommitted in his projects, each undo in the document's L20-L22. Owed: `init` keeps an own
+  `CLAUDE.md` without the import, so `claude-import` is red after it (L22); the session probe in each project (L23).
 
 ### S2 Removing gentle-ai, Orca and herdr
 - **Changes:** in order (diet section 10, "S2, the removal"): writers quiesced; one full backup,
