@@ -89,13 +89,17 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
   without a control a finding (`bin/lib/project-rules.mjs:55`), which 14.3's "refuses only gaps opened after the
   baseline" does not say; a project whose list has such a rule gets a note naming them, not a red gate.
 - D6, context7: said with doctor's own row and fix (`bin/lib/stack.mjs`, the context7 tool), never registered.
+- D7 (this session, on the verifier's L13): the baseline is recorded in a clone `sync` set up too, where `init` never
+  records one (`bin/lib/project.mjs:903-905`): the manifest does not mark a clone (only `writeProject`'s argument
+  does, `:1844`), so the two cannot be told apart, and D5's guard keeps the baseline from adding a finding.
 
 ## Next step
 State at 2026-10-30 ~07:45Z (branch `f8-s12-migration`, nothing pushed; PR 688 is the docs-only unit). The four
 code commits are in (T1-T3); both reviews of `24c47ca..09ae012` are recorded (L9, L11) and their findings fixed in
-commit D (L12). T4's facts went to the lead (02:16 local). Next: commit D; Codex and the lenses over D alone, no
-edit in the worktree while they run; gentle-ai per code commit; the independent verifier over `24c47ca..HEAD`;
-chained PRs (doc + A; B1 + B2; C + D) with ready notices; the summary under docs/sessions/ and the closed notice.
+commit D (L12), D's reviews clean and the verifier's four defects fixed in E (L13). T4's facts went to the lead
+(02:16 local). Next: Codex and the lenses over E alone, no edit in the worktree while they run; gentle-ai per code
+commit; chained PRs (doc + A; B1 + B2; C + D + E) with ready notices; the summary under docs/sessions/ and the closed
+notice.
 
 ## Log
 - L1 (2026-10-30, the lead's brief `briefs/2026-10-30T06-12-57-495Z-28130615.md`): "Then S12's building part, its
@@ -152,3 +156,11 @@ chained PRs (doc + A; B1 + B2; C + D) with ready notices; the summary under docs
   pin move, which fails at the next version: the expectation follows the running version. With L9's undo names and
   L10's scan, commit D holds nine fixes. The link test skips on this machine (symlinks need privileges) and runs on
   CI's Linux.
+- L13 (2026-10-30): reviews of D (`09ae012..9af1aac`): Codex, the seven findings fixed, the patch correct (79,095
+  input tokens); the four lenses, no finding (about 71,000 input tokens). The independent verifier (a sub-agent, read
+  only, over `24c47ca..9af1aac`, 149,704 tokens) found four defects, fixed in commit E `7af9ec25` with tests red
+  first: an untracked `AGENTS.md` passed the uncommitted check under `status.showUntrackedFiles=no` (two of them
+  checked by its run); `--check` refreshed git's index; a `CLAUDE.md` the project deleted after init was written
+  again; with `CLAUDE.md` a link to `AGENTS.md`, the plan read no split where sync reads through the link. It also
+  named a divergence, D7. Open, outside this range: through such a link, sync renders `AGENTS.md`'s half, so Claude
+  loses its half of the lines (`bin/lib/project.mjs:1858-1860`); told to the lead.

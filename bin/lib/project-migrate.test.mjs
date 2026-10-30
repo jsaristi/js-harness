@@ -354,6 +354,75 @@ test('an AGENTS.md git ignores is refused like an uncommitted one: git could not
   }
 });
 
+test('an untracked AGENTS.md is refused even where git is told not to show untracked files', () => {
+  const { dir, home } = oldProject({ pin: RUNNING });
+  try {
+    git(dir, 'rm', '-q', '--cached', 'AGENTS.md');
+    git(dir, 'commit', '-q', '--no-verify', '-m', 'AGENTS.md untracked');
+    git(dir, 'config', 'status.showUntrackedFiles', 'no');
+    const before = tree(dir);
+    const result = migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.equal(result.code, 1);
+    assert.deepEqual(result.uncommitted, ['AGENTS.md']);
+    assert.deepEqual(tree(dir), before);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test("the plan leaves git's index as it was: no stat refresh, no lock", () => {
+  const { dir, home } = oldProject();
+  try {
+    const index = path.join(dir, '.git', 'index');
+    const later = new Date(Date.now() + 60_000);
+    fs.utimesSync(path.join(dir, 'AGENTS.md'), later, later);
+    const before = fs.readFileSync(index);
+    migrationPlan(dir, RUNNING, { home, today: TODAY });
+    assert.ok(fs.readFileSync(index).equals(before));
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test('a CLAUDE.md the project deleted after init wrote it stays deleted, with a note', () => {
+  const { dir, manifestPath, home } = oldProject({ pin: RUNNING });
+  try {
+    assert.equal(migrateProject(dir, RUNNING, { home, today: TODAY }).code, 0);
+    commitAll(dir);
+    git(dir, 'rm', '-q', 'CLAUDE.md');
+    git(dir, 'commit', '-q', '--no-verify', '-m', 'no CLAUDE.md');
+    const plan = migrationPlan(dir, RUNNING, { home, today: TODAY });
+    assert.ok(!plan.pending.some((line) => line.startsWith('CLAUDE.md')), plan.pending.join('\n'));
+    assert.ok(plan.notes.some((note) => note.path === 'CLAUDE.md' && /deleted/.test(note.reason)), JSON.stringify(plan.notes));
+    migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.equal(fs.existsSync(path.join(dir, 'CLAUDE.md')), false);
+    assert.equal(JSON.parse(read(manifestPath)).files.filter((item) => item.path === 'CLAUDE.md').length, 1);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test('with CLAUDE.md a link to AGENTS.md, the plan says what migrate writes, and nothing after it', (t) => {
+  const { dir, home } = oldProject({ pin: RUNNING });
+  try {
+    try {
+      fs.symlinkSync('AGENTS.md', path.join(dir, 'CLAUDE.md'), 'file');
+    } catch (err) {
+      if (err.code === 'EPERM' || err.code === 'EACCES') return t.skip('symlinks need privileges on this machine');
+      throw err;
+    }
+    commitAll(dir);
+    const plan = migrationPlan(dir, RUNNING, { home, today: TODAY }).pending;
+    const result = migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.equal(result.code, 0);
+    assert.equal(plan.some((line) => line.startsWith('AGENTS.md')), result.committed.includes('AGENTS.md'), plan.join('\n'));
+    commitAll(dir);
+    assert.deepEqual(migrationPlan(dir, RUNNING, { home, today: TODAY }).pending, []);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
 test('a harness.json checked out with CRLF is still the one init wrote: after the pin moves, uninstall removes it', () => {
   const { dir, manifestPath, home } = oldProject();
   try {
