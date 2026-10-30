@@ -161,3 +161,7 @@ meter, read at that moment". His typed words of 2026-10-11 ("recuerda siempre de
   `rule/his-decisions` has landed.
 - L15 (2026-10-30, JH 98): two `- Seen:` lines owed from the lead's relief file go to `docs/FAILURES.md`, each a new
   entry whose control is owed by an open task here (T8, T9); which text carries each is the lead's to route.
+- L16 (2026-10-30, JH 98) gentle-ai: 035e3250..e5454da4 (665baea7, e5454da4) assessed medium, not due (under_budget),
+  by `gentle-ai review assess --base-ref 035e3250 --committed-only`; the Stop hook's candidate was the branch from
+  a2b801fb, the merge of main in it, so its status was read and nothing started. Codex: correct (0.93), no findings;
+  the Claude lenses readability and reliability: 0 findings; both recorded.
