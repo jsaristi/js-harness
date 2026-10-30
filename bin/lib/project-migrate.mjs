@@ -11,7 +11,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { sha256, writeManifestAtomic } from './manifest.mjs';
 import { tools } from './stack.mjs';
-import { importsAgents, mainCheckoutOf } from './claude-import.mjs';
+import { importsAgents, mainCheckoutOf, oneFile } from './claude-import.mjs';
 import { checkProjectRules, PROJECT_RULES_PATH } from './project-rules.mjs';
 import { isNewer } from './version.mjs';
 import { localDay } from './flaky.mjs';
@@ -135,7 +135,7 @@ function decide(state, version, deps) {
     } else {
       notes.push({ path: 'AGENTS.md', reason: `${agentsFile.state === 'absent' ? 'not there' : 'not a regular file'}, so no CLAUDE.md is written to import it: a file the project deleted stays deleted` });
     }
-  } else if (claudeFile.state === 'file' && !importsAgents(claudeFile.text) && agentsFile.state === 'file') {
+  } else if (claudeFile.state === 'file' && !importsAgents(claudeFile.text) && agentsFile.state === 'file' && !oneFile(root)) {
     notes.push({ path: 'CLAUDE.md', reason: "the project's own, and it does not import AGENTS.md, so Claude never loads it: add a line `@AGENTS.md` (doctor's claude-import row)" });
   }
 
@@ -192,24 +192,20 @@ function repairLines({ root, manifest, spawn }) {
 }
 
 /** The lines `sync` would render in the blocks once the migration's `CLAUDE.md` is there. Whether the project has the
- * split is read as sync reads it, through a `CLAUDE.md` that is a link (`blockFileOf`), so the plan says what it does. */
+ * split is read as sync reads it (`syncTemplateBlock`): a `CLAUDE.md` that is a link is no split, and one file under
+ * both names keeps the whole block under the name that is no link (odd/tasks/claude-md-block.md, D1), so the plan says
+ * what it does. */
 function blockLines(root, decided) {
   const lines = [];
   const claudeFile = fileOf(root, 'CLAUDE.md');
-  let claudeText = claudeFile.text;
-  if (claudeFile.state === 'link') {
-    try {
-      claudeText = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
-    } catch {
-      claudeText = undefined; // A link to nothing that can be read: sync finds no block either.
-    }
-  }
-  const split = (decided.claude && !decided.claude.importOnly) || (claudeText !== undefined && TEMPLATE_BLOCK_MARK.test(claudeText));
   const agentsFile = fileOf(root, 'AGENTS.md');
+  const one = oneFile(root);
+  const split = !one && ((decided.claude && !decided.claude.importOnly) || (claudeFile.state === 'file' && TEMPLATE_BLOCK_MARK.test(claudeFile.text)));
   if (agentsFile.state === 'file' && renderBlock(agentsFile.text, split ? agentsBlock() : templateBlock()).state === 'rendered') {
     lines.push("AGENTS.md: its block is rendered again with this version's lines");
   }
-  if (claudeFile.state === 'file' && renderBlock(claudeFile.text, claudeBlock()).state === 'rendered') {
+  const claudeBody = !one ? claudeBlock() : agentsFile.state === 'link' ? templateBlock() : null;
+  if (claudeFile.state === 'file' && claudeBody && renderBlock(claudeFile.text, claudeBody).state === 'rendered') {
     lines.push("CLAUDE.md: its block is rendered again with this version's lines");
   }
   return lines;

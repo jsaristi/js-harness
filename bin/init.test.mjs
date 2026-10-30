@@ -109,6 +109,35 @@ test('initMain on a fresh repo writes the four actions and exits 0', async () =>
   }
 });
 
+test('initMain says the import it added to a committed CLAUDE.md of the project\'s, and how git takes it back', async () => {
+  const root = makeTmpRepo();
+  const home = makeTmpHome();
+  withCodegraphSkipped(root);
+  const git = (...args) => assert.equal(spawnSync('git', args, { cwd: root, encoding: 'utf8' }).status, 0);
+  try {
+    fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# ours\n', 'utf8');
+    git('add', 'CLAUDE.md');
+    git('-c', 'user.email=js-harness-test@example.invalid', '-c', 'user.name=js-harness test', 'commit', '-q', '-m', 'ours');
+    let stdout = '';
+    const origLog = console.log;
+    console.log = (msg) => {
+      stdout += `${msg}\n`;
+    };
+    let code;
+    try {
+      code = await initMain(['--cwd', root, '--home', home], process.env, {});
+    } finally {
+      console.log = origLog;
+    }
+    assert.equal(code, 0);
+    assert.match(stdout, /^added @AGENTS\.md at the top of CLAUDE\.md; git checkout -- CLAUDE\.md takes it back$/m);
+    assert.equal(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n\n# ours\n');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('initMain does not point at onboard in a project that has a roadmap already', async () => {
   const root = makeTmpRepo();
   const home = makeTmpHome();

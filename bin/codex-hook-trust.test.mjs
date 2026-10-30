@@ -123,6 +123,29 @@ test('doctor reads the harness hooks as trusted once every one has a trusted_has
   }
 });
 
+test('doctor reads the trust of the shape Codex 0.166 writes: ok when every harness hook is trusted, missing for one that is not', async () => {
+  const home = makeTmp('js-harness-trust-home-');
+  try {
+    await quietly(() => installMain(['--home', home]));
+    const codexHome = path.join(home, '.codex');
+    const config = path.join(codexHome, 'config.toml');
+    // Its shape, its values made up: an empty `[hooks.state]` table first, and a plugin's trust with a content hash.
+    const plugin = '[hooks.state."engram@engram:hooks/hooks.json:session_start:0:0"]\ntrusted_hash = "sha256:p"\ntrusted_content_hash = "sha256:q"\n';
+    fs.writeFileSync(config, `model = "x"\n\n[hooks.state]\n\n${trustEverything(codexHome)}\n${plugin}\n[tui]\nx = 1\n`, 'utf8');
+    const ok = await doctorRow(home);
+    assert.equal(ok.codex, 'ok');
+    assert.deepEqual(ok.gaps, []);
+
+    const untrusted = fs.readFileSync(config, 'utf8').replace(/\[hooks\.state\.'[^']*:stop:1:0'\]\r?\ntrusted_hash = "[^"]*"\r?\n/, '');
+    fs.writeFileSync(config, untrusted, 'utf8');
+    const row = await doctorRow(home);
+    assert.equal(row.codex, 'missing');
+    assert.deepEqual(row.fix.codex.filter((line) => line.startsWith('  ')).map((line) => line.trim()), ['stop:1:0 js-harness backup --hook || exit 0']);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('doctor keys each harness entry by its place among the user\'s own hooks, and reads no trust of another hooks.json', async () => {
   const home = makeTmp('js-harness-trust-home-');
   try {
