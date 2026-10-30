@@ -137,6 +137,11 @@ export const COVERAGE = {
       "level": "owed",
       "since": "2026-10-28"
     },
+    "owner-decisions": {
+      "level": "protocol",
+      "path": "bin/lib/protocols-skill.mjs",
+      "phrase": "Decide everything else, say what it costs, and go on."
+    },
     "person-present": {
       "level": "owed",
       "since": "2026-10-28"
@@ -415,7 +420,6 @@ export const COVERAGE = {
       "fbb4d5c957e3",
       "21d376a28bac",
       "49cf30e33785",
-      "bd9f9977920c",
       "e4c63656c08a",
       "14f96c7a3917",
       "2174d4a39a3c",
@@ -550,7 +554,6 @@ export const COVERAGE = {
       "8f2863504e3d",
       "f90ecec2f93e",
       "45777c183381",
-      "7b0e27c5a9f1",
       "a58d21586dd4",
       "ad3655173cc6",
       "289a68a5c975",
@@ -562,7 +565,6 @@ export const COVERAGE = {
       "76433bc095fa",
       "3aa8b271c3e4",
       "45777c183381",
-      "7b0e27c5a9f1",
       "a58d21586dd4",
       "ad3655173cc6",
       "289a68a5c975"
@@ -722,7 +724,6 @@ export const COVERAGE = {
       "1e51727a49bb",
       "c53658a6c399",
       "ef6527b37ed6",
-      "c0c6a66225a4",
       "1ba09cc2b907",
       "6dc706dd3326",
       "6c7e851fd8f7",
@@ -767,7 +768,6 @@ export const COVERAGE = {
       "f968034fb0b8",
       "19645ac8797e",
       "695014f04d80",
-      "b2bc511f6260",
       "a8f8fa2ba7b9",
       "5ff183d88d2f",
       "b96a96ea7f8b",

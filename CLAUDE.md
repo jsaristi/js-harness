@@ -24,7 +24,7 @@ and commit; `## Log` last, L1 his request as written, then his corrections, evid
 
 ## Working with Sebastián
 
-He decides spend, anything irreversible, and product choices. Everything else, keep moving: name
+He decides what `rule:owner-decisions` lists. Everything else, keep moving: name
 the next few units of work and do them without stopping to report between them. He often answers
 from his phone by tapping the suggested prompt, so a step he reports doing outside the session is
 checked before anything is built on it.

@@ -296,6 +296,25 @@ export const RULES = [
     ]
   },
   {
+    "id": "owner-decisions",
+    "subject": "what is the owner's to decide, asked one at a time; everything else is decided and its cost said",
+    "owner": "sebastian",
+    "since": "2026-10-30",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "spend outside the plan",
+      "anything irreversible",
+      "a product choice",
+      "anything published",
+      "any credential",
+      "a change of a protocol",
+      "a security or system setting",
+      "anything installed or changed on a machine",
+      "a change of the plan or of its order",
+      "a report published outside the project"
+    ]
+  },
+  {
     "id": "person-present",
     "subject": "how long after the user last wrote in a session a question is put to them at once with the question tool",
     "owner": "project",

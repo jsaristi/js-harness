@@ -33,7 +33,7 @@ Each section opens with the incident it came for and its date. A section whose i
 
 Incident (2026-10-09): a session stopped and waited 17 hours for the user's yes to run its own gate, push and pull request, none of which was the user's to decide.
 
-- Ask only what is the user's; the project's \`CLAUDE.md\` or \`AGENTS.md\` says what that is. Decide everything else, say what it costs, and go on.
+- Ask only what is the user's (\`rule:owner-decisions\`): spend outside the plan, anything irreversible, a product choice, anything published, any credential, a change of a protocol, a security or system setting, anything installed or changed on a machine, a change of the plan or of its order, and a report published outside the project. A project's \`CLAUDE.md\` may add to it. Decide everything else, say what it costs, and go on.
 - A push goes unasked where the project's \`pushUnasked\` switch reads on (\`js-harness functions\`); where it is off, a push is asked first, as any other decision.
 - Before the question, say what a yes covers in everyday words, what it does to the user, what it does not authorize, and what the other option means. Put a choice as an everyday situation with its options A and B.
 - One decision a question, one question at a time, never while work runs. Where an orchestrator holds its role, the question goes through it (\`js-harness-orchestrator\`, "Questions to the user").
@@ -110,7 +110,7 @@ The measure, the trigger and the re-measure are commands: the heartbeat's \`DUE:
 - Candidates: each with its baseline, target, cost, owner, risk item, and why quality is unchanged: no check, review or test is removed or weakened, and the land's proof never shrinks. Each figure is marked measured (with the row of the table it comes from), derived, or estimate.
 - Readers: only when a candidate list goes to the user, never on the daily review: it first passes the two readers of section 1 (\`rule:double-review\`), one rerunning the figures and attacking the reasoning, one looking for what is missing; the version the user gets lists what they changed.
 - Stop rule: a candidate whose gain is less than its cost is dropped, and why is written down. Record each review with \`js-harness throughput reviewed --day <day> --found nothing|candidates\`, and what ships with \`js-harness throughput shipped <item>\`. After \`rule:throughput-quiet-runs\` reviews in a row that found nothing, the review comes every \`rule:throughput-quiet-days\` instead of daily; one that finds candidates makes it daily again.
-- The user's decisions: spend, a protocol change, a security or system setting, anything irreversible, one question at a time (section 1). The lead assigns everything else.
+- The user's decisions: \`rule:owner-decisions\`, asked one at a time (section 1). The lead assigns everything else.
 - Five questions: it happened (the incident); twice in a day, at a cost of up to 64.4 session-hours of turns that ended in silence over two days; a check does the measuring, the trigger, the snapshots and the re-measure, so only this judgment is prose; no section held a recurring review, and sections 1 and 4 are named, not copied; its cost and what leaves follow.
 - What leaves: the hand-written measure scripts in the lead's notes.
 - Cost: one command a day, weekly once quiet, and two readers only with a candidate list. Reviewed by 2026-11-16.

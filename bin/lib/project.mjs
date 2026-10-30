@@ -396,9 +396,8 @@ door asks for its record before a change lands.
 /** The half of the harness's lines Claude works from, the block of the `CLAUDE.md` `init` writes: working with the owner. */
 export function claudeBlock() {
   return `## Working with the owner
-The owner decides spend outside the plan, anything installed or changed on a machine, a product
-choice, what cannot be undone, a change of the plan or of its order, a new protocol, and a report
-published outside this project. Ask those one at a time, never while work runs, naming which it is, as \`rule:questions-one-place\` says.
+The owner decides what \`rule:owner-decisions\` lists (\`js-harness-protocols\` section 1). Ask those
+one at a time, never while work runs, naming which it is, as \`rule:questions-one-place\` says.
 Everything else is decided and its cost said, as \`js-harness-protocols\` section 1 says, and the work goes on.
 
 Near \`rule:context-pause\` of its window a session writes its state and keeps working; the host

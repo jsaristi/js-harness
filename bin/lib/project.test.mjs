@@ -1945,7 +1945,7 @@ test('agentsTemplate carries the lines that hold in any project', () => {
   assert.match(text, /Work here is done properly, not to comply: no shortcut; under the agreed protocols; nothing stated that was not checked; what is passed on is complete and true; and each mistake leaves a control, of the smallest kind that does the job\./);
   assert.match(text, /A rule is not recorded until it has its place in a check, a line of this file or a protocol\./);
   // Item 2: what is the owner's, asked one at a time; the rest is decided and goes on.
-  assert.match(text, /The owner decides spend outside the plan, anything installed or changed on a machine, a product choice, what cannot be undone, a change of the plan or of its order, a new protocol, and a report published outside this project\./);
+  assert.match(text, /The owner decides what `rule:owner-decisions` lists \(`js-harness-protocols` section 1\)\./);
   assert.match(text, /Ask those one at a time, never while work runs, naming which it is, as `rule:questions-one-place` says\./);
   // Item 3: the owner's wording is the need.
   assert.match(text, /The owner's wording is the need, not the specification: an answer to a proposal of theirs says the need that was understood, what would be done differently from their words and why, and what it costs or is not known; only then is it recorded\./);
