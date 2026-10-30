@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { rehearsalLayout, rehearsalEnv, engramEnv, filledContract, snapshotTree, commandWords, scratchProcesses, openedBrowsers, hostLeftover, STEPS, HIS_SETTINGS, HIS_CLAUDE_MD } from './rehearsal.mjs';
+import { rehearsalLayout, rehearsalEnv, engramEnv, filledContract, snapshotTree, commandWords, scratchProcesses, openedBrowsers, hostLeftover, withoutPluginResidue, STEPS, HIS_SETTINGS, HIS_CLAUDE_MD } from './rehearsal.mjs';
 import { plantedRuleFiles, directiveProblem, recordedPaths, restoreProblems, importRowState, REHEARSAL } from './rehearsal-lib.mjs';
 
 const JS_HARNESS = fileURLToPath(new URL('../bin/js-harness.mjs', import.meta.url));
@@ -143,6 +143,16 @@ test('filledContract fills every placeholder of the contract template, so contra
   fs.writeFileSync(path.join(root, 'odd', 'tasks', 'greeting.md'), `# Greeting\n\n${filledContract(template)}`);
   const check = spawnSync(process.execPath, [JS_HARNESS, 'contract', 'check', 'odd/tasks/greeting.md'], { cwd: root, encoding: 'utf8' });
   assert.equal(check.status, 0, `${check.stdout}${check.stderr}`);
+});
+
+test('withoutPluginResidue takes out only the empty plugin keys Claude\'s plugin commands leave, as Claude writes the file', () => {
+  // Walk 8: after his engram steps' undo, Claude's settings.json kept `enabledPlugins: {}` and
+  // `extraKnownMarketplaces: {}` beside his own lines; js-harness writes neither key in the home.
+  const left = '{\n  "enabledPlugins": {},\n  "extraKnownMarketplaces": {},\n  "theme": "dark"\n}\n';
+  assert.equal(withoutPluginResidue(left), HIS_SETTINGS);
+  const kept = '{\n  "enabledPlugins": { "engram@engram": true },\n  "theme": "dark"\n}\n';
+  assert.equal(withoutPluginResidue(kept), JSON.stringify(JSON.parse(kept), null, 2) + '\n');
+  assert.equal(withoutPluginResidue('not json'), 'not json');
 });
 
 test('the walk has one step for each id of the rehearsal, and no other', () => {

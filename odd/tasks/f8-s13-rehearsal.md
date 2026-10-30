@@ -115,6 +115,18 @@ directive coverage and S12's migration carries it" (reverse-engineering document
   externo"); the walk now shims npm beside pnpm. `seen.hostLeftovers` holds two `codegraph.js serve --mcp` processes,
   one after each `claude -p` session: Claude Code leaves codegraph's MCP server running when a `-p` session ends on
   Windows, a finding for S12. `real-home-after` PASS; no other process left.
+- Run 8 (2026-10-30 ~03:20Z, `241cfe27`, 4 minutes, host cost $0.0185 of the $5 estimate): every step through
+  `uninstall-machine` PASS, among them `push-main`, `commit` (the commit that broke its test refused), `push-refused`,
+  `reviews`, `push-reviewed`, `updates`, `guide`, `import-row` and `directive`. Reviews, plan beside run: Codex
+  planned 1 part, 6 changed lines, "No estimate" (no measured part on the scratch machine), used 32,831 input tokens
+  (16,384 cached) and 348 output in 29 s; the lens planned "about 1,393 estimated input tokens a lens" and used 3,751
+  input and 253 output, 2.7 times its estimate, past the brief's 1.5, so paid runs stop and the lead is told.
+  `recorded-paths` FAIL: "changed: <scratch home>\.claude\settings.json", which kept `"enabledPlugins": {}` and
+  `"extraKnownMarketplaces": {}` beside his line. js-harness writes neither key in the home (search: `enabledPlugins|
+  extraKnownMarketplaces` in bin/ outside tests: only reads in payload.mjs:182 and stack.mjs:132, and the project's
+  settings.local.json in project-apply.mjs:23); Claude's plugin commands in his engram steps do. The step now judges
+  that file by its bytes once those two keys, when empty, are out, keeps them under `seen.hisStepResidue` for S12, and
+  fails on any other difference. `foreign-absent` skipped after it; `real-home-after` PASS; no process left.
 
 ## Next step
 State at the second context pause (2026-10-30 ~02:30Z, branch `f8-s13-rehearsal`, worktree

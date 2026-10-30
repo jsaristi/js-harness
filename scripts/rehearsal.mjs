@@ -70,6 +70,25 @@ export function rehearsalEnv(layout, base) {
   };
 }
 
+/** The keys Claude's `plugin install` and `marketplace add` write into its settings.json, which its `uninstall` and
+ * `remove` leave behind empty (walk 8). js-harness writes neither in the home: they come from his engram steps. */
+const PLUGIN_RESIDUE = ['enabledPlugins', 'extraKnownMarketplaces'];
+
+/** `text`, a Claude settings.json, without the `PLUGIN_RESIDUE` keys that are empty, written as Claude writes the
+ * file; `text` itself when it is no JSON object. */
+export function withoutPluginResidue(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return text;
+  const empty = (value) => value !== null && typeof value === 'object' && Object.keys(value).length === 0;
+  for (const key of PLUGIN_RESIDUE) if (empty(data[key])) delete data[key];
+  return `${JSON.stringify(data, null, 2)}\n`;
+}
+
 /** The task contract of the walk's one feature: `template`, as `contract template` prints it, with every
  * placeholder filled, the task's kind among them. */
 export function filledContract(template) {
@@ -532,7 +551,12 @@ export const STEPS = {
     const { home, project, root } = ctx.layout;
     const recorded = [...recordedPaths(ctx.machineManifest, home), ...recordedPaths(ctx.projectManifest, project)];
     const after = snapshotTree(root);
-    const problems = restoreProblems(ctx.treeBefore, after, recorded);
+    // His settings.json is judged by its bytes once the empty keys his steps' Claude plugin commands left are out,
+    // which are kept as a finding for S12; any other difference stays a problem.
+    const settings = path.join(home, '.claude', 'settings.json');
+    const residue = fs.existsSync(settings) && fs.readFileSync(settings, 'utf8') !== HIS_SETTINGS && withoutPluginResidue(fs.readFileSync(settings, 'utf8')) === HIS_SETTINGS;
+    if (residue) ctx.seen.hisStepResidue = `${path.relative(home, settings)}: ${fs.readFileSync(settings, 'utf8').replace(/\s+/g, ' ').trim()}`;
+    const problems = restoreProblems(ctx.treeBefore, after, recorded).filter((problem) => !(residue && problem.toLowerCase() === `changed: ${settings} was there before the walk and its bytes differ`.toLowerCase()));
     // What else the walk left in the scratch home, outside every manifest: engram's and the hosts' own state, for S12.
     const recordedKeys = new Set(recorded.map((file) => file.toLowerCase()));
     ctx.seen.unrecorded = Object.keys(after).filter((file) => file.startsWith(home) && !(file in ctx.treeBefore) && !recordedKeys.has(file.toLowerCase())).map((file) => path.relative(home, file));
