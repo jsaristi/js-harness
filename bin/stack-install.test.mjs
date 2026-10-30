@@ -24,7 +24,7 @@ function newWorld() {
 
 function read(world) {
   return ({ env } = {}) => ((world.reads ??= []).push(env), {
-    rows: ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex'].map((id) => ({ id, version: '1.0.0', ...OK, fix: {}, ...world[id] })),
+    rows: ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex'].map((id) => ({ id, version: '1.0.0', ...OK, fix: {}, ...world[id], ...world.onRead?.(id) })),
     functions: ON,
     prerequisites: [{ id: 'git', state: 'ok' }, { id: 'gh', state: 'ok' }],
   });
@@ -307,6 +307,22 @@ test('a timed-out install the probe reads ok at the end of the run gets what its
   world.onTimeout = () => { world.codex.installed = 'ok'; };
   const { code, out } = await run(['--yes', '--tool', 'codex'], { world, home });
   assert.equal(code, 0);
+  assert.ok(out.includes('codex installed: read at the end of the run: done'), out);
+  assert.deepEqual(readManifest(home).stack.map((row) => [row.tool, row.dimension, row.applies]), [['codex', 'installed', '2.0.0']]);
+}));
+
+// F8 S13, walks 4 and 6: the first run of a freshly installed codex.exe took 18 s on Windows, past the probe's 5 s, so
+// the probe could not tell right after the install while the read of what its undo applies to answered.
+test('an install the probe cannot tell at once but reads ok at the end of the run is done there, and the run exits 0', withHome(async (home) => {
+  const world = newWorld();
+  let slow = true;
+  world.onRead = (id) => {
+    if (id !== 'codex' || world.codex.installed !== 'ok' || !slow) return {};
+    slow = false;
+    return { installed: 'unknown' };
+  };
+  const { code, out, err } = await run(['--yes', '--tool', 'codex'], { world, home });
+  assert.equal(code, 0, err);
   assert.ok(out.includes('codex installed: read at the end of the run: done'), out);
   assert.deepEqual(readManifest(home).stack.map((row) => [row.tool, row.dimension, row.applies]), [['codex', 'installed', '2.0.0']]);
 }));

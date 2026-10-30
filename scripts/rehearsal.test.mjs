@@ -9,14 +9,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { rehearsalLayout, rehearsalEnv, snapshotTree } from './rehearsal.mjs';
-import { plantedRuleFiles, directiveProblem, recordedPaths, restoreProblems, importRowState } from './rehearsal-lib.mjs';
+import { rehearsalLayout, rehearsalEnv, engramEnv, filledContract, snapshotTree, commandWords, scratchProcesses, openedBrowsers, hostLeftover, withoutPluginResidue, STEPS, HIS_SETTINGS, HIS_CLAUDE_MD } from './rehearsal.mjs';
+import { plantedRuleFiles, directiveProblem, recordedPaths, restoreProblems, importRowState, REHEARSAL } from './rehearsal-lib.mjs';
 
 const JS_HARNESS = fileURLToPath(new URL('../bin/js-harness.mjs', import.meta.url));
-
-// His own files in the scratch home before the walk: install grafts onto both, and uninstall must give back their bytes.
-const HIS_SETTINGS = '{\n  "theme": "dark"\n}\n';
-const HIS_CLAUDE_MD = '# Mine\n\nAnswer in Spanish.\n';
 
 test('in a scratch home, a planted directive without a control makes rules check exit 1, and the uninstalls leave every recorded path as it was', (t) => {
   const layout = rehearsalLayout(fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-rehearsal-')));
@@ -88,4 +84,90 @@ test('snapshotTree hashes every file and marks every folder under a folder by it
   // A recorded folder left behind is no longer invisible to restoreProblems (Codex P2 on 541464c).
   assert.equal(snapshot[path.join(root, 'empty')], 'folder');
   assert.deepEqual(snapshotTree(path.join(root, 'none')), {});
+});
+
+test('scratchProcesses names the topmost process of each tree whose command line holds the scratch root', () => {
+  // Walk 1 left the scratch Codex CLI's login, and the browser it opened, alive after the walk ended (L5).
+  const root = 'C:\\Users\\me\\AppData\\Local\\Temp\\js-harness-rehearsal-walk-abc';
+  const processes = [
+    { pid: 1, parent: 0, command: 'explorer.exe' },
+    { pid: 10, parent: 1, command: `node ${root.toLowerCase()}\\prefix\\bin\\..\\codex.js mcp add context7` },
+    { pid: 11, parent: 10, command: `${root}\\prefix\\codex.exe mcp add context7` },
+    { pid: 12, parent: 11, command: 'brave.exe --single-argument https://clerk.context7.com/oauth/authorize' },
+    { pid: 20, parent: 1, command: 'brave.exe' },
+    { pid: 30, parent: 99, command: `engram serve --data ${root}\\home\\.engram` },
+    { pid: 40, parent: 1, command: null },
+  ];
+  assert.deepEqual(scratchProcesses(processes, root, 'win32'), [{ pid: 10, command: processes[1].command }, { pid: 30, command: processes[5].command }]);
+  assert.deepEqual(scratchProcesses(processes, root.toLowerCase(), 'linux'), [{ pid: 10, command: processes[1].command }]);
+  assert.deepEqual(scratchProcesses([], root, 'win32'), []);
+});
+
+test('hostLeftover names an MCP server a host session left behind, and not the engram server the hook started', () => {
+  // Walk 5 left codegraph's MCP server running after its Claude sessions ended.
+  const root = 'C:\\Temp\\js-harness-rehearsal-walk-abc';
+  assert.equal(hostLeftover({ command: `node ${root}\\prefix\\codegraph.js serve --mcp --path ${root}\\project` }), true);
+  assert.equal(hostLeftover({ command: `${root}\\bin\\engram.exe mcp` }), true);
+  assert.equal(hostLeftover({ command: `${root}\\bin\\engram.exe serve` }), false);
+  assert.equal(hostLeftover({ command: null }), false);
+});
+
+test('openedBrowsers names a browser started under a scratch process, and none of his own', () => {
+  // Nothing in a walk may open his browser again (L6): a step that does is stopped.
+  const root = 'C:\\Temp\\js-harness-rehearsal-walk-abc';
+  const processes = [
+    { pid: 1, parent: 0, name: 'explorer.exe', command: 'explorer.exe' },
+    { pid: 10, parent: 1, name: 'node.exe', command: `node ${root}\\prefix\\codex.js mcp add context7` },
+    { pid: 11, parent: 10, name: 'codex.exe', command: 'codex.exe mcp add context7' },
+    { pid: 12, parent: 11, name: 'brave.exe', command: '"C:\\Program Files\\Brave\\brave.exe" --single-argument https://x' },
+    { pid: 13, parent: 12, name: 'brave.exe', command: 'brave.exe --type=renderer' },
+    { pid: 20, parent: 1, name: 'msedge.exe', command: 'msedge.exe' },
+    { pid: 30, parent: 10, name: 'node.exe', command: 'node child.js' },
+  ];
+  assert.deepEqual(openedBrowsers(processes, root, 'win32'), [{ pid: 12, command: processes[3].command }]);
+  assert.deepEqual(openedBrowsers(processes.filter((p) => p.pid !== 12 && p.pid !== 13), root, 'win32'), []);
+});
+
+test('engramEnv gives engram a port and a data folder in the scratch home, and no URL', () => {
+  // Engram's hook reads an ENGRAM_URL as an external server and starts none, so walk 3's start found no context.
+  const layout = rehearsalLayout(path.join(os.tmpdir(), 'r'));
+  assert.deepEqual(engramEnv(layout, 50123), { ENGRAM_PORT: '50123', ENGRAM_DATA_DIR: path.join(layout.home, '.engram') });
+});
+
+test('filledContract fills every placeholder of the contract template, so contract check passes it', (t) => {
+  // Walk 5's feature step left the task's kind as the template has it, and contract check refused it.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-contract-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const template = spawnSync(process.execPath, [JS_HARNESS, 'contract', 'template'], { encoding: 'utf8' }).stdout;
+  fs.mkdirSync(path.join(root, 'odd', 'tasks'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'odd', 'tasks', 'greeting.md'), `# Greeting\n\n${filledContract(template)}`);
+  const check = spawnSync(process.execPath, [JS_HARNESS, 'contract', 'check', 'odd/tasks/greeting.md'], { cwd: root, encoding: 'utf8' });
+  assert.equal(check.status, 0, `${check.stdout}${check.stderr}`);
+});
+
+test('withoutPluginResidue takes out only the empty plugin keys Claude\'s plugin commands leave, as Claude writes the file', () => {
+  // Walk 8: after his engram steps' undo, Claude's settings.json kept `enabledPlugins: {}` and
+  // `extraKnownMarketplaces: {}` beside his own lines; js-harness writes neither key in the home.
+  const left = '{\n  "enabledPlugins": {},\n  "extraKnownMarketplaces": {},\n  "theme": "dark"\n}\n';
+  assert.equal(withoutPluginResidue(left), HIS_SETTINGS);
+  const kept = '{\n  "enabledPlugins": { "engram@engram": true },\n  "theme": "dark"\n}\n';
+  assert.equal(withoutPluginResidue(kept), JSON.stringify(JSON.parse(kept), null, 2) + '\n');
+  assert.equal(withoutPluginResidue('not json'), 'not json');
+});
+
+test('the walk has one step for each id of the rehearsal, and no other', () => {
+  assert.deepEqual(Object.keys(STEPS).sort(), REHEARSAL.map(({ id }) => id).sort());
+});
+
+test('commandWords starts an .exe of the PATH folders by its path, a .cmd through cmd.exe, and anything else as it is', () => {
+  const dirs = [path.join('C:', 'w', 'bin'), path.join('C:', 'w', 'prefix')];
+  const there = new Set([path.join(dirs[0], 'git.exe'), path.join(dirs[1], 'codex.cmd'), path.join(dirs[1], 'git.cmd')]);
+  const exists = (file) => there.has(file);
+  const windows = { platform: 'win32', exists, comspec: 'C:\\Windows\\System32\\cmd.exe' };
+  assert.deepEqual(commandWords(['git', 'status'], dirs, windows), [path.join(dirs[0], 'git.exe'), 'status']);
+  // Node starts no .cmd by itself since its batch-file fix: the Codex CLI pnpm installs is one.
+  assert.deepEqual(commandWords(['codex', 'mcp', 'remove', 'engram'], dirs, windows), ['C:\\Windows\\System32\\cmd.exe', '/d', '/c', path.join(dirs[1], 'codex.cmd'), 'mcp', 'remove', 'engram']);
+  assert.deepEqual(commandWords(['nowhere', 'x'], dirs, windows), ['nowhere', 'x']);
+  assert.deepEqual(commandWords([process.execPath, 'x'], dirs, windows), [process.execPath, 'x']);
+  assert.deepEqual(commandWords(['codex', 'x'], dirs, { platform: 'linux', exists }), ['codex', 'x']);
 });

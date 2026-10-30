@@ -472,6 +472,9 @@ not the committed range, wrote no record and had to be run again.
   during the Codex review of `947ac91..62f4a62`; 353,663 input tokens spent on two parts of 8, nothing recorded
 - Seen: 2026-10-29 — `odd/tasks/stretch-forecast.md` L5 (JH 89) — `docs/FAILURES.md` edited for T6 during the
   Codex review of `b60053a..5aed8af`; 181,101 input tokens spent on part 1 of 2, nothing recorded, run again
+- Seen: 2026-10-30 — `odd/tasks/f8-s13-rehearsal.md` L12 (JH 90) — `docs/ROADMAP.md` committed during the Codex
+  review of `bb6223b..1a21375`, with the lenses running beside it; 58,369 input tokens spent on part 1 of 3,
+  nothing recorded, run again
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 
@@ -1269,6 +1272,15 @@ this entry, so the lands it turned red have no cause.
 - Was: owed — odd/tasks/throughput-review.md — "Unit 4: section 7"; that task is checked off (49de368c),
   and the daily throughput table now names the failing tests of each day's gates
 
+### scratch-run-opened-browser
+A run in a scratch home started a command that opened a browser on his screen, and it outlived the run.
+- Class: machine
+- Seen: 2026-10-30 — odd/tasks/f8-s13-rehearsal.md, L5 — walk 1's `stack install --tool context7` ran the
+  scratch Codex CLI's `codex mcp add context7 --url ...`, which left context7's OAuth login running and Brave open at
+  its page; found only when the scratch root could not be removed, its tree (8 processes) stopped by hand
+- Control: check — scripts/rehearsal.test.mjs — "openedBrowsers names a browser started under a scratch process,
+  and none of his own" — since 2026-10-30
+
 ### script-ate-backslashes
 Text with backslashes written through a shell script lost them, and a commit carries the broken
 path.
@@ -1536,6 +1548,13 @@ was not so.
   reading; JH 8's measure found two Windows services (PcaSvc since about 17:00, and the antivirus)
   taking two to three of the eight processors while a check runs (odd/tasks/gate-wait.md, Progress);
   a gate now names the processes that spent the processor before its command
+- Seen: 2026-10-30 — odd/tasks/f8-s13-rehearsal.md, L5 and L7 — JH 90 offered the lead D3 on a cause marked
+  assumed (a 30 s timeout that killed only the shell); the walk's own log already refuted it, since `stack install`
+  passed its exit check and a timeout exits 1 (`bin/stack.mjs:245-250`); the lead chose on it, and was told the
+  correction before anything was built on it
+- Seen: 2026-10-30 — odd/tasks/f8-s13-rehearsal.md, run 8 — JH 90 told the lead that `lens-review --plan` leaves out
+  the lens prompt, unread; `bin/lens-review.mjs:221` counts it, and the session corrected the notice within a minute,
+  before the lead answered or anything was built on it
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting

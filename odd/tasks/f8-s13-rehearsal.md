@@ -58,41 +58,102 @@ directive coverage and S12's migration carries it" (reverse-engineering document
 
 ## Tasks
 - [x] T1 (kind: docs) close S5c-a: T9 by the lead's decision, S5c-a's roadmap line — inline; `ef23c03e`
-- [ ] T2 (kind: build) `scripts/rehearsal-lib.mjs`, the pure part: the walk's steps, what each must show, the planted
+- [x] T2 (kind: build) `scripts/rehearsal-lib.mjs`, the pure part: the walk's steps, what each must show, the planted
   fixtures, the comparison of recorded paths after the uninstalls, the absence of gentle-ai, Orca and herdr — S1 to
-  S6; inline, test first
-- [ ] T3 (kind: build) `scripts/rehearsal.test.mjs`, the free rehearsal test: a scratch project in a scratch home,
-  `init`, the planted directive makes `rules check` exit 1 — S5, S7; inline, test first
-- [ ] T4 (kind: build) `scripts/rehearsal.mjs`, the walk, run by hand — S1 to S6; inline
-- [ ] T5 (kind: verify) one walk from a clean commit, recorded under `## Walk` with its cost — S1 to S6
-- [ ] T6 (kind: verify) the rehearsal test on a planted break, then green again — S7
-- [ ] T8 (kind: build) the `doctor` row of 13.3 row 16: the project's root `CLAUDE.md` imports `AGENTS.md` and no
-  `CLAUDE.md` above it turns the import off, test first, its own commit (D1, L4) — S4; inline
+  S6; inline, test first; `d1cea611`
+- [x] T3 (kind: build) `scripts/rehearsal.test.mjs`, the free rehearsal test: a scratch project in a scratch home,
+  `init`, the planted directive makes `rules check` exit 1 — S5, S7; inline, test first; `57584e5d`, `2c4e534e`, `d8fb14a5`
+- [x] T4 (kind: build) `scripts/rehearsal.mjs`, the walk, run by hand — S1 to S6; inline; `d4dd7199` and the fixes runs 1-8 found
+- [x] T5 (kind: verify) one walk from a clean commit, recorded under `## Walk` with its cost — S1 to S6; run 9
+- [x] T6 (kind: verify) the rehearsal test on a planted break, then green again — S7; L8
+- [x] T8 (kind: build) the `doctor` row of 13.3 row 16: the project's root `CLAUDE.md` imports `AGENTS.md` and no
+  `CLAUDE.md` above it turns the import off, test first, its own commit (D1, L4) — S4; inline; `604253a6`, `430130ed`, `bb6223b9`
+- [x] T9 dropped by the lead (D3 corrected, L9): no run timed out (L7)
 - [ ] T7 (kind: docs) Codex and the lenses on every code commit, gentle-ai lines, the independent verifier over
   the range, PR, ready notice, summary — inline
 
 ## Walk
-Not run yet.
+- Run 1 (2026-10-30T02:04Z, `d4dd7199`, 1.3 minutes, host cost $0 of the $5 estimate): `real-home-before` PASS (19
+  of his files hashed), `install` PASS (9 files and 20 hook entries recorded, 24 denies), `stack-install` FAIL:
+  "engram setup claude-code exited 1: engram: the Claude Code plugin requires jq in PATH"; the rest skipped;
+  `real-home-after` PASS (19 of his files as they were). Two findings, L5.
+- Run 2 (2026-10-30 ~02:35Z, `4664012e`, host cost $0): `install` PASS; `stack-install` FAIL: "stack still lists codex",
+  its manual `codex login`, which no scratch home can do since no credential enters it; the walk now takes that step
+  as his, as it takes gh; `real-home-after` PASS (19 of 19); no process left, no browser. Walk 3 next.
+- Run 3 (2026-10-30T02:35Z, `df754a6d`, 1.2 minutes, host cost $0.0112 of the $5 estimate): `install`, `stack-install`
+  ("context7 in Claude as stack plans it; nothing missing but context7.codex, owed, and gh") and `init` PASS;
+  `engram-start` FAIL: "no SessionStart:startup hook printed the planted observation: 0/0B, 0/0B, 0/0B, 0/71B,
+  0/3168B". Cause, read in the kept root: the observation was saved (`engram search` in the scratch store finds it
+  under project `project`), but the walk set `ENGRAM_URL`, which engram 0.1.19's `_helpers.sh` (lines 95-99) reads
+  as an external server (`ENGRAM_MANAGED_LOCAL=0`), so `session-start.sh` started no server and its context fetch
+  found nothing; the 3168 bytes are the protocol text alone. Fix: `engramEnv` sets only the port and the data
+  folder, test first. One process left, a scratch codegraph binary under the pnpm prefix, stopped by the sweep; the
+  sweep printed only the head of its command line, so it now prints the tail. `real-home-after` PASS.
+- Run 4 (2026-10-30 ~02:50Z, `1e9d4458`, 1.8 minutes, host cost $0): `install` PASS; `stack-install` FAIL, `stack
+  install` exited 1 where run 3's passed on the same rows: "codex installed: the command exited 0 and the probe cannot
+  tell whether it worked", still unread at the end of the run (bin/stack.mjs:268-286), while `codex mcp add
+  codegraph` ran after it. Not known why: the step keeps eight lines and stack does not say why its probe could not
+  tell. In the kept root, `codex --version` answers `codex-cli 0.165.0` in about 200 ms three times, warm; a cold first
+  run past `PROBE_TIMEOUT_MS` (5 s, bin/lib/stack.mjs:27) is a guess, not checked. No process left, no browser;
+  `real-home-after` PASS. The walk now keeps every command's whole output in `commands.log` under its root.
+- Run 5 (2026-10-30 ~03:00Z, `ddb28a02`, 2.3 minutes, host cost $0.0182 of the $5 estimate): `install`,
+  `stack-install` (the probe answered this time, so run 4's failure did not come back), `init`, `engram-start`
+  ("SessionStart:startup brought back s13-planted-33c3ec5e in 3421 bytes; MCP servers: codegraph, context7, engram")
+  and `engram-compact` ("SessionStart:compact brought back s13-planted-33c3ec5e in 4097 bytes") PASS; `feature` FAIL:
+  the walk's contract kept the template's "(kind: design | build | verify | docs)", which `contract check` refuses;
+  `filledContract` now fills it, tested against `contract check`. One process left: `codegraph.js serve --mcp --path
+  <scratch project>`, Claude's codegraph MCP server, running after its `claude -p` sessions ended (which session is not
+  known); the walk now stops such a server after each host session and keeps it under `seen.hostLeftovers` as a
+  finding for S12, while the final sweep still fails on any other. `real-home-after` PASS.
+- Run 6 (2026-10-30T03:00Z, `38d1e348`, 1 minute, host cost $0): `install` PASS; `stack-install` FAIL as in run 4,
+  "codex installed: the command exited 0 and the probe cannot tell whether it worked", now with the whole output in
+  `commands.log`: no end-of-run read follows it. Cause proven and fixed in `bin/stack.mjs`, test first (L10).
+  `real-home-after` PASS; no process left.
+- Run 7 (2026-10-30T03:10Z, `dc8d0e33`, 2 minutes, host cost $0.0185 of the $5 estimate): `install`, `stack-install`,
+  `init`, `engram-start` (3421 bytes), `engram-compact` (4151 bytes) and `feature` PASS; `push-main` FAIL: the first
+  commit's gate ran `npm run test` and the walk's PATH had no npm ("\"npm\" no se reconoce como un comando interno o
+  externo"); the walk now shims npm beside pnpm. `seen.hostLeftovers` holds two `codegraph.js serve --mcp` processes,
+  one after each `claude -p` session: Claude Code leaves codegraph's MCP server running when a `-p` session ends on
+  Windows, a finding for S12. `real-home-after` PASS; no other process left.
+- Run 8 (2026-10-30 ~03:20Z, `241cfe27`, 4 minutes, host cost $0.0185 of the $5 estimate): every step through
+  `uninstall-machine` PASS, among them `push-main`, `commit` (the commit that broke its test refused), `push-refused`,
+  `reviews`, `push-reviewed`, `updates`, `guide`, `import-row` and `directive`. Reviews, plan beside run: Codex
+  planned 1 part, 6 changed lines, "No estimate" (no measured part on the scratch machine), used 32,831 input tokens
+  (16,384 cached) and 348 output in 29 s; the lens planned "about 1,393 estimated input tokens a lens" and used 3,751
+  input and 253 output, 2.7 times its estimate, past the brief's 1.5, so paid runs stop and the lead is told.
+  `recorded-paths` FAIL: "changed: <scratch home>\.claude\settings.json", which kept `"enabledPlugins": {}` and
+  `"extraKnownMarketplaces": {}` beside his line. js-harness writes neither key in the home (search: `enabledPlugins|
+  extraKnownMarketplaces` in bin/ outside tests: only reads in payload.mjs:182 and stack.mjs:132, and the project's
+  settings.local.json in project-apply.mjs:23); Claude's plugin commands in his engram steps do. The step now judges
+  that file by its bytes once those two keys, when empty, are out, keeps them under `seen.hisStepResidue` for S12, and
+  fails on any other difference. `foreign-absent` skipped after it; `real-home-after` PASS; no process left.
+- Run 9 (2026-10-30T04:10Z, `97e3af53`, 3.6 minutes, host cost $0.0243 of the $5 estimate, `costProblem` null): all
+  21 steps PASS, `ok: true`, exit 0 — the pass of S13. `recorded-paths`: "20 recorded paths gone or back to their
+  bytes; 91 paths outside every manifest left in the scratch home" (engram's and the hosts' own state, for S12), with
+  `seen.hisStepResidue` ".claude\settings.json: { "enabledPlugins": {}, "extraKnownMarketplaces": {}, "theme":
+  "dark" }"; `foreign-absent`: "55 commands run and 4893 files on the PATH: none of gentle-ai, orca, herdr";
+  `real-home-after`: 19 of his files as they were; no process left; `hostLeftovers` two `codegraph.js serve --mcp`,
+  one a `claude -p` session, as in runs 5 and 7. The slice's reviews in the scratch project, plan beside run: Codex
+  "No estimate", used 31,866 input (15,744 cached) and 357 output in 21 s; the lens "about 1,393 estimated input
+  tokens a lens", used 3,753 input and 269 output, the gap of run 8 again, owed as a finding (L11). Host cost of the
+  nine runs: $0.0907 against the one walk's $5.
 
 ## Next step
-State at the context pause (2026-10-29, branch `f8-s13-rehearsal`, worktree
-`D:\js-harness\.claude\worktrees\f8-s13-rehearsal`, HEAD `6e5cd3e8`, nothing pushed, no PR): T1, T2, T3 and T8 built
-(`ef23c03e`, `d1cea611`, `57584e5d`, `604253a6`, `2c4e534e`). Reviews: lenses on `f2110239..57584e5d` (risk,
-reliability, readability) and `57584e5d..2c4e534e` (reliability, readability, resilience), 0 findings each; Codex on
-`541464c..6e5cd3e`, four P2, (3) and (4) and the CLAUDE_CONFIG_DIR change fixed in `d8fb14a5`, (1) in `430130ed`; next, test first: (2), then the lens and Codex reviews of
-`6e5cd3e8..HEAD`; (1) for the record: `importsAgents` must match a fence's character and
-length; (2) `importHealth` must treat a root CLAUDE.md that `claudeMdExcludes` drops as not loaded (reuse
-`excludingGlob`/`claudeMdSource` of `bin/lib/payload.mjs`); (3) `rehearsalEnv` must drop git's repository variables
-as `childEnv` of `scripts/practice-lib.mjs` does; (4) `snapshotTree` must record folders, so a recorded folder left
-after uninstall fails `restoreProblems`. Also `rehearsalEnv` must stop setting `CLAUDE_CONFIG_DIR` (Claude then keeps
-`.claude.json` inside it, where stack does not read it back). Then T4: the walk is drafted in
-`C:\Users\Oficina\.claude\jobs\bb7fa0ca\tmp\walk-part.mjs`, to append to `scripts/rehearsal.mjs` (its imports:
-practice-lib `readHostStream`, `hostCost`, `redacted`, `realHomeFiles`, `compareSnapshots`, `walkJourney`;
-stack-scratch `realFilesOf`, `claudeJsonMcpPart`, `registrationsLeftIn`, `shimContent`; evals `SANDBOX_SWITCHES`,
-`allocatePort`, `killByPort`; the free test's `HIS_SETTINGS`/`HIS_CLAUDE_MD` move into it). Then T5, one walk
-(`node scripts/rehearsal.mjs`), estimate $5, stop past $7.50; T6; reviews of the fixes and the walk; gentle-ai lines;
-the verifier; chained PRs (slice 1 `f2110239..57584e5d`, slice 2 to the fixes, slice 3 the walk); ready notice;
-summary.
+State at 2026-10-30 ~03:35Z (branch `f8-s13-rehearsal`, worktree `D:\js-harness\.claude\worktrees\f8-s13-rehearsal`,
+HEAD `a7ad4a1c` or later, nothing pushed, no PR). Done: T1, T2, T3, T4, T6 (L8), T8; T9 dropped (L9). Walks 1-8 under
+`## Walk`, host cost $0.0664 in all against $5; walk 8 passed every step through `uninstall-machine`, and its
+`recorded-paths` failure is fixed (`200e506d`). Bin fix of this stretch: `e68e232c` (stack install, L10; the
+independent verifier must cover it). Waiting: the lead's answer on the stop rule (walk 8's lens run used 3,751 input
+tokens against a plan of about 1,393, 2.7 times; notices of 22:30 local): (a) go on with paid runs, (b) stop. On (a):
+walk 9, `node scripts/rehearsal.mjs --keep` into the job tmp's `walk-9.log`; record it; remove its kept root. Then:
+lens-review and codex-review of `bb6223b9..HEAD`; gentle-ai assess per slice; S13's roadmap line; the independent
+verifier over `f2110239..HEAD` (high risk); chained PRs (slice 1 `f2110239..57584e5d`, slice 2 `57584e5d..bb6223b9`,
+slice 3 the rest); ready notice; summary `docs/sessions/2026-10-30-jh-90-f8-s13-the-rehearsal-on-a-scratch-project.md`;
+closed notice. Owed to S12 for the report: engram's plugin needs jq (L5); Codex's mcp add leaves context7's login open
+(L7, L9); each `claude -p` session leaves codegraph's MCP server running (runs 5, 7); Claude's plugin commands leave
+empty `enabledPlugins` and `extraKnownMarketplaces` in his settings.json (run 8); a cold first start of a new codex.exe
+takes 18 s (L10); the lens plan's gap (run 8). The brief's surfaces gained `bin/lib/gentle-ai-absence.test.mjs` (NAMED
+list), `bin/lib/payload.mjs` (export), `bin/stack.mjs` and `bin/stack-install.test.mjs` (L10).
 
 ## Log
 - L1 (2026-10-29, the lead's brief `briefs/2026-10-29T19-21-42-028Z-0339f9b7.md`): "JH 90 · F8 S13: the rehearsal
@@ -129,3 +190,58 @@ summary.
   test-first in bin/doctor, its own commit; S12 reuses it. D2 yes: the two reviews run from his env with --cwd on the
   scratch project; nothing linked or copied into the scratch home, and the review records land in the scratch
   project's git dir, not this repo's." So T8 builds the row.
+- L5 (2026-10-30, evidence, walk run 1): (1) engram's Claude Code plugin needs `jq` (and `curl`) on the PATH to set
+  up; the walk's PATH had none, so the walk now links his `jq` beside `claude` (`curl` is System32's). Nothing in
+  `bin/` names `jq` as a prerequisite of his engram step (`grep -rn "\bjq\b" bin` finds only `gh --jq`), so a machine
+  without it fails at that step: owed to S12's guide. (2) The scratch Codex CLI stack installed (0.165.0) opened a
+  browser: `stack install --tool context7` runs `codex mcp add context7 --url https://mcp.context7.com/mcp`
+  (`bin/lib/stack-install.mjs`), which started context7's OAuth login and launched Brave with its profile in the
+  scratch `LOCALAPPDATA`. The process tree read after the walk: node (the scratch codex launcher) -> codex.exe ->
+  brave.exe at `https://clerk.context7.com/oauth/authorize?...`, still alive after the walk ended; killed by its tree
+  (`taskkill /PID 23452 /T /F`, 8 processes), no Brave left, nothing entered in it. Assumed, not checked: the
+  registration's 30 s timeout (`bin/lib/stack-run.mjs:12`) killed only the `.cmd` shim and left the tree. Not
+  reproduced, since a rerun opens his browser again. D3, the lead's (an installer change): (a) `stack install`
+  stops the whole tree of a timed-out run, and the walk keeps context7 out of Codex until a registration that opens
+  no browser exists, recorded owed; (b) the walk runs without `--tool context7` and row 2 records it owed to S12;
+  bin unchanged. Recommended: (a), since an orphaned login and browser on a timeout reach his real machine too.
+- L6 (2026-10-30, the lead's note in the channel at 21:09 local): "Lead, D3: (a). Test first, its own commit: stack
+  install stops a timed-out run's whole process tree (named to me: it touches install, so the independent verifier
+  covers it). The walk leaves context7 out of Codex and records it owed, with why (codex mcp add starts context7's
+  OAuth in a browser). Nothing in a walk may open his browser again: if another step would, stop it and tell me."
+  So: T9 below; the walk runs `stack install --tool codex --tool codegraph` and registers Claude's context7 by
+  stack's own plan (`RUNNABLE` of `bin/lib/stack-install.mjs`), and after every step a browser under a scratch
+  process is stopped and fails the step.
+- L7 (2026-10-30, a correction, JH 90's own): L5's assumed cause is refuted by evidence that was already in hand.
+  A timed-out run makes `stack install` exit 1 (`bin/stack.mjs:245-250`; `bin/stack-install.test.mjs:293-300`),
+  and walk 1's `stack install` passed its exit check, so no run timed out: `codex mcp add` itself returned and left
+  context7's login running, its launcher's parent (pid 11288) already gone when the tree was read. T9 would not
+  have stopped what happened. Recorded in `docs/FAILURES.md` (told-him-unverified, scratch-run-opened-browser). D3
+  goes back to the lead with this: (a) T9 is dropped, and what Codex does after `mcp add` is owed to S12 (the walk
+  keeps context7 out of Codex and its browser guard); (b) T9 is built anyway, for the latent case its comment
+  already names (`bin/lib/stack-run.mjs:53`). Recommended: (a), since no run is known to have timed out.
+- L8 (2026-10-30, evidence, T6): the planted break is `controlFaults` of `bin/lib/rules-coverage.mjs:193` returning
+  no fault for a rule with no control. `node --test scripts/rehearsal.test.mjs` on it: exit 1, 6 pass and 1 fail, "in
+  a scratch home, a planted directive without a control makes rules check exit 1 ...", with "rules check exited 1 but
+  does not name the missing control of no-hand-deploy". The file restored with `git checkout`, the same command:
+  exit 0, 7 pass.
+- L9 (2026-10-30, the lead's note in the channel at 21:25 local): "Lead, D3 corrected: (a). Drop T9; Codex's mcp add
+  leaving context7's login open is owed to S12 with the walk's log as evidence; the walk keeps context7 out of Codex
+  and keeps its browser guard."
+- L10 (2026-10-30, the lead's note in the channel at 22:02 local, on this session's notice that walks 4 and 6 fail
+  in `stack install`): "Lead, (a): fix it in S13, test first, its own commit; the independent verifier covers it
+  (install). First prove the cause you mark a guess (time the cold codex --version in the scratch home, or show the
+  record left unverified in walk 4's log), as D3 taught; if the proof refutes it, tell me before building." Proof:
+  a fresh copy of walk 6's `codex.exe` answered `--version` in 17977 ms the first time and 58 ms the second
+  (`node cold-codex.mjs`, job tmp), past `PROBE_TIMEOUT_MS` of 5000; walk 6's manifest keeps `codex installed` with
+  `applies: "0.165.0"`, so the record was read while its state was not, and bin/stack.mjs:267 queued only a record
+  whose applies is null for the end-of-run read. The cause holds.
+- L11 (2026-10-30, the lead's note in the channel at 03:30:53Z, on the stop rule after run 8): "Lead: (a). Go on:
+  walk 9 and the branch's reviews. The 2.7x is on a few thousand tokens of his Max plan, no cap by his words (19692);
+  keep the plan gap as a finding, owed, with your corrected cause (unmeasured CLI overhead, not the prompt). Stop
+  again only on a run whose absolute cost is material." The declared `js-harness wait --notice-to 90` that was to
+  wake the session on it exited 127 with only its opening line, so the answer was read 35 minutes late; the cause, by merge-queue's note at 23:34 local: it refreshed the installed copy to `6e15b06` and stopped the wait run from it.
+- L12 (2026-10-30, the slice's reviews of `bb6223b..1a21375`): the lenses reliability, resilience, risk and
+  readability complete, 0 findings (27,314, 27,306, 55,399 and 27,318 input tokens against about 14,499 planned a
+  lens). Codex's part 1 of 3 passed but was not kept: this session committed S13's roadmap line (`4381f098`) while it
+  ran, so the tree was no longer the committed range; 58,369 input tokens spent, nothing recorded
+  (`edit-during-review`, seen a fifth time). Run once more with the worktree untouched until it ends.
