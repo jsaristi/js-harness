@@ -776,8 +776,15 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-24",
-    "value": 3,
-    "unit": "sessions"
+    "unit": "sessions",
+    "was": [
+      {
+        "value": 3,
+        "until": "2026-10-30"
+      }
+    ],
+    "retired": "2026-10-30",
+    "successors": []
   },
   {
     "id": "work-sessions-private-wsl",
