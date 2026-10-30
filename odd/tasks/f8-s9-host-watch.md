@@ -175,10 +175,10 @@ session records `tools-background.txt` from its own list either way.
   S4; inline; code commit; Codex and lenses; PR 2
 - [x] T4 (kind: build) the trigger: the stale row, the notice and the heartbeat's `HOST:` line; the rendered fallback
   command through the guards; tests first — S4; inline; code commit; Codex and lenses; PR 3
-- [ ] T5 (kind: verify) the real run: the excerpts, the draft decided row by row, the tool lists, `check`, the
+- [x] T5 (kind: verify) the real run: the excerpts, the draft decided row by row, the tool lists, `check`, the
   acceptance test, the map rows, the Spanish page, one question per `adopt` or `adapt` — S1, S3, S4; inline; docs
   commit, and the acceptance test as a reviewed code commit; PR 4
-- [ ] T6 (kind: docs) the summary, the ready and closed notices — S4
+- [x] T6 (kind: docs) the summary, the ready and closed notices — S4
 
 ## Log
 - L1 (2026-10-30, the lead's brief, as written): "S9 changes from watching gentle-ai to watching Claude; each new
@@ -303,8 +303,16 @@ session records `tools-background.txt` from its own list either way.
   over two compactions, listed them as required. Nothing is rewritten; later commits carry neither. Third sighting
   of `commit-attribution-from-host` in `docs/FAILURES.md`; the `commit-msg` check is proposed to the lead. T1 to T4
   are merged (PRs 716, 717, 718); the summary is `docs/sessions/2026-10-30-jh-109-host-watch-s9-watches-claude-releases.md`.
+- L16 (2026-10-30): PR 719 landed (`dac75c49`, 22:26:30Z). `doctor --host-reviewed` accepts the first review: run
+  with a scratch home whose record read 4.29.0 / 2.1.308, the app folder holding only a copy of `sentry/scope_v3.json`
+  and `claude-code/2.1.308` and `2.1.309`, over this checkout of main, it printed "Recorded Claude Desktop 4.4212.0
+  and its Code tab CLI 2.1.309 as reviewed." and the record became 4.4212.0 / 2.1.309; the scratch home was then
+  deleted. His real record already read 4.4212.0 / 2.1.309 (written 13:12:50Z by the lead, before this review:
+  `host-review-without-research`), so it was not touched. gentle-ai `review-15d71f1b2546bc8a` over `de970be..3c204e3`
+  approved (reliability) and acknowledged; its one suggestion (a newline or tab case beside the non-breaking space
+  one) is left: `\s` covers both and the non-breaking space case already pins a separator other than a space. T5 and T6
+  are done; the feature is done.
 
 ## Next step
-1. PR 719 (T5) to main, out of draft once Codex has reviewed `de970be..HEAD`; `ready --pr 719` to the lead.
-2. After it lands: `doctor --host-reviewed` from the main checkout records 4.4212.0 / 2.1.309 (the lead's, or this session's if it is still open).
-3. T6: the `closed` notice with the summary.
+Nothing: the feature is done. Open for the lead: question 131, the `commit-msg` check, the gate hole of L8, the
+brief in S5c's register.
