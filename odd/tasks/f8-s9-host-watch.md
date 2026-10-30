@@ -213,3 +213,39 @@ session records `tools-background.txt` from its own list either way.
   defaults from the cache give an empty one. Every finding is taken into the Design above, except Codex's challenge
   to the Code-tab scope: his own words at line 33574, "solo por Claude Desktop en su version Claude Code", settle it,
   now quoted in S2, and Cowork rows stay visible.
+- L5 (2026-10-30): PR 716 (T1, docs) merged as `0c190b7c`. On branch `f8-s9-probe` (stacked on it, same worktree):
+  `9a173984` (lib, gate) and `dad0db39` (command, README, SPEC). Running the command on the lead's real desktop list
+  (`~/.js-harness/research/host-watch/tools-desktop-lead.txt`, 52 loaded + 149 deferred) showed the app names it
+  `mcp__ccd_session__start_session` and ships servers `terminal`, `visualize`, `scheduled-tasks`, `mcp-registry`: fixed
+  in `dad0db39`. Reviews of `16834f52..dad0db39`: Claude lenses reliability, readability, risk: 0 findings (~184k
+  input); Codex 3 parts, 335k input: three P2 findings, all real — `check` must match each span's end to the version
+  the review names (title, `Code tab CLI:`); a declared source with a malformed range must be a gap, not skipped; a
+  target with no heading loses its boundary in `cutSpan`, so `check` rejects its own draft's excerpt (keep the next
+  newer heading line). gentle-ai review started by its `granted` choice, lineage `review-4991b18b1d344d43`, waiting
+  for a `review-reliability` reviewer result (`gentle-ai review status ... --next-transition` gives the capture).
+  Also found: the published CLI page escapes prefixes (`\[Cloud sessions]`), so entry text must be unescaped; its
+  2.1.309 block has 79 bullets, as the cache copy.
+- L6 (2026-10-30, T5 reading so far): Desktop 4.4212.0's 33 entries hold nothing to adopt (SSH, Cowork, 3P admin
+  settings, chat fixes); CLI 2.1.309's candidates checked: transcripts `jq` could not parse — the harness readers
+  already skip a bad line (`bin/lib/sessions.mjs:76-82`, `bin/audit.mjs:35-39`, `bin/lib/audit.mjs:118-124`,
+  `bin/subagents.mjs:42-46`), so ignore; the bypass `rm` prompt now denied with a hint bears on map row 1 (fewer cards).
+- L7 (2026-10-30, after the host compacted the session at its pause): Codex's three findings fixed in `c0d15661`;
+  lenses reliability, risk over `c2a21b9e..c0d15661`: 0 findings; Codex over `c2a21b9..fa2c829`: all four fixed,
+  verdict correct (0.96), recorded (its first run wrote no record: the document was edited while it read). PR 717
+  opened as a draft. gentle-ai: lineage `review-4991b18b1d344d43` (reliability over `dad0db39`'s tree) approved and
+  acknowledged, with four non-blocking warnings, all real and fixed in the next commit, tests first: a side whose
+  version did not move drafted a false "no changelog entry" row (R3-001); draft with no reviewed record failed with
+  "undefined" (R3-002); check let a named CLI drop its span and accepted rows no span names (R3-003); tools took any
+  read failure of the recorded list for a first capture (R3-004).
+- gentle-ai: `dad0db39` approved (review-4991b18b1d344d43, reliability).
+- L8 (2026-10-30): the fix is `98d4c7cb`; Codex over `fa2c829..98d4c7c` correct (0.9), lenses 0 findings but one
+  reliability warning, real: `check` reads the spans the file writes, so "(X to X)" at the version read skips every
+  entry. Only `doctor --host-reviewed` knows the version last reviewed, so its gate now asks each moved changelog for
+  the span from that version (`60bddd22`). `f3274d4c` renames comments that named gentle-ai, which
+  `bin/lib/gentle-ai-absence.test.mjs` refuses under `bin`; two commits had entered with it because the pre-commit
+  with tests on CI failed and a hand `npm run check` of the same code, without them, then passed as `same`
+  (gate-log 309-317): told to the lead, not fixed here. Codex over `98d4c7c..f3274d4` correct (0.92); lenses 0.
+
+## Next step
+1. PR 717 out of draft once its CI is green, then the `ready` notice.
+2. T4 (trigger: heartbeat `HOST:` line, row fix, notice, `host-watch brief`), PR 3; then T5 (real run), T6.

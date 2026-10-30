@@ -2018,7 +2018,7 @@ test('a host update since the reviewed versions is stale, with the versions and 
       '    check that the harness hooks in ~/.claude/settings.json still run',
       '    turn Remote Control back on in each work session without asking the user (rule remote-control-yes: a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first',
       '    report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
-      '    write that account to docs/host-updates/claude-desktop-2.42304.0.md in the project that keeps the host reviews: the line "Code tab CLI: 2.1.299", a table of Change, Decision (adopt, adapt or ignore) and Reason, one row a change the update brings, and a "## Sources" list of what was read, the changelogs above among it',
+      '    write that account to docs/host-updates/claude-desktop-2.42304.0.md in the project that keeps the host reviews: the line "Code tab CLI: 2.1.299", a table of Change, Decision (adopt, adapt or ignore) and Reason, one row a change the update brings, and a "## Sources" list of what was read, the changelogs above among it, each with its span "(<from> to <to>)"',
       '    then record the review: js-harness doctor --host-reviewed, which refuses while that file lacks any of it',
     ].join('\n');
     assert.ok(table.output.includes(`\n${steps}\n`), table.output);
@@ -2051,7 +2051,7 @@ test('a host update since the reviewed versions is stale, with the versions and 
     fs.writeFileSync(file, [
       '# Claude Desktop 2.42304.0', '', 'Code tab CLI: 2.1.299', '',
       '| Change | Decision | Reason |', '|---|---|---|', '| Mods | adapt | the board could be a panel beside the chat |', '',
-      '## Sources', '- https://claude.com/docs/cowork/claude-desktop-changelog', '- https://code.claude.com/docs/en/changelog', '',
+      '## Sources', '- https://claude.com/docs/cowork/claude-desktop-changelog (2.37337.1 to 2.42304.0)', '- https://code.claude.com/docs/en/changelog (2.1.295 to 2.1.299)', '',
     ].join('\n'));
 
     const reviewed = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed'], {}, { spawn, fetch: noopFetch, host });

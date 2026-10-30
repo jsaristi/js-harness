@@ -692,6 +692,15 @@ check or an eval case ("After F8", directive coverage).
 **Discarded:** A hook that sends the rows: no hook or command reaches an artifact's database. Rewriting a session's status document on each event: a write to an existing document needs the version it was read at, so rows are only ever created.
 **Today:** `bin/sessions-live.mjs`, `bin/lib/live-rows.mjs`, `bin/sessions.mjs`, `js-harness sessions`
 
+### Each host update is reviewed in depth
+
+**Problem:** A Claude Desktop update was recorded as reviewed after a check that nothing broke, with no account of what it brought (`docs/FAILURES.md`, host-review-without-research); he asked for a session that researches each release in depth and says how the harness should use it (F8's S9, question 129).
+**Requirement:** `js-harness host-watch draft` cuts the update's span of the desktop and CLI changelogs, from the reviewed record to the versions doctor reads (or a frozen span), and prints the review file with one row an entry: each entry placed in every harness area it touches, an entry outside the Code tab decided `ignore`, every other `?`; a version with no entry is a row; a changelog older than the version reviewed is refused; `--sources` writes the span's excerpts. `host-watch check` holds a review file to the span read from its excerpts: one decided row an entry by its id, Windows and Phone `checked: <how>`, `unknown` or `n/a`, the hand list empty, the desktop tool list's status said. `host-watch tools` diffs the app's tool list, as a session transcribes it, with the one recorded for its surface (desktop, the only one given `start_session`, or background), a first capture a baseline. The gate of `doctor --host-reviewed` refuses a review whose hand list still holds entries.
+**Reason:** The changelogs are long and most entries do not touch the harness; placing them keeps the session's reading on what does, and a check by entry id keeps one decided row from passing for a whole release.
+**Proof:** `node --test bin/host-watch.test.mjs bin/lib/host-watch.test.mjs`
+**Discarded:** Deciding `adopt` or `adapt` by pattern: a decision is a reading, and his yes in question 129 covers no adoption. Dropping Cowork entries unread: they default to `ignore` only when no harness area matches, and stay visible rows.
+**Today:** `bin/host-watch.mjs`, `bin/lib/host-watch.mjs`, `bin/lib/host-update.mjs`, `js-harness host-watch`
+
 ### The machine says when nothing runs
 
 **Problem:** The owner leaves the lead alone for 8 hours or more; once every session has finished the PC stays on for nothing, and a session that waits for him moves only when he answers (his words of 2026-10-25: "cuando no haya nada ejecutandose me avises para ver que en vez de dejandote trabajar solo pueda apagar el pc").
