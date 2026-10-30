@@ -303,10 +303,11 @@ function mondayOf(ms) {
 }
 
 /** The sightings of a register read without a fault, one row a week from the week of the first sighting to the week
- * of `now`, the oldest first: `{ week, sightings, lead, byClass }`, `week` its Monday, `lead` the sightings whose
+ * of `now` (a Date the caller reads, so the same register always gives the same weeks), the oldest first:
+ * `{ week, sightings, lead, byClass }`, `week` its Monday, `lead` the sightings whose
  * evidence says they were the lead's own, and `byClass` every declared class, in order, with its count. A week with
  * none is a row of zeros, so a week the count fell to nothing is seen. No sighting is no week. */
-export function weeklyCounts({ classes, entries }, now = new Date()) {
+export function weeklyCounts({ classes, entries }, now) {
   const dated = entries.flatMap((entry) => sightings(entry).map((sighting) => ({ ...sighting, class: entry.class })));
   if (dated.length === 0) return [];
   const dayOf = (date) => Date.parse(`${date}T00:00:00Z`);
