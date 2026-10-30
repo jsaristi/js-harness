@@ -433,8 +433,7 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   the tests that assert its absence; `check` and `doctor` green with gentle-ai still installed.
 - **Cost:** no eval (its own probes).
 - **His decisions:** G14, the presets' names, by default (the lead takes the stated default).
-- **State:** in progress, JH 68, worktree `f8-s11`, branch `f8-s11-complements`; its feature
-  document is not written yet.
+- **State:** done (PRs 627, 628, 629, 632, merged 2026-10-28 and 29; `odd/tasks/f8-s11-complements.md`).
 
 ### S5c-a Directive coverage, the mechanism
 - **Changes:** every source the harness ships or sends to an agent is listed by a test; each source
@@ -454,7 +453,8 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **Order:** after S11, before S13.
 - **His decisions:** S5c's eval spend, about $95 to $130 above the envelope, goes to him when S5c-a
   starts (D2 left no cap, but this overrun is named his in 14.4).
-- **State:** designed (`odd/tasks/directive-coverage.md`, PR 622); the mechanism built 2026-10-28 on
+- **State:** done 2026-10-29 (PRs 622, 638, 677, 682; `odd/tasks/f8-s5c-a-coverage.md`, closed by T9). Designed
+  (`odd/tasks/directive-coverage.md`, PR 622); the mechanism built 2026-10-28 on
   `f8-s5c-a-coverage` (`odd/tasks/f8-s5c-a-coverage.md`): the sources, spans and register seeded `owed`, `rules
   coverage` with `--strict`, `--prove` (11 checks red) and `--refresh`, the `rules check` refusal, the
   `rule-<id>` arm with its record under `evals/proofs/rules/`, the free check in `tasks.test.mjs`, a project's
@@ -494,7 +494,7 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   takes part; after the uninstalls every path the manifests recorded is gone or back to its bytes.
 - **Cost:** one walk, about $5 [i].
 - **Order:** after S5c-a; before S12 and S2.
-- **State:** walked 2026-10-30 (JH 90, `odd/tasks/f8-s13-rehearsal.md`), in review on branch `f8-s13-rehearsal`.
+- **State:** done (PRs 685, 686, 687, merged 2026-10-30; JH 90, `odd/tasks/f8-s13-rehearsal.md`). Walked 2026-10-30.
   `scripts/rehearsal.mjs` walks the nine rows in a `mktemp -d` home with his logins stripped, and
   `scripts/rehearsal.test.mjs` is its free part (it fails on a planted break and passes again, L8). Run 9 passed all
   21 steps at a host cost of $0.0243 ($0.0907 for the nine runs, against $5): engram brought the planted observation
