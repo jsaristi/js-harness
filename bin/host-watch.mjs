@@ -257,7 +257,11 @@ export async function hostWatchTick({
   cwd = process.cwd(),
   host = () => readHostVersions({ home }),
   reviewed = () => readCache(home).host?.reviewed ?? null,
-  titles = () => [...(readRecord(home).started ?? []).map((entry) => entry.title), ...readNotices(home, slug).notices.map((notice) => notice.from?.title)],
+  titles = () => {
+    // A session that only read the channel is there by its reading's title (Codex on 34562cc).
+    const channel = readNotices(home, slug);
+    return [...(readRecord(home).started ?? []).map((entry) => entry.title), ...channel.notices.map((notice) => notice.from?.title), ...channel.readings.map((reading) => reading.title)];
+  },
   next = () => nextOf(home, cwd),
 }) {
   const file = path.join(channelDir(home), 'host-watch', slug, 'asked');
@@ -274,8 +278,10 @@ export async function hostWatchTick({
   if (change === null) return { lines: [], told: null };
   const holder = titles().find((title) => watchOpened([title], versions.desktop));
   if (holder !== undefined) return { lines: [`host-watch: ${change} is held by "${holder}"`], told: null };
+  // The folder the brief is written to is there before the command that writes it is handed (Codex on 34562cc).
+  fs.mkdirSync(backgroundDir(home), { recursive: true });
   const brief = path.join(backgroundDir(home), `host-watch-${versions.desktop}.md`);
-  return { lines: [], told: watchLine({ change, version: versions.desktop, title: watchTitle(next(), versions.desktop), brief }) };
+  return { lines: [], told: watchLine({ change, version: versions.desktop, title: watchTitle(next(), versions.desktop), brief, home }) };
 }
 
 /** The command. The seams are the output, the versions read now (`host`), the reviewed record (`reviewed`), the

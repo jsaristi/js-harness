@@ -258,6 +258,13 @@ session records `tools-background.txt` from its own list either way.
   producer of hook messages because a comment named `systemMessage`; reworded. Open, for the lead: the brief
   `renderBrief` builds is a text the harness sends an agent, and the directive-coverage register (F8 S5c,
   `bin/lib/rules-coverage-data.mjs`) does not list it; declaring it is S5c's register work, not done here.
+- L10 (2026-10-30): T4 is `34562cc4` (gate on CI, 171 s). Lenses reliability, risk, readability: 0 findings. Codex
+  (0.97 incorrect): three P2, all real, fixed next with their tests: the brief's folder may not exist on a fresh
+  machine, so the tick creates it; a heartbeat under another home handed commands that read the default one, so
+  both carry `--home`; a session that only read the channel was not counted, so readings' titles count. Checked:
+  `js-harness sessions start --home <tmp> --title "JH 120 · host watch 4.5000.0" --brief <missing> --worktree
+  host-watch-4-5000-0 --effort high` parses and stops at the brief (exit 2), nothing written. Correction to L6: no
+  entry of the span names a bypass `rm` prompt (searched the draft's 113 rows for rm, bypass, deny, hint).
 
 ## Next step
 1. T4's commit, then Codex and lenses on it (`--base 06a160c3`), then PR 3 (base `f8-s9-probe` until 717 lands).

@@ -320,11 +320,13 @@ export function watchOpened(titles, version) {
 
 /** The heartbeat's line for an update no host watch session holds: the update, the session to open and the two ways
  * to open it. `start_session` is the only one that sees the desktop's tools, and runs only on his typed turn; the
- * other is a background session, its brief written to `brief` first. */
-export function watchLine({ change, version, title, brief }) {
+ * other is a background session, its brief written to `brief` first. `home`, when given, is the harness home both
+ * commands read, so a heartbeat run under another home hands commands that read the same one (Codex on 34562cc). */
+export function watchLine({ change, version, title, brief, home = null }) {
+  const at = home === null ? '' : ` --home "${home}"`;
   return `HOST: ${change} since the last review, and no host watch session holds it: open "${title}". On his typed turn, `
     + `start_session (fresh, its own worktree, effort high, that title, the brief js-harness host-watch brief prints); `
-    + `otherwise: js-harness host-watch brief > "${brief}" && js-harness sessions start --title "${title}" --brief "${brief}" `
+    + `otherwise: js-harness host-watch brief${at} > "${brief}" && js-harness sessions start${at} --title "${title}" --brief "${brief}" `
     + `--worktree host-watch-${version.replace(/\./g, '-')} --effort high`;
 }
 

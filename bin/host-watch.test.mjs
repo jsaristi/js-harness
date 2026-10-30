@@ -6,6 +6,7 @@ import path from 'node:path';
 import { hostWatchMain, hostWatchTick } from './host-watch.mjs';
 import { sessionEffortRefusal } from './lib/guard.mjs';
 import { sessionTitleRefusal } from './lib/session-title-guard.mjs';
+import { appendReading, newReading } from './lib/channel.mjs';
 
 // `js-harness host-watch` (odd/tasks/f8-s9-host-watch.md) through its main: `draft` over changelog files, `check` over
 // a review file and the excerpts beside it, `tools` against the list recorded in a project. Everything lives in a
@@ -232,7 +233,9 @@ test('the tick names an update no host watch session holds, once an hour, with a
     const told = await tickOf(w);
     assert.match(told.told, /^HOST: Claude Desktop 4\.4212\.0 → 4\.5000\.0 and its Code tab CLI 2\.1\.318 → 2\.1\.320 since the last review/);
     const brief = path.join(w.dir, '.js-harness', 'background', 'host-watch-4.5000.0.md');
-    assert.ok(told.told.endsWith(`js-harness host-watch brief > "${brief}" && js-harness sessions start --title "JH 120 · host watch 4.5000.0" --brief "${brief}" --worktree host-watch-4-5000-0 --effort high`));
+    // Codex on 34562cc: both commands carry the home the heartbeat read, and the brief's folder is there to write in.
+    assert.ok(told.told.endsWith(`js-harness host-watch brief --home "${w.dir}" > "${brief}" && js-harness sessions start --home "${w.dir}" --title "JH 120 · host watch 4.5000.0" --brief "${brief}" --worktree host-watch-4-5000-0 --effort high`));
+    assert.ok(fs.statSync(path.dirname(brief)).isDirectory());
     const title = /--title "([^"]+)"/.exec(told.told)[1];
     const effort = /--effort (\S+)$/.exec(told.told)[1];
     assert.equal(sessionTitleRefusal({ title }, RULES, { codeOf: () => ({ code: 'JH' }), next: () => ({ number: 120 }) }, 'js-harness sessions start'), null);
@@ -253,6 +256,11 @@ test('the tick is quiet with no update, and names the session that holds one', a
     const held = await tickOf(w, { now: () => Date.parse('2026-11-06T12:00:00Z'), titles: () => ['JH 121 · host watch 4.5000.0'] });
     assert.equal(held.told, null);
     assert.deepEqual(held.lines, ['host-watch: Claude Desktop 4.4212.0 → 4.5000.0 and its Code tab CLI 2.1.318 → 2.1.320 is held by "JH 121 · host watch 4.5000.0"']);
+    // Codex on 34562cc: a session that only read the channel is in it by its reading, and holds the update too.
+    appendReading(w.dir, 'D--project', newReading({ at: '2026-11-06T12:30:00Z', reader: { id: 'abc' }, title: 'JH 122 · host watch 4.5000.0' }));
+    const read = await tickOf(w, { now: () => Date.parse('2026-11-06T14:00:00Z'), titles: undefined });
+    assert.equal(read.told, null);
+    assert.match(read.lines[0], /is held by "JH 122 · host watch 4\.5000\.0"/);
   } finally {
     w.remove();
   }
