@@ -103,3 +103,11 @@ out, so it is the lead's to put on the roadmap or not.
   tokens. The Claude lenses risk, reliability, readability and resilience over the same range, recorded: 0 findings
   each (13,756, 13,754, 28,247 and 28,207 input tokens). The gentle-ai Stop hook offered the whole branch: only its
   read-only status ran (`action: start`), nothing was started, as `CLAUDE.md` says for a branch-wide candidate.
+- L12 (the lead's request, 2026-10-30 after the ready notice): "One more commit on PR 702 before I land it, please:
+  your L8, README.md naming `js-harness doctor --gentle-ai-reviewed`, a flag doctor no longer takes. Fix the line to
+  what doctor takes now [...]. The network read for the engram cell is mine to put to him; leave it." Searched:
+  `grep -rn gentle-ai-reviewed bin` and `gentle-ai-sync` in `bin/` find nothing; `git log -S gentle-ai-sync --
+  bin/doctor.mjs` names `8b724f3d feat(doctor): drop the gentle-ai-sync row and --gentle-ai-reviewed`; SPEC.md:929
+  says the row left at F8 S11. So the README paragraph describing that row went whole, and the `stack-update` one
+  after it says "the tools of the stack", no longer "the other tools". Doctor's review flags now: `--host-reviewed`,
+  `--stack-reviewed` (`KNOWN`, `bin/doctor.mjs`). Markdown only: no code for Codex or the lenses.
