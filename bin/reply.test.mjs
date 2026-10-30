@@ -372,12 +372,15 @@ test('a reply with no command block never reads the transcript for it, and a par
 test('the command check runs after the wake and board checks, so its deadline holds their time too', async () => {
   const events = [];
   const handed = 'Corre:\n\n```powershell\njs-harness doctor --offline\n```\n\nSigo solo. Me despierta el aviso de JH 102.';
-  await hook(stopPayload(handed, { transcript_path: SESSION_LOG }), {
+  const result = await hook(stopPayload(handed, { transcript_path: SESSION_LOG }), {
     files: { ...ON, [SESSION_LOG]: RUNS },
-    deps: { platform: 'win32', now: () => { events.push('now'); return 0; }, parse: () => { events.push('parse'); return { errors: [[]] }; } },
+    deps: { platform: 'win32', now: () => { events.push('now'); return 0; }, parse: () => { events.push('parse'); return { errors: [['js-harness has no parameter -x']] }; } },
   });
   assert.ok(events.includes('parse'));
   assert.equal(events.indexOf('now', events.indexOf('parse')), -1, `no check reads the clock after the parser: ${events.join(' ')}`);
+  const { decision, reason } = JSON.parse(result.out);
+  assert.equal(decision, 'block', 'its refusal still reaches the answer');
+  assert.match(reason, /^js-harness reply: this reply hands him command blocks .*js-harness has no parameter -x/s);
 });
 
 test('a close that is refused and a block that is refused go back in one block', async () => {

@@ -66,6 +66,9 @@ test('a run proves a command only when nothing after it can mask its exit: a lat
   assert.deepEqual(proved('x ||\ny'), [], 'a newline after || continues it: y ran only if x failed');
   assert.deepEqual(proved('a &&\nb'), ['a', 'b'], 'a newline after && continues it');
   assert.deepEqual(proved('a |\nb'), ['b']);
+  assert.deepEqual(proved('a &&\n\nb'), ['a', 'b'], 'a blank line after && continues it too');
+  assert.deepEqual(proved('a &&\n'), ['a'], 'an operator and a newline at the end leave the command as the last');
+  assert.deepEqual(proved('a && >f\nb'), ['b'], 'a command of redirections alone is a command: a newline after it ends it');
 });
 
 test('a handed command matches a run word for word: `rm "a b"` does not prove `rm a b`', () => {

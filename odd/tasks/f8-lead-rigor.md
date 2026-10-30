@@ -275,6 +275,14 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   then `b` refused `a`; the command check ran before the wake and board checks, so its 4 s did not hold their time,
   and now runs last; the excerpt of line 30024 had lost its backslashes in a JS string.
   gentle-ai: `9d4c9c6f..862a96d3` approved (lineage `review-896647eacc932ece`).
+- L16 (2026-10-30, reviews of `d7af8f92`): lens reliability 0 findings. Codex (64,548 input tokens): one P2, holding:
+  a command of redirections alone after `&&` and before a newline (`a && >f`, then `b`) was taken for a continuation,
+  so `a` was proved when it may have failed; the continuation is now read from the part's words before redirections
+  are dropped, test RED first. gentle-ai on `862a96d3..d7af8f92`: approved and acknowledged (lineage
+  `review-eb8331a6c62bd8f0`), two suggestions taken in the same commit: tests for a blank line after `&&` and an
+  operator with a trailing newline, and the order test now asserts the refusal still reaches the answer (the wake
+  warning's place in a combined reason is not asserted).
+  gentle-ai: `862a96d3..d7af8f92` approved (lineage `review-eb8331a6c62bd8f0`).
 
 ## Next step
 State (2026-10-30): PRs 707 (T2) and 710 (T3) are merged; T4 is `ccd7e3f9`, `acbd2816` and `9c967aa4`, reviewed (L12,
