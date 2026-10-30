@@ -444,11 +444,15 @@ export const STEPS = {
   reviews: (ctx) => {
     const { project } = ctx.layout;
     const base = git(ctx, 'rev-parse', 'main').stdout.trim();
-    const codex = ctx.must(ctx.his('codex-review', '--base', base, '--cwd', project), 'codex-review');
-    const lens = ctx.must(ctx.his('lens-review', '--base', base, '--lenses', 'reliability', '--reason', 'a function and its test, the rehearsal\'s slice', '--cwd', project), 'lens-review');
+    const codexArgs = ['codex-review', '--base', base, '--cwd', project];
+    const lensArgs = ['lens-review', '--base', base, '--lenses', 'reliability', '--reason', 'a function and its test, the rehearsal\'s slice', '--cwd', project];
+    // Each plan is read before its run, and kept beside the run's result to set the real cost against the estimate.
+    const plans = { codex: ctx.must(ctx.his(...codexArgs, '--plan'), 'codex-review --plan').stdout.trim(), lens: ctx.must(ctx.his(...lensArgs, '--plan'), 'lens-review --plan').stdout.trim() };
+    const codex = ctx.must(ctx.his(...codexArgs), 'codex-review');
+    const lens = ctx.must(ctx.his(...lensArgs), 'lens-review');
     const common = git(ctx, 'rev-parse', '--path-format=absolute', '--git-common-dir').stdout.trim();
     for (const file of ['codex-reviews.jsonl', 'lens-reviews.jsonl']) assertThat(fs.existsSync(path.join(common, 'js-harness', file)), `no ${file} in the scratch project's git folder`);
-    ctx.seen.reviews = { codex: codex.stdout.trim().split(/\r?\n/).slice(-2).join(' | '), lens: lens.stdout.trim().split(/\r?\n/).slice(-2).join(' | ') };
+    ctx.seen.reviews = { plans, codex: codex.stdout.trim().split(/\r?\n/).slice(-2).join(' | '), lens: lens.stdout.trim().split(/\r?\n/).slice(-2).join(' | ') };
     return 'both records written in the scratch project\'s git folder';
   },
   'push-reviewed': (ctx) => {
