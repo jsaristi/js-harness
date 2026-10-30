@@ -21,7 +21,7 @@ user message). The brief's items, quoted, are S1-S3 of `odd/tasks/claude-md-bloc
 - `cabbacbc` fix(init): the verifier's findings: the write needs the name git tracks, no skip flag and the bytes a
   checkout of the index writes (`git cat-file --filters`); one file under both names (a link either way, or a hard
   link) keeps the whole block in sync, the migration's plan and doctor's `claude-import` row (L5).
-- The pull request of this branch: open, ready notice sent with it.
+- PR 698 (`fix-claude-md-block`): open, with its ready notice.
 
 ## Decisions
 - This session's, as the brief allowed: D1 (a linked `CLAUDE.md` is no split; one file under both names keeps the
