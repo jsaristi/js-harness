@@ -45,6 +45,10 @@ test('what is left in a phase shows each item\'s first sentence, cut short, the 
   const html = mapSection({ total: { before: null, after: { done: 1, total: 3 } }, phases: [{ title: 'A', before: null, after: { done: 1, total: 3 }, open: [long, 'Short one', longFirst], change: 'same' }] });
   assert.match(html, /<details><summary>Visual pages: the harness shows its moments as pages\.<\/summary>[\s\S]*More words here/);
   assert.match(html, /<li>Short one<\/li>/);
+  // The reliability review, R3-001: an item of one sentence with blanks at its edges is that sentence, not a fold of itself.
+  const padded = mapSection({ total: { before: null, after: { done: 0, total: 1 } }, phases: [{ title: 'A', before: null, after: { done: 0, total: 1 }, open: ['  One sentence only.  '], change: 'same' }] });
+  assert.match(padded, /<li>One sentence only\.<\/li>/);
+  assert.doesNotMatch(padded, /<details>/);
   const [, summary] = /<summary>(a+…)<\/summary>/.exec(html);
   assert.ok(summary.length <= 160, `cut to about 160 characters: ${summary.length}`);
   const now = mapNowSection({ done: 1, total: 2, phases: [{ title: 'A', done: 1, total: 2, open: [long] }] });

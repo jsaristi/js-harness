@@ -147,6 +147,13 @@ test('the head says what it does not know: no cut map, no stretch, an unread roa
   const unread = headOf(renderStatus({ ...FACTS, map: { error: 'git show: bad' }, stretch: { unavailable: 'EACCES' }, notes: null }));
   assert.match(unread, /el mapa no se pudo leer/);
   assert.match(unread, /los tramos no se pudieron leer/);
+  // The reliability review, R3-002: a stretch whose goals are not checked yet, a branch with no roadmap, a roadmap with no plan.
+  const unchecked = { ...STRETCH, state: 'open', goals: { checkedAt: null, met: 0, total: 1, list: [{ id: 'G1', text: 'PR 630 en main', met: null, said: null }] } };
+  const open = headOf(renderStatus({ ...FACTS, map: { absent: true }, stretch: unchecked, notes: null }));
+  assert.match(open, /la rama main no tiene docs\/ROADMAP\.md/);
+  assert.match(open, /sin revisar[\s\S]*1 metas del último tramo, s-1 \(abierto\), sin revisar todavía[\s\S]*sin revisar[\s\S]*PR 630 en main/);
+  const noPlan = headOf(renderStatus({ ...FACTS, map: { ...MAP, plans: [] }, stretch: null, notes: null }));
+  assert.match(noPlan, /la hoja de ruta no tiene una sección de plan[\s\S]*El mapa del proyecto: 3 de 5 filas hechas/);
 });
 
 test('section 1 is one row a pull request, what it gives first and its commits folded', () => {
@@ -157,4 +164,8 @@ test('section 1 is one row a pull request, what it gives first and its commits f
   assert.doesNotMatch(one, /<td><ul>/, 'no commit list left open');
   const noFeat = sectionOne(renderStatus({ ...FACTS, landed: [{ ...landed[0], commits: ['fix(a): first fix', 'docs: b'] }], notes: null }));
   assert.match(noFeat, /PR 683[\s\S]*fix\(a\): first fix[\s\S]*2 commits/);
+  // The reliability review, R3-003: the column heads, and a merge that brought no commit of its own.
+  const none = sectionOne(renderStatus({ ...FACTS, landed: [{ ...landed[0], commits: [] }], notes: null }));
+  assert.match(none, /<th>Qué da<\/th><th>Cuándo<\/th><th>Commits<\/th>/);
+  assert.match(none, /<strong>PR 683<\/strong> · feat\/x<\/td>[\s\S]*<td>—<\/td>/);
 });

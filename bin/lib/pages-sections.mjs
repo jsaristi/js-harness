@@ -35,10 +35,10 @@ const LEFT_CUT = 160;
 function leftHtml(open) {
   if (open.length === 0) return '—';
   const items = open.map((text) => {
-    const whole = String(text);
+    const whole = String(text).trim();
     const first = /^[\s\S]*?[.!?](?=\s|$)/.exec(whole)?.[0] ?? whole;
     const short = first.length > LEFT_CUT ? `${first.slice(0, LEFT_CUT - 1)}…` : first;
-    return short === whole.trim() ? `<li>${escapeHtml(whole)}</li>` : `<li><details><summary>${escapeHtml(short)}</summary>${escapeHtml(whole)}</details></li>`;
+    return short === whole ? `<li>${escapeHtml(whole)}</li>` : `<li><details><summary>${escapeHtml(short)}</summary>${escapeHtml(whole)}</details></li>`;
   });
   return { html: `<ul class="left">${items.join('')}</ul>` };
 }
