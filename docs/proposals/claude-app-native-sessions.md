@@ -298,9 +298,15 @@ Proposed: S9 becomes the **host watch**, run by a session of its own.
 - **Reads:** the Claude Code changelog from the reviewed version; the Desktop changelog for the
   same span; the host's tool list in a fresh session, diffed against the last recorded list (the
   desktop tools are undocumented, section 1); the `plugin-authoring` types when their build moves.
-- **Delivers:** `docs/host-watch/<version>.md`, one row per new feature: adopt, adapt or ignore,
-  the row of this map it touches, its evidence, Windows and phone checked or unknown; this map
-  updated in the same PR; the review recorded only when that PR lands.
+- **Delivers:** `docs/host-updates/claude-desktop-<version>.md`, the file `doctor --host-reviewed`
+  requires since PR 710 (`bin/lib/host-update.mjs`, `reviewFileOf`; the format in
+  `docs/host-updates/README.md`), one row per new feature: adopt, adapt or ignore, the row of this
+  map it touches, its evidence, Windows and phone checked or unknown; this map updated in the same
+  PR; the review recorded only when that PR lands. (This section first named
+  `docs/host-watch/<version>.md`; the gate's file supersedes it, so the role writes one file, not
+  two.)
+- **Approved:** D2 is answered: question 129, "Sí, súmala (Recomendada)" (the lead's transcript,
+  line 34781). The build is `odd/tasks/f8-s9-host-watch.md`.
 - **Reaches him:** a Spanish visual page (`rule:reports-spanish-visual`) and one recorded question
   per adoption (`rule:questions-one-place`).
 - **Costs:** one session per release. The CLI shipped 2.1.304 to 2.1.314 recently and the desktop
