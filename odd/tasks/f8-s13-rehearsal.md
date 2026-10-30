@@ -69,8 +69,8 @@ directive coverage and S12's migration carries it" (reverse-engineering document
 - [x] T8 (kind: build) the `doctor` row of 13.3 row 16: the project's root `CLAUDE.md` imports `AGENTS.md` and no
   `CLAUDE.md` above it turns the import off, test first, its own commit (D1, L4) — S4; inline; `604253a6`, `430130ed`, `bb6223b9`
 - [x] T9 dropped by the lead (D3 corrected, L9): no run timed out (L7)
-- [ ] T7 (kind: docs) Codex and the lenses on every code commit, gentle-ai lines, the independent verifier over
-  the range, PR, ready notice, summary — inline
+- [x] T7 (kind: docs) Codex and the lenses on every code commit, gentle-ai lines, the independent verifier over
+  the range, PR, ready notice, summary — inline; L12-L14, #685, #686 and the third, the summary under docs/sessions/
 
 ## Walk
 - Run 1 (2026-10-30T02:04Z, `d4dd7199`, 1.3 minutes, host cost $0 of the $5 estimate): `real-home-before` PASS (19
@@ -138,22 +138,25 @@ directive coverage and S12's migration carries it" (reverse-engineering document
   tokens a lens", used 3,753 input and 269 output, the gap of run 8 again, owed as a finding (L11). Host cost of the
   nine runs: $0.0907 against the one walk's $5.
 
+- Run 10 (2026-10-30 ~04:55Z, `174fb070`, 3.6 minutes, host cost $0.0184): all 21 steps PASS, `ok: true`, exit 0,
+  with the fixes of L13: `leftProcesses` and `cleanupProblems` empty, so the sweeps by creation time and engram's stop
+  held. Host cost of the ten runs: $0.1091.
+
+- Run 11 (2026-10-30 ~05:35Z, `08d724a1`, 3.5 minutes, host cost $0.0186): all 21 steps PASS, `ok: true`, exit 0,
+  with the check fixes of L14 (`updates`: "init again wrote nothing" now read with init's exit 0). Host cost of the
+  eleven runs: $0.1277.
 ## Next step
-State at 2026-10-30 ~03:35Z (branch `f8-s13-rehearsal`, worktree `D:\js-harness\.claude\worktrees\f8-s13-rehearsal`,
-HEAD `a7ad4a1c` or later, nothing pushed, no PR). Done: T1, T2, T3, T4, T6 (L8), T8; T9 dropped (L9). Walks 1-8 under
-`## Walk`, host cost $0.0664 in all against $5; walk 8 passed every step through `uninstall-machine`, and its
-`recorded-paths` failure is fixed (`200e506d`). Bin fix of this stretch: `e68e232c` (stack install, L10; the
-independent verifier must cover it). Waiting: the lead's answer on the stop rule (walk 8's lens run used 3,751 input
-tokens against a plan of about 1,393, 2.7 times; notices of 22:30 local): (a) go on with paid runs, (b) stop. On (a):
-walk 9, `node scripts/rehearsal.mjs --keep` into the job tmp's `walk-9.log`; record it; remove its kept root. Then:
-lens-review and codex-review of `bb6223b9..HEAD`; gentle-ai assess per slice; S13's roadmap line; the independent
-verifier over `f2110239..HEAD` (high risk); chained PRs (slice 1 `f2110239..57584e5d`, slice 2 `57584e5d..bb6223b9`,
-slice 3 the rest); ready notice; summary `docs/sessions/2026-10-30-jh-90-f8-s13-the-rehearsal-on-a-scratch-project.md`;
-closed notice. Owed to S12 for the report: engram's plugin needs jq (L5); Codex's mcp add leaves context7's login open
-(L7, L9); each `claude -p` session leaves codegraph's MCP server running (runs 5, 7); Claude's plugin commands leave
-empty `enabledPlugins` and `extraKnownMarketplaces` in his settings.json (run 8); a cold first start of a new codex.exe
-takes 18 s (L10); the lens plan's gap (run 8). The brief's surfaces gained `bin/lib/gentle-ai-absence.test.mjs` (NAMED
-list), `bin/lib/payload.mjs` (export), `bin/stack.mjs` and `bin/stack-install.test.mjs` (L10).
+State after the gentle-ai reviews (2026-10-30 ~05:45Z, branch `f8-s13-rehearsal`, worktree
+`D:\js-harness\.claude\worktrees\f8-s13-rehearsal`, HEAD after `08d724a1`, nothing pushed, no PR). Done: T1-T6, T8;
+T9 dropped; T7 has every review: Codex and the lenses on every code commit (L12-L14), the independent verifier
+(L13), gentle-ai on each slice (L14). Run 11 passed whole at `08d724a1`. Then, the chain: stacked pull requests to
+main, cut where the review records end, since a record whose head lies past a pull request's head is not counted at
+push (JH 79, #645): 1 `f2110239..bb6223b9` (the free test and the import row) on `f8-s13-rehearsal-1`;
+2 `bb6223b9..ee22f206` (the walk and its fixes through walk 9) on `f8-s13-rehearsal-2`; 3 `ee22f206..HEAD` (the
+review fixes, walks 10-11) on `f8-s13-rehearsal`. Ready notice with the first pull request; summary
+`docs/sessions/2026-10-30-jh-90-f8-s13-the-rehearsal-on-a-scratch-project.md`; closed notice. Owed to S12: listed in
+S13's roadmap State, plus L14's advisory findings kept. Out-of-surface edits to name: `bin/lib/gentle-ai-absence.test.mjs`,
+`bin/lib/payload.mjs`, and `bin/stack.mjs` with its test (the lead's L10).
 
 ## Log
 - L1 (2026-10-29, the lead's brief `briefs/2026-10-29T19-21-42-028Z-0339f9b7.md`): "JH 90 · F8 S13: the rehearsal
@@ -245,3 +248,40 @@ list), `bin/lib/payload.mjs` (export), `bin/stack.mjs` and `bin/stack-install.te
   lens). Codex's part 1 of 3 passed but was not kept: this session committed S13's roadmap line (`4381f098`) while it
   ran, so the tree was no longer the committed range; 58,369 input tokens spent, nothing recorded
   (`edit-during-review`, seen a fifth time). Run once more with the worktree untouched until it ends.
+- L13 (2026-10-30, the reviews of `bb6223b..ee22f20` and the independent verifier over `f2110239..ee22f20`): Codex
+  recorded all 3 parts (407,979 input tokens, 295,680 cached, against a plan of 521,000 to 649,000); parts 1 and 3
+  correct (0.95, 0.94), part 2 incorrect (0.99) with four findings on `scripts/rehearsal.mjs`: P1 the sweeps use
+  `taskkill /T`, which follows a reused parent pid, where `bin/lib/process-tree.mjs` kills by creation time; P2 on
+  POSIX only the root of a tree is killed; P2 a `claude` that is an npm `.cmd` launcher breaks once linked into the
+  scratch bin; P2 a failure of `killByPort` was only printed, so the walk could pass with engram listening. The
+  verifier (read-only, 146 tests pass): approve with notes, its finding 1 the same as P1 (`scratchTrees.under` goes
+  by parent pid alone, so `openedBrowsers` could take his browser for one a scratch process opened); 2, low,
+  `withoutPluginResidue` excused a file that differs in format alone; 3, low, two test gaps (`stack install` exiting
+  1 when the end read still cannot tell; `rehearsalEnv`'s APPDATA, LOCALAPPDATA and lower-case names); 4, info, the
+  import row reads only an import on a line of its own, which `init` writes (kept as it is). Fixed, test first: a
+  parent counts only when created before its child; `stopTargets` kills by `selectTrees` and `killProcesses` on
+  Windows (the walk's CIM query now carries creation times, checked equal to `takeSnapshot`'s on this machine: 405 of
+  405 rows numeric) and every descendant elsewhere; `launcherShim`; `walkOk` with `cleanupProblems`; the residue set
+  apart only when one of its keys is an empty object; both test gaps.
+- L14 (2026-10-30, gentle-ai on each slice; consent pre-granted, CLAUDE.md). gentle-ai lines:
+  - review-536971f232811da2 (`e68e232c`, escalated: item 5, the installer): approved and acknowledged; one lens
+    (reliability), its WARNING (an install that exits 0 and still cannot be told at the end of the run) already
+    covered by `cf3e6a01`'s test.
+  - `f2110239..57584e5d` (`d1cea611`, `57584e5d`): not due (`under_budget`, 561 changed lines, medium).
+  - `57584e5d..bb6223b9` (`604253a6`, `2c4e534e`, `d8fb14a5`, `430130ed`, `bb6223b9`): not due (`under_budget`, 354, medium).
+  - review-434a046bee12940f (`bb6223b9..d4dd7199`: `d4dd7199`, escalated: item 5, the walk installs and uninstalls):
+    approved and acknowledged; four WARNINGs, three SUGGESTIONs, advisory.
+  - review-819f6b50b54c34f8 (`d4dd7199..999afacb`: `80d2a547`, `df754a6d`, `1e9d4458`, `ddb28a02`, `38d1e348`,
+    `e68e232c`, `398ee28c`, `241cfe27`, `200e506d`, `608a8e68`, `cf3e6a01`; escalated: item 5): approved and
+    acknowledged; one WARNING, one SUGGESTION, advisory.
+  - `999afacb..08d724a1` (`08d724a1`): not due (`under_budget`, 92, medium).
+  Of the advisory findings, the three that let the walk say more than it saw were fixed, test first, in `08d724a1`:
+  the `updates` step did not read the second `init`'s exit; `import-row` and `directive` left their planted files
+  when what they ran threw; `stopTrees` returned "the processes could not be listed" as if it were a process stopped.
+  Kept as owed (each fails loudly, none passes falsely): a throw in `main`'s setup, after the scratch root is made,
+  skips its removal and the engram port's kill; `engram` and `pnpm` are not checked on the PATH up front, so a
+  missing one fails as a TypeError mid-walk; `stack --json`'s output is parsed without `must`; no step body but
+  three is run on a fake context; on POSIX a kill that EPERM refuses still reads as stopped. `record.steps` empty
+  is not so: `walkJourney` pushes each step's result to `ctx.results` (scripts/practice-lib.mjs:807). `08d724a1`'s reviews: the lenses reliability and resilience
+  complete, 0 findings (7,322 and 7,314 input tokens, against about 3,493 planned a lens); Codex on
+  `999afac..08d724a`: correct (0.94), 66,468 input tokens against a plan of 97,000 to 120,000, recorded.

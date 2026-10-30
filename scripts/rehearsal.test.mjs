@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { rehearsalLayout, rehearsalEnv, engramEnv, filledContract, snapshotTree, commandWords, scratchProcesses, openedBrowsers, hostLeftover, withoutPluginResidue, STEPS, HIS_SETTINGS, HIS_CLAUDE_MD } from './rehearsal.mjs';
+import { rehearsalLayout, rehearsalEnv, engramEnv, filledContract, snapshotTree, commandWords, scratchProcesses, openedBrowsers, hostLeftover, withoutPluginResidue, stopTargets, launcherShim, walkOk, stopTrees, STEPS, HIS_SETTINGS, HIS_CLAUDE_MD } from './rehearsal.mjs';
 import { plantedRuleFiles, directiveProblem, recordedPaths, restoreProblems, importRowState, REHEARSAL } from './rehearsal-lib.mjs';
 
 const JS_HARNESS = fileURLToPath(new URL('../bin/js-harness.mjs', import.meta.url));
@@ -61,10 +61,14 @@ test('in a scratch home, a planted directive without a control makes rules check
 
 test('rehearsalEnv puts the scratch home under every name a host reads it by and drops every login token', () => {
   const layout = rehearsalLayout(path.join(os.tmpdir(), 'r'));
-  const his = { PATH: '/bin', JS_HARNESS_EVAL_OAUTH_TOKEN: 't', CLAUDE_CODE_OAUTH_TOKEN: 't', ANTHROPIC_API_KEY: 'k', CODEX_HOME: '/his/.codex', CLAUDE_CONFIG_DIR: '/his/.claude', GIT_DIR: '/his/.git', GIT_WORK_TREE: '/his', GIT_INDEX_FILE: '/his/.git/index' };
+  const his = { PATH: '/bin', JS_HARNESS_EVAL_OAUTH_TOKEN: 't', CLAUDE_CODE_OAUTH_TOKEN: 't', ANTHROPIC_API_KEY: 'k', CODEX_HOME: '/his/.codex', CLAUDE_CONFIG_DIR: '/his/.claude', GIT_DIR: '/his/.git', GIT_WORK_TREE: '/his', GIT_INDEX_FILE: '/his/.git/index', git_dir: '/his/.git', anthropic_api_key: 'k', APPDATA: '/his/roaming', LOCALAPPDATA: '/his/local' };
   const env = rehearsalEnv(layout, his);
   for (const name of ['HOME', 'USERPROFILE', 'JS_HARNESS_HOME']) assert.equal(env[name], layout.home);
   assert.equal(env.CODEX_HOME, path.join(layout.home, '.codex'));
+  assert.equal(env.APPDATA, layout.appData);
+  assert.equal(env.LOCALAPPDATA, layout.localAppData);
+  // Windows reads a variable's name in any case (the verifier on bb6223b..ee22f20).
+  for (const name of ['git_dir', 'anthropic_api_key']) assert.equal(env[name], undefined);
   // Claude reads its config and .claude.json from HOME, where stack reads them back: no CLAUDE_CONFIG_DIR moves them.
   // git binds to the scratch project by its folder, never to a repository his variables name (Codex P2 on 541464c).
   for (const name of ['JS_HARNESS_EVAL_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'CLAUDE_CONFIG_DIR', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) assert.equal(env[name], undefined);
@@ -101,6 +105,95 @@ test('scratchProcesses names the topmost process of each tree whose command line
   assert.deepEqual(scratchProcesses(processes, root, 'win32'), [{ pid: 10, command: processes[1].command }, { pid: 30, command: processes[5].command }]);
   assert.deepEqual(scratchProcesses(processes, root.toLowerCase(), 'linux'), [{ pid: 10, command: processes[1].command }]);
   assert.deepEqual(scratchProcesses([], root, 'win32'), []);
+});
+
+test('a process whose recorded parent pid a later scratch process reuses hangs from no scratch process', () => {
+  // Windows keeps a dead parent's pid on its children and reuses pids (bin/lib/process-tree.mjs): his browser must
+  // not be taken for one a scratch process opened (Codex P1 and the verifier on bb6223b..ee22f20).
+  const root = 'C:\\Temp\\js-harness-rehearsal-walk-abc';
+  const processes = [
+    { pid: 1, parent: 0, createdAt: 10, name: 'explorer.exe', command: 'explorer.exe' },
+    { pid: 50, parent: 10, createdAt: 100, name: 'brave.exe', command: 'brave.exe' },
+    { pid: 51, parent: 50, createdAt: 110, name: 'brave.exe', command: 'brave.exe --type=renderer' },
+    { pid: 10, parent: 1, createdAt: 200, name: 'engram.exe', command: `${root}\\bin\\engram.exe serve` },
+  ];
+  assert.deepEqual(openedBrowsers(processes, root, 'win32'), []);
+  assert.deepEqual(scratchProcesses(processes, root, 'win32'), [{ pid: 10, command: processes[3].command }]);
+  assert.deepEqual(stopTargets(processes, [10], 'win32'), [{ pid: 10, createdAt: 200 }]);
+});
+
+test('stopTargets takes each root with its descendants: by creation time on Windows, by parent elsewhere', () => {
+  const processes = [
+    { pid: 10, parent: 1, createdAt: 100, command: 'node codex.js' },
+    { pid: 11, parent: 10, createdAt: 110, command: 'codex.exe' },
+    { pid: 12, parent: 11, createdAt: 120, command: 'brave.exe' },
+    { pid: 20, parent: 1, createdAt: 50, command: 'his.exe' },
+  ];
+  assert.deepEqual(stopTargets(processes, [10], 'win32').map(({ pid }) => pid).sort(), [10, 11, 12]);
+  // A root with no creation time has no identity to kill by on Windows.
+  assert.deepEqual(stopTargets([{ pid: 10, parent: 1, createdAt: null, command: 'x' }], [10], 'win32'), []);
+  const posix = processes.map(({ createdAt, ...rest }) => rest);
+  assert.deepEqual(stopTargets(posix, [10], 'linux').map(({ pid }) => pid).sort(), [10, 11, 12]);
+});
+
+test('launcherShim says a program is started through a shim unless it is a Windows .exe, which is linked', () => {
+  // An npm launcher finds its package beside itself, so a link of it in the scratch bin finds none (Codex P2).
+  assert.equal(launcherShim('C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd', 'win32'), true);
+  assert.equal(launcherShim('C:\\Users\\me\\.local\\bin\\claude.exe', 'win32'), false);
+  assert.equal(launcherShim('/usr/local/bin/claude', 'linux'), true);
+});
+
+test('walkOk fails a walk whose steps passed when a process was left or engram\'s server could not be stopped', () => {
+  // killByPort's failure was only printed, so a walk could exit 0 with engram still listening (Codex P2).
+  assert.equal(walkOk({ steps: true, left: [], cleanup: [] }), true);
+  assert.equal(walkOk({ steps: true, left: ['1 stopped: x'], cleanup: [] }), false);
+  assert.equal(walkOk({ steps: true, left: [], cleanup: ['engram on 5: still listening'] }), false);
+  assert.equal(walkOk({ steps: false, left: [], cleanup: [] }), false);
+});
+
+test('stopTrees fails when the processes cannot be listed, and never reports that as a process it stopped', () => {
+  // The reliability lens on the walk (S13's log): the sentinel line read as a browser stopped, an MCP leftover and a process left.
+  assert.throws(() => stopTrees(() => [], () => null), /the processes could not be listed/);
+  assert.deepEqual(stopTrees(() => [], () => []), []);
+});
+
+/** A step's context for the steps that only read what the harness answered: `answers(args)` is each command's result. */
+function stepContext(t, answers) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rehearsal-step-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, 'project');
+  for (const dir of [path.join(project, '.git', 'js-harness'), path.join(project, 'docs')]) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(project, '.git', 'js-harness', 'manifest.json'), '{}\n');
+  const must = (result, what) => {
+    if (result.code !== 0) throw new Error(`${what} exited ${result.code}`);
+    return result;
+  };
+  const answer = (args) => ({ code: 0, stdout: '', stderr: '', ...answers(args) });
+  return { layout: { root, project }, at: [], must, harness: (...args) => answer(args), exec: (words) => answer(words) };
+}
+
+test('the updates step fails when init run again exits non-zero, even having written nothing', (t) => {
+  // The reliability lens on the walk (S13's log): a re-init that crashed before writing read as proof that it writes nothing.
+  const ctx = stepContext(t, (args) => (args[0] === 'init' ? { code: 1, stderr: 'boom' } : { stdout: 'up to date\n' }));
+  assert.throws(() => STEPS.updates(ctx), /init again exited 1/);
+});
+
+test('the import-row and directive steps take their planted files away when what they run throws', (t) => {
+  // The reliability lens on the walk (S13's log): a planted file left behind skews every later step.
+  const doctor = (state) => JSON.stringify([{ id: 'claude-import', project: state }]);
+  let calls = 0;
+  const importCtx = stepContext(t, () => {
+    calls += 1;
+    if (calls > 1) throw new Error('doctor died');
+    return { stdout: doctor('ok') };
+  });
+  assert.throws(() => STEPS['import-row'](importCtx), /doctor died/);
+  assert.equal(fs.existsSync(path.join(importCtx.layout.root, 'CLAUDE.md')), false);
+  const directiveCtx = stepContext(t, () => {
+    throw new Error('rules check died');
+  });
+  assert.throws(() => STEPS.directive(directiveCtx), /rules check died/);
+  for (const file of Object.keys(plantedRuleFiles())) assert.equal(fs.existsSync(path.join(directiveCtx.layout.project, file)), false, file);
 });
 
 test('hostLeftover names an MCP server a host session left behind, and not the engram server the hook started', () => {
@@ -151,8 +244,13 @@ test('withoutPluginResidue takes out only the empty plugin keys Claude\'s plugin
   const left = '{\n  "enabledPlugins": {},\n  "extraKnownMarketplaces": {},\n  "theme": "dark"\n}\n';
   assert.equal(withoutPluginResidue(left), HIS_SETTINGS);
   const kept = '{\n  "enabledPlugins": { "engram@engram": true },\n  "theme": "dark"\n}\n';
-  assert.equal(withoutPluginResidue(kept), JSON.stringify(JSON.parse(kept), null, 2) + '\n');
+  assert.equal(withoutPluginResidue(kept), kept);
   assert.equal(withoutPluginResidue('not json'), 'not json');
+  // Only the residue is set apart: a file without those keys, or with them as anything but an empty object, is
+  // returned as it is, so a change of its bytes still fails recorded-paths (the verifier on bb6223b..ee22f20).
+  assert.equal(withoutPluginResidue('{"theme":"dark"}'), '{"theme":"dark"}');
+  const arrays = '{\n  "enabledPlugins": [],\n  "theme": "dark"\n}\n';
+  assert.equal(withoutPluginResidue(arrays), arrays);
 });
 
 test('the walk has one step for each id of the rehearsal, and no other', () => {

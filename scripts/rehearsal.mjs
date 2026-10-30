@@ -19,6 +19,7 @@ import { claudeJsonMcpPart, realFilesOf, registrationsLeftIn, shimContent } from
 import { SANDBOX_SWITCHES } from '../evals/configs.mjs';
 import { allocatePort, killByPort } from '../evals/ports.mjs';
 import { RUNNABLE } from '../bin/lib/stack-install.mjs';
+import { killProcesses, selectTrees } from '../bin/lib/process-tree.mjs';
 import {
   ALWAYS, FOREIGN_TOOLS, REHEARSAL, costProblem, directiveProblem, engramRecoveryProblem, foreignProblems, importRowState,
   plantedRuleFiles, recordedPaths, restoreProblems,
@@ -84,8 +85,11 @@ export function withoutPluginResidue(text) {
     return text;
   }
   if (data === null || typeof data !== 'object' || Array.isArray(data)) return text;
-  const empty = (value) => value !== null && typeof value === 'object' && Object.keys(value).length === 0;
-  for (const key of PLUGIN_RESIDUE) if (empty(data[key])) delete data[key];
+  const empty = (value) => value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0;
+  const residue = PLUGIN_RESIDUE.filter((key) => empty(data[key]));
+  // Nothing set apart, the file as it is: a change of its bytes alone is still a change.
+  if (residue.length === 0) return text;
+  for (const key of residue) delete data[key];
   return `${JSON.stringify(data, null, 2)}\n`;
 }
 
@@ -176,16 +180,58 @@ export function openedBrowsers(processes, root, platform = process.platform) {
   return processes.filter((p) => browsers.has(p.pid) && !under(p, browsers)).map(({ pid, command }) => ({ pid, command }));
 }
 
-/** The pids whose command line holds `root`, and whether a process hangs, at any depth, from one of a set of pids. */
+/** The pids whose command line holds `root`, and whether a process hangs, at any depth, from one of a set of pids.
+ * A parent counts only when it was created before its child, where both creation times are known: Windows keeps a
+ * dead parent's pid on its children and gives the pid to a later process (bin/lib/process-tree.mjs). */
 function scratchTrees(processes, root, platform) {
   const fold = (text) => (platform === 'win32' ? text.toLowerCase() : text);
   const holds = new Set(processes.filter((p) => typeof p.command === 'string' && fold(p.command).includes(fold(root))).map((p) => p.pid));
   const byPid = new Map(processes.map((p) => [p.pid, p]));
+  const parentOf = (p) => {
+    const up = byPid.get(p.parent);
+    if (!up || up.pid === p.pid) return undefined;
+    return Number.isFinite(up.createdAt) && Number.isFinite(p.createdAt) && up.createdAt > p.createdAt ? undefined : up;
+  };
   const under = (p, pids) => {
-    for (let up = byPid.get(p.parent), hops = 0; up && hops < processes.length; up = byPid.get(up.parent), hops += 1) if (pids.has(up.pid)) return true;
+    for (let up = parentOf(p), hops = 0; up && hops < processes.length; up = parentOf(up), hops += 1) if (pids.has(up.pid)) return true;
     return false;
   };
   return { holds, under };
+}
+
+/** What stopping the trees of `pids` kills, from `processes` (each `{ pid, parent, createdAt, command }`). Windows:
+ * `[{ pid, createdAt }]`, each root and the descendants its creation time proves (`selectTrees`), the identity
+ * `killProcesses` checks before each kill; a root with no creation time gives none. Elsewhere: `[{ pid }]`, each
+ * root and every process below it by parent, which a kill of the root alone would leave orphaned (Codex P2). */
+export function stopTargets(processes, pids, platform = process.platform) {
+  if (platform === 'win32') {
+    const snapshot = processes.map(({ pid, parent, createdAt, name }) => ({ pid, ppid: parent, createdAt: Number.isFinite(createdAt) ? createdAt : null, name }));
+    const created = new Map(snapshot.map(({ pid, createdAt }) => [pid, createdAt]));
+    return selectTrees(snapshot, pids).map((pid) => ({ pid, createdAt: created.get(pid) }));
+  }
+  const children = new Map();
+  for (const p of processes) children.set(p.parent, [...(children.get(p.parent) ?? []), p.pid]);
+  const seen = new Set();
+  const queue = pids.filter((pid) => processes.some((p) => p.pid === pid));
+  while (queue.length > 0) {
+    const pid = queue.shift();
+    if (seen.has(pid)) continue;
+    seen.add(pid);
+    queue.push(...(children.get(pid) ?? []));
+  }
+  return [...seen].map((pid) => ({ pid }));
+}
+
+/** Whether the walk starts `program` through a shim in its bin, rather than a link of it: anything but a Windows
+ * `.exe`, since an npm launcher finds its package beside itself (Codex P2). */
+export function launcherShim(program, platform = process.platform) {
+  return platform !== 'win32' || !/\.exe$/i.test(program);
+}
+
+/** Whether a walk passed: every step did, no process outlived it, and its cleanup, engram's server among it, ran
+ * without a problem. */
+export function walkOk({ steps, left, cleanup }) {
+  return steps && left.length === 0 && cleanup.length === 0;
 }
 
 // ---- the walk ---------------------------------------------------------------------------------------------------------
@@ -259,13 +305,15 @@ function snapshotOfHim(realHome) {
   return snapshot;
 }
 
-/** Every process of the machine as `{ pid, parent, name, command }`, or `null` when they cannot be listed. */
+/** Every process of the machine as `{ pid, parent, createdAt, name, command }`, from one query, or `null` when they
+ * cannot be listed. `createdAt` is in ms since the epoch, as `takeSnapshot` reads it (Windows only, else absent). */
 function listProcesses() {
   if (process.platform === 'win32') {
-    const ps = 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine | ConvertTo-Json -Compress';
+    const created = "@{n='Created';e={if ($_.CreationDate) { ([DateTimeOffset]$_.CreationDate.ToUniversalTime()).ToUnixTimeMilliseconds() }}}";
+    const ps = `Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine,${created} | ConvertTo-Json -Compress`;
     const out = spawnSync('powershell.exe', ['-NoProfile', '-Command', ps], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, windowsHide: true });
     try {
-      return JSON.parse(out.stdout).map((p) => ({ pid: p.ProcessId, parent: p.ParentProcessId, name: p.Name, command: p.CommandLine }));
+      return JSON.parse(out.stdout).map((p) => ({ pid: p.ProcessId, parent: p.ParentProcessId, createdAt: Number.isFinite(p.Created) ? p.Created : null, name: p.Name, command: p.CommandLine }));
     } catch {
       return null;
     }
@@ -275,14 +323,30 @@ function listProcesses() {
   return out.stdout.split('\n').map((line) => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line)).filter(Boolean).map(([, pid, parent, command]) => ({ pid: Number(pid), parent: Number(parent), command }));
 }
 
-/** Stops each tree `pick` names among the machine's processes, and says what each was. */
-function stopTrees(pick) {
-  const processes = listProcesses();
-  if (processes === null) return ['the processes could not be listed'];
+/** Stops each tree `pick` names among the machine's processes, each process checked by its creation time before
+ * its kill (`stopTargets`, `killProcesses`), and says what each was. `list` is for the tests. */
+export function stopTrees(pick, list = listProcesses) {
+  const processes = list();
+  // Thrown, not returned: a line in the list read as a process stopped (the reliability lens on the walk, S13's log).
+  if (processes === null) throw new Error('the processes could not be listed, so none could be checked or stopped');
   return pick(processes.filter((p) => p.pid !== process.pid)).map(({ pid, command }) => {
-    const stopped = process.platform === 'win32'
-      ? spawnSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { encoding: 'utf8', windowsHide: true }).status === 0
-      : (() => { try { process.kill(pid, 'SIGKILL'); return true; } catch { return false; } })();
+    const targets = stopTargets(processes, [pid]);
+    let stopped = targets.length > 0;
+    if (process.platform === 'win32') {
+      try {
+        stopped &&= killProcesses(targets).running.length === 0;
+      } catch {
+        stopped = false;
+      }
+    } else {
+      for (const target of targets.reverse()) {
+        try {
+          process.kill(target.pid, 'SIGKILL');
+        } catch {
+          // already gone
+        }
+      }
+    }
     // The tail, where the arguments are: walk 3's leftover showed only the scratch root its binary sat under.
     const text = String(command);
     return `${pid} ${stopped ? 'stopped' : 'not stopped'}: ${text.length > 240 ? `…${text.slice(-240)}` : text}`;
@@ -300,7 +364,13 @@ function guarded(step, root) {
     } catch (err) {
       failure = err;
     }
-    const browsers = stopTrees((processes) => openedBrowsers(processes, root));
+    let browsers;
+    try {
+      browsers = stopTrees((processes) => openedBrowsers(processes, root));
+    } catch (err) {
+      // The step's own failure says more than a browser check that could not run.
+      throw failure ?? err;
+    }
     if (browsers.length > 0) throw new Error(`a browser opened under the walk and was stopped: ${browsers.join('; ')}`);
     if (failure) throw failure;
     return detail;
@@ -484,7 +554,8 @@ export const STEPS = {
     const update = ctx.must(ctx.harness('update', ...ctx.at, '--repo', REPO), 'update');
     const manifest = path.join(project, '.git', 'js-harness', 'manifest.json');
     const before = [fs.readFileSync(manifest, 'utf8'), git(ctx, 'status', '--porcelain').stdout];
-    ctx.harness('init', ...ctx.at, '--cwd', project);
+    // Its exit too: one that failed before writing would read as one that writes nothing.
+    ctx.must(ctx.harness('init', ...ctx.at, '--cwd', project), 'init again');
     const after = [fs.readFileSync(manifest, 'utf8'), git(ctx, 'status', '--porcelain').stdout];
     assertThat(before[0] === after[0] && before[1] === after[1], 'init again changed the manifest or the tree');
     return `update: ${update.stdout.trim().split(/\r?\n/)[0]}; init again wrote nothing`;
@@ -507,17 +578,25 @@ export const STEPS = {
     assertThat(state() === 'ok', 'the claude-import row is not ok after init');
     const above = path.join(root, 'CLAUDE.md');
     fs.writeFileSync(above, '# planted above the project\n');
-    const red = state();
-    fs.rmSync(above);
+    let red;
+    try {
+      red = state();
+    } finally {
+      fs.rmSync(above, { force: true });
+    }
     assertThat(red === 'mismatch', `a CLAUDE.md above the project leaves the row ${red}`);
     return 'ok after init; mismatch with a CLAUDE.md planted above the project';
   },
   directive: (ctx) => {
     const { project } = ctx.layout;
     const planted = plantedRuleFiles();
-    for (const [file, text] of Object.entries(planted)) fs.writeFileSync(path.join(project, file), text);
-    const check = ctx.harness('rules', 'check');
-    for (const file of Object.keys(planted)) fs.rmSync(path.join(project, file));
+    let check;
+    try {
+      for (const [file, text] of Object.entries(planted)) fs.writeFileSync(path.join(project, file), text);
+      check = ctx.harness('rules', 'check');
+    } finally {
+      for (const file of Object.keys(planted)) fs.rmSync(path.join(project, file), { force: true });
+    }
     const problem = directiveProblem({ code: check.code, stdout: check.stdout });
     assertThat(problem === null, problem);
     return check.stdout.trim().split(/\r?\n/).join(' | ');
@@ -613,7 +692,8 @@ async function main(argv) {
   for (const name of ['claude', 'jq']) {
     const program = locate(name);
     assertThat(program, `${name} is not on your PATH`);
-    linkOrCopy(program, path.join(layout.bin, path.basename(program)));
+    if (launcherShim(program)) fs.writeFileSync(path.join(layout.bin, process.platform === 'win32' ? `${name}.cmd` : name), shimContent(program, process.platform), { mode: 0o755 });
+    else linkOrCopy(program, path.join(layout.bin, path.basename(program)));
   }
   // npm too, which the project's gate runs its tests with (walk 7's first commit found none).
   for (const name of ['pnpm', 'npm']) {
@@ -636,19 +716,28 @@ async function main(argv) {
   const started = Date.now();
   const steps = Object.fromEntries(Object.entries(STEPS).map(([id, step]) => [id, guarded(step, layout.root)]));
   const outcome = walkJourney({ journey: REHEARSAL, steps, ctx, alwaysRun: ALWAYS, report: ({ status, id, detail, failed }) => console.log(`${status.padEnd(4)}  ${id}  ${redacted(detail ?? `after ${failed}`, token)}`) });
+  // Engram's server may name no scratch path (evals/ports.mjs), so the sweep below cannot be trusted to find it: a
+  // server that could not be stopped fails the walk.
+  const cleanup = [];
   try {
     killByPort(port);
   } catch (err) {
-    console.log(`engram on ${port}: ${err.message}`);
+    cleanup.push(`engram on ${port}: ${err.message}`);
   }
   // Nothing the walk started may outlive it: one left is stopped, named, and fails the walk.
-  const left = stopTrees((processes) => scratchProcesses(processes, layout.root));
+  let left = [];
+  try {
+    left = stopTrees((processes) => scratchProcesses(processes, layout.root));
+  } catch (err) {
+    cleanup.push(`the sweep: ${err.message}`);
+  }
   const spent = ctx.spend.reduce((sum, cost) => sum + cost, 0);
   const record = {
     date: new Date().toISOString(),
     commit: spawnSync('git', ['rev-parse', 'HEAD'], { cwd: REPO, encoding: 'utf8' }).stdout.trim(),
-    ok: outcome.ok && left.length === 0,
+    ok: walkOk({ steps: outcome.ok, left, cleanup }),
     leftProcesses: left,
+    cleanupProblems: cleanup,
     minutes: Math.round((Date.now() - started) / 6000) / 10,
     hostCostUsd: Math.round(spent * 10000) / 10000,
     estimateUsd: WALK_ESTIMATE_USD,
