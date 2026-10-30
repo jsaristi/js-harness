@@ -1112,6 +1112,23 @@ ended runs nothing (`bin/gate.test.mjs`, "gate whose launcher ends while it wait
 - Control: check — bin/loop.test.mjs — "stop --take-over kills the loop and every descendant by pid
   and creation time, looks again and removes the record" — since 2026-10-15
 
+### project-migrate-maintenance-flake
+A merge queue run failed on one test of `bin/lib/project-migrate.test.mjs`, "a CLAUDE.md deleted and not
+committed is refused", which compares every file of its scratch project, `.git` included, before and after a
+refused migrate: the second tree held `.git/objects/f1/0b857d...` and `.git/objects/maintenance.lock` the first
+did not. The fixture's commits started `git maintenance run --auto --detach`, which wrote into the repository while
+the test ran; the same test passed alone. The file's own global git config did not turn automatic maintenance off,
+as `bin/check.test.mjs` and the shared `repoTemplate` do (rules-row-template-copy-enoent); it now sets
+`maintenance.auto` false and `gc.auto` 0 for every repository the file makes. No other test file that snapshots a
+tree with `.git` in it commits in that repository: `bin/update.test.mjs` snapshots projects it never commits in,
+and `bin/lib/project.test.mjs` skips `.git` (searched: test files that walk a tree with `withFileTypes` or copy it
+with `cpSync` and set `GIT_CONFIG_GLOBAL` without maintenance off).
+- Class: machine
+- Seen: 2026-10-30 — GitHub Actions run 41116514048, the merge queue's candidate 579e918 of pull request 714 —
+  `deepStrictEqual` at `bin/lib/project-migrate.test.mjs:398`; the only failing test of the run
+- Control: check — bin/lib/project-migrate.test.mjs — "a commit in a project these tests make starts no git
+  maintenance" — since 2026-10-30
+
 ### proposal-unreviewed
 A plan, a design or a protocol reached him to decide before any reader that did not write it had
 read it, and he found its holes, or was asked to approve a version its next round replaced.
