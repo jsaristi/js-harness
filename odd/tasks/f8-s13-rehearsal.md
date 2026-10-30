@@ -58,16 +58,16 @@ directive coverage and S12's migration carries it" (reverse-engineering document
 
 ## Tasks
 - [x] T1 (kind: docs) close S5c-a: T9 by the lead's decision, S5c-a's roadmap line — inline; `ef23c03e`
-- [ ] T2 (kind: build) `scripts/rehearsal-lib.mjs`, the pure part: the walk's steps, what each must show, the planted
+- [x] T2 (kind: build) `scripts/rehearsal-lib.mjs`, the pure part: the walk's steps, what each must show, the planted
   fixtures, the comparison of recorded paths after the uninstalls, the absence of gentle-ai, Orca and herdr — S1 to
-  S6; inline, test first
-- [ ] T3 (kind: build) `scripts/rehearsal.test.mjs`, the free rehearsal test: a scratch project in a scratch home,
-  `init`, the planted directive makes `rules check` exit 1 — S5, S7; inline, test first
-- [ ] T4 (kind: build) `scripts/rehearsal.mjs`, the walk, run by hand — S1 to S6; inline
-- [ ] T5 (kind: verify) one walk from a clean commit, recorded under `## Walk` with its cost — S1 to S6
+  S6; inline, test first; `d1cea611`
+- [x] T3 (kind: build) `scripts/rehearsal.test.mjs`, the free rehearsal test: a scratch project in a scratch home,
+  `init`, the planted directive makes `rules check` exit 1 — S5, S7; inline, test first; `57584e5d`, `2c4e534e`, `d8fb14a5`
+- [x] T4 (kind: build) `scripts/rehearsal.mjs`, the walk, run by hand — S1 to S6; inline; `d4dd7199` and the fixes runs 1-8 found
+- [x] T5 (kind: verify) one walk from a clean commit, recorded under `## Walk` with its cost — S1 to S6; run 9
 - [x] T6 (kind: verify) the rehearsal test on a planted break, then green again — S7; L8
-- [ ] T8 (kind: build) the `doctor` row of 13.3 row 16: the project's root `CLAUDE.md` imports `AGENTS.md` and no
-  `CLAUDE.md` above it turns the import off, test first, its own commit (D1, L4) — S4; inline
+- [x] T8 (kind: build) the `doctor` row of 13.3 row 16: the project's root `CLAUDE.md` imports `AGENTS.md` and no
+  `CLAUDE.md` above it turns the import off, test first, its own commit (D1, L4) — S4; inline; `604253a6`, `430130ed`, `bb6223b9`
 - [x] T9 dropped by the lead (D3 corrected, L9): no run timed out (L7)
 - [ ] T7 (kind: docs) Codex and the lenses on every code commit, gentle-ai lines, the independent verifier over
   the range, PR, ready notice, summary — inline
@@ -127,6 +127,16 @@ directive coverage and S12's migration carries it" (reverse-engineering document
   settings.local.json in project-apply.mjs:23); Claude's plugin commands in his engram steps do. The step now judges
   that file by its bytes once those two keys, when empty, are out, keeps them under `seen.hisStepResidue` for S12, and
   fails on any other difference. `foreign-absent` skipped after it; `real-home-after` PASS; no process left.
+- Run 9 (2026-10-30T04:10Z, `97e3af53`, 3.6 minutes, host cost $0.0243 of the $5 estimate, `costProblem` null): all
+  21 steps PASS, `ok: true`, exit 0 — the pass of S13. `recorded-paths`: "20 recorded paths gone or back to their
+  bytes; 91 paths outside every manifest left in the scratch home" (engram's and the hosts' own state, for S12), with
+  `seen.hisStepResidue` ".claude\settings.json: { "enabledPlugins": {}, "extraKnownMarketplaces": {}, "theme":
+  "dark" }"; `foreign-absent`: "55 commands run and 4893 files on the PATH: none of gentle-ai, orca, herdr";
+  `real-home-after`: 19 of his files as they were; no process left; `hostLeftovers` two `codegraph.js serve --mcp`,
+  one a `claude -p` session, as in runs 5 and 7. The slice's reviews in the scratch project, plan beside run: Codex
+  "No estimate", used 31,866 input (15,744 cached) and 357 output in 21 s; the lens "about 1,393 estimated input
+  tokens a lens", used 3,753 input and 269 output, the gap of run 8 again, owed as a finding (L11). Host cost of the
+  nine runs: $0.0907 against the one walk's $5.
 
 ## Next step
 State at 2026-10-30 ~03:35Z (branch `f8-s13-rehearsal`, worktree `D:\js-harness\.claude\worktrees\f8-s13-rehearsal`,
@@ -229,4 +239,4 @@ list), `bin/lib/payload.mjs` (export), `bin/stack.mjs` and `bin/stack-install.te
   walk 9 and the branch's reviews. The 2.7x is on a few thousand tokens of his Max plan, no cap by his words (19692);
   keep the plan gap as a finding, owed, with your corrected cause (unmeasured CLI overhead, not the prompt). Stop
   again only on a run whose absolute cost is material." The declared `js-harness wait --notice-to 90` that was to
-  wake the session on it exited 127 with only its opening line, so the answer was read 35 minutes late.
+  wake the session on it exited 127 with only its opening line, so the answer was read 35 minutes late; the cause, by merge-queue's note at 23:34 local: it refreshed the installed copy to `6e15b06` and stopped the wait run from it.
