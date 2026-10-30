@@ -1386,7 +1386,7 @@ The status report reached him without the migration's share or whether the last 
 three sections saying no record holds them: the page read neither the plan's steps nor the stretch's record, and
 nothing warned the lead that a report marked without notes leaves sections 3, 5 and 6 empty.
 - Class: tool
-- Seen: 2026-10-30 — lead transcript 0f71b2c6, line 25304 — "no aparecio en el como vamos, ni el mapa
+- Seen: 2026-10-30 — lead transcript 0f71b2c6, line 25223 — "no aparecio en el como vamos, ni el mapa
   ni los porcentajes si se cumplio la meta"; the lead sent the report without notes and without the
   stretch (brief JH 91, odd/tasks/report-stretch-share.md)
 - Control: check — bin/report.test.mjs — "the status page and the printed report carry the F8 share and

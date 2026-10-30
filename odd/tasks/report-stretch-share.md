@@ -38,10 +38,11 @@ Nothing beyond the standing rules: the brief (JH 91) and his words decide the fe
 
 ## Specs
 1. The page and the printed report carry the migration's share, the F8 plan steps done of their total, now and at the
-   last report's cut. His words, lead transcript 0f71b2c6 line 23526 and 23561 (2026-10-30): what % total we are at,
-   and the total is the F8 migration, not the old map.
+   last report's cut. His words, lead transcript 0f71b2c6, line 23526 (2026-10-29T16:14Z): "tambien que diga en que
+   porcentaje total vamos y a cuanto aproximadamente llegariamos"; line 23561 (16:16Z): "como el proyecto lo vamos a
+   tener que volver amigrar todo y completo es a eso no a lo que ya veniamos haciendo que es el proyecto antiguo".
 2. They carry the last stretch closed or open since the cut: each goal met or not with its exit, its hours, and its
-   forecast against what happened. His words, line 25304: "no aparecio en el como vamos, ni el mapa ni los porcentajes
+   forecast against what happened. His words, line 25223 (2026-10-30T01:46:58Z): "no aparecio en el como vamos, ni el mapa ni los porcentajes
    si se cumplio la meta, no aparecio absoultamente nada de lo que planteamos".
 3. With no `--notes`, sections 3, 5 and 6 say so as now, and `report --mark --html` without `--notes` prints a warning
    that those three sections will be empty.
@@ -77,3 +78,12 @@ Nothing beyond the standing rules: the brief (JH 91) and his words decide the fe
   again (pass 0, fail 1); restored, pass 1, fail 0.
 - L8 The FAILURES entry `status-report-without-facts` read "control lost" while the test title held `\'`: the register
   matches the title's text, so the title is written in double quotes; `js-harness failures` then reads it controlled.
+- L9 His words were checked with `js-harness sessions --quote`: the brief's line 25304 is an assistant entry, and his
+  line is 25223 (2026-10-30T01:46:58Z); lines 23408, 23526 and 23561 are his, of 2026-10-29. The Specs cite the lines
+  read. Lenses: readability, reliability and resilience over f2110239..d04fd86c, 0 findings each, recorded.
+- L10 Codex over f2110239..d04fd86c, recorded in 2 parts: part 1 correct (0.86); part 2 one P2 finding, valid:
+  `reportStretch` dropped `measure`'s `unavailable`, so partial hours read as whole and `--mark` could advance the cut.
+  The first run did not record part 2 because this session edited this document while it ran; the edits went to a
+  tagged stash and the run was repeated once (part 1 kept). Fix: `reportStretch` returns `unread`, the lines and the
+  page say each record and that the hours are partial, and `--mark` records nothing; tests first (4 failed, then 79
+  of 79 passed). The test comment citing line 25304 now cites 25223.
