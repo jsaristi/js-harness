@@ -2334,6 +2334,41 @@ test('doctorMain shows the permissions row stale with each missing entry, and n/
   }
 });
 
+// The claude-import row (the reverse-engineering document, 13.3 row 16; odd/tasks/f8-s13-rehearsal.md, T8): the
+// project's own cell, a gap with each file above the project that loads beside its CLAUDE.md.
+test('doctorMain shows the claude-import row in the project cell, a gap with each file above the project', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const seen = [];
+    const above = (root, at) => {
+      seen.push([root, at]);
+      return { state: 'mismatch', fix: ['claude-import: 1 file above the project loads into every session in it, beside its CLAUDE.md: move it or remove it', '/planted/CLAUDE.md'] };
+    };
+    const { output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, imports: above });
+    assert.match(output, /^claude-import\s+n\/a\s+n\/a\s+n\/a\s+mismatch\s+n\/a$/m);
+    assert.ok(output.includes('  claude-import (project):\n    claude-import: 1 file above the project'), output);
+    assert.ok(output.includes('    /planted/CLAUDE.md'), output);
+    // The home goes along, so his own settings' claudeMdExcludes count.
+    assert.deepEqual(seen, [[project, home]]);
+
+    const green = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, imports: () => ({ state: 'ok', fix: [] }) });
+    assert.match(green.output, /^claude-import\s+n\/a\s+n\/a\s+n\/a\s+ok\s+n\/a$/m);
+    const broken = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, imports: () => { throw new Error('boom'); } });
+    assert.match(broken.output, /^claude-import\s+n\/a\s+n\/a\s+n\/a\s+unknown\s+n\/a$/m);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('doctorCommand gives the claude-import row its check', async () => {
+  const source = fs.readFileSync(new URL('./doctor.mjs', import.meta.url), 'utf8');
+  assert.match(source, /imports: \(project, home\) => importHealth\(project, \{ home \}\)/);
+});
+
 // The worktrees row (odd/tasks/land-unattended.md, T10): the worktrees on branches origin/main already holds, clean
 // and idle, which no land removed, counted with the command that removes them. Counting asks a `git status` of each,
 // so the hook, run at every session start, does not ask.

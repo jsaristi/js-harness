@@ -477,7 +477,10 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   others mid-work. Then (L40 to L42, on branch `f8-s5c-a-reach-2`, $4.43): the case cut at 5 minutes, its grader
   passing a reply that closes on Working and holds his question for his return and failing one that asks it, proven
   on five replies of its own, and `rule-proof.mjs` counting cut trials at their list cost; P10 ties at 0.92, and
-  the lead closed the case owed with that evidence (D21). S13 opens after this branch lands.
+  the lead closed the case owed with that evidence (D21). S13 opens after this branch lands. Done 2026-10-29
+  (JH 90): T9 closed with no case built, by the lead's decision (each rule a case could not tell apart stays `owed`
+  with its evidence; how a case could moves to S5c-b); on main at `f2110239`, `rules coverage --strict` exits 0
+  and `rules coverage --prove` exits 0 (11 planted breaks turn their tests red). S5c-a is done.
 
 ### S13 The rehearsal on a scratch project
 - **Changes:** nothing new; the whole path of the reverse-engineering document's 11.1 walked on a

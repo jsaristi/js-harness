@@ -245,7 +245,7 @@ function globPattern(glob) {
 /** The first `claudeMdExcludes` glob, across the settings layers (odd/tasks/f8-s3-split.md, S8), that
  * matches `filePath`, or `null`: Claude Code merges the arrays of every layer and skips a CLAUDE.md any
  * of them matches. A missing or malformed layer, or an entry that is not a string, adds nothing. */
-function excludingGlob(settingsPaths, filePath) {
+export function excludingGlob(settingsPaths, filePath) {
   const target = path.resolve(filePath).replace(/\\/g, '/');
   for (const settingsPath of settingsPaths) {
     const globs = readJson(settingsPath)?.claudeMdExcludes;
