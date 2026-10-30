@@ -618,16 +618,7 @@ call, both reviews are recorded, and `--json` prints `{ host, stack }`. The row 
 `outdated` when the app downloaded an update it has not applied: on Windows that waits until
 Claude is quit fully, the tray icon included.
 
-Its `gentle-ai-sync` row does the same for gentle-ai. A gentle-ai sync rewrites the global
-`~/.claude/CLAUDE.md`, which gentle-ai owns: js-harness writes nothing there but its own recorded
-Rules block (`install`, above), and otherwise only reads the file to measure the per-turn payload
-(`bin/lib/payload.mjs`). So a new gentle-ai version stays `stale`
-until it is reviewed. One review step diffs the global `CLAUDE.md` against the copy gentle-ai saved
-before the first sync since the last review (`~/.gentle-ai/backups/<stamp>/snapshot.tar.gz`), and
-the next checks each change against the project's `AGENTS.md` for conflicts.
-`js-harness doctor --gentle-ai-reviewed` records the review, and `--json` prints the record.
-
-Its `stack-update` row does the same for the other tools of the stack and for the `claude` on PATH:
+Its `stack-update` row does the same for the tools of the stack and for the `claude` on PATH:
 the first reading is recorded as reviewed, and a tool that updated itself since (engram, codex, the
 Claude CLI's native updater) stays `stale`, named by the session-start hook, until
 `js-harness doctor --stack-reviewed` records its review. A tool installed since joins the record as
