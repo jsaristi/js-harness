@@ -2018,13 +2018,41 @@ test('a host update since the reviewed versions is stale, with the versions and 
       '    check that the harness hooks in ~/.claude/settings.json still run',
       '    turn Remote Control back on in each work session without asking the user (rule remote-control-yes: a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first',
       '    report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
-      '    then record the review: js-harness doctor --host-reviewed',
+      '    write that account to docs/host-updates/claude-desktop-2.42304.0.md in the project that keeps the host reviews: the line "Code tab CLI: 2.1.299", a table of Change, Decision (adopt, adapt or ignore) and Reason, one row a change the update brings, and a "## Sources" list of what was read, the changelogs above among it',
+      '    then record the review: js-harness doctor --host-reviewed, which refuses while that file lacks any of it',
     ].join('\n');
     assert.ok(table.output.includes(`\n${steps}\n`), table.output);
     const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch, host });
     const row = JSON.parse(json.output).find((item) => item.id === 'host-update');
     assert.deepEqual(row.gaps, [{ dimension: 'claude', state: 'stale', fix: row.fix.claude }]);
     assert.equal(readCache(home).host.reviewed.desktop, '2.37337.1', 'a report records nothing while the update is unreviewed');
+
+    // The lead's mistake of 2026-10-30 (docs/FAILURES.md, host-review-without-research): the update recorded as
+    // reviewed with no account of what it brings. With no review file, or one that lacks a part, nothing is recorded.
+    const file = path.join(project, 'docs', 'host-updates', 'claude-desktop-2.42304.0.md');
+    const errors = [];
+    const original = console.error;
+    console.error = (line) => errors.push(line);
+    try {
+      const bare = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed'], {}, { spawn, fetch: noopFetch, host });
+      assert.deepEqual([bare.code, bare.output], [1, '']);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, '# Claude Desktop 2.42304.0\n\nCode tab CLI: 2.1.299\n\n| Change | Decision | Reason |\n|---|---|---|\n| Mods | maybe | a panel beside the chat |\n');
+      const partial = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed'], {}, { spawn, fetch: noopFetch, host });
+      assert.deepEqual([partial.code, partial.output], [1, '']);
+    } finally {
+      console.error = original;
+    }
+    assert.deepEqual(errors, [
+      `js-harness doctor: no review file docs/host-updates/claude-desktop-2.42304.0.md in ${project}: the review of Claude Desktop 2.42304.0 is recorded from the project that keeps the host reviews, once that file holds it (the host-update row's fix says what it holds). Nothing was recorded.`,
+      'js-harness doctor: docs/host-updates/claude-desktop-2.42304.0.md does not hold the review of Claude Desktop 2.42304.0 yet: it lacks row 1: a Decision of adopt, adapt or ignore (it reads "maybe"); a "## Sources" section. Nothing was recorded.',
+    ]);
+    assert.equal(readCache(home).host.reviewed.desktop, '2.37337.1', 'a refused review records nothing');
+    fs.writeFileSync(file, [
+      '# Claude Desktop 2.42304.0', '', 'Code tab CLI: 2.1.299', '',
+      '| Change | Decision | Reason |', '|---|---|---|', '| Mods | adapt | the board could be a panel beside the chat |', '',
+      '## Sources', '- https://claude.com/docs/cowork/claude-desktop-changelog', '- https://code.claude.com/docs/en/changelog', '',
+    ].join('\n'));
 
     const reviewed = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed'], {}, { spawn, fetch: noopFetch, host });
     assert.equal(reviewed.code, 0);

@@ -82,6 +82,88 @@ export function readHostVersions({ platform = process.platform, home } = {}) {
   return { found: true, desktop, staged: isVersion(stagedValue) ? stagedValue : null, code };
 }
 
+/** The folder of a project that keeps the host reviews, and the file of one desktop version in it. */
+export const HOST_REVIEWS = 'docs/host-updates';
+export const reviewFileOf = (desktop) => `${HOST_REVIEWS}/claude-desktop-${desktop}.md`;
+
+const DECISIONS = ['adopt', 'adapt', 'ignore'];
+
+/** The cells of a table line `| a | b |`, or null for a line that is no table row. */
+function cellsOf(line) {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('|')) return null;
+  return trimmed.replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
+}
+
+/** A cell's text with the markdown around it taken off: backticks and emphasis. */
+const plain = (cell) => cell.replace(/[`*_]/g, '').trim();
+
+/** What the review file `text` lacks for an update from `reviewed` to `versions`, one reason each; none when it holds
+ * the review: the CLI version read now (when one is read), a table of `Change`, `Decision` and `Reason` whose every
+ * row is decided (`adopt`, `adapt` or `ignore`) with its reason, and a `## Sources` list that holds the changelog of
+ * each part that changed. */
+export function reviewFileGaps(text, versions, reviewed) {
+  const gaps = [];
+  const lines = String(text).split(/\r?\n/);
+  if (versions.code) {
+    const named = lines.map((line) => /^\s*Code tab CLI:\s*(\S+)/.exec(plain(line))).find(Boolean);
+    if (!named) gaps.push(`a line "Code tab CLI: ${versions.code}"`);
+    else if (named[1] !== versions.code) gaps.push(`the Code tab CLI read now, ${versions.code} (it names ${named[1]})`);
+  }
+  const header = lines.findIndex((line) => {
+    const cells = cellsOf(line)?.map((cell) => plain(cell).toLowerCase());
+    return cells && ['change', 'decision', 'reason'].every((name) => cells.includes(name));
+  });
+  if (header === -1) gaps.push('a table with the columns Change, Decision and Reason');
+  else {
+    const names = cellsOf(lines[header]).map((cell) => plain(cell).toLowerCase());
+    const at = Object.fromEntries(['change', 'decision', 'reason'].map((name) => [name, names.indexOf(name)]));
+    const rows = [];
+    for (const line of lines.slice(header + 2)) {
+      const cells = cellsOf(line);
+      if (!cells) break;
+      rows.push(cells);
+    }
+    if (rows.length === 0) gaps.push('one row at least in the table');
+    rows.forEach((cells, i) => {
+      const decision = plain(cells[at.decision] ?? '').toLowerCase();
+      if (!DECISIONS.includes(decision)) gaps.push(`row ${i + 1}: a Decision of adopt, adapt or ignore (it reads "${decision}")`);
+      if (plain(cells[at.reason] ?? '') === '') gaps.push(`row ${i + 1}: a Reason`);
+      if (plain(cells[at.change] ?? '') === '') gaps.push(`row ${i + 1}: a Change`);
+    });
+  }
+  const start = lines.findIndex((line) => /^##\s+Sources\s*$/i.test(line.trim()));
+  if (start === -1) gaps.push('a "## Sources" section');
+  else {
+    const end = lines.findIndex((line, i) => i > start && /^#{1,2}\s/.test(line));
+    const sources = lines.slice(start + 1, end === -1 ? undefined : end).filter((line) => /^\s*[-*]\s+\S/.test(line)).join('\n');
+    const needed = [];
+    if (reviewed.desktop !== versions.desktop) needed.push(DESKTOP_CHANGELOG);
+    if (versions.code && reviewed.code && reviewed.code !== versions.code) needed.push(CODE_CHANGELOG);
+    for (const url of needed) if (!sources.includes(url)) gaps.push(`${url} among the sources`);
+    if (sources === '') gaps.push('one source at least under "## Sources"');
+  }
+  return gaps;
+}
+
+/** Why `doctor --host-reviewed` may not record the `versions` read now over the `reviewed` record (the cache's, or
+ * `null`) from `project`, or `null` when it may. With no record yet, or the versions already reviewed, there is no
+ * update to account for. Otherwise the project's review file of that desktop version must hold its account
+ * (`reviewFileGaps`): the review record is the machine's, the file the project's that keeps the reviews. */
+export function hostReviewRefusal({ project, versions, reviewed }) {
+  const changed = reviewed && (reviewed.desktop !== versions.desktop || (versions.code && reviewed.code && reviewed.code !== versions.code));
+  if (!changed) return null;
+  const relative = reviewFileOf(versions.desktop);
+  let text;
+  try {
+    text = fs.readFileSync(path.join(project, ...relative.split('/')), 'utf8');
+  } catch {
+    return `no review file ${relative} in ${project}: the review of Claude Desktop ${versions.desktop} is recorded from the project that keeps the host reviews, once that file holds it (the host-update row's fix says what it holds)`;
+  }
+  const gaps = reviewFileGaps(text, versions, reviewed);
+  return gaps.length === 0 ? null : `${relative} does not hold the review of Claude Desktop ${versions.desktop} yet: it lacks ${gaps.join('; ')}`;
+}
+
 /** The words of an update from `reviewed` to `now`: the desktop's range, the CLI's, or both; `null` for none. */
 function updateWords(reviewed, now) {
   const desktop = reviewed.desktop !== now.desktop ? `Claude Desktop ${reviewed.desktop} → ${now.desktop}` : null;
@@ -127,7 +209,8 @@ export function hostUpdateRow(versions, reviewed, now = () => new Date(), projec
       'check that the harness hooks in ~/.claude/settings.json still run',
       remoteControlStep(projectData),
       'report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
-      'then record the review: js-harness doctor --host-reviewed',
+      `write that account to ${reviewFileOf(versions.desktop)} in the project that keeps the host reviews: ${versions.code ? `the line "Code tab CLI: ${versions.code}", ` : ''}a table of Change, Decision (adopt, adapt or ignore) and Reason, one row a change the update brings, and a "## Sources" list of what was read, the changelogs above among it`,
+      'then record the review: js-harness doctor --host-reviewed, which refuses while that file lacks any of it',
     ];
   }
   if (versions.staged && compareSemver(versions.staged, versions.desktop) > 0) {

@@ -757,9 +757,10 @@ update brings and what the harness should adopt, adapt or ignore from it.
   --stack-reviewed` recorded his Claude Desktop update at 13:12Z, though the row's fix list asks for a full account
   of the update; he said at line 33399 that he got no clear account of how it could improve the harness; the fix
   then: JH 105 researches the update (the lead's relief note, line 33432)
-- Control: owed — odd/tasks/f8-lead-rigor.md — "S2 — the host review file and the `--host-reviewed` gate"
-- Proof: `js-harness failures weeks`: no sighting of this entry once `--host-reviewed` refuses an update with no
-  review file (owed: odd/tasks/f8-lead-rigor.md, T3)
+- Control: check — bin/doctor.test.mjs — "a refused review records nothing" — since 2026-10-30
+- Proof: `js-harness failures weeks`: no sighting of this entry after the week of 2026-10-26
+- Was: owed — odd/tasks/f8-lead-rigor.md — "S2 — the host review file and the `--host-reviewed` gate" — replaced on
+  2026-10-30 by the check, which T3 of that document built
 
 ### hours-guessed
 Hours written in the relief file were not read from a clock.
