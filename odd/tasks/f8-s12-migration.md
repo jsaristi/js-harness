@@ -197,4 +197,6 @@ landed in order, each with a ready notice; then the summary under docs/sessions/
   The chain (`js-harness-chained-prs`), stacked on main and landed in order: 1 `24c47cad` this document (106 lines);
   2 `1488343e` the scans (315); 3 `abe05fd3` the plan (195); 4 `5058d55e` the writes (234); 5 `09ae0126` the
   command, its test, the v0.97.0 proof, the dispatcher, README and SPEC (404: one unit, 4 over); 6 `9af1aacb` the
-  reviews' fixes D and their record (328); 7 this branch, E through H and the records (about 380).
+  reviews' fixes D and their record (328); 7 this branch, E through H and the records (about 380). Measured at the
+  push, 7 held 413 (370 + 43), so it is cut at E: 7 `5529661d`, the verifier's fixes and their record (109); 8 this
+  branch, F through H, the records and the summary.

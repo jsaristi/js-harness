@@ -20,14 +20,15 @@ before anything else, and do the work it gives you. Its last section says how yo
   `3cba3c9f`, `7af9ec25`, `c362110f`, `60fc1295`, `8546b86f`, with the document's records between them.
 - `scripts/migration.test.mjs`: v0.97.0's own `init` in a `mktemp -d` home, a copy migrated and uninstalled back to
   the same bytes; green, then red on a planted break (`CLAUDE.md` not recorded), then green (L5).
-- The chain of seven pull requests (L17), opened after this file with a ready notice each.
+- The chain of eight pull requests (L17), opened with a ready notice each; the eighth holds this file.
 - T4's facts to the lead (02:16 local): one initialized project, `D:\plataforma-preproyecto` (L10).
 
 ## Decisions
 - D1-D6 (this session, D1 with the lead's yes of 01:21, L2): a new command, the state read rather than the version,
   the split, the pin, the baseline guard, context7 never registered. D7 (this session, on the verifier's finding): the
   baseline is recorded in a clone `sync` set up too. All in the feature document's Decisions.
-- The chain's boundaries (this session, L17): seven slices, one over 400 (the command, 404, one unit).
+- The chain's boundaries (this session, L17): eight slices, one over 400 (the command, 404, one unit); the seventh
+  was planned at about 380, measured 413 at the push and cut at E.
 
 ## Failures and lessons
 - `edit-during-review`: the document and the roadmap were edited while Codex read part 3, so it recorded nothing
