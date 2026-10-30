@@ -382,6 +382,21 @@ Each step is one PR and starts only on his yes. "Undo" is how it is reverted.
 After each step: refresh the installed copy (`merge-queue --land --refresh-copy`), and move any
 `docs/FAILURES.md` entry whose control the step removes to its new control.
 
+### What each step found
+
+Steps 2 to 5 ran in JH 107 on his answer to question 128 (the lead's transcript line 34672, "Sí, arranca el plan
+(Recomendada)"); the detail is in `odd/tasks/f8-desktop-plan.md`.
+
+- **Step 2, 2026-10-30.** Registrations: 18 recorded, 16 stale, each with its `closed` notice in the channel; the
+  list went to the lead before anything was removed, and their `sessions stop` is the lead's, so the count is still 18
+  until it runs. Worktrees: 9 → 8 in `git worktree list` [checked]: `merge-queue --prune` removed JH 105's
+  `claude-app-native` once gentle-ai's ignored `.atl/` cache was deleted (the prune counts any ignored file as
+  unsaved, rightly for an `.env`, needlessly for that cache). Kept: one with an open PR (596), Orca's two (S2), the
+  land's two detached candidates (the lead's), the two live sessions. Five empty folders under `.claude/worktrees` stay
+  "busy", held by a process [unknown which]. Found on the way, for row "Waits killed by low memory" of section 7: 111
+  `node` processes of `ccstatusline`, the status line (`refreshInterval` 10), alive with no parent since 2026-10-28,
+  about 4.3 GB [checked: `wmic process`]; nothing was stopped.
+
 ## 13. His decisions
 
 Each one asked alone, through the lead (`rule:questions-one-place`):

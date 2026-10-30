@@ -319,6 +319,9 @@ forbids: the host's reminder asks for them, and its own text says the user's ins
 - Seen: 2026-10-29 — JH 88, its first commit of feat/lead-manual-steps — the message carried
   `Co-Authored-By` and `Claude-Session`; the commit was stopped while its pre-commit gate waited for
   the gate lock, so none was made, and it was made again without them
+- Seen: 2026-10-30 — JH 107, commit 09489509 of worktree-f8-desktop-plan — the message carried
+  `Co-Authored-By` and `Claude-Session`, and it was pushed before the session saw it; it stays, since
+  the branch is never force-pushed, and the next commits carry neither
 - Control: protocol — bin/lib/rules-block.mjs — "or AI attribution to commits. Use conventional
   commits only" — since 2026-10-29
 
