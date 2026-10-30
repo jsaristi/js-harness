@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { tools, checks, resolveProjectRoot, probeTool, probeStack, hookCommandPlan, ENGRAM_INSTALL } from './stack.mjs';
 import { recordOptionalFile } from './manifest.mjs';
+import { CODEX_DAEMON_FIX } from './codex-daemon.mjs';
 import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './remote.mjs';
 
 function makeTmpHome(prefix = 'js-harness-stack-home-') {
@@ -114,10 +115,37 @@ test('engram-plugin upToDate fix, when the binary\'s tag cannot be read from the
 
 test('engram-plugin upToDate fix for a plugin ahead of its binary\'s tag updates the binary, not the plugin (row 11)', () => {
   const { upToDateFix } = findTool('engram-plugin');
-  assert.deepEqual(upToDateFix('0.1.16', '0.1.14', [{ id: 'engram', installed: 'ok', version: '3.5.1' }]), [
-    'plugin 0.1.16 is ahead of 0.1.14, the plugin engram v3.5.1 ships, so the two serve different protocols; update the engram binary, then restart Claude Code:',
+  const rows = [{ id: 'engram', installed: 'ok', version: '3.5.1' }];
+  const ahead = 'plugin 0.1.16 is ahead of 0.1.14, the plugin engram v3.5.1 ships, so the two serve different protocols';
+  // A newer engram release known (the engram row's latest version, which doctor already resolves): the binary moves.
+  assert.deepEqual(upToDateFix('0.1.16', '0.1.14', rows, { latestVersions: { engram: '3.6.0' } }), [
+    `${ahead}; engram v3.6.0 is out: update the engram binary, then restart Claude Code:`,
     ENGRAM_INSTALL,
   ]);
+});
+
+// odd/tasks/codex-daemon-row.md, S2: on 2026-10-30 the binary, 3.6.0, was engram's latest release, so "update the engram
+// binary" could not be followed.
+test('engram-plugin upToDate fix for a plugin ahead of a binary that is engram\'s latest release says nothing is to be done until the next one', () => {
+  const { upToDateFix } = findTool('engram-plugin');
+  const rows = [{ id: 'engram', installed: 'ok', version: '3.6.0' }];
+  const said = [
+    'plugin 0.1.19 is ahead of 0.1.17, the plugin engram v3.6.0 ships, so the two serve different protocols; engram v3.6.0 is engram\'s latest release, so the plugin is ahead of engram\'s last release and nothing is to be done until the next one: then update the engram binary and restart Claude Code',
+  ];
+  assert.deepEqual(upToDateFix('0.1.19', '0.1.17', rows, { latestVersions: { engram: '3.6.0' } }), said);
+  assert.deepEqual(upToDateFix('0.1.19', '0.1.17', rows, { latestVersions: { engram: '3.5.1' } }), said, 'a binary past the latest read');
+});
+
+test('engram-plugin upToDate fix for a plugin ahead of its binary\'s tag, with engram\'s latest release unknown, says both cases', () => {
+  const { upToDateFix } = findTool('engram-plugin');
+  const rows = [{ id: 'engram', installed: 'ok', version: '3.6.0' }];
+  const both = [
+    'plugin 0.1.19 is ahead of 0.1.17, the plugin engram v3.6.0 ships, so the two serve different protocols; if engram has a release newer than v3.6.0, update the engram binary, then restart Claude Code; if not, the plugin is ahead of engram\'s last release and nothing is to be done until the next one:',
+    ENGRAM_INSTALL,
+  ];
+  assert.deepEqual(upToDateFix('0.1.19', '0.1.17', rows), both, 'no latest versions given');
+  assert.deepEqual(upToDateFix('0.1.19', '0.1.17', rows, { latestVersions: { engram: null } }), both, 'engram\'s latest not looked up');
+  assert.deepEqual(upToDateFix('0.1.19', '0.1.17', rows, { latestVersions: { engram: 'not a version' } }), both, 'an unreadable latest');
 });
 
 test('no tool ever recommends `codegraph upgrade` (user rule)', () => {
@@ -777,7 +805,7 @@ test('probeStack leaves the codex row out only when codexReview resolves off, an
     const ids = (functions) => probeStack({ home, project, spawn: fakeSpawnMissing(), functions }).map((row) => row.id);
     const off = ids({ codexReview: { value: 'off' } });
     assert.equal(off.includes('codex'), false);
-    assert.deepEqual(off, ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'pnpm-lock']);
+    assert.deepEqual(off, ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'codex-daemon', 'pnpm-lock']);
     assert.equal(ids({ codexReview: { value: 'on' } }).includes('codex'), true);
     assert.equal(ids(undefined).includes('codex'), true, 'with no switches resolved the row is shown');
   } finally {
@@ -969,7 +997,7 @@ test('probeStack returns one row per tool, in order, then one per check, never t
     const rows = probeStack({ home, project, spawn: fakeSpawnMissing() });
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'pnpm-lock'],
+      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'codex-daemon', 'pnpm-lock'],
     );
     for (const row of rows) assert.equal(row.upToDate, 'unknown');
   } finally {
@@ -1013,8 +1041,35 @@ function accountState(seed, platform = 'win32') {
 }
 
 test('checks carries the Claude account check and then the remote server one, apart from the tools', () => {
-  assert.deepEqual(checks.map((check) => check.id), ['memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'hook-commands', 'pnpm-lock']);
+  assert.deepEqual(checks.map((check) => check.id), ['memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'codex-daemon', 'hook-commands', 'pnpm-lock']);
   assert.equal(tools.some((tool) => ['claude-account', 'remote-server'].includes(tool.id)), false);
+});
+
+// odd/tasks/codex-daemon-row.md, S1: the daemon check reads the Codex home of `home`, and its fix is the reason, then
+// what the state says is wrong and the repair, each on its own line.
+test('the codex-daemon check reads <home>/.codex: missing on a current with no executable, with the repair as its fix', () => {
+  const home = makeTmpHome('js-harness-stack-daemon-');
+  try {
+    const pkg = path.join(home, '.codex', 'packages', 'app-server-daemon');
+    const release = path.join(pkg, 'releases', '0.162.0-x86_64-pc-windows-msvc');
+    fs.mkdirSync(path.join(release, 'bin'), { recursive: true });
+    writeJson(path.join(release, 'codex-package.json'), { version: '0.162.0', entrypoint: 'bin/codex.exe' });
+    fs.symlinkSync(release, path.join(pkg, 'current'), 'junction');
+    const check = checks.find((candidate) => candidate.id === 'codex-daemon');
+    const row = probeTool(check, { home, project: home, spawn: fakeSpawnMissing() });
+    assert.equal(row.codex, 'missing');
+    assert.equal(row.claude, 'n/a');
+    assert.equal(row.installed, 'n/a');
+    assert.equal(row.fix.codex[0], CODEX_DAEMON_FIX);
+    assert.match(row.fix.codex[1], /bin\/codex\.exe, which is not there$/);
+    assert.ok(row.fix.codex.length > 3, 'the repair follows');
+    fs.writeFileSync(path.join(release, 'bin', 'codex.exe'), 'binary');
+    const healthy = probeTool(check, { home, project: home, spawn: fakeSpawnMissing() });
+    assert.equal(healthy.codex, 'ok');
+    assert.deepEqual(healthy.fix, {});
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('claude-account is ok when the CLI and the desktop app name the same account, on Windows and on macOS', () => {
