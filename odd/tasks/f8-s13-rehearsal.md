@@ -105,6 +105,10 @@ directive coverage and S12's migration carries it" (reverse-engineering document
   <scratch project>`, Claude's codegraph MCP server, running after its `claude -p` sessions ended (which session is not
   known); the walk now stops such a server after each host session and keeps it under `seen.hostLeftovers` as a
   finding for S12, while the final sweep still fails on any other. `real-home-after` PASS.
+- Run 6 (2026-10-30T03:00Z, `38d1e348`, 1 minute, host cost $0): `install` PASS; `stack-install` FAIL as in run 4,
+  "codex installed: the command exited 0 and the probe cannot tell whether it worked", now with the whole output in
+  `commands.log`: no end-of-run read follows it. Cause proven and fixed in `bin/stack.mjs`, test first (L10).
+  `real-home-after` PASS; no process left.
 
 ## Next step
 State at the second context pause (2026-10-30 ~02:30Z, branch `f8-s13-rehearsal`, worktree
@@ -193,3 +197,11 @@ L9); the brief's surfaces gained `bin/lib/gentle-ai-absence.test.mjs` (NAMED lis
 - L9 (2026-10-30, the lead's note in the channel at 21:25 local): "Lead, D3 corrected: (a). Drop T9; Codex's mcp add
   leaving context7's login open is owed to S12 with the walk's log as evidence; the walk keeps context7 out of Codex
   and keeps its browser guard."
+- L10 (2026-10-30, the lead's note in the channel at 22:02 local, on this session's notice that walks 4 and 6 fail
+  in `stack install`): "Lead, (a): fix it in S13, test first, its own commit; the independent verifier covers it
+  (install). First prove the cause you mark a guess (time the cold codex --version in the scratch home, or show the
+  record left unverified in walk 4's log), as D3 taught; if the proof refutes it, tell me before building." Proof:
+  a fresh copy of walk 6's `codex.exe` answered `--version` in 17977 ms the first time and 58 ms the second
+  (`node cold-codex.mjs`, job tmp), past `PROBE_TIMEOUT_MS` of 5000; walk 6's manifest keeps `codex installed` with
+  `applies: "0.165.0"`, so the record was read while its state was not, and bin/stack.mjs:267 queued only a record
+  whose applies is null for the end-of-run read. The cause holds.
