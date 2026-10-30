@@ -236,3 +236,4 @@ session records `tools-background.txt` from its own list either way.
 2. Push `f8-s9-probe`, open PR 2 (base main), `ready` notice.
 3. T4 (trigger: heartbeat `HOST:` line, row fix, notice, `host-watch brief`), then T5 (real run), T6.
 - Next (2026-10-30, at compaction): RED tests are in WIP commit 86241d53 (cutSpan keeps the next newer heading line; parseChangelog unescapes \[ \] \_ \*; check refuses a span end below the version the review names and a declared source with no readable span). Make them green in bin/lib/host-watch.mjs and bin/host-watch.mjs, amend 86241d53 into a fix(host-watch) commit, then step 1 of "Next step" goes on.
+- Next (2026-10-30): Codex findings fixed in c0d15661 (green, 46 tests); its reviews run over c2a21b9e..c0d15661 (Codex; lenses reliability, risk). The gentle-ai lineage review-4991b18b1d344d43 was opened on the old tree (dad0db39); read its status before capturing anything. Then push f8-s9-probe and open PR 2.
