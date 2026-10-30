@@ -24,9 +24,11 @@ import {
   clonePending,
   gitDirs,
   gitTopLevel,
+  matchesRecordedHash,
   projectFiles,
   readPin,
   readRecorded,
+  resolveManifestEntryPath,
   syncProject,
   templateBlock,
 } from './project.mjs';
@@ -109,6 +111,10 @@ function decide(state, version, deps) {
   const notes = [];
   let pinWrite = null;
   if (pin !== version) {
+    // Through a link the write would change its target, which git cannot give back (Codex, 2026-10-30).
+    if (fs.lstatSync(files.harnessJsonPath).isSymbolicLink()) {
+      return { refusal: { code: 1, pinUnmovable: true, link: true, harnessJsonPath: files.harnessJsonPath, pin, version } };
+    }
     const before = fs.readFileSync(files.harnessJsonPath, 'utf8');
     const after = movedPin(before, pin, version);
     if (after === null) return { refusal: { code: 1, pinUnmovable: true, harnessJsonPath: files.harnessJsonPath, pin, version } };
@@ -143,11 +149,24 @@ function decide(state, version, deps) {
   return { pin: pinWrite, claude, baseline, notes };
 }
 
-/** The committed files of `COMMITTED` that git sees changed or untracked in the project at `root`. */
+/** The committed files of `COMMITTED` that git sees changed, untracked or ignored in the project at `root`: git could
+ * give none of them back. */
 function uncommittedOf(root, spawn) {
-  const result = spawn('git', ['status', '--porcelain', '--', ...COMMITTED], { cwd: root, encoding: 'utf8' });
+  const result = spawn('git', ['status', '--porcelain', '--ignored', '--', ...COMMITTED], { cwd: root, encoding: 'utf8' });
   if (!result || result.error || result.status !== 0) return [...COMMITTED];
   return result.stdout.split('\n').filter(Boolean).map((line) => line.slice(3).trim()).filter((name) => COMMITTED.includes(name));
+}
+
+/** What `sync` repairs in the clone that `clonePending` does not read (`updateRecorded`): the pre-commit gate of a
+ * manifest `functions apply` wrote or a recorded one that is gone, and the `.atl/` exclude line of a clone with no
+ * record of it. */
+function repairLines({ root, manifest }) {
+  const lines = [];
+  const gate = manifest.files.find((file) => file.path.split('/').pop() === 'pre-commit');
+  if (manifest.scope === 'functions') lines.push('the pre-commit gate: written, as sync sets the clone up the rest of the way');
+  else if (gate && !fs.existsSync(resolveManifestEntryPath(root, gate))) lines.push('the pre-commit gate: written again, since the one recorded is gone');
+  if (!manifest.exclude) lines.push(".atl/: its exclude line added to the clone's exclude file and recorded");
+  return lines;
 }
 
 /** The lines `sync` would render in the blocks once the migration's `CLAUDE.md` is there. */
@@ -219,7 +238,7 @@ export function migrationPlan(cwd, version, deps = {}) {
   if (decided.claude) pending.push(`CLAUDE.md: written, importing AGENTS.md${decided.claude.importOnly ? ' alone' : " and holding the harness's lines for Claude"}`);
   if (decided.baseline) pending.push(`the coverage baseline: recorded as ${decided.baseline}`);
   if (state.manifest.version !== version && !decided.pin) pending.push(`the manifest: records ${version}`);
-  pending.push(...blockLines(state.root, decided), ...clonePending(state.root, { spawn: state.spawn }));
+  pending.push(...repairLines(state), ...blockLines(state.root, decided), ...clonePending(state.root, { spawn: state.spawn }));
   return {
     code: 0,
     root: state.root,
@@ -247,16 +266,18 @@ export function migrateProject(cwd, version, deps = {}) {
   if (decided.refusal) return decided.refusal;
 
   const writeFile = deps.writeFile ?? fs.writeFileSync;
+  const removeFile = deps.removeFile ?? fs.rmSync;
   const manifestDeps = { open: deps.open, write: deps.write, close: deps.close };
   const next = JSON.parse(JSON.stringify(state.manifest));
   const actions = [];
   const committed = new Set();
   const undo = [];
   try {
+    // Each undo is registered before its write, so a write that fails halfway is taken back too (Codex, 2026-10-30).
     if (decided.claude) {
       const target = path.join(root, 'CLAUDE.md');
+      undo.push({ path: 'CLAUDE.md', run: () => removeFile(target, { force: true }) });
       writeFile(target, decided.claude.text, 'utf8');
-      undo.push(() => fs.rmSync(target, { force: true }));
       const hash = sha256(decided.claude.text);
       next.files.push({ path: 'CLAUDE.md', sha256: hash });
       actions.push({ kind: 'wrote', path: 'CLAUDE.md', sha256: hash });
@@ -264,11 +285,12 @@ export function migrateProject(cwd, version, deps = {}) {
     }
     if (decided.pin) {
       const { from, to, before, after } = decided.pin;
+      undo.push({ path: 'harness.json', run: () => writeFile(files.harnessJsonPath, before, 'utf8') });
       writeFile(files.harnessJsonPath, after, 'utf8');
-      undo.push(() => fs.writeFileSync(files.harnessJsonPath, before, 'utf8'));
-      // The record follows the new bytes only while they were the bytes init wrote (D4): an edited file stays the project's.
+      // The record follows the new bytes only while they were the bytes init wrote (D4), CRLF from a checkout read as
+      // the LF init wrote: an edited file stays the project's.
       const entry = next.files.find((file) => file.path === 'harness.json');
-      if (entry && entry.sha256 === sha256(before)) entry.sha256 = sha256(after);
+      if (entry && matchesRecordedHash(before, entry.sha256)) entry.sha256 = sha256(after.replace(/\r\n/g, '\n'));
       actions.push({ kind: 'pinMoved', path: 'harness.json', from, to });
       committed.add('harness.json');
     }
@@ -279,17 +301,24 @@ export function migrateProject(cwd, version, deps = {}) {
     if (actions.length > 0) writeManifestAtomic(files.manifestFilePath, next, manifestDeps);
   } catch (err) {
     const notRemoved = [];
-    for (const step of undo.reverse()) {
+    for (const step of [...undo].reverse()) {
       try {
-        step();
+        step.run();
       } catch {
-        notRemoved.push(step === undo[0] ? 'CLAUDE.md' : 'harness.json');
+        notRemoved.push(step.path);
       }
     }
     throw new InitWriteError(err.message, notRemoved);
   }
 
-  const synced = syncProject(root, version, deps);
+  let synced;
+  try {
+    synced = syncProject(root, version, deps);
+  } catch (err) {
+    // Sync takes back only its own writes: the migration's stay, recorded, and its reader is told which.
+    if (err instanceof InitWriteError) err.migrated = actions.map((action) => (action.kind === 'baseline' ? 'the coverage baseline' : action.path));
+    throw err;
+  }
   for (const action of synced.actions ?? []) if (action.kind === 'rendered') committed.add(action.path);
   return {
     ...synced,
@@ -327,7 +356,8 @@ function cwdOf(file) {
 }
 
 /** The folders the move list is chosen from (the roadmap's S12, "His decisions"), read-only: each folder a Claude Code
- * session under `<claudeHome>/projects` ran in, a linked worktree read as its main checkout, kept where a session ran
+ * session under `<claudeHome>/projects` ran in, a linked worktree read as its main checkout and a folder inside a
+ * repository as its top level, kept where a session ran
  * there in the last `days` days or where it is an initialized project. `[{ path, days, initialized, pin }]`, `days`
  * since its newest session, `pin` the version its `harness.json` pins or `null`; a folder that is gone is left out. */
 export function candidateProjects({ claudeHome = path.join(os.homedir(), '.claude'), now = Date.now(), days = CANDIDATE_DAYS, spawn = spawnSync } = {}) {
@@ -348,7 +378,8 @@ export function candidateProjects({ claudeHome = path.join(os.homedir(), '.claud
       const age = Math.max(0, Math.floor((now - fs.statSync(file).mtimeMs) / 86_400_000));
       const cwd = cwdOf(file);
       if (cwd === null || !fs.existsSync(cwd)) continue;
-      if (!mains.has(cwd)) mains.set(cwd, mainCheckoutOf(cwd, spawn) ?? cwd);
+      // A folder inside a repository, such as a worktree's folder git no longer links, is read as its top level.
+      if (!mains.has(cwd)) mains.set(cwd, mainCheckoutOf(cwd, spawn) ?? gitTopLevel(cwd, spawn) ?? cwd);
       const top = path.resolve(mains.get(cwd));
       if (!newest.has(top) || newest.get(top) > age) newest.set(top, age);
     }

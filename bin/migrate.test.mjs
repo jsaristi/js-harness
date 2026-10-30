@@ -109,6 +109,25 @@ test('a file migrate may write with an uncommitted change is refused with exit 1
   }
 });
 
+test("a failure in sync's part says that what the migration wrote stays recorded, and names it", async (t) => {
+  const { dir, home } = oldProject();
+  try {
+    let writes = 0;
+    const write = (fd, ...rest) => {
+      if (++writes === 2) throw new Error('disk full');
+      return fs.writeSync(fd, ...rest);
+    };
+    const result = await run(t, ['--cwd', dir, '--home', home], { write });
+    assert.equal(result.code, 1);
+    assert.doesNotMatch(result.err, /^migrate failed: disk full; nothing was left behind$/m);
+    assert.match(result.err, /^migrate failed in sync's part: disk full; of sync's writes, nothing was left behind$/m);
+    assert.match(result.err, /^what the migration wrote before it stays, recorded: CLAUDE\.md, harness\.json, the coverage baseline; commit it, then run js-harness sync once the cause is fixed$/m);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('migrate list names the folders of recent sessions read-only, and says none where there are none', async (t) => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-migrate-cli-list-'));
   try {

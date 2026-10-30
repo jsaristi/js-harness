@@ -52,6 +52,7 @@ function refused(result) {
   else if (result.notSetUp) console.error(`this clone of ${result.root} is not set up yet: run js-harness sync here first`);
   else if (result.noPin) console.error(`${result.harnessJsonPath} pins no version, so there is no version to migrate from; nothing was written. To pin it, ${howToPinClause(result.version)}, then run js-harness migrate again.`);
   else if (result.pinNewer) console.error(`harness.json pins js-harness ${result.pin}, newer than ${result.version}, which is running; nothing was written: run that version`);
+  else if (result.pinUnmovable && result.link) console.error(`${result.harnessJsonPath} is a link, and git could not give its target back, so its pin is not moved through it; nothing was written`);
   else if (result.pinUnmovable) console.error(`${result.harnessJsonPath} does not hold "version": "${result.pin}" once, so its pin cannot be moved in place; nothing was written`);
   else if (result.code !== 0 && result.uncommitted) console.error(`${result.uncommitted.join(', ')} ${result.uncommitted.length === 1 ? 'holds a change' : 'hold changes'} git has not committed, and migrate may write ${result.uncommitted.length === 1 ? 'it' : 'them'}: commit first, so git can undo the migration exactly; nothing was written`);
   else if (result.staleManifest) console.error(staleManifestMessage(result.manifestPath));
@@ -86,6 +87,11 @@ function runMigrate(parsed, version, deps) {
     result = migrateProject(parsed.cwd, version, { ...deps, home: parsed.home });
   } catch (err) {
     // The migration took back what it wrote before throwing, and a failure of sync's part leaves the migration's recorded.
+    if (err instanceof InitWriteError && err.migrated?.length > 0) {
+      console.error(`migrate failed in sync's part: ${err.message}; of sync's writes, ${cleanupClause(err)}`);
+      console.error(`what the migration wrote before it stays, recorded: ${err.migrated.join(', ')}; commit it, then run js-harness sync once the cause is fixed`);
+      return 1;
+    }
     if (err instanceof InitWriteError) {
       console.error(`migrate failed: ${err.message}; ${cleanupClause(err)}`);
       return 1;
