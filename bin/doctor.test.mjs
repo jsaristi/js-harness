@@ -149,13 +149,13 @@ test("doctorMain --json prints a parseable array with the six tool ids, then the
     const rows = JSON.parse(output);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'hook-commands', 'pnpm-lock', 'js-harness'],
+      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'codex-daemon', 'hook-commands', 'pnpm-lock', 'js-harness'],
     );
     for (const row of rows) {
       // Network is disabled and there is no cache, so every real lookup fails open to `unknown` —
       // except hosted context7 and the two checks, which have no version of their own to compare
       // and are `n/a` instead. The harness's own row could not read main's list either: `unknown`.
-      assert.equal(row.upToDate, ['context7', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'hook-commands', 'pnpm-lock'].includes(row.id) ? 'n/a' : 'unknown');
+      assert.equal(row.upToDate, ['context7', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'codex-daemon', 'hook-commands', 'pnpm-lock'].includes(row.id) ? 'n/a' : 'unknown');
     }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -222,9 +222,20 @@ test('doctorMain --offline shows the engram plugin as a mismatch when it is ahea
 
     assert.equal(code, 0);
     assert.match(output, /\nengram-plugin\s+0\.1\.12\s+ok\s+n\/a\s+n\/a\s+mismatch\n/);
+    // No cache: engram's latest release is unknown, so the fix says both cases (odd/tasks/codex-daemon-row.md, S2).
     assert.match(
       output,
-      / {2}engram-plugin \(upToDate\):\n {4}plugin 0\.1\.12 is ahead of 0\.1\.10, the plugin engram v3\.5\.1 ships, so the two serve different protocols; update the engram binary, then restart Claude Code:\n {4}install engram from /,
+      / {2}engram-plugin \(upToDate\):\n {4}plugin 0\.1\.12 is ahead of 0\.1\.10, the plugin engram v3\.5\.1 ships, so the two serve different protocols; if engram has a release newer than v3\.5\.1, update the engram binary, then restart Claude Code; if not, the plugin is ahead of engram's last release and nothing is to be done until the next one:\n {4}install engram from /,
+    );
+
+    // The binary cached as engram's latest release: the gap stays, and its fix says there is nothing to do yet (D5).
+    writeCache(home, { latest: { checkedAt: new Date().toISOString(), versions: { engram: '3.5.1', ...NULL_VERSIONS } }, notified: null });
+    const cached = await runDoctor(['--home', home, '--cwd', project, '--offline'], {}, { spawn, git, fetch: noopFetch });
+    assert.match(cached.output, /\nengram\s+3\.5\.1\s+ok\s+ok\s+n\/a\s+ok\n/);
+    assert.match(cached.output, /\nengram-plugin\s+0\.1\.12\s+ok\s+n\/a\s+n\/a\s+mismatch\n/);
+    assert.match(
+      cached.output,
+      / {2}engram-plugin \(upToDate\):\n {4}plugin 0\.1\.12 is ahead of 0\.1\.10, the plugin engram v3\.5\.1 ships, so the two serve different protocols; engram v3\.5\.1 is engram's latest release, so the plugin is ahead of engram's last release and nothing is to be done until the next one: then update the engram binary and restart Claude Code\n/,
     );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -563,13 +574,14 @@ test('doctorMain shows the account check after the tools, ok when both accounts 
 
     assert.equal(code, 0);
     const lines = output.split('\n').filter(Boolean);
-    assert.equal(lines.at(-6), accountLine('ok'), output);
-    assert.equal(lines.at(-5), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
-    assert.match(lines.at(-4), /^codex-trust\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/, 'then the Codex trust check, with no manifest to read');
+    assert.equal(lines.at(-7), accountLine('ok'), output);
+    assert.equal(lines.at(-6), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
+    assert.match(lines.at(-5), /^codex-trust\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/, 'then the Codex trust check, with no manifest to read');
+    assert.match(lines.at(-4), /^codex-daemon\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/, 'then the Codex daemon check, with no managed daemon under this home');
     assert.equal(lines.at(-3), hookLine('n/a'), 'then the hook commands check, with no manifest to read');
     assert.match(lines.at(-2), /^pnpm-lock\s+n\/a\s+n\/a/, 'then the pnpm lock check, with no PNPM_HOME in the env given');
     assert.match(lines.at(-1), /^js-harness\s+[0-9a-f]{8}\s+n\/a\s+n\/a\s+n\/a\s+unknown$/, "then the harness's own rules, main unread");
-    assert.equal(lines.length, 15, "the header, the six tools, the seven checks and the harness's own row");
+    assert.equal(lines.length, 16, "the header, the six tools, the eight checks and the harness's own row");
     assert.doesNotMatch(output, /\nFix:/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

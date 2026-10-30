@@ -209,8 +209,8 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   const rows = localRows.map((row) => {
     const latest = latestVersions[row.id];
     // A tool's fix can depend on the latest version and on another row (the engram plugin's names the engram binary's
-    // version).
-    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest, localRows, { home, platform });
+    // version, and whether it is engram's latest release).
+    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest, localRows, { home, platform, latestVersions });
     const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
     return { ...row, upToDate: computeUpToDate(row, latest), fix };
   });
