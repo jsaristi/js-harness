@@ -451,3 +451,37 @@ test('a form that prints runs through the dispatcher too, on the project it is r
     }
   });
 });
+
+// ── By week ─────────────────────────────────────────────────────────────────────────────────────
+
+test('failures weeks prints one line a week from the first sighting to this week, with the lead\'s own and each class', async () => {
+  const LEAD = [
+    '### command-for-the-wrong-shell',
+    'A command for bash was handed to him, whose shell is PowerShell.',
+    '- Class: tool',
+    '- Seen: 2026-10-14 — the lead\'s transcript 0f71b2c6, line 32954 (the lead\'s own) — `rm -rf` in a bash block',
+  ];
+  await inProject({ ...FULL, 'docs/FAILURES.md': register(LEAD, GATE, QUESTION, RENAMED, STATED) }, async (dir) => {
+    const { code, stdout, stderr } = await run(['weeks'], dir, { now: () => new Date('2026-10-21T09:00:00Z') });
+    assert.deepEqual([code, stderr], [0, '']);
+    const lines = stdout.split('\n');
+    assert.equal(lines[0], 'docs/FAILURES.md  sightings by week, Monday first');
+    const weeks = lines.filter((line) => line.startsWith('  week of ')).map((line) => line.trim().split(/ {2,}/));
+    assert.deepEqual(weeks, [
+      ['week of 2026-10-05', '5 sightings', '0 the lead\'s own', 'asked-of-him 1, machine 2, tool 1, wrong-information 1'],
+      ['week of 2026-10-12', '1 sighting', '1 the lead\'s own', 'asked-of-him 0, machine 0, tool 1, wrong-information 0'],
+      ['week of 2026-10-19', '0 sightings', '0 the lead\'s own', 'asked-of-him 0, machine 0, tool 0, wrong-information 0'],
+    ]);
+    assert.match(lines.at(-1), /counts what was recorded/);
+  });
+});
+
+test('failures weeks takes no other word and no flag: a usage error, and nothing is read', async () => {
+  await inProject(FULL, async (dir) => {
+    const readFile = () => assert.fail('a usage error reads no file');
+    for (const argv of [['weeks', 'extra'], ['weeks', '--settled'], ['weeks', '--nope']]) {
+      const { code, stdout } = await run(argv, dir, { readFile });
+      assert.deepEqual([code, stdout], [2, ''], argv.join(' '));
+    }
+  });
+});

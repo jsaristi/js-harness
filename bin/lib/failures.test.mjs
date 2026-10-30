@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { STATES, entryState, holdsPhrase, isSettled, parseRegister, sightings, summarize } from './failures.mjs';
+import { STATES, entryState, holdsPhrase, isSettled, parseRegister, sightings, summarize, weeklyCounts } from './failures.mjs';
 
 const CLASSES = [
   '## Classes',
@@ -719,4 +719,36 @@ test('the counts give one row per entry, the most seen first, with its state and
     { id: 'alpha-failure', class: 'machine', state: 'once', settled: true, sightings: 1, firstSeen: '2026-10-11' },
     { id: 'gamma-failure', class: 'machine', state: 'once', settled: true, sightings: 1, firstSeen: '2026-10-12' },
   ]);
+});
+
+// ── By week ─────────────────────────────────────────────────────────────────────────────────────
+
+test('weeklyCounts groups the sightings by ISO week, Monday first, and counts the lead\'s own and each class', () => {
+  const lines = (id, className, seen) => [`### ${id}`, 'What happened.', `- Class: ${className}`, ...seen];
+  const { classes, entries, errors } = parseRegister(register(
+    lines('a-command', 'tool', [
+      '- Seen: 2026-10-30 — the lead\'s transcript 0f71b2c6, line 32954 (the lead\'s own) — a bash block handed on win32',
+      '- Seen: 2026-10-27 — the lead\'s note to JH 7 (claimed; JH 7\'s) — the lead names the source, not the maker',
+    ]),
+    lines('b-gate', 'machine', [
+      '- Seen: 2026-10-11 — relief file, line 224 — a Sunday, so the week of Monday the 5th',
+      '- Seen: 2026-10-12 — relief file, line 300 — a Monday',
+      '- Seen: 2026-10-12 — relief file, line 300 — the same record read twice is one sighting',
+    ]),
+  ));
+  assert.deepEqual(errors, []);
+  const counts = weeklyCounts({ classes, entries }, new Date('2026-11-03T12:00:00Z'));
+  assert.deepEqual(counts.map((week) => [week.week, week.sightings, week.lead]), [
+    ['2026-10-05', 1, 0],
+    ['2026-10-12', 1, 0],
+    ['2026-10-19', 0, 0],
+    ['2026-10-26', 2, 1],
+    ['2026-11-02', 0, 0],
+  ]);
+  assert.deepEqual(counts[3].byClass, { machine: 0, tool: 2 });
+  assert.deepEqual(counts[0].byClass, { machine: 1, tool: 0 });
+});
+
+test('weeklyCounts of a register with no sighting is no week', () => {
+  assert.deepEqual(weeklyCounts({ classes: ['machine'], entries: [] }, new Date('2026-10-30T00:00:00Z')), []);
 });
