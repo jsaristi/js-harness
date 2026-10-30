@@ -651,3 +651,13 @@ test('reportStretch gives the open stretch, else the last closed since the cut, 
   assert.deepEqual(closed.goals.list.map((goal) => [goal.id, goal.met, goal.said]), [['G1', true, 'exit 0'], ['G2', false, 'exit 1']]);
   assert.equal(read(7, 9), null, 'a stretch closed before the cut is not this report\'s');
 });
+
+// Codex review of f2110239..d04fd86c, P2: a record the measure could not read leaves its hours partial, and the report
+// must say so, not show them as whole.
+test('reportStretch keeps the records the measure could not read, so the report can say its hours are partial', async () => {
+  const place = scratch();
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
+  const read = (readCodexRuns) => reportStretch({ home: place.home, root: place.project, slug: projectSlug(place.project), since: T0, now: T0 + H, run: () => ({ status: 1, stdout: '', stderr: 'not a repository' }), readLands: () => [], readCodexRuns });
+  assert.deepEqual(read(() => { throw new Error('EACCES: the Codex record'); }).unread, { codex: 'EACCES: the Codex record' });
+  assert.deepEqual(read(() => []).unread, {});
+});

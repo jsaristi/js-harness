@@ -105,7 +105,8 @@ function stretchHtml(stretch) {
     const [word, tone] = GOAL_MET[String(goal.met)];
     return [goal.text, { pill: pill(word, tone) }, { text: goal.said ?? '—', mono: true }];
   });
-  return `${heading}<p>${escapeHtml(said)}</p>${note(checked)}${table(['Meta', '¿Se cumplió?', 'Salida'], rows)}${forecastHtml(stretch.forecast)}`;
+  const partial = Object.entries(stretch.unread ?? {}).map(([name, why]) => note(`No se pudo leer ${name} (${why}): las horas son parciales.`)).join('');
+  return `${heading}<p>${escapeHtml(said)}</p>${partial}${note(checked)}${table(['Meta', '¿Se cumplió?', 'Salida'], rows)}${forecastHtml(stretch.forecast)}`;
 }
 
 function mapHtml(map, before, branch, stretch) {

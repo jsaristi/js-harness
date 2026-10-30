@@ -181,6 +181,7 @@ function stretchLines(stretch) {
     `Stretch ${stretch.id}: ${when}, opened ${stamp(Date.parse(stretch.openedAt))}; ${stretch.elapsedHours} of ${stretch.hours} h; goals ${goals.met} of ${goals.total} met, ${checked}`,
     ...goals.list.map((goal) => `  goal ${goal.id} ${goal.met === null ? 'not checked' : `${goal.met ? 'met' : 'not met'} (${goal.said})`}: ${oneLine(goal.text)}`),
     `  estimated ${hoursRange(totals.estimate)}, real ${totals.realHours} h, lost ${totals.lostHours} h`,
+    ...Object.entries(stretch.unread ?? {}).map(([name, why]) => `  ${name} could not be read: ${why}; the hours above are partial`),
     ...forecastLines(stretch.forecast),
   ];
 }

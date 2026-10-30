@@ -79,6 +79,8 @@ test('section 4 says when no stretch ran since the cut, when the stretch record 
   assert.match(none, /Ningún tramo abierto ni cerrado desde el corte\./);
   const unread = sectionFour(renderStatus({ ...FACTS, map: { ...MAP, plans }, stretch: { unavailable: 'EACCES' }, notes: null }));
   assert.match(unread, /El registro de los tramos no se pudo leer: EACCES/);
+  const partial = sectionFour(renderStatus({ ...FACTS, map: { ...MAP, plans }, stretch: { ...STRETCH, unread: { 'gate log': 'EACCES' } }, notes: null }));
+  assert.match(partial, /real 7 h[\s\S]*No se pudo leer gate log \(EACCES\): las horas son parciales\./);
   const open = sectionFour(renderStatus({ ...FACTS, map: { ...MAP, plans: [] }, stretch: { ...STRETCH, state: 'open', goals: { checkedAt: null, met: 0, total: 1, list: [{ id: 'G1', text: 'PR 630 en main', met: null, said: null }] }, forecast: { unavailable: 'git show: bad' } }, notes: null }));
   assert.match(open, /La hoja de ruta no tiene una sección de plan/);
   assert.match(open, /abierto[\s\S]*vuelve 2026-10-29 11:00Z/);

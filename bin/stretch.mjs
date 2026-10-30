@@ -746,7 +746,8 @@ export function boardStretch({ home, root, slug, now, run, fileSystem = fs }) {
 /** The last stretch since `since` (ms) as the status report shows it (odd/tasks/report-stretch-share.md): the open one,
  * else the last closed at or after `since`, measured as `status` and `show` measure it (a closed one as it closed), its
  * goals as last checked (it runs none) and its forecast against the map now: `{ id, state, openedAt, returnAt, at,
- * hours, elapsedHours, goals, totals, forecast }`; `null` when none; `{ unavailable }` when the record cannot be read. */
+ * hours, elapsedHours, goals, totals, forecast, unread }`, `unread` the records the measure could not read, each with
+ * why, which leave the hours partial; `null` when none; `{ unavailable }` when the stretch record cannot be read. */
 export function reportStretch({ home, root, slug, since, now, run, fileSystem = fs, readLands = (folder) => readLandRecord(folder, run, fileSystem), readCodexRuns = (folder) => readCodexRunRecord(folder, run, fileSystem) }) {
   let events;
   try {
@@ -761,7 +762,7 @@ export function reportStretch({ home, root, slug, since, now, run, fileSystem = 
   const view = measure(ctx, last, end);
   const { forecast } = momentsOf(ctx, last, view, end, { closed: Boolean(last.close) });
   const { id, openedAt, returnAt, at, hours, elapsedHours, goals, totals } = view;
-  return { id, state: last.close ? 'closed' : 'open', openedAt, returnAt, at, hours, elapsedHours, goals, totals, forecast };
+  return { id, state: last.close ? 'closed' : 'open', openedAt, returnAt, at, hours, elapsedHours, goals, totals, forecast, unread: view.unavailable };
 }
 
 export async function stretchMain(

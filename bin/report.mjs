@@ -164,8 +164,9 @@ export async function reportMain(argv, options = {}) {
   const stretch = reportStretch({ home, root, slug, since: cut.at, now: at, run, fileSystem });
 
   for (const line of reportLines({ cut, branch: name, landed, sessions, questions, map, before, stretch })) stdout(line);
-  // A stretch record that cannot be read is a section that could not be read: --mark then records nothing.
-  const failed = [landed, map, sessions, questions].some((section) => section.error !== undefined) || stretch?.unavailable !== undefined;
+  // A stretch record that cannot be read, or one its measure reads, is a section that could not be read: --mark then
+  // records nothing.
+  const failed = [landed, map, sessions, questions].some((section) => section.error !== undefined) || stretch?.unavailable !== undefined || Object.keys(stretch?.unread ?? {}).length > 0;
   if (parsed.html !== undefined) {
     // A section that could not be read is said on the page as it is in the lines above.
     const file = path.resolve(cwd, parsed.html);

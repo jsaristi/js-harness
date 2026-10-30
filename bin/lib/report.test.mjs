@@ -163,6 +163,9 @@ test('with no before, no plan, no stretch or a stretch that cannot be read, the 
   const unread = shareLines({ before: { unavailable: 'c0abcdef: git show: bad object' }, stretch: { unavailable: 'EACCES' } });
   assert.ok(unread.includes('Migration: F8 plan  9/14 steps  64%; at the cut not known: c0abcdef: git show: bad object'), unread.join('\n'));
   assert.ok(unread.includes('Stretch: could not read: EACCES'), unread.join('\n'));
+  // A record the measure could not read leaves the hours partial, said under them.
+  const partial = shareLines({ before: null, stretch: { ...STRETCH, unread: { 'gate log': 'EACCES' } } });
+  assert.ok(partial.indexOf('  gate log could not be read: EACCES; the hours above are partial') > partial.indexOf('  estimated 6-9 h, real 7 h, lost 0.5 h'), partial.join('\n'));
   const noPlan = shareLines({ map: { ...SHARE_MAP, plans: [] }, before: null, stretch: null });
   assert.ok(noPlan.includes('Migration: the roadmap has no plan section'), noPlan.join('\n'));
   const open = shareLines({ before: null, stretch: { ...STRETCH, state: 'open', goals: { checkedAt: null, met: 0, total: 1, list: [{ id: 'G1', text: 'PR 630 en main', met: null, said: null }] }, forecast: { unavailable: 'git show: bad object' } } });
