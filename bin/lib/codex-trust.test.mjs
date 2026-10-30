@@ -42,9 +42,39 @@ test('trustedPlaces takes no header inside a multi-line string or a multi-line a
   assert.deepEqual([...trustedPlaces(text, HOOKS, 'win32')], ['stop:1:0']);
 });
 
+// The shape Codex 0.166 writes (its values made up): an empty `[hooks.state]` table before the trust tables, and a
+// plugin's hooks keyed by `<plugin>@<marketplace>:<hooks.json>` with a `trusted_content_hash` beside the hash.
+const CODEX_0166 = [
+  'model = "x"',
+  '',
+  '[hooks.state]',
+  '',
+  `[hooks.state.'${HOOKS}:session_start:0:0']`,
+  'trusted_hash = "sha256:a"',
+  '',
+  `[hooks.state.'${HOOKS}:stop:1:0']`,
+  'trusted_hash = "sha256:b"',
+  '',
+  '[hooks.state."engram@engram:hooks/hooks.json:session_start:0:0"]',
+  'trusted_hash = "sha256:c"',
+  'trusted_content_hash = "sha256:d"',
+  '',
+  '[tui]',
+  'x = 1',
+  '',
+].join('\n');
+
+test('trustedPlaces reads the shape Codex 0.166 writes: an empty [hooks.state] table, and a plugin\'s trust beside', () => {
+  assert.deepEqual([...trustedPlaces(CODEX_0166, HOOKS, 'win32')], ['session_start:0:0', 'stop:1:0']);
+  const { text, dropped, moved } = moveTrust(CODEX_0166, HOOKS, { stop: [-1, 0] }, 'win32');
+  assert.deepEqual([dropped, moved], [0, 1]);
+  assert.equal(text, CODEX_0166.replace(`${HOOKS}:stop:1:0`, `${HOOKS}:stop:0:0`), 'the empty table and the plugin\'s trust are kept as written');
+});
+
 test('hook trust in any form but a table header is refused, never guessed at', () => {
   for (const text of [
     '[hooks.state]\n"a:stop:0:0" = { trusted_hash = "x" }\n',
+    '[hooks.state]\n# a comment, then a key\nenabled = true\n',
     'hooks.state."a:stop:0:0".trusted_hash = "x"\n',
     'hooks = { state = {} }\n',
     '[hooks]\nstate = {}\n',
@@ -134,9 +164,10 @@ test('quoted spellings of hooks.state are the same tables: a trust key is read a
   const text = `["hooks" . 'state'.'${HOOKS}:stop:1:0']\ntrusted_hash = "x"\n`;
   assert.deepEqual([...trustedPlaces(text, HOOKS, 'win32')], ['stop:1:0']);
   assert.equal(moveTrust(text, HOOKS, { stop: [-1, 0] }, 'win32').text, `["hooks" . 'state'.'${HOOKS}:stop:0:0']\ntrusted_hash = "x"\n`);
+  // An empty `[hooks.state]` table, however quoted, holds no trust: it is read as Codex 0.166 writes it.
+  assert.equal(trustedPlaces("['hooks'.state] # Codex's\n\n", HOOKS, 'win32').size, 0);
   for (const refused of [
     '["hooks"."state"]\n"a:stop:0:0" = { trusted_hash = "x" }\n',
-    "['hooks'.state]\n",
     `[hooks.state.'${HOOKS}:stop:0:0'.extra]\n`,
     `[[hooks.state.'${HOOKS}:stop:0:0']]\n`,
     '["hooks"]\nstate = {}\n',

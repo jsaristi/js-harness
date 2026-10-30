@@ -4,8 +4,9 @@
 // index in the event's list and the handler the hook's index in the entry (B4 of the launch audit). The hash is a sha256
 // of a form internal to Codex, so nothing here can write one: this module reads the records and, for `uninstall`, drops
 // or renumbers them, line by line, so every other byte of the file stays as the user had it. No TOML library: only the
-// table headers are read, their keys quoted or not, and hook trust spelled any other way (a `[hooks.state]` table,
-// dotted keys, an inline table) is refused with `TrustFormError` instead of guessed at.
+// table headers are read, their keys quoted or not, and hook trust spelled any other way (keys in a `[hooks.state]`
+// table, dotted keys, an inline table) is refused with `TrustFormError` instead of guessed at. Codex 0.166 writes an
+// empty `[hooks.state]` table before the trust tables; with no key in it, it is read and kept as written.
 import fs from 'node:fs';
 import path from 'node:path';
 import { deepEqual } from './json-equal.mjs';
@@ -127,13 +128,16 @@ function tables(text) {
       const head = headerKeys(bare);
       const names = head?.keys.map((key) => key.name) ?? [];
       const underState = names[0] === 'hooks' && names[1] === 'state';
-      if (underState && (names.length !== 3 || head.array)) throw new TrustFormError(names.length === 2 ? 'a [hooks.state] table' : 'hook trust in a nested table or an array of tables');
+      // Codex 0.166 writes an empty `[hooks.state]` before the trust tables: read, as long as no key follows it.
+      const stateTable = underState && names.length === 2 && !head.array;
+      if (underState && !stateTable && (names.length !== 3 || head.array)) throw new TrustFormError('hook trust in a nested table or an array of tables');
       const key = underState ? head.keys[2] : null;
       const place = key && PLACE.exec(key.basic ? unescapeBasic(key.name) : key.name);
-      table = names.length === 1 && names[0] === 'hooks' && !head.array ? 'hooks' : 'other';
+      table = names.length === 1 && names[0] === 'hooks' && !head.array ? 'hooks' : stateTable ? 'state' : 'other';
       found.push({ header: line, lines: [], keyEnd: place ? key.end : null, place: place && { hooksPath: place[1], event: place[2], group: Number(place[3]), handler: Number(place[4]) } });
       continue;
     }
+    if (outside && table === 'state' && /^\s*[^\s#]/.test(bare)) throw new TrustFormError('a [hooks.state] table with keys');
     if (outside && ((table === 'root' && /^\s*["']?hooks["']?\s*[.=]/.test(bare) && /state/.test(bare)) || (table === 'hooks' && /^\s*["']?state["']?\s*[.=]/.test(bare)))) {
       throw new TrustFormError('hook trust in dotted keys or an inline table');
     }
