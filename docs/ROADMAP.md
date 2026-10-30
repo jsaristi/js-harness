@@ -451,6 +451,19 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   0f71b2c6, line 32757): "Sí, agrégala".
 - **State:** built, PR 704 (`feat/codex-daemon-row`, `odd/tasks/codex-daemon-row.md`).
 
+### The desktop plan, steps 2 to 5 (JH 107, beside the Host row)
+- **Changes:** steps 2 to 5 of [the desktop proposal's plan](proposals/claude-app-native-sessions.md#12-plan-in-order):
+  cleanups with their counts, one hour of processes and memory, the auto-archive probe, the skill-text trim. What each
+  found is in that section, "What each step found".
+- **Files:** `odd/tasks/f8-desktop-plan.md`, `docs/audits/2026-10-30-process-hour.md`, the proposal.
+- **Probe and pass:** each step's proof of section 12; `npm run check` green.
+- **Cost:** no eval; one hour of `wmic` samples.
+- **His decisions:** the plan's order and these four steps by his answer to question 128 (lead transcript
+  0f71b2c6, line 34672): "Sí, arranca el plan (Recomendada)"; stopping the orphaned status-line processes by his
+  answer "Elimina todo lo de ccstatusline, completamente y a profundidad" (channel, 2026-10-30T18:47:25Z).
+- **State:** PRs 708 (step 2), 709 (step 5) merged; 711 (the probe's scratch PR) merged; 712 (step 3) and this
+  record ready. No skill line was removed: rows 3 and 4 wait for R1.
+
 ### S5c-a Directive coverage, the mechanism
 - **Changes:** every source the harness ships or sends to an agent is listed by a test; each source
   is cut into spans tied to a rule, a rule's phrases or a listed context line; every obligation names

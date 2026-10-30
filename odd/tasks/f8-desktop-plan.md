@@ -61,9 +61,9 @@ removes a friction of section 7 or measures one before anything is claimed about
 - [x] T1 (kind: verify) step 2: the list to the lead, then `merge-queue --prune` and the empty folders; counts before
   and after — S1; inline; docs commit
 - [x] T2 (kind: verify) step 3: one hour of process and memory samples, the measure file — S2; inline; docs commit
-- [ ] T3 (kind: verify) step 4: the auto-archive probe with a scratch session and a scratch PR — S3; inline; docs commit
+- [x] T3 (kind: verify) step 4: the auto-archive probe with a scratch session and a scratch PR — S3; inline; docs commit
 - [x] T4 (kind: verify) step 5: the skill-text trim, tests first — S4; inline; no line removed (L4), so no code commit
-- [ ] T5 (kind: docs) the proposal's map, the roadmap, the summary, the ready and closed notices — S5
+- [x] T5 (kind: docs) the proposal's map, the roadmap, the summary, the ready and closed notices — S5
 
 ## Step 2: the list, before anything is removed
 
@@ -181,3 +181,13 @@ step 2 there exactly, nothing else; touch no file; never arm a wait; your summar
   the 110 `ccstatusline` orphans held 4,244 MB of working set but 404 MB private, so "about 4.3 GB" overstated what
   they cost; the lead stopped them at 18:48Z on his answer "Elimina todo lo de ccstatusline, completamente y a
   profundidad" (channel, answer of 18:47:25Z), and free RAM rose by about 260 MB.
+- L7 (evidence, T3, the lead's claim): the lead started the scratch session JH 108 (`local_900d93fc`) from section
+  "Step 4"; its empty-commit PR 711 merged at 19:03:38Z, and `git diff 5d63d3b1 2a134ff9` is empty here [checked]. The
+  lead's note to 107 at 19:09Z: "get_session local_900d93fc shows isArchived true, prState MERGED, worktreePath gone,
+  remoteControlState off. At 19:04Z (20 s after the merge) it was isArchived false, prState OPEN". This session cannot
+  read `get_session`; the result is the lead's, recorded as such. JH 108 sent `ready` and no `closed`, and was still
+  archived: the archive follows the merge.
+- L8 (decision, T4 after step 4): row 3's skill line stays even though step 4 passed, since it is a phrase of his rule
+  `session-housekeeping`, so trimming it is R1; the map moves row 3 from probe to use now.
+- L9 (delivery, T5): PRs 708 (step 2) and 709 (step 5) merged 2026-10-30T19:03:39Z; 712 (step 3) and the last one
+  (step 4's record, the roadmap, the summary) ready.

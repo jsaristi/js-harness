@@ -180,7 +180,7 @@ probe or the mod pilot), **keep**.
 |---|---|---|---|---|---|
 | 1 | `permit` relay (`SKILL.md:29`) | none | **keep** | Section 3, point 4. Its use is low (10 relays, the last 2026-10-18), so whether he still wants it is his question, not a host replacement | — |
 | 2 | Codex skill copies and Codex hooks in `install` | none needed: Codex only reviews (line 33574) | **policy** | Codex never leads or works; reviews already disable hooks and skills; today its `reply` hook overwrote a reader's answer | 8 install components; no runtime tokens |
-| 3 | The lead's archive of a finished session (`SKILL.md:117`) | auto-archive on PR close (On) | **probe** | The app archives on merge, but the lead's checks (clean worktree, nothing queued, summary read, `manifest.mjs:227`) are not proven by a merge, and "running sessions don't auto-archive" while a background `wait` runs | ~150 tokens *estimate*; one lead turn per session |
+| 3 | The lead's archive of a finished session (`SKILL.md:117`) | auto-archive on PR close (On) | **use now** (step 4 passed) | The app archived a merged session in 20 s to ~6 min (section 12, step 4). The app archives on merge, but the lead's checks (clean worktree, nothing queued, summary read, `manifest.mjs:227`) are not proven by a merge, and "running sessions don't auto-archive" while a background `wait` runs | ~150 tokens *estimate*; one lead turn per session |
 | 4 | Recap prose (`SKILL.md:94-99`) | `wrap_up` recap | **use now** | The box carries 300 characters and one question; the effort line and the Codex meter stay in the reply | ~250 *estimate* |
 | 5 | `reply` five states (`rule:reply-five-states`) | `wrap_up` `ask`, `blocked` | **probe** | "working" and "cut" have no field. Accepting a `wrap_up` decision needs the reply hook, stop-wake and the question gate taught it, with refusal tests | fewer blocked stops |
 | 6 | Two-option questions held by AskUserQuestion (`SKILL.md:26`) | `wrap_up` ask + buttons | **probe** | Avoids holding the lead, but the gate (`template-gate.mjs:132-134`, matcher `hook-entries.mjs:188`) admits and tracks only AskUserQuestion; switching first needs that integration | ~300 *estimate*; no held lead |
@@ -204,7 +204,7 @@ probe or the mod pilot), **keep**.
 | 24 | Plan in replies | `update_plan` | **done** | No harness text duplicates it [checked: none in the skills] | — |
 | 25 | `waiting` notices the model writes (`SKILL.md:148-150`) | `Notification` hook `idle_prompt` | **probe** | A hook could write `waiting` when a session goes idle, so silence is seen (`turn-ended-waiting`); whether `idle_prompt` fires in a desktop session is [unknown] | one model step per wait |
 
-Counted: done 2 (7, 24), use now 2 (4, 8), policy 1 (2), probe 7 (3, 5, 6, 10, 14, 15, 25),
+Counted: done 2 (7, 24), use now 3 (3, 4, 8), policy 1 (2), probe 6 (5, 6, 10, 14, 15, 25),
 keep 13.
 
 ## 5. Mods
@@ -403,14 +403,22 @@ Steps 2 to 5 ran in JH 107 on his answer to question 128 (the lead's transcript 
   answer the lead stopped the 110 orphans at 18:48Z: 404 MB private, and free RAM rose by about 260 MB. No low-memory
   kill happened in the hour, so what drove the earlier ones is still [unknown]. For row 15 this means moving the
   hooks to a mod saves start time, not memory; for row 10, about 36 MB a waiting session.
-- **Step 4, 2026-10-30: not run, the lead's to start.** JH 107 is a `claude --bg` session (`sessions start`), and
-  none of the desktop's session tools is in its tool list (`ToolSearch` for `start_session`, `list_sessions`,
-  `bind_pr`, `wrap_up`, `update_plan`: no match) [checked]; `start_session` also needs his typed turn. The steps and
-  the scratch session's prompt are in `odd/tasks/f8-desktop-plan.md`, section "Step 4". Row 3 stays **probe**.
+- **Step 4, 2026-10-30: passed, run by the lead.** JH 107 is a `claude --bg` session (`sessions start`), and none of
+  the desktop's session tools is in its tool list (`ToolSearch` for `start_session`, `list_sessions`, `bind_pr`,
+  `wrap_up`, `update_plan`: no match) [checked]. So the lead started the scratch session JH 108 (`local_900d93fc`)
+  from the steps in `odd/tasks/f8-desktop-plan.md`, section "Step 4". Its empty-commit PR 711 merged at 19:03:38Z and
+  left main's tree unchanged (`git diff 5d63d3b1 2a134ff9` empty) [checked]. The lead's `get_session` read
+  `isArchived false`, `prState OPEN` at 19:04Z, then `isArchived true`, `prState MERGED`, worktree gone, Remote
+  Control off at about 19:09Z [the lead's note to 107, 19:09Z; not read by JH 107]. The app takes from 20 s to about
+  6 minutes to see a merge, and it archived a session that sent `ready` but no `closed` notice: the archive follows
+  the merge, not the channel. Row 3 moves from **probe** to **use now**: the lead reads `list_sessions` before
+  archiving a session that bound its PR, and no longer spends a turn on one the app archived. Its skill line stays,
+  as step 5 says.
 - **Step 5, 2026-10-30: no skill line removed; each row's reason.** [checked: `bin/lib/rules-data.mjs`,
   `bin/lib/manifest.mjs`]
   - Row 3: its line ("then archive the session with the host's tool to archive sessions, without asking") is a phrase
-    of his rule `session-housekeeping`, homed in `bin/lib/manifest.mjs`; and step 4 has not passed.
+    of his rule `session-housekeeping`, homed in `bin/lib/manifest.mjs`. Step 4 passed, but trimming the line is still a
+    rule change (R1).
   - Row 4: the recap's first two lines are the phrases of his rules `recap-effort-line` and `session-housekeeping`.
     Moving them to `wrap_up` is a rule change (R1), outside question 128. The other three lines (the Codex meter,
     what waits for him read at that moment, which session to return to) stay: the proposal keeps the meter in the

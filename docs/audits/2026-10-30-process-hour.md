@@ -17,8 +17,10 @@ memory over one hour of normal work, measured before any claim about what drives
   4,244 MB of working set but only 404 MB private: most of the working set is node's shared image, counted once per
   process. He decided "Elimina todo lo de ccstatusline, completamente y a profundidad" (answer recorded 18:47:25Z), and
   they were gone at 18:48:11Z. Free RAM went from a mean of 7,749 MB in the 10 minutes before to 8,012 MB in the 10
-  after. JH 107's note of 18:07Z and section 7 of the proposal said "about 4.3 GB": that is the working set, not memory
-  freed.
+  after. The lead's single reading around the stop gave 6.8 → 7.7 GB (relief file, line 1990); free RAM swings by
+  over 1 GB within minutes here (18:45:07Z read 5,988 MB), so the 404 MB private is the figure for what they held.
+  JH 107's note of 18:07Z, the step 2 text and the lead's question on it said "about 4.3 GB" or "4,2 GB": that is the
+  working set, not memory they held alone.
 - **Free RAM stayed between 5,235 and 10,039 MB of 20,164 MB.** No low-memory kill happened in the hour, so nothing
   here says what drove the earlier ones.
 
