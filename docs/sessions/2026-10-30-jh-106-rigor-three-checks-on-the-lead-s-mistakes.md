@@ -19,7 +19,7 @@ lo que veo como sera lo que haces y no puedo ver por detras?" Line 33700: "Sí, 
   week of 2026-10-26 reads 38 sightings, 7 the lead's own.
 - PR 710 (merged): T3, `doctor --host-reviewed` refuses without `docs/host-updates/claude-desktop-<version>.md` and
   its table (`hostReviewRefusal` in `bin/lib/host-update.mjs`).
-- PR 3 (this branch, `ccd7e3f9`, `acbd2816`, `9c967aa4`): T4, the Stop hook refuses a command block not tagged for
+- PR 714 (ready, `ccd7e3f9` to `19348fd4`): T4, the Stop hook refuses a command block not tagged for
   his shell, not run with success first, or rejected by his shell's parser (`bin/lib/reply-commands.mjs`).
 - T6: F4 of `docs/audits/2026-10-30-cleanup-inventory.md`: one failure settled, five routed to the lead (L13).
 
@@ -42,15 +42,15 @@ lo que veo como sera lo que haces y no puedo ver por detras?" Line 33700: "Sí, 
   proved `y`) the other reviews missed; all three fixed, test first (L15).
 
 ## Left
-- PR 3 waits for the merge queue (the lead).
+- PR 714 waits for the merge queue (the lead).
 - The five unsettled failures of F4 (L13), held by the lead.
-- T8 of `odd/tasks/instruction-homes.md` closes when PR 3 lands.
+- T8 of `odd/tasks/instruction-homes.md` closes when PR 714 lands.
 - JH 105's research role for host reviews: its document had not landed when T3 was built.
 
 ## Cost
-- Time: brief at 17:14Z; PR 3 at about 19:25Z.
+- Time: brief at 17:14Z; PR 714 opened at about 19:25Z, ready at about 20:10Z.
 - Context: 44% at 19:14Z, after one compaction by the host at 18:38Z.
-- Codex: T2 145k input tokens (2 runs), T3 two runs (144k and the fix), T4 433k (2 runs).
-- Claude lenses: T2 3 runs, T3 4 runs, T4 6 lens runs, all recorded in `.git/js-harness/lens-reviews.jsonl`.
-- gentle-ai: T2 and T3 not reviewed (whole-branch candidate, `operation_timeout`); T4 one lens, approved (L15).
+- Codex: T2 145k input tokens (2 runs), T3 two runs (144k and the fix), T4 about 540k input tokens (4 runs).
+- Claude lenses: T2 3 runs, T3 4 runs, T4 8 lens runs, all recorded in `.git/js-harness/lens-reviews.jsonl`.
+- gentle-ai: T2 and T3 not reviewed (whole-branch candidate, `operation_timeout`); T4 three lineages, each one lens, approved (L15 to L17).
 - Gates: every commit's pre-commit gate except `3ed7fd47`; two of T4's refused, then passed.

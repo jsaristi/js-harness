@@ -283,7 +283,14 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   operator with a trailing newline, and the order test now asserts the refusal still reaches the answer (the wake
   warning's place in a combined reason is not asserted).
   gentle-ai: `862a96d3..d7af8f92` approved (lineage `review-eb8331a6c62bd8f0`).
+- L17 (2026-10-30, reviews of `19348fd4`): Codex (43,019 input tokens) correct (0.99); lens reliability 0 findings.
+  gentle-ai on `862a96d3..19348fd4`: approved and acknowledged (lineage `review-c4cd419b84ce606f`) with two advisory
+  suggestions not taken: a test of an exhausted deadline (the parser gets 1 ms at least, fails, and the block is
+  refused with "its parser could not check it", which `bin/lib/reply-commands.test.mjs` already proves), and the
+  order of standard-error lines among the checks (diagnostics, not the answer he sees, whose order is unchanged).
+  gentle-ai: `862a96d3..19348fd4` approved (lineage `review-c4cd419b84ce606f`).
 
 ## Next step
-State (2026-10-30): PRs 707 (T2) and 710 (T3) are merged; T4 is `ccd7e3f9`, `acbd2816` and `9c967aa4`, reviewed (L12,
-L14). Next: PR 3 from this branch, its ready notice once green, the closed notice with the session summary.
+State (2026-10-30): PRs 707 (T2) and 710 (T3) are merged; T4 is PR 714 (`ccd7e3f9` to `19348fd4`), every code commit
+reviewed by Codex, the lenses and gentle-ai (L12 to L17). Next: push, the ready notice for 714, the closed notice with
+the session summary. The contract closes when 714 is on main (the lead's merge queue).
