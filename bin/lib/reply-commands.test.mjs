@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fencedBlocks } from './reply.mjs';
-import { commandRefusals, runParts } from './reply-commands.mjs';
+import { commandRefusals, runParts, shellParser } from './reply-commands.mjs';
 
 // Excerpts of the lead's transcript 0f71b2c6 (2026-10-30), trimmed to the fields the check reads.
 const assistant = (id, command) => JSON.stringify({ type: 'assistant', isSidechain: false, message: { content: [{ type: 'tool_use', id, name: 'Bash', input: { command } }] } });
@@ -54,4 +54,35 @@ test('a run proves only the commands its exit proves: not before ||, ;, or a pip
   assert.deepEqual(proved('a x && b 2>&1 | head -5'), ['a x', 'head -5']);
   assert.deepEqual(proved('rm -rf /d/x || true'), []);
   assert.deepEqual(proved('pwsh -NoProfile -Command "Remove-Item -Recurse D:\\x"'), ['pwsh -NoProfile -Command Remove-Item -Recurse D:\\x', 'Remove-Item -Recurse D:\\x']);
+});
+
+test('the parser of win32 falls back to Windows PowerShell where there is no pwsh, and one that does not answer in time refuses', () => {
+  const spawned = [];
+  const spawn = (program, args, options) => {
+    spawned.push({ program, timeout: options.timeout });
+    if (program === 'pwsh.exe') return { error: Object.assign(new Error('spawn pwsh.exe ENOENT'), { code: 'ENOENT' }) };
+    return { status: 0, stdout: '1\trm has no parameter -rf\r\n', stderr: '' };
+  };
+  assert.deepEqual(shellParser('win32', spawn)(['js-harness doctor', 'rm -rf x'], { timeout: 3000 }), { errors: [[], ['rm has no parameter -rf']] });
+  assert.deepEqual(spawned.map(({ program }) => program), ['pwsh.exe', 'powershell.exe']);
+  assert.ok(spawned.every(({ timeout }) => timeout > 0 && timeout <= 3000));
+  const late = shellParser('win32', () => ({ error: Object.assign(new Error('spawnSync pwsh.exe ETIMEDOUT'), { code: 'ETIMEDOUT' }) }));
+  assert.deepEqual(late(['codex'], { timeout: 10 }), { failed: 'PowerShell: it did not answer in time' });
+  const linux = shellParser('linux', () => ({ status: 2, stderr: 'bash: line 1: syntax error near unexpected token `)\'\n' }));
+  assert.deepEqual(linux(['echo )'], { timeout: 1000 }), { errors: [['bash cannot parse it: bash: line 1: syntax error near unexpected token `)\'']] });
+});
+
+test('real: PowerShell reads each block as he would, its parse errors and parameters that bind to nothing', { skip: process.platform !== 'win32' && 'PowerShell is checked on Windows' }, () => {
+  const texts = ['rm -rf /d/js-harness-worktrees', 'Remove-Item -Recurse -Force D:\\x', 'cd D:\\js-harness; codex', 'Get-ChildItem -File | Where-Object {', 'Remove-Item D:\\tráfico -Recurs'];
+  const checked = shellParser('win32')(texts, { timeout: 20000 });
+  assert.equal(checked.failed, undefined, checked.failed);
+  assert.deepEqual(checked.errors[0], ['rm has no parameter -rf']);
+  assert.deepEqual([checked.errors[1], checked.errors[2], checked.errors[4]], [[], [], []], 'a prefix of a parameter binds, as PowerShell binds it');
+  assert.match(checked.errors[3].join('\n'), /^PowerShell cannot parse it: /);
+});
+
+test('real: bash -n reads each block off Windows', { skip: process.platform === 'win32' && 'bash is checked off Windows' }, () => {
+  const checked = shellParser('linux')(['rm -rf /tmp/none-such && echo ok', 'if then fi )'], { timeout: 10000 });
+  assert.deepEqual(checked.errors[0], []);
+  assert.match(checked.errors[1].join('\n'), /^bash cannot parse it: /);
 });

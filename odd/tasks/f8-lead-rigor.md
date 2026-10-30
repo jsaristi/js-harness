@@ -230,10 +230,21 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   state only) was committed with `--no-verify`, skipping the gate; the next commit ran it. That gate refused the
   module: `bin/lib/process-tree.test.mjs` forbids the text `Stop-Process` in any source under `bin/`, and
   `PROGRAMS` of `bin/lib/reply-commands.mjs` listed it; the name left the list (a tagged block is checked anyway).
+  The retry then failed on `bin/lib/gentle-ai-absence.test.mjs` (the same list named `gentle-ai`); it left the list
+  and `ccd7e3f9` passed the gate.
+- L11 (2026-10-30, T4): RED: the four hook tests on the excerpts of lines 32954 and 30024 failed on `ccd7e3f9` (22
+  pass, 4 fail), since the hook did not read command blocks; GREEN once wired (`node --test bin/reply.test.mjs
+  bin/lib/reply-commands.test.mjs bin/lib/reply.test.mjs`, 52 pass). The parser is one spawn of `pwsh.exe` (else
+  `powershell.exe`) over every block, one base64 line each, because 5.1 and 7 read a JSON array differently; both
+  gave the same answers on nine cases (`rm -rf`, `ls -la`, `-Destinaton`, an open brace refused; `-Stream`, a
+  provider's dynamic parameter, and `-Recurs`, a prefix, bound), in 1.1 s and 0.7 s. The replay over every
+  assistant text of transcript 0f71b2c6 (34k lines): 14 texts hold fenced blocks, 9 hold command blocks, all 9 are
+  refused on win32 and on linux, and none of the other 5 (cut prompts, code) is; on win32 seven for a `bash` tag,
+  two (lines 32980, 33568) for `powershell` blocks of commands the session never ran, which were his to run and
+  should have been tagged `own`. The check took 0.2 to 2.3 s a reply, the parser included, under the 4 s deadline.
+  `command-handed-untested` moved its Control to the check, its owed line kept as `Was:`.
 
 ## Next step
-State (2026-10-30, after the compaction): PR 707 holds T2, PR 710 holds T3 (both ready notices sent). T4 started, uncommitted in the
-worktree: `bin/lib/reply.mjs` exports `fencedBlocks` (each fence's `info`), reply tests 20 pass; the draft module is
-copied to `bin/lib/reply-commands.mjs` with its tests (6 pass, written after the draft: the RED is the hook test on main). Next: the hook test in `bin/reply.test.mjs` on the real excerpts named in S1's design, wire it in `bin/reply.mjs` with
-the deadline and a parser spawn (`pwsh.exe`, else `powershell.exe`; the probe script that caught `-rf` is
-`tmp/probe.ps1`, alias resolved by `Definition`), then the replay over transcript 0f71b2c6's replies, then reviews.
+State (2026-10-30, after the compaction): PR 707 holds T2, PR 710 holds T3 (both ready notices sent). T4's code and
+docs are written and green (L11), not yet committed. Next: commit, then Codex and the lenses on the range from
+`3ed7fd47`, then PR 3 on a branch from PR 710's head, its ready notice, then T6 and T5.

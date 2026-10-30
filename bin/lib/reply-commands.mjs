@@ -20,6 +20,8 @@
 // `X || true`, `X; exit 0` and `X | head` prove nothing of `X`. A command matches another when their words are
 // equal, quotes taken off and redirections dropped.
 
+import { spawnSync } from 'node:child_process';
+
 /** The shell tags of the user's shell on each platform. */
 export const HIS_SHELLS = Object.freeze({ win32: Object.freeze(['powershell', 'pwsh', 'ps1']), other: Object.freeze(['bash', 'sh', 'zsh', 'shell', 'console']) });
 
@@ -249,8 +251,8 @@ function unrun(commands, runs, text, succeeded) {
 /** Why the command blocks of a reply are refused, one reason a block, or `[]`. `blocks` are the reply's fenced blocks
  * (`{ start, info, body }`), `platform` the user's, `transcript` the transcript's text (or `null`), and `parse(texts)`
  * the shell's checker over the texts of the blocks that need it: `{ errors }`, one list a text, or `{ failed }` when it
- * could not run. */
-export function commandRefusals(blocks, { platform, transcript, parse }) {
+ * could not run, given the `timeout` it has. */
+export function commandRefusals(blocks, { platform, transcript, parse, timeout = COMMANDS_DEADLINE_MS }) {
   const found = commandBlocks(blocks);
   if (found.length === 0) return [];
   const his = shellsOf(platform);
@@ -274,11 +276,95 @@ export function commandRefusals(blocks, { platform, transcript, parse }) {
     }
   }
   if (toParse.length > 0) {
-    const checked = parse(toParse.map((block) => block.text));
+    const checked = parse(toParse.map((block) => block.text), { timeout });
     toParse.forEach((block, i) => {
       if (checked.failed) add(block, `its parser could not check it (${checked.failed})`);
       else for (const error of checked.errors[i] ?? []) add(block, error);
     });
   }
   return [...reasons].map(([block, whys]) => `the block that starts "${block.first}" (line ${block.start + 1}): ${whys.join('; ')}`);
+}
+
+/** The time the hook gives the whole check, parser included, under the 5 seconds the host gives the hook. */
+export const COMMANDS_DEADLINE_MS = 4000;
+
+// PowerShell's own reading of each text, one a line of standard input in base64 (PowerShell 5.1 and 7 read a JSON
+// array differently): its parser's errors, then each named parameter of a cmdlet or function that binds to none of
+// its parameters, an alias resolved by its `Definition` (a profile-less shell leaves `ResolvedCommand` empty) and a
+// provider's dynamic parameters counted through `-ArgumentList`. A native program is skipped. Each line it prints is
+// `<index>`, a tab, and why.
+const POWERSHELL_CHECK = String.raw`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$tab = [char]9
+$texts = @([Console]::In.ReadToEnd() -split [char]10 | Where-Object { $_.Trim() } | ForEach-Object { [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_.Trim())) })
+$common = [System.Management.Automation.Cmdlet]::CommonParameters + [System.Management.Automation.Cmdlet]::OptionalCommonParameters
+for ($i = 0; $i -lt $texts.Count; $i++) {
+  $tokens = $null; $errors = $null
+  $ast = [System.Management.Automation.Language.Parser]::ParseInput([string]$texts[$i], [ref]$tokens, [ref]$errors)
+  foreach ($e in $errors) { "$i$($tab)PowerShell cannot parse it: $($e.Message)" }
+  if ($errors.Count -gt 0) { continue }
+  foreach ($c in $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true)) {
+    $name = $c.GetCommandName(); if (-not $name) { continue }
+    $cmd = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd -and $cmd.CommandType -eq 'Alias') { $cmd = Get-Command $cmd.Definition -ErrorAction SilentlyContinue | Select-Object -First 1 }
+    if (-not $cmd -or $cmd.CommandType -notin 'Cmdlet', 'Function') { continue }
+    $first = $c.CommandElements | Select-Object -Skip 1 | Where-Object { $_ -is [System.Management.Automation.Language.StringConstantExpressionAst] } | Select-Object -First 1
+    if ($first) { try { $withArg = Get-Command $cmd.Name -ArgumentList $first.Value -ErrorAction Stop; if ($withArg) { $cmd = $withArg } } catch { } }
+    $names = @($cmd.Parameters.Keys) + @($cmd.Parameters.Values | ForEach-Object { $_.Aliases }) + $common
+    foreach ($p in $c.CommandElements | Where-Object { $_ -is [System.Management.Automation.Language.CommandParameterAst] }) {
+      if (-not @($names | Where-Object { $_ -like "$($p.ParameterName)*" }).Count) { "$i$($tab)$name has no parameter -$($p.ParameterName)" }
+    }
+  }
+}
+`;
+
+/** Why one spawn of a checker gave no answer, or `null` when it answered. */
+function spawnFailure(result) {
+  if (result.error?.code === 'ETIMEDOUT' || result.signal) return 'it did not answer in time';
+  if (result.error) return result.error.message;
+  if (result.status !== 0) return `it exited ${result.status}`;
+  return null;
+}
+
+/** The checker of the user's shell on `platform`: `parse(texts, { timeout })` as `commandRefusals` asks. On win32 one
+ * spawn of `pwsh.exe` (else `powershell.exe`, when there is no PowerShell 7) reads every text; elsewhere `bash -n`
+ * reads each, all within the one `timeout`. */
+export function shellParser(platform, spawn = spawnSync) {
+  return (texts, { timeout }) => {
+    const until = Date.now() + timeout;
+    const left = () => Math.max(1, until - Date.now());
+    if (platform === 'win32') {
+      const input = `${texts.map((text) => Buffer.from(text, 'utf8').toString('base64')).join('\n')}\n`;
+      const encoded = Buffer.from(POWERSHELL_CHECK, 'utf16le').toString('base64');
+      let result;
+      for (const program of ['pwsh.exe', 'powershell.exe']) {
+        result = spawn(program, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], { input, encoding: 'utf8', windowsHide: true, timeout: left() });
+        if (result.error?.code !== 'ENOENT') break;
+      }
+      const failed = spawnFailure(result);
+      if (failed !== null) return { failed: `PowerShell: ${failed}` };
+      const errors = texts.map(() => []);
+      for (const line of String(result.stdout ?? '').split(/\r?\n/)) {
+        const match = /^(\d+)\t(.+)$/.exec(line);
+        if (match && errors[Number(match[1])]) errors[Number(match[1])].push(match[2].trim());
+      }
+      return { errors };
+    }
+    const errors = [];
+    for (const text of texts) {
+      const result = spawn('bash', ['-n'], { input: text, encoding: 'utf8', timeout: left() });
+      if (result.error || result.signal) return { failed: `bash -n: ${spawnFailure(result)}` };
+      const said = String(result.stderr ?? '').trim().split(/\r?\n/)[0];
+      errors.push(result.status === 0 ? [] : [`bash cannot parse it: ${said || `bash -n exited ${result.status}`}`]);
+    }
+    return { errors };
+  };
+}
+
+/** The Stop hook's reason for the refused command blocks of a reply, `reasons` as `commandRefusals` gives them, or
+ * `null` when there are none. `platform` is the one his shell was read from. */
+export function commandsWarning(reasons, platform) {
+  if (reasons.length === 0) return null;
+  return `js-harness reply: this reply hands him command blocks it has not proved (his shell is read from this machine, ${platform}): `
+    + `${reasons.join('; ')}. The reply is already on his screen: tell him in plain words not to run the block above, and give `
+    + 'the corrected one, run first. Tag a block "ran" after its shell when it shows what you ran, and "own" when only he can run it (his credentials, his settings).';
 }
