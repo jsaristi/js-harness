@@ -222,7 +222,7 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   // The templates' records are read by the interactive report only, as the skips are.
   const withUnseen = deps.templates && interactive ? [...withSkips, templatesRow(deps.templates, project, home)] : withSkips;
   const withBackup = deps.backup ? [...withUnseen, backupRow(deps.backup, home, now)] : withUnseen;
-  const withImport = deps.imports ? [...withBackup, importRow(deps.imports, project)] : withBackup;
+  const withImport = deps.imports ? [...withBackup, importRow(deps.imports, project, home)] : withBackup;
   const withPermissions = deps.permissions ? [...withImport, permissionsRow(deps.permissions, home)] : withImport;
   const withHost = deps.host ? [...withPermissions, hostRow(deps.host, home, now, project)] : withPermissions;
   const withStack = deps.stackUpdate ? [...withHost, stackRow(readStackVersions(rows, { home, spawn, platform }), home, now)] : withHost;
@@ -297,10 +297,10 @@ function permissionsRow(permissions, home) {
 /** The claude-import row (bin/lib/claude-import.mjs; the reverse-engineering document, 13.3 row 16): the project's root
  * CLAUDE.md imports AGENTS.md and no CLAUDE.md above the project loads beside it, a gap with each file otherwise. It
  * reads a few files, so the hook asks it too. Fails open to `unknown`. */
-function importRow(imports, project) {
+function importRow(imports, project, home) {
   const row = { id: 'claude-import', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'n/a', upToDate: 'n/a', fix: {} };
   try {
-    const health = imports(project);
+    const health = imports(project, home);
     return { ...row, project: health.state, fix: health.fix.length ? { project: health.fix } : {} };
   } catch {
     return { ...row, project: 'unknown' };
@@ -372,7 +372,7 @@ export function doctorCommand(argv) {
     templates: (project, home) => templatesHealth(project, home),
     backup: (home, now) => backupHealth(home, now),
     permissions: (home) => permissionsHealth(home),
-    imports: (project) => importHealth(project),
+    imports: (project, home) => importHealth(project, { home }),
     clean: { start: backgroundMeasure(process.env, argv) },
   });
 }

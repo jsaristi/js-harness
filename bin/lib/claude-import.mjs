@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { excludingGlob } from './payload.mjs';
 
 /** The files above a project that Claude loads beside its own. */
 const ABOVE = ['CLAUDE.md', 'CLAUDE.local.md'];
@@ -49,24 +50,34 @@ const within = (root, dir) => {
 };
 
 /** The health of the import at `project`, a project's top folder (`null` outside one), as `{ state, fix }`: `n/a`
- * where the project is not initialized or has no AGENTS.md; `missing` when its root CLAUDE.md is gone or does not
- * import AGENTS.md; `mismatch` with each file when a CLAUDE.md or CLAUDE.local.md sits in a folder above it; `ok`
- * otherwise. `mainCheckout` is the main checkout of a linked worktree (`mainCheckoutOf` when not given). */
-export function importHealth(project, { mainCheckout } = {}) {
+ * where the project is not initialized or has no AGENTS.md; `missing` when its root CLAUDE.md is gone, does not
+ * import AGENTS.md or a `claudeMdExcludes` glob drops it; `mismatch` with each file when a CLAUDE.md or CLAUDE.local.md
+ * no glob drops sits in a folder above it; `ok` otherwise. `mainCheckout` is the main checkout of a linked worktree
+ * (`mainCheckoutOf` when not given); `home` adds the user's settings layer to the project's two. */
+export function importHealth(project, { mainCheckout, home } = {}) {
   if (!project) return NONE;
   if (!fs.existsSync(path.join(project, 'harness.json')) || !fs.existsSync(path.join(project, 'AGENTS.md'))) return NONE;
+  const settings = [
+    ...(home ? [path.join(home, '.claude', 'settings.json')] : []),
+    path.join(project, '.claude', 'settings.json'),
+    path.join(project, '.claude', 'settings.local.json'),
+  ];
   const fix = [];
   const claude = path.join(project, 'CLAUDE.md');
+  const dropping = fs.existsSync(claude) ? excludingGlob(settings, claude) : null;
   if (!fs.existsSync(claude)) {
     fix.push('claude-import: the project has no root CLAUDE.md, so Claude may not load AGENTS.md: write one whose first line is @AGENTS.md');
   } else if (!importsAgents(fs.readFileSync(claude, 'utf8'))) {
     fix.push('claude-import: CLAUDE.md does not import AGENTS.md, so Claude may not load it: add the line @AGENTS.md');
+  } else if (dropping !== null) {
+    fix.push(`claude-import: the claudeMdExcludes glob ${dropping} drops CLAUDE.md, so Claude does not load AGENTS.md: take CLAUDE.md out of it`);
   }
   const missing = fix.length > 0;
   const main = mainCheckout === undefined ? mainCheckoutOf(project) : mainCheckout;
+  const loads = (file) => fs.existsSync(file) && excludingGlob(settings, file) === null;
   const above = [];
   for (let dir = path.dirname(project); ; dir = path.dirname(dir)) {
-    if (!(main && within(main, dir))) for (const name of ABOVE) if (fs.existsSync(path.join(dir, name))) above.push(path.join(dir, name));
+    if (!(main && within(main, dir))) for (const name of ABOVE) if (loads(path.join(dir, name))) above.push(path.join(dir, name));
     if (path.dirname(dir) === dir) break;
   }
   if (above.length > 0) {

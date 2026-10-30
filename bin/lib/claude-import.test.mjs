@@ -62,6 +62,24 @@ test('importHealth names a project with no root CLAUDE.md, or one that does not 
   });
 });
 
+test('importHealth reads a root CLAUDE.md a claudeMdExcludes glob drops as not loaded, and leaves out a dropped file above', (t) => {
+  // Claude skips a CLAUDE.md any settings layer's glob matches, and AGENTS.md goes with it (Codex P2 on 541464c).
+  const { outer, project } = tree(t, { ...INITIALIZED, 'CLAUDE.md': IMPORTING });
+  fs.mkdirSync(path.join(project, '.claude'));
+  fs.writeFileSync(path.join(project, '.claude', 'settings.local.json'), JSON.stringify({ claudeMdExcludes: ['**/project/CLAUDE.md'] }));
+  assert.deepEqual(importHealth(project), {
+    state: 'missing',
+    fix: ['claude-import: the claudeMdExcludes glob **/project/CLAUDE.md drops CLAUDE.md, so Claude does not load AGENTS.md: take CLAUDE.md out of it'],
+  });
+  fs.rmSync(path.join(project, '.claude', 'settings.local.json'));
+  const home = path.join(outer, 'home');
+  fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.claude', 'settings.json'), JSON.stringify({ claudeMdExcludes: [`${outer.replace(/\\/g, '/')}/CLAUDE.md`] }));
+  fs.writeFileSync(path.join(outer, 'CLAUDE.md'), '# dropped by his settings\n');
+  assert.deepEqual(importHealth(project, { home }), { state: 'ok', fix: [] });
+  assert.equal(importHealth(project).state, 'mismatch');
+});
+
 test('importHealth is n/a outside an initialized project, or in one with no AGENTS.md', (t) => {
   assert.deepEqual(importHealth(null), { state: 'n/a', fix: [] });
   assert.deepEqual(importHealth(tree(t, { 'CLAUDE.md': IMPORTING }).project), { state: 'n/a', fix: [] });
