@@ -87,7 +87,7 @@ export function parseChangelog(text, source) {
 export function entriesBetween({ source = null, versions, entries }, { from, to }) {
   const top = [...versions].sort(compareSemver).at(-1);
   if (!VERSION.test(String(to)) || !VERSION.test(String(from))) return { source, entries: [], missing: [], error: `a span runs between two versions, got ${from} to ${to}` };
-  // A side that did not move brings nothing: a desktop update can keep its bundled CLI (gentle-ai, R3-001).
+  // A side that did not move brings nothing: a desktop update can keep its bundled CLI (the reliability lens on dad0db39, R3-001).
   if (compareSemver(from, to) === 0) return { source, entries: [], missing: [] };
   if (!top || compareSemver(top, to) < 0) return { source, entries: [], missing: [], error: `the changelog read stops at ${top ?? 'no version'}, below ${to}: read a copy that holds ${to}` };
   const within = (version) => compareSemver(version, from) > 0 && compareSemver(version, to) <= 0;
@@ -240,7 +240,7 @@ export function checkReview(text, spans) {
     if (count === 0) gaps.push(`${id}: no row`);
     else if (count > 1) gaps.push(`${id}: ${count} rows`);
   }
-  // A row no span names cannot be traced to the changelogs read (gentle-ai, R3-003).
+  // A row no span names cannot be traced to the changelogs read (the reliability lens on dad0db39, R3-003).
   for (const row of rows) {
     const id = at(row, 'evidence');
     if (id !== '' && !ids.includes(id)) gaps.push(`${id}: a row no entry of the spans names`);

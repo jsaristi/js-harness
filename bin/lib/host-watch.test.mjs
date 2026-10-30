@@ -293,7 +293,7 @@ test('a markdown escape in an entry is read as the character it escapes, so a pu
   assert.equal(classify(entries[0]).outside, '[VSCode]');
 });
 
-// gentle-ai review-4991b18b1d344d43, R3-001: a desktop update that keeps its bundled CLI has a CLI span of nothing.
+// The reliability lens on dad0db39, R3-001: a desktop update that keeps its bundled CLI has a CLI span of nothing.
 test('a side whose version did not move has no entries and no missing version, and the draft still names its span', () => {
   const code = entriesBetween(parseChangelog(CODE, 'code'), { from: '2.1.320', to: '2.1.320' });
   assert.equal(code.error, undefined);

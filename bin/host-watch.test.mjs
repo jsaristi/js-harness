@@ -142,7 +142,7 @@ test('check refuses a span that ends below the version the review names, and a d
   }
 });
 
-// gentle-ai review-4991b18b1d344d43, R3-001 to R3-004.
+// The reliability lens on dad0db39, R3-001 to R3-004.
 test('draft and check hold a desktop update that keeps its bundled CLI: no CLI rows, its span named and checked', async () => {
   const w = world();
   try {

@@ -82,7 +82,7 @@ function draft(ctx, flags) {
     desktop: { from: flags['--from-desktop'] ?? reviewed.desktop, to: flags['--to-desktop'] ?? versions.desktop },
     code: { from: flags['--from-code'] ?? reviewed.code, to: flags['--to-code'] ?? versions.code },
   };
-  // What the cache or the app could not give is named with the flag that gives it (gentle-ai, R3-002).
+  // What the cache or the app could not give is named with the flag that gives it (the reliability lens on dad0db39, R3-002).
   if (span.desktop.from == null || span.code.from == null) {
     ctx.stderr("js-harness host-watch: doctor's cache holds no reviewed record of the host, or none of its CLI: give the span with --from-desktop and --from-code");
     return 1;
@@ -134,7 +134,7 @@ function check(ctx, file) {
         ctx.stderr(`js-harness host-watch: ${file} names ${url} with no span "(<from> to <to>)" check can read`);
         return 1;
       }
-      // A version the review names is held to its changelog, so its rows cannot leave with their span (gentle-ai, R3-003).
+      // A version the review names is held to its changelog, so its rows cannot leave with their span (the reliability lens on dad0db39, R3-003).
       if (named) {
         ctx.stderr(`js-harness host-watch: ${file} names ${key === 'desktop' ? 'Claude Desktop' : 'Code tab CLI'} ${named} and no span of ${url} under "## Sources"`);
         return 1;
@@ -186,7 +186,7 @@ function tools(ctx, flags) {
     recorded = parseToolList(read(recordFile));
   } catch (err) {
     // No list recorded for this surface yet: this capture is its baseline. Any other failure is said, or --record
-    // would write a fresh baseline over a list it could not read (gentle-ai, R3-004).
+    // would write a fresh baseline over a list it could not read (the reliability lens on dad0db39, R3-004).
     if (err.code !== 'ENOENT') {
       ctx.stderr(`js-harness host-watch: the recorded list ${recordFile} could not be read (${err.code ?? err.message})`);
       return 1;
