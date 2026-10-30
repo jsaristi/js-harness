@@ -1269,6 +1269,15 @@ this entry, so the lands it turned red have no cause.
 - Was: owed — odd/tasks/throughput-review.md — "Unit 4: section 7"; that task is checked off (49de368c),
   and the daily throughput table now names the failing tests of each day's gates
 
+### scratch-run-opened-browser
+A run in a scratch home started a command that opened a browser on his screen, and it outlived the run.
+- Class: machine
+- Seen: 2026-10-30 — odd/tasks/f8-s13-rehearsal.md, L5 — walk 1's `stack install --tool context7` ran the
+  scratch Codex CLI's `codex mcp add context7 --url ...`, which left context7's OAuth login running and Brave open at
+  its page; found only when the scratch root could not be removed, its tree (8 processes) stopped by hand
+- Control: check — scripts/rehearsal.test.mjs — "openedBrowsers names a browser started under a scratch process,
+  and none of his own" — since 2026-10-30
+
 ### script-ate-backslashes
 Text with backslashes written through a shell script lost them, and a commit carries the broken
 path.
@@ -1522,6 +1531,10 @@ was not so.
   reading; JH 8's measure found two Windows services (PcaSvc since about 17:00, and the antivirus)
   taking two to three of the eight processors while a check runs (odd/tasks/gate-wait.md, Progress);
   a gate now names the processes that spent the processor before its command
+- Seen: 2026-10-30 — odd/tasks/f8-s13-rehearsal.md, L5 and L7 — JH 90 offered the lead D3 on a cause marked
+  assumed (a 30 s timeout that killed only the shell); the walk's own log already refuted it, since `stack install`
+  passed its exit check and a timeout exits 1 (`bin/stack.mjs:245-250`); the lead chose on it, and was told the
+  correction before anything was built on it
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting

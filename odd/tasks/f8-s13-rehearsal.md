@@ -155,3 +155,11 @@ summary.
   So: T9 below; the walk runs `stack install --tool codex --tool codegraph` and registers Claude's context7 by
   stack's own plan (`RUNNABLE` of `bin/lib/stack-install.mjs`), and after every step a browser under a scratch
   process is stopped and fails the step.
+- L7 (2026-10-30, a correction, JH 90's own): L5's assumed cause is refuted by evidence that was already in hand.
+  A timed-out run makes `stack install` exit 1 (`bin/stack.mjs:245-250`; `bin/stack-install.test.mjs:293-300`),
+  and walk 1's `stack install` passed its exit check, so no run timed out: `codex mcp add` itself returned and left
+  context7's login running, its launcher's parent (pid 11288) already gone when the tree was read. T9 would not
+  have stopped what happened. Recorded in `docs/FAILURES.md` (told-him-unverified, scratch-run-opened-browser). D3
+  goes back to the lead with this: (a) T9 is dropped, and what Codex does after `mcp add` is owed to S12 (the walk
+  keeps context7 out of Codex and its browser guard); (b) T9 is built anyway, for the latent case its comment
+  already names (`bin/lib/stack-run.mjs:53`). Recommended: (a), since no run is known to have timed out.
