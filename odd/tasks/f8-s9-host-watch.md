@@ -245,7 +245,43 @@ session records `tools-background.txt` from its own list either way.
   `bin/lib/gentle-ai-absence.test.mjs` refuses under `bin`; two commits had entered with it because the pre-commit
   with tests on CI failed and a hand `npm run check` of the same code, without them, then passed as `same`
   (gate-log 309-317): told to the lead, not fixed here. Codex over `98d4c7c..f3274d4` correct (0.92); lenses 0.
+- L9 (2026-10-30): PR 717 has no PR checks by design (`.github/workflows/gate.yml` runs only for `gate/` and `queue/`
+  pushes); its last code commit passed the gate on CI (gate-log 318). Out of draft, `ready` sent. T4 on branch
+  `f8-s9-trigger`, stacked on `f8-s9-probe`: `watchTitle`, `watchOpened`, `watchLine`, `renderBrief` in the lib;
+  `host-watch brief` and `hostWatchTick` in the command; `loop heartbeat` reads it every hour (`HOST_MINUTES`) and
+  ends with the `HOST:` line; the row's first step and the notice say the review is the host watch session's. Run on
+  this machine: `host-watch brief` exits 1 (no update: the record is 4.4212.0/2.1.309); with the record faked at
+  4.29.0/2.1.308 it prints "# JH 111 · host watch 4.4212.0", the number `sessions --next-number` gives. Known limit:
+  an update of the CLI alone after a desktop version's review is titled with the same desktop version, so the earlier
+  session's title counts as opened; rare (the CLI ships inside the app), written here rather than built.
+  The first commit of T4 failed the gate on CI (run 41132256606): `bin/lib/rules-sources.test.mjs` took the lib for a
+  producer of hook messages because a comment named `systemMessage`; reworded. Open, for the lead: the brief
+  `renderBrief` builds is a text the harness sends an agent, and the directive-coverage register (F8 S5c,
+  `bin/lib/rules-coverage-data.mjs`) does not list it; declaring it is S5c's register work, not done here.
+- L10 (2026-10-30): T4 is `34562cc4` (gate on CI, 171 s). Lenses reliability, risk, readability: 0 findings. Codex
+  (0.97 incorrect): three P2, all real, fixed next with their tests: the brief's folder may not exist on a fresh
+  machine, so the tick creates it; a heartbeat under another home handed commands that read the default one, so
+  both carry `--home`; a session that only read the channel was not counted, so readings' titles count. Checked:
+  `js-harness sessions start --home <tmp> --title "JH 120 · host watch 4.5000.0" --brief <missing> --worktree
+  host-watch-4-5000-0 --effort high` parses and stops at the brief (exit 2), nothing written. Correction to L6: no
+  entry of the span names a bypass `rm` prompt (searched the draft's 113 rows for rm, bypass, deny, hint).
+
+- L11 (2026-10-30): Codex over `34562cc..56c82c7` correct (0.98), the three fixed; lenses reliability, risk 0. T4
+  is reviewed: `34562cc4`, `56c82c71` on `f8-s9-trigger`.
 
 ## Next step
-1. PR 717 out of draft once its CI is green, then the `ready` notice.
-2. T4 (trigger: heartbeat `HOST:` line, row fix, notice, `host-watch brief`), PR 3; then T5 (real run), T6.
+1. Push `f8-s9-trigger`; open PR 3 (base `f8-s9-probe` while PR 717 is open, else main); `ready` notice.
+2. T5, the real run, on a branch `f8-s9-review` from `f8-s9-trigger`: the draft is
+   `node bin/js-harness.mjs host-watch draft --desktop <desktop.md> --code <code.md> --from-desktop 4.29.0
+   --to-desktop 4.4212.0 --from-code 2.1.308 --to-code 2.1.309 --sources docs/host-updates/sources` over the
+   published pages (`https://claude.com/docs/cowork/claude-desktop-changelog.md`,
+   `https://code.claude.com/docs/en/changelog.md`): 113 rows, 56 to decide, 13 by hand. Decided so far: no adopt;
+   one candidate adapt, desktop 4.4212.0 #24 `sessionStatusLine` (a line above the Code tab's message box printed by
+   a program the app runs; on Windows it must sit in Program Files, set by managed settings: admin, outside the
+   per-user undo), which brings one question; desktop #28 (`desktopHome`, breaking Nov 10) ignore: "Code is not
+   affected" (desktop changelog, the `desktopHome` entry of its beta); code #49 (PowerShell hooks failing open)
+   ignore: checked, no harness hook in `~/.claude/settings.json` sets `shell`; code #33 ignore (L6). Every other
+   row: a host fix that needs no harness change.
+3. Then `tools-background.txt` from this session's own list, `tools-desktop.txt` from the lead's
+   (`~/.js-harness/research/host-watch/tools-desktop-lead.txt`, `--record`), `host-watch check` exit 0, the map
+   rows of the proposal, the Spanish page, one `notify --kind question` for #24, PR 4; T6.

@@ -210,7 +210,8 @@ export function hostUpdateRow(versions, reviewed, now = () => new Date(), projec
     read.claude = 'stale';
     read.change = change;
     read.fix.claude = [
-      `${change} since the last review; review the update:`,
+      // The review is the host watch session's (F8's S9): any other session that reads this row tells the lead.
+      `${change} since the last review; a host watch session reviews it and the steps below are that session's (js-harness host-watch brief prints its brief, and js-harness loop heartbeat names it to the lead): any other session tells the lead and records no review:`,
       ...(reviewed.desktop !== versions.desktop ? [`read ${DESKTOP_CHANGELOG} from ${reviewed.desktop} to ${versions.desktop}`] : []),
       ...(versions.code && reviewed.code && reviewed.code !== versions.code ? [`read the Claude Code CHANGELOG (${CODE_CHANGELOG}) from ${reviewed.code} to ${versions.code}`] : []),
       'check that the harness hooks in ~/.claude/settings.json still run',
@@ -231,7 +232,7 @@ export function hostUpdateRow(versions, reviewed, now = () => new Date(), projec
 /** What the hook's notice adds for this row: the update since the last review, and a version not applied. */
 export function hostNotice(row) {
   const parts = [];
-  if (row?.claude === 'stale' && row.change) parts.push(`${row.change} since the last review`);
+  if (row?.claude === 'stale' && row.change) parts.push(`${row.change} since the last review, which a host watch session reviews`);
   if (row?.upToDate === 'outdated' && row.staged) parts.push(`Claude Desktop ${row.staged} is downloaded and not applied`);
   return parts.join('; ');
 }

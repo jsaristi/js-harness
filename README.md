@@ -1695,6 +1695,13 @@ A desktop list must hold `start_session`, which only a session the app started i
 `claude --bg` session's list is recorded as `background`. A removed name is confirmed with
 `ToolSearch` `select:<name>` before a review claims it.
 
+`brief` prints the brief of the session that reviews the update read now: its title
+`<code> <n> · host watch <version>` with the next number, the spans frozen from the record last
+reviewed, and each step of the review. `js-harness loop heartbeat` reads the host every hour and,
+while an update has no session titled for its version, ends with a `HOST:` line that names the
+session and the command that opens it; the `host-update` row and the hook's notice say the review
+is that session's.
+
 ### js-harness wait
 
 Waits in the background for one condition and ends when it holds: a pull request merged

@@ -54,7 +54,9 @@ export const USAGE = [
   '    session-stall when not given), and again each time that quiet doubles; one already stalled at the start is named on an',
   '    "already stalled:" line and waits for its doubling; with a WINDOWS line (exit 0) when the daily Windows run,',
   '    read every --windows minutes (60; 0 for never; js-harness windows-daily reads it by hand), is red and was not',
-  '    told before; with the DUE line of a throughput review (exit 0) when it falls due and again an hour, three and',
+  '    told before; with a HOST line (exit 0) when the host, read every hour, has an update no host watch session',
+  '    holds, naming the session to open and the command that opens it (js-harness host-watch brief prints its brief);',
+  '    with the DUE line of a throughput review (exit 0) when it falls due and again an hour, three and',
   '    seven after, one already due at the start being named on an "already due:" line; or after --max hours (10,',
   '    exit 1). Every line that ends it is followed by the DUE lines still open. Each tick also keeps, as',
   '    js-harness throughput snapshot does, the settled days of the window the rule throughput-backfill-days gives that the gate',
@@ -340,6 +342,10 @@ const STALL_GIT_TIMEOUT_MS = 10 * 1000;
 // heartbeat started again reads the time of the last ask from its file (bin/lib/windows-daily.mjs).
 const WINDOWS_MINUTES = 60;
 
+// How often the heartbeat reads the host's versions, in minutes: an update lands a few times a week, and the reading
+// says it again each hour until a host watch session opens for it (odd/tasks/f8-s9-host-watch.md, S4).
+const HOST_MINUTES = 60;
+
 /** How long `ms` is, in hours and minutes: `1h 30m`, `45m`. */
 const spanOf = (ms) => {
   const minutes = Math.floor(ms / 60000);
@@ -401,6 +407,22 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     }
     return result.told;
   };
+  // The host watch: an update no session reviews ends the loop with the line that opens one. Said once each, as above.
+  const hostSaid = new Set();
+  const hostTold = async () => {
+    let result;
+    try {
+      result = await ctx.hostWatch({ home, slug, cwd: ctx.cwd, everyMs: HOST_MINUTES * 60000, now: ctx.now });
+    } catch (err) {
+      result = { lines: [`host-watch: the host could not be read (${err.message})`], told: null };
+    }
+    if (result === null) return null;
+    for (const line of result.lines) {
+      if (!hostSaid.has(line)) ctx.out(line);
+      hostSaid.add(line);
+    }
+    return result.told;
+  };
   // The throughput review (odd/tasks/throughput-review.md, S4): each tick keeps the settled days that have no
   // snapshot and reads the reviews due; a due one ends the loop when it falls due and again each time its wait,
   // plus an hour, doubles (due, +1, +3, +7 h). What the tick said is said once each, as `unread` is.
@@ -448,7 +470,7 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     }
     return last;
   };
-  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it`);
+  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}; every hour, the host's versions are read, and an update no host watch session holds ends it; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it`);
   for (const item of stalledAt(started)) {
     told.set(identity(item), crossing(item));
     ctx.out(`already stalled: ${item.title ?? `work session ${item.number}`}, quiet ${spanOf(item.quietMs)}`);
@@ -466,6 +488,8 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     if (fresh.length > 0) return ending(fresh.map(stalledLine), dues, 0);
     const windowsLine = await windowsTold();
     if (windowsLine !== null) return ending([windowsLine], dues, 0);
+    const hostLine = await hostTold();
+    if (hostLine !== null) return ending([hostLine], dues, 0);
     if (dues.some((due) => dueCrossing(due, now) > (dueTold.get(due.id) ?? -1))) return ending([], dues, 0);
     if (now >= end) return ending([`js-harness loop heartbeat: ${plural(max, 'hour')} cap reached (${hourOf(now)})`], dues, 1);
     await ctx.sleep(Math.min(every, end - now, last + quiet * 60000 - now));
@@ -562,6 +586,8 @@ export async function loopMain(
     windowsDaily = async (options) => (await import('./lib/windows-daily.mjs')).windowsDailyTick(options),
     // The heartbeat's throughput tick: keeps the settled days with no snapshot, and says which review is due.
     throughputTick = async (options) => (await import('./throughput.mjs')).throughputTick(options),
+    // The heartbeat's reading of the host: null when it is not due, else an update no host watch session holds.
+    hostWatch = async (options) => (await import('./host-watch.mjs')).hostWatchTick(options),
   } = {},
 ) {
   let parsed;
@@ -575,7 +601,7 @@ export async function loopMain(
   const cwd = path.resolve(defaultCwd, parsed.flags.cwd ?? '.');
   const home = harnessHome({ given: parsed.flags.home, env, cwd: defaultCwd, homedir });
   const slug = projectSlug(mainCheckout(run, cwd));
-  const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile, run, windowsDaily, throughputTick };
+  const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile, run, windowsDaily, throughputTick, hostWatch };
   if (parsed.verb === 'status') return status(ctx, parsed, loopsFolder(home, slug));
   if (parsed.verb === 'heartbeat' || parsed.verb === 'channel-watch') {
     try {
