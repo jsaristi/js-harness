@@ -84,5 +84,12 @@ question.
   with no `sameTree`. A failure that ran no sensor (`error`, `sensors: []`) stands against every pass of its files.
   Both cost a run, never a proof; a tree that failed is rarely gated again unchanged.
 
+- L6 (2026-10-30): the first commit of T1 failed its gate on CI, once: `bin/conventions-structure.test.mjs` refused
+  `bin/check.mjs` at 2042 lines over its ceiling of 2031 ("move code out of it rather than into it"). `testsOnCi`,
+  which the fix changes, moved to `bin/lib/ci-gate.mjs`, the module of the gate on GitHub's machines, whose imports
+  it already used but three core ones (`failingTests`, `gateRecord`, `gateRow`/`gateLogRows`); `check.mjs` is 2010
+  lines and its ceiling 2010. Then `js-harness gate -- node --test bin/conventions-*.test.mjs bin/check.test.mjs
+  bin/lib/rules-sources.test.mjs bin/lib/gentle-ai-absence.test.mjs`: 276 of 276.
+
 ## Next step
 T1 and T2 committed, then `npm run check`, Codex and the lenses over the slice, the verifier, the PR.

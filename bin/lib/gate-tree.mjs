@@ -82,3 +82,29 @@ export function treeKey(git, { sensors, runtime = RUNTIME, place } = {}) {
   ]);
   return createHash('sha256').update(hashed).digest('hex');
 }
+
+// The listing of the index alone, one entry for each path: its mode, its object id, its stage and the path, what
+// `git write-tree` makes a tree of. Not the folder: a gate on CI runs the tree of the index (`runCiGate` of
+// ./ci-gate.mjs), whatever the folder holds.
+const FILES = ['ls-files', '-s', '-z'];
+
+// An entry of that listing that is merged: a mode, an object id, stage 0, a tab and a path.
+const MERGED = /^\d{6} [0-9a-f]{40,64} 0\t./;
+
+/** The key of the files of the index of the repository `git` answers for, as 64 lowercase hex characters, or `null`
+ * when there is none: what a gate on CI ran, and what a gate here ran where its folder is that index (`treeKey`),
+ * with no word of the sensors, the runtime or the place. A gate writes it on its end, so a failure of these files
+ * wherever it ran stands against a pass of them elsewhere (`provenBy` of ./gate-log.mjs; JH 109, 2026-10-30,
+ * odd/tasks/gate-narrow-pass.md). The sensors are in it as the files that declare them, `harness.json` and
+ * `package.json`.
+ *
+ * `git` is as `treeKey` takes it. `null` for git that does not answer, an index with nothing in it, and an entry
+ * that is not merged. One process of git. */
+export function filesKey(git) {
+  if (typeof git !== 'function') return null;
+  const listing = git(FILES);
+  if (typeof listing !== 'string') return null;
+  const lines = listing.split('\0').filter(Boolean);
+  if (lines.length === 0 || !lines.every((line) => MERGED.test(line))) return null;
+  return createHash('sha256').update(JSON.stringify([TREE_KEY_FORMAT, 'files', lines])).digest('hex');
+}

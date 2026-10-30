@@ -4924,6 +4924,52 @@ test('through the real hook: a commit of one named path beside another staged fi
   }
 });
 
+// JH 109, 2026-10-30 (odd/tasks/gate-narrow-pass.md, L2): a commit's tests failed on CI, a check by hand of the same
+// tree then passed in the WSL mirror, where the failing test skips itself, and the next commit's gate took that pass
+// for the proof of its tree and ran nothing: two commits entered with a red test.
+test('a tree whose tests failed on CI is not proven by a narrower pass here: the next commit goes to CI again and is refused', async () => {
+  const { gate, sensorRuns, events, remove } = sameTreeRepo();
+  try {
+    let ciRuns = 0;
+    const red = { ran: true, pass: false, url: 'https://github.com/o/r/actions/runs/42', seconds: 200, output: '✖ failing tests:\n\ntest at bin/a.test.mjs:1:1\n✖ a test that needs .git (1ms)\n' };
+    const onCi = {
+      ciGateWanted: () => 'the project holds .github/workflows/gate.yml, so a commit\'s tests go to GitHub\'s machines first',
+      runCiGate: async () => {
+        ciRuns += 1;
+        return red;
+      },
+    };
+    const commit = await gate({}, onCi);
+    assert.equal(commit.code, 1, commit.output);
+    // By hand the suite runs here, where the test that failed on CI is skipped, and passes.
+    const byHand = await gate();
+    assert.equal(byHand.code, 0, byHand.output);
+    assert.equal(sensorRuns(), 1);
+    const next = await gate({}, onCi);
+    assert.equal(next.code, 1, `the commit entered on a pass narrower than the run that failed:\n${next.output}`);
+    assert.equal(ciRuns, 2, 'the commit did not go to CI again');
+    assert.equal(events().some((event) => event.event === 'same'), false);
+  } finally {
+    remove();
+  }
+});
+
+test('a tree whose sensors failed here and then passed here is proven by that pass: a run as wide as the failure', async () => {
+  const { gate, sensor, sensorRuns, events, remove } = sameTreeRepo();
+  try {
+    sensor.answer = () => ({ status: 1, signal: null, stdout: '', stderr: 'no' });
+    assert.equal((await gate()).code, 1);
+    sensor.answer = sensorRan;
+    assert.equal((await gate()).code, 0);
+    const third = await gate();
+    assert.equal(third.code, 0, third.output);
+    assert.equal(sensorRuns(), 2, 'a pass in the place the failure ran in did not prove its tree');
+    assert.equal(events().at(-1).event, 'same');
+  } finally {
+    remove();
+  }
+});
+
 // Git runs no pre-commit hook for the commit a merge makes by itself: it runs `pre-merge-commit`, with the
 // merged index staged. `.githooks/pre-merge-commit` starts the gate there, so such a merge is a gate as a
 // commit is.

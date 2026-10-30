@@ -692,13 +692,48 @@ test('gateRecord with the writer of this module writes a real file, with an id o
 // --- the key of a tree: on the end of a gate that proved it, and in the line of a gate that ran no sensor ---
 
 const KEY = 'c'.repeat(64);
+// The key of the files a tree's gates ran on (`filesKey` of ./gate-tree.mjs).
+const FILES = 'f'.repeat(64);
 const same = (id, more = {}) => ({ v: 1, event: 'same', id, at: AT, cwd: 'C:\\work\\two', command: 'check', pid: 101, code: KEY, by: 'g1', ...more });
 
 test('provenBy: the proof of a tree is the last end that passed and holds its key, with the folder of its start where the log still has it', () => {
   const events = [start('g1'), end('g1', { code: KEY }), start('g2', { cwd: 'C:\\work\\two' }), end('g2', { code: KEY, at: '2026-10-11T08:00:00.000Z' }), end('g3', { code: KEY, at: '2026-10-11T09:00:00.000Z' })];
-  assert.deepEqual(provenBy(events.slice(0, 4), KEY), { id: 'g2', at: '2026-10-11T08:00:00.000Z', cwd: 'C:\\work\\two' });
+  assert.deepEqual(provenBy(events.slice(0, 4), KEY, FILES), { id: 'g2', at: '2026-10-11T08:00:00.000Z', cwd: 'C:\\work\\two' });
   // The start of the last one was rotated away: the proof stands, and names no folder.
-  assert.deepEqual(provenBy(events, KEY), { id: 'g3', at: '2026-10-11T09:00:00.000Z', cwd: null });
+  assert.deepEqual(provenBy(events, KEY, FILES), { id: 'g3', at: '2026-10-11T09:00:00.000Z', cwd: null });
+});
+
+// JH 109, 2026-10-30 (odd/tasks/gate-narrow-pass.md, L2): the tests of a commit failed on CI, a pass of the same files
+// in the WSL mirror, where the failing test skips itself, then proved the tree, and the next commit ran nothing.
+test('provenBy: a pass is no proof where a gate of the same files failed somewhere the pass did not run, or failed after it', () => {
+  const onCi = (id, more = {}) => end(id, { result: 'fail', files: FILES, sensors: [{ name: 'tests', seconds: 200, pass: false, ranIn: 'ci' }], ...more });
+  const inWsl = (id, more = {}) => end(id, { code: KEY, files: FILES, sensors: [{ name: 'tests', seconds: 150, pass: true, timedOut: false, ranIn: 'wsl', skip: { files: 312, skipped: 214 } }], ...more });
+  const here = (id, more = {}) => end(id, { files: FILES, ...more });
+  const refused = [
+    // The incident: red on CI, then green in the mirror.
+    [onCi('g1'), inWsl('g2')],
+    // Red in the mirror after green there: the pass is not the last word of its own place.
+    [inWsl('g1'), inWsl('g2', { result: 'fail', code: undefined })],
+    // Red on CI after green in the mirror.
+    [inWsl('g1'), onCi('g2')],
+    // A timeout and an error are failures too.
+    [onCi('g1', { result: 'timeout' }), inWsl('g2')],
+    [here('g1', { result: 'error', sensors: [] }), here('g2', { code: KEY })],
+    // Red on Windows, then green in the mirror: a pass in one place says nothing of another.
+    [here('g1', { result: 'fail' }), inWsl('g2')],
+  ];
+  for (const events of refused) assert.equal(provenBy(events, KEY, FILES), null, JSON.stringify(events));
+  const proven = [
+    // Red here, then green here: the pass ran where the failure did.
+    [here('g1', { result: 'fail', sensors: [{ name: 'tests', seconds: 3, pass: false }] }), here('g2', { code: KEY })],
+    [inWsl('g1', { result: 'fail', code: undefined }), inWsl('g2')],
+    // A failure of other files, and one written with no files key (an older line), stand against nothing.
+    [onCi('g1', { files: 'e'.repeat(64) }), inWsl('g2')],
+    [onCi('g1', { files: undefined }), inWsl('g2')],
+    // The end of a `gate --` turn is no gate of these sensors.
+    [end('g1', { result: 'exit 1', files: FILES, sensors: undefined }), inWsl('g2')],
+  ];
+  for (const events of proven) assert.equal(provenBy(events, KEY, FILES)?.id, 'g2', JSON.stringify(events));
 });
 
 test('provenBy: nothing but a passed end with that very key is a proof', () => {
@@ -714,10 +749,12 @@ test('provenBy: nothing but a passed end with that very key is a proof', () => {
     [start('g1', { code: KEY })],
     [stopped('g1', { code: KEY })],
   ];
-  for (const events of none) assert.equal(provenBy(events, KEY), null, JSON.stringify(events));
+  for (const events of none) assert.equal(provenBy(events, KEY, FILES), null, JSON.stringify(events));
   const proof = [start('g1'), end('g1', { code: KEY })];
-  for (const key of [undefined, null, '', 'c'.repeat(63), 'C'.repeat(64), 7]) assert.equal(provenBy(proof, key), null, String(key));
-  assert.equal(provenBy(undefined, KEY), null);
+  for (const key of [undefined, null, '', 'c'.repeat(63), 'C'.repeat(64), 7]) assert.equal(provenBy(proof, key, FILES), null, String(key));
+  // A gate that cannot say which files it guards has no proof either: every doubt runs the sensors.
+  for (const files of [undefined, null, '', 'f'.repeat(63), 7]) assert.equal(provenBy(proof, KEY, files), null, String(files));
+  assert.equal(provenBy(undefined, KEY, FILES), null);
   assert.equal(isTreeKey(KEY), true);
 });
 
@@ -728,11 +765,12 @@ test('gateRecord writes the key of the tree on the end of a gate that gives one,
     written.length = 0;
     const gate = record();
     gate.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
-    gate.end({ result: 'pass', sensors: [], code });
+    gate.end({ result: 'pass', sensors: [], code, files: code });
     return written.at(-1);
   };
   assert.equal(ended(KEY).code, KEY);
-  for (const code of [undefined, null, '', 'not a key', 12]) assert.equal('code' in ended(code), false, String(code));
+  assert.equal(ended(KEY).files, KEY);
+  for (const code of [undefined, null, '', 'not a key', 12]) assert.deepEqual(['code' in ended(code), 'files' in ended(code)], [false, false], String(code));
 });
 
 test('gateRecord writes a gate that ran no sensor as one line of the kind same, with the key and the gate that proved it, and nothing when either is missing', withHome(async (home) => {
@@ -889,7 +927,7 @@ test('a ci-fallback line under a gate\'s id is read, and pairs, prints and prove
   assert.equal(gates.length, 1);
   assert.deepEqual(Object.keys(gates[0]).sort(), ['end', 'start']);
   assert.equal(formatGates(gates).length, 1);
-  assert.equal(provenBy(events, code).id, 'g1');
+  assert.equal(provenBy(events, code, FILES).id, 'g1');
   // Alone, with its gate rotated away, it is no gate at all.
   assert.deepEqual(gatesOf([fallback]), []);
 }));

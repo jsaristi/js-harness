@@ -15,6 +15,9 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { failingTests } from './flaky.mjs';
+import { gateRecord } from './gate-log.mjs';
+import { gateLogRows, gateRow } from './gate-turn.mjs';
 import { ruleValue } from './rules.mjs';
 
 /** Set to `0`, the gate never goes to CI. */
@@ -168,4 +171,38 @@ async function followRun({ sha, gh, now, sleep, startedAt }) {
     if (id !== null) gh(['run', 'cancel', id]);
     return { ran: false, why: err instanceof Error ? err.message : String(err) };
   }
+}
+
+/** The rows of a gate of ../check.mjs whose tests ran on GitHub's machines, where every commit's gate goes first,
+ * or null for a gate that runs here: the project has no gate workflow, the switch keeps it here, or CI gave no
+ * answer, which it says on stderr. Such a gate leaves its own record in the gate log, its tests marked as run on CI
+ * and the names of those that failed there, so the measures of the lines count both, and the key of the files of the
+ * index the run is of, which `filesNow` gives (`filesKey` of ./gate-tree.mjs) or `null`: what lets a failure here
+ * stand against a pass of the same files elsewhere (`provenBy` of ./gate-log.mjs). A gate CI gave no answer leaves a
+ * `ci-fallback` line under `local`'s id, the record of the gate that then runs here, with what the wait cost.
+ * `deps.ciGateWanted` and `deps.runCiGate` stand in for the two halves. Moved here from ../check.mjs on 2026-10-30
+ * (odd/tasks/gate-narrow-pass.md), which may not grow. */
+export async function testsOnCi(cwd, lock, deps, local = null, filesNow = () => null) {
+  const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, env: lock.env ?? process.env });
+  if (!why) return null;
+  console.error(`check: ${why}; the push of the tree being committed starts their run`);
+  // Asked before the push, of the index `runCiGate` writes the tree of.
+  const files = filesNow();
+  const startedAt = Date.now();
+  const ci = await (deps.runCiGate ?? runCiGate)({ cwd, remote: lock.remote ?? 'origin', env: lock.env ?? process.env });
+  if (!ci.ran) {
+    console.error(`check: no answer from GitHub's machines (${ci.why}), so the tests run here`);
+    local?.ciFallback({ seconds: Math.round((Date.now() - startedAt) / 1000), reason: ci.why });
+    return null;
+  }
+  const tests = { name: 'tests', pass: ci.pass, detail: `ran on GitHub's machines in ${ci.seconds}s (${CI_WORKFLOW}): ${ci.url}`, ...(ci.output && { output: ci.output }) };
+  let at = startedAt;
+  const record = lock.log !== false && lock.home !== undefined
+    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', session: lock.session, now: () => at, ...deps.gateLog })
+    : null;
+  record?.start({ lock: 'ci', waitedMs: 0, waitedFor: [] });
+  at = Date.now();
+  const failing = ci.pass ? [] : failingTests(ci.output);
+  record?.end({ result: ci.pass ? 'pass' : 'fail', sensors: [{ name: 'tests', seconds: ci.seconds, pass: ci.pass, ranIn: 'ci', ...(failing.length > 0 && { failing }) }], files });
+  return [gateRow(`the tests ran on CI: ${why}`), tests, ...gateLogRows(record)];
 }

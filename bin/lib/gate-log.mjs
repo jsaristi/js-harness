@@ -174,6 +174,7 @@ const BODY = {
   load: shaped(LOAD),
   rows: listOf(isText),
   code: isTreeKey,
+  files: isTreeKey,
   error: isText,
   by: isText,
 };
@@ -400,13 +401,33 @@ function stopSaid({ rows }) {
  * Only such a line is a proof. A gate writes `code` on its end when it ran every sensor, all passed, and
  * the tree had the same key before them and after them; no other kind of line is read here, so a gate that
  * ran no sensor because of a proof proves nothing itself, and neither does a `gate -- <command>` turn,
- * whose end says `exit 0`. */
-export function provenBy(events, code) {
-  if (!isTreeKey(code) || !Array.isArray(events)) return null;
-  const end = events.findLast((event) => event.event === 'end' && event.result === 'pass' && event.code === code);
-  if (end === undefined) return null;
+ * whose end says `exit 0`.
+ *
+ * `files` is the key of the files of that tree (`filesKey` of ./gate-tree.mjs), and with no such key there is no
+ * proof. A pass is none where a gate of those files failed (`standsAgainst`) after it, or before it somewhere the
+ * pass did not run: on GitHub's machines, which hold no key of a tree, or in WSL2 for a pass on Windows. JH 109,
+ * 2026-10-30 (odd/tasks/gate-narrow-pass.md, L2): a commit's tests failed on CI, a pass of the same tree in the WSL
+ * mirror, where the failing test skips itself, proved it, and two commits entered with a red test. */
+export function provenBy(events, code, files) {
+  if (!isTreeKey(code) || !isTreeKey(files) || !Array.isArray(events)) return null;
+  const at = events.findLastIndex((event) => event.event === 'end' && event.result === 'pass' && event.code === code);
+  if (at === -1) return null;
+  const end = events[at];
+  if (events.some((event, index) => standsAgainst(event, files) && (index > at || !ranWhere(end, event)))) return null;
   const start = events.find((event) => event.event === 'start' && event.id === end.id);
   return { id: end.id, at: end.at, cwd: start?.cwd ?? null };
+}
+
+/** Whether `event` is the end of a gate of the files `files` whose sensors did not all pass: a failure, a timeout or
+ * an error. The end of a `gate -- <command>` turn has no sensors, and is none. */
+const standsAgainst = (event, files) => event.event === 'end' && event.result !== 'pass' && event.files === files && Array.isArray(event.sensors);
+
+/** Whether the gate that ended `pass` ran each sensor of the one that ended `failed` where that one ran it (`ranIn`:
+ * `ci`, `wsl`, or none for the machine itself): a run as wide as the failure. A failure that names no sensor cannot
+ * be placed, and no pass is that wide. */
+function ranWhere(pass, failed) {
+  const ran = Array.isArray(pass.sensors) ? pass.sensors : [];
+  return failed.sensors.length > 0 && failed.sensors.every((sensor) => ran.some((own) => own?.name === sensor?.name && own?.ranIn === sensor?.ranIn));
 }
 
 /** That a gate ran no sensor, and which gate had passed the same tree. */
@@ -554,11 +575,12 @@ export function gateRecord({ home, cwd, command, pid = process.pid, session, app
       const sampled = loadWritten(load);
       if (write('this gate', at, { event: 'start', ...said, lock, ...waited({ waitedMs, waitedFor }), ...(sampled && { load: sampled }) })) startedAt = at;
     },
-    end({ result, sensors, code }) {
+    end({ result, sensors, code, files }) {
       if (startedAt === undefined) return;
       const at = now();
-      // The key of the tree, where the gate has one to give: what makes this line a proof (`provenBy`).
-      write('the end of this gate', at, { event: 'end', seconds: seconds(at - startedAt), result, ...(sensors && { sensors }), ...(isTreeKey(code) && { code }) });
+      // The key of the tree, where the gate has one to give: what makes this line a proof (`provenBy`). The key of
+      // its files, whatever the result: what lets a failure stand against a pass of them elsewhere.
+      write('the end of this gate', at, { event: 'end', seconds: seconds(at - startedAt), result, ...(sensors && { sensors }), ...(isTreeKey(code) && { code }), ...(isTreeKey(files) && { files }) });
     },
     same({ code, by }) {
       // Written only whole: a line of this kind with no key or no gate behind it says nothing.
