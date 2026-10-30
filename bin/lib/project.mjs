@@ -1712,7 +1712,7 @@ function removeRecordedIndex(root, manifest, rm, actions) {
 /** Where a repository keeps what `init` leaves: the committed `harness.json` and this clone's project
  * manifest (under the git dir, resolved the way git itself does), and whether each is there. Occupied
  * counts a dangling link as present, like every other check in this module (see `isOccupied`). */
-function projectFiles(root, spawn) {
+export function projectFiles(root, spawn) {
   const harnessJsonPath = path.join(root, 'harness.json');
   const manifestFilePath =
     resolveGitPath(root, 'js-harness/manifest.json', spawn) ?? path.join(root, '.git', 'js-harness', 'manifest.json');
@@ -1732,7 +1732,7 @@ function projectFiles(root, spawn) {
  * smuggle shell or escape sequences through it (T4c, R1-001); the same holds for a reason, so those are fixed text or an error
  * code, never the parser's message (which quotes the file's own bytes). The one reading `syncProject`
  * and `projectLocation` share. */
-function readPin(harnessJsonPath) {
+export function readPin(harnessJsonPath) {
   let text;
   try {
     text = fs.readFileSync(harnessJsonPath, 'utf8');
