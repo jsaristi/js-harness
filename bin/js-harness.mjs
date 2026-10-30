@@ -14,6 +14,7 @@ Commands:
   install     Write the skills and the session hooks of Claude Code and Codex under a home, and record each in a manifest, so uninstall removes exactly them. --accept-session-messages also sets Claude Code's crossSessionInbound to "accept" in the user settings, so a message from a session of another permission class arrives; uninstall puts back what was there.
   loop        Run a session's long background loops under an owner record, so two sessions never stop each other's loops: js-harness loop run <name> --purpose "<text>" --until "<end condition>" -- <command> runs the command in the foreground (start it as a background task, so its end wakes the session) and records the owner session, its process and the command's by pid and creation time, the purpose and what ends it; loop status lists the project's loops, alive or stale, with their owners; loop stop <name> refuses a live loop another session owns unless --take-over, and exits 0 only when a second look finds none of its processes left; run --restart stops it first, under the same rule. loop heartbeat (ends on 30 minutes with no write to the gate log or the channel, a stalled work session, or a red daily Windows run not told before) and loop channel-watch (ends on the first notice of another session) are bodies for run.
   sync        Move the project to its pinned version (inside one) or re-write the machine install (--global, or outside a git repository).
+  migrate     Bring a project an older release initialized to what this version's init writes, keeping its edits: the CLAUDE.md that imports AGENTS.md where there is none, the pin of harness.json moved in place, the coverage baseline where it adds no finding to rules check, each recorded so uninstall project or git undoes it; then what sync does. It writes nothing outside the project, refuses while a file it may write holds an uncommitted change, and names context7 where it is missing, with its fix, and what gentle-ai left (.atl/, its review store, the odd/ documents that stay). --check says what it would write and writes nothing, exit 1 when there is something; migrate list names, read-only, the folders of Claude Code sessions of the last 30 days and the initialized projects sessions ran in.
   uninstall   Undo the project (inside one) or the machine install (--global, or outside a git repository). --full also removes the memory snapshots, the only copy of what a pass changed; files you modified and the memory notes themselves are kept either way. It goes with --global. Each kind also has a name, which never acts by location: uninstall project (what init wrote here), machine (--global), snapshots (--global --full) or everything (--global --everything: also the whole .js-harness folder and the program). The machine kinds also undo what stack install ran, each undo printed first; one that fails stays recorded for a run again.
   status      Show the project's pin and this clone (inside one) or the machine's installed, manifest and latest versions (--global, or outside a git repository).
   update      Say whether a newer release exists: the newest vX.Y.Z tag of the repository, read with the machine's git (--repo <url or folder> names another). When none is tagged it says that and how to get the newest copy; --source <dir> reads a folder of npm pack tarballs instead. Tags that cannot be listed exit 1 and say why.
@@ -69,6 +70,7 @@ const COMMANDS = {
   install: async () => (await import('./install.mjs')).installMain,
   loop: async () => (await import('./loop.mjs')).loopMain,
   sync: async () => (await import('./install.mjs')).syncMain,
+  migrate: async () => (await import('./migrate.mjs')).migrateMain,
   uninstall: async () => (await import('./install.mjs')).uninstallMain,
   status: async () => (await import('./update.mjs')).statusMain,
   update: async () => (await import('./update.mjs')).updateMain,
@@ -122,6 +124,7 @@ const HELP = {
   install: ['./install.mjs', 'INSTALL_USAGE'],
   loop: ['./loop.mjs', 'USAGE'],
   sync: ['./install.mjs', 'SYNC_USAGE'],
+  migrate: ['./migrate.mjs', 'USAGE'],
   uninstall: ['./install.mjs', 'UNINSTALL_USAGE'],
   status: ['./update.mjs', 'STATUS_USAGE'],
   update: ['./update.mjs', 'UPDATE_USAGE'],

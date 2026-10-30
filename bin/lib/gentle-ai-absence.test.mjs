@@ -44,6 +44,10 @@ const NAMED = {
   'bin/lib/stack-install.test.mjs': ABSENCE,
   'bin/lib/stack.test.mjs': ABSENCE,
   'bin/lib/throughput.test.mjs': ABSENCE,
+  // S12's migration names, read-only, what gentle-ai left in a project, so it can be removed by hand (F8 S12, S2).
+  'bin/lib/project-migrate.mjs': 'the migration names what gentle-ai left in a project',
+  'bin/lib/project-migrate.test.mjs': 'the migration names what gentle-ai left in a project',
+  'bin/migrate.mjs': 'migrate prints what gentle-ai left in a project',
   'evals/suite.test.mjs': `${ABSENCE}: a run recorded with it in its stack still resumes`,
   'evals/proofs/codex-isolation.md': RESULT,
   ...Object.fromEntries(['f8-s0-a', 'f8-s0-b', 'f8-s0-c'].flatMap((run) => ['honesty', 'incidents', 'three'].map((name) => [`evals/results/${run}-${name}.json`, RESULT]))),

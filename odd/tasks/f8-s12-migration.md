@@ -87,6 +87,19 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
   baseline" does not say; a project whose list has such a rule gets a note naming them, not a red gate.
 - D6, context7: said with doctor's own row and fix (`bin/lib/stack.mjs`, the context7 tool), never registered.
 
+## Next step
+State at the context pause (2026-10-30 ~07:40Z, branch `f8-s12-migration`, worktree
+`D:\js-harness\.claude\worktrees\f8-s12-migration`, HEAD `24c47cad`, nothing pushed; PR 688 is the docs-only unit).
+The final files sit in `C:\Users\Oficina\.claude\jobs\566f950e\tmp\final\` (project-migrate.mjs and its test,
+migrate.mjs and its test, migration.test.mjs for scripts/, js-harness.mjs with the migrate entry, project.mjs with
+three exports); `tmp\stage.mjs A|B1 <worktree>` writes the chain's intermediate module and test. Stage A is staged;
+its commit failed on CI (L7); fixed at 01:44 local: both test files' `commitAll` pass `--no-verify` (in the worktree
+and in `final\`), and `bin/lib/gentle-ai-absence.test.mjs` NAMED holds project-migrate.mjs and its test (in the
+worktree, named to the lead in a note). Next: `git add` that file too and commit A again. Then
+commit A (scans), B1 (the plan), B2 (migrateProject, the final files), C (command, dispatcher, its test, the
+scripts proof); Codex and lens reviews per code commit; the independent verifier; chained PRs with ready notices; T4,
+`migrate list`'s facts to the lead; the summary under docs/sessions/ and the closed notice.
+
 ## Log
 - L1 (2026-10-30, the lead's brief `briefs/2026-10-30T06-12-57-495Z-28130615.md`): "Then S12's building part, its
   feature document `odd/tasks/f8-s12-migration.md` opened before the first source write ... Build the migration (on
@@ -104,3 +117,13 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
 - L4 (2026-10-30): PR 688, docs only: S11, S5c-a and S13 State lines read done; the roadmap parser counts the F8 plan
   9/19 on that branch (`planOf` + `planShare` over `docs/ROADMAP.md`); the installed `report` reads the default
   branch, so it prints 9/19 once 688 lands.
+- L5 (2026-10-30): `node --test scripts/migration.test.mjs` green: v0.97.0's own `init` (read from the tag through a
+  separate index) set a scratch project up in a `mktemp -d` home; a copy migrated by this branch kept the project's
+  line in AGENTS.md and its own settings key, got CLAUDE.md, the style, the denies and the baseline, doctor's
+  claude-import row read ok, and `migrate --check` then exited 0; after `uninstall project` on both copies and git on
+  the files migrate named, the two copies were the same bytes. Planted break (CLAUDE.md not recorded in the
+  manifest): the same test red, "the record names the CLAUDE.md the migration wrote"; restored, green.
+- L6 (2026-10-30): the tests found two defects, fixed: `--check` read an empty `uncommitted` list as a refusal; a
+  session file written a moment ago aged -1 day (`Math.max(0, …)`, and a test of it).
+- L7 (2026-10-30): CI on stage A: the scratch repos' pre-commit hook calls `js-harness`, absent on CI's PATH, and
+  `gentle-ai-absence.test.mjs` requires the new files on its named list.
