@@ -1080,7 +1080,7 @@ export function initProject(cwd, version, deps = {}) {
  * must not call this: an entry claiming `gitDir: true` with a non-absolute `path` would resolve
  * relative to `process.cwd()` here, which is exactly the escape `isValidManifestEntry` exists to
  * catch first. */
-function resolveManifestEntryPath(root, entry) {
+export function resolveManifestEntryPath(root, entry) {
   const segments = entry.path.split('/');
   return entry.gitDir ? path.resolve(segments.join(path.sep)) : path.join(root, ...segments);
 }
@@ -1090,7 +1090,7 @@ function resolveManifestEntryPath(root, entry) {
  * endings on checkout (`core.autocrlf`, a `.gitattributes` rule), but `init` itself only ever writes
  * LF (`PRE_COMMIT_HOOK`, `agentsTemplate`, harness.json's `JSON.stringify(...) + '\n'`), so the
  * recorded hash is always for LF content — never the reverse, so no other direction needs checking. */
-function matchesRecordedHash(content, expectedHash) {
+export function matchesRecordedHash(content, expectedHash) {
   if (sha256(content) === expectedHash) return true;
   return sha256(content.replace(/\r\n/g, '\n')) === expectedHash;
 }

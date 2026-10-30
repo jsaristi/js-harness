@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { agentsTemplate, claudeTemplate, initProject, uninstallProject } from './project.mjs';
+import { InitWriteError, agentsTemplate, claudeTemplate, initProject, uninstallProject } from './project.mjs';
 import { sha256 } from './manifest.mjs';
 import { candidateProjects, context7Gaps, gentleLeftovers, migrateProject, migrationPlan } from './project-migrate.mjs';
 
@@ -252,6 +252,167 @@ test('a write that fails takes back everything the migration wrote before it', (
   }
 });
 
+test('a write that cannot be taken back is named by its own file, whichever of the two it is', () => {
+  for (const stuck of ['CLAUDE.md', 'harness.json']) {
+    const { dir, home } = oldProject();
+    try {
+      const harnessJson = path.join(dir, 'harness.json');
+      const pinned = read(harnessJson);
+      let written = 0;
+      const writeFile = (file, ...rest) => {
+        // The second write of harness.json is the one that puts its old bytes back.
+        if (path.resolve(file) === path.resolve(harnessJson) && written++ === 1 && stuck === 'harness.json') throw new Error('locked');
+        return fs.writeFileSync(file, ...rest);
+      };
+      const removeFile = (file, ...rest) => {
+        if (stuck === 'CLAUDE.md') throw new Error('locked');
+        return fs.rmSync(file, ...rest);
+      };
+      const write = () => {
+        throw new Error('disk full');
+      };
+      let thrown;
+      try {
+        migrateProject(dir, RUNNING, { home, today: TODAY, writeFile, removeFile, write });
+      } catch (err) {
+        thrown = err;
+      }
+      assert.ok(thrown instanceof InitWriteError, String(thrown));
+      assert.deepEqual(thrown.notRemoved, [stuck]);
+      assert.equal(fs.existsSync(path.join(dir, 'CLAUDE.md')), stuck === 'CLAUDE.md');
+      assert.equal(read(harnessJson) === pinned, stuck !== 'harness.json');
+    } finally {
+      cleanup(dir, home);
+    }
+  }
+});
+
+test('a write that fails halfway is taken back too: the half-written file is gone or its old bytes are back', () => {
+  for (const name of ['CLAUDE.md', 'harness.json']) {
+    const { dir, manifestPath, home } = oldProject();
+    try {
+      const before = tree(dir);
+      const manifestBefore = read(manifestPath);
+      let failed = false;
+      const writeFile = (file, ...rest) => {
+        if (!failed && path.basename(file) === name) {
+          failed = true;
+          fs.writeFileSync(file, '{ "half');
+          throw new Error('disk full');
+        }
+        return fs.writeFileSync(file, ...rest);
+      };
+      assert.throws(() => migrateProject(dir, RUNNING, { home, today: TODAY, writeFile }), /disk full/);
+      assert.deepEqual(tree(dir), before, name);
+      assert.equal(read(manifestPath), manifestBefore);
+    } finally {
+      cleanup(dir, home);
+    }
+  }
+});
+
+test('a harness.json that is a link is refused before any write: git could not give its target back', (t) => {
+  const { dir, home } = oldProject();
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-migrate-outside-'));
+  try {
+    const target = path.join(outside, 'harness.json');
+    fs.copyFileSync(path.join(dir, 'harness.json'), target);
+    fs.rmSync(path.join(dir, 'harness.json'));
+    try {
+      fs.symlinkSync(target, path.join(dir, 'harness.json'), 'file');
+    } catch (err) {
+      if (err.code === 'EPERM' || err.code === 'EACCES') return t.skip('symlinks need privileges on this machine');
+      throw err;
+    }
+    commitAll(dir);
+    const targetBefore = read(target);
+    const before = tree(dir);
+    const result = migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.equal(result.code, 1);
+    assert.equal(result.pinUnmovable, true);
+    assert.equal(result.link, true);
+    assert.equal(read(target), targetBefore);
+    assert.deepEqual(tree(dir), before);
+  } finally {
+    cleanup(dir, home, outside);
+  }
+});
+
+test('an AGENTS.md git ignores is refused like an uncommitted one: git could not give its bytes back', () => {
+  const { dir, home } = oldProject({ pin: RUNNING });
+  try {
+    git(dir, 'rm', '-q', '--cached', 'AGENTS.md');
+    fs.writeFileSync(path.join(dir, '.gitignore'), 'AGENTS.md\n');
+    commitAll(dir);
+    const before = tree(dir);
+    const result = migrateProject(dir, RUNNING, { home, today: TODAY });
+    assert.equal(result.code, 1);
+    assert.deepEqual(result.uncommitted, ['AGENTS.md']);
+    assert.deepEqual(tree(dir), before);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test('a harness.json checked out with CRLF is still the one init wrote: after the pin moves, uninstall removes it', () => {
+  const { dir, manifestPath, home } = oldProject();
+  try {
+    const file = path.join(dir, 'harness.json');
+    fs.writeFileSync(file, read(file).replace(/\n/g, '\r\n'));
+    commitAll(dir);
+    assert.equal(migrateProject(dir, RUNNING, { home, today: TODAY }).code, 0);
+    const entry = JSON.parse(read(manifestPath)).files.find((item) => item.path === 'harness.json');
+    assert.equal(entry.sha256, sha256(read(file).replace(/\r\n/g, '\n')));
+    commitAll(dir);
+    uninstallProject(dir);
+    assert.equal(fs.existsSync(file), false);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test("the plan names what sync would repair: a recorded gate that is gone and the .atl/ exclude line's record", () => {
+  const { dir, manifestPath, home } = oldProject({ pin: RUNNING });
+  try {
+    assert.equal(migrateProject(dir, RUNNING, { home, today: TODAY }).code, 0);
+    commitAll(dir);
+    assert.deepEqual(migrationPlan(dir, RUNNING, { home, today: TODAY }).pending, []);
+    fs.rmSync(path.join(dir, '.git', 'hooks', 'pre-commit'));
+    const manifest = JSON.parse(read(manifestPath));
+    delete manifest.exclude;
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+    const pending = migrationPlan(dir, RUNNING, { home, today: TODAY }).pending.join('\n');
+    assert.match(pending, /pre-commit/);
+    assert.match(pending, /\.atl\//);
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
+test("a failure in sync's part names what the migration wrote before it, which stays recorded", () => {
+  const { dir, manifestPath, home } = oldProject();
+  try {
+    let writes = 0;
+    // The migration's manifest write is the first; sync's, which records the version, the second.
+    const write = (fd, ...rest) => {
+      if (++writes === 2) throw new Error('disk full');
+      return fs.writeSync(fd, ...rest);
+    };
+    let thrown;
+    try {
+      migrateProject(dir, RUNNING, { home, today: TODAY, write });
+    } catch (err) {
+      thrown = err;
+    }
+    assert.ok(thrown instanceof InitWriteError, String(thrown));
+    assert.deepEqual(thrown.migrated, ['CLAUDE.md', 'harness.json', 'the coverage baseline']);
+    assert.ok(fs.existsSync(path.join(dir, 'CLAUDE.md')));
+    assert.ok(JSON.parse(read(manifestPath)).files.some((item) => item.path === 'CLAUDE.md'));
+  } finally {
+    cleanup(dir, home);
+  }
+});
+
 test('context7 registered nowhere is said with each host fix, and nothing is registered', () => {
   const { dir, home } = oldProject();
   try {
@@ -330,6 +491,12 @@ test('the candidates are the folders of sessions of the last 30 days and every i
     assert.equal(by[path.resolve(recent)].initialized, false);
     assert.equal(by[path.resolve(stale)], undefined);
     assert.deepEqual({ initialized: by[path.resolve(dir)].initialized, pin: by[path.resolve(dir)].pin }, { initialized: true, pin: RUNNING });
+    // A session in a folder inside a repository, such as a worktree's folder git no longer links, is its top level's.
+    session('inside', path.join(dir, 'docs'), 1);
+    found = candidateProjects({ claudeHome, now });
+    by = Object.fromEntries(found.map((item) => [path.resolve(item.path), item]));
+    assert.equal(by[path.resolve(dir, 'docs')], undefined);
+    assert.equal(by[path.resolve(dir)].days, 1);
   } finally {
     cleanup(claudeHome, dir, home, recent, stale);
   }

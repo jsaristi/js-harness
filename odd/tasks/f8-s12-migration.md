@@ -58,14 +58,17 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
   the run".
 
 ## Tasks
-- [ ] T1 (kind: build) `bin/lib/project-migrate.mjs`: the plan (read-only) and the writes: the pin, the split,
-  the baseline, then `syncProject`; context7 and gentle-ai said read-only — S1-S6; inline, test first
-- [ ] T2 (kind: build) `bin/migrate.mjs` and its entry: `migrate`, `migrate --check`, `migrate list` — S1, S2, S7;
-  inline, test first
-- [ ] T3 (kind: verify) `scripts/migration.test.mjs`: v0.97.0's `init` in a scratch home, a copy with his edits,
-  `migrate`, `uninstall project` back to the bytes; green, then red on a planted break — S4, S5
+- [x] T1 (kind: build) `bin/lib/project-migrate.mjs`: the plan (read-only) and the writes: the pin, the split,
+  the baseline, then `syncProject`; context7 and gentle-ai said read-only — S1-S6; inline, test first; commits
+  `1488343e` (scans), `abe05fd3` (plan), `5058d55e` (writes)
+- [x] T2 (kind: build) `bin/migrate.mjs` and its entry: `migrate`, `migrate --check`, `migrate list` — S1, S2, S7;
+  inline, test first; commit `09ae0126`
+- [x] T3 (kind: verify) `scripts/migration.test.mjs`: v0.97.0's `init` in a scratch home, a copy with his edits,
+  `migrate`, `uninstall project` back to the bytes; green, then red on a planted break — S4, S5; commit `09ae0126`, L5
 - [ ] T4 (kind: verify) `migrate list` read-only on his machine, its facts to the lead — S7
-- [ ] T5 (kind: docs) S8: what the walk owes about context7's OAuth in Codex, recorded — S8
+- [x] T5 (kind: docs) S8: what the walk owes about context7's OAuth in Codex, recorded — S8; the migration never
+  runs `codex mcp add`: context7's Codex gap is said with doctor's fix, which warns that it opens context7's sign-in
+  in a browser (`context7Gaps`, its test asserts the warning), so no run of migrate can leave a login open
 - [ ] T6 (kind: verify) Codex and the lenses on every code commit, gentle-ai lines, the independent verifier over
   the range; PRs, ready notices, summary
 
@@ -88,17 +91,11 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
 - D6, context7: said with doctor's own row and fix (`bin/lib/stack.mjs`, the context7 tool), never registered.
 
 ## Next step
-State at the context pause (2026-10-30 ~07:40Z, branch `f8-s12-migration`, worktree
-`D:\js-harness\.claude\worktrees\f8-s12-migration`, HEAD `24c47cad`, nothing pushed; PR 688 is the docs-only unit).
-The final files sit in `C:\Users\Oficina\.claude\jobs\566f950e\tmp\final\` (project-migrate.mjs and its test,
-migrate.mjs and its test, migration.test.mjs for scripts/, js-harness.mjs with the migrate entry, project.mjs with
-three exports); `tmp\stage.mjs A|B1 <worktree>` writes the chain's intermediate module and test. Stage A is staged;
-its commit failed on CI (L7); fixed at 01:44 local: both test files' `commitAll` pass `--no-verify` (in the worktree
-and in `final\`), and `bin/lib/gentle-ai-absence.test.mjs` NAMED holds project-migrate.mjs and its test (in the
-worktree, named to the lead in a note). Next: `git add` that file too and commit A again. Then
-commit A (scans), B1 (the plan), B2 (migrateProject, the final files), C (command, dispatcher, its test, the
-scripts proof); Codex and lens reviews per code commit; the independent verifier; chained PRs with ready notices; T4,
-`migrate list`'s facts to the lead; the summary under docs/sessions/ and the closed notice.
+State at 2026-10-30 ~07:45Z (branch `f8-s12-migration`, nothing pushed; PR 688 is the docs-only unit). The four
+code commits are in (T1-T3); both reviews of `24c47ca..09ae012` are recorded (L9, L11) and their findings fixed in
+commit D (L12). T4's facts went to the lead (02:16 local). Next: commit D; Codex and the lenses over D alone, no
+edit in the worktree while they run; gentle-ai per code commit; the independent verifier over `24c47ca..HEAD`;
+chained PRs (doc + A; B1 + B2; C + D) with ready notices; the summary under docs/sessions/ and the closed notice.
 
 ## Log
 - L1 (2026-10-30, the lead's brief `briefs/2026-10-30T06-12-57-495Z-28130615.md`): "Then S12's building part, its
@@ -127,3 +124,31 @@ scripts proof); Codex and lens reviews per code commit; the independent verifier
   session file written a moment ago aged -1 day (`Math.max(0, …)`, and a test of it).
 - L7 (2026-10-30): CI on stage A: the scratch repos' pre-commit hook calls `js-harness`, absent on CI's PATH, and
   `gentle-ai-absence.test.mjs` requires the new files on its named list.
+- L8 (2026-10-30): commit C's gate asked three more, each named to the lead in a note: `docs/SPEC.md`'s spec row
+  needs a capability to claim `js-harness migrate` (Project init's Requirement, Proof and Today lines take it);
+  `bin/readme.test.mjs` needs a README section for each command (one after sync's); gentle-ai-absence's named list
+  takes `bin/migrate.mjs`.
+- L9 (2026-10-30): the four lenses over `24c47ca..09ae012` (sonnet, about 165,000 input and 7,400 output tokens in
+  all, his Max plan) found one defect, the same in each: the undo reversed its list in place, then named a step it
+  could not take back by comparing it with the list's first item, so the message named the other file.
+- L10 (2026-10-30, T4, read-only): `migrate list` on his machine lists one initialized project,
+  `D:\plataforma-preproyecto` (pin 0.97.0, newest session 6 days ago), and, not initialized, `D:\abogadaclaudiajimenez`
+  (2 days), `D:\harness` (8 days, a read-only reference), `D:\js-harness` (0 days) and a job's scratch folder. It
+  also listed six folders under `D:\js-harness\.claude\worktrees\` as their own: they are no longer linked worktrees
+  (`git rev-parse --git-dir` equals the common dir), so git reads them as folders of the main checkout; the scan now
+  reads such a folder as its top level.
+- L11 (2026-10-30): Codex over `24c47ca..09ae012` (gpt-6.1-sol, medium): parts 1 and 2 passed (296,217 and 66,927
+  input tokens); part 3 passed too (226,291) but wrote no record, since this document and `docs/ROADMAP.md` were
+  edited in the worktree while it read (`edit-during-review`, its seventh sighting in `docs/FAILURES.md`). The edits
+  were set aside in the job's `tmp\next\` and part 3 run again on a clean tree (302,689 input tokens); recorded.
+- L12 (2026-10-30): Codex's seven findings over `24c47ca..09ae012`, each checked in the code and fixed in commit D
+  with a test that was red first: (P1) a `harness.json` that is a link had its pin moved through it, changing a target
+  git cannot give back: refused; (P2) the undo was registered after its write, so a write that failed halfway stayed:
+  registered before; (P2) `--check` said nothing to migrate where sync would still repair a recorded gate that is gone
+  or the `.atl/` exclude record: the plan names them; (P2) an `AGENTS.md` git ignores passed the uncommitted check:
+  `git status --ignored`; (P2) a `harness.json` checked out with CRLF read as edited, so the record kept the old hash
+  and `uninstall project` kept the file: read as init's with `matchesRecordedHash`; (P2) a failure in sync's part
+  said "nothing was left behind" though the migration's writes stay: it names them; (P2) the scripts proof expected no
+  pin move, which fails at the next version: the expectation follows the running version. With L9's undo names and
+  L10's scan, commit D holds nine fixes. The link test skips on this machine (symlinks need privileges) and runs on
+  CI's Linux.

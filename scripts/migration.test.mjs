@@ -21,6 +21,8 @@ const JS_HARNESS = fileURLToPath(new URL('../bin/js-harness.mjs', import.meta.ur
 /** The release whose `init` set up the one initialized project the read-only scan found (L3). */
 const RELEASE = 'v0.97.0';
 const OURS = '\n## Our own\n- a line the project added after init\n';
+/** The version this checkout runs: past the release, the migration moves the pin too. */
+const RUNNING = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 /** Every file of `dir` by its path from `dir`, with `.git` reduced to what init, migrate and uninstall touch there. */
 function projectBytes(dir) {
@@ -80,7 +82,7 @@ test(`a copy of a project ${RELEASE}'s init set up migrates keeping its edits, a
   const migrated = harness(copies.migrated, 'migrate', '--home', layout.home);
   ok(migrated, 'migrate');
   const changed = /^commit what migrate changed: (.+)$/m.exec(migrated.stdout)?.[1].split(', ') ?? [];
-  assert.deepEqual(changed, ['AGENTS.md', 'CLAUDE.md']);
+  assert.deepEqual(changed, RUNNING === RELEASE.slice(1) ? ['AGENTS.md', 'CLAUDE.md'] : ['AGENTS.md', 'CLAUDE.md', 'harness.json']);
 
   const read = (file) => fs.readFileSync(path.join(copies.migrated, file), 'utf8');
   assert.equal(read('CLAUDE.md'), claudeTemplate());
