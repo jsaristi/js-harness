@@ -49,10 +49,21 @@ and one pull request each, plus the two `- Seen:` lines owed to `docs/FAILURES.m
 
 ## Left
 - T7, once PR 701 has landed: on `rule/retire-work-sessions-windows`, merge origin/main, then
-  `node bin/js-harness.mjs rules change work-sessions-private-windows` with
-  `{"retire":{"successors":[]},"source":{"kind":"words","quotes":[{"session":"0f71b2c6-cbce-43ca-a031-276a4b2c381f","line":30812}],"reading":"...","accepted":"..."}}`
-  (the reading and acceptance as written in this session's scratch `t7.json`: the Windows cap retired with no successor,
-  the public and WSL caps unchanged; Q71 tapped at line 28610, Q114 typed at line 30812). Then `rules check`, the
+  `node bin/js-harness.mjs rules change work-sessions-private-windows` with this change on standard input:
+
+  ```json
+  {
+    "retire": { "successors": [] },
+    "source": {
+      "kind": "words",
+      "quotes": [{ "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f", "line": 30812 }],
+      "reading": "The cap of three work sessions open at one time when only Windows is used is retired with no successor: the number of sessions is decided case by case. The caps for a public repository and for a private one used with WSL stay as they are.",
+      "accepted": "He chose to retire it in question 71 (lead transcript 0f71b2c6-cbce-43ca-a031-276a4b2c381f, line 28610, tapped \"Retirarla\"), and typed the retirement itself at line 30812 (2026-10-30T14:04Z) in answer to question 114, which asked for his own words for this change (odd/tasks/instruction-homes.md, S20, S21, L13); the reading is his to correct when he reads the pull request."
+    }
+  }
+  ```
+
+  Then `rules check`, the
   coverage register (`work-sessions-private-windows` has an owed control there), the gate, Codex and the lenses, T7
   checked off in `odd/tasks/instruction-homes.md`, a PR and a ready notice.
 - T8 and T9: where the two owed controls are written is the lead's to route.
