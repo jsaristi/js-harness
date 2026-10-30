@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AREAS, checkReview, classify, cutSpan, diffTools, draftReview, entriesBetween, hostTools, parseChangelog, parseToolList, renderToolList, surfaceRefusal } from './host-watch.mjs';
+import { AREAS, checkReview, classify, cutSpan, diffTools, draftReview, entriesBetween, hostTools, parseChangelog, parseToolList, renderBrief, renderToolList, surfaceRefusal, watchLine, watchOpened, watchTitle } from './host-watch.mjs';
 import { reviewFileGaps } from './host-update.mjs';
 
 // The desktop changelog as it is served in markdown (https://claude.com/docs/cowork/claude-desktop-changelog.md):
@@ -310,4 +310,34 @@ test('the check refuses a row whose evidence names no entry of the spans', () =>
   const done = decided(text);
   const row = done.split('\n').find((line) => line.includes('| code 2.1.320 #3 |'));
   assert.match(checkReview(done.replace(row, `${row}\n${row.replace('code 2.1.320 #3', 'code 2.1.321 #1')}`), [desktop, code]).join('\n'), /code 2\.1\.321 #1: a row no entry of the spans names/);
+});
+
+// The trigger (T4, spec S4): the heartbeat names the session to open, titled with the version it reviews.
+test('a host watch session is titled with its number and the version it reviews, and found by that version only', () => {
+  const title = watchTitle({ code: 'JH', number: 120 }, '4.5000.0');
+  assert.equal(title, 'JH 120 · host watch 4.5000.0');
+  assert.equal(watchOpened(['JH 109 · host watch: S9 watches Claude releases', 'JH 110 · host watch 4.5000.01'], '4.5000.0'), false);
+  assert.equal(watchOpened([null, undefined, title], '4.5000.0'), true);
+});
+
+test('the HOST line names the update, the session to open and both ways to open it', () => {
+  const line = watchLine({ change: 'Claude Desktop 4.4212.0 → 4.5000.0', version: '4.5000.0', title: 'JH 120 · host watch 4.5000.0', brief: 'C:/h/.js-harness/background/host-watch-4.5000.0.md' });
+  assert.match(line, /^HOST: Claude Desktop 4\.4212\.0 → 4\.5000\.0 since the last review/);
+  assert.match(line, /start_session/);
+  assert.match(line, /js-harness host-watch brief > "C:\/h\/\.js-harness\/background\/host-watch-4\.5000\.0\.md" && js-harness sessions start --title "JH 120 · host watch 4\.5000\.0" --brief "C:\/h\/\.js-harness\/background\/host-watch-4\.5000\.0\.md" --worktree host-watch-4-5000-0 --effort high$/);
+});
+
+test('the brief freezes the spans and names every step of the review, in order', () => {
+  const brief = renderBrief({ versions: { desktop: '4.5000.0', code: '2.1.320' }, reviewed: { desktop: '4.4212.0', code: '2.1.309' }, title: 'JH 120 · host watch 4.5000.0' });
+  assert.match(brief, /^# JH 120 · host watch 4\.5000\.0$/m);
+  assert.match(brief, /--from-desktop 4\.4212\.0 --to-desktop 4\.5000\.0 --from-code 2\.1\.309 --to-code 2\.1\.320/);
+  const steps = ['host-watch draft', 'every entry', 'Map row', 'host-watch tools', 'plugin-authoring', 'docs/proposals/claude-app-native-sessions.md', 'host-watch check', 'rule:reports-spanish-visual', 'notify --to orchestrator --kind question', 'codex-review', 'lens-review', 'gh pr create', 'doctor --host-reviewed'];
+  let at = -1;
+  for (const step of steps) {
+    const i = brief.indexOf(step);
+    assert.ok(i > at, `${step} comes after the step before it`);
+    at = i;
+  }
+  assert.match(brief, /a second update/);
+  assert.match(brief, /without his yes/);
 });

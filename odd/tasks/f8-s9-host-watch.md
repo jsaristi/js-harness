@@ -245,7 +245,20 @@ session records `tools-background.txt` from its own list either way.
   `bin/lib/gentle-ai-absence.test.mjs` refuses under `bin`; two commits had entered with it because the pre-commit
   with tests on CI failed and a hand `npm run check` of the same code, without them, then passed as `same`
   (gate-log 309-317): told to the lead, not fixed here. Codex over `98d4c7c..f3274d4` correct (0.92); lenses 0.
+- L9 (2026-10-30): PR 717 has no PR checks by design (`.github/workflows/gate.yml` runs only for `gate/` and `queue/`
+  pushes); its last code commit passed the gate on CI (gate-log 318). Out of draft, `ready` sent. T4 on branch
+  `f8-s9-trigger`, stacked on `f8-s9-probe`: `watchTitle`, `watchOpened`, `watchLine`, `renderBrief` in the lib;
+  `host-watch brief` and `hostWatchTick` in the command; `loop heartbeat` reads it every hour (`HOST_MINUTES`) and
+  ends with the `HOST:` line; the row's first step and the notice say the review is the host watch session's. Run on
+  this machine: `host-watch brief` exits 1 (no update: the record is 4.4212.0/2.1.309); with the record faked at
+  4.29.0/2.1.308 it prints "# JH 111 · host watch 4.4212.0", the number `sessions --next-number` gives. Known limit:
+  an update of the CLI alone after a desktop version's review is titled with the same desktop version, so the earlier
+  session's title counts as opened; rare (the CLI ships inside the app), written here rather than built.
+  The first commit of T4 failed the gate on CI (run 41132256606): `bin/lib/rules-sources.test.mjs` took the lib for a
+  producer of hook messages because a comment named `systemMessage`; reworded. Open, for the lead: the brief
+  `renderBrief` builds is a text the harness sends an agent, and the directive-coverage register (F8 S5c,
+  `bin/lib/rules-coverage-data.mjs`) does not list it; declaring it is S5c's register work, not done here.
 
 ## Next step
-1. PR 717 out of draft once its CI is green, then the `ready` notice.
-2. T4 (trigger: heartbeat `HOST:` line, row fix, notice, `host-watch brief`), PR 3; then T5 (real run), T6.
+1. T4's commit, then Codex and lenses on it (`--base 06a160c3`), then PR 3 (base `f8-s9-probe` until 717 lands).
+2. T5 (real run), T6.

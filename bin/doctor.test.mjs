@@ -2012,7 +2012,7 @@ test('a host update since the reviewed versions is stale, with the versions and 
     assert.match(table.output, /^host-update\s+2\.42304\.0\s+stale\s+n\/a\s+n\/a\s+ok$/m);
     const steps = [
       '  host-update (claude):',
-      '    Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299 since the last review; review the update:',
+      "    Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299 since the last review; a host watch session reviews it and the steps below are that session's (js-harness host-watch brief prints its brief, and js-harness loop heartbeat names it to the lead): any other session tells the lead and records no review:",
       '    read https://claude.com/docs/cowork/claude-desktop-changelog from 2.37337.1 to 2.42304.0',
       '    read the Claude Code CHANGELOG (https://code.claude.com/docs/en/changelog) from 2.1.295 to 2.1.299',
       '    check that the harness hooks in ~/.claude/settings.json still run',

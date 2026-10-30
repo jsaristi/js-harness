@@ -122,7 +122,7 @@ test('an update since the reviewed versions is stale until reviewed: its fix nam
   assert.equal(row.upToDate, 'ok');
   assert.equal(row.change, 'Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299');
   assert.deepEqual(row.fix.claude, [
-    'Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299 since the last review; review the update:',
+    "Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299 since the last review; a host watch session reviews it and the steps below are that session's (js-harness host-watch brief prints its brief, and js-harness loop heartbeat names it to the lead): any other session tells the lead and records no review:",
     'read https://claude.com/docs/cowork/claude-desktop-changelog from 2.37337.1 to 2.42304.0',
     'read the Claude Code CHANGELOG (https://code.claude.com/docs/en/changelog) from 2.1.295 to 2.1.299',
     'check that the harness hooks in ~/.claude/settings.json still run',
@@ -149,7 +149,7 @@ test('a Code tab CLI update alone names only the CLI and its changelog', () => {
   const { row } = hostUpdateRow({ ...current, desktop: '2.37337.1' }, reviewed, NOW);
   assert.equal(row.claude, 'stale');
   assert.equal(row.change, 'the Code tab CLI 2.1.295 → 2.1.299');
-  assert.equal(row.fix.claude[0], 'the Code tab CLI 2.1.295 → 2.1.299 since the last review; review the update:');
+  assert.equal(row.fix.claude[0], "the Code tab CLI 2.1.295 → 2.1.299 since the last review; a host watch session reviews it and the steps below are that session's (js-harness host-watch brief prints its brief, and js-harness loop heartbeat names it to the lead): any other session tells the lead and records no review:");
   assert.ok(!row.fix.claude.some((line) => line.includes('claude-desktop-changelog')));
   assert.ok(row.fix.claude.some((line) => line.startsWith('read the Claude Code CHANGELOG')));
 });

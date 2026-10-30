@@ -449,13 +449,13 @@ test('doctor --hook names a host update since the last review and a downloaded v
     const updated = await runHook(argv, {}, deps);
     assert.equal(updated.code, 0);
     assert.equal(updated.stderr, '');
-    assert.deepEqual(JSON.parse(updated.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299 since the last review)' });
+    assert.deepEqual(JSON.parse(updated.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299 since the last review, which a host watch session reviews)' });
     assert.equal((await runHook(argv, {}, deps)).stdout, '', 'the same update is not notified twice');
 
     // Another update before the review is recorded is a new notice, though the gap's state is the same (Codex, 2026-10-15).
     versions = { found: true, desktop: '2.45000.0', staged: '2.45000.0', code: '2.1.301' };
     const again = await runHook(argv, {}, deps);
-    assert.deepEqual(JSON.parse(again.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (Claude Desktop 2.37337.1 → 2.45000.0 and its Code tab CLI 2.1.295 → 2.1.301 since the last review)' });
+    assert.deepEqual(JSON.parse(again.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (Claude Desktop 2.37337.1 → 2.45000.0 and its Code tab CLI 2.1.295 → 2.1.301 since the last review, which a host watch session reviews)' });
     versions = { found: true, desktop: '2.45000.0', staged: '2.46000.0', code: '2.1.301' };
     const stagedAgain = await runHook(argv, {}, deps);
     assert.match(JSON.parse(stagedAgain.stdout).systemMessage, /Claude Desktop 2\.46000\.0 is downloaded and not applied\)$/);
@@ -492,7 +492,7 @@ test('doctor --hook names a stack tool updated since the last review, once, and 
     versions = { found: true, desktop: '2.42304.0', staged: null, code: '2.1.295' };
     const both = await runHook(argv, {}, deps);
     assert.deepEqual(JSON.parse(both.stdout), {
-      systemMessage: 'js-harness: 2 stack gaps — run js-harness doctor (Claude Desktop 2.37337.1 → 2.42304.0 since the last review; engram 9.8.0 → 9.9.9 since the last review)',
+      systemMessage: 'js-harness: 2 stack gaps — run js-harness doctor (Claude Desktop 2.37337.1 → 2.42304.0 since the last review, which a host watch session reviews; engram 9.8.0 → 9.9.9 since the last review)',
     });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

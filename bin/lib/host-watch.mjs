@@ -304,3 +304,66 @@ export function renderToolList({ surface, versions, at, names }) {
     '',
   ].join('\n');
 }
+
+// The trigger (T4): an update no review holds names the session that reviews it, in the heartbeat that wakes the lead
+// (`js-harness loop heartbeat`), the host-update row and the hook's notice. The notice is shown to him and no model
+// reads (bin/doctor.mjs, hookMain), so the heartbeat's line is the one that opens the session.
+
+/** The title of the session that reviews the update to Claude Desktop `version`: `<code> <n> · host watch <version>`. */
+export const watchTitle = ({ code, number }, version) => `${code} ${number} · host watch ${version}`;
+
+/** Whether one of `titles` (the sessions started and those that wrote to the channel) is the host watch of `version`. */
+export function watchOpened(titles, version) {
+  const name = new RegExp(`\\bhost watch ${version.replace(/\./g, '\\.')}(?![\\d.])`, 'i');
+  return titles.some((title) => typeof title === 'string' && name.test(title));
+}
+
+/** The heartbeat's line for an update no host watch session holds: the update, the session to open and the two ways
+ * to open it. `start_session` is the only one that sees the desktop's tools, and runs only on his typed turn; the
+ * other is a background session, its brief written to `brief` first. */
+export function watchLine({ change, version, title, brief }) {
+  return `HOST: ${change} since the last review, and no host watch session holds it: open "${title}". On his typed turn, `
+    + `start_session (fresh, its own worktree, effort high, that title, the brief js-harness host-watch brief prints); `
+    + `otherwise: js-harness host-watch brief > "${brief}" && js-harness sessions start --title "${title}" --brief "${brief}" `
+    + `--worktree host-watch-${version.replace(/\./g, '-')} --effort high`;
+}
+
+/** The brief of a host watch session, from the versions read now and the record last reviewed: the spans it freezes,
+ * then each step of the review in the order it runs. */
+export function renderBrief({ versions, reviewed, title }) {
+  const v = versions.desktop;
+  const span = `--from-desktop ${reviewed.desktop} --to-desktop ${v} --from-code ${reviewed.code ?? versions.code} --to-code ${versions.code}`;
+  return [
+    `# ${title}`,
+    '',
+    `Review the update of Claude Desktop ${reviewed.desktop} → ${v} (its Code tab CLI ${reviewed.code ?? 'unknown'} → ${versions.code ?? 'unknown'}) in depth,`,
+    'as F8\'s S9 says (docs/ROADMAP.md) and odd/tasks/f8-s9-host-watch.md built: every novelty read, each decided with',
+    'its evidence, nothing adopted without his yes. The spans are frozen here; the record of doctor\'s cache is not',
+    `written until the review is on main. The file is docs/host-updates/claude-desktop-${v}.md.`,
+    '',
+    '## Steps',
+    '',
+    `1. Fetch both changelogs as published (${DESKTOP_CHANGELOG}.md and ${CODE_CHANGELOG}.md), then`,
+    `   js-harness host-watch draft --desktop <file> --code <file> ${span} --sources docs/host-updates/sources`,
+    `   > docs/host-updates/claude-desktop-${v}.md`,
+    '2. Read every entry in its changelog, not only the draft\'s words, and decide each row: adopt, adapt or ignore, the',
+    '   Reason in a sentence, the Map row of the proposal\'s map (step 5) it touches, its Evidence, and',
+    '   Windows and Phone "checked: <how>" where you checked them. Empty the list "To classify by hand".',
+    '3. The tool list: js-harness host-watch tools --surface background --list <your tools, one a line> --record; a',
+    '   desktop list comes only from a session the app started (ask the lead for one), else the line says "owed".',
+    '4. Where an entry moves what a mod can build, read the plugin-authoring skill\'s types against it.',
+    '5. Update the map of docs/proposals/claude-app-native-sessions.md (section 4) in the same pull request.',
+    `6. js-harness host-watch check docs/host-updates/claude-desktop-${v}.md exits 0.`,
+    '7. A page in Spanish for him, as rule:reports-spanish-visual says: one row a novelty, the decision and why.',
+    '8. One question for each adopt or adapt row: js-harness notify --to orchestrator --kind question with the JSON on',
+    '   stdin and the text in Spanish; never wait on the answer. None when no row is adopt or adapt.',
+    '9. js-harness codex-review --base <boundary> and js-harness lens-review --base <boundary> on the commit.',
+    '10. gh pr create, then js-harness notify --to orchestrator --kind ready --pr <n>.',
+    '11. Once the pull request is on main, the lead records the review from the main checkout:',
+    '    js-harness doctor --host-reviewed, which refuses while the file lacks any of it.',
+    '',
+    'If a second update lands before the pull request merges, extend the review to the newer version: the file is the',
+    'newer version\'s, its spans from the same record last reviewed. Nothing here covers adopting a change without his yes.',
+    '',
+  ].join('\n');
+}

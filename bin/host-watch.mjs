@@ -7,16 +7,21 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { backgroundDir, readRecord } from './lib/background.mjs';
 import { readCache } from './lib/cache.mjs';
+import { channelDir, nextSessionNumber, readNotices } from './lib/channel.mjs';
 import { harnessHome } from './lib/home.mjs';
-import { readHostVersions } from './lib/host-update.mjs';
-import { CODE_CHANGELOG, DESKTOP_CHANGELOG, checkReview, cutSpan, diffTools, draftReview, entriesBetween, hostTools, parseChangelog, parseToolList, renderToolList, surfaceRefusal } from './lib/host-watch.mjs';
+import { hostUpdateRow, readHostVersions } from './lib/host-update.mjs';
+import { CODE_CHANGELOG, DESKTOP_CHANGELOG, checkReview, cutSpan, diffTools, draftReview, entriesBetween, hostTools, parseChangelog, parseToolList, renderBrief, renderToolList, surfaceRefusal, watchLine, watchOpened, watchTitle } from './lib/host-watch.mjs';
+import { mainCheckout, projectCode, projectSlug } from './lib/sessions.mjs';
 import { resolveProjectRoot } from './lib/stack.mjs';
 
 export const USAGE = [
   'Usage: js-harness host-watch draft --desktop <file> --code <file> [--from-desktop <v>] [--to-desktop <v>] [--from-code <v>] [--to-code <v>] [--sources <dir>] [--home <path>]',
   '       js-harness host-watch check <review file>',
   '       js-harness host-watch tools --surface desktop|background --list <file> [--record] [--project <dir>] [--home <path>]',
+  '       js-harness host-watch brief [--title <title>] [--home <path>]',
   '',
   'draft prints the review file of a Claude Desktop update: the Code tab CLI line, a "Desktop tool list: owed" line,',
   'one row an entry of the two changelogs over the update\'s span (Change, Decision, Reason, Map row, Evidence, Windows,',
@@ -37,6 +42,10 @@ export const USAGE = [
   'and left out). desktop is a session the app started, the only one given start_session; background is claude --bg.',
   'With none recorded it is a baseline; --record writes the list. A removed name is confirmed with ToolSearch',
   'select:<name> before a review claims it. Exit 1 for a list the surface could not give, 2 for a usage error.',
+  '',
+  'brief prints the brief of the session that reviews the update read now, from the record last reviewed: the spans',
+  'frozen and each step of the review. Its title is "<code> <n> · host watch <version>" with the next number, or',
+  '--title. js-harness loop heartbeat hands it, with the command that opens the session. Exit 1 with no update.',
 ].join('\n');
 
 class HostWatchArgError extends Error {}
@@ -45,12 +54,13 @@ const VALUED = {
   draft: ['--desktop', '--code', '--from-desktop', '--to-desktop', '--from-code', '--to-code', '--sources', '--home'],
   check: [],
   tools: ['--surface', '--list', '--project', '--home'],
+  brief: ['--title', '--home'],
 };
-const BOOLEAN = { draft: [], check: [], tools: ['--record'] };
+const BOOLEAN = { draft: [], check: [], tools: ['--record'], brief: [] };
 
 function parseArgs(argv) {
   const [verb, ...rest] = argv;
-  if (!Object.hasOwn(VALUED, verb ?? '')) throw new HostWatchArgError(verb === undefined ? 'a subcommand is required: draft, check or tools' : `unknown argument: ${verb}`);
+  if (!Object.hasOwn(VALUED, verb ?? '')) throw new HostWatchArgError(verb === undefined ? 'a subcommand is required: draft, check, tools or brief' : `unknown argument: ${verb}`);
   const flags = {};
   const positional = [];
   for (let i = 0; i < rest.length; i += 1) {
@@ -67,7 +77,7 @@ function parseArgs(argv) {
   }
   if (verb === 'check' && positional.length !== 1) throw new HostWatchArgError('check takes one review file');
   if (verb !== 'check' && positional.length > 0) throw new HostWatchArgError(`unexpected argument: ${positional[0]}`);
-  for (const flag of { draft: ['--desktop', '--code'], check: [], tools: ['--surface', '--list'] }[verb]) {
+  for (const flag of { draft: ['--desktop', '--code'], check: [], tools: ['--surface', '--list'], brief: [] }[verb]) {
     if (flags[flag] === undefined) throw new HostWatchArgError(`${verb} requires ${flag}`);
   }
   return { verb, flags, file: positional[0] };
@@ -209,8 +219,67 @@ function tools(ctx, flags) {
   return 0;
 }
 
+/** The update read now against the record last reviewed: `{ change, versions, reviewed }`, `change` null with none. */
+function updateOf(versions, reviewed) {
+  if (!reviewed) return { change: null, versions, reviewed };
+  const { row } = hostUpdateRow(versions, reviewed);
+  return { change: row.claude === 'stale' ? row.change : null, versions, reviewed };
+}
+
+function brief(ctx, flags) {
+  const { change, versions, reviewed } = updateOf(ctx.host(), ctx.reviewed());
+  if (change === null) {
+    ctx.stderr(`js-harness host-watch: no update since the last review (Claude Desktop ${versions.desktop ?? 'unknown'}, Code tab CLI ${versions.code ?? 'unknown'}), so no brief`);
+    return 1;
+  }
+  ctx.stdout(renderBrief({ versions, reviewed, title: flags['--title'] ?? watchTitle(ctx.next(), versions.desktop) }));
+  return 0;
+}
+
+/** The project's code and the number of its next session, from the main checkout of `cwd` (the title guard's). */
+function nextOf(home, cwd) {
+  const root = mainCheckout((command, args, options) => spawnSync(command, args, { encoding: 'utf8', windowsHide: true, ...options }), cwd);
+  const { code } = projectCode(root, read);
+  if (code === null) throw new Error(`${path.join(root, 'harness.json')} declares no "code"`);
+  return { code, number: nextSessionNumber(home, projectSlug(root), { code }).number };
+}
+
+/** The heartbeat's reading of the host (`js-harness loop heartbeat`): null while the last reading is under `everyMs`
+ * old, kept in a file as the daily Windows run's is, so a heartbeat started again still reads once an interval. Else
+ * `{ lines, told }`: `told` is the HOST line when an update has no host watch session (the background record and the
+ * channel hold none titled for its version), and is said again each interval until one opens. The seams read the
+ * versions, the record last reviewed, the titles of the sessions and the next number. */
+export async function hostWatchTick({
+  home,
+  slug,
+  everyMs,
+  now = Date.now,
+  cwd = process.cwd(),
+  host = () => readHostVersions({ home }),
+  reviewed = () => readCache(home).host?.reviewed ?? null,
+  titles = () => [...(readRecord(home).started ?? []).map((entry) => entry.title), ...readNotices(home, slug).notices.map((notice) => notice.from?.title)],
+  next = () => nextOf(home, cwd),
+}) {
+  const file = path.join(channelDir(home), 'host-watch', slug, 'asked');
+  let last = -Infinity;
+  try {
+    last = Date.parse(fs.readFileSync(file, 'utf8').trim());
+  } catch {
+    // never read
+  }
+  if (now() - last < everyMs) return null;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${new Date(now()).toISOString()}\n`);
+  const { change, versions } = updateOf(host(), reviewed());
+  if (change === null) return { lines: [], told: null };
+  const holder = titles().find((title) => watchOpened([title], versions.desktop));
+  if (holder !== undefined) return { lines: [`host-watch: ${change} is held by "${holder}"`], told: null };
+  const brief = path.join(backgroundDir(home), `host-watch-${versions.desktop}.md`);
+  return { lines: [], told: watchLine({ change, version: versions.desktop, title: watchTitle(next(), versions.desktop), brief }) };
+}
+
 /** The command. The seams are the output, the versions read now (`host`), the reviewed record (`reviewed`), the
- * project (`project`) and the clock (`now`). */
+ * project (`project`), the next session's code and number (`next`) and the clock (`now`). */
 export async function hostWatchMain(argv = [], deps = {}) {
   const stdout = deps.stdout ?? console.log;
   const stderr = deps.stderr ?? console.error;
@@ -230,10 +299,12 @@ export async function hostWatchMain(argv = [], deps = {}) {
     reviewed: deps.reviewed ?? (() => readCache(home).host?.reviewed ?? null),
     project: deps.project ?? (() => resolveProjectRoot(deps.cwd ?? process.cwd())),
     now: deps.now ?? (() => new Date()),
+    next: deps.next ?? (() => nextOf(home, deps.cwd ?? process.cwd())),
   };
   try {
     if (parsed.verb === 'draft') return draft(ctx, parsed.flags);
     if (parsed.verb === 'check') return check(ctx, parsed.file);
+    if (parsed.verb === 'brief') return brief(ctx, parsed.flags);
     return tools(ctx, parsed.flags);
   } catch (err) {
     if (!err.code) throw err;
