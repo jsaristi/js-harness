@@ -60,7 +60,7 @@ removes a friction of section 7 or measures one before anything is claimed about
 ## Tasks
 - [x] T1 (kind: verify) step 2: the list to the lead, then `merge-queue --prune` and the empty folders; counts before
   and after — S1; inline; docs commit
-- [ ] T2 (kind: verify) step 3: one hour of process and memory samples, the measure file — S2; inline; docs commit
+- [x] T2 (kind: verify) step 3: one hour of process and memory samples, the measure file — S2; inline; docs commit
 - [ ] T3 (kind: verify) step 4: the auto-archive probe with a scratch session and a scratch PR — S3; inline; docs commit
 - [x] T4 (kind: verify) step 5: the skill-text trim, tests first — S4; inline; no line removed (L4), so no code commit
 - [ ] T5 (kind: docs) the proposal's map, the roadmap, the summary, the ready and closed notices — S5
@@ -175,3 +175,9 @@ step 2 there exactly, nothing else; touch no file; never arm a wait; your summar
   because its gain is below the cost of a code commit's Codex and lens reviews. The proposal's step 5 finding says so.
 - L5 (evidence, T4): `node --test bin/install.test.mjs bin/lib/manifest.test.mjs` 323 of 323 pass; `js-harness rules
   check` PASS, 70 rules, hash `96ea160b1ccc`; both exit 0 on this branch.
+- L6 (evidence, T2): the measure ran 18:04:15Z to 19:04:12Z, 337 samples by `wmic` every 10 s, none failed; the result
+  is `docs/audits/2026-10-30-process-hour.md`. What ran in it is listed there (the lead's land, JH 106's tests and
+  reviews, this session's tests and gates, JH 108's probe). Correction to the note of 18:07:03Z and the step 2 text:
+  the 110 `ccstatusline` orphans held 4,244 MB of working set but 404 MB private, so "about 4.3 GB" overstated what
+  they cost; the lead stopped them at 18:48Z on his answer "Elimina todo lo de ccstatusline, completamente y a
+  profundidad" (channel, answer of 18:47:25Z), and free RAM rose by about 260 MB.
