@@ -19,7 +19,9 @@ before(() => {
   }
   configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-migrate-gitconfig-'));
   process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
-  fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '[user]\n\tname = t\n\temail = t@example.com\n');
+  // Automatic maintenance and gc off: a commit would start one in the background that writes into `.git` while a test
+  // compares its tree, which includes `.git` because migrate writes its manifest and exclude line there.
+  fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '[user]\n\tname = t\n\temail = t@example.com\n[maintenance]\n\tauto = false\n[gc]\n\tauto = 0\n');
   process.env.GIT_CONFIG_NOSYSTEM = '1';
 });
 after(() => {
@@ -66,7 +68,7 @@ function cleanup(...dirs) {
   for (const dir of dirs) fs.rmSync(dir, { recursive: true, force: true });
 }
 
-/** Every file under `dir` but git's own, with its bytes, to tell that nothing was written. */
+/** Every file under `dir`, git's own included, with its bytes, to tell that nothing was written. */
 function tree(dir) {
   const out = {};
   const walk = (at) => {
@@ -79,6 +81,24 @@ function tree(dir) {
   walk(dir);
   return out;
 }
+
+// A commit starts `git maintenance run --auto --detach` (git 2.47 and later), which outlives it and writes objects and
+// `.git/objects/maintenance.lock` while a test compares the trees around a migrate (project-migrate-maintenance-flake
+// in docs/FAILURES.md).
+test('a commit in a project these tests make starts no git maintenance', () => {
+  const { dir, home } = oldProject();
+  try {
+    const run = spawnSync('git', ['commit', '-q', '--no-verify', '--allow-empty', '-m', 'traced'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: { ...process.env, GIT_TRACE: '1' },
+    });
+    assert.equal(run.status, 0, run.stderr);
+    assert.doesNotMatch(run.stderr, /maintenance run|gc --auto/);
+  } finally {
+    cleanup(dir, home);
+  }
+});
 
 test('migrate writes the split, moves the pin and records the baseline, keeping the line the project added', () => {
   const { dir, manifestPath, home } = oldProject();
