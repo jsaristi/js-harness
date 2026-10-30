@@ -285,3 +285,4 @@ session records `tools-background.txt` from its own list either way.
 3. Then `tools-background.txt` from this session's own list, `tools-desktop.txt` from the lead's
    (`~/.js-harness/research/host-watch/tools-desktop-lead.txt`, `--record`), `host-watch check` exit 0, the map
    rows of the proposal, the Spanish page, one `notify --kind question` for #24, PR 4; T6.
+- Next (2026-10-30, at the pause): the draft is committed (f1f02e87); the decisions of its 56 open rows are in $CLAUDE_JOB_DIR/tmp/t5-decisions.json (id -> [decision, reason]; one adapt, desktop #24; the rest ignore with reasons, "_default" for host fixes). Apply them to docs/host-updates/claude-desktop-4.4212.0.md with a script, empty the hand list, then step 3.
