@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { closesProblem, forecastNow, forecastOf, resolveClose } from './stretch-forecast.mjs';
+import { closesProblem, forecastNow, forecastOf, planShare, resolveClose } from './stretch-forecast.mjs';
 
 // The roadmap at the opening as `roadmapOf` reads it: the checklist's phases with their steps, and the plan sections.
 const step = (text, done = false) => ({ text, done });
@@ -111,4 +111,11 @@ test('now, the named rows are counted by themselves, apart from the share now an
   // The rows the forecast counts (the middle): A's two and B's; two of them are done now.
   assert.deepEqual(now.forecastDone, { done: 2, of: 3 });
   assert.deepEqual(now.plans.map((one) => [one.name, one.done, one.total]), [['F8 plan', 3, 4]]);
+});
+
+// odd/tasks/report-stretch-share.md, S1: the status report reads the migration's share with this count, never its own.
+test('planShare counts a plan\'s steps done as the forecast counts them: done, built and applied, of all its steps', () => {
+  assert.deepEqual(planShare({ steps: [{ reported: 'done' }, { reported: 'built' }, { reported: 'applied' }, { reported: 'designed' }, { reported: 'to do' }] }), { done: 3, total: 5 });
+  const [plan] = forecastOf({ items: [], lanes: [], hours: 1, roadmap: ROADMAP }).plans;
+  assert.deepEqual(planShare(ROADMAP.plans[0]), { done: plan.done, total: plan.total });
 });

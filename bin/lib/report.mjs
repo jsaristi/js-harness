@@ -1,9 +1,11 @@
 // The pure parts of `js-harness report` (odd/tasks/status-report.md): the cut, and the four sections of facts a
 // status report is written from — what landed on the default branch, the sessions' notices, the questions, and the
-// roadmap's map — read from what `bin/report.mjs` gives them and printed as plain lines. Nothing here runs git or
-// reads a file.
+// roadmap's map, led by the migration's share and the last stretch (odd/tasks/report-stretch-share.md) — read from
+// what `bin/report.mjs` gives them and printed as plain lines. Nothing here runs git or reads a file.
 import { recordedQuestions } from './channel.mjs';
 import { parseRoadmap } from './progress.mjs';
+import { planOf } from './report-pages.mjs';
+import { planShare } from './stretch-forecast.mjs';
 
 /** The window a report covers when none was ever recorded, in hours. */
 export const REPORT_WINDOW_HOURS = 24;
@@ -107,11 +109,17 @@ export function questionsOf(record, cut) {
   return { answered, open };
 }
 
-/** The roadmap's map from its markdown: `{ done, total, phases: [{ title, done, total, open }] }`, `open` being the
- * text of each step still open. */
+/** The roadmap's map from its markdown: `{ done, total, phases: [{ title, done, total, open }], plans: [{ name, done,
+ * total }] }`, `open` being the text of each step still open, and each plan section's steps done counted as the stretch
+ * forecast counts them (`planShare`): the F8 plan's is the migration's share. */
 export function mapOf(markdown) {
   const { phases, done, total } = parseRoadmap(markdown);
-  return { done, total, phases: phases.map((phase) => ({ title: phase.title, done: phase.done, total: phase.total, open: phase.steps.filter((step) => !step.done).map((step) => step.text) })) };
+  return {
+    done,
+    total,
+    phases: phases.map((phase) => ({ title: phase.title, done: phase.done, total: phase.total, open: phase.steps.filter((step) => !step.done).map((step) => step.text) })),
+    plans: planOf(markdown).map((plan) => ({ name: plan.name, ...planShare(plan) })),
+  };
 }
 
 /** `ms` as `YYYY-MM-DD HH:MMZ`, in UTC. */
@@ -130,9 +138,58 @@ const CUT_SAID = {
   window: `the last ${REPORT_WINDOW_HOURS} hours: no report is recorded`,
 };
 
-/** The report as lines: the cut, then Landed, Sessions, Questions and Map. A section given as `{ error }` says it
- * could not be read, and a map given as `{ absent: true }` that the default branch holds no roadmap. */
-export function reportLines({ cut, branch, landed, sessions, questions, map }) {
+/** Each plan section's share now and at the cut (`before`: `{ map }`, `{ unavailable }` or `null`), as lines. */
+function migrationLines(map, before) {
+  if (map.plans.length === 0) return ['Migration: the roadmap has no plan section'];
+  return map.plans.map((plan) => {
+    const was = before?.map?.plans?.find((one) => one.name === plan.name);
+    let cut;
+    if (!before) cut = 'at the cut not known: the last report recorded no commit';
+    else if (before.unavailable) cut = `at the cut not known: ${before.unavailable}`;
+    else cut = was ? `at the cut ${was.done}/${was.total}  ${percent(was.done, was.total)}` : 'at the cut the roadmap had no such plan';
+    return `Migration: ${plan.name}  ${plan.done}/${plan.total} steps  ${percent(plan.done, plan.total)}; ${cut}`;
+  });
+}
+
+const hoursRange = ([low, high]) => (low === high ? `${low} h` : `${low}-${high} h`);
+
+/** The stretch's forecast (`forecastOf` with `now`, `forecastNow`'s) as lines: each plan by its steps, then the map. */
+function forecastLines(forecast) {
+  if (forecast.unavailable) return [`  forecast: the map could not be read (${forecast.unavailable})`];
+  const { now } = forecast;
+  const nowOf = (counts) => {
+    if (!now) return 'not measured now';
+    if (now.unavailable) return `now could not be read (${now.unavailable})`;
+    return counts ? `now ${percent(counts.done, counts.total)}` : 'now gone from the roadmap';
+  };
+  const scope = (label, counts, current) => `  forecast ${label}: ${percent(counts.done, counts.total)} at the opening, ~${percent(counts.forecast, counts.total)} at the return (${percent(counts.low, counts.total)} to ${percent(counts.high, counts.total)}); ${nowOf(current)}`;
+  const rowsDone = now && !now.unavailable ? `; ${now.forecastDone.done} of ${now.forecastDone.of} forecast rows done` : '';
+  return [
+    ...forecast.plans.map((plan) => scope(plan.name, plan, now?.plans?.find((one) => one.name === plan.name))),
+    `${scope('map', forecast.total, now?.total)}${rowsDone}`,
+  ];
+}
+
+/** The last stretch since the cut (`reportStretch` of `bin/stretch.mjs`), `null` or `{ unavailable }`, as lines. */
+function stretchLines(stretch) {
+  if (stretch === null) return ['Stretch: none open or closed since the cut'];
+  if (stretch.unavailable) return [`Stretch: could not read: ${stretch.unavailable}`];
+  const { goals, totals } = stretch;
+  const when = stretch.state === 'closed' ? `closed at ${stamp(Date.parse(stretch.at))}` : `open, back at ${stamp(Date.parse(stretch.returnAt))}`;
+  const checked = goals.checkedAt ? `checked ${stamp(Date.parse(goals.checkedAt))}` : 'not checked yet';
+  return [
+    `Stretch ${stretch.id}: ${when}, opened ${stamp(Date.parse(stretch.openedAt))}; ${stretch.elapsedHours} of ${stretch.hours} h; goals ${goals.met} of ${goals.total} met, ${checked}`,
+    ...goals.list.map((goal) => `  goal ${goal.id} ${goal.met === null ? 'not checked' : `${goal.met ? 'met' : 'not met'} (${goal.said})`}: ${oneLine(goal.text)}`),
+    `  estimated ${hoursRange(totals.estimate)}, real ${totals.realHours} h, lost ${totals.lostHours} h`,
+    ...forecastLines(stretch.forecast),
+  ];
+}
+
+/** The report as lines: the cut, then Landed, Sessions, Questions, the migration and the last stretch, and Map. A
+ * section given as `{ error }` says it could not be read, and a map given as `{ absent: true }` that the default branch
+ * holds no roadmap. The migration is each plan's share of `map` now and in `before`, the map at the cut; `stretch`
+ * left out prints no stretch line. */
+export function reportLines({ cut, branch, landed, sessions, questions, map, before = null, stretch }) {
   const lines = [`Since ${stamp(cut.at)}, ${CUT_SAID[cut.source]}`, ''];
 
   if (landed.error) lines.push(`Landed on ${branch}: could not read: ${landed.error}`);
@@ -173,6 +230,10 @@ export function reportLines({ cut, branch, landed, sessions, questions, map }) {
     }
   }
   lines.push('');
+
+  if (!map.error && !map.absent && map.plans !== undefined) lines.push(...migrationLines(map, before));
+  if (stretch !== undefined) lines.push(...stretchLines(stretch));
+  if (lines.at(-1) !== '') lines.push('');
 
   if (map.error) lines.push(`Map: could not read: ${map.error}`);
   else if (map.absent) lines.push(`Map: no docs/ROADMAP.md on ${branch}`);

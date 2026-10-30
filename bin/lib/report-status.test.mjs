@@ -39,6 +39,53 @@ test('with no notes each of their sections says no record holds it, and with no 
   assert.match(html, /4\. El mapa<\/h2>[\s\S]*sin un antes[\s\S]*F2 Board[\s\S]*1\/3 · 33 %/);
 });
 
+// odd/tasks/report-stretch-share.md: section 4 opens with the migration's share and the last stretch, from the records.
+const STRETCH = {
+  id: 's-1',
+  state: 'closed',
+  openedAt: '2026-10-29T06:00:00.000Z',
+  returnAt: '2026-10-29T11:00:00.000Z',
+  at: '2026-10-29T10:30:00.000Z',
+  hours: 5,
+  elapsedHours: 4.5,
+  goals: { checkedAt: '2026-10-29T10:30:00.000Z', met: 1, total: 2, list: [{ id: 'G1', text: 'PR 630 en main', met: true, said: 'exit 0' }, { id: 'G2', text: 'S13 hecha', met: false, said: 'exit 1' }] },
+  totals: { estimate: [6, 9], realHours: 7, lostHours: 0.5, lostShare: 0.07 },
+  forecast: {
+    named: 2,
+    total: { done: 1, total: 4, forecast: 3, low: 2, high: 3 },
+    plans: [{ name: 'F8 plan', done: 1, total: 2, forecast: 2, low: 1, high: 2 }],
+    now: { total: { done: 3, total: 5 }, plans: [{ name: 'F8 plan', done: 2, total: 2 }], forecastDone: { done: 2, of: 2 }, gained: 1 },
+  },
+};
+const sectionFour = (html) => html.slice(html.indexOf('4. El mapa'), html.indexOf('5. Lo que espera'));
+
+test('section 4 opens with the migration now and at the cut, then the last stretch: each goal with its exit, its hours and its forecast against now', () => {
+  const html = renderStatus({ ...FACTS, map: { ...MAP, plans: [{ name: 'F8 plan', done: 9, total: 14 }] }, before: { map: { ...BEFORE, plans: [{ name: 'F8 plan', done: 8, total: 14 }] } }, stretch: STRETCH, notes: null });
+  const four = sectionFour(html);
+  assert.match(four, /<h3>La migración<\/h3>[\s\S]*F8 plan[\s\S]*8 de 14 pasos · 57 %[\s\S]*9 de 14 pasos · 64 %/);
+  assert.match(four, /<h3>El último tramo<\/h3>[\s\S]*s-1[\s\S]*cerrado[\s\S]*4\.5 h de 5 h[\s\S]*estimado 6-9 h, real 7 h, perdido 0\.5 h/);
+  assert.match(four, /PR 630 en main[\s\S]*sí[\s\S]*exit 0[\s\S]*S13 hecha[\s\S]*no[\s\S]*exit 1/);
+  assert.match(four, /F8 plan[\s\S]*1 de 2 · 50 %[\s\S]*~100 %[\s\S]*50 % a 100 %[\s\S]*2 de 2 · 100 %/);
+  assert.match(four, /Mapa del proyecto[\s\S]*1 de 4 · 25 %[\s\S]*~75 %[\s\S]*50 % a 75 %[\s\S]*3 de 5 · 60 %/);
+  assert.match(four, /De las filas que el pronóstico contaba, 2 de 2 están hechas/);
+  assert.ok(four.indexOf('La migración') < four.indexOf('El último tramo') && four.indexOf('El último tramo') < four.indexOf('F2 Board'), 'the migration, then the stretch, then the phases');
+});
+
+test('section 4 says when no stretch ran since the cut, when the stretch record cannot be read, and when the cut has no map', () => {
+  const plans = [{ name: 'F8 plan', done: 9, total: 14 }];
+  const none = sectionFour(renderStatus({ ...FACTS, map: { ...MAP, plans }, before: null, stretch: null, notes: null }));
+  assert.match(none, /9 de 14 pasos · 64 %/);
+  assert.match(none, /En el corte no se sabe: el último reporte no guardó la rama que leyó/);
+  assert.match(none, /Ningún tramo abierto ni cerrado desde el corte\./);
+  const unread = sectionFour(renderStatus({ ...FACTS, map: { ...MAP, plans }, stretch: { unavailable: 'EACCES' }, notes: null }));
+  assert.match(unread, /El registro de los tramos no se pudo leer: EACCES/);
+  const open = sectionFour(renderStatus({ ...FACTS, map: { ...MAP, plans: [] }, stretch: { ...STRETCH, state: 'open', goals: { checkedAt: null, met: 0, total: 1, list: [{ id: 'G1', text: 'PR 630 en main', met: null, said: null }] }, forecast: { unavailable: 'git show: bad' } }, notes: null }));
+  assert.match(open, /La hoja de ruta no tiene una sección de plan/);
+  assert.match(open, /abierto[\s\S]*vuelve 2026-10-29 11:00Z/);
+  assert.match(open, /PR 630 en main[\s\S]*sin revisar/);
+  assert.match(open, /El pronóstico no se pudo leer: git show: bad/);
+});
+
 test('a section the records could not give says why, and nothing that landed or wrote is said as such', () => {
   const html = renderStatus({ ...FACTS, landed: { error: 'git log: fatal' }, sessions: [], questions: { error: 'the record: EACCES' }, map: { absent: true }, before: { unavailable: 'c0: bad object' }, notes: null });
   assert.match(html, /1\. Lo que entró<\/h2><p class="note">No se pudo leer: git log: fatal/);
