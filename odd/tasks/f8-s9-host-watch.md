@@ -266,6 +266,22 @@ session records `tools-background.txt` from its own list either way.
   host-watch-4-5000-0 --effort high` parses and stops at the brief (exit 2), nothing written. Correction to L6: no
   entry of the span names a bypass `rm` prompt (searched the draft's 113 rows for rm, bypass, deny, hint).
 
+- L11 (2026-10-30): Codex over `34562cc..56c82c7` correct (0.98), the three fixed; lenses reliability, risk 0. T4
+  is reviewed: `34562cc4`, `56c82c71` on `f8-s9-trigger`.
+
 ## Next step
-1. T4's commit, then Codex and lenses on it (`--base 06a160c3`), then PR 3 (base `f8-s9-probe` until 717 lands).
-2. T5 (real run), T6.
+1. Push `f8-s9-trigger`; open PR 3 (base `f8-s9-probe` while PR 717 is open, else main); `ready` notice.
+2. T5, the real run, on a branch `f8-s9-review` from `f8-s9-trigger`: the draft is
+   `node bin/js-harness.mjs host-watch draft --desktop <desktop.md> --code <code.md> --from-desktop 4.29.0
+   --to-desktop 4.4212.0 --from-code 2.1.308 --to-code 2.1.309 --sources docs/host-updates/sources` over the
+   published pages (`https://claude.com/docs/cowork/claude-desktop-changelog.md`,
+   `https://code.claude.com/docs/en/changelog.md`): 113 rows, 56 to decide, 13 by hand. Decided so far: no adopt;
+   one candidate adapt, desktop 4.4212.0 #24 `sessionStatusLine` (a line above the Code tab's message box printed by
+   a program the app runs; on Windows it must sit in Program Files, set by managed settings: admin, outside the
+   per-user undo), which brings one question; desktop #28 (`desktopHome`, breaking Nov 10) ignore: "Code is not
+   affected" (desktop changelog, the `desktopHome` entry of its beta); code #49 (PowerShell hooks failing open)
+   ignore: checked, no harness hook in `~/.claude/settings.json` sets `shell`; code #33 ignore (L6). Every other
+   row: a host fix that needs no harness change.
+3. Then `tools-background.txt` from this session's own list, `tools-desktop.txt` from the lead's
+   (`~/.js-harness/research/host-watch/tools-desktop-lead.txt`, `--record`), `host-watch check` exit 0, the map
+   rows of the proposal, the Spanish page, one `notify --kind question` for #24, PR 4; T6.
