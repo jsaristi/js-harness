@@ -43,6 +43,7 @@ export function rehearsalLayout(root) {
     prefix: path.join(root, 'prefix'),
     prefixBin: path.join(root, 'prefix', 'bin'),
     record: path.join(root, 'record.json'),
+    log: path.join(root, 'commands.log'),
   };
 }
 
@@ -288,7 +289,10 @@ function walkContext(layout, { gitDir, port, token }) {
     commands.push(words.map(String));
     const [program, ...args] = commandWords(words.map(String), pathDirs, { comspec: kept.ComSpec ?? kept.COMSPEC ?? 'cmd.exe' });
     const result = spawnSync(program, args, { cwd, env: environment, input, encoding: 'utf8', timeout, maxBuffer: 64 * 1024 * 1024, windowsHide: true });
-    return { code: result.status, stdout: result.stdout ?? '', stderr: `${result.stderr ?? ''}${result.error ? `\n${result.error.message}` : ''}` };
+    const ran = { code: result.status, stdout: result.stdout ?? '', stderr: `${result.stderr ?? ''}${result.error ? `\n${result.error.message}` : ''}` };
+    // Every command's whole output, kept with the root: walk 4's stack install failed past the eight lines a step keeps.
+    fs.appendFileSync(layout.log, redacted(`$ ${words.join(' ')}\nexit ${ran.code}\n${ran.stdout}\n${ran.stderr}\n\n`, token));
+    return ran;
   };
   const harness = (...args) => exec([process.execPath, JS_HARNESS, ...args]);
   const must = (result, what) => {

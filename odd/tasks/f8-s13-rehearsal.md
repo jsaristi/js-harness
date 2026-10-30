@@ -89,6 +89,13 @@ directive coverage and S12's migration carries it" (reverse-engineering document
   found nothing; the 3168 bytes are the protocol text alone. Fix: `engramEnv` sets only the port and the data
   folder, test first. One process left, a scratch codegraph binary under the pnpm prefix, stopped by the sweep; the
   sweep printed only the head of its command line, so it now prints the tail. `real-home-after` PASS.
+- Run 4 (2026-10-30 ~02:50Z, `1e9d4458`, 1.8 minutes, host cost $0): `install` PASS; `stack-install` FAIL, `stack
+  install` exited 1 where run 3's passed on the same rows: "codex installed: the command exited 0 and the probe cannot
+  tell whether it worked", still unread at the end of the run (bin/stack.mjs:268-286), while `codex mcp add
+  codegraph` ran after it. Not known why: the step keeps eight lines and stack does not say why its probe could not
+  tell. In the kept root, `codex --version` answers `codex-cli 0.165.0` in about 200 ms three times, warm; a cold first
+  run past `PROBE_TIMEOUT_MS` (5 s, bin/lib/stack.mjs:27) is a guess, not checked. No process left, no browser;
+  `real-home-after` PASS. The walk now keeps every command's whole output in `commands.log` under its root.
 
 ## Next step
 State at the second context pause (2026-10-30 ~02:30Z, branch `f8-s13-rehearsal`, worktree
