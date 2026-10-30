@@ -164,3 +164,11 @@ notice.
   again; with `CLAUDE.md` a link to `AGENTS.md`, the plan read no split where sync reads through the link. It also
   named a divergence, D7. Open, outside this range: through such a link, sync renders `AGENTS.md`'s half, so Claude
   loses its half of the lines (`bin/lib/project.mjs:1858-1860`); told to the lead.
+- L14 (2026-10-30): reviews of E (`9af1aac..5529661`): Codex correct (0.93, 91,401 input tokens); the lenses risk,
+  reliability and resilience, no finding (about 41,000 input tokens). gentle-ai lines:
+  - review-5a9a528091a81b7a (`5058d55e..5529661d`: `09ae0126`, `3cba3c9f`, `7af9ec25`; medium, one lens,
+    reliability): approved and acknowledged; three WARNINGs and a SUGGESTION, advisory. Fixed in commit F `c362110f`,
+    tests red first: an ignored `CLAUDE.md` of the project's stopped the migration (the check now reads only the files
+    it or sync may write); `--check` named the `.atl/` line where sync keeps the exclude file (it asks `excludeFile`);
+    an error of sync's part other than a write's did not name the migration's writes. The SUGGESTION does not apply:
+    `inspect` validates the manifest's shape before `repairLines` reads an entry.
