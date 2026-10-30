@@ -394,8 +394,15 @@ Steps 2 to 5 ran in JH 107 on his answer to question 128 (the lead's transcript 
   unsaved, rightly for an `.env`, needlessly for that cache). Kept: one with an open PR (596), Orca's two (S2), the
   land's two detached candidates (the lead's), the two live sessions. Five empty folders under `.claude/worktrees` stay
   "busy", held by a process [unknown which]. Found on the way, for row "Waits killed by low memory" of section 7: 111
-  `node` processes of `ccstatusline`, the status line (`refreshInterval` 10), alive with no parent since 2026-10-28,
-  about 4.3 GB [checked: `wmic process`]; nothing was stopped.
+  `node` processes of `ccstatusline`, the status line (`refreshInterval` 10), alive with no parent since 2026-10-28
+  [checked: `wmic process`]; nothing was stopped by the step. They held about 4.3 GB of working set but only about
+  0.4 GB private, as step 3 measured.
+- **Step 3, 2026-10-30.** [`docs/audits/2026-10-30-process-hour.md`] Over one hour of normal work, about 20
+  `claude.exe` held 4.2-4.7 GB private. All the `js-harness` processes together held 110-200 MB. A hook is never
+  standing (at most one alive in a 10 s sample, about 1 MB mean), and a `wait` is about 36 MB while it runs. On his
+  answer the lead stopped the 110 orphans at 18:48Z: 404 MB private, and free RAM rose by about 260 MB. No low-memory
+  kill happened in the hour, so what drove the earlier ones is still [unknown]. For row 15 this means moving the
+  hooks to a mod saves start time, not memory; for row 10, about 36 MB a waiting session.
 - **Step 4, 2026-10-30: not run, the lead's to start.** JH 107 is a `claude --bg` session (`sessions start`), and
   none of the desktop's session tools is in its tool list (`ToolSearch` for `start_session`, `list_sessions`,
   `bind_pr`, `wrap_up`, `update_plan`: no match) [checked]; `start_session` also needs his typed turn. The steps and
