@@ -663,6 +663,9 @@ change. The free titles of 2026-10-19 came before the title guard existed; these
 An output he sees again and again reached him made by hand, in a shape other than the one planned,
 where a command should have made it; each escape `template shown` names is one more `- Seen:` line.
 - Class: rule-not-acting
+- Seen: 2026-10-27 — odd/tasks/memory-notes.md, "Moved out of memory" (claimed; the lead's own, from its memory note
+  board-rows-through-notify) — hand-written rows of the live board gave the lead two `session` keys, so the board
+  showed two orchestrators; his words: "necesito que hagas las cosas bien"
 - Seen: 2026-10-29 — the lead's transcript `0f71b2c6`, lines 14687 and 14721 — the 02:44Z page went
   by `mcp__visualize__show_widget`, retyped, not the planned one; his words at 14721 (odd/tasks/templates.md, Specs)
 - Control: check — bin/template.test.mjs — "gate --hook refuses a hand-made page by Artifact with the
@@ -1554,6 +1557,10 @@ was not so.
   reading; JH 8's measure found two Windows services (PcaSvc since about 17:00, and the antivirus)
   taking two to three of the eight processors while a check runs (odd/tasks/gate-wait.md, Progress);
   a gate now names the processes that spent the processor before its command
+- Seen: 2026-10-20 — odd/tasks/memory-notes.md, "Moved out of memory" (claimed; the lead's own, from its memory note
+  one-sample-is-not-a-diagnosis) — after one OpenSSL success the lead told him and three sessions that Schannel made
+  `git ls-remote` fail; three OpenSSL fetches a minute later failed too, the path to github.com was flaky while
+  api.github.com answered, and it corrected itself to him and to every session
 - Seen: 2026-10-30 — odd/tasks/f8-s13-rehearsal.md, L5 and L7 — JH 90 offered the lead D3 on a cause marked
   assumed (a 30 s timeout that killed only the shell); the walk's own log already refuted it, since `stack install`
   passed its exit check and a timeout exits 1 (`bin/stack.mjs:245-250`); the lead chose on it, and was told the
