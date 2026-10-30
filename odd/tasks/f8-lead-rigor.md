@@ -80,7 +80,7 @@ words, not to run the block and give the corrected one. Doctor's gate does preve
 - [x] T1 (kind: design) this document; two blind readers on the plan before code (L5)
 - [x] T2 (kind: build) S3 — the Seen lines, and `failures weeks`; test first; Codex and lenses; PR 1 (L7, L8)
 - [x] T3 (kind: build) S2 — the host review file and the `--host-reviewed` gate; test first; Codex and lenses; PR 2 (L9)
-- [ ] T4 (kind: build) S1 — command blocks in the reply check; test first on real excerpts; the replay; Codex and
+- [x] T4 (kind: build) S1 — command blocks in the reply check; test first on real excerpts; the replay; Codex and
   lenses; PR 3
 - [ ] T5 (kind: verify) `npm run check`, ready notices, summary
 - [x] T6 (kind: docs) F4 of `docs/audits/2026-10-30-cleanup-inventory.md`, by the lead's note (L6): the six failures
@@ -265,8 +265,9 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   cost (226,291 tokens lost on 2026-10-30); a review of a detached copy of the range's head would make the edit
   harmless. `door-covers-past-tip` (3): its check refuses at the door, but on 2026-10-30 a chain cut inside a reviewed
   range passed the pre-push hook three times; the push side does not hold the door's rule for a cut.
+- L14 (2026-10-30, T4 fix reviews): Codex on `acbd281..9c967aa` (45,942 input tokens): correct, all six fixed. Lenses
+  reliability and risk on the same range: 0 findings. T6's routing went to the lead at 19:14Z.
 
 ## Next step
-State (2026-10-30): PRs 707 (T2) and 710 (T3) are merged. T4 is `ccd7e3f9` and `acbd2816`, reviewed (L12); the fixes
-of its review are written and green, not yet committed. Next: commit them, review the fix (Codex and reliability on
-`acbd2816..`), PR 3 from main, its ready notice; T6's routing note to the lead; then T5.
+State (2026-10-30): PRs 707 (T2) and 710 (T3) are merged; T4 is `ccd7e3f9`, `acbd2816` and `9c967aa4`, reviewed (L12,
+L14). Next: PR 3 from this branch, its ready notice once green, the closed notice with the session summary.
