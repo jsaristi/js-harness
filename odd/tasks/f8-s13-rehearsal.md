@@ -68,8 +68,7 @@ directive coverage and S12's migration carries it" (reverse-engineering document
 - [x] T6 (kind: verify) the rehearsal test on a planted break, then green again — S7; L8
 - [ ] T8 (kind: build) the `doctor` row of 13.3 row 16: the project's root `CLAUDE.md` imports `AGENTS.md` and no
   `CLAUDE.md` above it turns the import off, test first, its own commit (D1, L4) — S4; inline
-- [ ] T9 (kind: build) `stack install` stops the whole process tree of a run that timed out, test first, its own
-  commit (D3, L6) — S6; inline
+- [x] T9 dropped by the lead (D3 corrected, L9): no run timed out (L7)
 - [ ] T7 (kind: docs) Codex and the lenses on every code commit, gentle-ai lines, the independent verifier over
   the range, PR, ready notice, summary — inline
 
@@ -80,24 +79,19 @@ directive coverage and S12's migration carries it" (reverse-engineering document
   `real-home-after` PASS (19 of his files as they were). Two findings, L5.
 
 ## Next step
-State at the context pause (2026-10-29, branch `f8-s13-rehearsal`, worktree
-`D:\js-harness\.claude\worktrees\f8-s13-rehearsal`, HEAD `6e5cd3e8`, nothing pushed, no PR): T1, T2, T3 and T8 built
-(`ef23c03e`, `d1cea611`, `57584e5d`, `604253a6`, `2c4e534e`). Reviews: lenses on `f2110239..57584e5d` (risk,
-reliability, readability) and `57584e5d..2c4e534e` (reliability, readability, resilience), 0 findings each; Codex on
-`541464c..6e5cd3e`, four P2, (3) and (4) and the CLAUDE_CONFIG_DIR change fixed in `d8fb14a5`, (1) in `430130ed`; next, test first: (2), then the lens and Codex reviews of
-`6e5cd3e8..HEAD`; (1) for the record: `importsAgents` must match a fence's character and
-length; (2) `importHealth` must treat a root CLAUDE.md that `claudeMdExcludes` drops as not loaded (reuse
-`excludingGlob`/`claudeMdSource` of `bin/lib/payload.mjs`); (3) `rehearsalEnv` must drop git's repository variables
-as `childEnv` of `scripts/practice-lib.mjs` does; (4) `snapshotTree` must record folders, so a recorded folder left
-after uninstall fails `restoreProblems`. Also `rehearsalEnv` must stop setting `CLAUDE_CONFIG_DIR` (Claude then keeps
-`.claude.json` inside it, where stack does not read it back). Then T4: the walk is drafted in
-`C:\Users\Oficina\.claude\jobs\bb7fa0ca\tmp\walk-part.mjs`, to append to `scripts/rehearsal.mjs` (its imports:
-practice-lib `readHostStream`, `hostCost`, `redacted`, `realHomeFiles`, `compareSnapshots`, `walkJourney`;
-stack-scratch `realFilesOf`, `claudeJsonMcpPart`, `registrationsLeftIn`, `shimContent`; evals `SANDBOX_SWITCHES`,
-`allocatePort`, `killByPort`; the free test's `HIS_SETTINGS`/`HIS_CLAUDE_MD` move into it). Then T5, one walk
-(`node scripts/rehearsal.mjs`), estimate $5, stop past $7.50; T6; reviews of the fixes and the walk; gentle-ai lines;
-the verifier; chained PRs (slice 1 `f2110239..57584e5d`, slice 2 to the fixes, slice 3 the walk); ready notice;
-summary.
+State at the second context pause (2026-10-30 ~02:30Z, branch `f8-s13-rehearsal`, worktree
+`D:js-harness.claudeworktrees8-s13-rehearsal`, HEAD after `1dacd138`, nothing pushed, no PR). Done: T1, T2,
+T3, T4 (`d4dd7199`), T6 (L8), T8; walk guards `80d2a547`; D3 closed (L9), T9 dropped. Reviews: lenses and Codex
+cover `f2110239..bb6223b9` (Codex verdict correct 0.96 on `34fc68e..bb6223b`; lenses 0 findings on
+`6e5cd3e..bb6223b`); NOT yet reviewed: `d4dd7199`, `80d2a547` (scripts/rehearsal.mjs and its test). Running: walk 2,
+`node scripts/rehearsal.mjs --keep` into `C:UsersOficina.claudejobsb7fa0ca	mpwalk-2.log`; read it, record it
+under `## Walk` (cost beside $5, stop past $7.50), remove its kept root once no process holds it. If it fails, read
+why before any rerun. Then: lens-review and codex-review of `bb6223b9..HEAD`; gentle-ai assess per slice (whole
+branch read-only: medium, not due, under_budget, 1330 lines); S13's roadmap line; the independent verifier over
+`f2110239..HEAD` (high risk); chained PRs (slice 1 `f2110239..57584e5d`, slice 2 `57584e5d..bb6223b9`, slice 3 the
+rest); ready notice; summary `docs/sessions/2026-10-30-jh-90-f8-s13-the-rehearsal-on-a-scratch-project.md`; closed
+notice. Owed to S12 for the report: engram's plugin needs jq (L5); Codex's mcp add leaves context7's login open (L7,
+L9); the brief's surfaces gained `bin/lib/gentle-ai-absence.test.mjs` (NAMED list), `bin/lib/payload.mjs` (export).
 
 ## Log
 - L1 (2026-10-29, the lead's brief `briefs/2026-10-29T19-21-42-028Z-0339f9b7.md`): "JH 90 · F8 S13: the rehearsal
@@ -168,3 +162,6 @@ summary.
   a scratch home, a planted directive without a control makes rules check exit 1 ...", with "rules check exited 1 but
   does not name the missing control of no-hand-deploy". The file restored with `git checkout`, the same command:
   exit 0, 7 pass.
+- L9 (2026-10-30, the lead's note in the channel at 21:25 local): "Lead, D3 corrected: (a). Drop T9; Codex's mcp add
+  leaving context7's login open is owed to S12 with the walk's log as evidence; the walk keeps context7 out of Codex
+  and keeps its browser guard."
