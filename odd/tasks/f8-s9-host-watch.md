@@ -213,3 +213,25 @@ session records `tools-background.txt` from its own list either way.
   defaults from the cache give an empty one. Every finding is taken into the Design above, except Codex's challenge
   to the Code-tab scope: his own words at line 33574, "solo por Claude Desktop en su version Claude Code", settle it,
   now quoted in S2, and Cowork rows stay visible.
+- L5 (2026-10-30): PR 716 (T1, docs) merged as `0c190b7c`. On branch `f8-s9-probe` (stacked on it, same worktree):
+  `9a173984` (lib, gate) and `dad0db39` (command, README, SPEC). Running the command on the lead's real desktop list
+  (`~/.js-harness/research/host-watch/tools-desktop-lead.txt`, 52 loaded + 149 deferred) showed the app names it
+  `mcp__ccd_session__start_session` and ships servers `terminal`, `visualize`, `scheduled-tasks`, `mcp-registry`: fixed
+  in `dad0db39`. Reviews of `16834f52..dad0db39`: Claude lenses reliability, readability, risk: 0 findings (~184k
+  input); Codex 3 parts, 335k input: three P2 findings, all real — `check` must match each span's end to the version
+  the review names (title, `Code tab CLI:`); a declared source with a malformed range must be a gap, not skipped; a
+  target with no heading loses its boundary in `cutSpan`, so `check` rejects its own draft's excerpt (keep the next
+  newer heading line). gentle-ai review started by its `granted` choice, lineage `review-4991b18b1d344d43`, waiting
+  for a `review-reliability` reviewer result (`gentle-ai review status ... --next-transition` gives the capture).
+  Also found: the published CLI page escapes prefixes (`\[Cloud sessions]`), so entry text must be unescaped; its
+  2.1.309 block has 79 bullets, as the cache copy.
+- L6 (2026-10-30, T5 reading so far): Desktop 4.4212.0's 33 entries hold nothing to adopt (SSH, Cowork, 3P admin
+  settings, chat fixes); CLI 2.1.309's candidates checked: transcripts `jq` could not parse — the harness readers
+  already skip a bad line (`bin/lib/sessions.mjs:76-82`, `bin/audit.mjs:35-39`, `bin/lib/audit.mjs:118-124`,
+  `bin/subagents.mjs:42-46`), so ignore; the bypass `rm` prompt now denied with a hint bears on map row 1 (fewer cards).
+
+## Next step
+1. Fix Codex's three findings and the `\[` unescape, tests first; commit; Codex and lenses on the fix
+   (`--base dad0db39`); capture the gentle-ai reviewer result for lineage `review-4991b18b1d344d43`.
+2. Push `f8-s9-probe`, open PR 2 (base main), `ready` notice.
+3. T4 (trigger: heartbeat `HOST:` line, row fix, notice, `host-watch brief`), then T5 (real run), T6.
