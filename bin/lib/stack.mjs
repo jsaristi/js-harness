@@ -2,7 +2,8 @@
 // configured (per host, per project), and outdated (`upToDate`, which a tool's `upToDateFix` sets from the latest version).
 // The Codex row (`codex`, the Codex CLI itself) has `claude` `n/a` (Claude Code has no Codex side any more) and `codex`
 // "the Codex CLI is logged in". `checks` holds what doctor reports that is not a tool: the memory-rules,
-// session-classes, claude-account, remote-server, codex-trust, hook-commands and pnpm-lock checks, each with its state cell and fix.
+// session-classes, claude-account, remote-server, codex-trust, codex-daemon, hook-commands and pnpm-lock checks, each
+// with its state cell and fix.
 // Every probe takes the same `deps` bag (`home`, `project`, `spawn`, `platform`) so tests can
 // fixture a temp home and a fake spawn instead of touching the real one or the network.
 import fs from 'node:fs';
@@ -14,6 +15,7 @@ import { realCodexHome } from './codex-review-home.mjs';
 import { resolveStackPm, shownWord } from './package-manager.mjs';
 import { readManifest } from './manifest.mjs';
 import { entryPlaces, snakeEvent, trustedPlaces } from './codex-trust.mjs';
+import { CODEX_DAEMON_FIX, codexDaemonState } from './codex-daemon.mjs';
 import { takeSnapshot } from './process-tree.mjs';
 import { isLoginLauncher, launcherStart, locate, lookUpProcesses, readState, remoteFiles, remoteId, remoteStartCommand } from './remote.mjs';
 import { INSTALL_NEWEST, compareSemver } from './version.mjs';
@@ -618,7 +620,9 @@ function codexTrustState(deps) {
  * permission classes and the user setting that lets a message cross between them is not `accept`
  * (`session-classes.mjs`); its fix is `install --accept-session-messages`. The pnpm lock check's gap is `stale` in the
  * `claude` cell: the global bin lock a failed `pnpm add -g` left, which makes the next one wait five minutes and fail
- * (`pnpm-lock.mjs`); it reads `PNPM_HOME` from `deps.env`, the env doctor was given, and its fix is the `rmdir`. */
+ * (`pnpm-lock.mjs`); it reads `PNPM_HOME` from `deps.env`, the env doctor was given, and its fix is the `rmdir`. The
+ * Codex daemon check's gap is `missing` in the `codex` cell: Codex's managed daemon has no executable to start and will
+ * not install one (`codex-daemon.mjs`); it reads the Codex home only, and its fix names the repair, never run here. */
 export const checks = [
   {
     id: 'memory-rules',
@@ -654,6 +658,13 @@ export const checks = [
     configured: codexTrustState,
     project: () => 'n/a',
     fix: (_deps, configured) => (configured?.codex === 'missing' ? { codex: [CODEX_TRUST_FIX, ...configured.lines] } : {}),
+  },
+  {
+    id: 'codex-daemon',
+    installed: () => ({ state: 'n/a', version: null }),
+    configured: (deps) => codexDaemonState({ codexHome: codexHomeOf(deps) }),
+    project: () => 'n/a',
+    fix: (_deps, configured) => (configured?.codex === 'missing' ? { codex: [CODEX_DAEMON_FIX, ...configured.lines] } : {}),
   },
   {
     id: 'hook-commands',

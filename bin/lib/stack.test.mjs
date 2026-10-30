@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { tools, checks, resolveProjectRoot, probeTool, probeStack, hookCommandPlan, ENGRAM_INSTALL } from './stack.mjs';
 import { recordOptionalFile } from './manifest.mjs';
+import { CODEX_DAEMON_FIX } from './codex-daemon.mjs';
 import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './remote.mjs';
 
 function makeTmpHome(prefix = 'js-harness-stack-home-') {
@@ -777,7 +778,7 @@ test('probeStack leaves the codex row out only when codexReview resolves off, an
     const ids = (functions) => probeStack({ home, project, spawn: fakeSpawnMissing(), functions }).map((row) => row.id);
     const off = ids({ codexReview: { value: 'off' } });
     assert.equal(off.includes('codex'), false);
-    assert.deepEqual(off, ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'pnpm-lock']);
+    assert.deepEqual(off, ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'codex-daemon', 'pnpm-lock']);
     assert.equal(ids({ codexReview: { value: 'on' } }).includes('codex'), true);
     assert.equal(ids(undefined).includes('codex'), true, 'with no switches resolved the row is shown');
   } finally {
@@ -969,7 +970,7 @@ test('probeStack returns one row per tool, in order, then one per check, never t
     const rows = probeStack({ home, project, spawn: fakeSpawnMissing() });
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'pnpm-lock'],
+      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'codex-daemon', 'pnpm-lock'],
     );
     for (const row of rows) assert.equal(row.upToDate, 'unknown');
   } finally {
@@ -1013,8 +1014,35 @@ function accountState(seed, platform = 'win32') {
 }
 
 test('checks carries the Claude account check and then the remote server one, apart from the tools', () => {
-  assert.deepEqual(checks.map((check) => check.id), ['memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'hook-commands', 'pnpm-lock']);
+  assert.deepEqual(checks.map((check) => check.id), ['memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'codex-daemon', 'hook-commands', 'pnpm-lock']);
   assert.equal(tools.some((tool) => ['claude-account', 'remote-server'].includes(tool.id)), false);
+});
+
+// odd/tasks/codex-daemon-row.md, S1: the daemon check reads the Codex home of `home`, and its fix is the reason, then
+// what the state says is wrong and the repair, each on its own line.
+test('the codex-daemon check reads <home>/.codex: missing on a current with no executable, with the repair as its fix', () => {
+  const home = makeTmpHome('js-harness-stack-daemon-');
+  try {
+    const pkg = path.join(home, '.codex', 'packages', 'app-server-daemon');
+    const release = path.join(pkg, 'releases', '0.162.0-x86_64-pc-windows-msvc');
+    fs.mkdirSync(path.join(release, 'bin'), { recursive: true });
+    writeJson(path.join(release, 'codex-package.json'), { version: '0.162.0', entrypoint: 'bin/codex.exe' });
+    fs.symlinkSync(release, path.join(pkg, 'current'), 'junction');
+    const check = checks.find((candidate) => candidate.id === 'codex-daemon');
+    const row = probeTool(check, { home, project: home, spawn: fakeSpawnMissing() });
+    assert.equal(row.codex, 'missing');
+    assert.equal(row.claude, 'n/a');
+    assert.equal(row.installed, 'n/a');
+    assert.equal(row.fix.codex[0], CODEX_DAEMON_FIX);
+    assert.match(row.fix.codex[1], /bin\/codex\.exe, which is not there$/);
+    assert.ok(row.fix.codex.length > 3, 'the repair follows');
+    fs.mkdirSync(path.join(release, 'bin', 'codex.exe'));
+    const healthy = probeTool(check, { home, project: home, spawn: fakeSpawnMissing() });
+    assert.equal(healthy.codex, 'ok');
+    assert.deepEqual(healthy.fix, {});
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('claude-account is ok when the CLI and the desktop app name the same account, on Windows and on macOS', () => {
