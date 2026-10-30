@@ -156,8 +156,11 @@ export async function replyMain(argv, {
           return read.get(file);
         };
         const io = { readFile: readOnce, readdir, run, env, homedir, now };
+        const wake = await wakeOf(payload, state, io, stderr);
+        const stale = await staleOf(payload, state, io, stderr);
+        // Last, so its one deadline, counted from the hook's start, holds the other checks' time too.
         const commands = commandsOf(payload, message, { readFile: readOnce, platform, parse, now, started }, stderr);
-        for (const warning of [commands, await wakeOf(payload, state, io, stderr), await staleOf(payload, state, io, stderr)]) {
+        for (const warning of [commands, wake, stale]) {
           if (warning !== null) reason = reason === null ? warning : `${reason}\n\n${warning}`;
         }
       }

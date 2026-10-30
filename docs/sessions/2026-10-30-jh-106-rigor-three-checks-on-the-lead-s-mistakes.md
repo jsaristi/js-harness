@@ -38,6 +38,8 @@ lo que veo como sera lo que haces y no puedo ver por detras?" Line 33700: "Sí, 
 - A batch of eight test files ran twice because a filter cut its summary: a `- Seen:` line of
   `diagnostic-whole-gate` (L13). Outputs of long runs go to a file before they are filtered.
 - Codex found six P2 in the first T4 slice and the lenses one; all fixed with a test each, RED first (L12).
+- gentle-ai approved T4's slice with three advisory findings, among them a false pass (`x ||`, a newline, `y`
+  proved `y`) the other reviews missed; all three fixed, test first (L15).
 
 ## Left
 - PR 3 waits for the merge queue (the lead).
@@ -50,4 +52,5 @@ lo que veo como sera lo que haces y no puedo ver por detras?" Line 33700: "Sí, 
 - Context: 44% at 19:14Z, after one compaction by the host at 18:38Z.
 - Codex: T2 145k input tokens (2 runs), T3 two runs (144k and the fix), T4 433k (2 runs).
 - Claude lenses: T2 3 runs, T3 4 runs, T4 6 lens runs, all recorded in `.git/js-harness/lens-reviews.jsonl`.
+- gentle-ai: T2 and T3 not reviewed (whole-branch candidate, `operation_timeout`); T4 one lens, approved (L15).
 - Gates: every commit's pre-commit gate except `3ed7fd47`; two of T4's refused, then passed.

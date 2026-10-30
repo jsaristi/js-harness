@@ -319,7 +319,7 @@ const RUNS = [
 const RM_REPLY = 'Bórrala tú con este comando:\n\n```bash\nrm -rf /d/js-harness-worktrees\n```\n\nSigo solo. Me despierta el aviso de JH 102.';
 // Line 30024: the reply that handed him Codex, trimmed to its blocks and its close.
 const CODEX_REPLY = 'Para comprobarlo, ejecuta:\n\n```bash\npnpm config get minimumReleaseAgeExclude\n```\n\nPara arreglarlo:\n\n'
-  + '```bash\ncd D:\js-harness; codex\n```\n\nTe pregunto: ¿me pegas lo que te mostró Codex al abrirlo en `D:\`?';
+  + '```bash\ncd D:\\js-harness; codex\n```\n\nTe pregunto: ¿me pegas lo que te mostró Codex al abrirlo en `D:\\`?';
 
 async function commandHook(message, { platform, parse = () => ({ errors: [] }), transcript = RUNS } = {}) {
   const files = { ...ON, [SESSION_LOG]: transcript };
@@ -341,7 +341,7 @@ test('today\'s mistakes: a reply handing him a block the session never ran with 
     const codex = await commandHook(CODEX_REPLY, { platform });
     assert.equal(codex.answer.decision, 'block', platform);
     assert.match(codex.answer.reason, /"pnpm config get minimumReleaseAgeExclude"/, platform);
-    assert.match(codex.answer.reason, /codex/, platform);
+    assert.match(codex.answer.reason, /"cd D:\\js-harness; codex"/, platform);
     assert.equal(codex.err, '', platform);
   }
 });
@@ -367,6 +367,17 @@ test('a reply with no command block never reads the transcript for it, and a par
   assert.match(failed.answer.reason, /its parser could not check it \(no PowerShell answered in time\)/);
   const rejected = await commandHook(own.replace('codex login', 'rm -rf /d/x'), { platform: 'win32', parse: () => ({ errors: [['rm has no parameter -rf']] }) });
   assert.match(rejected.answer.reason, /rm has no parameter -rf/);
+});
+
+test('the command check runs after the wake and board checks, so its deadline holds their time too', async () => {
+  const events = [];
+  const handed = 'Corre:\n\n```powershell\njs-harness doctor --offline\n```\n\nSigo solo. Me despierta el aviso de JH 102.';
+  await hook(stopPayload(handed, { transcript_path: SESSION_LOG }), {
+    files: { ...ON, [SESSION_LOG]: RUNS },
+    deps: { platform: 'win32', now: () => { events.push('now'); return 0; }, parse: () => { events.push('parse'); return { errors: [[]] }; } },
+  });
+  assert.ok(events.includes('parse'));
+  assert.equal(events.indexOf('now', events.indexOf('parse')), -1, `no check reads the clock after the parser: ${events.join(' ')}`);
 });
 
 test('a close that is refused and a block that is refused go back in one block', async () => {

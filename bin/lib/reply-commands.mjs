@@ -72,6 +72,11 @@ export function simpleCommands(text) {
   const endPart = (separator) => {
     endWord();
     const kept = dropRedirections(words);
+    // A newline right after `&&`, `||` or `|` continues the command: that operator stays the separator.
+    if (kept.length === 0 && separator === '\n' && (before === '&&' || before === '||' || before === '|')) {
+      words = [];
+      return;
+    }
     if (kept.length > 0) parts.push({ words: kept, before, after: separator });
     else if (parts.length > 0 && separator !== '') parts.at(-1).after = separator;
     // A `;` or a newline that ends the text ends the last command: its exit is the run's.

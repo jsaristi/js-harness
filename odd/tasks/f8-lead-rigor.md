@@ -267,6 +267,14 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   range passed the pre-push hook three times; the push side does not hold the door's rule for a cut.
 - L14 (2026-10-30, T4 fix reviews): Codex on `acbd281..9c967aa` (45,942 input tokens): correct, all six fixed. Lenses
   reliability and risk on the same range: 0 findings. T6's routing went to the lead at 19:14Z.
+- L15 (2026-10-30, gentle-ai on T4): its Stop hook offered `9d4c9c6f..862a96d3`, T4's slice (not the branch, whose
+  base is `72b0a6aa`); status, start, the `granted` invocation, `capture-result --agent=claude-code` for its one lens
+  (review-reliability) and `acknowledge-approved`: lineage `review-896647eacc932ece` approved, acknowledged, with
+  three advisory findings, all three holding and fixed in the commit after `862a96d3`, test first (two RED): a
+  newline after `&&`, `||` or `|` replaced that operator, so `x ||` then `y` proved `y` (a false pass) and `a &&`
+  then `b` refused `a`; the command check ran before the wake and board checks, so its 4 s did not hold their time,
+  and now runs last; the excerpt of line 30024 had lost its backslashes in a JS string.
+  gentle-ai: `9d4c9c6f..862a96d3` approved (lineage `review-896647eacc932ece`).
 
 ## Next step
 State (2026-10-30): PRs 707 (T2) and 710 (T3) are merged; T4 is `ccd7e3f9`, `acbd2816` and `9c967aa4`, reviewed (L12,

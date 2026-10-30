@@ -63,6 +63,9 @@ test('a run proves a command only when nothing after it can mask its exit: a lat
   assert.deepEqual(proved('git status\n'), ['git status']);
   assert.deepEqual(proved('git status;\n'), ['git status']);
   assert.deepEqual(proved('x || y && a'), ['a']);
+  assert.deepEqual(proved('x ||\ny'), [], 'a newline after || continues it: y ran only if x failed');
+  assert.deepEqual(proved('a &&\nb'), ['a', 'b'], 'a newline after && continues it');
+  assert.deepEqual(proved('a |\nb'), ['b']);
 });
 
 test('a handed command matches a run word for word: `rm "a b"` does not prove `rm a b`', () => {
