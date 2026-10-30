@@ -50,7 +50,7 @@ Codex 0.166 writes an empty `[hooks.state]` table header before the per-place tr
   on the 0.166 shape, missing for an untrusted hook — S1; inline, test first
 - [x] T2 (kind: docs) the daemon: mechanism and steps in `## Daemon`, the doctor proposal — S2; one research
   sub-agent, read-only; the repair itself done by the lead (L7)
-- [ ] T3 (kind: verify) Codex and the lenses on the code commit; `npm run check`; PR, ready notice, summary — S3
+- [x] T3 (kind: verify) Codex and the lenses on the code commit; `npm run check`; PR, ready notice, summary — S3
 
 ## Daemon
 Repaired by the lead with his authorization while this session researched (L7); the steps below are the ones that
