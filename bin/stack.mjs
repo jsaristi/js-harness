@@ -268,7 +268,9 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
     if (stillMissing) error(`${tool} ${dimension}: the command exited 0 and the probe still finds it missing; it stays recorded, so uninstall machine judges it`);
     else if (state === 'ok') log(`${tool} ${dimension}: done`);
     else {
+      // Read again at the end of the run, when a slow first start may have passed (F8 S13: 18 s for a new codex.exe).
       unverified.push(record);
+      if (applies !== null) unread.push({ record, row, childEnv });
       error(`${tool} ${dimension}: the command exited 0 and the probe cannot tell whether it worked; it stays recorded, so uninstall machine judges it`);
     }
   }
