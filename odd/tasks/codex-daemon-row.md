@@ -52,7 +52,7 @@ told him to update the engram binary while 3.6.0 was engram's latest release, ad
 
 ## Tasks
 - [x] T1 (kind: build) the `codex-daemon` check row: state, fix, its place in the row lists — S1; inline, test first
-- [ ] T2 (kind: build) the engram plugin's ahead fix names the case that holds, both when not known — S2; inline, test
+- [x] T2 (kind: build) the engram plugin's ahead fix names the case that holds, both when not known — S2; inline, test
   first
 - [ ] T3 (kind: docs) the roadmap's F8 task with question 123 — S1
 - [ ] T4 (kind: verify) doctor read-only here; Codex and the lenses on the code commits; `npm run check`; PR, ready
@@ -98,3 +98,10 @@ told him to update the engram binary while 3.6.0 was engram's latest release, ad
   2026-10-21's state is `missing` (`codex-daemon.test.mjs`, "the state of 2026-10-21"). The same run shows S2's
   defect live: `engram` 3.6.0 with `upToDate` `ok`, and `engram-plugin` 0.1.19 `mismatch` telling him to update
   the engram binary.
+- L6 (red, then green, T2): with the tests first, `node --test bin/lib/stack.test.mjs bin/doctor.test.mjs` failed 4
+  of 211 (the three `upToDateFix` tests and the doctor test); after `upToDateFix` reads
+  `latestVersions.engram`, which `buildReport` now passes, 211 of 211.
+- L7 (evidence, T2): the branch's `doctor --json --offline` on this machine gives the `engram-plugin` fix
+  "plugin 0.1.19 is ahead of 0.1.17, the plugin engram v3.6.0 ships, so the two serve different protocols; engram v3.6.0
+  is engram's latest release, so the plugin is ahead of engram's last release and nothing is to be done until the next
+  one: then update the engram binary and restart Claude Code", the cell still `mismatch` (D5).

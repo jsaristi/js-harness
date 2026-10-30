@@ -265,8 +265,9 @@ export const tools = [
     installed: ({ home }) => pluginInstalledVersion(home, ENGRAM_PLUGIN),
     configured: ({ home }) => ({ claude: claudeEnabledPlugin(home, ENGRAM_PLUGIN), codex: 'n/a' }),
     project: () => 'n/a',
-    // The versions go in the fix, since the row shows only the installed one: `rows` holds the engram binary's.
-    upToDateFix: (installed, latest, rows = [], { home, platform = process.platform } = {}) => {
+    // The versions go in the fix, since the row shows only the installed one: `rows` holds the engram binary's, and
+    // `latestVersions` the latest of every row doctor resolved, engram's among them, so no request is made for it here.
+    upToDateFix: (installed, latest, rows = [], { home, platform = process.platform, latestVersions = {} } = {}) => {
       const binary = rows.find((row) => row.id === 'engram')?.version;
       // No latest with a binary version is a tag the marketplace clone lacks: since 2026-10-27 Claude Code clones it
       // shallow, without tags (odd/tasks/doctor-rows.md, `## Engram plugin`). Fetching that one tag lets doctor read it.
@@ -278,9 +279,16 @@ export const tools = [
         ];
       }
       if (!installed || !latest) return ENGRAM_PLUGIN_UPDATE_FIX;
-      // Ahead of the binary's tag is doctor's `mismatch` (row 11): the binary moves, not the plugin.
+      // Ahead of the binary's tag is doctor's `mismatch` (row 11): the binary moves, not the plugin, unless it is engram's
+      // latest release already; with that release unknown, both cases are said (odd/tasks/codex-daemon-row.md, S2).
       if (compareSemver(installed, latest) > 0) {
-        return [`plugin ${installed} is ahead of ${latest}, the plugin engram v${binary} ships, so the two serve different protocols; update the engram binary, then restart Claude Code:`, ENGRAM_INSTALL];
+        const ahead = `plugin ${installed} is ahead of ${latest}, the plugin engram v${binary} ships, so the two serve different protocols`;
+        const newest = latestVersions.engram;
+        if (!SEMVER_RE.test(binary ?? '') || !SEMVER_RE.test(newest ?? '')) {
+          return [`${ahead}; if engram has a release newer than v${binary}, update the engram binary, then restart Claude Code; if not, the plugin is ahead of engram's last release and nothing is to be done until the next one:`, ENGRAM_INSTALL];
+        }
+        if (compareSemver(newest, binary) > 0) return [`${ahead}; engram v${newest} is out: update the engram binary, then restart Claude Code:`, ENGRAM_INSTALL];
+        return [`${ahead}; engram v${binary} is engram's latest release, so the plugin is ahead of engram's last release and nothing is to be done until the next one: then update the engram binary and restart Claude Code`];
       }
       return [`plugin ${installed} is behind ${latest}, the plugin engram v${binary} ships; update it, then restart Claude Code:`, ...ENGRAM_PLUGIN_UPDATE_FIX];
     },

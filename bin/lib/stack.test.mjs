@@ -115,10 +115,37 @@ test('engram-plugin upToDate fix, when the binary\'s tag cannot be read from the
 
 test('engram-plugin upToDate fix for a plugin ahead of its binary\'s tag updates the binary, not the plugin (row 11)', () => {
   const { upToDateFix } = findTool('engram-plugin');
-  assert.deepEqual(upToDateFix('0.1.16', '0.1.14', [{ id: 'engram', installed: 'ok', version: '3.5.1' }]), [
-    'plugin 0.1.16 is ahead of 0.1.14, the plugin engram v3.5.1 ships, so the two serve different protocols; update the engram binary, then restart Claude Code:',
+  const rows = [{ id: 'engram', installed: 'ok', version: '3.5.1' }];
+  const ahead = 'plugin 0.1.16 is ahead of 0.1.14, the plugin engram v3.5.1 ships, so the two serve different protocols';
+  // A newer engram release known (the engram row's latest version, which doctor already resolves): the binary moves.
+  assert.deepEqual(upToDateFix('0.1.16', '0.1.14', rows, { latestVersions: { engram: '3.6.0' } }), [
+    `${ahead}; engram v3.6.0 is out: update the engram binary, then restart Claude Code:`,
     ENGRAM_INSTALL,
   ]);
+});
+
+// odd/tasks/codex-daemon-row.md, S2: on 2026-10-30 the binary, 3.6.0, was engram's latest release, so "update the engram
+// binary" could not be followed.
+test('engram-plugin upToDate fix for a plugin ahead of a binary that is engram\'s latest release says nothing is to be done until the next one', () => {
+  const { upToDateFix } = findTool('engram-plugin');
+  const rows = [{ id: 'engram', installed: 'ok', version: '3.6.0' }];
+  const said = [
+    'plugin 0.1.19 is ahead of 0.1.17, the plugin engram v3.6.0 ships, so the two serve different protocols; engram v3.6.0 is engram\'s latest release, so the plugin is ahead of engram\'s last release and nothing is to be done until the next one: then update the engram binary and restart Claude Code',
+  ];
+  assert.deepEqual(upToDateFix('0.1.19', '0.1.17', rows, { latestVersions: { engram: '3.6.0' } }), said);
+  assert.deepEqual(upToDateFix('0.1.19', '0.1.17', rows, { latestVersions: { engram: '3.5.1' } }), said, 'a binary past the latest read');
+});
+
+test('engram-plugin upToDate fix for a plugin ahead of its binary\'s tag, with engram\'s latest release unknown, says both cases', () => {
+  const { upToDateFix } = findTool('engram-plugin');
+  const rows = [{ id: 'engram', installed: 'ok', version: '3.6.0' }];
+  const both = [
+    'plugin 0.1.19 is ahead of 0.1.17, the plugin engram v3.6.0 ships, so the two serve different protocols; if engram has a release newer than v3.6.0, update the engram binary, then restart Claude Code; if not, the plugin is ahead of engram\'s last release and nothing is to be done until the next one:',
+    ENGRAM_INSTALL,
+  ];
+  assert.deepEqual(upToDateFix('0.1.19', '0.1.17', rows), both, 'no latest versions given');
+  assert.deepEqual(upToDateFix('0.1.19', '0.1.17', rows, { latestVersions: { engram: null } }), both, 'engram\'s latest not looked up');
+  assert.deepEqual(upToDateFix('0.1.19', '0.1.17', rows, { latestVersions: { engram: 'not a version' } }), both, 'an unreadable latest');
 });
 
 test('no tool ever recommends `codegraph upgrade` (user rule)', () => {

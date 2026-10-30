@@ -222,9 +222,20 @@ test('doctorMain --offline shows the engram plugin as a mismatch when it is ahea
 
     assert.equal(code, 0);
     assert.match(output, /\nengram-plugin\s+0\.1\.12\s+ok\s+n\/a\s+n\/a\s+mismatch\n/);
+    // No cache: engram's latest release is unknown, so the fix says both cases (odd/tasks/codex-daemon-row.md, S2).
     assert.match(
       output,
-      / {2}engram-plugin \(upToDate\):\n {4}plugin 0\.1\.12 is ahead of 0\.1\.10, the plugin engram v3\.5\.1 ships, so the two serve different protocols; update the engram binary, then restart Claude Code:\n {4}install engram from /,
+      / {2}engram-plugin \(upToDate\):\n {4}plugin 0\.1\.12 is ahead of 0\.1\.10, the plugin engram v3\.5\.1 ships, so the two serve different protocols; if engram has a release newer than v3\.5\.1, update the engram binary, then restart Claude Code; if not, the plugin is ahead of engram's last release and nothing is to be done until the next one:\n {4}install engram from /,
+    );
+
+    // The binary cached as engram's latest release: the gap stays, and its fix says there is nothing to do yet (D5).
+    writeCache(home, { latest: { checkedAt: new Date().toISOString(), versions: { engram: '3.5.1', ...NULL_VERSIONS } }, notified: null });
+    const cached = await runDoctor(['--home', home, '--cwd', project, '--offline'], {}, { spawn, git, fetch: noopFetch });
+    assert.match(cached.output, /\nengram\s+3\.5\.1\s+ok\s+ok\s+n\/a\s+ok\n/);
+    assert.match(cached.output, /\nengram-plugin\s+0\.1\.12\s+ok\s+n\/a\s+n\/a\s+mismatch\n/);
+    assert.match(
+      cached.output,
+      / {2}engram-plugin \(upToDate\):\n {4}plugin 0\.1\.12 is ahead of 0\.1\.10, the plugin engram v3\.5\.1 ships, so the two serve different protocols; engram v3\.5\.1 is engram's latest release, so the plugin is ahead of engram's last release and nothing is to be done until the next one: then update the engram binary and restart Claude Code\n/,
     );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
