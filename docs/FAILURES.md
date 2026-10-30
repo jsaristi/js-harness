@@ -52,8 +52,11 @@ A session stopped and asked him for a yes on a step that was not one of the thin
 - Seen: 2026-10-10 — relief file, line 119 — the orchestrator called the deferral of a test "his to
   accept" and JH 3 asked him; his words and the withdrawal at line 124; also
   odd/tasks/session-board.md:1598-1608
-- Control: protocol — bin/lib/protocols-skill.mjs — "Ask only what is the user's; the project's" — since
-  2026-10-17
+- Control: protocol — bin/lib/protocols-skill.mjs — "Decide everything else, say what it costs, and go on." — since
+  2026-10-30
+- Was: protocol — bin/lib/protocols-skill.mjs — "Ask only what is the user's; the project's" — replaced on
+  2026-10-30: section 1's first line now holds the list of `rule:owner-decisions` instead of sending the reader to the
+  project's files (odd/tasks/instruction-homes.md, T4), and keeps its last sentence
 - Was: owed — odd/tasks/rule-hierarchy.md — "The reply check: `bin/lib/reply.mjs`,
   `bin/reply.mjs`"; that task landed as pull request 282, and the reply check turns back a reply with no
   state or a decision while work runs, not a yes asked on a step that is not his, so the control is the
@@ -275,6 +278,15 @@ of it and recorded nothing.
   lines", "Access denied (os error 5)"
 - Control: check — bin/lib/codex-review-home.test.mjs — "gives the login a second name there: the
   same file, not a copy" — since 2026-10-09
+
+### command-handed-untested
+A command he was handed to run on his machine had not been run first, and it broke what it wrote.
+- Class: wrong-information
+- Seen: 2026-10-30 — relief file, line 1963 — the lead gave him `pnpm config set minimumReleaseAgeExclude "a,b"
+  --global` untested; pnpm 12 wrote a string, his `config.yaml` no longer parsed and every pnpm and npm command
+  failed; the lead rewrote it as a YAML list and read it back with `pnpm config get`
+- Control: owed — odd/tasks/instruction-homes.md — "a command handed to him that writes his configuration is run
+  first against a scratch configuration"
 
 ### command-run-for-help
 A session ran a command it did not know, to read its help, and the command acted.
@@ -1695,3 +1707,12 @@ context until it has to be relieved.
   stale once T4 was checked off; replaced on 2026-10-15 by the tests T4 left, merged in pull
   request 65 (2026-10-11): bin/sessions.test.mjs:2095 holds the watch quiet for a notice to
   another role and for its own, and :2080 wakes it for a notice to the orchestrator
+
+### written-question-buried
+A question he had to answer in writing was put at the end of long reports, so it did not read as a question and
+waited.
+- Class: asked-of-him
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 30745 — question 113 needed his typed words, so it could
+  not go through the question tool; the lead left it at the end of long reports and repeated it four times without
+  it reading as a question, then sent it alone in a block to copy, and he answered at line 30759
+- Control: owed — odd/tasks/instruction-homes.md — "a question he answers in writing goes alone in its message"

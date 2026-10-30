@@ -442,6 +442,23 @@
       "by": "command"
     }
   },
+  "owner-decisions": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Lo que decido yo es una sola lista, en una regla: gasto fuera del plan, todo lo irreversible, las decisiones de producto, publicar, credenciales, cambios de protocolo, ajustes de seguridad o del sistema, lo que se instale o cambie en una máquina, un cambio del plan o de su orden, y un informe publicado fuera del proyecto; los demás textos nombran esa regla.",
+        "date": "2026-10-30",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 30759
+      }
+    ],
+    "reading": "What he decides is one list, in one rule, the union of the lists the texts held apart: spend outside the plan, anything irreversible, a product choice, anything published, any credential, a change of a protocol, a security or system setting, anything installed or changed on a machine, a change of the plan or of its order, and a report published outside the project. Its home is js-harness-protocols section 1, where a session asks; CLAUDE.md, the init block, protocol 7 and the orchestrator's permit relay name rule:owner-decisions instead of repeating the list. A project's CLAUDE.md may add to it; everything else is decided and its cost said.",
+    "accepted": "He chose the union in question 62 (lead transcript 0f71b2c6-cbce-43ca-a031-276a4b2c381f, line 28485, tapped \"Una lista, la unión (Recomendada)\"), and typed the list itself at line 30759 (2026-10-30T14:00Z) in answer to question 113, which asked for his own words for this change (odd/tasks/instruction-homes.md, S18, S19, L13); the reading is his to correct when he reads the pull request.",
+    "checked": {
+      "date": "2026-10-30",
+      "by": "command"
+    }
+  },
   "person-present": {
     "kind": "design",
     "path": "odd/tasks/session-channel.md"

@@ -3066,7 +3066,7 @@ test('the orchestrator skill says how a question reaches the user: recorded, ask
   assert.ok(text.includes('`js-harness permit lease` at your start; `js-harness wait --notice-to orchestrator` renews it on each tick while you hold it'));
   assert.ok(text.includes('`js-harness permit deny <id> --reason "<why>"` when it is obsolete or unsafe'));
   // odd/tasks/held-sessions.md, S9: a card that is his is brought to him with a recommendation; he chooses.
-  assert.ok(text.includes('A card that touches what is the user\'s (spend, publishing, anything irreversible outside the project, credentials, their security settings), or is important enough to be their call, you never decide alone (while they are away, `rule:away-autonomy` says what waits and the spend that is yours): bring it to them in the orchestrator\'s chat that turn, through the question tool'));
+  assert.ok(text.includes('A card that touches what is the user\'s (`rule:owner-decisions`), or is important enough to be their call, you never decide alone (while they are away, `rule:away-autonomy` says what waits and the spend that is yours): bring it to them in the orchestrator\'s chat that turn, through the question tool'));
   assert.ok(text.includes('then apply their choice with `js-harness permit allow <id>` or `js-harness permit deny <id> --reason'));
   assert.ok(text.includes('`js-harness permit lease --off`'));
   // The double review (odd/tasks/rule-hierarchy.md, T18): a proposal in a question has passed its readers.
