@@ -9,14 +9,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { rehearsalLayout, rehearsalEnv, snapshotTree } from './rehearsal.mjs';
-import { plantedRuleFiles, directiveProblem, recordedPaths, restoreProblems, importRowState } from './rehearsal-lib.mjs';
+import { rehearsalLayout, rehearsalEnv, snapshotTree, commandWords, STEPS, HIS_SETTINGS, HIS_CLAUDE_MD } from './rehearsal.mjs';
+import { plantedRuleFiles, directiveProblem, recordedPaths, restoreProblems, importRowState, REHEARSAL } from './rehearsal-lib.mjs';
 
 const JS_HARNESS = fileURLToPath(new URL('../bin/js-harness.mjs', import.meta.url));
-
-// His own files in the scratch home before the walk: install grafts onto both, and uninstall must give back their bytes.
-const HIS_SETTINGS = '{\n  "theme": "dark"\n}\n';
-const HIS_CLAUDE_MD = '# Mine\n\nAnswer in Spanish.\n';
 
 test('in a scratch home, a planted directive without a control makes rules check exit 1, and the uninstalls leave every recorded path as it was', (t) => {
   const layout = rehearsalLayout(fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-rehearsal-')));
@@ -88,4 +84,21 @@ test('snapshotTree hashes every file and marks every folder under a folder by it
   // A recorded folder left behind is no longer invisible to restoreProblems (Codex P2 on 541464c).
   assert.equal(snapshot[path.join(root, 'empty')], 'folder');
   assert.deepEqual(snapshotTree(path.join(root, 'none')), {});
+});
+
+test('the walk has one step for each id of the rehearsal, and no other', () => {
+  assert.deepEqual(Object.keys(STEPS).sort(), REHEARSAL.map(({ id }) => id).sort());
+});
+
+test('commandWords starts an .exe of the PATH folders by its path, a .cmd through cmd.exe, and anything else as it is', () => {
+  const dirs = [path.join('C:', 'w', 'bin'), path.join('C:', 'w', 'prefix')];
+  const there = new Set([path.join(dirs[0], 'git.exe'), path.join(dirs[1], 'codex.cmd'), path.join(dirs[1], 'git.cmd')]);
+  const exists = (file) => there.has(file);
+  const windows = { platform: 'win32', exists, comspec: 'C:\\Windows\\System32\\cmd.exe' };
+  assert.deepEqual(commandWords(['git', 'status'], dirs, windows), [path.join(dirs[0], 'git.exe'), 'status']);
+  // Node starts no .cmd by itself since its batch-file fix: the Codex CLI pnpm installs is one.
+  assert.deepEqual(commandWords(['codex', 'mcp', 'remove', 'engram'], dirs, windows), ['C:\\Windows\\System32\\cmd.exe', '/d', '/c', path.join(dirs[1], 'codex.cmd'), 'mcp', 'remove', 'engram']);
+  assert.deepEqual(commandWords(['nowhere', 'x'], dirs, windows), ['nowhere', 'x']);
+  assert.deepEqual(commandWords([process.execPath, 'x'], dirs, windows), [process.execPath, 'x']);
+  assert.deepEqual(commandWords(['codex', 'x'], dirs, { platform: 'linux', exists }), ['codex', 'x']);
 });
