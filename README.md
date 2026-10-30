@@ -978,7 +978,9 @@ Reads the register of what went wrong, `docs/FAILURES.md`: the totals, the count
 one line per failure, the most seen first. `failures <id>` prints one entry; `failures check`
 exits 1 when the register is malformed, and with `--settled` also while a failure is not settled: one
 repeated with no control, a control owed that is stale, a control lost or seen again, or a measurement
-lost or seen again. It only reads: the register is written by hand.
+lost or seen again. `failures weeks` prints one line a week, Monday first, from the first sighting
+to this week: the sightings, those whose evidence says "the lead's own", and each class, so whether
+the mistakes go down is seen. It only reads: the register is written by hand.
 
 ```console
 $ js-harness failures
