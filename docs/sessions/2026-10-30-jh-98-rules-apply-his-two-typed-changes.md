@@ -25,7 +25,10 @@ and one pull request each, plus the two `- Seen:` lines owed to `docs/FAILURES.m
     `command-handed-untested` (relief file line 1963) and `written-question-buried` (lead transcript line 30745);
     `asked-yes-not-his` names the sentence of protocol 1 that still holds.
   - `09ea0927` docs: the reviews of the slice (L16).
-- `rule/retire-work-sessions-windows`, from origin/main, holding only this summary; T7's change is not made yet.
+- PR for T7 (`rule/retire-work-sessions-windows`), after PR 701 landed (main b2869d7) and was merged in (`400653c3`):
+  - `35399967` feat(rules): `work-sessions-private-windows` retired with no successor, made with `rules change`;
+    line 30812 quoted, line 28610 as where he chose it; the coverage register drops its owed control.
+  - the feature document (T7 done, L17) and this summary.
 
 ## Decisions
 - This session: the id is `owner-decisions`, not the draft's `his-decisions`. The id is written into the skills every
@@ -36,44 +39,28 @@ and one pull request each, plus the two `- Seen:` lines owed to `docs/FAILURES.m
   existing entry is about a command run on his machine or a question that did not read as one.
 
 ## Failures and lessons
-- T7 cannot run while PR 701 is open. `node bin/js-harness.mjs rules change work-sessions-private-windows --dry-run` on
+- T7 could not run while PR 701 was open. `node bin/js-harness.mjs rules change work-sessions-private-windows --dry-run` on
   `rule/retire-work-sessions-windows` exits 1: "rule/his-decisions holds a rule change not on origin/main
   (owner-decisions): one change is open at a time". The brief asked for both PRs at once; the command allows one open
   rule change across every `rule/` branch. Lesson for the brief: two rule changes are two sessions in sequence, or one
   session that waits for the first land.
 - Claude Code stopped this session's background wait for PR 701 to land (low memory, about 10:00 local); not restarted,
-  as its notice said.
+  as its notice said. One read of the PR's state found it merged a few minutes later, and the lead's message said the
+  same.
 - The first draft of the failure controls wrapped their phrases outside an unchecked task, so `failures` read them
   "owed, stale"; an owed phrase is looked up only inside an open task (`bin/lib/failures.mjs:329`). Fixed before the
   commit with T8 and T9.
 
 ## Left
-- T7, once PR 701 has landed: on `rule/retire-work-sessions-windows`, merge origin/main, then
-  `node bin/js-harness.mjs rules change work-sessions-private-windows` with this change on standard input:
-
-  ```json
-  {
-    "retire": { "successors": [] },
-    "source": {
-      "kind": "words",
-      "quotes": [{ "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f", "line": 30812 }],
-      "reading": "The cap of three work sessions open at one time when only Windows is used is retired with no successor: the number of sessions is decided case by case. The caps for a public repository and for a private one used with WSL stay as they are.",
-      "accepted": "He chose to retire it in question 71 (lead transcript 0f71b2c6-cbce-43ca-a031-276a4b2c381f, line 28610, tapped \"Retirarla\"), and typed the retirement itself at line 30812 (2026-10-30T14:04Z) in answer to question 114, which asked for his own words for this change (odd/tasks/instruction-homes.md, S20, S21, L13); the reading is his to correct when he reads the pull request."
-    }
-  }
-  ```
-
-  Then `rules check`, the
-  coverage register (`work-sessions-private-windows` has an owed control there), the gate, Codex and the lenses, T7
-  checked off in `odd/tasks/instruction-homes.md`, a PR and a ready notice.
 - T8 and T9: where the two owed controls are written is the lead's to route.
 - `two-blocks-out-of-order` reads "control lost" on origin/main as well: its phrase left AGENTS.md before this session.
 
 ## Cost
-- Time: start about 09:05 local, PR 701 ready at 09:45 local.
-- Context: about 45% at the end.
-- Reviews: one Codex review of 035e3250..e5454da4 (76,235 input tokens, 29 s), correct (0.93), no findings; Claude lenses
-  readability and reliability, 0 findings; gentle-ai assess, medium, not due. The Stop hook's branch-wide gentle-ai
-  candidate (from a2b801fb, the merge of main included) was read with `review status` and not started.
-- Gates: one `npm run check` by hand (exit 1: four tests, fixed), three pre-commit gates, PASS each, and the pre-push
+- Time: start about 09:05 local, PR 701 ready at 09:45 local, T7's PR ready at about 10:20 local.
+- Context: about 50% at the end.
+- Reviews: two Codex reviews, 035e3250..e5454da4 (76,235 input tokens, 29 s), correct (0.93), and 400653c3..35399967
+  (75,913 input tokens, 33 s), correct (0.97), no findings in either; Claude lenses readability and reliability on the
+  first, reliability on the second, 0 findings; two gentle-ai assessments, medium, not due. The Stop hook's branch-wide
+  gentle-ai candidate (from a2b801fb, the merge of main included) was read with `review status` and not started.
+- Gates: one `npm run check` by hand (exit 1: four tests, fixed), seven pre-commit gates, PASS each, and two pre-push
   checks.

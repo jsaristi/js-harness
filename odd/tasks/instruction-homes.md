@@ -81,7 +81,7 @@ absence is in L1.
 - [x] T2 (kind: build) N12: the reply check refuses only a decision while work runs; RED (the question close refused while 1 task ran) then GREEN in `bin/lib/reply.test.mjs` (S8, S16)
 - [x] T3 (kind: build) N2: the per-project pushing switch `pushUnasked`, declared beside the other functions; RED in `functions`, `project-functions`, `functions` CLI and protocol 1 / orchestrator texts, GREEN after; js-harness declares it on (S2, S17)
 - [x] T4 (kind: build) N7: the union list in one rule, `owner-decisions`, through `js-harness rules change`; `docs/RULES.md` re-rendered (S6, S18, S19, S21; L14; 665baea7, branch `rule/his-decisions`)
-- [ ] T7 (kind: build) N35: retire `work-sessions-private-windows` with no successor through `js-harness rules change` (S20, S21). His typed words exist (line 30812); it runs on branch `rule/retire-work-sessions-windows` once `rule/his-decisions` has landed, since one rule change is open at a time (L14)
+- [x] T7 (kind: build) N35: retire `work-sessions-private-windows` with no successor through `js-harness rules change` (S20, S21; L17; 35399967, branch `rule/retire-work-sessions-windows`, after PR 701 landed)
 - [~] T5 (kind: docs) Text rows (S1, S3-S5, S7, S9-S14). Done: N33 (efef30d0); N6, N46, N38, N39-N42 in the init block (protocols 6 and 1 are pointed at, not restated); N1, N8, N38 in AGENTS.md; protocol 3 names every slice through Codex; N3 already held by protocol 3 (`operation_timeout`); N4, N22 (L6); N43 (L7, the orchestrator copy kept); N44 (L8). The owner list: T4 (protocol 1 holds it; CLAUDE.md, protocol 7, the init block and the permit relay name it). Open: the orchestrator copy of the pause sentence in `bin/lib/manifest.mjs` (L7) needs the owner's typed words for `announce-finished` or the lead's decision
 - [x] T6 (kind: verify) N48: a test asserts the shipped init block and AGENTS.md name the same rule ids (S15); RED then GREEN in `bin/lib/template-block.test.mjs`; the block names `rule:context-pause` and `rule:questions-one-place`, and so does AGENTS.md (L9)
 - [ ] T8 (kind: docs) The control of `command-handed-untested` (L15): a command handed to him that writes his configuration is run first against a scratch configuration and its read-back shown. Owed; the lead routes its text
@@ -165,3 +165,8 @@ meter, read at that moment". His typed words of 2026-10-11 ("recuerda siempre de
   by `gentle-ai review assess --base-ref 035e3250 --committed-only`; the Stop hook's candidate was the branch from
   a2b801fb, the merge of main in it, so its status was read and nothing started. Codex: correct (0.93), no findings;
   the Claude lenses readability and reliability: 0 findings; both recorded.
+- L17 (2026-10-30, JH 98): PR 701 landed (main b2869d7); T7 ran on `rule/retire-work-sessions-windows` after merging
+  that main in (400653c3), with line 30812 as the quotation and line 28610 as where he chose it; the coverage register
+  drops the retired rule's owed control. gentle-ai: 400653c3..35399967 (35399967) assessed medium, not due
+  (under_budget), by `gentle-ai review assess --base-ref 400653c3 --committed-only`. Codex: correct (0.97), no
+  findings; the Claude lens reliability: 0 findings; both recorded.
