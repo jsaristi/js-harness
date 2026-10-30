@@ -253,7 +253,7 @@ export function parseRoadmap(markdown) {
 // alignment colons.
 const CELL_BOUNDARY = /(?<!\\)\|/;
 const TASK_ID_PATTERN = /^T\d+[a-z]*$/i;
-const DELIMITER_CELL_PATTERN = /^:?-+:?$/;
+export const DELIMITER_CELL_PATTERN = /^:?-+:?$/;
 
 /** The trimmed cells of a table row, or `null` for a line that is not one: a row here starts with a pipe. */
 export function cellsOf(line) {

@@ -21,7 +21,7 @@ import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestV
 import { GAP_STATES, gapList, gapDigest } from './lib/digest.mjs';
 import { harnessRulesRow } from './lib/rules-installed.mjs';
 import { unknownArgument } from './lib/args.mjs';
-import { hostNotice, hostUpdateRow, readHostVersions, readProjectRulesText } from './lib/host-update.mjs';
+import { hostNotice, hostReviewRefusal, hostUpdateRow, readHostVersions, readProjectRulesText } from './lib/host-update.mjs';
 import { owedSkipLines } from './lib/lens-review-rows.mjs';
 import { worktreesInMain } from './lib/worktrees.mjs';
 import { backupHealth } from './backup.mjs';
@@ -434,7 +434,7 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
  * neither flag is given. */
 function recordReviews(argv, { home, cwd, json }, deps) {
   const asked = [
-    ['host', '--host-reviewed', () => recordHostReview(home, deps)],
+    ['host', '--host-reviewed', () => recordHostReview({ home, cwd }, deps)],
     ['stack', '--stack-reviewed', () => recordStackReview({ home, cwd }, deps)],
   ].filter(([, flag]) => argv.includes(flag));
   if (asked.length === 0) return null;
@@ -449,11 +449,18 @@ function recordReviews(argv, { home, cwd, json }, deps) {
 
 /** `doctor --host-reviewed`: records the Claude Desktop and Code tab CLI versions read now as reviewed, the last step
  * of the review the host-update row lists, and returns `{ reviewed, line }`, the record written and the line that
- * says so. With no running version read it records nothing and returns `null`. */
-function recordHostReview(home, deps) {
+ * says so. With no running version read it records nothing and returns `null`. An update since the last review is
+ * recorded only once the project's review file holds its account (`hostReviewRefusal`, odd/tasks/f8-lead-rigor.md
+ * S2): otherwise it says what is missing and returns `null`. */
+function recordHostReview({ home, cwd }, deps) {
   const versions = deps.host ? deps.host(home) : { desktop: null };
   if (!versions.desktop) {
     console.error('js-harness doctor: could not read the running Claude Desktop version: nothing was recorded.');
+    return null;
+  }
+  const refusal = hostReviewRefusal({ project: resolveProjectRoot(cwd, deps.spawn ?? spawnSync), versions, reviewed: readCache(home).host?.reviewed ?? null });
+  if (refusal !== null) {
+    console.error(`js-harness doctor: ${refusal}. Nothing was recorded.`);
     return null;
   }
   const now = deps.now ?? (() => new Date());

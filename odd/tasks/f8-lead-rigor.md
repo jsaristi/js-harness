@@ -79,7 +79,7 @@ words, not to run the block and give the corrected one. Doctor's gate does preve
 ## Tasks
 - [x] T1 (kind: design) this document; two blind readers on the plan before code (L5)
 - [x] T2 (kind: build) S3 — the Seen lines, and `failures weeks`; test first; Codex and lenses; PR 1 (L7, L8)
-- [ ] T3 (kind: build) S2 — the host review file and the `--host-reviewed` gate; test first; Codex and lenses; PR 2
+- [x] T3 (kind: build) S2 — the host review file and the `--host-reviewed` gate; test first; Codex and lenses; PR 2 (L9)
 - [ ] T4 (kind: build) S1 — command blocks in the reply check; test first on real excerpts; the replay; Codex and
   lenses; PR 3
 - [ ] T5 (kind: verify) `npm run check`, ready notices, summary
@@ -220,3 +220,17 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   lenses readability and reliability on the first range, and reliability on the fix: 0 findings. gentle-ai: its
   Stop hook offered the whole branch (base `72b0a6aa`), which is no candidate here; its read-only status ended in
   `operation_timeout` and nothing was started, so T2's commits are not reviewed by gentle-ai.
+- L9 (2026-10-30, T3): RED: on main the bare `--host-reviewed` recorded the update (`bin/doctor.test.mjs`, "a refused
+  review records nothing"); GREEN in `919e0fe8`. Codex on `653c171..919e0fe` (144,163 tokens): two P2 (an escaped
+  pipe split a row; a table with no delimiter row), fixed in `fd46303` by reusing `cellsOf` of `bin/lib/progress.mjs`;
+  Codex on the fix: both fixed. Lenses risk, reliability and readability, then reliability on the fix: 0 findings.
+  PR 1 is 707 (branch `f8-lead-rigor-1`, ready notice sent 18:05Z).
+
+## Next step
+State at the context pause (2026-10-30, 85%): T2 and T3 done on this branch (head `fd46303` plus this commit); PR 707
+holds T2. Next: push this branch as `f8-lead-rigor-2` and open PR 2 (T3) on main, ready notice; then T4. T4's draft
+module is in `C:\Users\Oficina\.claude\jobs\01225f7c\tmp\reply-commands.mjs` (not committed; scratch): move it to
+`bin/lib/reply-commands.mjs`, export `fencedBlocks` (with each fence's `info`) from `bin/lib/reply.mjs`, write
+`bin/lib/reply-commands.test.mjs` first on the real excerpts named in S1's design, wire it in `bin/reply.mjs` with
+the deadline and a parser spawn (`pwsh.exe`, else `powershell.exe`; the probe script that caught `-rf` is
+`tmp/probe.ps1`, alias resolved by `Definition`), then the replay over transcript 0f71b2c6's replies, then reviews.
