@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { windowsFolder } from './app-record.mjs';
+import { handListCount } from './host-watch.mjs';
 import { cellsOf, DELIMITER_CELL_PATTERN } from './progress.mjs';
 import { ruleHere } from './rules.mjs';
 import { compareSemver } from './version.mjs';
@@ -129,6 +130,10 @@ export function reviewFileGaps(text, versions, reviewed) {
       if (plain(cells[at.change] ?? '') === '') gaps.push(`row ${i + 1}: a Change`);
     });
   }
+  // A hand list left with entries is research left undone, however decided the table (Codex, 2026-10-30: one decided
+  // row beside an unresolved list passed).
+  const hand = handListCount(text);
+  if (hand > 0) gaps.push(`the list "To classify by hand" emptied (it holds ${hand}): each entry decided in its row`);
   const start = lines.findIndex((line) => /^##\s+Sources\s*$/i.test(line.trim()));
   if (start === -1) gaps.push('a "## Sources" section');
   else {
