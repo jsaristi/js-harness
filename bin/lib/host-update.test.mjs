@@ -241,3 +241,11 @@ test('a table with a header and no row is refused, and only the changelog of wha
   const desktopOnly = REVIEW.replace('- https://code.claude.com/docs/en/changelog (2.1.295 to 2.1.299)\n', '');
   assert.deepEqual(reviewFileGaps(desktopOnly, READ_NOW, { desktop: '2.37337.1', code: '2.1.299' }), []);
 });
+
+// Codex's review of the gate (2026-10-30): a pipe the Change escapes is text, and a table needs its delimiter row.
+test('a pipe a cell escapes is part of its text, and a table with no delimiter row under its header is refused', () => {
+  const escaped = REVIEW.replace('| Mods: panels beside the chat |', '| Mods: a panel \\| a band beside the chat |');
+  assert.deepEqual(reviewFileGaps(escaped, READ_NOW, LAST_REVIEWED), []);
+  const noDelimiter = REVIEW.replace('|---|---|---|\n', '');
+  assert.deepEqual(reviewFileGaps(noDelimiter, READ_NOW, LAST_REVIEWED), ['a delimiter row (|---|---|---|) under the table\'s header']);
+});

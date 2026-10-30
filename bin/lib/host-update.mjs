@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { windowsFolder } from './app-record.mjs';
+import { cellsOf, DELIMITER_CELL_PATTERN } from './progress.mjs';
 import { ruleHere } from './rules.mjs';
 import { compareSemver } from './version.mjs';
 
@@ -88,13 +89,6 @@ export const reviewFileOf = (desktop) => `${HOST_REVIEWS}/claude-desktop-${deskt
 
 const DECISIONS = ['adopt', 'adapt', 'ignore'];
 
-/** The cells of a table line `| a | b |`, or null for a line that is no table row. */
-function cellsOf(line) {
-  const trimmed = line.trim();
-  if (!trimmed.startsWith('|')) return null;
-  return trimmed.replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
-}
-
 /** A cell's text with the markdown around it taken off: backticks and emphasis. */
 const plain = (cell) => cell.replace(/[`*_]/g, '').trim();
 
@@ -114,8 +108,11 @@ export function reviewFileGaps(text, versions, reviewed) {
     const cells = cellsOf(line)?.map((cell) => plain(cell).toLowerCase());
     return cells && ['change', 'decision', 'reason'].every((name) => cells.includes(name));
   });
+  const delimiter = header === -1 ? null : cellsOf(lines[header + 1] ?? '');
   if (header === -1) gaps.push('a table with the columns Change, Decision and Reason');
-  else {
+  else if (!delimiter || delimiter.length !== cellsOf(lines[header]).length || !delimiter.every((cell) => DELIMITER_CELL_PATTERN.test(cell))) {
+    gaps.push('a delimiter row (|---|---|---|) under the table\'s header');
+  } else {
     const names = cellsOf(lines[header]).map((cell) => plain(cell).toLowerCase());
     const at = Object.fromEntries(['change', 'decision', 'reason'].map((name) => [name, names.indexOf(name)]));
     const rows = [];
