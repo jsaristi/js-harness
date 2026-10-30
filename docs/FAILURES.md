@@ -1115,9 +1115,10 @@ ended runs nothing (`bin/gate.test.mjs`, "gate whose launcher ends while it wait
 ### project-migrate-maintenance-flake
 A merge queue run failed on one test of `bin/lib/project-migrate.test.mjs`, "a CLAUDE.md deleted and not
 committed is refused", which compares every file of its scratch project, `.git` included, before and after a
-refused migrate: the second tree held `.git/objects/f1/0b857d...` and `.git/objects/maintenance.lock` the first
-did not. The fixture's commits started `git maintenance run --auto --detach`, which wrote into the repository while
-the test ran; the same test passed alone. The file's own global git config did not turn automatic maintenance off,
+refused migrate: the first tree held `.git/objects/maintenance.lock` and the second did not (the assertion's diff
+marks it `-`, expected only; the brief read it the other way). The fixture's commits started
+`git maintenance run --auto --detach`, which held its lock while the first tree was read and let it go before the
+second; the same test passed alone. The file's own global git config did not turn automatic maintenance off,
 as `bin/check.test.mjs` and the shared `repoTemplate` do (rules-row-template-copy-enoent); it now sets
 `maintenance.auto` false and `gc.auto` 0 for every repository the file makes. No other test file that snapshots a
 tree with `.git` in it commits in that repository: `bin/update.test.mjs` snapshots projects it never commits in,
