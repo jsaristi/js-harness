@@ -44,10 +44,11 @@ question.
 3. The brief: "Fix it at the cause, tests first."
 
 ## Tasks
-- [ ] T1 (kind: build) specs 1 and 3: the files key and `provenBy` refusing a pass a failed run of the same files
-  stands against; the planted case red then green — commit: pending
-- [ ] T2 (kind: docs) spec 2: the ROADMAP's Sensors row, `docs/FAILURES.md`, the session summary — commit: pending
-- [ ] T3 (kind: verify) Codex, the lenses, an independent verifier, the PR — commit: pending
+- [x] T1 (kind: build) specs 1 and 3: the files key and `provenBy` refusing a pass a failed run of the same files
+  stands against; the planted case red then green — commits: `41bfc83c`, `1bddd479`, `90260996`, `ca97c13f`
+- [x] T2 (kind: docs) spec 2: the ROADMAP's Sensors row, `docs/FAILURES.md`, the session summary — commits:
+  `41bfc83c`, `1bddd479`, `ca97c13f`
+- [ ] T3 (kind: verify) Codex, the lenses, an independent verifier (L7 to L10), the PR — commit: this one
 
 ## Log
 - L1 (2026-10-30, the brief as written, title): "JH 111 · gate: a pass that skipped tests must not stand for a commit".
@@ -122,5 +123,11 @@ question.
   no files key ..." failed before (`actual: [ true, false, false ]`) and passes after; `files` and `tried` are set
   together, only where the tree did not move.
 
+- L10 (2026-10-30): the lens's fix is `ca97c13f`. Codex over `9026099..ca97c13`: correct (0.96). Reliability lens:
+  0 findings. `npm run check` by hand, 23:35-23:38Z: PASS. Its gate ran the tests in WSL2, the tree being unproven,
+  and its end names `code`, `files` and `tried` (gate log, gate `bb7d959f`). Every code commit of the slice has a
+  Codex record and a lens record: `41bfc83c` (Codex incorrect, P2 fixed in `1bddd479`), `1bddd479`, `90260996`,
+  `ca97c13f`.
+
 ## Next step
-The lens's fix committed, then Codex and the lenses over it, `npm run check`, the PR.
+The PR to main, its ready notice, and the land; then the closed notice with the summary.

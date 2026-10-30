@@ -30,7 +30,7 @@ cannot be told there, and CI holds that check.
 - The ROADMAP's Sensors row is amended, and `docs/FAILURES.md` has a new entry, `gate-narrow-pass-stood`.
 - Tests: the planted case was red before the fix and is green after it, with three more `check` cases and the unit
   cases.
-- Commits: `5754e11a`, `41bfc83c`, `1bddd479`, `90260996` on `worktree-gate-narrow-pass`.
+- Commits: `5754e11a`, `41bfc83c`, `1bddd479`, `90260996`, `ca97c13f` on `worktree-gate-narrow-pass`.
 
 ## Decisions
 - This session: a failure stands against a pass that came after it unless the failure ran under the pass's own key.
@@ -44,6 +44,8 @@ cannot be told there, and CI holds that check.
   could not tell them apart (L7).
 - The verifier found that a failure which fell back to Windows was written under the WSL2 key (L8). Both were fixed
   tests first.
+- The reliability lens found that a sensor which threw left the pre-run `files` key on its end, unchecked (L9).
+  Fixed tests first.
 
 ## Left
 - For the lead, sent as a note: a failure is forgotten once the gate log rotates it out, after roughly 350 to 700
@@ -51,8 +53,9 @@ cannot be told there, and CI holds that check.
 - The installed js-harness writes the new fields only after an update to a version that holds this change.
 
 ## Cost
-- Codex: 3 recorded reviews.
-- Claude lenses: 3 recorded runs, reliability and risk each.
+- Codex: 4 recorded reviews, 145,406 + 41,732 + 111,967 + 63,923 input tokens.
+- Claude lenses: 4 recorded runs, reliability and risk on the first three and reliability alone on the last; about
+  120,000 input tokens in all.
 - One independent verifier: 100,300 tokens.
 - gentle-ai: read-only status only.
-- Gates on CI: one per commit, about 3 minutes each; one failed.
+- Gates on CI: one per commit, about 3 minutes each; one failed. One `npm run check` by hand, 177 s.
