@@ -146,7 +146,7 @@ State at the third context pause (2026-10-30 ~04:50Z, branch `f8-s13-rehearsal`,
 `D:\js-harness\.claude\worktrees\f8-s13-rehearsal`, HEAD `cf3e6a01` or later, nothing pushed, no PR). Done: T1-T6,
 T8; T9 dropped. Run 9 passed whole (S13's pass). Reviewed and recorded: lenses and Codex on `f2110239..bb6223b9` and
 on `bb6223b..ee22f20` (L12, L13); the independent verifier over `f2110239..ee22f20`: approve with notes (L13).
-Fixes of their findings: `608a8e68`, `cf3e6a01`, NOT yet reviewed. Walk 10 passed whole with them (run 10). Then: `js-harness lens-review --base ee22f206 --lenses reliability,resilience,risk --reason "..."` and
+Fixes of their findings: `608a8e68`, `cf3e6a01`; lenses reliability, resilience and risk on `ee22f20..276db39`: complete, 0 findings (25,741, 25,585, 25,440 input tokens); Codex on them was started next, from `ee22f206`, and its record is what to read first. Walk 10 passed whole with them (run 10). Then: `js-harness lens-review --base ee22f206 --lenses reliability,resilience,risk --reason "..."` and
 `js-harness codex-review --base ee22f206`, touching NOTHING in the worktree while Codex runs (L12); gentle-ai: run
 `gentle-ai review assess` per slice, `e68e232c` escalated (item 5, installer), a due candidate started with its
 granted consent; chained PRs: slice 1 `f2110239..57584e5d`, slice 2 `57584e5d..bb6223b9`, slice 3a `bb6223b9..d4dd7199`,
