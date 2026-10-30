@@ -49,8 +49,8 @@ review flags in one call record only the host review, silently: the lead had to 
 
 ## Tasks
 - [x] T1 (kind: build) S1 — `claudeAccountState` reads the app config from `desktopDir`; inline, test first (L3, L4)
-- [ ] T2 (kind: build) S2 — the engram-plugin cell: cause in `## Engram plugin`, fix text for a clone with no tag;
-  inline, test first
+- [x] T2 (kind: build) S2 — the engram-plugin cell: cause in `## Engram plugin`, fix text for a clone with no tag;
+  inline, test first (L6, L7)
 - [ ] T3 (kind: build) S3 — one call records both reviews; inline, test first
 - [ ] T4 (kind: verify) Codex and the lenses on the code commits; `npm run check`; PR, ready notice, summary
 
@@ -63,6 +63,15 @@ with main alone: its `.git` holds `shallow`, `config` fetches `+refs/heads/main:
 `packed-refs` names `refs/remotes/origin/main` and no tag. The binary is 3.6.0, so `v3.6.0` is not there, the read
 returns `null` and `computeUpToDate` says `unknown`. The reader does what D2 says; what changed is the clone. So this
 is a real "cannot tell" offline, not a harness defect.
+
+What changed (T2): the cell stays `unknown` (no network read, as D2 decided), and its fix, when the engram binary's
+version is known, says what lets doctor tell: `git -C <clone> fetch --depth 1 origin tag v<binary>`, which writes one
+tag into Claude Code's clone and nothing else. A test with real git proves it on a shallow clone of main with no tags:
+null before the fetch, the tag's plugin version after. The old fix, `claude plugin marketplace update engram` then
+`claude plugin update engram@engram`, would not help: Claude Code refreshes the clone the same shallow way. The fix
+shows in `--json` only, since `unknown` is no gap (`rowGaps`). Not run here: the clone is his.
+A network read at the tag (GitHub's raw file) would make the cell answer without that step; it is the choice D2 left
+out, so it is the lead's to put on the roadmap or not.
 
 ## Log
 - L1 (the lead's brief, as written): "JH 99 · doctor: three defects it reports wrong" — items 1 to 3 quoted in S1 to S3.
@@ -77,3 +86,10 @@ is a real "cannot tell" offline, not a harness defect.
   `claude-account` `claude: ok`; the installed `js-harness doctor` gives `unknown`. Only the state was printed.
 - L5 (decision): `desktopDir` is called with an empty env, so AppData is placed under the given home: on this machine
   `APPDATA` is `<home>AppDataRoaming`, and reading the env would let a fixture home read the real app config.
+- L6 (red, then green): with the tests first, `node --test --test-name-pattern=engram-plugin bin/lib/latest.test.mjs
+  bin/lib/stack.test.mjs` failed 1 of 14 (the fix-text test); the real-git test passed already, since it proves the
+  command, not doctor's code. After the change, `latest`, `stack` and `doctor` tests 236 of 236.
+- L7 (evidence): on this machine the branch's `doctor --offline --json` gives `engram-plugin` `upToDate: unknown` with
+  the fix `git -C C:\Users\Oficina\.claude\plugins\marketplaces\engram fetch --depth 1 origin tag v3.6.0`. Not run.
+- L8 (open, out of scope): `README.md` names `js-harness doctor --gentle-ai-reviewed`, a flag doctor's `KNOWN` list no
+  longer takes (`grep -rn gentle-ai-reviewed bin` finds nothing). Left for the lead.

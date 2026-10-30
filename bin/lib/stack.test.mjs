@@ -100,6 +100,18 @@ test('engram-plugin upToDate fix names the installed version, the one the engram
   assert.deepEqual(upToDateFix('0.1.12', null, rows), ['claude plugin marketplace update engram', 'claude plugin update engram@engram']);
 });
 
+test('engram-plugin upToDate fix, when the binary\'s tag cannot be read from the marketplace clone, fetches that tag into it', () => {
+  const { upToDateFix } = findTool('engram-plugin');
+  const rows = [{ id: 'engram', installed: 'ok', version: '3.6.0' }];
+  const home = path.join(os.tmpdir(), 'a home');
+  const clone = path.join(home, '.claude', 'plugins', 'marketplaces', 'engram');
+  const lead = 'the plugin engram v3.6.0 ships cannot be read from tag v3.6.0 of Claude Code\'s engram marketplace clone, which it clones shallow, without tags; fetch that tag into the clone, then run doctor again:';
+  assert.deepEqual(upToDateFix('0.1.19', null, rows, { home, platform: 'linux' }), [lead, `git -C '${clone}' fetch --depth 1 origin tag v3.6.0`]);
+  assert.deepEqual(upToDateFix('0.1.19', null, rows, { home, platform: 'win32' }), [lead, `git -C "${clone}" fetch --depth 1 origin tag v3.6.0`]);
+  // With no binary version there is no tag to name: the catalog and plugin update, as before.
+  assert.deepEqual(upToDateFix('0.1.19', null, [], { home, platform: 'linux' }), ['claude plugin marketplace update engram', 'claude plugin update engram@engram']);
+});
+
 test('engram-plugin upToDate fix for a plugin ahead of its binary\'s tag updates the binary, not the plugin (row 11)', () => {
   const { upToDateFix } = findTool('engram-plugin');
   assert.deepEqual(upToDateFix('0.1.16', '0.1.14', [{ id: 'engram', installed: 'ok', version: '3.5.1' }]), [

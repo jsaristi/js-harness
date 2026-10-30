@@ -245,6 +245,9 @@ test('doctorMain fails open to unknown for the engram plugin when the clone cann
     const row = JSON.parse(output).find((r) => r.id === 'engram-plugin');
     assert.equal(row.upToDate, 'unknown');
     assert.deepEqual(row.gaps, []);
+    // Its fix says what lets doctor tell: the binary's tag fetched into the clone under the home doctor was given.
+    assert.match(row.fix.upToDate.at(-1), /^git -C .+ fetch --depth 1 origin tag v3\.5\.1$/);
+    assert.ok(row.fix.upToDate.at(-1).includes(path.join(home, '.claude', 'plugins', 'marketplaces', 'engram')), row.fix.upToDate.at(-1));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });

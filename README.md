@@ -598,7 +598,9 @@ tag's `.claude-plugin/marketplace.json` names, read with git from Claude Code's 
 marketplace (`~/.claude/plugins/marketplaces/engram`), never from its working tree and never over
 the network. An older plugin is `outdated`, and its fix names both versions:
 `claude plugin marketplace update engram`, then `claude plugin update engram@engram`, then a
-restart of Claude Code. A clone without that tag, or no git, is `unknown`. engram's latest version
+restart of Claude Code. A clone without that tag, or no git, is `unknown`. Claude Code clones the
+marketplace shallow, without tags, so then the fix (shown with `--json`, since `unknown` is no gap)
+fetches that one tag into the clone: `git -C <clone> fetch --depth 1 origin tag v<binary>`. engram's latest version
 is its highest `v<semver>` release, so its separate `pi-v*` releases are never read as engram's.
 
 Its `host-update` row watches the Claude Desktop app and the Claude Code CLI bundled for its Code

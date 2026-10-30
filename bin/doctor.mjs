@@ -210,7 +210,7 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
     const latest = latestVersions[row.id];
     // A tool's fix can depend on the latest version and on another row (the engram plugin's names the engram binary's
     // version).
-    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest, localRows);
+    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest, localRows, { home, platform });
     const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
     return { ...row, upToDate: computeUpToDate(row, latest), fix };
   });

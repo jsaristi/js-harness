@@ -264,9 +264,18 @@ export const tools = [
     configured: ({ home }) => ({ claude: claudeEnabledPlugin(home, ENGRAM_PLUGIN), codex: 'n/a' }),
     project: () => 'n/a',
     // The versions go in the fix, since the row shows only the installed one: `rows` holds the engram binary's.
-    upToDateFix: (installed, latest, rows = []) => {
-      if (!installed || !latest) return ENGRAM_PLUGIN_UPDATE_FIX;
+    upToDateFix: (installed, latest, rows = [], { home, platform = process.platform } = {}) => {
       const binary = rows.find((row) => row.id === 'engram')?.version;
+      // No latest with a binary version is a tag the marketplace clone lacks: since 2026-10-27 Claude Code clones it
+      // shallow, without tags (odd/tasks/doctor-rows.md, `## Engram plugin`). Fetching that one tag lets doctor read it.
+      if (installed && !latest && binary && home) {
+        const clone = path.join(home, '.claude', 'plugins', 'marketplaces', 'engram');
+        return [
+          `the plugin engram v${binary} ships cannot be read from tag v${binary} of Claude Code's engram marketplace clone, which it clones shallow, without tags; fetch that tag into the clone, then run doctor again:`,
+          `git -C ${shownWord(clone, platform)} fetch --depth 1 origin tag v${binary}`,
+        ];
+      }
+      if (!installed || !latest) return ENGRAM_PLUGIN_UPDATE_FIX;
       // Ahead of the binary's tag is doctor's `mismatch` (row 11): the binary moves, not the plugin.
       if (compareSemver(installed, latest) > 0) {
         return [`plugin ${installed} is ahead of ${latest}, the plugin engram v${binary} ships, so the two serve different protocols; update the engram binary, then restart Claude Code:`, ENGRAM_INSTALL];
