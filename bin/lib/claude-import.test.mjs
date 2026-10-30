@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { importHealth, mainCheckoutOf, importsAgents } from './claude-import.mjs';
+import { importHealth, mainCheckoutOf, importsAgents, oneFile, withImport } from './claude-import.mjs';
 
 /** A folder `outer` holding a project `outer/work/project` with `files`, removed after the test. */
 function tree(t, files) {
@@ -29,6 +29,19 @@ test('importsAgents reads an import line of AGENTS.md, and no mention of it in p
   // A fence closes only on its own character, at least as long (Codex P2 on 541464c).
   assert.equal(importsAgents('````md\n```\n@AGENTS.md\n```\n````\n'), false);
   assert.equal(importsAgents('~~~\n```\n~~~\n@AGENTS.md\n'), true);
+});
+
+test('withImport puts the import first, in the file\'s own line ends, after a UTF-8 byte order mark, and no line in UTF-16', () => {
+  assert.equal(withImport(Buffer.from('# ours\n')).toString('utf8'), '@AGENTS.md\n\n# ours\n');
+  assert.equal(withImport(Buffer.from('# ours\r\n')).toString('utf8'), '@AGENTS.md\r\n\r\n# ours\r\n');
+  assert.equal(withImport(Buffer.from('')).toString('utf8'), '@AGENTS.md\n\n');
+  const bom = withImport(Buffer.from('﻿# ours\n'));
+  assert.equal(bom.toString('utf8'), '﻿@AGENTS.md\n\n# ours\n');
+  assert.equal(importsAgents(bom.toString('utf8')), true);
+  // Bytes outside UTF-8, such as a Latin-1 é, are kept as they are.
+  assert.deepEqual(withImport(Buffer.from([0x23, 0xe9, 0x0a])), Buffer.concat([Buffer.from('@AGENTS.md\n\n'), Buffer.from([0x23, 0xe9, 0x0a])]));
+  assert.equal(withImport(Buffer.from([0xff, 0xfe, 0x23, 0x00])), null);
+  assert.equal(withImport(Buffer.from([0xfe, 0xff, 0x00, 0x23])), null);
 });
 
 test('importHealth is ok for a root CLAUDE.md that imports AGENTS.md with nothing above it', (t) => {
@@ -60,6 +73,17 @@ test('importHealth names a project with no root CLAUDE.md, or one that does not 
     state: 'missing',
     fix: ['claude-import: CLAUDE.md does not import AGENTS.md, so Claude may not load it: add the line @AGENTS.md'],
   });
+});
+
+test('importHealth is ok for a CLAUDE.md that is AGENTS.md under a second name, which Claude loads as it is', (t) => {
+  // A hard link needs no privilege, so this runs on every machine; a link is the same file to `stat` (D1).
+  const { project } = tree(t, INITIALIZED);
+  fs.linkSync(path.join(project, 'AGENTS.md'), path.join(project, 'CLAUDE.md'));
+  assert.equal(oneFile(project), true);
+  assert.deepEqual(importHealth(project, { mainCheckout: null }), { state: 'ok', fix: [] });
+  fs.rmSync(path.join(project, 'CLAUDE.md'));
+  fs.writeFileSync(path.join(project, 'CLAUDE.md'), INITIALIZED['AGENTS.md']);
+  assert.equal(oneFile(project), false);
 });
 
 test('importHealth reads a root CLAUDE.md a claudeMdExcludes glob drops as not loaded, and leaves out a dropped file above', (t) => {
