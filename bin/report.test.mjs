@@ -7,6 +7,7 @@ import path from 'node:path';
 import { appendNotice, newNotice, readNotices, recordPath } from './lib/channel.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { reportMain, USAGE } from './report.mjs';
+import { stretchMain } from './stretch.mjs';
 
 // odd/tasks/status-report.md, S2-S5: `js-harness report` against a repository and a harness home of its own in
 // the temp folder. The repository has two merged pull requests, one before the cut and one after; the home's
@@ -248,4 +249,81 @@ test('--notes that do not parse are refused before anything is written, and --no
   const alone = await report(['--notes', notes], project);
   assert.equal(alone.code, 2);
   assert.match(alone.err, /--notes goes with --html/);
+}));
+
+// --- the migration and the last stretch (odd/tasks/report-stretch-share.md) ---
+
+const F8_ROADMAP = (s13) => `# Roadmap\n\n## Checklist\n\n### One\n- [x] a\n- [ ] b still open\n\n## F8 plan\n\n### S0 Baseline\n- **State:** done\n\n### S13 Rehearsal\n- **State:** ${s13}\n`;
+
+/** `js-harness stretch` in the project at `ms`, its goals' exits from `goals`. */
+async function stretchAt(project, argv, ms, goals = {}) {
+  const err = [];
+  const code = await stretchMain([...argv, '--home', project.home, '--cwd', project.repo], {}, { cwd: project.repo, stdout: () => {}, stderr: (line) => err.push(line), now: () => ms, readLands: () => [], readCodexRuns: () => [], recordLoad: async () => null, runGoal: async (command) => ({ status: goals[command] ?? 0, stdout: '', stderr: '' }) });
+  assert.equal(code, 0, err.join('\n'));
+}
+
+// His words of 2026-10-30 (lead transcript 0f71b2c6 line 25223): the "cómo vamos" showed neither the map's
+// percentages nor whether the stretch's goals were met. The share and the goals come from the records, not the notes.
+test("the status page and the printed report carry the F8 share and the last stretch's goals, from the records", withProject(async (project) => {
+  const hour = 3_600_000;
+  fs.writeFileSync(path.join(project.repo, 'docs', 'ROADMAP.md'), F8_ROADMAP('to do'));
+  git(project.repo, ['commit', '-q', '-am', 'docs: the F8 plan'], '2026-10-20T11:00:00Z');
+  await report(['--mark'], project);
+  const plan = path.join(project.home, 'plan.json');
+  fs.writeFileSync(plan, JSON.stringify({ hours: 2, slots: 1, goals: [{ id: 'G1', text: 'PR 630 en main', command: 'g1' }, { id: 'G2', text: 'S12 empezada', command: 'g2' }], items: [{ id: 'W1', title: 'ensayo', kind: 'build', hours: [1, 1], closes: [{ in: 'F8 plan', step: 'S13' }] }] }));
+  await stretchAt(project, ['open', '--plan', plan], NOW + hour / 2);
+  fs.writeFileSync(path.join(project.repo, 'docs', 'ROADMAP.md'), F8_ROADMAP('done'));
+  git(project.repo, ['commit', '-q', '-am', 'docs: S13 is done'], '2026-10-20T13:00:00Z');
+  await stretchAt(project, ['close'], NOW + 2 * hour, { g2: 1 });
+
+  const html = path.join(project.home, 'status.html');
+  const recordLoad = async () => ({ renderedFile: () => path.join(project.home, 'rendered.jsonl'), recordRendered: () => ({ sha256: 'e'.repeat(64), bytes: 1 }) });
+  const out = [];
+  const err = [];
+  const code = await reportMain(['--html', html, '--cwd', project.repo, '--home', project.home], { stdout: (line) => out.push(line), stderr: (line) => err.push(line), now: () => NOW + 3 * hour, env: {}, recordLoad });
+  assert.equal(code, 0, err.join('\n'));
+  const printed = out.join('\n');
+  assert.match(printed, /^Migration: F8 plan {2}2\/2 steps {2}100%; at the cut 1\/2 {2}50%$/m);
+  assert.match(printed, /^Stretch \S+: closed at 2026-10-20 14:00Z, opened 2026-10-20 12:30Z; 1\.5 of 2 h; goals 1 of 2 met, checked 2026-10-20 14:00Z$/m);
+  assert.match(printed, /^ {2}goal G2 not met \(exit 1\): S12 empezada$/m);
+  assert.match(printed, /^ {2}forecast F8 plan: 50% at the opening, ~100% at the return \(100% to 100%\); now 100%$/m);
+  const four = fs.readFileSync(html, 'utf8').split('4. El mapa')[1].split('5. Lo que espera')[0];
+  assert.match(four, /La migración[\s\S]*F8 plan[\s\S]*1 de 2 pasos · 50 %[\s\S]*2 de 2 pasos · 100 %/);
+  assert.match(four, /El último tramo[\s\S]*PR 630 en main[\s\S]*sí[\s\S]*exit 0[\s\S]*S12 empezada[\s\S]*no[\s\S]*exit 1/);
+  assert.match(four, /F8 plan[\s\S]*1 de 2 · 50 %[\s\S]*~100 %[\s\S]*2 de 2 · 100 %/);
+}));
+
+// Codex review of f2110239..d04fd86c, P2: a stretch measured without one of its records shows partial hours; the report
+// says which record, and --mark records nothing, as for any section that could not be read.
+test('a record the stretch measure could not read is said, and --mark then records nothing', withProject(async (project) => {
+  const plan = path.join(project.home, 'plan.json');
+  fs.mkdirSync(project.home, { recursive: true });
+  fs.writeFileSync(plan, JSON.stringify({ hours: 2, slots: 1, goals: [{ id: 'G1', text: 'PR 630 en main', command: 'g1' }], items: [{ id: 'W1', title: 'ensayo', kind: 'build', hours: [1, 1] }] }));
+  await stretchAt(project, ['open', '--plan', plan], NOW - 3_600_000);
+  fs.mkdirSync(path.join(project.repo, '.git', 'js-harness', 'lands.jsonl'), { recursive: true });
+  const { code, out, err } = await report(['--mark'], project);
+  assert.equal(code, 1);
+  assert.match(out, /^ {2}lands could not be read: .*EISDIR.*; the hours above are partial$/m);
+  assert.match(err, /not recorded: a section could not be read/);
+  assert.deepEqual(readNotices(project.home, project.slug).reports, []);
+}));
+
+// The lead sent a report without notes on 2026-10-30, and sections 3, 5 and 6 reached him empty with no warning.
+test('--mark --html without --notes warns that sections 3, 5 and 6 will be empty; with notes, or without --mark, it does not', withProject(async (project) => {
+  const html = path.join(project.home, 'status.html');
+  const notes = path.join(project.home, 'notes.json');
+  fs.mkdirSync(project.home, { recursive: true });
+  fs.writeFileSync(notes, '{}');
+  const recordLoad = async () => ({ renderedFile: () => path.join(project.home, 'rendered.jsonl'), recordRendered: () => ({ sha256: 'e'.repeat(64), bytes: 1 }) });
+  const runIt = async (argv) => {
+    const err = [];
+    const code = await reportMain([...argv, '--cwd', project.repo, '--home', project.home], { stdout: () => {}, stderr: (line) => err.push(line), now: () => NOW, env: {}, recordLoad });
+    return { code, err: err.join('\n') };
+  };
+  const bare = await runIt(['--html', html, '--mark']);
+  assert.equal(bare.code, 0, bare.err);
+  assert.match(bare.err, /^js-harness report: warning: no --notes, so sections 3, 5 and 6 of the page \(his decisions, what waits, what the lead proposes\) will say no record holds them: pass them with --notes <file>$/m);
+  assert.match(fs.readFileSync(html, 'utf8'), /6\. Lo que propongo<\/h2><p class="note">Ningún registro lo guarda/);
+  assert.equal((await runIt(['--html', html, '--mark', '--notes', notes])).err, '');
+  assert.equal((await runIt(['--html', html])).err, '');
 }));

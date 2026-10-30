@@ -11,6 +11,10 @@ const isText = (value) => typeof value === 'string' && value.trim() !== '';
 // The states of a plan step the return draws as done (`STEP_STATE` of ./pages-sections.mjs).
 const DONE_STATES = new Set(['done', 'built', 'applied']);
 
+/** A plan section's (`planOf`) steps done of all its steps, `{ done, total }`: the count the forecast reads, and the
+ * migration's share the status report shows (odd/tasks/report-stretch-share.md). */
+export const planShare = (plan) => ({ done: plan.steps.filter((one) => DONE_STATES.has(one.reported)).length, total: plan.steps.length });
+
 /** Why an item's `closes` (a list of `{ in, step }`, both texts) is refused, or `null`; absent is none. */
 export function closesProblem(id, closes) {
   if (closes === undefined) return null;
@@ -95,10 +99,10 @@ export function forecastOf({ items, lanes, hours, roadmap }) {
     named: items.filter((item) => (item.closes ?? []).length > 0).length,
     total: countsOf(roadmap.done, roadmap.total, mapRows),
     phases: roadmap.phases.map((phase) => ({ title: phase.title, ...countsOf(phase.done, phase.total, mapRows.filter((one) => one.in === phase.title)) })),
-    plans: roadmap.plans.map((plan) => ({
-      name: plan.name,
-      ...countsOf(plan.steps.filter((one) => DONE_STATES.has(one.reported)).length, plan.steps.length, list.filter((one) => one.plan && one.in === plan.name)),
-    })),
+    plans: roadmap.plans.map((plan) => {
+      const { done, total } = planShare(plan);
+      return { name: plan.name, ...countsOf(done, total, list.filter((one) => one.plan && one.in === plan.name)) };
+    }),
     rows: list,
     problems,
   };
@@ -125,7 +129,7 @@ export function forecastNow(forecast, roadmap) {
   return {
     total: { done: roadmap.done, total: roadmap.total },
     phases: roadmap.phases.map((phase) => ({ title: phase.title, done: phase.done, total: phase.total })),
-    plans: roadmap.plans.map((plan) => ({ name: plan.name, done: plan.steps.filter((one) => DONE_STATES.has(one.reported)).length, total: plan.steps.length })),
+    plans: roadmap.plans.map((plan) => ({ name: plan.name, ...planShare(plan) })),
     rows,
     forecastDone: { done: counted.filter((one) => one.now === 'done').length, of: counted.length },
     gained: roadmap.total - forecast.total.total,

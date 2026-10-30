@@ -1381,6 +1381,17 @@ already stale.
   (2026-10-23) moved the states into protocol 2 of js-harness-protocols, and PR 560 (8b525bce) left
   AGENTS.md only the pointer "End each reply in one of the five states of `js-harness-protocols`"
 
+### status-report-without-facts
+The status report reached him without the migration's share or whether the last stretch met its goals, and with
+three sections saying no record holds them: the page read neither the plan's steps nor the stretch's record, and
+nothing warned the lead that a report marked without notes leaves sections 3, 5 and 6 empty.
+- Class: tool
+- Seen: 2026-10-30 — lead transcript 0f71b2c6, line 25223 — "no aparecio en el como vamos, ni el mapa
+  ni los porcentajes si se cumplio la meta"; the lead sent the report without notes and without the
+  stretch (brief JH 91, odd/tasks/report-stretch-share.md)
+- Control: check — bin/report.test.mjs — "the status page and the printed report carry the F8 share and
+  the last stretch's goals, from the records" — since 2026-10-30
+
 ### stop-read-as-refusal
 The app words a turn stopped by another session as his refusal of a tool call, so the stopped
 session believed he had rejected it and asked for his word.

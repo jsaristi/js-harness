@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { RECORD_SCHEMA, stretchFile, stretchMain } from './stretch.mjs';
+import { RECORD_SCHEMA, reportStretch, stretchFile, stretchMain } from './stretch.mjs';
 import { newNotice } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 
@@ -629,4 +629,35 @@ test('closes names a row an item of the open stretch closes, and status measures
 test('closes with no stretch open exits 1', async () => {
   const place = scratch();
   assert.equal((await stretch(place, ['closes', 'W1', 'F1 Skeleton', 'b'], { deps: { run: forecastGit() } })).code, 1);
+});
+
+// --- the status report's stretch (odd/tasks/report-stretch-share.md, S2) ---
+
+test('reportStretch gives the open stretch, else the last closed since the cut, measured as status measures it; none before', async () => {
+  const place = scratch();
+  const slug = projectSlug(place.project);
+  const read = (since, hours) => reportStretch({ home: place.home, root: place.project, slug, since: T0 + since * H, now: T0 + hours * H, run: () => ({ status: 1, stdout: '', stderr: 'not a repository' }), readLands: () => [], readCodexRuns: () => [] });
+  assert.equal(read(0, 0), null);
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
+  const open = read(-1, 2);
+  assert.equal(open.state, 'open');
+  assert.equal(open.elapsedHours, 2);
+  assert.deepEqual(open.goals.list.map((goal) => [goal.id, goal.met]), [['G1', null], ['G2', null]]);
+  assert.match(open.forecast.unavailable, /not a repository/);
+  await stretch(place, ['close'], { hours: 6, goals: { 'goal-reviewed': 1 } });
+  const closed = read(5, 9);
+  assert.equal(closed.state, 'closed');
+  assert.equal(closed.elapsedHours, 6, 'a closed stretch reads as it closed, whatever the time now');
+  assert.deepEqual(closed.goals.list.map((goal) => [goal.id, goal.met, goal.said]), [['G1', true, 'exit 0'], ['G2', false, 'exit 1']]);
+  assert.equal(read(7, 9), null, 'a stretch closed before the cut is not this report\'s');
+});
+
+// Codex review of f2110239..d04fd86c, P2: a record the measure could not read leaves its hours partial, and the report
+// must say so, not show them as whole.
+test('reportStretch keeps the records the measure could not read, so the report can say its hours are partial', async () => {
+  const place = scratch();
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
+  const read = (readCodexRuns) => reportStretch({ home: place.home, root: place.project, slug: projectSlug(place.project), since: T0, now: T0 + H, run: () => ({ status: 1, stdout: '', stderr: 'not a repository' }), readLands: () => [], readCodexRuns });
+  assert.deepEqual(read(() => { throw new Error('EACCES: the Codex record'); }).unread, { codex: 'EACCES: the Codex record' });
+  assert.deepEqual(read(() => []).unread, {});
 });
