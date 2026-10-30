@@ -116,7 +116,20 @@ function check(ctx, file) {
   const spans = [];
   for (const [key, url] of [['desktop', DESKTOP_CHANGELOG], ['code', CODE_CHANGELOG]]) {
     const range = new RegExp(`${url.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}\\S*\\s+\\((\\d+\\.\\d+\\.\\d+) to (\\d+\\.\\d+\\.\\d+)\\)`).exec(text);
-    if (!range) continue;
+    if (!range) {
+      // A source named with no span it can read would drop its changelog from the check (Codex, 2026-10-30).
+      if (text.includes(url)) {
+        ctx.stderr(`js-harness host-watch: ${file} names ${url} with no span "(<from> to <to>)" check can read`);
+        return 1;
+      }
+      continue;
+    }
+    // The span ends at the version the review names, or newer releases would pass on older research (Codex).
+    const named = key === 'desktop' ? desktop : /^Code tab CLI:\s*(\d+\.\d+\.\d+)/m.exec(text)?.[1];
+    if (named && range[2] !== named) {
+      ctx.stderr(`js-harness host-watch: ${file}: the ${key} changelog span ends at ${range[2]}, and the review names ${named}`);
+      return 1;
+    }
     const excerpt = path.join(path.dirname(file), 'sources', `claude-desktop-${desktop}.${key}.md`);
     let source;
     try {

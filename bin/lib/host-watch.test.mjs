@@ -273,3 +273,22 @@ test('the excerpt of a span holds its versions as published, and reads back to t
   const cut = entriesBetween(parseChangelog(excerpt, 'desktop'), { from: '4.29.0', to: '4.5000.0' });
   assert.deepEqual(cut, whole);
 });
+
+test('the excerpt of a span whose last version has no heading keeps the next newer heading, so it reads back as no entry, not as an older copy', () => {
+  const span = { from: '2.1.318', to: '2.1.319' };
+  const excerpt = cutSpan(CODE, span);
+  assert.match(excerpt, /^## 2\.1\.320$/m);
+  assert.doesNotMatch(excerpt, /Added mods/);
+  assert.deepEqual(entriesBetween(parseChangelog(excerpt, 'code'), span), entriesBetween(parseChangelog(CODE, 'code'), span));
+});
+
+test('a markdown escape in an entry is read as the character it escapes, so a published [VSCode] prefix places it', () => {
+  const { entries } = parseChangelog(String.raw`**2.1.320**
+
+**Fixed**
+
+* \[VSCode] Fixed a mod's label
+`, 'code');
+  assert.equal(entries[0].text, "[VSCode] Fixed a mod's label");
+  assert.equal(classify(entries[0]).outside, '[VSCode]');
+});

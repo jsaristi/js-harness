@@ -121,3 +121,23 @@ test('an argument it does not know is refused with exit 2', async () => {
   assert.equal(code, 2);
   assert.match(err, /^unknown argument: --nope/);
 });
+
+test('check refuses a span that ends below the version the review names, and a declared source whose span cannot be read', async () => {
+  const w = world();
+  try {
+    const sources = path.join(w.project, 'docs', 'host-updates', 'sources');
+    const drafted = await run(['draft', '--desktop', path.join(w.dir, 'desktop.md'), '--code', path.join(w.dir, 'code.md'), '--sources', sources]);
+    const file = path.join(w.project, 'docs', 'host-updates', 'claude-desktop-4.5000.0.md');
+    const done = drafted.out.replace(/\| \? \|/g, '| adapt |').replace(/(## To classify by hand\n)[\s\S]*?(\n## Sources)/, '$1$2');
+    fs.writeFileSync(file, done.replace('Code tab CLI: 2.1.320', 'Code tab CLI: 2.1.330'));
+    const stale = await run(['check', file]);
+    assert.equal(stale.code, 1);
+    assert.match(stale.err, /code changelog span ends at 2\.1\.320, and the review names 2\.1\.330/);
+    fs.writeFileSync(file, done.replace('(2.1.318 to 2.1.320)', '(2.1.318 -> 2.1.320)'));
+    const malformed = await run(['check', file]);
+    assert.equal(malformed.code, 1);
+    assert.match(malformed.err, /names https:\/\/code\.claude\.com\/docs\/en\/changelog with no span/);
+  } finally {
+    w.remove();
+  }
+});

@@ -71,21 +71,20 @@ export function parseChangelog(text, source) {
     const bullet = /^[-*]\s+(.*)$/.exec(line);
     if (bullet) {
       const n = entries.filter((entry) => entry.version === version).length + 1;
-      last = { id: `${source} ${version} #${n}`, source, version, section, text: bullet[1].trim() };
+      last = { id: `${source} ${version} #${n}`, source, version, section, text: bullet[1].trim().replace(/\\([[\]_*`\\])/g, '$1') };
       entries.push(last);
       continue;
     }
     if (last && /^\s+\S/.test(line)) last.text = `${last.text} ${line.trim()}`;
     else if (line.trim() !== '') last = null;
   }
-  return { versions, entries };
+  return { source, versions, entries };
 }
 
 /** `{ source, entries, missing, error? }`: the entries of the versions after `from` up to `to`, and the versions of
  * that span with no entry (`to` itself when no heading names it). `error` when the changelog's newest version is below
  * `to`: the copy read is older than the version reviewed, and a span cut from it would miss entries. */
-export function entriesBetween({ versions, entries }, { from, to }) {
-  const source = entries[0]?.source ?? null;
+export function entriesBetween({ source = null, versions, entries }, { from, to }) {
   const top = [...versions].sort(compareSemver).at(-1);
   if (!VERSION.test(String(to)) || !VERSION.test(String(from))) return { source, entries: [], missing: [], error: `a span runs between two versions, got ${from} to ${to}` };
   if (!top || compareSemver(top, to) < 0) return { source, entries: [], missing: [], error: `the changelog read stops at ${top ?? 'no version'}, below ${to}: read a copy that holds ${to}` };
@@ -103,11 +102,18 @@ export function entriesBetween({ versions, entries }, { from, to }) {
 export function cutSpan(text, { from, to }) {
   const out = [];
   let keep = false;
+  // The heading of the nearest newer version, alone: it shows the copy reached past `to`, so a `to` with no heading
+  // reads back as a version with no entry, not as a copy too old (Codex, 2026-10-30).
+  let boundary = null;
   for (const line of String(text).split(/\r?\n/)) {
     const version = headingOf(line);
-    if (version) keep = compareSemver(version, from) > 0 && compareSemver(version, to) <= 0;
+    if (version) {
+      keep = compareSemver(version, from) > 0 && compareSemver(version, to) <= 0;
+      if (compareSemver(version, to) > 0 && (boundary === null || compareSemver(version, boundary.version) < 0)) boundary = { version, line };
+    }
     if (keep) out.push(line);
   }
+  if (boundary) out.unshift(boundary.line, '');
   return `${out.join('\n').trimEnd()}\n`;
 }
 
