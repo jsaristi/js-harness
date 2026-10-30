@@ -46,7 +46,7 @@ Deleting or retyping any memory note: one question, sent through the lead.
 - [x] T2 (docs) S1: place what had no home: two `- Seen:` lines in `docs/FAILURES.md`, his 2026-10-14 decision in the
   roadmap row "First version's scope", and every quotation of a note to delete in "Moved out of memory".
 - [x] T3 (verify) S2: the check is right about the fact notes; no code change (see "The fact notes").
-- [ ] T4 (docs) S1: the question to the lead, one notice; then, after his yes, the backup, the memory pass and its verify.
+- [ ] T4 (docs) S1: the question to the lead, one notice; then, after his yes, the backup, the memory pass and its verify (the 17 pointers and the retype done, L5; the 5 placed notes after this branch lands).
 - [ ] T5 (docs) the summary under `docs/sessions/`, the ready notice with the pull request.
 
 ## Classification
@@ -213,3 +213,17 @@ recordaras todo y ahi si solucionaremos lo demas".
 - L3 (2026-10-30) Decision (this session's): reinstall-checklist.md is retyped, not deleted, and the check is not
   changed (T3). corrections-before-date: his 2026-10-14 decision goes to the roadmap's row, its queue reading stays the
   lead's, offered as an optional rule.
+- L4 (2026-10-30) e3926468 (T1-T3) passed the pre-commit gate ("PASS check 17 rows passed") and `js-harness rules
+  check` (69 rules, a7f087c64ca7); docs only, so no Codex or lens record is owed. Draft PR 700. Question 117 recorded
+  for the lead at 14:45:05Z (the text in `## The question`, with three options: all 22 and the retype, only the 17
+  pointers, nothing). Waiting for his answer through the lead: `js-harness wait --notice-to 100` in the background.
+- L5 (2026-10-30) His answer to question 117, read with `js-harness sessions --quote
+  0f71b2c6-cbce-43ca-a031-276a4b2c381f 31693`: tapped "Sí, las 22 y el tipo (Recomendada)", 14:57:26Z. The lead's
+  condition, by message: the 17 pointers and the retype now; the 5 placed notes only once this branch is in main, since
+  until then the branch is their only other home. Done: `js-harness backup run` ("6156 observations ... committed, 1
+  pushed"); memory pass 20261030T150050643Z deleted the 17 pointers and their MEMORY.md lines and retyped
+  reinstall-checklist.md to `reference`; `memory verify 20261030T150050643Z --approved <the 17>` passed ("verified:
+  journaled, lock released"). Doctor's `memory-rules` row now lists only the 5, which wait for this branch to land.
+  Found after the pass: restart-announce-caps.md's quotation of 2026-10-20 ("Recuerdame avisarme ...") is in no home on
+  main either (`rule:restart-announce` quotes his words of 2026-10-24), so until this branch lands its copies are this
+  document, the backup of 15:0xZ and the pass's snapshot (`memory undo 20261030T150050643Z`).
