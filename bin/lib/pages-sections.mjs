@@ -2,7 +2,7 @@
 // shares of the planned met, the map before and now, a plan step by step, and a timeline. Each takes the JSON a
 // command computed (`bin/lib/stretch-moments.mjs`, `bin/lib/report-pages.mjs`) and gives HTML built from the parts of
 // `bin/lib/pages.mjs`; a record's own text is shown as the record holds it. Pure.
-import { chain, pill, shareText, table, tiles, timeline } from './pages.mjs';
+import { chain, escapeHtml, pill, shareText, table, tiles, timeline } from './pages.mjs';
 
 const fraction = (counts) => (counts ? `${counts.done}/${counts.total}` : '—');
 const withPercent = (counts) => (counts ? `${fraction(counts)} · ${counts.total === 0 ? '—' : `${Math.round((counts.done / counts.total) * 100)} %`}` : '—');
@@ -27,11 +27,27 @@ export function sharesTiles({ goals, work, outside }) {
   ]);
 }
 
+// A roadmap item can run to hundreds of words; on his phone a phase's row is its first sentence, the rest folded.
+const LEFT_CUT = 160;
+
+/** What is left in a phase, each item its first sentence cut to `LEFT_CUT` characters, the whole item folded below
+ * when that is not all of it. */
+function leftHtml(open) {
+  if (open.length === 0) return '—';
+  const items = open.map((text) => {
+    const whole = String(text).trim();
+    const first = /^[\s\S]*?[.!?](?=\s|$)/.exec(whole)?.[0] ?? whole;
+    const short = first.length > LEFT_CUT ? `${first.slice(0, LEFT_CUT - 1)}…` : first;
+    return short === whole ? `<li>${escapeHtml(whole)}</li>` : `<li><details><summary>${escapeHtml(short)}</summary>${escapeHtml(whole)}</details></li>`;
+  });
+  return { html: `<ul class="left">${items.join('')}</ul>` };
+}
+
 const PHASE_CHANGE = { same: ['igual', 'mut'], changed: ['cambió', 'part'], closed: ['cerrada', 'ok'], new: ['nueva', 'part'], gone: ['ya no está', 'no'], unmeasured: ['sin medir', 'mut'] };
 
 /** The map as it is now (`mapOf` of `bin/lib/report.mjs`), with no before: each phase's share and what is left. */
 export function mapNowSection(map) {
-  const rows = map.phases.map((phase) => [phase.title, { text: withPercent(phase), mono: true }, phase.open.join(' · ') || '—']);
+  const rows = map.phases.map((phase) => [phase.title, { text: withPercent(phase), mono: true }, leftHtml(phase.open)]);
   rows.push([{ html: '<strong>Total</strong>' }, { text: withPercent(map), mono: true }, '']);
   return table(['Fase', 'Hecho', 'Lo que falta'], rows);
 }
@@ -40,7 +56,7 @@ export function mapNowSection(map) {
 export function mapSection(map) {
   const rows = map.phases.map((phase) => {
     const [word, tone] = PHASE_CHANGE[phase.change] ?? [phase.change, 'mut'];
-    return [phase.title, { text: fraction(phase.before), mono: true }, { text: withPercent(phase.after), mono: true }, { pill: pill(word, tone) }, phase.open.join(' · ') || '—'];
+    return [phase.title, { text: fraction(phase.before), mono: true }, { text: withPercent(phase.after), mono: true }, { pill: pill(word, tone) }, leftHtml(phase.open)];
   });
   rows.push([{ html: '<strong>Total</strong>' }, { text: withPercent(map.total.before), mono: true }, { text: withPercent(map.total.after), mono: true }, '', '']);
   const before = map.total.before === null ? '<p class="note">Sin antes: el mapa de antes de este momento no se guardó o no se pudo leer; nada se compara.</p>' : '';

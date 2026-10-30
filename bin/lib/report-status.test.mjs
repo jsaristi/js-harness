@@ -121,3 +121,51 @@ test('the notes are read whole or refused with what is wrong', () => {
     assert.throws(() => notesOf(JSON.stringify({ decisions: [decision] })), /decisions\[0\] needs text and changed/);
   }
 });
+
+// His words (lead transcript 0f71b2c6 line 26049, 2026-10-30): "En la pagina como vamos no me aparece lo que me
+// dices". The numbers he asks for head the page, before every commit and the sessions.
+const headOf = (html) => html.slice(html.indexOf('<div class="tiles">'), html.indexOf('1. Lo que entró'));
+
+test('the numbers head the page before section 1: the migration now and at the cut, the map, the stretch goals each sí or no', () => {
+  const html = renderStatus({ ...FACTS, map: { ...MAP, plans: [{ name: 'F8 plan', done: 9, total: 14 }] }, before: { map: { ...BEFORE, plans: [{ name: 'F8 plan', done: 8, total: 14 }] } }, stretch: STRETCH, notes: notesOf(JSON.stringify({ badNews: ['algo malo'] })) });
+  const tilesAt = html.indexOf('<div class="tiles">');
+  assert.ok(tilesAt > html.indexOf('Primero lo malo'), 'the bad news first, then the numbers');
+  assert.ok(tilesAt > 0 && tilesAt < html.indexOf('1. Lo que entró'), `the tiles before section 1: ${tilesAt}`);
+  const head = headOf(html);
+  assert.match(head, /64 %[\s\S]*width:64%[\s\S]*F8 plan[\s\S]*9 de 14 pasos/);
+  assert.match(head, /57 %[\s\S]*en el corte[\s\S]*8 de 14 pasos/);
+  assert.match(head, /60 %[\s\S]*width:60%[\s\S]*mapa[\s\S]*3 de 5/);
+  assert.match(head, /1 de 2[\s\S]*width:50%[\s\S]*metas[\s\S]*s-1/);
+  assert.match(head, /sí[\s\S]*PR 630 en main[\s\S]*no[\s\S]*S13 hecha/);
+});
+
+test('the head says what it does not know: no cut map, no stretch, an unread roadmap or stretch record', () => {
+  const head = headOf(renderStatus({ ...FACTS, map: { ...MAP, plans: [{ name: 'F8 plan', done: 9, total: 14 }] }, before: null, stretch: null, notes: null }));
+  assert.match(head, /64 %[\s\S]*F8 plan/);
+  assert.match(head, /en el corte no se sabe/);
+  assert.match(head, /ningún tramo desde el corte/);
+  const unread = headOf(renderStatus({ ...FACTS, map: { error: 'git show: bad' }, stretch: { unavailable: 'EACCES' }, notes: null }));
+  assert.match(unread, /el mapa no se pudo leer/);
+  assert.match(unread, /los tramos no se pudieron leer/);
+  // The reliability review, R3-002: a stretch whose goals are not checked yet, a branch with no roadmap, a roadmap with no plan.
+  const unchecked = { ...STRETCH, state: 'open', goals: { checkedAt: null, met: 0, total: 1, list: [{ id: 'G1', text: 'PR 630 en main', met: null, said: null }] } };
+  const open = headOf(renderStatus({ ...FACTS, map: { absent: true }, stretch: unchecked, notes: null }));
+  assert.match(open, /la rama main no tiene docs\/ROADMAP\.md/);
+  assert.match(open, /sin revisar[\s\S]*1 metas del último tramo, s-1 \(abierto\), sin revisar todavía[\s\S]*sin revisar[\s\S]*PR 630 en main/);
+  const noPlan = headOf(renderStatus({ ...FACTS, map: { ...MAP, plans: [] }, stretch: null, notes: null }));
+  assert.match(noPlan, /la hoja de ruta no tiene una sección de plan[\s\S]*El mapa del proyecto: 3 de 5 filas hechas/);
+});
+
+test('section 1 is one row a pull request, what it gives first and its commits folded', () => {
+  const landed = [{ hash: 'm1', at: Date.parse('2026-10-29T02:00:00Z'), subject: 'Merge pull request #683 from feat/x', number: 683, branch: 'feat/x', commits: ['test(report): a test', 'feat(report): carry the share', 'docs: a doc'] }];
+  const sectionOne = (html) => html.slice(html.indexOf('1. Lo que entró'), html.indexOf('2. Las sesiones'));
+  const one = sectionOne(renderStatus({ ...FACTS, landed, notes: null }));
+  assert.match(one, /PR 683[\s\S]*feat\(report\): carry the share[\s\S]*<details><summary>3 commits<\/summary><ul><li>test\(report\): a test/);
+  assert.doesNotMatch(one, /<td><ul>/, 'no commit list left open');
+  const noFeat = sectionOne(renderStatus({ ...FACTS, landed: [{ ...landed[0], commits: ['fix(a): first fix', 'docs: b'] }], notes: null }));
+  assert.match(noFeat, /PR 683[\s\S]*fix\(a\): first fix[\s\S]*2 commits/);
+  // The reliability review, R3-003: the column heads, and a merge that brought no commit of its own.
+  const none = sectionOne(renderStatus({ ...FACTS, landed: [{ ...landed[0], commits: [] }], notes: null }));
+  assert.match(none, /<th>Qué da<\/th><th>Cuándo<\/th><th>Commits<\/th>/);
+  assert.match(none, /<strong>PR 683<\/strong> · feat\/x<\/td>[\s\S]*<td>—<\/td>/);
+});

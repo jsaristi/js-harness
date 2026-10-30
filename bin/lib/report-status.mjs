@@ -4,7 +4,7 @@
 // last stretch since the cut, odd/tasks/report-stretch-share.md) and the open questions. His
 // decisions and what they changed, what waits and what the lead proposes are no record's: they come from the lead's
 // notes file, each labelled "del orquestador", and with no notes their sections say no record holds them. Pure.
-import { escapeHtml, page, pill, table } from './pages.mjs';
+import { escapeHtml, page, pill, table, tiles } from './pages.mjs';
 import { mapNowSection, mapSection } from './pages-sections.mjs';
 import { compareMaps } from './report-pages.mjs';
 import { stamp } from './report.mjs';
@@ -42,14 +42,20 @@ const unread = (section) => note(`No se pudo leer: ${section.error}`);
 const NO_RECORD = 'Ningún registro lo guarda: lo escribe el orquestador en sus notas (--notes), y esta vez no las dio.';
 const LEAD = 'del orquestador';
 
+// What a pull request gives is its first feature commit, else its first commit: its merge commit's body is empty here.
+const FEATURE = /^feat(\(|!|:)/;
+
+/** One row a pull request: what it gives, when, and its commits folded, so a phone reaches the numbers below. */
 function landedHtml(landed) {
   if (landed.error) return unread(landed);
   if (landed.length === 0) return note('Nada entró a la rama principal desde el corte.');
-  return table(['Qué', 'Cuándo', 'Sus commits'], landed.map((one) => [
-    one.number === null ? one.subject : `PR ${one.number} · ${one.branch}`,
-    { text: stamp(one.at), mono: true },
-    { html: `<ul>${one.commits.map((commit) => `<li>${escapeHtml(commit)}</li>`).join('')}</ul>` },
-  ]));
+  return table(['Qué da', 'Cuándo', 'Commits'], landed.map((one) => {
+    const gives = one.commits.find((commit) => FEATURE.test(commit)) ?? one.commits[0];
+    const what = one.number === null ? escapeHtml(one.subject) : `<strong>PR ${one.number}</strong> · ${escapeHtml(one.branch)}${gives === undefined ? '' : `<br>${escapeHtml(gives)}`}`;
+    const count = one.commits.length;
+    const commits = count === 0 ? '—' : `<details><summary>${count} ${count === 1 ? 'commit' : 'commits'}</summary><ul>${one.commits.map((commit) => `<li>${escapeHtml(commit)}</li>`).join('')}</ul></details>`;
+    return [{ html: what }, { text: stamp(one.at), mono: true }, { html: commits }];
+  }));
 }
 
 function sessionsHtml(sessions) {
@@ -109,6 +115,42 @@ function stretchHtml(stretch) {
   return `${heading}<p>${escapeHtml(said)}</p>${partial}${note(checked)}${table(['Meta', '¿Se cumplió?', 'Salida'], rows)}${forecastHtml(stretch.forecast)}`;
 }
 
+const ratioOf = (done, total) => (total > 0 ? done / total : null);
+
+/** The numbers he asks for first (lead transcript 0f71b2c6 line 26049): each plan's steps done now and at the cut, the
+ * map's total and the last stretch's goals, each goal sí or no; what section 4 shows in detail, from the same facts. */
+function headHtml(map, before, branch, stretch) {
+  const list = [];
+  if (map.error) list.push({ value: '—', caption: `el mapa no se pudo leer: ${map.error}` });
+  else if (map.absent) list.push({ value: '—', caption: `la rama ${branch} no tiene docs/ROADMAP.md` });
+  else {
+    if (map.plans?.length === 0) list.push({ value: '—', caption: 'la hoja de ruta no tiene una sección de plan' });
+    for (const plan of map.plans ?? []) {
+      list.push({ value: percentOf(plan.done, plan.total), share: ratioOf(plan.done, plan.total), caption: `La migración, ${plan.name}, ahora: ${plan.done} de ${plan.total} pasos` });
+      const was = before?.map?.plans?.find((one) => one.name === plan.name);
+      list.push(was
+        ? { value: percentOf(was.done, was.total), share: ratioOf(was.done, was.total), caption: `${plan.name} en el corte: ${was.done} de ${was.total} pasos` }
+        : { value: '—', caption: `${plan.name} en el corte no se sabe: ${before?.map ? 'el plan no estaba' : beforeWhy(before)}` });
+    }
+    list.push({ value: percentOf(map.done, map.total), share: ratioOf(map.done, map.total), caption: `El mapa del proyecto: ${map.done} de ${map.total} filas hechas` });
+  }
+  let goals = '';
+  if (stretch === null || stretch === undefined) list.push({ value: '—', caption: 'ningún tramo desde el corte' });
+  else if (stretch.unavailable) list.push({ value: '—', caption: `los tramos no se pudieron leer: ${stretch.unavailable}` });
+  else {
+    const state = stretch.state === 'closed' ? 'cerrado' : 'abierto';
+    const { goals: { checkedAt, met, total } } = stretch;
+    list.push(checkedAt
+      ? { value: `${met} de ${total}`, share: ratioOf(met, total), caption: `metas cumplidas del último tramo, ${stretch.id} (${state})` }
+      : { value: 'sin revisar', caption: `${total} metas del último tramo, ${stretch.id} (${state}), sin revisar todavía` });
+    goals = `<ul class="goals">${stretch.goals.list.map((goal) => {
+      const [word, tone] = GOAL_MET[String(goal.met)];
+      return `<li>${pill(word, tone)} ${escapeHtml(goal.text)}</li>`;
+    }).join('')}</ul>`;
+  }
+  return `${tiles(list)}${goals}`;
+}
+
 function mapHtml(map, before, branch, stretch) {
   // The migration and the last stretch lead the phases, from the records: his question is how far the migration is.
   // The stretch is its record's and git's, so a roadmap that cannot be read leaves it shown.
@@ -149,6 +191,7 @@ export function renderStatus({ cut, branch, landed, sessions, questions, map, be
     heading: 'Cómo vamos desde el último reporte',
     lead: `Desde ${stamp(cut.at)}. Lo que entró, las sesiones, el mapa y las preguntas salen de git y del registro; tus decisiones, lo que espera y lo que propongo, de las notas del orquestador.`,
     badNews: notes?.badNews ?? [],
+    top: headHtml(map, before, branch, stretch),
     sections: [
       { title: '1. Lo que entró', html: landedHtml(landed) },
       { title: '2. Las sesiones', html: sessionsHtml(sessions) },
