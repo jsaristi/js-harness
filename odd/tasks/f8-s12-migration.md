@@ -74,8 +74,8 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
   the range; PRs, ready notices, summary — L9-L18; PRs 689, 693-696
 - [x] T7 (kind: verify) move `D:\plataforma-preproyecto`: `migrate --check`, then `migrate`, `doctor` inside it —
   his decision of question 112; L19, L20; branch `f8-s12-moves`
-- [ ] T8 (kind: verify) move `D:\abogadaclaudiajimenez`: `init`, `migrate --check`, `doctor` inside it — his
-  decision of question 112; L19, L21
+- [x] T8 (kind: verify) move `D:\abogadaclaudiajimenez`: `init`, `migrate --check`, the import line, `doctor`
+  inside it — his decision of question 112; L19, L21-L23
 
 ## Decisions
 - D1 (2026-10-30, this session): a new command `js-harness migrate`, not a second `init` nor a `sync` flag: a second
@@ -99,10 +99,10 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
   does, `:1844`), so the two cannot be told apart, and D5's guard keeps the baseline from adding a finding.
 
 ## Next step
-State at 2026-10-30 ~10:15Z (JH 94, branch `f8-s12-moves`, docs only): `D:\plataforma-preproyecto` moved and its
-doctor's `claude-import` row ok (L20); `D:\abogadaclaudiajimenez` initialized, its doctor exit 0 but `claude-import`
-missing, since its own `CLAUDE.md` does not import `AGENTS.md` (L21): the lead was asked in a `waiting` notice
-whether to add the line `@AGENTS.md`. Then S12's State line, the summary, one PR and its ready notice.
+State at 2026-10-30 ~10:25Z (JH 94, branch `f8-s12-moves`, docs only): both projects moved, doctor exit 0 inside
+each with `claude-import` ok (L20-L23); S12's State line reads done. Owed after S12: the finding of L22 (`init` with
+an own `CLAUDE.md` leaves the import out), the session probe in each project (L23), the owed tests of L16 and L17,
+and L13's sync symlink defect (its own session).
 
 State at 2026-10-30 ~08:50Z (branch `f8-s12-migration`, code through H `8546b86f`, nothing pushed). Every code
 commit has Codex, the lenses and a gentle-ai line (L9-L17); the verifier ran over `24c47ca..9af1aac` (L13). The
@@ -258,3 +258,19 @@ owed tests of L16 and L17.
   hand, `git -C D:/abogadaclaudiajimenez checkout -- .claude/settings.local.json`, delete `harness.json`,
   `AGENTS.md`, `docs/FAILURES.md`, `.git/hooks/pre-commit`, `.git/hooks/pre-push` and `.git/js-harness/`, and remove
   the line `.atl/` from `.git/info/exclude`.
+- L22 (2026-10-30 ~10:20Z, the lead's answer to this session's `waiting` notice): "yes, add the @AGENTS.md line at
+  the top of D:/abogadaclaudiajimenez/CLAUDE.md, uncommitted, with its undo (git checkout -- CLAUDE.md) in the log;
+  it is part of the move he chose (Q112 "Ambos proyectos"). Record as a finding that init keeps an own CLAUDE.md
+  without the import, so doctor's claude-import row is red after init: a follow-up, not yours to fix." Done: the
+  lines `@AGENTS.md` and an empty one prepended, CRLF as the file is (`git diff --stat -- CLAUDE.md`: 2 insertions),
+  left uncommitted. `js-harness doctor` inside it, exit 0, `claude-import` ok, `context7` ok in claude, codex and
+  project, `codegraph` ok. `migrate --check`, exit 1, asks only to commit `AGENTS.md` first and names `.atl/`
+  tracked. Undo of this line: `git -C D:/abogadaclaudiajimenez checkout -- CLAUDE.md`.
+  Finding, owed, not this session's: `init` keeps a project's own `CLAUDE.md` that does not import `AGENTS.md` and
+  writes the whole block into `AGENTS.md` (`bin/lib/project.mjs:808-830`), so doctor's `claude-import` row is red
+  right after `init` and Claude loads none of the harness's lines until the import is added by hand.
+- L23 (2026-10-30): both projects pass: doctor exit 0 inside each with `claude-import` ok. Left for him in his
+  projects, uncommitted: in `D:\plataforma-preproyecto` `AGENTS.md` and `CLAUDE.md`; in `D:\abogadaclaudiajimenez`
+  `CLAUDE.md`, `.claude/settings.local.json`, `AGENTS.md`, `harness.json` and `docs/FAILURES.md`. Not checked here:
+  a new session in each project showing its `CLAUDE.md`, the style and context7 (the roadmap's probe), which needs a
+  session started there. Context7's OAuth in Codex stays open (S8): never started.
