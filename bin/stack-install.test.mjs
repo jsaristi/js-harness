@@ -327,6 +327,17 @@ test('an install the probe cannot tell at once but reads ok at the end of the ru
   assert.deepEqual(readManifest(home).stack.map((row) => [row.tool, row.dimension, row.applies]), [['codex', 'installed', '2.0.0']]);
 }));
 
+test('an install that exited 0 and the probe still cannot tell at the end of the run stays unverified, and the run exits 1', withHome(async (home) => {
+  // The other side of the test above (the verifier on bb6223b..ee22f20): the end-of-run read clears only what it reads ok.
+  const world = newWorld();
+  world.onRead = (id) => (id === 'codex' && world.codex.installed === 'ok' ? { installed: 'unknown' } : {});
+  const { code, out, err } = await run(['--yes', '--tool', 'codex'], { world, home });
+  assert.equal(code, 1);
+  assert.ok(!out.includes('read at the end of the run'), out);
+  assert.ok(err.includes('codex installed: the command exited 0 and the probe cannot tell whether it worked'), err);
+  assert.deepEqual(readManifest(home).stack.map((row) => [row.tool, row.dimension]), [['codex', 'installed']]);
+}));
+
 test('a failed command the probe still cannot tell at the end of the run stays unread, and the run exits 1', withHome(async (home) => {
   const world = newWorld();
   world.fail.add('pnpm add -g @openai/codex');

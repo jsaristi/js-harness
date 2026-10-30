@@ -245,3 +245,18 @@ list), `bin/lib/payload.mjs` (export), `bin/stack.mjs` and `bin/stack-install.te
   lens). Codex's part 1 of 3 passed but was not kept: this session committed S13's roadmap line (`4381f098`) while it
   ran, so the tree was no longer the committed range; 58,369 input tokens spent, nothing recorded
   (`edit-during-review`, seen a fifth time). Run once more with the worktree untouched until it ends.
+- L13 (2026-10-30, the reviews of `bb6223b..ee22f20` and the independent verifier over `f2110239..ee22f20`): Codex
+  recorded all 3 parts (407,979 input tokens, 295,680 cached, against a plan of 521,000 to 649,000); parts 1 and 3
+  correct (0.95, 0.94), part 2 incorrect (0.99) with four findings on `scripts/rehearsal.mjs`: P1 the sweeps use
+  `taskkill /T`, which follows a reused parent pid, where `bin/lib/process-tree.mjs` kills by creation time; P2 on
+  POSIX only the root of a tree is killed; P2 a `claude` that is an npm `.cmd` launcher breaks once linked into the
+  scratch bin; P2 a failure of `killByPort` was only printed, so the walk could pass with engram listening. The
+  verifier (read-only, 146 tests pass): approve with notes, its finding 1 the same as P1 (`scratchTrees.under` goes
+  by parent pid alone, so `openedBrowsers` could take his browser for one a scratch process opened); 2, low,
+  `withoutPluginResidue` excused a file that differs in format alone; 3, low, two test gaps (`stack install` exiting
+  1 when the end read still cannot tell; `rehearsalEnv`'s APPDATA, LOCALAPPDATA and lower-case names); 4, info, the
+  import row reads only an import on a line of its own, which `init` writes (kept as it is). Fixed, test first: a
+  parent counts only when created before its child; `stopTargets` kills by `selectTrees` and `killProcesses` on
+  Windows (the walk's CIM query now carries creation times, checked equal to `takeSnapshot`'s on this machine: 405 of
+  405 rows numeric) and every descendant elsewhere; `launcherShim`; `walkOk` with `cleanupProblems`; the residue set
+  apart only when one of its keys is an empty object; both test gaps.
