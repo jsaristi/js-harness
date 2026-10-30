@@ -1063,7 +1063,7 @@ test('the codex-daemon check reads <home>/.codex: missing on a current with no e
     assert.equal(row.fix.codex[0], CODEX_DAEMON_FIX);
     assert.match(row.fix.codex[1], /bin\/codex\.exe, which is not there$/);
     assert.ok(row.fix.codex.length > 3, 'the repair follows');
-    fs.mkdirSync(path.join(release, 'bin', 'codex.exe'));
+    fs.writeFileSync(path.join(release, 'bin', 'codex.exe'), 'binary');
     const healthy = probeTool(check, { home, project: home, spawn: fakeSpawnMissing() });
     assert.equal(healthy.codex, 'ok');
     assert.deepEqual(healthy.fix, {});

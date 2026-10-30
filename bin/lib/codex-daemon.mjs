@@ -29,7 +29,7 @@ function repairLines(codexHome) {
 const exists = (file) => fs.existsSync(file);
 
 /** The check's cells and lines, read from `codexHome`: `ok` when `current` resolves to a release whose
- * `codex-package.json` names an `entrypoint` that is there; `missing` when `current` resolves to no folder, its release
+ * `codex-package.json` names an `entrypoint` that is a file there; `missing` when `current` resolves to no folder, its release
  * lacks that entrypoint, or `current` is gone while one of the daemon's own files is there, the lines saying which and
  * then the repair; `n/a` with neither `current` nor those files (no managed daemon yet, and the next start installs
  * one); `unknown` when the release's `codex-package.json` cannot be read or names no entrypoint, or a path cannot be
@@ -55,7 +55,8 @@ export function codexDaemonState({ codexHome }) {
       return none('unknown');
     }
     if (typeof entrypoint !== 'string' || entrypoint === '') return none('unknown');
-    if (exists(path.join(release, entrypoint))) return none('ok');
+    // A file, not just a path: a folder where the executable should be starts nothing (Codex's review, P2).
+    if (fs.statSync(path.join(release, entrypoint), { throwIfNoEntry: false })?.isFile()) return none('ok');
     return missing(`${current} resolves to ${release}, whose codex-package.json names ${entrypoint}, which is not there`);
   } catch {
     return none('unknown');

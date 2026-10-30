@@ -85,6 +85,21 @@ test('the state of 2026-10-21, a current whose release has no executable, is mis
   }
 });
 
+// Codex's review of 04e3d29..27bba80 (P2): a folder where the executable should be is no executable.
+test('a release whose entrypoint is a folder is missing', () => {
+  const home = codexHome();
+  try {
+    const dir = home.release(`0.166.0-${TARGET}`, { exe: false });
+    fs.mkdirSync(path.join(dir, 'bin', EXE));
+    home.point(`0.166.0-${TARGET}`);
+    const state = codexDaemonState({ codexHome: home.root });
+    assert.equal(state.codex, 'missing');
+    assert.match(state.lines[0], new RegExp(`names bin/${EXE.replace('.', '\\.')}, which is not there$`));
+  } finally {
+    home.cleanup();
+  }
+});
+
 test('a current whose release folder is gone is missing', () => {
   const home = codexHome();
   try {

@@ -105,3 +105,8 @@ told him to update the engram binary while 3.6.0 was engram's latest release, ad
   "plugin 0.1.19 is ahead of 0.1.17, the plugin engram v3.6.0 ships, so the two serve different protocols; engram v3.6.0
   is engram's latest release, so the plugin is ahead of engram's last release and nothing is to be done until the next
   one: then update the engram binary and restart Claude Code", the cell still `mismatch` (D5).
+- L8 (reviews of `04e3d29..27bba80`, the code commits `1da156e` and `22c6317`): the Claude lenses reliability,
+  readability and resilience, 0 findings each (40,178, 40,082 and 40,192 input tokens); Codex, "the patch is incorrect
+  (confidence 0.96)", one P2: an entrypoint that is a folder reads `ok`, and the stack test made it so with `mkdirSync`
+  (127,922 input tokens, 90,880 cached). Accepted: a test of a folder entrypoint failed 1 of 8, then `isFile` in
+  `codexDaemonState` and a written file in the stack test, 124 of 124.
