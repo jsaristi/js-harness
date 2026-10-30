@@ -54,7 +54,7 @@ Nothing beyond the standing rules: the brief (JH 91) and his words decide the fe
 - [x] T2 (kind: build) S2: `reportStretch` beside `boardStretch`; the printed report and section 4 show the last
   stretch's goals, hours and forecast against now. Commit: feat(report), with T1.
 - [x] T3 (kind: build) S3: the warning on `--mark --html` without `--notes`. Commit: feat(report), with T1.
-- [ ] T4 (kind: docs) the FAILURES entry, this document, the session summary. Commit: docs.
+- [x] T4 (kind: docs) the FAILURES entry, this document, the session summary. Commit: docs.
 
 ## Log
 - L1 His request, through the lead's brief JH 91 (2026-10-30): "no aparecio en el como vamos, ni el mapa ni los
@@ -87,3 +87,5 @@ Nothing beyond the standing rules: the brief (JH 91) and his words decide the fe
   tagged stash and the run was repeated once (part 1 kept). Fix: `reportStretch` returns `unread`, the lines and the
   page say each record and that the hours are partial, and `--mark` records nothing; tests first (4 failed, then 79
   of 79 passed). The test comment citing line 25304 now cites 25223.
+- L11 Reviews of the fix, d04fd86c..f0773740: Codex "1 fixed, 0 not fixed", correct (0.98); the lenses 0 findings.
+  PR 683. gentle-ai: the Stop hook offered the whole branch; its status was read and nothing started (CLAUDE.md).
