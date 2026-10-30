@@ -140,9 +140,14 @@ export function reviewFileGaps(text, versions, reviewed) {
     const end = lines.findIndex((line, i) => i > start && /^#{1,2}\s/.test(line));
     const sources = lines.slice(start + 1, end === -1 ? undefined : end).filter((line) => /^\s*[-*]\s+\S/.test(line)).join('\n');
     const needed = [];
-    if (reviewed.desktop !== versions.desktop) needed.push(DESKTOP_CHANGELOG);
-    if (versions.code && reviewed.code && reviewed.code !== versions.code) needed.push(CODE_CHANGELOG);
-    for (const url of needed) if (!sources.includes(url)) gaps.push(`${url} among the sources`);
+    if (reviewed.desktop !== versions.desktop) needed.push([DESKTOP_CHANGELOG, `(${reviewed.desktop} to ${versions.desktop})`]);
+    if (versions.code && reviewed.code && reviewed.code !== versions.code) needed.push([CODE_CHANGELOG, `(${reviewed.code} to ${versions.code})`]);
+    // Each changelog carries its span from the version last reviewed: `host-watch check` reads the spans the file
+    // writes, and only this gate knows where the review starts (the reliability lens, 2026-10-30).
+    for (const [url, span] of needed) {
+      if (!sources.includes(url)) gaps.push(`${url} among the sources`);
+      else if (!sources.split('\n').some((line) => line.includes(url) && line.includes(span))) gaps.push(`the span of ${url} from the version last reviewed, "${span}"`);
+    }
     if (sources === '') gaps.push('one source at least under "## Sources"');
   }
   return gaps;
@@ -211,7 +216,7 @@ export function hostUpdateRow(versions, reviewed, now = () => new Date(), projec
       'check that the harness hooks in ~/.claude/settings.json still run',
       remoteControlStep(projectData),
       'report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
-      `write that account to ${reviewFileOf(versions.desktop)} in the project that keeps the host reviews: ${versions.code ? `the line "Code tab CLI: ${versions.code}", ` : ''}a table of Change, Decision (adopt, adapt or ignore) and Reason, one row a change the update brings, and a "## Sources" list of what was read, the changelogs above among it`,
+      `write that account to ${reviewFileOf(versions.desktop)} in the project that keeps the host reviews: ${versions.code ? `the line "Code tab CLI: ${versions.code}", ` : ''}a table of Change, Decision (adopt, adapt or ignore) and Reason, one row a change the update brings, and a "## Sources" list of what was read, the changelogs above among it, each with its span "(<from> to <to>)"`,
       'then record the review: js-harness doctor --host-reviewed, which refuses while that file lacks any of it',
     ];
   }

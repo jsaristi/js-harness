@@ -128,7 +128,7 @@ test('an update since the reviewed versions is stale until reviewed: its fix nam
     'check that the harness hooks in ~/.claude/settings.json still run',
     YES_STEP,
     'report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
-    'write that account to docs/host-updates/claude-desktop-2.42304.0.md in the project that keeps the host reviews: the line "Code tab CLI: 2.1.299", a table of Change, Decision (adopt, adapt or ignore) and Reason, one row a change the update brings, and a "## Sources" list of what was read, the changelogs above among it',
+    'write that account to docs/host-updates/claude-desktop-2.42304.0.md in the project that keeps the host reviews: the line "Code tab CLI: 2.1.299", a table of Change, Decision (adopt, adapt or ignore) and Reason, one row a change the update brings, and a "## Sources" list of what was read, the changelogs above among it, each with its span "(<from> to <to>)"',
     'then record the review: js-harness doctor --host-reviewed, which refuses while that file lacks any of it',
   ]);
 });
@@ -200,7 +200,7 @@ const REVIEW = [
   '| Side sessions | `ignore` | the harness opens its sessions through `sessions start` |',
   '',
   '## Sources',
-  '- https://claude.com/docs/cowork/claude-desktop-changelog (read 2026-10-30)',
+  '- https://claude.com/docs/cowork/claude-desktop-changelog (2.37337.1 to 2.42304.0)',
   '- https://code.claude.com/docs/en/changelog (2.1.295 to 2.1.299)',
   '',
 ].join('\n');
@@ -248,4 +248,13 @@ test('a pipe a cell escapes is part of its text, and a table with no delimiter r
   assert.deepEqual(reviewFileGaps(escaped, READ_NOW, LAST_REVIEWED), []);
   const noDelimiter = REVIEW.replace('|---|---|---|\n', '');
   assert.deepEqual(reviewFileGaps(noDelimiter, READ_NOW, LAST_REVIEWED), ['a delimiter row (|---|---|---|) under the table\'s header']);
+});
+
+// The reliability lens on 98d4c7cb: `host-watch check` reads the spans the file writes, so a span that starts at the
+// version read ("X to X") skips every entry; only the gate knows the version last reviewed, and holds the span to it.
+test('a changelog named with a span other than the one from the version last reviewed to the one read now is refused', () => {
+  const late = REVIEW.replace('(2.1.295 to 2.1.299)', '(2.1.299 to 2.1.299)');
+  assert.deepEqual(reviewFileGaps(late, READ_NOW, LAST_REVIEWED), ['the span of https://code.claude.com/docs/en/changelog from the version last reviewed, "(2.1.295 to 2.1.299)"']);
+  const undated = REVIEW.replace('(2.37337.1 to 2.42304.0)', '(read 2026-10-30)');
+  assert.deepEqual(reviewFileGaps(undated, READ_NOW, LAST_REVIEWED), ['the span of https://claude.com/docs/cowork/claude-desktop-changelog from the version last reviewed, "(2.37337.1 to 2.42304.0)"']);
 });

@@ -11,7 +11,8 @@ A file holds:
 - a line `Code tab CLI: <version>`, the CLI the app bundles, when doctor reads one;
 - a table with the columns `Change`, `Decision` and `Reason`, one row at least: each `Decision` is `adopt`, `adapt`
   or `ignore`, each `Reason` says why; a version the changelog has no entry for is a row that says so;
-- a `## Sources` list of what was read, holding the changelog of each part that changed:
+- a `## Sources` list of what was read, holding the changelog of each part that changed with its span from the
+  version last reviewed to the one read now, `(<from> to <to>)`:
   `https://claude.com/docs/cowork/claude-desktop-changelog` for the desktop,
   `https://code.claude.com/docs/en/changelog` for the CLI.
 
