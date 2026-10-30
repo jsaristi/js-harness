@@ -448,7 +448,7 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **Cost:** no eval.
 - **His decisions:** the row enters the plan by his answer to question 123 (lead transcript
   0f71b2c6, line 32757): "Sí, agrégala".
-- **State:** built on `feat/codex-daemon-row` (`odd/tasks/codex-daemon-row.md`).
+- **State:** built, PR 704 (`feat/codex-daemon-row`, `odd/tasks/codex-daemon-row.md`).
 
 ### S5c-a Directive coverage, the mechanism
 - **Changes:** every source the harness ships or sends to an agent is listed by a test; each source

@@ -23,7 +23,7 @@ user message). The brief's items, quoted, are S1-S3 of `odd/tasks/codex-daemon-r
   of 211, green (L6); on this machine it now says "nothing is to be done until the next one" (L7).
 - `27bba804` docs(roadmap): "The Codex daemon row (JH 103, beside S11's doctor rows)" under the F8 plan, with his answer.
 - `36dbe52a` fix(doctor): the entrypoint must be a file (Codex's P2, L8).
-- The pull request of `feat/codex-daemon-row`, with its ready notice.
+- PR 704 (`feat/codex-daemon-row`), with its ready notice.
 
 ## Decisions
 - This session's, within the plan: D1 (`missing`, no new gap state), D2 (no `current` is a gap only while Codex will not
