@@ -653,8 +653,8 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   (Recomendada)"): "el paso S9, que hoy vigila solo gentle-ai, pasa a vigilar Claude. [...] No
   cubre adoptar nada sin tu sí." (transcript `0f71b2c6`, read with `sessions --quote`).
 - **Changes:** each Claude Desktop update doctor sees opens a session of its own, `JH <n> · host
-  watch <version>`, named by the `host-update` row's fix and briefed by `js-harness host-watch
-  brief`. It reads the Desktop and Claude Code changelogs over the update's span and diffs the
+  watch <version>`, named by the lead's heartbeat (a `HOST:` line) and the `host-update` row's
+  fix, and briefed by `js-harness host-watch brief`. It reads the Desktop and Claude Code changelogs over the update's span and diffs the
   app's tool list against the last recorded one (`docs/host-updates/tools-<surface>.txt`); `host-watch
   draft` gives one row per entry, classed by the harness area it touches, and lists what it cannot
   place for hand classification. It writes `docs/host-updates/claude-desktop-<version>.md` (adopt,
@@ -665,7 +665,8 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **Probe and pass:** `node --test bin/lib/host-watch.test.mjs`: a fixture changelog with one entry
   per class gives one row per entry, an unmatched entry is listed for hand classification, the
   tool-list diff names what was added and removed; the first real review,
-  `docs/host-updates/claude-desktop-4.4212.0.md`, passes the gate of `--host-reviewed`.
+  `docs/host-updates/claude-desktop-4.4212.0.md`, passes `host-watch check` (every entry of its
+  span has a decided row) and the gate of `--host-reviewed`.
 - **Was:** the idea watch of gentle-ai releases (`bin/lib/gentle-ai-update.mjs`, the
   reverse-engineering document's section 5), planned for any time after S2. It leaves with gentle-ai
   at S2, by question 129; this entry keeps its history.
