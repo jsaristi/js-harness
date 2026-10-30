@@ -1535,6 +1535,9 @@ was not so.
   assumed (a 30 s timeout that killed only the shell); the walk's own log already refuted it, since `stack install`
   passed its exit check and a timeout exits 1 (`bin/stack.mjs:245-250`); the lead chose on it, and was told the
   correction before anything was built on it
+- Seen: 2026-10-30 — odd/tasks/f8-s13-rehearsal.md, run 8 — JH 90 told the lead that `lens-review --plan` leaves out
+  the lens prompt, unread; `bin/lens-review.mjs:221` counts it, and the session corrected the notice within a minute,
+  before the lead answered or anything was built on it
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting
