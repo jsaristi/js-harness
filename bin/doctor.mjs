@@ -210,7 +210,7 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
     const latest = latestVersions[row.id];
     // A tool's fix can depend on the latest version and on another row (the engram plugin's names the engram binary's
     // version).
-    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest, localRows);
+    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest, localRows, { home, platform });
     const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
     return { ...row, upToDate: computeUpToDate(row, latest), fix };
   });
@@ -398,8 +398,8 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
     return 2;
   }
   const { home, cwd, json, offline } = parsed;
-  if (argv.includes('--host-reviewed')) return recordHostReview(home, json, deps);
-  if (argv.includes('--stack-reviewed')) return recordStackReview({ home, cwd, json }, deps);
+  const reviewed = recordReviews(argv, { home, cwd, json }, deps);
+  if (reviewed !== null) return reviewed;
   const rows = await buildReport({ home, cwd, offline, interactive: true, env }, deps);
 
   if (json) {
@@ -427,37 +427,52 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
   return 0;
 }
 
+/** `doctor --host-reviewed` and `--stack-reviewed`, alone or both in one call, which records both (seen 2026-10-30:
+ * the second flag was dropped, odd/tasks/doctor-rows.md S3). Prints the line of each review recorded, or with
+ * `--json` the record written: `{ reviewed }` for one flag, `{ host: { reviewed }, stack: { reviewed } }` for both.
+ * A review that records nothing says why on stderr and the call exits 1, the other still recorded. `null` when
+ * neither flag is given. */
+function recordReviews(argv, { home, cwd, json }, deps) {
+  const asked = [
+    ['host', '--host-reviewed', () => recordHostReview(home, deps)],
+    ['stack', '--stack-reviewed', () => recordStackReview({ home, cwd }, deps)],
+  ].filter(([, flag]) => argv.includes(flag));
+  if (asked.length === 0) return null;
+  const recorded = asked.map(([key, , record]) => [key, record()]).filter(([, result]) => result !== null);
+  if (json && recorded.length > 0) {
+    const records = recorded.map(([key, { reviewed }]) => [key, { reviewed }]);
+    console.log(JSON.stringify(asked.length === 1 ? records[0][1] : Object.fromEntries(records)));
+  }
+  if (!json) for (const [, { line }] of recorded) console.log(line);
+  return recorded.length === asked.length ? 0 : 1;
+}
+
 /** `doctor --host-reviewed`: records the Claude Desktop and Code tab CLI versions read now as reviewed, the last step
- * of the review the host-update row lists; with `--json` it prints `{ reviewed }`, the record written. With no
- * running version read it records nothing and exits 1. */
-function recordHostReview(home, json, deps) {
+ * of the review the host-update row lists, and returns `{ reviewed, line }`, the record written and the line that
+ * says so. With no running version read it records nothing and returns `null`. */
+function recordHostReview(home, deps) {
   const versions = deps.host ? deps.host(home) : { desktop: null };
   if (!versions.desktop) {
     console.error('js-harness doctor: could not read the running Claude Desktop version: nothing was recorded.');
-    return 1;
+    return null;
   }
   const now = deps.now ?? (() => new Date());
   const reviewed = { desktop: versions.desktop, code: versions.code, at: now().toISOString() };
   writeCache(home, { ...readCache(home), host: { reviewed } });
-  if (json) {
-    console.log(JSON.stringify({ reviewed }));
-    return 0;
-  }
-  console.log(`Recorded Claude Desktop ${versions.desktop}${versions.code ? ` and its Code tab CLI ${versions.code}` : ''} as reviewed.`);
-  return 0;
+  return { reviewed, line: `Recorded Claude Desktop ${versions.desktop}${versions.code ? ` and its Code tab CLI ${versions.code}` : ''} as reviewed.` };
 }
 
 /** `doctor --stack-reviewed`: records the versions of the stack's tools and of the Claude CLI read now as reviewed, the
- * last step of the review the stack-update row lists; with `--json` it prints `{ reviewed }`, the record written. With
- * no version read it records nothing and exits 1. */
-function recordStackReview({ home, cwd, json }, deps) {
+ * last step of the review the stack-update row lists, and returns `{ reviewed, line }` as above. With no version read
+ * it records nothing and returns `null`. */
+function recordStackReview({ home, cwd }, deps) {
   const spawn = deps.spawn ?? spawnSync;
   const platform = deps.platform ?? process.platform;
   const rows = probeStack({ home, project: resolveProjectRoot(cwd, spawn), spawn, platform, interactive: false, functions: {} });
   const versions = readStackVersions(rows, { home, spawn, platform });
   if (Object.keys(versions).length === 0) {
     console.error('js-harness doctor: could not read the version of any tool of the stack: nothing was recorded.');
-    return 1;
+    return null;
   }
   const now = deps.now ?? (() => new Date());
   // A tool whose probe failed this time keeps the version reviewed before: dropped, its next reading would join the
@@ -466,8 +481,7 @@ function recordStackReview({ home, cwd, json }, deps) {
   const reviewed = { versions: { ...cache.stack?.reviewed.versions, ...versions }, at: now().toISOString() };
   writeCache(home, { ...cache, stack: { reviewed } });
   const named = Object.entries(versions).map(([id, version]) => `${id} ${version}`).join(', ');
-  console.log(json ? JSON.stringify({ reviewed }) : `Recorded ${named} as reviewed.`);
-  return 0;
+  return { reviewed, line: `Recorded ${named} as reviewed.` };
 }
 
 /** `doctor --hook`: a `SessionStart` hook, at zero model tokens when nothing changed. Computes the

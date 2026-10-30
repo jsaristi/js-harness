@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './latest.mjs';
 import { withoutAutoMaintenance } from './git-fixture.testkit.mjs';
 
@@ -431,6 +432,38 @@ test('engram-plugin reads null when the clone lacks the binary\'s tag, when ther
     assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.6.0'), { home }), { 'engram-plugin': null });
     assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS(null), { home }), { 'engram-plugin': null });
     assert.deepEqual(await readLocalLatestVersions([{ id: 'engram-plugin', version: '0.1.12' }], { home }), { 'engram-plugin': null });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Since 2026-10-27 Claude Code clones the engram marketplace shallow, main alone, with no tag (odd/tasks/doctor-rows.md,
+// `## Engram plugin`): the read is null, and the fix doctor names, fetching the binary's tag, makes it answer.
+test('engram-plugin reads null from a shallow clone with no tags, and the version once the binary\'s tag is fetched into it', async () => {
+  const home = makeTmpHome();
+  try {
+    const origin = path.join(home, 'origin');
+    const clone = path.join(home, '.claude', 'plugins', 'marketplaces', 'engram');
+    const env = { ...process.env, GIT_CONFIG_GLOBAL: path.join(home, 'no-gitconfig'), GIT_CONFIG_NOSYSTEM: '1' };
+    const git = (...args) => {
+      const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { encoding: 'utf8', env });
+      assert.equal(result.status, 0, result.stderr);
+    };
+    const manifest = (version) => writeJson(path.join(origin, '.claude-plugin', 'marketplace.json'), { name: 'engram', plugins: [{ name: 'engram', version }] });
+    fs.mkdirSync(origin, { recursive: true });
+    withoutAutoMaintenance(() => {
+      git('-C', origin, 'init', '-q', '-b', 'main');
+      manifest('0.1.19');
+      git('-C', origin, 'add', '.');
+      git('-C', origin, 'commit', '-q', '-m', 'release');
+      git('-C', origin, 'tag', 'v3.6.0');
+      manifest('0.1.20');
+      git('-C', origin, 'commit', '-q', '-am', 'main moves on');
+      git('clone', '-q', '--depth', '1', '--no-tags', '--single-branch', pathToFileURL(origin).href, clone);
+    });
+    assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.6.0'), { home }), { 'engram-plugin': null });
+    withoutAutoMaintenance(() => git('-C', clone, 'fetch', '-q', '--depth', '1', 'origin', 'tag', 'v3.6.0'));
+    assert.deepEqual(await readLocalLatestVersions(ENGRAM_ROWS('3.6.0'), { home }), { 'engram-plugin': '0.1.19' });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

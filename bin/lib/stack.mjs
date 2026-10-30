@@ -20,6 +20,7 @@ import { INSTALL_NEWEST, compareSemver } from './version.mjs';
 import { MEMORY_RULES_FIX, memoryRulesState } from './memory-rules.mjs';
 import { SESSION_CLASSES_FIX, sessionClassesState } from './session-classes.mjs';
 import { PNPM_LOCK_FIX, pnpmLockState } from './pnpm-lock.mjs';
+import { desktopDir } from './backup.mjs';
 
 const SEMVER_RE = /(\d+\.\d+\.\d+)/;
 // R3-001 (accepted T1 review follow-up): a hung probe must never block `doctor` — kill it and
@@ -263,9 +264,18 @@ export const tools = [
     configured: ({ home }) => ({ claude: claudeEnabledPlugin(home, ENGRAM_PLUGIN), codex: 'n/a' }),
     project: () => 'n/a',
     // The versions go in the fix, since the row shows only the installed one: `rows` holds the engram binary's.
-    upToDateFix: (installed, latest, rows = []) => {
-      if (!installed || !latest) return ENGRAM_PLUGIN_UPDATE_FIX;
+    upToDateFix: (installed, latest, rows = [], { home, platform = process.platform } = {}) => {
       const binary = rows.find((row) => row.id === 'engram')?.version;
+      // No latest with a binary version is a tag the marketplace clone lacks: since 2026-10-27 Claude Code clones it
+      // shallow, without tags (odd/tasks/doctor-rows.md, `## Engram plugin`). Fetching that one tag lets doctor read it.
+      if (installed && !latest && binary && home) {
+        const clone = path.join(home, '.claude', 'plugins', 'marketplaces', 'engram');
+        return [
+          `the plugin engram v${binary} ships cannot be read from tag v${binary} of Claude Code's engram marketplace clone, which it clones shallow, without tags; fetch that tag into the clone, then run doctor again:`,
+          `git -C ${shownWord(clone, platform)} fetch --depth 1 origin tag v${binary}`,
+        ];
+      }
+      if (!installed || !latest) return ENGRAM_PLUGIN_UPDATE_FIX;
       // Ahead of the binary's tag is doctor's `mismatch` (row 11): the binary moves, not the plugin.
       if (compareSemver(installed, latest) > 0) {
         return [`plugin ${installed} is ahead of ${latest}, the plugin engram v${binary} ships, so the two serve different protocols; update the engram binary, then restart Claude Code:`, ENGRAM_INSTALL];
@@ -359,11 +369,8 @@ export const tools = [
   },
 ];
 
-// Where the desktop app keeps its config, under the home, on the platforms it has one this reads.
-const DESKTOP_APP_CONFIG = {
-  win32: ['AppData', 'Roaming', 'Claude', 'config.json'],
-  darwin: ['Library', 'Application Support', 'Claude', 'config.json'],
-};
+// The platforms whose desktop app config this reads: its folder is `desktopDir`'s.
+const DESKTOP_APP_PLATFORMS = new Set(['win32', 'darwin']);
 
 /** The account identifier at `keys` in the JSON file at `filePath`, or `null` when it cannot be had: no file,
  * one that cannot be read or parsed, or anything at that key but a non-blank string. Nothing else of the file
@@ -377,15 +384,15 @@ function accountIdentifier(filePath, keys) {
 /** Whether the Claude Code CLI and the desktop app are signed into the same account: a session opened from
  * the phone runs on this machine only when they are, and when they are not the phone just says the session is
  * not available. The CLI's identifier is `oauthAccount.accountUuid` in `<home>/.claude.json`, the app's is
- * `lastKnownAccountUuid` in its `config.json`; both paths come from `home`, never from the environment, so a
- * fixture home is read and nothing else. `ok` when both are there and equal (compared without letter case:
+ * `lastKnownAccountUuid` in the `config.json` of its folder (`desktopDir`, which follows the folder the app moved on
+ * Windows); both paths come from `home`, never from the environment, so a fixture home is read and nothing else. `ok` when both are there and equal (compared without letter case:
  * they are hexadecimal), `mismatch` when both are there and differ, `unknown` when either is missing, which
  * it always is on a platform with no known app config. Only the state is returned: that `config.json` also
  * holds token caches, and neither identifier is ever printed, stored or put in a row. */
 function claudeAccountState({ home, platform = process.platform }) {
-  const appConfig = Object.hasOwn(DESKTOP_APP_CONFIG, platform) ? DESKTOP_APP_CONFIG[platform] : null;
   const cli = accountIdentifier(path.join(home, '.claude.json'), ['oauthAccount', 'accountUuid']);
-  const app = appConfig ? accountIdentifier(path.join(home, ...appConfig), ['lastKnownAccountUuid']) : null;
+  // An empty env: `desktopDir` then places AppData under `home`, as the check's contract above says.
+  const app = DESKTOP_APP_PLATFORMS.has(platform) ? accountIdentifier(path.join(desktopDir(home, {}, platform), 'config.json'), ['lastKnownAccountUuid']) : null;
   if (cli === null || app === null) return 'unknown';
   return cli === app ? 'ok' : 'mismatch';
 }

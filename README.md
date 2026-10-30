@@ -598,7 +598,9 @@ tag's `.claude-plugin/marketplace.json` names, read with git from Claude Code's 
 marketplace (`~/.claude/plugins/marketplaces/engram`), never from its working tree and never over
 the network. An older plugin is `outdated`, and its fix names both versions:
 `claude plugin marketplace update engram`, then `claude plugin update engram@engram`, then a
-restart of Claude Code. A clone without that tag, or no git, is `unknown`. engram's latest version
+restart of Claude Code. A clone without that tag, or no git, is `unknown`. Claude Code clones the
+marketplace shallow, without tags, so then the fix (shown with `--json`, since `unknown` is no gap)
+fetches that one tag into the clone: `git -C <clone> fetch --depth 1 origin tag v<binary>`. engram's latest version
 is its highest `v<semver>` release, so its separate `pi-v*` releases are never read as engram's.
 
 Its `host-update` row watches the Claude Desktop app and the Claude Code CLI bundled for its Code
@@ -611,7 +613,8 @@ harness should change; a version the changelog has no entry for is reported as h
 Control off, and the step is to turn it back on in each work session without asking where the rule
 `remote-control-yes` holds, his standing yes of 2026-10-15, and to ask the user first anywhere else; a session that has run no turn since the restart refuses it, so it
 is sent a message first. `js-harness doctor --host-reviewed`
-records the review; with `--json` it prints the record it wrote. The row also shows
+records the review; with `--json` it prints the record it wrote. Given with `--stack-reviewed` in one
+call, both reviews are recorded, and `--json` prints `{ host, stack }`. The row also shows
 `outdated` when the app downloaded an update it has not applied: on Windows that waits until
 Claude is quit fully, the tray icon included.
 
