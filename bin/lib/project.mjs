@@ -1530,7 +1530,7 @@ function syncRecorded(root, version, manifestFilePath, spawn, platform, writeFil
 
 /** The project manifest at `manifestFilePath`, validated before anything is touched: `{ manifest, gitBases }`,
  * or the refusal (`malformedManifest`, `newerManifest`) to return as it is. */
-function readRecorded(root, manifestFilePath, spawn) {
+export function readRecorded(root, manifestFilePath, spawn) {
   let manifest;
   try {
     manifest = JSON.parse(fs.readFileSync(manifestFilePath, 'utf8'));

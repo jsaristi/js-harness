@@ -10,7 +10,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { agentsTemplate, initProject } from './project.mjs';
 import { sha256 } from './manifest.mjs';
-import { candidateProjects, context7Gaps, gentleLeftovers } from './project-migrate.mjs';
+import { candidateProjects, context7Gaps, gentleLeftovers, migrationPlan } from './project-migrate.mjs';
 
 let configDir;
 before(() => {
@@ -79,6 +79,23 @@ function tree(dir) {
   walk(dir);
   return out;
 }
+
+test('the plan names what migrate would write and writes nothing', () => {
+  const { dir, home } = oldProject();
+  try {
+    const before = tree(dir);
+    const plan = migrationPlan(dir, RUNNING, { home, today: TODAY });
+    assert.equal(plan.code, 0);
+    assert.deepEqual(tree(dir), before);
+    const said = plan.pending.join('\n');
+    assert.match(said, /harness\.json: the pin 0\.9\.0 moves to 0\.97\.0/);
+    assert.match(said, /CLAUDE\.md: written, importing AGENTS\.md/);
+    assert.match(said, /the coverage baseline: recorded as 2026-10-30/);
+    assert.match(said, /AGENTS\.md: its block is rendered again/);
+  } finally {
+    cleanup(dir, home);
+  }
+});
 
 test('context7 registered nowhere is said with each host fix, and nothing is registered', () => {
   const { dir, home } = oldProject();
