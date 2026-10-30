@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
 import { AREAS, checkReview, classify, cutSpan, diffTools, draftReview, entriesBetween, hostTools, parseChangelog, parseToolList, renderBrief, renderToolList, surfaceRefusal, watchLine, watchOpened, watchTitle } from './host-watch.mjs';
-import { reviewFileGaps } from './host-update.mjs';
+import { hostReviewRefusal, reviewFileGaps } from './host-update.mjs';
 
 // The desktop changelog as it is served in markdown (https://claude.com/docs/cowork/claude-desktop-changelog.md):
 // a bold version heading, a date, the bundled CLI, bold sections and `* ` bullets. One entry a class, and one no
@@ -340,6 +341,11 @@ test('the brief freezes the spans and names every step of the review, in order',
   }
   assert.match(brief, /a second update/);
   assert.match(brief, /without his yes/);
+});
+
+test('the gate of doctor --host-reviewed accepts the first real review, of 4.29.0 / 2.1.308 to 4.4212.0 / 2.1.309', () => {
+  const project = fileURLToPath(new URL('../..', import.meta.url));
+  assert.equal(hostReviewRefusal({ project, versions: { desktop: '4.4212.0', code: '2.1.309' }, reviewed: { desktop: '4.29.0', code: '2.1.308' } }), null);
 });
 
 // The first real review, desktop 4.4212.0 #24: a Cowork entry that names Code was drafted ignore, outside the Code tab.

@@ -268,6 +268,28 @@ session records `tools-background.txt` from its own list either way.
 
 - L11 (2026-10-30): Codex over `34562cc..56c82c7` correct (0.98), the three fixed; lenses reliability, risk 0. T4
   is reviewed: `34562cc4`, `56c82c71` on `f8-s9-trigger`.
+- L12 (2026-10-30): L10's "correction to L6" is wrong and L6 stands: code 2.1.309 #6 is "Changed the dangerous `rm`
+  and `rmdir` prompt in bypass permissions mode in the Desktop app and VS Code to deny the command at once with a
+  rewrite hint". The search behind L10 split rows on `|` and missed the rows whose split differed (desktop #29, #30,
+  code #4 to #9). Every row of the review is decided: one adapt (desktop #24), 112 ignore, each with its reason;
+  `host-watch check` exits 0 over 113 rows. Desktop #24 had been drafted ignore, "outside the Code tab: Cowork",
+  though it reads "in Cowork, Chat and Code": the classifier let an outside word win over the Code tab named on its
+  own. Fixed with its test (`CODE_TAB` in `bin/lib/host-watch.mjs`); a redraft of the same span changes that row only
+  (64 to 65 open rows). The rows drafted outside were then read again; #28 (`desktopHome`, breaking) now carries its
+  evidence, "Code is not affected". Tool lists recorded as baselines: `tools-desktop.txt`, 169 host tools, from the
+  lead's capture; `tools-background.txt`, 68, this session's own. Only the Code tab has the `ccd_*`, `terminal`,
+  `scheduled-tasks`, `Claude_Browser`, `visualize` and `mcp-registry` servers; only the background session has
+  `Task*`, `SendFeedback`, `EndConversation` and the MCP resource tools. The acceptance test runs
+  `hostReviewRefusal` over the committed file for 4.29.0 / 2.1.308 → 4.4212.0 / 2.1.309 and gets `null`. Map rows 1
+  and 14 of the proposal name the entries that touch them.
+- L13 (2026-10-30): the Spanish page is https://claude.ai/artifact/NL5RU96pRQ6cwXBHkoLCNh, read back after publishing
+  (version 1793397967-278b). Its counts come from the review file: 26 rows of another surface, 12 of another platform
+  or provider, 9 of Cowork or 3P, 30 host fixes, 36 read and reasoned one by one. It is marked free under the template
+  gate: no command renders a review file yet.
+- Q 131 (2026-10-30, recorded through `notify --kind question`, asked by the lead): desktop 4.4212.0 #24, adapt:
+  whether a feature opens to show the harness's state with `sessionStatusLine` (admin rights on Windows, outside
+  the per-user undo). A yes opens that feature and asks again before anything is installed as administrator; a no
+  leaves it written on map row 14. T5 does not wait on it.
 
 ## Next step
 1. Done: PR 718 (T4) open on f8-s9-probe; its ready goes when 717 lands and 718 is retargeted to main.
