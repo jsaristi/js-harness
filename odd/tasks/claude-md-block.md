@@ -97,3 +97,8 @@ until `@AGENTS.md` was prepended by hand.
   apart) were red, so were the hard-link sync test and doctor's row over a hard link; the link tests (`addImport`'s two
   links, `AGENTS.md` a link to `CLAUDE.md`) skip here and run on CI's Linux; the migration's hard-link test was written
   with the fix, not run red. Not taken: an ignored file and UTF-16 through init stay untested (`withImport`'s `null` is).
+- L6 (2026-10-30): reviews of E (`00afb01..cabbacb`): the lenses risk, reliability and resilience, no finding (62,215
+  input and 3,493 output tokens); Codex correct (0.88; 85,188 input tokens, 42,496 cached). E's gate passed, its tests
+  on GitHub's Linux, where the link tests run. No `docs/FAILURES.md` line: the verifier is a control inside the task
+  and caught the defect before any pull request, which the register's preamble says is not a failure. No gentle-ai
+  review was run: Codex and the lenses cover every code commit (CLAUDE.md, "Running what costs, and review").
