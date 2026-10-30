@@ -142,11 +142,11 @@ directive coverage and S12's migration carries it" (reverse-engineering document
   with the fixes of L13: `leftProcesses` and `cleanupProblems` empty, so the sweeps by creation time and engram's stop
   held. Host cost of the ten runs: $0.1091.
 
-- Run 11 (2026-10-30 ~06:05Z, `08d724a1`, 3.5 minutes, host cost $0.0186): all 21 steps PASS, `ok: true`, exit 0,
+- Run 11 (2026-10-30 ~05:35Z, `08d724a1`, 3.5 minutes, host cost $0.0186): all 21 steps PASS, `ok: true`, exit 0,
   with the check fixes of L14 (`updates`: "init again wrote nothing" now read with init's exit 0). Host cost of the
   eleven runs: $0.1277.
 ## Next step
-State after the gentle-ai reviews (2026-10-30 ~06:10Z, branch `f8-s13-rehearsal`, worktree
+State after the gentle-ai reviews (2026-10-30 ~05:45Z, branch `f8-s13-rehearsal`, worktree
 `D:\js-harness\.claude\worktrees\f8-s13-rehearsal`, HEAD after `08d724a1`, nothing pushed, no PR). Done: T1-T6, T8;
 T9 dropped; T7 has every review: Codex and the lenses on every code commit (L12-L14), the independent verifier
 (L13), gentle-ai on each slice (L14). Run 11 passed whole at `08d724a1`. Then, the chain: stacked pull requests to

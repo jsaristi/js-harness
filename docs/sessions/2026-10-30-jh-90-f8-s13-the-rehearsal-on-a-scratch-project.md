@@ -61,7 +61,7 @@ dollar cap. Everything else came from the lead (the feature document's Log, L1-L
 - The chain's landing, and the refresh of the installed copy: the lead's.
 
 ## Cost
-- Time: brief 2026-10-29T19:21Z; this summary 2026-10-30 ~06:20Z; compacted by the host at least at 02:37Z and 05:19Z.
+- Time: brief 2026-10-29T19:21Z; the ready notice 2026-10-30T05:52Z; compacted by the host at least at 02:37Z and 05:19Z.
 - Walks: eleven runs, host cost $0.1277 against the roadmap's $5 [i].
 - Codex: `f2110239..bb6223b9`'s records; `bb6223b..ee22f20` 3 parts, 407,979 input tokens; `ee22f20..ceabd88`
   75,699; `999afac..08d724a` 66,468; the void run 58,369.
