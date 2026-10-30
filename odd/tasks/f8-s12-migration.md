@@ -94,12 +94,16 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
   does, `:1844`), so the two cannot be told apart, and D5's guard keeps the baseline from adding a finding.
 
 ## Next step
-State at 2026-10-30 ~07:45Z (branch `f8-s12-migration`, nothing pushed; PR 688 is the docs-only unit). The four
-code commits are in (T1-T3); both reviews of `24c47ca..09ae012` are recorded (L9, L11) and their findings fixed in
-commit D (L12), D's reviews clean and the verifier's four defects fixed in E (L13). T4's facts went to the lead
-(02:16 local). Next: Codex and the lenses over E alone, no edit in the worktree while they run; gentle-ai per code
-commit; chained PRs (doc + A; B1 + B2; C + D + E) with ready notices; the summary under docs/sessions/ and the closed
-notice.
+State at 2026-10-30 ~08:40Z (branch `f8-s12-migration`, HEAD `60fc1295`, nothing pushed; PR 688 is the docs-only
+unit). Code commits A `1488343e`, B1 `abe05fd3`, B2 `5058d55e`, C `09ae0126`, D `3cba3c9f`, E `7af9ec25`, F
+`c362110f`, G `60fc1295`: Codex and the lenses recorded on all (L9-L15), the verifier done (L13). gentle-ai:
+`5058d55..5529661` approved (L14); `5529661..60fc129` (F, G) is lineage review-65cbe28528eca61f, started granted, to
+collect: run its `review status --next-transition` (in the job's `tmp\ga-granted-4.json`), then `capture-result
+--agent=claude-code` with the collect tokens, then `acknowledge-approved`. Then slices 1 (`34ff5c7..1488343e`) and 2
+(`1488343e..5058d55e`): `git checkout --detach <end>` in this worktree, status `--base-ref <start> --committed-only`,
+start relay then granted, capture, acknowledge; back with `git checkout f8-s12-migration`. Then a gentle-ai line per
+slice in the Log; chained PRs (`34ff5c7..1488343e`, `..5058d55e`, `..HEAD`) with ready notices; the summary under
+docs/sessions/ and the closed notice.
 
 ## Log
 - L1 (2026-10-30, the lead's brief `briefs/2026-10-30T06-12-57-495Z-28130615.md`): "Then S12's building part, its
@@ -176,3 +180,8 @@ notice.
   37,000 input tokens); Codex (151,544 input tokens) found F's narrowing too narrow: a `CLAUDE.md` the project
   committed and then deleted without committing was left out of the check, so the one migrate writes would cover the
   deletion. Fixed in commit G, test red first: a `CLAUDE.md` the migration writes is always checked.
+- L16 (2026-10-30): reviews of G (`4e99f77..60fc129`): Codex correct (0.99, the finding fixed, 34,536 input tokens);
+  the lenses risk and reliability, no finding (about 9,000). gentle-ai line: review-65cbe28528eca61f
+  (`5529661..60fc129`: `c362110f`, `60fc1295`; medium, reliability): approved and acknowledged; a WARNING that does not
+  apply (sync neither recreates nor renders an `AGENTS.md` that is gone or holds no block, `bin/lib/project.mjs:1885`)
+  and a SUGGESTION kept as owed (a positive control in the exclude-file test).
