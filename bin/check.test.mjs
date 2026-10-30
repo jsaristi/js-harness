@@ -5313,6 +5313,27 @@ test('a tree whose sensors failed in one WSL2 distribution is not proven by a pa
   }
 });
 
+// The independent verifier, on 1bddd479 (odd/tasks/gate-narrow-pass.md): a failure that came back to Windows was
+// written under the key of WSL2, so a pass in WSL2 answered it.
+test('a tree whose sensors failed after they came back to Windows is not proven by a pass in WSL2: the next gate runs them', async () => {
+  const { repo, home, events, remove } = sameTreeRepo({ sameTree: 'skip', sensorsInWsl: true });
+  try {
+    fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), JSON.stringify(UBUNTU));
+    const spawn = spawnsInTurn({ status: 1, signal: null, stdout: 'no such distribution\n', stderr: '' }, { status: 1, signal: null, stdout: '', stderr: 'red on Windows' }, reachedMirror(0), reachedMirror(0));
+    const gate = () => runCheck(['--cwd', repo, '--home', home], { JS_HARNESS_GATE_LOAD: 'off' }, wslDeps(spawn, { git: undefined, takeGateLock: undefined }));
+    assert.equal((await gate()).code, 1);
+    const [failed] = events().filter((event) => event.event === 'end');
+    assert.equal(failed.tried, undefined, 'a failure on Windows was written under the key of WSL2');
+    assert.equal((await gate()).code, 0);
+    const again = await gate();
+    assert.equal(again.code, 0, again.output);
+    assert.equal(spawn.calls.length, 4, 'a pass in WSL2 answered a failure on Windows');
+  } finally {
+    remove();
+  }
+});
+
 test('a sensor sent to WSL2 that came back on Windows proves no tree, since its key was of WSL2', async () => {
   const { repo, home, events, remove } = sameTreeRepo({ sameTree: 'skip', sensorsInWsl: true });
   try {

@@ -99,5 +99,22 @@ question.
   sensors failed in one WSL2 distribution is not proven by a pass in another ...". An `error` that ran no sensor,
   followed by a pass under the same key, now proves the tree (L5 corrected: it ran under that key).
 
+- L8 (2026-10-30): the fix of the P2 is `1bddd479`. Codex over `41bfc83..1bddd47`: correct (0.96), its finding
+  fixed. Lenses reliability and risk: 0 findings. gentle-ai: the Stop hook offered the whole branch, so only its
+  read-only status was run and nothing was started (`CLAUDE.md`). The independent verifier, a read-only agent given
+  the code and not this document's conclusion, found three things:
+  (1) real: a failure whose sensors came back to Windows was written with `tried` set to the WSL2 key, so a later
+  pass in WSL2 answered it. It confirmed this with a scratch probe of `provenBy`. Fixed next, tests first: `tried` is
+  written only where `ranWhereKeyed`. The new test, "a tree whose sensors failed after they came back to Windows is
+  not proven by a pass in WSL2 ...", failed before the fix (`actual: '35896ecb...'`, `expected: undefined`) and
+  passes after it.
+  (2) a limit: the gate log is two files, so a failure is forgotten once rotation drops it, after roughly 350 to 700
+  gates. A tree committed unchanged after that is judged as before this fix. Not fixed here; sent to the lead as a
+  follow-up.
+  (3) temporary: CI failures written before this change have no `files`, so they stand against nothing until they
+  rotate out. Left as it is.
+  It found no sequence that blocks a gate for good, since `provenBy` returning `null` only runs the sensors. It also
+  checked `testsOnCi`: the moved code matches the old line for line, apart from `files`.
+
 ## Next step
-The fix of Codex's P2 committed, then Codex and the lenses over it, the verifier, `npm run check`, the PR.
+The verifier's fix committed, then Codex and the lenses over it, `npm run check`, the PR.

@@ -1552,8 +1552,7 @@ export async function checkSensors(cwd, deps = {}, lock) {
   // twice and this gate keeps a record: the proof is a line of the gate log, so a gate that neither reads
   // nor writes that log has no key. `null` in every doubt, which is a gate that runs its sensors.
   const keyNow = () => (sameTree.skip && record ? treeKey(hookGit(cwd, deps.git), { sensors, place }) : null);
-  // The key of the files of the index, wherever the sensors run (`filesKey`): written on the end of every gate that
-  // has one, so a failure stands against a pass of the same files run elsewhere (`provenBy`).
+  // The key of the index's files, wherever the sensors run (`filesKey`): what a failure stands against (`provenBy`).
   const filesNow = () => (sameTree.skip && record ? filesKey(hookGit(cwd, deps.git)) : null);
   // The rows of a gate that runs no sensor because the gate log holds the proof of `key`, after its own
   // line is written; `null` when there is no key or no proof.
@@ -1602,11 +1601,11 @@ export async function checkSensors(cwd, deps = {}, lock) {
     // The key this gate proves: the one it had before its sensors, when all of them passed and the tree
     // has that key still. A file that changed while they ran is a suite of no one tree, and proves none.
     // Asked before the end is written, which holds it, so its two git processes are in the seconds the
-    // log says the sensors took: a fraction of one. `files` is written on a failure too, under the same
-    // condition of a tree that did not move.
+    // log says the sensors took: a fraction of one. `files`, and `tried` where the sensors ran where the key says
+    // (a failure on Windows is none under the key of WSL2), are written on a failure too, if the tree did not move.
     let code;
-    let files;
-    const filesBefore = key !== null ? filesNow() : null;
+    let tried;
+    let files = key !== null ? filesNow() : null;
     try {
       for (const sensor of sensors) {
         // The tests sensor in shadow or skip mode, where the project says so and its suite is `node --test`
@@ -1647,13 +1646,14 @@ export async function checkSensors(cwd, deps = {}, lock) {
       // proven by their stored passing traces, which is the premise of the switch S6's count earned.
       const still = key !== null && keyNow() === key;
       if (result === 'pass' && ranWhereKeyed && !quarantined && still) code = key;
-      if (still) files = filesBefore;
+      if (!still) files = null;
+      else if (ranWhereKeyed) tried = key;
     } finally {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
       // A sensor that failed keeps the names of its failing tests, where its output says them (`failingTests`).
       // A skip gate's tests row keeps `skip`, never `shadow`, so S6's count (`s6Count`) never reads it.
       const failing = ({ pass, output, rerun }) => (pass && !rerun ? [] : failingTests(output));
-      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code, files, tried: files && key });
+      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code, files, tried });
       // Beside the log, under the gate's id: a list of every file on the end line would rotate the log far sooner.
       record?.testTimes(ran.flatMap((row) => row.times ?? []));
     }
