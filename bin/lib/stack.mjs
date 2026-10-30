@@ -20,6 +20,7 @@ import { INSTALL_NEWEST, compareSemver } from './version.mjs';
 import { MEMORY_RULES_FIX, memoryRulesState } from './memory-rules.mjs';
 import { SESSION_CLASSES_FIX, sessionClassesState } from './session-classes.mjs';
 import { PNPM_LOCK_FIX, pnpmLockState } from './pnpm-lock.mjs';
+import { desktopDir } from './backup.mjs';
 
 const SEMVER_RE = /(\d+\.\d+\.\d+)/;
 // R3-001 (accepted T1 review follow-up): a hung probe must never block `doctor` — kill it and
@@ -359,11 +360,8 @@ export const tools = [
   },
 ];
 
-// Where the desktop app keeps its config, under the home, on the platforms it has one this reads.
-const DESKTOP_APP_CONFIG = {
-  win32: ['AppData', 'Roaming', 'Claude', 'config.json'],
-  darwin: ['Library', 'Application Support', 'Claude', 'config.json'],
-};
+// The platforms whose desktop app config this reads: its folder is `desktopDir`'s.
+const DESKTOP_APP_PLATFORMS = new Set(['win32', 'darwin']);
 
 /** The account identifier at `keys` in the JSON file at `filePath`, or `null` when it cannot be had: no file,
  * one that cannot be read or parsed, or anything at that key but a non-blank string. Nothing else of the file
@@ -377,15 +375,15 @@ function accountIdentifier(filePath, keys) {
 /** Whether the Claude Code CLI and the desktop app are signed into the same account: a session opened from
  * the phone runs on this machine only when they are, and when they are not the phone just says the session is
  * not available. The CLI's identifier is `oauthAccount.accountUuid` in `<home>/.claude.json`, the app's is
- * `lastKnownAccountUuid` in its `config.json`; both paths come from `home`, never from the environment, so a
- * fixture home is read and nothing else. `ok` when both are there and equal (compared without letter case:
+ * `lastKnownAccountUuid` in the `config.json` of its folder (`desktopDir`, which follows the folder the app moved on
+ * Windows); both paths come from `home`, never from the environment, so a fixture home is read and nothing else. `ok` when both are there and equal (compared without letter case:
  * they are hexadecimal), `mismatch` when both are there and differ, `unknown` when either is missing, which
  * it always is on a platform with no known app config. Only the state is returned: that `config.json` also
  * holds token caches, and neither identifier is ever printed, stored or put in a row. */
 function claudeAccountState({ home, platform = process.platform }) {
-  const appConfig = Object.hasOwn(DESKTOP_APP_CONFIG, platform) ? DESKTOP_APP_CONFIG[platform] : null;
   const cli = accountIdentifier(path.join(home, '.claude.json'), ['oauthAccount', 'accountUuid']);
-  const app = appConfig ? accountIdentifier(path.join(home, ...appConfig), ['lastKnownAccountUuid']) : null;
+  // An empty env: `desktopDir` then places AppData under `home`, as the check's contract above says.
+  const app = DESKTOP_APP_PLATFORMS.has(platform) ? accountIdentifier(path.join(desktopDir(home, {}, platform), 'config.json'), ['lastKnownAccountUuid']) : null;
   if (cli === null || app === null) return 'unknown';
   return cli === app ? 'ok' : 'mismatch';
 }

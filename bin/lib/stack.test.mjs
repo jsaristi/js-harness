@@ -1064,6 +1064,45 @@ test('claude-account is unknown on a platform where the desktop app has no known
   assert.equal(accountState(seed, 'linux'), 'unknown');
 });
 
+/** Moves the Windows app config `seedAccounts` wrote to where the app keeps it since 2026-10-21: its folder under
+ * `AppData\Local\Claude-Data\claude_<id>`, and in the old one only the marker that names it (`windowsFolder`). */
+function moveAppFolder(home, id = 'claude_0a1b2c') {
+  const old = path.join(home, 'AppData', 'Roaming', 'Claude');
+  const moved = path.join(home, 'AppData', 'Local', 'Claude-Data', id);
+  fs.mkdirSync(path.dirname(moved), { recursive: true });
+  fs.renameSync(old, moved);
+  fs.mkdirSync(old);
+  fs.writeFileSync(path.join(old, `.user-data-left.${id}`), '');
+}
+
+test('claude-account reads the desktop app config from the folder the app moved it to on Windows', () => {
+  const same = (home) => {
+    seedAccounts(home, { cli: CLI_ACCOUNT, app: CLI_ACCOUNT });
+    moveAppFolder(home);
+  };
+  assert.equal(accountState(same), 'ok');
+  const other = (home) => {
+    seedAccounts(home, { cli: CLI_ACCOUNT, app: OTHER_ACCOUNT });
+    moveAppFolder(home);
+  };
+  assert.equal(accountState(other), 'mismatch');
+});
+
+test('claude-account reads only under the home it is given, whatever APPDATA and LOCALAPPDATA name', () => {
+  const home = makeTmpHome('js-harness-stack-account-');
+  const elsewhere = makeTmpHome('js-harness-stack-account-env-');
+  try {
+    seedAccounts(home, { cli: CLI_ACCOUNT, app: CLI_ACCOUNT });
+    seedAccounts(elsewhere, { app: OTHER_ACCOUNT });
+    const env = { APPDATA: path.join(elsewhere, 'AppData', 'Roaming'), LOCALAPPDATA: path.join(elsewhere, 'AppData', 'Local') };
+    const state = checks.find((check) => check.id === 'claude-account').configured({ home, platform: 'win32', env }).claude;
+    assert.equal(state, 'ok');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(elsewhere, { recursive: true, force: true });
+  }
+});
+
 test('claude-account reads the app config of the platform it is given, under the home it is given', () => {
   // The macOS location is not read on Windows, nor the Windows one on macOS.
   assert.equal(accountState((home) => seedAccounts(home, { cli: CLI_ACCOUNT, app: OTHER_ACCOUNT, platform: 'darwin' }), 'win32'), 'unknown');
