@@ -13,7 +13,7 @@ const PROJECT = path.resolve('/work/project');
 const SPANISH = { states: { working: 'Sigo solo', decision: 'Necesito tu decisión', question: 'Te pregunto', cut: 'Corte', finished: 'Terminado' }, labels: { what: 'Qué es', where: 'Dónde', effect: 'Qué pasa' } };
 const ON = { [path.join(PROJECT, 'harness.json')]: JSON.stringify({ documents: ['docs/'], reply: SPANISH }) };
 
-async function hook(payload, { files = ON, argv = ['--hook'], raw } = {}) {
+async function hook(payload, { files = ON, argv = ['--hook'], raw, deps = {} } = {}) {
   const out = [];
   const err = [];
   const read = [];
@@ -26,6 +26,7 @@ async function hook(payload, { files = ON, argv = ['--hook'], raw } = {}) {
     },
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
+    ...deps,
   });
   return { code, out: out.join(''), err: err.join(''), read };
 }
@@ -299,4 +300,91 @@ test('a work session holding handed work in a project whose board is stale gets 
   const result = await wakeHook({ files: BOARD_CURSOR });
   assert.match(result.answer.reason, WARNING);
   assert.doesNotMatch(result.answer.reason, STALE);
+});
+
+// The command blocks of a reply (S1 of odd/tasks/f8-lead-rigor.md), on excerpts of the lead's transcript 0f71b2c6 of
+// 2026-10-30, trimmed to the fields the check reads.
+const SESSION_LOG = path.join(PROJECT, 'session.jsonl');
+const toolCall = (id, command) => JSON.stringify({ type: 'assistant', isSidechain: false, message: { content: [{ type: 'tool_use', id, name: 'Bash', input: { command } }] } });
+const toolResult = (id, error) => JSON.stringify({
+  type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, is_error: error, content: error ? 'Exit code 1' : 'ok' }] },
+  toolUseResult: error ? 'Error: Exit code 1' : { stdout: 'ok', stderr: '', interrupted: false },
+});
+// Lines 32882 to 32895, the lead's own runs of the deletion, which the guard refused; and a run that succeeded.
+const RUNS = [
+  toolCall('toolu_rm', 'cd /d/js-harness-worktrees && rm -rf -- ./* ./.[!.]*'), toolResult('toolu_rm', true),
+  toolCall('toolu_doc', 'js-harness doctor --offline'), toolResult('toolu_doc', false),
+].join('\n');
+// Line 32954: the reply that handed him the deletion.
+const RM_REPLY = 'Bórrala tú con este comando:\n\n```bash\nrm -rf /d/js-harness-worktrees\n```\n\nSigo solo. Me despierta el aviso de JH 102.';
+// Line 30024: the reply that handed him Codex, trimmed to its blocks and its close.
+const CODEX_REPLY = 'Para comprobarlo, ejecuta:\n\n```bash\npnpm config get minimumReleaseAgeExclude\n```\n\nPara arreglarlo:\n\n'
+  + '```bash\ncd D:\\js-harness; codex\n```\n\nTe pregunto: ¿me pegas lo que te mostró Codex al abrirlo en `D:\\`?';
+
+async function commandHook(message, { platform, parse = () => ({ errors: [] }), transcript = RUNS } = {}) {
+  const files = { ...ON, [SESSION_LOG]: transcript };
+  const parsed = [];
+  const result = await hook(stopPayload(message, { transcript_path: SESSION_LOG }), {
+    files,
+    deps: { platform, parse: (texts, options) => { parsed.push({ texts, options }); return parse(texts, options); } },
+  });
+  return { ...result, answer: JSON.parse(result.out), parsed, transcriptReads: result.read.filter((file) => file === SESSION_LOG).length };
+}
+
+test('today\'s mistakes: a reply handing him a block the session never ran with success is turned back, on win32 and on linux', async () => {
+  for (const platform of ['win32', 'linux']) {
+    const rm = await commandHook(RM_REPLY, { platform });
+    assert.equal(rm.answer.decision, 'block', platform);
+    assert.match(rm.answer.reason, /the block that starts "rm -rf \/d\/js-harness-worktrees"/, platform);
+    assert.match(rm.answer.reason, /tell him in plain words not to run/, platform);
+    assert.match(rm.answer.reason, platform === 'win32' ? /tagged bash, which is not his shell/ : /no run of this session that succeeded holds `rm -rf \/d\/js-harness-worktrees`/, platform);
+    const codex = await commandHook(CODEX_REPLY, { platform });
+    assert.equal(codex.answer.decision, 'block', platform);
+    assert.match(codex.answer.reason, /"pnpm config get minimumReleaseAgeExclude"/, platform);
+    assert.match(codex.answer.reason, /"cd D:\\js-harness; codex"/, platform);
+    assert.equal(codex.err, '', platform);
+  }
+});
+
+test('a block for his shell of a run that succeeded, and evidence of a run whatever its exit, let the session stop', async () => {
+  const handed = 'Corre:\n\n```powershell\njs-harness doctor --offline\n```\n\nSigo solo. Me despierta el aviso de JH 102.';
+  const win = await commandHook(handed, { platform: 'win32' });
+  assert.deepEqual(win.answer, {});
+  assert.deepEqual(win.parsed.map(({ texts }) => texts), [['js-harness doctor --offline']], 'on win32 the parser reads it too');
+  assert.ok(win.parsed[0].options.timeout > 0 && win.parsed[0].options.timeout <= 4000, 'the parser gets the time left of one deadline');
+  assert.ok(win.transcriptReads <= 1, 'the transcript is read once, the wake check included');
+  const linux = await commandHook(handed.replace('powershell', 'bash'), { platform: 'linux' });
+  assert.deepEqual([linux.answer, linux.parsed], [{}, []]);
+  const evidence = 'Lo que corrí, y falló:\n\n```bash ran\nrm -rf -- ./* ./.[!.]*\n```\n\nSigo solo. Me despierta el aviso de JH 102.';
+  for (const platform of ['win32', 'linux']) assert.deepEqual((await commandHook(evidence, { platform })).answer, {}, platform);
+});
+
+test('a reply with no command block never reads the transcript for it, and a parser that cannot run refuses the block', async () => {
+  const plain = await commandHook('Hecho.\n\n```js\nrm(1);\n```\n\nSigo solo. Me despierta el aviso de JH 102.', { platform: 'win32' });
+  assert.deepEqual([plain.answer, plain.parsed], [{}, []]);
+  const own = 'Esto es tuyo, con tu sesión:\n\n```powershell own\ncodex login\n```\n\nSigo solo. Me despierta el aviso de JH 102.';
+  const failed = await commandHook(own, { platform: 'win32', parse: () => ({ failed: 'no PowerShell answered in time' }) });
+  assert.match(failed.answer.reason, /its parser could not check it \(no PowerShell answered in time\)/);
+  const rejected = await commandHook(own.replace('codex login', 'rm -rf /d/x'), { platform: 'win32', parse: () => ({ errors: [['rm has no parameter -rf']] }) });
+  assert.match(rejected.answer.reason, /rm has no parameter -rf/);
+});
+
+test('the command check runs after the wake and board checks, so its deadline holds their time too', async () => {
+  const events = [];
+  const handed = 'Corre:\n\n```powershell\njs-harness doctor --offline\n```\n\nSigo solo. Me despierta el aviso de JH 102.';
+  const result = await hook(stopPayload(handed, { transcript_path: SESSION_LOG }), {
+    files: { ...ON, [SESSION_LOG]: RUNS },
+    deps: { platform: 'win32', now: () => { events.push('now'); return 0; }, parse: () => { events.push('parse'); return { errors: [['js-harness has no parameter -x']] }; } },
+  });
+  assert.ok(events.includes('parse'));
+  assert.equal(events.indexOf('now', events.indexOf('parse')), -1, `no check reads the clock after the parser: ${events.join(' ')}`);
+  const { decision, reason } = JSON.parse(result.out);
+  assert.equal(decision, 'block', 'its refusal still reaches the answer');
+  assert.match(reason, /^js-harness reply: this reply hands him command blocks .*js-harness has no parameter -x/s);
+});
+
+test('a close that is refused and a block that is refused go back in one block', async () => {
+  const both = await commandHook(RM_REPLY.replace('\n\nSigo solo. Me despierta el aviso de JH 102.', ''), { platform: 'win32' });
+  assert.match(both.answer.reason, /no state line/);
+  assert.match(both.answer.reason, /tagged bash/);
 });

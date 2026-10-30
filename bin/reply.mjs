@@ -15,19 +15,24 @@
 // handed it with nothing in its background to wake it (bin/lib/stop-wake.mjs, A(a) of odd/tasks/wake-and-flag.md);
 // both reasons go in one block when both apply. Codex sends no background tasks, so there that check does not run.
 // And it turns back, once a pending set, the lead of a project with a live board whose rows have waited longer than
-// one check of the board holds (bin/lib/stale-board.mjs, spec 3 of odd/tasks/visual-pages.md).
+// one check of the board holds (bin/lib/stale-board.mjs, spec 3 of odd/tasks/visual-pages.md). And it turns back a
+// reply that hands the user a shell command block not tagged for his shell, not run by the session with success first,
+// or rejected by his shell's parser (bin/lib/reply-commands.mjs, S1 of odd/tasks/f8-lead-rigor.md).
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { closingState, replyConfig, replyRefusal } from './lib/reply.mjs';
+import { closingState, fencedBlocks, replyConfig, replyRefusal } from './lib/reply.mjs';
+import { COMMANDS_DEADLINE_MS, commandBlocks, commandRefusals, commandsWarning, shellParser } from './lib/reply-commands.mjs';
 
 const USAGE = 'Usage: js-harness reply --hook\n'
   + '  reads a Stop payload on standard input; where the nearest harness.json holds a "reply" key, turns the stop back\n'
   + '  when the reply does not close with exactly one state (working, decision, question, cut, finished, in the labels\n'
   + '  the key names) and what that state needs, and, once, when a work session ends its turn holding handed work with\n'
   + '  nothing in its background to wake it, and, once, when the lead of a project with a live board ends its turn\n'
-  + '  while the board\'s rows waited longer than one check; writes nothing and always exits 0\n';
+  + '  while the board\'s rows waited longer than one check, and when a fenced block hands the user a shell command\n'
+  + '  not tagged for his shell, not run by the session with success first, or rejected by his shell\'s parser;\n'
+  + '  writes nothing and always exits 0\n';
 
 /** The parsed `harness.json` nearest above `start` (that folder included), or `null` when none is found. A file that
  * is there and cannot be read or parsed throws. */
@@ -80,6 +85,30 @@ async function staleOf(payload, state, io, stderr) {
   }
 }
 
+/** The command-block check's warning (bin/lib/reply-commands.mjs), or `null`. The transcript is read only when the
+ * reply holds a command block, and the parser gets what is left of the check's one deadline; a check that throws is
+ * said on standard error and lets the rest answer. */
+function commandsOf(payload, message, { readFile, platform, parse, now, started }, stderr) {
+  try {
+    const blocks = fencedBlocks(message);
+    if (commandBlocks(blocks).length === 0) return null;
+    let transcript = null;
+    if (typeof payload.transcript_path === 'string' && payload.transcript_path !== '') {
+      try {
+        transcript = readFile(payload.transcript_path);
+      } catch {
+        // No transcript to read (Codex sends none): every block goes to the parser instead.
+      }
+    }
+    const until = started + COMMANDS_DEADLINE_MS;
+    const reasons = commandRefusals(blocks, { platform, transcript, parse: parse ?? shellParser(platform), now, until });
+    return commandsWarning(reasons, platform);
+  } catch (err) {
+    stderr(`js-harness reply: ${err?.message ?? err}; the command-block check did not run\n`);
+    return null;
+  }
+}
+
 export async function replyMain(argv, {
   readStdin = () => fs.readFileSync(0, 'utf8'),
   readFile = (file) => fs.readFileSync(file, 'utf8'),
@@ -88,6 +117,8 @@ export async function replyMain(argv, {
   env = process.env,
   homedir = os.homedir,
   now = () => Date.now(),
+  platform = process.platform,
+  parse = null,
   stdout = (text) => process.stdout.write(text),
   stderr = (text) => process.stderr.write(text),
 } = {}) {
@@ -101,6 +132,7 @@ export async function replyMain(argv, {
     stderr(`${unknown === undefined ? '' : `js-harness reply: unknown argument: ${unknown}\n\n`}${USAGE}`);
     return 2;
   }
+  const started = now();
   let reason = null;
   let payload = null;
   try {
@@ -117,8 +149,18 @@ export async function replyMain(argv, {
       else if (config !== null) {
         reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks) });
         const state = closingState(message, config);
-        const io = { readFile, readdir, run, env, homedir, now };
-        for (const warning of [await wakeOf(payload, state, io, stderr), await staleOf(payload, state, io, stderr)]) {
+        // The transcript is read once whichever check reads it first.
+        const read = new Map();
+        const readOnce = (file) => {
+          if (!read.has(file)) read.set(file, readFile(file));
+          return read.get(file);
+        };
+        const io = { readFile: readOnce, readdir, run, env, homedir, now };
+        const wake = await wakeOf(payload, state, io, stderr);
+        const stale = await staleOf(payload, state, io, stderr);
+        // Last, so its one deadline, counted from the hook's start, holds the other checks' time too.
+        const commands = commandsOf(payload, message, { readFile: readOnce, platform, parse, now, started }, stderr);
+        for (const warning of [commands, wake, stale]) {
           if (warning !== null) reason = reason === null ? warning : `${reason}\n\n${warning}`;
         }
       }

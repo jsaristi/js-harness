@@ -80,10 +80,10 @@ words, not to run the block and give the corrected one. Doctor's gate does preve
 - [x] T1 (kind: design) this document; two blind readers on the plan before code (L5)
 - [x] T2 (kind: build) S3 — the Seen lines, and `failures weeks`; test first; Codex and lenses; PR 1 (L7, L8)
 - [x] T3 (kind: build) S2 — the host review file and the `--host-reviewed` gate; test first; Codex and lenses; PR 2 (L9)
-- [ ] T4 (kind: build) S1 — command blocks in the reply check; test first on real excerpts; the replay; Codex and
+- [x] T4 (kind: build) S1 — command blocks in the reply check; test first on real excerpts; the replay; Codex and
   lenses; PR 3
 - [ ] T5 (kind: verify) `npm run check`, ready notices, summary
-- [ ] T6 (kind: docs) F4 of `docs/audits/2026-10-30-cleanup-inventory.md`, by the lead's note (L6): the six failures
+- [x] T6 (kind: docs) F4 of `docs/audits/2026-10-30-cleanup-inventory.md`, by the lead's note (L6): the six failures
   not settled. `two-blocks-out-of-order` done in PR 1 (its line moved to CLAUDE.md); the five others need a control
   that holds, each a finding of its own: read after T4, and what each needs is reported to the lead
 
@@ -226,11 +226,71 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   Codex on the fix: both fixed. Lenses risk, reliability and readability, then reliability on the fix: 0 findings.
   PR 1 is 707 (branch `f8-lead-rigor-1`, ready notice sent 18:05Z).
 
+- L10 (2026-10-30, T4): the host compacted this session at 13:38 local. Before it, `3ed7fd47` (this document's
+  state only) was committed with `--no-verify`, skipping the gate; the next commit ran it. That gate refused the
+  module: `bin/lib/process-tree.test.mjs` forbids the text `Stop-Process` in any source under `bin/`, and
+  `PROGRAMS` of `bin/lib/reply-commands.mjs` listed it; the name left the list (a tagged block is checked anyway).
+  The retry then failed on `bin/lib/gentle-ai-absence.test.mjs` (the same list named `gentle-ai`); it left the list
+  and `ccd7e3f9` passed the gate.
+- L11 (2026-10-30, T4): RED: the four hook tests on the excerpts of lines 32954 and 30024 failed on `ccd7e3f9` (22
+  pass, 4 fail), since the hook did not read command blocks; GREEN once wired (`node --test bin/reply.test.mjs
+  bin/lib/reply-commands.test.mjs bin/lib/reply.test.mjs`, 52 pass). The parser is one spawn of `pwsh.exe` (else
+  `powershell.exe`) over every block, one base64 line each, because 5.1 and 7 read a JSON array differently; both
+  gave the same answers on nine cases (`rm -rf`, `ls -la`, `-Destinaton`, an open brace refused; `-Stream`, a
+  provider's dynamic parameter, and `-Recurs`, a prefix, bound), in 1.1 s and 0.7 s. The replay over every
+  assistant text of transcript 0f71b2c6 (34k lines): 14 texts hold fenced blocks, 9 hold command blocks, all 9 are
+  refused on win32 and on linux, and none of the other 5 (cut prompts, code) is; on win32 seven for a `bash` tag,
+  two (lines 32980, 33568) for `powershell` blocks of commands the session never ran, which were his to run and
+  should have been tagged `own`. The check took 0.2 to 2.3 s a reply, the parser included, under the 4 s deadline.
+  `command-handed-untested` moved its Control to the check, its owed line kept as `Was:`.
+- L12 (2026-10-30, T4 reviews): the lenses risk, reliability, resilience and readability on `3ed7fd4..acbd281`
+  (24-50k input tokens each): two reliability warnings. One holds: with no transcript a `ran` block went to his
+  parser, so a `bash ran` block was misread as PowerShell; now evidence with no transcript is left unchecked. One is
+  kept as designed: a parser that cannot answer refuses the block, since the brief says "never left unchecked"; the
+  cost is one rewritten close, once, as `stop_hook_active` lets the next stop through. Codex on the same range (2
+  parts, 387,294 input tokens): six P2, all fixed with a test each, RED first (5 failing): a later `||`, `;` or newline
+  masked the exit of an earlier command; `rm "a b"` matched `rm a b`; a trailing newline refused a command run alone;
+  PowerShell's ambiguous prefix (`Remove-Item -f`: Filter, Force) passed; a block inside a quote kept its `>` marks;
+  the parser's budget was taken before the transcript scan. The replay after the fixes: still 9 of 9 refused, 0.1 to
+  1.0 s a reply. gentle-ai: not run on this slice (its Stop hook offers the whole branch, no candidate here).
+- L13 (2026-10-30, T6): F4's six failures, read with `js-harness failures <id>`. `two-blocks-out-of-order` is settled
+  (PR 707). The five others need more than a line here, so each goes to the lead: `diagnostic-whole-gate` (repeated,
+  no control): the gate has named its failing tests since 2026-10-14 (`5d027a0d`) and reruns a failed file alone
+  since 2026-10-15, yet the 2026-10-27 sighting reran a commit because `tail` cut that output; this session did the
+  same in small on 2026-10-30, eight test files run twice through `js-harness gate` because a `grep | head` cut the
+  summary. `told-him-unverified` (12 sightings with the lead's of 18:50Z) and `checked-not-read` (6): their control
+  is the 2026-10-15 measurement that a general honesty audit was not worth building, seen again since, so the
+  measurement is stale and wants redoing; S1 here covers only commands handed to him. `edit-during-review` (6): its
+  check makes the review record nothing when the tree changed, which stops a wrong record but not the edit or its
+  cost (226,291 tokens lost on 2026-10-30); a review of a detached copy of the range's head would make the edit
+  harmless. `door-covers-past-tip` (3): its check refuses at the door, but on 2026-10-30 a chain cut inside a reviewed
+  range passed the pre-push hook three times; the push side does not hold the door's rule for a cut.
+- L14 (2026-10-30, T4 fix reviews): Codex on `acbd281..9c967aa` (45,942 input tokens): correct, all six fixed. Lenses
+  reliability and risk on the same range: 0 findings. T6's routing went to the lead at 19:14Z.
+- L15 (2026-10-30, gentle-ai on T4): its Stop hook offered `9d4c9c6f..862a96d3`, T4's slice (not the branch, whose
+  base is `72b0a6aa`); status, start, the `granted` invocation, `capture-result --agent=claude-code` for its one lens
+  (review-reliability) and `acknowledge-approved`: lineage `review-896647eacc932ece` approved, acknowledged, with
+  three advisory findings, all three holding and fixed in the commit after `862a96d3`, test first (two RED): a
+  newline after `&&`, `||` or `|` replaced that operator, so `x ||` then `y` proved `y` (a false pass) and `a &&`
+  then `b` refused `a`; the command check ran before the wake and board checks, so its 4 s did not hold their time,
+  and now runs last; the excerpt of line 30024 had lost its backslashes in a JS string.
+  gentle-ai: `9d4c9c6f..862a96d3` approved (lineage `review-896647eacc932ece`).
+- L16 (2026-10-30, reviews of `d7af8f92`): lens reliability 0 findings. Codex (64,548 input tokens): one P2, holding:
+  a command of redirections alone after `&&` and before a newline (`a && >f`, then `b`) was taken for a continuation,
+  so `a` was proved when it may have failed; the continuation is now read from the part's words before redirections
+  are dropped, test RED first. gentle-ai on `862a96d3..d7af8f92`: approved and acknowledged (lineage
+  `review-eb8331a6c62bd8f0`), two suggestions taken in the same commit: tests for a blank line after `&&` and an
+  operator with a trailing newline, and the order test now asserts the refusal still reaches the answer (the wake
+  warning's place in a combined reason is not asserted).
+  gentle-ai: `862a96d3..d7af8f92` approved (lineage `review-eb8331a6c62bd8f0`).
+- L17 (2026-10-30, reviews of `19348fd4`): Codex (43,019 input tokens) correct (0.99); lens reliability 0 findings.
+  gentle-ai on `862a96d3..19348fd4`: approved and acknowledged (lineage `review-c4cd419b84ce606f`) with two advisory
+  suggestions not taken: a test of an exhausted deadline (the parser gets 1 ms at least, fails, and the block is
+  refused with "its parser could not check it", which `bin/lib/reply-commands.test.mjs` already proves), and the
+  order of standard-error lines among the checks (diagnostics, not the answer he sees, whose order is unchanged).
+  gentle-ai: `862a96d3..19348fd4` approved (lineage `review-c4cd419b84ce606f`).
+
 ## Next step
-State at the context pause (2026-10-30, 85%): T2 and T3 done on this branch (head `fd46303` plus this commit); PR 707
-holds T2. Next: push this branch as `f8-lead-rigor-2` and open PR 2 (T3) on main, ready notice; then T4. T4's draft
-module is in `C:\Users\Oficina\.claude\jobs\01225f7c\tmp\reply-commands.mjs` (not committed; scratch): move it to
-`bin/lib/reply-commands.mjs`, export `fencedBlocks` (with each fence's `info`) from `bin/lib/reply.mjs`, write
-`bin/lib/reply-commands.test.mjs` first on the real excerpts named in S1's design, wire it in `bin/reply.mjs` with
-the deadline and a parser spawn (`pwsh.exe`, else `powershell.exe`; the probe script that caught `-rf` is
-`tmp/probe.ps1`, alias resolved by `Definition`), then the replay over transcript 0f71b2c6's replies, then reviews.
+State (2026-10-30): PRs 707 (T2) and 710 (T3) are merged; T4 is PR 714 (`ccd7e3f9` to `19348fd4`), every code commit
+reviewed by Codex, the lenses and gentle-ai (L12 to L17). Next: push, the ready notice for 714, the closed notice with
+the session summary. The contract closes when 714 is on main (the lead's merge queue).

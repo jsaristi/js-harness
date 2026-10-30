@@ -291,10 +291,13 @@ A command he was handed to run on his machine had not been run first, and it bro
   `rm -rf /d/js-harness-worktrees`, after its own runs of it were refused by the guard (lines 32882 to 32895); his
   shell is PowerShell, where `rm` is `Remove-Item`, and he got "Remove-Item: No se encuentra un parámetro que
   coincida con el nombre de parámetro "rf"" (line 32965); the fix then was a PowerShell command run first
-- Control: owed — odd/tasks/instruction-homes.md — "a command handed to him that writes his configuration is run
-  first against a scratch configuration"
-- Proof: `js-harness failures weeks`: no sighting of this entry once the reply check refuses a command block not
-  tagged for his shell or never run (owed: odd/tasks/f8-lead-rigor.md, T4)
+- Control: check — bin/reply.test.mjs — "a reply handing him a block the session never ran with success is turned
+  back" — since 2026-10-30
+- Proof: `js-harness failures weeks`: no sighting of this entry from the week the reply check lands; its replay over
+  the lead's transcript 0f71b2c6 refused all 9 of the replies that handed him a command block (odd/tasks/f8-lead-rigor.md, L11)
+- Was: owed — odd/tasks/instruction-homes.md — "a command handed to him that writes his configuration is run
+  first against a scratch configuration"; replaced on 2026-10-30 by the reply check's refusal of a command block not
+  tagged for his shell, not run with success first or rejected by his shell's parser (odd/tasks/f8-lead-rigor.md, T4)
 
 ### command-run-for-help
 A session ran a command it did not know, to read its help, and the command acted.
@@ -414,6 +417,8 @@ machine for nothing.
 - Seen: 2026-10-27 — odd/tasks/f8-s1-reviews.md, L9 — JH 62 ran a failed commit again to read its failing
   test, a second CI run of about 165 s, when the first run's output, cut by `tail`, already pointed at the
   failure; the name of the failing test is on the gate's `✖ failing tests:` lines, read from the first run
+- Seen: 2026-10-30 — odd/tasks/f8-lead-rigor.md, L13 (JH 106) — in small: eight test files run twice through
+  `js-harness gate`, about four minutes, because a `grep | head` of the first run kept help lines and cut its summary
 
 ### doctor-lock-mtime-ms
 A test of `bin/doctor.test.mjs`, "doctorMain shows the pnpm-lock row stale for a global bin lock left over
@@ -1618,6 +1623,10 @@ was not so.
 - Seen: 2026-10-30 — odd/tasks/f8-s13-rehearsal.md, run 8 — JH 90 told the lead that `lens-review --plan` leaves out
   the lens prompt, unread; `bin/lens-review.mjs:221` counts it, and the session corrected the notice within a minute,
   before the lead answered or anything was built on it
+- Seen: 2026-10-30 — the channel, the lead's note to JH 106 at 19:08Z (the lead's own) — at 18:50Z the lead told him
+  that stopping ccstatusline freed about 4 GB, read from its WorkingSet64; JH 107 measured 404 MB private and about
+  260 MB of free memory gained; the claim came from the wrong measure, with no read of free memory before and after
+  by the same probe
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting

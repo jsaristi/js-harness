@@ -1867,6 +1867,21 @@ session of that number (except the opening the session read, always stored befor
 call the host moved to the background when it outlived its timeout counts as a launch, and Codex, which sends no background tasks, is not checked. When the close
 is refused too, both reasons go in one block.
 
+It also turns back a reply that hands the user a shell command in a fenced block, on both hosts. A
+block is a command block when its info string starts with a shell (`bash`, `powershell`, ...), or
+when it has none and its first line starts with a known program (`git`, `npm`, `js-harness`,
+`rm`, `Remove-Item`, ...). A block handed to him must be tagged for his shell (on win32
+`powershell`, `pwsh` or `ps1`; elsewhere `bash`, `sh`, `zsh`, `shell` or `console`), and each of its
+commands must match, word for word, a `Bash` or `PowerShell` run of the session that succeeded
+(not after `||`, not before `;` or a pipe); on win32 PowerShell's parser also reads it, with each
+named parameter of a cmdlet bound (`rm -rf` is refused: `rm has no parameter -rf`). A second word
+in the info string says what else a block is: `ran`, evidence of what the session ran, matched to
+a run whatever its exit; `own`, his alone to run (his credentials, his settings), read by his
+shell's parser instead of a run (`bash -n` off Windows). The parser gets what is left of 4
+seconds; one that cannot answer in it refuses the block. Known limits: a command written inline or
+in a question is not read, his shell is read from the machine the hook runs on, and the block is
+already on his screen, so the session tells him not to run it and gives the corrected one.
+
 ```console
 $ js-harness reply --hook < stop.json
 {"decision":"block","reason":"js-harness reply: the reply has no state line. End the reply with one line that starts with one of: Sigo solo (say what wakes you), Necesito tu decisión (never while background work runs; the question itself goes through the question tool), Te pregunto (an open question the user answers in writing, asked on that line), Corte (one code block of only what the user sends, under the lines Qué es:, Dónde: and Qué pasa:), Terminado (name the session to return to). Your reply is already shown: write the close again in your next words."}
