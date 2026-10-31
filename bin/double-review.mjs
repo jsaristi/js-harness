@@ -379,13 +379,15 @@ async function readCommand(args, root, env, deps, { log, error }) {
     const readers = await readBoth({ root, model, prompt, hash, folder, material: copies, env, deps, error });
     const id = (deps.id ?? randomUUID)();
     const at = (deps.now ?? (() => new Date()))().toISOString();
+    // What the readers found is printed first: it cost both readers' tokens, and a record that cannot be written must
+    // not lose it.
+    for (const line of readLines(id, readers)) log(line);
     try {
       appendDoubleReview(root, { kind: 'read', id, at, files: sources.map((one) => one.rel), ...(args.diff === undefined ? {} : { diff: args.diff }), hash, readers });
     } catch (err) {
-      error(`the read could not be recorded: ${err.message}`);
+      error(`the read could not be recorded: ${err.message}; its findings are above, and take cannot judge them until a read is recorded`);
       return 1;
     }
-    for (const line of readLines(id, readers)) log(line);
     return readers.every((one) => one.outcome === 'answered') ? 0 : 1;
   } finally {
     fs.rmSync(folder, { recursive: true, force: true });

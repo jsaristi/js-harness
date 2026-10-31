@@ -554,6 +554,9 @@ not the committed range, wrote no record and had to be run again.
 - Seen: 2026-10-31 — `odd/tasks/reply-hook-latency.md` L8 (JH 116) — that document edited, after the lenses had
   finished, during the Codex review of `f91cbcc..8dd55c8`; 128,821 input tokens spent on part 3 of 3, nothing
   recorded, that part run again (parts 1 and 2 kept)
+- Seen: 2026-10-31 — `odd/tasks/double-review-alignment.md` L11 (JH 126) — that document edited, with the lenses
+  running beside it, during the Codex review of `d22f33e..bcd2dd4`; 28,500 input tokens spent on part 1 of 4,
+  nothing recorded, run again
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 

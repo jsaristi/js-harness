@@ -182,8 +182,14 @@ CRLF folded, 2cb04248, a code commit since it refreshed `rules-coverage-data.mjs
 declines it; the roadmap's two lines): T5 is done (b042cddc). T3 is built without the reserve: `bin/double-review.mjs`,
 `bin/lib/double-review-records.mjs`, their tests, the dispatcher and the README; `codex-review` exports `leanFlags`
 and `leanEnv` with no line added. The Claude reader reads `rule:subagent-reader-model` through `ruleHere`, a rule of
-this repository, and a project without it reads on the alias `opus`. Not run against the real CLIs yet: T6's first
-read, announced with its cost, is that run. Next: T2 and T4 once 150 is answered, else T6. Earlier notes: CLAUDE.md is at 3190 of 3200 tokens as `check` measures it; the two edits (`## Depth
+this repository, and a project without it reads on the alias `opus`. Committed as bcd2dd4a (L10). Not run against
+the real CLIs yet: T6's first read, announced with its cost, is that run. `bin/lib/rules-coverage-data.mjs` is at 988
+of its 1,000-line ceiling, so T4's text changes must change spans in place or free lines first. Running: Codex
+(`codex-review --base 3ac49fa8`, 4 parts, about 474k to 660k input tokens, meter 80% weekly before) and the lenses
+risk, resilience and reliability over `d22f33ed..bcd2dd4a`. Next: their findings, then T2 and T4 once 150 is
+answered. The lenses finished (risk 0, resilience 1, reliability 0); resilience's finding, a read whose record fails
+loses both readers' findings, is fixed in the commit after bcd2dd4a, and Codex runs again over `d22f33e..` that commit
+(L11). Earlier notes: CLAUDE.md is at 3190 of 3200 tokens as `check` measures it; the two edits (`## Depth
 pass` (rule 1) in the order at line 24, and line 92 "a skip is a debt `check`, `doctor` and the merge door list until
 a review pays it, and the door refuses a lens skip") measured 3237 with `estimateTokens` after the Edit tool, likely
 line endings; measure as `bin/lib/claude-md-budget.mjs` does before committing, and trim within the same paragraphs
@@ -262,3 +268,15 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   change of 147); 147 and 148 were tapped, and the reserve's 10% exists only in 148's option text. A rule of his takes
   only his typed words, so one question goes to him through the lead, asking him to write his acceptance of 147 and
   148; the two rule commits (T2's first step, T4) wait for it, and T3, T5 and T2's code that reads no rule go on.
+- L10 (2026-10-31, decisions in building T5 and T3): `sync` offers `depthPassSince` and never writes it, since
+  `harness.json` is a committed file it keeps; the offered day is the next one, as this repository chose 2026-11-01 so
+  documents opened today stay as they are, and `null` declines it. The offer is in `syncMain` alone, so `migrate` and
+  `check` print nothing new (b042cddc). In T3 the readers' prompt is a text source of directive coverage
+  (`bin/lib/rules-sources.test.mjs` holds every prompt builder to one), with no headings, because each sentence is a
+  span the register declares and the register sits under its line ceiling; the Claude reader's model is read with
+  `ruleHere`, since `rule:subagent-reader-model` is of this repository only (bcd2dd4a).
+- L11 (2026-10-31, a mistake): this document was edited while Codex reviewed `d22f33e..bcd2dd4`, so the run read a
+  tree that was not the range and recorded nothing (28,500 input tokens, part 1 of 4); `docs/FAILURES.md`
+  `edit-during-review`, its eighth sighting. Fixed by committing the edit and running the review again, touching no
+  tracked file until it returns. What would stop it: the guard refusing an edit of a tracked file in a worktree
+  whose Codex review is running, a check before a line; proposed to the lead, not built here (out of this scope).

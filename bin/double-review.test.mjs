@@ -183,6 +183,19 @@ test('a reader that does not echo the material\'s hash did not read it: the read
   assert.match(record.readers[1].reason, /hash/);
 });
 
+test('a read whose record cannot be written still prints what both readers found, and exits 1', async (t) => {
+  const root = makeRepo(t);
+  fs.writeFileSync(path.join(root, '.git', 'js-harness'), 'a file where the record folder goes\n');
+  const { spawn } = fakeSpawn((command, args, prompt) =>
+    command === 'codex' ? codexAnswer(args, prompt, [finding('codex one')]) : { stdout: claudeOut(prompt, [finding('claude one')]) });
+  const run = deps(t, root, spawn);
+  assert.equal(await doubleReviewMain(['read', 'plan.md'], {}, run.deps), 1);
+  const said = run.lines.log.join('\n');
+  assert.match(said, /claude 1\. \[high\] claude one/);
+  assert.match(said, /codex 1\. \[high\] codex one/);
+  assert.match(run.lines.error.join('\n'), /could not be recorded/);
+});
+
 test('a missing file is refused before anything starts', async (t) => {
   const root = makeRepo(t);
   const { spawn, calls } = fakeSpawn(() => ({}));
