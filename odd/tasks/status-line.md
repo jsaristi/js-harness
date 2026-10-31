@@ -71,7 +71,7 @@ mod: his. Whether the feature closes here or builds a program the app would not 
   (L4)
 - [x] T3 (kind: docs) row #24 of the host review, row 14 of the map, the ROADMAP, the failure entry — commits: with
   this document's second commit
-- [ ] T4 (kind: verify) two blind readers of the design (done, L3); Codex and the lenses over T2's commits — pending
+- [x] T4 (kind: verify) two blind readers of the design (L3); Codex and the lenses over T2's commits (L6)
 - [ ] T5 (kind: docs) specs 3 and 4 are deferred pending the answer to T6's question: the brief's Done-when holds them,
   and this document does not meet it without his word — pending
 - [ ] T6 (kind: verify) the pull request, its ready notice, the question to the lead, the summary — pending
@@ -214,3 +214,11 @@ only with evidence that a claude.ai install reads it, and step 2 of the review b
 - L5 — cost per refresh, measured with `Measure-Command` in Windows PowerShell 5.1 through the node runner: empty
   `powershell.exe -NoProfile` 1,275 ms; `node -e 0` 574 ms; `js-harness sessions --json` from `D:\js-harness`
   24,135 ms. One run each: an estimate of the order, not a distribution.
+- L6 — reviews of 1f19c04..ceffbc0 (code commits 6b37f498, 33246b02, 15fd8749). Codex (`js-harness codex-review --base
+  1f19c04e`, gpt-6.1-sol at medium, 41 changed lines in 2 files, 68,616 input tokens): "the patch is correct
+  (confidence 0.96) [...] no actionable defects were found". The Claude lenses (`js-harness lens-review --base 1f19c04e
+  --lenses reliability,readability`): reliability 0 findings (14,142 input tokens), readability 0 findings (6,707).
+  Both recorded under `.git/js-harness/`. gentle-ai: the Stop hook offered the whole branch (base 1f19c04e, every path);
+  its read-only `review status` was run and nothing started, as `CLAUDE.md` says for a branch candidate: not reviewed
+  by gentle-ai. No independent verifier: no Task Size high-risk item is touched (no installer was written; the
+  administrator install was not built).
