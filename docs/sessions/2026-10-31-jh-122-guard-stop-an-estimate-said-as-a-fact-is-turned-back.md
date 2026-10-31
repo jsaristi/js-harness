@@ -50,7 +50,9 @@ would turn back 77 of the lead's 595 replies (L4).
 - The worktree guard refused compound commands and `js-harness gate -- git commit`; they ran as plain commands.
 
 ## Left
-- Merge of PR 737: the lead's. After it lands, the installed copy must be brought up to main for the hook to act.
+- Dropped by his answer to question 142, "Descartarlo (Recomendada)" (transcript 0f71b2c6, line 42276): PR 737 closed
+  without merging; why is in L10 of the feature document. Row 72 of the lead's duties stays without its own control.
+  The branch is kept until he answers whether to delete it.
 - Known gaps, written in L7: a forecast with no future verb, a scheduled time in the future tense, marks that pass a
   clause from anywhere in it, a share-and-forecast reply with an unreadable transcript (fails open).
 

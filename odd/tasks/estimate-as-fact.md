@@ -151,3 +151,12 @@ changes no rule of his. Spend: one gate, one Codex review, the Claude lenses, on
   on 638e27fe, on Windows (not WSL2, where PR 736's land was red), 4/4: the lead's stop p90 729 ms, a work session's
   p90 646 ms, budget 2500 ms. Those tests time `reply --hook`, which does not load `bin/lib/audit.mjs`; this check
   runs in `guard --stop`, its own process, at 11 to 22 ms for its first reading (L5, L7).
+- L10 (2026-10-31, his decision, question 142, answered "Descartarlo (Recomendada)", transcript 0f71b2c6, line
+  42276, 11:31:54Z, read with `js-harness sessions --quote`; relayed by the lead): PR 737 is closed without merging.
+  Why the check did not earn its place: it catches none of the six sightings that motivated it (three were already
+  marked as estimates, two were counts and one a premise with no figure, L3); over real replies it turned back 0 of
+  the lead's 597 and 9 of 7,588 of work sessions (5 distinct, 1 a true forecast, L7); and it costs 11 to 22 ms a
+  stop (L5, L7). A net for bare forecasts that have not happened yet was not worth that cost and the code to keep.
+  Row 72 of `odd/tasks/lead-duty-checks.md` stays without its own control on main: its share half is still checked
+  by `shareRefusal`, as before; this branch's edits to row 72, item 3 and `docs/FAILURES.md` do not land. The branch
+  is kept: deleting it is his yes, still unasked.
