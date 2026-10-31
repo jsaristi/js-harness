@@ -10,7 +10,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { CONTRACT_TEMPLATE, doneWhen, isContract, modeLine, parseContract, taskModes, validateContract } from './lib/contract.mjs';
 import { ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
-import { depthPassFor } from './lib/depth-pass.mjs';
+import { depthPassJudge, isDocument } from './lib/depth-pass.mjs';
+import { localDay } from './lib/flaky.mjs';
 
 export const USAGE =
   'Usage: js-harness contract template | check [file...] [--cwd <dir>] | run <file> [--timeout <minutes>] [--cwd <dir>] | goal <file> [--cwd <dir>] | modes <file> [--task <id>] [--cwd <dir>]';
@@ -131,8 +132,7 @@ export function discoverContracts(
 /** One `{ label, ok, errors }` per entry from `discoverContracts` or from explicit files. Given the project's
  * `root`, each entry is also held to `rule:depth-pass` (./lib/depth-pass.mjs) at its repository path, `file` or
  * else its label; `run` and `goal` give none, since the pass is a gate's question and not a run's. */
-export function validateEntries(entries, { root } = {}) {
-  const depthPass = root ? depthPassFor(root) : null;
+export function validateEntries(entries, { depthPass = null } = {}) {
   return entries.map(({ label, file = label, markdown, error }) => {
     if (error) return { label, ok: false, errors: [`cannot read: ${error}`] };
     if (!isContract(markdown)) return { label, ok: false, errors: ['not a contract: no "## Goal" heading'] };
@@ -172,7 +172,7 @@ function checkCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn }) {
     stdout('no contracts under odd/tasks');
     return 0;
   }
-  const results = validateEntries(entries, { root });
+  const results = validateEntries(entries, { depthPass: depthPassFor(root) });
   for (const { label, ok, errors } of results) {
     stdout(`${ok ? 'PASS' : 'FAIL'}  ${label}`);
     for (const reason of errors) stdout(`      ${reason}`);
@@ -392,4 +392,87 @@ export async function contractMain(
     return 2;
   }
   return SUBCOMMANDS[subcommand](rest, { cwd, stdout, stderr, spawn, start, env, harnessPath });
+}
+
+// The reading half of `rule:depth-pass`: the history ./lib/depth-pass.mjs judges, read here at the command's edge.
+const TRUNKS = ['origin/HEAD', 'origin/main', 'origin/master'];
+const gitIn = (root) => (args) => {
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  return result.status === 0 ? result.stdout.split('\n').map((line) => line.trimEnd()).filter(Boolean) : null;
+};
+
+/** The commit and the day each document under `odd/tasks/` first came into `root`'s history, by its path today: one
+ * `git log` oldest first, a rename carrying the day of the path it came from. Paths are the project's (`--relative`). */
+function openedOn(git) {
+  const opened = new Map();
+  let commit = null;
+  for (const line of git(['log', '--reverse', '--relative', '-M', '--diff-filter=AR', '--name-status', '--format=>%H %cs', '--', 'odd/tasks']) ?? []) {
+    if (line.startsWith('>')) {
+      const [hash, day] = line.slice(1).split(' ');
+      commit = { hash, day };
+      continue;
+    }
+    const [status, from, to] = line.split('\t');
+    if (status.startsWith('R') && to) opened.set(to, opened.get(from) ?? commit);
+    else if (status === 'A' && !opened.has(from)) opened.set(from, commit);
+  }
+  return opened;
+}
+
+/** The trunk and the branch's commits oldest first, `{ trunk, commits: [{ hash, files }] }`, from the trunk to
+ * `HEAD`, merges left out; `null` where no trunk is known, so no order can be judged. */
+function branchOf(git) {
+  const trunk = TRUNKS.find((ref) => git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]) !== null);
+  if (!trunk) return null;
+  const commits = [];
+  for (const line of git(['log', '--reverse', '--topo-order', '--no-merges', '--relative', '--name-only', '--format=>%H', `${trunk}..HEAD`]) ?? []) {
+    if (line.startsWith('>')) commits.push({ hash: line.slice(1), files: [] });
+    else commits.at(-1)?.files.push(line);
+  }
+  return { trunk, commits };
+}
+
+/** The day `root`'s `harness.json` holds the control from, or `null` where it declares none. */
+function sinceOf(root) {
+  try {
+    const since = JSON.parse(fs.readFileSync(path.join(root, 'harness.json'), 'utf8'))?.depthPassSince;
+    return typeof since === 'string' ? since : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The control for every document of the project at `root`, as `(file, markdown) => faults`: nothing at all where
+ * the project declares no `depthPassSince`, or where its history cannot say when a document opened (no repository,
+ * or a shallow clone, whose first commit shows every file as added that day); else `depthPassJudge` over the
+ * history, read once, at the first document. An untracked document counts as opened `today`. */
+export function depthPassFor(root, { git = gitIn(root), today = localDay() } = {}) {
+  const since = sinceOf(root);
+  if (since === null || git(['rev-parse', '--is-shallow-repository'])?.[0] !== 'false') return () => [];
+  let judge;
+  return (file, markdown) => (judge ??= readJudge(git, since, today))(file, markdown);
+}
+
+/** `depthPassJudge` over `git`'s history. */
+function readJudge(git, since, today) {
+  const branch = branchOf(git);
+  const trunk = branch?.trunk;
+  const text = (spec) => git(['show', spec])?.join('\n') ?? null;
+  return depthPassJudge({
+    since,
+    today,
+    opened: openedOn(git),
+    branch: branch?.commits ?? null,
+    staged: git(['diff', '--cached', '--relative', '--name-only']) ?? [],
+    onTrunk: (file) => text(`${trunk}:./${file}`),
+    trail: (file) => {
+      const trail = [];
+      for (const line of git(['log', '--follow', '--no-merges', '--name-only', '--format=>%H', `${trunk}..HEAD`, '--', file]) ?? []) {
+        if (line.startsWith('>')) trail.unshift({ hash: line.slice(1), path: null });
+        else if (trail[0].path === null) trail[0].path = line;
+      }
+      return trail;
+    },
+    version: (hash, path) => text(`${hash}:${path}`),
+  });
 }

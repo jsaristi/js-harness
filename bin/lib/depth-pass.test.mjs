@@ -7,8 +7,9 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { depthPassFor, depthPassText } from './depth-pass.mjs';
+import { depthPassText } from './depth-pass.mjs';
 import { checkContracts } from '../check.mjs';
+import { depthPassFor } from '../contract.mjs';
 import { contractMain } from '../contract.mjs';
 
 let configDir;
@@ -261,6 +262,30 @@ test('a renamed document keeps the day it opened', (t) => {
   git(root, 'mv', FILE, 'odd/tasks/renamed.md');
   git(root, 'commit', '-q', '-m', 'docs: rename');
   assert.deepEqual(depthPassFor(root, { today: '2026-11-05' })('odd/tasks/renamed.md', `${CONTRACT}\n${SPECS}`), []);
+});
+
+test('a pass renamed on its branch after its code keeps the commit that brought its verdict', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  write(root, FILE, document());
+  commit(root, 'docs: the pass', FILE);
+  write(root, 'bin/a.mjs', 'two\n');
+  commit(root, 'feat: the code', 'bin/a.mjs');
+  git(root, 'mv', FILE, 'odd/tasks/renamed.md');
+  git(root, 'commit', '-q', '-m', 'docs: rename');
+  assert.deepEqual(errorsOf(root, document(), 'odd/tasks/renamed.md'), []);
+});
+
+test('a document whose verdict is on the trunk is not judged again when a branch edits it beside code', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  write(root, FILE, document());
+  commit(root, 'docs: the pass', FILE);
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  write(root, FILE, `${document()}\n## Log\n- L9: a later note.\n`);
+  write(root, 'bin/a.mjs', 'two\n');
+  commit(root, 'feat: more code and a note', FILE, 'bin/a.mjs');
+  assert.deepEqual(errorsOf(root), []);
 });
 
 test('a project in a folder of its repository reads its documents\' days at their project paths', (t) => {

@@ -7,15 +7,11 @@
 //
 // The order is judged on the branch alone, the commits `HEAD` holds and the trunk (`origin/HEAD`, `origin/main` or
 // `origin/master`) does not: once a feature is on the trunk its order was judged, and a squash, a refuted plan left
-// there or another feature's later code says nothing new. `depthPassText` and `depthPassOrder` read only what they
-// are handed; `depthPassFor` is the one part that reads, `harness.json` and git, a few commands for all documents.
-import fs from 'node:fs';
-import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+// there or another feature's later code says nothing new. Pure: the command reads the history (`depthPassFor`,
+// ../contract.mjs) and hands this module what it read.
 import { parseContract } from './contract.mjs';
 import { tokenize } from './progress.mjs';
 import { citationsIn } from './citations.mjs';
-import { localDay } from './flaky.mjs';
 
 const ITEMS = ['Method', 'Raw material', 'The bar', 'Refutation', 'Request'];
 // An item opens a line, as a list item or a heading, bold or not: `- 1. Method:`, `### 2. Raw material`.
@@ -26,8 +22,9 @@ const ADDS = /^\s*(?:[-*+]\s+)?Adds: (?:none|.+\(question \d+\))\s*\.?\s*$/;
 const URL = /\bhttps?:\/\/\S+/;
 const TRANSCRIPT_LINE = /\btranscript\b[^\n]*?\bline\s+\d+/i;
 const SPEC = /^(\d+)\.\s/;
+/** Whether `name` is a document: Markdown, the only files a pass may be committed with. */
+export const isDocument = (name) => name.toLowerCase().endsWith('.md');
 const NO_PASS = 'no "## Depth pass": large work holds one before its first code commit (js-harness-protocols section 9)';
-const TRUNKS = ['origin/HEAD', 'origin/main', 'origin/master'];
 
 /** The lines of `markdown`'s `## Depth pass`, fenced lines left out, or `null` where it has none. */
 function passLines(markdown) {
@@ -44,7 +41,7 @@ function passLines(markdown) {
 
 /** The verdict of `markdown`'s pass, `'supports'` or `'refutes'`, or `null` where its pass gives none. */
 export function verdictOf(markdown) {
-  return VERDICT.exec((passLines(markdown) ?? []).join('\n'))?.[1] ?? null;
+  return VERDICT.exec((passLines(markdown ?? '') ?? []).join('\n'))?.[1] ?? null;
 }
 
 /** The form of `markdown`'s pass, `file` being its project path: the faults, in the order of the items. */
@@ -98,76 +95,25 @@ export function depthPassOrder({ branch, staged, verdict, answered }) {
   return errors;
 }
 
-const gitIn = (root) => (args) => {
-  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  return result.status === 0 ? result.stdout.split('\n').map((line) => line.trimEnd()).filter(Boolean) : null;
-};
-const isDocument = (name) => name.toLowerCase().endsWith('.md');
-
-/** The commit and the day each document under `odd/tasks/` first came into `root`'s history, by its path today: one
- * `git log` oldest first, a rename carrying the day of the path it came from. Paths are the project's (`--relative`). */
-function openedOn(git) {
-  const opened = new Map();
-  let commit = null;
-  for (const line of git(['log', '--reverse', '--relative', '-M', '--diff-filter=AR', '--name-status', '--format=>%H %cs', '--', 'odd/tasks']) ?? []) {
-    if (line.startsWith('>')) {
-      const [hash, day] = line.slice(1).split(' ');
-      commit = { hash, day };
-      continue;
-    }
-    const [status, from, to] = line.split('\t');
-    if (status.startsWith('R') && to) opened.set(to, opened.get(from) ?? commit);
-    else if (status === 'A' && !opened.has(from)) opened.set(from, commit);
-  }
-  return opened;
-}
-
-/** The branch's commits oldest first, `{ hash, files }`, from the trunk to `HEAD`, merges left out; `null` where no
- * trunk is known, so no order can be judged. */
-function branchOf(git) {
-  const trunk = TRUNKS.find((ref) => git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]) !== null);
-  if (!trunk) return null;
-  const commits = [];
-  for (const line of git(['log', '--reverse', '--topo-order', '--no-merges', '--relative', '--name-only', '--format=>%H', `${trunk}..HEAD`]) ?? []) {
-    if (line.startsWith('>')) commits.push({ hash: line.slice(1), files: [] });
-    else commits.at(-1)?.files.push(line);
-  }
-  return commits;
-}
-
-/** The day `root`'s `harness.json` holds the control from, or `null` where it declares none. */
-function sinceOf(root) {
-  try {
-    const since = JSON.parse(fs.readFileSync(path.join(root, 'harness.json'), 'utf8'))?.depthPassSince;
-    return typeof since === 'string' ? since : null;
-  } catch {
-    return null;
-  }
-}
-
-/** The control for every document of the project at `root`, as `(file, markdown) => faults`, `file` its project
- * path: nothing at all where the project declares no `depthPassSince`, or where its history cannot say when a
- * document opened (no repository, or a shallow clone, whose first commit shows every file as added that day). The
- * history is read once, at the first document held; an untracked document counts as opened `today`. */
-export function depthPassFor(root, { git = gitIn(root), today = localDay() } = {}) {
-  const since = sinceOf(root);
-  if (since === null || git(['rev-parse', '--is-shallow-repository'])?.[0] !== 'false') return () => [];
-  let history;
-  const read = () => (history ??= {
-    opened: openedOn(git),
-    branch: branchOf(git),
-    staged: (git(['diff', '--cached', '--relative', '--name-only']) ?? []).filter((name) => !isDocument(name)),
-  });
+/** The control over one project, as `(file, markdown) => faults`, `file` the document's project path, from the
+ * history the command read: `since` and `today`; `opened`, each document's path to `{ day }` it first came in, renames
+ * followed; `branch`, the branch's commits oldest first as `{ hash, files }`, or `null` where no trunk is known;
+ * `staged`, the staged files; and three readers of one document: `onTrunk(file)`, its text on the trunk or `null`;
+ * `trail(file)`, the branch's commits that touched it oldest first as `{ hash, path }`, renames followed; and
+ * `version(hash, path)`, its text at that commit or `null`. */
+export function depthPassJudge({ since, today, opened, branch, staged, onTrunk, trail, version }) {
   return (file, markdown) => {
-    const { opened, branch, staged } = read();
     if ((opened.get(file)?.day ?? today) < since) return [];
     const errors = depthPassText(markdown, file);
-    // A document the branch does not touch was judged on the branch that brought it.
-    const touched = branch?.filter((commit) => commit.files.includes(file)) ?? [];
-    if (errors.includes(NO_PASS) || branch === null || (opened.has(file) && touched.length === 0)) return errors;
-    const first = touched.find((commit) => verdictOf((git(['show', `${commit.hash}:./${file}`]) ?? []).join('\n')) !== null);
+    if (errors.includes(NO_PASS) || branch === null) return errors;
+    // A verdict already on the trunk was judged on the branch that brought it.
+    if (verdictOf(onTrunk(file)) !== null) return errors;
+    const touched = trail(file);
+    if (opened.has(file) && touched.length === 0) return errors;
+    const first = touched.find(({ hash, path }) => verdictOf(version(hash, path)) !== null);
     const facts = branch.map(({ hash, files }) => ({ code: files.filter((name) => !isDocument(name)), brings: hash === first?.hash }));
     const pass = (passLines(markdown) ?? []).join('\n');
-    return [...errors, ...depthPassOrder({ branch: facts, staged, verdict: verdictOf(markdown), answered: ANSWERED.test(pass) })];
+    const code = staged.filter((name) => !isDocument(name));
+    return [...errors, ...depthPassOrder({ branch: facts, staged: code, verdict: verdictOf(markdown), answered: ANSWERED.test(pass) })];
   };
 }

@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { estimateTokens, measurePayload } from './lib/payload.mjs';
 import { VERSION_TAG_REF } from './lib/version.mjs';
 import { fixedLoadRow } from './lib/fixed-load.mjs';
-import { discoverContracts, validateEntries } from './contract.mjs';
+import { depthPassFor, discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
 import { checkSpec } from './lib/spec.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
@@ -72,7 +72,7 @@ export function checkBudget(cwd) {
  * Static only: it never runs a done-when command, which may be `npm run check` itself. */
 export function checkContracts(cwd) {
   const name = 'contracts';
-  const results = validateEntries(discoverContracts(cwd), { root: cwd });
+  const results = validateEntries(discoverContracts(cwd), { depthPass: depthPassFor(cwd) });
   if (results.length === 0) return { name, pass: true, detail: 'no contracts under odd/tasks' };
   const plural = (n) => `${n} contract${n === 1 ? '' : 's'}`;
   const failed = results.filter((result) => !result.ok);

@@ -232,8 +232,20 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   (L21, the double review, written into the alignment feature and not built here). No question of this feature open.
 - Slice 1 (T4) is 1722be2d (L19); slice 2 (T5) is 36439e1e (L20); section 9's line and T7 are the two commits after
   it (L21).
-- Next, in order: (1) Merge origin/main (JH 123). (2) Codex, the lenses and a verifier over the code commits,
-  `npm run check`, push, PR, ready notice.
+- Reviewed and recorded: Codex b5bf748..c1e482b and c1e482b..6b10846 (its recheck: 2 of 4 fixed); lenses over
+  both ranges. Open from them, uncommitted work in progress at the context pause: (a) Codex, the verdict trail does
+  not follow renames; (b) Codex, the reading belongs at the command's edge: `bin/lib/depth-pass.mjs` becomes pure
+  (`depthPassJudge` takes `{ since, today, opened, branch, staged, onTrunk, trail, version }`), and
+  `depthPassFor(root)` moves to `bin/contract.mjs`, which reads `harness.json` and git (`openedOn` with `-M
+  --diff-filter=AR --relative`, `branchOf` over `origin/HEAD|main|master..HEAD`, `trail` by `git log --follow
+  --no-merges --name-only <trunk>..HEAD -- <file>`, `version` by `git show <hash>:<path>`, `onTrunk` by `git show
+  <trunk>:./<file>`); `validateEntries(entries, { depthPass })` takes the judge, built by `checkCommand` and by
+  `checkContracts` (`bin/check.mjs`, at its 2010-line ceiling: change lines, add none); (c) the reliability lens, a
+  verdict already on the trunk is not judged again. Two tests for (a) and (c) are written in
+  `bin/lib/depth-pass.test.mjs`, red as predicted; its tests import `depthPassFor` from `../contract.mjs` once moved.
+- Next, in order: (1) finish (a)-(c), 24 of 24, commit; (2) Codex once over 6b10846..HEAD and the lenses; (3) push,
+  PR with the merge of origin/main if JH 123 has landed, ready notice with `--pr`, `docs/sessions/` summary, closed
+  notice.
 
 ## Log
 - L1 (2026-10-31T11:55:49Z, his words, the lead's transcript `0f71b2c6`, line 42804, read with
