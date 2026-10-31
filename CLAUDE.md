@@ -22,7 +22,7 @@ within one short read), touches no high-risk item (below) and could be finished 
 and `git diff` alone. Small work stays inline with no feature document; it is large only when that
 resume test fails, never by counting files, tests or lines. Large work opens
 `odd/tasks/<feature>.md` before the first source write, in this order: the task contract;
-`## Specs`, numbered, quoting his words as written; `## Tasks`, one line each with its spec, route
+`## Depth pass`; `## Specs`, numbered, quoting his words as written; `## Tasks`, one line each with its spec, route
 and commit; `## Log` last, L1 his request as written, then his corrections, evidence and decisions.
 
 ## Working with Sebastián
@@ -89,8 +89,8 @@ or not gentle-ai reviewed it: `js-harness codex-review --base <boundary>` and `j
 lens-review --base <boundary> --lenses <pertinent> --reason <why>` record the reviews, and the
 pre-push hook refuses a branch whose code commits either record does not cover. Treat their
 findings like gentle-ai's. If one cannot run, report that and record the skip with its
-`--unavailable <reason>`: a skip is a debt `check` and `doctor` list and the merge door refuses
-until a review pays it.
+`--unavailable <reason>`: a skip is a debt `check`, `doctor` and the merge door list until a
+review pays it, and the door refuses a lens skip.
 
 ## Kept from the global file
 
