@@ -494,6 +494,20 @@ test('a merge of a stacked base is not read by its own lines when a commit of th
   assert.equal(mergeStart(root, { given: marked, tip: merge }), null);
 });
 
+test('a merge of main that only a record past it covers is still read by what was written in it: the push counts no such record (JH 112\'s verifier, finding 2)', () => {
+  const { root, first } = makeRepo();
+  git(root, 'checkout', '--quiet', '-b', 'trunk');
+  const moved = commit(root, 'm.js', 'main moves', 'feat: main moves');
+  remoteMainAt(root, moved);
+  git(root, 'checkout', '--quiet', '-b', 'feat', first);
+  const own = commit(root, 'b.js', 'two', 'feat: two');
+  record(root, first, own);
+  const merged = mergeWithEdit(root, 'trunk');
+  const later = commit(root, 'c.js', 'three', 'feat: three, past the merge');
+  record(root, own, later);
+  assert.equal(mergeStart(root, { given: own, tip: merged })?.from, own);
+});
+
 test('the base of a review that is the tip of the default branch is no base left out, though it is a code commit with no record', () => {
   const { root } = makeRepo();
   const tip = commit(root, 'b.js', 'two', 'feat: two');

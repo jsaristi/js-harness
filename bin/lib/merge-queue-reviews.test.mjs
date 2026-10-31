@@ -57,10 +57,11 @@ function makeRepo({ codexReview = 'on' } = {}) {
   return { root, main, c, d, record };
 }
 
-test('a record whose head lies past the pull request covers its head alone and not merged: the door refuses it, as the push of the merge does', () => {
+test('a record whose head lies past the pull request covers it neither at its head nor merged: the door refuses it, as the push of the branch and of the merge do', () => {
   const { root, main, c, d, record } = makeRepo();
   record(main, d);
-  assert.equal(checkCodexReviews(root, c).pass, true, 'at the head itself, d lies past the tip and the record covers c');
+  // Until JH 112 the push of the branch took it, d lying past the tip (docs/FAILURES.md, door-covers-past-tip).
+  assert.equal(checkCodexReviews(root, c).pass, false, 'at the head itself, d lies past the tip and the record covers nothing');
   const said = reviewEvidence(root, main, c);
   assert.equal(said.pass, false);
   assert.match(said.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
