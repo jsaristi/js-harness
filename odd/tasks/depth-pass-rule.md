@@ -216,6 +216,24 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
       after this lands. Route: inline.
 - [ ] T6 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
 
+## State for a resume
+- Branch `rule/depth-pass` in worktree `D:\js-harness\.claude\worktrees\depth-pass-rule` (from b66e8211; the old
+  `worktree-depth-pass-rule` on origin holds the documents only). His yes: 143 (v3, large work and when asked), 144
+  ("Encabeza los principios y el 7 se queda (Recomendada)", the lead's transcript line 43523, to be read with
+  `sessions --quote` and logged as L18). Question (c), readers on every large plan, not sent yet.
+- Uncommitted on purpose: section 9 in `bin/lib/protocols-skill.mjs` (green) and its tests in
+  `bin/lib/protocols-skill.test.mjs` (one still red: the pointer).
+- Next, in order: (1) copy the test file aside and `git checkout` it, so the tree differs only in the home; run
+  `node bin/js-harness.mjs rules change depth-pass` with JSON on stdin: set {subject, owner "sebastian"}, path
+  `bin/lib/protocols-skill.mjs`, phrases from section 9 ("Deeper, not bigger: the pass grounds the work asked for and
+  adds none", "the analysis first and the rewrite last", "A refuting verdict reaches the user as a question before
+  any code", "never the user's summary nor this document", "The pass reaches the user in the feature's report"),
+  source words: quotes {session 0f71b2c6-cbce-43ca-a031-276a4b2c381f, lines 42804, 42859, 42878, 43370, excerpt},
+  reading, accepted (`sourceOf`, `bin/lib/rules-change.mjs:260`). (2) Restore the test file; add the pointer after the
+  import in the root `CLAUDE.md` and as the first paragraph of `claudeBlock` ("the owner asks"); fix the tests that
+  pin `claudeBlock` (hash, line ceiling: see commit 665baea7); the coverage entry (`rules coverage --refresh`); one
+  commit. (3) Slice 2, the control. (4) T7, the roadmap, as 144 says. (5) Reviews, PR.
+
 ## Log
 - L1 (2026-10-31T11:55:49Z, his words, the lead's transcript `0f71b2c6`, line 42804, read with
   `js-harness sessions --quote`): "Quiero que de ahora en adelante cambiemos un pilar fundamental como primera regla
