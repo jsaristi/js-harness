@@ -129,6 +129,13 @@ test('profile runs only where the hook would, the nearest harness.json deciding,
   const lines = await profile(payload, options);
   assert.ok(lines.some((line) => /^commands\s+\d+\s+warns$/.test(line)), lines.join('\n'));
   assert.ok(lines.some((line) => /the shell parser/.test(line)), lines.join('\n'));
+  // The deadline counts from the profile's start, as the hook's counts from its own, setup included: with the clock
+  // at 0 at the start and 3900 ms on after it, the parser is left 100 ms of the check's 4000.
+  const timeouts = [];
+  let calls = 0;
+  const now = () => (calls++ === 0 ? 0 : 3900);
+  await profile(payload, { ...options, now, parse: (texts, { timeout }) => { timeouts.push(timeout); return { errors: [['x']] }; } });
+  assert.deepEqual(timeouts, [100]);
 });
 
 test('parseArgs reads each mode and refuses what it does not know', () => {

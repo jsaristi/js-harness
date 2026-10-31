@@ -165,8 +165,10 @@ export function timeRuns(commands, input, n, { spawn = spawnSync, clock = () => 
  * sharing what the hook shares (its `stopIo`, its config lookup, its command-block check and that check's deadline):
  * the lines of a report, the time of loading the modules, each check's time and, under it, each read, git call, parse
  * of the record and shell parse it made; what an earlier check made is not made again. It throws where the hook
- * would check nothing. `env`, `homedir`, `platform` and `parse` are the hook's own, given to a test. */
-export async function profile(payload, { repo = REPO_ROOT, env = process.env, homedir = os.homedir, platform = process.platform, parse = null } = {}) {
+ * would check nothing. `env`, `homedir`, `now`, `platform` and `parse` are the hook's own, given to a test. */
+export async function profile(payload, { repo = REPO_ROOT, env = process.env, homedir = os.homedir, now = () => Date.now(), platform = process.platform, parse = null } = {}) {
+  // The command-block check's deadline counts from here, as the hook's counts from its start: setup is in it.
+  const started = now();
   const lib = (name) => import(pathToFileURL(path.join(repo, 'bin', 'lib', name)).href);
   const loading = performance.now();
   const { closingState, replyConfig } = await lib('reply.mjs');
@@ -193,19 +195,18 @@ export async function profile(payload, { repo = REPO_ROOT, env = process.env, ho
     run: (command, args, options) => timed(`${command} ${args.join(' ')}`, () => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: 2000 })),
     env,
     homedir,
-    now: () => Date.now(),
+    now,
   }, stderr);
   const readNotices = io.readNotices;
   if (readNotices) io.readNotices = (...args) => timed('the record of notices, read and parsed (once a stop)', () => readNotices(...args));
   const parser = parse ?? shellParser(platform);
   const shellParse = (...args) => timed('the shell parser', () => parser(...args));
-  const started = Date.now();
   const checks = [
     ['wake', () => modules.wake.wakeWarning(payload, state, io)],
-    ['stale', () => modules.stale.staleBoardWarning(payload, state, io, Date.now())],
+    ['stale', () => modules.stale.staleBoardWarning(payload, state, io, now())],
     ['return', () => modules.back.returnReportWarning(payload, state, io)],
     // Last, as in the hook, so its deadline holds the other checks' time too.
-    ['commands', () => commandsOf(payload, payload.last_assistant_message, { readFile: io.readFile, platform, parse: shellParse, now: () => Date.now(), started }, stderr)],
+    ['commands', () => commandsOf(payload, payload.last_assistant_message, { readFile: io.readFile, platform, parse: shellParse, now, started }, stderr)],
   ];
   const lines = [`state ${state ?? 'none'}; modules loaded in ${loaded.toFixed(0)} ms; each check, then the reads and git calls it made (ms)`];
   for (const [name, run] of checks) {

@@ -206,6 +206,17 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
 - L7 (2026-10-31, T6): the Claude lenses (risk, resilience, reliability, readability) over `7aac3e4..8dd55c8`: 0
   findings each, recorded by `js-harness lens-review`. The host compacted this session at 22:58 local; it resumed from
   this document.
+- L8 (2026-10-31, T6): Codex over `f91cbcc..3543c9f`, 3 parts: parts 1 and 2 (the hook, its checks, their tests)
+  correct, no finding; part 3 (`scripts/reply-hook-time.mjs`) three P2: failed runs counted as samples, the profile's
+  config lookup walking past the nearest `harness.json`, the command-block check left out of the profile. A first run
+  of part 3 was discarded because this document was edited while it ran (`docs/FAILURES.md`). Fixed in `8c746b16`,
+  tests first (red on the old script). The gate's first run of that fix failed in WSL: the new test's `powershell`
+  block reached no parser on Linux; the profile now takes `platform` as the hook does. Codex's recheck
+  (`3543c9f..8c746b1`): 2 fixed, 1 partly: the profile started the command check's deadline after its setup, the
+  hook before. Fixed in the next commit (the profile takes `now`, the deadline starts at its first line; test red on
+  `8c746b16`). Codex does not recheck a range starting at `8c746b1`; the Claude lenses review it. The lenses over
+  `3543c9f..8c746b1` (reliability, readability, resilience): 0 findings. gentle-ai's Stop hook offered the whole
+  branch (base `7aac3e43`): its status run, nothing started, as `CLAUDE.md` says.
 
 ## Next step
 Code committed: `b42532d7` (gate green). Question 138 (T5) is recorded and sent; on a yes, change `replyHookEntry`'s timeout to 15 with its test. Next: `js-harness codex-review --base 7aac3e43` and `js-harness lens-review --base 7aac3e43`, an independent verifier, push, PR, `notify --kind ready --pr <n>`, the summary under `docs/sessions/`, `notify --kind closed`.
