@@ -58,7 +58,8 @@ question (`js-harness notify --to orchestrator --kind question`, in Spanish).
 - [x] T3 (kind: design) spec 2: the decision for the forgotten failure, with its evidence, in `## Log` — L4, L5
 - [x] T4 (kind: build) spec 2: the fix, tests first, the planted case red then green — commits: `bebf5238`,
   `f9d4c09c` (L13, L14)
-- [ ] T5 (kind: verify) spec 3: Codex, the lenses, an independent verifier, PR 2, its ready notice, the summary — pending
+- [x] T5 (kind: verify) spec 3: Codex, the lenses, an independent verifier, PR 2, its ready notice, the summary — PR
+  724, merged (L14-L16)
 
 ## Log
 - L1 (2026-10-30, the brief as written, title): "JH 112 · gate and push: two holes left open after JH 111". Its words
@@ -222,7 +223,11 @@ question (`js-harness notify --to orchestrator --kind question`, in Spanish).
   Slice 2 is reviewed whole: every code commit, `bebf5238` and `f9d4c09c`, has a Codex record and a lens record. The
   summary is `docs/sessions/2026-10-31-jh-112-gate-and-push-two-holes-left-open-after-jh-111.md`.
 
+- L16 (2026-10-31): slice 2 pushed (the pre-push hook passed) and opened as PR 724; `js-harness notify --kind ready
+  --pr 724` recorded at 01:35Z; merged at 01:49Z (`82919956`). On that main, `npm run check`: `PASS  check  14 rows
+  passed, 7 of them INFO`; the contract's commands there: 160 of 160, 306 of 306, `contract check` and `rules check`
+  PASS. Both fixes are on main through reviewed pull requests, each planted case red before and
+  green after (L6, L13): the contract's end is met. The feature is done.
+
 ## Next step
-Slice 2 on branch `gate-forgotten-failure` (worktree `D:\js-harness\.claude\worktrees\gate-push-holes`): push, PR 2
-against main, ready notice with `--pr`; when it is on main, `npm run check` there and the `closed` notice with the
-summary.
+None: the feature is done (L16). Its follow-ups went to the lead (L12, L14).
