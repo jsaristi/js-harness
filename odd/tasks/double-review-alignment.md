@@ -179,7 +179,11 @@ acceptance of 147 and 148, L9); it blocks only T2's rule commit and T4. Next, in
 once 150 is answered. T5 progress: older texts 5 and 6 done in CLAUDE.md (3200 of 3200, `check`'s measure,
 CRLF folded, 2cb04248, a code commit since it refreshed `rules-coverage-data.mjs`: it needs Codex and the lenses),
 8, the contract template (5cbbca4c), and 9, 10 and 12 (`sync` offers `depthPassSince` from the next day, `null`
-declines it; the roadmap's two lines): T5 is done, and T3 is next. Earlier notes: CLAUDE.md is at 3190 of 3200 tokens as `check` measures it; the two edits (`## Depth
+declines it; the roadmap's two lines): T5 is done (b042cddc). T3 is built without the reserve: `bin/double-review.mjs`,
+`bin/lib/double-review-records.mjs`, their tests, the dispatcher and the README; `codex-review` exports `leanFlags`
+and `leanEnv` with no line added. The Claude reader reads `rule:subagent-reader-model` through `ruleHere`, a rule of
+this repository, and a project without it reads on the alias `opus`. Not run against the real CLIs yet: T6's first
+read, announced with its cost, is that run. Next: T2 and T4 once 150 is answered, else T6. Earlier notes: CLAUDE.md is at 3190 of 3200 tokens as `check` measures it; the two edits (`## Depth
 pass` (rule 1) in the order at line 24, and line 92 "a skip is a debt `check`, `doctor` and the merge door list until
 a review pays it, and the door refuses a lens skip") measured 3237 with `estimateTokens` after the Edit tool, likely
 line endings; measure as `bin/lib/claude-md-budget.mjs` does before committing, and trim within the same paragraphs

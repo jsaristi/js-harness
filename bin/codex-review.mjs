@@ -362,7 +362,7 @@ const LEAN_WINDOWS_SANDBOX = 'unelevated';
 // after the run, and only a session that is not ephemeral writes there the rollout files the tokens are
 // read from. `effort` is `REVIEW_EFFORT` for everyone but the comparison of the configurations, whose cells
 // stay at the effort they were measured with.
-const leanFlags = (platform, effort) => [
+export const leanFlags = (platform, effort) => [
   // Leaves out every key of `$CODEX_HOME/config.toml`: the MCP servers, the plugins, the model
   // instructions file, and the user's model and effort. Auth still uses the home.
   '--ignore-user-config',
@@ -431,7 +431,7 @@ export function childEnv(env, platform) {
  * to the run's own `home`, and, for a review out of a turn of the gate lock (`outOfTurn`), `NODE_OPTIONS`
  * with the preload that refuses `node --test` after the ones `env` gave (`noTestNodeOptions`). On Windows
  * names are case-insensitive, so one spelled in another case is dropped instead of left beside it. */
-function leanEnv(env, home, platform, { outOfTurn = false } = {}) {
+export function leanEnv(env, home, platform, { outOfTurn = false } = {}) {
   const out = { ...env };
   let nodeOptions = out.NODE_OPTIONS;
   for (const key of Object.keys(out)) {

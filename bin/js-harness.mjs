@@ -32,6 +32,7 @@ Commands:
   rules       Show the declared rules of the harness, each with its value or its home (rules <id> prints one with its source and who reads it). rules check exits 1 when a declaration, its source, a reader or docs/RULES.md is wrong; rules render writes docs/RULES.md; rules applied says what each model alias gave in the records of the last seven days. In a project that installs the harness, the project's own rules in docs/rules.json are listed too, and rules check holds them: each phrase still in its file, each sensor still declared, no rule deleted since HEAD. In the harness's own checkout rules check also counts each rule's patterns in the texts in force, and the gate's rules row reports, or for a rule that refuses fails, a line a commit adds that restates a rule's value instead of marking it rule:<id>. rules change <id> is the one command that changes a rule of the harness, in its own checkout on a rule/ branch: the change as JSON on standard input, it writes the declaration, its source and docs/RULES.md and appends a relief line (--dry-run prints them and writes nothing; --check-source checks a stored source against its transcript again). Its set takes patterns and a failure of docs/FAILURES.md as a change of form; set.row { refuses: today } turns a rule to refuse once its patterns find nothing on origin/main, fetched first, and set.row { reports, since: today } switches a refusing rule back. rules --hook is the turn-start hook install registers for Claude Code (UserPromptSubmit, SessionStart after a compaction or a resume, and SubagentStart; a clear in the desktop app arrives as a startup, which it does not name): where the project declares rules, it tells the session once what the rules on the default branch say that its merge base does not, with each new declaration; it prints nothing otherwise and always exits 0.
   codex-review  Run the Codex review of <base>..HEAD and record it (--unavailable <reason> records a skip).
   codex-meter  Read Codex's five-hour and weekly limits and its reset credits left, from codex app-server, which answers without running a model, so it spends no tokens: js-harness codex-meter [--json]. It starts one process per read and kills it after; --json prints the numbers, and a field the answer does not hold is printed as unknown.
+  double-review  Give a plan, a design, a proposing document or a small code change to a Claude reader and a Codex reader at once, blind, on one frozen copy, and record what each found (rule:double-review): js-harness double-review read <file>... [--diff <rev>] [--plan]; take records the findings the writer took, skip the user's words that skip a read, tally what each reader adds. A read covers no code.
   lens-review  Run the Claude lenses picked over <base>..HEAD, each a fresh tool-less run on the CLI login, and record the run (--unavailable <reason> records a skip).
   windows-daily  Read the newest run of the daily Windows suite (.github/workflows/windows-daily.yml) on GitHub and say whether it passed; a red run not told before is told to the orchestrator once, with its failing test names. The lead's loop heartbeat runs the same reading every hour.
   status-line  Keep the line Claude Desktop's sessionStatusLine program shows above the Code tab's message box: status-line write runs the board and keeps it in one Spanish line under the home (.js-harness/status-line/line.txt), leaving the last line when the board fails; status-line program prints the path of the program, which only prints that file, since the board takes longer than the host's 10 s. The app reads the key only on third-party inference today.
@@ -94,6 +95,7 @@ const COMMANDS = {
     : import('./rules.mjs').then((module) => module.rulesMain(args))),
   'codex-review': async () => (await import('./codex-review.mjs')).codexReviewMain,
   'codex-meter': async () => (await import('./codex-meter.mjs')).codexMeterMain,
+  'double-review': async () => (await import('./double-review.mjs')).doubleReviewMain,
   'lens-review': async () => (await import('./lens-review.mjs')).lensReviewMain,
   'windows-daily': async () => (await import('./windows-daily.mjs')).windowsDailyMain,
   'status-line': async () => (await import('./status-line.mjs')).statusLineMain,
@@ -147,6 +149,7 @@ const HELP = {
   rules: ['./rules.mjs', 'USAGE'],
   'codex-review': ['./codex-review.mjs', 'USAGE'],
   'codex-meter': ['./codex-meter.mjs', 'USAGE'],
+  'double-review': ['./double-review.mjs', 'USAGE'],
   'lens-review': ['./lens-review.mjs', 'USAGE'],
   'status-line': ['./status-line.mjs', 'USAGE'],
   functions: ['./functions.mjs', 'USAGE'],

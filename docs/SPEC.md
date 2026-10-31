@@ -201,6 +201,7 @@ to them (diet section 10, "The rule pass").
 | The machine manifest | `~/.js-harness/manifest.json` | `install`, `stack install`, opt-ins | `uninstall`, `status`, `doctor` |
 | A clone's manifest | `js-harness/manifest.json` at `git rev-parse --git-path` (`bin/lib/project.mjs:1063`) | `init` | `uninstall` in the project, `sync` |
 | Review records | `<git common dir>/js-harness/codex-reviews.jsonl`, `codex-review-runs.jsonl`, `lens-reviews.jsonl`, `lens-review-runs.jsonl`, and an incomplete lens's whole stdout in `lens-answers/`, which no check reads | `codex-review`, `lens-review` | `check --push`, the merge door, `doctor`, `throughput` |
+| Double review reads | `<git common dir>/js-harness/double-reviews.jsonl`: each read, take and skip | `double-review` | `double-review tally`; no push and no merge door |
 | Lands | `<git common dir>/js-harness/lands.jsonl` | `merge-queue --land` | `throughput` |
 | Codex review homes | `~/.js-harness/codex-review-homes` (`bin/lib/codex-review-home.mjs:65`) | `codex-review` | `codex-review` (`--keep-home`) |
 | The channel | `~/.js-harness/channel/<project>.jsonl`; the lead's relief file in `~/.js-harness/relief/` | `notify` | `wait`, `sessions`, `report`, `sessions live`, `resume` |
@@ -487,6 +488,15 @@ check or an eval case ("After F8", directive coverage).
 **Proof:** `node --test bin/codex-meter.test.mjs`, `node --test bin/lib/codex-meter.test.mjs`
 **Discarded:** `rate_limits` from the rollout files `codex-usage` reads: they hold `null` in the sessions this repository ran. A flag of `codex-review --plan`: a read runs no review and writes no record.
 **Today:** `bin/codex-meter.mjs`, `bin/lib/codex-meter.mjs`, `bin/lib/process-tree.mjs`, `js-harness codex-meter`
+
+### The double review
+
+**Problem:** The owner asked for one Claude reader and one Codex reader, blind and independent, on plans and designs (question 145, `odd/tasks/double-review-alignment.md`, L2), and no command did it: this feature's own plan was read by hand, Codex in a lean session and Claude in a sub-agent (L8). Both readers found that blindness held only by intention, since a reader with tools reads any file.
+**Requirement:** A command copies the files, and a diff if asked, into a folder outside the repository, hashes the copy and starts a Claude reader with read-only tools confined to the repository and the copy and a Codex reader in the lean session at once, on one prompt. An answer that does not echo the hash does not count. Both answers are recorded together once both return, the copy is removed, and the record is never read as a review of code. Before a read it says what a read costs and the user's words that skip it; it records a skip with those words, which findings the writer took and which the other reader also found, and tallies each reader's yield.
+**Reason:** Two model families find different things (L8: four of Codex's eight findings and three of Claude's seven were found by the other too), and the judgement of 2026-11-16 needs each reader's yield measured.
+**Proof:** `node --test bin/double-review.test.mjs`, `node --test bin/lib/double-review-records.test.mjs`
+**Discarded:** A mode of `codex-review`: that command reviews a range of commits and its records cover code at the push and the merge door, which a read of a plan must never do (L7).
+**Today:** `bin/double-review.mjs`, `bin/lib/double-review-prompt.mjs`, `bin/lib/double-review-records.mjs`, `js-harness double-review`
 
 ### The merge queue
 
