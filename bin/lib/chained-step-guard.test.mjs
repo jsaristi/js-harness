@@ -54,6 +54,11 @@ test('a push, a commit, a pull request, a land or a notice after a ;, a line bre
     ['npm test; timeout 60 git push', 'git push', ';'],
     ['npm test; nice -n 5 git push', 'git push', ';'],
     ['npm test; time -p git push', 'git push', ';'],
+    // Codex on 06869de9: `time` prefixes a group or a negation too.
+    ['npm test; time (git push)', 'git push', ';'],
+    ['npm test; time ! git push', 'git push', ';'],
+    ['npm test; time -p { git push; }', 'git push', ';'],
+    ['npm test; time -f %e git push', 'git push', ';'],
     ['npm test; npx --yes js-harness notify --kind ready x', 'js-harness notify', ';'],
     ['npm test; npx js-harness@latest notify --kind ready x', 'js-harness notify', ';'],
     ['npm test; pnpm exec js-harness notify --kind ready x', 'js-harness notify', ';'],

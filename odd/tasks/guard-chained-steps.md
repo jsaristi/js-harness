@@ -117,3 +117,7 @@ changes no rule of his; the rule is the project's. Spend: one gate, one Codex re
   `backticksInDoubleQuotes`; it costs one retry joined by `&&`); `eval`, `xargs`, backticks and `$(...)` holding a
   step, and `bash -c`/`powershell -Command` strings (out of scope); the verifier's design notes as L4 states them
   (`a; b && git push` passes, since only the operator right before the step counts; `set -e` scripts are refused).
+- L8 (2026-10-31, reviews of 4a3bc314..06869de9): the lenses reliability and risk, 0 findings. Codex in 2 parts:
+  the move correct (0.98); one P2, `time (git push)` and `time ! git push` passed after a `;`, since `time` had been
+  handed to the step's reader. Fixed: `chainedStep` looks through `time` and its options (`-p`, `-f <format>`), so a
+  group or a negation after it is read as before. RED: 1 (`npm test; time (git push)`); GREEN: 82/82.

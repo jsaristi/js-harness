@@ -59,7 +59,7 @@ function guardedStep(words) {
   while (at < segment.length) {
     const program = name(segment[at]);
     if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[at])) at += 1;
-    else if (WRAPPERS.has(segment[at]) || program === 'nice' || program === 'time') at = pastOptions(segment, at + 1, program);
+    else if (WRAPPERS.has(segment[at]) || program === 'nice') at = pastOptions(segment, at + 1, program);
     // timeout runs the command after its options and its duration.
     else if (program === 'timeout') at = pastOptions(segment, at + 1, program) + 1;
     else if (program === 'npx') at = pastOptions(segment, at + 1, program);
@@ -100,8 +100,12 @@ export function chainedStep(command) {
       joiner = null;
       continue;
     }
-    // `time` is read by `guardedStep`, which takes its options too.
-    if ((COMMAND_KEYWORDS.has(words[i]) && words[i] !== 'time') || CONDITIONS.has(words[i])) continue;
+    // `time` prefixes a command, a group or a negation, after its options (`time -p`) (Codex, on 06869de9).
+    if (words[i] === 'time') {
+      while (i + 1 < words.length && !operators.has(i + 1) && words[i + 1].startsWith('-')) i += VALUE_OPTIONS.time.has(words[i + 1]) ? 2 : 1;
+      continue;
+    }
+    if (COMMAND_KEYWORDS.has(words[i]) || CONDITIONS.has(words[i])) continue;
     let end = i;
     while (end < words.length && !operators.has(end)) end += 1;
     const step = guardedStep(words.slice(i, end));
