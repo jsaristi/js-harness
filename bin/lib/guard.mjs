@@ -272,7 +272,8 @@ export function terminalNoteRefusal(command, projectData) {
 
 /** The words of the shell command `command`, its quotes taken off, with `;`, `&&`, `||` and `|` as words of their
  * own, and an unquoted newline as a `;`. A heredoc's body is left out: it is text, not commands. A backslash is kept
- * as it is: a Windows path is written with them. `words.operators` holds the indexes of the words that are operators,
+ * as it is, since a Windows path is written with them, except before `;`, `&` or `|`, which it makes a character; so is
+ * the `&` of `2>&1`, which stays in its word where `redirections` is off. `words.operators` holds the indexes of the words that are operators,
  * so a quoted `"&&"` is told from one. With `groups`, an unquoted `(` or `)` of a subshell is an operator too; one of
  * a `$(...)` stays in its word. With `redirections`, an unquoted `>`, `>>` or `>|` is a word of its own wherever it
  * stands, a descriptor before it (`2>`) taken in, and `words.redirections` holds their indexes. */
@@ -307,6 +308,10 @@ export function shellWords(command, { groups = false, redirections = false } = {
       word ??= '';
     } else if (c === '\\' && text[i + 1] === '\n') {
       i += 1;
+    } else if (c === '\\' && /[;&|]/.test(text[i + 1] ?? '')) {
+      // An escaped operator is a character of its word, as `find`'s `\;` (Codex, on efbbb26).
+      word = (word ?? '') + text[i + 1];
+      i += 1;
     } else if (c === '#' && word === null) {
       while (i + 1 < text.length && text[i + 1] !== '\n') i += 1;
     } else if (c === '<' && text[i + 1] === '<' && text[i + 2] !== '<' && HEREDOC.test(text.slice(i))) {
@@ -331,6 +336,9 @@ export function shellWords(command, { groups = false, redirections = false } = {
     } else if (/\s/.test(c)) {
       if (word !== null) words.push(word);
       word = null;
+    } else if (c === '&' && word !== null && /[<>]$/.test(word)) {
+      // The `&` of `2>&1` or `>&2` belongs to its redirection.
+      word += c;
     } else if (c === ';' || c === '|' || c === '&') {
       if (word !== null) words.push(word);
       word = null;
@@ -471,20 +479,55 @@ const CONDITION_BODIES = new Set(['then', 'else', 'do']);
 // How the refusal names each joiner; shellWords writes an unquoted line break as a `;`.
 const JOINERS = { ';': 'a ; or a line break', '||': '||', '&': '&' };
 
+// The options of each wrapper, and of git before its verb, that take the next word as their value.
+const VALUE_OPTIONS = {
+  env: new Set(['-u', '--unset', '-C', '--chdir', '-S', '--split-string']),
+  sudo: new Set(['-u', '--user', '-g', '--group', '-C', '--close-from', '-h', '--host', '-p', '--prompt', '-D', '--chdir', '-r', '--role', '-t', '--type', '-U', '--other-user']),
+  exec: new Set(['-a']),
+  command: new Set(),
+  nohup: new Set(),
+  git: new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env', '--super-prefix']),
+};
+// A redirection that starts a word (`>f`, `2>f`, `<f`, `>>f`); one with no file in it takes the next word.
+const REDIRECTION = /^\d*(?:>>?|<)(.*)$/;
+
+/** The index of the first word of `segment` from `at` that is no option of `program` (`VALUE_OPTIONS`), its values
+ * and an ending `--` taken; for a wrapper, no assignment either. */
+function pastOptions(segment, at, program) {
+  while (at < segment.length) {
+    const word = segment[at];
+    if (word === '--') return at + 1;
+    if (word.startsWith('-') && word !== '-') at += VALUE_OPTIONS[program].has(word) ? 2 : 1;
+    else if (program !== 'git' && /^[A-Za-z_][A-Za-z0-9_]*=/.test(word)) at += 1;
+    else return at;
+  }
+  return at;
+}
+
 /** The step the words of one simple command take, among those whose check must be read first: `git push`, `git commit`,
- * `gh pr`, `js-harness merge-queue` or `js-harness notify`, or null. It looks through assignments and wrappers, git's
- * `-C` and `-c` options, `node <path>/js-harness.mjs`, `npx` and `js-harness gate --`. */
-function guardedStep(segment) {
-  let at = 0;
-  while (at < segment.length && (WRAPPERS.has(segment[at]) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[at]))) at += 1;
+ * `gh pr`, `js-harness merge-queue` or `js-harness notify`, or null. It looks through assignments, redirections,
+ * wrappers and their options, git's options before its verb, `node <path>/js-harness.mjs`, `npx` and
+ * `js-harness gate --`. */
+function guardedStep(words) {
+  const segment = [];
+  for (let i = 0; i < words.length; i += 1) {
+    const redirection = REDIRECTION.exec(words[i]);
+    if (redirection === null) segment.push(words[i]);
+    else if (redirection[1] === '' || redirection[1] === '&') i += 1;
+  }
   const name = (word) => String(word ?? '').split(/[\\/]/).pop().toLowerCase().replace(/\.(?:exe|cmd|mjs)$/, '');
+  let at = 0;
+  while (at < segment.length) {
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[at])) at += 1;
+    else if (WRAPPERS.has(segment[at])) at = pastOptions(segment, at + 1, segment[at]);
+    else break;
+  }
   if (name(segment[at]) === 'npx' || (name(segment[at]) === 'node' && name(segment[at + 1]) === 'js-harness')) at += 1;
   const program = name(segment[at]);
   const args = segment.slice(at + 1);
   if (program === 'git') {
-    let verb = 0;
-    while (verb < args.length && args[verb].startsWith('-')) verb += args[verb] === '-C' || args[verb] === '-c' ? 2 : 1;
-    return args[verb] === 'push' || args[verb] === 'commit' ? `git ${args[verb]}` : null;
+    const verb = args[pastOptions(args, 0, 'git')];
+    return verb === 'push' || verb === 'commit' ? `git ${verb}` : null;
   }
   if (program === 'gh') return args[0] === 'pr' ? 'gh pr' : null;
   if (program !== 'js-harness') return null;

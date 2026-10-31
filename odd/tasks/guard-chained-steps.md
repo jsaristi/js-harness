@@ -66,6 +66,8 @@ changes no rule of his; the rule is the project's. Spend: one gate, one Codex re
   with a planted break (tried by hand: 2 of 46 tests red, restored), the FAILURES control line (the protocol line
   moves to `- Was:`), row 67, the help lines and docs/SPEC.md. `rules check`, `rules coverage --strict` (after
   `--refresh` settled the manifest's edited guard span) and `failures check` pass. Route: inline. One commit with T1.
+- [x] T4 (kind: build): Codex's four P2 findings on efbbb26 (L6), tests first. RED: 2 of 46 (`command -- git push`
+  passed, `printf x\;git push` refused). GREEN: guard, lib/guard and merge-queue-waits tests 91/91.
 - [ ] T3 (kind: verify): gate, Codex review, Claude lenses, independent verifier, pull request, ready notice.
 
 ## Log
@@ -90,3 +92,11 @@ changes no rule of his; the rule is the project's. Spend: one gate, one Codex re
   costs one retry joined by `&&`, and a list of read verbs would be one more list to keep. A step is found behind
   `NAME=value`, `env`, `command`, `exec`, `sudo`, `nohup`, git's `-C`/`-c` options, `node <path>/js-harness.mjs`, `npx`
   and `js-harness gate --`.
+- L6 (2026-10-31, reviews of 70e9e8f..efbbb26): the Claude lenses reliability and risk, 0 findings (recorded). Codex,
+  "the patch is incorrect", four P2: an escaped `\;` or `\&` was taken as a joiner (a false refusal); a wrapper's
+  options (`command --`, `env -u DEBUG`), a leading redirection (`>push.log git push`) and git's `--git-dir`/
+  `--work-tree` values hid the step. All four fixed in `bin/lib/guard.mjs`: `shellWords` takes a backslash before `;`,
+  `&` or `|` as a character, and the `&` of `2>&1` stays in its word where `redirections` is off (its other callers'
+  tests, guard and merge-queue-waits, pass); `guardedStep` skips redirections and the options of each wrapper and of
+  git that take a value. gentle-ai's stop hook offered the whole branch: its status was read and nothing started
+  (CLAUDE.md, a candidate is never the whole branch). `bin/lib/guard.mjs` is 988 lines, 12 under the size limit.

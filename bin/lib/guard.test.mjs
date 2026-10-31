@@ -899,6 +899,18 @@ test('a push, a commit, a pull request, a land or a notice after a ;, a line bre
     ['if npm test; then echo ok; git push; fi', 'git push', ';'],
     ['(npm test) ; git push', 'git push', ';'],
     ["cat > m.txt <<'EOF'\nthe message\nEOF\ngit commit -F m.txt", 'git commit', ';'],
+    // Codex on efbbb26: wrappers' options, leading redirections and git's other options that take a value.
+    ['npm test; command -- git push', 'git push', ';'],
+    ['npm test; env -u DEBUG git push', 'git push', ';'],
+    ['npm test; env -i PATH=/usr/bin git push', 'git push', ';'],
+    ['npm test; sudo -u builder git push', 'git push', ';'],
+    ['npm test; nohup -- js-harness notify --kind ready x', 'js-harness notify', ';'],
+    ['npm test; >push.log git push', 'git push', ';'],
+    ['npm test; > push.log 2>&1 git push', 'git push', ';'],
+    ['npm test; 2>err.log git commit -m x', 'git commit', ';'],
+    ['npm test; git --git-dir .git push', 'git push', ';'],
+    ['npm test; git --work-tree . --git-dir=.git commit -m x', 'git commit', ';'],
+    ['find . -name x -exec rm {} \\; ; git push', 'git push', ';'],
   ];
   for (const [command, step, joiner] of cases) {
     const reason = chainedStepRefusal(command, HERE);
@@ -932,6 +944,10 @@ test('a step joined by &&, quoted, in a heredoc\'s body, in a -Command argument,
     'echo git push; ls',
     '(git push)',
     '',
+    // Codex on efbbb26: an escaped operator is an argument, not a joiner.
+    'printf x\\;git push',
+    'echo a \\& git push',
+    "find . -name '*.tmp' -exec rm {} \\; && git commit -m x",
   ]) assert.equal(chainedStepRefusal(command, HERE), null, command);
 });
 
