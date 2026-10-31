@@ -1921,14 +1921,19 @@ $ js-harness reply --hook < stop.json
 
 The `commit-msg` hook's step. The Claude app tells every session to end a commit message with
 `Co-Authored-By: Claude ...` and `Claude-Session: ...` lines; this takes them out of the message
-git hands the hook, and the commit goes on. A line goes when it is a whole `Co-Authored-By:`
-trailer (any case of the key) whose name holds the word Claude or whose address is at
-`anthropic.com` or a subdomain of it, or a whole `Claude-Session:` line; a human co-author, a line
-that only mentions them and every other byte stay as they were. What it took out is said in one
-line on standard error, and nothing is said when there was nothing. It never stops a commit: a
-message file it cannot read or write is said and left as it is, exit 0. This repository's
-`.githooks/commit-msg` runs it (`npm run hooks` wires the folder in). Known limit: a human
-co-author whose name holds the word Claude is taken out too.
+git hands the hook, and the commit goes on. A line goes when it is in the trailers that end the
+message (its last paragraph, comment lines and the diff under `git commit -v`'s scissors left
+out, when that paragraph holds trailers alone) and is a whole `Co-Authored-By:` trailer (any case
+of the key) whose name is the host's (`Claude`, alone or with a model: `Claude Opus 5.5`,
+`Claude Code`) or whose address is at `anthropic.com` or a subdomain of it, or a whole
+`Claude-Session:` line. A human co-author (`Claude Dupont <claude@example.fr>` too), a host line
+quoted in the body and every other byte stay as they were, in any encoding. The message is
+replaced through a temporary file and one rename, so a write that fails leaves it whole. What it
+took out is said in one line on standard error, and nothing is said when there was nothing. It
+never stops a commit: a message file it cannot read or write is said and left as it is, exit 0.
+This repository's `.githooks/commit-msg` runs it (`npm run hooks` wires the folder in), and lets
+the commit go as it is when the branch has no `bin/commit-msg.mjs`, when the script fails or when
+no `node` is on the PATH.
 
 ```console
 $ git commit -m "fix: a change" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"

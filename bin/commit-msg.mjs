@@ -4,42 +4,86 @@
 // `Co-Authored-By: Claude ...` and `Claude-Session: ...`, which his rule forbids; three sightings showed the protocol
 // line does not stop it (docs/FAILURES.md, commit-attribution-from-host). His answer was to take them out and let the
 // commit go, so this never stops a commit: a file it cannot read or write is said and left as it is, exit 0.
-// Exit 2: a usage error. It imports nothing but node's own modules, so this repository's hook runs this file directly.
+// Exit 2: a usage error. It imports node's own modules and `lib/atomic-write.mjs` alone, so this repository's hook
+// runs this file directly.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { renameOver } from './lib/atomic-write.mjs';
 
 const USAGE = [
   'Usage: js-harness commit-msg <file>',
   "  The commit-msg hook's step: takes the host's attribution lines out of the commit message in <file> (git hands",
-  '    the hook its path) and says in one line on stderr what it took out. A line goes when it is a whole',
-  '    `Co-Authored-By:` trailer naming Claude or an address at anthropic.com, or a whole `Claude-Session:` line; a',
-  '    human co-author stays, and every other byte is left as it was. It never stops the commit: a file it cannot read',
-  '    or write is said and left as it is, exit 0. Exit 2: a usage error.',
+  '    the hook its path) and says in one line on stderr what it took out. A line goes when it is in the trailers that',
+  '    end the message and is a whole `Co-Authored-By:` trailer naming Claude (the name alone, or with a model) or an',
+  '    address at anthropic.com, or a whole `Claude-Session:` line; a human co-author stays, and every other byte is',
+  '    left as it was. It never stops the commit: a file it cannot read or write is said and left as it is, exit 0.',
+  '    Exit 2: a usage error.',
 ].join('\n');
 
 class CommitMsgArgError extends Error {}
 
-const CO_AUTHOR = /^co-authored-by:\s*(.*?)\s*<([^<>]*)>\s*$/i;
+const CO_AUTHOR = /^co-authored-by:\s*(.*?)\s*(?:<([^<>]*)>)?\s*$/i;
 const SESSION = /^claude-session:/i;
+// The names the host signs with: `Claude`, `Claude Code`, `Claude Opus 5.5`; a person named Claude Dupont is none.
+const HOST_NAME = /^claude(?:\s+(?:code|opus|sonnet|haiku|fable|instant|\d+(?:\.\d+)*))*$/i;
 const ANTHROPIC = /@(?:[a-z0-9-]+\.)*anthropic\.com$/i;
+const TRAILER = /^[a-z0-9][a-z0-9-]*\s*:/i;
+const CONTINUATION = /^\s+\S/;
+// What `git commit -v` writes above the diff it shows; git drops it and everything under it.
+const SCISSORS = /^\S -{24} >8 -{24}\s*$/;
+const COMMENT = /^#/;
 
 /** Whether `line` (without its ending) is one the host appends: its co-author or its session. */
 function hostLine(line) {
   if (SESSION.test(line)) return true;
   const coAuthor = CO_AUTHOR.exec(line);
-  return coAuthor !== null && (/\bclaude\b/i.test(coAuthor[1]) || ANTHROPIC.test(coAuthor[2]));
+  return coAuthor !== null && (HOST_NAME.test(coAuthor[1]) || ANTHROPIC.test(coAuthor[2] ?? ''));
 }
 
-/** `text` without the host's attribution lines, each with its ending, and the lines removed, in order. */
+/** The indexes of the trailers that end the message: its last paragraph, comment lines and what lies under the
+ * scissors left out, when that paragraph is not the subject's and holds trailers alone. Empty otherwise, so a host
+ * line quoted in the body is never taken for one. */
+function trailerLines(lines) {
+  const scissors = lines.findIndex((line) => SCISSORS.test(line));
+  const content = (scissors === -1 ? lines : lines.slice(0, scissors)).map((line, i) => ({ line, i })).filter(({ line }) => !COMMENT.test(line));
+  let last = content.length - 1;
+  while (last >= 0 && content[last].line.trim() === '') last -= 1;
+  let first = last;
+  while (first > 0 && content[first - 1].line.trim() !== '') first -= 1;
+  if (last < 0 || first === 0) return [];
+  const paragraph = content.slice(first, last + 1);
+  if (!paragraph.every(({ line }) => TRAILER.test(line) || CONTINUATION.test(line))) return [];
+  return paragraph.map(({ i }) => i);
+}
+
+/** `text` without the host's attribution lines, each with its ending, and the lines removed, in order. `text` is the
+ * message's bytes read as latin1, so every byte comes back as it was when the caller writes it as latin1. */
 export function stripAttribution(text) {
-  const kept = [];
-  const removed = [];
-  for (const piece of text.split(/(?<=\n)/)) {
-    const line = piece.replace(/\r?\n$/, '');
-    if (hostLine(line)) removed.push(line);
-    else kept.push(piece);
+  const pieces = text.split(/(?<=\n)/);
+  const lines = pieces.map((piece) => piece.replace(/\r?\n$/, ''));
+  const gone = new Set(trailerLines(lines).filter((i) => hostLine(lines[i])));
+  return { text: pieces.filter((_, i) => !gone.has(i)).join(''), removed: lines.filter((_, i) => gone.has(i)) };
+}
+
+/** Writes `buffer` over `file` whole or not at all: a fresh temporary sibling, then one rename over it (`renameOver`,
+ * whose seams `deps` carries), so a write that fails halfway leaves the message git reads as it was. */
+export function replaceFile(file, buffer, deps = {}) {
+  const tmp = `${file}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  const fd = fs.openSync(tmp, 'wx');
+  try {
+    fs.writeFileSync(fd, buffer);
+    fs.closeSync(fd);
+    renameOver(tmp, file, deps);
+  } catch (error) {
+    try {
+      fs.closeSync(fd);
+    } catch {
+      // Already closed when the rename is what failed.
+    }
+    fs.rmSync(tmp, { force: true });
+    throw error;
   }
-  return { text: kept.join(''), removed };
 }
 
 function parse(argv) {
@@ -54,12 +98,7 @@ function parse(argv) {
 
 export function commitMsgMain(
   argv,
-  {
-    stdout = console.log,
-    stderr = console.error,
-    readFile = (file) => fs.readFileSync(file, 'utf8'),
-    writeFile = (file, text) => fs.writeFileSync(file, text, 'utf8'),
-  } = {},
+  { stdout = console.log, stderr = console.error, readFile = (file) => fs.readFileSync(file), writeFile = replaceFile } = {},
 ) {
   if (argv.length === 1 && (argv[0] === '--help' || argv[0] === '-h')) {
     stdout(USAGE);
@@ -78,20 +117,21 @@ export function commitMsgMain(
     stderr(`js-harness commit-msg: the message was left as it is: ${file} could not be ${what} (${error?.message ?? String(error)})`);
     return 0;
   };
-  let text;
+  let bytes;
   try {
-    text = readFile(file);
+    bytes = readFile(file);
   } catch (error) {
     return leftAsItIs('read', error);
   }
-  const stripped = stripAttribution(text);
+  const stripped = stripAttribution(bytes.toString('latin1'));
   if (stripped.removed.length === 0) return 0;
   try {
-    writeFile(file, stripped.text);
+    writeFile(file, Buffer.from(stripped.text, 'latin1'));
   } catch (error) {
     return leftAsItIs('written', error);
   }
-  stderr(`js-harness commit-msg: removed the host's attribution lines: ${stripped.removed.join(' | ')}`);
+  const said = stripped.removed.map((line) => Buffer.from(line, 'latin1').toString('utf8'));
+  stderr(`js-harness commit-msg: removed the host's attribution lines: ${said.join(' | ')}`);
   return 0;
 }
 

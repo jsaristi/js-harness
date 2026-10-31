@@ -254,8 +254,8 @@ check or an eval case ("After F8", directive coverage).
 ### A commit message keeps no attribution of the host
 
 **Problem:** The Claude app tells every session to end a commit message with `Co-Authored-By: Claude ...` and `Claude-Session: ...`, which `CLAUDE.md` forbids; the protocol line did not stop it three times (`docs/FAILURES.md`, commit-attribution-from-host), and his answer to question 132 was to take the lines out without stopping the commit (`odd/tasks/strip-attribution.md`).
-**Requirement:** The `commit-msg` hook takes out of the message every whole `Co-Authored-By:` trailer whose name holds the word Claude or whose address is at `anthropic.com`, and every whole `Claude-Session:` line, leaves every other byte as it was, says in one line what it took out, and never stops the commit. A branch with no `bin/commit-msg.mjs` lets the message be, since every worktree runs the main checkout's hooks.
-**Reason:** His rule acts on every commit only when a hook acts on it; a refusal would cost each session one more try a commit.
+**Requirement:** The `commit-msg` hook takes out of the trailers that end the message every whole `Co-Authored-By:` trailer whose name is the host's (`Claude`, alone or with a model) or whose address is at `anthropic.com` or a subdomain of it, and every whole `Claude-Session:` line; it leaves every other byte as it was, in any encoding, replaces the file whole or not at all, says in one line what it took out, and never stops the commit. A branch with no `bin/commit-msg.mjs`, a script that fails or no `node` on the PATH lets the message be, since every worktree runs the main checkout's hooks.
+**Reason:** His rule acts on every commit only when a hook acts on it; a refusal would cost each session one more try at every commit.
 **Proof:** `node --test bin/commit-msg.test.mjs`
 **Discarded:** Refusing the commit until the session takes the lines out: his answer was "Quitarlas solo". Rewriting the commits already on main: main is never rewritten.
 **Today:** `bin/commit-msg.mjs`, `.githooks/commit-msg`, `js-harness commit-msg`

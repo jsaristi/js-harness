@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { commitMsgMain, stripAttribution } from './commit-msg.mjs';
+import { commitMsgMain, replaceFile, stripAttribution } from './commit-msg.mjs';
 
 // The planted messages of the brief (odd/tasks/strip-attribution.md, spec 3), the trailers as the Claude app asks a
 // session to write them on 2026-10-31.
@@ -57,6 +57,30 @@ test('only whole trailer lines go: a line that names them in its text, or a name
   assert.deepEqual(stripAttribution(message), { text: message, removed: [] });
 });
 
+test('a human co-author named Claude stays; the host\'s name with no address goes', () => {
+  const human = 'Co-Authored-By: Claude Dupont <claude@example.fr>';
+  const { text, removed } = stripAttribution(`${BODY}\n${human}\nCo-Authored-By: Claude\nCo-Authored-By: Claude Code <x@example.com>\n`);
+  assert.equal(text, `${BODY}\n${human}\n`);
+  assert.deepEqual(removed, ['Co-Authored-By: Claude', 'Co-Authored-By: Claude Code <x@example.com>']);
+});
+
+test('a host line quoted in the body stays: only the trailers that end the message go', () => {
+  const quoted = `fix: x\n\nThe app writes:\n${HOST_CO_AUTHOR}\nand the hook takes it out.\n\n${HOST_SESSION}\n\nAnd a paragraph after it.\n`;
+  assert.deepEqual(stripAttribution(quoted), { text: quoted, removed: [] });
+  const alone = `fix: x\n\n${HOST_CO_AUTHOR}\n\nThe paragraph above is a quote.\n\nSigned-off-by: Ana Gómez <ana@example.com>\n${HOST_SESSION}\n`;
+  const { text, removed } = stripAttribution(alone);
+  assert.equal(text, `fix: x\n\n${HOST_CO_AUTHOR}\n\nThe paragraph above is a quote.\n\nSigned-off-by: Ana Gómez <ana@example.com>\n`);
+  assert.deepEqual(removed, [HOST_SESSION]);
+});
+
+test('the diff git -v leaves under its scissors line is not the end of the message', () => {
+  const scissors = '# ------------------------ >8 ------------------------';
+  const message = `${BODY}\n${HOST_CO_AUTHOR}\n${scissors}\n# Do not modify or remove the line above.\ndiff --git a/a.txt b/a.txt\n+${HOST_SESSION}\n`;
+  const { text, removed } = stripAttribution(message);
+  assert.equal(text, `${BODY}\n${scissors}\n# Do not modify or remove the line above.\ndiff --git a/a.txt b/a.txt\n+${HOST_SESSION}\n`);
+  assert.deepEqual(removed, [HOST_CO_AUTHOR]);
+});
+
 test('a message written with CRLF keeps its line endings, and a last line with no ending goes whole', () => {
   const { text, removed } = stripAttribution(`feat: x\r\n\r\nbody\r\n\r\n${HOST_CO_AUTHOR}\r\n${HOST_SESSION}`);
   assert.equal(text, 'feat: x\r\n\r\nbody\r\n\r\n');
@@ -68,7 +92,29 @@ test('the comment lines an editor leaves under the trailers do not keep the trai
   assert.equal(stripAttribution(message).text, `${BODY}\n# Please enter the commit message for your changes.\n#\n`);
 });
 
-/** The seams of the command, with the message file held in memory. */
+test('a message in another encoding than UTF-8 keeps every byte but the lines that go', () => {
+  // `é` and `ï` in ISO-8859-1, as a repository with i18n.commitEncoding=ISO-8859-1 writes them.
+  const latin = Buffer.concat([Buffer.from('fix: caf'), Buffer.from([0xe9]), Buffer.from(' na'), Buffer.from([0xef]), Buffer.from('f\n\n')]);
+  const files = { MSG: Buffer.concat([latin, Buffer.from(`${HOST_CO_AUTHOR}\n`)]) };
+  const { deps } = seams(files);
+  assert.equal(commitMsgMain(['MSG'], deps), 0);
+  assert.deepEqual(files.MSG, latin);
+});
+
+test('the message is replaced whole or not at all: a rename that fails leaves the file and no temporary beside it', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-commit-msg-replace-'));
+  made.push(dir);
+  const file = path.join(dir, 'COMMIT_EDITMSG');
+  fs.writeFileSync(file, `${BODY}\n${HOST_SESSION}\n`);
+  assert.throws(() => replaceFile(file, Buffer.from(BODY), { rename: () => { throw Object.assign(new Error('EPERM'), { code: 'EPERM' }); }, platform: 'linux' }), /EPERM/);
+  assert.equal(fs.readFileSync(file, 'utf8'), `${BODY}\n${HOST_SESSION}\n`);
+  assert.deepEqual(fs.readdirSync(dir), ['COMMIT_EDITMSG']);
+  replaceFile(file, Buffer.from(BODY));
+  assert.equal(fs.readFileSync(file, 'utf8'), BODY);
+  assert.deepEqual(fs.readdirSync(dir), ['COMMIT_EDITMSG']);
+});
+
+/** The seams of the command, with the message file held in memory as bytes. */
 function seams(files) {
   const out = [];
   const err = [];
@@ -82,7 +128,7 @@ function seams(files) {
       stderr: (text) => err.push(text),
       readFile: (file) => {
         if (!Object.hasOwn(files, file)) throw Object.assign(new Error(`ENOENT: no such file, open '${file}'`), { code: 'ENOENT' });
-        return files[file];
+        return Buffer.from(files[file]);
       },
       writeFile: (file, text) => {
         writes.push(file);
@@ -96,7 +142,7 @@ test('the command writes the message back without the lines and says in one line
   const files = { MSG: `${BODY}\n${HOST_CO_AUTHOR}\n${HOST_SESSION}\n` };
   const { err, writes, deps } = seams(files);
   assert.equal(commitMsgMain(['MSG'], deps), 0);
-  assert.equal(files.MSG, `${BODY}\n`);
+  assert.equal(files.MSG.toString('utf8'), `${BODY}\n`);
   assert.deepEqual(writes, ['MSG']);
   assert.deepEqual(err, [`js-harness commit-msg: removed the host's attribution lines: ${HOST_CO_AUTHOR} | ${HOST_SESSION}`]);
 });
@@ -177,7 +223,8 @@ function scratch({ command }) {
   git(root, 'config', 'core.hooksPath', 'hooks');
   if (command) {
     fs.mkdirSync(path.join(root, 'bin'));
-    fs.copyFileSync(path.join(REPO, 'bin', 'commit-msg.mjs'), path.join(root, 'bin', 'commit-msg.mjs'));
+    fs.mkdirSync(path.join(root, 'bin', 'lib'), { recursive: true });
+    for (const file of ['commit-msg.mjs', 'lib/atomic-write.mjs']) fs.copyFileSync(path.join(REPO, 'bin', file), path.join(root, 'bin', file));
   }
   fs.writeFileSync(path.join(root, 'a.txt'), 'a\n');
   git(root, 'add', 'a.txt');
@@ -186,6 +233,7 @@ function scratch({ command }) {
 
 const message = `${BODY}\n${HUMAN_CO_AUTHOR}\n${HOST_CO_AUTHOR}\n${HOST_SESSION}`;
 
+// docs/FAILURES.md quotes this title as the Control of commit-attribution-from-host: renaming it loses the control.
 test("the repository's commit-msg hook makes the commit without the host's lines and says so", { skip }, () => {
   const root = scratch({ command: true });
   const commit = git(root, 'commit', '-q', '-m', message);
@@ -197,4 +245,43 @@ test('on a branch with no bin/commit-msg.mjs the hook lets the message be and th
   const root = scratch({ command: false });
   git(root, 'commit', '-q', '-m', message);
   assert.equal(git(root, 'log', '-1', '--format=%B').stdout, `${message}\n\n`);
+});
+
+test('a hook whose script throws lets the commit go with the message as given', { skip }, () => {
+  const broken = scratch({ command: true });
+  fs.writeFileSync(path.join(broken, 'bin', 'commit-msg.mjs'), 'this is not javascript (\n');
+  git(broken, 'commit', '-q', '-m', message);
+  assert.equal(git(broken, 'log', '-1', '--format=%B').stdout, `${message}\n\n`);
+});
+
+test('a hook that finds no node on the PATH lets the commit go with the message as given', { skip }, (t) => {
+  const noNode = scratch({ command: true });
+  const separator = process.platform === 'win32' ? ';' : ':';
+  const pathKey = Object.keys(process.env).find((key) => key.toUpperCase() === 'PATH');
+  const withoutNode = process.env[pathKey]
+    .split(separator)
+    .filter((dir) => dir !== '' && !['node', 'node.exe', 'node.cmd'].some((name) => fs.existsSync(path.join(dir, name))))
+    .join(separator);
+  const env = { ...process.env, [pathKey]: withoutNode };
+  if (spawnSync('git', ['--version'], { env }).status !== 0) {
+    t.skip('git lives in a folder of node, so no PATH has git without node');
+    return;
+  }
+  // `command -v` exits 1 in bash and 127 in dash when the name is not found.
+  const lookup = spawnSync('sh', ['-c', 'command -v node'], { encoding: 'utf8', env });
+  assert.ok(lookup.error === undefined && lookup.status !== 0, `node is still on the PATH the commit runs with: ${lookup.stdout}`);
+  const commit = spawnSync('git', ['commit', '-q', '-m', message], { cwd: noNode, encoding: 'utf8', env });
+  assert.equal(commit.status, 0, commit.stderr);
+  assert.equal(git(noNode, 'log', '-1', '--format=%B').stdout, `${message}\n\n`);
+});
+
+test('js-harness commit-msg <file> runs the step through the dispatcher, as a project hook calls it', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-commit-msg-dispatch-'));
+  made.push(dir);
+  const file = path.join(dir, 'COMMIT_EDITMSG');
+  fs.writeFileSync(file, `${BODY}\n${HOST_CO_AUTHOR}\n${HOST_SESSION}\n`);
+  const run = spawnSync(process.execPath, [path.join(REPO, 'bin', 'js-harness.mjs'), 'commit-msg', file], { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stderr, /^js-harness commit-msg: removed the host's attribution lines: /);
+  assert.equal(fs.readFileSync(file, 'utf8'), `${BODY}\n`);
 });
