@@ -782,6 +782,17 @@ has no owner, and the board keeps showing rows and work that nobody holds.
 - Control: check — bin/lib/sessions.test.mjs — "rosterOf: the transcripts of one title are one row,
   which says what the latest of them records" — since 2026-10-11
 
+### host-review-scope-unread
+A host review adopted a change for the Code tab without checking that the app applies it where the harness runs.
+- Class: wrong-information
+- Seen: 2026-10-31 — `docs/host-updates/claude-desktop-4.4212.0.md`, row desktop 4.4212.0 #24 — `sessionStatusLine`,
+  listed in the changelog's 3P section, was decided adapt as a Code tab feature and became question 131, which he
+  answered "Sí, ábrela"; JH 113 found that the installed app reads the key only in its third-party-inference class
+  (`odd/tasks/status-line.md`, Design), so the feature could show nothing on his claude.ai install
+- Control: check — bin/lib/host-watch.test.mjs — "a 3P entry left to decide says its decision needs evidence that a
+  claude.ai install reads it" — since 2026-10-31
+- Proof: `js-harness failures weeks`: no sighting of this entry after the week of 2026-10-26
+
 ### host-review-without-research
 A host update was recorded as reviewed after a check that nothing the harness uses broke, with no study of what the
 update brings and what the harness should adopt, adapt or ignore from it.
