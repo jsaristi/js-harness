@@ -360,6 +360,8 @@ export function renderBrief({ versions, reviewed, title }) {
     '2. Read every entry in its changelog, not only the draft\'s words, and decide each row: adopt, adapt or ignore, the',
     '   Reason in a sentence, the Map row of the proposal\'s map (step 5) it touches, its Evidence, and',
     '   Windows and Phone "checked: <how>" where you checked them. Empty the list "To classify by hand".',
+    '   An entry of the 3P section is a key of Claude Desktop on third-party inference: adopt or adapt it only with',
+    '   evidence (its docs or a probe of the app) that a claude.ai install reads it.',
     '3. The tool list: js-harness host-watch tools --surface background --list <your tools, one a line> --record; a',
     '   desktop list comes only from a session the app started (ask the lead for one), else the line says "owed".',
     '4. Where an entry moves what a mod can build, read the plugin-authoring skill\'s types against it.',

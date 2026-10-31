@@ -341,6 +341,8 @@ test('the brief freezes the spans and names every step of the review, in order',
   }
   assert.match(brief, /a second update/);
   assert.match(brief, /without his yes/);
+  // JH 113: #24 was decided adapt with no check that the app reads a 3P key on a claude.ai install; it does not.
+  assert.match(brief, /3P section .*third-party inference.*claude\.ai install/s);
 });
 
 test('the gate of doctor --host-reviewed accepts the first real review, of 4.29.0 / 2.1.308 to 4.4212.0 / 2.1.309', () => {
@@ -361,7 +363,7 @@ test('an entry of the 3P section is drafted outside even when it names Code or a
 });
 
 // The first real review, desktop 4.4212.0 #24 (`sessionStatusLine`, a 3P entry), was drafted outside before CODE_TAB.
-test('an entry that names Code is not placed outside by an outside word or its section; one that names Claude Code or VS Code still is', () => {
+test('an entry that names Code is not placed outside by an outside word or the Cowork section; one that names Claude Code or VS Code still is', () => {
   const entry = (text, section) => ({ id: 'desktop 4.5000.0 #9', version: '4.5000.0', section, text });
   assert.equal(classify(entry('Added a status line above the message box in Cowork, Chat and Code.', 'Cowork')).outside, null);
   assert.equal(classify(entry('Changed Code sessions to ask before a dev server starts over SSH.', 'Code')).outside, null);
