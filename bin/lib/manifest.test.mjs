@@ -8,6 +8,7 @@ import {
   components,
   entryComponents,
   PAUSE_HOOK_COMMAND,
+  REPLY_HOOK_COMMAND,
   sha256,
   manifestPath,
   readManifest,
@@ -1508,7 +1509,31 @@ const claudeReplyHook = hookById('claude-reply-hook');
 test('entryComponents declare the reply check for Claude Code: a Stop entry with no matcher, guarded to exit 0', () => {
   assert.deepEqual(claudeReplyHook.pointer, ['hooks', 'Stop']);
   assert.deepEqual(claudeReplyHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
-  assert.deepEqual(claudeReplyHook.entry(), { hooks: [{ type: 'command', command: 'js-harness reply --hook || exit 0', timeout: 5 }] });
+  assert.deepEqual(claudeReplyHook.entry(), { hooks: [{ type: 'command', command: 'js-harness reply --hook || exit 0', timeout: 15 }] });
+});
+
+// Question 138 (odd/tasks/reply-hook-timeout.md): versions up to 0.97.0 wrote the reply check with 5 s, and at a stop
+// the start of nine hooks eats them. A home installed with the 5 s entry gets the 15 s one in its place, recorded, once.
+test('install puts the 15 s reply check in place of the 5 s one an earlier version wrote and recorded', () => {
+  const home = makeTmpHome();
+  try {
+    const target = claudeReplyHook.target(home);
+    const fiveSeconds = { hooks: [{ type: 'command', command: 'js-harness reply --hook || exit 0', timeout: 5 }] };
+    const earlier = entryComponents.map((component) => (component === claudeReplyHook ? { ...component, entry: () => fiveSeconds } : component));
+    install(home, '0.97.0', { entryComponents: earlier });
+    assert.ok(readJson(target).hooks.Stop.some((entry) => deepEqualJson(entry, fiveSeconds)), 'the earlier install wrote 5 s');
+
+    const manifest = install(home, '0.98.0');
+    const replies = readJson(target).hooks.Stop.filter((entry) => entry.hooks?.[0]?.command === REPLY_HOOK_COMMAND);
+    assert.deepEqual(replies, [claudeReplyHook.entry()], 'one reply entry, at 15 s');
+    const recorded = manifest.entries.filter((record) => record.path === target && record.entry.hooks?.[0]?.command === REPLY_HOOK_COMMAND);
+    assert.deepEqual(recorded.map((record) => record.entry), [claudeReplyHook.entry()], 'recorded once, at 15 s');
+
+    uninstall(home);
+    assert.equal(fs.existsSync(target), false, 'uninstall takes it out with the file the install created');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 // --- The memory backup: a `Stop` entry in Claude Code's settings (odd/tasks/memory-backup.md, D2) ---

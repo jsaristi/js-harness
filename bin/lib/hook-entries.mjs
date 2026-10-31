@@ -120,12 +120,13 @@ export const REPLY_HOOK_COMMAND = 'js-harness reply --hook || exit 0';
  * only in a project whose nearest `harness.json` holds a `reply` key and prints `{}` everywhere else, so the entry runs
  * in every session of the machine and changes nothing where the project did not turn it on. It reads only the reply's
  * text, which Claude Code sends as `last_assistant_message` (its payload logged on 2026-10-16); versions up to 0.97.0
- * registered it in Codex too, which sends the same field. Five seconds, as the share check's: it reads one small file a folder, up to
- * the project's `harness.json`, and, for the wake check of a work session, the end of its transcript, the record of
- * notices and the openings (533 ms on this project's largest transcript, 64.7 MB, measured on 2026-10-16). */
+ * registered it in Codex too, which sends the same field. Fifteen seconds, his answer to question 138
+ * (odd/tasks/reply-hook-timeout.md): its own work holds under 2.5 s (bin/reply-budget.test.mjs), but at a stop the start
+ * of nine Stop hooks ate the 5 s it had in about one stop in ten, skipping its checks, and the stop already waits for
+ * a slower Stop hook (a median of 7.5 s), so the longer limit seldom lengthens a stop (odd/tasks/reply-hook-latency.md, T5). */
 export function replyHookEntry() {
   return {
-    hooks: [{ type: 'command', command: REPLY_HOOK_COMMAND, timeout: 5 }],
+    hooks: [{ type: 'command', command: REPLY_HOOK_COMMAND, timeout: 15 }],
   };
 }
 

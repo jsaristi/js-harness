@@ -306,7 +306,8 @@ export function commandRefusals(blocks, { platform, transcript, parse, now = Dat
   return [...reasons].map(([block, whys]) => `the block that starts "${block.first}" (line ${block.start + 1}): ${whys.join('; ')}`);
 }
 
-/** The time the hook gives the whole check, parser included, under the 5 seconds the host gives the hook. */
+/** The time the hook gives the whole check, parser included. It was set under the hook's 5 s timeout and stays when the
+ * timeout is 15 s (odd/tasks/reply-hook-timeout.md): those 10 s are room for the load of a stop, not for this check. */
 export const COMMANDS_DEADLINE_MS = 4000;
 
 // PowerShell's own reading of each text, one a line of standard input in base64 (PowerShell 5.1 and 7 read a JSON
