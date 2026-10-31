@@ -64,7 +64,21 @@ Any timeout other than the reply hook's.
   (Windows): `node --test` over `bin/lib/manifest.test.mjs`, `bin/install.test.mjs`, `bin/codex-hook-trust.test.mjs`,
   `bin/lib/spec.test.mjs`, `scripts/practice-lib.test.mjs` and `scripts/reply-hook-time.test.mjs` exits 0;
   `bin/reply-budget.test.mjs` 4 of 4, lead p90 696 ms, work p90 658 ms, budget 2500 ms.
+- L5 (2026-10-31, T3): the first commit's gate failed on CI: `bin/lib/gentle-ai-absence.test.mjs` refused the comment
+  of `replyHookEntry`, which named gentle-ai in a file not on its list; the comment now says "a slower Stop hook".
+  The second gate passed: `af847c22`.
+- L6 (2026-10-31, T3, reviews of `b0c658ce..af847c22`): Codex correct (0.97), no finding, 69,543 input tokens; the
+  Claude lenses risk, resilience and reliability 0 findings each; gentle-ai (lineage `review-61bd159f2559ffe5`, lens
+  reliability) approved and acknowledged, one SUGGESTION: name the tests that consume the testkit. They are
+  `bin/lib/manifest.test.mjs` and `bin/codex-hook-trust.test.mjs`, both green (L4).
+- L7 (2026-10-31, T3, the independent verifier, read-only, over `af847c22`): claims 1, 3, 4 and 5 held (temp homes:
+  `sync` over a 5 s home, a hand edit to 30 s, a stopped install, a fresh install; only the reply entry changed;
+  `git show v0.97.0:bin/lib/manifest.mjs` shows the Codex reply entry at 5 s). Claim 2 did not: the comment of
+  `COMMANDS_DEADLINE_MS` (`bin/lib/reply-commands.mjs:309`) tied its 4000 ms to "the 5 seconds" (my search had no
+  "5 seconds" pattern); reworded, the deadline kept, since the 10 s added are not for that check. A reflowed comment
+  line of `bin/reply-budget.test.mjs` was 205 characters; rewrapped. And a finding for applying it: a hand edit of his
+  settings to 15 s before an `install` makes the entry be recorded as his (`createdEntry: false`), so `uninstall`
+  would leave it; the value reaches his settings through `install` (the lead's refresh), never by hand.
 
 ## Next step
-T3: commit through the gate, then Codex and the Claude lenses over the code commit, the independent verifier, push,
-PR, `notify --kind ready --pr <n>`.
+Commit the verifier's fixes; Codex and the lenses over them; push, PR, `notify --kind ready --pr <n>`.

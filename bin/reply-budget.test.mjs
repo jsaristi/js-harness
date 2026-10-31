@@ -20,10 +20,11 @@ import { percentile } from '../scripts/reply-hook-time.mjs';
 // this red before it reaches him. A run that outlives the timeout skips every check of its stop, and at a stop the hook
 // shares the machine with eight other Stop hooks. The budget was half the 5 s timeout it was set against; the timeout
 // is 15 s since question 138 (odd/tasks/reply-hook-timeout.md), and the 10 s added are room for the load of a stop, not
-// for the hook's own work, so the budget stays where it was and is held to at most half the timeout. The hook runs as the host runs it, a process of its own, and the fixture makes every check do its whole
-// work: the lead's stop warns of waiting board rows and of a return whose page was published and never linked (so the
-// return check reads every Artifact call and searches the whole transcript for the link), a work session's stop of
-// held work with nothing to wake it, each searching the whole transcript for an earlier warning it does not find; and
+// for the hook's own work, so the budget stays where it was and is held to at most half the timeout. The hook runs as
+// the host runs it, a process of its own, and the fixture makes every check do its whole work: the lead's stop warns
+// of waiting board rows and of a return whose page was published and never linked (so the return check reads every
+// Artifact call and searches the whole transcript for the link), a work session's stop of held work with nothing to
+// wake it, each searching the whole transcript for an earlier warning it does not find; and
 // both replies show a block of what was run, which the command-block check reads against every run of the transcript.
 // A block handed to him is also parsed by his PowerShell, a process whose start alone takes 1.4 to 2.3 s on the
 // machine that measured it: that cost is not the hook's own work, is measured apart, and is not held here
