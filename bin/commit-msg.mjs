@@ -36,20 +36,29 @@ const SCISSORS = /^\S+ -{24} >8 -{24}\s*$/;
 // The marks `core.commentChar=auto` picks one of: the first that no line of the message starts with.
 const AUTO_MARKS = ['#', ';', '@', '!', '$', '%', '^', '&', '|', ':'];
 
-/** The marks a comment line of the message may start with, from git's `core.commentString` or `core.commentChar`
- * (`value`, null where neither is set): `#` by default, every mark `auto` may pick. */
-export function commentMarks(value) {
+/** The mark a comment line of the message starts with, from git's comment setting (`value`, null where none is set):
+ * `#` by default. Under `auto` git picks one mark and writes its comments under the message, an empty comment line
+ * (the mark alone) among them, so the mark is the first character of the last line that is not blank, when that is a
+ * mark `auto` may pick and some line is that mark alone; `#` otherwise, as for a message given with `-m`. */
+export function commentMarks(value, text = '') {
   if (value === null || value === '') return ['#'];
-  return value === 'auto' ? AUTO_MARKS : [value];
+  if (value !== 'auto') return [value];
+  const lines = text.split(/\r?\n/);
+  const mark = (lines.filter((line) => line.trim() !== '').pop() ?? '')[0];
+  return [AUTO_MARKS.includes(mark) && lines.includes(mark) ? mark : '#'];
+}
+
+/** The value of the last of `core.commentString` and `core.commentChar` in `git config --get-regexp`'s output, which
+ * lists them in config order: the two are aliases, and the last one set wins. */
+export function lastCommentSetting(listed) {
+  const values = listed.split(/\r?\n/).filter(Boolean).map((line) => line.replace(/^\S+ ?/, ''));
+  return values.length === 0 || values.at(-1) === '' ? null : values.at(-1);
 }
 
 /** What git says of the comment mark, read where the hook runs; null where nothing is set or git cannot answer. */
 function gitCommentConfig() {
-  for (const key of ['core.commentString', 'core.commentChar']) {
-    const result = spawnSync('git', ['config', '--get', key], { encoding: 'utf8' });
-    if (result.status === 0 && result.stdout.replace(/\r?\n$/, '') !== '') return result.stdout.replace(/\r?\n$/, '');
-  }
-  return null;
+  const result = spawnSync('git', ['config', '--get-regexp', '^core\\.comment(string|char)$'], { encoding: 'utf8' });
+  return result.status === 0 ? lastCommentSetting(result.stdout) : null;
 }
 
 /** Whether `line` (without its ending) is one the host appends: its co-author or its session. */
@@ -152,7 +161,8 @@ export function commitMsgMain(
     return leftAsItIs('read', error);
   }
   const config = commentConfig();
-  const stripped = stripAttribution(bytes.toString('latin1'), { comments: commentMarks(config === null ? null : Buffer.from(config, 'utf8').toString('latin1')) });
+  const text = bytes.toString('latin1');
+  const stripped = stripAttribution(text, { comments: commentMarks(config === null ? null : Buffer.from(config, 'utf8').toString('latin1'), text) });
   if (stripped.removed.length === 0) return 0;
   try {
     writeFile(file, Buffer.from(stripped.text, 'latin1'));

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { commentMarks, commitMsgMain, replaceFile, stripAttribution } from './commit-msg.mjs';
+import { commentMarks, commitMsgMain, lastCommentSetting, replaceFile, stripAttribution } from './commit-msg.mjs';
 
 // The planted messages of the brief (odd/tasks/strip-attribution.md, spec 3), the trailers as the Claude app asks a
 // session to write them on 2026-10-31.
@@ -84,10 +84,23 @@ test('host trailers right under a body line, with no blank line between, go; the
 test('the comment lines of another core.commentChar, or of auto, do not keep the trailers in', () => {
   const below = (mark) => `${BODY}\n${HOST_CO_AUTHOR}\n${HOST_SESSION}\n${mark} Please enter the commit message for your changes.\n${mark}\n`;
   assert.equal(stripAttribution(below(';'), { comments: [';'] }).text, `${BODY}\n; Please enter the commit message for your changes.\n;\n`);
-  assert.equal(stripAttribution(below('%'), { comments: commentMarks('auto') }).text, `${BODY}\n% Please enter the commit message for your changes.\n%\n`);
+  assert.equal(stripAttribution(below('%'), { comments: commentMarks('auto', below('%')) }).text, `${BODY}\n% Please enter the commit message for your changes.\n%\n`);
   assert.deepEqual(stripAttribution(below(';')).removed, [], 'with the default mark, a ; line is prose');
   assert.deepEqual(commentMarks(null), ['#']);
   assert.deepEqual(commentMarks('//'), ['//']);
+});
+
+test('under auto, the one mark git picked counts: a prose line that starts with another candidate is no comment', () => {
+  const prose = `fix: document syntax\n\n${HOST_SESSION}\n!This is explanatory prose\n`;
+  assert.deepEqual(stripAttribution(prose, { comments: commentMarks('auto', prose) }), { text: prose, removed: [] });
+  assert.deepEqual(commentMarks('auto', `${BODY}\n#x\n; Please enter\n;\n`), [';']);
+  assert.deepEqual(commentMarks('auto', `${BODY}\n${HOST_SESSION}\n`), ['#']);
+});
+
+test("the last of git's comment aliases in config order is the mark", () => {
+  assert.equal(lastCommentSetting('core.commentstring //\ncore.commentchar ;\n'), ';');
+  assert.equal(lastCommentSetting('core.commentchar ;\ncore.commentstring //\n'), '//');
+  assert.equal(lastCommentSetting(''), null);
 });
 
 test('the diff git -v leaves under its scissors line is not the end of the message', () => {

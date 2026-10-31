@@ -150,3 +150,35 @@ Nothing here is his: a decision only he can take goes to the lead as a recorded 
   `#` alone, so under `core.commentChar=;` (or `auto`) an editor's comment paragraph hid the trailers above it. The
   command now reads `core.commentString`, then `core.commentChar`, from git where the hook runs (`auto`: every mark git
   may pick, `#;@!$%^&|:`); red (the file failed to load: no `commentMarks`), then 24 of 24.
+- L10 (2026-10-31, the reviews of `6110bd91`): Codex over `b0f98b5..6110bd9`: incorrect (0.99), two P2, taken, tests
+  first: under `auto` every candidate mark counted, so `Claude-Session: example` above a prose line `!This ...` went
+  (now the one mark git picked: the last non-blank line's first char, when it is a candidate and some line is that
+  mark alone, git's empty comment line; `#` otherwise); `core.commentString` was read before `core.commentChar`,
+  though they are aliases and the last set wins (now one `git config --get-regexp`, its last value). Red: 1 of 26
+  (the `!` prose case, `removed: ['Claude-Session: ...']`), then 26 of 26. Lens reliability: 0. gentle-ai (lineage
+  `review-911e27eb1c17d7c2`): a SUGGESTION, the host's names are a fixed list, and a WARNING, a host trailer followed
+  by prose in the last paragraph is kept; neither is taken: the first is what keeps a human named Claude (the
+  anthropic.com address still catches what the app writes), the second what keeps a quoted host line with prose under
+  it (the verifier's finding of L5); the `auto` case it names is the P2 fixed here.
+
+## Next step
+UPDATE (read first): the two P2 below are FIXED in the tree, UNCOMMITTED, tests 26 of 26 (`commentMarks(value, text)`:
+auto's mark is the last non-blank line's first char when it is an auto mark and some line is that mark alone, else
+`#`; `lastCommentSetting` reads one `git config --get-regexp`). gentle-ai's capture of `6110bd91` (log
+`$CLAUDE_JOB_DIR/tmp/ga4-capture.log`) holds 1 WARNING + 1 SUGGESTION not yet read: `grep claim` it, take them, run
+that lineage's status and `acknowledge-approved`, write L10, then commit and go on as below.
+
+State at the context pause (2026-10-31): branch `worktree-strip-attribution`, worktree
+`D:\js-harness\.claude\worktrees\strip-attribution`, slice 1 = `951bcfb4` `348378ce` `b0f98b5a` `6110bd91`, not
+pushed. Commit through the branch's hooks: `git -c core.hooksPath=.githooks commit -F <msg>` (the worktree's own
+hooksPath is main's `.githooks`, which has no `commit-msg` yet). Open now: Codex over `b0f98b5..6110bd9` gave two P2
+(`auto` must resolve the one mark git picked: the first char of the last non-blank line when it is one of the auto
+marks, else `#`; `core.commentString`/`core.commentChar` are aliases, the last in config order wins: read both with
+one `git config --get-regexp`); fix tests first, commit, Codex + lens reliability over it, gentle-ai if offered
+(lineage `review-911e27eb1c17d7c2` capture of `6110bd91` may still be running). Then: push, PR 1 (body drafted in
+`$CLAUDE_JOB_DIR/tmp/pr1.md`, ends with the PR attribution line), `js-harness notify --to orchestrator --kind ready
+--pr <n>`. Then slice 2 (T3) on a new branch: move `PRE_COMMIT_HOOK`, `PRE_PUSH_HOOK`, `HOOKS` from
+`bin/lib/project.mjs` (at its 1,989-line ceiling) to `bin/lib/project-hooks.mjs` (draft in `$CLAUDE_JOB_DIR/tmp`),
+add `commitMsg` (`js-harness commit-msg "$1" || exit 0`); `writeHookGate` for it in `writeProject` beside pre-commit;
+in `updateRecorded` under `sync`, restore it when recorded, write it when not; `repairLines` in
+`bin/lib/project-migrate.mjs` says so; tests in `bin/lib/project.test.mjs` (counts 10 wrote / 6 files grow by one).
