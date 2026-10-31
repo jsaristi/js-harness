@@ -145,7 +145,7 @@ reply and backup entries in `~/.codex/hooks.json`; the next `install` or `sync` 
 | PostToolUse | `claude-pause-hook` | `js-harness resume --pause` | the context pause and the inbox |
 | PostToolUse | `claude-template-shown-hook` | `js-harness template gate --shown` | records what the template gate let through as shown |
 | PostToolUseFailure | `claude-web-failure-hook` | `js-harness resume --pause` | the next rung after a failed web fetch |
-| Stop | `claude-share-hook` | `js-harness guard --stop` | turns back a reply whose stated context share is off its transcript's |
+| Stop | `claude-share-hook` | `js-harness guard --stop` | turns back a reply whose stated context share is off its transcript's, or that states a forecast with no estimate mark |
 | Stop | `claude-reply-hook` | `js-harness reply --hook` | turns back a reply that closes with no state |
 | Stop | `claude-backup-hook` | `js-harness backup --hook` | starts a memory backup when one is due |
 

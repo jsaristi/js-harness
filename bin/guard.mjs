@@ -35,9 +35,11 @@
 //     rule `memory-feedback-home` is declared (bin/lib/memory-feedback-guard.mjs, imported only for a memory note;
 //     odd/tasks/memory-feedback-home.md). `guard --memory <folder>` runs the same check over a whole folder.
 // `js-harness guard --stop` is the `Stop` hook (odd/tasks/honesty-audit.md, T16): a reply that states the session's own
-// context share more than 2 points from the share its transcript records (bin/lib/audit.mjs, `shareRefusal`). A reply
+// context share more than 2 points from the share its transcript records (bin/lib/audit.mjs, `shareRefusal`), or that
+// states a forecast with no estimate mark and no measurement named, read in the same reading of the reply's figures
+// (`forecastRefusal`, odd/tasks/estimate-as-fact.md). A reply
 // is not a tool call and is already shown when the hook runs, so it cannot be refused before it is sent: the hook
-// turns the stop back with the hooks contract's `decision: "block"` and its reason, and the session corrects the share
+// turns the stop back with the hooks contract's `decision: "block"` and its reason, and the session corrects the figure
 // in its next words. It never turns back a stop it already turned back (`stop_hook_active`), so it cannot loop; it
 // reads the transcript only when the reply states a share, and a failure inside it lets the session stop.
 import { spawnSync } from 'node:child_process';
@@ -68,7 +70,8 @@ export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  `rule:<id>` or a phrase of AGENTS.md quoted on a line that names it, and exits 1; exits 0 when every one does\n'
   + '       js-harness guard --stop\n'
   + '  reads a Stop payload on standard input; turns the stop back when the reply states this session\'s context share\n'
-  + '  more than 2 points from the share its transcript records, so the session corrects it; always exits 0\n';
+  + '  more than 2 points from the share its transcript records, or states a forecast (a duration, a time of arrival or\n'
+  + '  a cost to come) with no estimate mark and no measurement named, so the session corrects it; always exits 0\n';
 
 const MESSAGE_TOOLS = new Set(['SendMessage', 'mcp__ccd_session_mgmt__send_message']);
 const FILE_TOOLS = new Set(['Write', 'Edit']);
@@ -211,17 +214,23 @@ async function hintOf(payload, { env, projectRoot, exists }) {
  * reply that says what the notice told it (odd/tasks/session-channel.md, T6b). */
 async function stopRefusalOf(payload, readTranscript, { env, homedir, projectRoot }) {
   if (payload?.stop_hook_active === true || typeof payload?.transcript_path !== 'string' || payload.transcript_path === '') return null;
-  const { lastShare, shareRefusal } = await import('./lib/audit.mjs');
+  const { forecastRefusal, lastShare, shareRefusal } = await import('./lib/audit.mjs');
   const given = typeof payload.last_assistant_message === 'string' ? payload.last_assistant_message : null;
   // A reply that names no context share costs no read of the transcript; the window the share is of comes from it.
-  if (given !== null && !(/context/i.test(given) && /\d\s?%/.test(given))) return null;
-  const read = lastShare(readTranscript(payload.transcript_path).split(/\r?\n/));
-  if (read === null) return null;
-  const { hostWindow } = await import('./lib/pause.mjs');
-  const projectDir = typeof payload.cwd === 'string' && payload.cwd !== '' ? projectRoot(path.resolve(payload.cwd)) : null;
-  const window = hostWindow({ env, home: harnessHome({ env, homedir }), projectDir });
-  const recorded = window === null ? read : { ...read, window };
-  return shareRefusal(given ?? recorded.text, recorded);
+  const read = given !== null && !(/context/i.test(given) && /\d\s?%/.test(given))
+    ? null
+    : lastShare(readTranscript(payload.transcript_path).split(/\r?\n/));
+  const text = given ?? read?.text ?? '';
+  let share = null;
+  if (read !== null) {
+    const { hostWindow } = await import('./lib/pause.mjs');
+    const projectDir = typeof payload.cwd === 'string' && payload.cwd !== '' ? projectRoot(path.resolve(payload.cwd)) : null;
+    const window = hostWindow({ env, home: harnessHome({ env, homedir }), projectDir });
+    share = shareRefusal(text, window === null ? read : { ...read, window });
+  }
+  // A forecast said as a fact is read from the same text, in the same reading of stated figures (odd/tasks/estimate-as-fact.md).
+  const reasons = [share, forecastRefusal(text)].filter((reason) => reason !== null);
+  return reasons.length === 0 ? null : reasons.join('\n\n');
 }
 
 /** `guard --memory <folder>`: each feedback note of the memory folder `folder` that names no home of its rule, one line

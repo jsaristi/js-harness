@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { auditEntries, lastShare, ownShares, shareRefusal, windowBefore } from './audit.mjs';
+import { auditEntries, forecastRefusal, lastShare, ownShares, shareRefusal, statedFigures, windowBefore } from './audit.mjs';
 
 // Clauses read from this project's transcripts (2026-10-12 to 2026-10-15), each with the share it states of the
 // session that wrote it.
@@ -212,6 +212,106 @@ test('shareRefusal refuses a stated own share more than 2 points from the record
   assert.equal(shareRefusal('JH 9 está al 10 % de contexto.', { tokens: 300000, window: 500000 }), null, 'another session\'s share');
   assert.equal(shareRefusal('Nothing about it.', { tokens: 300000, window: 500000 }), null);
   assert.match(shareRefusal('Mi contexto: 40 %.', { tokens: 300000, window: 350000 }), /records 86% of a 350k window/, 'a share of the window read');
+});
+
+// --- Forecasts said as facts (odd/tasks/estimate-as-fact.md): a duration, a time of arrival or a cost of what has not
+// happened yet, read in the same walk over a reply as the shares ---
+
+// Bare forecasts, in the forms of the sightings of `estimate-passed-as-fact` (docs/FAILURES.md) with their marks taken
+// away: each is turned back.
+const BARE = [
+  'Con tres shards el gate bajará a 500 s.',
+  'Three shards will bring the gate to 500 s.',
+  'El gate tardará 12 minutos.',
+  'JH 121 terminará a las 10:30 UTC.',
+  'La revisión de Codex costará 1,6 millones de tokens.',
+  'The Codex review would cost 1.6M tokens.',
+  'Las evaluaciones van a costar $70.',
+  'Le faltan 20 minutos a la puerta.',
+  'La sesión estará lista a las 11:00.',
+  // From a work session's transcript (43523cfc, 2026-10-10), the one bare forecast its replies held.
+  'Escribirlos ahora costaría otro gate de 17 minutos, así que van con el próximo commit del registro.',
+];
+
+// The same forecasts marked as estimates, or naming what measured them: each passes.
+const MARKED = [
+  'Con tres shards el gate bajará a cerca de 500 s, por aritmética y sin medir.',
+  'Three shards would bring the gate near 500 s.',
+  'El gate tardará unos 12 minutos.',
+  'El gate tardará ~12 minutos.',
+  'JH 121 terminará hacia las 10:30 UTC.',
+  'La revisión costará aprox. 1,6 millones de tokens.',
+  'The review will cost about 1.6M tokens.',
+  'The gate should take 10 to 12 minutes.',
+  'Es un estimado: el gate tardará 12 minutos.',
+  'El gate tardará 12 minutos, lo que midió `js-harness gate-log` en las últimas diez corridas.',
+  'The gate will take 12 minutes, as measured in odd/tasks/gate-lock.md:1090.',
+];
+
+// Figures that are no forecast of the writer's, or are not the writer's words: each passes.
+const NOT_FORECASTS = [
+  'El gate tardó 747 s.',
+  'Lleva 37 minutos.',
+  'Volveré a las 10:30.',
+  'JH 69 termina a las 10:30.',
+  'Me despierta el temporizador de las 19:09 UTC.',
+  'La mayoría tardó 5 min.',
+  'El latido correrá cada 5 minutos.',
+  'A las 03:06 JH 114 avisó que Claude Code le mató el commit por falta de memoria mientras corría su puerta, y que lo repetiría solo cuando yo se lo dijera.',
+  'Corrí esto:\n\n```powershell\n# El gate tardará 12 minutos.\njs-harness gate -- git commit\n```',
+  '> El gate tardará 12 minutos.',
+  'JH 121 dijo: "el gate tardará 12 minutos".',
+  'JH 121 dijo: “el gate tardará 12 minutos”.',
+  'El paso `sleep 720 # tardará 12 min` es el de la prueba.',
+  // The false positives of a first draft over 40 work sessions' transcripts (odd/tasks/estimate-as-fact.md, L4): a time
+  // a run is scheduled for, a plan in the first person, a noun in -ería, an imperfect, a figure inside a condition, a
+  // bound and a range in words.
+  '- **Próxima corrida:** quedó programada para las 3:05 AM hora local, cuando se libera el cupo.',
+  'JH 14 me sirve de prueba: está quieto con 453.900 tokens, y voy a mirar si se compacta solo.',
+  '| Esta (principal) | Trabajando | 1 vivo: commit de la librería, en el gate desde las 19:30 | Nada |',
+  '**La alarma detectó un frenado** a las 19:11: desde las 18:39 no corría ningún gate.',
+  'Si la otra sesión arranca su gate en estos 12 minutos, van a correr dos a la vez y uno puede salir rojo;',
+  'Un intento, debería terminar antes de las 07:18.',
+  '| El commit del documento | 18:28 | Corriendo, lleva 12 minutos, debería cerrar en uno o dos más |',
+  // Two of 40 other transcripts, read after the draft was fixed (L4): a budget it stayed within, and a figure whose
+  // sentence ends inside bold marks.
+  '**Lo que encontró Codex** (585.739 tokens, dentro de los 638.400): la parte de los tests estaba bien.',
+  '- **Deja el tope en 1.200 segundos.** Subirlo taparía la próxima pérdida.',
+  // Two of a third 40 (L4): a bound after a time, and a range in digits joined by "o".
+  '- **Lo que no vi en rojo:** el P1, porque recién se manifestaría después de las 19:45 UTC.',
+  '**Correr el gate dentro de Linux en tu misma PC (WSL2):** podría bajar los 12 minutos a 3 o 4.',
+];
+
+test('statedFigures reads a bare forecast as one, with the clause it is in', () => {
+  for (const text of BARE) assert.deepEqual(statedFigures(text).forecasts.map((forecast) => forecast.clause), [text], text);
+});
+
+test('statedFigures leaves out a forecast marked as an estimate or naming what measured it', () => {
+  for (const text of MARKED) assert.deepEqual(statedFigures(text).forecasts, [], text);
+});
+
+test('statedFigures leaves out a past or present figure, a plan of the writer\'s own, and a figure in code or a quote', () => {
+  for (const text of NOT_FORECASTS) assert.deepEqual(statedFigures(text).forecasts, [], text);
+});
+
+test('statedFigures reads the shares in the same walk, as ownShares reads them', () => {
+  const text = 'Listo. Contexto: 40 %.\nEl gate tardará 12 minutos.\n\n```\nContexto: 70 %.\n```';
+  const figures = statedFigures(text);
+  assert.deepEqual(figures.shares, ownShares(text));
+  assert.deepEqual(figures.shares.map((share) => share.stated), [40, 70], 'a share in a code block is read as before');
+  assert.deepEqual(figures.forecasts.map((forecast) => forecast.clause), ['El gate tardará 12 minutos.']);
+});
+
+test('forecastRefusal names the bare forecast and asks for its mark or its measurement in one line', () => {
+  const reason = forecastRefusal('Listo. El gate tardará 12 minutos. Sigo.');
+  assert.match(reason, /states a forecast as a fact: "El gate tardará 12 minutos\."/);
+  assert.match(reason, /estimate/);
+  assert.match(reason, /one line/);
+  assert.equal(forecastRefusal('El gate tardará unos 12 minutos.'), null);
+  assert.equal(forecastRefusal('Nothing to forecast.'), null);
+  assert.equal(forecastRefusal(''), null);
+  const long = `El gate tardará 12 minutos ${'y algo más '.repeat(40)}.`;
+  assert.ok(forecastRefusal(long).length < 600, 'a long clause is cut');
 });
 
 // --- windowBefore: the window of a session's own last get_usage read before a time (session channel, T9) ---

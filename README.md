@@ -1849,7 +1849,7 @@ $ js-harness guard --memory ~/.claude/projects/D--js-harness/memory
 every feedback note names its home (23 feedback notes)
 ```
 
-`install` also registers `guard --stop` for Claude Code, as a `Stop` hook: the share check. A
+`install` also registers `guard --stop` for Claude Code, as a `Stop` hook: the share and forecast check. A
 reply that states the session's own context share ("Contexto: 40 %") more than 2 points from the
 share its transcript records is turned back with the hooks contract's `decision: "block"`, so the
 session corrects it in one line from `get_usage`. The share is of the window the host is configured with when
@@ -1860,6 +1860,16 @@ the check cannot hold it back, only make the session correct it before the turn 
 turns back a stop it already turned back (`stop_hook_active`), and always exits 0. When the host
 sends the reply's text (`last_assistant_message`) and it names no share, the transcript is not
 read; a host that sends no text has the transcript's last reply read instead.
+
+In the same reading of the reply's figures it turns back a forecast said as a fact: a duration, a
+time of arrival or a cost of what has not happened yet ("El gate tardará 12 minutos", "the review
+will cost 1.6M tokens") with no estimate mark ("unos", "cerca de", "aprox.", "about", "~", a range
+or a bound) and no measurement named (a measuring word with the command in backticks or the file).
+A figure in a code block, inline code, a quote line or quoted text is not the writer's and is not
+read, nor is a past or present figure, a plan of the writer's own ("volveré a las 10:30", "voy a")
+or a figure inside a condition ("si ... en 12 minutos,"). Over the lead's transcript of 2026-10-31
+it turned back none of 596 replies, and 10 of 7,588 over 120 work sessions' transcripts
+(odd/tasks/estimate-as-fact.md). Both reasons go in one turn-back when both hold.
 
 ```console
 $ js-harness guard --stop < stop.json

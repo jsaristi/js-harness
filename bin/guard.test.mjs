@@ -536,6 +536,32 @@ test('the check stays quiet when it already blocked this stop, when the reply st
   assert.deepEqual(await stop(wrong, { transcript: usageLine(500000) }), { ...quiet, read: [TRANSCRIPT] }, 'no reply records a usage');
 });
 
+// A forecast said as a fact (odd/tasks/estimate-as-fact.md) is read in the same reading of stated figures as the
+// share, from the host's text, so it costs no read of the transcript.
+test('a reply that states a forecast with no estimate mark is blocked from stopping, with the reason, and the transcript is not read', async () => {
+  const result = await stop({ hook_event_name: 'Stop', transcript_path: TRANSCRIPT, stop_hook_active: false, last_assistant_message: 'Listo. El gate tardará 12 minutos.' });
+  assert.equal(result.code, 0);
+  assert.deepEqual(result.read, []);
+  const answer = JSON.parse(result.out);
+  assert.equal(answer.decision, 'block');
+  assert.match(answer.reason, /states a forecast as a fact: "El gate tardará 12 minutos\."/);
+});
+
+test('a marked or measured forecast passes; a bare one is read from the transcript when the host sends no text; a stop already turned back passes', async () => {
+  const quiet = { code: 0, out: '', err: '', read: [] };
+  assert.deepEqual(await stop({ transcript_path: TRANSCRIPT, last_assistant_message: 'El gate tardará unos 12 minutos.' }), quiet, 'marked');
+  assert.deepEqual(await stop({ transcript_path: TRANSCRIPT, last_assistant_message: 'El gate tardará 12 minutos, lo que midió `js-harness gate-log`.' }), quiet, 'measured');
+  assert.deepEqual(await stop({ transcript_path: TRANSCRIPT, last_assistant_message: 'El gate tardará 12 minutos.', stop_hook_active: true }), quiet, 'turned back once already');
+  const fromTranscript = await stop({ transcript_path: TRANSCRIPT }, { transcript: [usageLine(500000), replyLine('El gate tardará 12 minutos.', 300000)].join('\n') });
+  assert.match(JSON.parse(fromTranscript.out).reason, /states a forecast as a fact/);
+});
+
+test('a reply with a wrong share and a bare forecast is turned back once, with both reasons', async () => {
+  const answer = JSON.parse((await stop({ transcript_path: TRANSCRIPT, last_assistant_message: 'Contexto: 40 %. El gate tardará 12 minutos.' })).out);
+  assert.match(answer.reason, /states your context at 40%/);
+  assert.match(answer.reason, /states a forecast as a fact/);
+});
+
 // The window the host is configured with is the one the pause notice says the share of (odd/tasks/session-channel.md,
 // T6b), so the stop check reads it first: a session that says what the notice told it is not turned back.
 test('a configured window is the one a stated share is checked against, ahead of a get_usage read and of the default', async () => {

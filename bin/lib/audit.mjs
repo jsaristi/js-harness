@@ -3,7 +3,9 @@
 // - the hour a message to another session stamps as its time of sending, against the entry's own timestamp;
 // - the share of its context a session states of itself, against the usage its own reply records.
 // Each was the one kind of the recorded honesty failures that an oracle in the transcript reaches; the general
-// audit stayed "not worth it" (version 3 found 2 or 3 of 14). Pure: entries are handed in. Zero deps.
+// audit stayed "not worth it" (version 3 found 2 or 3 of 14). The Stop hook reads one more kind in the same reading
+// of a reply's figures, which needs no oracle: a forecast said with no estimate mark and no measurement named
+// (`statedFigures`, odd/tasks/estimate-as-fact.md). Pure: entries are handed in. Zero deps.
 import { stampedHour } from './guard.mjs';
 import { DEFAULT_CONTEXT_WINDOW, percentOf } from './sessions.mjs';
 
@@ -41,6 +43,101 @@ const NOT_PRESENT = /\b\d{1,2}:\d{2}\b|\b(?:estaba|iba|era|dije|was|said)\b|[úu
 // A threshold named just before the number: the pause, the compaction, a limit.
 const THRESHOLD = /paus|compact|l[íi]mite|limit|umbral|threshold|tope|llego|llegue|reach|cuando|when|hasta|until|aviso|warn/i;
 
+/** The shares of its own context the one clause `clause` states, as `[{ stated, clause }]` (`ownShares`). */
+function sharesOf(clause, window) {
+  if (!/context/i.test(clause) || OTHER.test(clause) || NOT_PRESENT.test(clause)) return [];
+  const found = [];
+  const numbers = new Set();
+  for (const match of clause.matchAll(AFTER)) numbers.add(match.indices[1][0]);
+  for (const match of clause.matchAll(BEFORE)) {
+    const before = clause.slice(0, match.index);
+    const segment = before.slice(Math.max(before.lastIndexOf(','), before.lastIndexOf('('), before.lastIndexOf(';')) + 1);
+    if (!SELF.test(before + match[0]) || THRESHOLD.test(segment)) continue;
+    numbers.add(match.index);
+  }
+  for (const at of [...numbers].sort((a, b) => a - b)) {
+    const rest = clause.slice(at);
+    // Either end of a range, "40%-50%" or "40-50 %", is no exact claim (Codex, 2026-10-15).
+    if (/[-–]\s*$/.test(clause.slice(0, at)) || /^\d{1,3}\s?%?\s*[-–]\s*\d/.test(rest)) continue;
+    // A window named right after the share, "70 % de 350k" or "49% (148k de 300k)", that is not the session's.
+    const named = /^\d{1,3}\s?%\s*(?:\(\s*\d+\s?k\s+)?(?:de|of)\s+(\d+)\s?k\b/i.exec(rest);
+    if (named !== null && Number(named[1]) * 1000 !== window) continue;
+    found.push({ stated: Number(/^\d{1,3}/.exec(rest)[0]), clause });
+  }
+  return found;
+}
+
+// A forecast (odd/tasks/estimate-as-fact.md) is a figure of what has not happened yet: no command measured it, so
+// stated bare it is an estimate said as a fact. The figure is a duration, a time of day or a cost; "cada 5 minutos"
+// and "every 5 minutes" are a frequency, not a forecast.
+const FIGURE = /(?<!\b(?:cada|every|per)\s)(?:\b\d+(?:[.,]\d+)?\s*(?:s|seg(?:undos?)?|sec(?:onds?)?|min(?:utos?|utes?|s)?|h|hrs?|horas?|hours?|d[íi]as?|days?|semanas?|weeks?)\b|\b\d{1,2}:\d{2}\b|\$\s?\d|\b\d+(?:[.,]\d+)?\s*(?:k|M|mil|millones?|millions?)?\s*(?:de\s+)?(?:tokens|USD|d[óo]lares|dollars)\b)/giu;
+// The future in a word: Spanish's third person future ("tardará", "tendrá", "habrá") and its conditional ("costaría",
+// "podría", "habría"), whose stems are chosen so that the imperfect ("corría", "abría") and "mayoría" are not read;
+// English's "will", "would", "going" and "'ll". The first person future, "volveré", is a plan of the writer's own and
+// is not read; nor are the nouns in -ería of NOT_FUTURE.
+const FUTURE_WORD = /^(?:\p{L}*[aeidbr]r(?:á|án)|\p{L}*(?:[aeid]|hab|sab|cab|quer)r(?:ía|ían)|will|would|going|eta|\p{L}+'ll)$/iu;
+const NOT_FUTURE = /^(?:librer|galer|bater|ingenier|mensajer|cafeter|tonter|loter|panader|carpinter)ías?$/iu;
+// The future in a phrase: "va a costar", "dentro de 10 minutos", "faltan 20 minutos", "should take", "by 10:30". "Voy a"
+// and "vamos a" are a plan of the writer's own; "para las 3:05" is the time a run is set for, a fact of the schedule.
+const FUTURE_PHRASE = /\b(?:vas|va|van)\s+a\s+\p{L}+(?:ar|er|ir)\b|\bdentro\s+de\s+(?:los\s+|las\s+)?\d+\s*(?:s|seg|min|h|hora|d[íi]a|semana)|\bfalta(?:n)?\s+\d|\bshould\s+(?:take|last|cost|land|finish|be|reach)\b|\bexpected\s+to\b|\bby\s+\d{1,2}:\d{2}/giu;
+// A condition, from "si" or "if" to the next comma: a figure in it is what the forecast depends on, not the forecast.
+const CONDITION = /\b(?:si|if)\b[^,;:]*/giu;
+// How near, in words, a figure stands to the future that it is a forecast of.
+const FORECAST_SPAN = 6;
+// A mark that the writer says the figure is an estimate, a bound or a range, in Spanish or English.
+const ESTIMATE_MARK = /\bunos\b|\bunas\b|\bcerca\b|alrededor\s+de|\bhacia\b|\baprox|estimad|\bestimo\b|estimaci[óo]n|\bcalcul|c[áa]lculo|a\s+ojo|m[áa]s\s+o\s+menos|del\s+orden|quiz[áa]|probablemente|posiblemente|aritm[ée]tica|sin\s+medir|no\s+medid|\bhasta\b|a\s+lo\s+sumo|como\s+m[áa]ximo|como\s+mucho|menos\s+de|m[áa]s\s+de|\bentre\b|~|≈|≲|\babout\b|\baround\b|\bnear(?:ly)?\b|roughly|approx|estimat|\bguess|\bmaybe\b|perhaps|probably|likely|at\s+most|up\s+to|less\s+than|more\s+than|arithmetic|not\s+measured|or\s+so|\bsome\b|antes\s+de|despu[ée]s\s+de|\bbefore\b|\bafter\b|\d\s*(?:a|o|-|–|to|or)\s*\d|\b(?:un[oa]?|dos|tres|one|two|three)\s+(?:o|or)\s+(?:dos|tres|cuatro|two|three|four)\b/iu;
+// A measurement named: a measuring word and where it was read, a command in backticks (here `CODE`) or a file.
+const MEASURED = /medid|\bmed[íi]\b|midi[óo]|measured|\ble[íi]\b|le[íi]d[oa]|\bread\b|seg[úu]n|\bper\b|[úu]ltim[oa]s?|\blast\b/iu;
+const MEASURED_WHERE = /\bCODE\b|[\w-]+\/[\w./-]+|\b[\w-]+\.(?:mjs|js|md|json|jsonl|txt|log)\b/u;
+
+/** The words before `offset` of `clause`: the index of the word that starts there. */
+const wordIndex = (clause, offset) => clause.slice(0, offset).split(/\s+/).filter(Boolean).length;
+
+/** The forecasts said as facts in the one clause `clause` of the writer's prose, as `[{ clause }]` (`statedFigures`). */
+function forecastsOf(written) {
+  // A clause with no digit holds no figure, and most clauses hold none: the cheap test runs first.
+  if (!/\d/.test(written) || ESTIMATE_MARK.test(written) || (MEASURED.test(written) && MEASURED_WHERE.test(written))) return [];
+  const clause = written.replace(CONDITION, 'COND');
+  const figures = [...clause.matchAll(FIGURE)].map((match) => wordIndex(clause, match.index));
+  if (figures.length === 0) return [];
+  const isFuture = (word) => FUTURE_WORD.test(word) && !NOT_FUTURE.test(word);
+  const futures = clause.split(/\s+/).filter(Boolean).flatMap((word, at) => (isFuture(word.replace(/^[^\p{L}\d']+|[^\p{L}\d']+$/gu, '')) ? [at] : []));
+  for (const match of clause.matchAll(FUTURE_PHRASE)) futures.push(wordIndex(clause, match.index));
+  return figures.some((figure) => futures.some((future) => Math.abs(figure - future) <= FORECAST_SPAN)) ? [{ clause }] : [];
+}
+
+/** The writer's prose of the one line `line`: inline code and quoted text stand as one word each, `CODE` and `QUOTE`. */
+const proseOf = (line) => line.replace(/`[^`]*`/g, ' CODE ').replace(/"[^"]*"|“[^”]*”|«[^»]*»/g, ' QUOTE ');
+
+/**
+ * The figures `text` states, in one walk over its lines and clauses: `shares`, the shares of its own context
+ * (`ownShares`), and `forecasts`, the forecasts said as facts. Each clause is read on its own. A share is read in every
+ * clause, as the share check always read it; a forecast only in the writer's prose: not in a code block, a quote line,
+ * inline code or quoted text, and not when its clause marks it an estimate or names what measured it.
+ * @param {string} text the text of one reply
+ * @param {number} [window] the session's context window, in tokens
+ * @returns {{ shares: { stated: number, clause: string }[], forecasts: { clause: string }[] }}
+ */
+export function statedFigures(text, window = DEFAULT_CONTEXT_WINDOW) {
+  const shares = [];
+  const forecasts = [];
+  let inCode = false;
+  for (const line of String(text ?? '').split(/\r?\n/)) {
+    const fence = /^\s*(?:```|~~~)/.test(line);
+    const prose = !inCode && !fence && !/^\s*>/.test(line);
+    if (fence) inCode = !inCode;
+    for (const raw of line.split(/(?<=[.;!?])\s+/)) {
+      const clause = raw.trim();
+      if (clause === '') continue;
+      shares.push(...sharesOf(clause, window));
+      if (!prose) continue;
+      // A sentence that ends inside bold or italic marks, "**Deja el tope en 1.200 segundos.** Subirlo…", ends there.
+      for (const part of clause.split(/(?<=[.;!?][*_]+)\s+/)) forecasts.push(...forecastsOf(proseOf(part)).map(() => ({ clause: part })));
+    }
+  }
+  return { shares, forecasts };
+}
+
 /**
  * The shares of its own context that `text` states, as `[{ stated, clause }]`: each clause read on its own, a
  * share left out when the clause names another session, a past or dated share, a threshold, a range or another
@@ -49,29 +146,24 @@ const THRESHOLD = /paus|compact|l[íi]mite|limit|umbral|threshold|tope|llego|lle
  * @param {number} [window] the session's context window, in tokens
  */
 export function ownShares(text, window = DEFAULT_CONTEXT_WINDOW) {
-  const found = [];
-  for (const raw of String(text ?? '').split(/(?<=[.;!?])\s+|\n+/)) {
-    const clause = raw.trim();
-    if (clause === '' || !/context/i.test(clause) || OTHER.test(clause) || NOT_PRESENT.test(clause)) continue;
-    const numbers = new Set();
-    for (const match of clause.matchAll(AFTER)) numbers.add(match.indices[1][0]);
-    for (const match of clause.matchAll(BEFORE)) {
-      const before = clause.slice(0, match.index);
-      const segment = before.slice(Math.max(before.lastIndexOf(','), before.lastIndexOf('('), before.lastIndexOf(';')) + 1);
-      if (!SELF.test(before + match[0]) || THRESHOLD.test(segment)) continue;
-      numbers.add(match.index);
-    }
-    for (const at of [...numbers].sort((a, b) => a - b)) {
-      const rest = clause.slice(at);
-      // Either end of a range, "40%-50%" or "40-50 %", is no exact claim (Codex, 2026-10-15).
-      if (/[-–]\s*$/.test(clause.slice(0, at)) || /^\d{1,3}\s?%?\s*[-–]\s*\d/.test(rest)) continue;
-      // A window named right after the share, "70 % de 350k" or "49% (148k de 300k)", that is not the session's.
-      const named = /^\d{1,3}\s?%\s*(?:\(\s*\d+\s?k\s+)?(?:de|of)\s+(\d+)\s?k\b/i.exec(rest);
-      if (named !== null && Number(named[1]) * 1000 !== window) continue;
-      found.push({ stated: Number(/^\d{1,3}/.exec(rest)[0]), clause });
-    }
-  }
-  return found;
+  return statedFigures(text, window).shares;
+}
+
+/** The longest clause a refusal quotes, so a reason stays one short paragraph. */
+const QUOTED_CLAUSE = 200;
+
+/**
+ * Why a reply whose `text` states a forecast as a fact is to be corrected, or null: the first clause of it that states a
+ * duration, a time of arrival or a cost of what has not happened yet with no estimate mark and no measurement named.
+ * @param {string} text the reply's text
+ */
+export function forecastRefusal(text) {
+  const [first] = statedFigures(text).forecasts;
+  if (first === undefined) return null;
+  const quoted = first.clause.length > QUOTED_CLAUSE ? `${first.clause.slice(0, QUOTED_CLAUSE)}…` : first.clause;
+  return `js-harness guard: this reply states a forecast as a fact: "${quoted}". No command measured what has not happened `
+    + 'yet. The reply is already sent: correct it in one line, saying the figure is an estimate (unos, cerca de, about, ~) '
+    + 'or naming the command or file that measured it.';
 }
 
 /** An entry that is the session's own reply: an assistant entry of no side chain that the harness did not write. */

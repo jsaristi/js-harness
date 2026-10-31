@@ -587,8 +587,14 @@ on it.
 - Seen: 2026-10-14 — this session's (JH 7) transcript 9265156a, its replies of about 05:20 and
   06:00 — "Contexto cerca del 35 %", said without a read; `get_usage` read 76 percent at 06:25,
   the first read after 26 percent at about 04:30
-- Control: check — bin/guard.test.mjs — "a reply whose stated own share is more than 2 points off
-  the recorded one is blocked from stopping, with the reason" — since 2026-10-15
+- Control: check — bin/guard.test.mjs — "a reply that states a forecast with no estimate mark is
+  blocked from stopping, with the reason, and the transcript is not read" — since 2026-10-31
+- Was: check — bin/guard.test.mjs — "a reply whose stated own share is more than 2 points off the
+  recorded one is blocked from stopping, with the reason" — replaced on 2026-10-31: the stop check
+  reads a bare forecast beside the share in one reading of the reply's figures
+  (odd/tasks/estimate-as-fact.md); the share's test still runs. Of the six sightings, the share
+  reading reaches two (2026-10-11, 2026-10-14) and the forecast reading none as written: three were
+  marked ("near", "some", "cerca del") and two were counts
 
 ### eval-interrupt-process-alive
 A gate failed on one test of `evals/suite.test.mjs`, "an interrupt during a real trial against a

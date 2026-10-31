@@ -157,7 +157,7 @@ after the reply is shown (`bin/reply.mjs:3-5`); none refuses before. Checked by 
 | 69 | Pages come from commands; a template request becomes `template new` | protocols:72, :103 | Partly: hand-made pages refused (`bin/lib/template-gate.mjs:109-127`) | `hand-made-output` (2) |
 | 70 | A mistake in five parts with a `- Seen:` line | protocols:84-91 | Partly: `failures check` holds the form | none recorded |
 | 71 | Reports: bad news first; not checked and failed always said | protocols:97, :100 | Nothing | none recorded |
-| 72 | Each claim checked, assumed or not known; an estimate says so | protocols:98 | Partly: the context share only (`bin/guard.mjs:208-221`) | `estimate-passed-as-fact` (6) |
+| 72 | Each claim checked, assumed or not known; an estimate says so | protocols:98 | Check of an estimate's mark: `guard --stop` turns back a stated context share off the transcript's and a forecast with no estimate mark and no measurement named, in one reading (`statedFigures`, `forecastRefusal`, `bin/lib/audit.mjs`; `odd/tasks/estimate-as-fact.md`); counts and past figures stay unchecked | `estimate-passed-as-fact` (6) |
 | 73 | Check one thing of another session's claim before telling or building on it | protocols:99 | Nothing: measured not worth building (`odd/tasks/honesty-audit.md`, 2026-10-15) | `told-him-unverified` (12); `checked-not-read` (6) |
 | 74 | Sub-agents on the rules' model and effort | protocols:101 | Check of the model (`bin/lib/guard.mjs:29`) | none recorded |
 | 75 | The throughput review when due, recorded | protocols:110-112 | The trigger repeats until recorded (`bin/lib/throughput.mjs:569`) | none recorded |
@@ -175,7 +175,8 @@ The unchecked duties, most failed first, each with the check proposed (spec 4's 
    before `git push`, `git commit`, `gh pr`, `merge-queue` or `notify`. Built by JH 118 (`odd/tasks/guard-chained-steps.md`,
    2026-10-31), with `||` and `&` refused too; row 67 names it.
 3. Row 72: an estimate stated as a fact, 6 sightings. Proposed: `guard --stop` reads stated durations and forecasts
-   as it reads the context share.
+   as it reads the context share. Built by JH 122 (`odd/tasks/estimate-as-fact.md`, 2026-10-31): a bare forecast is
+   turned back; counts and past figures are not read; row 72 names it.
 4. Row 1: `board/summary` stale, 1 sighting (this one, two days). Proposed: the stale-board hook warns once when the
    newest notice the summary describes is newer than the summary's last update carrying `now` or `status`, which the
    template gate's after-call hook can record from the `ArtifactData` call. Built by JH 120
