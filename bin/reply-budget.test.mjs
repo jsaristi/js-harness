@@ -8,9 +8,10 @@ import { fileURLToPath } from 'node:url';
 import { recordPath } from './lib/channel.mjs';
 import { replyHookEntry } from './lib/hook-entries.mjs';
 import { CURSOR_SCHEMA, liveCursorPath } from './lib/live-rows.mjs';
-import { RETURN_MARKER } from './lib/return-report.mjs';
+import { OPEN_STRETCH_MARKER, RETURN_MARKER } from './lib/return-report.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { STALE_MARKER, SUMMARY_MARKER } from './lib/stale-board.mjs';
+import { RECORD_SCHEMA as STRETCH_SCHEMA, stretchFile } from './lib/stretch.mjs';
 import { WAKE_MARKER } from './lib/stop-wake.mjs';
 import { RENDERED_SCHEMA, SHOWN_SCHEMA, SUMMARY_SUBJECT, renderedFile, shownFile } from './lib/template-record.mjs';
 import { percentile } from '../scripts/reply-hook-time.mjs';
@@ -150,6 +151,18 @@ before(() => {
     line({ type: 'assistant', timestamp: publishedAt, message: { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_page', name: 'Artifact', input: { file_path: page, icon: 'chart' } }] } }),
     line({ type: 'user', timestamp: publishedAt, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_page', content: `Published ${page} at ${PAGE_URL} (Version 1).` }] } }),
   ];
+  // The stretch record: months of stretches opened and closed, and the one opened before he left still open, so the
+  // return's stretch check reads the whole record and warns.
+  const stretches = [];
+  for (let i = 0; i < 400; i += 1) {
+    const id = new Date(now - (500 - i) * 6 * HOUR).toISOString();
+    stretches.push(line({ schema: STRETCH_SCHEMA, event: 'open', id, at: id, plan: { hours: 4, slots: 3, goals: [], items: [] } }));
+    stretches.push(line({ schema: STRETCH_SCHEMA, event: 'close', id, at: new Date(Date.parse(id) + 4 * HOUR).toISOString() }));
+  }
+  const left = new Date(now - 4 * HOUR).toISOString();
+  stretches.push(line({ schema: STRETCH_SCHEMA, event: 'open', id: left, at: left, plan: { hours: 4, slots: 3, goals: [], items: [] } }));
+  fs.mkdirSync(path.dirname(stretchFile(home, slug)), { recursive: true });
+  fs.writeFileSync(stretchFile(home, slug), `${stretches.join('\n')}\n`);
   leadTranscript = path.join(dir, 'lead.jsonl');
   workTranscript = path.join(dir, 'work.jsonl');
   fs.writeFileSync(leadTranscript, transcriptOf(LEAD.title, TRANSCRIPT_BYTES, now, published));
@@ -199,6 +212,7 @@ test('the lead\'s stop, every check doing its whole work, stays within the budge
   assert.ok(answer.reason.includes(STALE_MARKER), 'the live-board check searched the transcript and warned');
   assert.ok(answer.reason.includes(SUMMARY_MARKER), 'the summary check read the shown record, searched the transcript and warned');
   assert.ok(answer.reason.includes(RETURN_MARKER), 'the return check read the publish of the page, searched for its link and warned');
+  assert.ok(answer.reason.includes(OPEN_STRETCH_MARKER), 'the return\'s stretch check read the whole stretch record and warned');
   const p90 = percentile(times, 0.9);
   t.diagnostic(`p90 ${p90.toFixed(0)} ms, budget ${BUDGET_MS} ms, runs ${times.map((ms) => ms.toFixed(0)).join(' ')}`);
   assert.ok(p90 <= BUDGET_MS, `p90 ${p90.toFixed(0)} ms over ${RUNS} runs is above the budget of ${BUDGET_MS} ms: ${times.map((ms) => ms.toFixed(0)).join(' ')}`);

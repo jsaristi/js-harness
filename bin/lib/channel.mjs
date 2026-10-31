@@ -330,10 +330,14 @@ export function appendReading(home, slug, reading) {
 
 /** A report line as the record keeps it: `{ schema, at, by, head }`, `at` the time the report was given (ISO), `by`
  * the id of the session that gave it and `head` the commit of the default branch the report read, each `null` when
- * not known. The next report lists what the branch gained since `head`, so a merge fetched late is not lost. */
-export function newReport({ at, by = null, head = null }) {
+ * not known. The next report lists what the branch gained since `head`, so a merge fetched late is not lost. With
+ * the lead's `proposals` (`{ step, estimate? }`), it keeps `proposals: [{ step, estimate }]`, for the next report to
+ * set each estimate beside what happened (odd/tasks/departure-stretch.md, spec 9); with none, the field is left out. */
+export function newReport({ at, by = null, head = null, proposals = [] }) {
   const known = (value) => (typeof value === 'string' && value !== '' ? value : null);
-  return { schema: REPORT_SCHEMA, at, by: known(by), head: known(head) };
+  const report = { schema: REPORT_SCHEMA, at, by: known(by), head: known(head) };
+  if (proposals.length > 0) report.proposals = proposals.map((one) => ({ step: one.step, estimate: known(one.estimate) }));
+  return report;
 }
 
 /** Appends `report` (`newReport`) to the record of the project `slug` under `home`, and returns the record's path. */

@@ -19,6 +19,13 @@ test('the cut is --since when given, else the last recorded report, else 24 hour
   assert.deepEqual(cutOf({ reports: [], now: NOW }), { at: at('2026-10-19T12:00:00Z'), source: 'window', head: null });
 });
 
+// odd/tasks/departure-stretch.md, spec 9: the last report's proposals come with its cut, for the next to compare.
+test('the cut of the last report carries the proposals it recorded, each a step with its estimate', () => {
+  const reports = [{ at: '2026-10-20T07:30:00.000Z', head: 'bbb', proposals: [{ step: 'Tramo C', estimate: '3 h' }, { step: 7 }, { step: 'Tramo B', estimate: '' }] }];
+  assert.deepEqual(cutOf({ reports, now: NOW }).proposals, [{ step: 'Tramo C', estimate: '3 h' }, { step: 'Tramo B', estimate: null }]);
+  assert.equal(Object.hasOwn(cutOf({ since: '2026-10-18T00:00:00Z', reports, now: NOW }), 'proposals'), false);
+});
+
 test('the last report is the latest by time, not the last line written', () => {
   const reports = [{ at: '2026-10-20T07:30:00.000Z' }, { at: '2026-10-19T08:00:00.000Z' }];
   assert.equal(cutOf({ reports, now: NOW }).at, at('2026-10-20T07:30:00.000Z'));

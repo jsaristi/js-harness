@@ -16,6 +16,8 @@ import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { recordPageRendered } from './lib/pages-rendered.mjs';
 import { notesOf, renderStatus } from './lib/report-status.mjs';
+import { momentAt } from './lib/report-git.mjs';
+import { comparePlans } from './lib/report-pages.mjs';
 import { reportStretch } from './stretch.mjs';
 import { FEATURE_USAGE, reportFeatureMain } from './report-feature.mjs';
 import { PHASE_USAGE, reportPhaseMain } from './report-phase.mjs';
@@ -32,11 +34,13 @@ export const USAGE = [
   '          under the home; the next report lists what that branch gained since that commit. Nothing else is written,',
   '          and nothing at all when a section could not be read.',
   '  --html <file>   also write the status report as a page in Spanish, its six sections: what landed, the sessions,',
-  '                  his decisions, the map (against the map at the head the last --mark read), what waits and what',
-  '                  the lead proposes; the page goes into the rendered record of the templates, to show it unchanged',
+  '                  his decisions, the map (against the map at the head the last --mark read, each plan step by step),',
+  '                  what waits and what the lead proposes, after what the last --mark proposed and its estimates; the',
+  '                  page goes into the rendered record of the templates, to show it unchanged',
   '  --notes <file>  the lead\'s notes for what no record holds, JSON: { badNews: [text], decisions: [{ text, changed }],',
-  '                  waits: [{ what, why }], proposals: [{ step, why }] }, each shown as the lead\'s; --mark --html',
-  '                  without it warns that sections 3, 5 and 6 will say no record holds them',
+  '                  waits: [{ what, why }], proposals: [{ step, why, estimate? }] }, each shown as the lead\'s; --mark',
+  '                  records the proposals\' steps and estimates; --mark --html without it warns that sections 3, 5',
+  '                  and 6 will say no record holds them',
   '',
   PHASE_USAGE,
   '',
@@ -105,6 +109,15 @@ function readMap(run, cwd, ref) {
   return shown.error ? { error: shown.error } : mapOf(shown.stdout);
 }
 
+/** Each plan step by step at the cut (`head`, or none) and at `ref` now (`comparePlans`), or `{ unavailable }`. */
+function stepsOf(run, cwd, ref, head) {
+  const after = momentAt(run, cwd, ref);
+  if (after.unavailable) return { unavailable: after.unavailable };
+  const before = head === null ? null : momentAt(run, cwd, head);
+  const usable = before !== null && !before.unavailable ? before : null;
+  return comparePlans(usable?.plans ?? null, after.plans, { before: usable?.tasks ?? {}, after: after.tasks });
+}
+
 export async function reportMain(argv, options = {}) {
   // A moment's page is its own command, with its own options.
   if (argv[0] === 'phase') return reportPhaseMain(argv.slice(1), options);
@@ -166,13 +179,17 @@ export async function reportMain(argv, options = {}) {
   for (const line of reportLines({ cut, branch: name, landed, sessions, questions, map, before, stretch })) stdout(line);
   // A stretch record that cannot be read, or one its measure reads, is a section that could not be read: --mark then
   // records nothing.
-  const failed = [landed, map, sessions, questions].some((section) => section.error !== undefined) || stretch?.unavailable !== undefined || Object.keys(stretch?.unread ?? {}).length > 0;
+  // The plan step by step is the page's alone ("el mapa de donde vamos", odd/tasks/departure-stretch.md, spec 9): it
+  // reads every task document the steps name, at the cut and now. Steps it could not read are a section unread; with
+  // no roadmap, or one the map already could not read, there are no steps to read, and the map says why.
+  const steps = parsed.html === undefined || map.absent || map.error !== undefined ? undefined : stepsOf(run, cwd, ref, cut.head);
+  const failed = [landed, map, sessions, questions].some((section) => section.error !== undefined) || stretch?.unavailable !== undefined || Object.keys(stretch?.unread ?? {}).length > 0 || steps?.unavailable !== undefined;
   if (parsed.html !== undefined) {
     // A section that could not be read is said on the page as it is in the lines above.
     const file = path.resolve(cwd, parsed.html);
     try {
       fileSystem.mkdirSync(path.dirname(file), { recursive: true });
-      fileSystem.writeFileSync(file, renderStatus({ cut, branch: name, landed, sessions, questions, map, before, stretch, notes }), 'utf8');
+      fileSystem.writeFileSync(file, renderStatus({ cut, branch: name, landed, sessions, questions, map, before, steps, stretch, notes }), 'utf8');
     } catch (err) {
       stderr(`js-harness report: the page ${file} could not be written: ${err.code ?? err.message}`);
       return 1;
@@ -191,7 +208,8 @@ export async function reportMain(argv, options = {}) {
     return 1;
   }
   try {
-    appendReport(home, slug, newReport({ at: new Date(at).toISOString(), by: env.CLAUDE_CODE_SESSION_ID, head: seen?.stdout?.trim() }));
+    // Its proposals and their estimates go with it, so the next report sets each beside what landed.
+    appendReport(home, slug, newReport({ at: new Date(at).toISOString(), by: env.CLAUDE_CODE_SESSION_ID, head: seen?.stdout?.trim(), proposals: notes?.proposals ?? [] }));
   } catch (err) {
     stderr(`js-harness report: the report was not recorded: ${err.code ?? err.message}`);
     return 1;

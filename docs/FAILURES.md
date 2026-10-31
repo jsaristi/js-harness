@@ -1633,8 +1633,24 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-10-29 — the lead's note to JH 89 at 16:33Z (claimed; the lead's own) — he was away about
   an hour with no stretch open; the stretch record holds none between the close at 08:11:36Z and the
   open at 16:07:51Z (`stretches.jsonl` under the throughput folder, read by JH 89)
-- Control: protocol — bin/lib/manifest.mjs — "exits 1 when none is open) and show its departure in that reply" — since
-  2026-10-29
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, his "Listo entonces desde ya te dejo solo" at 18:54:39Z (the
+  lead's own, found by JH 123's replay) — no stretch opened until his return at 2026-10-31T01:33:48Z; the record's
+  last close before it is at 13:13:20Z
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, lines 39243 and 41022 (the lead's own) — he left twice, "voy a
+  dejarte entre 1 a 2 horas solo" at 03:23:57Z and "voy a ausentarme una horas mas aproximadamente entre 4 a 8 horas"
+  at 07:41:17Z, and the lead opened no stretch; at "ya regrese" (11:09:21Z, line 42109) `stretch status` said "no
+  stretch is open" and the status report "ningún tramo desde el corte", so he got no estimate against actual and no
+  route map: "el como vamos le faltan varias cosas como el mapa de donde vamos". The lead saw both departures and
+  started `quiet --wait` each time (relief file, 03:25Z and 07:43Z); it skipped `stretch open` for its hand-written
+  plan. Fixed by two checks that read none of his words (JH 123): `js-harness quiet --wait`, the wait every
+  departure starts, refuses with exit 4 while no stretch is open unless `--no-stretch <reason>` (`bin/quiet.mjs`); and
+  the reply hook turns the lead back once a return after an absence no stretch covered, asking for this class's
+  sighting, or whose stretch is still open, naming `stretch close` (`bin/lib/return-report.mjs`,
+  `returnStretchWarning`). It enters at the first wait and the first return after the pull request lands and the
+  installed copy is refreshed; its proof is `node --test bin/quiet.test.mjs bin/lib/return-report.test.mjs`, and no
+  later sighting of this class without the turn-back's time beside it
+- Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
+  once, naming the failure to record" — since 2026-10-31
 
 ### taskstop-leaves-work-alive
 Stopping a background task of the host ends its shell and not what that shell started, so the work

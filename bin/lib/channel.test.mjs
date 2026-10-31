@@ -399,6 +399,13 @@ test('appendReport writes a report line beside the notices, and readNotices give
   assert.deepEqual(channel.newReport({ at: AT }), { schema: channel.REPORT_SCHEMA, at: AT, by: null, head: null });
 }));
 
+// odd/tasks/departure-stretch.md, spec 9: the proposals a report gave, with their estimates, for the next one.
+test('a report keeps the step and estimate of each proposal it gave, and none when it gave none', () => {
+  const proposals = [{ step: 'Tramo D', why: 'falta el mapa', estimate: '2 h' }, { step: 'Tramo E', why: 'luego' }];
+  assert.deepEqual(channel.newReport({ at: AT, proposals }).proposals, [{ step: 'Tramo D', estimate: '2 h' }, { step: 'Tramo E', estimate: null }]);
+  assert.equal(Object.hasOwn(channel.newReport({ at: AT, proposals: [] }), 'proposals'), false);
+});
+
 test('readNotices counts and skips a torn line and a line that is not a notice, and keeps the rest', withHome((home) => {
   const file = channel.recordPath(home, SLUG);
   fs.mkdirSync(path.dirname(file), { recursive: true });

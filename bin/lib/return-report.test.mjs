@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { recordPath } from './channel.mjs';
-import { ABSENCE_MS, RETURN_MARKER, returnReportWarning } from './return-report.mjs';
+import { ABSENCE_MS, NO_STRETCH_MARKER, OPEN_STRETCH_MARKER, RETURN_MARKER, returnReportWarning, returnStretchWarning } from './return-report.mjs';
 import { mainCheckout, projectSlug } from './sessions.mjs';
+import { RECORD_SCHEMA as STRETCH_SCHEMA, stretchFile } from './stretch.mjs';
 import { RENDERED_SCHEMA, renderedFile } from './template-record.mjs';
 
 // The return check (odd/tasks/lead-duty-checks.md, spec 2). Its records are handed in: the channel record, the
@@ -197,4 +198,77 @@ test('Codex, which sends no background tasks and cannot publish a page, is not t
 
 test('a record it cannot read throws, so the hook says the check did not run', () => {
   assert.throws(() => check({ renders: UNREADABLE }), /rendered record/);
+});
+
+// --- the stretch of his absence (odd/tasks/departure-stretch.md, spec 8) ---
+// His two absences of 2026-10-31 had no stretch: "voy a dejarte entre 1 a 2 horas solo" at 03:23:57Z, back at
+// 06:20:47Z, and the lead had opened none (the stretch record's last close was at 2026-10-30T13:13:20Z).
+const STRETCHES = stretchFile(HOME, SLUG);
+const opened = (at, id = at) => line({ schema: STRETCH_SCHEMA, event: 'open', id, at, plan: { hours: 4 } });
+const closed = (at, id) => line({ schema: STRETCH_SCHEMA, event: 'close', id, at });
+
+function stretchCheck({ transcript = RETURN, stretches = null, payload = {} } = {}) {
+  const files = { [RECORD]: `${NOTICES.join('\n')}\n`, [TRANSCRIPT]: `${transcript.join('\n')}\n` };
+  // `null` is no stretch record; UNREADABLE is one that is there and cannot be read.
+  if (stretches !== null) files[STRETCHES] = stretches === UNREADABLE ? undefined : `${stretches.join('\n')}\n`;
+  const io = {
+    readFile: (file) => {
+      if (Object.hasOwn(files, file) && files[file] === undefined) throw Object.assign(new Error(`EACCES: ${file}`), { code: 'EACCES' });
+      if (Object.hasOwn(files, file)) return files[file];
+      throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
+    },
+    run: noGit,
+    env: { JS_HARNESS_HOME: HOME },
+    homedir: () => path.resolve('/elsewhere'),
+  };
+  return returnStretchWarning({ cwd: PROJECT, session_id: 'lead-1', transcript_path: TRANSCRIPT, background_tasks: [], last_assistant_message: TOTALS, ...payload }, 'working', io);
+}
+
+test('a return after an absence no stretch covered is turned back once, naming the failure to record', () => {
+  for (const stretches of [null, [opened('2026-10-30T10:38:59.222Z', 's0'), closed('2026-10-30T13:13:20.627Z', 's0')]]) {
+    const reason = stretchCheck({ stretches });
+    assert.ok(reason.includes(NO_STRETCH_MARKER), reason);
+    assert.match(reason, /^js-harness reply: /);
+    assert.match(reason, /rule:away-autonomy/);
+    assert.match(reason, /stretch-not-opened/, 'the failure to record');
+    assert.match(reason, /docs\/FAILURES\.md/);
+    assert.match(reason, /once for this return/);
+  }
+});
+
+test('a return with the stretch of his absence still open is turned back once, naming stretch close', () => {
+  const reason = stretchCheck({ stretches: [opened('2026-10-30T18:55:00.000Z', 's1')] });
+  assert.ok(reason.includes(OPEN_STRETCH_MARKER), reason);
+  assert.ok(reason.includes('js-harness stretch close --html <file>'), reason);
+  assert.match(reason, /\bs1\b/, 'the stretch named');
+});
+
+test('a return whose stretch was opened before he left and closed since he came back passes', () => {
+  assert.equal(stretchCheck({ stretches: [opened('2026-10-30T18:55:00.000Z', 's1'), closed('2026-10-31T01:40:00.000Z', 's1')] }), null);
+});
+
+test('a stretch opened while he was away covers the absence; one opened after he came back does not', () => {
+  // Opened late, it cannot show the departure's forecast, but the return has its measure.
+  assert.equal(stretchCheck({ stretches: [opened('2026-10-30T22:00:00.000Z', 's2'), closed('2026-10-31T01:40:00.000Z', 's2')] }), null);
+  const after = stretchCheck({ stretches: [opened('2026-10-31T01:50:00.000Z', 's3')] });
+  assert.ok(after.includes(NO_STRETCH_MARKER), after);
+});
+
+test('it warns of the stretch once a return, and a later return is warned again', () => {
+  const first = stretchCheck();
+  assert.equal(stretchCheck({ transcript: [...RETURN, warned(first)] }), null);
+  const again = [...RETURN, warned(first), said('2026-10-31T01:50:00.000Z', TOTALS), his('2026-10-31T09:00:00.000Z', 'volví otra vez')];
+  assert.notEqual(stretchCheck({ transcript: again }), null);
+  assert.notEqual(stretchCheck({ transcript: [...RETURN, warned(check())] }), null, 'the page\'s warning for the same return is not this one');
+});
+
+test('no return, a work session and Codex are not told of the stretch', () => {
+  const soon = new Date(Date.parse(LEFT) + ABSENCE_MS).toISOString();
+  assert.equal(stretchCheck({ transcript: [his(LEFT), his(soon)] }), null);
+  assert.equal(stretchCheck({ payload: { session_id: 'work-1' } }), null);
+  assert.equal(stretchCheck({ payload: { background_tasks: undefined } }), null);
+});
+
+test('a stretch record it cannot read throws, so the hook says the check did not run', () => {
+  assert.throws(() => stretchCheck({ stretches: UNREADABLE }), /stretch record/);
 });
