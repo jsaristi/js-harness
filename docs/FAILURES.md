@@ -481,9 +481,13 @@ printed only git's "failed to push some refs".
   its PR then ended at 4b85503f, its parent, so the push of the candidate b5236e3 refused 4b85503f
   for both records (reproduced on the records as they stood at 10:25Z: covered at the tip 4b85503f,
   uncovered at b5236e3)
-- Control: check — bin/merge-queue.test.mjs — "a record whose head lies past the pull request covers
-  it at its head and not merged: the door refuses it before a candidate, as the push does" — since
-  2026-10-29
+- Control: check — bin/check-codex-reviews.test.mjs — "check --push refuses a cut inside a reviewed range on both
+  rows, as the merge door refuses it, and names the head to push to" — since 2026-10-30
+- Was: check — bin/merge-queue.test.mjs — "a record whose head lies past the pull request covers it at its head and
+  not merged: the door refuses it before a candidate, as the push does" — replaced on 2026-10-30: it held the door
+  alone, and the pre-push hook still counted a record past the pushed commit (`reviewCoverage`); since JH 112
+  (odd/tasks/gate-push-holes.md, L3) the push row, the plain rows and `codex-review` count none (`beyondTip: false`),
+  so the cut is refused at the push as at the door; the door's test stands
 
 ### door-reads-pr-alone
 The merge queue's door read each pull request merged onto main alone, while the push of main reads

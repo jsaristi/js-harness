@@ -177,8 +177,13 @@ export const MARKS_UNREAD = 'marks';
  * `read` and `isValid` name the records: Codex's by default, the Claude lenses' for their push row
  * (`./lens-review-rows.mjs`). A record that carries a `subjectHash` covers only while the patch of its own range
  * still hashes to it (`./lens-candidate.mjs`): one that does not is counted `stale` and covers nothing
- * (odd/tasks/f8-s1-reviews.md, T4). */
-export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read = readCodexReviews, isValid = isValidCodexReview }) {
+ * (odd/tasks/f8-s1-reviews.md, T4).
+ *
+ * `beyondTip: false` is for the rows that refuse, the push's and the merge door's, and for the command whose record
+ * they ask for: a record whose head lies past the tip then covers nothing, and is given back in `beyond`, as
+ * `{ rec, covered }`, for a row to name. The door reads a pull request merged onto main, past which no head lies, so a
+ * cut inside a reviewed range passed the push and was refused there (docs/FAILURES.md, door-covers-past-tip). */
+export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read = readCodexReviews, isValid = isValidCodexReview, beyondTip = true }) {
   // Every commit of the range, merges included: a record whose head is one is worth expanding.
   const inRange = gitOut(spawn, cwd, ['rev-list', `${from}..${tip}`]);
   if (inRange === null) return { unknown: COMMITS_UNREAD };
@@ -254,6 +259,7 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
   const mayLiePast = valid.filter((rec) => outside(rec) && !onlyWhole(rec));
   const pastTip = headsPastTip(spawn, cwd, tip, [...new Set(mayLiePast.map((rec) => rec.head))]);
   const covers = [];
+  const beyond = [];
   let ignored = 0;
   let stale = 0;
   for (const rec of valid) {
@@ -263,12 +269,20 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
       continue;
     }
     const covered = coveredBy(spawn, cwd, rec);
-    if (covered) covers.push({ rec, covered });
-    else ignored += 1;
+    if (!covered) ignored += 1;
+    else (beyondTip || !outside(rec) ? covers : beyond).push({ rec, covered });
   }
   const uncovered = codeCommits.filter((commit) => !covers.some(({ covered }) => covered.has(commit.id)));
-  return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored, stale };
+  return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored, stale, ...(beyondTip ? {} : { beyond }) };
 }
+
+/** The line of each `uncovered` commit that a record of `beyond` (`reviewCoverage` with `beyondTip: false`) covers
+ * from past the commit checked: what the push of the whole reviewed range, or a record that ends at that commit, would
+ * cover. Both review rows print it, so a cut says why its review does not count and where it would. */
+export const beyondLines = (uncovered, beyond = []) => uncovered.flatMap((commit) => {
+  const head = beyond.find(({ covered }) => covered.has(commit.id))?.rec.head.slice(0, 7);
+  return head ? [`${commit.shortId} lies in a range reviewed up to ${head}, past this commit: push up to ${head}, or make a record that ends here`] : [];
+});
 
 // The outcomes of a record that is no review of Codex's, each with what a row calls it.
 export const NOT_A_REVIEW = { unavailable: 'unavailable', [NOTHING_TO_REVIEW]: 'nothing to review' };

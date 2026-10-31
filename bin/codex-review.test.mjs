@@ -5892,6 +5892,18 @@ test('a range the records cover whole starts nothing and records nothing: the ru
   nothing.untouched('one commit');
 });
 
+test('a range covered only by a record whose head lies past it is not covered: the run plans its review, as the push row asks for its record (door-covers-past-tip)', async () => {
+  const { root, base, two, three } = makeSlicedRepo();
+  appendCodexReview(root, reviewedRecord(base, three));
+  git(root, 'checkout', '--quiet', '--detach', two);
+  const nothing = startsNothing(root);
+  const result = await run(['--base', base, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  assert.doesNotMatch(result.out, /^Nothing to review/, result.out);
+  assert.deepEqual(result.out.split('\n').slice(0, 2), planned(root, base, two, [{ files: ['a.txt', 'b.txt'], changedLines: 4 }]).slice(0, 2));
+  nothing.untouched('a plan');
+});
+
 test('a range that holds commits and no code commit starts nothing and records nothing: the push check asks a record of code commits alone', async () => {
   const { root, base, head } = makeRepoWith({ 'notes.md': 'n1\n', 'f.txt': 'one' }, { 'notes.md': 'N1 changed\n' });
   for (const flags of [[], ['--plan'], ['--unavailable', 'quota']]) {

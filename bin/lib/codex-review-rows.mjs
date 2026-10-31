@@ -7,7 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { numstatFiles, reviewParts } from './codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './codex-review-plan.mjs';
-import { defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, remoteHoldsNoBranch, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
+import { beyondLines, defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, remoteHoldsNoBranch, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
 import { mergeTurn, turnsCheaper } from './codex-review-turns.mjs';
 import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './codex-reviews.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
@@ -55,18 +55,19 @@ function codexReviewCoverage(cwd, head, { spawn, remote }) {
   }
   const { ref: baseRef, label: base } = branch;
 
-  const coverage = reviewCoverage(cwd, { from: baseRef, tip, spawn });
+  // A record whose head lies past the tip covers nothing here, as at the merge door (`beyondTip`).
+  const coverage = reviewCoverage(cwd, { from: baseRef, tip, spawn, beyondTip: false });
   if (coverage.unknown === MARKS_UNREAD) {
     return unknown(`cannot read which files of ${base}..${head} a Codex review leaves out (\`git check-attr --source\` failed; it needs git 2.40 or later)`);
   }
   if (coverage.unknown) return unknown(`cannot list the commits in ${base}..${head}`);
-  const { codeCommits, covers, uncovered, invalid, ignored } = coverage;
+  const { codeCommits, covers, uncovered, beyond, invalid, ignored } = coverage;
   const noteParts = [
     invalid ? `${invalid} invalid record${invalid === 1 ? '' : 's'} ignored` : '',
     ignored ? `${ignored} record${ignored === 1 ? '' : 's'} ignored (base or head not found)` : '',
   ].filter(Boolean);
   const note = noteParts.length ? `; ${noteParts.join('; ')}` : '';
-  return { tip, baseRef, base, codeCommits, covers, uncovered, note };
+  return { tip, baseRef, base, codeCommits, covers, uncovered, beyond, note };
 }
 
 /** The lines that both rows print for the code commits no Codex review record covers: one per commit, with its
@@ -271,7 +272,7 @@ function codexCoverageRow(cwd, head, { spawn, remote }) {
     const hint = oldest.isRoot
       ? `${oldest.shortId} is a root commit, so ${oldest.shortId}^ does not exist; a range from the default branch reaches it: js-harness codex-review --base ${base} (add --unavailable <reason> to record a skip instead)`
       : `make the record with: js-harness codex-review --base ${before === null ? base : `${before.shortId}^`}`;
-    const lines = [...uncoveredNames(uncovered), hint];
+    const lines = [...uncoveredNames(uncovered), ...beyondLines(uncovered, state.beyond), hint];
     return fail(`${uncovered.length} of ${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base} have no Codex review record (${codexReviewsPath(cwd, { spawn }) ?? 'no record file'})${note}`, lines);
   }
 
@@ -389,6 +390,7 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   return row(`no Codex review record for ${uncovered.length} of ${counted(codeCommits.length, 'code commit')} since ${base}: ${sized}${note}`, [
     // The base is the one the size above was read from, so the row names one review, not two.
     ...uncoveredNames(uncovered),
+    ...beyondLines(uncovered, state.beyond),
     `make the record with: js-harness codex-review --base ${baseArg}`,
     ...(over ? ['the cheaper way is to review now: every commit added to this range makes its review larger'] : []),
     `what it would cost, with nothing spent: js-harness codex-review --base ${baseArg} --plan`,

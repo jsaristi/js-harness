@@ -14,6 +14,7 @@ import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-revie
 import { priorLine } from './lib/codex-review-recheck.mjs';
 import { gitDirs } from './lib/project.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
+import { reviewCoverage } from './lib/codex-review-coverage.mjs';
 import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
@@ -777,16 +778,22 @@ test('a record whose head is outside the checked range is not expanded at all', 
   assert.ok(!expanded.some((range) => range.startsWith('e'.repeat(40))), 'an unknown head is skipped');
 });
 
-test('a record whose head lies past the pushed tip still covers the commits of its range it contains', () => {
+test('a record whose head lies past the pushed tip covers nothing there, as merged onto main it covers nothing, and the row names that head', () => {
+  // Until 2026-10-30 it covered the commits of its range at the pushed tip; the merge door, which reads the pull request
+  // merged onto main, did not, and refused what the push had taken (docs/FAILURES.md, door-covers-past-tip).
   const { root, base } = makeRepo();
   feature(root);
   const first = commit(root, 'b.js', 'two', 'feat: two');
   const second = commit(root, 'c.js', 'three', 'feat: three');
-  assert.equal(checkCodexReviews(root, first).pass, false);
   record(root, base, second);
   const row = checkCodexReviews(root, first);
-  assert.equal(row.pass, true, `${row.detail}`);
-  assert.match(row.detail, /1 code commit since origin.main/);
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+  assert.deepEqual(row.lines.slice(0, 2), [
+    `${short(root, first)} feat: two`,
+    `${short(root, first)} lies in a range reviewed up to ${second.slice(0, 7)}, past this commit: push up to ${second.slice(0, 7)}, or make a record that ends here`,
+  ]);
+  assert.equal(checkCodexReviews(root, second).pass, true, 'pushed up to its head');
 });
 
 test('a record of nothing to review covers its commits only when what is pushed holds its head', () => {
@@ -836,16 +843,17 @@ test('a review that left out files the project marks covers its commits only whe
   assert.equal(checkCodexReviews(root, 'HEAD').pass, true);
 });
 
-test('a review that left out documents alone still covers an earlier tip: no commit can make a Markdown file code', () => {
+test('a review that left out documents alone still covers an earlier tip where a record past the tip counts: no commit can make a Markdown file code', () => {
+  // The push row counts no record past the tip (`beyondTip: false`); the reading that plans a review still does.
   const { root, base } = makeRepo();
   feature(root);
   const first = commit(root, 'b.js', 'two', 'feat: two');
   fs.writeFileSync(path.join(root, 'notes.md'), 'words', 'utf8');
   const second = commit(root, 'c.js', 'three', 'feat: three, with a note');
   record(root, base, second, { leftOut: leftOutOf(1, 0) });
-  const row = checkCodexReviews(root, first);
-  assert.equal(row.pass, true, row.detail);
-  assert.equal(row.detail, '1 code commit since origin/main, all covered by a Codex review record');
+  const coverage = reviewCoverage(root, { from: 'origin/main', tip: first });
+  assert.deepEqual([coverage.codeCommits.length, coverage.uncovered.length], [1, 0]);
+  assert.equal(checkCodexReviews(root, first).pass, false, 'the push row counts no record past the tip');
 });
 
 // A record from before it said how many of the files it left out were marked, and ones a hand has been at.
@@ -899,6 +907,14 @@ function countingSpawn() {
   return { spawn, started };
 }
 
+/** What the push row reads of `tip` (`reviewCoverage` with `beyondTip: false`), through `spawn`, having checked that
+ * the record whose head lies past `tip` was read and covers nothing there: what the cost tests below hold the git
+ * processes of. The row then fails, and its failure asks git more (where a review would start), which is not theirs. */
+const readPast = (root, tip, spawn) => {
+  const coverage = reviewCoverage(root, { from: 'origin/main', tip, spawn, beyondTip: false });
+  assert.deepEqual([coverage.uncovered.length, coverage.beyond?.length], [1, 1], JSON.stringify(coverage));
+};
+
 /** A branch of two code commits with a record whose head lies past `first`, the commit that is checked,
  * and `unrelated` more records of history the default branch already holds. */
 function repoWithUnrelatedRecords(unrelated) {
@@ -920,8 +936,7 @@ test('the records whose head is outside the range cost one git process together,
   const processes = (unrelated) => {
     const { root, first } = repoWithUnrelatedRecords(unrelated);
     const { spawn, started } = countingSpawn();
-    const row = checkCodexReviews(root, first, { spawn });
-    assert.equal(row.pass, true, row.detail);
+    readPast(root, first, spawn);
     assert.ok(!started.includes('merge-base'), started.join(' '));
     return started.length;
   };
@@ -933,8 +948,7 @@ test('a record whose head this repository no longer knows is passed over in that
   const { root, first } = repoWithUnrelatedRecords(1);
   record(root, git(root, 'rev-parse', 'origin/main'), 'c'.repeat(40));
   const push = countingSpawn();
-  const row = checkCodexReviews(root, first, { spawn: push.spawn });
-  assert.equal(row.pass, true, row.detail);
+  readPast(root, first, push.spawn);
   assert.ok(!push.started.includes('merge-base'), push.started.join(' '));
   const plain = countingSpawn();
   assert.match(checkCodexReviewDebt(root, { spawn: plain.spawn }).detail, /^2 code commits since origin\/main, all covered/);
@@ -949,8 +963,7 @@ test('when git cannot say which heads lie past the tip all at once, each is aske
     if (args[0] === 'merge-base') asked.push(args[args.length - 1]);
     return spawnSync(cmd, args, opts);
   };
-  const row = checkCodexReviews(root, first, { spawn });
-  assert.equal(row.pass, true, row.detail);
+  readPast(root, first, spawn);
   assert.equal(asked.length, 2, 'one question for each distinct head outside the range');
 });
 
@@ -1703,6 +1716,25 @@ test('check --push --head checks the given commit and passes once it is covered'
   const { code, output } = await runCheck(['--push', '--head', head, '--cwd', root, '--home', home]);
   assert.equal(code, 0, output);
   assert.match(output, /PASS {2}codex-review/);
+});
+
+test('check --push refuses a cut inside a reviewed range on both rows, as the merge door refuses it, and names the head to push to', async () => {
+  // docs/FAILURES.md, door-covers-past-tip (2026-10-30, odd/tasks/f8-s12-migration.md L18): a chain reviewed as one
+  // range, Codex and lens, was cut inside it; each cut passed the pre-push hook and the door then refused it, since
+  // merged onto main nothing lies past the cut.
+  const { root, head: first, home } = projectWithUnreviewedCommit();
+  const cut = commit(root, 'harness.json', `${JSON.stringify({ functions: { codexReview: 'on', lensReview: 'on' } })}\n`, 'feat: both reviews on, the cut');
+  const past = commit(root, 'c.js', 'three', 'feat: three, past the cut');
+  record(root, git(root, 'rev-parse', `${first}^`), past);
+  const { code, output } = await runCheck(['--push', '--head', cut, '--cwd', root, '--home', home]);
+  assert.equal(code, 1, output);
+  assert.match(output, /FAIL {2}codex-review {2}2 of 2 code commits since origin\/main have no Codex review record/);
+  assert.match(output, /FAIL {2}lens-review {2}1 of 1 code commit since origin\/main have no complete Claude lens record/);
+  const named = `${short(root, cut)} lies in a range reviewed up to ${short(root, past)}, past this commit: push up to ${short(root, past)}, or make a record that ends here`;
+  assert.ok(output.split('\n').filter((line) => line.includes(named)).length === 2, output);
+  // Pushed up to the head of its records, the same commit is covered.
+  const whole = await runCheck(['--push', '--head', past, '--cwd', root, '--home', home]);
+  assert.equal(whole.code, 0, whole.output);
 });
 
 test('--head or --remote with no value exits 2 with usage and runs no row', async () => {

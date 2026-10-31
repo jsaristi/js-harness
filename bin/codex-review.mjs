@@ -1096,7 +1096,7 @@ function leftByRecords(spawn, root, { from, head, given, where }) {
   let coverage;
   let start;
   try {
-    coverage = reviewCoverage(root, { from, tip: head, spawn, where });
+    coverage = reviewCoverage(root, { from, tip: head, spawn, where, beyondTip: false });
     if (coverage.unknown) return asGiven(coverage.unknown === MARKS_UNREAD ? 'git could not say which of their files a review leaves out' : 'git could not list them');
     ({ start } = reviewStart(coverage.uncovered, { cwd: root, from, tip: head, spawn }));
   } catch (err) {
