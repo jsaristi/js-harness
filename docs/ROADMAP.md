@@ -696,13 +696,18 @@ built in rule 1's pull request.
   Question 146 (line 43701): "Me gustaria en todo, pero que me dieras la opcion de cuando si y cuando no, siento que
   siempre todo se debe revisar doble pero de la forma de nos de criterio y con la filosofia nueva que tenemos ya que
   todo es importante a menos que yo como usuario te diga que no quiero la revision, esa seria la unica opcion de que
-  no se hiciera." As the lead read them to him: one Claude reader and one Codex reader, blind and independent, on
-  every piece of work that yields a plan or a change, small included, scaled by judgment to its size; the only skip
-  is his explicit "no quiero la revisión" for that work, recorded with his words; never run on his short replies or
-  taps. `rule:double-review` changes through `js-harness rules change`, and its scope, stated two ways today
-  (`bin/lib/protocols-skill.mjs:43` against `bin/lib/project.mjs:412`), becomes one text. Codex reviews code and not
-  Markdown today (the Review row above), so `codex-review` needs a mode that reviews a plan; each run spends his
-  Codex weekly limit, read on the meter first.
+  no se hiciera." Question 147 (line 44098, tapped) approved the corrected design, which two blind readers, one of
+  Claude and one of Codex, shaped: "Sí, pero también en el código chico". So: code keeps today's pair
+  (`codex-review` and `lens-review` on every slice), and a small code change also gets the blind Claude and Codex
+  read; plans, designs and documents that propose something get one Claude reader and one Codex reader, blind, on the
+  same frozen material, their findings kept outside the repository until both return; each read is announced with
+  its cost and a phrase that skips it, and only his words skip it, recorded with them; never run on his short
+  replies or taps; each finding is recorded, to measure what each reader adds, judged on 2026-11-16. It goes through
+  `js-harness rules change double-review`, retiring his D5 (2026-10-27) by name and keeping its rules on
+  disagreement and rounds; its scope, stated two ways today (`bin/lib/protocols-skill.mjs:43` against
+  `bin/lib/project.mjs:412`), becomes one text. Codex reviews code and not Markdown today (the Review row above), so
+  `codex-review` needs a mode that reviews a plan; each run spends his Codex weekly limit, read on the meter first.
+  Open, his to answer: what happens when the Codex limit runs out.
 - **The older texts:** the feature document's order in `CLAUDE.md` and in the block `init` writes gains `## Depth
   pass` after the contract; the contract template gains its skeleton; `sync` offers `depthPassSince` to a project.
 - **The eval** of PR 737's brief, with and without the rule, owed by 2026-11-30.

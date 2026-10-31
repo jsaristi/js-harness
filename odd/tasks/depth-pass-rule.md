@@ -448,3 +448,16 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   eval owed by 2026-11-30; "Alignment to the depth pass", its first item the double review with both his quotes,
   then the older texts (the document's order in `CLAUDE.md` and `init`'s block, the contract template, `sync`
   offering `depthPassSince`) and the eval. `js-harness progress`: 1125 of 1168, 96%.
+- L22 (2026-10-31, T6, the reviews of b5bf748..f3b68fd; his answer to question 147): the four Claude lenses ran
+  (reliability, readability, risk, resilience; about 168k input tokens on sonnet), recorded; readability and risk
+  found nothing; reliability and resilience found the same fault: in a shallow clone every document looks opened
+  in the boundary commit, so older documents would fail the contracts row. Fixed: `depthPassFor` holds no document
+  where the history cannot say when one opened (`git rev-parse --is-shallow-repository` not `false`); its test
+  clones at depth 1, red before the fix, 16 of 16 after. The Codex review's part 1 (171k input tokens) was thrown
+  away by the command, since I edited the tree while it ran; no record was written, and the run is repeated once
+  over the whole range with the tree untouched (my mistake: what happened, a test written during a review; the fix,
+  one rerun with nothing edited until it returns; what stops it, the command's own refusal, which caught it; the
+  count, a second refusal of this kind in this feature). The lead relayed his tapped answer to question 147 (the
+  lead's transcript `0f71b2c6`, line 44098, read with `sessions --quote`): "Sí, pero también en el código chico";
+  the alignment feature's first item now carries the corrected design and leaves open, his to answer, what happens
+  when the Codex limit runs out. Codex's weekly limit stood at 78% used (the lead, `js-harness codex-meter`).
