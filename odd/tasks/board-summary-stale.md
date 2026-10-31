@@ -75,7 +75,8 @@ changes no rule of his. Spend: one gate, one Codex review, the Claude lenses, on
   help line. Route: inline. Commit: the slice's.
 - [x] T3 (kind: docs): row 1 and item 4 of `odd/tasks/lead-duty-checks.md`, the failure's `Control:` line, the live
   board's section of `docs/SPEC.md`. The sessions summary at the close.
-- [ ] T4 (kind: verify): gate, Codex review, Claude lenses, independent verifier, pull request, ready notice.
+- [x] T4 (kind: verify): gate, Codex review, Claude lenses, independent verifier, pull request, ready notice. Each
+  code commit gated and reviewed (L6, L7, L9); verifier on `466c70b` (L8), its fixes in `1afe54d`. Merge: the lead's.
 
 ## Log
 - L1 (2026-10-31, the brief as written, `C:\Users\Oficina\.js-harness\background\briefs\2026-10-31T07-48-05-299Z-4cd7b30e.md`):
@@ -136,3 +137,7 @@ changes no rule of his. Spend: one gate, one Codex review, the Claude lenses, on
   read and its write count as described; (5) not checked: whether a write `ArtifactData` refuses for `if_version`
   reaches PostToolUse as a success; (6) no test chains the gate's record into the stop hook (the verifier's scratch
   run did), and `(summary of none)` is said once a transcript until a content write.
+- L9 (2026-10-31, reviews of `466c70b..1afe54d`, the verifier's fixes): Codex, "the patch is correct" (0.96), no
+  finding, 71,613 input tokens; the Claude lenses reliability and resilience, 0 findings each (7,767 and 16,097 input
+  tokens). gentle-ai's stop hook offered the whole branch again: status read, nothing started. Every code commit of
+  the branch is covered by both records.
