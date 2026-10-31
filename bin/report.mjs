@@ -179,13 +179,13 @@ export async function reportMain(argv, options = {}) {
   for (const line of reportLines({ cut, branch: name, landed, sessions, questions, map, before, stretch })) stdout(line);
   // A stretch record that cannot be read, or one its measure reads, is a section that could not be read: --mark then
   // records nothing.
-  const failed = [landed, map, sessions, questions].some((section) => section.error !== undefined) || stretch?.unavailable !== undefined || Object.keys(stretch?.unread ?? {}).length > 0;
+  // The plan step by step is the page's alone ("el mapa de donde vamos", odd/tasks/departure-stretch.md, spec 9): it
+  // reads every task document the steps name, at the cut and now. Steps it could not read are a section unread.
+  const steps = parsed.html === undefined ? undefined : named.error ? { unavailable: named.error } : stepsOf(run, cwd, ref, cut.head);
+  const failed = [landed, map, sessions, questions].some((section) => section.error !== undefined) || stretch?.unavailable !== undefined || Object.keys(stretch?.unread ?? {}).length > 0 || steps?.unavailable !== undefined;
   if (parsed.html !== undefined) {
     // A section that could not be read is said on the page as it is in the lines above.
     const file = path.resolve(cwd, parsed.html);
-    // The plan step by step is the page's alone ("el mapa de donde vamos", odd/tasks/departure-stretch.md, spec 9):
-    // it reads every task document the steps name, at the cut and now.
-    const steps = named.error ? { unavailable: named.error } : stepsOf(run, cwd, ref, cut.head);
     try {
       fileSystem.mkdirSync(path.dirname(file), { recursive: true });
       fileSystem.writeFileSync(file, renderStatus({ cut, branch: name, landed, sessions, questions, map, before, steps, stretch, notes }), 'utf8');

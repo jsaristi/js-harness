@@ -251,6 +251,21 @@ test('--mark records the proposals and their estimates, and the next page sets t
   assert.match(fs.readFileSync(next, 'utf8').split('6. Lo que propongo')[1], /Lo que propuse el[\s\S]*Tramo D[\s\S]*2 h, PR 740 en main[\s\S]*Desde entonces no entró nada/);
 }));
 
+// Codex review of 6bee9e5..8be755d, P2: plan steps that cannot be read are a section that could not be read, so
+// --mark --html records nothing and the next report's cut does not pass facts this page never showed.
+test('--mark --html with plan steps git cannot read says so and records nothing', withProject(async (project) => {
+  fs.mkdirSync(project.home, { recursive: true });
+  const html = path.join(project.home, 'status.html');
+  const recordLoad = async () => ({ renderedFile: () => path.join(project.home, 'rendered.jsonl'), recordRendered: () => ({ sha256: 'e'.repeat(64), bytes: 1 }) });
+  const failing = (cmd, args, options) => (args.includes('odd/tasks/') ? { status: 128, stdout: '', stderr: 'fatal: no tree' } : run(cmd, args, options));
+  const err = [];
+  const code = await reportMain(['--mark', '--html', html, '--cwd', project.repo, '--home', project.home], { stdout: () => {}, stderr: (line) => err.push(line), now: () => NOW, env: {}, recordLoad, run: failing });
+  assert.equal(code, 1);
+  assert.match(fs.readFileSync(html, 'utf8'), /Los pasos del plan no se pudieron leer: .*no tree/);
+  assert.match(err.join('\n'), /not recorded: a section could not be read/);
+  assert.deepEqual(readNotices(project.home, project.slug).reports, []);
+}));
+
 test('--notes that do not parse are refused before anything is written, and --notes needs --html', withProject(async (project) => {
   const notes = path.join(project.home, 'notes.json');
   fs.mkdirSync(project.home, { recursive: true });

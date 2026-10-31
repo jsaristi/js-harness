@@ -271,7 +271,16 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
   queue (the background record) and the roadmap's next step not done, its goals the open pull requests' `gh pr
   checks`.
 
+- L19 (2026-10-31, T4): T8 and T9 committed as `8be755d2` (gate PASS). Codex's review of `6bee9e5..8be755d`, 2
+  parts, 311,437 input tokens in 76 s, recorded: part 1 correct (0.87); part 2, P2 at `bin/report.mjs:188`, "When
+  `momentAt` cannot list or read a task document ... `--mark --html` records this incomplete report and exits
+  successfully, advancing the next report's cut past facts this page never showed." Accepted: the steps are now read
+  before the failure decision and count in it. Red first, "--mark --html with plan steps git cannot read says so and
+  records nothing" (actual 0, expected 1); green, `bin/report.test.mjs bin/lib/report-status.test.mjs` 31 of 31.
+  gentle-ai's start for `8be755d2` reached its consent envelope (lineage `review-015c4548afc4f7fc`); not granted,
+  since this fix moves the head its target names.
+
 ## Next step
-Commit T8 and T9 through the gate; then the reviews of `6bee9e5b..HEAD` (gentle-ai's contract run, then
+Commit the P2 fix through the gate; then the reviews of `6bee9e5b..HEAD` (gentle-ai's contract run, then
 `js-harness codex-review --base 6bee9e5b` and `js-harness lens-review --base 6bee9e5b`, then the verifier), push, PR,
 the ready notice and the lead told; the summary under `docs/sessions/`.
