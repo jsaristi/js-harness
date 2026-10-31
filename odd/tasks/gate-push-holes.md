@@ -53,10 +53,11 @@ question (`js-harness notify --to orchestrator --kind question`, in Spanish).
 ## Tasks
 - [x] T1 (kind: build) spec 1: a record whose head lies past the tip covers nothing at the push, the plain row or
   `codex-review`; the planted cut red then green; the failure's Control line — commits: `2b678054`, `1283e5f2`
-- [ ] T2 (kind: verify) spec 3: Codex, the lenses, an independent verifier, PR 1 and its ready notice — PR 723 open,
-  reviewed (L8-L12); waits for its merge
+- [x] T2 (kind: verify) spec 3: Codex, the lenses, an independent verifier, PR 1 and its ready notice — PR 723,
+  merged (L8-L12, L15)
 - [x] T3 (kind: design) spec 2: the decision for the forgotten failure, with its evidence, in `## Log` — L4, L5
-- [ ] T4 (kind: build) spec 2: the fix, tests first, the planted case red then green — L13; commit pending
+- [x] T4 (kind: build) spec 2: the fix, tests first, the planted case red then green — commits: `bebf5238`,
+  `f9d4c09c` (L13, L14)
 - [ ] T5 (kind: verify) spec 3: Codex, the lenses, an independent verifier, PR 2, its ready notice, the summary — pending
 
 ## Log
@@ -213,8 +214,15 @@ question (`js-harness notify --to orchestrator --kind question`, in Spanish).
   Seen and left for later: `bin/lib/manifest.mjs:1448` says the folder holds two files; it has held more since
   `busiest.jsonl`, and the removal is of the whole folder.
 
+- L15 (2026-10-31): the fixes of L14 are `f9d4c09c` (gate on CI green, first try). Codex over `bebf523..f9d4c09`:
+  correct (0.9), no finding. Lenses risk and reliability: 0 findings. gentle-ai over the same commit (lineage
+  `review-9ebad3491893eba1`): approved, one SUGGESTION, `R3-001`: an unparseable `at` would put a failure last, which
+  is the safe side, and no test pins it; left, since `hasHead` refuses every line, of the log or of the failures, whose
+  `at` does not parse, so no such line reaches `readGateProof`; acknowledged. PR 723 merged at 01:01Z (T2 done).
+  Slice 2 is reviewed whole: every code commit, `bebf5238` and `f9d4c09c`, has a Codex record and a lens record. The
+  summary is `docs/sessions/2026-10-31-jh-112-gate-and-push-two-holes-left-open-after-jh-111.md`.
+
 ## Next step
-Slice 2 on branch `gate-forgotten-failure` (worktree `D:\js-harness\.claude\worktrees\gate-push-holes`, stacked on
-`9d30c96d` until PR 723 lands): commit T4 (L13); then Codex and the lenses over it, gentle-ai if the Stop hook offers
-the commit, an independent verifier; push, PR 2 based on main once 723 lands, ready notice; summary under
-`docs/sessions/`, `closed` notice when both PRs are on main.
+Slice 2 on branch `gate-forgotten-failure` (worktree `D:\js-harness\.claude\worktrees\gate-push-holes`): push, PR 2
+against main, ready notice with `--pr`; when it is on main, `npm run check` there and the `closed` notice with the
+summary.
