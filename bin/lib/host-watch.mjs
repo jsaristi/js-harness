@@ -35,13 +35,13 @@ const SURFACE_PREFIX = /^(?:\[(?:VSCode|Cloud sessions|Claude Tag|Code Review|Je
 // Words of what the harness does not run on: another surface, a provider, a platform. They place an entry outside
 // only when no harness area does.
 const OUTSIDE = /VS ?Code|JetBrains|Slack|Bedrock|Vertex|Foundry|gateway|macOS|\bMac\b|Linux|GNOME|\bSSH\b|Self-hosted runner|Cowork|\/claude-api|\bMDM\b|HKLM|Dvorak/i;
-const OUTSIDE_SECTIONS = ['Cowork'];
-// A section that is a deployment mode the harness does not run in, not a surface: its entries are outside whatever
-// they name. The app reads 3P keys such as `sessionStatusLine` only in its third-party-inference class (JH 113).
-const DEPLOYMENT_SECTIONS = ['3P'];
+const OUTSIDE_SECTIONS = ['Cowork', '3P'];
+// What a 3P entry left for the session to decide must show: the section holds keys the app reads only on third-party
+// inference (`sessionStatusLine`, JH 113) beside features a claude.ai install has too (desktop 4.4212.0 #26 and #30).
+const THREE_P_CHECK = '3P section: adopt or adapt only with evidence that a claude.ai install reads it';
 // The Code tab named on its own ("in Cowork, Chat and Code", "Code sessions"), not Claude Code, VS Code, Visual Studio
 // Code, Code Review or Code Interpreter: an entry that names it is the Code tab's too, whatever outside word or
-// surface section it carries; a deployment section still places it outside.
+// section it carries (desktop 4.4212.0 #24).
 const CODE_TAB = /(?<!Claude\s|VS\s|Visual Studio\s)\bCode\b(?!\s(?:Review|Interpreter))/;
 const WINDOWS = /Windows|PowerShell/i;
 const PHONE = /mobile|phone|\biOS\b|Android/i;
@@ -127,13 +127,12 @@ export function cutSpan(text, { from, to }) {
 }
 
 /** `{ areas, outside }` of an entry: the ids of the harness areas its words touch, and what places it outside the Code
- * tab (a declared surface; else a deployment section; else, with no area and no word naming the Code tab, an outside
- * word or the Cowork section), or null. */
+ * tab (a declared surface; else, with no area and no word naming the Code tab, an outside word or the Cowork or 3P
+ * section), or null. */
 export function classify(entry) {
   const areas = AREAS.filter((area) => area.pattern.test(entry.text)).map((area) => area.id);
   const prefix = SURFACE_PREFIX.exec(entry.text);
   if (prefix) return { areas, outside: prefix[0] };
-  if (DEPLOYMENT_SECTIONS.includes(entry.section)) return { areas, outside: `the ${entry.section} section` };
   if (areas.length > 0 || CODE_TAB.test(entry.text)) return { areas, outside: null };
   const word = OUTSIDE.exec(entry.text);
   if (word) return { areas, outside: word[0] };
@@ -146,14 +145,14 @@ const named = (pattern, text) => (pattern.test(text) ? 'unknown (named)' : 'unkn
 const rowsOf = (areas) => areas.map((id) => AREAS.find((area) => area.id === id).rows).join('; ') || '—';
 
 /** One draft row of an entry: `{ id, cells, unplaced }`. An entry outside the Code tab is `ignore` by default, one a
- * harness area touches or none places is `?`, which the gate refuses until the session decides it. */
+ * harness area touches or none places is `?`, which the gate refuses until the session decides it; a `?` of the 3P
+ * section says what its decision must show. */
 function draftRow(entry) {
   const { areas, outside } = classify(entry);
+  const open = areas.length > 0 ? `touches ${areas.join(', ')}: read and decide` : 'no area matched: classify by hand';
   const reason = outside
     ? `outside the Code tab: ${outside}${areas.length > 0 ? ` (its words touch ${areas.join(', ')})` : ''}`
-    : areas.length > 0
-      ? `touches ${areas.join(', ')}: read and decide`
-      : 'no area matched: classify by hand';
+    : entry.section === '3P' ? `${open}; ${THREE_P_CHECK}` : open;
   const decision = outside ? 'ignore' : '?';
   return { id: entry.id, unplaced: !outside && areas.length === 0, text: entry.text, cells: [escape(entry.text), decision, reason, rowsOf(outside ? [] : areas), entry.id, named(WINDOWS, entry.text), named(PHONE, entry.text)] };
 }
@@ -360,8 +359,8 @@ export function renderBrief({ versions, reviewed, title }) {
     '2. Read every entry in its changelog, not only the draft\'s words, and decide each row: adopt, adapt or ignore, the',
     '   Reason in a sentence, the Map row of the proposal\'s map (step 5) it touches, its Evidence, and',
     '   Windows and Phone "checked: <how>" where you checked them. Empty the list "To classify by hand".',
-    '   An entry of the 3P section is a key of Claude Desktop on third-party inference: adopt or adapt it only with',
-    '   evidence (its docs or a probe of the app) that a claude.ai install reads it.',
+    '   An entry of the 3P section may be read only where the app runs on third-party inference: adopt or adapt it',
+    '   only with evidence (its docs or a probe of the app) that a claude.ai install reads it.',
     '3. The tool list: js-harness host-watch tools --surface background --list <your tools, one a line> --record; a',
     '   desktop list comes only from a session the app started (ask the lead for one), else the line says "owed".',
     '4. Where an entry moves what a mod can build, read the plugin-authoring skill\'s types against it.',

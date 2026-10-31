@@ -351,15 +351,25 @@ test('the gate of doctor --host-reviewed accepts the first real review, of 4.29.
 });
 
 // JH 113 (odd/tasks/status-line.md): #24 was decided adapt as a Code tab feature, but the installed app reads
-// `sessionStatusLine` only in its 3P deployment class. The 3P section is a deployment mode the harness does not run in,
-// not a surface, so neither the Code tab named on its own nor a harness area brings its entries in.
-test('an entry of the 3P section is drafted outside even when it names Code or a harness area touches it', () => {
-  const entry = (text, section) => ({ id: 'desktop 4.5000.0 #9', version: '4.5000.0', section, text });
-  const threeP = 'the 3P section';
-  assert.equal(classify(entry('Added `sessionStatusLine` to show one line of text above the message box in Cowork, Chat and Code, printed by a program that the app runs.', '3P')).outside, threeP);
-  assert.deepEqual(classify(entry('Fixed the token limit set with `inferenceMaxTokensPerWindow` leaving out requests.', '3P')), { areas: ['context'], outside: threeP });
-  assert.equal(classify(entry('Added a status line above the message box in Cowork, Chat and Code.', 'Cowork')).outside, null, 'the Cowork section is a surface: naming Code still brings an entry in');
-  assert.equal(classify(entry('[VSCode] Fixed a panel.', '3P')).outside, '[VSCode]', 'a declared surface still names itself');
+// `sessionStatusLine` only in its 3P deployment class. The 3P section also repeats features a claude.ai install has
+// (#26, #30), so its entries stay for the session to decide, and the draft says what that decision must show.
+test('a 3P entry left to decide says its decision needs evidence that a claude.ai install reads it; other rows do not', () => {
+  const at = (n, section, text) => ({ id: `desktop 4.5000.0 #${n}`, source: 'desktop', version: '4.5000.0', section, text });
+  const desktop = { entries: [
+    at(1, '3P', 'Added `sessionStatusLine` to show one line of text above the message box in Cowork, Chat and Code.'),
+    at(2, '3P', 'Changed Code sessions to ask for approval before starting a dev server from `launch.json`.'),
+    at(3, '3P', 'Added `projectsEnabled` to hide projects in Chat.'),
+    at(4, 'Code', 'Changed Code sessions to ask before a dev server starts.'),
+  ], missing: [] };
+  const text = draftReview({ versions: { desktop: '4.5000.0', code: '2.1.320' }, reviewed: { desktop: '4.4212.0', code: '2.1.320' }, desktop, code: { entries: [], missing: [] } });
+  const rows = Object.fromEntries(tableOf(text).map((row) => [row.Evidence, row]));
+  const check = /3P section: adopt or adapt only with evidence that a claude\.ai install reads it/;
+  for (const n of [1, 2]) {
+    assert.equal(rows[`desktop 4.5000.0 #${n}`].Decision, '?', `#${n} names the Code tab, so the session decides it`);
+    assert.match(rows[`desktop 4.5000.0 #${n}`].Reason, check);
+  }
+  assert.deepEqual([rows['desktop 4.5000.0 #3'].Decision, rows['desktop 4.5000.0 #3'].Reason], ['ignore', 'outside the Code tab: the 3P section']);
+  assert.doesNotMatch(rows['desktop 4.5000.0 #4'].Reason, check);
 });
 
 // The first real review, desktop 4.4212.0 #24 (`sessionStatusLine`, a 3P entry), was drafted outside before CODE_TAB.
