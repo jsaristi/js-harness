@@ -157,3 +157,9 @@ Nothing left in this session: the product choice was D4. Applying it to his mach
   its own findings, each with a test that failed first) and gentle-ai (its budget refused the first commit, L8).
   Pushed; the pre-push hook covered both code commits. The apply question is recorded with the lead: question 140
   (`js-harness notify --kind question`, 2026-10-31T04:37:04Z), its commands those `apply-try.sh` ran.
+- L11 (2026-10-31) The ready notice was refused: #729 was CONFLICTING with main (#727, #728). Main merged in
+  (`bc8c6f6b`); the one conflict, `bin/js-harness.mjs`, kept main's new commit-msg help line beside this branch's reply
+  line. Reading the merged text, three lines the L3 search missed still said both hosts: `docs/SPEC.md` (the skills
+  requirement, "for each host"), `README.md`'s opening line ("sets up Claude Code and Codex"), and the comments of
+  `shippedId`/`textSources` in `bin/lib/rules-sources.mjs` (code unchanged: the coverage ids still drop the host).
+  Fixed; `bin/readme.test.mjs` 5/0, `bin/lib/spec.test.mjs` 28/0, `bin/rules-coverage.test.mjs` 8/0.

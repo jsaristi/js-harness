@@ -1,6 +1,6 @@
 # js-harness
 
-js-harness sets up Claude Code and Codex for AI-assisted development in a project, on top of a
+js-harness sets up Claude Code, with Codex as its reviewer, for AI-assisted development in a project, on top of a
 stack it does not rebuild: gentle-ai owns the workflow, task documents and TDD, engram owns
 memory, codegraph owns code structure. js-harness adds the thin layer those leave open: a short
 `AGENTS.md`, a pre-commit gate that runs the project's checks, the two reviews every slice gets
