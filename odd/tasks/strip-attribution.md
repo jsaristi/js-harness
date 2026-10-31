@@ -199,6 +199,13 @@ Nothing here is his: a decision only he can take goes to the lead as a recorded 
 - L15 (2026-10-31, the reviews of `03db395b`): Codex over `7a73e47..03db395`: correct (0.98), the P2 fixed. Lens
   reliability: 0. The ROADMAP's S4a State says the hook is done and shipped by `init`; the 50-commit count, the
   hook-count row and D8 stay open there.
+- L16 (2026-10-31, gentle-ai over `7a73e476..62ada4e4`, lineage `review-5eb9df063f17432d`, `granted` run): approved
+  and acknowledged, a WARNING and a SUGGESTION, neither taken. The WARNING: a kept commit-msg entry is permanent, so if
+  the owner later deletes their hook, or the hooks path comes back inside, no sync writes the step; that is the rule
+  `init` already applies to every hook it keeps (a kept file is the project's, never written over or after), and
+  changing it for one hook would make two rules. The SUGGESTION: no test of the outside-hooks-path case under `sync`;
+  `init`'s outside case is tested (the `core.hooksPath` outside test) and `sync` records it through the same
+  `keptRecord`.
 ## Next step
 State (2026-10-31): slice 1 (`951bcfb4`..`7214c0fe`, branch `worktree-strip-attribution`) is PR #728, every code
 commit reviewed (L12), ready notice sent. Worktree `D:\js-harness\.claude\worktrees\strip-attribution`, now on branch
