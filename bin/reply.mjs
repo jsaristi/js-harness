@@ -17,10 +17,9 @@
 // And it turns back, once a pending set, the lead of a project with a live board whose rows have waited longer than
 // one check of the board holds (bin/lib/stale-board.mjs, spec 3 of odd/tasks/visual-pages.md). And it turns back, once
 // a return, the lead whose replies since the user's message after a long absence link no status page of
-// `report --html` (bin/lib/return-report.mjs, spec 2 of odd/tasks/lead-duty-checks.md). And it turns back, at every
-// stop, the lead whose user's newest word of leaving or coming back says he leaves while no stretch is open, or says
-// he is back while the stretch opened before it is open (bin/lib/away-stretch.mjs, odd/tasks/departure-stretch.md).
-// And it turns back a
+// `report --html` (bin/lib/return-report.mjs, spec 2 of odd/tasks/lead-duty-checks.md), and, once that return, the lead
+// whose user came back after an absence no stretch covered, or with its stretch still open (`returnStretchWarning`,
+// spec 1b of odd/tasks/departure-stretch.md). And it turns back a
 // reply that hands the user a shell command block not tagged for his shell, not run by the session with success first,
 // or rejected by his shell's parser (bin/lib/reply-commands.mjs, S1 of odd/tasks/f8-lead-rigor.md).
 import { spawnSync } from 'node:child_process';
@@ -37,9 +36,8 @@ const USAGE = 'Usage: js-harness reply --hook\n'
   + '  nothing in its background to wake it, and, once, when the lead of a project with a live board ends its turn\n'
   + '  while the board\'s rows waited longer than one check, or notices did since board/summary was last written with\n'
   + '  now or status, and, once, when the lead\'s replies since the user\'s\n'
-  + '  message after a long absence link no status page of report --html, and, at every stop, when the user\'s newest\n'
-  + '  word of leaving or coming back to the lead says he leaves while no stretch is open, or that he is back while the\n'
-  + '  stretch opened before it is still open, and when a fenced block hands the user a\n'
+  + '  message after a long absence link no status page of report --html, and, once, when that absence had no\n'
+  + '  stretch or its stretch is still open, and when a fenced block hands the user a\n'
   + '  shell command\n'
   + '  not tagged for his shell, not run by the session with success first, or rejected by his shell\'s parser;\n'
   + '  writes nothing and always exits 0\n';
@@ -148,13 +146,14 @@ async function returnOf(payload, state, io, stderr) {
   }
 }
 
-/** The departure check's warning (bin/lib/away-stretch.mjs), or `null`, read as the wake check is. */
-async function awayOf(payload, state, io, stderr) {
+/** The return's stretch warning (bin/lib/return-report.mjs, `returnStretchWarning`), or `null`, read as the wake
+ * check is. */
+async function returnStretchOf(payload, state, io, stderr) {
   try {
-    const { awayStretchWarning } = await import('./lib/away-stretch.mjs');
-    return awayStretchWarning(payload, state, io);
+    const { returnStretchWarning } = await import('./lib/return-report.mjs');
+    return returnStretchWarning(payload, state, io);
   } catch (err) {
-    stderr(`js-harness reply: ${err?.message ?? err}; the departure check did not run\n`);
+    stderr(`js-harness reply: ${err?.message ?? err}; the return's stretch check did not run\n`);
     return null;
   }
 }
@@ -230,10 +229,10 @@ export async function replyMain(argv, {
         const wake = await wakeOf(payload, state, io, stderr);
         const stale = await staleOf(payload, state, io, stderr);
         const back = await returnOf(payload, state, io, stderr);
-        const away = await awayOf(payload, state, io, stderr);
+        const stretch = await returnStretchOf(payload, state, io, stderr);
         // Last, so its one deadline, counted from the hook's start, holds the other checks' time too.
         const commands = commandsOf(payload, message, { readFile: io.readFile, platform, parse, now, started }, stderr);
-        for (const warning of [commands, wake, stale, back, away]) {
+        for (const warning of [commands, wake, stale, back, stretch]) {
           if (warning !== null) reason = reason === null ? warning : `${reason}\n\n${warning}`;
         }
       }

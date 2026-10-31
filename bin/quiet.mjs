@@ -13,7 +13,9 @@ import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { listCommandLines } from './lib/process-list.mjs';
 import { QUIET_PROCESSES, lookAtMachine, lookLines } from './lib/quiet.mjs';
-import { readGateLock } from './lib/sessions.mjs';
+import { mainCheckout, projectSlug, readGateLock } from './lib/sessions.mjs';
+import { eventsOf, openEvent, stretchFile } from './lib/stretch.mjs';
+import fs from 'node:fs';
 
 const DEFAULT_SETTLE_MINUTES = 10;
 const DEFAULT_FOR_MINUTES = 720;
@@ -34,6 +36,8 @@ export const USAGE = [
   `--settle minutes (${DEFAULT_SETTLE_MINUTES}; 0 ends at the first quiet look), saying what it saw and what needs you; a busy`,
   `or unknown look starts the count again. After --for minutes (${DEFAULT_FOR_MINUTES}) with no settle it exits 1 with the`,
   'last look. Run it as a background task, and stop it with TaskStop when it is no longer needed. Exit 2: a usage error.',
+  'The wait runs while he is away, so with no stretch open (js-harness stretch status exits 1) it refuses, exit 4,',
+  'unless --no-stretch <reason> says why none is needed.',
 ].join('\n');
 
 class QuietArgError extends Error {}
@@ -44,7 +48,7 @@ function wholeNumber(flag, value, what, min) {
   return Number(value);
 }
 
-const VALUED = new Map([['--self', 'self'], ['--home', 'home'], ['--settle', 'settle'], ['--for', 'forMinutes'], ['--every', 'every']]);
+const VALUED = new Map([['--self', 'self'], ['--home', 'home'], ['--settle', 'settle'], ['--for', 'forMinutes'], ['--every', 'every'], ['--no-stretch', 'noStretch']]);
 
 function parseArgs(argv) {
   const values = {};
@@ -63,7 +67,7 @@ function parseArgs(argv) {
       i += 1;
     } else throw new QuietArgError(flag.startsWith('-') ? `unknown argument: ${flag}` : `unexpected argument: ${flag}`);
   }
-  for (const flag of ['--settle', '--for', '--every']) {
+  for (const flag of ['--settle', '--for', '--every', '--no-stretch']) {
     if (!wait && values[VALUED.get(flag)] !== undefined) throw new QuietArgError(`${flag} goes with --wait`);
   }
   if (values.self !== undefined && values.self.length < 8) throw new QuietArgError('--self takes a session id, or its first eight characters or more');
@@ -72,6 +76,7 @@ function parseArgs(argv) {
     wait,
     self: values.self,
     home: values.home,
+    noStretch: values.noStretch ?? null,
     settle: values.settle === undefined ? DEFAULT_SETTLE_MINUTES : wholeNumber('--settle', values.settle, 'a number of minutes', 0),
     forMinutes: values.forMinutes === undefined ? DEFAULT_FOR_MINUTES : wholeNumber('--for', values.forMinutes, 'a number of minutes', 1),
     every: values.every === undefined ? DEFAULT_EVERY_SECONDS : wholeNumber('--every', values.every, 'a number of seconds', 1),
@@ -129,6 +134,24 @@ export async function quietMain(
     return { quiet: 0, busy: 1, unknown: 3 }[seen.state];
   }
 
+  // The wait runs while he is away, so it asks the stretch of his absence first (odd/tasks/departure-stretch.md, 1a):
+  // on 2026-10-31 the lead started it twice with none open.
+  if (parsed.noStretch === null) {
+    const file = stretchFile(home, projectSlug(mainCheckout(run, cwd)));
+    let open = null;
+    try {
+      open = openEvent(eventsOf(fs.readFileSync(file, 'utf8')));
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        stderr(`js-harness quiet --wait: the stretch record ${file} cannot be read (${err.code ?? err.message}); pass --no-stretch <reason> to wait without one`);
+        return 4;
+      }
+    }
+    if (open === null) {
+      stderr('js-harness quiet --wait: no stretch is open, and the wait runs while he is away (rule:away-autonomy): open one with `js-harness stretch open --plan <file> --html <file>` and show its departure, or pass --no-stretch <reason> to wait without one');
+      return 4;
+    }
+  } else (parsed.json ? stderr : stdout)(`js-harness quiet --wait: no stretch open: ${parsed.noStretch}`);
   // Under --json the whole of stdout is the JSON, so the line that says what the wait is goes to stderr.
   (parsed.json ? stderr : stdout)(`js-harness quiet --wait: waits until nothing has run on this machine for ${parsed.settle} minutes, looking every ${parsed.every} seconds; ends then, or after ${parsed.forMinutes} minutes; stop it with TaskStop when it is no longer needed`);
   const began = now();

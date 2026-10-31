@@ -23,6 +23,7 @@ import { comparable, mainCheckout, projectSlug } from './sessions.mjs';
 import { isLeadSession } from './stale-board.mjs';
 import { pageTarget } from './template-gate.mjs';
 import { lastLineWith } from './stop-wake.mjs';
+import { eventsOf, stretchFile } from './stretch.mjs';
 import { RENDERED_SCHEMA, readRecord, renderedFile } from './template-record.mjs';
 
 /** How long between two of his messages counts as an absence, in ms. In the four largest lead transcripts of this
@@ -127,7 +128,9 @@ function linked(urls, message, text, sinceMs) {
 /** The warning for a stop of `payload` whose reply closes with `state`, or `null` when none is due. The records are
  * read through `io` (`readFile`, `run`, `env`, `homedir`, and `readNotices` when the hook shares one parse of the record); one that cannot be read throws, and the hook says so.
  * `state` is not read: a return is answered with the page first, whatever the reply closes with. */
-export function returnReportWarning(payload, state, io) {
+/** The lead's newest return for a stop of `payload`, read through `io`, as `{ cwd, home, slug, text, before, back,
+ * away }`, or `null` when the session is no lead on Claude Code or the transcript holds no return. */
+function leadReturnOf(payload, io) {
   // Codex sends no background tasks, and cannot publish a page.
   if (!Array.isArray(payload?.background_tasks)) return null;
   if (typeof payload.session_id !== 'string' || payload.session_id === '') return null;
@@ -144,16 +147,23 @@ export function returnReportWarning(payload, state, io) {
 
   const text = io.readFile(payload.transcript_path);
   const found = lastReturn(personTimesIn(text));
+  return found === null ? null : { cwd, home, slug, text, ...found };
+}
+
+/** Whether the transcript `text` holds a Stop hook's warning carrying `marker` and naming the return `named`. */
+const warnedOf = (text, named, marker) => lastLineWith(text, named, (entry) => entry.type === 'attachment'
+  && entry.attachment?.type === 'hook_blocking_error'
+  && entry.attachment.hookEvent === 'Stop'
+  && String(entry.attachment.blockingError?.blockingError ?? '').includes(marker)) !== null;
+
+export function returnReportWarning(payload, state, io) {
+  const found = leadReturnOf(payload, io);
   if (found === null) return null;
-  const { before, back, away } = found;
+  const { cwd, home, slug, text, before, back, away } = found;
   const backMs = Date.parse(back);
 
   const named = `(return at ${back})`;
-  const warned = lastLineWith(text, named, (entry) => entry.type === 'attachment'
-    && entry.attachment?.type === 'hook_blocking_error'
-    && entry.attachment.hookEvent === 'Stop'
-    && String(entry.attachment.blockingError?.blockingError ?? '').includes(RETURN_MARKER));
-  if (warned !== null) return null;
+  if (warnedOf(text, named, RETURN_MARKER)) return null;
 
   const pages = pagesSince(renderedFile(home, slug), backMs, io.readFile);
   const urls = pages.size === 0 ? new Set() : publishedUrls(text, pages, backMs, cwd);
@@ -163,4 +173,52 @@ export function returnReportWarning(payload, state, io) {
     + `the one before at ${hhmm(before)} UTC) and no reply since links the status page (rule:reports-spanish-visual). `
     + 'Run `js-harness report --mark --html <file> --notes <file>`, publish the file it wrote unchanged with Artifact, '
     + `and link its URL in your reply. This is said once for this return ${named}.`;
+}
+
+/** The words only the stretch warnings of a return have. */
+export const NO_STRETCH_MARKER = 'no stretch covered his absence';
+export const OPEN_STRETCH_MARKER = 'the stretch of his absence is still open';
+
+/** The stretches of the record of `slug` under `home`, each `{ id, openedAt, closedAt }` (ms; `closedAt` null while
+ * open), read as `js-harness stretch status` reads it (`eventsOf`); a record that is there and cannot be read throws. */
+function stretchesOf(home, slug, readFile) {
+  let text;
+  try {
+    text = readFile(stretchFile(home, slug));
+  } catch (err) {
+    if (err?.code === 'ENOENT') return [];
+    throw new Error(`the stretch record (${stretchFile(home, slug)}): ${err?.code ?? err?.message}`);
+  }
+  const events = eventsOf(text);
+  return events.filter((event) => event.event === 'open').map((open) => {
+    const close = events.find((event) => event.event === 'close' && event.id === open.id);
+    return { id: open.id, openedAt: Date.parse(open.at), closedAt: close ? Date.parse(close.at) : null };
+  });
+}
+
+/** The stretch warning for a stop of `payload` (odd/tasks/departure-stretch.md, spec 1b), or `null` when none is due:
+ * the user's newest return after an absence (`lastReturn`) that no stretch covered (none open at any time between
+ * his message before and his return), or whose stretch, opened before the return, is still open. Said once a return,
+ * as the page's warning is, and read from the records alone, never from his words: the lead saw both absences of
+ * 2026-10-31 and wrote them, and skipped the stretch (the feature document, L10). */
+export function returnStretchWarning(payload, state, io) {
+  const found = leadReturnOf(payload, io);
+  if (found === null) return null;
+  const { home, slug, text, before, back } = found;
+  const named = `(return at ${back})`;
+  if (warnedOf(text, named, NO_STRETCH_MARKER) || warnedOf(text, named, OPEN_STRETCH_MARKER)) return null;
+
+  const [beforeMs, backMs] = [Date.parse(before), Date.parse(back)];
+  const stretches = stretchesOf(home, slug, io.readFile);
+  const open = stretches.findLast((one) => one.closedAt === null && one.openedAt < backMs);
+  if (open !== undefined) {
+    return `js-harness reply: he came back at ${hhmm(back)} UTC and ${OPEN_STRETCH_MARKER} (${open.id}; rule:away-autonomy). `
+      + 'Close it with `js-harness stretch close --html <file>` and show its return page in your reply. '
+      + `This is said once for this return ${named}.`;
+  }
+  if (stretches.some((one) => one.openedAt <= backMs && (one.closedAt === null || one.closedAt >= beforeMs))) return null;
+  return `js-harness reply: he came back at ${hhmm(back)} UTC after ${hhmm(before)} UTC and ${NO_STRETCH_MARKER} `
+    + '(rule:away-autonomy), so his return has no estimate to measure against. Tell him so in your report, and add a '
+    + '`- Seen:` line to `stretch-not-opened` in docs/FAILURES.md with the times of his absence. '
+    + `This is said once for this return ${named}.`;
 }

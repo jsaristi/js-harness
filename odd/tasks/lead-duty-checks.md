@@ -130,7 +130,7 @@ after the reply is shown (`bin/reply.mjs:3-5`); none refuses before. Checked by 
 | 42 | Recap: what waits on him, only after reading that session now | manifest:208 | Nothing | `told-him-unverified` (12, one of them) |
 | 43 | Recap: name the session to return to | manifest:209 | Partly: a finished close names it (`bin/lib/reply.mjs:176`) | none recorded |
 | 44 | While he is away: ask nothing; "away" and the time in the relief file | manifest:211 | Nothing | none recorded |
-| 45 | Before he leaves, open a stretch and show its departure; on return close it and show its return | manifest:211 | Check (JH 123, `odd/tasks/departure-stretch.md`): the reply hook turns the lead back at every stop while his newest word of leaving finds no stretch open, or his word of coming back finds the stretch of his absence open (`bin/lib/away-stretch.mjs`); showing the pages is partly checked: a hand-made page is refused, a moment page never shown is not counted (`bin/template.mjs:341-349`) | `stretch-not-opened` (3) |
+| 45 | Before he leaves, open a stretch and show its departure; on return close it and show its return | manifest:211 | Check (JH 123, `odd/tasks/departure-stretch.md`): `quiet --wait`, the wait of row 32, refuses (exit 4) while no stretch is open unless `--no-stretch <reason>` (`bin/quiet.mjs`), and the reply hook turns the lead back once a return after an absence no stretch covered, or whose stretch is still open (`bin/lib/return-report.mjs`, `returnStretchWarning`); neither reads his words; showing the pages is partly checked: a hand-made page is refused, a moment page never shown is not counted (`bin/template.mjs:341-349`) | `stretch-not-opened` (3) |
 | 46 | While away: a block given once; replies close working or in that cut | manifest:212 | Nothing | none recorded |
 | 47 | Relief file: a dated line per event, the first naming his id, never rewritten | manifest:215-216 | Partly: `notify --relief` stamps the clock (`bin/lib/channel.mjs:445-453`) | `hours-guessed` (9) |
 | 48 | At the context pause, write state and keep working | manifest:219 | Check/flag: the pause notice (`bin/lib/hook-entries.mjs:44-48`), resume (`bin/resume.mjs:537-549`), `guard --stop` (`bin/guard.mjs:208-221`) | `context-fills-unnoticed` (4) |
@@ -186,7 +186,8 @@ The unchecked duties, most failed first, each with the check proposed (spec 4's 
 7. Row 36: no report when he asks how it goes, 2. Proposed: the reply hook, as the return check, on his "cómo vamos".
 8. Rows 45, 8, 17, 27, 10: one sighting each (no stretch at his leaving, a question tool held, a missed wake, a land of
    a pending pull request, a card not brought). Row 45 built by JH 123 (`odd/tasks/departure-stretch.md`,
-   2026-10-31), after two more sightings; row 45 names it.
+   2026-10-31), after two more sightings: at the wait he starts when he leaves and at his return, not at his words;
+   row 45 names it.
 
 ## Log
 - L1 (2026-10-31, the lead's brief JH 115, `C:\Users\Oficina\.js-harness\background\briefs\2026-10-31T01-55-03-340Z-7f5ced41.md`):

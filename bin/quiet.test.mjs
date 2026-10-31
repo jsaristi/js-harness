@@ -6,6 +6,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { quietMain } from './quiet.mjs';
+import { mainCheckout, projectSlug } from './lib/sessions.mjs';
+import { RECORD_SCHEMA as STRETCH_SCHEMA, stretchFile } from './lib/stretch.mjs';
 
 // `js-harness quiet` and `quiet --wait` (odd/tasks/quiet-machine.md), through the command's main, against a fake
 // `claude` on PATH, a gate lock in a temp harness home and a process listing the test gives. The fake answers
@@ -40,6 +42,10 @@ function makeWorld() {
     fs.chmodSync(path.join(world.shim, 'claude'), 0o755);
   }
   setAgents(world, []);
+  // A stretch open for this project, as `quiet --wait` asks one while he is away (odd/tasks/departure-stretch.md, 1a).
+  world.stretches = stretchFile(world.home, projectSlug(mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }), process.cwd())));
+  fs.mkdirSync(path.dirname(world.stretches), { recursive: true });
+  fs.writeFileSync(world.stretches, `${JSON.stringify({ schema: STRETCH_SCHEMA, event: 'open', id: 's1', at: '2026-10-25T11:00:00.000Z', plan: { hours: 4 } })}\n`);
   return world;
 }
 
@@ -246,6 +252,44 @@ test('quiet --json gives the same look as data', withWorld(async (world) => {
 
 const busyOne = [session({ sessionId: 'aaaa1111-0', name: 'JH 3 · thing', status: 'busy' })];
 const asking = [session({ sessionId: 'dddd4444-0', name: 'JH 4 · asks', status: 'waiting', waitingFor: 'permission prompt' })];
+
+// 1a of odd/tasks/departure-stretch.md: the wait runs only while he is away, so it asks the stretch of his absence.
+// On 2026-10-31 at 03:25Z the lead started it with no stretch open (its relief file, line 2050).
+
+test('quiet --wait with no stretch open refuses, exit 4, naming stretch open and --no-stretch, and looks at nothing', withWorld(async (world) => {
+  fs.rmSync(world.stretches);
+  const run = await quiet(world, ['--wait', '--settle', '0']);
+  assert.equal(run.code, 4, run.stdout);
+  assert.match(run.stderr, /no stretch is open/);
+  assert.ok(run.stderr.includes('js-harness stretch open --plan <file> --html <file>'), run.stderr);
+  assert.match(run.stderr, /--no-stretch <reason>/);
+  assert.match(run.stderr, /rule:away-autonomy/);
+  assert.deepEqual(run.slept, []);
+  assert.equal(JSON.parse(fs.readFileSync(world.state, 'utf8')).calls ?? 0, 0, 'claude was not asked');
+  // A record whose last stretch was closed holds none open.
+  fs.writeFileSync(world.stretches, [
+    JSON.stringify({ schema: STRETCH_SCHEMA, event: 'open', id: 's1', at: '2026-10-25T08:00:00.000Z', plan: { hours: 2 } }),
+    JSON.stringify({ schema: STRETCH_SCHEMA, event: 'close', id: 's1', at: '2026-10-25T10:00:00.000Z' }),
+  ].join('\n'));
+  assert.equal((await quiet(world, ['--wait', '--settle', '0'])).code, 4);
+}));
+
+test('quiet --wait --no-stretch <reason> waits with none open and says the reason; one look needs no stretch', withWorld(async (world) => {
+  fs.rmSync(world.stretches);
+  const run = await quiet(world, ['--wait', '--settle', '0', '--no-stretch', 'he only went for lunch']);
+  assert.equal(run.code, 0, run.stderr);
+  assert.match(run.stdout, /no stretch open: he only went for lunch/);
+  assert.equal((await quiet(world, [])).code, 0, 'one look is no wait');
+  assert.equal((await quiet(world, ['--no-stretch', 'x'])).code, 2, '--no-stretch goes with --wait');
+}));
+
+test('quiet --wait with a stretch record it cannot read refuses and says why', withWorld(async (world) => {
+  fs.rmSync(world.stretches);
+  fs.mkdirSync(world.stretches);
+  const run = await quiet(world, ['--wait', '--settle', '0']);
+  assert.equal(run.code, 4);
+  assert.match(run.stderr, /stretch record .* cannot be read/);
+}));
 
 test('quiet --wait ends once the machine stayed quiet for the settle time, and says what it saw', withWorld(async (world) => {
   writeState(world, { sequence: [busyOne, asking] });

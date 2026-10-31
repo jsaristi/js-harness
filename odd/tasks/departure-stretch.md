@@ -1,44 +1,49 @@
-# JH 123 · guard --stop: a departure with no stretch open is turned back
+# JH 123 · quiet --wait and reply --hook: an absence with no stretch is turned back
 
 Locator: `odd/tasks/departure-stretch.md` · Engram mirror: `odd/departure-stretch/tasks` · Branch: `worktree-departure-stretch`
 Delivery: one pull request to main · Test runner: `node --test`
 
 ## Goal
-When his newest word to the lead says he leaves or will be away and no stretch is open, the lead's stop is turned
-back naming `js-harness stretch open --plan <file> --html <file>`; when it says he is back and the stretch of his
-absence is still open, the stop is turned back until it is closed with `js-harness stretch close --html <file>`.
+The wait the lead runs while he is away, `js-harness quiet --wait`, refuses with no stretch open unless
+`--no-stretch <reason>` says why; and the lead's stop (`js-harness reply --hook`) is turned back once a return after
+an absence no stretch covered, or whose stretch is still open, naming `stretch close` or the `stretch-not-opened`
+sighting. Neither reads his words.
 
 ## Why
 `rule:away-autonomy` asks for a stretch before he leaves and its return when he is back, and only prose carried it.
-He left twice on 2026-10-31 (03:23:57Z and 07:41:17Z) and the lead opened none, so on his return the status report
-said "ningún tramo desde el corte" and he got no estimate against actual and no route map: "el como vamos le faltan
-varias cosas como el mapa de donde vamos, tambien de lo que estimabamos avanzar y lo que realmente avanzamos". A
-check at the stop makes the duty act after every compaction, when the skill reaches the lead cut.
+He left twice on 2026-10-31 (03:23:57Z and 07:41:17Z) and the lead opened none, though it saw both departures and
+started `quiet --wait` each time (L10), so on his return the status report said "ningún tramo desde el corte" and he
+got no estimate against actual and no route map: "el como vamos le faltan varias cosas como el mapa de donde vamos,
+tambien de lo que estimabamos avanzar y lo que realmente avanzamos". The wait is the one step every departure
+already takes; the return is the one moment every absence ends with.
 
 ## Done when
 - `node bin/js-harness.mjs contract check odd/tasks/departure-stretch.md` exits 0
-- `node --test bin/lib/away-stretch.test.mjs bin/lib/person-times.test.mjs bin/reply.test.mjs bin/stretch.test.mjs bin/lib/stretch.test.mjs` exits 0
-- the four planted cases of spec 3 in `bin/lib/away-stretch.test.mjs` failed before the check existed and pass after
-  it, both runs quoted in `## Log`
-- the false positives over the lead's real transcript are counted, with a sample and the cost per stop, in `## Log`
-- the Stop hook's budget tests (`bin/reply-budget.test.mjs`) pass on Windows and in WSL, both quoted in `## Log`
+- `node --test bin/quiet.test.mjs bin/lib/return-report.test.mjs bin/reply.test.mjs bin/stretch.test.mjs bin/lib/stretch.test.mjs` exits 0
+- the new cases of `bin/quiet.test.mjs` and `bin/lib/return-report.test.mjs` failed before the code existed and pass
+  after it, both runs quoted in `## Log`
+- the cost per stop is measured and the Stop hook's budget tests (`bin/reply-budget.test.mjs`) pass on Windows and on
+  a second system, both quoted in `## Log`
 - `node bin/js-harness.mjs failures check` exits 0
 - `node bin/js-harness.mjs rules check` exits 0
 - `npm run check` exits 0
 - the pull request is merged into main, named in `## Log`, with Codex and the Claude lenses recorded over its code
 
 ## In scope / Out of scope
-- In: `bin/lib/away-stretch.mjs` (new) and its test, `bin/lib/person-times.mjs` (his words beside his times),
-  `bin/lib/stretch.mjs` and `bin/stretch.mjs` (the record's reader moves to the light module), `bin/reply.mjs` and its
-  test (the wiring), `bin/lib/manifest.mjs` (the hook's line), `docs/FAILURES.md`, `odd/tasks/lead-duty-checks.md`
-  (row 45), `docs/sessions/`.
-- Out: `~/.claude`, `~/.codex`, credentials, gentle-ai config; the stretch's own pages and measures.
+- In: `bin/quiet.mjs` and its test (1a), `bin/lib/return-report.mjs` and its test (1b), `bin/lib/stretch.mjs` and
+  `bin/stretch.mjs` (the record's reader moves to the light module), `bin/reply.mjs` and its tests (the wiring),
+  `bin/lib/report-status.mjs`, `bin/report.mjs` and their tests (spec 8's map), `bin/lib/manifest.mjs` (the hook's
+  line), `bin/lib/rules-coverage-data.mjs` (its refresh), `docs/FAILURES.md`, `odd/tasks/lead-duty-checks.md` (row 45),
+  `docs/sessions/`; the removal of `818b1eeb`'s detector (`bin/lib/away-stretch.mjs`, `bin/lib/person-times.mjs`).
+- Out: `~/.claude`, `~/.codex`, credentials, gentle-ai config; the stretch's own pages and measures; spec 10's draft
+  plan, the next task if it does not fit.
 
 ## Constraints
-- His messages are read by `quoteOf`'s one rule (`quoteEntry` through `bin/lib/person-times.mjs`), never a second
-  copy — because two copies of whose words an entry is would drift.
-- The open stretch is told by the one reader `js-harness stretch status` uses — because a second reading of the
-  record could call open what `status` calls closed.
+- His words are not read: the wait and the return need no departure in them — because a detector fitted to the
+  messages it was measured on has no known error rate (L11).
+- The record is parsed by the one parser `js-harness stretch status` uses (`eventsOf`, and `openEvent` for the open
+  one, in `bin/lib/stretch.mjs`) — because a second parse could call open what `status` calls closed. The return
+  check pairs each open with its close by id over the same events, since an absence may lie before the last open.
 - The hook stays inside its budget (JH 116's tests, 15 s timeout) — because a timed-out hook skips every check of
   the stop.
 - A Stop hook guard is Task Size high risk (items 2 and 6): Codex and the Claude lenses on every code slice and an
@@ -70,11 +75,42 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
    control in `odd/tasks/lead-duty-checks.md`."
 6. The brief: "Ready notice with --pr per slice; summary under docs/sessions/. Done when the change is on main
    through a PR that passed its reviews, `npm run check` passes and the duty row names its control."
+7. The lead, 2026-10-31 ~12:20Z, the readers' findings it checked (L10), which replace specs 2 and 3's detection:
+   "a. PRIMARY signal, deterministic: `js-harness quiet --wait` (run only while he is away: manifest duty, row 32 of
+   lead-duty-checks) refuses while `stretch status` exits 1, unless `--no-stretch <reason>`."
+8. The lead, the same message: "b. Wording-free backstop: extend `bin/lib/return-report.mjs` (its 2 h gap,
+   `ABSENCE_MS`) so a return after a gap with no stretch, or with one still open, is turned back ONCE per return, as
+   its sibling checks are, and records a sighting under the existing class `stretch-not-opened`
+   (docs/FAILURES.md:1629), whose control moves from protocol to check." The hook writes no repo file, so the
+   sighting is asked of the lead by the warning, which names the class.
+9. The lead, the same message: "2. His complaint was the report, not my nagging: ... Add `planSections` of the plans
+   (before/now) to the status report's map section, and give each proposal in the report notes an estimate that the
+   next report compares with what happened. List each item of his complaint in Specs with its source, and say what a
+   late-opened stretch cannot show (the departure forecast)." His complaint (spec 1's source), item by item:
+   - "el mapa de donde vamos": the plan's steps as a chain, before and now, which only stretch and phase pages drew
+     (`bin/lib/stretch-render.mjs:213`, `bin/lib/report-phase.mjs:65`); this task draws it on the status report.
+   - "lo que estimabamos avanzar": the forecast a stretch makes at its opening (`stretch open`, the plan's estimate
+     and the map at that commit). A stretch opened late cannot show it: the forecast is made when it opens, so the
+     work done before has none. The proposals' estimates in the report's notes are the second estimate.
+   - "lo que realmente avanzamos": the stretch's hours and goals at its return, and the next report setting each
+     proposal's estimate beside what landed since.
+   - "osea faltan varias cosas": no more items named; nothing else is read into it.
+10. The lead, the same message: "3. Make the duty cheap, since its cost is why it was skipped: `stretch open --draft`
+    (or the nearest existing way: search first) that builds a plan from the open sessions, the queue and the
+    roadmap for the lead to edit. If that is too large for this feature, write it as the next task, not built here."
+11. The lead, the same message: "4. Fix your document's title: the check lives in `reply --hook` (bin/reply.mjs), not
+    `guard --stop`. 5. JH 124 also touches `bin/lib/rules-coverage-data.mjs` and the manifest: you land first; tell
+    me when you are ready."
 
 ## Tasks
-- [ ] T1 (kind: build) spec 2, 3: the check, tests first, the planted cases red then green — commits: pending
-- [ ] T2 (kind: verify) spec 4: false positives over the real transcript and the hook's budget on both systems — commits: this document's
-- [ ] T3 (kind: docs) spec 5: the `- Seen:` line and row 45 of the duties — commits: pending
+- [x] T1 (kind: build) spec 2, 3: the free-text check, tests first — commits: `818b1eeb`; dropped by spec 7 (L11)
+- [x] T2 (kind: verify) spec 4: false positives over the real transcript and the hook's budget on both systems — commits: this document's
+- [ ] T3 (kind: docs) spec 5, 8: the `- Seen:` lines, the control and row 45 of the duties, for 1a and 1b — commits: pending
+- [ ] T6 (kind: build) spec 7: `quiet --wait` refuses with no stretch open, tests first — commits: pending
+- [ ] T7 (kind: build) spec 8: the return's stretch warning, tests first, budget measured — commits: pending
+- [ ] T8 (kind: build) spec 9: the step chain on the status report's map, tests first — commits: pending
+- [ ] T9 (kind: build) spec 9: each proposal's estimate, compared by the next report — commits: pending
+- [ ] T10 (kind: docs) spec 10: the search for a draft plan, built or written as the next task — commits: pending
 - [ ] T4 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice — PR pending
 - [ ] T5 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice — pending
 
@@ -153,6 +189,70 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
   `odd/tasks/lead-duty-checks.md` names it. Not changed: `bin/lib/rules-coverage-data.mjs` keeps `away-autonomy` at
   the level `line`; raising it to `check` needs a break `rules check` runs, a follow-up for the lead.
 
+- L9 (2026-10-31, ~12:10Z): T1 to T3 committed as `818b1eeb` (the gate's second run passed). gentle-ai's review of
+  `6bee9e5b..818b1eeb` started, its consent run as `granted` (lineage `review-0808781f6b772e62`, state reviewing, four
+  lenses, the lens contexts emitted to the job's scratch); no reviewer launched yet. Then the lead (JH ORQ, by
+  message): "he asked for a deep second review of your brief; two blind read-only readers are attacking it now. Keep
+  reading and designing, but push nothing and open no PR until I send you their findings (they may change the signal
+  or the approach)." So the paid reviews (gentle-ai's four lenses, Codex, the four Claude lenses, the verifier) wait
+  for those findings too: run now, a change of approach would pay them twice.
+
+- L10 (2026-10-31, ~12:20Z, the readers' findings, reader A and reader B, two blind read-only readers of the brief,
+  checked and sent by the lead): (1) the root cause is not detection: the lead saw both departures and wrote them
+  (relief file line 2050, "LEAD 03:25Z ... He leaves for 1-2 h ... quiet --wait started", and line 2068, "LEAD 07:43Z
+  ... HE LEAVES 4-8 h"; checked here, both read) and skipped `stretch open` because it needs a hand-written JSON plan.
+  (1a) Primary signal: `js-harness quiet --wait`, run only while he is away (row 32 of the duties), refuses while
+  `stretch status` exits 1, unless `--no-stretch <reason>`; it costs no stop time. (1b) Wording-free backstop: the
+  return check (`bin/lib/return-report.mjs`, its 2 h gap) turns back once a return after a gap with no stretch, or
+  with one still open, and `stretch-not-opened`'s control moves from protocol to check. (1c) The free-text detector
+  of `818b1eeb`: reader A, "18 patterns fitted to the same 20 messages", and its replay "would turn back 242 and 300
+  stops when every stop is checked"; dropped unless a labelled holdout it was not fitted to shows both error rates.
+  (2) His complaint was the report: the step chain is drawn only on stretch pages (`bin/lib/stretch-render.mjs:213`,
+  `planSections`); `bin/lib/report-status.mjs` has none; add `planSections` (before and now) to the status report's
+  map, and give each proposal in the report's notes an estimate the next report compares with what happened. (3) Make
+  the duty cheap: `stretch open --draft` (or the nearest existing way) building a plan from the open sessions, the
+  queue and the roadmap; if too large, the next task. (4) The title: the check lives in `reply --hook`. (5) JH 124
+  also touches `bin/lib/rules-coverage-data.mjs` and the manifest; this branch lands first and tells the lead when
+  ready. Then the reviews on the new slices only.
+- L11 (2026-10-31, the detector): dropped. No holdout exists that it was not fitted to: the patterns were written from
+  the same 20 messages the replay counted (L3, L6), so its error rates are not known, and 1a and 1b catch both of
+  today's misses without reading his words. The reader move of the stretch record (`bin/lib/stretch.mjs`) stays: the
+  backstop and `quiet` read the open stretch by it.
+
+- L12 (2026-10-31, state at the context pause, 86 %): uncommitted on top of `818b1eeb`: the detector removed
+  (`git rm` of `bin/lib/away-stretch*.mjs`, `bin/lib/person-times*.mjs` restored from `6bee9e5b`); 1b built test
+  first in `bin/lib/return-report.mjs` (`returnStretchWarning`, `NO_STRETCH_MARKER`, `OPEN_STRETCH_MARKER`; red:
+  "does not provide an export named 'NO_STRETCH_MARKER'", green 23 of 23), wired in `bin/reply.mjs`
+  (`returnStretchOf`), its hook case in `bin/reply.test.mjs` and the budget's marker in `bin/reply-budget.test.mjs`
+  (neither run yet). Still to do: the manifest's sentence (line 63) rewritten for 1b and `rules coverage --refresh`;
+  1a in `bin/quiet.mjs` (`--wait` refuses with no open stretch, `--no-stretch <reason>`; read with `openEvent` and
+  `stretchFile` of `bin/lib/stretch.mjs`, project by `mainCheckout(run, cwd)`), tests first in `bin/quiet.test.mjs`
+  (helpers `withWorld`, `quiet(world, argv)`, home `world.home`); then the title, Specs and Tasks for L10, the
+  FAILURES control naming the return test, then 2 (`planSections` in `bin/lib/report-status.mjs`) and 3 as the next
+  task.
+
+- L13 (2026-10-31, 88 %): 1a's tests written in `bin/quiet.test.mjs` (the world seeds an open stretch at
+  `world.stretches`; three new tests: refusal exit 4 with no stretch or a closed one, `--no-stretch <reason>` waits
+  and prints "no stretch open: <reason>", an unreadable record refuses saying "stretch record ... cannot be read");
+  red: 3 of 21 fail, the 18 old ones pass.
+
+- L14 (2026-10-31): 1a built in `bin/quiet.mjs` (`--no-stretch`, exit 4, USAGE lines); `node --test
+  bin/quiet.test.mjs bin/lib/return-report.test.mjs bin/reply.test.mjs` 75 of 75. Uncommitted.
+
+- L15 (2026-10-31): the manifest's reply-hook sentence now says 1b; `rules coverage --refresh` settled one line;
+  `bin/rules-coverage.test.mjs bin/lib/manifest.test.mjs` 222 of 222. `bin/reply-budget.test.mjs` on Windows with
+  1b warning: lead p90 905 ms (905 953 803 785 762 757 752 751 796 854), work p90 775 ms, budget 2500, 4 of 4.
+
+- L16 (2026-10-31, ~14:20Z): the host compacted this session at about 12:25Z, after L15 and the Next step were
+  written; nothing of 1a or 1b was committed before it. The notice wait (`js-harness wait --notice-to 123`) was
+  stopped by the host for low memory and is not restarted. The title, the goal, the scope and specs 7 to 11 now say
+  the readers' approach, quoting the lead's message as written; the sighting of 2026-10-31 and the control of
+  `stretch-not-opened` in `docs/FAILURES.md` and row 45 name 1a and 1b. The hook writes no repo file, so 1b asks the
+  lead for the sighting rather than writing it (spec 8). `failures check` PASS (131 failures, 306 sightings),
+  `contract check` PASS, `rules check` PASS (71 rules).
+
 ## Next step
-T4: commit T1 to T3, then gentle-ai's review of the code commit, Codex and the lenses, the independent verifier, and
-`npm run check`.
+Commit T3, T6, T7 (1a, 1b, the detector removed, the docs) through the gate; then T8: `planSections` of
+`comparePlans(before plans, after plans)` on the status report's map (`bin/lib/report-status.mjs` `mapHtml`,
+`bin/report.mjs` reading `momentAt` of `bin/lib/report-git.mjs` at the ref and at `cut.head`), tests first in
+`bin/lib/report-status.test.mjs`; then T9 (proposal estimates), T10 (search for a draft plan), the reviews.

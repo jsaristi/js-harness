@@ -11,7 +11,7 @@ import { CURSOR_SCHEMA, liveCursorPath } from './lib/live-rows.mjs';
 import { RETURN_MARKER } from './lib/return-report.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { STALE_MARKER, SUMMARY_MARKER } from './lib/stale-board.mjs';
-import { BACK_MARKER } from './lib/away-stretch.mjs';
+import { OPEN_STRETCH_MARKER } from './lib/return-report.mjs';
 import { RECORD_SCHEMA as STRETCH_SCHEMA, stretchFile } from './lib/stretch.mjs';
 import { WAKE_MARKER } from './lib/stop-wake.mjs';
 import { RENDERED_SCHEMA, SHOWN_SCHEMA, SUMMARY_SUBJECT, renderedFile, shownFile } from './lib/template-record.mjs';
@@ -153,7 +153,7 @@ before(() => {
     line({ type: 'user', timestamp: publishedAt, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_page', content: `Published ${page} at ${PAGE_URL} (Version 1).` }] } }),
   ];
   // The stretch record: months of stretches opened and closed, and the one opened before he left still open, so the
-  // departure check reads the whole record and warns of his return ("ya volví").
+  // return's stretch check reads the whole record and warns.
   const stretches = [];
   for (let i = 0; i < 400; i += 1) {
     const id = new Date(now - (500 - i) * 6 * HOUR).toISOString();
@@ -213,7 +213,7 @@ test('the lead\'s stop, every check doing its whole work, stays within the budge
   assert.ok(answer.reason.includes(STALE_MARKER), 'the live-board check searched the transcript and warned');
   assert.ok(answer.reason.includes(SUMMARY_MARKER), 'the summary check read the shown record, searched the transcript and warned');
   assert.ok(answer.reason.includes(RETURN_MARKER), 'the return check read the publish of the page, searched for its link and warned');
-  assert.ok(answer.reason.includes(BACK_MARKER), 'the departure check read his words and the stretch record and warned');
+  assert.ok(answer.reason.includes(OPEN_STRETCH_MARKER), 'the return\'s stretch check read the whole stretch record and warned');
   const p90 = percentile(times, 0.9);
   t.diagnostic(`p90 ${p90.toFixed(0)} ms, budget ${BUDGET_MS} ms, runs ${times.map((ms) => ms.toFixed(0)).join(' ')}`);
   assert.ok(p90 <= BUDGET_MS, `p90 ${p90.toFixed(0)} ms over ${RUNS} runs is above the budget of ${BUDGET_MS} ms: ${times.map((ms) => ms.toFixed(0)).join(' ')}`);

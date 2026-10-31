@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { linesHolding, personMessagesIn, personTimesIn, personTimesOf } from './person-times.mjs';
+import { linesHolding, personTimesIn, personTimesOf } from './person-times.mjs';
 import { parseTranscript, personAtOf } from './sessions.mjs';
 
 // When the person wrote, read for the return check (odd/tasks/lead-duty-checks.md, spec 2). The entries have the
@@ -27,15 +27,6 @@ test('personTimesIn reads every time he wrote, oldest first, by quoteOf\'s rule,
   assert.deepEqual(personTimesIn(text), personTimesOf(parseTranscript(text).entries), 'the lines it skips hold none of his');
   assert.equal(personAtOf(parseTranscript(text).entries), at(9), 'the newest is the board\'s');
   assert.deepEqual(personTimesIn(transcript(reply('only mine', 1))), []);
-});
-
-test('personMessagesIn gives his words beside his times, a tapped answer\'s too, and the same answer for the same text', () => {
-  const text = transcript(prompt('me voy', 2), reply('working', 3), asked('toolu_q1', 4), answered('toolu_q1', 5, 'Alto'), prompt('ya volví', 6));
-  const messages = personMessagesIn(text);
-  assert.deepEqual(messages, [{ at: at(2), text: 'me voy' }, { at: at(5), text: 'Alto' }, { at: at(6), text: 'ya volví' }]);
-  assert.deepEqual(messages.map((message) => message.at), personTimesIn(text));
-  assert.equal(personMessagesIn(text), messages, 'the second check of a stop reads what the first did');
-  assert.deepEqual(personMessagesIn(transcript(prompt('otra', 1))), [{ at: at(1), text: 'otra' }], 'another text is read again');
 });
 
 test('linesHolding gives each line that holds a mark once, in file order, and never a record the host keeps of its own requests', () => {
