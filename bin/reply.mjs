@@ -32,7 +32,8 @@ const USAGE = 'Usage: js-harness reply --hook\n'
   + '  when the reply does not close with exactly one state (working, decision, question, cut, finished, in the labels\n'
   + '  the key names) and what that state needs, and, once, when a work session ends its turn holding handed work with\n'
   + '  nothing in its background to wake it, and, once, when the lead of a project with a live board ends its turn\n'
-  + '  while the board\'s rows waited longer than one check, and, once, when the lead\'s replies since the user\'s\n'
+  + '  while the board\'s rows waited longer than one check, or notices did since board/summary was last written with\n'
+  + '  now or status, and, once, when the lead\'s replies since the user\'s\n'
   + '  message after a long absence link no status page of report --html, and when a fenced block hands the user a\n'
   + '  shell command\n'
   + '  not tagged for his shell, not run by the session with success first, or rejected by his shell\'s parser;\n'
@@ -75,7 +76,8 @@ function once(fn, keyOf) {
   };
 }
 
-/** The `io` the checks of one stop share, over the host's `readFile`, `readdir`, `run`, `env`, `homedir` and `now`.
+/** The `io` the checks of one stop share, over the host's `readFile`, `readdir`, `run`, `env`, `homedir` and `now`, and
+ * `templates`, whether the project's harness.json turns the template gate on (the stale-board check reads its record).
  * What the checks share is read once a stop, whichever check asks first: a file (the transcript above all), where the
  * project is (`mainCheckout`), and the record of notices, parsed (each was read or asked up to three times a lead's
  * stop, odd/tasks/reply-hook-latency.md). A read that throws is tried again by the next check, which then says so
@@ -83,7 +85,7 @@ function once(fn, keyOf) {
  * seconds. The modules these need are loaded here, only where the reply check is on; when one cannot be loaded it is
  * said on standard error and each check reads the record and asks git itself, so the reply check still answers.
  * scripts/reply-hook-time.mjs builds its profile on it, so what it times is what the hook does. */
-export async function stopIo({ readFile, readdir, run, env, homedir, now }, stderr) {
+export async function stopIo({ readFile, readdir, run, env, homedir, now, templates = false }, stderr) {
   const readOnce = once(readFile, (file) => file);
   const runOnce = once(run, (command, args, options) => JSON.stringify([command, args, options?.cwd ?? null]));
   let readNotices;
@@ -98,7 +100,7 @@ export async function stopIo({ readFile, readdir, run, env, homedir, now }, stde
   } catch (err) {
     stderr(`js-harness reply: ${err?.message ?? err}; each check reads the record and finds the project by itself\n`);
   }
-  return { readFile: readOnce, readdir, run: runOnce, env, homedir, now, readNotices, mainCheckout };
+  return { readFile: readOnce, readdir, run: runOnce, env, homedir, now, templates, readNotices, mainCheckout };
 }
 
 /** The wake check's warning (bin/lib/stop-wake.mjs), or `null`; a record it cannot read is said on standard error
@@ -114,12 +116,17 @@ async function wakeOf(payload, state, io, stderr) {
   }
 }
 
-/** The stale-board check's warning (bin/lib/stale-board.mjs), or `null`, read as the wake check is. */
+/** The stale-board check's warning (bin/lib/stale-board.mjs), or `null`, read as the wake check is; a failure of the
+ * summary's part carries the rows' warning (`warning`), which is given. */
 async function staleOf(payload, state, io, stderr) {
   try {
     const { staleBoardWarning } = await import('./lib/stale-board.mjs');
     return staleBoardWarning(payload, state, io, io.now());
   } catch (err) {
+    if (err?.warning !== undefined) {
+      stderr(`js-harness reply: ${err.message}\n`);
+      return err.warning;
+    }
     stderr(`js-harness reply: ${err?.message ?? err}; the stale-board check did not run\n`);
     return null;
   }
@@ -197,12 +204,13 @@ export async function replyMain(argv, {
   if (payload?.stop_hook_active !== true && typeof message === 'string') {
     try {
       const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
-      const config = replyConfig(nearestHarness(cwd, readFile));
+      const harness = nearestHarness(cwd, readFile);
+      const config = replyConfig(harness);
       if (config?.error) stderr(`js-harness reply: ${config.error}; the reply check did not run\n`);
       else if (config !== null) {
         reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks) });
         const state = closingState(message, config);
-        const io = await stopIo({ readFile, readdir, run, env, homedir, now }, stderr);
+        const io = await stopIo({ readFile, readdir, run, env, homedir, now, templates: harness?.templates === true }, stderr);
         const wake = await wakeOf(payload, state, io, stderr);
         const stale = await staleOf(payload, state, io, stderr);
         const back = await returnOf(payload, state, io, stderr);

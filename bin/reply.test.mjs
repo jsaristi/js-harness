@@ -7,6 +7,8 @@ import { replyMain } from './reply.mjs';
 import { openingsDir, recordPath } from './lib/channel.mjs';
 import { CURSOR_SCHEMA, liveCursorPath } from './lib/live-rows.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
+import { SUMMARY_MARKER } from './lib/stale-board.mjs';
+import { SHOWN_SCHEMA, SUMMARY_SUBJECT, shownFile } from './lib/template-record.mjs';
 
 // `js-harness reply --hook`, the Stop hook of C1 (odd/tasks/rule-hierarchy.md, T2). The files it reads are
 // handed in, so no test touches a real project: `files` maps a path to its text, and a path it does not hold
@@ -296,6 +298,24 @@ test('the lead ending its turn while the live board\'s rows wait is turned back 
   assert.equal(lead.err, '');
   const noBoard = await wakeHook({ payload: { session_id: 'lead' }, record: [handed('2026-10-17T01:30:00.000Z')], transcript: [started] });
   assert.deepEqual(noBoard.answer, {}, 'a project with no board is never told');
+});
+
+// The summary's warning (odd/tasks/board-summary-stale.md): told only where harness.json turns the template gate on.
+test('the lead whose board/summary content is older than the waiting notices is told so only where templates are on', async () => {
+  const shown = { [shownFile(HOME, SLUG)]: `${JSON.stringify({ schema: SHOWN_SCHEMA, at: '2026-10-17T01:00:00.000Z', session: 'lead', tool: 'ArtifactData', call: 'c1', template: null, subject: SUMMARY_SUBJECT, decision: 'shown', sha256: null, reason: 'fields: ["now","status"]' })}\n` };
+  const stop = (harness) => wakeHook({ payload: { session_id: 'lead' }, record: [handed('2026-10-17T01:30:00.000Z')], files: { ...BOARD_CURSOR, ...shown, [path.join(PROJECT, 'harness.json')]: JSON.stringify(harness) }, transcript: [started] });
+  const harness = JSON.parse(ON[path.join(PROJECT, 'harness.json')]);
+  const on = await stop({ ...harness, templates: true });
+  assert.ok(on.answer.reason.includes(SUMMARY_MARKER), on.answer.reason);
+  assert.equal(on.err, '');
+  const off = await stop(harness);
+  assert.match(off.answer.reason, STALE);
+  assert.equal(off.answer.reason.includes(SUMMARY_MARKER), false, 'templates off: the record no write refreshes is not read');
+  // A shown record that is there and cannot be read: the rows' warning still reaches the lead, the failure stderr.
+  const harnessOn = JSON.stringify({ ...harness, templates: true });
+  const locked = await wakeHook({ payload: { session_id: 'lead' }, record: [handed('2026-10-17T01:30:00.000Z')], files: { ...BOARD_CURSOR, [shownFile(HOME, SLUG)]: undefined, [path.join(PROJECT, 'harness.json')]: harnessOn }, transcript: [started] });
+  assert.match(locked.answer.reason, STALE);
+  assert.match(locked.err, /the template gate's shown record .*EACCES.*the summary check did not run/);
 });
 
 // The return check (odd/tasks/lead-duty-checks.md, spec 2): the lead's reply to his message after a long absence links

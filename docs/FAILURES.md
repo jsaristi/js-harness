@@ -136,6 +136,8 @@ the `checked` stamp `sessions live` prints, which refreshes the page's freshness
   of the 133 recorded was closed; found when he asked whether they were open. The page's freshness reads the newest
   row and the stamp alone (`docs/live-board.html:512-518`, `bin/sessions-live.mjs:218-220`)
   (odd/tasks/lead-duty-checks.md, row 1 of the list)
+- Control: check — bin/lib/stale-board.test.mjs — "the lead whose summary was last written with now or status
+  before notices that waited longer than one check is told so" — since 2026-10-31
 
 ### brief-waived-review-lines
 A lead's brief for code work waived the feature document, whose gentle-ai lines the merge door asks

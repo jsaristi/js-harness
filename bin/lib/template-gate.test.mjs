@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { GATE_MESSAGES, GATE_SAYS, RENDERED_FRESH_HOURS, askTarget, decideAsk, decidePage, freeReason, pageTarget, shownReport } from './template-gate.mjs';
+import { GATE_MESSAGES, GATE_SAYS, RENDERED_FRESH_HOURS, askTarget, decideAsk, decidePage, freeReason, pageTarget, shownReport, summaryWrites } from './template-gate.mjs';
 import { cutSpans } from './rules-coverage.mjs';
 import { RENDERED_SCHEMA, normalText, sha256 } from './template-record.mjs';
 
@@ -39,6 +39,32 @@ test('an Artifact call that shows no page is not the gate\'s', () => {
   ]) assert.equal(pageTarget('Artifact', input), null, JSON.stringify(input));
   assert.equal(pageTarget('ArtifactData', { action: 'set' }), null);
   assert.equal(pageTarget('mcp__visualize__show_widget', {}), null);
+});
+
+// The board summary's writes (odd/tasks/board-summary-stale.md, S2): what an ArtifactData call writes to board/summary.
+test('summaryWrites reads each set, update, str_replace or batch entry of board/summary, and its source', () => {
+  const base = { url: 'u', collection: 'board', doc_id: 'summary' };
+  assert.deepEqual(summaryWrites('ArtifactData', { ...base, action: 'update', data: { now: 'x' } }), [{ data: { now: 'x' } }]);
+  assert.deepEqual(summaryWrites('ArtifactData', { ...base, action: 'set', file_path: 'b.json' }), [{ file: 'b.json' }]);
+  assert.deepEqual(summaryWrites('ArtifactData', { ...base, action: 'str_replace', field: 'status', old_str: 'a', new_str: 'b' }), [{ field: 'status' }]);
+  assert.deepEqual(summaryWrites('ArtifactData', { ...base, action: 'delete' }), [{}]);
+  const batch = { url: 'u', action: 'batch', writes: [
+    { op: 'set', collection: 'events', doc_id: 'e1', data: { rows: [] } },
+    { op: 'update', collection: 'board', doc_id: 'summary', file_path: 'c.json' },
+  ] };
+  assert.deepEqual(summaryWrites('ArtifactData', batch), [{ file: 'c.json' }]);
+});
+
+test('a call that writes no board/summary is not a summary write', () => {
+  const base = { url: 'u', collection: 'board', doc_id: 'summary' };
+  for (const [tool, input] of [
+    ['ArtifactData', { ...base, action: 'get' }], ['ArtifactData', { ...base, action: 'list' }],
+    ['ArtifactData', { ...base, action: 'update', doc_id: 'other', data: { now: 'x' } }],
+    ['ArtifactData', { ...base, action: 'update', collection: 'events', data: { now: 'x' } }],
+    ['ArtifactData', { url: 'u', action: 'batch', writes: [{ op: 'set', collection: 'events', doc_id: 'e1', data: {} }] }],
+    ['ArtifactData', { url: 'u', action: 'batch', writes: 'no list' }], ['ArtifactData', null],
+    ['Artifact', { ...base, action: 'update', data: { now: 'x' } }],
+  ]) assert.equal(summaryWrites(tool, input), null, JSON.stringify([tool, input]));
 });
 
 test('a page whose bytes a template command recorded within the hours is admitted as that template', () => {
