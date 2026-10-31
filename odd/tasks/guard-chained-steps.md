@@ -121,3 +121,7 @@ changes no rule of his; the rule is the project's. Spend: one gate, one Codex re
   the move correct (0.98); one P2, `time (git push)` and `time ! git push` passed after a `;`, since `time` had been
   handed to the step's reader. Fixed: `chainedStep` looks through `time` and its options (`-p`, `-f <format>`), so a
   group or a negation after it is read as before. RED: 1 (`npm test; time (git push)`); GREEN: 82/82.
+- L9 (2026-10-31, reviews of 06869de9..a1802693): Codex, "the patch is correct" (0.97), its finding fixed; the risk
+  lens, 0; the reliability lens, one WARNING: after a wrapper (`env time -p git push`, `nice time git push`) `time` is
+  the program `/usr/bin/time` and was no longer read through. Fixed: `guardedStep` takes `time` and its options as a
+  wrapper again, beside the keyword's reading in `chainedStep`. RED: 1; GREEN: 82/82.

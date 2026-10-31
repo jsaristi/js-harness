@@ -59,7 +59,8 @@ function guardedStep(words) {
   while (at < segment.length) {
     const program = name(segment[at]);
     if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[at])) at += 1;
-    else if (WRAPPERS.has(segment[at]) || program === 'nice') at = pastOptions(segment, at + 1, program);
+    // After a wrapper, time is the program /usr/bin/time, with options (the reliability lens, on a1802693).
+    else if (WRAPPERS.has(segment[at]) || program === 'nice' || program === 'time') at = pastOptions(segment, at + 1, program);
     // timeout runs the command after its options and its duration.
     else if (program === 'timeout') at = pastOptions(segment, at + 1, program) + 1;
     else if (program === 'npx') at = pastOptions(segment, at + 1, program);

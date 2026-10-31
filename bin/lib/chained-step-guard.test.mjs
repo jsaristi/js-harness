@@ -59,6 +59,9 @@ test('a push, a commit, a pull request, a land or a notice after a ;, a line bre
     ['npm test; time ! git push', 'git push', ';'],
     ['npm test; time -p { git push; }', 'git push', ';'],
     ['npm test; time -f %e git push', 'git push', ';'],
+    // The reliability lens on a1802693: after a wrapper, time is a program with options.
+    ['npm test; env time -p git push', 'git push', ';'],
+    ['npm test; nice time git push', 'git push', ';'],
     ['npm test; npx --yes js-harness notify --kind ready x', 'js-harness notify', ';'],
     ['npm test; npx js-harness@latest notify --kind ready x', 'js-harness notify', ';'],
     ['npm test; pnpm exec js-harness notify --kind ready x', 'js-harness notify', ';'],
