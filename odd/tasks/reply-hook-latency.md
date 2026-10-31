@@ -202,10 +202,7 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   budget holds the hook's own work, the load at a stop is the rest.
 - L5 (2026-10-31): bad news, measured: hooks lighter than the reply hook time out as often in situ (`## Measure`, T5).
   The cuts do not alone remove the in-situ timeouts; the hook's timeout, his value, does.
+- L6 (2026-10-31, T5): the question, recorded here before it is asked: raise the reply hook's timeout from 5 to 15 s in his settings and in `replyHookEntry` (text and options in Spanish; question 138 of the record, sent with `js-harness notify --to orchestrator --kind question`). 15 s: half of it is gentle-ai's median stop hook, so the stop seldom waits longer.
 
 ## Next step
-Run `npm run check` and commit T2–T4 (code, tests, script, this document). Record the question of T5 in this
-document, then `js-harness notify --to orchestrator --kind question` with its JSON (Spanish): raise the reply hook's
-timeout from 5 to 15 s in his settings and in `replyHookEntry`. Then `codex-review` and `lens-review` from `d98897c5`,
-an independent verifier, push, PR, `notify --kind ready --pr <n>`, the summary under `docs/sessions/`, `notify --kind
-closed`.
+Code committed: `b42532d7` (gate green). Question 138 (T5) is recorded and sent; on a yes, change `replyHookEntry`'s timeout to 15 with its test. Next: `js-harness codex-review --base 7aac3e43` and `js-harness lens-review --base 7aac3e43`, an independent verifier, push, PR, `notify --kind ready --pr <n>`, the summary under `docs/sessions/`, `notify --kind closed`.
