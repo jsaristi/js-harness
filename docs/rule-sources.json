@@ -167,6 +167,10 @@
       "by": "command"
     }
   },
+  "chained-steps": {
+    "kind": "design",
+    "path": "odd/tasks/guard-chained-steps.md"
+  },
   "ci-gate-bound": {
     "kind": "design",
     "path": "odd/tasks/commit-gates-first.md"

@@ -152,7 +152,7 @@ after the reply is shown (`bin/reply.mjs:3-5`); none refuses before. Checked by 
 | 64 | Text he copies: one block under the three labels | protocols:49 | Check: `bin/lib/reply.mjs:186-197`; `bin/lib/reply-commands.mjs:273` | `two-blocks-out-of-order` (1); `command-handed-untested` (2) |
 | 65 | Before a decision or a cut: done, next, why, which session; then the map | protocols:50-51 | Nothing | none recorded |
 | 66 | Say how many runs and what each costs; one try, no loop | protocols:58-59 | Nothing | none recorded |
-| 67 | Read the proof before the command; `&&`, never `;` | protocols:60 | Nothing (`bin/lib/guard.mjs:358` splits, for the review base only) | `chained-step-not-conditional` (10) |
+| 67 | Read the proof before the command; `&&`, never `;` | protocols:60 | Check: the guard refuses a push, commit, `gh pr`, `merge-queue` or `notify` after `;`, a line break, `\|\|` or `&` (`chainedStepRefusal`, `bin/lib/chained-step-guard.mjs`; rule `chained-steps`; `odd/tasks/guard-chained-steps.md`) | `chained-step-not-conditional` (10) |
 | 68 | Change a rule only with `rules change` on a `rule/` branch | protocols:74 | Check: `bin/check.mjs:1756`; `rules check` | `old-rule-beside-new` (2) |
 | 69 | Pages come from commands; a template request becomes `template new` | protocols:72, :103 | Partly: hand-made pages refused (`bin/lib/template-gate.mjs:109-127`) | `hand-made-output` (2) |
 | 70 | A mistake in five parts with a `- Seen:` line | protocols:84-91 | Partly: `failures check` holds the form | none recorded |
@@ -172,7 +172,8 @@ The unchecked duties, most failed first, each with the check proposed (spec 4's 
    2026-10-15. Proposed: the reply hook turns back a lead reply that calls a pull request merged or a session closed
    when no notice or `origin/main` commit holds it.
 2. Row 67: `&&`, never `;`, 10 sightings, its control a protocol line. Proposed: the guard refuses a `;` or a newline
-   before `git push`, `git commit`, `gh pr`, `merge-queue` or `notify`.
+   before `git push`, `git commit`, `gh pr`, `merge-queue` or `notify`. Built by JH 118 (`odd/tasks/guard-chained-steps.md`,
+   2026-10-31), with `||` and `&` refused too; row 67 names it.
 3. Row 72: an estimate stated as a fact, 6 sightings. Proposed: `guard --stop` reads stated durations and forecasts
    as it reads the context share.
 4. Row 1: `board/summary` stale, 1 sighting (this one, two days). Proposed: the stale-board hook warns once when the

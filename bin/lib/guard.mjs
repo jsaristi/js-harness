@@ -272,7 +272,9 @@ export function terminalNoteRefusal(command, projectData) {
 
 /** The words of the shell command `command`, its quotes taken off, with `;`, `&&`, `||` and `|` as words of their
  * own, and an unquoted newline as a `;`. A heredoc's body is left out: it is text, not commands. A backslash is kept
- * as it is: a Windows path is written with them. `words.operators` holds the indexes of the words that are operators,
+ * as it is, since a Windows path is written with them, except before `;`, `&`, `|`, a quote or a backslash, which it
+ * makes a character, as it does before a double quote or a backslash inside double quotes; the `&` of an unquoted
+ * `2>&1` stays in its word where `redirections` is off. `words.operators` holds the indexes of the words that are operators,
  * so a quoted `"&&"` is told from one. With `groups`, an unquoted `(` or `)` of a subshell is an operator too; one of
  * a `$(...)` stays in its word. With `redirections`, an unquoted `>`, `>>` or `>|` is a word of its own wherever it
  * stands, a descriptor before it (`2>`) taken in, and `words.redirections` holds their indexes. */
@@ -283,14 +285,19 @@ export function shellWords(command, { groups = false, redirections = false } = {
   const operator = (text) => { operators.add(words.length); words.push(text); };
   let word = null;
   let quote = null;
+  // Whether the word's last character was quoted or escaped, so that a quoted `>` takes no `&`.
+  let quoted = false;
   let substitutions = 0;
   const pending = [];
   const text = String(command ?? '');
   for (let i = 0; i < text.length; i += 1) {
     const c = text[i];
     if (quote !== null) {
-      if (c === quote) quote = null;
+      // Inside double quotes a backslash escapes a quote or a backslash; inside single quotes nothing is escaped.
+      if (quote === '"' && c === '\\' && (text[i + 1] === '"' || text[i + 1] === '\\')) word += text[(i += 1)];
+      else if (c === quote) quote = null;
       else word += c;
+      quoted = true;
     } else if (groups && c === '$' && text[i + 1] === '(') {
       word = `${word ?? ''}$(`;
       substitutions += 1;
@@ -306,6 +313,12 @@ export function shellWords(command, { groups = false, redirections = false } = {
       quote = c;
       word ??= '';
     } else if (c === '\\' && text[i + 1] === '\n') {
+      i += 1;
+    } else if (c === '\\' && /[;&|'"\\]/.test(text[i + 1] ?? '')) {
+      // An escaped operator, quote or backslash is a character of its word, as `find`'s `\;` (Codex, on efbbb26); so
+      // `\\;` is a backslash and an operator (the risk lens, on 4a3bc314).
+      word = (word ?? '') + text[i + 1];
+      quoted = true;
       i += 1;
     } else if (c === '#' && word === null) {
       while (i + 1 < text.length && text[i + 1] !== '\n') i += 1;
@@ -331,6 +344,9 @@ export function shellWords(command, { groups = false, redirections = false } = {
     } else if (/\s/.test(c)) {
       if (word !== null) words.push(word);
       word = null;
+    } else if (c === '&' && word !== null && !quoted && /[<>]$/.test(word)) {
+      // The `&` of `2>&1` or `>&2` belongs to its redirection.
+      word += c;
     } else if (c === ';' || c === '|' || c === '&') {
       if (word !== null) words.push(word);
       word = null;
@@ -347,6 +363,7 @@ export function shellWords(command, { groups = false, redirections = false } = {
       if (text[i + 1] === '|') i += 1;
     } else {
       word = (word ?? '') + c;
+      quoted = false;
     }
   }
   if (word !== null) words.push(word);
@@ -465,8 +482,7 @@ export function driveRootRemovalRefusal(command) {
 }
 
 // The words after which a command starts, as after an operator: a group's `{` and the bodies of if, for and while.
-const COMMAND_KEYWORDS = new Set(['{', 'then', 'else', 'do', '!', 'time']);
-
+export const COMMAND_KEYWORDS = new Set(['{', 'then', 'else', 'do', '!', 'time']);
 // The records of both reviews, each in `<git common dir>/js-harness/` (./codex-reviews.mjs, ./codex-review-runs.mjs,
 // ./lens-reviews.mjs; a test holds this list to their names). Only the commands that make a review write them: a
 // line a session writes there by hand reads as a review nobody made (docs/proposals/gentle-ai-reverse-engineering.md,
@@ -569,7 +585,7 @@ const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash']);
 const INTERPRETERS = new Set(['node', 'python', 'python3', 'py', 'perl', 'ruby', 'deno', 'bun', 'pwsh', 'powershell']);
 const POWERSHELLS = new Set(['pwsh', 'powershell']);
 // The words before a command that leave it the command: an assignment, and a few wrappers.
-const WRAPPERS = new Set(['env', 'command', 'exec', 'sudo', 'nohup']);
+export const WRAPPERS = new Set(['env', 'command', 'exec', 'sudo', 'nohup']);
 // The calls of a script that write a file they are given, and the cmdlets that do in PowerShell.
 const WRITE_CALL = /\b(appendFile|writeFile|createWriteStream|truncate|rename|copyFile|unlink|rm|open|appendJsonLine)(?:Sync)?\s*\(/gi;
 const CMDLET_WRITE = /\b(?:Add-Content|Set-Content|Out-File)\b/i;
