@@ -135,3 +135,10 @@ lead's land. Left: L9's verified "No".
   change beyond spec 1's "open question". Minor ones taken: gh runs with a 30 s limit, and `refreshNow` turns a throw of
   the early look into the exit-77 refusal (both tests red then green). Not taken: a `waiting` of a session that never
   closed stays listed whatever its age, as the board keeps it.
+- L10 (2026-10-31, T5, the land): merge-queue left PR 736 out of a land at 08:48Z, red in WSL on the two time-budget
+  tests of `bin/reply-budget.test.mjs`, after PR 735 (JH 120: `bin/reply.mjs`, the same test) had merged. The gate log
+  (`gate-log/failed.jsonl`, id 280e0908) names the tests, not the assertion; its load log names Windows Defender
+  (`MsMpEng`, 142 CPU s) as the busiest process of that run, and the land before it at 08:35Z was not. On a trial
+  merge of origin/main into this branch, `node --test bin/reply-budget.test.mjs` on Windows passed: p90 873 ms (the
+  lead's stop) and 1037 ms (a work session's), budget 2500. Not measured: the same in WSL (the worktree guard refuses
+  `wsl`), and main alone against this branch. The trial merge was aborted; the branch is as reviewed.
