@@ -203,6 +203,9 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
 - L5 (2026-10-31): bad news, measured: hooks lighter than the reply hook time out as often in situ (`## Measure`, T5).
   The cuts do not alone remove the in-situ timeouts; the hook's timeout, his value, does.
 - L6 (2026-10-31, T5): the question, recorded here before it is asked: raise the reply hook's timeout from 5 to 15 s in his settings and in `replyHookEntry` (text and options in Spanish; question 138 of the record, sent with `js-harness notify --to orchestrator --kind question`). 15 s: half of it is gentle-ai's median stop hook, so the stop seldom waits longer.
+- L7 (2026-10-31, T6): the Claude lenses (risk, resilience, reliability, readability) over `7aac3e4..8dd55c8`: 0
+  findings each, recorded by `js-harness lens-review`. The host compacted this session at 22:58 local; it resumed from
+  this document.
 
 ## Next step
 Code committed: `b42532d7` (gate green). Question 138 (T5) is recorded and sent; on a yes, change `replyHookEntry`'s timeout to 15 with its test. Next: `js-harness codex-review --base 7aac3e43` and `js-harness lens-review --base 7aac3e43`, an independent verifier, push, PR, `notify --kind ready --pr <n>`, the summary under `docs/sessions/`, `notify --kind closed`.
