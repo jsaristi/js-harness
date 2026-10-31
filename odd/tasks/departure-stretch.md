@@ -33,7 +33,7 @@ already takes; the return is the one moment every absence ends with.
 ## In scope / Out of scope
 - In: `bin/quiet.mjs` and its test (1a), `bin/lib/return-report.mjs` and its test (1b), `bin/lib/stretch.mjs` and
   `bin/stretch.mjs` (the record's reader moves to the light module), `bin/reply.mjs` and its tests (the wiring),
-  `bin/lib/report-status.mjs`, `bin/report.mjs` and their tests (spec 8's map), `bin/lib/manifest.mjs` (the hook's
+  `bin/lib/report-status.mjs`, `bin/report.mjs` and their tests (spec 9's map), `bin/lib/manifest.mjs` (the hook's
   line), `bin/lib/rules-coverage-data.mjs` (its refresh), `docs/FAILURES.md`, `odd/tasks/lead-duty-checks.md` (row 45),
   `docs/sessions/`; the removal of `818b1eeb`'s detector (`bin/lib/away-stretch.mjs`, `bin/lib/person-times.mjs`).
 - Out: `~/.claude`, `~/.codex`, credentials, gentle-ai config; the stretch's own pages and measures; spec 10's draft
@@ -109,8 +109,8 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
 - [x] T3 (kind: docs) spec 5, 8: the `- Seen:` lines, the control and row 45 of the duties, for 1a and 1b — commits: `4d5e7605`
 - [x] T6 (kind: build) spec 7: `quiet --wait` refuses with no stretch open, tests first — commits: `4d5e7605`
 - [x] T7 (kind: build) spec 8: the return's stretch warning, tests first, budget measured — commits: `4d5e7605`
-- [ ] T8 (kind: build) spec 9: the step chain on the status report's map, tests first — commits: pending
-- [ ] T9 (kind: build) spec 9: each proposal's estimate, compared by the next report — commits: pending
+- [x] T8 (kind: build) spec 9: the step chain on the status report's map, tests first — commits: `8be755d2`, `a4ecfc3c`
+- [x] T9 (kind: build) spec 9: each proposal's estimate, compared by the next report — commits: `8be755d2`
 - [x] T10 (kind: docs) spec 10: the search for a draft plan; not built, written as the next task (L18) — commits: this document's
 - [ ] T4 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice — PR pending
 - [ ] T5 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice — pending
@@ -288,7 +288,42 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
   back above `returnReportWarning`; with it, the code's "spec 1b" and "1a" now say specs 8 and 7.
   `bin/lib/return-report.test.mjs bin/quiet.test.mjs bin/reply.test.mjs` 75 of 75.
 
+- L21 (2026-10-31, T4): the lens fix committed as `23c028a5` (gate PASS; "every one of 4 code commits since
+  origin/main has a Claude lens record"); Codex over `a4ecfc3..23c028a`, correct (0.99); the readability lens over
+  it, 0 findings. gentle-ai over `13ce66dd..23c028a5` (tree `a60f80d4`): its `granted` run created lineage
+  `review-aa2aa61811a5ac2d`, state reviewing, four lenses to collect. The first four reviewers, on the agent types
+  `review-*`, returned no result: those definitions carry `tools: []` (`~/.claude/agents/review-risk.md:5`), so they
+  could not read their context file, and a 120 KB context each pasted into the prompt would fill this session. The
+  one retry runs them as general-purpose readers on opus (the guard refused sonnet: `subagent-reader-model` gives
+  opus), each reading its context file and writing its result JSON to the job's scratch. The independent verifier
+  runs beside them over `6bee9e5b..HEAD`.
+
+- L22 (2026-10-31, T4): gentle-ai's risk reader, no finding (`result-risk.json`, 22 paths). Outside its lens it
+  noted that `bin/lib/merge-queue-waits.mjs` re-runs a `quiet --wait` after a refresh; read: it only sends the
+  session a note to run the wait again (`reArmNote`, line 163), so with no stretch open the wait refuses with its
+  message naming `--no-stretch <reason>`, the behavior spec 7 asks for. Not a defect.
+
+- L23 (2026-10-31, T4): gentle-ai's other readers, all captured ("admission_decision": "completed" each).
+  Reliability and resilience, independently, one CRITICAL each, the same: "on a default branch with no roadmap ...
+  `report --mark --html` prints 'not recorded: a section could not be read' and records nothing" (`bin/report.mjs`,
+  the steps read by `momentAt` where `readMap` calls the roadmap absent, no error). Accepted: no steps are read with
+  no roadmap or one the map could not read; red first (the no-roadmap test with `--mark --html`, actual 1, expected
+  0), green `bin/report.test.mjs bin/lib/report-status.test.mjs` 31 of 31. Readability: two WARNINGs (Tasks T8 and
+  T9 left open; `quiet`'s help and refusal saying "he" where its text says "you", and `--no-stretch` missing from the
+  usage line) and two SUGGESTIONs (scope's "spec 8's map" for spec 9; a second import from `./lib/return-report.mjs`
+  in `bin/reply-budget.test.mjs`): all fixed, `bin/quiet.test.mjs` 21 of 21. Resilience's SUGGESTION, an unreadable
+  cut moment drawing every step "sin medir" with no reason, not taken: the map's own note says why its before is
+  missing, in the same section. The correction plan: 60 lines. The independent verifier over `6bee9e5b..23c028a5`:
+  "fails, on one defect", the same no-roadmap exit, and "Your uncommitted working-tree edits fix it, and I checked
+  that fix by running it"; its four test commands 21, 54, 113 and 64 passing; not checked by it: the budget test,
+  the gates, Codex, a second system.
+
+- L24 (2026-10-31): the correction's first gate failed on one test, read: `bin/lib/gentle-ai-absence.test.mjs:140`,
+  "bin/report.test.mjs breaks the convention and is not on the legacy list", the new test's comment naming the
+  review tool; reworded to name its readers; the test 3 of 3. Every other test passed (GitHub run 41213207364).
+
 ## Next step
-Commit the lens fix through the gate, review it (Codex, the readability lens); then the reviews of `6bee9e5b..HEAD` (gentle-ai's contract run, then
+Commit the correction; gentle-ai's status for its validation; Codex and the lenses over the correction; push, PR (`gentle-ai review capture-result --input <file>` with the collect arguments of
+`ga3-status2.json`), then status until it closes; the verifier's verdict; then the reviews of `6bee9e5b..HEAD` (gentle-ai's contract run, then
 `js-harness codex-review --base 6bee9e5b` and `js-harness lens-review --base 6bee9e5b`, then the verifier), push, PR,
 the ready notice and the lead told; the summary under `docs/sessions/`.

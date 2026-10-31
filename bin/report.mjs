@@ -180,8 +180,9 @@ export async function reportMain(argv, options = {}) {
   // A stretch record that cannot be read, or one its measure reads, is a section that could not be read: --mark then
   // records nothing.
   // The plan step by step is the page's alone ("el mapa de donde vamos", odd/tasks/departure-stretch.md, spec 9): it
-  // reads every task document the steps name, at the cut and now. Steps it could not read are a section unread.
-  const steps = parsed.html === undefined ? undefined : named.error ? { unavailable: named.error } : stepsOf(run, cwd, ref, cut.head);
+  // reads every task document the steps name, at the cut and now. Steps it could not read are a section unread; with
+  // no roadmap, or one the map already could not read, there are no steps to read, and the map says why.
+  const steps = parsed.html === undefined || map.absent || map.error !== undefined ? undefined : stepsOf(run, cwd, ref, cut.head);
   const failed = [landed, map, sessions, questions].some((section) => section.error !== undefined) || stretch?.unavailable !== undefined || Object.keys(stretch?.unread ?? {}).length > 0 || steps?.unavailable !== undefined;
   if (parsed.html !== undefined) {
     // A section that could not be read is said on the page as it is in the lines above.

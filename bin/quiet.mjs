@@ -23,7 +23,7 @@ const DEFAULT_EVERY_SECONDS = 60;
 
 export const USAGE = [
   'Usage: js-harness quiet [--json] [--self <session id>] [--home <path>]',
-  `       js-harness quiet --wait [--settle <minutes>] [--for <minutes>] [--every <seconds>] [--json] [--self <session id>] [--home <path>]`,
+  `       js-harness quiet --wait [--settle <minutes>] [--for <minutes>] [--every <seconds>] [--no-stretch <reason>] [--json] [--self <session id>] [--home <path>]`,
   '',
   'One look at the machine: quiet (exit 0), busy (exit 1) or unknown (exit 3, a source could not be read and nothing',
   'was seen to run), with what runs, what needs you and what could not be read. Work is a session claude agents',
@@ -36,8 +36,8 @@ export const USAGE = [
   `--settle minutes (${DEFAULT_SETTLE_MINUTES}; 0 ends at the first quiet look), saying what it saw and what needs you; a busy`,
   `or unknown look starts the count again. After --for minutes (${DEFAULT_FOR_MINUTES}) with no settle it exits 1 with the`,
   'last look. Run it as a background task, and stop it with TaskStop when it is no longer needed. Exit 2: a usage error.',
-  'The wait runs while he is away, so with no stretch open (js-harness stretch status exits 1) it refuses, exit 4,',
-  'unless --no-stretch <reason> says why none is needed.',
+  'The wait runs while the user is away, so with no stretch open (js-harness stretch status exits 1) it refuses,',
+  'exit 4, unless --no-stretch <reason> says why none is needed.',
 ].join('\n');
 
 class QuietArgError extends Error {}
@@ -148,7 +148,7 @@ export async function quietMain(
       }
     }
     if (open === null) {
-      stderr('js-harness quiet --wait: no stretch is open, and the wait runs while he is away (rule:away-autonomy): open one with `js-harness stretch open --plan <file> --html <file>` and show its departure, or pass --no-stretch <reason> to wait without one');
+      stderr('js-harness quiet --wait: no stretch is open, and the wait runs while the user is away (rule:away-autonomy): open one with `js-harness stretch open --plan <file> --html <file>` and show its departure, or pass --no-stretch <reason> to wait without one');
       return 4;
     }
   } else (parsed.json ? stderr : stdout)(`js-harness quiet --wait: no stretch open: ${parsed.noStretch}`);

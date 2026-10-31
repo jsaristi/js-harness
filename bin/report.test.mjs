@@ -143,6 +143,15 @@ test('a default branch with no roadmap says so, and that is no error', withProje
   const { code, out } = await report([], project);
   assert.equal(code, 0);
   assert.match(out, /^Map: no docs\/ROADMAP.md on main$/m);
+  // The reliability and resilience readers of 23c028a5 (CRITICAL): the page's plan steps read no roadmap that is not
+  // there, so --mark --html records the report, as --mark alone does.
+  const html = path.join(project.home, 'status.html');
+  const recordLoad = async () => ({ renderedFile: () => path.join(project.home, 'rendered.jsonl'), recordRendered: () => ({ sha256: 'e'.repeat(64), bytes: 1 }) });
+  const err = [];
+  const marked = await reportMain(['--mark', '--html', html, '--cwd', project.repo, '--home', project.home], { stdout: () => {}, stderr: (line) => err.push(line), now: () => NOW, env: {}, recordLoad });
+  assert.equal(marked, 0, err.join('\n'));
+  assert.equal(readNotices(project.home, project.slug).reports.length, 1);
+  assert.match(fs.readFileSync(html, 'utf8'), /La rama main no tiene docs\/ROADMAP\.md/);
 }));
 
 // Review findings R3-mark-after-failed-section and R3-untested-mark-failure.
