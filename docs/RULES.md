@@ -235,7 +235,7 @@ The most estimated tokens AGENTS.md may hold, since every session pays it on eve
 ### chained-steps
 The one way two steps share a command: the second runs only on the first's success, so the guard refuses a push, a commit, a pull request command, a land or a notice that follows the step before it by a semicolon, a line break, a double bar or an ampersand: &&.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: `bin/lib/guard.mjs`.
+- Read by: `bin/lib/chained-step-guard.mjs`.
 - Since 2026-10-31. Row: reports, against the failure `chained-step-not-conditional`. Source: design, `odd/tasks/guard-chained-steps.md`.
 
 ### ci-gate-bound

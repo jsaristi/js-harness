@@ -141,7 +141,7 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     }
     return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now(), readIndex);
   }
-  const { OPENING_TOOLS, SESSION_TOOL, TERMINAL_TOOL, allowedModels, backtickRefusal, chainedStep, chainedStepRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal, reviewRecordWriteRefusal, sessionEffortRefusal, terminalNoteRefusal } = await import('./lib/guard.mjs');
+  const { OPENING_TOOLS, SESSION_TOOL, TERMINAL_TOOL, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal, reviewRecordWriteRefusal, sessionEffortRefusal, terminalNoteRefusal } = await import('./lib/guard.mjs');
   const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
   if (tool === TERMINAL_TOOL) return terminalNoteRefusal(input.command, rulesTextOf(rootOf(), readFile));
   if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && tool !== SESSION_TOOL && !MESSAGE_TOOLS.has(tool)) return null;
@@ -159,7 +159,8 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   if (driveRoot !== null) return driveRoot;
   const record = reviewRecordWriteRefusal(input.command);
   if (record !== null) return record;
-  // Only a command with a chained step reads the project's rules file.
+  // Only a command with a chained step reads the project's rules file (lib/chained-step-guard.mjs).
+  const { chainedStep, chainedStepRefusal } = await import('./lib/chained-step-guard.mjs');
   const chained = chainedStep(input.command) === null ? null : chainedStepRefusal(input.command, rulesTextOf(rootOf(), readFile));
   if (chained !== null) return chained;
   const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();

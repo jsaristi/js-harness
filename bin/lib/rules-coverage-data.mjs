@@ -29,9 +29,9 @@ export const COVERAGE = {
     },
     "chained-steps": {
       "level": "check",
-      "test": "bin/lib/guard.test.mjs",
+      "test": "bin/lib/chained-step-guard.test.mjs",
       "break": {
-        "path": "bin/lib/guard.mjs",
+        "path": "bin/lib/chained-step-guard.mjs",
         "find": "if (step !== null && before && Object.hasOwn(JOINERS, joiner)) return { step, joiner };",
         "replace": "if (step !== null && before && Object.hasOwn(JOINERS, joiner) && step === '') return { step, joiner };"
       }

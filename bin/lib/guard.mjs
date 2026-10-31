@@ -272,8 +272,9 @@ export function terminalNoteRefusal(command, projectData) {
 
 /** The words of the shell command `command`, its quotes taken off, with `;`, `&&`, `||` and `|` as words of their
  * own, and an unquoted newline as a `;`. A heredoc's body is left out: it is text, not commands. A backslash is kept
- * as it is, since a Windows path is written with them, except before `;`, `&` or `|`, which it makes a character; so is
- * the `&` of `2>&1`, which stays in its word where `redirections` is off. `words.operators` holds the indexes of the words that are operators,
+ * as it is, since a Windows path is written with them, except before `;`, `&`, `|`, a quote or a backslash, which it
+ * makes a character, as it does before a double quote or a backslash inside double quotes; the `&` of an unquoted
+ * `2>&1` stays in its word where `redirections` is off. `words.operators` holds the indexes of the words that are operators,
  * so a quoted `"&&"` is told from one. With `groups`, an unquoted `(` or `)` of a subshell is an operator too; one of
  * a `$(...)` stays in its word. With `redirections`, an unquoted `>`, `>>` or `>|` is a word of its own wherever it
  * stands, a descriptor before it (`2>`) taken in, and `words.redirections` holds their indexes. */
@@ -284,14 +285,19 @@ export function shellWords(command, { groups = false, redirections = false } = {
   const operator = (text) => { operators.add(words.length); words.push(text); };
   let word = null;
   let quote = null;
+  // Whether the word's last character was quoted or escaped, so that a quoted `>` takes no `&`.
+  let quoted = false;
   let substitutions = 0;
   const pending = [];
   const text = String(command ?? '');
   for (let i = 0; i < text.length; i += 1) {
     const c = text[i];
     if (quote !== null) {
-      if (c === quote) quote = null;
+      // Inside double quotes a backslash escapes a quote or a backslash; inside single quotes nothing is escaped.
+      if (quote === '"' && c === '\\' && (text[i + 1] === '"' || text[i + 1] === '\\')) word += text[(i += 1)];
+      else if (c === quote) quote = null;
       else word += c;
+      quoted = true;
     } else if (groups && c === '$' && text[i + 1] === '(') {
       word = `${word ?? ''}$(`;
       substitutions += 1;
@@ -308,9 +314,11 @@ export function shellWords(command, { groups = false, redirections = false } = {
       word ??= '';
     } else if (c === '\\' && text[i + 1] === '\n') {
       i += 1;
-    } else if (c === '\\' && /[;&|]/.test(text[i + 1] ?? '')) {
-      // An escaped operator is a character of its word, as `find`'s `\;` (Codex, on efbbb26).
+    } else if (c === '\\' && /[;&|'"\\]/.test(text[i + 1] ?? '')) {
+      // An escaped operator, quote or backslash is a character of its word, as `find`'s `\;` (Codex, on efbbb26); so
+      // `\\;` is a backslash and an operator (the risk lens, on 4a3bc314).
       word = (word ?? '') + text[i + 1];
+      quoted = true;
       i += 1;
     } else if (c === '#' && word === null) {
       while (i + 1 < text.length && text[i + 1] !== '\n') i += 1;
@@ -336,7 +344,7 @@ export function shellWords(command, { groups = false, redirections = false } = {
     } else if (/\s/.test(c)) {
       if (word !== null) words.push(word);
       word = null;
-    } else if (c === '&' && word !== null && /[<>]$/.test(word)) {
+    } else if (c === '&' && word !== null && !quoted && /[<>]$/.test(word)) {
       // The `&` of `2>&1` or `>&2` belongs to its redirection.
       word += c;
     } else if (c === ';' || c === '|' || c === '&') {
@@ -355,6 +363,7 @@ export function shellWords(command, { groups = false, redirections = false } = {
       if (text[i + 1] === '|') i += 1;
     } else {
       word = (word ?? '') + c;
+      quoted = false;
     }
   }
   if (word !== null) words.push(word);
@@ -473,117 +482,7 @@ export function driveRootRemovalRefusal(command) {
 }
 
 // The words after which a command starts, as after an operator: a group's `{` and the bodies of if, for and while.
-const COMMAND_KEYWORDS = new Set(['{', 'then', 'else', 'do', '!', 'time']);
-// The keywords whose body runs on a condition the command states: a step right after one is joined by nothing.
-const CONDITION_BODIES = new Set(['then', 'else', 'do']);
-// How the refusal names each joiner; shellWords writes an unquoted line break as a `;`.
-const JOINERS = { ';': 'a ; or a line break', '||': '||', '&': '&' };
-
-// The options of each wrapper, and of git before its verb, that take the next word as their value.
-const VALUE_OPTIONS = {
-  env: new Set(['-u', '--unset', '-C', '--chdir', '-S', '--split-string']),
-  sudo: new Set(['-u', '--user', '-g', '--group', '-C', '--close-from', '-h', '--host', '-p', '--prompt', '-D', '--chdir', '-r', '--role', '-t', '--type', '-U', '--other-user']),
-  exec: new Set(['-a']),
-  command: new Set(),
-  nohup: new Set(),
-  git: new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env', '--super-prefix']),
-};
-// A redirection that starts a word (`>f`, `2>f`, `<f`, `>>f`); one with no file in it takes the next word.
-const REDIRECTION = /^\d*(?:>>?|<)(.*)$/;
-
-/** The index of the first word of `segment` from `at` that is no option of `program` (`VALUE_OPTIONS`), its values
- * and an ending `--` taken; for a wrapper, no assignment either. */
-function pastOptions(segment, at, program) {
-  while (at < segment.length) {
-    const word = segment[at];
-    if (word === '--') return at + 1;
-    if (word.startsWith('-') && word !== '-') at += VALUE_OPTIONS[program].has(word) ? 2 : 1;
-    else if (program !== 'git' && /^[A-Za-z_][A-Za-z0-9_]*=/.test(word)) at += 1;
-    else return at;
-  }
-  return at;
-}
-
-/** The step the words of one simple command take, among those whose check must be read first: `git push`, `git commit`,
- * `gh pr`, `js-harness merge-queue` or `js-harness notify`, or null. It looks through assignments, redirections,
- * wrappers and their options, git's options before its verb, `node <path>/js-harness.mjs`, `npx` and
- * `js-harness gate --`. */
-function guardedStep(words) {
-  const segment = [];
-  for (let i = 0; i < words.length; i += 1) {
-    const redirection = REDIRECTION.exec(words[i]);
-    if (redirection === null) segment.push(words[i]);
-    else if (redirection[1] === '' || redirection[1] === '&') i += 1;
-  }
-  const name = (word) => String(word ?? '').split(/[\\/]/).pop().toLowerCase().replace(/\.(?:exe|cmd|mjs)$/, '');
-  let at = 0;
-  while (at < segment.length) {
-    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[at])) at += 1;
-    else if (WRAPPERS.has(segment[at])) at = pastOptions(segment, at + 1, segment[at]);
-    else break;
-  }
-  if (name(segment[at]) === 'npx' || (name(segment[at]) === 'node' && name(segment[at + 1]) === 'js-harness')) at += 1;
-  const program = name(segment[at]);
-  const args = segment.slice(at + 1);
-  if (program === 'git') {
-    const verb = args[pastOptions(args, 0, 'git')];
-    return verb === 'push' || verb === 'commit' ? `git ${verb}` : null;
-  }
-  if (program === 'gh') return args[0] === 'pr' ? 'gh pr' : null;
-  if (program !== 'js-harness') return null;
-  if (args[0] === 'gate') return args.includes('--') ? guardedStep(args.slice(args.indexOf('--') + 1)) : null;
-  return args[0] === 'merge-queue' || args[0] === 'notify' ? `js-harness ${args[0]}` : null;
-}
-
-/** The first step of the shell command `command` whose check must be read before it runs, and that follows another
- * step by a joiner that runs it whatever that step answered, as `{ step, joiner }`, or null. `;` and a line break
- * run it after any answer, `||` only after a failure and `&` beside the step, never waiting; `&&` runs it only on a
- * success, and `|` feeds it the step's output (odd/tasks/guard-chained-steps.md, S3). A line break right after `&&`,
- * `||` or `|` continues that command, so the first operator between two steps is their joiner; a group's `(` and `)`
- * are none. A step that is the body of `then`, `else` or `do` runs on a condition the command states. Text in quotes
- * or in a heredoc's body is no step, so neither is a `-Command` argument of PowerShell. */
-export function chainedStep(command) {
-  const words = shellWords(command, { groups: true });
-  const { operators } = words;
-  let joiner = null;
-  let before = false;
-  for (let i = 0; i < words.length; i += 1) {
-    if (operators.has(i)) {
-      if (joiner === null && words[i] !== '(' && words[i] !== ')') joiner = words[i];
-      continue;
-    }
-    if (CONDITION_BODIES.has(words[i])) {
-      joiner = null;
-      continue;
-    }
-    if (COMMAND_KEYWORDS.has(words[i])) continue;
-    let end = i;
-    while (end < words.length && !operators.has(end)) end += 1;
-    const step = guardedStep(words.slice(i, end));
-    if (step !== null && before && Object.hasOwn(JOINERS, joiner)) return { step, joiner };
-    before = true;
-    joiner = null;
-    i = end - 1;
-  }
-  return null;
-}
-
-/** Why the Bash command `command` is refused for a step chained to the one before it, or null (`chainedStep`). Only
- * where the rule chained-steps is declared (`projectData`, the text of the project's rules file), as terminal-note
- * is; behind one that declares it, the copy's value is held (`guardHeld`). Row 67 of the lead's duties failed 10
- * times: twice a push the pre-push hook refused was followed by a notice that said "pushed". */
-export function chainedStepRefusal(command, projectData) {
-  const chained = chainedStep(command);
-  if (chained === null) return null;
-  const rule = guardHeld('chained-steps', ruleHere('chained-steps', undefined, projectData));
-  if (rule === null) return null;
-  const { step, joiner } = chained;
-  return `js-harness guard: ${step} follows the step before it by ${JOINERS[joiner]}, so it runs whatever that step `
-    + `answered (rule chained-steps: two steps share one command only joined by ${rule.value}). Join them with `
-    + `${rule.value} (a heredoc's command takes it on its first line: cat > f <<'EOF' ${rule.value} git commit -F f), `
-    + `or run ${step} in a call of its own once the answer of the step before is read.${rule.note}`;
-}
-
+export const COMMAND_KEYWORDS = new Set(['{', 'then', 'else', 'do', '!', 'time']);
 // The records of both reviews, each in `<git common dir>/js-harness/` (./codex-reviews.mjs, ./codex-review-runs.mjs,
 // ./lens-reviews.mjs; a test holds this list to their names). Only the commands that make a review write them: a
 // line a session writes there by hand reads as a review nobody made (docs/proposals/gentle-ai-reverse-engineering.md,
@@ -686,7 +585,7 @@ const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash']);
 const INTERPRETERS = new Set(['node', 'python', 'python3', 'py', 'perl', 'ruby', 'deno', 'bun', 'pwsh', 'powershell']);
 const POWERSHELLS = new Set(['pwsh', 'powershell']);
 // The words before a command that leave it the command: an assignment, and a few wrappers.
-const WRAPPERS = new Set(['env', 'command', 'exec', 'sudo', 'nohup']);
+export const WRAPPERS = new Set(['env', 'command', 'exec', 'sudo', 'nohup']);
 // The calls of a script that write a file they are given, and the cmdlets that do in PowerShell.
 const WRITE_CALL = /\b(appendFile|writeFile|createWriteStream|truncate|rename|copyFile|unlink|rm|open|appendJsonLine)(?:Sync)?\s*\(/gi;
 const CMDLET_WRITE = /\b(?:Add-Content|Set-Content|Out-File)\b/i;

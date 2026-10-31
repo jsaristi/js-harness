@@ -193,7 +193,7 @@ check said or before its answer was read.
   script and the gate's commit were joined by `;` in one command. The script threw on the feature
   document, and the commit ran with the roadmap change alone and a message saying the document closed.
   Commit `1f28794` wrote the document. The next tries were joined by `&&` and stopped where they failed
-- Control: check — bin/lib/guard.test.mjs — "a push, a commit, a pull request, a land or a notice after a ;, a
+- Control: check — bin/lib/chained-step-guard.test.mjs — "a push, a commit, a pull request, a land or a notice after a ;, a
   line break, || or & is refused, naming the step and the joiner" — since 2026-10-31
 - Was: protocol — bin/lib/protocols-skill.mjs — "Two steps share one command only when the second is conditional on
   the first" — replaced on 2026-10-31: the guard refuses the step where the rule `chained-steps` is declared

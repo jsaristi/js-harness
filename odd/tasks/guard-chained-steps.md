@@ -68,6 +68,11 @@ changes no rule of his; the rule is the project's. Spend: one gate, one Codex re
   `--refresh` settled the manifest's edited guard span) and `failures check` pass. Route: inline. One commit with T1.
 - [x] T4 (kind: build): Codex's four P2 findings on efbbb26 (L6), tests first. RED: 2 of 46 (`command -- git push`
   passed, `printf x\;git push` refused). GREEN: guard, lib/guard and merge-queue-waits tests 91/91.
+- [x] T5 (kind: build): the risk lens's and the verifier's findings on 4a3bc314 (L7), tests first, and the check
+  moved to `bin/lib/chained-step-guard.mjs` with its test beside it (`bin/lib/guard.mjs` had reached 1009 lines, over
+  the 1000-line limit). RED: 2 (`echo a\\; git push` passed, the `'\''` idiom refused). GREEN: guard, lib/guard,
+  chained-step-guard and merge-queue-waits tests 91/91; conventions and rules-coverage tests 27/27; planted break
+  red on 2 of 3, restored.
 - [ ] T3 (kind: verify): gate, Codex review, Claude lenses, independent verifier, pull request, ready notice.
 
 ## Log
@@ -100,3 +105,15 @@ changes no rule of his; the rule is the project's. Spend: one gate, one Codex re
   tests, guard and merge-queue-waits, pass); `guardedStep` skips redirections and the options of each wrapper and of
   git that take a value. gentle-ai's stop hook offered the whole branch: its status was read and nothing started
   (CLAUDE.md, a candidate is never the whole branch). `bin/lib/guard.mjs` is 988 lines, 12 under the size limit.
+- L7 (2026-10-31, reviews of efbbb26..4a3bc314): Codex, "the patch is correct" (0.94), its 4 findings fixed. The
+  reliability lens, 0 findings; the risk lens, one WARNING: `\\;` (an escaped backslash, then a real `;`) hid the
+  joiner. The independent verifier (91/91, the hook's route right, no regression in `shellWords`' other callers by
+  running the old module beside the new on 16 commands) found the same miss, three false refusals that `shellWords`
+  had before (`\"` inside double quotes, the `'\''` idiom, an odd `"` in a heredoc's body inside `"$(...)"`) and
+  low misses. Fixed: a backslash outside quotes escapes `;`, `&`, `|`, a quote or a backslash, and inside double
+  quotes a `"` or a backslash; the `&` after a quoted `>` is an operator; `if`, `elif`, `while` and `until` are
+  looked through; `timeout`, `nice`, `time -p`, `npx` with options or a version and `pnpm exec`/`dlx` are wrappers.
+  Left, written as known: an odd `"` in a heredoc's body inside `"$(...)"` (it needs the context stack of
+  `backticksInDoubleQuotes`; it costs one retry joined by `&&`); `eval`, `xargs`, backticks and `$(...)` holding a
+  step, and `bash -c`/`powershell -Command` strings (out of scope); the verifier's design notes as L4 states them
+  (`a; b && git push` passes, since only the operator right before the step counts; `set -e` scripts are refused).
