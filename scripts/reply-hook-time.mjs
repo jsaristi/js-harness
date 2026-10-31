@@ -132,16 +132,28 @@ export function stopPayload(text, file, cwd) {
   };
 }
 
+/** Why a run of `spawnSync` failed (it did not start, exited other than 0 or was ended by a signal), or `null`. */
+function failureOf(ran) {
+  if (ran?.error) return ran.error.message;
+  if (ran?.signal) return `signal ${ran.signal}`;
+  if (ran?.status !== 0) return `exit ${ran?.status}: ${String(ran?.stderr ?? '').trim().slice(0, 200)}`;
+  return null;
+}
+
 /** `n` runs of each shell command of `commands` with `input` on its standard input, taken in turn (the first's run,
  * the second's, then the first's again), so that each meets the same load of the machine: for each command, in its
- * order, `{ command, times, stdout, stderr }`, the wall times in ms and its last run's output. */
+ * order, `{ command, times, failures, stdout, stderr }`, the wall times in ms of the runs that succeeded, each failed
+ * run's number and why (its time is no measure of the hook), and its last run's output. */
 export function timeRuns(commands, input, n, { spawn = spawnSync, clock = () => performance.now() } = {}) {
-  const results = commands.map((command) => ({ command, times: [], stdout: '', stderr: '' }));
+  const results = commands.map((command) => ({ command, times: [], failures: [], stdout: '', stderr: '' }));
   for (let i = 0; i < n; i += 1) {
     for (const result of results) {
       const started = clock();
       const ran = spawn(result.command, { input, shell: true, encoding: 'utf8', windowsHide: true });
-      result.times.push(clock() - started);
+      const ms = clock() - started;
+      const why = failureOf(ran);
+      if (why === null) result.times.push(ms);
+      else result.failures.push({ run: i + 1, why });
       result.stdout = String(ran?.stdout ?? '');
       result.stderr = String(ran?.stderr ?? '');
     }
@@ -149,23 +161,22 @@ export function timeRuns(commands, input, n, { spawn = spawnSync, clock = () => 
   return results;
 }
 
-/** Each check of the hook run once on `payload` in this process, from the modules of `repo`, sharing what the hook
- * shares (its `stopIo`): the lines of a report, the time of loading the modules, each check's time and, under it,
- * each read, git call and parse of the record it made; what an earlier check made is not made again. */
-async function profile(payload, repo) {
+/** Each check of the hook run once on `payload` in this process, from the modules of `repo`, in the hook's order and
+ * sharing what the hook shares (its `stopIo`, its config lookup, its command-block check and that check's deadline):
+ * the lines of a report, the time of loading the modules, each check's time and, under it, each read, git call, parse
+ * of the record and shell parse it made; what an earlier check made is not made again. It throws where the hook
+ * would check nothing. `env`, `homedir`, `platform` and `parse` are the hook's own, given to a test. */
+export async function profile(payload, { repo = REPO_ROOT, env = process.env, homedir = os.homedir, platform = process.platform, parse = null } = {}) {
   const lib = (name) => import(pathToFileURL(path.join(repo, 'bin', 'lib', name)).href);
   const loading = performance.now();
   const { closingState, replyConfig } = await lib('reply.mjs');
-  const { stopIo } = await import(pathToFileURL(path.join(repo, 'bin', 'reply.mjs')).href);
+  const { shellParser } = await lib('reply-commands.mjs');
+  const { commandsOf, nearestHarness, stopIo } = await import(pathToFileURL(path.join(repo, 'bin', 'reply.mjs')).href);
   const modules = { wake: await lib('stop-wake.mjs'), stale: await lib('stale-board.mjs'), back: await lib('return-report.mjs') };
   const loaded = performance.now() - loading;
-  let config = null;
-  for (let dir = path.resolve(payload.cwd); config === null; dir = path.dirname(dir)) {
-    const file = path.join(dir, 'harness.json');
-    if (fs.existsSync(file)) config = replyConfig(JSON.parse(fs.readFileSync(file, 'utf8')));
-    if (path.dirname(dir) === dir) break;
-  }
-  if (config === null || config.error) throw new Error(`no reply check is on above ${payload.cwd}`);
+  const readFile = (file) => fs.readFileSync(file).toString('utf8');
+  const config = replyConfig(nearestHarness(payload.cwd, readFile));
+  if (config === null || config.error) throw new Error(`no reply check is on above ${payload.cwd}${config?.error ? ` (${config.error})` : ''}`);
   const state = closingState(payload.last_assistant_message, config);
   const calls = [];
   let current = '';
@@ -175,20 +186,26 @@ async function profile(payload, repo) {
     calls.push({ check: current, what, ms: performance.now() - started });
     return value;
   };
+  const stderr = (text) => process.stderr.write(text);
   const io = await stopIo({
-    readFile: (file) => timed(`read ${path.basename(file)}`, () => fs.readFileSync(file).toString('utf8')),
+    readFile: (file) => timed(`read ${path.basename(file)}`, () => readFile(file)),
     readdir: (dir) => timed(`list ${path.basename(dir)}`, () => fs.readdirSync(dir)),
     run: (command, args, options) => timed(`${command} ${args.join(' ')}`, () => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: 2000 })),
-    env: process.env,
-    homedir: os.homedir,
+    env,
+    homedir,
     now: () => Date.now(),
-  }, (text) => process.stderr.write(text));
-  const parse = io.readNotices;
-  if (parse) io.readNotices = (...args) => timed('the record of notices, read and parsed (once a stop)', () => parse(...args));
+  }, stderr);
+  const readNotices = io.readNotices;
+  if (readNotices) io.readNotices = (...args) => timed('the record of notices, read and parsed (once a stop)', () => readNotices(...args));
+  const parser = parse ?? shellParser(platform);
+  const shellParse = (...args) => timed('the shell parser', () => parser(...args));
+  const started = Date.now();
   const checks = [
     ['wake', () => modules.wake.wakeWarning(payload, state, io)],
     ['stale', () => modules.stale.staleBoardWarning(payload, state, io, Date.now())],
     ['return', () => modules.back.returnReportWarning(payload, state, io)],
+    // Last, as in the hook, so its deadline holds the other checks' time too.
+    ['commands', () => commandsOf(payload, payload.last_assistant_message, { readFile: io.readFile, platform, parse: shellParse, now: () => Date.now(), started }, stderr)],
   ];
   const lines = [`state ${state ?? 'none'}; modules loaded in ${loaded.toFixed(0)} ms; each check, then the reads and git calls it made (ms)`];
   for (const [name, run] of checks) {
@@ -237,16 +254,21 @@ async function main(argv) {
   }
   const payload = stopPayload(text, path.resolve(options.transcript), path.resolve(options.cwd));
   if (options.mode === 'profile') {
-    process.stdout.write(`${(await profile(payload, REPO_ROOT)).join('\n')}\n`);
+    process.stdout.write(`${(await profile(payload)).join('\n')}\n`);
     return 0;
   }
   const commands = options.commands.length > 0 ? options.commands : [`"${process.execPath}" "${path.join(REPO_ROOT, 'bin', 'js-harness.mjs')}" reply --hook`];
-  for (const { command, times, stdout, stderr } of timeRuns(commands, JSON.stringify(payload), options.runs)) {
+  let failed = false;
+  for (const { command, times, failures, stdout, stderr } of timeRuns(commands, JSON.stringify(payload), options.runs)) {
+    const at = (p) => (times.length === 0 ? 'none' : percentile(times, p).toFixed(0));
     process.stdout.write(`${command}\nruns ${times.map((ms) => ms.toFixed(0)).join(' ')}\n`
-      + `p50 ${percentile(times, 0.5).toFixed(0)} p90 ${percentile(times, 0.9).toFixed(0)} max ${Math.max(...times).toFixed(0)}\n`
+      + `p50 ${at(0.5)} p90 ${at(0.9)} max ${times.length === 0 ? 'none' : Math.max(...times).toFixed(0)}\n`
       + `last answer ${stdout.trim().slice(0, 160)}${stderr.trim() === '' ? '' : `\nlast stderr ${stderr.trim().slice(0, 300)}`}\n`);
+    for (const { run, why } of failures) process.stdout.write(`run ${run} failed, no measure: ${why}\n`);
+    failed ||= failures.length > 0;
   }
-  return 0;
+  // A run that failed measured no hook, so the times printed are not the hook's whole measure.
+  return failed ? 1 : 0;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

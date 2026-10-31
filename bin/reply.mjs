@@ -40,7 +40,7 @@ const USAGE = 'Usage: js-harness reply --hook\n'
 
 /** The parsed `harness.json` nearest above `start` (that folder included), or `null` when none is found. A file that
  * is there and cannot be read or parsed throws. */
-function nearestHarness(start, readFile) {
+export function nearestHarness(start, readFile) {
   let dir = path.resolve(start);
   for (;;) {
     let text;
@@ -139,7 +139,7 @@ async function returnOf(payload, state, io, stderr) {
 /** The command-block check's warning (bin/lib/reply-commands.mjs), or `null`. The transcript is read only when the
  * reply holds a command block, and the parser gets what is left of the check's one deadline; a check that throws is
  * said on standard error and lets the rest answer. */
-function commandsOf(payload, message, { readFile, platform, parse, now, started }, stderr) {
+export function commandsOf(payload, message, { readFile, platform, parse, now, started }, stderr) {
   try {
     const blocks = fencedBlocks(message);
     if (commandBlocks(blocks).length === 0) return null;

@@ -1,9 +1,13 @@
 // Tests of scripts/reply-hook-time.mjs, the measure of the reply hook (odd/tasks/reply-hook-latency.md). The hook's
 // records are the host's, as the lead's transcript 0f71b2c6 holds them (2026-10-31), trimmed to the fields read; the
-// runs are given a fake spawn and clock, so no process starts.
+// runs are given a fake spawn and clock, so no process starts; the profile runs the hook's checks in this process on a
+// project and a home made in a temporary folder, with a fake shell parser.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hookRuns, inSituReport, parseArgs, percentile, stopHooks, stopPayload, timeRuns } from './reply-hook-time.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { hookRuns, inSituReport, parseArgs, percentile, profile, stopHooks, stopPayload, timeRuns } from './reply-hook-time.mjs';
 
 const HOOK = 'js-harness reply --hook || exit 0';
 const line = (entry) => JSON.stringify(entry);
@@ -75,7 +79,7 @@ test('timeRuns takes the commands in turn, so a before and an after meet the sam
   const spawn = (command, options) => {
     order.push(command);
     clock += command === 'before' ? 30 : 10;
-    return { stdout: `${command} said`, stderr: '', input: options.input };
+    return { stdout: `${command} said`, stderr: '', status: 0, signal: null, input: options.input };
   };
   const results = timeRuns(['before', 'after'], '{}', 3, { spawn, clock: () => clock });
   assert.deepEqual(order, ['before', 'after', 'before', 'after', 'before', 'after']);
@@ -83,6 +87,48 @@ test('timeRuns takes the commands in turn, so a before and an after meet the sam
     { command: 'before', times: [30, 30, 30], stdout: 'before said' },
     { command: 'after', times: [10, 10, 10], stdout: 'after said' },
   ]);
+});
+
+test('timeRuns keeps a run that failed out of the times and says why it failed', () => {
+  const answers = [
+    { stdout: '{}', stderr: '', status: 0, signal: null },
+    { stdout: '', stderr: 'not found', status: 1, signal: null },
+    { error: new Error('spawn ENOENT'), stdout: '', stderr: '', status: null, signal: null },
+    { stdout: '', stderr: '', status: null, signal: 'SIGTERM' },
+  ];
+  let clock = 0;
+  const spawn = () => {
+    clock += 10;
+    return answers.shift();
+  };
+  const [result] = timeRuns(['hook'], '{}', 4, { spawn, clock: () => clock });
+  assert.deepEqual(result.times, [10]);
+  assert.deepEqual(result.failures, [
+    { run: 2, why: 'exit 1: not found' },
+    { run: 3, why: 'spawn ENOENT' },
+    { run: 4, why: 'signal SIGTERM' },
+  ]);
+});
+
+test('profile runs only where the hook would, the nearest harness.json deciding, and times the command-block check too', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'reply-hook-time-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const home = path.join(root, 'home');
+  const project = path.join(root, 'project');
+  const inner = path.join(project, 'inner');
+  fs.mkdirSync(home);
+  fs.mkdirSync(inner, { recursive: true });
+  fs.writeFileSync(path.join(project, 'harness.json'), JSON.stringify({ reply: true }));
+  fs.writeFileSync(path.join(inner, 'harness.json'), JSON.stringify({}));
+  const transcript = path.join(root, 'session.jsonl');
+  fs.writeFileSync(transcript, '');
+  const message = 'Run this:\n\n```powershell\nsome-tool -x\n```\n\nSigo solo: a notice wakes me.';
+  const options = { env: { JS_HARNESS_HOME: home }, homedir: () => home, platform: 'win32', parse: () => ({ errors: [['some-tool has no parameter -x']] }) };
+  await assert.rejects(profile(stopPayload('', transcript, inner), options), /no reply check is on/);
+  const payload = { ...stopPayload('', transcript, project), last_assistant_message: message };
+  const lines = await profile(payload, options);
+  assert.ok(lines.some((line) => /^commands\s+\d+\s+warns$/.test(line)), lines.join('\n'));
+  assert.ok(lines.some((line) => /the shell parser/.test(line)), lines.join('\n'));
 });
 
 test('parseArgs reads each mode and refuses what it does not know', () => {
