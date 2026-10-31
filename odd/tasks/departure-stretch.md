@@ -322,8 +322,18 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
   "bin/report.test.mjs breaks the convention and is not on the legacy list", the new test's comment naming the
   review tool; reworded to name its readers; the test 3 of 3. Every other test passed (GitHub run 41213207364).
 
+- L25 (2026-10-31, T4): the correction committed as `718858fd` (gate PASS). Codex over `23c028a..718858f`, correct
+  (0.97); the lenses resilience, readability and reliability over it, 0 findings each. gentle-ai's status after the
+  commit: state `correction_required`, next transition `stop`, `manual_intervention_required`, with and without its
+  repository context; its repair is the provider's, not run.
+- gentle-ai: lineage `review-aa2aa61811a5ac2d` reviewed `13ce66dd..23c028a5` (`818b1eeb`, `4d5e7605`, `8be755d2`,
+  `a4ecfc3c`, `23c028a5`), four lenses captured, its findings corrected in `718858fd`; `23c028a5..718858fd` not
+  reviewed by gentle-ai (its validation stopped), reviewed by Codex and the Claude lenses.
+- L26 (2026-10-31, T5): the summary at `docs/sessions/2026-10-31-jh-123-quiet-wait-and-reply-hook-an-absence-with-no-stretch.md`.
+
 ## Next step
-Commit the correction; gentle-ai's status for its validation; Codex and the lenses over the correction; push, PR (`gentle-ai review capture-result --input <file>` with the collect arguments of
+Push, open the PR, `notify --kind ready --pr <n>`, tell the lead it can land before JH 124. Was: commit the
+correction; gentle-ai's status for its validation; Codex and the lenses over the correction; push, PR (`gentle-ai review capture-result --input <file>` with the collect arguments of
 `ga3-status2.json`), then status until it closes; the verifier's verdict; then the reviews of `6bee9e5b..HEAD` (gentle-ai's contract run, then
 `js-harness codex-review --base 6bee9e5b` and `js-harness lens-review --base 6bee9e5b`, then the verifier), push, PR,
 the ready notice and the lead told; the summary under `docs/sessions/`.
