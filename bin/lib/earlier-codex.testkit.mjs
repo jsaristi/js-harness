@@ -5,7 +5,7 @@
 // them, then runs today's commands over that home. Nothing here touches the real home.
 import path from 'node:path';
 import { components, entryComponents } from './manifest.mjs';
-import { backupHookEntry, fallbackHookEntry, hookEntry, replyHookEntry, resumeHookEntry } from './hook-entries.mjs';
+import { REPLY_HOOK_COMMAND, backupHookEntry, fallbackHookEntry, hookEntry, resumeHookEntry } from './hook-entries.mjs';
 
 const contentOf = (id) => components.find((component) => component.id === id).content;
 const codexSkill = (id, folder, claudeId) => ({ id, target: (home) => path.join(home, '.codex', 'skills', folder, 'SKILL.md'), content: contentOf(claudeId) });
@@ -18,11 +18,15 @@ export const EARLIER_CODEX_FILES = Object.freeze([
   codexSkill('codex-protocols-skill', 'js-harness-protocols', 'claude-protocols-skill'),
 ]);
 
+/** The reply check as 0.97.0 wrote it, with 5 s: Claude Code's took 15 s later (odd/tasks/reply-hook-timeout.md), and
+ * a home's record still holds the Codex one as it was written. */
+const REPLY_ENTRY_0_97 = Object.freeze({ hooks: [{ type: 'command', command: REPLY_HOOK_COMMAND, timeout: 5 }] });
+
 /** The five entries of the Codex hooks.json, in the order 0.97.0 grafted them. */
 export const EARLIER_CODEX_ENTRIES = Object.freeze([
   { id: 'codex-hook', target: codexHooks, pointer: ['hooks', 'SessionStart'], entry: hookEntry },
   { id: 'codex-resume-hook', target: codexHooks, pointer: ['hooks', 'SessionStart'], entry: resumeHookEntry },
-  { id: 'codex-reply-hook', target: codexHooks, pointer: ['hooks', 'Stop'], entry: replyHookEntry },
+  { id: 'codex-reply-hook', target: codexHooks, pointer: ['hooks', 'Stop'], entry: () => REPLY_ENTRY_0_97 },
   { id: 'codex-backup-hook', target: codexHooks, pointer: ['hooks', 'Stop'], entry: backupHookEntry },
   { id: 'codex-fallback-hook', target: codexHooks, pointer: ['hooks', 'SessionStart'], entry: fallbackHookEntry },
 ]);
