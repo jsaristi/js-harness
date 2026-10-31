@@ -23,6 +23,7 @@ import {
   codeOfName,
 } from './project.mjs';
 import { sha256 } from './manifest.mjs';
+import { migrationPlan } from './project-migrate.mjs';
 import { repoTemplate } from './git-fixture.testkit.mjs';
 import { parseRegister } from './failures.mjs';
 import { checkFailures } from '../failures.mjs';
@@ -3248,7 +3249,7 @@ test('syncProject writes the commit-msg step into a clone init set up before it 
   }
 });
 
-test("syncProject keeps a commit-msg hook a clone has of its own, and never overwrites it", () => {
+test("syncProject keeps a commit-msg hook a clone has of its own, records it as kept, and has nothing more to say of it", () => {
   const root = makeTmpRepo();
   try {
     const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
@@ -3263,8 +3264,21 @@ test("syncProject keeps a commit-msg hook a clone has of its own, and never over
 
     assert.equal(result.code, 0);
     assert.equal(fs.readFileSync(hookPath, 'utf8'), '#!/bin/sh\necho mine\n');
-    assert.ok(result.actions.some((a) => a.kind === 'kept' && a.path === '.git/hooks/commit-msg'));
+    const keptAction = result.actions.find((a) => a.kind === 'kept' && a.path === '.git/hooks/commit-msg');
+    assert.ok(keptAction);
+    // A hook that is the project's own is told how to fail open too, as the one init writes does.
+    assert.match(keptAction.reason, /js-harness commit-msg "\$1" \|\| exit 0/);
     assert.ok(!result.actions.some((a) => a.kind === 'wrote'));
+    assert.deepEqual(result.manifest.kept.filter((k) => k.path === '.git/hooks/commit-msg').length, 1);
+
+    // Recorded as kept, so a second sync, and the migration's plan, have nothing to say of it.
+    const again = syncProject(root, '0.1.0', syncDeps());
+    assert.equal(again.upToDate, true);
+    assert.ok(!again.actions.some((a) => a.path === '.git/hooks/commit-msg'));
+    const plan = migrationPlan(root, '0.1.0', { spawn: spawnSync });
+    assert.equal(plan.code, 0);
+    assert.ok(!plan.pending.some((line) => line.includes('commit-msg')), plan.pending.join('\n'));
+    assert.equal(fs.readFileSync(hookPath, 'utf8'), '#!/bin/sh\necho mine\n');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

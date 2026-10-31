@@ -260,7 +260,7 @@ when the lines there already exclude `.atl`, and `uninstall` takes back exactly 
 added. A project set up before `init` wrote it gets the same line, recorded the same way, from its
 next `js-harness sync`. The `commit-msg` hook runs `js-harness commit-msg`, which takes the host's
 attribution lines out of each commit message and never stops a commit; a clone set up before `init`
-wrote it gets it from its next `sync`, and a `commit-msg` hook the project already has is kept. The example is a project with code. What `init` adds beyond the first four files follows the
+wrote it gets it from its next `sync`, and a `commit-msg` hook the project already has is kept. The example is a project with code. What `init` adds beyond the first four files and its two hooks follows the
 switches in `harness.json` `"functions"` (`js-harness functions` shows each one and why): the
 pre-push check (`.git/hooks/pre-push`) when the Codex review is on, the code map's `codegraph init`
 and the keys of `.claude/settings.local.json` when their switches ask for them. A project whose code

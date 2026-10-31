@@ -33,5 +33,5 @@ const COMMIT_MSG_HOOK = [
 export const HOOKS = {
   preCommit: { name: 'pre-commit', content: PRE_COMMIT_HOOK, command: '`js-harness check`' },
   prePush: { name: 'pre-push', content: PRE_PUSH_HOOK, command: '`js-harness check --push` for each pushed ref' },
-  commitMsg: { name: 'commit-msg', content: COMMIT_MSG_HOOK, command: '`js-harness commit-msg "$1"`' },
+  commitMsg: { name: 'commit-msg', content: COMMIT_MSG_HOOK, command: '`js-harness commit-msg "$1" || exit 0`' },
 };

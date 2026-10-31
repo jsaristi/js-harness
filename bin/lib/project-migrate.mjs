@@ -186,8 +186,9 @@ function repairLines({ root, manifest, spawn }) {
   if (manifest.scope === 'functions') lines.push('the pre-commit gate: written, as sync sets the clone up the rest of the way');
   else if (gate && gone(gate)) lines.push('the pre-commit gate: written again, since the one recorded is gone');
   const commitMsg = hook('commit-msg');
-  if (!commitMsg) lines.push("the commit-msg step that takes the host's attribution lines out: written, or kept where the clone has a commit-msg hook of its own");
-  else if (gone(commitMsg)) lines.push('the commit-msg step: written again, since the one recorded is gone');
+  const kept = (manifest.kept ?? []).some((entry) => entry.path.split('/').pop() === 'commit-msg');
+  if (!commitMsg && !kept) lines.push("the commit-msg step that takes the host's attribution lines out: written, or kept and recorded as kept where a hook of that name is already there or the hooks path is outside the repository");
+  else if (commitMsg && gone(commitMsg)) lines.push('the commit-msg step: written again, since the one recorded is gone');
   // Only where sync would write it: an exclude file behind a link, or outside the repository, sync keeps as it is.
   if (!manifest.exclude) {
     const target = excludeFile(root, spawn);

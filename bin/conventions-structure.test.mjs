@@ -72,7 +72,7 @@ const CEILINGS = {
   'bin/codex-review.mjs': 2284,
   'bin/lib/manifest.mjs': 1793,
   'bin/check.mjs': 2010,
-  'bin/lib/project.mjs': 1972,
+  'bin/lib/project.mjs': 1978,
   'evals/isolation-probe.mjs': 1681,
   'bin/lib/profiles-data.mjs': 1598,
   'bin/backup.mjs': 1303,

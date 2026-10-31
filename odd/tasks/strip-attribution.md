@@ -185,6 +185,17 @@ Nothing here is his: a decision only he can take goes to the lead as a recorded 
   `project-migrate`, `migrate`, `init`, `uninstall-kinds` and `conventions-structure`: 257 tests, 0 failed, 11
   skipped. Two first runs were stopped by Claude Code for low memory while they waited for the gate lock; the lead
   told the restart.
+- L14 (2026-10-31, the reviews of `7a73e476`): Codex over `75c3583..7a73e47`: incorrect (0.9), one P2, taken: the
+  line a project with its own commit-msg hook is told to add had no `|| exit 0`, so it could stop a commit. Lens
+  risk: 0. Lens reliability: one WARNING, the same as gentle-ai's (lineage `review-feea5702949509ec`, `granted` run,
+  approved and acknowledged, a WARNING and a SUGGESTION) and the verifier's W1, confirmed by running it: a clone that
+  keeps its own commit-msg hook, or whose hooks path is outside the repository, never had it recorded, so every sync
+  said `kept` again and `migrate --check` exited 1 forever. Taken, tests first (red: the reason lacked `|| exit 0`):
+  `sync` now records the kept hook in `kept`, as `init` does (`keptRecord`), and `repairLines` reads it; the test runs a
+  second sync (up to date, nothing said) and the migration plan (nothing pending). The verifier's N3 (SPEC's init
+  requirement and the README's "first four files" named no commit-msg step) is taken; its N4 (two linked worktrees'
+  manifests recording one shared hook) is the pre-push hook's pattern already, not taken here. The project and migrate
+  tests: 222, 0 failed. `project.mjs` is 1,978 lines, its ceiling set to that (main's was 1,989).
 ## Next step
 State (2026-10-31): slice 1 (`951bcfb4`..`7214c0fe`, branch `worktree-strip-attribution`) is PR #728, every code
 commit reviewed (L12), ready notice sent. Worktree `D:\js-harness\.claude\worktrees\strip-attribution`, now on branch

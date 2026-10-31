@@ -519,6 +519,14 @@ function kept(relPath, reason, outside = false, gitDir = false) {
   return entry;
 }
 
+/** The manifest's `kept` entry of a `kept` action. */
+function keptRecord({ path: relPath, reason, outside, gitDir }) {
+  const entry = { path: relPath, reason };
+  if (outside) entry.outside = true;
+  if (gitDir) entry.gitDir = true;
+  return entry;
+}
+
 /** Thrown by `initProject` when a step after the first write fails: everything this run wrote has
  * already been rolled back (best-effort) by the time this is thrown, `.codegraph/` included when
  * this run is the one that created it (T2e item 2, R3-retry-manifest-failure-loses-codegraph-ownership
@@ -860,14 +868,7 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     const manifest = {
       version,
       files,
-      kept: actions
-        .filter((a) => a.kind === 'kept')
-        .map((a) => {
-          const entry = { path: a.path, reason: a.reason };
-          if (a.outside) entry.outside = true;
-          if (a.gitDir) entry.gitDir = true;
-          return entry;
-        }),
+      kept: actions.filter((a) => a.kind === 'kept').map(keptRecord),
       codegraph: codegraphManifest,
       dirs,
     };
@@ -1546,11 +1547,16 @@ function updateRecorded(root, manifest, gitBases, steps) {
     } else if (sync) {
       restoreRecordedHook(root, next, gitBases, writeFile, createdPaths, createdDirs, actions);
     }
-    // The commit-msg step reaches a clone `init` set up before it wrote one; a recorded one that is gone comes back.
+    // The commit-msg step reaches a clone `init` set up before it wrote one; a recorded one that is gone comes back,
+    // and a hook the clone has of its own is recorded as kept, as `init` records it, so no later sync repeats it.
+    const keptCommitMsg = (next.kept ?? []).some((k) => k.path.split('/').pop() === HOOKS.commitMsg.name);
     if (sync && recordedHook(next, HOOKS.commitMsg)) {
       restoreRecordedHook(root, next, gitBases, writeFile, createdPaths, createdDirs, actions, HOOKS.commitMsg);
-    } else if (sync) {
+    } else if (sync && !keptCommitMsg) {
+      const before = actions.length;
       writeHookInto(root, next, HOOKS.commitMsg, { spawn, writeFile, createdPaths, createdDirs, actions });
+      const keptNow = actions.slice(before).filter((a) => a.kind === 'kept').map(keptRecord);
+      if (keptNow.length > 0) next.kept = [...(next.kept ?? []), ...keptNow];
     }
     const functions = functionsPlan(root, spawn);
     if (functions.errors) actions.push(functionsProblem(functions.errors));
