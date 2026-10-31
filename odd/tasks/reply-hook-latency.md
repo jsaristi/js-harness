@@ -67,7 +67,7 @@ Nothing here is his but the hook's timeout: if the fix needs it changed, a recor
 - [x] T4 (kind: verify) spec 1: the measure after, on the fixture and the lead's real files
 - [ ] T5 (kind: docs) spec 5: the recorded question on the timeout, if the measure says the fix needs it
 - [ ] T6 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice
-- [ ] T6a (kind: verify) spec 6: Codex reads again the fix of its partly fixed finding (`c76d97d1`) and whatever the
+- [x] T6a (kind: verify) spec 6: Codex reads again the fix of its partly fixed finding (`c76d97d1`) and whatever the
   verifier changes, from `8dd55c84` with `--again` (it runs no second recheck of the review that ended at `3543c9f`)
 - [ ] T8 (kind: build) out of scope, for the lead: the command-block check's PowerShell parser costs 1.4–2.3 s a stop
   whose reply hands him a block (`## Measure`); started beside the other checks or kept warm, or the timeout raised
@@ -248,6 +248,10 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   cost each check its two seconds and push the hook past its timeout, skipping every check. (4) The budget fixture
   did not reach the return check's publish search nor the command-block check: widened (a page rendered, published and
   never linked; a `ran` block), which found the parser's cost (`## Measure`, After the verifier).
+- L10 (2026-10-31, T6a): Codex over `8dd55c8..7f06e84` (`--again`, one part, 96,129 input tokens): correct, no
+  finding (confidence 0.88), recorded. The lenses over `c76d97d..7f06e84` (risk, resilience, reliability,
+  readability): 0 findings. The lenses over `8c746b1..c76d97d` (reliability, readability): 0 findings. Every code
+  commit of the branch is covered by both records.
 
 ## Next step
 Code: `b42532d7`, `8c746b16`, `c76d97d1` and the verifier's fixes (L9), each committed with the gate green. Question
