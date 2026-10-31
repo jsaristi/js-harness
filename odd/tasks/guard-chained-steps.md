@@ -73,7 +73,8 @@ changes no rule of his; the rule is the project's. Spend: one gate, one Codex re
   the 1000-line limit). RED: 2 (`echo a\\; git push` passed, the `'\''` idiom refused). GREEN: guard, lib/guard,
   chained-step-guard and merge-queue-waits tests 91/91; conventions and rules-coverage tests 27/27; planted break
   red on 2 of 3, restored.
-- [ ] T3 (kind: verify): gate, Codex review, Claude lenses, independent verifier, pull request, ready notice.
+- [x] T3 (kind: verify): gate, Codex review, Claude lenses, independent verifier, pull request, ready notice. Each
+  code commit gated and reviewed (L6–L9); verifier on 4a3bc314 (L7); PR 734; ready notice sent. Merge: the lead's.
 
 ## Log
 - L1 (2026-10-31, the brief as written): "JH 118 · guard: refuse `;` or a newline before push, commit, gh pr,
