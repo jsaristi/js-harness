@@ -2,7 +2,7 @@
 // configured (per host, per project), and outdated (`upToDate`, which a tool's `upToDateFix` sets from the latest version).
 // The Codex row (`codex`, the Codex CLI itself) has `claude` `n/a` (Claude Code has no Codex side any more) and `codex`
 // "the Codex CLI is logged in". `checks` holds what doctor reports that is not a tool: the memory-rules,
-// session-classes, claude-account, remote-server, codex-trust, codex-daemon, hook-commands and pnpm-lock checks, each
+// session-classes, claude-account, remote-server, codex-daemon, hook-commands and pnpm-lock checks, each
 // with its state cell and fix.
 // Every probe takes the same `deps` bag (`home`, `project`, `spawn`, `platform`) so tests can
 // fixture a temp home and a fake spawn instead of touching the real one or the network.
@@ -14,7 +14,6 @@ import { randomUUID } from 'node:crypto';
 import { realCodexHome } from './codex-review-home.mjs';
 import { resolveStackPm, shownWord } from './package-manager.mjs';
 import { readManifest } from './manifest.mjs';
-import { entryPlaces, snakeEvent, trustedPlaces } from './codex-trust.mjs';
 import { CODEX_DAEMON_FIX, codexDaemonState } from './codex-daemon.mjs';
 import { takeSnapshot } from './process-tree.mjs';
 import { isLoginLauncher, launcherStart, locate, lookUpProcesses, readState, remoteFiles, remoteId, remoteStartCommand } from './remote.mjs';
@@ -576,44 +575,6 @@ function hookCommandsState(deps) {
   }
 }
 
-// The fix of the Codex trust check. Trusting a hook is the user's security setting, and its hash is Codex's own, so the
-// harness names the step and never writes the record (odd/tasks/codex-hook-trust.md).
-export const CODEX_TRUST_FIX = 'Codex runs no hook its config.toml holds no trust record for, and says nothing: run `codex` in a terminal and answer its prompt about hooks with "Trust all and continue". The harness never writes that record: trusting a hook is your setting';
-
-/** The Codex trust check: each hook of a harness entry of `<home>/.codex/hooks.json` that the config.toml of the Codex
- * home (`codexHomeOf`, T8) holds no `trusted_hash` for, at the place Codex keys it by
- * (`<hooks.json>:<event_snake>:<group>:<handler>`, the group found as `uninstall` finds the entry). `missing` in the
- * `codex` cell is the gap, with the config.toml read and one line per hook (`lines`); `n/a` when no Codex entry is
- * recorded or there; `unknown` when a file cannot be read, or holds hook trust in a form not read. A stale hash, of an
- * entry an upgrade changed, reads as trusted here: it cannot be recomputed. It reads files only, so the session-start
- * report runs it too. */
-function codexTrustState(deps) {
-  const none = { claude: 'n/a', codex: 'n/a', lines: [] };
-  try {
-    const hooksPath = path.join(deps.home, '.codex', 'hooks.json');
-    const records = (readManifest(deps.home)?.entries ?? []).filter((entry) => entry?.path === hooksPath);
-    if (records.length === 0 || !fs.existsSync(hooksPath)) return none;
-    const places = entryPlaces(JSON.parse(fs.readFileSync(hooksPath, 'utf8')), records);
-    if (places.length === 0) return none;
-    const config = path.join(codexHomeOf(deps), 'config.toml');
-    const text = fs.existsSync(config) ? fs.readFileSync(config, 'utf8') : '';
-    const trusted = trustedPlaces(text, hooksPath, deps.platform ?? process.platform);
-    const lines = [];
-    // In the order of the file, event by event, so each line reads as Codex's own key does.
-    const ordered = places.map((place) => ({ ...place, event: snakeEvent(place.event) })).sort((a, b) => a.event.localeCompare(b.event) || a.group - b.group);
-    for (const { record, event, group } of ordered) {
-      record.entry.hooks.forEach((hook, handler) => {
-        const place = `${event}:${group}:${handler}`;
-        if (!trusted.has(place)) lines.push(`  ${place} ${hook.command}`);
-      });
-    }
-    if (lines.length === 0) return { claude: 'n/a', codex: 'ok', lines };
-    return { claude: 'n/a', codex: 'missing', lines: [`${config} holds no trust for these hooks of ${hooksPath}:`, ...lines] };
-  } catch {
-    return { claude: 'n/a', codex: 'unknown', lines: [] };
-  }
-}
-
 /** Checks that are not tools, in the tools' own shape so `probeTool` and every reader of a doctor row take
  * them as they are: nothing to install (`installed` is `n/a`, with no version, so nothing to be up to date
  * with either) and one cell that carries the state. They are kept apart from `tools`, which other modules
@@ -659,13 +620,6 @@ export const checks = [
     configured: (deps) => remoteServerState(deps),
     project: () => 'n/a',
     fix: (_deps, configured) => remoteServerFix(configured?.down),
-  },
-  {
-    id: 'codex-trust',
-    installed: () => ({ state: 'n/a', version: null }),
-    configured: codexTrustState,
-    project: () => 'n/a',
-    fix: (_deps, configured) => (configured?.codex === 'missing' ? { codex: [CODEX_TRUST_FIX, ...configured.lines] } : {}),
   },
   {
     id: 'codex-daemon',

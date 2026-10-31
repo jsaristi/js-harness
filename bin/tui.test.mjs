@@ -649,7 +649,7 @@ test('computeStackState resolves real rows from local probes without ever callin
     assert.ok(Array.isArray(stack));
     assert.deepEqual(
       stack.map((r) => r.id),
-      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'codex-daemon', 'pnpm-lock', 'js-harness'],
+      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-daemon', 'pnpm-lock', 'js-harness'],
     );
     assert.match(stack.find((row) => row.id === 'js-harness').version, /^[0-9a-f]{8}$/, "the harness's own rules, by their hash, main unread");
     assert.deepEqual(stack.find((row) => row.id === 'claude-account'), { id: 'claude-account', version: 'n/a', state: 'unknown claude' }, 'an empty home names no account');

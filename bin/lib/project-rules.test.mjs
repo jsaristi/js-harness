@@ -205,13 +205,11 @@ test('a list that cannot be read is marked so, whether as a file or as rules', (
 
 // ---- how a project's list reaches an agent, in text it already reads (odd/tasks/project-rules.md, "How it reaches an agent") ----
 
-test('the js-harness skill of both hosts names the rules command and the project list', async () => {
+test('the js-harness skill names the rules command and the project list', async () => {
   const { components } = await import('./manifest.mjs');
-  for (const id of ['claude-skill', 'codex-skill']) {
-    const text = components.find((component) => component.id === id).content('0.0.0');
-    assert.match(text, /`js-harness rules`/);
-    assert.match(text, /`docs\/rules\.json`/);
-  }
+  const text = components.find((component) => component.id === 'claude-skill').content('0.0.0');
+  assert.match(text, /`js-harness rules`/);
+  assert.match(text, /`docs\/rules\.json`/);
 });
 
 test('the AGENTS.md template says where a constraint the gate must hold is declared', async () => {

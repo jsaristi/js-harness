@@ -24,7 +24,11 @@ import {
   throwawayTags,
   upgradePmCommand,
   versionProblem,
+  EARLIER_CODEX_HOOKS,
+  codexHooksOf,
 } from './release-proof-lib.mjs';
+import { hooksOfHost } from './practice-lib.mjs';
+import { EARLIER_CODEX_ENTRIES } from '../bin/lib/earlier-codex.testkit.mjs';
 
 const PKG = { version: '0.1.0', repository: { type: 'git', url: 'git+https://github.com/jsaristi/js-harness.git' } };
 
@@ -173,6 +177,49 @@ test('the seeded host files hold one unrelated hook each, and hostFilesProblem n
   assert.equal(JSON.parse(seeded.claude.text).hooks.SessionStart[0].hooks[0].command, seeded.claude.command);
   assert.equal(JSON.parse(seeded.codex.text).hooks.SessionStart[0].hooks[0].command, seeded.codex.command);
   assert.notEqual(hostFilesProblem({ claude: seeded.claude.text, codex: seeded.codex.text }, seeded), null);
+});
+
+// The seeded host file `text` with `hooks` grafted on it in their order, each at the end of its event's list, as install grafts them.
+function grafted(text, hooks) {
+  const data = JSON.parse(text);
+  for (const hook of hooks) {
+    data.hooks[hook.event] ??= [];
+    data.hooks[hook.event].push({ ...(hook.matcher === undefined ? {} : { matcher: hook.matcher }), hooks: [{ type: 'command', command: hook.command, timeout: 5 }] });
+  }
+  return JSON.stringify(data, null, 4);
+}
+
+test('EARLIER_CODEX_HOOKS are the entries 0.97.0 grafted on the Codex hooks file, in its order', () => {
+  const declared = EARLIER_CODEX_ENTRIES.map((component) => {
+    const entry = component.entry();
+    const hook = { event: component.pointer.at(-1), command: entry.hooks.map((item) => item.command).join(' && ') };
+    return entry.matcher === undefined ? hook : { ...hook, matcher: entry.matcher };
+  });
+  assert.deepEqual(EARLIER_CODEX_HOOKS.map((hook) => ({ ...hook })), declared);
+  assert.ok(Object.isFrozen(EARLIER_CODEX_HOOKS));
+});
+
+test('codexHooksOf expects the earlier Codex entries only of a release tag at 0.97.0 or older, never of this checkout', () => {
+  for (const version of ['0.97.0', '0.96.0', '0.9.0']) assert.equal(codexHooksOf(version, false), EARLIER_CODEX_HOOKS, version);
+  for (const version of ['0.97.1', '0.98.0', '1.0.0', '0.100.0']) assert.deepEqual(codexHooksOf(version, false), [], version);
+  // A local proof tags a clone of this checkout with its own version, whatever that reads.
+  assert.deepEqual(codexHooksOf('0.97.0', true), []);
+});
+
+test('hostFilesProblem holds the Codex file to what the release wrote there: nothing from this one, its entries from an earlier one', () => {
+  const seeded = seededHostFiles();
+  const claude = grafted(seeded.claude.text, hooksOfHost('claude'));
+  const earlier = grafted(seeded.codex.text, EARLIER_CODEX_HOOKS);
+  assert.equal(hostFilesProblem({ claude, codex: seeded.codex.text }, seeded, []), null);
+  assert.equal(hostFilesProblem({ claude, codex: earlier }, seeded, EARLIER_CODEX_HOOKS), null);
+  // An earlier install's entries left after this release's sync, and an earlier release that wrote none.
+  assert.match(hostFilesProblem({ claude, codex: earlier }, seeded, []), /^codex hook file: expected the seeded entry "echo unrelated-codex-hook"; found: /);
+  assert.match(hostFilesProblem({ claude, codex: seeded.codex.text }, seeded, EARLIER_CODEX_HOOKS), /^codex hook file: expected the seeded entry "echo unrelated-codex-hook", then "js-harness doctor --hook"/);
+  // Its Stop entries left when its SessionStart ones went.
+  const stopsLeft = grafted(seeded.codex.text, EARLIER_CODEX_HOOKS.filter((hook) => hook.event === 'Stop'));
+  assert.match(hostFilesProblem({ claude, codex: stopsLeft }, seeded, []), /^codex hook file: expected no entry of the harness in hooks\.Stop of codex; found: /);
+  // The Claude file is held to today's entries whatever the release.
+  assert.match(hostFilesProblem({ claude: seeded.claude.text, codex: seeded.codex.text }, seeded, []), /^claude hook file: /);
 });
 
 test('movePin sets the version a harness.json pins and keeps the rest of the file', () => {

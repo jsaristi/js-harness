@@ -37,6 +37,7 @@ import { remoteDir, remoteFiles } from './remote.mjs';
 import { hygieneDir, journalPath, purgeMarker } from './memory-hygiene.mjs';
 import { ruleValue } from './rules.mjs';
 import { PERMISSIONS_ALLOW, PERMISSIONS_DENY } from './permissions.mjs';
+import { EARLIER_CODEX_ENTRIES, EARLIER_CODEX_FILES, EARLIER_INSTALL } from './earlier-codex.testkit.mjs';
 
 const OUR_PERMISSIONS = { allow: PERMISSIONS_ALLOW, deny: PERMISSIONS_DENY };
 
@@ -74,7 +75,8 @@ function ourFile(file) {
 }
 
 const claudeHook = hookById('claude-hook');
-const codexHook = hookById('codex-hook');
+// The doctor's entry of the Codex hooks.json as 0.97.0 wrote it: install writes none now (odd/tasks/drop-codex-components.md).
+const codexHook = EARLIER_CODEX_ENTRIES.find((component) => component.id === 'codex-hook');
 
 test('sha256 is deterministic', () => {
   assert.equal(sha256('abc'), sha256('abc'));
@@ -106,14 +108,12 @@ test('install writes every component and records a manifest', () => {
   }
 });
 
-test('install writes the Claude and Codex skill files at the documented paths', () => {
+test('install writes the Claude Code skill files at the documented paths', () => {
   const home = makeTmpHome();
   try {
     install(home, '0.1.0');
-    for (const host of ['.claude', '.codex']) {
-      for (const skill of ['js-harness', 'js-harness-orchestrator', 'js-harness-protocols']) {
-        assert.ok(fs.existsSync(path.join(home, host, 'skills', skill, 'SKILL.md')), `${host} ${skill}`);
-      }
+    for (const skill of ['js-harness', 'js-harness-orchestrator', 'js-harness-protocols']) {
+      assert.ok(fs.existsSync(path.join(home, '.claude', 'skills', skill, 'SKILL.md')), skill);
     }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -148,19 +148,97 @@ test('the output style names the voseo forms never to use, and keeps Claude Code
 });
 
 // Other tests index the first two, so a new component goes after them.
-test('the components are the three skills, each for Claude Code and for Codex, the first skill first, then the style and the two ported skills, for Claude Code only', () => {
+test('the components are the three skills, the first skill first, then the style and the two ported skills, all for Claude Code', () => {
   assert.deepEqual(components.map((component) => component.id), [
     'claude-skill',
-    'codex-skill',
     'claude-orchestrator-skill',
-    'codex-orchestrator-skill',
     'claude-protocols-skill',
-    'codex-protocols-skill',
     'claude-output-style',
     'claude-work-units-skill',
     'claude-chained-prs-skill',
   ]);
   assert.equal(new Set(components.map((component) => component.target('home'))).size, components.length, 'no two components share a file');
+});
+
+// odd/tasks/drop-codex-components.md (D4): the harness serves Claude Desktop's Code tab and Codex only reviews, so
+// install writes nothing under `.codex`, and what an earlier version wrote there goes on the next sync or uninstall.
+test('install writes nothing under .codex: no component and no hook entry of Codex', () => {
+  const home = makeTmpHome();
+  try {
+    const manifest = install(home, '0.1.0');
+    assert.equal(fs.existsSync(path.join(home, '.codex')), false);
+    const codexHome = path.join(home, '.codex');
+    for (const target of [...components, ...entryComponents].map((component) => component.target(home))) assert.ok(!target.startsWith(codexHome), target);
+    assert.deepEqual([...manifest.files, ...manifest.entries].filter((record) => record.path.startsWith(codexHome)), []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('sync over an earlier install takes its Codex skills and hook entries out, keeps the user\'s own Codex hook and moves its trust', () => {
+  const home = makeTmpHome();
+  try {
+    const hooksFile = path.join(home, '.codex', 'hooks.json');
+    const config = path.join(home, '.codex', 'config.toml');
+    install(home, '0.1.0', { ...EARLIER_INSTALL, codexConfig: config });
+    // The user's own SessionStart hook after ours, and Codex's trust of every group, as Codex keys it.
+    const data = readJson(hooksFile);
+    data.hooks.SessionStart.push(theirStart);
+    fs.writeFileSync(hooksFile, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+    const table = (event, group, hash) => `[hooks.state.'${hooksFile}:${event}:${group}:0']\ntrusted_hash = "${hash}"\n`;
+    fs.writeFileSync(config, [0, 1, 2].map((group) => table('session_start', group, `sha256:ours${group}`)).concat(table('session_start', 3, 'sha256:theirs'), table('stop', 0, 'sha256:stop0')).join('\n'), 'utf8');
+    assert.ok(EARLIER_CODEX_FILES.every((component) => fs.existsSync(component.target(home))), 'the earlier install wrote its Codex skills');
+
+    const manifest = sync(home, '0.2.0', { codexConfig: config });
+    assert.equal(fs.existsSync(path.join(home, '.codex', 'skills')), false, 'no Codex skill, and no empty folder of one');
+    assert.deepEqual(readJson(hooksFile), { hooks: { SessionStart: [theirStart] } });
+    assert.equal(fs.readFileSync(config, 'utf8').trim(), table('session_start', 0, 'sha256:theirs').trim());
+    assert.deepEqual([...manifest.files, ...manifest.entries].filter((record) => record.path.startsWith(path.join(home, '.codex'))), []);
+    assert.deepEqual(manifest.pruneKept, []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('sync keeps an earlier Codex skill the user changed, and records it no more', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0', EARLIER_INSTALL);
+    const edited = EARLIER_CODEX_FILES[0].target(home);
+    fs.writeFileSync(edited, 'mine now', 'utf8');
+    const manifest = sync(home, '0.2.0');
+    assert.equal(fs.readFileSync(edited, 'utf8'), 'mine now');
+    assert.deepEqual(manifest.pruneKept, [{ path: edited, reason: 'changed since it was written' }]);
+    assert.ok(EARLIER_CODEX_FILES.slice(1).every((component) => !fs.existsSync(component.target(home))));
+    assert.equal(manifest.files.some((record) => record.path === edited), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('sync over an earlier install on a home with no .codex takes the .codex it made too, and uninstall then leaves the home empty', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0', EARLIER_INSTALL);
+    sync(home, '0.2.0');
+    assert.equal(fs.existsSync(path.join(home, '.codex')), false);
+    uninstall(home);
+    assert.deepEqual(fs.readdirSync(home, { recursive: true }), []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall of an earlier install takes its Codex skills and hook entries out with the rest, and leaves the home empty', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0', EARLIER_INSTALL);
+    assert.ok(fs.existsSync(path.join(home, '.codex', 'hooks.json')));
+    uninstall(home);
+    assert.deepEqual(fs.readdirSync(home, { recursive: true }), []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('sync rewrites components for the current version and updates the manifest', () => {
@@ -329,18 +407,18 @@ test('uninstall removes unmodified files, keeps modified ones, and deletes the m
   const home = makeTmpHome();
   try {
     install(home, '0.1.0');
-    const [claudeComponent, codexComponent] = components;
-    // The user edited the codex copy; uninstall must keep it.
-    fs.writeFileSync(codexComponent.target(home), 'user was here', 'utf8');
+    const [claudeComponent, editedComponent] = components;
+    // The user edited the orchestrator skill; uninstall must keep it.
+    fs.writeFileSync(editedComponent.target(home), 'user was here', 'utf8');
 
     const result = uninstall(home);
 
     assert.equal(fs.existsSync(claudeComponent.target(home)), false);
-    assert.equal(fs.existsSync(codexComponent.target(home)), true);
-    const untouched = components.filter((component) => component !== codexComponent).map((component) => component.target(home));
+    assert.equal(fs.existsSync(editedComponent.target(home)), true);
+    const untouched = components.filter((component) => component !== editedComponent).map((component) => component.target(home));
     for (const target of untouched) assert.equal(fs.existsSync(target), false, target);
     assert.deepEqual(result.removed, untouched);
-    assert.deepEqual(result.kept, [codexComponent.target(home)]);
+    assert.deepEqual(result.kept, [editedComponent.target(home)]);
     assert.equal(fs.existsSync(manifestPath(home)), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -353,11 +431,8 @@ test('uninstall removes now-empty directories it created', () => {
     install(home, '0.1.0');
     uninstall(home);
     assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', 'js-harness')), false);
-    assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', 'js-harness')), false);
     assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', 'js-harness-orchestrator')), false);
-    assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', 'js-harness-orchestrator')), false);
     assert.equal(fs.existsSync(path.join(home, '.claude', 'skills', 'js-harness-protocols')), false);
-    assert.equal(fs.existsSync(path.join(home, '.codex', 'skills', 'js-harness-protocols')), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -443,7 +518,6 @@ test('uninstall from a manifest that names no created folder leaves the host fol
     fs.writeFileSync(manifestPath(home), JSON.stringify(manifest, null, 2));
     uninstall(home);
     assert.ok(fs.existsSync(path.join(home, '.claude')));
-    assert.ok(fs.existsSync(path.join(home, '.codex')));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1279,26 +1353,19 @@ test('sync returns its manifest when the folder a pruned file leaves cannot be l
 
 // --- T4: entry-level manifest records (install registers one hook entry per host) ---
 
-test('entryComponents declare the SessionStart hook for Claude and Codex', () => {
+test('entryComponents declare the SessionStart hook for Claude Code', () => {
   assert.equal(claudeHook.id, 'claude-hook');
   assert.deepEqual(claudeHook.pointer, ['hooks', 'SessionStart']);
   assert.deepEqual(claudeHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
-  assert.equal(codexHook.id, 'codex-hook');
-  assert.deepEqual(codexHook.pointer, ['hooks', 'SessionStart']);
-  assert.deepEqual(codexHook.target('/h'), path.join('/h', '.codex', 'hooks.json'));
-
-  const entry = claudeHook.entry();
-  assert.deepEqual(entry, {
+  assert.deepEqual(claudeHook.entry(), {
     matcher: 'startup|resume',
     hooks: [{ type: 'command', command: 'js-harness doctor --hook', timeout: 10 }],
   });
-  assert.deepEqual(codexHook.entry(), entry);
 });
 
-// --- Session channel, T6: the resume hook, a second `SessionStart` entry per host, for the matcher `compact` ---
+// --- Session channel, T6: the resume hook, a second `SessionStart` entry, for the matcher `compact` ---
 
 const claudeResume = hookById('claude-resume-hook');
-const codexResume = hookById('codex-resume-hook');
 // The turn-start hook of the rules (letter F, T16f): three Claude entries after the others, one of them a third
 // SessionStart entry in the Claude file, for the matchers after which a session is told again.
 const claudeRulesTurn = hookById('claude-rules-turn-hook');
@@ -1318,13 +1385,11 @@ test('entryComponents declare the turn-start hook of the rules for Claude alone:
   assert.deepEqual(claudeRulesSubagent.entry(), claudeRulesTurn.entry());
 });
 
-test('entryComponents declare the resume hook for Claude and Codex: a SessionStart entry for the matcher compact', () => {
-  assert.deepEqual([claudeResume.id, codexResume.id], ['claude-resume-hook', 'codex-resume-hook']);
-  assert.deepEqual([claudeResume.pointer, codexResume.pointer], [['hooks', 'SessionStart'], ['hooks', 'SessionStart']]);
-  assert.deepEqual([claudeResume.target('/h'), codexResume.target('/h')], [claudeHook.target('/h'), codexHook.target('/h')], 'the files the first entry is in');
-  const entry = claudeResume.entry();
-  assert.deepEqual(entry, { matcher: 'compact|clear|startup', hooks: [{ type: 'command', command: 'js-harness resume --hook', timeout: 15 }] });
-  assert.deepEqual(codexResume.entry(), entry);
+test('entryComponents declare the resume hook for Claude Code: a SessionStart entry for the matcher compact', () => {
+  assert.equal(claudeResume.id, 'claude-resume-hook');
+  assert.deepEqual(claudeResume.pointer, ['hooks', 'SessionStart']);
+  assert.deepEqual(claudeResume.target('/h'), claudeHook.target('/h'), 'the file the first entry is in');
+  assert.deepEqual(claudeResume.entry(), { matcher: 'compact|clear|startup', hooks: [{ type: 'command', command: 'js-harness resume --hook', timeout: 15 }] });
 });
 
 // What the count of components used to catch: a merge that kept both sides of an entry, declared twice, and two ids that collide.
@@ -1335,10 +1400,9 @@ test('entryComponents declare each hook once: ids are unique, and no two share a
   assert.equal(new Set(declared).size, declared.length, 'two components declare the same entry in the same place');
 });
 
-test('the SessionStart entries come in this order in each host file: the doctor, the resume hook, the rules, then the memory fallback', () => {
+test('the SessionStart entries come in this order in the Claude settings: the doctor, the resume hook, the rules, then the memory fallback', () => {
   const sessionStartIds = (file) => componentsIn(file).filter((component) => component.pointer.join('.') === 'hooks.SessionStart').map((component) => component.id);
   assert.deepEqual(sessionStartIds('settings.json'), ['claude-hook', 'claude-resume-hook', 'claude-rules-start-hook', 'claude-fallback-hook']);
-  assert.deepEqual(sessionStartIds('hooks.json'), ['codex-hook', 'codex-resume-hook', 'codex-fallback-hook']);
 });
 
 // --- Session channel, the context pause: a `PostToolUse` entry in Claude Code's settings and nowhere else ---
@@ -1350,7 +1414,6 @@ test('entryComponents declare the pause hook for Claude Code only: a PostToolUse
   assert.deepEqual(pauseHook.pointer, ['hooks', 'PostToolUse']);
   assert.deepEqual(pauseHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
   assert.deepEqual(pauseHook.entry(), { hooks: [{ type: 'command', command: 'js-harness resume --pause || exit 0', timeout: 2 }] });
-  assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.pointer.at(-1) === 'PostToolUse'), false, 'no Codex entry: a Codex session has no transcript the pause reads');
 });
 
 // --- The web notice for a WebFetch that fails as a tool error: a `PostToolUseFailure` entry (T4 of
@@ -1363,7 +1426,6 @@ test('entryComponents declare the web failure hook for Claude Code only: a PostT
   assert.deepEqual(webFailureHook.pointer, ['hooks', 'PostToolUseFailure']);
   assert.deepEqual(webFailureHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
   assert.deepEqual(webFailureHook.entry(), { matcher: 'WebFetch', hooks: [{ type: 'command', command: 'js-harness resume --pause || exit 0', timeout: 2 }] });
-  assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.pointer.at(-1) === 'PostToolUseFailure'), false, 'no Codex entry: WebFetch is a Claude Code tool');
 });
 
 test('install writes the web failure hook under hooks.PostToolUseFailure of the Claude settings, records it once; uninstall takes it back and leaves the user\'s own entry', () => {
@@ -1378,7 +1440,6 @@ test('install writes the web failure hook under hooks.PostToolUseFailure of the 
     const records = manifest.entries.filter((e) => e.path === settings && e.pointer.at(-1) === 'PostToolUseFailure');
     assert.deepEqual(records.map((record) => [record.pointer, record.entry, record.skipped]), [[['hooks', 'PostToolUseFailure'], webFailureHook.entry(), false]]);
     assert.equal(records[0].sha256, sha256(JSON.stringify(webFailureHook.entry())));
-    assert.equal(readJson(codexHook.target(home)).hooks.PostToolUseFailure, undefined, 'WebFetch is a Claude Code tool');
     // A second install writes no second entry.
     install(home, '0.1.0');
     assert.deepEqual(readJson(settings).hooks.PostToolUseFailure, [theirs, webFailureHook.entry()]);
@@ -1398,7 +1459,6 @@ test('entryComponents declare the permit relay for Claude Code only: a Permissio
   assert.deepEqual(permitHook.pointer, ['hooks', 'PermissionRequest']);
   assert.deepEqual(permitHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
   assert.deepEqual(permitHook.entry(), { hooks: [{ type: 'command', command: 'js-harness permit --hook || exit 0', timeout: 600 }] });
-  assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.pointer.at(-1) === 'PermissionRequest'), false, 'no Codex entry: the event is Claude Code\'s');
 });
 
 // --- The guard: a `PreToolUse` entry on the three tools it checks, in Claude Code's settings and nowhere else ---
@@ -1414,7 +1474,6 @@ test('entryComponents declare the guard hook for Claude Code only: a PreToolUse 
     matcher: '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Read|Write|Edit|MultiEdit|NotebookEdit|Grep|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$',
     hooks: [{ type: 'command', command: 'js-harness guard --hook || exit 0', timeout: 5 }],
   });
-  assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.pointer.at(-1) === 'PreToolUse'), false, 'no Codex entry: the tool names are Claude Code\'s');
 });
 
 test('the guard matcher is anchored: each tool it names matches, and a tool it does not name, or one that only contains its name, does not', () => {
@@ -1440,38 +1499,25 @@ test('entryComponents declare the share check for Claude Code only: a Stop entry
   assert.deepEqual(shareHook.pointer, ['hooks', 'Stop']);
   assert.deepEqual(shareHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
   assert.deepEqual(shareHook.entry(), { hooks: [{ type: 'command', command: 'js-harness guard --stop || exit 0', timeout: 5 }] });
-  assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && component.entry().hooks[0].command === 'js-harness guard --stop || exit 0'), false, 'no Codex entry: the transcript read is Claude Code\'s');
 });
 
-// --- The reply check: a `Stop` entry in the hooks file of each host ---
+// --- The reply check: a `Stop` entry in Claude Code's settings ---
 
 const claudeReplyHook = hookById('claude-reply-hook');
-const codexReplyHook = hookById('codex-reply-hook');
 
-test('entryComponents declare the reply check for both hosts: a Stop entry with no matcher, guarded to exit 0', () => {
-  assert.ok(claudeReplyHook, 'the claude-reply-hook component is declared');
-  assert.ok(codexReplyHook, 'the codex-reply-hook component is declared');
-  assert.deepEqual([claudeReplyHook.pointer, codexReplyHook.pointer], [['hooks', 'Stop'], ['hooks', 'Stop']]);
+test('entryComponents declare the reply check for Claude Code: a Stop entry with no matcher, guarded to exit 0', () => {
+  assert.deepEqual(claudeReplyHook.pointer, ['hooks', 'Stop']);
   assert.deepEqual(claudeReplyHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
-  assert.deepEqual(codexReplyHook.target('/h'), path.join('/h', '.codex', 'hooks.json'));
-  for (const hook of [claudeReplyHook, codexReplyHook]) {
-    assert.deepEqual(hook.entry(), { hooks: [{ type: 'command', command: 'js-harness reply --hook || exit 0', timeout: 5 }] });
-  }
+  assert.deepEqual(claudeReplyHook.entry(), { hooks: [{ type: 'command', command: 'js-harness reply --hook || exit 0', timeout: 5 }] });
 });
 
-// --- The memory backup: a `Stop` entry in the hooks file of each host (odd/tasks/memory-backup.md, D2) ---
+// --- The memory backup: a `Stop` entry in Claude Code's settings (odd/tasks/memory-backup.md, D2) ---
 
-test('entryComponents declare the memory backup hook for both hosts: a Stop entry with no matcher, guarded to exit 0', () => {
+test('entryComponents declare the memory backup hook for Claude Code: a Stop entry with no matcher, guarded to exit 0', () => {
   const claudeBackupHook = hookById('claude-backup-hook');
-  const codexBackupHook = hookById('codex-backup-hook');
-  assert.ok(claudeBackupHook, 'the claude-backup-hook component is declared');
-  assert.ok(codexBackupHook, 'the codex-backup-hook component is declared');
-  assert.deepEqual([claudeBackupHook.pointer, codexBackupHook.pointer], [['hooks', 'Stop'], ['hooks', 'Stop']]);
+  assert.deepEqual(claudeBackupHook.pointer, ['hooks', 'Stop']);
   assert.deepEqual(claudeBackupHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
-  assert.deepEqual(codexBackupHook.target('/h'), path.join('/h', '.codex', 'hooks.json'));
-  for (const hook of [claudeBackupHook, codexBackupHook]) {
-    assert.deepEqual(hook.entry(), { hooks: [{ type: 'command', command: 'js-harness backup --hook || exit 0', timeout: 5 }] });
-  }
+  assert.deepEqual(claudeBackupHook.entry(), { hooks: [{ type: 'command', command: 'js-harness backup --hook || exit 0', timeout: 5 }] });
 });
 
 // --- The template gate: a `PreToolUse` and a `PostToolUse` entry on the tools that show the user an output, in Claude Code's settings only ---
@@ -1489,55 +1535,47 @@ test('entryComponents declare the template gate for Claude Code only: an anchore
   const tools = new RegExp(matcher);
   for (const tool of ['Artifact', 'ArtifactData', 'AskUserQuestion', 'mcp__visualize__show_widget']) assert.ok(tools.test(tool), tool);
   for (const tool of ['ArtifactComments', 'Artifacts', 'mcp__visualize__show_widget2', 'Bash']) assert.equal(tools.test(tool), false, tool);
-  assert.equal(entryComponents.some((component) => component.target('/h') === path.join('/h', '.codex', 'hooks.json') && /template gate/.test(component.entry().hooks[0].command)), false, 'no Codex entry: the tools are Claude Code\'s');
 });
 
-test('entryComponents declare the memory fallback notice for both hosts: a SessionStart entry for every start, last', () => {
-  const ids = entryComponents.map((component) => component.id);
-  assert.deepEqual(ids.slice(-2), ['claude-fallback-hook', 'codex-fallback-hook']);
-  const [claudeHook, codexHook] = ['claude-fallback-hook', 'codex-fallback-hook'].map(hookById);
-  assert.deepEqual([claudeHook.pointer, codexHook.pointer], [['hooks', 'SessionStart'], ['hooks', 'SessionStart']]);
-  assert.deepEqual(claudeHook.target('/h'), path.join('/h', '.claude', 'settings.json'));
-  assert.deepEqual(codexHook.target('/h'), path.join('/h', '.codex', 'hooks.json'));
-  for (const hook of [claudeHook, codexHook]) {
-    assert.deepEqual(hook.entry(), {
-      matcher: 'startup|resume|clear|compact',
-      hooks: [{ type: 'command', command: 'js-harness backup --session-start || exit 0', timeout: 5 }],
-    });
-  }
+test('entryComponents declare the memory fallback notice for Claude Code: a SessionStart entry for every start, last', () => {
+  assert.equal(entryComponents.at(-1).id, 'claude-fallback-hook');
+  const fallback = hookById('claude-fallback-hook');
+  assert.deepEqual(fallback.pointer, ['hooks', 'SessionStart']);
+  assert.deepEqual(fallback.target('/h'), path.join('/h', '.claude', 'settings.json'));
+  assert.deepEqual(fallback.entry(), {
+    matcher: 'startup|resume|clear|compact',
+    hooks: [{ type: 'command', command: 'js-harness backup --session-start || exit 0', timeout: 5 }],
+  });
 });
 
 // What the Claude Code settings file holds of ours after an install: the two SessionStart entries, the pause hook's
 // PostToolUse one, the web failure hook's PostToolUseFailure one, the guard's PreToolUse one, and the share check's
-// and the reply check's Stop ones. Codex's hooks file holds the two SessionStart entries and the reply check's Stop one.
+// and the reply check's Stop ones.
 const ourPostToolUse = () => ourHooks('settings.json', 'PostToolUse');
 const ourPostToolUseFailure = () => ourHooks('settings.json', 'PostToolUseFailure');
 const ourPreToolUse = () => ourHooks('settings.json', 'PreToolUse');
 const ourStop = () => ourHooks('settings.json', 'Stop');
-const ourCodexStop = () => ourHooks('hooks.json', 'Stop');
 const ourRules = () => componentsIn('settings.json').filter((component) => component.id.startsWith('claude-rules-')).map((component) => component.entry());
-// The whole Claude settings file, and the Codex hooks file, as install writes them (see `ourFile`).
+// The whole Claude settings file as install writes it (see `ourFile`).
 const ourSettings = () => ourFile('settings.json');
 
-test('install writes the resume entry beside the doctor\'s in each host file and records both; uninstall removes both and the file it created', () => {
+test('install writes the resume entry beside the doctor\'s in the Claude settings and records both; uninstall removes both and the file it created', () => {
   const home = makeTmpHome();
   try {
     const manifest = install(home, '0.1.0');
-    const claudeFile = claudeHook.target(home);
-    for (const target of [claudeFile, codexHook.target(home)]) {
-      assert.deepEqual(readJson(target), ourFile(path.basename(target)), target);
-      const records = manifest.entries.filter((e) => e.path === target);
-      assert.deepEqual(records.map((record) => record.entry), componentsIn(path.basename(target)).map((component) => component.entry()));
-      // The file is the install's whichever entry made it: the last one removed is the one that deletes it.
-      assert.deepEqual(records.map((record) => [record.createdFile, record.skipped]), records.map(() => [true, false]), target);
-      assert.equal(records[1].sha256, sha256(JSON.stringify(claudeResume.entry())));
-    }
+    const target = claudeHook.target(home);
+    assert.deepEqual(readJson(target), ourFile('settings.json'));
+    const records = manifest.entries.filter((e) => e.path === target);
+    assert.deepEqual(records.map((record) => record.entry), componentsIn('settings.json').map((component) => component.entry()));
+    // The file is the install's whichever entry made it: the last one removed is the one that deletes it.
+    assert.deepEqual(records.map((record) => [record.createdFile, record.skipped]), records.map(() => [true, false]));
+    assert.equal(records[1].sha256, sha256(JSON.stringify(claudeResume.entry())));
     assert.deepEqual(readManifest(home).entries, manifest.entries, 'what is recorded is what was written');
 
     const result = uninstall(home);
     assert.deepEqual(result.entriesKept, []);
     assert.deepEqual([...result.entriesRemoved].sort(), entryComponents.map((component) => component.target(home)).sort());
-    assert.deepEqual([fs.existsSync(claudeHook.target(home)), fs.existsSync(codexHook.target(home))], [false, false]);
+    assert.equal(fs.existsSync(target), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1669,7 +1707,7 @@ test('an entry install wrote is still its own on a reinstall, and uninstall take
   }
 });
 
-test('an entry the Codex hooks.json already held, identical to ours, keeps its place and its trust through install and uninstall', () => {
+test('an entry the Codex hooks.json already held, identical to the one an earlier install wrote, keeps its place and its trust through that install and uninstall', () => {
   const home = makeTmpHome();
   try {
     const target = codexHook.target(home);
@@ -1680,7 +1718,7 @@ test('an entry the Codex hooks.json already held, identical to ours, keeps its p
     fs.writeFileSync(config, `${trust(0)}\n${trust(1)}`, 'utf8');
     const seeded = { hooks: fs.readFileSync(target, 'utf8'), config: fs.readFileSync(config, 'utf8') };
 
-    const manifest = install(home, '0.1.0', { codexConfig: config });
+    const manifest = install(home, '0.1.0', { ...EARLIER_INSTALL, codexConfig: config });
     assert.equal(manifest.entries.find((record) => record.path === target && deepEqualJson(record.entry, codexHook.entry())).createdEntry, false);
     uninstall(home);
     assert.deepEqual({ hooks: fs.readFileSync(target, 'utf8'), config: fs.readFileSync(config, 'utf8') }, seeded);
@@ -1881,13 +1919,11 @@ test('an update from an install made before the resume hook adds its entry, and 
       }
       // The older install: what `install` wrote and recorded when the doctor's entry was the only one.
       const older = install(home, '0.1.0');
-      for (const file of [claudeHook.target(home), codexHook.target(home)]) {
-        const data = readJson(file);
-        data.hooks.SessionStart = data.hooks.SessionStart.filter((entry) => entry.matcher !== 'compact|clear|startup' && !isRulesEntry(entry) && !isFallbackEntry(entry));
-        delete data.hooks.UserPromptSubmit;
-        delete data.hooks.SubagentStart;
-        fs.writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
-      }
+      const data = readJson(target);
+      data.hooks.SessionStart = data.hooks.SessionStart.filter((entry) => entry.matcher !== 'compact|clear|startup' && !isRulesEntry(entry) && !isFallbackEntry(entry));
+      delete data.hooks.UserPromptSubmit;
+      delete data.hooks.SubagentStart;
+      fs.writeFileSync(target, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
       fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: older.entries.filter((record) => record.entry.matcher !== 'compact|clear|startup' && !isRulesEntry(record.entry) && !isFallbackEntry(record.entry)) }, null, 2), 'utf8');
       assert.deepEqual(readJson(target).hooks.SessionStart, created ? [claudeHook.entry()] : [unrelated, claudeHook.entry()]);
 
@@ -1949,7 +1985,7 @@ test('uninstall removes the entry that is still there when the user removed the 
   }
 });
 
-test('install writes the pause hook under hooks.PostToolUse of the Claude settings, records it once, and writes nothing to Codex', () => {
+test('install writes the pause hook under hooks.PostToolUse of the Claude settings and records it once', () => {
   const home = makeTmpHome();
   try {
     const manifest = install(home, '0.1.0');
@@ -1958,7 +1994,6 @@ test('install writes the pause hook under hooks.PostToolUse of the Claude settin
     const record = manifest.entries.find((e) => e.path === settings && e.pointer.at(-1) === 'PostToolUse');
     assert.deepEqual([record.pointer, record.entry, record.createdFile, record.skipped], [['hooks', 'PostToolUse'], pauseHook.entry(), true, false]);
     assert.equal(record.sha256, sha256(JSON.stringify(pauseHook.entry())));
-    assert.equal(readJson(codexHook.target(home)).hooks.PostToolUse, undefined, 'a Codex session has no transcript for the pause to read');
 
     const before = fs.readFileSync(settings, 'utf8');
     const again = install(home, '0.1.0');
@@ -1970,7 +2005,7 @@ test('install writes the pause hook under hooks.PostToolUse of the Claude settin
   }
 });
 
-test('install writes the guard hook under hooks.PreToolUse of the Claude settings, records it once, and writes nothing to Codex', () => {
+test('install writes the guard hook under hooks.PreToolUse of the Claude settings and records it once', () => {
   const home = makeTmpHome();
   try {
     const manifest = install(home, '0.1.0');
@@ -1979,7 +2014,6 @@ test('install writes the guard hook under hooks.PreToolUse of the Claude setting
     const record = manifest.entries.find((e) => e.path === settings && e.pointer.at(-1) === 'PreToolUse');
     assert.deepEqual([record.pointer, record.entry, record.createdFile, record.skipped], [['hooks', 'PreToolUse'], guardHook.entry(), true, false]);
     assert.equal(record.sha256, sha256(JSON.stringify(guardHook.entry())));
-    assert.equal(readJson(codexHook.target(home)).hooks.PreToolUse, undefined, 'the tool names are Claude Code\'s: Codex has no guard entry');
 
     const before = fs.readFileSync(settings, 'utf8');
     const again = install(home, '0.1.0');
@@ -2325,9 +2359,9 @@ test('R3-002: install reports an entry skipped without throwing when the target 
 
     const record = manifest.entries.find((e) => e.path === target);
     assert.equal(record.skipped, true);
-    // The other entry component (codex-hook) must still be written normally.
-    const codexRecord = manifest.entries.find((e) => e.path === codexHook.target(home));
-    assert.equal(codexRecord.skipped, false);
+    // The file components must still be written normally, and the manifest records them.
+    assert.deepEqual(manifest.files.map((f) => f.path), components.map((component) => component.target(home)));
+    assert.ok(fs.existsSync(components[0].target(home)));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -2833,7 +2867,6 @@ test('the installed skill names the --global forms for the machine and the proje
   assert.match(text, /initialized repository/);
   assert.match(text, /refuse/);
   assert.doesNotMatch(text, /`js-harness (status|sync|uninstall)` /, 'no unqualified machine command left');
-  assert.equal(components[1].content('0.1.0'), text, 'Claude and Codex read the same text');
 });
 
 // A merge resolved by hand once left its markers inside the skill's template, and every install would have
@@ -2904,25 +2937,22 @@ function olderRelease(home, target) {
   fs.writeFileSync(manifestPath(home), JSON.stringify(manifest, null, 2));
 }
 
-test('the orchestrator skill is installed for Claude Code and for Codex with the same text, re-written by sync and removed by uninstall', () => {
+test('the orchestrator skill is installed for Claude Code, re-written by sync and removed by uninstall', () => {
   const home = makeTmpHome();
   try {
-    const [, , claudeOrchestrator, codexOrchestrator] = components;
+    const claudeOrchestrator = components.find((component) => component.id === 'claude-orchestrator-skill');
     assert.equal(claudeOrchestrator.target(home), path.join(home, '.claude', 'skills', 'js-harness-orchestrator', 'SKILL.md'));
-    assert.equal(codexOrchestrator.target(home), path.join(home, '.codex', 'skills', 'js-harness-orchestrator', 'SKILL.md'));
-    assert.equal(codexOrchestrator.content('0.1.0'), claudeOrchestrator.content('0.1.0'), 'Claude and Codex read the same text');
 
     install(home, '0.1.0');
     assert.equal(fs.readFileSync(claudeOrchestrator.target(home), 'utf8'), claudeOrchestrator.content('0.1.0'));
-    olderRelease(home, codexOrchestrator.target(home));
+    olderRelease(home, claudeOrchestrator.target(home));
     sync(home, '0.2.0');
-    assert.equal(fs.readFileSync(codexOrchestrator.target(home), 'utf8'), codexOrchestrator.content('0.2.0'));
+    assert.equal(fs.readFileSync(claudeOrchestrator.target(home), 'utf8'), claudeOrchestrator.content('0.2.0'));
 
     const result = uninstall(home);
-    assert.ok(result.removed.includes(claudeOrchestrator.target(home)) && result.removed.includes(codexOrchestrator.target(home)));
+    assert.ok(result.removed.includes(claudeOrchestrator.target(home)));
     assert.deepEqual(result.kept, []);
     assert.equal(fs.existsSync(path.join(home, '.claude', 'skills')), false, 'no skill folder is left under the home');
-    assert.equal(fs.existsSync(path.join(home, '.codex', 'skills')), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -2930,23 +2960,20 @@ test('the orchestrator skill is installed for Claude Code and for Codex with the
 
 // T7 of odd/tasks/rule-hierarchy.md: the protocols are one skill, loaded on demand; its text is tested in
 // bin/lib/protocols-skill.test.mjs.
-test('the protocols skill is installed for Claude Code and for Codex with the same text, re-written by sync and removed by uninstall', () => {
+test('the protocols skill is installed for Claude Code, re-written by sync and removed by uninstall', () => {
   const home = makeTmpHome();
   try {
     const claudeProtocols = components.find((component) => component.id === 'claude-protocols-skill');
-    const codexProtocols = components.find((component) => component.id === 'codex-protocols-skill');
     assert.equal(claudeProtocols.target(home), path.join(home, '.claude', 'skills', 'js-harness-protocols', 'SKILL.md'));
-    assert.equal(codexProtocols.target(home), path.join(home, '.codex', 'skills', 'js-harness-protocols', 'SKILL.md'));
-    assert.equal(codexProtocols.content('0.1.0'), claudeProtocols.content('0.1.0'), 'Claude and Codex read the same text');
 
     install(home, '0.1.0');
     assert.equal(fs.readFileSync(claudeProtocols.target(home), 'utf8'), claudeProtocols.content('0.1.0'));
-    olderRelease(home, codexProtocols.target(home));
+    olderRelease(home, claudeProtocols.target(home));
     sync(home, '0.2.0');
-    assert.equal(fs.readFileSync(codexProtocols.target(home), 'utf8'), codexProtocols.content('0.2.0'));
+    assert.equal(fs.readFileSync(claudeProtocols.target(home), 'utf8'), claudeProtocols.content('0.2.0'));
 
     const result = uninstall(home);
-    assert.ok(result.removed.includes(claudeProtocols.target(home)) && result.removed.includes(codexProtocols.target(home)));
+    assert.ok(result.removed.includes(claudeProtocols.target(home)));
     assert.deepEqual(result.kept, []);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -2954,7 +2981,7 @@ test('the protocols skill is installed for Claude Code and for Codex with the sa
 });
 
 test('the orchestrator skill has a one-line description a host can read, and names the commands an orchestrator runs', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   const frontmatter = /^---\nname: js-harness-orchestrator\ndescription: (.+)\n---\n/.exec(text);
   assert.ok(frontmatter, text.slice(0, 200));
   // A colon followed by a space, or a hash after one, would end or break the YAML value a host parses.
@@ -2966,7 +2993,7 @@ test('the orchestrator skill has a one-line description a host can read, and nam
 
 // T16f of odd/tasks/rule-hierarchy.md: the rules in force are read in the list, not in the relief file.
 test('the orchestrator skill reads the rules in force in the list, at its start from the handover prompt too', () => {
-  const lines = components[2].content('0.1.0').split('\n');
+  const lines = components[1].content('0.1.0').split('\n');
   const home = lines.find((line) => line.startsWith('- the rules in force'));
   assert.ok(home !== undefined, 'the list of where each thing lives names the rules in force');
   assert.ok(home.includes('`js-harness rules`') && home.includes('read the list, not the relief file'), home);
@@ -2976,7 +3003,7 @@ test('the orchestrator skill reads the rules in force in the list, at its start 
 
 // T9 of odd/tasks/session-channel.md: the handover ends with a `relieved` notice, which `sessions --measures` counts as a relief.
 test('the orchestrator skill has the one before append a relieved notice as the step after its handover', () => {
-  const lines = components[2].content('0.1.0').split('\n');
+  const lines = components[1].content('0.1.0').split('\n');
   const handover = lines.findIndex((line) => line.startsWith('- When you start from that prompt, '));
   assert.notEqual(handover, -1, 'the handover bullet is in the skill');
   assert.ok(lines[handover + 1].startsWith('- ') && lines[handover + 1].includes('`js-harness notify --to orchestrator --kind relieved "<why it was relieved>"`'), lines[handover + 1]);
@@ -2987,7 +3014,7 @@ test('the orchestrator skill has the one before append a relieved notice as the 
 // Two gates at once was a rule each session kept by hand, from the board. `check` keeps it now, so the
 // skill no longer asks for it: it says what a session still has to know, and what is still its own to keep.
 test('the orchestrator skill no longer asks a session to keep by hand the rule that check keeps', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.doesNotMatch(text, /never start a gate while another runs/);
   assert.doesNotMatch(text, /a gate is about to start/);
   // A whole test run of a session's own is no gate: the line names the command that puts it in line.
@@ -3001,7 +3028,7 @@ test('the orchestrator skill no longer asks a session to keep by hand the rule t
 // T8 of odd/tasks/gate-wait.md: M2 held by the records (Progress, 2026-10-16), so the two reviews run beside a
 // gate; what runs tests still waits, a sub-agent's tests included (`heavy-run-beside-gate`, 2026-10-16).
 test('the orchestrator skill lets both reviews run beside a gate, and keeps a sub-agent that runs tests waiting', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.doesNotMatch(text, /a reviewer wait for the gate to end/);
   assert.ok(text.includes(
     '\n- While a gate runs on the machine, run nothing heavy beside it: a quote (`js-harness sessions --quote`) and one test file that runs in under half a minute are free; a whole test suite, a measure, a read of the board and a sub-agent that runs tests wait for the gate to end. The two reviews do not: `js-harness codex-review` runs beside a gate, since out of a turn Codex\'s `node --test` is refused, and so does `js-harness lens-review`, whose lenses have no tools. Give each a base on the head\'s first-parent line, as `js-harness-protocols` section 3 says.\n',
@@ -3011,7 +3038,7 @@ test('the orchestrator skill lets both reviews run beside a gate, and keeps a su
 // odd/tasks/live-board.md, S5: work sessions write each event as a notice, and the lead sends the record to the
 // live board and points every reply to it (rule:live-board).
 test('the orchestrator skill has work sessions notify each event and the lead feed the live board and point to it', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   const [lead, work] = text.split('\n## A work session\n');
   assert.ok(work.includes('\n- Every event of your work reaches the user\'s live board as a notice: '), work);
   assert.match(work, /`opened` when you start, `note` when a step of your plan finishes, a pull request opens or merges, a decision is made or you report spend/);
@@ -3023,7 +3050,7 @@ test('the orchestrator skill has work sessions notify each event and the lead fe
 // The relief of an orchestrator is one prompt, always the same: it is in the skill as the block the user
 // copies, and it leads the new session back to this skill.
 test('the orchestrator skill carries its fixed opening prompt as its one fenced block, and the prompt names the skill', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   const blocks = [...text.matchAll(/^```\n([\s\S]*?)\n```$/gm)];
   assert.equal(blocks.length, 1);
   assert.match(blocks[0][1], /orchestrator/);
@@ -3033,21 +3060,21 @@ test('the orchestrator skill carries its fixed opening prompt as its one fenced 
 });
 
 test('the orchestrator skill says the opening of a new work session comes back as a block the user copies', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.ok(text.includes("it prints the session's first message as a block of its own"));
 });
 
 // Every question of the project reaches the user in one place, the orchestrator's chat, through the host's
 // question tool; it is recorded before it is asked and its answer after, so a compaction loses neither.
 test('the orchestrator skill lands ready pull requests with the merge queue before any merge by hand (harness-review e1)', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   const queue = text.indexOf('`js-harness merge-queue --land`');
   assert.ok(queue > 0, 'the skill names the merge queue');
   assert.ok(queue < text.indexOf('A pull request that changes code is merged on a green run'), 'the queue comes before the hand-merge rules');
 });
 
 test('the orchestrator skill says how a question reaches the user: recorded, asked in one place, answered and carried', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.ok(text.includes('\n## Questions to the user\n'));
   assert.ok(text.includes('`js-harness notify --to orchestrator --kind question`'));
   assert.ok(text.includes('`--to orchestrator --kind answer --question <n>`'));
@@ -3084,14 +3111,14 @@ test('the orchestrator skill says how a question reaches the user: recorded, ask
 });
 
 test('the orchestrator skill says what may run beside a running gate, and what a merge checks first', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.ok(text.includes('a quote (`js-harness sessions --quote`) and one test file that runs in under half a minute'));
   assert.ok(text.includes('`git merge-tree`'));
   assert.ok(text.includes('touches only documentation and none of the files the pull request changes'));
 });
 
 test('the orchestrator skill merges code on a green run of the merge with the current default branch, and documents on a clean merge-tree', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.ok(text.includes('- A pull request that changes code is merged on a green run of the project\'s CI whose checkout says it tested `Merge <head> into <base>`, with that base the default branch as origin has it now.'));
   assert.ok(text.includes('A run on an older base is stale: close and reopen the pull request, which runs it again on the merge of today.'));
   assert.ok(text.includes('The merge\'s message names the run, the base it tested and the head.'));
@@ -3100,14 +3127,14 @@ test('the orchestrator skill merges code on a green run of the merge with the cu
 });
 
 test('the orchestrator skill lists what is checked before the user leaves', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.ok(text.includes('- Before the user leaves, check and say: every session that waits has a declared wait running in its background work, none ended its turn to wait for the user, and your own watch is running.'));
 });
 
 // S4 of odd/tasks/quiet-machine.md: while the user is away the lead keeps the quiet wait running and, when it ends,
 // tells the user by a push notification what needs the user and that the PC can be turned off.
 test('the orchestrator skill keeps js-harness quiet --wait running while the user is away and pushes its end', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   const line = text.split('\n').find((one) => one.includes('While the user is away, keep `js-harness quiet --wait` running as a background task'));
   assert.ok(line, 'the skill has the line');
   assert.match(line, /When it exits 0, send the user a push notification \(the PushNotification tool\)/);
@@ -3118,7 +3145,7 @@ test('the orchestrator skill keeps js-harness quiet --wait running while the use
 // T8 of odd/tasks/session-channel.md: the orchestrator is the lead, not a watchman, and the twelve items of the
 // sweep (docs/sweep-2026-10-11.md, "JH 5", the two lists of this file) said where the old text was wrong.
 test('the orchestrator skill describes the lead and its charter, not a watchman', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.ok(text.includes('\n## The lead\n'));
   assert.ok(text.includes('What you do alone and what stays the user\'s is the charter the user approved'));
   assert.ok(text.includes('- You never implement, never commit, never write in a worktree and never answer a question for the user'));
@@ -3130,7 +3157,7 @@ test('the orchestrator skill describes the lead and its charter, not a watchman'
 });
 
 test('the orchestrator skill names the context pause and keeps the fixed prompt for a relief the user asks for', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   // Sweep A1 2, A1 3, A2 3, CD 3, CD 4: no limit is news, and the lead is compacted, not replaced for a share.
   assert.doesNotMatch(text, /past the limit/);
   assert.doesNotMatch(text, /passed the limit/);
@@ -3144,7 +3171,7 @@ test('the orchestrator skill names the context pause and keeps the fixed prompt 
 // The rotation of 2026-10-15 (the lead's relief file, 04:26 to 04:57): a fork could not be detached, killed the old
 // lead's loops, and archiving a lead would have archived the new one with it.
 test('the orchestrator skill says how a lead is rotated: started and detached, never forked, children detached before an archive', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.ok(text.includes('- A new lead is started with the host\'s session-start tool in a turn the user\'s own message starts, and detached from the old lead at once'));
   assert.ok(text.includes('- Never by a fork: an agent cannot detach a fork, and a fork inherits the old lead\'s context and stops its background work.'));
   assert.ok(text.includes('- Before a lead is archived, detach every session it started: archiving a session archives its idle side sessions.'));
@@ -3154,7 +3181,7 @@ test('the orchestrator skill says how a lead is rotated: started and detached, n
 // rule:question-context: on 2026-10-22 he answered a question by asking what it was for: he had taken an
 // onboarding question for the backup work. Every question now says first which work it serves.
 test('the orchestrator skill says every question opens with what it is for', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   for (const line of [
     '- Every question opens with what it is for: the work it belongs to, by the name the user knows (the project, the feature, the session), and what its answer changes.',
     'record the question with `--kind question`, its `text` opening with what it is for',
@@ -3164,7 +3191,7 @@ test('the orchestrator skill says every question opens with what it is for', () 
 // odd/tasks/status-report.md, S6: on 2026-10-20 he asked how it was going and got two lines; the answer is a
 // report of everything since the last one, from the facts `report --mark` prints, in six sections.
 test('the orchestrator skill says how the lead answers how the work is going: report --mark, then six sections', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.ok(text.includes('\n## The status report\n'));
   for (const line of [
     'When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well.',
@@ -3184,7 +3211,7 @@ test('the orchestrator skill says how the lead answers how the work is going: re
 // odd/tasks/backup-ready.md, L5: his words, "Deja lo que tenga que quedar como protocolo armado"; a reinstall is
 // prepared the same way each time: the readiness check, the private checklist, one item at a time, then the restore.
 test('the orchestrator skill says how a reinstall is prepared: backup ready, the checklist, the pause, then the restore', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.ok(text.includes('\n## Before a reinstall\n'));
   for (const line of [
     '1. Run `js-harness backup ready`.',
@@ -3198,7 +3225,7 @@ test('the orchestrator skill says how a reinstall is prepared: backup ready, the
 // rule:restart-announce. On 2026-10-20 he asked to be told in capitals when to restart, with everything paused first
 // to give him time; the lead pauses every session at a safe point, and only then says it.
 test('the orchestrator skill says how the lead pauses everything before it tells the user to restart', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.ok(text.includes('\n## The restart\n'));
   for (const line of [
     'When the user must restart or update (a Claude Desktop update `js-harness doctor` reports downloaded and not applied, a doctor fix that says to restart Claude Code, the machine), or whenever the user asks the lead to pause for a restart or an update, pause everything at a safe point first, and only then tell them.',
@@ -3219,7 +3246,7 @@ test('the orchestrator skill says how the lead pauses everything before it tells
 });
 
 test('the orchestrator skill says what every recap carries and how a block waits while the user is away', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.ok(text.includes('\n## The recap\n'));
   for (const line of [
     '- one line a session: its state, the effort mode its kind of work calls for and why;',
@@ -3246,7 +3273,7 @@ test('the orchestrator skill says what every recap carries and how a block waits
 });
 
 test('the orchestrator skill closes a work session with the notify command and keeps notices out of the relief file', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   // Sweep A1 16 and A1 17.
   assert.ok(text.includes('- When you have finished, say so in your first line. Write your summary from `js-harness summary template --title "<your title>"` into the file it names, commit and push it, and close with `js-harness notify --to orchestrator --kind closed --summary <that file> "<what you delivered>"`: nothing more goes to you, and the lead reads your summary and archives you.'));
   assert.doesNotMatch(text, /Your last prompt is the closing notice/);
@@ -3256,7 +3283,7 @@ test('the orchestrator skill closes a work session with the notify command and k
 // The lead's loops have owners since PR 201: a fork killed the old lead's loops on 2026-10-15 and nothing said whose
 // they were. The skills name the command, and the lead restarts its own after a compaction and touches no other's.
 test('the skills name js-harness loop, and the lead restarts only the loops it owns', () => {
-  const orchestrator = components[2].content('0.1.0');
+  const orchestrator = components[1].content('0.1.0');
   assert.ok(orchestrator.includes('- `js-harness loop run <name> --purpose "<what it is for>" --until "<what ends it>" -- <command>`, in the background'));
   assert.ok(orchestrator.includes('`js-harness loop status` lists the project\'s loops with their owners'));
   assert.ok(orchestrator.includes('- Loops have owners. At your start and after a compaction, run `js-harness loop status`.'));
@@ -4262,7 +4289,7 @@ test('the js-harness skill carries the memory hygiene protocol: when, what alone
 // D3 of odd/tasks/memory-hygiene.md, settled by the user's words of 2026-10-15: the lead archives and opens
 // sessions itself where the host gives it the tool; TaskStop was seen to leave a background command's node alive.
 test('the skills say who archives and opens sessions, and to check that TaskStop left no process behind', () => {
-  const orchestrator = components[2].content('0.1.0');
+  const orchestrator = components[1].content('0.1.0');
   assert.ok(orchestrator.includes('archives the old orchestrator itself when the host gives it a tool to archive sessions'));
   assert.ok(orchestrator.includes('a work session whose work is fully finished'));
   // odd/tasks/session-close.md, S4: a session closed with its summary is read and archived, no question.
@@ -4276,14 +4303,14 @@ test('the skills say who archives and opens sessions, and to check that TaskStop
 });
 
 test('the orchestrator skill tells a work session never to end a turn waiting for a message or an event, present or away', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.ok(text.includes('- Never end a turn waiting for a message or an event, whether the user is present or not: write your state, start `js-harness wait` in the background for what you wait on, and keep working; the host compacts a session inside a turn.'));
 });
 
 // odd/tasks/no-manual-compact.md, S1 and S3: he no longer compacts by hand, and the lead sends a stopped session its
 // next prompt.
 test('the orchestrator skill says the user never compacts by hand and the lead sends a stopped session its next prompt', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   assert.ok(text.includes('- The user never compacts a session by hand, present or away: at its context pause a work session writes its state to its feature document and keeps working, and the host compacts it by itself. A work session that stops instead gets its next prompt from you, by `SendMessage` to its title; never hand the user a compaction command or a resume prompt to send.'));
   assert.doesNotMatch(text, /\/compact/, 'no compaction command is named to the user');
 });
@@ -4295,7 +4322,7 @@ const LEAD_TEACHING = 'Teaching, where the roadmap holds `## Advice mode` (a pro
 const SESSION_TEACHING = '- Where the roadmap holds `## Advice mode`, read it before you put a decision to the user: with `Teaching: on`, the question\'s text says why, at the level the line records for the area the decision touches, and names that area\'s ADR, or its open decision (`OD<n>`) while it has none; you teach nowhere else. A notice from the lead that the teaching or a level changed holds from the moment it arrives, and the first change of yours to the roadmap writes it into `## Advice mode`.';
 
 test('the orchestrator skill gives the first lead its start and carries the onboarding\'s teaching, where a roadmap records it', () => {
-  const text = components[2].content('0.1.0');
+  const text = components[1].content('0.1.0');
   const at = (needle) => {
     const index = text.indexOf(needle);
     assert.ok(index !== -1, needle);
@@ -4305,7 +4332,6 @@ test('the orchestrator skill gives the first lead its start and carries the onbo
   assert.ok(at(FIRST_LEAD) < at('## Before a reinstall'));
   assert.ok(at(LEAD_TEACHING) > at('\n## The lead\n') && at(LEAD_TEACHING) < at('\n## The status report\n'));
   assert.ok(at(SESSION_TEACHING) > at('\n## A work session\n'));
-  assert.equal(components[3].content('0.1.0'), text, 'Codex gets the same skill');
 });
 
 // The rename over the manifest is refused for a moment on Windows while another process (an antivirus, the indexer,

@@ -14,8 +14,7 @@ import { GAP_STATES } from './lib/digest.mjs';
 
 const BIN = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
 // The rows of `doctor` that are the harness's own. The others are tools of the stack (engram, codegraph, Codex...),
-// whose state is the machine's, not the install's. `codex-trust` is the harness's, and a gap on a clean install by
-// design: trusting the Codex hooks is the user's step, which install never takes (odd/tasks/codex-hook-trust.md).
+// whose state is the machine's, not the install's.
 const OWN_ROWS = ['memory-rules', 'session-classes', 'remote-server', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'host-update', 'stack-update', 'clean'];
 // Every state a row reports in, so a row whose state is not one of these is a failure of the run, not a pass.
 const STATES = new Set([...GAP_STATES, 'ok', 'n/a', 'unknown']);
@@ -122,35 +121,28 @@ test('a clean home installs the harness, reports no gap of its own, runs its ses
         assert.ok(!GAP_STATES.has(row[column]), `${id} ${column} is a gap: ${row[column]}; fix: ${JSON.stringify(row.fix)}`);
       }
     }
-    // Codex runs none of the five harness hooks until the user trusts them, and doctor says so.
-    const trust = rows.find((row) => row.id === 'codex-trust');
-    assert.equal(trust.codex, 'missing');
-    assert.equal(trust.fix.codex.filter((line) => line.startsWith('  ')).length, 5, JSON.stringify(trust.fix));
+    // Codex only reviews: install wrote nothing under its home (odd/tasks/drop-codex-components.md).
+    assert.equal(fs.existsSync(path.join(home, '.codex')), false);
     // The commands the installed hooks run answered: they reached this checkout through the shim.
     assert.equal(rows.find((row) => row.id === 'hook-commands').claude, 'ok');
 
-    // Each session-start entry of both hosts, run as its host runs it: by name, through a shell, with the hook's input.
+    // Each session-start entry of Claude Code, run as it runs it: by name, through a shell, with the hook's input.
     const ran = [];
-    for (const file of [path.join(home, '.claude', 'settings.json'), path.join(home, '.codex', 'hooks.json')]) {
-      for (const entry of JSON.parse(fs.readFileSync(file, 'utf8')).hooks.SessionStart) {
-        const source = entry.matcher.split('|').includes('compact') ? 'compact' : 'startup';
-        const input = JSON.stringify({ hook_event_name: 'SessionStart', source, session_id: '00000000-0000-4000-8000-000000000000', cwd: project });
-        for (const { command } of entry.hooks) {
-          const hook = spawnSync(command, { cwd: project, env, encoding: 'utf8', input, shell: true, timeout: 60_000 });
-          assert.equal(hook.status, 0, `${command}: ${hook.stderr}`);
-          // A session-start hook says nothing, or one JSON object for the host.
-          if (hook.stdout.trim() !== '') assert.equal(typeof JSON.parse(hook.stdout), 'object', `${command}: ${hook.stdout}`);
-          ran.push(command);
-        }
+    for (const entry of JSON.parse(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8')).hooks.SessionStart) {
+      const source = entry.matcher.split('|').includes('compact') ? 'compact' : 'startup';
+      const input = JSON.stringify({ hook_event_name: 'SessionStart', source, session_id: '00000000-0000-4000-8000-000000000000', cwd: project });
+      for (const { command } of entry.hooks) {
+        const hook = spawnSync(command, { cwd: project, env, encoding: 'utf8', input, shell: true, timeout: 60_000 });
+        assert.equal(hook.status, 0, `${command}: ${hook.stderr}`);
+        // A session-start hook says nothing, or one JSON object for the host.
+        if (hook.stdout.trim() !== '') assert.equal(typeof JSON.parse(hook.stdout), 'object', `${command}: ${hook.stdout}`);
+        ran.push(command);
       }
     }
     assert.deepEqual(ran, [
       'js-harness doctor --hook',
       'js-harness resume --hook',
       'js-harness rules --hook || exit 0',
-      'js-harness backup --session-start || exit 0',
-      'js-harness doctor --hook',
-      'js-harness resume --hook',
       'js-harness backup --session-start || exit 0',
     ]);
 

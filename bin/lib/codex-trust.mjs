@@ -236,9 +236,13 @@ function groupMoves(data, places) {
  * `sync` those no longer shipped), planned before an entry is taken out, since the places are those of the hooks.json
  * as it is now: one per hooks.json and config.toml its records name (`trustConfigs`, every one an install recorded),
  * with where each of its groups goes. A hooks.json that cannot be read, or holds none of the entries, has none: nothing
- * of it is removed, so no key moves. */
-export function planTrustMoves(removing) {
+ * of it is removed, so no key moves. `earlier`, `{ hooksPath, config }`, is for an install older than `trustConfigs`
+ * (0.96.0 and before, c7af39e2): a record of that hooks.json naming none has its trust in that config.toml, today's. */
+export function planTrustMoves(removing, earlier = null, platform = process.platform) {
   const plans = [];
+  removing = removing.map((entry) => (!entry.trustConfigs?.length && earlier && samePath(entry.path, earlier.hooksPath, platform)
+    ? { ...entry, trustConfigs: [earlier.config] }
+    : entry));
   for (const hooksPath of new Set(removing.filter((entry) => entry.trustConfigs?.length).map((entry) => entry.path))) {
     const records = removing.filter((entry) => entry.path === hooksPath);
     let data;

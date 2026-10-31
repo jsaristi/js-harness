@@ -45,11 +45,12 @@ export const CUT_MESSAGE_SOURCES = Object.freeze({
 // The folder name a project's AGENTS.md is titled with; its title is a heading, and no span.
 const PROJECT = 'project';
 
-/** A component's source id: its id without the host it is written for, since both hosts get the same text. */
+/** A component's source id: its id without the host it is written for. Only Claude Code's are written now (D4), and the
+ * ids an earlier version's Codex copies shared stay as the coverage data names them. */
 const shippedId = (component) => component.id.replace(/^(?:claude|codex)-/, '');
 
 /** The text sources at `version`: `{ id, from, text }` each, `from` saying where the text goes. Each file `install`
- * writes for both hosts is one source. `readFile(path)` gives a file of this repository, or `null` when it is not
+ * writes is one source. `readFile(path)` gives a file of this repository, or `null` when it is not
  * there, which leaves that source out. */
 export function textSources(version, readFile) {
   const sources = [];

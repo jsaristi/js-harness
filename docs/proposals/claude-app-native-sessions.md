@@ -439,6 +439,10 @@ Steps 2 to 5 ran in JH 107 on his answer to question 128 (the lead's transcript 
     question written out" (`manifest.mjs:132`) could go, at about 16 tokens a load, against a Codex review and the
     lenses for a code commit. The gain is below the cost, so it is dropped.
   - Section 10's ~400 and ~300 tokens of skill text are therefore 0 within his yes; what remains needs R1.
+- **Step 6, 2026-10-31, JH 117, on his D4 (question 136, "Sí, sácalos (Recomendada)").** `install` declares no Codex
+  component; `sync`, which both `install` and `sync` run, already removed a component no longer declared while its
+  bytes are the recorded ones, with its hooks' trust, so the earlier copies needed tests, not new removal code. The
+  doctor's `codex-trust` row left with them. Detail and proof: `odd/tasks/drop-codex-components.md`.
 
 ## 13. His decisions
 
