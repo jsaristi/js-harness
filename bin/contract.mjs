@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { CONTRACT_TEMPLATE, doneWhen, isContract, modeLine, parseContract, taskModes, validateContract } from './lib/contract.mjs';
 import { ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
-import { depthPassJudge, isDocument } from './lib/depth-pass.mjs';
+import { depthPassJudge } from './lib/depth-pass.mjs';
 import { localDay } from './lib/flaky.mjs';
 
 export const USAGE =
@@ -129,9 +129,9 @@ export function discoverContracts(
   return found;
 }
 
-/** One `{ label, ok, errors }` per entry from `discoverContracts` or from explicit files. Given the project's
- * `root`, each entry is also held to `rule:depth-pass` (./lib/depth-pass.mjs) at its repository path, `file` or
- * else its label; `run` and `goal` give none, since the pass is a gate's question and not a run's. */
+/** One `{ label, ok, errors }` per entry from `discoverContracts` or from explicit files. Given `depthPass`, the
+ * control `depthPassFor` builds, each entry is also held to `rule:depth-pass` at its project path, `file` or else
+ * its label; `run` and `goal` give none, since the pass is a gate's question and not a run's. */
 export function validateEntries(entries, { depthPass = null } = {}) {
   return entries.map(({ label, file = label, markdown, error }) => {
     if (error) return { label, ok: false, errors: [`cannot read: ${error}`] };

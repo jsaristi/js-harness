@@ -225,6 +225,8 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
       (the eval, or its owed date) and the next feature, "harness alignment to the depth pass", opened by the lead
       after this lands. Route: inline. L21.
 - [ ] T6 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
+- [ ] T8 (kind: verify) Codex's two findings its recheck of c1e482b..6b10846 left open (the verdict trail across
+      renames; the reading at the command's edge), fixed in ff8c61a: Codex over them from e2d46f3, `--again`. L24.
 
 ## State for a resume
 - Branch `rule/depth-pass` in worktree `D:\js-harness\.claude\worktrees\depth-pass-rule` (from b66e8211; the old
@@ -233,19 +235,10 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
 - Slice 1 (T4) is 1722be2d (L19); slice 2 (T5) is 36439e1e (L20); section 9's line and T7 are the two commits after
   it (L21).
 - Reviewed and recorded: Codex b5bf748..c1e482b and c1e482b..6b10846 (its recheck: 2 of 4 fixed); lenses over
-  both ranges. Open from them, uncommitted work in progress at the context pause: (a) Codex, the verdict trail does
-  not follow renames; (b) Codex, the reading belongs at the command's edge: `bin/lib/depth-pass.mjs` becomes pure
-  (`depthPassJudge` takes `{ since, today, opened, branch, staged, onTrunk, trail, version }`), and
-  `depthPassFor(root)` moves to `bin/contract.mjs`, which reads `harness.json` and git (`openedOn` with `-M
-  --diff-filter=AR --relative`, `branchOf` over `origin/HEAD|main|master..HEAD`, `trail` by `git log --follow
-  --no-merges --name-only <trunk>..HEAD -- <file>`, `version` by `git show <hash>:<path>`, `onTrunk` by `git show
-  <trunk>:./<file>`); `validateEntries(entries, { depthPass })` takes the judge, built by `checkCommand` and by
-  `checkContracts` (`bin/check.mjs`, at its 2010-line ceiling: change lines, add none); (c) the reliability lens, a
-  verdict already on the trunk is not judged again. Two tests for (a) and (c) are written in
-  `bin/lib/depth-pass.test.mjs`, red as predicted; its tests import `depthPassFor` from `../contract.mjs` once moved.
-- Next, in order: (1) finish (a)-(c), 24 of 24, commit; (2) Codex once over 6b10846..HEAD and the lenses; (3) push,
-  PR with the merge of origin/main if JH 123 has landed, ready notice with `--pr`, `docs/sessions/` summary, closed
-  notice.
+  both ranges, and over 6b10846..ff8c61a. ff8c61a closes their open findings (L24); the commit after it takes the
+  readability lens's two. Codex over them is T8: `codex-review --base e2d46f3 --again`, one run.
+- Next, in order: (1) T8, then the lenses over ff8c61a..HEAD; (2) push, PR with the merge of origin/main if JH 123
+  has landed, ready notice with `--pr`, `docs/sessions/` summary, closed notice.
 
 ## Log
 - L1 (2026-10-31T11:55:49Z, his words, the lead's transcript `0f71b2c6`, line 42804, read with
@@ -493,3 +486,12 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   `project.mjs` at its ceiling; L17's "`sync` writes" stays as history, L20 records the change. His tapped answer to
   question 148 (the lead's transcript `0f71b2c6`, line 44186, read with `sessions --quote`): "Claude reemplaza y
   Codex paga después (Recomendada)", written into the alignment's first item, closing its open point.
+- L24 (2026-10-31, T6 and T8: ff8c61a and the reviews over it; the host compacted this session at 09:05 while they
+  ran, with the state already committed): ff8c61a closes Codex's two open findings and the reliability lens's one
+  (a verdict already on the trunk is not judged again): `bin/lib/depth-pass.mjs` is pure, `depthPassJudge` takes the
+  history as facts and readers, `depthPassFor` reads it in `bin/contract.mjs`, and the trail follows renames by
+  `git log --follow`; two tests written first, red, then 24 of 24. The lenses over 6b10846..ff8c61a (reliability
+  and resilience none; readability two, both taken): `validateEntries`'s comment still named `root`, and
+  `isDocument` was imported and unused in `bin/contract.mjs`. Codex refused a second recheck of c1e482b's findings,
+  since the first left two open, and asked for a follow-up task (T8) and one run from e2d46f3 with `--again`; that
+  run is the next one, over the fix commit as well.
