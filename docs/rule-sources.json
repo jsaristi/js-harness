@@ -255,6 +255,35 @@
     "kind": "design",
     "path": "odd/tasks/rule-hierarchy.md"
   },
+  "depth-pass": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "la regla numero 1 sobre la que siempre se va a basar el modelo",
+        "date": "2026-10-31",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 42804
+      },
+      {
+        "quote": "Quiero una version mas profunda de esta tarea, no una mas grande",
+        "date": "2026-10-31",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 42859
+      },
+      {
+        "quote": "me gustaria que adoptaramos la idea mejorada",
+        "date": "2026-10-31",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 42878
+      }
+    ],
+    "reading": "Before large work is built, and whenever he asks, a depth pass in his order: the discipline's method, the rawest material cited, what excellent and complete mean as a bar per spec, the cheapest refutation run before code with a verdict, and his request rewritten last beside his words; a refuting verdict reaches him before any code, and the pass reaches him in the feature's report. Its text is section 9 of js-harness-protocols, named in one line at the head of every CLAUDE.md the harness writes (odd/tasks/depth-pass-rule.md, draft v3).",
+    "accepted": "His answer to question 143, tapped, 2026-10-31T12:35:41Z (the lead's transcript 0f71b2c6, line 43370): \"Sí, v3, trabajo grande y cuando la pida (Recomendada)\".",
+    "checked": {
+      "date": "2026-10-31",
+      "by": "command"
+    }
+  },
   "double-review": {
     "kind": "words",
     "quotes": [

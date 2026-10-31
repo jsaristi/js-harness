@@ -78,6 +78,11 @@ export const COVERAGE = {
       "level": "owed",
       "since": "2026-10-28"
     },
+    "depth-pass": {
+      "level": "protocol",
+      "path": "bin/lib/protocols-skill.mjs",
+      "phrase": "Deeper, not bigger: the pass grounds the work asked for and adds none"
+    },
     "double-review": {
       "level": "owed",
       "since": "2026-10-28"
@@ -713,7 +718,7 @@ export const COVERAGE = {
     ],
     "protocols-skill": [
       "dbb0ff001b03",
-      "a4c6035260a5",
+      "7e1ff1ae6f1c",
       "97be50cbf1ac",
       "d9debb17aa57",
       "954fc8e56820",
@@ -724,6 +729,10 @@ export const COVERAGE = {
       "d4c4f6039f1e",
       "2433a1420941",
       "14d717b10cea",
+      {
+        "hash": "9e28e4998af5",
+        "context": "the skill's index names section 9, whose items hold rule:depth-pass; a title, no obligation"
+      },
       "336cc5e6331a",
       "62cc104f711c",
       "1e51727a49bb",
@@ -783,7 +792,23 @@ export const COVERAGE = {
       "6ff9f06d1317",
       "e97f8322032a",
       "4e69bec6b964",
-      "bfbc2b380256"
+      "bfbc2b380256",
+      {
+        "hash": "7ec75310272e",
+        "context": "the heading of section 9, whose items hold rule:depth-pass; a title, no obligation"
+      },
+      {
+        "hash": "9cc13a77a365",
+        "context": "the incident rule:depth-pass answers (PR 737, odd/tasks/depth-pass-rule.md); a record, no obligation"
+      },
+      {
+        "hash": "bfb455e6f62d",
+        "context": "the five questions rule:depth-pass answered before it was added; a record, no obligation"
+      },
+      {
+        "hash": "84aadfb1196b",
+        "context": "the cost of section 9 and the day it is reviewed; a record, no obligation"
+      }
     ],
     "rules-block": [
       "b66542635d2a",

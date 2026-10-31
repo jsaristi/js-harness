@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `09945b46a441`. In force: 67 (40 of Sebastián, 27 of the project). Retired: 4.
+Hash `e1a5347d3d12`. In force: 68 (41 of Sebastián, 27 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -44,6 +44,11 @@ The most input tokens a Codex review may cost for each changed line of its slice
 The share of its context window at which a session pauses, writes its state and judges whether what is left fits before the host compacts: 88 percent of the context window. The flag `--context-pause` overrides it for one run.
 - Read by: `bin/lib/sessions.mjs`.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-12.
+
+### depth-pass
+Before large work is built, and whenever he asks, its feature document holds a depth pass in his order (method, raw material, a bar per spec, a refutation run before code with its verdict, his request rewritten last), committed before the first code commit; a refuting verdict reaches him before any code: "- Large work is work a fresh session could not finish from the request and \`git diff\` alone; it has a feature document under \`odd/tasks/\`."
+- Home: `bin/lib/protocols-skill.mjs`.
+- Since 2026-10-31. Row: reports. Source: his words of 2026-10-31, 2026-10-31, 2026-10-31, checked by the command on 2026-10-31.
 
 ### double-review
 A proposal that changes one of his decisions passes two read-only readers that did not write it: "- A proposal that changes one of the user's decisions, whether a design before it is built, a plan, an analysis with figures, a protocol or a change of the charter, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing."

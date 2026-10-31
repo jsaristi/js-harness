@@ -28,10 +28,9 @@ proof's answer, read from that material, did not reach him before the code.
 
 ## In scope / Out of scope
 - In: the rule's text in `bin/lib/protocols-skill.mjs` (a new section 9); a one-line pointer after the import in the
-  root `CLAUDE.md` and at the head of `claudeBlock` (`bin/lib/project.mjs`); a line in `wording-is-the-need`'s
-  paragraph pointing to it; the rule's declaration (`bin/lib/rules-data.mjs`, `docs/RULES.md`, through
-  `js-harness rules change`); the control in `bin/lib/contract.mjs` and the `contracts` row, its test, its legacy
-  list and its entry in `bin/lib/rules-coverage-data.mjs`; this document; `docs/sessions/`.
+  root `CLAUDE.md` and at the head of `claudeBlock` (`bin/lib/project.mjs`); the rule's declaration (`bin/lib/rules-data.mjs`, `docs/RULES.md`, through
+  `js-harness rules change`); the control in `bin/lib/contract.mjs` and the `contracts` row, its test, its date
+  exemption and its entry in `bin/lib/rules-coverage-data.mjs`; this document; `docs/sessions/`.
 - Out: removing `CLAUDE.md`'s `@AGENTS.md` import, which changes his Principle 5 (`docs/ROADMAP.md`, line 25, his D3
   of 2026-10-26), a separate question for later; the stop guard, `docs/FAILURES.md` and
   `odd/tasks/lead-duty-checks.md` (JH 123 works on them); his `~/.claude`, `~/.codex`, credentials and gentle-ai's
@@ -203,11 +202,11 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
       89c04507 (v1); v2 in this commit.
 - [x] T2 (kind: verify) specs 1-4: `rule:double-review` on draft v2 and the three candidates (L11, L12), draft v3
       (L13). Route: two read-only readers, two rounds each.
-- [ ] T3 (kind: docs) specs 1-4: questions (a) and (b) to the lead, one at a time, each with the reviewed text, what
+- [x] T3 (kind: docs) specs 1-4: questions (a) and (b) to the lead, one at a time, each with the reviewed text, what
       the readers changed and the cost. Route: inline.
-- [ ] T4 (kind: build) after his yes to (a): the rule through `js-harness rules change depth-pass` on a `rule/` branch,
-      his words quoted with their date; section 9, the pointer in the root `CLAUDE.md` and in `claudeBlock`, the
-      clause in `wording-is-the-need`.
+- [x] T4 (kind: build) after his yes to (a): the rule through `js-harness rules change depth-pass` on a `rule/` branch,
+      his words quoted with their date; section 9, the pointer in the root `CLAUDE.md` and in `claudeBlock` (v3
+      dropped the clause in `wording-is-the-need`, L13). Route: inline. The commit after b5bf7484 (L19).
 - [ ] T5 (kind: build) after his yes to (a): the control, its test first with PR 737's document replayed and a
       planted break that turns it red, its legacy list, its `rules coverage` entry; rebased on JH 123 and the coverage
       data regenerated.
@@ -218,21 +217,14 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
 
 ## State for a resume
 - Branch `rule/depth-pass` in worktree `D:\js-harness\.claude\worktrees\depth-pass-rule` (from b66e8211; the old
-  `worktree-depth-pass-rule` on origin holds the documents only). His yes: 143 (v3, large work and when asked), 144
-  ("Encabeza los principios y el 7 se queda (Recomendada)", the lead's transcript line 43523, to be read with
-  `sessions --quote` and logged as L18). Question (c), readers on every large plan, not sent yet.
-- Uncommitted on purpose: section 9 in `bin/lib/protocols-skill.mjs` (green) and its tests in
-  `bin/lib/protocols-skill.test.mjs` (one still red: the pointer).
-- Next, in order: (1) copy the test file aside and `git checkout` it, so the tree differs only in the home; run
-  `node bin/js-harness.mjs rules change depth-pass` with JSON on stdin: set {subject, owner "sebastian"}, path
-  `bin/lib/protocols-skill.mjs`, phrases from section 9 ("Deeper, not bigger: the pass grounds the work asked for and
-  adds none", "the analysis first and the rewrite last", "A refuting verdict reaches the user as a question before
-  any code", "never the user's summary nor this document", "The pass reaches the user in the feature's report"),
-  source words: quotes {session 0f71b2c6-cbce-43ca-a031-276a4b2c381f, lines 42804, 42859, 42878, 43370, excerpt},
-  reading, accepted (`sourceOf`, `bin/lib/rules-change.mjs:260`). (2) Restore the test file; add the pointer after the
-  import in the root `CLAUDE.md` and as the first paragraph of `claudeBlock` ("the owner asks"); fix the tests that
-  pin `claudeBlock` (hash, line ceiling: see commit 665baea7); the coverage entry (`rules coverage --refresh`); one
-  commit. (3) Slice 2, the control. (4) T7, the roadmap, as 144 says. (5) Reviews, PR.
+  `worktree-depth-pass-rule` on origin holds the documents only). His yes: 143 (L15) and 144 (L18). Question (c),
+  readers on every large plan, not sent yet: it goes once slice 1 is committed.
+- Slice 1 (T4) is the commit after b5bf7484 (L19). Its control is `protocol` level until slice 2 makes it `check`.
+- Next, in order: (1) question (c) to the lead. (2) Slice 2 (T5), the control: tests first in
+  `bin/lib/contract.test.mjs` with PR 737's document replayed and a planted break, git-aware in `checkContracts`
+  (`bin/check.mjs:73`) and `contract check`, the date exemption, `depthPassSince` written by `sync`, the coverage
+  entry raised to `check`. (3) T7, the roadmap, as 144 says. (4) Merge origin/main (JH 123), Codex, the lenses and a
+  verifier per code slice, `npm run check`, push, PR, ready notice.
 
 ## Log
 - L1 (2026-10-31T11:55:49Z, his words, the lead's transcript `0f71b2c6`, line 42804, read with
@@ -401,3 +393,20 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   `claudeBlock`, the tests that pin them, the coverage entry. Slice 2, the control, tests first with a planted
   break. Slice 3, the roadmap (T7) once 144 is answered. In a project the control holds only once `harness.json`
   declares `depthPassSince`, which `sync` writes when it ships the rule, so no project turns red on upgrade.
+- L18 (2026-10-31T12:38:03Z, his answer to question 144, the lead's transcript `0f71b2c6`, line 43523, read with
+  `js-harness sessions --quote`, tapped): "Encabeza los principios y el 7 se queda (Recomendada)". T7 writes it so:
+  the roadmap's principles open with "Regla 1: el pase de profundidad" as Principle 7's practical form, and the
+  seven keep their numbers and words.
+- L19 (2026-10-31, slice 1 built): the host compacted this session at 07:42 local after its state was committed
+  (b5bf7484); it resumed from that state. `rules change depth-pass` refused his tapped answer at line 43370 as a
+  quote, so it stays the source's `accepted` and the quotes are his typed lines 42804, 42859 and 42878. The pointer
+  in `claudeBlock` first broke the template literal (unescaped backticks), which made both test files fail whole.
+  `project.mjs` would have grown by three lines past its ceiling (`bin/conventions-structure.test.mjs`, 1978, a
+  ceiling that only goes down), so `realish`'s comment was reflowed to 118 columns, 24 lines to 21, its words
+  unchanged. Rules coverage held four obligations of section 9 untied (the large-work bullet, items 3 and 5, the
+  close), so the declaration gained four phrases taken from them, written into `bin/lib/rules-data.mjs` after the
+  command ran; the heading, the index entry, the incident, the five questions and the cost are context with their
+  reasons. The init block's hash moves on purpose (`bin/lib/template-block.test.mjs`, the reason beside it). Root
+  `CLAUDE.md` measures 3190 of 3200 tokens. Run: `node --test` over the protocols, project, template-block,
+  conventions-structure and rules test files, 282 passed, 0 failed; `node bin/js-harness.mjs rules check`: PASS, 72
+  rules.

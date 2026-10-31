@@ -72,10 +72,11 @@ test('a file checked out with Windows line ends keeps them, and its unedited blo
 // The bytes moved on purpose three times: his answer to question 104 (odd/tasks/f8-s11-complements.md, L14) changed one
 // line, the ideas he approved on 2026-10-28 (odd/tasks/visual-pages.md, spec 3, idea 3: the pages ship to every project
 // through init) added the paragraph that names the page of each moment (T7), and his list of 2026-10-30
-// (odd/tasks/instruction-homes.md, T4) made the owner's line name `rule:owner-decisions` instead of repeating it.
+// (odd/tasks/instruction-homes.md, T4) made the owner's line name `rule:owner-decisions` instead of repeating it, and
+// his yes to question 143 (odd/tasks/depth-pass-rule.md, L15) opened the owner's half with rule 1, `rule:depth-pass`.
 test('the whole block is the two halves, and stays the bytes every project holds today', () => {
   assert.equal(templateBlock(), `${agentsBlock()}\n${claudeBlock()}`);
-  assert.equal(sha256(templateBlock()), '5870201ed7ea73bd879f813eae1a96de5689c4e4f243fbd2d330956784c85bad');
+  assert.equal(sha256(templateBlock()), 'a572b2b87e4616b88b9a4ca5c62e7589de05f5d0524be1238d10a1373b4d1a2f');
   assert.ok(agentsBlock().startsWith('## What good looks like\n'));
   assert.ok(claudeBlock().startsWith('## Working with the owner\n'));
   assert.doesNotMatch(agentsBlock(), /Working with the owner/);
