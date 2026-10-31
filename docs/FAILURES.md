@@ -341,6 +341,10 @@ forbids: the host's reminder asks for them, and its own text says the user's ins
   breach only on reading JH 107's summary; nothing is rewritten (main is never rewritten, the branch
   never force-pushed), and the next commits carry neither. Third sighting: the protocol line did not
   stop it, so a `commit-msg` check is the next step (`bin/`), proposed to the lead
+- Seen: 2026-10-31 — JH 116, its first commit of worktree-reply-hook-latency — the message carried
+  `Co-Authored-By`; amended before any push (f91cbcc1), and the next commits carry neither. Fourth
+  sighting, with the host's reminder repeated after the compaction: the `commit-msg` check is still
+  the step that would stop it
 - Control: protocol — bin/lib/rules-block.mjs — "or AI attribution to commits. Use conventional
   commits only" — since 2026-10-29
 
