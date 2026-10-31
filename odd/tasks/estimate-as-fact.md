@@ -65,7 +65,8 @@ changes no rule of his. Spend: one gate, one Codex review, the Claude lenses, on
   inline. RED: `bin/lib/audit.test.mjs` could not load (`forecastRefusal` not exported); then each false positive of
   L4 added as a case before its fix (1 failing each round). GREEN: audit 20/20, guard 39/39.
 - [x] T2 (kind: docs): FAILURES control line, row 72, help, README, SPEC and header lines. `failures check` passes.
-- [ ] T3 (kind: verify): gate, Codex review, Claude lenses, independent verifier, pull request, ready notice.
+- [x] T3 (kind: verify): gate, Codex review, Claude lenses, independent verifier, pull request, ready notice. Each
+  code commit gated and reviewed (L6, L8); verifier on 41f774d8 (L7); budget tests (L9). Merge: the lead's.
 
 ## Log
 - L1 (2026-10-31, the brief as written,
@@ -143,3 +144,10 @@ changes no rule of his. Spend: one gate, one Codex review, the Claude lenses, on
   lead's 597; 9 of 7,588 over the 120 work transcripts, 5 distinct (forks repeat them), 1 true. Cold cost after: the
   first `forecastRefusal` on 3,588 characters 10.7 to 11.7 ms, import 31 to 34 ms (`cold.mjs`, three runs, a
   quieter machine than L5's).
+- L8 (2026-10-31, reviews of 41f774d8..638e27fe): Codex, "the patch is correct" (0.98), a recheck of its finding
+  (fixed); the lenses reliability and risk, 0 findings. gentle-ai: its stop hook offered the whole branch (base
+  9e22eb3); the status was read and nothing started (CLAUDE.md), so no gentle-ai line names these commits.
+- L9 (2026-10-31, the Stop budget before the push, the lead's 09:30Z ask): `node --test bin/reply-budget.test.mjs`
+  on 638e27fe, on Windows (not WSL2, where PR 736's land was red), 4/4: the lead's stop p90 729 ms, a work session's
+  p90 646 ms, budget 2500 ms. Those tests time `reply --hook`, which does not load `bin/lib/audit.mjs`; this check
+  runs in `guard --stop`, its own process, at 11 to 22 ms for its first reading (L5, L7).
