@@ -364,3 +364,8 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   as the test of "completo", the definition of large work inside section 9. Unguaranteed, both readers: that the
   refutation test really ran, and depth itself. Cost of this double review: four reader runs, about 443,000
   sub-agent tokens in all (97k, 105k, 117k, 124k, as each run reported).
+- L14 (2026-10-31T12:29:35Z, T3): question 143 recorded for the lead (`js-harness notify --kind question`): draft v3,
+  its home and its scope, options "Sí, v3, trabajo grande y cuando la pida (Recomendada)", "Sí, v3, en cada pedido
+  tipo tarea", "No, quiero cambiarla"; its context in Spanish (what it is, why v3, where each of his phrases went,
+  what a yes covers and does not, the cost per turn and per feature, what stays unguaranteed) sent to the lead
+  beside it, since a question's text is one line. Questions (b) and (c) wait for his answer to 143.
