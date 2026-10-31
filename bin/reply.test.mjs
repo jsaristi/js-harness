@@ -296,6 +296,24 @@ test('the lead ending its turn while the live board\'s rows wait is turned back 
   assert.deepEqual(noBoard.answer, {}, 'a project with no board is never told');
 });
 
+// The return check (odd/tasks/lead-duty-checks.md, spec 2): the lead's reply to his message after a long absence links
+// the status page; bin/lib/return-report.test.mjs holds its cases, this its place in the hook.
+const RETURNED = /he came back after/;
+const his = (at) => line({ type: 'user', timestamp: at, origin: { kind: 'human' }, message: { role: 'user', content: 'hola' } });
+
+test('the lead answering his return after a long absence without the status page is turned back with what to run', async () => {
+  const away = [his('2026-10-16T18:00:00.000Z'), his('2026-10-17T01:00:00.000Z')];
+  const lead = await wakeHook({ payload: { session_id: 'lead' }, record: [handed('2026-10-17T01:30:00.000Z')], transcript: away });
+  assert.equal(lead.answer.decision, 'block');
+  assert.match(lead.answer.reason, RETURNED);
+  assert.match(lead.answer.reason, /js-harness report --mark --html <file> --notes <file>/);
+  assert.equal(lead.err, '');
+  const soon = await wakeHook({ payload: { session_id: 'lead' }, record: [handed('2026-10-17T01:30:00.000Z')], transcript: [his('2026-10-17T00:30:00.000Z'), his('2026-10-17T01:00:00.000Z')] });
+  assert.deepEqual(soon.answer, {}, 'a short gap is no return');
+  const work = await wakeHook({ transcript: [titled('JH 26 · canal'), ...away], record: [] });
+  assert.deepEqual(work.answer, {}, 'a work session is never told');
+});
+
 test('a work session holding handed work in a project whose board is stale gets the wake warning alone', async () => {
   const result = await wakeHook({ files: BOARD_CURSOR });
   assert.match(result.answer.reason, WARNING);

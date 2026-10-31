@@ -43,6 +43,10 @@ function lastTitleOf(notices, sessionId) {
   return newest?.title ?? null;
 }
 
+/** Whether the session `sessionId` is the lead by `notices`: the newest notice it sent carries the lead's title. The
+ * return check asks it too (bin/lib/return-report.mjs). */
+export const isLeadSession = (notices, sessionId) => isLeadTitle(lastTitleOf(notices, sessionId));
+
 /** The saved cursor of the board, `null` when the project has none (no file, or one of another schema, which
  * `sessions live` reads as none too); one that is there and cannot be read throws. */
 function savedBoard(file, readFile) {
@@ -80,7 +84,7 @@ export function staleBoardWarning(payload, state, io, now = Date.now()) {
   if (saved === null || typeof saved.url !== 'string' || saved.url === '') return null;
   const record = readNotices(home, slug, { readFile: io.readFile });
   if (record.unavailable !== undefined) throw new Error(`the record of notices (${record.path}): ${record.unavailable}`);
-  if (!isLeadTitle(lastTitleOf(record.notices, payload.session_id))) return null;
+  if (!isLeadSession(record.notices, payload.session_id)) return null;
 
   const rows = pendingRows(record.notices, cursorOf(saved), new Date(now - FIRST_WINDOW_MS).toISOString());
   if (rows.length === 0) return null;
