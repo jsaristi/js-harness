@@ -162,4 +162,5 @@ Nothing left in this session: the product choice was D4. Applying it to his mach
   line. Reading the merged text, three lines the L3 search missed still said both hosts: `docs/SPEC.md` (the skills
   requirement, "for each host"), `README.md`'s opening line ("sets up Claude Code and Codex"), and the comments of
   `shippedId`/`textSources` in `bin/lib/rules-sources.mjs` (code unchanged: the coverage ids still drop the host).
-  Fixed; `bin/readme.test.mjs` 5/0, `bin/lib/spec.test.mjs` 28/0, `bin/rules-coverage.test.mjs` 8/0.
+  Fixed; `bin/readme.test.mjs` 5/0, `bin/lib/spec.test.mjs` 28/0, `bin/rules-coverage.test.mjs` 8/0. Reviews of
+  `44a4218f` (bc8c6f6b..44a4218f): Codex "the patch is correct" (0.99); the readability lens, 0 findings.

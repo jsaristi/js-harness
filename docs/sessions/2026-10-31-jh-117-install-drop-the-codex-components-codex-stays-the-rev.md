@@ -19,6 +19,8 @@ arnés instaló."
   - `57486c74` feat(install): write nothing under ~/.codex; Codex only reviews.
   - `dd397c0d` fix(install): earlier Codex copies leave with their trust, their folder and a line each (the
     independent verifier's findings).
+  - `bc8c6f6b` merge of main (#727, #728; one conflict in `bin/js-harness.mjs`, both lines kept).
+  - `44a4218f` docs(install): the last lines that said install serves both hosts (SPEC, README, two comments).
 - Feature document `odd/tasks/drop-codex-components.md`: contract `PASS`, T1–T5 done, Log L1–L10.
 - Scratch-home proof (L6, L9): this branch on an empty home writes no `.codex`; over a 0.97.0 install it removes the
   3 Codex skills and 5 hook entries, keeps the user's own hook and an edited skill, moves the trust, and removes the
@@ -39,6 +41,10 @@ arnés instaló."
   (`grep -rl "manifest.mjs'"` over the whole repo), which the second search did.
 - Removing `codexConfigOf` dropped a side effect nobody named: `sync` re-recording `trustConfigs` for installs older
   than c7af39e2. The independent verifier found it by reading git history (L9, finding 1); fixed with a test.
+- Three lines still saying install serves both hosts (SPEC, README's opener, two comments) were found only when the
+  merge with main was read (L11): the L3 grep looked for ids and paths, not for the wording. Lesson: a change of what a
+  product serves greps its prose too ("both hosts", "each host", "<host> and <host>").
+- The first ready notice was refused, #729 CONFLICTING with main; `notify` checks it, so nothing was claimed ready.
 - Two gate runs failed before the first commit landed (a module ceiling and a rules-coverage span, then the evals
   test); each was read in its CI log before the next run.
 
@@ -51,7 +57,7 @@ arnés instaló."
 ## Cost
 - Time: brief at 2026-10-31T03:10Z; this summary at about 04:45Z; one host compaction at 22:50 local.
 - Context at the end: about 45% of the window (42% at question 140's notice).
-- Reviews: Codex twice (3 parts over `57486c74`, 392,930 input tokens; 1 part over `dd397c0d`); Claude lenses twice
-  (risk, reliability, readability, 0 findings; about 512k then 62k input tokens); one independent verifier (159k
-  tokens); one gentle-ai start refused in preflight.
-- Gate runs: four on code commits (two failed, two passed), plus the one of this document's commit.
+- Reviews: Codex three times (3 parts over `57486c74`, 392,930 input tokens; 1 part over `dd397c0d`; 1 over
+  `44a4218f`); Claude lenses three times (risk, reliability, readability, 0 findings, about 512k then 62k input tokens;
+  readability alone over `44a4218f`); one independent verifier (159k tokens); one gentle-ai start refused in preflight.
+- Gate runs: seven commits' (two failed, five passed), plus the one of this document's last commit.
