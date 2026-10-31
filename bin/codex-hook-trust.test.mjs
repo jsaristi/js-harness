@@ -1,22 +1,16 @@
-// Codex's trust of the harness's hooks (odd/tasks/codex-hook-trust.md), through the public commands on throwaway
-// homes: `doctor` names each harness entry of the Codex hooks.json that has no trust record, and `uninstall` takes the
-// trust of the entries it removes and moves the trust of the user's own hooks to the places they move to. The home is
-// never the real one: a test home is not `os.homedir()`, so its Codex home is `<home>/.codex` (stack-install T8).
+// Codex's trust of the hooks an earlier install wrote in its hooks.json (odd/tasks/codex-hook-trust.md), through the
+// public commands on throwaway homes. Install writes no Codex hook any more (odd/tasks/drop-codex-components.md), so each
+// test seeds a home as 0.97.0 installed it (./lib/earlier-codex.testkit.mjs): `uninstall` and `sync` take the trust of
+// the entries they remove and move the trust of the user's own hooks to the places they move to. The home is never the
+// real one.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { doctorMain } from './doctor.mjs';
-import { installMain, syncMain, uninstallMain } from './install.mjs';
-import { readManifest } from './lib/manifest.mjs';
-
-const noopFetch = async () => {
-  throw new Error('network disabled in tests');
-};
-
-// Never a real spawn: every probe looks at a missing binary, and git says there is no repository.
-const noSpawn = () => ({ status: null, error: new Error('spawn ENOENT'), stdout: '', stderr: '' });
+import { syncMain, uninstallMain } from './install.mjs';
+import { install, readManifest } from './lib/manifest.mjs';
+import { EARLIER_INSTALL } from './lib/earlier-codex.testkit.mjs';
 
 function makeTmp(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -63,172 +57,19 @@ function trustEverything(codexHome) {
   return tables.join('\n');
 }
 
-async function doctorRow(home, env = {}, deps = {}) {
-  const { code, out } = await quietly(() => doctorMain(['--home', home, '--cwd', home, '--json', '--offline'], env, { spawn: noSpawn, fetch: noopFetch, ...deps }));
-  assert.equal(code, 0);
-  return JSON.parse(out.join('\n')).find((row) => row.id === 'codex-trust');
+/** Installs into `home` what 0.97.0 installed, its five Codex entries recording `configs` (default the config.toml of
+ * `<home>/.codex`) as the config.toml files their trust is in, one install a file, as each install then resolved it. */
+function installEarlier(home, configs = [path.join(home, '.codex', 'config.toml')]) {
+  for (const codexConfig of configs) install(home, '0.97.0', { ...EARLIER_INSTALL, codexConfig });
 }
 
-test('doctor names every harness entry of the Codex hooks.json with no trust record, with the step that trusts them', async () => {
+test('an earlier install under two CODEX_HOMEs recorded both config.toml files, and uninstall takes the trust out of both', async () => {
   const home = makeTmp('js-harness-trust-home-');
   try {
-    assert.equal((await quietly(() => installMain(['--home', home]))).code, 0);
-    const codexHome = path.join(home, '.codex');
-    const hooksPath = hooksPathOf(codexHome);
-    // Only the first SessionStart group is trusted: the four other harness entries are not.
-    fs.writeFileSync(path.join(codexHome, 'config.toml'), `model = "x"\n\n${trustTable(hooksPath, 'session_start', 0)}`, 'utf8');
-
-    const row = await doctorRow(home);
-
-    assert.equal(row.codex, 'missing');
-    assert.deepEqual(row.gaps.map((gap) => [gap.dimension, gap.state]), [['codex', 'missing']]);
-    const [fix, ...lines] = row.fix.codex;
-    assert.match(fix, /run `codex` in a terminal/);
-    assert.match(fix, /Trust all and continue/);
-    assert.match(fix, /never writes/);
-    assert.ok(lines.some((line) => line.includes(path.join(codexHome, 'config.toml'))), 'the fix names the config.toml it read');
-    const untrusted = lines.filter((line) => line.startsWith('  '));
-    assert.deepEqual(untrusted.map((line) => line.trim()), [
-      'session_start:1:0 js-harness resume --hook',
-      'session_start:2:0 js-harness backup --session-start || exit 0',
-      'stop:0:0 js-harness reply --hook || exit 0',
-      'stop:1:0 js-harness backup --hook || exit 0',
-    ]);
-    const before = fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8');
-    await doctorRow(home);
-    assert.equal(fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8'), before, 'doctor never writes a trust record');
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('doctor reads the harness hooks as trusted once every one has a trusted_hash, and counts a table without one as untrusted', async () => {
-  const home = makeTmp('js-harness-trust-home-');
-  try {
-    await quietly(() => installMain(['--home', home]));
-    const codexHome = path.join(home, '.codex');
-    const config = path.join(codexHome, 'config.toml');
-    fs.writeFileSync(config, trustEverything(codexHome), 'utf8');
-    const ok = await doctorRow(home);
-    assert.equal(ok.codex, 'ok');
-    assert.deepEqual(ok.gaps, []);
-
-    // A table at the place with no trusted_hash is no trust.
-    fs.writeFileSync(config, fs.readFileSync(config, 'utf8').replace(/(stop:1:0'\]\r?\n)trusted_hash = "[^"]*"/, '$1enabled = true'), 'utf8');
-    const row = await doctorRow(home);
-    assert.equal(row.codex, 'missing');
-    assert.deepEqual(row.fix.codex.filter((line) => line.startsWith('  ')).map((line) => line.trim()), ['stop:1:0 js-harness backup --hook || exit 0']);
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('doctor reads the trust of the shape Codex 0.166 writes: ok when every harness hook is trusted, missing for one that is not', async () => {
-  const home = makeTmp('js-harness-trust-home-');
-  try {
-    await quietly(() => installMain(['--home', home]));
-    const codexHome = path.join(home, '.codex');
-    const config = path.join(codexHome, 'config.toml');
-    // Its shape, its values made up: an empty `[hooks.state]` table first, and a plugin's trust with a content hash.
-    const plugin = '[hooks.state."engram@engram:hooks/hooks.json:session_start:0:0"]\ntrusted_hash = "sha256:p"\ntrusted_content_hash = "sha256:q"\n';
-    fs.writeFileSync(config, `model = "x"\n\n[hooks.state]\n\n${trustEverything(codexHome)}\n${plugin}\n[tui]\nx = 1\n`, 'utf8');
-    const ok = await doctorRow(home);
-    assert.equal(ok.codex, 'ok');
-    assert.deepEqual(ok.gaps, []);
-
-    const untrusted = fs.readFileSync(config, 'utf8').replace(/\[hooks\.state\.'[^']*:stop:1:0'\]\r?\ntrusted_hash = "[^"]*"\r?\n/, '');
-    fs.writeFileSync(config, untrusted, 'utf8');
-    const row = await doctorRow(home);
-    assert.equal(row.codex, 'missing');
-    assert.deepEqual(row.fix.codex.filter((line) => line.startsWith('  ')).map((line) => line.trim()), ['stop:1:0 js-harness backup --hook || exit 0']);
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('doctor keys each harness entry by its place among the user\'s own hooks, and reads no trust of another hooks.json', async () => {
-  const home = makeTmp('js-harness-trust-home-');
-  try {
-    const codexHome = path.join(home, '.codex');
-    fs.mkdirSync(codexHome, { recursive: true });
-    const mine = { matcher: 'startup', hooks: [{ type: 'command', command: 'my-own-hook' }] };
-    fs.writeFileSync(hooksPathOf(codexHome), JSON.stringify({ hooks: { SessionStart: [mine], Stop: [mine] } }, null, 2), 'utf8');
-    await quietly(() => installMain(['--home', home]));
-    const hooksPath = hooksPathOf(codexHome);
-    const other = path.join(home, 'elsewhere', 'hooks.json');
-    // The user's own hooks at 0 are trusted, the harness's at 1.. of this file are trusted only under another path.
-    fs.writeFileSync(path.join(codexHome, 'config.toml'), [
-      trustTable(hooksPath, 'session_start', 0),
-      trustTable(hooksPath, 'stop', 0),
-      trustTable(other, 'session_start', 1),
-      trustTable(hooksPath, 'stop', 1),
-    ].join('\n'), 'utf8');
-
-    const row = await doctorRow(home);
-
-    assert.equal(row.codex, 'missing');
-    assert.deepEqual(row.fix.codex.filter((line) => line.startsWith('  ')).map((line) => line.trim().split(' ')[0]), ['session_start:1:0', 'session_start:2:0', 'session_start:3:0', 'stop:2:0']);
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('doctor reads the config.toml of the CODEX_HOME the user set when the home is the real one', async () => {
-  const home = makeTmp('js-harness-trust-home-');
-  const codexHomeSet = makeTmp('js-harness-trust-codex-');
-  try {
-    await quietly(() => installMain(['--home', home]));
-    // Trusted under <home>/.codex, and nothing under the CODEX_HOME the user set: doctor reads the second.
-    fs.writeFileSync(path.join(home, '.codex', 'config.toml'), trustEverything(path.join(home, '.codex')), 'utf8');
-    const row = await doctorRow(home, { CODEX_HOME: codexHomeSet }, { homedir: home });
-    assert.equal(row.codex, 'missing');
-    assert.ok(row.fix.codex.some((line) => line.includes(path.join(codexHomeSet, 'config.toml'))));
-    // A home that is not the real one keeps `<home>/.codex`, whatever CODEX_HOME says.
-    assert.equal((await doctorRow(home, { CODEX_HOME: codexHomeSet })).codex, 'ok');
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-    fs.rmSync(codexHomeSet, { recursive: true, force: true });
-  }
-});
-
-test('doctor says n/a with no Codex entry installed, and unknown for trust it cannot read', async () => {
-  const home = makeTmp('js-harness-trust-home-');
-  try {
-    assert.equal((await doctorRow(home)).codex, 'n/a');
-    await quietly(() => installMain(['--home', home]));
-    fs.writeFileSync(path.join(home, '.codex', 'config.toml'), '[hooks.state]\n"x:session_start:0:0" = { trusted_hash = "sha256:1" }\n', 'utf8');
-    const row = await doctorRow(home);
-    assert.equal(row.codex, 'unknown');
-    assert.deepEqual(row.gaps, []);
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('install records the config.toml of the Codex home on each Codex entry, so uninstall edits that file', async () => {
-  const home = makeTmp('js-harness-trust-home-');
-  try {
-    await quietly(() => installMain(['--home', home]));
-    const config = path.join(home, '.codex', 'config.toml');
-    const { entries } = readManifest(home);
-    const codexRecords = entries.filter((entry) => entry.path === hooksPathOf(path.join(home, '.codex')));
-    assert.equal(codexRecords.length, 5);
-    for (const record of codexRecords) assert.deepEqual(record.trustConfigs, [config]);
-    for (const record of entries.filter((entry) => !codexRecords.includes(entry))) assert.equal(record.trustConfigs, undefined);
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-test('an install under another CODEX_HOME adds its config.toml to the record, and uninstall takes the trust out of both', async () => {
-  const home = makeTmp('js-harness-trust-home-');
-  try {
-    // The home is the real one (`homedir`), so the CODEX_HOME the user set decides which config.toml install records.
     const [first, second] = [path.join(home, 'codex-a'), path.join(home, 'codex-b')];
-    await quietly(() => installMain(['--home', home], { CODEX_HOME: first }, { homedir: home }));
-    await quietly(() => installMain(['--home', home], { CODEX_HOME: second }, { homedir: home }));
     const codexHome = path.join(home, '.codex');
     const [firstConfig, secondConfig] = [path.join(first, 'config.toml'), path.join(second, 'config.toml')];
+    installEarlier(home, [firstConfig, secondConfig]);
     for (const record of readManifest(home).entries.filter((entry) => entry.path === hooksPathOf(codexHome))) {
       assert.deepEqual(record.trustConfigs, [firstConfig, secondConfig]);
     }
@@ -253,7 +94,7 @@ test('uninstall drops the trust of the harness entries it removes and moves the 
     fs.mkdirSync(codexHome, { recursive: true });
     const first = { matcher: 'startup', hooks: [{ type: 'command', command: 'mine-first' }] };
     fs.writeFileSync(hooksPathOf(codexHome), JSON.stringify({ hooks: { SessionStart: [first], Stop: [] } }, null, 2), 'utf8');
-    await quietly(() => installMain(['--home', home]));
+    installEarlier(home);
     // The user adds hooks after install: one between the harness's, one after them, in both events.
     const hooks = readHooks(codexHome);
     const between = { hooks: [{ type: 'command', command: 'mine-between' }] };
@@ -300,7 +141,7 @@ test('uninstall drops the trust of the harness entries it removes and moves the 
 test('uninstall of a hooks.json that held only the harness takes every trust of it and keeps the rest of config.toml', async () => {
   const home = makeTmp('js-harness-trust-home-');
   try {
-    await quietly(() => installMain(['--home', home]));
+    installEarlier(home);
     const codexHome = path.join(home, '.codex');
     const hooksPath = hooksPathOf(codexHome);
     const config = path.join(codexHome, 'config.toml');
@@ -320,7 +161,7 @@ test('uninstall of a hooks.json that held only the harness takes every trust of 
 test('uninstall leaves a config.toml whose hook trust it cannot read as it is, and says so', async () => {
   const home = makeTmp('js-harness-trust-home-');
   try {
-    await quietly(() => installMain(['--home', home]));
+    installEarlier(home);
     const config = path.join(home, '.codex', 'config.toml');
     const text = `hooks.state."${hooksPathOf(path.join(home, '.codex')).replaceAll('\\', '\\\\')}:stop:0:0".trusted_hash = "sha256:1"\n`;
     fs.writeFileSync(config, text, 'utf8');
@@ -335,32 +176,28 @@ test('uninstall leaves a config.toml whose hook trust it cannot read as it is, a
   }
 });
 
-test('sync that drops an entry no longer shipped takes its trust and moves the trust of the hooks after it', async () => {
+test('sync over an earlier install drops the harness\'s Codex entries with their trust and moves the trust of the user\'s hooks after them', async () => {
   const home = makeTmp('js-harness-trust-home-');
   try {
-    await quietly(() => installMain(['--home', home]));
+    installEarlier(home);
     const codexHome = path.join(home, '.codex');
     const hooksPath = hooksPathOf(codexHome);
     const config = path.join(codexHome, 'config.toml');
-    // An entry an earlier release wrote first in Stop, and that this one no longer ships.
-    const retired = { hooks: [{ type: 'command', command: 'js-harness retired --hook' }] };
+    // The user's own Stop hook, after the harness's two.
+    const mine = { hooks: [{ type: 'command', command: 'mine-stop' }] };
     const hooks = readHooks(codexHome);
-    hooks.hooks.Stop.unshift(retired);
+    hooks.hooks.Stop.push(mine);
     fs.writeFileSync(hooksPath, JSON.stringify(hooks, null, 2), 'utf8');
-    const manifest = JSON.parse(fs.readFileSync(path.join(home, '.js-harness', 'manifest.json'), 'utf8'));
-    manifest.entries.push({ path: hooksPath, pointer: ['hooks', 'Stop'], entry: retired, createdFile: true, createdFolders: [], createdContainers: 0, skipped: false, trustConfigs: [config] });
-    fs.writeFileSync(path.join(home, '.js-harness', 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
     fs.writeFileSync(config, trustEverything(codexHome), 'utf8');
 
     const { code, out } = await quietly(() => syncMain(['--global', '--home', home], {}));
 
     assert.equal(code, 0);
-    assert.deepEqual(readHooks(codexHome).hooks.Stop.map((group) => group.hooks[0].command), ['js-harness reply --hook || exit 0', 'js-harness backup --hook || exit 0']);
-    const after = trustOf(fs.readFileSync(config, 'utf8'), hooksPath);
-    assert.deepEqual([after['stop:0:0'], after['stop:1:0'], after['stop:2:0']], ['sha256:js-harness reply --hook || exit 0', 'sha256:js-harness backup --hook || exit 0', undefined]);
-    assert.equal(after['session_start:0:0'], 'sha256:js-harness doctor --hook', 'another event is left as it was');
-    assert.ok(out.includes(`removed 1 trust record of the harness's Codex hooks from ${config}`), out.join('\n'));
-    assert.equal((await doctorRow(home)).codex, 'ok', 'the hooks that moved are still trusted where they are now');
+    assert.deepEqual(readHooks(codexHome).hooks, { Stop: [mine] }, 'only the user\'s hook is left; the SessionStart list the install made went with its last entry');
+    assert.deepEqual(trustOf(fs.readFileSync(config, 'utf8'), hooksPath), { 'stop:0:0': 'sha256:mine-stop' });
+    assert.ok(out.includes(`removed 5 trust records of the harness's Codex hooks from ${config}`), out.join('\n'));
+    assert.ok(out.includes(`moved 1 trust record of your own Codex hooks in ${config} to their hooks' new places`), out.join('\n'));
+    assert.equal(fs.existsSync(path.join(codexHome, 'skills')), false, 'and the Codex skills the earlier install wrote');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -369,12 +206,12 @@ test('sync that drops an entry no longer shipped takes its trust and moves the t
 test('uninstall with no config.toml, or one without hook trust, writes nothing there', async () => {
   const home = makeTmp('js-harness-trust-home-');
   try {
-    await quietly(() => installMain(['--home', home]));
+    installEarlier(home);
     const config = path.join(home, '.codex', 'config.toml');
     assert.equal((await quietly(() => uninstallMain(['--global', '--home', home]))).code, 0);
     assert.equal(fs.existsSync(config), false);
 
-    await quietly(() => installMain(['--home', home]));
+    installEarlier(home);
     fs.writeFileSync(config, 'model = "gpt"\n', 'utf8');
     const { out } = await quietly(() => uninstallMain(['--global', '--home', home]));
     assert.equal(fs.readFileSync(config, 'utf8'), 'model = "gpt"\n');

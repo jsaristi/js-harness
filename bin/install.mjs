@@ -13,7 +13,6 @@ import { MalformedManifestError, SESSION_MESSAGES, acceptSessionMessages, instal
 import { hygieneDir, memoryLocation } from './lib/memory-hygiene.mjs';
 import { undoStack } from './lib/stack-run.mjs';
 import { claudeRunner, undoBackground } from './lib/background.mjs';
-import { codexHomeOf } from './lib/stack.mjs';
 import {
   uninstallProject,
   syncProject,
@@ -299,17 +298,11 @@ function logRulesBlock(held) {
   else if (held?.status === 'skipped') console.error(`skipped the Rules block in ${held.path}: ${held.reason}`);
 }
 
-/** The config.toml Codex keeps its hooks' trust in, for the Codex home of `home` as doctor reads it (`codexHomeOf`,
- * stack-install T8): install records it on each Codex entry, so `uninstall` takes the trust out of that file
- * (odd/tasks/codex-hook-trust.md). `deps.homedir` and `deps.platform` are the seams of a test. */
-function codexConfigOf(home, env, deps) {
-  return path.join(codexHomeOf({ home, env, homedir: deps.homedir ?? os.homedir(), platform: deps.platform ?? process.platform }), 'config.toml');
-}
-
 /** Says what taking hook entries out did to Codex's trust of them, and of the user's own hooks they moved
- * (odd/tasks/codex-hook-trust.md), for `uninstall` and for the entries a `sync` prunes. A config.toml that could not
- * be edited is a change to the user's Codex left half done that nothing records any more: it goes to stderr, and the
- * count of them is returned so the command fails. */
+ * (odd/tasks/codex-hook-trust.md), for `uninstall` and for the entries a `sync` prunes: those an earlier version wrote
+ * in Codex's hooks.json, each with the config.toml files that version recorded (odd/tasks/drop-codex-components.md).
+ * A config.toml that could not be edited is a change to the user's Codex left half done that nothing records any more:
+ * it goes to stderr, and the count of them is returned so the command fails. */
 function logTrust({ trustMoved = [], trustKept = [] }) {
   for (const { path: p, dropped, moved } of trustMoved) {
     if (dropped > 0) console.log(`removed ${dropped} trust record${dropped === 1 ? '' : 's'} of the harness's Codex hooks from ${p}`);
@@ -342,7 +335,7 @@ export async function installMain(argv, env = process.env, deps = {}) {
   // would drop from the records and leave behind (harness-review a2); with no manifest the two are the same.
   let manifest;
   try {
-    manifest = sync(home, version, { ...deps, codexConfig: codexConfigOf(home, env, deps) });
+    manifest = sync(home, version, deps);
   } catch (err) {
     // A machine manifest that does not parse: one line, and nothing was written (`sync` reads it before any step).
     if (!(err instanceof MalformedManifestError)) throw err;
@@ -497,7 +490,7 @@ export async function syncMain(argv, env = process.env, deps = {}) {
   const home = parsed.home;
   let manifest;
   try {
-    manifest = sync(home, version, { ...deps, codexConfig: codexConfigOf(home, env, deps) });
+    manifest = sync(home, version, deps);
   } catch (err) {
     // A machine manifest that does not parse: one line, and nothing was written (`sync` reads it before any step).
     if (!(err instanceof MalformedManifestError)) throw err;

@@ -115,12 +115,12 @@ export function shareHookEntry() {
  * and a `Stop` hook that exits 2 turns the stop back. */
 export const REPLY_HOOK_COMMAND = 'js-harness reply --hook || exit 0';
 
-/** `reply --hook` (bin/reply.mjs) registered as a `Stop` hook in both hosts: a reply that does not close with exactly one
+/** `reply --hook` (bin/reply.mjs) registered as a `Stop` hook in Claude Code's settings: a reply that does not close with exactly one
  * state, and what that state needs, is turned back to be closed again (odd/tasks/rule-hierarchy.md, C1 and T2). It acts
  * only in a project whose nearest `harness.json` holds a `reply` key and prints `{}` everywhere else, so the entry runs
- * in every session of the machine and changes nothing where the project did not turn it on. Both hosts: it reads only
- * the reply's text, which both send as `last_assistant_message` (Claude Code's payload logged on 2026-10-16; Codex's
- * hooks documentation read the same day). Five seconds, as the share check's: it reads one small file a folder, up to
+ * in every session of the machine and changes nothing where the project did not turn it on. It reads only the reply's
+ * text, which Claude Code sends as `last_assistant_message` (its payload logged on 2026-10-16); versions up to 0.97.0
+ * registered it in Codex too, which sends the same field. Five seconds, as the share check's: it reads one small file a folder, up to
  * the project's `harness.json`, and, for the wake check of a work session, the end of its transcript, the record of
  * notices and the openings (533 ms on this project's largest transcript, 64.7 MB, measured on 2026-10-16). */
 export function replyHookEntry() {
@@ -133,7 +133,7 @@ export function replyHookEntry() {
  * `backup` answers 2, and a `Stop` hook that exits 2 turns the stop back. */
 export const BACKUP_HOOK_COMMAND = 'js-harness backup --hook || exit 0';
 
-/** `backup --hook` (bin/backup.mjs) registered as a `Stop` hook in both hosts: when a backup is due (the clone exists,
+/** `backup --hook` (bin/backup.mjs) registered as a `Stop` hook in Claude Code's settings: when a backup is due (the clone exists,
  * the last success is 30 minutes old and something it copies changed since) it starts `backup run` detached and
  * returns, so the memory reaches the private repository as sessions work (odd/tasks/memory-backup.md, D2). With no
  * clone it does nothing, on every machine where `backup init` was never run. Five seconds, as the other Stop entries:
@@ -147,7 +147,7 @@ export function backupHookEntry() {
 /** The command of the memory fallback's notice, guarded to exit 0 like the backup's: an older js-harness answers 2. */
 export const FALLBACK_HOOK_COMMAND = 'js-harness backup --session-start || exit 0';
 
-/** `backup --session-start` (bin/backup.mjs) registered as a `SessionStart` hook in both hosts, for every start: after a
+/** `backup --session-start` (bin/backup.mjs) registered as a `SessionStart` hook in Claude Code's settings, for every start: after a
  * compaction the notice is needed most. When Engram holds less than nine tenths of what the last backup held of the
  * session's project, it sends the session to that project's readable file (odd/tasks/recent-memory.md, D7). An entry
  * of its own, since doctor's hook prints `systemMessage` only. Five seconds: `engram stats` gets three. */

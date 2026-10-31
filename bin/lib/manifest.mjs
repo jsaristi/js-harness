@@ -60,7 +60,7 @@ js-harness commands:
 - \`js-harness loop (run <name> --purpose <text> --until <text> -- <command> | status | stop <name>)\` — runs a session's background loop under an owner record, lists the project's loops with their owners, or stops one with every process it started; a loop another session owns is not stopped without \`--take-over\`.
 - \`js-harness guard --hook\` — the PreToolUse hook install registers: it refuses a sub-agent launched on a model the project's rules do not give (only where those rules are in force), a message to another session whose opening hour is more than a minute off the clock, with the right hour, a command typed into the user's terminal that does not end with a note saying what it does (only where the project's rule \`terminal-note\` is in force), a session started with \`start_session\` that names no effort or one above the project's rule \`session-effort\` (only where that rule is in force; a fork cannot set its own, so start it \`fresh\`), a session started with a title that is not \`<code> <n> · <purpose>\` with the project's code, harness.json \`"code"\` (only where the rule \`session-title\` is in force; the reason names the next free number, which \`js-harness sessions --next-number\` prints, or says to declare the code), a Bash command with backticks inside double quotes, a recursive \`rm\` or an \`rmdir\` of a folder at the top of a drive (the host holds that one for the user even in bypass mode, so put practice and scratch folders below the project's worktrees folder or in your scratchpad), and a \`node --test\` of several files while another gate holds the lock, and a Write or Edit that puts a line over ${INDEX_LINE_CHARS} characters in a project's memory index (\`MEMORY.md\`). A \`git commit\` or \`git merge\` wrapped in \`js-harness gate --\` runs, with a hint beside its result: the wrapper holds the lock for the commit's whole gate, which then runs here and never goes to GitHub, while a plain commit waits for its turn by itself. Its \`--stop\` form is the Stop hook beside it: a reply that states your own context share more than ${SHARE_TOLERANCE} points from the share your transcript records is turned back, and you correct the share in one line from get_usage.
 - \`js-harness permit\` — the PermissionRequest hook install registers (\`--hook\`): while the orchestrator holds the relay (\`lease\`), a permission card of another session reaches it first and waits up to ${WAIT_MS / 60_000} minutes for \`allow <id>\` or \`deny <id> --reason <text>\`; with no verdict the card reaches the user. \`list\` shows the waiting cards.
-- \`js-harness reply --hook\` — the Stop hook install registers for Claude Code and Codex, acting only where the project's \`harness.json\` holds a \`reply\` key: a reply that does not close with exactly one state line (working, decision, question, cut, finished, in the labels the key names) and what that state needs is turned back, and you write the close again in your next words. On Claude Code a work session that ends its turn holding work the orchestrator handed it, with nothing in its background to wake it, is turned back once, with the wait to arm.
+- \`js-harness reply --hook\` — the Stop hook install registers for Claude Code, acting only where the project's \`harness.json\` holds a \`reply\` key: a reply that does not close with exactly one state line (working, decision, question, cut, finished, in the labels the key names) and what that state needs is turned back, and you write the close again in your next words. On Claude Code a work session that ends its turn holding work the orchestrator handed it, with nothing in its background to wake it, is turned back once, with the wait to arm.
 
 Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project inside an initialized repository
 (report it, move it to its pin, undo it) and refuse in a git repository that is not one.
@@ -265,16 +265,13 @@ When the user says they will reinstall the machine or wipe its disk, nothing of 
 
 export { BACKUP_HOOK_COMMAND, FALLBACK_HOOK_COMMAND, GUARD_HOOK_COMMAND, PAUSE_HOOK_COMMAND, PERMIT_HOOK_COMMAND, REPLY_HOOK_COMMAND, RULES_HOOK_COMMAND, RULES_RETOLD_MATCHER, SHARE_HOOK_COMMAND } from './hook-entries.mjs';
 
-/** Components are data: where each one lives under a home, and what it contains at a version. */
+/** Components are data: where each one lives under a home, and what it contains at a version. Every one is Claude
+ * Code's: the harness serves Claude Desktop's Code tab and Codex only reviews (D4, odd/tasks/drop-codex-components.md),
+ * so nothing is written under `~/.codex`, and `sync` and `uninstall` take out the Codex copies earlier versions wrote. */
 export const components = [
   {
     id: 'claude-skill',
     target: (home) => path.join(home, '.claude', 'skills', 'js-harness', 'SKILL.md'),
-    content: skillContent,
-  },
-  {
-    id: 'codex-skill',
-    target: (home) => path.join(home, '.codex', 'skills', 'js-harness', 'SKILL.md'),
     content: skillContent,
   },
   {
@@ -283,22 +280,12 @@ export const components = [
     content: orchestratorSkillContent,
   },
   {
-    id: 'codex-orchestrator-skill',
-    target: (home) => path.join(home, '.codex', 'skills', 'js-harness-orchestrator', 'SKILL.md'),
-    content: orchestratorSkillContent,
-  },
-  {
     id: 'claude-protocols-skill',
     target: (home) => path.join(home, '.claude', 'skills', 'js-harness-protocols', 'SKILL.md'),
     content: protocolsSkillContent,
   },
-  {
-    id: 'codex-protocols-skill',
-    target: (home) => path.join(home, '.codex', 'skills', 'js-harness-protocols', 'SKILL.md'),
-    content: protocolsSkillContent,
-  },
-  // F8 S10 (odd/tasks/f8-s10-port.md): the output style, for Claude Code only, since Codex only
-  // reviews here (D3). A clone selects the style through its settings (bin/lib/project-apply.mjs).
+  // F8 S10 (odd/tasks/f8-s10-port.md): the output style. A clone selects it through its settings
+  // (bin/lib/project-apply.mjs).
   {
     id: 'claude-output-style',
     target: (home) => path.join(home, '.claude', 'output-styles', `${OUTPUT_STYLE_NAME}.md`),
@@ -328,20 +315,8 @@ export const entryComponents = [
     entry: () => hookEntry(),
   },
   {
-    id: 'codex-hook',
-    target: (home) => path.join(home, '.codex', 'hooks.json'),
-    pointer: ['hooks', 'SessionStart'],
-    entry: () => hookEntry(),
-  },
-  {
     id: 'claude-resume-hook',
     target: (home) => path.join(home, '.claude', 'settings.json'),
-    pointer: ['hooks', 'SessionStart'],
-    entry: () => resumeHookEntry(),
-  },
-  {
-    id: 'codex-resume-hook',
-    target: (home) => path.join(home, '.codex', 'hooks.json'),
     pointer: ['hooks', 'SessionStart'],
     entry: () => resumeHookEntry(),
   },
@@ -400,20 +375,8 @@ export const entryComponents = [
     entry: () => replyHookEntry(),
   },
   {
-    id: 'codex-reply-hook',
-    target: (home) => path.join(home, '.codex', 'hooks.json'),
-    pointer: ['hooks', 'Stop'],
-    entry: () => replyHookEntry(),
-  },
-  {
     id: 'claude-backup-hook',
     target: (home) => path.join(home, '.claude', 'settings.json'),
-    pointer: ['hooks', 'Stop'],
-    entry: () => backupHookEntry(),
-  },
-  {
-    id: 'codex-backup-hook',
-    target: (home) => path.join(home, '.codex', 'hooks.json'),
     pointer: ['hooks', 'Stop'],
     entry: () => backupHookEntry(),
   },
@@ -421,12 +384,6 @@ export const entryComponents = [
   {
     id: 'claude-fallback-hook',
     target: (home) => path.join(home, '.claude', 'settings.json'),
-    pointer: ['hooks', 'SessionStart'],
-    entry: () => fallbackHookEntry(),
-  },
-  {
-    id: 'codex-fallback-hook',
-    target: (home) => path.join(home, '.codex', 'hooks.json'),
     pointer: ['hooks', 'SessionStart'],
     entry: () => fallbackHookEntry(),
   },
@@ -706,11 +663,11 @@ function isBelow(inner, outer) {
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
-function installEntries(home, previousManifest, missingBefore = new Map(), codexConfig = undefined, write = true) {
+function installEntries(home, previousManifest, missingBefore = new Map(), codexConfig = undefined, write = true, declared = entryComponents) {
   const createdByTarget = new Map();
   const foldersByTarget = new Map();
   const ours = oursContainers(previousManifest?.entries);
-  return entryComponents.map((component) => {
+  return declared.map((component) => {
     const target = component.target(home);
     const pointer = component.pointer;
     const entry = component.entry();
@@ -1094,13 +1051,15 @@ export function removeEmptyDirsUpTo(dir, home, listDir = fs.readdirSync) {
  * marked `skipped: true` with the failure's `reason` — so a file js-harness already wrote is never orphaned: uninstall
  * can still find and remove it (see `uninstall` below, unchanged: it already compares the real file's sha256 against
  * whatever record it is handed), and `sync`'s pruning (below) never mistakes a merely-failed rewrite for a component
- * that is no longer shipped. */
+ * that is no longer shipped. `deps.components` and `deps.entryComponents` (default the two lists above) are the seam
+ * of a test that installs what an earlier version declared, such as its Codex components (./earlier-codex.testkit.mjs). */
 export function install(home, version, deps = {}) {
   const writeFile = deps.writeFile ?? fs.writeFileSync;
   const previous = readManifest(home);
-  const missingBefore = new Map(entryComponents.map((component) => [component.target(home), missingFolders(component.target(home), home)]));
+  const declared = { files: deps.components ?? components, entries: deps.entryComponents ?? entryComponents };
+  const missingBefore = new Map(declared.entries.map((component) => [component.target(home), missingFolders(component.target(home), home)]));
   const files = [];
-  for (const component of components) {
+  for (const component of declared.files) {
     const target = component.target(home);
     // A file the user changed is left and its record carried forward (./component-write.mjs), as one whose write failed.
     const record = writeComponent(target, component.content(version), previous?.files?.find((f) => f.path === target), writeFile);
@@ -1108,9 +1067,9 @@ export function install(home, version, deps = {}) {
   }
   // Recorded before written, by the same walk with no write, beside the earlier records, whose entries (an older form) may still be there:
   // a run stopped in between leaves both ours to undo (JH 81's verifier; Codex on 8c45db8..c70aa5a).
-  const planned = installEntries(home, previous, missingBefore, deps.codexConfig, false);
+  const planned = installEntries(home, previous, missingBefore, deps.codexConfig, false, declared.entries);
   writeManifest(home, { ...previous, version: previous?.version ?? null, files: [...files, ...(previous?.files ?? []).filter((f) => !files.some((g) => g.path === f.path))], entries: [...planned, ...(previous?.entries ?? []).filter((e) => !planned.some((p) => p.path === e.path && deepEqual(p.pointer, e.pointer) && deepEqual(p.entry, e.entry)))] });
-  const entries = installEntries(home, previous, missingBefore, deps.codexConfig);
+  const entries = installEntries(home, previous, missingBefore, deps.codexConfig, true, declared.entries);
   // Optional files and scheduled tasks are carried forward as recorded (see `recordOptionalFile` and
   // `recordScheduledTask`): nothing here writes, registers or drops one.
   const carried = Object.fromEntries(ON_REQUEST.filter((key) => previous?.[key]).map((key) => [key, previous[key]]));
@@ -1139,7 +1098,7 @@ export function sync(home, version, deps = {}) {
     // user changed is theirs and is kept, and so is one that cannot be read or removed, since the manifest is
     // already written and a throw here would leave the sync half reported (harness-review a1). Either way it is no
     // longer recorded; `pruneKept` says which and why.
-    const declaredTargets = new Set(components.map((c) => c.target(home)));
+    const declaredTargets = new Set((deps.components ?? components).map((c) => c.target(home)));
     const pruneKept = [];
     for (const file of previous.files) {
       if (declaredTargets.has(file.path) || !fs.existsSync(file.path)) continue;

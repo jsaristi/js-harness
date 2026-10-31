@@ -304,7 +304,7 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
       // `memory-backup` (odd/tasks/memory-backup.md) follows it, then `claude-import` (odd/tasks/f8-s13-rehearsal.md, T8)
       // and `permissions` (odd/tasks/f8-s10-port.md, T4).
       // `clean` (odd/tasks/clean.md) follows `stack-update`.
-      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'codex-daemon', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'review-skips', 'templates', 'memory-backup', 'claude-import', 'permissions', 'host-update', 'stack-update', 'clean'],
+      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-daemon', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'review-skips', 'templates', 'memory-backup', 'claude-import', 'permissions', 'host-update', 'stack-update', 'clean'],
     );
     // A temp home has no install: nothing holds the permissions, and that is no gap.
     assert.equal(rows.find((r) => r.id === 'permissions').claude, 'n/a');

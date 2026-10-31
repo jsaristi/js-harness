@@ -9,7 +9,8 @@ import { pathToFileURL } from 'node:url';
 import { REPO_ROOT, resolveNpmCli, run, npm, mkTmp, copyRepoToStaging, bumpVersion, globalPackageDir, nextVersion } from './lib.mjs';
 import { hooksOfHost, hookLabel, hostHooksProblem, uninstalledHostProblem } from './practice-lib.mjs';
 
-// The skills `install` writes for each host, one folder each under `<home>/.<host>/skills/`.
+// The skills `install` writes for Claude Code, one folder each under `<home>/.claude/skills/`; it writes none for Codex,
+// which only reviews (odd/tasks/drop-codex-components.md).
 // The repository's version is packed first, and the upgrade goes to the next minor (harness review e6).
 const FROM = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')).version;
 const TO = nextVersion(FROM);
@@ -64,9 +65,8 @@ async function main() {
   ];
 
   /** What is wrong with the hook entries of the two host files, or `null`: each must hold its seeded entry
-   * and then every entry `install` writes for its host (`hooksOfHost`: the doctor's for `startup|resume` and
-   * the resume hook's for `compact|clear|startup`, for both; the pause hook's for Claude Code only) once, by its event, its
-   * matcher and its command (`hostHooksProblem`). */
+   * and then every entry `install` writes for its host (`hooksOfHost`: all of them Claude Code's, none Codex's) once, by
+   * its event, its matcher and its command (`hostHooksProblem`). */
   function hostFilesProblem() {
     for (const [filePath, seededCommand, host] of seededCommands) {
       const problem = hostHooksProblem(fs.readFileSync(filePath, 'utf8'), seededCommand, host);
@@ -147,31 +147,27 @@ async function main() {
       fs.writeFileSync(codexHooksPath, seededCodexHooks, 'utf8');
     });
 
-    step('installed `js-harness install --home` writes the manifest and skill files', () => {
+    step('installed `js-harness install --home` writes the manifest and the Claude skill files, and no Codex skill', () => {
       const result = run(process.execPath, [binPath, 'install', '--home', home]);
       assertThat(result.status === 0, `install exited ${result.status}: ${result.stderr}`);
       const manifest = JSON.parse(fs.readFileSync(path.join(home, '.js-harness', 'manifest.json'), 'utf8'));
       assertThat(manifest.version === FROM, `expected manifest version ${FROM}, got ${manifest.version}`);
-      for (const [host, label] of [['.claude', 'Claude'], ['.codex', 'Codex']]) {
-        for (const skill of SKILLS) {
-          assertThat(
-            fs.existsSync(path.join(home, host, 'skills', skill, 'SKILL.md')),
-            `missing the ${label} skill file of ${skill}`,
-          );
-        }
+      for (const skill of SKILLS) {
+        assertThat(fs.existsSync(path.join(home, '.claude', 'skills', skill, 'SKILL.md')), `missing the Claude skill file of ${skill}`);
       }
+      assertThat(!fs.existsSync(path.join(home, '.codex', 'skills')), 'install wrote a Codex skill folder, which it no longer writes');
     });
 
-    step(`install added its hook entries to each seeded host file, after the seeded one: ${seededCommands.map(([, , host]) => `${host} ${hooksOfHost(host).map(hookLabel).join(' and ')}`).join('; ')}`, () => {
+    step(`install added its hook entries to each seeded host file, after the seeded one: ${seededCommands.map(([, , host]) => `${host} ${hooksOfHost(host).map(hookLabel).join(' and ') || 'none'}`).join('; ')}`, () => {
       const problem = hostFilesProblem();
       assertThat(problem === null, `after install, ${problem}`);
     });
 
-    step('install preserved each seeded file\'s own indentation (4-space Claude, tab Codex)', () => {
+    step('install preserved the Claude file\'s 4-space indentation and left the Codex file byte for byte as seeded', () => {
       const claudeRaw = fs.readFileSync(claudeSettingsPath, 'utf8');
       assertThat(claudeRaw.includes('\n    "hooks"'), `expected 4-space indentation in:\n${claudeRaw}`);
       const codexRaw = fs.readFileSync(codexHooksPath, 'utf8');
-      assertThat(codexRaw.includes('\n\t"hooks"'), `expected tab indentation in:\n${codexRaw}`);
+      assertThat(codexRaw === seededCodexHooks, `expected the Codex hooks.json as seeded, found:\n${codexRaw}`);
     });
 
     step('a second `install --home` adds no duplicate hook entries', () => {
@@ -249,7 +245,7 @@ async function main() {
       );
       assertThat(
         !fs.existsSync(path.join(home, '.codex', 'skills')),
-        'expected the Codex skill dir to be removed',
+        'expected no Codex skill dir, which install never wrote',
       );
       // uninstall takes back the PostToolUse list install made in Claude's file as well, so both files are the seeded bytes.
       const claudeAfter = fs.readFileSync(claudeSettingsPath, 'utf8');

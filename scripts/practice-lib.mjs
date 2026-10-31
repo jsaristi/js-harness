@@ -240,10 +240,9 @@ export function ownsFolder(markerText) {
 
 // ---- the real home, before and after ---------------------------------------------------------------------------------
 
-// What `install` writes under a home (`bin/lib/manifest.mjs`: `components` and `entryComponents`): three skills
-// for each of two hosts, two entries in a file of each host, and the pause entry in Claude Code's (`HARNESS_HOOKS` below).
+// What `install` writes under a home (`bin/lib/manifest.mjs`): Claude Code's skills and settings entries, nothing under
+// `.codex` (odd/tasks/drop-codex-components.md).
 const SKILLS = ['js-harness', 'js-harness-orchestrator', 'js-harness-protocols'];
-const HOSTS = ['.claude', '.codex'];
 // The arrays of the manifest whose records name a file by `path`: what `install` wrote, the files it grafted
 // an entry onto, and what was written only when asked (the login launcher, which lies outside the home).
 const RECORDED = ['files', 'entries', 'optional'];
@@ -263,10 +262,11 @@ function recordedPaths(manifestText) {
 }
 
 /** The files the harness owns in the user's REAL home `home`, as absolute paths without duplicates: the
- * manifest, the `SKILL.md` of the three skills for both hosts, the two files that hold a `SessionStart` entry,
+ * manifest, the `SKILL.md` of Claude Code's three skills, the two host files that hold a `SessionStart` entry,
  * and every file the real manifest (`manifestText`, the content of `<home>/.js-harness/manifest.json`, or
  * `undefined`) records. The manifest records absolute paths; a relative one is taken from `home`. On Windows
- * two paths that differ only in case are one file.
+ * two paths that differ only in case are one file. Codex's `hooks.json`, the user's, stays listed so the run is seen
+ * to leave it; an earlier install's Codex skills are hashed through the manifest that records them.
  *
  * The practice never writes to this home, and the run proves it: these files are hashed before the first
  * step and after the last, and any difference fails the run. The doctor cache (`.js-harness/doctor.json`) is
@@ -277,7 +277,7 @@ export function realHomeFiles(home, manifestText, platform = process.platform) {
   const p = pathFor(platform);
   const fixed = [
     p.join(home, '.js-harness', 'manifest.json'),
-    ...HOSTS.flatMap((host) => SKILLS.map((skill) => p.join(home, host, 'skills', skill, 'SKILL.md'))),
+    ...SKILLS.map((skill) => p.join(home, '.claude', 'skills', skill, 'SKILL.md')),
     p.join(home, '.claude', 'settings.json'),
     p.join(home, '.codex', 'hooks.json'),
   ];
@@ -342,15 +342,12 @@ const RULES_HOOK_COMMAND = 'js-harness rules --hook || exit 0';
 const GUARD_HOOK_MATCHER = '^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Read|Write|Edit|MultiEdit|NotebookEdit|Grep|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$';
 
 /** The entries `install` grafts on the hooks file of each host, in the order it writes them, each as the event it hangs
- * from, its matcher (none for the pause entry), its command and the hosts that get it: the doctor's and the resume hook's
- * for both hosts; the pause entry after a tool call and after a failed WebFetch, the guard's, the share check's and the
- * template gate's for Claude Code only, since what they read (a transcript, WebFetch, the tools named) is Claude Code's;
- * the reply check's at a stop for both hosts, since it reads only the reply's text. The test holds this list to what
- * `bin/lib/manifest.mjs` declares (`entryComponents`), so a journey cannot go on passing against an install that
- * changed. */
+ * from, its matcher (none for the pause entry), its command and the hosts that get it: Claude Code alone, since Codex
+ * only reviews (odd/tasks/drop-codex-components.md; what 0.97.0 wrote there is `EARLIER_CODEX_HOOKS` in
+ * scripts/release-proof-lib.mjs). The test holds this list to `entryComponents` (`bin/lib/manifest.mjs`). */
 export const HARNESS_HOOKS = Object.freeze([
-  Object.freeze({ event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook', hosts: Object.freeze(['claude', 'codex']) }),
-  Object.freeze({ event: 'SessionStart', matcher: 'compact|clear|startup', command: 'js-harness resume --hook', hosts: Object.freeze(['claude', 'codex']) }),
+  Object.freeze({ event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook', hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'SessionStart', matcher: 'compact|clear|startup', command: 'js-harness resume --hook', hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PostToolUse', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PostToolUseFailure', matcher: 'WebFetch', command: PAUSE_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PreToolUse', matcher: GUARD_HOOK_MATCHER, command: GUARD_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
@@ -359,14 +356,14 @@ export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'UserPromptSubmit', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'SessionStart', matcher: 'compact|clear|resume', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'SubagentStart', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
-  Object.freeze({ event: 'Stop', command: REPLY_HOOK_COMMAND, hosts: Object.freeze(['claude', 'codex']) }),
-  Object.freeze({ event: 'Stop', command: BACKUP_HOOK_COMMAND, hosts: Object.freeze(['claude', 'codex']) }),
+  Object.freeze({ event: 'Stop', command: REPLY_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'Stop', command: BACKUP_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PreToolUse', matcher: '^(Artifact|ArtifactData|AskUserQuestion|mcp__visualize__show_widget)$', command: 'js-harness template gate --hook || exit 0', hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'PostToolUse', matcher: '^(Artifact|ArtifactData|AskUserQuestion|mcp__visualize__show_widget)$', command: 'js-harness template gate --shown || exit 0', hosts: Object.freeze(['claude']) }),
-  Object.freeze({ event: 'SessionStart', matcher: 'startup|resume|clear|compact', command: FALLBACK_HOOK_COMMAND, hosts: Object.freeze(['claude', 'codex']) }),
+  Object.freeze({ event: 'SessionStart', matcher: 'startup|resume|clear|compact', command: FALLBACK_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
 ]);
 
-/** The entries of `HARNESS_HOOKS` that `install` grafts on the hooks file of `host` (`claude` or `codex`), in order. */
+/** The entries of `HARNESS_HOOKS` `install` grafts on the hooks file of `host`, in order: none for `codex`. */
 export function hooksOfHost(host) {
   return HARNESS_HOOKS.filter((hook) => hook.hosts.includes(host));
 }
@@ -390,16 +387,19 @@ function entryShown(entry) {
   return `${command === null ? 'no command' : `"${command}"`} (${typeof entry.matcher === 'string' ? `matcher ${entry.matcher}` : 'no matcher'})`;
 }
 
+/** The events whose lists `hostHooksProblem` holds after `hooks.SessionStart`, each by `tailProblem`. */
+const TAIL_EVENTS = ['PostToolUse', 'UserPromptSubmit', 'SubagentStart'];
+
 /** What is wrong with the hook entries of a host file after `install`, or `null` when nothing is. `text` is
  * the content of the file (`.claude/settings.json`, `.codex/hooks.json`), `seededCommand` the command of the
  * one entry that was there before, the user's, and `host` (`claude` or `codex`) the host whose file it is, which
- * decides what `install` wrote there. Nothing is wrong when `hooks.SessionStart` holds that entry first and
- * untouched in what it runs, and then each of the host's `SessionStart` entries of `HARNESS_HOOKS` once, in
- * order, with its matcher and its command: an entry missing, one written twice by a second install, and the right
- * command under another matcher are each a problem. `hooks.PostToolUse` is checked after that, by
- * `postToolUseProblem`. The message says what was expected and every entry found, so a failed step shows the
- * file without opening it. */
-export function hostHooksProblem(text, seededCommand, host) {
+ * decides what `install` wrote there (`hooks`, the host's entries of `HARNESS_HOOKS` unless the caller gives the
+ * entries an earlier release wrote). Nothing is wrong when `hooks.SessionStart` holds that entry first and untouched in
+ * what it runs, and then each `SessionStart` entry of `hooks` once, in order, with its matcher and its command: an
+ * entry missing, one written twice by a second install, and the right command under another matcher are each a problem.
+ * `tailProblem` then checks the lists of `TAIL_EVENTS` and every other harness event `hooks` has no entry of (so a
+ * Codex `Stop` entry a failed prune left is found). The message names what was expected and every entry found. */
+export function hostHooksProblem(text, seededCommand, host, hooks = hooksOfHost(host)) {
   let data;
   try {
     data = JSON.parse(text);
@@ -408,7 +408,7 @@ export function hostHooksProblem(text, seededCommand, host) {
   }
   const entries = data?.hooks?.SessionStart;
   if (!Array.isArray(entries)) return 'the file holds no list at hooks.SessionStart';
-  const ours = hooksOfHost(host).filter((hook) => hook.event === 'SessionStart');
+  const ours = hooks.filter((hook) => hook.event === 'SessionStart');
   const asExpected =
     entries.length === ours.length + 1 &&
     entryCommand(entries[0]) === seededCommand &&
@@ -417,22 +417,22 @@ export function hostHooksProblem(text, seededCommand, host) {
     const expected = [`the seeded entry "${seededCommand}"`, ...ours.map((hook) => `"${hook.command}" (matcher ${hook.matcher})`)].join(', then ');
     return `expected ${expected}; found: ${entries.length === 0 ? 'no entry' : entries.map(entryShown).join(' | ')}`;
   }
-  return postToolUseProblem(data, host) ?? tailProblem(data, host, 'UserPromptSubmit') ?? tailProblem(data, host, 'SubagentStart');
+  const without = [...new Set(HARNESS_HOOKS.map((hook) => hook.event))]
+    .filter((event) => event !== 'SessionStart' && !TAIL_EVENTS.includes(event) && !hooks.some((hook) => hook.event === event));
+  for (const event of [...TAIL_EVENTS, ...without]) {
+    const problem = tailProblem(data, host, hooks, event);
+    if (problem !== null) return problem;
+  }
+  return null;
 }
 
-/** What is wrong with `hooks.PostToolUse` of a host file, or `null` when nothing is. Claude Code holds the pause
- * entry once, with no matcher, at the end of the list: `install` appends it, so a user's own entry before it stays
- * first and untouched. Codex holds no entry of the harness there, so one found in its file is a problem. */
-function postToolUseProblem(data, host) {
-  return tailProblem(data, host, 'PostToolUse');
-}
-
-/** What is wrong with the list `hooks.<event>` of a host file, held as `postToolUseProblem` holds `PostToolUse`: the
- * harness's entries of that event once each at its end, and none where the host gets none (the rules' turn-start
- * entries are Claude Code's alone). */
-function tailProblem(data, host, event) {
+/** What is wrong with the list `hooks.<event>` of a host file, or `null` when nothing is: the entries of `hooks` of that
+ * event once each at its end, and no entry of the harness where `hooks` has none. Claude Code holds the pause entry once,
+ * with no matcher, at the end of `PostToolUse`: `install` appends it, so a user's own entry before it stays first and
+ * untouched. Codex holds no entry of the harness at all, so one found in its file is a problem. */
+function tailProblem(data, host, hooks, event) {
   const list = data?.hooks?.[event];
-  const ours = hooksOfHost(host).filter((hook) => hook.event === event);
+  const ours = hooks.filter((hook) => hook.event === event);
   if (!Array.isArray(list)) return ours.length === 0 ? null : `the file holds no list at hooks.${event}`;
   const harnessCommands = HARNESS_HOOKS.filter((hook) => hook.event === event).map((hook) => hook.command);
   const harnessFound = list.filter((entry) => harnessCommands.includes(entryCommand(entry)));

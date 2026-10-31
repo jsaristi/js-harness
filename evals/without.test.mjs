@@ -161,6 +161,13 @@ test('the evidence of rule-<id> is the words it cut, never a line it rewrote or 
   assert.deepEqual(lines, ['Every question of the project reaches the user in one place.']);
 });
 
+test('rule-<id> under Codex cuts a js-harness skill an earlier version left in .codex/skills, though install writes none there now', (t) => {
+  const root = codexHome(tmp(t));
+  put(root, '.codex/skills/js-harness-protocols/SKILL.md', '# protocols\n\nAsk the user nothing while an orchestrator holds its role.\n\nOther text.\n');
+  applyWithout(root, ['rule-questions-one-place'], 'codex');
+  assert.equal(snapshot(root)['.codex/skills/js-harness-protocols/SKILL.md'], '# protocols\n\n\nOther text.\n');
+});
+
 test('rule-<id> of no live rule, or of a rule the home holds no text of, is refused before anything is touched', (t) => {
   const root = claudeHome(tmp(t));
   const before = snapshot(root);
