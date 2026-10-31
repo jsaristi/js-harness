@@ -154,5 +154,23 @@ question (`js-harness notify --to orchestrator --kind question`, in Spanish).
   `bin/lib/gentle-ai-absence.test.mjs`, "no file under bin, evals or scripts names gentle-ai but the named ones": a
   test comment named the review's tool. Reworded; that test then 3 of 3.
 
+- L10 (2026-10-31): the verifier's fixes are `1283e5f2` (gate on CI green). Codex over `2b67805..1283e5f`: correct
+  (0.9), no finding. Lenses risk and reliability: 0 findings. gentle-ai over the same commit: its `granted` invocation
+  started (lineage `review-1511b14c5ac86b6f`); its reliability lens is captured with `gentle-ai review
+  capture-result --cwd . ... --agent=claude-code` (no `--materialize`: the compiled runtime runs the lens itself), then
+  `acknowledge-approved` with the command its result prints. Every code commit of slice 1 then has a Codex record and
+  a lens record: `2b678054`, `1283e5f2`.
+
+- L11 (2026-10-31): gentle-ai over `1283e5f2`: approved, two SUGGESTIONs left as later work
+  (`R3-beyond-lines-empty-tip-default`: `beyondLines`'s `tip` defaults to ''; `R3-tip-abbrev-length-mismatch`: the
+  line slices ids to 7 where git's short ids may be longer), acknowledged. Slice 1 is reviewed whole.
+
 ## Next step
-T1: commit the verifier's fixes, Codex and the lenses over that commit, then the push and PR 1 (T2).
+State at the context pause (2026-10-31): branch `worktree-gate-push-holes`, worktree
+`D:\js-harness\.claude\worktrees\gate-push-holes`, slice 1 = `2b678054` + `1283e5f2`, every review done (L8-L11).
+Next: commit this document; `git push -u origin worktree-gate-push-holes`; open PR 1 (`gh pr create`, body ends with the PR attribution
+line of the session); `js-harness notify --to orchestrator --kind ready --pr <n> "<one line>"`; notice of follow-ups
+to the lead (`codexSkipsOwed`, `baseLeftOut` still count records past the tip, L8 item 3). Then slice 2 (T3 decided
+in L5) on a new branch from main: `failed.jsonl` beside the log, read before it in `proven` (`bin/check.mjs:1560`),
+`provenBy` requiring the pass's `files`; planted test in `bin/check.test.mjs` beside "a tree whose tests failed on CI
+is not proven by a narrower pass here", with both log files removed after the CI failure to stand for rotation.
