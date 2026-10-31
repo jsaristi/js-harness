@@ -353,28 +353,20 @@ async function sharedStop(project) {
   return { reason: JSON.parse(out.join('')).reason, err: err.join(''), gits, reads: (file) => reads.get(file) ?? 0, record };
 }
 
-test('the checks of one stop find the project once, from the .git files when they say, and read each file once (odd/tasks/reply-hook-latency.md)', async (t) => {
+test('the checks of one stop ask git once where the project is, and read each file once (odd/tasks/reply-hook-latency.md)', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reply-shared-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  // A main checkout: its `.git` folder says where the project is, and git is never asked.
-  const main = path.join(dir, 'main');
-  fs.mkdirSync(path.join(main, '.git'), { recursive: true });
-  const byFiles = await sharedStop(main);
-  assert.match(byFiles.reason, STALE);
-  assert.match(byFiles.reason, RETURNED);
-  assert.equal(byFiles.err, '');
-  assert.equal(byFiles.gits, 0, 'the files answered');
-  assert.equal(byFiles.reads(byFiles.record), 1);
-  assert.equal(byFiles.reads(TRANSCRIPT), 1);
-  // A submodule's `.git` file names a git folder whose place says nothing: git is asked, once for the three checks.
-  const sub = path.join(dir, 'sub');
-  fs.mkdirSync(sub);
-  fs.writeFileSync(path.join(sub, '.git'), `gitdir: ${path.join(dir, 'super', '.git', 'modules', 'sub')}\n`);
-  const byGit = await sharedStop(sub);
-  assert.match(byGit.reason, STALE);
-  assert.match(byGit.reason, RETURNED);
-  assert.equal(byGit.gits, 1, 'one git answer for the three checks that ask where the project is');
-  assert.equal(byGit.reads(byGit.record), 1);
+  // Git is asked even where a `.git` folder seems to say: one that git does not take (here an empty one) names another
+  // project than git would, and the project picks the record each check reads.
+  const project = path.join(dir, 'main');
+  fs.mkdirSync(path.join(project, '.git'), { recursive: true });
+  const stop = await sharedStop(project);
+  assert.match(stop.reason, STALE);
+  assert.match(stop.reason, RETURNED);
+  assert.equal(stop.err, '');
+  assert.equal(stop.gits, 1, 'one git answer for the three checks that ask where the project is');
+  assert.equal(stop.reads(stop.record), 1);
+  assert.equal(stop.reads(TRANSCRIPT), 1);
 });
 
 test('a work session holding handed work in a project whose board is stale gets the wake warning alone', async () => {

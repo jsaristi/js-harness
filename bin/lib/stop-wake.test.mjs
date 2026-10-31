@@ -100,3 +100,15 @@ test('each line is judged once, newest first, and a line that is no JSON is pass
   assert.equal(lastLineWith(text, 'absent', () => true), null);
   assert.equal(lastLineWith('', NEEDLE, () => true), null);
 });
+
+test('an empty needle is in every line, and the newest line accepted is found', () => {
+  // Every position holds it, so the search must still move on at the end of a window (the verifier's finding: it did
+  // not, and the hook ran out of memory on a tool call whose id was empty). The walk is no reference here: on a text
+  // that ends in a newline it stays on the empty last line for ever.
+  const text = '{"type":"user","id":1}\n{"type":"assistant"}\n{"type":"user","id":2}\ntorn {\n';
+  assert.deepEqual(lastLineWith(text, '', (entry) => entry.type === 'user'), { entry: { type: 'user', id: 2 }, start: 44 });
+  assert.deepEqual(lastLineWith(text, '', (entry) => entry.type === 'assistant'), { entry: { type: 'assistant' }, start: 23 });
+  assert.equal(lastLineWith(text, '', () => false), null);
+  assert.equal(lastLineWith('', '', () => true), null);
+  assert.deepEqual(lastLineWith('{"a":1}', '', () => true), { entry: { a: 1 }, start: 0 });
+});

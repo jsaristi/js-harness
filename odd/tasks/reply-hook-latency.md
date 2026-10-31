@@ -67,6 +67,10 @@ Nothing here is his but the hook's timeout: if the fix needs it changed, a recor
 - [x] T4 (kind: verify) spec 1: the measure after, on the fixture and the lead's real files
 - [ ] T5 (kind: docs) spec 5: the recorded question on the timeout, if the measure says the fix needs it
 - [ ] T6 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice
+- [ ] T6a (kind: verify) spec 6: Codex reads again the fix of its partly fixed finding (`c76d97d1`) and whatever the
+  verifier changes, from `8dd55c84` with `--again` (it runs no second recheck of the review that ended at `3543c9f`)
+- [ ] T8 (kind: build) out of scope, for the lead: the command-block check's PowerShell parser costs 1.4–2.3 s a stop
+  whose reply hands him a block (`## Measure`); started beside the other checks or kept warm, or the timeout raised
 - [ ] T7 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice
 
 ## Measure
@@ -172,6 +176,21 @@ rounds), so no on-access scan of a growing transcript adds to it.
 - Not checked: the in-situ p90 after the change, which needs this release installed and stops recorded; `node
   scripts/reply-hook-time.mjs in-situ <transcript>` measures it.
 
+After the verifier (2026-10-31, the project asked of git again, once a stop; the fixture widened, L9):
+
+- The lead's real files, in turn, 15 runs (the same `runs` command): before p50 1412, p90 1798 ms; after p50 663, p90
+  955 ms; the same answer byte for byte and nothing on standard error (both run on the same payload, outputs compared).
+  The machine was busier than at the first measure (before's p90 1283 then).
+- Per check on the lead's real files with a reply showing a `ran` block (the profile, three runs): wake 187–276 (git
+  82–139), stale 26–35, return 148–202, commands 336–493 ms (`transcriptRuns` alone 326 ms).
+- Fixture, widened (`node --test bin/reply-budget.test.mjs`, Windows): lead p90 2231 ms (runs 814–2387: the first six
+  slow, the machine's load), work session p90 807 ms; both under the 2500 ms budget.
+- Bad news, measured: a reply that hands him a PowerShell block makes the command-block check start his PowerShell to
+  parse it: 1452–2285 ms for the parser alone, 2157–2865 ms for the check, on the lead's real files (the profile with
+  a handed block, three runs). Such a stop takes about 3 s, over half the timeout; the budget does not hold it (a
+  process's start, not the hook's own work) and says so. What lowers it is the timeout (question 138) or a follow-up
+  that starts the parser differently (beside the other checks, or kept warm): out of this feature's scope.
+
 ### What the timeout needs (T5)
 
 In the same transcript the host cancelled `guard --stop` at its 5 s in 52 of 503 stops and `backup --hook` in 55, as
@@ -217,6 +236,22 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   `8c746b16`). Codex does not recheck a range starting at `8c746b1`; the Claude lenses review it. The lenses over
   `3543c9f..8c746b1` (reliability, readability, resilience): 0 findings. gentle-ai's Stop hook offered the whole
   branch (base `7aac3e43`): its status run, nothing started, as `CLAUDE.md` says.
+- L9 (2026-10-31, T6, the independent verifier, read-only, over `7aac3e43..c76d97d1`): the claim "every check answers
+  as before" did not hold in full. (1) The project read from the `.git` files (`mainCheckoutByFiles`) is not git's
+  answer for a removed worktree, an empty or invalid `.git` folder, an outer repository holding one, or a folder git
+  refuses; the project picks the record each check reads. Decided (this session): git is asked again, once a stop, as
+  each check asked; the cost is one git call a stop (82–139 ms on the lead's files). The test "ask git once" was red on
+  `c76d97d1` (0 git calls on an empty `.git` folder). (2) An empty needle made `lastLineWith` loop without end (the
+  hook ran out of memory, exit 134, on a tool call whose id was empty; the verifier's run); guarded and tested. The old
+  walk also never ended on it when the text ends in a newline, so the test states the answers instead of comparing.
+  (3) A failed git answer is kept for the stop: kept, decided, as `stopIo` says: asking a timed-out git again would
+  cost each check its two seconds and push the hook past its timeout, skipping every check. (4) The budget fixture
+  did not reach the return check's publish search nor the command-block check: widened (a page rendered, published and
+  never linked; a `ran` block), which found the parser's cost (`## Measure`, After the verifier).
 
 ## Next step
-Code committed: `b42532d7` (gate green). Question 138 (T5) is recorded and sent; on a yes, change `replyHookEntry`'s timeout to 15 with its test. Next: `js-harness codex-review --base 7aac3e43` and `js-harness lens-review --base 7aac3e43`, an independent verifier, push, PR, `notify --kind ready --pr <n>`, the summary under `docs/sessions/`, `notify --kind closed`.
+Code: `b42532d7`, `8c746b16`, `c76d97d1` and the verifier's fixes (L9), each committed with the gate green. Question
+138 (T5) is recorded and sent, no answer yet; on a yes, change `replyHookEntry`'s timeout to 15 with its test. Reviews
+done: the lenses over every code commit up to `c76d97d1`, Codex over `f91cbcc..8c746b1`, the verifier. Next: T6a,
+`js-harness codex-review --base 8dd55c84 --again` and the lenses over the verifier's fixes; push, PR, `notify --kind
+ready --pr <n>`; the summary under `docs/sessions/`; `notify --kind closed`. Nothing edited while a review runs.

@@ -53,7 +53,8 @@ export function lastLineWith(text, needle, accept) {
     // The window reaches past `before` by the needle's length less one, so a needle that starts in it is whole.
     const window = text.slice(from, Math.min(text.length, before + needle.length - 1));
     const hits = [];
-    for (let at = window.indexOf(needle); at >= 0; at = window.indexOf(needle, at + 1)) hits.push(from + at);
+    // An empty needle is found at every position, the window's end included, where `indexOf` would not move on.
+    for (let at = window.indexOf(needle); at >= 0 && at < window.length; at = window.indexOf(needle, at + 1)) hits.push(from + at);
     for (let i = hits.length - 1; i >= 0; i -= 1) {
       if (hits[i] >= before) continue;
       const start = text.lastIndexOf('\n', hits[i]) + 1;

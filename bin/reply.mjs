@@ -89,12 +89,12 @@ export async function stopIo({ readFile, readdir, run, env, homedir, now }, stde
   let readNotices;
   let mainCheckout;
   try {
-    const [channel, inbox, sessions] = await Promise.all([import('./lib/channel.mjs'), import('./lib/inbox.mjs'), import('./lib/sessions.mjs')]);
+    const [channel, sessions] = await Promise.all([import('./lib/channel.mjs'), import('./lib/sessions.mjs')]);
     readNotices = once((home, slug) => channel.readNotices(home, slug, { readFile: readOnce }), (home, slug) => JSON.stringify([home, slug]));
-    // Where the project is, read from the `.git` files as the inbox hook reads it, and asked of git only when they do
-    // not say: under a stop's load a git process takes about half a second to start (p50 468 ms, odd/tasks/
-    // reply-hook-latency.md), which a lead's stop, in its main checkout, never needs.
-    mainCheckout = once((cwd) => inbox.mainCheckoutByFiles(cwd) ?? sessions.mainCheckout(runOnce, cwd), (cwd) => cwd);
+    // Asked of git, as each check asked: the `.git` files the inbox hook reads (`mainCheckoutByFiles`) would save a
+    // git process, but name another project than git for a removed worktree, an empty `.git` folder or a folder git
+    // refuses (the verifier's finding, odd/tasks/reply-hook-latency.md), and the project picks the record each check reads.
+    mainCheckout = once((cwd) => sessions.mainCheckout(runOnce, cwd), (cwd) => cwd);
   } catch (err) {
     stderr(`js-harness reply: ${err?.message ?? err}; each check reads the record and finds the project by itself\n`);
   }
