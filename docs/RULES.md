@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `96ea160b1ccc`. In force: 66 (40 of Sebastián, 26 of the project). Retired: 4.
+Hash `09945b46a441`. In force: 67 (40 of Sebastián, 27 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -231,6 +231,12 @@ The most work sessions open at one time in a public repository: 12 sessions.
 The most estimated tokens AGENTS.md may hold, since every session pays it on every turn: 1,500 estimated tokens.
 - Read by: `bin/check.mjs`.
 - Since 2026-10-15. Row: reports. Source: design, `docs/ROADMAP.md`.
+
+### chained-steps
+The one way two steps share a command: the second runs only on the first's success, so the guard refuses a push, a commit, a pull request command, a land or a notice that follows the step before it by a semicolon, a line break, a double bar or an ampersand: &&.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: `bin/lib/guard.mjs`.
+- Since 2026-10-31. Row: reports, against the failure `chained-step-not-conditional`. Source: design, `odd/tasks/guard-chained-steps.md`.
 
 ### ci-gate-bound
 How long a commit gate sent to GitHub waits for its run to end, from the push, before it cancels the run and runs the gate on this machine: 8 minutes.

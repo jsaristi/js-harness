@@ -68,6 +68,15 @@ export const RULES = [
     ]
   },
   {
+    "id": "chained-steps",
+    "subject": "the one way two steps share a command: the second runs only on the first's success, so the guard refuses a push, a commit, a pull request command, a land or a notice that follows the step before it by a semicolon, a line break, a double bar or an ampersand",
+    "owner": "project",
+    "scope": "repository",
+    "since": "2026-10-31",
+    "value": "&&",
+    "failure": "chained-step-not-conditional"
+  },
+  {
     "id": "ci-gate-bound",
     "subject": "how long a commit gate sent to GitHub waits for its run to end, from the push, before it cancels the run and runs the gate on this machine",
     "owner": "project",

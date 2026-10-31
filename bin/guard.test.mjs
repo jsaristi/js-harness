@@ -260,6 +260,15 @@ test('a Bash command with backticks inside double quotes is denied; in single qu
   }
 });
 
+test('a Bash push chained by ; is denied where the rule chained-steps is declared; joined by && it passes, and with no rules file it is not read', async () => {
+  const refused = await hook({ tool_name: 'Bash', cwd: 'D:/project', tool_input: { command: 'npm test; git push' } });
+  assert.equal(refused.code, 0);
+  assert.equal(denied(refused).permissionDecision, 'deny');
+  assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: git push follows the step before it by a ; or a line break/);
+  assert.deepEqual(await hook({ tool_name: 'Bash', cwd: 'D:/project', tool_input: { command: 'npm test && git push' } }), { code: 0, out: '', err: '' });
+  assert.deepEqual(await hook({ tool_name: 'Bash', cwd: 'D:/project', tool_input: { command: 'npm test; git push' } }, { rulesText: null }), { code: 0, out: '', err: '' });
+});
+
 test('a Bash rm -rf of a folder at the top of a drive is denied with where to put it; one below the worktrees folder passes', async () => {
   const refused = await hook({ tool_name: 'Bash', tool_input: { command: 'rm -rf D:/practice-jh22 && node scripts/practice.mjs setup' } });
   assert.equal(refused.code, 0);

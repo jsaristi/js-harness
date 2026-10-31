@@ -58,10 +58,14 @@ changes no rule of his; the rule is the project's. Spend: one gate, one Codex re
   `chained-step-not-conditional`; its control in the coverage register is this check, with a planted break.
 
 ## Tasks
-- [ ] T1 (S1-S3, kind: build): `chainedStepRefusal` in `bin/lib/guard.mjs` over `shellWords`, its route in
-  `bin/guard.mjs`, tests first. Route: inline. Commit: pending.
-- [ ] T2 (S4, kind: build): `rules change chained-steps`, the coverage control, FAILURES control line, row 67, help
-  lines. Route: inline. Commit: pending.
+- [x] T1 (S1-S3, kind: build): `chainedStep` and `chainedStepRefusal` in `bin/lib/guard.mjs` over `shellWords`, its
+  route in `bin/guard.mjs` (the rules file is read only for a command with a chained step), tests first. Route:
+  inline. RED: `bin/lib/guard.test.mjs` could not load (`chainedStepRefusal` not exported). GREEN: guard, lib/guard,
+  manifest, rules and failures tests 409/409. Commit: the rule's commit (T2).
+- [x] T2 (S4, kind: build): `rules change chained-steps` (new, source design, this document), its control a check
+  with a planted break (tried by hand: 2 of 46 tests red, restored), the FAILURES control line (the protocol line
+  moves to `- Was:`), row 67, the help lines and docs/SPEC.md. `rules check`, `rules coverage --strict` (after
+  `--refresh` settled the manifest's edited guard span) and `failures check` pass. Route: inline. One commit with T1.
 - [ ] T3 (kind: verify): gate, Codex review, Claude lenses, independent verifier, pull request, ready notice.
 
 ## Log

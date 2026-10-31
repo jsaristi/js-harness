@@ -27,6 +27,15 @@ export const COVERAGE = {
       "level": "owed",
       "since": "2026-10-28"
     },
+    "chained-steps": {
+      "level": "check",
+      "test": "bin/lib/guard.test.mjs",
+      "break": {
+        "path": "bin/lib/guard.mjs",
+        "find": "if (step !== null && before && Object.hasOwn(JOINERS, joiner)) return { step, joiner };",
+        "replace": "if (step !== null && before && Object.hasOwn(JOINERS, joiner) && step === '') return { step, joiner };"
+      }
+    },
     "ci-gate-bound": {
       "level": "owed",
       "since": "2026-10-28"
@@ -809,7 +818,7 @@ export const COVERAGE = {
       "a440cb5134de",
       "71c551731cd8",
       "3380c3e633c3",
-      "1a548f2c2562",
+      "496fa9cd84d8",
       "bb7c472cb9cf",
       "ba72d3cffccf",
       "4eee354ceae4",

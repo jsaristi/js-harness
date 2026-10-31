@@ -466,6 +466,80 @@ export function driveRootRemovalRefusal(command) {
 
 // The words after which a command starts, as after an operator: a group's `{` and the bodies of if, for and while.
 const COMMAND_KEYWORDS = new Set(['{', 'then', 'else', 'do', '!', 'time']);
+// The keywords whose body runs on a condition the command states: a step right after one is joined by nothing.
+const CONDITION_BODIES = new Set(['then', 'else', 'do']);
+// How the refusal names each joiner; shellWords writes an unquoted line break as a `;`.
+const JOINERS = { ';': 'a ; or a line break', '||': '||', '&': '&' };
+
+/** The step the words of one simple command take, among those whose check must be read first: `git push`, `git commit`,
+ * `gh pr`, `js-harness merge-queue` or `js-harness notify`, or null. It looks through assignments and wrappers, git's
+ * `-C` and `-c` options, `node <path>/js-harness.mjs`, `npx` and `js-harness gate --`. */
+function guardedStep(segment) {
+  let at = 0;
+  while (at < segment.length && (WRAPPERS.has(segment[at]) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[at]))) at += 1;
+  const name = (word) => String(word ?? '').split(/[\\/]/).pop().toLowerCase().replace(/\.(?:exe|cmd|mjs)$/, '');
+  if (name(segment[at]) === 'npx' || (name(segment[at]) === 'node' && name(segment[at + 1]) === 'js-harness')) at += 1;
+  const program = name(segment[at]);
+  const args = segment.slice(at + 1);
+  if (program === 'git') {
+    let verb = 0;
+    while (verb < args.length && args[verb].startsWith('-')) verb += args[verb] === '-C' || args[verb] === '-c' ? 2 : 1;
+    return args[verb] === 'push' || args[verb] === 'commit' ? `git ${args[verb]}` : null;
+  }
+  if (program === 'gh') return args[0] === 'pr' ? 'gh pr' : null;
+  if (program !== 'js-harness') return null;
+  if (args[0] === 'gate') return args.includes('--') ? guardedStep(args.slice(args.indexOf('--') + 1)) : null;
+  return args[0] === 'merge-queue' || args[0] === 'notify' ? `js-harness ${args[0]}` : null;
+}
+
+/** The first step of the shell command `command` whose check must be read before it runs, and that follows another
+ * step by a joiner that runs it whatever that step answered, as `{ step, joiner }`, or null. `;` and a line break
+ * run it after any answer, `||` only after a failure and `&` beside the step, never waiting; `&&` runs it only on a
+ * success, and `|` feeds it the step's output (odd/tasks/guard-chained-steps.md, S3). A line break right after `&&`,
+ * `||` or `|` continues that command, so the first operator between two steps is their joiner; a group's `(` and `)`
+ * are none. A step that is the body of `then`, `else` or `do` runs on a condition the command states. Text in quotes
+ * or in a heredoc's body is no step, so neither is a `-Command` argument of PowerShell. */
+export function chainedStep(command) {
+  const words = shellWords(command, { groups: true });
+  const { operators } = words;
+  let joiner = null;
+  let before = false;
+  for (let i = 0; i < words.length; i += 1) {
+    if (operators.has(i)) {
+      if (joiner === null && words[i] !== '(' && words[i] !== ')') joiner = words[i];
+      continue;
+    }
+    if (CONDITION_BODIES.has(words[i])) {
+      joiner = null;
+      continue;
+    }
+    if (COMMAND_KEYWORDS.has(words[i])) continue;
+    let end = i;
+    while (end < words.length && !operators.has(end)) end += 1;
+    const step = guardedStep(words.slice(i, end));
+    if (step !== null && before && Object.hasOwn(JOINERS, joiner)) return { step, joiner };
+    before = true;
+    joiner = null;
+    i = end - 1;
+  }
+  return null;
+}
+
+/** Why the Bash command `command` is refused for a step chained to the one before it, or null (`chainedStep`). Only
+ * where the rule chained-steps is declared (`projectData`, the text of the project's rules file), as terminal-note
+ * is; behind one that declares it, the copy's value is held (`guardHeld`). Row 67 of the lead's duties failed 10
+ * times: twice a push the pre-push hook refused was followed by a notice that said "pushed". */
+export function chainedStepRefusal(command, projectData) {
+  const chained = chainedStep(command);
+  if (chained === null) return null;
+  const rule = guardHeld('chained-steps', ruleHere('chained-steps', undefined, projectData));
+  if (rule === null) return null;
+  const { step, joiner } = chained;
+  return `js-harness guard: ${step} follows the step before it by ${JOINERS[joiner]}, so it runs whatever that step `
+    + `answered (rule chained-steps: two steps share one command only joined by ${rule.value}). Join them with `
+    + `${rule.value} (a heredoc's command takes it on its first line: cat > f <<'EOF' ${rule.value} git commit -F f), `
+    + `or run ${step} in a call of its own once the answer of the step before is read.${rule.note}`;
+}
 
 // The records of both reviews, each in `<git common dir>/js-harness/` (./codex-reviews.mjs, ./codex-review-runs.mjs,
 // ./lens-reviews.mjs; a test holds this list to their names). Only the commands that make a review write them: a
