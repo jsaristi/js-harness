@@ -177,7 +177,8 @@ export async function profile(payload, { repo = REPO_ROOT, env = process.env, ho
   const modules = { wake: await lib('stop-wake.mjs'), stale: await lib('stale-board.mjs'), back: await lib('return-report.mjs') };
   const loaded = performance.now() - loading;
   const readFile = (file) => fs.readFileSync(file).toString('utf8');
-  const config = replyConfig(nearestHarness(payload.cwd, readFile));
+  const harness = nearestHarness(payload.cwd, readFile);
+  const config = replyConfig(harness);
   if (config === null || config.error) throw new Error(`no reply check is on above ${payload.cwd}${config?.error ? ` (${config.error})` : ''}`);
   const state = closingState(payload.last_assistant_message, config);
   const calls = [];
@@ -196,6 +197,7 @@ export async function profile(payload, { repo = REPO_ROOT, env = process.env, ho
     env,
     homedir,
     now,
+    templates: harness?.templates === true,
   }, stderr);
   const readNotices = io.readNotices;
   if (readNotices) io.readNotices = (...args) => timed('the record of notices, read and parsed (once a stop)', () => readNotices(...args));

@@ -19,8 +19,8 @@
 // were. The template gate's after-call hook records each write of the summary with its fields (bin/template.mjs,
 // `recordSummary`); the lead is turned back once a stale stretch when notices have waited longer than one check since
 // its last write carrying `now` or `status`. "Once" names that write, so a newer notice is the same stretch and a new
-// write starts the next. Where the gate recorded no write of the summary (templates off, or the hook new), nothing is
-// said: the record cannot tell.
+// write starts the next. Where the gate records nothing (templates off in harness.json now) or recorded no write of the
+// summary yet (the hook new), nothing is said: the record cannot tell.
 
 import { readNotices } from './channel.mjs';
 import { harnessHome } from './home.mjs';
@@ -139,8 +139,9 @@ function summaryWarning(payload, io, saved, record, { home, slug }, now) {
 }
 
 /** The warning for a stop of `payload` whose reply closes with `state`, or `null` when none is due: the rows', the
- * summary's, or both. The records are read through `io` (`readFile`, `run`, `env`, `homedir`, and `readNotices` when
- * the hook shares one parse of the record) at the time `now` (ms); one that cannot be read throws, and the hook says so. */
+ * summary's, or both. The records are read through `io` (`readFile`, `run`, `env`, `homedir`, `templates`, whether the
+ * project's harness.json turns the template gate on, and `readNotices` when the hook shares one parse of the record) at
+ * the time `now` (ms); one that cannot be read throws, and the hook says so. */
 export function staleBoardWarning(payload, state, io, now = Date.now()) {
   // Codex sends no background tasks, and cannot send a row: no command reaches an artifact's database.
   if (!Array.isArray(payload?.background_tasks)) return null;
@@ -159,7 +160,10 @@ export function staleBoardWarning(payload, state, io, now = Date.now()) {
   if (record.unavailable !== undefined) throw new Error(`the record of notices (${record.path}): ${record.unavailable}`);
   if (!isLeadSession(record.notices, payload.session_id)) return null;
 
-  const warnings = [rowsWarning(payload, io, saved, record, now), summaryWarning(payload, io, saved, record, { home, slug }, now)];
+  // The summary only where the gate records its writes now: a project that turned templates off keeps a record that
+  // no write refreshes.
+  const summary = io.templates === true ? summaryWarning(payload, io, saved, record, { home, slug }, now) : null;
+  const warnings = [rowsWarning(payload, io, saved, record, now), summary];
   const due = warnings.filter((warning) => warning !== null);
   return due.length === 0 ? null : due.join('\n\n');
 }

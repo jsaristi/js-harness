@@ -111,3 +111,10 @@ changes no rule of his. Spend: one gate, one Codex review, the Claude lenses, on
   record holds only checked writes), so newer notices are the same stretch. A write whose file cannot be read is
   recorded as fields unknown and is not content. All notices count, the lead's own included: `now`, `status` and
   `yours` describe the lead's openings and questions too.
+- L6 (2026-10-31, reviews of `2947b290..cf492335`): Codex, "the patch is incorrect" (0.94), 132,143 input tokens, one
+  P2: a project that turned `templates` off after summary writes were recorded kept being checked against a record no
+  write refreshes. Fixed: the reply hook passes `harness.json`'s `templates` to the checks (`stopIo`, also in
+  `scripts/reply-hook-time.mjs`), and the summary's warning runs only where it is `true`; the rows' warning is kept.
+  RED: `bin/lib/stale-board.test.mjs` 1 of 16 (the templates-off case). GREEN: stale-board and reply 45/45, then reply
+  with a hook-level case 30/30, `scripts/reply-hook-time.test.mjs` 8/8, the budget test 4/4 with its fixture's
+  `harness.json` now turning templates on (lead p90 739 ms, work p90 633 ms, budget 2500 ms).

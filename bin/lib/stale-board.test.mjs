@@ -29,7 +29,7 @@ const warned = (reason) => JSON.stringify({ type: 'attachment', timestamp: '2026
 
 const SHOWN = shownFile(HOME, SLUG);
 
-function check({ record = OLD, cursor = sentUpTo(1), transcript = [], payload = {}, state = 'working', now = NOW, shown = null } = {}) {
+function check({ record = OLD, cursor = sentUpTo(1), transcript = [], payload = {}, state = 'working', now = NOW, shown = null, templates = true } = {}) {
   const files = { [RECORD]: record === UNREADABLE ? undefined : `${record.join('\n')}\n`, [TRANSCRIPT]: `${transcript.join('\n')}\n` };
   // `null` is no shown record (the template gate never wrote one); UNREADABLE is one that cannot be read.
   if (shown !== null) files[SHOWN] = shown === UNREADABLE ? undefined : `${shown.join('\n')}\n`;
@@ -44,6 +44,8 @@ function check({ record = OLD, cursor = sentUpTo(1), transcript = [], payload = 
     run: noGit,
     env: { JS_HARNESS_HOME: HOME },
     homedir: () => path.resolve('/elsewhere'),
+    // Whether the project's harness.json turns the template gate on now (bin/reply.mjs reads it once a stop).
+    templates,
   };
   return staleBoardWarning({ cwd: PROJECT, session_id: 'lead-1', transcript_path: TRANSCRIPT, background_tasks: [], ...payload }, state, io, now);
 }
@@ -164,6 +166,13 @@ test('no summary warning where the gate recorded no summary write, nor for a wor
   assert.equal(summaryCheck({ shown: [] }), null, 'a shown record with no summary write');
   assert.equal(summaryCheck({ shown: [summaryWrite('2026-10-28T21:30:00.000Z', CONTENT)], payload: { session_id: 'work-1' } }), null);
   assert.equal(summaryCheck({ shown: [summaryWrite('2026-10-28T21:30:00.000Z', CONTENT)], state: 'decision' }), null);
+});
+
+test('a project that turned templates off is not warned of its summary from the record the gate no longer writes, and still of its rows', () => {
+  const shown = [summaryWrite('2026-10-28T21:30:00.000Z', CONTENT)];
+  assert.equal(summaryCheck({ shown, templates: false }), null);
+  const rows = check({ shown, templates: false });
+  assert.ok(rows.includes(STALE_MARKER) && !rows.includes(SUMMARY_MARKER), rows);
 });
 
 test('the summary warning is said once a stale stretch: the same last write is not warned again, a newer one is', () => {

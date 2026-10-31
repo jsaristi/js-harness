@@ -114,7 +114,8 @@ before(() => {
   project = path.join(dir, 'project');
   home = path.join(dir, 'home');
   fs.mkdirSync(project, { recursive: true });
-  fs.writeFileSync(path.join(project, 'harness.json'), JSON.stringify({ reply: true }));
+  // The template gate on, as in this repository, so the summary check reads the shown record.
+  fs.writeFileSync(path.join(project, 'harness.json'), JSON.stringify({ reply: true, templates: true }));
   // A repository of its own, as the lead's checkout is: the hook asks git where the project is.
   const init = spawnSync('git', ['init', '-q'], { cwd: project, encoding: 'utf8', windowsHide: true });
   assert.equal(init.status, 0, init.stderr);
