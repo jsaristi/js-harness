@@ -189,7 +189,12 @@ of its 1,000-line ceiling, so T4's text changes must change spans in place or fr
 risk, resilience and reliability over `d22f33ed..bcd2dd4a`. Next: their findings, then T2 and T4 once 150 is
 answered. The lenses finished (risk 0, resilience 1, reliability 0); resilience's finding, a read whose record fails
 loses both readers' findings, is fixed in the commit after bcd2dd4a, and Codex runs again over `d22f33e..` that commit
-(L11). Earlier notes: CLAUDE.md is at 3190 of 3200 tokens as `check` measures it; the two edits (`## Depth
+(L11). Codex recorded `d22f33e..1a7638c` (487,468 input tokens; meter 80% weekly before): 3 P2 in
+`bin/double-review.mjs`, all checked and fixed in the next commit with tests (14 of 14 pass): `dispose`'s returned
+diagnostic is said; the frozen diff passes `--no-ext-diff --no-textconv --no-color`; a reader that cannot be killed
+past its timeout is said, its streams let go, and its lean home and copy kept. Next: Codex (`--base 1a7638cf`) and the
+lens resilience over that fix commit, reading the meter first and touching no tracked file while they run; then T2
+and T4 once 150 is answered, else T6. Earlier notes: CLAUDE.md is at 3190 of 3200 tokens as `check` measures it; the two edits (`## Depth
 pass` (rule 1) in the order at line 24, and line 92 "a skip is a debt `check`, `doctor` and the merge door list until
 a review pays it, and the door refuses a lens skip") measured 3237 with `estimateTokens` after the Edit tool, likely
 line endings; measure as `bin/lib/claude-md-budget.mjs` does before committing, and trim within the same paragraphs

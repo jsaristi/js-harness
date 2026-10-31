@@ -158,7 +158,9 @@ export function codexReaderArgs(platform, root, schemaFile, answerFile) {
   return ['exec', '--json', ...leanFlags(platform, REVIEW_EFFORT), '-C', root, '--output-schema', schemaFile, '-o', answerFile, '-'];
 }
 
-/** Runs a child to its end: `{ status, stdout, stderr, error, durationMs }`; killed with its tree past `timeoutMs`. */
+/** Runs a child to its end: `{ status, stdout, stderr, error, durationMs }`; killed with its tree past `timeoutMs`.
+ * A kill that fails leaves the reader running: `stillRunning` says so, and its streams are let go so it does not hold
+ * this process open. */
 function runChild(start, { input, timeoutMs, kill }) {
   return new Promise((resolve) => {
     const startedAt = Date.now();
@@ -180,12 +182,16 @@ function runChild(start, { input, timeoutMs, kill }) {
       resolve({ stdout, stderr, durationMs: Date.now() - startedAt, ...fields });
     };
     timer = setTimeout(() => {
+      const late = `no answer within ${Math.round(timeoutMs / 1000)} seconds`;
       try {
         kill(child, { startedAt });
-      } catch {
-        // It ended meanwhile, or what it left is said by the timeout below.
+      } catch (err) {
+        for (const stream of [child.stdin, child.stdout, child.stderr]) stream?.destroy?.();
+        child.unref?.();
+        finish({ status: null, stillRunning: true, error: new Error(`${late}, and it could not be stopped: ${err.message}`) });
+        return;
       }
-      finish({ status: null, error: new Error(`no answer within ${Math.round(timeoutMs / 60000)} minutes`) });
+      finish({ status: null, error: new Error(late) });
     }, timeoutMs);
     child.stdout?.setEncoding?.('utf8');
     child.stderr?.setEncoding?.('utf8');
@@ -287,11 +293,13 @@ function freeze(folder, sources, diffText, diff) {
   return { material, hash: hash.digest('hex') };
 }
 
-/** The two readers, started at once on `prompt`: their outcomes in the order of `READERS`. */
+/** The two readers, started at once on `prompt`: `{ readers, stillRunning }`, their outcomes in the order of `READERS`,
+ * and whether one could not be stopped past its timeout, whose lean home is then kept. */
 async function readBoth({ root, model, prompt, hash, folder, material, env, deps, error }) {
   const platform = deps.platform ?? process.platform;
   const spawn = deps.spawn ?? spawnChild;
-  const kill = (child, lifetime) => killTree(child, lifetime, { platform });
+  const kill = deps.kill ?? ((child, lifetime) => killTree(child, lifetime, { platform }));
+  const timeoutMs = deps.readTimeoutMs ?? READ_TIMEOUT_MS;
   const settingsFile = path.join(folder, 'settings.json');
   const schemaFile = path.join(folder, 'schema.json');
   const answers = path.join(folder, 'answers');
@@ -307,7 +315,7 @@ async function readBoth({ root, model, prompt, hash, folder, material, env, deps
     ? Promise.resolve({ error: new Error('the Claude CLI was not found on the PATH') })
     : runChild(() => (claude.shell
       ? spawn(windowsCommandLine(quoteWindowsArg(claude.path), claudeArgs), [], { ...options, env: lensEnv(env), shell: true })
-      : spawn(claude.path, claudeArgs, { ...options, env: lensEnv(env) })), { input: prompt, timeoutMs: READ_TIMEOUT_MS, kill });
+      : spawn(claude.path, claudeArgs, { ...options, env: lensEnv(env) })), { input: prompt, timeoutMs, kill });
 
   let lean = null;
   let codexRan;
@@ -315,22 +323,30 @@ async function readBoth({ root, model, prompt, hash, folder, material, env, deps
     const homedir = deps.homedir ?? os.homedir;
     lean = (deps.makeLeanHome ?? createLeanHome)({ realHome: realCodexHome(env, homedir(), platform), parent: leanHomesDir(harnessHome({ env, homedir })), id: `double-review-${path.basename(folder)}` });
     const codexEnv = leanEnv(childEnv(env, platform), lean.home, platform);
-    codexRan = runChild(() => launchCodex(spawn, platform, codexReaderArgs(platform, root, schemaFile, answerFile), { ...options, env: codexEnv }), { input: prompt, timeoutMs: READ_TIMEOUT_MS, kill });
+    codexRan = runChild(() => launchCodex(spawn, platform, codexReaderArgs(platform, root, schemaFile, answerFile), { ...options, env: codexEnv }), { input: prompt, timeoutMs, kill });
   } catch (err) {
     codexRan = Promise.resolve({ error: err });
   }
 
   const [claudeDone, codexDone] = await Promise.all([claudeRan, codexRan]);
-  try {
-    lean?.dispose();
-  } catch (err) {
-    error(`could not remove the lean Codex home: ${err.message}`);
+  if (codexDone.stillRunning && lean !== null) {
+    error(`the lean Codex home ${lean.home} is kept: its reader could not be stopped and may still use it; a later lean review sweeps it once stale`);
+  } else {
+    // `dispose` returns what it could not leave clean rather than throwing, as `codex-review` reads it.
+    let left;
+    try {
+      left = lean?.dispose();
+    } catch (err) {
+      left = err.message;
+    }
+    if (left) error(`Warning: the lean Codex home of this read was not left clean: ${left}`);
   }
   const answerText = fs.existsSync(answerFile) ? fs.readFileSync(answerFile, 'utf8') : null;
-  return [
+  const readers = [
     { reader: 'claude', model, durationMs: claudeDone.durationMs ?? null, ...claudeOutcome(claudeDone, hash) },
     { reader: 'codex', model: REVIEW_MODEL, durationMs: codexDone.durationMs ?? null, ...codexOutcome(codexDone, answerText, hash) },
   ];
+  return { readers, stillRunning: Boolean(claudeDone.stillRunning || codexDone.stillRunning) };
 }
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -363,7 +379,8 @@ async function readCommand(args, root, env, deps, { log, error }) {
   if (args.plan) return 0;
   let diffText = null;
   if (args.diff !== undefined) {
-    const ran = spawnSync('git', ['diff', `${args.diff}...HEAD`], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    // Git's own patch: an external diff tool or a text conversion in the user's config would freeze its output instead.
+    const ran = spawnSync('git', ['diff', '--no-ext-diff', '--no-textconv', '--no-color', `${args.diff}...HEAD`], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
     if (ran.status !== 0) {
       error(`git diff ${args.diff}...HEAD failed: ${String(ran.stderr).trim().split('\n')[0]}; nothing was started`);
       return 1;
@@ -371,12 +388,14 @@ async function readCommand(args, root, env, deps, { log, error }) {
     diffText = ran.stdout;
   }
   const folder = fs.mkdtempSync(path.join((deps.tmpdir ?? os.tmpdir)(), 'js-harness-double-review-'));
+  let keep = false;
   try {
     const copies = path.join(folder, 'material');
     fs.mkdirSync(copies);
     const { material, hash } = freeze(copies, sources, diffText, args.diff);
     const prompt = readerPrompt(material, hash);
-    const readers = await readBoth({ root, model, prompt, hash, folder, material: copies, env, deps, error });
+    const { readers, stillRunning } = await readBoth({ root, model, prompt, hash, folder, material: copies, env, deps, error });
+    keep = stillRunning;
     const id = (deps.id ?? randomUUID)();
     const at = (deps.now ?? (() => new Date()))().toISOString();
     // What the readers found is printed first: it cost both readers' tokens, and a record that cannot be written must
@@ -390,7 +409,9 @@ async function readCommand(args, root, env, deps, { log, error }) {
     }
     return readers.every((one) => one.outcome === 'answered') ? 0 : 1;
   } finally {
-    fs.rmSync(folder, { recursive: true, force: true });
+    // A reader that could not be stopped may still read the copy: it is kept, and said, rather than removed under it.
+    if (keep) error(`kept ${folder}: a reader that could not be stopped may still read it; remove it once that reader is gone`);
+    else fs.rmSync(folder, { recursive: true, force: true });
   }
 }
 

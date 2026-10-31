@@ -42,7 +42,8 @@ function fakeSpawn(answer) {
     child.stdin.on('finish', () => setTimeout(() => {
       call.prompt = prompt;
       call.startedWhenAnswering = calls.length;
-      const { stdout = '', status = 0, file } = answer(command, args, prompt);
+      const { stdout = '', status = 0, file, hang } = answer(command, args, prompt);
+      if (hang) return;
       if (file) fs.writeFileSync(file.path, file.text);
       child.stdout.end(stdout);
       child.stderr.end('');
@@ -194,6 +195,47 @@ test('a read whose record cannot be written still prints what both readers found
   assert.match(said, /claude 1\. \[high\] claude one/);
   assert.match(said, /codex 1\. \[high\] codex one/);
   assert.match(run.lines.error.join('\n'), /could not be recorded/);
+});
+
+test('the frozen diff is git\'s own patch: an external diff tool or a text conversion in the user\'s config is not run', async (t) => {
+  const root = makeRepo(t);
+  spawnSync('git', ['config', 'diff.external', 'no-such-diff-tool'], { cwd: root });
+  spawnSync('git', ['config', 'color.ui', 'always'], { cwd: root });
+  let patch = null;
+  const { spawn } = fakeSpawn((command, args, prompt) => {
+    if (command === 'codex') return codexAnswer(args, prompt, []);
+    patch = fs.readFileSync(path.join(args[args.indexOf('--add-dir') + 1], 'diff.patch'), 'utf8');
+    return { stdout: claudeOut(prompt, []) };
+  });
+  const run = deps(t, root, spawn);
+  assert.equal(await doubleReviewMain(['read', 'plan.md', '--diff', 'HEAD~1'], {}, run.deps), 0);
+  assert.match(patch, /^\+Do the thing, twice\.$/m);
+  assert.ok(!patch.includes('\u001b['), 'no color codes');
+});
+
+test('a lean Codex home that is not left clean is said', async (t) => {
+  const root = makeRepo(t);
+  const { spawn } = fakeSpawn((command, args, prompt) => (command === 'codex' ? codexAnswer(args, prompt, []) : { stdout: claudeOut(prompt, []) }));
+  const run = deps(t, root, spawn, { makeLeanHome: () => ({ home: os.tmpdir(), dispose: () => 'the login link could not be removed' }) });
+  assert.equal(await doubleReviewMain(['read', 'plan.md'], {}, run.deps), 0);
+  assert.match(run.lines.error.join('\n'), /lean Codex home .*not left clean: the login link could not be removed/);
+});
+
+test('a reader past its timeout that cannot be stopped is said, and its lean home and copy are kept, not removed under it', async (t) => {
+  const root = makeRepo(t);
+  const { spawn } = fakeSpawn((command, args, prompt) => (command === 'codex' ? { hang: true } : { stdout: claudeOut(prompt, []) }));
+  const kills = [];
+  const run = deps(t, root, spawn, { readTimeoutMs: 50, kill: (child) => { kills.push(child); throw new Error('pid 42 still running after the kill'); } });
+  assert.equal(await doubleReviewMain(['read', 'plan.md'], {}, run.deps), 1);
+  assert.equal(kills.length, 1);
+  const [record] = readDoubleReviews(root);
+  assert.match(record.readers[1].reason, /could not be stopped: pid 42 still running/);
+  assert.deepEqual(run.disposed, [], 'the lean home of a reader still running is not removed');
+  const said = run.lines.error.join('\n');
+  assert.match(said, /kept .*js-harness-double-review-/);
+  const kept = /kept (.+?): a reader that could not be stopped/.exec(said)[1];
+  t.after(() => fs.rmSync(kept, { recursive: true, force: true }));
+  assert.ok(fs.existsSync(kept), 'the copy a reader may still read is kept');
 });
 
 test('a missing file is refused before anything starts', async (t) => {
