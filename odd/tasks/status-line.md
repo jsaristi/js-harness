@@ -74,7 +74,8 @@ mod: his. Whether the feature closes here or builds a program the app would not 
 - [x] T4 (kind: verify) two blind readers of the design (L3); Codex and the lenses over T2's commits (L6)
 - [ ] T5 (kind: docs) specs 3 and 4 are deferred pending the answer to T6's question: the brief's Done-when holds them,
   and this document does not meet it without his word — pending
-- [ ] T6 (kind: verify) the pull request, its ready notice, the question to the lead, the summary — pending
+- [ ] T6 (kind: verify) the pull request (726), its ready notice, the question to the lead (134), the summary (L7);
+  open until the pull request is merged
 
 ## Design
 
@@ -222,3 +223,5 @@ only with evidence that a claude.ai install reads it, and step 2 of the review b
   its read-only `review status` was run and nothing started, as `CLAUDE.md` says for a branch candidate: not reviewed
   by gentle-ai. No independent verifier: no Task Size high-risk item is touched (no installer was written; the
   administrator install was not built).
+- L7 — pull request 726, ready notice at 2026-10-31T02:11:25Z; question 134 to the lead (close here, or build the
+  program for a future host) at 02:09:17Z; summary `docs/sessions/2026-10-31-jh-113-status-line-the-harness-s-state-above-the-code-tab-s.md`.
