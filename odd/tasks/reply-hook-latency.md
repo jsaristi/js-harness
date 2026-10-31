@@ -252,6 +252,12 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   finding (confidence 0.88), recorded. The lenses over `c76d97d..7f06e84` (risk, resilience, reliability,
   readability): 0 findings. The lenses over `8c746b1..c76d97d` (reliability, readability): 0 findings. Every code
   commit of the branch is covered by both records.
+- L11 (2026-10-31): the lead: PR 732 conflicted with main (`bd45a5b`, PRs 727–731). Merged in `fba6f133`: one conflict,
+  `docs/FAILURES.md` (main's `commit-msg` check replaced the attribution entry's control; this branch's sighting kept
+  above it); main changed only comments in `bin/lib/hook-entries.mjs`, the timeout still 5. After the merge
+  (Windows): the budget test lead p90 666 ms, work p90 919 ms; `bin/reply.test.mjs` 29 of 29; the merge's gate green.
+  gentle-ai's Stop hook offered the merge commit (main's 60 files, reviewed in their own PRs): its status run, nothing
+  started, as no work unit of this branch.
 
 ## Next step
 Code: `b42532d7`, `8c746b16`, `c76d97d1` and the verifier's fixes (L9), each committed with the gate green. Question
