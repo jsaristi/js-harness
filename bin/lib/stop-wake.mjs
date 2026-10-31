@@ -37,31 +37,53 @@ const timeOf = (iso) => {
 
 const pad = (n) => String(n).padStart(2, '0');
 
+// How much of the text one step of `lastLineWith` searches, from the end back. `lastIndexOf` walks a string about three
+// times slower than `indexOf` (an absent needle in the lead's 60 MB transcript: 115 ms against 39 ms, Node 24.15,
+// odd/tasks/reply-hook-latency.md), so the text is searched forwards a window at a time, newest window first: a needle
+// near the end costs one window, an absent one a forward pass.
+const SEARCH_WINDOW = 1 << 20;
+
 /** The newest line of `text` that holds `needle` and whose parsed entry `accept` takes: `{ entry, start }`, `start`
  * its position in `text`, or `null`. Lines that are not JSON are passed over. */
 export function lastLineWith(text, needle, accept) {
-  let at = text.lastIndexOf(needle);
-  while (at >= 0) {
-    const start = text.lastIndexOf('\n', at) + 1;
-    const end = text.indexOf('\n', at);
-    let entry = null;
-    try {
-      entry = JSON.parse(text.slice(start, end < 0 ? undefined : end));
-    } catch {
-      // A torn or quoted line is no entry.
+  // Only a needle that starts before `before` is still to be read: the lines from there on are judged.
+  let before = text.length;
+  while (before > 0) {
+    const from = Math.max(0, before - SEARCH_WINDOW);
+    // The window reaches past `before` by the needle's length less one, so a needle that starts in it is whole.
+    const window = text.slice(from, Math.min(text.length, before + needle.length - 1));
+    const hits = [];
+    for (let at = window.indexOf(needle); at >= 0; at = window.indexOf(needle, at + 1)) hits.push(from + at);
+    for (let i = hits.length - 1; i >= 0; i -= 1) {
+      if (hits[i] >= before) continue;
+      const start = text.lastIndexOf('\n', hits[i]) + 1;
+      const end = text.indexOf('\n', hits[i]);
+      let entry = null;
+      try {
+        entry = JSON.parse(text.slice(start, end < 0 ? undefined : end));
+      } catch {
+        // A torn or quoted line is no entry.
+      }
+      if (entry !== null && accept(entry)) return { entry, start };
+      before = start;
     }
-    if (entry !== null && accept(entry)) return { entry, start };
-    if (start === 0) return null;
-    at = text.lastIndexOf(needle, start - 1);
+    before = Math.min(before, from);
   }
   return null;
 }
 
+/** When the transcript `text` began (ms), read from its first entries, or `null`. */
+const firstAtIn = (text) => {
+  const first = /"timestamp":"([^"]+)"/.exec(text.slice(0, 64 * 1024));
+  return first === null ? null : timeOf(first[1]);
+};
+
+/** The newest title the transcript `text` was given, or `null`. */
+const titleIn = (text) => lastLineWith(text, '"custom-title"', (entry) => entry.type === 'custom-title' && typeof entry.customTitle === 'string')?.entry.customTitle ?? null;
+
 /** What the transcript `text` says for the check: when it began (`firstAt`, ms), the title it was given, the newest
  * warning of this check (`warnedAt`, ms, and `warnedPos`) and the position of its newest background launch. */
 export function transcriptMarks(text) {
-  const first = /"timestamp":"([^"]+)"/.exec(text.slice(0, 64 * 1024));
-  const title = lastLineWith(text, '"custom-title"', (entry) => entry.type === 'custom-title' && typeof entry.customTitle === 'string');
   const warning = lastLineWith(text, WAKE_MARKER, (entry) => entry.type === 'attachment'
     && entry.attachment?.type === 'hook_blocking_error'
     && entry.attachment.hookEvent === 'Stop'
@@ -73,8 +95,8 @@ export function transcriptMarks(text) {
   const moved = lastLineWith(text, '"backgroundTaskId"', (entry) => typeof entry.toolUseResult?.backgroundTaskId === 'string');
   const launches = [launch?.start, moved?.start].filter((at) => at !== undefined);
   return {
-    firstAt: first === null ? null : timeOf(first[1]),
-    title: title?.entry.customTitle ?? null,
+    firstAt: firstAtIn(text),
+    title: titleIn(text),
     warnedAt: warning === null ? null : timeOf(warning.entry.timestamp),
     warnedPos: warning?.start ?? null,
     launchPos: launches.length === 0 ? null : Math.max(...launches),
@@ -102,7 +124,7 @@ export function heldWork({ notices = [], openings = [], number, sinceMs = -Infin
 }
 
 /** The warning for a stop of `payload` whose reply closes with `state`, or `null` when none is due. The records are
- * read through `io` (`readFile`, `readdir`, `run`, `env`, `homedir`); one that cannot be read throws, and the hook says so. */
+ * read through `io` (`readFile`, `readdir`, `run`, `env`, `homedir`, and `readNotices` when the hook shares one parse of the record); one that cannot be read throws, and the hook says so. */
 export function wakeWarning(payload, state, io) {
   // Codex sends no background tasks: it cannot say that nothing runs.
   if (!Array.isArray(payload?.background_tasks)) return null;
@@ -112,20 +134,25 @@ export function wakeWarning(payload, state, io) {
   if (state === 'decision' || state === 'question') return null;
   if (typeof payload.transcript_path !== 'string' || payload.transcript_path === '') return null;
 
-  const marks = transcriptMarks(io.readFile(payload.transcript_path));
+  const text = io.readFile(payload.transcript_path);
   const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
   const home = harnessHome({ env: io.env, homedir: io.homedir });
-  const slug = projectSlug(mainCheckout(io.run, cwd));
-  const record = readNotices(home, slug, { readFile: io.readFile });
+  // The hook finds the project once a stop and from the files when it can (`io.mainCheckout`, bin/reply.mjs).
+  const slug = projectSlug(io.mainCheckout?.(cwd) ?? mainCheckout(io.run, cwd));
+  // The hook hands its checks one parse of the record (`io.readNotices`, bin/reply.mjs); alone, the check reads it.
+  const record = (io.readNotices ?? readNotices)(home, slug, { readFile: io.readFile });
   if (record.unavailable !== undefined) throw new Error(`the record of notices (${record.path}): ${record.unavailable}`);
-  const title = marks.title ?? titleRead(record.readings, payload.session_id);
+  // The title and the transcript's start are read from its two ends; the whole transcript is searched only for a work
+  // session that holds work, since the lead's stops are most stops and hold none (odd/tasks/reply-hook-latency.md).
+  const title = titleIn(text) ?? titleRead(record.readings, payload.session_id);
   const role = roleOfTitle(title);
   if (role?.role !== 'work') return null;
   const { openings, unavailable } = readOpenings(home, slug, { readdirSync: io.readdir, readFileSync: (file) => io.readFile(file) });
   if (unavailable) throw new Error(unavailable);
-  const held = heldWork({ notices: record.notices, openings, number: role.number, sinceMs: marks.firstAt ?? -Infinity, sessionId: payload.session_id ?? null,
+  const held = heldWork({ notices: record.notices, openings, number: role.number, sinceMs: firstAtIn(text) ?? -Infinity, sessionId: payload.session_id ?? null,
     readTitles: record.readings.filter((reading) => isSelf(payload.session_id, reading.reader?.id)).map((reading) => reading.title) });
   if (held === null) return null;
+  const marks = transcriptMarks(text);
   const warnedSince = marks.warnedAt !== null && marks.warnedAt >= held.at;
   const launchedAfter = marks.launchPos !== null && marks.warnedPos !== null && marks.launchPos > marks.warnedPos;
   if (warnedSince && !launchedAfter) return null;

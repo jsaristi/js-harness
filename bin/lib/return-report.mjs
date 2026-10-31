@@ -125,7 +125,7 @@ function linked(urls, message, text, sinceMs) {
 }
 
 /** The warning for a stop of `payload` whose reply closes with `state`, or `null` when none is due. The records are
- * read through `io` (`readFile`, `run`, `env`, `homedir`); one that cannot be read throws, and the hook says so.
+ * read through `io` (`readFile`, `run`, `env`, `homedir`, and `readNotices` when the hook shares one parse of the record); one that cannot be read throws, and the hook says so.
  * `state` is not read: a return is answered with the page first, whatever the reply closes with. */
 export function returnReportWarning(payload, state, io) {
   // Codex sends no background tasks, and cannot publish a page.
@@ -135,8 +135,10 @@ export function returnReportWarning(payload, state, io) {
 
   const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
   const home = harnessHome({ env: io.env, homedir: io.homedir });
-  const slug = projectSlug(mainCheckout(io.run, cwd));
-  const record = readNotices(home, slug, { readFile: io.readFile });
+  // The hook finds the project once a stop and from the files when it can (`io.mainCheckout`, bin/reply.mjs).
+  const slug = projectSlug(io.mainCheckout?.(cwd) ?? mainCheckout(io.run, cwd));
+  // One parse of the record for every check of the stop when the hook shares it (`io.readNotices`, bin/reply.mjs).
+  const record = (io.readNotices ?? readNotices)(home, slug, { readFile: io.readFile });
   if (record.unavailable !== undefined) throw new Error(`the record of notices (${record.path}): ${record.unavailable}`);
   if (!isLeadSession(record.notices, payload.session_id)) return null;
 

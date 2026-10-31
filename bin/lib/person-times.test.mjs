@@ -44,4 +44,36 @@ test('linesHolding gives each line that holds a mark once, in file order, and ne
     '{"type":"user","d":"human"}',
   ], 'a short line before a host record is kept: its head is its own');
   assert.deepEqual(linesHolding('', ['"human"']), []);
+  assert.deepEqual(linesHolding(text, []), [], 'no mark finds no line');
+});
+
+test('linesHolding\'s one pass finds the lines a pass a mark found, marks with a regex\'s characters and marks inside marks', () => {
+  // The search as it was before the one pass (odd/tasks/reply-hook-latency.md, T3), kept as the reference.
+  const aPassAMark = (text, marks) => {
+    const starts = new Set();
+    for (const mark of marks) {
+      for (let at = text.indexOf(mark); at >= 0;) {
+        starts.add(text.lastIndexOf('\n', at) + 1);
+        const end = text.indexOf('\n', at);
+        if (end < 0) break;
+        at = text.indexOf(mark, end + 1);
+      }
+    }
+    return [...starts].sort((a, b) => a - b).map((start) => {
+      const end = text.indexOf('\n', start);
+      return text.slice(start, end < 0 ? text.length : end);
+    }).filter((line) => !line.slice(0, 256).includes('"type":"api-request-shape"') && !line.slice(0, 256).includes('"type":"prompt_snapshot"'));
+  };
+  const pieces = ['"human"', 'human', '"a.b"', 'axb', '(x)', '"answers"', 'ñandú', '{}', '\\'];
+  let state = 7;
+  const next = (n) => {
+    state = (state * 48271) % 2147483647;
+    return state % n;
+  };
+  const lines = Array.from({ length: 400 }, () => Array.from({ length: 1 + next(4) }, () => pieces[next(pieces.length)]).join(' · '));
+  const text = lines.join('\n');
+  for (const marks of [['"human"', 'human'], ['"a.b"'], ['(x)', '\\'], ['ñandú', '"answers"', '{}'], ['absent']]) {
+    assert.deepEqual(linesHolding(text, marks), aPassAMark(text, marks), marks.join(' '));
+    assert.deepEqual(linesHolding(`${text}\n`, marks), aPassAMark(`${text}\n`, marks), `${marks.join(' ')}, with a last line break`);
+  }
 });

@@ -62,9 +62,9 @@ Nothing here is his but the hook's timeout: if the fix needs it changed, a recor
 
 ## Tasks
 - [x] T1 (kind: verify) spec 1: the measure before, per check and in situ — this document's `## Measure`
-- [ ] T2 (kind: build) spec 4: the measuring script and the budget test on a lead-sized fixture, run before the cuts
-- [ ] T3 (kind: build) specs 2, 3: the cuts, each check answering as before
-- [ ] T4 (kind: verify) spec 1: the measure after, on the fixture and the lead's real files
+- [x] T2 (kind: build) spec 4: the measuring script and the budget test on a lead-sized fixture, run before the cuts
+- [x] T3 (kind: build) specs 2, 3: the cuts, each check answering as before
+- [x] T4 (kind: verify) spec 1: the measure after, on the fixture and the lead's real files
 - [ ] T5 (kind: docs) spec 5: the recorded question on the timeout, if the measure says the fix needs it
 - [ ] T6 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice
 - [ ] T7 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice
@@ -143,6 +143,44 @@ rounds), so no on-access scan of a growing transcript adds to it.
 - Found by the measure: the wake check scans the whole transcript before it knows the session is no work session; a
   search for the newest line holding a needle scans backwards three times slower than forwards.
 
+### The cuts (T3)
+
+1. The transcript is read as a buffer and decoded (`bin/reply.mjs`, `readFile`).
+2. One `io` a stop (`stopIo`, `bin/reply.mjs`): each file read once, the record of notices parsed once
+   (`io.readNotices`), git's answer kept, and where the project is found once, from the `.git` files by the inbox
+   hook's `mainCheckoutByFiles` (`bin/lib/inbox.mjs`), asking git only when they do not say (a submodule).
+3. The wake check reads the title and the transcript's start first, and searches the whole transcript only for a work
+   session that holds handed work (`bin/lib/stop-wake.mjs`).
+4. `lastLineWith` searches forwards a 1 MiB window at a time from the end, the same answer as the backwards walk
+   (`bin/lib/stop-wake.test.mjs` holds the walk as its reference and a needle cut by a window edge).
+5. `linesHolding` finds every mark in one regex pass (`bin/lib/person-times.test.mjs` holds the pass a mark).
+
+### After (this branch, 2026-10-31)
+
+- Fixture (`node --test --test-reporter=tap bin/reply-budget.test.mjs`, ten runs a stop): lead p90 359 ms, work session
+  p90 368 ms. The same test on `7aac3e43`'s code (exported to a scratch folder) back to back: p90 1798 and 1360 ms; on
+  it under the load of an hour earlier, 3982 and 4147 ms (red).
+- The lead's real files, before and after taken in turn (`node scripts/reply-hook-time.mjs runs --transcript <0f71b2c6>
+  --cwd D:/js-harness --runs 15 --command "node <scratch>/before/bin/js-harness.mjs reply --hook" --command "node
+  bin/js-harness.mjs reply --hook"`): before p50 1136, p90 1283 ms; after p50 460, p90 588 ms; the same answer, byte
+  for byte (`cmp` of both outputs).
+- Per check after (`node scripts/reply-hook-time.mjs profile --transcript <0f71b2c6> --cwd D:/js-harness`, before the
+  files-first project): modules 55, wake 187 (transcript read 82, git 86, the record 17), stale 31, return 138 ms.
+- Under a simulated stop's load (eight node processes each keeping a core busy 6 s; a scratch script), ten rounds in
+  turn: before p50 4826, p90 5428 ms; after p50 2278, p90 2720 ms. Under that load `node -e 0` alone takes p50 1201,
+  p90 1663 ms, one git call 468 and 704 ms, the transcript read 212 and 326 ms.
+- Not checked: the in-situ p90 after the change, which needs this release installed and stops recorded; `node
+  scripts/reply-hook-time.mjs in-situ <transcript>` measures it.
+
+### What the timeout needs (T5)
+
+In the same transcript the host cancelled `guard --stop` at its 5 s in 52 of 503 stops and `backup --hook` in 55, as
+often as the reply hook (59 of 469), though `guard --stop` takes 682 ms alone and `backup --hook` reads two small files.
+At a stop, starting a process is what the 5 s are spent on. The reply hook after the cuts (460 ms alone) is lighter than
+`guard --stop`, so in situ it will likely still be cancelled at about that rate: the cuts halve its own work, the
+timeout is what removes the skipped stops. The stop already waits for gentle-ai's hook (timeout 60 s, p50 7553 ms), so
+a longer timeout for the reply hook seldom lengthens a stop. That value is his: the recorded question of T5.
+
 ## Log
 - L1 (2026-10-31, his request as the lead's brief gives it, `C:\Users\Oficina\.js-harness\background\briefs\2026-10-31T03-00-48-294Z-b392e219.md`):
   "JH 116 · reply hook: under its timeout, so no stop skips its checks". The defect as JH 115's verifier measured it
@@ -156,3 +194,18 @@ rounds), so no on-access scan of a growing transcript adds to it.
   `fixed-load-budget`, `review-timeout`, `sensor-timeout`); `bin/**/*.test.mjs` for a timing budget (none holds a
   hook's time); `scripts/` for a measuring script (none). The timeout `install` writes is `replyHookEntry`'s
   `timeout: 5` (`bin/lib/hook-entries.mjs:125`), his settings hold the same 5.
+- L4 (2026-10-31, tests first): `bin/reply-budget.test.mjs` before the cuts, under the machine's load then: lead p90
+  3982 ms, work session p90 4147 ms, both red with every check warning (a first run had a fixture defect: `ready`
+  notices with no `pr` are no notices, and times by line count overran the gap; fixed in the fixture, not the hook).
+  The test "the checks of one stop find the project once" was red on `7aac3e43`'s `bin/reply.mjs` (git asked 3 times)
+  and green after. The budget test is green on the old code when the machine is quiet (p90 1798 and 1360 ms): the
+  budget holds the hook's own work, the load at a stop is the rest.
+- L5 (2026-10-31): bad news, measured: hooks lighter than the reply hook time out as often in situ (`## Measure`, T5).
+  The cuts do not alone remove the in-situ timeouts; the hook's timeout, his value, does.
+
+## Next step
+Run `npm run check` and commit T2–T4 (code, tests, script, this document). Record the question of T5 in this
+document, then `js-harness notify --to orchestrator --kind question` with its JSON (Spanish): raise the reply hook's
+timeout from 5 to 15 s in his settings and in `replyHookEntry`. Then `codex-review` and `lens-review` from `d98897c5`,
+an independent verifier, push, PR, `notify --kind ready --pr <n>`, the summary under `docs/sessions/`, `notify --kind
+closed`.

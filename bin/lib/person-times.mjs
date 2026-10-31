@@ -30,19 +30,22 @@ export function personTimesIn(text) {
 const HOST_RECORDS = ['"type":"api-request-shape"', '"type":"prompt_snapshot"'];
 const HEAD = 256;
 
+const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /** The lines of a transcript's `text` that hold one of `marks`, in file order and each once, found by searching the
  * text rather than splitting it, and none of the host's records of its own requests (`HOST_RECORDS`, read in a line's
- * first characters). */
+ * first characters). One pass finds every mark: in the lead's 60 MB transcript, 46 ms for the three of
+ * `personTimesIn`, against 121 ms for a pass a mark (odd/tasks/reply-hook-latency.md). */
 export function linesHolding(text, marks) {
+  if (marks.length === 0) return [];
   const starts = new Set();
-  for (const mark of marks) {
-    let at = text.indexOf(mark);
-    while (at >= 0) {
-      starts.add(text.lastIndexOf('\n', at) + 1);
-      const end = text.indexOf('\n', at);
-      if (end < 0) break;
-      at = text.indexOf(mark, end + 1);
-    }
+  const any = new RegExp(marks.map(escaped).join('|'), 'g');
+  for (let found = any.exec(text); found !== null; found = any.exec(text)) {
+    starts.add(text.lastIndexOf('\n', found.index) + 1);
+    // The rest of the line holds nothing more to find: the line is kept once.
+    const end = text.indexOf('\n', found.index);
+    if (end < 0) break;
+    any.lastIndex = end + 1;
   }
   const lines = [];
   for (const start of [...starts].sort((a, b) => a - b)) {
