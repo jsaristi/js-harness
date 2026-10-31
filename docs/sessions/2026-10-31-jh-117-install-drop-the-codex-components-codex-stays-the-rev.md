@@ -45,6 +45,8 @@ arnés instaló."
   merge with main was read (L11): the L3 grep looked for ids and paths, not for the wording. Lesson: a change of what a
   product serves greps its prose too ("both hosts", "each host", "<host> and <host>").
 - The first ready notice was refused, #729 CONFLICTING with main; `notify` checks it, so nothing was claimed ready.
+- I edited documents while a Codex review ran, so it wrote no record and the push was refused (L12). Lesson: nothing
+  is edited in the worktree until every review started has ended; `codex-review` already refuses to record such a run.
 - Two gate runs failed before the first commit landed (a module ceiling and a rules-coverage span, then the evals
   test); each was read in its CI log before the next run.
 
@@ -57,7 +59,8 @@ arnés instaló."
 ## Cost
 - Time: brief at 2026-10-31T03:10Z; this summary at about 04:45Z; one host compaction at 22:50 local.
 - Context at the end: about 45% of the window (42% at question 140's notice).
-- Reviews: Codex three times (3 parts over `57486c74`, 392,930 input tokens; 1 part over `dd397c0d`; 1 over
-  `44a4218f`); Claude lenses three times (risk, reliability, readability, 0 findings, about 512k then 62k input tokens;
-  readability alone over `44a4218f`); one independent verifier (159k tokens); one gentle-ai start refused in preflight.
-- Gate runs: seven commits' (two failed, five passed), plus the one of this document's last commit.
+- Reviews: Codex five runs (3 parts over `57486c74`, 392,930 input tokens; 1 part over `dd397c0d`; 1 over `44a4218f`
+  that recorded nothing, L12; then 2 turns over the merge and what follows); Claude lenses four runs (risk,
+  reliability, readability, 0 findings, about 512k then 62k input tokens; readability alone twice, 8k and 41k); one
+  independent verifier (159k tokens); one gentle-ai start refused in preflight, one candidate not started.
+- Gate runs: eight commits' (two failed, six passed), plus the one of this document's last commit.

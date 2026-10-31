@@ -164,3 +164,11 @@ Nothing left in this session: the product choice was D4. Applying it to his mach
   `shippedId`/`textSources` in `bin/lib/rules-sources.mjs` (code unchanged: the coverage ids still drop the host).
   Fixed; `bin/readme.test.mjs` 5/0, `bin/lib/spec.test.mjs` 28/0, `bin/rules-coverage.test.mjs` 8/0. Reviews of
   `44a4218f` (bc8c6f6b..44a4218f): Codex "the patch is correct" (0.99); the readability lens, 0 findings.
+- L12 (2026-10-31) That Codex run wrote no record: I edited the summary and this document while it read, and it says
+  so ("Tracked files changed while Codex was reviewing"); the pre-push refused the push for it and for the merge,
+  which no range starting after it covers. Run again with nothing edited meanwhile: `js-harness codex-review --base
+  bc8c6f6b^`, two turns, the merge 6aaed4b..bc8c6f6 "correct" (0.98) and bc8c6f6..418892d "correct" (0.99), both
+  recorded; `lens-review --base bc8c6f6b^ --lenses readability`, 0 findings, recorded. The push then passed (4 code
+  commits covered). gentle-ai's Stop hook offered 6aaed4bf..HEAD: its read-only status listed main's `commit-msg` and
+  lead-duty files beside this branch's comments, a range of main's merged work and no work-unit commit of this
+  session's, so no review was started over it.
