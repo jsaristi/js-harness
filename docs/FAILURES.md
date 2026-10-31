@@ -127,6 +127,16 @@ one runs.
   a sub-agent that runs tests wait for the gate to end" — replaced on 2026-10-23:
   it was seen again on 2026-10-15, after it; guard --hook now refuses the read while another gate holds the lock
 
+### board-summary-stale
+The live board's summary kept the lead's words of days before, while the page read as current: the lead sent only
+the `checked` stamp `sessions live` prints, which refreshes the page's freshness and none of the summary's fields.
+- Class: unseen-state
+- Seen: 2026-10-31 — the lead's brief JH 115 (claimed; the lead's own) — `board/summary` kept its `now`, `status`,
+  `route` and `yours` from 2026-10-29 13:58Z for two days, its "lo que me toca" listing questions of which every one
+  of the 133 recorded was closed; found when he asked whether they were open. The page's freshness reads the newest
+  row and the stamp alone (`docs/live-board.html:512-518`, `bin/sessions-live.mjs:218-220`)
+  (odd/tasks/lead-duty-checks.md, row 1 of the list)
+
 ### brief-waived-review-lines
 A lead's brief for code work waived the feature document, whose gentle-ai lines the merge door asks
 for every code commit while gentle-ai reviews (until F8's S2).
@@ -1297,6 +1307,17 @@ The resume hook said the host had compacted a session by itself when he had type
   the hook's text opened with "The host compacted this session by itself"; the hook says so
   whenever the boundary is not in the transcript yet (`bin/resume.mjs:651`), which it takes for
   the host's way alone
+
+### return-without-report
+He came back after a long absence and the lead's replies did not show him the status page
+`rule:reports-spanish-visual` asks for, until he asked: the duty was written only in the skill, which reaches the lead
+cut after a compaction, and no hook asked for it.
+- Class: rule-not-acting
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, lines 37758, 37935 and 38011 (the lead's own) — "ya llegue" at
+  01:33:48Z after 6.7 hours away; the lead's reply at 01:43:11Z listed its next steps with no page; his words at
+  01:44:33Z: "en ningun momento me mostraste que tanto avanzamos"; the page came at 01:47:49Z (line 38120)
+- Control: check — bin/lib/return-report.test.mjs — "a planted return without the page is turned back once, with
+  what to run" — since 2026-10-31
 
 ### review-tool-timeout
 The bound status of a gentle-ai review failed with `operation_timeout`, the candidate was left
