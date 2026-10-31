@@ -712,8 +712,8 @@ built in rule 1's pull request.
   (Recomendada)". Below 10% of the weekly limit (`js-harness codex-meter`), a new Codex read goes to a second Claude
   reader in a fresh context, marked "sin Codex"; code left without a Codex review is a debt Codex reviews after the
   reset, and the merge door lists it. His one reset credit is not spent without his word.
-- **The older texts:** the feature document's order in `CLAUDE.md` and in the block `init` writes gains `## Depth
-  pass` after the contract; the contract template gains its skeleton; `sync` offers `depthPassSince` to a project.
+- **The older texts:** the feature document's order in `CLAUDE.md` gains `## Depth pass` after the contract (the
+  block `init` writes holds no such order, `bin/lib/project.mjs:395`); the contract template gains its skeleton; `sync` offers `depthPassSince` to a project.
 - **The eval** of PR 737's brief, with and without the rule, owed by 2026-11-30.
 
 ### S8 Certification (step 5)

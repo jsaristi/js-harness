@@ -114,7 +114,11 @@ rule commits wait and the work that does not depend on them goes on.
   about 0.43M input tokens a point (this week's records against the meter; a plan read cost a point at 60k, so the
   rate varies with what is cached) is about 9.0M tokens; 11 points to the reserve is about 4.7M, about 45 code
   reviews at this week's 104k average, under one day at 57 to 123 a day: the reserve binds about 2026-11-01, so it
-  is built first, and it acts on the meter, never on this estimate.
+  is built first, and it acts on the meter, never on this estimate. Measured since (L12, Claude 8): the meter went
+  from 80% to 82% over about 1.6M input tokens counted with their cache reads, as `codex-review` and `double-review`
+  count them (reviews of 487,468, 173,538 and 65,096, a read of 874,702), about 0.8M a point, an estimate; L8's 55k
+  and 60k a point were counted without them. At 82%, 8 points are left to the reserve, about 6M tokens: it has not
+  bound on 2026-10-31, and T2 still comes before the next large run.
   Verdict: supports
 - 5. Request: his request rewritten, beside his words (L1 to L5): "Make the double review one Claude reader and one
   Codex reader, blind, on the same frozen material: on everything that proposes something (a plan, a design, an
@@ -141,10 +145,11 @@ rule commits wait and the work that does not depend on them goes on.
 ## Older texts
 Each text found that contradicts rule 1 or this design, before it changes; the search: `grep -rnE "two (read-only
 )?readers|double review|double-review|attacks its claims|what is missing"` over the repository outside `odd/tasks/`,
-`docs/sessions/`, `docs/origin.md` and `docs/proposals/`, the roadmap's list (`docs/ROADMAP.md:714`), and the two
-readers of this plan (L8), who found items 11 to 17.
+`docs/sessions/`, `docs/origin.md` and `docs/proposals/`, the roadmap's list (`docs/ROADMAP.md:715`), the two
+readers of this plan (L8), who found items 11 to 17, and the first read of the command (L12), who found 18 and 19.
+Line numbers re-checked on 2026-10-31 after T5 (L12, Claude 7).
 1. `bin/lib/protocols-skill.mjs:43`, section 1: D5's scope and two roles. Becomes his design (T4).
-2. `bin/lib/project.mjs:411`, `claudeBlock`: a second scope text with the two roles. Becomes a pointer to
+2. `bin/lib/project.mjs:412`, `claudeBlock`: a second scope text with the two roles. Becomes a pointer to
    `rule:double-review` (T4).
 3. `bin/lib/protocols-skill.mjs:112`, section 7: restates the roles ("one rerunning the figures ..., one looking for
    what is missing"). Names the rule only (T4).
@@ -154,57 +159,43 @@ readers of this plan (L8), who found items 11 to 17.
    refuses a lens skip (raw material). Says each (T5).
 6. `CLAUDE.md:24`: the feature document's order lacks `## Depth pass` after the contract. Gains it (T5).
 7. The block `init` writes (`claudeBlock`): the roadmap says it holds the feature order; it holds none
-   (`bin/lib/project.mjs:395`), so nothing changes there.
+   (`bin/lib/project.mjs:395`), so nothing changes there; item 19 corrects the roadmap.
 8. `js-harness contract template`: no `## Depth pass` skeleton. Gains it (T5).
 9. `sync`: never offers `depthPassSince`, which `bin/contract.mjs:438` reads and nothing writes. Offers it (T5).
-10. `docs/ROADMAP.md:897`: "Each item that needs a design passes two readers that did not write it". Names the
+10. `docs/ROADMAP.md:898`: "Each item that needs a design passes two readers that did not write it". Names the
     double review (T5).
-11. `docs/RULES.md:53` and `bin/lib/rules-data.mjs:197`: D5's subject and phrases, rendered. `rules change` rewrites
+11. `docs/RULES.md:54` and `bin/lib/rules-data.mjs:197`: D5's subject and phrases, rendered. `rules change` rewrites
     both (T4).
 12. `docs/ROADMAP.md:709`: "`codex-review` needs a mode that reviews a plan". Says the command of L7 (T5).
 13. `bin/lib/protocols-skill.mjs:65`, section 3: a skip is only "a review that cannot run". Gains the reserve's skip,
     which `codex-review` records itself (T2).
 14. `bin/lib/protocols-skill.test.mjs:130` and `:135`, `bin/lib/project.test.mjs:1980`: assert D5's text. Assert
     the new one (T4).
-15. `docs/FAILURES.md:1219`: its control names the test of item 14 by its title. Follows the title (T4).
-16. `docs/ROADMAP.md:704` to `:712`, the alignment item itself: ticked with this document's names when it lands (T6).
+15. `docs/FAILURES.md:1222`: its control names the test of item 14 by its title. Follows the title (T4).
+16. `docs/ROADMAP.md:689` to `:717`, the alignment item itself: ticked with this document's names when it lands (T6).
 17. `bin/lib/protocols-skill.mjs:117`, section 7's cost: "two readers only with a candidate list". Still true, now
     of two families; left.
-Checked and left: `bin/lib/manifest.mjs:140` and section 6 name the rule and its home; `bin/lib/onboard.mjs:747` and
-the roadmap's "Design, past its two readers" items still have two readers, now of two families.
+18. `bin/lib/onboard.mjs:108`, `:747`, `:885` and `:902`, with `bin/lib/onboard.test.mjs:262` and
+    `bin/lib/onboard.testkit.mjs:208`: the onboarding asks "two readers" of no stated family for the pre-plan and the
+    roadmap, both proposing documents put to the owner (L12, Claude 4). Name `rule:double-review` (T4).
+19. `docs/ROADMAP.md:715`: said the block `init` writes gains `## Depth pass`; it holds no feature order (item 7).
+    Says `CLAUDE.md` alone (L12, Codex 5; done with this list).
+Checked and left: `bin/lib/manifest.mjs:140` and section 6 name the rule and its home; the roadmap's "Design, past its
+two readers" items (`docs/ROADMAP.md:256`, `:271`, mirrored at `README.md:766`) are titles of items, and their reading
+is the one item 18 makes the onboarding ask for.
 
 ## Next step
-State at the context pause (2026-10-31, after c1ce70e9). Open: question 150 to him through the lead (his typed
-acceptance of 147 and 148, L9); it blocks only T2's rule commit and T4. Next, in order: T5, then T3, then T2 and T4
-once 150 is answered. T5 progress: older texts 5 and 6 done in CLAUDE.md (3200 of 3200, `check`'s measure,
-CRLF folded, 2cb04248, a code commit since it refreshed `rules-coverage-data.mjs`: it needs Codex and the lenses),
-8, the contract template (5cbbca4c), and 9, 10 and 12 (`sync` offers `depthPassSince` from the next day, `null`
-declines it; the roadmap's two lines): T5 is done (b042cddc). T3 is built without the reserve: `bin/double-review.mjs`,
-`bin/lib/double-review-records.mjs`, their tests, the dispatcher and the README; `codex-review` exports `leanFlags`
-and `leanEnv` with no line added. The Claude reader reads `rule:subagent-reader-model` through `ruleHere`, a rule of
-this repository, and a project without it reads on the alias `opus`. Committed as bcd2dd4a (L10). Not run against
-the real CLIs yet: T6's first read, announced with its cost, is that run. `bin/lib/rules-coverage-data.mjs` is at 988
-of its 1,000-line ceiling, so T4's text changes must change spans in place or free lines first. Running: Codex
-(`codex-review --base 3ac49fa8`, 4 parts, about 474k to 660k input tokens, meter 80% weekly before) and the lenses
-risk, resilience and reliability over `d22f33ed..bcd2dd4a`. Next: their findings, then T2 and T4 once 150 is
-answered. The lenses finished (risk 0, resilience 1, reliability 0); resilience's finding, a read whose record fails
-loses both readers' findings, is fixed in the commit after bcd2dd4a, and Codex runs again over `d22f33e..` that commit
-(L11). Codex recorded `d22f33e..1a7638c` (487,468 input tokens; meter 80% weekly before): 3 P2 in
-`bin/double-review.mjs`, all checked and fixed in the next commit with tests (14 of 14 pass): `dispose`'s returned
-diagnostic is said; the frozen diff passes `--no-ext-diff --no-textconv --no-color`; a reader that cannot be killed
-past its timeout is said, its streams let go, and its lean home and copy kept (c59e58b0). Codex recorded
-`1a7638c..c59e58b` correct (0.96); lenses resilience 0, reliability 1 (the timeout reason now in seconds, not
-minutes), not taken: the command is unreleased and nothing reads that text. All code on the branch is reviewed by
-both. Next: T2 and T4 once 150 is answered, else T6 (the first real read, announced with its cost; the verifier;
-gate, push, PR). The gentle-ai Stop hook offers the whole branch (base 3ac49fa8): status only, start nothing.
-Earlier notes: CLAUDE.md is at 3190 of 3200 tokens as `check` measures it; the two edits (`## Depth
-pass` (rule 1) in the order at line 24, and line 92 "a skip is a debt `check`, `doctor` and the merge door list until
-a review pays it, and the door refuses a lens skip") measured 3237 with `estimateTokens` after the Edit tool, likely
-line endings; measure as `bin/lib/claude-md-budget.mjs` does before committing, and trim within the same paragraphs
-if over. T3 drafts, outside the repository and not reviewed: `C:\Users\Oficina\.claude\jobs\9cc00bff\tmp\draft\`
-(`double-review.mjs`, `double-review-records.mjs`, `codex-reserve.mjs`); T3 is built first without the reserve
-(the sin Codex branch comes with T2, which declares the rule), tests first. The plan's two answers:
-`...\tmp\read1\codex\answer.md` and the Claude reader's result in L8.
+State on 2026-10-31, after 09725fbd. Done: T1 and T5. T3 is built and reviewed, and stays open until T2 gives `read`
+the reserve and the `claude-sin-codex` reader (Claude 5 of L12). T6 has begun: the first real read ran (L12), its
+14 findings are taken, and its code fixes are aad73210 and 09725fbd, each reviewed by Codex (aad7321: 2 findings,
+both fixed in 09725fb; 09725fb: correct, 0.98) and by the lenses (0 findings on both). Every code commit on the
+branch has both reviews. Open: question 150 (his typed acceptance of 147 and 148, L9), which blocks T2's rule
+commit and T4; after it, and only then, the question of Claude 6 (L12) on D5's two exemptions. Next: T2 and T4 once
+150 is answered; meanwhile what of T6 waits on nothing (the independent verifier waits for T2's code, since it
+covers T2 and T3 together). Meter: 82% of the weekly limit used, reset 2026-11-04 01:44, one reset credit, never
+spent without his word. `bin/lib/rules-coverage-data.mjs` sits at 988 of its 1,000-line ceiling, so T4's text
+changes replace spans in place. The gentle-ai Stop hook offers the whole branch (base 3ac49fa8): status only, start
+nothing. Never edit a tracked file while a Codex review runs (L11).
 
 ## Eval plan
 The eval owed by 2026-11-30 (spec 6), not run here: the case built from PR 737's brief runs on the current arm and
@@ -225,8 +216,8 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   announces), `take` (taken and shared), `skip`, `tally`; records under the git common dir, which no review row
   reads, with the test that a read leaves code uncovered; spec 1, 2, 3, 4.
 - [ ] T4 (kind: build) `rules change double-review` (after L9's answer): section 1's one text, `claudeBlock` and
-  section 7 name it, D5 retired by name, his rules on disagreement and rounds kept; older texts 1 to 3, 11, 14, 15;
-  spec 2.
+  section 7 name it, D5 retired by name, his rules on disagreement and rounds kept; older texts 1 to 3, 11, 14, 15,
+  18; spec 2.
 - [x] T5 (kind: build) Older texts 5, 6, 8, 9, 10, 12; spec 5; 2cb04248, 5cbbca4c and the commit of `sync`'s offer.
 - [ ] T6 (kind: verify) Reviews (Codex, lenses, an independent verifier for T2, a guard's input, and T3, two
   processes at once), gate, PR, older text 16; the report tells him how to try it (L1); spec all.
