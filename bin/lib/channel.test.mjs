@@ -156,9 +156,30 @@ test('standard input that is not JSON, or is JSON that is not an object, is refu
   for (const json of ['null', '[]', '"Which budget?"', '5', 'true']) questionRefusedIn(json, /what came is not an object/);
 });
 
-test('a question takes no key but text, options and waits, and the refusal names the key it found', () => {
-  questionRefusedIn(questionJson({ due: 'Friday' }), /a question takes no key "due": it takes text, options and waits/);
+test('a question takes no key but text, options, waits and applies, and the refusal names the key it found', () => {
+  questionRefusedIn(questionJson({ due: 'Friday' }), /a question takes no key "due": it takes text, options, waits and applies/);
 });
+
+test('a question may say it asks to apply a pull request, applies {pr}, which its notice keeps; one that says nothing keeps no applies', () => {
+  assert.deepEqual(channel.questionFieldsOf(questionJson({ applies: { pr: 729 } })).applies, { pr: 729 });
+  assert.equal('applies' in channel.questionFieldsOf(questionJson()), false, 'a question that applies nothing has no applies');
+  assert.deepEqual(asking({ applies: { pr: 729 } }).applies, { pr: 729 }, 'the record keeps it');
+  assert.equal('applies' in asking(), false);
+});
+
+test('applies is an object with the number of a pull request, from 1, and takes no other key', () => {
+  for (const applies of [729, '729', null, [], { pr: 0 }, { pr: 1.5 }, { pr: '729' }, {}]) questionRefusedIn(questionJson({ applies }), /applies names the pull request the question asks to apply: \{"pr": <n>\}/);
+  questionRefusedIn(questionJson({ applies: { pr: 729, component: 'codex' } }), /applies takes no key "component": it takes pr/);
+  askingRefused({ applies: { pr: -1 } }, /applies names the pull request/);
+  assert.throws(() => note({ kind: 'note', applies: { pr: 729 } }), /only a question takes id, options, waits and applies/);
+});
+
+test('readNotices keeps a question with applies, and a question without it is still read', withHome((home) => {
+  const with729 = asking({ id: 'q-a', applies: { pr: 729 } });
+  const plain = asking({ id: 'q-b' });
+  for (const one of [with729, plain]) channel.appendNotice(home, SLUG, one);
+  assert.deepEqual(channel.readNotices(home, SLUG).questions.map(({ number, notice }) => [number, notice.applies ?? null]), [[1, { pr: 729 }], [2, null]]);
+}));
 
 test('the text of a question is one line, not empty, of 2000 characters at most', () => {
   questionRefusedIn(questionJson({ text: '' }), /the text of a question is empty/);
@@ -251,9 +272,9 @@ test('a question refuses a transcript and a line, a question number, a verdict a
 
 test('every other kind refuses the question fields, and a withdrawal takes its question number and nothing of a question', () => {
   for (const kind of ['opened', 'waiting', 'closed', 'note', 'relieved']) {
-    refused({ kind, id: 'q-1' }, /only a question takes id, options and waits/);
-    refused({ kind, options: [] }, /only a question takes id, options and waits/);
-    refused({ kind, waits: 'the sprint' }, /only a question takes id, options and waits/);
+    refused({ kind, id: 'q-1' }, /only a question takes id, options, waits and applies/);
+    refused({ kind, options: [] }, /only a question takes id, options, waits and applies/);
+    refused({ kind, waits: 'the sprint' }, /only a question takes id, options, waits and applies/);
     refused({ kind, question: 1 }, /only an answer or a withdrawal takes --question/);
     refused({ kind, verified: true }, /only an answer with a question takes verified and copy/);
     refused({ kind, copy: null }, /only an answer with a question takes verified and copy/);
@@ -268,9 +289,9 @@ test('a withdrawal names its question and its reason is its text, one line of 50
   refused({ kind: 'withdrawn', question: 1, text: 'x'.repeat(501) }, /501 characters.*500 at most/);
   const extras = [
     [{ transcript: '1d16beeb', line: 4 }, /only an answer takes --transcript and --line/],
-    [{ id: 'q-1' }, /only a question takes id, options and waits/],
-    [{ options: [] }, /only a question takes id, options and waits/],
-    [{ waits: 'the sprint' }, /only a question takes id, options and waits/],
+    [{ id: 'q-1' }, /only a question takes id, options, waits and applies/],
+    [{ options: [] }, /only a question takes id, options, waits and applies/],
+    [{ waits: 'the sprint' }, /only a question takes id, options, waits and applies/],
     [{ verified: true }, /only an answer with a question takes verified and copy/],
     [{ copy: null }, /only an answer with a question takes verified and copy/],
   ];

@@ -108,19 +108,20 @@ function oneLine(text, max, what) {
  * `kind`, `text`, and where it was run from: `cwd`, and the `worktree` and `branch` git gave there, each
  * `null` when it could not be read. An `answer` also has the `transcript` (a file or a session id) and the
  * `line` the user's words are read at; nothing here checks the quote. A `question` has no text of a note's
- * length: its `text` is the question, and it has an `id`, its `options` (`checkedQuestion`) and its `waits`.
+ * length: its `text` is the question, and it has an `id`, its `options` (`checkedQuestion`) and its `waits`, and
+ * `applies` (`{ pr }`) when it asks to apply what a pull request changes, which the refresh reads (refresh-consent.mjs).
  * A `withdrawn` closes the question numbered `question` without his answer, and its text is the reason. A `ready`
  * says the pull request numbered `pr` is ready to land, so the land can tell whose it is without a branch. An
  * `answer` may name the question it answers with `question`, with `verified` (whether its line was read) and
  * `copy` (`answerCopyOf` what the line holds, or `null` when no transcript could be read). A verified answer may keep
  * `answeredAt`, the time of his line, and, when the question tool asked, `shownAt`, the time of that call. Throws a
  * `ChannelInputError` for anything that is not a notice. */
-export function newNotice({ at, from, to, kind, text, cwd = null, worktree = null, branch = null, transcript, line, id, options, waits, question, verified, copy, shownAt, answeredAt, pr, summary }) {
+export function newNotice({ at, from, to, kind, text, cwd = null, worktree = null, branch = null, transcript, line, id, options, waits, applies, question, verified, copy, shownAt, answeredAt, pr, summary }) {
   const role = typeof to === 'string' ? roleNamed(to) : null;
   if (role === null) throw new ChannelInputError('--to takes a role: orchestrator (or ORQ), or the number of a work session');
   if (!NOTICE_KINDS.includes(kind)) throw new ChannelInputError(`--kind takes one of ${NOTICE_KINDS.join(', ')}`);
   if (kind !== 'answer' && (transcript !== undefined || line !== undefined)) throw new ChannelInputError('only an answer takes --transcript and --line');
-  if (kind !== 'question' && (id !== undefined || options !== undefined || waits !== undefined)) throw new ChannelInputError('only a question takes id, options and waits');
+  if (kind !== 'question' && (id !== undefined || options !== undefined || waits !== undefined || applies !== undefined)) throw new ChannelInputError('only a question takes id, options, waits and applies');
   if (kind !== 'answer' && kind !== 'withdrawn' && question !== undefined) throw new ChannelInputError('only an answer or a withdrawal takes --question');
   if (kind !== 'answer' && (verified !== undefined || copy !== undefined)) throw new ChannelInputError('only an answer with a question takes verified and copy');
   const timed = shownAt !== undefined || answeredAt !== undefined;
@@ -128,9 +129,9 @@ export function newNotice({ at, from, to, kind, text, cwd = null, worktree = nul
   if (kind !== 'ready' && pr !== undefined) throw new ChannelInputError('only a ready notice takes --pr');
   if (kind !== 'closed' && summary !== undefined) throw new ChannelInputError('only a closed notice takes --summary');
   if (kind === 'question' && role.role !== 'orchestrator') throw new ChannelInputError('a question goes to the orchestrator, who asks the user: --to orchestrator');
-  const asked = kind === 'question' ? checkedQuestion({ text, options, waits }) : null;
+  const asked = kind === 'question' ? checkedQuestion({ text, options, waits, applies }) : null;
   const notice = { schema: NOTICE_SCHEMA, at, from, to: role, kind, text: asked === null ? oneLine(text, NOTICE_TEXT_MAX, 'the text of a notice') : asked.text, cwd, worktree, branch };
-  if (kind === 'question') return { ...notice, id: oneLine(id, QUESTION_ID_MAX, 'the id of a question'), options: asked.options, waits: asked.waits };
+  if (kind === 'question') return { ...notice, id: oneLine(id, QUESTION_ID_MAX, 'the id of a question'), options: asked.options, waits: asked.waits, ...(asked.applies === undefined ? {} : { applies: asked.applies }) };
   if (kind === 'ready') {
     if (pr === undefined) throw new ChannelInputError('a ready notice names its pull request: --pr <n>');
     if (!isPullRequestNumber(pr)) throw new ChannelInputError('--pr takes the number of a pull request, from 1');
@@ -201,9 +202,10 @@ const HAND_NUMBERED = /^pregunta\s+\d+\s*[:.\-–—]/i;
 
 /** The fields of a question as a notice keeps them, checked: `text` one line of `QUESTION_TEXT_MAX`, `options`
  * a list of at most `QUESTION_OPTIONS_MAX` (the recommended one first; an empty list is a question with nothing
- * to tap), no two with one label, and `waits` one line. It is the one check of a question, whether it comes
- * from standard input (`questionFieldsOf`) or from a caller (`newNotice`). Throws a `ChannelInputError`. */
-function checkedQuestion({ text, options, waits }) {
+ * to tap), no two with one label, `waits` one line, and `applies` absent or `{ pr }`, the number of the pull request
+ * whose change the question asks to apply. It is the one check of a question, whether it comes from standard input
+ * (`questionFieldsOf`) or from a caller (`newNotice`). Throws a `ChannelInputError`. */
+function checkedQuestion({ text, options, waits, applies }) {
   const line = oneLine(text, QUESTION_TEXT_MAX, 'the text of a question');
   if (HAND_NUMBERED.test(line)) throw new ChannelInputError('the text of a question starts with its own "Pregunta <n>": drop it; the record numbers the question and prints the prefix to ask it with');
   if (!Array.isArray(options)) throw new ChannelInputError('the options of a question are a list, the recommended one first');
@@ -214,7 +216,17 @@ function checkedQuestion({ text, options, waits }) {
     if (labels.has(label)) throw new ChannelInputError(`two options of a question have the label "${label}"`);
     labels.add(label);
   }
-  return { text: line, options: checked, waits: oneLine(waits, QUESTION_WAITS_MAX, 'what waits on a question') };
+  const asked = { text: line, options: checked, waits: oneLine(waits, QUESTION_WAITS_MAX, 'what waits on a question') };
+  return applies === undefined ? asked : { ...asked, applies: appliesOf(applies) };
+}
+
+/** What a question asks to apply, as its notice keeps it: `{ pr }`, a pull request's number. It takes no other key, so a
+ * misspelt one is named rather than dropped. Throws a `ChannelInputError`. */
+function appliesOf(applies) {
+  if (!isObject(applies) || !isPullRequestNumber(applies.pr)) throw new ChannelInputError('applies names the pull request the question asks to apply: {"pr": <n>}, a number from 1');
+  const extra = Object.keys(applies).find((key) => key !== 'pr');
+  if (extra !== undefined) throw new ChannelInputError(`applies takes no key "${extra}": it takes pr`);
+  return { pr: applies.pr };
 }
 
 /** One option of a question as it is kept: `{ label, description }`, a missing description stored as `''`. It
@@ -229,11 +241,11 @@ function optionOf(option) {
   return { label, description: description.trim() === '' ? '' : oneLine(description, OPTION_DESCRIPTION_MAX, 'the description of an option') };
 }
 
-const QUESTION_KEYS = ['text', 'options', 'waits'];
+const QUESTION_KEYS = ['text', 'options', 'waits', 'applies'];
 
-/** The fields of a question from the JSON text standard input gave: `{ text, options, waits }`, each checked as
- * `checkedQuestion` checks it. The text may start with a byte order mark, as a Windows pipe may give one. A
- * question takes no key but these three, so one that is misspelt is named. Throws a `ChannelInputError` in words
+/** The fields of a question from the JSON text standard input gave: `{ text, options, waits }`, and `applies` when it
+ * has one, each checked as `checkedQuestion` checks it. The text may start with a byte order mark, as a Windows pipe may
+ * give one. A question takes no key but these four, so one that is misspelt is named. Throws a `ChannelInputError` in words
  * that name what is wrong: text that is not JSON, JSON that is not an object, a key it does not take, or a field. */
 export function questionFieldsOf(json) {
   let fields;
@@ -244,7 +256,7 @@ export function questionFieldsOf(json) {
   }
   if (!isObject(fields)) throw new ChannelInputError('the question is a JSON object with text, options and waits, and what came is not an object');
   const extra = Object.keys(fields).find((key) => !QUESTION_KEYS.includes(key));
-  if (extra !== undefined) throw new ChannelInputError(`a question takes no key "${extra}": it takes text, options and waits`);
+  if (extra !== undefined) throw new ChannelInputError(`a question takes no key "${extra}": it takes text, options, waits and applies`);
   return checkedQuestion(fields);
 }
 

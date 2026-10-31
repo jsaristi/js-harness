@@ -93,6 +93,7 @@ function runner(prs, gh = {}) {
     }
     if (command === 'gh' && args[0] === 'repo' && args[1] === 'view' && gh.view) return gh.view(args);
     if (command === 'gh' && args[0] === 'pr' && args[1] === 'edit' && gh.edit) return gh.edit(args);
+    if (command === 'gh' && args[0] === 'pr' && args[1] === 'view' && gh.view_pr) return gh.view_pr(args);
     return { status: 1, stdout: '', stderr: 'unexpected' };
   };
   return { run, calls };
@@ -1889,8 +1890,8 @@ test('a land keeps a landed worktree of the Orca app, under orca/workspaces', as
 
 // T4 (S5b): `--land --refresh-copy` refreshes the installed copy after a land that moved main, through `refreshCopy`
 // (bin/lib/refresh-copy.mjs), which is passed here as a stand-in so no package manager runs.
-async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', '--refresh-copy'], agents = () => [] } = {}) {
-  const { run } = landRunner(prs, [[workflowRun('completed', 'success')]]);
+async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', '--refresh-copy'], agents = () => [], env, gh } = {}) {
+  const { run } = landRunner(prs, [[workflowRun('completed', 'success')]], () => {}, gh);
   const out = [];
   const asked = [];
   let at = Date.now();
@@ -1909,9 +1910,26 @@ async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', 
       asked.push(opts);
       return refresh(opts);
     },
+    ...(env && { env }),
   });
   return { code, out, asked };
 }
+
+// odd/tasks/refresh-open-apply.md, T2: on 2026-10-31 a refresh installed PR 729 and changed his ~/.codex while question
+// 140, which asked his yes for exactly that, was open. Here question 1 asks it for PR 1, which the land lands.
+test('--land --refresh-copy lands, then refreshes nothing, exit 77, while an open question asks to apply a pull request main now holds', async () => {
+  const { root, heads } = makeQueueRepo();
+  const home = harnessHome();
+  const from = { host: 'h', id: 'jh117-0000', source: 'claude-code', title: 'JH 117 · install' };
+  appendNotice(home, slugOf(root), newNotice({ at: '2026-10-31T05:00:00.000Z', from, to: 'orchestrator', kind: 'question', text: '¿Quito las skills de Codex?', id: 'q-1', options: [], waits: 'PR 1', applies: { pr: 1 } }));
+  const view_pr = (args) => ({ status: 0, stdout: JSON.stringify({ headRefOid: args[2] === '1' ? heads['feat/a'] : '0'.repeat(40), mergeCommit: null }), stderr: '' });
+  const { code, out, asked } = await landRefreshing(root, [pr(1, 'feat/a', heads['feat/a'])], { env: { JS_HARNESS_HOME: home }, gh: { view_pr } });
+  assert.equal(code, 77, out.join('\n'));
+  assert.ok(out.some((line) => line.startsWith('Landed: main ')), 'the land landed');
+  assert.ok(out.some((line) => /^refresh: question 1 is open and asks the user's yes to apply pull request 1, which [0-9a-f]{7} holds: nothing was refreshed, and the installed copy still names its previous main; the land itself landed, and main stands\./.test(line)), out.join('\n'));
+  assert.equal(asked.length, 0, 'the refresh was not asked for');
+  assert.equal(landsOf(root).at(-1).exit, 0, 'the land record keeps the land\'s own exit');
+});
 
 test('--refresh-copy is a mode of --land or a mode alone: with --dry-run or --prune it is a usage error, and the usage names both', async () => {
   const out = [];

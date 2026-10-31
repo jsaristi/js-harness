@@ -78,7 +78,7 @@ const CEILINGS = {
   'bin/backup.mjs': 1303,
   'bin/remote.mjs': 1118,
   'scripts/practice-lib.mjs': 1174,
-  'bin/resume.mjs': 1123,
+  'bin/resume.mjs': 1111,
   'evals/suite.mjs': 1129,
   'bin/sessions.mjs': 1008,
   'evals/codex-isolation-probe.mjs': 1021,

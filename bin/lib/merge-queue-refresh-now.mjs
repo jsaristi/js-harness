@@ -15,6 +15,7 @@ import { refreshNow } from './merge-queue-refresh.mjs';
 import { readCopy } from './merge-queue-waits.mjs';
 import { listCommandLines } from './process-list.mjs';
 import { killProcesses, takeSnapshot } from './process-tree.mjs';
+import { unansweredApply } from './refresh-consent.mjs';
 import { namedSha, refreshCopy } from './refresh-copy.mjs';
 import { comparable, mainCheckout, projectDirsOf, projectSlug } from './sessions.mjs';
 import { WAKE_WINDOW_MS, wakePlan } from './wake.mjs';
@@ -57,7 +58,7 @@ export async function refreshNowRun(args, { run = spawnSync, env, now, stdout, s
   };
   return refreshNow({
     main, copySha: binDir ? namedSha(binDir) : null, look, stop: (targets) => killProcesses(targets, { spawnSync: run }), sessions, refresh,
-    versionOf, tell, home, cwd: args.cwd, env, sleep, stdout, stderr,
+    versionOf, tell, home, cwd: args.cwd, env, sleep, stdout, stderr, unanswered: (sha) => unansweredApply({ home, cwd: args.cwd, run, sha }),
   });
 }
 
