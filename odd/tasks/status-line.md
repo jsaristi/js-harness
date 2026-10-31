@@ -74,11 +74,12 @@ mod: his. Whether the feature closes here or builds a program the app would not 
 - [x] T4 (kind: verify) two blind readers of the design (L3); Codex and the lenses over T2's commits (L6)
 - [x] T5 (kind: docs) specs 3 and 4 were deferred to question 134; he answered "Construir el programa igual" (L8)
 - [x] T6 (kind: verify) pull request 726 (merged into main as 9f61429), its ready notice, question 134, the summary
-- [ ] T7 (kind: build) spec 3, slice 2 on branch `feat/status-line-program` from main 7aac3e43: `bin/lib/status-line.mjs`
+- [x] T7 (kind: build) spec 3, slice 2 on branch `feat/status-line-program` from main 7aac3e43: `bin/lib/status-line.mjs`
   (`statusLineOf(board)` pure, the line file written atomically under the harness home), `bin/status-line.mjs`
   (`js-harness status-line write` runs the board and writes the line; `program` prints the program's path),
   `bin/lib/status-line.ps1` (the program: reads the line file, prints it, marks it stale past 10 minutes, prints
-  nothing when it is missing), their tests first, the program timed in a scratch home — commits: pending
+  nothing when it is missing), their tests first, the program timed in a scratch home (L9) — commits: acc22f30, and
+  the one that adds the command
 - [ ] T8 (kind: verify) Codex, the lenses and an independent verifier over T7; spec 4's question to the lead with the
   exact PowerShell commands and their undo, each tried in a scratch place; pull request, ready, summary, closed — pending
 
@@ -86,8 +87,9 @@ mod: his. Whether the feature closes here or builds a program the app would not 
 T7, tests first. Done: `bin/lib/status-line.mjs` and its test (red: module not found; green: 4 pass);
 `bin/lib/status-line.ps1` and `bin/lib/status-line-program.test.mjs`, run through `powershell.exe` in a scratch
 USERPROFILE, skipped off win32 (red: 2 fail, no file; green: 2 pass). The script is ASCII: Windows PowerShell 5.1 reads
-a script without a BOM as ANSI, so the middle dot is `[char]0x00B7`. Next: `bin/status-line.mjs` and its registration
-in `bin/js-harness.mjs`. Decided (L8): the writer is `js-harness status-line write`, run by a per-user scheduled task every 5
+a script without a BOM as ANSI, so the middle dot is `[char]0x00B7`. `bin/status-line.mjs` and its registration in
+`bin/js-harness.mjs` are done and tried end to end (L9). Next, T8: Codex and the lenses over 7aac3e43..HEAD, the
+independent verifier, then the install question to the lead, each command tried in a scratch place first. Decided (L8): the writer is `js-harness status-line write`, run by a per-user scheduled task every 5
 minutes that is part of the deferred install (nothing runs today: the app does not read the key); the board takes about
 24 s, so the program never runs it. The line, Spanish, from the board: open questions (`questions.open`), sessions
 `working` and `waiting` (`sessions[].state`), open pull requests (`pullRequests.items`), the gate (`gateLock.holder`),
@@ -247,3 +249,10 @@ only with evidence that a claude.ai install reads it, and step 2 of the review b
   an independent verifier (installer, high risk item 5).
 - L7 — pull request 726, ready notice at 2026-10-31T02:11:25Z; question 134 to the lead (close here, or build the
   program for a future host) at 02:09:17Z; summary `docs/sessions/2026-10-31-jh-113-status-line-the-harness-s-state-above-the-code-tab-s.md`.
+- L9 — T7 built, tests first. `bin/lib/status-line.test.mjs`: red (module not found), green 4 pass;
+  `bin/lib/status-line-program.test.mjs`: red 2 fail (no program), green 2 pass; `bin/status-line.test.mjs`: red
+  (module not found), green 4 pass. Commit acc22f30 holds the line and the program. The command first refused its own
+  convention (`every command module declares its own ArgError`), so it throws `StatusLineArgError`. End to end in a
+  scratch home (job scratch `e2e.mjs`): the branch's `status-line write --home <scratch>` exit 0 in 24,371 ms on the real
+  board; the program, run as the host would (`powershell.exe -NoProfile -File`, USERPROFILE the scratch home), exit 0
+  in 683, 606 and 582 ms, 73 bytes: `ESC[31m1 pregunta ESC[0m · 4 trabajando · 2 esperando · 2 PR · gate libre`.
