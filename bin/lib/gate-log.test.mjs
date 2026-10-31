@@ -829,8 +829,9 @@ test('appendGateFailure keeps failures in failed.jsonl beside the log, rotated a
 }));
 
 test('readGateProof reads the failures the log no longer holds before the log, so a failure rotated away still stands against a pass after it', withHome(async (home) => {
-  const onCi = end('g1', { result: 'fail', files: FILES, sensors: [{ name: 'tests', seconds: 200, pass: false, ranIn: 'ci' }] });
-  for (const event of [start('g1'), onCi]) appendGateEvent(home, event);
+  const before = '2026-10-11T07:00:00.000Z';
+  const onCi = end('g1', { at: before, result: 'fail', files: FILES, sensors: [{ name: 'tests', seconds: 200, pass: false, ranIn: 'ci' }] });
+  for (const event of [start('g1', { at: before }), onCi]) appendGateEvent(home, event);
   appendGateFailure(home, onCi);
   // The log's rotation, as it lands at last: the failure is no longer in either of its files.
   for (const name of ['log.jsonl', 'log.1.jsonl']) fs.rmSync(path.join(gateLogDir(home), name), { force: true });
@@ -849,6 +850,24 @@ test('readGateProof reads the failures the log no longer holds before the log, s
   // Failures that cannot be read: no events, so no proof.
   const failing = { ...fs, readFileSync: (file, ...rest) => (String(file).includes('failed') ? (() => { throw Object.assign(new Error('EACCES'), { code: 'EACCES' }); })() : fs.readFileSync(file, ...rest)) };
   assert.equal(readGateProof(home, { fileSystem: failing }), null);
+}));
+
+// The verifier of bebf5238 and its reliability review: a failure the log lacks for another reason than its rotation, and
+// a log that cannot be read.
+test('readGateProof puts a failure the log lacks where its time puts it, and gives no events when a file of the log cannot be read', withHome(async (home) => {
+  const later = '2026-10-11T09:00:00.000Z';
+  for (const event of [start('g1'), end('g1', { code: KEY, files: FILES, tried: KEY })]) appendGateEvent(home, event);
+  // Its line in the log was refused (a busy file) or torn, while the failures took it: written after the pass, under its key.
+  appendGateFailure(home, end('g2', { at: later, result: 'fail', files: FILES, tried: KEY }));
+  assert.deepEqual(readGateProof(home).map(({ event, id }) => `${event} ${id}`), ['start g1', 'end g1', 'end g2']);
+  assert.equal(provenBy(readGateProof(home), KEY, FILES), null);
+  // A failure older than every line of the log still comes first, and one of the same instant as a line comes after it.
+  appendGateFailure(home, end('g0', { at: '2026-10-11T07:00:00.000Z', result: 'fail', files: FILES, tried: KEY }));
+  appendGateFailure(home, end('g3', { result: 'fail', files: FILES, tried: KEY }));
+  assert.deepEqual(readGateProof(home).map(({ id }) => id), ['g0', 'g1', 'g1', 'g3', 'g2']);
+  // A file of the log that is there and cannot be read may hold the pass a failure came after: no answer.
+  const busy = { ...fs, readFileSync: (file, ...rest) => (path.basename(String(file)) === 'log.jsonl' ? (() => { throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' }); })() : fs.readFileSync(file, ...rest)) };
+  assert.equal(readGateProof(home, { fileSystem: busy }), null);
 }));
 
 test('gateRecord writes a gate that ran no sensor as one line of the kind same, with the key and the gate that proved it, and nothing when either is missing', withHome(async (home) => {

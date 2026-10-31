@@ -189,6 +189,30 @@ question (`js-harness notify --to orchestrator --kind question`, in Spanish).
   bin/lib/gentle-ai-absence.test.mjs bin/lib/gate-log.test.mjs bin/throughput.test.mjs bin/rules.test.mjs`: 476 of 476.
   `uninstall` removes the whole folder (`removeGateLogFolder`), the new files with it.
 
+- L14 (2026-10-31): T4 is `bebf5238` (gate on CI green, first try). Codex over `9d30c96..bebf523`: correct (0.88), no
+  finding. Lenses risk, resilience and reliability: 0 findings each. gentle-ai over the same commit (lineage
+  `review-26b1ad328502cb31`, its `granted` invocation run as `CLAUDE.md` says): approved, one WARNING, informational,
+  `R3-001`: a failure the log lacks for another reason than rotation (its line there refused or torn) was put before
+  the whole log, so a same-key failure after a pass read as before it; acknowledged. The independent verifier, given the
+  code and not this document's conclusion, found no sequence where a failure written by the new code and lost to
+  rotation alone lets a proof through, checked that every end line is written by `gateRecord.end` (`check`, `ci-gate`,
+  `gate --`), and found three things, none a regression:
+  (1) real, left as it is with its end date: failures written between PR 721 and this commit are in the log alone, and
+  one rotated away still lets a pass after it prove, until they all leave the log (10 days at most, by about
+  2026-11-10); seeding the failures file from the log was not taken, since it writes in a reading or migrates once for a
+  window that closes by itself, and L4 counts one such failure in 90.
+  (2) real: a file of the log that cannot be read still gave a proof, its lines missing. Fixed: `readGateProof` gives no
+  events when `readGateLog` says a file is unavailable.
+  (3) the same as `R3-001`. Fixed: each failure the log lacks goes before the first line written after it, after one of
+  the same instant. Tests first, "readGateProof puts a failure the log lacks where its time puts it, and gives no events
+  when a file of the log cannot be read" (`bin/lib/gate-log.test.mjs`): before, `actual: [ 'end g2', 'start g1', 'end
+  g1' ]`; after, `✔`. The first test of `readGateProof` gave its failure the same instant as the pass, which a rotated
+  failure never has; it now has an earlier one. Then `node --test bin/check.test.mjs bin/gate.test.mjs
+  bin/check-ci-gate.test.mjs bin/check-ci-record.test.mjs bin/check-exact-tests.test.mjs
+  bin/conventions-structure.test.mjs bin/lib/gentle-ai-absence.test.mjs bin/lib/gate-log.test.mjs`: 418 of 418.
+  Seen and left for later: `bin/lib/manifest.mjs:1448` says the folder holds two files; it has held more since
+  `busiest.jsonl`, and the removal is of the whole folder.
+
 ## Next step
 Slice 2 on branch `gate-forgotten-failure` (worktree `D:\js-harness\.claude\worktrees\gate-push-holes`, stacked on
 `9d30c96d` until PR 723 lands): commit T4 (L13); then Codex and the lenses over it, gentle-ai if the Stop hook offers

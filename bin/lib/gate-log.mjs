@@ -304,18 +304,26 @@ export function readGateFailures(home, { fileSystem: io = fs } = {}) {
   return failures;
 }
 
-/** The events a proof of a tree is read from (`provenBy`): the failures of `home` the log no longer holds
- * (`readGateFailures`), then the events of the log. A line rotated out of the log is older than every line the log
- * keeps, so they stay in the order they were written. `null` where the failures cannot be read, which is no proof.
+/** The events a proof of a tree is read from (`provenBy`): the events of the log, with each failure of `home` the log
+ * does not hold (`readGateFailures`) before the first line written after it. One rotated out of the log is older than
+ * every line the log keeps, and comes first; one whose line in the log was refused or torn goes where its time puts it,
+ * after a line of the same instant, so a failure is never read as older than a pass it came after. `null` where the
+ * failures or a file of the log cannot be read, which is no proof: the line not read may be the one that decides.
  *
  * The failures are read before the log: a failure written between the two readings is then in the log, where a
  * reading the other way round would miss it in both. */
 export function readGateProof(home, { fileSystem } = {}) {
   const failures = readGateFailures(home, { fileSystem });
   if (failures === null) return null;
-  const { events } = readGateLog(home, { fileSystem });
+  const { events, unavailable } = readGateLog(home, { fileSystem });
+  if (unavailable) return null;
   const ended = new Set(events.filter((event) => event.event === 'end').map((event) => event.id));
-  return [...failures.filter((failure) => !ended.has(failure.id)), ...events];
+  const read = [...events];
+  for (const failure of failures.filter(({ id }) => !ended.has(id))) {
+    const after = read.findIndex((event) => Date.parse(event.at) > Date.parse(failure.at));
+    read.splice(after === -1 ? read.length : after, 0, failure);
+  }
+  return read;
 }
 
 /** A process that spent the processor over a gate's run, as far as a reader prints it: its name, its
