@@ -238,7 +238,24 @@ The unchecked duties, most failed first, each with the check proposed (spec 4's 
 - L9 (2026-10-31, T5): question 135 recorded for the lead ("Los tres primeros (Recomendado)" | "Solo el del tablero" |
   "Los tres y afirmaciones" | "Ninguno por ahora"); nothing of JH 115 waits on it.
 
+- L10 (2026-10-31): the gentle-ai Stop hook offered the whole branch (`--base-ref=1f19c04e`, all three commits);
+  as `CLAUDE.md` says, its read-only status was run (`applicability: unrelated`, action start) and nothing started.
+
+- L11 (2026-10-31, reviews of `767b6b5..f000f30`): Codex correct (0.97), both findings fixed; the lenses
+  reliability, resilience and readability, 0 findings each.
+
+- L12 (2026-10-31, the independent verifier, read-only, given the code and the brief): no blocker. Its findings 1
+  (a publish before a re-render) and 2 (a relative or `files` path) were already fixed in `f000f307`, confirmed on its
+  scratch copy. Open, not fixed here: (3) real risk, latency: the lead's 0f71b2c6 records 58 timed-out runs of the
+  reply hook (5000 ms) in about 499 stops, median 2331 ms, 90th percentile 5511 ms; this check adds about 300 ms on
+  the lead and about 80 ms elsewhere (one more git call and channel parse), and a timeout skips every check of the
+  stop. Follow-up proposed to the lead: share the lead test and the channel read with the stale-board check, and
+  measure the hook's p90. (4) a return never warned is warned once whatever its age (L4). (5) a decision or question
+  close is turned back too, a `stretch-return` page does not count, and a page `report` could not record is not
+  found. (6) `bin/reply.test.mjs`'s work-session case passes no notice; the spelling test does nothing on POSIX.
+  (7) `reply --help` wraps "shell command" onto a line of its own.
+
 ## Next step
-Commit the Codex fix; read the verifier's findings and fix the real ones, tests first; run `codex-review` and
+The fix's reviews are done (L11), the verifier's report is read (L12); read the verifier's findings and fix the real ones, tests first; run `codex-review` and
 `lens-review` again from `767b6b5c`; push, open the PR, `notify --kind ready --pr <n>`; the summary under
 `docs/sessions/` and `notify --kind closed --summary`.
