@@ -85,9 +85,9 @@ rule commits wait and the work that does not depend on them goes on.
   `bin/contract.mjs:438` (`depthPassSince` read, written by nobody).
 - 3. The bar:
   spec 1: `node --test bin/double-review.test.mjs`: one command starts a Claude reader and a Codex reader at once on
-  one frozen copy, each echoing the copy's hash (a read that does not counts for nothing), the Claude reader able to
-  read only the repository and the copy (`--add-dir`), and records both only after both return; a read never covers
-  code for the push or the merge door; none, new behaviour.
+  one frozen copy, each echoing every copy's read token (a read that does not counts for nothing), neither answer on
+  disk until both return (no reader is confined, L12), and records both only after both return, marked when the
+  repository moved meanwhile; a read never covers code for the push or the merge door; none, new behaviour.
   spec 2: `node --test bin/lib/protocols-skill.test.mjs bin/lib/project.test.mjs bin/double-review.test.mjs`: the
   scope, everything that proposes something (a plan, a design, an analysis with figures, a protocol, a document), is
   one text in section 1 that `claudeBlock` and section 7 name by `rule:double-review`; a read is announced with its
@@ -221,7 +221,7 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   use may still cross it, unguaranteed); `codex-meter` lists the reserve skips no review has paid, by commit, after
   their merge too, with the worktree command that pays each; older texts 4 and 13; spec 4; route codex-review.
 - [ ] T3 (kind: build) `js-harness double-review`: `read` (the frozen copy, both readers started at once, each echoing
-  its hash, the Claude reader on `rule:subagent-reader-model` confined by `--add-dir`, the reserve, `--plan`
+  its read tokens, the Claude reader on `rule:subagent-reader-model`, blind by sequence (L12), the reserve, `--plan`
   announces), `take` (taken and shared), `skip`, `tally`; records under the git common dir, which no review row
   reads, with the test that a read leaves code uncovered; spec 1, 2, 3, 4.
 - [ ] T4 (kind: build) `rules change double-review` (after L9's answer): section 1's one text, `claudeBlock` and
@@ -288,3 +288,19 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   `edit-during-review`, its eighth sighting. Fixed by committing the edit and running the review again, touching no
   tracked file until it returns. What would stop it: the guard refusing an edit of a tracked file in a worktree
   whose Codex review is running, a check before a line; proposed to the lead, not built here (out of this scope).
+- L12 (2026-10-31, T6's first real read, `89de7582`, of this document at b0f455ff, announced to the lead with its
+  cost): Claude 9 findings, Codex 5, three found by both. The announced cost was wrong: `--plan` said about 116k and
+  55k tokens, from L8's hand run, and the command counts input with its cache reads, so it measured 1,076,290 tokens
+  of Claude and 874,702 of Codex; the meter moved 81% to 82% weekly, the 1% it said. All 14 taken (`take`). Found by
+  both: the read is not blind, since `--add-dir` adds a folder and confines nothing (`CLAUDE_SETTINGS` denies no
+  read, and the Claude reader opened `D:\js-harness\package.json`), and Codex's answer file sat beside the copy, so
+  L8's "a print run reads outside its folder only with permission" is false; the echoed hash is in the prompt, so it
+  proves no reading; `skip` records any words. Fixes on this branch, tests first: Codex's answer is read from its
+  last `agent_message` on stdout, as `codex-review` reads it, so no answer of either reader is on disk until both
+  return (blind by sequence, not by confinement); each frozen copy ends with a read token the readers echo, and the
+  hash leaves the prompt; `skip` takes only his typed words, through `rules-change.mjs`'s `quotationOf`; a read says
+  when HEAD or the tracked files moved while it ran (Codex 3); the cost line says this measure. Docs: `## Older
+  texts` gains the onboarding's two-reader lines (Claude 4) and the roadmap's init-block line (Codex 5); citations
+  re-checked (Claude 7); the reserve's estimate restated from measured points (Claude 8). Claude 5 is T2. Claude 6,
+  whether D5's two exemptions (a question of fact; a step whose reviewed text the question names) survive "en todo",
+  is his: it goes to him with T4, through the lead, after question 150.

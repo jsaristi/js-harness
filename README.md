@@ -1097,14 +1097,18 @@ reset credits left: 1
 
 The double review of `rule:double-review`: one Claude reader and one Codex reader, blind, on a plan, a
 design, a document that proposes something, or a small code change (`--diff <rev>` adds the diff
-`<rev>...HEAD`). `read` copies the files into a folder outside the repository, hashes the copy, and
-starts both readers at once on the same prompt: Claude with read-only tools, the copy its one folder
-past the repository; Codex in the lean session `codex-review` uses. A reader whose answer does not
-echo the hash does not count. Both answers are recorded together once both have returned, in
-`double-reviews.jsonl` under the git common folder, and the copy is removed. No push and no merge
+`<rev>...HEAD`). `read` copies the files into a folder outside the repository, hashes the copy, ends
+each copy with a read token no prompt holds, and starts both readers at once on the same prompt:
+Claude with read-only tools; Codex in the lean session `codex-review` uses. A reader with tools can
+open any file, so the read is blind by sequence: neither answer is on disk until both have returned,
+and neither CLI keeps a session file. A reader whose answer does not echo every copy's token did not
+open them and does not count. Both answers are recorded together once both have returned, in
+`double-reviews.jsonl` under the git common folder, with a mark when the repository moved while they
+read, and the copy is removed. No push and no merge
 door reads that file: a read covers no code, which keeps its Codex and lens reviews. `--plan` says
 what a read costs and the words that skip it, and starts nothing; only the user's own words skip a
-read, recorded with `skip`. `take` records which of a reader's findings the writer took and which
+read: `skip` records them only where the session transcript holds them typed at that line, never a
+tapped answer or a paste. `take` records which of a reader's findings the writer took and which
 the other reader also found, and `tally` gives each reader its reads, findings, taken and found by it
 alone. A reader that could not answer exits 1, its reason recorded; a usage error exits 2.
 

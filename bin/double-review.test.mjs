@@ -54,13 +54,18 @@ function fakeSpawn(answer) {
   return { spawn, calls };
 }
 
-const hashIn = (prompt) => /inputHash to "([0-9a-f]{64})"/.exec(prompt)?.[1];
-const claudeOut = (prompt, findings, hash = hashIn(prompt)) =>
-  JSON.stringify({ structured_output: { inputHash: hash, findings, sound: ['the order'], unchecked: [] }, usage: { input_tokens: 10, cache_read_input_tokens: 90, output_tokens: 5 }, total_cost_usd: 0.5 });
-const codexAnswer = (args, prompt, findings, hash = hashIn(prompt)) => ({
-  stdout: `${JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 70, output_tokens: 7 } })}\n`,
-  file: { path: args[args.indexOf('-o') + 1], text: JSON.stringify({ inputHash: hash, findings, sound: [], unchecked: ['the meter'] }) },
+/** The read tokens a reader finds by opening each copy the prompt lists, as a real reader would. */
+const tokensIn = (prompt) => [...prompt.matchAll(/^- `([^`]+)`/gm)].map(([, copy]) => /read-token: (\S+)\s*$/.exec(fs.readFileSync(copy, 'utf8'))?.[1]);
+const claudeOut = (prompt, findings, tokens = tokensIn(prompt)) =>
+  JSON.stringify({ structured_output: { readTokens: tokens, findings, sound: ['the order'], unchecked: [] }, usage: { input_tokens: 10, cache_read_input_tokens: 90, output_tokens: 5 }, total_cost_usd: 0.5 });
+const codexAnswer = (args, prompt, findings, tokens = tokensIn(prompt)) => ({
+  stdout: [
+    { type: 'item.completed', item: { id: 'm', type: 'agent_message', text: JSON.stringify({ readTokens: tokens, findings, sound: [], unchecked: ['the meter'] }) } },
+    { type: 'turn.completed', usage: { input_tokens: 70, output_tokens: 7 } },
+  ].map((event) => `${JSON.stringify(event)}\n`).join(''),
 });
+/** Every file under `folder`, as paths relative to it. */
+const filesUnder = (folder) => fs.readdirSync(folder, { recursive: true }).filter((one) => fs.statSync(path.join(folder, one)).isFile()).map((one) => one.split(path.sep).join('/')).sort();
 
 function deps(t, root, spawn, extra = {}) {
   const lines = { log: [], error: [] };
@@ -134,9 +139,12 @@ test('in this repository the Claude reader runs on the model its rule sets', () 
 test('read starts both readers at once on one frozen copy outside the repository, blind, and records both once both return', async (t) => {
   const root = makeRepo(t);
   let copied = null;
+  let onDisk = null;
   const { spawn, calls } = fakeSpawn((command, args, prompt) => {
     if (command === 'codex') return codexAnswer(args, prompt, [finding('codex one')]);
-    copied = fs.readFileSync(path.join(args[args.indexOf('--add-dir') + 1], '1-plan.md'), 'utf8');
+    const material = args[args.indexOf('--add-dir') + 1];
+    copied = fs.readFileSync(path.join(material, '1-plan.md'), 'utf8');
+    onDisk = filesUnder(path.dirname(material));
     return { stdout: claudeOut(prompt, [finding('claude one'), finding('claude two')]) };
   });
   const run = deps(t, root, spawn);
@@ -151,11 +159,15 @@ test('read starts both readers at once on one frozen copy outside the repository
   assert.ok(fromRoot.startsWith('..') || path.isAbsolute(fromRoot), 'the copy is outside the repository');
   assert.ok(claude.prompt.includes(path.join(material, '1-plan.md')));
   assert.match(copied, /twice/, 'the copy is of the file as it stands');
+  assert.match(copied, /\nread-token: [0-9a-f]{16}\n$/, 'the copy ends with its read token');
   assert.match(claude.prompt, /diff\.patch/);
   assert.equal(claude.options.cwd, root);
   assert.deepEqual(claude.args.slice(0, 4), ['-p', '--safe-mode', '--tools', 'Read,Grep,Glob']);
-  const answerFile = codex.args[codex.args.indexOf('-o') + 1];
-  assert.ok(!claude.prompt.includes(path.dirname(answerFile)), 'no prompt names where an answer is written');
+  // Blind by sequence: neither answer is on disk while the readers run, since --add-dir confines no reader.
+  assert.ok(!codex.args.includes('-o'), 'Codex writes no answer file: its answer is read from its stdout');
+  assert.ok(codex.args.includes('--ephemeral'), 'Codex keeps no session file another reader could open');
+  assert.ok(claude.args.includes('--no-session-persistence'), 'nor does Claude');
+  assert.deepEqual(onDisk, ['material/1-plan.md', 'material/diff.patch', 'schema.json', 'settings.json'], 'while a reader runs, the folder holds the copy and the settings, no answer');
   assert.ok(codex.args.includes('--ignore-user-config'), 'Codex runs in the lean session of codex-review');
   assert.ok(run.disposed.length === 1, 'the lean Codex home is disposed');
 
@@ -164,7 +176,9 @@ test('read starts both readers at once on one frozen copy outside the repository
   assert.equal(record.id, 'read-1');
   assert.deepEqual(record.files, ['plan.md']);
   assert.equal(record.diff, 'HEAD~1');
-  assert.equal(record.hash, hashIn(claude.prompt));
+  assert.match(record.hash, /^[0-9a-f]{64}$/);
+  assert.ok(!claude.prompt.includes(record.hash), 'the hash is not in the prompt, so no reader can echo it unread');
+  assert.equal(record.moved, undefined, 'the repository did not move while they read');
   assert.deepEqual(record.readers.map((one) => [one.reader, one.outcome, one.findings.length]), [['claude', 'answered', 2], ['codex', 'answered', 1]]);
   assert.deepEqual(record.readers[0].usage, { inputTokens: 100, outputTokens: 5 });
   assert.deepEqual(record.readers[1].usage, { inputTokens: 70, outputTokens: 7 });
@@ -173,15 +187,28 @@ test('read starts both readers at once on one frozen copy outside the repository
   assert.match(run.lines.log.join('\n'), /double-review take read-1 claude --taken/);
 });
 
-test('a reader that does not echo the material\'s hash did not read it: the read is recorded as failed for it, exit 1', async (t) => {
+test('a reader that does not echo the read token of every copy did not open them: the read is recorded as failed for it, exit 1', async (t) => {
   const root = makeRepo(t);
   const { spawn } = fakeSpawn((command, args, prompt) =>
-    command === 'codex' ? codexAnswer(args, prompt, [finding('codex one')], 'f'.repeat(64)) : { stdout: claudeOut(prompt, []) });
+    command === 'codex' ? codexAnswer(args, prompt, [finding('codex one')], tokensIn(prompt).slice(1)) : { stdout: claudeOut(prompt, []) });
   const run = deps(t, root, spawn);
-  assert.equal(await doubleReviewMain(['read', 'plan.md'], {}, run.deps), 1);
+  assert.equal(await doubleReviewMain(['read', 'plan.md', '--diff', 'HEAD~1'], {}, run.deps), 1);
   const [record] = readDoubleReviews(root);
   assert.deepEqual(record.readers.map((one) => one.outcome), ['answered', 'failed']);
-  assert.match(record.readers[1].reason, /hash/);
+  assert.match(record.readers[1].reason, /read token of 1-plan\.md/);
+});
+
+test('a read during which the repository moves says so and records it, since the readers then checked different states', async (t) => {
+  const root = makeRepo(t);
+  const { spawn } = fakeSpawn((command, args, prompt) => {
+    if (command === 'codex') return codexAnswer(args, prompt, []);
+    fs.writeFileSync(path.join(root, 'plan.md'), '# The plan\n\nChanged while they read.\n');
+    return { stdout: claudeOut(prompt, []) };
+  });
+  const run = deps(t, root, spawn);
+  assert.equal(await doubleReviewMain(['read', 'plan.md'], {}, run.deps), 0);
+  assert.match(run.lines.error.join('\n'), /the repository moved while the readers read it: plan\.md/);
+  assert.equal(readDoubleReviews(root)[0].moved, true);
 });
 
 test('a read whose record cannot be written still prints what both readers found, and exits 1', async (t) => {
@@ -267,13 +294,33 @@ test('take records which findings the writer took and which the other reader als
   ]);
 });
 
-test('skip records the user\'s words that skip a read, with where they are read', async (t) => {
+const AT = '2026-10-31T17:00:00.000Z';
+const TRANSCRIPT = [
+  JSON.stringify({ type: 'user', origin: { kind: 'human' }, timestamp: AT, message: { role: 'user', content: 'Sigue con el plan, no quiero la revisión de este' } }),
+  JSON.stringify({ type: 'assistant', timestamp: AT, message: { role: 'assistant', content: [{ type: 'tool_use', id: 'q1', name: 'AskUserQuestion', input: { questions: [{ question: '¿Lo leen?', header: 'Lectura', options: [{ label: 'no quiero la revisión', description: 'sin lectura' }, { label: 'Sí', description: 'con lectura' }] }] } }] } }),
+  JSON.stringify({ type: 'user', timestamp: AT, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'q1', content: 'answered' }] }, toolUseResult: { answers: { '¿Lo leen?': 'no quiero la revisión' } } }),
+].join('\n');
+const transcriptOf = (session) => (session === 's1' ? TRANSCRIPT : null);
+const skipArgv = (words, line) => ['skip', '--what', 'the plan of JH 130', '--words', words, '--transcript', 's1', '--line', String(line)];
+
+test('skip records the user\'s typed words that skip a read, checked at the line of the transcript they are read at', async (t) => {
   const root = makeRepo(t);
-  const run = deps(t, root, fakeSpawn(() => ({})).spawn);
-  const argv = ['skip', '--what', 'the plan of JH 130', '--words', 'no quiero la revisión de este', '--transcript', '0f71b2c6', '--line', '44300'];
-  assert.equal(await doubleReviewMain(argv, {}, run.deps), 0);
+  const run = deps(t, root, fakeSpawn(() => ({})).spawn, { transcriptOf });
+  assert.equal(await doubleReviewMain(skipArgv('no quiero la revisión de este', 1), {}, run.deps), 0);
   const [skip] = readDoubleReviews(root);
-  assert.deepEqual([skip.kind, skip.what, skip.words, skip.transcript, skip.line], ['skip', 'the plan of JH 130', 'no quiero la revisión de este', '0f71b2c6', 44300]);
+  assert.deepEqual([skip.kind, skip.what, skip.words, skip.transcript, skip.line, skip.date], ['skip', 'the plan of JH 130', 'no quiero la revisión de este', 's1', 1, '2026-10-31']);
+});
+
+test('skip refuses words he did not type at that line: a tapped answer, words not in the line, a missing transcript', async (t) => {
+  const root = makeRepo(t);
+  const run = deps(t, root, fakeSpawn(() => ({})).spawn, { transcriptOf });
+  assert.equal(await doubleReviewMain(skipArgv('no quiero la revisión', 3), {}, run.deps), 1);
+  assert.match(run.lines.error.at(-1), /tapped answer/);
+  assert.equal(await doubleReviewMain(skipArgv('sáltate la revisión', 1), {}, run.deps), 1);
+  assert.match(run.lines.error.at(-1), /not in what he typed/);
+  assert.equal(await doubleReviewMain([...skipArgv('no quiero la revisión', 1).slice(0, 5), '--transcript', 's9', '--line', '1'], {}, run.deps), 1);
+  assert.match(run.lines.error.at(-1), /no transcript "s9"/);
+  assert.deepEqual(readDoubleReviews(root), [], 'nothing is recorded');
 });
 
 test('tally with no read says so', async (t) => {

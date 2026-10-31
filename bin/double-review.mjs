@@ -8,18 +8,23 @@
 // they share is imported: the Codex launcher, its lean session (`leanFlags`, `leanEnv`) and lean home, the Claude
 // path, and the environment of a Claude review (`lensEnv`).
 //
-// Blind by construction, not by intention. The material is copied into a folder outside the repository and hashed,
-// and each reader must echo that hash in its answer or its answer does not count. Both readers are started at once,
-// in two processes, on the same prompt. The Claude reader may read the repository and, through `--add-dir`, the copy
-// and nothing else; its answer stays in this process until both have returned. Codex writes its answer in a folder
-// no prompt names. The record holds both, written once both have returned, and the copy is removed after it. What
-// each found and what the writer took is recorded (./lib/double-review-records.mjs) for the judgement of 2026-11-16.
+// Blind by sequence, not by confinement. A reader with tools reads any file it can name: `--add-dir` adds the copy's
+// folder to what the Claude reader may read and takes nothing away, and a Claude reader of this feature's plan opened
+// a file outside both (the feature document, L12). So neither answer is on disk while the readers run: Claude's is its
+// stdout and Codex's its last message on stdout, both in this process, and neither keeps a session file
+// (`--no-session-persistence`, `--ephemeral`). The material is copied into a folder outside the repository and
+// hashed, and each copy ends with a read token of its own, which no prompt holds: an answer that does not echo every
+// token does not count. That proves each reader opened each copy, not that it read all of it. Both readers are
+// started at once, in two processes, on the same prompt; the record holds both, written once both have returned, and
+// says when the repository moved while they read, since they then checked different states. The copy is removed
+// after it. What each found and what the writer took is recorded (./lib/double-review-records.mjs) for the judgement
+// of 2026-11-16.
 //
 // Exit 0 when the read, the plan, the judgement, the skip or the tally is done; 1 when a reader could not answer (the
 // read is recorded with why), a file or the repository is missing, or a record cannot be written; 2 for a usage error,
 // which starts nothing.
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -33,7 +38,10 @@ import { readerPrompt } from './lib/double-review-prompt.mjs';
 import { appendDoubleReview, findingsOf, READERS, readDoubleReviews, readOf, SEVERITIES, tallyOf } from './lib/double-review-records.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { killTree } from './lib/process-tree.mjs';
+import { RuleChangeError, quotationOf } from './lib/rules-change.mjs';
 import { ruleHere } from './lib/rules.mjs';
+import { isSessionId } from './lib/session-id.mjs';
+import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 
 export const USAGE =
@@ -49,9 +57,11 @@ export const SKIP_PHRASE = 'no quiero la revisión';
 // The Claude reader runs on `rule:subagent-reader-model`, a rule of this repository: a project that does not declare
 // it reads on that rule's alias.
 const CLAUDE_FALLBACK = 'opus';
-// What one read cost when it was measured, on this feature's own plan (the feature document, L8): said as measured
-// once, not as a bound.
-const MEASURED_COST = 'about 116k tokens of Claude and 55k of Codex, about 1% of Codex\'s weekly limit';
+// What one read cost when it was measured by this command, on this feature's own document (the feature document,
+// L12): input counted with its cache reads, as the record counts it, and said as measured once, not as a bound.
+const MEASURED_COST = 'about 1.1M tokens of Claude and 0.9M of Codex, most of them cache reads, and 1% of Codex\'s weekly limit';
+// The token that ends each frozen copy: 8 random bytes, as hex.
+const READ_TOKEN_BYTES = 8;
 // A Claude reader took four minutes on a plan; past this a reader has stalled.
 export const READ_TIMEOUT_MS = 20 * 60 * 1000;
 // The settings a reader adds over the user's: `--safe-mode` keeps the user's `language`, as for a lens (lens-review).
@@ -61,9 +71,9 @@ const CLAUDE_SETTINGS = { language: 'English' };
 export const ANSWER_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['inputHash', 'findings', 'sound', 'unchecked'],
+  required: ['readTokens', 'findings', 'sound', 'unchecked'],
   properties: {
-    inputHash: { type: 'string' },
+    readTokens: { type: 'array', items: { type: 'string' } },
     findings: {
       type: 'array',
       items: {
@@ -142,7 +152,7 @@ export function parseArgs(argv, defaultCwd = process.cwd()) {
 export function announceLines({ files, diff, model }) {
   return [
     `double review of ${files.join(', ')}${diff === undefined ? '' : ` and the diff ${diff}...HEAD`}: a Claude reader on ${model} and a Codex reader on ${REVIEW_MODEL}, blind, started at once on one frozen copy`,
-    `cost: measured once, ${MEASURED_COST} (odd/tasks/double-review-alignment.md, L8); js-harness codex-meter reads what is left`,
+    `cost: measured once, ${MEASURED_COST} (odd/tasks/double-review-alignment.md, L12); js-harness codex-meter reads what is left`,
     `only the user's own words skip it, "${SKIP_PHRASE}", recorded with js-harness double-review skip`,
   ];
 }
@@ -153,9 +163,10 @@ export function claudeReaderArgs(settingsFile, material, model) {
   return ['-p', '--safe-mode', '--tools', 'Read,Grep,Glob', '--add-dir', material, '--model', model, '--settings', settingsFile, '--output-format', 'json', '--json-schema', JSON.stringify(ANSWER_SCHEMA), '--no-session-persistence'];
 }
 
-/** The arguments of the Codex reader: `codex exec` in the lean session of `codex-review`, the prompt on stdin. */
-export function codexReaderArgs(platform, root, schemaFile, answerFile) {
-  return ['exec', '--json', ...leanFlags(platform, REVIEW_EFFORT), '-C', root, '--output-schema', schemaFile, '-o', answerFile, '-'];
+/** The arguments of the Codex reader: `codex exec` in the lean session of `codex-review`, the prompt on stdin, its
+ * answer its last message on stdout and no session file kept, so nothing of it is on disk for the other reader. */
+export function codexReaderArgs(platform, root, schemaFile) {
+  return ['exec', '--json', '--ephemeral', ...leanFlags(platform, REVIEW_EFFORT), '-C', root, '--output-schema', schemaFile, '-'];
 }
 
 /** Runs a child to its end: `{ status, stdout, stderr, error, durationMs }`; killed with its tree past `timeoutMs`.
@@ -206,21 +217,23 @@ function runChild(start, { input, timeoutMs, kill }) {
 
 const isText = (value) => typeof value === 'string';
 function isAnswer(answer) {
-  return answer !== null && typeof answer === 'object' && isText(answer.inputHash)
+  return answer !== null && typeof answer === 'object' && Array.isArray(answer.readTokens) && answer.readTokens.every(isText)
     && Array.isArray(answer.findings) && answer.findings.every((f) => SEVERITIES.includes(f?.severity) && isText(f.claim) && isText(f.evidence) && isText(f.fix))
     && Array.isArray(answer.sound) && answer.sound.every(isText) && Array.isArray(answer.unchecked) && answer.unchecked.every(isText);
 }
 
-/** `answer` as a reader's outcome once its echo is checked against `hash`: what it found, or why it does not count. */
-function echoed(answer, hash, rest) {
+/** `answer` as a reader's outcome once its echo is checked against `tokens` (`{ name, token }` of each copy, in the
+ * order of the prompt's list): what it found, or why it does not count. */
+function echoed(answer, tokens, rest) {
   if (!isAnswer(answer)) return { outcome: 'failed', reason: 'its answer is not in the schema' };
-  if (answer.inputHash !== hash) return { outcome: 'failed', reason: 'it answered without echoing the material\'s hash, so it is not known to have read that material' };
-  const { inputHash, ...found } = answer;
+  const missed = tokens.find((one) => !answer.readTokens.map((token) => token.trim()).includes(one.token));
+  if (missed !== undefined) return { outcome: 'failed', reason: `it answered without the read token of ${missed.name}, so it is not known to have opened that copy` };
+  const { readTokens, ...found } = answer;
   return { outcome: 'answered', ...found, ...rest };
 }
 
 /** The outcome of the Claude run: its `structured_output`, with its usage, or why there is none. */
-export function claudeOutcome(ran, hash) {
+export function claudeOutcome(ran, tokens) {
   if (ran.error) return { outcome: 'failed', reason: ran.error.message };
   let parsed;
   try {
@@ -230,23 +243,19 @@ export function claudeOutcome(ran, hash) {
   }
   const usage = parsed?.usage;
   const spent = usage ? { inputTokens: (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0), outputTokens: usage.output_tokens ?? 0 } : null;
-  return echoed(parsed?.structured_output ?? null, hash, { usage: spent, costUsd: parsed?.total_cost_usd ?? null });
+  return echoed(parsed?.structured_output ?? null, tokens, { usage: spent, costUsd: parsed?.total_cost_usd ?? null });
 }
 
-/** The outcome of the Codex run: the answer file it wrote, with the usage of its `turn.completed` events, or why there
- * is none. */
-export function codexOutcome(ran, answerText, hash) {
+/** The outcome of the Codex run: its last `agent_message` on stdout, as `codex-review` reads its review, with the
+ * usage of its `turn.completed` events, or why there is none. */
+export function codexOutcome(ran, tokens) {
   if (ran.error) return { outcome: 'failed', reason: ran.error.message };
-  let answer;
-  try {
-    answer = JSON.parse(answerText ?? '');
-  } catch {
-    return { outcome: 'failed', reason: `Codex wrote no JSON answer (exit ${ran.status}): ${ran.stderr.trim().split('\n').at(-1) ?? ''}` };
-  }
+  let message = null;
   let usage = null;
   for (const line of ran.stdout.split('\n')) {
     try {
       const event = JSON.parse(line);
+      if (event?.type === 'item.completed' && event.item?.type === 'agent_message' && isText(event.item.text)) message = event.item.text;
       if (event?.type === 'turn.completed' && event.usage) {
         usage = { inputTokens: (usage?.inputTokens ?? 0) + (event.usage.input_tokens ?? 0), outputTokens: (usage?.outputTokens ?? 0) + (event.usage.output_tokens ?? 0) };
       }
@@ -254,7 +263,13 @@ export function codexOutcome(ran, answerText, hash) {
       // Not an event.
     }
   }
-  return echoed(answer, hash, { usage });
+  let answer;
+  try {
+    answer = JSON.parse(message ?? '');
+  } catch {
+    return { outcome: 'failed', reason: `Codex gave no JSON answer (exit ${ran.status}): ${ran.stderr.trim().split('\n').at(-1) ?? ''}` };
+  }
+  return echoed(answer, tokens, { usage });
 }
 
 /** The model of the Claude reader in the project at `root`: `rule:subagent-reader-model` where its rules file is this
@@ -275,38 +290,61 @@ function topLevel(cwd) {
   return ran.status === 0 ? path.resolve(ran.stdout.trim()) : null;
 }
 
-/** The frozen copy in `folder`: each file as `<n>-<name>`, and the diff as `diff.patch`. Returns the material and its hash. */
-function freeze(folder, sources, diffText, diff) {
+/** The frozen copy in `folder`: each file as `<n>-<name>`, and the diff as `diff.patch`, each ending with its read
+ * token. Returns the material, the tokens (`{ name, token }`) and the hash of what was copied, the tokens left out. */
+function freeze(folder, sources, diffText, diff, newToken) {
   const material = [];
-  sources.forEach((source, i) => {
-    const copy = path.join(folder, `${i + 1}-${path.basename(source.abs)}`);
-    fs.copyFileSync(source.abs, copy);
-    material.push({ copy, from: `a copy of ${source.rel}` });
-  });
-  if (diffText !== null) {
-    const copy = path.join(folder, 'diff.patch');
-    fs.writeFileSync(copy, diffText, 'utf8');
-    material.push({ copy, from: `git diff ${diff}...HEAD` });
-  }
   const hash = createHash('sha256');
-  for (const one of material) hash.update(`${path.basename(one.copy)}\0`).update(fs.readFileSync(one.copy)).update('\0');
-  return { material, hash: hash.digest('hex') };
+  const tokens = [];
+  const write = (name, bytes, from) => {
+    const copy = path.join(folder, name);
+    const token = newToken();
+    hash.update(`${name}\0`).update(bytes).update('\0');
+    const end = bytes.length === 0 || bytes.at(-1) === 0x0a ? '' : '\n';
+    fs.writeFileSync(copy, Buffer.concat([bytes, Buffer.from(`${end}\nread-token: ${token}\n`, 'utf8')]));
+    material.push({ copy, from });
+    tokens.push({ name, token });
+  };
+  sources.forEach((source, i) => write(`${i + 1}-${path.basename(source.abs)}`, fs.readFileSync(source.abs), `a copy of ${source.rel}`));
+  if (diffText !== null) write('diff.patch', Buffer.from(diffText, 'utf8'), `git diff ${diff}...HEAD`);
+  return { material, tokens, hash: hash.digest('hex') };
+}
+
+/** What a read may see of the repository at `root`: its HEAD and the hash of each tracked file's change against it,
+ * or `null` where git does not answer. */
+function repositoryState(root) {
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' });
+  const changed = spawnSync('git', ['diff', 'HEAD', '--no-ext-diff', '--no-textconv', '--no-color'], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  if (head.status !== 0 || changed.status !== 0) return null;
+  const files = new Map();
+  for (const section of changed.stdout.split(/^(?=diff --git )/m).filter((one) => one.startsWith('diff --git '))) {
+    const name = /^diff --git a\/(.+?) b\//.exec(section)?.[1] ?? section.split('\n')[0];
+    files.set(name, createHash('sha256').update(section).digest('hex'));
+  }
+  return { head: head.stdout.trim(), files };
+}
+
+/** What moved between two states of `repositoryState`: the HEAD and the files whose change is not the same, or none. */
+function movedBetween(before, after) {
+  if (before === null || after === null) return [];
+  const moved = before.head === after.head ? [] : [`HEAD ${before.head.slice(0, 7)} to ${after.head.slice(0, 7)}`];
+  for (const name of new Set([...before.files.keys(), ...after.files.keys()])) {
+    if (before.files.get(name) !== after.files.get(name)) moved.push(name);
+  }
+  return moved;
 }
 
 /** The two readers, started at once on `prompt`: `{ readers, stillRunning }`, their outcomes in the order of `READERS`,
  * and whether one could not be stopped past its timeout, whose lean home is then kept. */
-async function readBoth({ root, model, prompt, hash, folder, material, env, deps, error }) {
+async function readBoth({ root, model, prompt, tokens, folder, material, env, deps, error }) {
   const platform = deps.platform ?? process.platform;
   const spawn = deps.spawn ?? spawnChild;
   const kill = deps.kill ?? ((child, lifetime) => killTree(child, lifetime, { platform }));
   const timeoutMs = deps.readTimeoutMs ?? READ_TIMEOUT_MS;
   const settingsFile = path.join(folder, 'settings.json');
   const schemaFile = path.join(folder, 'schema.json');
-  const answers = path.join(folder, 'answers');
-  fs.mkdirSync(answers);
   fs.writeFileSync(settingsFile, JSON.stringify(CLAUDE_SETTINGS), 'utf8');
   fs.writeFileSync(schemaFile, JSON.stringify(ANSWER_SCHEMA), 'utf8');
-  const answerFile = path.join(answers, 'codex.json');
   const options = { cwd: root, windowsHide: true, detached: platform !== 'win32' };
 
   const claude = (deps.resolveClaude ?? resolveClaude)({ env, platform });
@@ -323,7 +361,7 @@ async function readBoth({ root, model, prompt, hash, folder, material, env, deps
     const homedir = deps.homedir ?? os.homedir;
     lean = (deps.makeLeanHome ?? createLeanHome)({ realHome: realCodexHome(env, homedir(), platform), parent: leanHomesDir(harnessHome({ env, homedir })), id: `double-review-${path.basename(folder)}` });
     const codexEnv = leanEnv(childEnv(env, platform), lean.home, platform);
-    codexRan = runChild(() => launchCodex(spawn, platform, codexReaderArgs(platform, root, schemaFile, answerFile), { ...options, env: codexEnv }), { input: prompt, timeoutMs, kill });
+    codexRan = runChild(() => launchCodex(spawn, platform, codexReaderArgs(platform, root, schemaFile), { ...options, env: codexEnv }), { input: prompt, timeoutMs, kill });
   } catch (err) {
     codexRan = Promise.resolve({ error: err });
   }
@@ -341,10 +379,9 @@ async function readBoth({ root, model, prompt, hash, folder, material, env, deps
     }
     if (left) error(`Warning: the lean Codex home of this read was not left clean: ${left}`);
   }
-  const answerText = fs.existsSync(answerFile) ? fs.readFileSync(answerFile, 'utf8') : null;
   const readers = [
-    { reader: 'claude', model, durationMs: claudeDone.durationMs ?? null, ...claudeOutcome(claudeDone, hash) },
-    { reader: 'codex', model: REVIEW_MODEL, durationMs: codexDone.durationMs ?? null, ...codexOutcome(codexDone, answerText, hash) },
+    { reader: 'claude', model, durationMs: claudeDone.durationMs ?? null, ...claudeOutcome(claudeDone, tokens) },
+    { reader: 'codex', model: REVIEW_MODEL, durationMs: codexDone.durationMs ?? null, ...codexOutcome(codexDone, tokens) },
   ];
   return { readers, stillRunning: Boolean(claudeDone.stillRunning || codexDone.stillRunning) };
 }
@@ -392,17 +429,20 @@ async function readCommand(args, root, env, deps, { log, error }) {
   try {
     const copies = path.join(folder, 'material');
     fs.mkdirSync(copies);
-    const { material, hash } = freeze(copies, sources, diffText, args.diff);
-    const prompt = readerPrompt(material, hash);
-    const { readers, stillRunning } = await readBoth({ root, model, prompt, hash, folder, material: copies, env, deps, error });
+    const { material, tokens, hash } = freeze(copies, sources, diffText, args.diff, deps.readToken ?? (() => randomBytes(READ_TOKEN_BYTES).toString('hex')));
+    const prompt = readerPrompt(material);
+    const before = repositoryState(root);
+    const { readers, stillRunning } = await readBoth({ root, model, prompt, tokens, folder, material: copies, env, deps, error });
     keep = stillRunning;
+    const moved = movedBetween(before, repositoryState(root));
+    if (moved.length > 0) error(`the repository moved while the readers read it: ${moved.join(', ')}; each may have checked the cited paths in a different state`);
     const id = (deps.id ?? randomUUID)();
     const at = (deps.now ?? (() => new Date()))().toISOString();
     // What the readers found is printed first: it cost both readers' tokens, and a record that cannot be written must
     // not lose it.
     for (const line of readLines(id, readers)) log(line);
     try {
-      appendDoubleReview(root, { kind: 'read', id, at, files: sources.map((one) => one.rel), ...(args.diff === undefined ? {} : { diff: args.diff }), hash, readers });
+      appendDoubleReview(root, { kind: 'read', id, at, files: sources.map((one) => one.rel), ...(args.diff === undefined ? {} : { diff: args.diff }), hash, ...(moved.length > 0 ? { moved: true } : {}), readers });
     } catch (err) {
       error(`the read could not be recorded: ${err.message}; its findings are above, and take cannot judge them until a read is recorded`);
       return 1;
@@ -433,10 +473,28 @@ function takeCommand(args, root, deps, { log, error }) {
   return 0;
 }
 
-function skipCommand(args, root, deps, { log }) {
+/** The text of the session transcript `session` of the project at `root`, where `rules change` reads it, or `null`. */
+function projectTranscript(root, env, session) {
+  if (!isSessionId(session)) return null;
+  const folder = path.join(env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'projects', projectSlug(mainCheckout(spawnSync, root)));
+  const file = path.join(folder, `${session}.jsonl`);
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+}
+
+/** Records a skip only on words the user typed at that line, as `rules change` takes a rule of his: never a tapped
+ * answer, a paste, or words not in the line (L3: his words are the one way a read is not made). */
+function skipCommand(args, root, env, deps, { log, error }) {
+  let quoted;
+  try {
+    quoted = quotationOf({ session: args.transcript, line: args.line, excerpt: args.words }, deps.transcriptOf ?? ((session) => projectTranscript(root, env, session)));
+  } catch (err) {
+    if (!(err instanceof RuleChangeError)) throw err;
+    error(`not recorded: ${err.message}; only the user's own typed words skip a read`);
+    return 1;
+  }
   const at = (deps.now ?? (() => new Date()))().toISOString();
-  appendDoubleReview(root, { kind: 'skip', at, what: args.what, words: args.words, transcript: args.transcript, line: args.line });
-  log(`recorded: the double review of ${args.what} skipped in the user's words, line ${args.line} of ${args.transcript}`);
+  appendDoubleReview(root, { kind: 'skip', at, what: args.what, words: quoted.quote, transcript: args.transcript, line: args.line, date: quoted.date });
+  log(`recorded: the double review of ${args.what} skipped in the user's words of ${quoted.date}, line ${args.line} of ${args.transcript}`);
   return 0;
 }
 
@@ -453,8 +511,8 @@ function tallyCommand(args, root, { log }) {
 }
 
 /** Runs the command; returns its exit code. `deps` (all optional) are for the tests: `log` and `error` take the lines
- * printed, `cwd` is the folder without `--cwd`, and `spawn`, `platform`, `resolveClaude`, `makeLeanHome`, `homedir`,
- * `tmpdir`, `now` and `id` replace what a read starts and stamps. */
+ * printed, `cwd` is the folder without `--cwd`, `spawn`, `platform`, `resolveClaude`, `makeLeanHome`, `homedir`,
+ * `tmpdir`, `now`, `id` and `readToken` replace what a read starts and stamps, and `transcriptOf` what a skip reads. */
 export async function doubleReviewMain(argv = process.argv.slice(2), env = process.env, deps = {}) {
   const out = { log: deps.log ?? console.log, error: deps.error ?? console.error };
   let args;
@@ -473,7 +531,7 @@ export async function doubleReviewMain(argv = process.argv.slice(2), env = proce
   try {
     if (args.verb === 'read') return await readCommand(args, root, env, deps, out);
     if (args.verb === 'take') return takeCommand(args, root, deps, out);
-    if (args.verb === 'skip') return skipCommand(args, root, deps, out);
+    if (args.verb === 'skip') return skipCommand(args, root, env, deps, out);
     return tallyCommand(args, root, out);
   } catch (err) {
     out.error(`double-review ${args.verb} failed: ${err.message}`);

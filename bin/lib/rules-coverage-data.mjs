@@ -545,15 +545,23 @@ export const COVERAGE = {
         "context": "the double review's prompt: a fact of the read, which the command makes true by starting both readers at once on one copy and recording both after both return (bin/double-review.test.mjs)"
       },
       {
+        "hash": "53d232dddb82",
+        "context": "the double review's prompt: the reader's read-only tools and Codex's read-only sandbox hold it on the run itself (bin/double-review.test.mjs), so no prose rule carries it"
+      },
+      {
         "hash": "8d6884151a0e",
         "context": "the double review's prompt: a heading or the slot of the material, no obligation"
       },
       {
-        "hash": "39ebce9d862a",
-        "context": "the double review's prompt: the command counts no answer without the material's hash (bin/double-review.test.mjs), so no prose rule carries it"
+        "hash": "fcd7f3e5defc",
+        "context": "the double review's prompt: the command counts no answer without every copy's read token (bin/double-review.test.mjs), so no prose rule carries it"
       },
       {
         "hash": "6d66e3b4c352",
+        "context": "the double review's prompt: what a one-shot reader is asked to look for in the material, an instruction of that read and no rule of the harness"
+      },
+      {
+        "hash": "536f83c7e90c",
         "context": "the double review's prompt: what a one-shot reader is asked to look for in the material, an instruction of that read and no rule of the harness"
       },
       {
@@ -566,14 +574,6 @@ export const COVERAGE = {
       },
       {
         "hash": "b1faf64805e7",
-        "context": "the double review's prompt: what a one-shot reader is asked to look for in the material, an instruction of that read and no rule of the harness"
-      },
-      {
-        "hash": "53d232dddb82",
-        "context": "the double review's prompt: the reader's read-only tools and Codex's read-only sandbox hold it on the run itself (bin/double-review.test.mjs), so no prose rule carries it"
-      },
-      {
-        "hash": "536f83c7e90c",
         "context": "the double review's prompt: what a one-shot reader is asked to look for in the material, an instruction of that read and no rule of the harness"
       },
       {
