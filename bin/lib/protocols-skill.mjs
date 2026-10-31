@@ -140,7 +140,7 @@ Incident (2026-10-31): a pull request was built, reviewed twice and verified, th
 - 4. Refutation: the cheapest test that could show the request does not hold, run now, its command and its result as a count or a measure; then \`Verdict: supports\` or \`Verdict: refutes\`. A refuting verdict reaches the user as a question before any code, its first option being to change or drop the plan, and the pass records \`answered: question <n>\`.
 - 5. Request: the user's request rewritten whole, to ask for exactly what items 1 to 4 found, beside their words in the Log, never in place of them; it ends \`Adds: none\` or \`Adds: <what> (question <n>)\`.
 - At the close, the Log records the result against item 3 and item 4 ("predicted k of n, measured m of n"); the time against its estimate stays with \`js-harness stretch\`.
-- The pass reaches the user in the feature's report (\`rule:reports-spanish-visual\`); it is asked only when it refutes or adds.
+- The pass reaches the user in the feature's report (\`rule:reports-spanish-visual\`); it is asked only when it refutes or adds. Its plan is reviewed as \`rule:double-review\` says.
 - Five questions: it happened once at the cost of a pull request with two reviews and a verifier; a test run before code alone would not have stopped it, since that test was run, the commit order does; the \`contracts\` row of \`check\` holds its form and its order, not its depth; no rule asked for cited material, a bar per spec or a verdict; what leaves: nothing.
 - Cost: one section per large feature, with a test run before code; read only when large work starts. Reviewed by 2026-11-30.
 `;
