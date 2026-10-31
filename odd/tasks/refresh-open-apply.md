@@ -57,6 +57,9 @@ Nothing beyond the brief: the field's shape and the exit code are decided here (
 - [ ] T5 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
 
 ## State for a resume
+Done since: Codex recorded `3d02efb..b5cff02`, "correct" (0.96), both P2 fixed; every code commit has a Codex
+record. Lens run 1 (slice A, `2947b29..3fde3ae`): risk, resilience, reliability, readability, 0 findings each,
+recorded. Lens run 2 (`3fde3ae..b5cff02`, the same four): 0 findings each, recorded. Next: push, PR, ready notice.
 Next step (T5): commits on the branch, not pushed: `3fde3ae2` slice A, `35a47cc7` slice B, `3d02efbf` docs, then
 the fix commit after L9. Codex covered `2947b29..3d02efb` (L8); a Codex run over the fix commit was started in the
 background (`js-harness codex-review --base 2947b290 --doc odd/tasks/refresh-open-apply.md --prompt own`): read its
