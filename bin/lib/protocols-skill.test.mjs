@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { protocolsSkillContent, PROTOCOLS } from './protocols-skill.mjs';
 import { RULES } from './rules-data.mjs';
 import { claudeTemplate } from './project.mjs';
@@ -31,8 +32,8 @@ test('the protocols skill has a one-line description a host can read, with the v
   assert.match(frontmatter[1], /\(js-harness v0\.1\.0\)/);
 });
 
-test('the protocols skill opens with an index of its eight situations, in the order of its sections', () => {
-  assert.equal(PROTOCOLS.length, 8);
+test('the protocols skill opens with an index of its nine situations, in the order of its sections', () => {
+  assert.equal(PROTOCOLS.length, 9);
   const body = TEXT.split('\n---\n')[1];
   const index = body.split('\n').filter((line) => /^\d\. /.test(line)).slice(0, PROTOCOLS.length);
   assert.deepEqual(index, PROTOCOLS.map((title, i) => `${i + 1}. ${title}.`));
@@ -156,4 +157,33 @@ test('section 8 points a session writing a new command, module or document at th
   assert.ok(bullets[0].startsWith('- Before adding a command, an option, a function, a protocol, a rule or a document, search for one that already does it'), bullets[0]);
   assert.ok(bullets[0].includes('amend that one instead of adding a second, and say in the commit what was searched.'), bullets[0]);
   assert.ok(text.includes('can an existing one be amended, the search of `rule:reuse-first`;'), 'section 4 points to the rule by its name');
+});
+
+// rule:depth-pass (odd/tasks/depth-pass-rule.md, draft v3, his yes to question 143): before large work is built, a
+// pass in five items in his order, the analysis first and his request rewritten last, ending in a verdict; a refuting
+// verdict reaches the user before any code. Every `CLAUDE.md` the harness writes names it in one line.
+test('section 9 holds the depth pass: large work defined, five items in order, a verdict, and the pass told to the user', () => {
+  const text = protocolsSkillContent('0.1.0');
+  assert.match(text, /^description: .*starting large work/m, 'the description loads the skill when large work starts');
+  const section = sections(text).find((found) => found.heading === '9. Before building large work: the depth pass');
+  assert.ok(section, 'section 9 exists');
+  const body = section.lines.join('\n').replace(/\s+/g, ' ');
+  assert.match(section.lines.find((line) => line.trim() !== ''), /^Incident \(2026-10-31\): .*caught none/);
+  assert.ok(body.includes('work a fresh session could not finish from the request and `git diff` alone'), 'large work is defined here, since a project has no resume test of its own');
+  assert.ok(body.includes('Deeper, not bigger'), body);
+  const items = ['1. Method: ', '2. Raw material: ', '3. The bar: ', '4. Refutation: ', '5. Request: '].map((item) => body.indexOf(`- ${item}`));
+  assert.ok(items.every((at) => at !== -1), 'all five items');
+  assert.deepEqual([...items].sort((a, b) => a - b), items, 'in his order, the rewritten request last');
+  for (const form of ['`spec <n>:` with its command in a code span','`Verdict: supports`', '`Verdict: refutes`', '`answered: question <n>`', '`Adds: none`']) assert.ok(body.includes(form), form);
+  assert.ok(body.includes('never the user\'s summary nor this document'), body);
+  assert.ok(body.includes('reaches the user as a question before any code'), body);
+  assert.ok(body.includes('The pass reaches the user in the feature\'s report (`rule:reports-spanish-visual`)'), body);
+  assert.ok(body.includes('`rule:reuse-first`'), body);
+  assert.ok(section.lines.some((line) => /^- Cost: .+ Reviewed by 2026-11-30\.$/.test(line)), body);
+});
+
+test('the CLAUDE.md init writes and the root one name the depth pass as Rule 1 in one line', () => {
+  const pointer = /^Rule 1: before large work is built, and whenever (?:he|the owner) asks, a depth pass \(`rule:depth-pass`,\n`js-harness-protocols` section 9\)\.$/m;
+  assert.match(claudeTemplate(), pointer);
+  assert.match(fs.readFileSync(new URL('../../CLAUDE.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n'), pointer);
 });

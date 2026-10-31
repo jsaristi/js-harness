@@ -129,30 +129,27 @@ function splitFromRoot(resolved) {
   return { root, segments };
 }
 
-/** Resolves `target` to a real, fully symlink-followed absolute path, one path segment at a time
- * from the filesystem root down — unlike `fs.realpathSync`, this never requires the final path (or
- * any ancestor) to actually exist. A segment that isn't there at all is appended lexically from
- * that point on; a symlink — even a dangling one — is followed via `fs.readlinkSync` (a relative
- * target resolved against the link's own directory) instead of being treated as an ordinary,
- * non-existent path component. That distinction is the whole point: the old "walk up to the
- * nearest `fs.existsSync` ancestor" approach saw a dangling symlink and a plain missing directory
- * as the same thing, silently ignoring where the symlink actually points (T2d Codex P1 +
- * R3-realish-dangling-symlink-escape).
+/** Resolves `target` to a real, fully symlink-followed absolute path, one path segment at a time from the filesystem
+ * root down — unlike `fs.realpathSync`, this never requires the final path (or any ancestor) to actually exist. A
+ * segment that isn't there at all is appended lexically from that point on; a symlink — even a dangling one — is
+ * followed via `fs.readlinkSync` (a relative target resolved against the link's own directory) instead of being
+ * treated as an ordinary, non-existent path component. That distinction is the whole point: the old "walk up to the
+ * nearest `fs.existsSync` ancestor" approach saw a dangling symlink and a plain missing directory as the same thing,
+ * silently ignoring where the symlink actually points (T2d Codex P1 + R3-realish-dangling-symlink-escape).
  *
- * Also returns `hadSymlink`, true when a symlink hop happened *at or below* one of `bases` (each
- * already a real, `fs.realpathSync`-resolved absolute directory) — never for a hop that resolves
- * one of `bases` itself, or anything above it. Occupying a hooks path is a property of what sits
- * inside the repository (or its git dir): a symlink the repository merely happens to be reached
- * through — a symlinked drive, macOS's `/tmp` → `/private/tmp` — says nothing about that, and must
- * never make an otherwise-untouched hooks path look occupied (T2e item 5,
- * R3-realish-flags-symlinks-above-repo-root). With no `bases` given, every hop counts, matching the
- * plain full-walk behaviour this function always had.
+ * Also returns `hadSymlink`, true when a symlink hop happened *at or below* one of `bases` (each already a real,
+ * `fs.realpathSync`-resolved absolute directory) — never for a hop that resolves one of `bases` itself, or anything
+ * above it. Occupying a hooks path is a property of what sits inside the repository (or its git dir): a symlink the
+ * repository merely happens to be reached through — a symlinked drive, macOS's `/tmp` → `/private/tmp` — says nothing
+ * about that, and must never make an otherwise-untouched hooks path look occupied (T2e item 5,
+ * R3-realish-flags-symlinks-above-repo-root). With no `bases` given, every hop counts, matching the plain full-walk
+ * behaviour this function always had.
  *
- * "At or below a base" is checked with `isWithinBase` (at-or-below containment, not exact string
- * equality with `current`) at the start of every segment *and* again after every individual hop
- * within it — a chain of symlinks resolved for a single segment can land squarely inside a base
- * without `current` ever having been exactly that base's own path along the way, and every hop
- * from that point on must still count (T2f item 3, R3-realish-base-detection-equality-only). */
+ * "At or below a base" is checked with `isWithinBase` (at-or-below containment, not exact string equality with
+ * `current`) at the start of every segment *and* again after every individual hop within it — a chain of symlinks
+ * resolved for a single segment can land squarely inside a base without `current` ever having been exactly that
+ * base's own path along the way, and every hop from that point on must still count (T2f item 3,
+ * R3-realish-base-detection-equality-only). */
 function realish(target, bases = []) {
   const { root, segments } = splitFromRoot(path.resolve(target));
   let current = root;
@@ -397,6 +394,9 @@ door asks for its record before a change lands.
 /** The half of the harness's lines Claude works from, the block of the `CLAUDE.md` `init` writes: working with the owner. */
 export function claudeBlock() {
   return `## Working with the owner
+Rule 1: before large work is built, and whenever the owner asks, a depth pass (\`rule:depth-pass\`,
+\`js-harness-protocols\` section 9).
+
 The owner decides what \`rule:owner-decisions\` lists (\`js-harness-protocols\` section 1). Ask those
 one at a time, never while work runs, naming which it is, as \`rule:questions-one-place\` says.
 Everything else is decided and its cost said, as \`js-harness-protocols\` section 1 says, and the work goes on.

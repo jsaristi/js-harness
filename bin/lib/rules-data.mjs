@@ -176,6 +176,24 @@ export const RULES = [
     ]
   },
   {
+    "id": "depth-pass",
+    "subject": "before large work is built, and whenever he asks, its feature document holds a depth pass in his order (method, raw material, a bar per spec, a refutation run before code with its verdict, his request rewritten last), committed before the first code commit; a refuting verdict reaches him before any code",
+    "owner": "sebastian",
+    "since": "2026-10-31",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "Large work is work a fresh session could not finish from the request",
+      "Deeper, not bigger: the pass grounds the work asked for and adds none",
+      "the analysis first and the rewrite last",
+      "as each numbered spec with its proof and today's result measured where there is one",
+      "the user's request rewritten whole, to ask for exactly what items 1 to 4 found",
+      "the Log records the result against item 3 and item 4",
+      "A refuting verdict reaches the user as a question before any code",
+      "never the user's summary nor this document",
+      "The pass reaches the user in the feature's report"
+    ]
+  },
+  {
     "id": "double-review",
     "subject": "a proposal that changes one of his decisions passes two read-only readers that did not write it",
     "owner": "sebastian",

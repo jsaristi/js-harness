@@ -1,10 +1,10 @@
-// The third skill, `js-harness-protocols`: what to do in eight situations, loaded only when a session is in one of
-// them. One skill and not eight, because the description of every installed skill is read on every turn. The design
+// The third skill, `js-harness-protocols`: what to do in nine situations, loaded only when a session is in one of
+// them. One skill and not nine, because the description of every installed skill is read on every turn. The design
 // is in odd/tasks/rule-hierarchy.md ("Protocols", T7). Each section opens with the incident it came for and its
 // date, so that it can be withdrawn when the incident has not come back; a rule it relies on is named by its id
 // (`rule:<id>`), never restated, so `js-harness rules change` reaches it with nothing to carry by hand.
 
-/** The eight situations, in the order of the index and of the sections. */
+/** The nine situations, in the order of the index and of the sections. */
 export const PROTOCOLS = [
   'Asking the user for a decision',
   'Closing a reply',
@@ -14,12 +14,13 @@ export const PROTOCOLS = [
   'Handing off, to the user, to a session or to a sub-agent',
   'Reviewing throughput',
   'Writing a new command, module or document',
+  'Before building large work: the depth pass',
 ];
 
 export function protocolsSkillContent(version) {
   return `---
 name: js-harness-protocols
-description: Use before asking the user for a decision, closing a reply, running something that costs (a gate, a review, a push), changing a rule, reporting a mistake, handing work off, reviewing throughput or writing a new command, module or document (js-harness v${version}).
+description: Use before asking the user for a decision, closing a reply, running something that costs (a gate, a review, a push), changing a rule, reporting a mistake, handing work off, reviewing throughput, writing a new command, module or document or starting large work (js-harness v${version}).
 ---
 
 # Protocols
@@ -126,5 +127,21 @@ Incident (2026-10-21): the user found the harness written one way in one part an
 - A new convention is a test with its legacy list, written once where it is enforced; never a conventions document, which restates the rules and is not read while code is written. What no test can judge (a pure core with the I/O at the command's edge, the voice of the text, how precise a name is) is the reviewer's, on each diff.
 - Five questions: it happened (the incident); the drift was found in three places at once; the checks do the holding, and this section only points at them before the first line is written; no section covered writing; it costs one section read when a new file is written, and no conventions document leaves because none was written.
 - Cost: this section, read only when a new command, module or document is written. Reviewed by 2026-11-21.
+
+## 9. ${PROTOCOLS[8]}
+
+Incident (2026-10-31): a pull request was built, reviewed twice and verified, then closed by the user's answer: its own feature document had read the six real cases that motivated it and found it caught none, in the same commit as its first code, and that answer reached neither the plan nor the user before the code.
+
+- Large work is work a fresh session could not finish from the request and \`git diff\` alone; it has a feature document under \`odd/tasks/\`. Before that document's first code commit, and whenever the user asks, it holds a \`## Depth pass\` after its contract, committed with documents alone. Asked for with no document, the pass is the reply itself. A small task and a short reply get none.
+- Deeper, not bigger: the pass grounds the work asked for and adds none. Its items come in this order, the analysis first and the rewrite last, and nothing is rewritten or built before they are written:
+- 1. Method: the discipline that masters the task, what its best practitioner would do, their standard, methods and tools, and the smallest change that meets it; the search of \`rule:reuse-first\` covers the design too.
+- 2. Raw material: the rawest they would start from (real data, the records, the code, primary sources), never the user's summary nor this document, each cited by \`path:line\`, a commit, a URL or a transcript line.
+- 3. The bar: what excellent and complete mean here, as each numbered spec with its proof and today's result measured where there is one (\`none, new behaviour\` where there is not), a line \`spec <n>:\` with its command in a code span, \`:\` and its result, or \`spec <n>: left out because <reason>\`.
+- 4. Refutation: the cheapest test that could show the request does not hold, run now, its command and its result as a count or a measure; then \`Verdict: supports\` or \`Verdict: refutes\`. A refuting verdict reaches the user as a question before any code, its first option being to change or drop the plan, and the pass records \`answered: question <n>\`.
+- 5. Request: the user's request rewritten whole, to ask for exactly what items 1 to 4 found, beside their words in the Log, never in place of them; it ends \`Adds: none\` or \`Adds: <what> (question <n>)\`.
+- At the close, the Log records the result against item 3 and item 4 ("predicted k of n, measured m of n"); the time against its estimate stays with \`js-harness stretch\`.
+- The pass reaches the user in the feature's report (\`rule:reports-spanish-visual\`); it is asked only when it refutes or adds. Its plan is reviewed as \`rule:double-review\` says.
+- Five questions: it happened once at the cost of a pull request with two reviews and a verifier; a test run before code alone would not have stopped it, since that test was run, the commit order does; the \`contracts\` row of \`check\` holds its form and its order, not its depth; no rule asked for cited material, a bar per spec or a verdict; what leaves: nothing.
+- Cost: one section per large feature, with a test run before code; read only when large work starts. Reviewed by 2026-11-30.
 `;
 }

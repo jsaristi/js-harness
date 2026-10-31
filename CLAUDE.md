@@ -1,5 +1,8 @@
 @AGENTS.md
 
+Rule 1: before large work is built, and whenever he asks, a depth pass (`rule:depth-pass`,
+`js-harness-protocols` section 9).
+
 ## How sessions run
 
 A session holds one feature, because the conversation is lost on a new session or a compaction and
