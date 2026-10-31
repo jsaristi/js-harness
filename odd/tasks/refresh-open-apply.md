@@ -56,6 +56,16 @@ Nothing beyond the brief: the field's shape and the exit code are decided here (
 - [x] T4 (kind: docs) spec 3: the two `- Seen:` lines with their controls.
 - [ ] T5 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
 
+## State for a resume
+Next step (T5): commits on the branch, not pushed: `3fde3ae2` slice A, `35a47cc7` slice B, `3d02efbf` docs, then
+the fix commit after L9. Codex covered `2947b29..3d02efb` (L8); a Codex run over the fix commit was started in the
+background (`js-harness codex-review --base 2947b290 --doc odd/tasks/refresh-open-apply.md --prompt own`): read its
+record, take its findings. Then the lenses, two runs: `js-harness lens-review --base 2947b290 --head 3fde3ae2 --lenses
+risk,resilience,reliability,readability --reason "..."` and `--base 3fde3ae2` (HEAD) with the same four. Then push,
+`gh pr create` (draft off), `js-harness notify --to orchestrator --kind ready --pr <n>`, the summary at
+`docs/sessions/2026-10-31-jh-121-refresh-refuse-while-an-open-question-asks-to-apply-w.md` (`js-harness summary
+template --title "<title>"`), and the closed notice once the PR is merged. Left: L9's verified "No".
+
 ## Log
 - L1 (2026-10-31, his request: the lead's brief `C:\Users\Oficina\.js-harness\background\briefs\2026-10-31T07-48-31-030Z-fbafab31.md`,
   "JH 121 · refresh: refuse while an open question asks to apply what it would install; and the lead's two misses of
