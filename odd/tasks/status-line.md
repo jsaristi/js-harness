@@ -88,8 +88,11 @@ T7, tests first. Done: `bin/lib/status-line.mjs` and its test (red: module not f
 `bin/lib/status-line.ps1` and `bin/lib/status-line-program.test.mjs`, run through `powershell.exe` in a scratch
 USERPROFILE, skipped off win32 (red: 2 fail, no file; green: 2 pass). The script is ASCII: Windows PowerShell 5.1 reads
 a script without a BOM as ANSI, so the middle dot is `[char]0x00B7`. `bin/status-line.mjs` and its registration in
-`bin/js-harness.mjs` are done and tried end to end (L9). Next, T8: Codex and the lenses over 7aac3e43..HEAD, the
-independent verifier, then the install question to the lead, each command tried in a scratch place first. Decided (L8): the writer is `js-harness status-line write`, run by a per-user scheduled task every 5
+`bin/js-harness.mjs` are done and tried end to end (L9). T8: Codex's P2 fixed in 13c9dfdb (L10); the install and its
+undo tried in scratch places (L11). The verifier's findings and Codex's second pass answered and tried again (L12).
+Next: Codex and the lenses over 13c9dfdb..HEAD, push, pull request, the install question to the lead (the real
+command: the packaged `status-line-install.ps1 -Project D:\js-harness`, after a release with this command is
+installed), ready, summary, closed. Decided (L8): the writer is `js-harness status-line write`, run by a per-user scheduled task every 5
 minutes that is part of the deferred install (nothing runs today: the app does not read the key); the board takes about
 24 s, so the program never runs it. The line, Spanish, from the board: open questions (`questions.open`), sessions
 `working` and `waiting` (`sessions[].state`), open pull requests (`pullRequests.items`), the gate (`gateLock.holder`),
@@ -274,3 +277,27 @@ only with evidence that a claude.ai install reads it, and step 2 of the review b
   Interactive; started by hand, it wrote the line in 22 s, last result 0; the copied program printed it in 966 ms;
   after the undo no task, no key, no folder, no line folder; the scratch key and folder removed. Not tried: an elevated
   window, the real `Program Files` and `SOFTWARE\Policies` (that is the question), and the app reading the key.
+- L12 — the independent verifier (a general-purpose agent, read-only, scratch under the job's `verifier\`) over the
+  code and L11's bodies. Corrected: L11's "last result 0" proves nothing, since `conhost.exe --headless` returned 0
+  for a child that exited 3 (its probe); the line's time is the check. Checked by this session before building on it:
+  the installed dispatcher's real path is `...\pnpm\store\v11\links\@\js-harness\0.97.0\<hash>\...\bin\js-harness.mjs`,
+  so a path taken from the package at install time is tied to one version, while `%LOCALAPPDATA%\pnpm\bin\js-harness.cmd`
+  is the shim pnpm rewrites. Its blocking findings: the bodies had no stop on error or precondition (with 0.97.0
+  installed, `status-line program` exits 2 and a half install followed), and they were tied to the version folder
+  and kept only in a job's scratch. Answered by `bin/lib/status-line-install.ps1` and `status-line-uninstall.ps1`,
+  tests first (`bin/lib/status-line-install.test.mjs`, red: ENOENT, green 5 pass): `$ErrorActionPreference = 'Stop'`;
+  the shim probed for `status-line` first; the task runs the shim; `-Force` re-registers; an explicit `Limited`,
+  `Interactive` principal; a `sessionStatusLine` value it did not write is refused and left; the undo is copied beside
+  the program, stops the task and waits before deleting it, skips what is gone, and removes the line last. Its
+  should-fix rename finding (EPERM while a reader holds the file, a staged file left): five tries 50 ms apart, the
+  staged file removed in a `finally`, test first (red: EPERM, green). The board's timeout is 90 s, under the task's
+  2 minutes. Codex's second pass over 13c9dfdb said relative homes still diverge: `write` now refuses a relative
+  `JS_HARNESS_HOME`, test first (red, green 9 pass). Tried in scratch places by job scratch `try2.ps1`: the installed
+  shim refused with nothing written; the scratch shim (the branch's dispatcher) installed twice; the task wrote the
+  line in 60 s (time `04:01:39.580Z`, now `04:01:40.25Z`); the copied program printed it in 1,235 ms; the undo from its
+  copy removed the task, value, key, both files, the folder and the line, and a second run printed nothing and failed
+  on nothing; a foreign value was refused and left. Left as notes, not fixed: a future time reads as fresh (the
+  writer always writes UTC with `Z`); a policy under `HKLM\SOFTWARE\Policies\Claude` makes the app ignore HKCU's
+  (configuration-format doc); a copy under Program Files goes stale when js-harness updates until the install runs
+  again, and nothing compares it yet; `uninstall` does not know this install, whose undo lives beside the copy. Not
+  checked: an elevated window, whether stopping the task stops its node, the app reading the key.

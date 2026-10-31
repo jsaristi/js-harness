@@ -37,13 +37,30 @@ export function statusLineFile(home) {
   return path.join(home, '.js-harness', 'status-line', 'line.txt');
 }
 
+/** How many times the rename is tried, and the wait between tries: a reader such as the program, an antivirus or the
+ * indexer holds the file without delete sharing for a moment, and Windows then refuses the rename with EPERM. */
+const RENAME_TRIES = 5;
+const RENAME_WAIT_MS = 50;
+
 /** Writes the time `now` and `line` to the line file, whole: to a file beside it first, then renamed over it, so the
- * program never reads half a line. Returns the file's path. */
+ * program never reads half a line. A rename refused while the file is held is tried again; one never made throws, and
+ * the file beside it is removed. Returns the file's path. */
 export function writeStatusLine({ home, line, now, fileSystem = fs }) {
   const file = statusLineFile(home);
   fileSystem.mkdirSync(path.dirname(file), { recursive: true });
   const staged = `${file}.${process.pid}.tmp`;
   fileSystem.writeFileSync(staged, `${new Date(now).toISOString()}\n${line}\n`, 'utf8');
-  fileSystem.renameSync(staged, file);
-  return file;
+  try {
+    for (let tried = 1; ; tried += 1) {
+      try {
+        fileSystem.renameSync(staged, file);
+        return file;
+      } catch (err) {
+        if (!['EPERM', 'EACCES', 'EBUSY'].includes(err.code) || tried === RENAME_TRIES) throw err;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, RENAME_WAIT_MS);
+      }
+    }
+  } finally {
+    fileSystem.rmSync(staged, { force: true });
+  }
 }

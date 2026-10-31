@@ -44,3 +44,26 @@ test('writeStatusLine writes the line and its time under the harness home whole,
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('writeStatusLine tries the rename again while a reader holds the file, and leaves no temporary file when it never can', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'status-line-'));
+  const held = (times) => {
+    let left = times;
+    return { ...fs, renameSync: (from, to) => {
+      if (left > 0) {
+        left -= 1;
+        throw Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' });
+      }
+      fs.renameSync(from, to);
+    } };
+  };
+  try {
+    writeStatusLine({ home, line: 'tras dos intentos', now: Date.parse('2026-10-31T03:00:00Z'), fileSystem: held(2) });
+    assert.equal(fs.readFileSync(statusLineFile(home), 'utf8'), '2026-10-31T03:00:00.000Z\ntras dos intentos\n');
+    assert.throws(() => writeStatusLine({ home, line: 'nunca', now: Date.now(), fileSystem: held(Infinity) }), /EPERM/);
+    assert.deepEqual(fs.readdirSync(path.dirname(statusLineFile(home))), ['line.txt'], 'the staged file is removed');
+    assert.equal(fs.readFileSync(statusLineFile(home), 'utf8'), '2026-10-31T03:00:00.000Z\ntras dos intentos\n');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

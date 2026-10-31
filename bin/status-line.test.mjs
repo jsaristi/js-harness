@@ -68,6 +68,20 @@ test('write leaves the last line as it was when the board fails or is not JSON, 
   }
 });
 
+test('write refuses a relative JS_HARNESS_HOME, which the program, run in System32, could not find, and runs no board', async () => {
+  const { home, out, err, ran, deps, done } = world({ status: 0, stdout: JSON.stringify(BOARD), stderr: '' });
+  try {
+    assert.equal(await statusLineMain(['write'], { ...deps, env: { JS_HARNESS_HOME: 'relative\\home' } }), 1);
+    assert.equal(ran.length, 0);
+    assert.deepEqual(out, []);
+    assert.match(err[0], /^js-harness status-line: JS_HARNESS_HOME is "relative\\\\home", a relative path/);
+    assert.equal(fs.existsSync(statusLineFile(home)), false);
+    assert.equal(await statusLineMain(['write'], { ...deps, env: { JS_HARNESS_HOME: home } }), 0, 'an absolute one is the home');
+  } finally {
+    done();
+  }
+});
+
 test('program prints the path of the program the host runs, beside the line module', async () => {
   const { out, ran, deps, done } = world(null);
   try {

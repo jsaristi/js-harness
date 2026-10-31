@@ -1152,8 +1152,10 @@ Spanish line, with the time it was written, in `.js-harness/status-line/line.txt
 board that fails leaves the last line as it was. `status-line program` prints the path of
 `bin/lib/status-line.ps1`, the program the setting names: it prints that file's line, its age in
 yellow first when the line is older than 10 minutes, and nothing when there is no file. Installing
-it means a copy under Program Files and a managed setting, so it is not part of `install`; and the
-app reads the setting only on third-party inference today (`odd/tasks/status-line.md`).
+it means a copy under Program Files and a managed setting, so it is not part of `install`:
+`status-line-install.ps1`, beside the program, does it in an elevated Windows PowerShell, with a
+task that runs `write` every 5 minutes, and leaves `status-line-uninstall.ps1` beside the copy to
+undo it. The app reads the setting only on third-party inference today (`odd/tasks/status-line.md`).
 
 ```console
 $ js-harness status-line write

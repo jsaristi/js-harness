@@ -1,12 +1,13 @@
 // `js-harness status-line`: keeps the line Claude Desktop's sessionStatusLine program prints above the Code tab's
 // message box (odd/tasks/status-line.md). The board takes about 24 s and the host stops its program at 10 s, so `write`
 // runs the board here and keeps its line in a file, and the program (`program` prints its path) only prints that file.
-// Exit 0, 1 when the board could not be read (the last line is left as it was), 2 for a usage error.
+// Exit 0, 1 when the board could not be read (the last line is left as it was) or JS_HARNESS_HOME is relative, 2 for
+// a usage error.
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { unknownArgument } from './lib/args.mjs';
-import { harnessHome } from './lib/home.mjs';
+import { harnessHome, relativeHome } from './lib/home.mjs';
 import { statusLineOf, writeStatusLine } from './lib/status-line.mjs';
 
 export const USAGE = [
@@ -17,13 +18,16 @@ export const USAGE = [
   '  time it was written, in .js-harness/status-line/line.txt under the home; a board that fails leaves the last line',
   '  as it was. program prints the path of status-line.ps1, the program sessionStatusLine runs: it prints that file\'s',
   '  line, its age first past 10 minutes, and nothing when the file is missing. The program reads the file under',
-  '  JS_HARNESS_HOME when it is an absolute path, else under USERPROFILE, so --home is for tests. Claude Desktop reads',
-  '  the key only on third-party inference today.',
+  '  JS_HARNESS_HOME when it is an absolute path, else under USERPROFILE, so write refuses a relative JS_HARNESS_HOME',
+  '  and --home is for tests. Claude Desktop reads the key only on third-party inference today.',
 ].join('\n');
 const KNOWN = { valued: ['--cwd', '--home'], bare: ['--help', '-h'], positional: true };
 const SUBCOMMANDS = ['write', 'program'];
 const DISPATCHER = path.join(import.meta.dirname, 'js-harness.mjs');
 const PROGRAM = path.join(import.meta.dirname, 'lib', 'status-line.ps1');
+// Under the 2 minutes the scheduled task gives a run (status-line-install.ps1), so the board is stopped here, with its
+// reason said, before the task is.
+const BOARD_TIMEOUT_MS = 90000;
 
 class StatusLineArgError extends Error {}
 
@@ -53,7 +57,7 @@ export async function statusLineMain(
     env = process.env,
     homedir = os.homedir,
     now = Date.now,
-    run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: 120000, maxBuffer: 64 * 1024 * 1024 }),
+    run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: BOARD_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 }),
   } = {},
 ) {
   if (argv.includes('--help') || argv.includes('-h')) {
@@ -71,6 +75,12 @@ export async function statusLineMain(
   if (options.subcommand === 'program') {
     stdout(PROGRAM);
     return 0;
+  }
+  // The program reads only an absolute JS_HARNESS_HOME (status-line.ps1), so a line kept under a relative one would
+  // be written where the host never looks.
+  if (options.home === undefined && relativeHome(env) !== null) {
+    stderr(`js-harness status-line: JS_HARNESS_HOME is ${JSON.stringify(relativeHome(env))}, a relative path, which the program the host runs in System32 cannot find; set it to an absolute path or unset it`);
+    return 1;
   }
   const cwd = path.resolve(defaultCwd, options.cwd ?? '.');
   const home = harnessHome({ given: options.home, env, cwd: defaultCwd, homedir });
