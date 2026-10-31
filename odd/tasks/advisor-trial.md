@@ -213,3 +213,12 @@ the scorer finds it named as a risk or prevented by a step of the plan.
   unchanged (sha1 before and after).
 - L5 T1: f36c272f. Codex review of 3ac49fa..f36c272: correct, confidence 0.97, no findings; lenses reliability and
   readability: 0 findings. Pushed as `advisor-option`, PR 740, ready notice sent 15:44Z.
+- L6 15:53Z, the lead: PR 740 was left out of a land, red only on the two stop-budget timing tests in WSL while
+  another session ran its reviews; the lead reads it as load and will land it again, and told this session to run
+  the arms with the worktree's own `node bin/js-harness.mjs sessions start --advisor`.
+- L7 15:55Z, a change of folder after the key's commit (no arm had run): `claude --bg` refused
+  `C:\Users\Oficina\advisor-trial-arms\a-without` with "Workspace not trusted". Accepting the trust prompt writes to
+  `~/.claude.json`, which this work may not touch. A read of that file's projects (no write) shows `D:/` trusted, so
+  the arms run in `D:\advisor-trial-arms\<x>`, a sibling of `D:\js-harness` outside any repository; the briefs and
+  plans moved there too, same bytes (the sha256 above). Arm A-without started as `9fa225bb` at 15:56Z, note sent at
+  15:55Z.
