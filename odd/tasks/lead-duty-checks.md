@@ -70,9 +70,9 @@ Nothing here is his but the question of spec 4: it goes to the lead as a recorde
 - [x] T1 (kind: build) spec 2: the return check, tests first, the planted cases red then green — commits: `ceb2f3e8`
 - [x] T2 (kind: docs) spec 3: the list of the lead's duties and what checks each — commits: this document's
 - [x] T3 (kind: docs) spec 5: the `- Seen:` line and its control — commits: this document's
-- [ ] T4 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice — in progress
+- [x] T4 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice — PR 727
 - [x] T5 (kind: docs) spec 4: the recorded question to the lead — question 135
-- [ ] T6 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice — pending
+- [x] T6 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice — this document's
 
 ## The lead's duties and what checks each (T2)
 
@@ -255,7 +255,10 @@ The unchecked duties, most failed first, each with the check proposed (spec 4's 
   found. (6) `bin/reply.test.mjs`'s work-session case passes no notice; the spelling test does nothing on POSIX.
   (7) `reply --help` wraps "shell command" onto a line of its own.
 
+- L13 (2026-10-31): PR 727 opened, ready notice at 02:38:15Z. L12's open findings are left to the lead as follow-ups,
+  not fixed here: none blocks the check, and the latency one needs the hook's p90 measured first. The host compacted
+  this session at 02:38Z; the summary is `docs/sessions/2026-10-31-jh-115-lead-duties-a-check-for-the-report-on-his-return-and.md`.
+
 ## Next step
-The fix's reviews are done (L11), the verifier's report is read (L12); read the verifier's findings and fix the real ones, tests first; run `codex-review` and
-`lens-review` again from `767b6b5c`; push, open the PR, `notify --kind ready --pr <n>`; the summary under
-`docs/sessions/` and `notify --kind closed --summary`.
+Nothing in this session: the lead merges PR 727 and checks main holds the check, the list and the Seen line; L12's
+findings 3 to 7 are his follow-ups; question 135 waits for Sebastián.
