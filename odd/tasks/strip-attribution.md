@@ -167,11 +167,19 @@ Nothing here is his: a decision only he can take goes to the lead as a recorded 
   paragraph kept the host trailers in (now the mark is read only down to the scissors line). Red: 1 of 27, then 27 of
   27.
 
+- L12 (2026-10-31, the reviews of `71420b38`): Codex over `589cef4..71420b3`: correct (0.97), no finding. Lens
+  reliability: 0. gentle-ai over `951bcfb4..71420b38` (lineage `review-31fc86f5c587c9b8`, `granted` run, its
+  reliability lens captured): approved and acknowledged, a WARNING and a SUGGESTION, neither taken. The WARNING: under
+  `--cleanup=verbatim` (or whitespace, scissors) a `#` line stays in the commit, so a host trailer above it is not
+  in the final trailers, yet it goes; what goes is still a line his rule forbids anywhere in a commit, and the hook
+  cannot know the cleanup mode git was given. The SUGGESTION: the continuation lines of a folded host trailer stay;
+  the host writes each trailer on one line. Taking either costs another round of three reviews for a case no commit
+  has shown.
 ## Next step
 State (2026-10-31): branch `worktree-strip-attribution`, worktree `D:js-harness.claudeworktreesstrip-attribution`,
-slice 1 = `951bcfb4` `348378ce` `b0f98b5a` `6110bd91` `589cef49` and the L11 fix, not pushed. Commit through the
+slice 1 = `951bcfb4` `348378ce` `b0f98b5a` `6110bd91` `589cef49` `71420b38`, every one reviewed (L12). Commit through the
 branch's hooks: `git -c core.hooksPath=.githooks commit -F <msg>` (the worktree's own hooksPath is main's
-`.githooks`, which has no `commit-msg` yet). Next: Codex + lens reliability over the L11 fix, then push, PR 1 (body
+`.githooks`, which has no `commit-msg` yet). Next: push, PR 1 (body
 drafted in `$CLAUDE_JOB_DIR/tmp/pr1.md`, ends with the PR attribution line), `js-harness notify --to orchestrator
 --kind ready --pr <n>`. Then slice 2 (T3) on a new branch: move `PRE_COMMIT_HOOK`, `PRE_PUSH_HOOK`, `HOOKS` from
 `bin/lib/project.mjs` (at its 1,989-line ceiling) to `bin/lib/project-hooks.mjs` (draft in `$CLAUDE_JOB_DIR/tmp`),
