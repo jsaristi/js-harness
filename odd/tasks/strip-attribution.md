@@ -144,3 +144,9 @@ Nothing here is his: a decision only he can take goes to the lead as a recorded 
   host line with prose under it is in no such run), red then green (22 of 22); the no-node test fails where `sh`
   cannot be spawned on the stripped PATH (now it skips there); `replaceFile` closed its descriptor a second time when
   the rename failed (now once).
+- L9 (2026-10-31, the reviews of `b0f98b5a`): Codex over `348378c..b0f98b5`: correct (0.91), no finding. Lens
+  reliability: 0. gentle-ai over `951bcfb4..b0f98b5a` (lineage `review-153b0dfb60636789`, `granted` run, its
+  reliability lens captured): approved and acknowledged, one WARNING, taken, tests first: comment lines were known by
+  `#` alone, so under `core.commentChar=;` (or `auto`) an editor's comment paragraph hid the trailers above it. The
+  command now reads `core.commentString`, then `core.commentChar`, from git where the hook runs (`auto`: every mark git
+  may pick, `#;@!$%^&|:`); red (the file failed to load: no `commentMarks`), then 24 of 24.

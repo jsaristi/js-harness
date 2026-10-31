@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { commitMsgMain, replaceFile, stripAttribution } from './commit-msg.mjs';
+import { commentMarks, commitMsgMain, replaceFile, stripAttribution } from './commit-msg.mjs';
 
 // The planted messages of the brief (odd/tasks/strip-attribution.md, spec 3), the trailers as the Claude app asks a
 // session to write them on 2026-10-31.
@@ -81,6 +81,15 @@ test('host trailers right under a body line, with no blank line between, go; the
   assert.deepEqual(stripAttribution(`${HOST_SESSION}\n`), { text: `${HOST_SESSION}\n`, removed: [] });
 });
 
+test('the comment lines of another core.commentChar, or of auto, do not keep the trailers in', () => {
+  const below = (mark) => `${BODY}\n${HOST_CO_AUTHOR}\n${HOST_SESSION}\n${mark} Please enter the commit message for your changes.\n${mark}\n`;
+  assert.equal(stripAttribution(below(';'), { comments: [';'] }).text, `${BODY}\n; Please enter the commit message for your changes.\n;\n`);
+  assert.equal(stripAttribution(below('%'), { comments: commentMarks('auto') }).text, `${BODY}\n% Please enter the commit message for your changes.\n%\n`);
+  assert.deepEqual(stripAttribution(below(';')).removed, [], 'with the default mark, a ; line is prose');
+  assert.deepEqual(commentMarks(null), ['#']);
+  assert.deepEqual(commentMarks('//'), ['//']);
+});
+
 test('the diff git -v leaves under its scissors line is not the end of the message', () => {
   const scissors = '# ------------------------ >8 ------------------------';
   const message = `${BODY}\n${HOST_CO_AUTHOR}\n${scissors}\n# Do not modify or remove the line above.\ndiff --git a/a.txt b/a.txt\n+${HOST_SESSION}\n`;
@@ -138,6 +147,7 @@ function seams(files) {
         if (!Object.hasOwn(files, file)) throw Object.assign(new Error(`ENOENT: no such file, open '${file}'`), { code: 'ENOENT' });
         return Buffer.from(files[file]);
       },
+      commentConfig: () => null,
       writeFile: (file, text) => {
         writes.push(file);
         files[file] = text;
@@ -153,6 +163,14 @@ test('the command writes the message back without the lines and says in one line
   assert.equal(files.MSG.toString('utf8'), `${BODY}\n`);
   assert.deepEqual(writes, ['MSG']);
   assert.deepEqual(err, [`js-harness commit-msg: removed the host's attribution lines: ${HOST_CO_AUTHOR} | ${HOST_SESSION}`]);
+});
+
+test("the command reads git's comment mark, so an editor's ; lines under the trailers do not keep them", () => {
+  const files = { MSG: `${BODY}\n${HOST_CO_AUTHOR}\n; Please enter the commit message for your changes.\n` };
+  const { deps } = seams(files);
+  deps.commentConfig = () => ';';
+  assert.equal(commitMsgMain(['MSG'], deps), 0);
+  assert.equal(files.MSG.toString('utf8'), `${BODY}\n; Please enter the commit message for your changes.\n`);
 });
 
 test("the command writes nothing and says nothing when no line is the host's", () => {

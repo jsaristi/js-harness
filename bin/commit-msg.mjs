@@ -6,6 +6,7 @@
 // commit go, so this never stops a commit: a file it cannot read or write is said and left as it is, exit 0.
 // Exit 2: a usage error. It imports node's own modules and `lib/atomic-write.mjs` alone, so this repository's hook
 // runs this file directly.
+import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -31,8 +32,25 @@ const ANTHROPIC = /@(?:[a-z0-9-]+\.)*anthropic\.com$/i;
 const TRAILER = /^[a-z0-9][a-z0-9-]*\s*:/i;
 const CONTINUATION = /^\s+\S/;
 // What `git commit -v` writes above the diff it shows; git drops it and everything under it.
-const SCISSORS = /^\S -{24} >8 -{24}\s*$/;
-const COMMENT = /^#/;
+const SCISSORS = /^\S+ -{24} >8 -{24}\s*$/;
+// The marks `core.commentChar=auto` picks one of: the first that no line of the message starts with.
+const AUTO_MARKS = ['#', ';', '@', '!', '$', '%', '^', '&', '|', ':'];
+
+/** The marks a comment line of the message may start with, from git's `core.commentString` or `core.commentChar`
+ * (`value`, null where neither is set): `#` by default, every mark `auto` may pick. */
+export function commentMarks(value) {
+  if (value === null || value === '') return ['#'];
+  return value === 'auto' ? AUTO_MARKS : [value];
+}
+
+/** What git says of the comment mark, read where the hook runs; null where nothing is set or git cannot answer. */
+function gitCommentConfig() {
+  for (const key of ['core.commentString', 'core.commentChar']) {
+    const result = spawnSync('git', ['config', '--get', key], { encoding: 'utf8' });
+    if (result.status === 0 && result.stdout.replace(/\r?\n$/, '') !== '') return result.stdout.replace(/\r?\n$/, '');
+  }
+  return null;
+}
 
 /** Whether `line` (without its ending) is one the host appends: its co-author or its session. */
 function hostLine(line) {
@@ -44,9 +62,10 @@ function hostLine(line) {
 /** The indexes of the trailers that end the message: the run of trailer lines that closes its last paragraph, comment
  * lines and what lies under the scissors left out, and never its first line, the subject. A host line quoted in the
  * body, with a line of prose under it, is in no such run. */
-function trailerLines(lines) {
+function trailerLines(lines, comments) {
   const scissors = lines.findIndex((line) => SCISSORS.test(line));
-  const content = (scissors === -1 ? lines : lines.slice(0, scissors)).map((line, i) => ({ line, i })).filter(({ line }) => !COMMENT.test(line));
+  const comment = (line) => comments.some((mark) => line.startsWith(mark));
+  const content = (scissors === -1 ? lines : lines.slice(0, scissors)).map((line, i) => ({ line, i })).filter(({ line }) => !comment(line));
   let last = content.length - 1;
   while (last >= 0 && content[last].line.trim() === '') last -= 1;
   let first = last + 1;
@@ -55,11 +74,12 @@ function trailerLines(lines) {
 }
 
 /** `text` without the host's attribution lines, each with its ending, and the lines removed, in order. `text` is the
- * message's bytes read as latin1, so every byte comes back as it was when the caller writes it as latin1. */
-export function stripAttribution(text) {
+ * message's bytes read as latin1, so every byte comes back as it was when the caller writes it as latin1; `comments`
+ * are the marks its comment lines start with (`commentMarks`). */
+export function stripAttribution(text, { comments = ['#'] } = {}) {
   const pieces = text.split(/(?<=\n)/);
   const lines = pieces.map((piece) => piece.replace(/\r?\n$/, ''));
-  const gone = new Set(trailerLines(lines).filter((i) => hostLine(lines[i])));
+  const gone = new Set(trailerLines(lines, comments).filter((i) => hostLine(lines[i])));
   return { text: pieces.filter((_, i) => !gone.has(i)).join(''), removed: lines.filter((_, i) => gone.has(i)) };
 }
 
@@ -100,7 +120,13 @@ function parse(argv) {
 
 export function commitMsgMain(
   argv,
-  { stdout = console.log, stderr = console.error, readFile = (file) => fs.readFileSync(file), writeFile = replaceFile } = {},
+  {
+    stdout = console.log,
+    stderr = console.error,
+    readFile = (file) => fs.readFileSync(file),
+    writeFile = replaceFile,
+    commentConfig = gitCommentConfig,
+  } = {},
 ) {
   if (argv.length === 1 && (argv[0] === '--help' || argv[0] === '-h')) {
     stdout(USAGE);
@@ -125,7 +151,8 @@ export function commitMsgMain(
   } catch (error) {
     return leftAsItIs('read', error);
   }
-  const stripped = stripAttribution(bytes.toString('latin1'));
+  const config = commentConfig();
+  const stripped = stripAttribution(bytes.toString('latin1'), { comments: commentMarks(config === null ? null : Buffer.from(config, 'utf8').toString('latin1')) });
   if (stripped.removed.length === 0) return 0;
   try {
     writeFile(file, Buffer.from(stripped.text, 'latin1'));
