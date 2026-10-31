@@ -17,7 +17,8 @@ export const USAGE = [
   '  time it was written, in .js-harness/status-line/line.txt under the home; a board that fails leaves the last line',
   '  as it was. program prints the path of status-line.ps1, the program sessionStatusLine runs: it prints that file\'s',
   '  line, its age first past 10 minutes, and nothing when the file is missing. The program reads the file under',
-  '  USERPROFILE, so --home is for tests. Claude Desktop reads the key only on third-party inference today.',
+  '  JS_HARNESS_HOME when it is an absolute path, else under USERPROFILE, so --home is for tests. Claude Desktop reads',
+  '  the key only on third-party inference today.',
 ].join('\n');
 const KNOWN = { valued: ['--cwd', '--home'], bare: ['--help', '-h'], positional: true };
 const SUBCOMMANDS = ['write', 'program'];

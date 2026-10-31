@@ -256,3 +256,21 @@ only with evidence that a claude.ai install reads it, and step 2 of the review b
   scratch home (job scratch `e2e.mjs`): the branch's `status-line write --home <scratch>` exit 0 in 24,371 ms on the real
   board; the program, run as the host would (`powershell.exe -NoProfile -File`, USERPROFILE the scratch home), exit 0
   in 683, 606 and 582 ms, 73 bytes: `ESC[31m1 pregunta ESC[0m · 4 trabajando · 2 esperando · 2 PR · gate libre`.
+- L10 — reviews of 7aac3e43..1df8e3aa (code commits acc22f30, 1df8e3aa). Codex (`js-harness codex-review --base
+  7aac3e43`, gpt-6.1-sol at medium, it ran 77fa10a..1df8e3a, 366 changed lines in 7 files, 169,301 input tokens):
+  "the patch is incorrect (confidence 0.95)", one finding, [P2] `bin/lib/status-line.ps1:7`: the writer honors
+  `JS_HARNESS_HOME` through `harnessHome()` and the program read only `USERPROFILE`. Fixed, test first (red: `'del
+  perfil'` printed where `'del home nombrado'` was expected; green 3 pass): the program reads `JS_HARNESS_HOME` when it
+  is an absolute path, else `USERPROFILE`, since the host runs it in System32. The Claude lenses (`js-harness
+  lens-review --base 7aac3e43 --lenses reliability,readability`): reliability 0 findings (13,954 input tokens),
+  readability 0 findings (28,542). gentle-ai: not run; the Stop hook offers the branch, which `CLAUDE.md` says to
+  start nothing for.
+- L11 — the install, tried in scratch places by one script (job scratch `try.ps1`, which dot-sources `body-install.ps1`
+  and `body-undo.ps1`, the bodies the question gives): a scratch folder for Program Files, the registry key
+  `HKCU:\Software\js-harness-scratch\Policies\Claude` for `HKCU:\SOFTWARE\Policies\Claude`, the task name
+  `js-harness-scratch-status-line`, and `--home <scratch>` added to the task's writer. Output: the file copied; the
+  value `{"command":"<scratch>\\Program Files\\js-harness\\status-line.ps1"}`; the task `Ready`, running `conhost.exe
+  --headless node.exe js-harness.mjs status-line write --cwd "D:\js-harness"`, every PT5M, principal Oficina, Limited,
+  Interactive; started by hand, it wrote the line in 22 s, last result 0; the copied program printed it in 966 ms;
+  after the undo no task, no key, no folder, no line folder; the scratch key and folder removed. Not tried: an elevated
+  window, the real `Program Files` and `SOFTWARE\Policies` (that is the question), and the app reading the key.
