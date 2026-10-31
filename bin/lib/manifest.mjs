@@ -1082,18 +1082,17 @@ export function install(home, version, deps = {}) {
 }
 
 /** Re-writes components for `version`, drops files and entries the current release no longer ships, and updates the
- * manifest. An old manifest with no `entries` field (written before T4) still loads: pruning simply has nothing to
- * prune. `deps` is forwarded to `install` (see its `deps.writeFile` seam above), and `deps.listDir` is the seam that
- * lists the folder a pruned file leaves behind (see `uninstall`). */
+ * manifest; an old manifest with no `entries` (before T4) has nothing to prune. `deps` goes to `install` (its
+ * `deps.writeFile` seam), `deps.listDir` lists a folder a pruned file leaves (see `uninstall`), and
+ * `deps.earlierTrust` is `planTrustMoves`'s `earlier`, as for `uninstall`. */
 export function sync(home, version, deps = {}) {
   const previous = readManifest(home);
   const manifest = install(home, version, deps);
 
   if (previous) {
-    // R3-001 (accepted final review follow-up, lineage review-cef5637e2884c12a): prune a file only when its component is
-    // no longer *declared* at all — compared against `components`' own current targets, not against this run's
-    // successful writes — so a component that is still declared but merely failed to (re)write this run (carried
-    // forward above with `skipped: true`) is never treated as "no longer shipped" and deleted.
+    // R3-001 (lineage review-cef5637e2884c12a): prune a file only when its component is no longer *declared* — against
+    // `components`' current targets, not this run's writes — so one still declared that failed to (re)write this run
+    // (carried forward above with `skipped: true`) is never treated as "no longer shipped" and deleted.
     // A file no longer shipped is removed only while its bytes are the ones recorded, as `uninstall` does: one the
     // user changed is theirs and is kept, and so is one that cannot be read or removed, since the manifest is
     // already written and a throw here would leave the sync half reported (harness-review a1). Either way it is no
@@ -1121,13 +1120,14 @@ export function sync(home, version, deps = {}) {
     const pruned = (previous.entries ?? []).filter((entry) => !entry.skipped && entry.createdEntry !== false && !keptEntries.some(
       (e) => e.path === entry.path && deepEqual(e.pointer, entry.pointer) && deepEqual(e.entry, entry.entry),
     ));
-    // An entry no longer shipped moves the Codex hooks after it as an uninstall does, so its trust goes the same way.
-    const trustPlans = planTrustMoves(pruned);
+    // An entry no longer shipped moves the Codex hooks after it as an uninstall does, so its trust goes the same way;
+    // and the folders install made for its file go once empty, as an uninstall takes them (`removeCreatedFolders`).
+    const trustPlans = planTrustMoves(pruned, deps.earlierTrust);
     for (const entry of pruned) {
       removeEntryFromFile(entry.path, entry.pointer, entry.entry, entry.createdFile, entry.createdContainers, pointersIn(previous.entries, entry.path));
     }
+    removeCreatedFolders(pruned, home, deps.listDir);
     const trust = moveTrustRecords(trustPlans, deps.writeFile);
-    // Not enumerable, like `pruneKept`: this run's report.
     Object.defineProperty(manifest, 'trustMoved', { value: trust.trustMoved, enumerable: false });
     Object.defineProperty(manifest, 'trustKept', { value: trust.trustKept, enumerable: false });
   }
@@ -1296,7 +1296,7 @@ function uninstallInstalled(home, deps) {
 
   // Codex keys a hook's trust by its place, so where each group of a Codex hooks.json goes is read before any entry
   // of it is taken out, and the trust follows the entries once they are out.
-  const trustPlans = planTrustMoves((manifest.entries ?? []).filter((entry) => entry.createdEntry !== false));
+  const trustPlans = planTrustMoves((manifest.entries ?? []).filter((entry) => entry.createdEntry !== false), deps.earlierTrust);
   const entriesRemoved = [];
   const entriesKept = [];
   for (const entry of manifest.entries ?? []) {

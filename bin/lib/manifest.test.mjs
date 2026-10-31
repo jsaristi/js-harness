@@ -216,6 +216,19 @@ test('sync keeps an earlier Codex skill the user changed, and records it no more
   }
 });
 
+test('sync over an earlier install on a home with no .codex takes the .codex it made too, and uninstall then leaves the home empty', () => {
+  const home = makeTmpHome();
+  try {
+    install(home, '0.1.0', EARLIER_INSTALL);
+    sync(home, '0.2.0');
+    assert.equal(fs.existsSync(path.join(home, '.codex')), false);
+    uninstall(home);
+    assert.deepEqual(fs.readdirSync(home, { recursive: true }), []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('uninstall of an earlier install takes its Codex skills and hook entries out with the rest, and leaves the home empty', () => {
   const home = makeTmpHome();
   try {

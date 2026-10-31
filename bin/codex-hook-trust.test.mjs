@@ -63,6 +63,28 @@ function installEarlier(home, configs = [path.join(home, '.codex', 'config.toml'
   for (const codexConfig of configs) install(home, '0.97.0', { ...EARLIER_INSTALL, codexConfig });
 }
 
+/** Installs what 0.96.0 and older installed: the same entries with no `trustConfigs`, which came later (c7af39e2). */
+function installOlder(home) {
+  install(home, '0.96.0', EARLIER_INSTALL);
+  const manifest = readManifest(home);
+  assert.ok(manifest.entries.every((entry) => entry.trustConfigs === undefined));
+}
+
+/** A home as an earlier install left it with the user's own Stop hook after the harness's two, and Codex's trust of
+ * every group: `{ codexHome, hooksPath, config, mine }`. */
+function withMineAfter(home, installed) {
+  installed(home);
+  const codexHome = path.join(home, '.codex');
+  const hooksPath = hooksPathOf(codexHome);
+  const mine = { hooks: [{ type: 'command', command: 'mine-stop' }] };
+  const hooks = readHooks(codexHome);
+  hooks.hooks.Stop.push(mine);
+  fs.writeFileSync(hooksPath, JSON.stringify(hooks, null, 2), 'utf8');
+  const config = path.join(codexHome, 'config.toml');
+  fs.writeFileSync(config, trustEverything(codexHome), 'utf8');
+  return { codexHome, hooksPath, config, mine };
+}
+
 test('an earlier install under two CODEX_HOMEs recorded both config.toml files, and uninstall takes the trust out of both', async () => {
   const home = makeTmp('js-harness-trust-home-');
   try {
@@ -179,16 +201,8 @@ test('uninstall leaves a config.toml whose hook trust it cannot read as it is, a
 test('sync over an earlier install drops the harness\'s Codex entries with their trust and moves the trust of the user\'s hooks after them', async () => {
   const home = makeTmp('js-harness-trust-home-');
   try {
-    installEarlier(home);
-    const codexHome = path.join(home, '.codex');
-    const hooksPath = hooksPathOf(codexHome);
-    const config = path.join(codexHome, 'config.toml');
-    // The user's own Stop hook, after the harness's two.
-    const mine = { hooks: [{ type: 'command', command: 'mine-stop' }] };
-    const hooks = readHooks(codexHome);
-    hooks.hooks.Stop.push(mine);
-    fs.writeFileSync(hooksPath, JSON.stringify(hooks, null, 2), 'utf8');
-    fs.writeFileSync(config, trustEverything(codexHome), 'utf8');
+    const { codexHome, hooksPath, config, mine } = withMineAfter(home, (h) => installEarlier(h));
+    const skills = readManifest(home).files.map((file) => file.path).filter((p) => p.startsWith(path.join(codexHome, 'skills')));
 
     const { code, out } = await quietly(() => syncMain(['--global', '--home', home], {}));
 
@@ -198,8 +212,29 @@ test('sync over an earlier install drops the harness\'s Codex entries with their
     assert.ok(out.includes(`removed 5 trust records of the harness's Codex hooks from ${config}`), out.join('\n'));
     assert.ok(out.includes(`moved 1 trust record of your own Codex hooks in ${config} to their hooks' new places`), out.join('\n'));
     assert.equal(fs.existsSync(path.join(codexHome, 'skills')), false, 'and the Codex skills the earlier install wrote');
+    // What it took out is said, as `uninstall` says it, one line a file and one for the entries of a host file.
+    assert.equal(skills.length, 3);
+    for (const skill of skills) assert.ok(out.includes(`removed ${skill}: no longer shipped`), out.join('\n'));
+    assert.ok(out.includes(`removed 5 hook entries from ${hooksPath}: no longer shipped`), out.join('\n'));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('sync and uninstall over an install that recorded no trustConfigs (0.96.0 and older) move the trust in today\'s config.toml', async () => {
+  for (const command of [(home) => syncMain(['--global', '--home', home], {}), (home) => uninstallMain(['--global', '--home', home], {})]) {
+    const home = makeTmp('js-harness-trust-home-');
+    try {
+      const { hooksPath, config } = withMineAfter(home, installOlder);
+
+      const { code, out, err } = await quietly(() => command(home));
+
+      assert.equal(code, 0, err.join('\n'));
+      assert.deepEqual(trustOf(fs.readFileSync(config, 'utf8'), hooksPath), { 'stop:0:0': 'sha256:mine-stop' }, 'the user\'s hook keeps its trust at its new place');
+      assert.ok(out.includes(`removed 5 trust records of the harness's Codex hooks from ${config}`), out.join('\n'));
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
   }
 });
 

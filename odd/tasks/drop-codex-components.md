@@ -132,3 +132,33 @@ Nothing left in this session: the product choice was D4. Applying it to his mach
   passes with it; `evals/without.test.mjs` 33/0. The L3 search grepped `bin/`, `scripts/` and docs, not `evals/`, for
   readers of `components`: the scope line "Out: the evals' Codex arm" meant not changing what it measures, and it still
   measures the same home.
+- L8 (2026-10-31) Reviews of `57486c74` (7aac3e43..57486c74) [checked, each command's output in the job's tmp]:
+  - Codex: `js-harness codex-review --base 7aac3e43`, 3 parts, each "the patch is correct" (0.90, 0.91, 0.87);
+    392,930 input tokens; recorded in `codex-reviews.jsonl`.
+  - Claude lenses: `js-harness lens-review --base 7aac3e43 --lenses risk,reliability,readability`, each complete with
+    0 findings (about 512k input tokens); resilience left out, since no failure behavior changed.
+  - gentle-ai: not reviewed. The Stop hook offered the candidate (the same one commit); the `granted` start stopped in
+    preflight, `lens_context_budget_exceeded` (31 files, 1,403 lines over its budget, `mutation_outcome: not_started`).
+    It was not split: that rewrites the reviewed commit and voids the Codex and lens records.
+  - Pushed; draft PR #729. Apply and undo tried in a scratch home (`apply-try.sh`): 0.97.0 `install` (3 Codex skills,
+    5 entries), this branch's `sync --global` (`.codex/skills` and `.codex/hooks.json` absent), 0.97.0's
+    `sync --global` (both back). The global package swap (`pnpm add -g`) was not tried there.
+- L9 (2026-10-31) The independent verifier (a fresh sub-agent, read-only, its own scratch homes) on `57486c74`: no
+  blocker; its main path held (tests each file alone, 0.97.0 then this branch, an edited earlier skill kept). Findings:
+  1. Should-fix: an install by 0.96.0 or older recorded no `trustConfigs` (they came in c7af39e2), and the removed
+     `codexConfigOf` had made `sync` record them while the entries were declared; now a prune of those entries left the
+     trust of the user's hooks after them on the wrong slots. Fixed: `planTrustMoves(removing, earlier)` gives a record
+     of `<home>/.codex/hooks.json` with none today's config.toml (`earlierTrustOf` in `bin/install.mjs`, for `install`,
+     `sync` and `uninstall`). Tests failed first: `bin/codex-hook-trust.test.mjs` (sync and uninstall over such an
+     install), `bin/lib/codex-trust.test.mjs` (only that hooks.json; a record's own wins).
+  2. Should-fix: `sync`'s prune never ran `removeCreatedFolders`, so the `.codex` 0.97.0 made on a home with none stayed
+     empty and unrecorded. Fixed in `sync`; `bin/lib/manifest.test.mjs` test failed first.
+  3. Nit, fixed: `install`/`sync` now say each file and, per host file, the entries their prune removed (`logPruned`),
+     as `uninstall` does; asserted in the sync test of `bin/codex-hook-trust.test.mjs`.
+  4. Nit, fixed: `bin/js-harness.mjs` backup help said "in both hosts".
+  5. Nit, not fixed, older than this change: an earlier entry recorded `skipped` is never pruned, and a sync stopped
+     between `install`'s manifest write and the prune forgets the records (L4). Both rare; out of this change's need.
+  Checked [each file alone]: codex-hook-trust 7/0, codex-trust 11/0, manifest 213/0, install 115/0, clean-home 1/0,
+  conventions-structure 7/0, js-harness 54/0, manifest-settings 11/0, manifest-stack 7/0, rules-coverage 8/0.
+  `apply-try.sh` again: the apply prints the three skills and "removed 5 hook entries from …\.codex\hooks.json: no
+  longer shipped", and `.codex` is absent after it; the undo brings both back.

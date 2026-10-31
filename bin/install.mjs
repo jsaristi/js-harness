@@ -12,6 +12,7 @@ import { checkoutOf, copyPackageManager, dependentProjectOf, installedPackageRoo
 import { MalformedManifestError, SESSION_MESSAGES, acceptSessionMessages, install, readManifest, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
 import { hygieneDir, memoryLocation } from './lib/memory-hygiene.mjs';
 import { undoStack } from './lib/stack-run.mjs';
+import { codexHomeOf } from './lib/stack.mjs';
 import { claudeRunner, undoBackground } from './lib/background.mjs';
 import {
   uninstallProject,
@@ -298,6 +299,43 @@ function logRulesBlock(held) {
   else if (held?.status === 'skipped') console.error(`skipped the Rules block in ${held.path}: ${held.reason}`);
 }
 
+/** Where an install older than the `trustConfigs` of its Codex entries (0.96.0 and before) left their trust, for
+ * `planTrustMoves`'s `earlier`: the config.toml of the Codex home of `home` as doctor reads it (`codexHomeOf`), which
+ * those installs' hooks.json, `<home>/.codex/hooks.json`, had theirs in. `deps.homedir` and `deps.platform` are a
+ * test's seams. */
+function earlierTrustOf(home, env, deps) {
+  const codexHome = codexHomeOf({ home, env, homedir: deps.homedir ?? os.homedir(), platform: deps.platform ?? process.platform });
+  return { hooksPath: path.join(home, '.codex', 'hooks.json'), config: path.join(codexHome, 'config.toml') };
+}
+
+/** Whether the host file of `record` still holds its entry at its pointer: `false` once the file is gone, `true` when
+ * it cannot be read or parsed, so nothing is said removed on a guess. */
+function holdsEntry({ path: file, pointer, entry }) {
+  try {
+    const list = pointer.reduce((node, key) => node?.[key], JSON.parse(fs.readFileSync(file, 'utf8')));
+    return Array.isArray(list) && list.some((held) => JSON.stringify(held) === JSON.stringify(entry));
+  } catch (err) {
+    return err.code !== 'ENOENT';
+  }
+}
+
+/** Says what a `sync` took out because nothing declares it any more, as `uninstall` says what it removes: each file
+ * `before` recorded that is no longer recorded and is gone, and per host file how many of its entries `before`
+ * recorded as the harness's that the file no longer holds (the Codex copies of an earlier version,
+ * odd/tasks/drop-codex-components.md). A file kept is said by `pruneKept`. */
+function logPruned(before, manifest) {
+  const same = (a, b) => a.path === b.path && JSON.stringify(a.pointer) === JSON.stringify(b.pointer) && JSON.stringify(a.entry) === JSON.stringify(b.entry);
+  for (const file of before?.files ?? []) {
+    if (!manifest.files.some((kept) => kept.path === file.path) && !fs.existsSync(file.path)) console.log(`removed ${file.path}: no longer shipped`);
+  }
+  const gone = new Map();
+  for (const entry of before?.entries ?? []) {
+    if (entry.skipped || entry.createdEntry === false || (manifest.entries ?? []).some((kept) => same(kept, entry)) || holdsEntry(entry)) continue;
+    gone.set(entry.path, (gone.get(entry.path) ?? 0) + 1);
+  }
+  for (const [file, count] of gone) console.log(`removed ${count} hook entr${count === 1 ? 'y' : 'ies'} from ${file}: no longer shipped`);
+}
+
 /** Says what taking hook entries out did to Codex's trust of them, and of the user's own hooks they moved
  * (odd/tasks/codex-hook-trust.md), for `uninstall` and for the entries a `sync` prunes: those an earlier version wrote
  * in Codex's hooks.json, each with the config.toml files that version recorded (odd/tasks/drop-codex-components.md).
@@ -334,8 +372,10 @@ export async function installMain(argv, env = process.env, deps = {}) {
   // `sync`, not `install`: over an older manifest it also removes what is no longer shipped, which `install` alone
   // would drop from the records and leave behind (harness-review a2); with no manifest the two are the same.
   let manifest;
+  let before;
   try {
-    manifest = sync(home, version, deps);
+    before = readManifest(home);
+    manifest = sync(home, version, { earlierTrust: earlierTrustOf(home, env, deps), ...deps });
   } catch (err) {
     // A machine manifest that does not parse: one line, and nothing was written (`sync` reads it before any step).
     if (!(err instanceof MalformedManifestError)) throw err;
@@ -343,6 +383,7 @@ export async function installMain(argv, env = process.env, deps = {}) {
     return 1;
   }
   console.log(`installed js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
+  logPruned(before, manifest);
   for (const kept of manifest.pruneKept ?? []) console.log(`kept ${kept.path}: ${kept.reason}; no longer shipped, and no longer recorded`);
   logFiles(manifest.files);
   logEntries(manifest.entries);
@@ -489,8 +530,10 @@ export async function syncMain(argv, env = process.env, deps = {}) {
 
   const home = parsed.home;
   let manifest;
+  let before;
   try {
-    manifest = sync(home, version, deps);
+    before = readManifest(home);
+    manifest = sync(home, version, { earlierTrust: earlierTrustOf(home, env, deps), ...deps });
   } catch (err) {
     // A machine manifest that does not parse: one line, and nothing was written (`sync` reads it before any step).
     if (!(err instanceof MalformedManifestError)) throw err;
@@ -498,6 +541,7 @@ export async function syncMain(argv, env = process.env, deps = {}) {
     return 1;
   }
   console.log(`synced js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
+  logPruned(before, manifest);
   logFiles(manifest.files);
   logEntries(manifest.entries);
   logPermissions(manifest.permissionsHeld);
@@ -607,7 +651,7 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   for (const { entry, why, settle } of background.kept) console.error(`kept background session ${entry.id} · ${entry.title}: ${why}; ${settles[settle](entry.id)}`);
   if (background.removedDir) console.log(`removed ${background.removedDir}`);
   if (background.failed) console.error(background.failed);
-  const result = uninstall(home, { ...deps, full: full || everything, undoStack: undoTheStack, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
+  const result = uninstall(home, { earlierTrust: earlierTrustOf(home, env, deps), ...deps, full: full || everything, undoStack: undoTheStack, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
   for (const p of result.removed) console.log(`removed ${p}`);
   for (const project of result.memorySnapshotsRemoved ?? []) console.log(`removed ${project.path}: ${snapshotWords(project.stamps)}`);
   // An optional file that could not be read or removed is not one the user edited, and the manifest that
