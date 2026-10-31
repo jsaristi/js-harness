@@ -33,7 +33,7 @@ Branch `worktree-departure-stretch`, one pull request:
 - Recorded in L18: `stretch open --draft` is not built. No plan builder exists, and it is written as the next task
   for the lead to place.
 
-## Reviews
+Reviews:
 - Codex: `6bee9e5..8be755d` (one P2, fixed in `a4ecfc3c`, rechecked 0.99), `a4ecfc3..23c028a` (0.99),
   `23c028a..718858f` (0.97).
 - Claude lenses: `6bee9e5..a4ecfc3` (one readability WARNING, fixed in `23c028a5`), `a4ecfc3..23c028a`,
@@ -45,9 +45,26 @@ Branch `worktree-departure-stretch`, one pull request:
 - The independent verifier: "fails, on one defect" at `23c028a5`. It is the same defect, and the verifier ran the
   uncommitted fix and found it fixed it.
 
-## Not done, and open
+## Failures and lessons
+- The first approach, a detector of his departure words, was the wrong root cause: the lead saw both departures and
+  skipped the stretch for its hand-written plan. Two blind readers found it before the pull request; it cost one
+  commit and one replay.
+- The first gentle-ai reviewers, on the `review-*` agent types, returned nothing: those definitions carry
+  `tools: []`, so they could not read their context file. The retry ran them as general-purpose readers.
+- A correction's first gate failed on one convention test, a test comment naming the review tool under `bin/`
+  (L24); read, reworded, passed.
+- The plan steps were wired without the no-roadmap case: two readers and the verifier found it (L23).
+
+## Left
+- PR 739: its land and merge are the lead's; JH 124 lands after it.
 - WSL not measured: the worktree guard refuses `wsl`. The second system is GitHub's Linux gate (L7), and the budget
   was measured on the detector's version there, not on 1b's. Windows with 1b: lead p90 905 ms of 2500.
-- The first reviewers on the `review-*` agent types returned nothing: those definitions carry `tools: []`.
+- gentle-ai's validation of `718858fd` stopped at `manual_intervention_required`.
 - JH 124 touches `bin/lib/rules-coverage-data.mjs` and the manifest, and lands after this branch.
 - Next task, not built: `stretch open --draft`.
+
+## Cost
+Codex: five runs, about 311,000, 52,000, 50,000 and 60,000 input tokens (the last two estimated by their plans). Claude
+lenses: three runs, 4, 1 and 3 lenses, about 210,000 input tokens. gentle-ai: four failed reviewers (about 14,000 to
+121,000 tokens each) and four on opus (114,000 to 147,000 each). The verifier: about 130,000. Seven gate runs on
+GitHub, one failed. The session was compacted once by the host.
