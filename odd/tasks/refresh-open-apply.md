@@ -57,17 +57,11 @@ Nothing beyond the brief: the field's shape and the exit code are decided here (
 - [ ] T5 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
 
 ## State for a resume
-Done since: Codex recorded `3d02efb..b5cff02`, "correct" (0.96), both P2 fixed; every code commit has a Codex
-record. Lens run 1 (slice A, `2947b29..3fde3ae`): risk, resilience, reliability, readability, 0 findings each,
-recorded. Lens run 2 (`3fde3ae..b5cff02`, the same four): 0 findings each, recorded. Next: push, PR, ready notice.
-Next step (T5): commits on the branch, not pushed: `3fde3ae2` slice A, `35a47cc7` slice B, `3d02efbf` docs, then
-the fix commit after L9. Codex covered `2947b29..3d02efb` (L8); a Codex run over the fix commit was started in the
-background (`js-harness codex-review --base 2947b290 --doc odd/tasks/refresh-open-apply.md --prompt own`): read its
-record, take its findings. Then the lenses, two runs: `js-harness lens-review --base 2947b290 --head 3fde3ae2 --lenses
-risk,resilience,reliability,readability --reason "..."` and `--base 3fde3ae2` (HEAD) with the same four. Then push,
-`gh pr create` (draft off), `js-harness notify --to orchestrator --kind ready --pr <n>`, the summary at
-`docs/sessions/2026-10-31-jh-121-refresh-refuse-while-an-open-question-asks-to-apply-w.md` (`js-harness summary
-template --title "<title>"`), and the closed notice once the PR is merged. Left: L9's verified "No".
+Done: every code commit has a Codex record and a lens record (L8, L9). Pushed; PR 736 open; ready notice recorded
+2026-10-31T08:41:28Z; the summary committed (`cd53d7d`). Next step (T5): once PR 736 is merged, `npm run check` on
+main, mark T5, then `js-harness notify --to orchestrator --kind closed --summary
+docs/sessions/2026-10-31-jh-121-refresh-refuse-while-an-open-question-asks-to-apply-w.md "..."`. The merge is the
+lead's land. Left: L9's verified "No".
 
 ## Log
 - L1 (2026-10-31, his request: the lead's brief `C:\Users\Oficina\.js-harness\background\briefs\2026-10-31T07-48-31-030Z-fbafab31.md`,
