@@ -136,3 +136,11 @@ Nothing here is his: a decision only he can take goes to the lead as a recorded 
   "node is still on the PATH the commit runs with", `actual: 127, expected: 1`: dash's `command -v` exits 127 for a
   name it does not find, bash's 1. The guard now asks for any exit but 0 with no spawn error, and the case is a test of
   its own that skips where git shares a folder with node; then `node --test bin/commit-msg.test.mjs`: 21 of 21.
+- L8 (2026-10-31, the reviews of `348378ce`): Codex over `951bcfb..348378c`: correct (0.98), its two findings fixed.
+  Lenses risk and reliability: 0 findings each. gentle-ai (lineage `review-ad878d337143d3fb`, `granted` run, its
+  reliability lens captured): approved and acknowledged, with two WARNINGs and a SUGGESTION, all taken, tests first:
+  host trailers right under a body line with no blank line between were kept, since the paragraph had to hold
+  trailers alone (now the run of trailer lines that closes the last paragraph goes, never the subject line; a quoted
+  host line with prose under it is in no such run), red then green (22 of 22); the no-node test fails where `sh`
+  cannot be spawned on the stripped PATH (now it skips there); `replaceFile` closed its descriptor a second time when
+  the rename failed (now once).

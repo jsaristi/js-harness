@@ -14,11 +14,11 @@ import { renameOver } from './lib/atomic-write.mjs';
 const USAGE = [
   'Usage: js-harness commit-msg <file>',
   "  The commit-msg hook's step: takes the host's attribution lines out of the commit message in <file> (git hands",
-  '    the hook its path) and says in one line on stderr what it took out. A line goes when it is in the trailers that',
-  '    end the message and is a whole `Co-Authored-By:` trailer naming Claude (the name alone, or with a model) or an',
-  '    address at anthropic.com, or a whole `Claude-Session:` line; a human co-author stays, and every other byte is',
-  '    left as it was. It never stops the commit: a file it cannot read or write is said and left as it is, exit 0.',
-  '    Exit 2: a usage error.',
+  '    the hook its path) and says in one line on stderr what it took out. A line goes when it is in the run of trailer',
+  '    lines that closes the last paragraph (never the subject) and is a whole `Co-Authored-By:` trailer naming Claude',
+  '    (the name alone, or with a model) or an address at anthropic.com, or a whole `Claude-Session:` line; a human',
+  '    co-author stays, and every other byte is left as it was. It never stops the commit: a file it cannot read or',
+  '    write is said and left as it is, exit 0. Exit 2: a usage error.',
 ].join('\n');
 
 class CommitMsgArgError extends Error {}
@@ -41,20 +41,17 @@ function hostLine(line) {
   return coAuthor !== null && (HOST_NAME.test(coAuthor[1]) || ANTHROPIC.test(coAuthor[2] ?? ''));
 }
 
-/** The indexes of the trailers that end the message: its last paragraph, comment lines and what lies under the
- * scissors left out, when that paragraph is not the subject's and holds trailers alone. Empty otherwise, so a host
- * line quoted in the body is never taken for one. */
+/** The indexes of the trailers that end the message: the run of trailer lines that closes its last paragraph, comment
+ * lines and what lies under the scissors left out, and never its first line, the subject. A host line quoted in the
+ * body, with a line of prose under it, is in no such run. */
 function trailerLines(lines) {
   const scissors = lines.findIndex((line) => SCISSORS.test(line));
   const content = (scissors === -1 ? lines : lines.slice(0, scissors)).map((line, i) => ({ line, i })).filter(({ line }) => !COMMENT.test(line));
   let last = content.length - 1;
   while (last >= 0 && content[last].line.trim() === '') last -= 1;
-  let first = last;
-  while (first > 0 && content[first - 1].line.trim() !== '') first -= 1;
-  if (last < 0 || first === 0) return [];
-  const paragraph = content.slice(first, last + 1);
-  if (!paragraph.every(({ line }) => TRAILER.test(line) || CONTINUATION.test(line))) return [];
-  return paragraph.map(({ i }) => i);
+  let first = last + 1;
+  while (first > 1 && content[first - 1].line.trim() !== '' && (TRAILER.test(content[first - 1].line) || CONTINUATION.test(content[first - 1].line))) first -= 1;
+  return content.slice(first, last + 1).map(({ i }) => i);
 }
 
 /** `text` without the host's attribution lines, each with its ending, and the lines removed, in order. `text` is the
@@ -71,15 +68,20 @@ export function stripAttribution(text) {
 export function replaceFile(file, buffer, deps = {}) {
   const tmp = `${file}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
   const fd = fs.openSync(tmp, 'wx');
+  let open = true;
   try {
     fs.writeFileSync(fd, buffer);
     fs.closeSync(fd);
+    open = false;
     renameOver(tmp, file, deps);
   } catch (error) {
-    try {
-      fs.closeSync(fd);
-    } catch {
-      // Already closed when the rename is what failed.
+    // Closed once only: a number closed again could by then name a file something else opened.
+    if (open) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        // The write's own error is the one to throw.
+      }
     }
     fs.rmSync(tmp, { force: true });
     throw error;

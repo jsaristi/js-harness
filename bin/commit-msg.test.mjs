@@ -73,6 +73,14 @@ test('a host line quoted in the body stays: only the trailers that end the messa
   assert.deepEqual(removed, [HOST_SESSION]);
 });
 
+test('host trailers right under a body line, with no blank line between, go; the subject line never does', () => {
+  const { text, removed } = stripAttribution(`fix: x\n\nWhy it is made.\n${HOST_CO_AUTHOR}\n${HOST_SESSION}\n`);
+  assert.equal(text, 'fix: x\n\nWhy it is made.\n');
+  assert.deepEqual(removed, [HOST_CO_AUTHOR, HOST_SESSION]);
+  assert.deepEqual(stripAttribution(`fix: x\n${HOST_CO_AUTHOR}\n`), { text: 'fix: x\n', removed: [HOST_CO_AUTHOR] });
+  assert.deepEqual(stripAttribution(`${HOST_SESSION}\n`), { text: `${HOST_SESSION}\n`, removed: [] });
+});
+
 test('the diff git -v leaves under its scissors line is not the end of the message', () => {
   const scissors = '# ------------------------ >8 ------------------------';
   const message = `${BODY}\n${HOST_CO_AUTHOR}\n${scissors}\n# Do not modify or remove the line above.\ndiff --git a/a.txt b/a.txt\n+${HOST_SESSION}\n`;
@@ -269,7 +277,11 @@ test('a hook that finds no node on the PATH lets the commit go with the message 
   }
   // `command -v` exits 1 in bash and 127 in dash when the name is not found.
   const lookup = spawnSync('sh', ['-c', 'command -v node'], { encoding: 'utf8', env });
-  assert.ok(lookup.error === undefined && lookup.status !== 0, `node is still on the PATH the commit runs with: ${lookup.stdout}`);
+  if (lookup.error !== undefined) {
+    t.skip('sh lives in a folder of node, or off the PATH, so the lookup cannot be asked');
+    return;
+  }
+  assert.notEqual(lookup.status, 0, `node is still on the PATH the commit runs with: ${lookup.stdout}`);
   const commit = spawnSync('git', ['commit', '-q', '-m', message], { cwd: noNode, encoding: 'utf8', env });
   assert.equal(commit.status, 0, commit.stderr);
   assert.equal(git(noNode, 'log', '-1', '--format=%B').stdout, `${message}\n\n`);

@@ -1922,8 +1922,8 @@ $ js-harness reply --hook < stop.json
 The `commit-msg` hook's step. The Claude app tells every session to end a commit message with
 `Co-Authored-By: Claude ...` and `Claude-Session: ...` lines; this takes them out of the message
 git hands the hook, and the commit goes on. A line goes when it is in the trailers that end the
-message (its last paragraph, comment lines and the diff under `git commit -v`'s scissors left
-out, when that paragraph holds trailers alone) and is a whole `Co-Authored-By:` trailer (any case
+message (the run of trailer lines that closes its last paragraph, comment lines and the diff under
+`git commit -v`'s scissors left out, never the subject line) and is a whole `Co-Authored-By:` trailer (any case
 of the key) whose name is the host's (`Claude`, alone or with a model: `Claude Opus 5.5`,
 `Claude Code`) or whose address is at `anthropic.com` or a subdomain of it, or a whole
 `Claude-Session:` line. A human co-author (`Claude Dupont <claude@example.fr>` too), a host line
