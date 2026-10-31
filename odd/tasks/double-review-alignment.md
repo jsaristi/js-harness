@@ -19,19 +19,19 @@ reserve before the reset on 2026-11-04 (Depth pass, item 2), so the reserve is b
 
 ## Done when
 - `node bin/js-harness.mjs contract check odd/tasks/double-review-alignment.md` exits 0
-- `node bin/js-harness.mjs rules double-review` exits 0
 - `node bin/js-harness.mjs rules codex-reserve` exits 0
 - `node bin/js-harness.mjs rules check` exits 0
-- `node --test bin/double-review.test.mjs bin/lib/double-review-records.test.mjs bin/codex-review-reserve.test.mjs` exits 0
-- `node --test bin/lib/protocols-skill.test.mjs bin/lib/project.test.mjs bin/lib/template-block.test.mjs bin/contract.test.mjs` exits 0
+- `node --test bin/double-review.test.mjs bin/lib/double-review-records.test.mjs bin/codex-review-reserve.test.mjs bin/lib/codex-reserve.test.mjs` exits 0
+- `node --test bin/lib/protocols-skill.test.mjs bin/lib/project.test.mjs bin/lib/template-block.test.mjs bin/contract.test.mjs` exits 0, with `protocols-skill.test.mjs` asserting section 1's new text
 - `npm run check` exits 0
 - the pull request is merged into main, named in `## Log`, with Codex and the Claude lenses recorded over its code
 
 ## In scope / Out of scope
 - In: `rule:double-review` and a new rule, `codex-reserve`, through `js-harness rules change`; the protocols skill's
   source (`bin/lib/protocols-skill.mjs`, sections 1, 6, 7); `claudeBlock` (`bin/lib/project.mjs`); a new command
-  `js-harness double-review` (`bin/double-review.mjs`, `bin/lib/double-review-*.mjs`); the reserve in
-  `codex-review` (`bin/codex-review.mjs`); the older texts of `## Older texts` below, each named there before it
+  `js-harness double-review` (`bin/double-review.mjs`, `bin/lib/double-review-*.mjs`, the dispatcher
+  `bin/js-harness.mjs`, `README.md`); the reserve in `codex-review` (`bin/codex-review.mjs`, `bin/lib/codex-reserve.mjs`)
+  and its debt in `codex-meter` (`bin/codex-meter.mjs`); the older texts of `## Older texts` below, each named there before it
   changes (`CLAUDE.md` and `AGENTS.md` only where that list names them); `docs/ROADMAP.md`; this document.
 - Out: running the eval of PR 737's brief (planned below, paid, his); his reset credit; his `~/.claude`, `~/.codex`
   and credentials; gentle-ai's review; JH 125's `/advisor` trial and its files.
@@ -47,9 +47,11 @@ reserve before the reset on 2026-11-04 (Depth pass, item 2), so the reserve is b
 - `CLAUDE.md` stays within `rule:claude-md-budget`, measured with `estimateTokens`, never assumed.
 
 ## Ask me before
-Nothing of his is open: the design is his yes to question 147 and the reserve his answer to 148. Asked, one at a time
-through the lead (`js-harness notify --to orchestrator --kind question`): spending the reset credit; running the
-eval; anything that would change his answers 145 to 148.
+Asked, one at a time through the lead (`js-harness notify --to orchestrator --kind question`): his typed acceptance
+of answers 147 and 148, which he tapped, since `rules change` takes only typed words of his
+(`bin/lib/rules-change.mjs:232`) and the reserve's 10% exists only in 148's option text (L9); spending the reset
+credit; running the eval; anything that would change his answers 145 to 148. Until the first is answered, the two
+rule commits wait and the work that does not depend on them goes on.
 
 ## Depth pass
 - 1. Method: the discipline is review-process design, as a code-review practice lead or a journal editor runs blind
@@ -82,36 +84,45 @@ eval; anything that would change his answers 145 to 148.
   `CLAUDE.md:24` and `bin/lib/project.mjs:395` (the feature order; the init block holds none);
   `bin/contract.mjs:438` (`depthPassSince` read, written by nobody).
 - 3. The bar:
-  spec 1: `node --test bin/double-review.test.mjs`: one command runs a Claude reader and a Codex reader on the same
-  frozen copy, hashed, and records their findings only after both return; none, new behaviour.
-  spec 2: `node --test bin/lib/protocols-skill.test.mjs bin/lib/project.test.mjs`: the double review's scope is one
-  text in section 1 that `claudeBlock` and section 7 name by `rule:double-review`; today two texts (spec's raw
-  material, `protocols-skill.mjs:43` against `project.mjs:411`).
-  spec 3: `node --test bin/double-review.test.mjs`: a read runs on plans, designs, proposing documents and a small
-  code change's diff, is announced with its cost and the phrase that skips it (`--plan`), and a skip records his
-  words and their transcript line; none, new behaviour.
-  spec 4: `node --test bin/lib/double-review-records.test.mjs`: each finding is recorded with its reader, and
-  `double-review tally` gives each reader's findings, taken and found by it alone; none, new behaviour.
-  spec 5: `node --test bin/codex-review-reserve.test.mjs bin/double-review.test.mjs`: below 10% of the weekly limit
-  left, `codex-review` starts nothing and records a skip named `codex-reserve`, and a read runs a second Claude reader
-  marked "sin Codex"; none, new behaviour (today a spent limit fails the review and blocks the push).
-  spec 6: `node bin/js-harness.mjs rules check`: `double-review` quotes 145 to 148 and retires D5 by name, and
-  `codex-reserve` holds 10 from his answer 148; PASS today with D5's reading.
-  spec 7: left out because it is planned, not run: the eval of PR 737's brief is his spend (`## Eval plan`).
+  spec 1: `node --test bin/double-review.test.mjs`: one command starts a Claude reader and a Codex reader at once on
+  one frozen copy, each echoing the copy's hash (a read that does not counts for nothing), the Claude reader able to
+  read only the repository and the copy (`--add-dir`), and records both only after both return; a read never covers
+  code for the push or the merge door; none, new behaviour.
+  spec 2: `node --test bin/lib/protocols-skill.test.mjs bin/lib/project.test.mjs bin/double-review.test.mjs`: the
+  scope, everything that proposes something (a plan, a design, an analysis with figures, a protocol, a document), is
+  one text in section 1 that `claudeBlock` and section 7 name by `rule:double-review`; a read is announced with its
+  cost and the phrase that skips it (`read --plan`); a skip records his words and their line; `tally` gives each
+  reader its findings, taken and found by it alone, the "sin Codex" reader apart; today two scope texts
+  (`protocols-skill.mjs:43` against `project.mjs:411`) and no read, announcement or record.
+  spec 3: `node --test bin/double-review.test.mjs`: a small code change is read with its request and its diff
+  (`read <request> --diff <rev>`); none, new behaviour.
+  spec 4: `node --test bin/codex-review-reserve.test.mjs bin/lib/codex-reserve.test.mjs bin/double-review.test.mjs`:
+  under 10% of the weekly limit left, `codex-review` starts nothing and records a `codex-reserve` skip, while a meter
+  that fails or reads exactly 10% left records none; a read runs `claude-sin-codex`; `js-harness codex-meter` lists
+  the reserve skips no Codex review has paid, after their merge too, each with the command that pays it; none, new
+  behaviour (today a spent limit fails the review and blocks the push).
+  spec 5: `grep -rnE "two (read-only )?readers|attacks its claims|looks only for what is missing"` over `bin/`,
+  `docs/`, `CLAUDE.md` and `AGENTS.md` outside `docs/sessions/`, `docs/origin.md` and `docs/proposals/`: only the
+  texts `## Older texts` keeps, the rest aligned; today 17 listed there.
+  spec 6: left out because it is planned, not run: the eval of PR 737's brief is his spend (`## Eval plan`).
 - 4. Refutation: does a reader that reads with tools run headless here, so that one command can launch Claude
   beside Codex? `claude -p --safe-mode --tools "Read,Grep,Glob" --model haiku --output-format json
   --no-session-persistence` on "read harness.json, answer its code": answered `JH` in 2 turns, $0.0008, 1 of 1.
   The Codex half ran headless at transcript `0f71b2c6` line 43951 with the lean flags, 1 of 2 runs (the plain one
-  read nothing). And does the reserve bind before the reset? 21% left at about 0.43M input tokens a point is about
-  9.0M tokens; 11 points to the reserve is about 4.7M, about 45 code reviews at this week's 104k average, under one
-  day at 57 to 123 a day: the reserve binds about 2026-11-01, so it is built first.
+  read nothing); this plan's own read (L8) ran both, Codex 55,396 tokens (meter 79% to 80%) and a Claude reader on
+  Opus 116,030 tokens. And does the reserve bind before the reset? An estimate, not a consumption model: 21% left at
+  about 0.43M input tokens a point (this week's records against the meter; a plan read cost a point at 60k, so the
+  rate varies with what is cached) is about 9.0M tokens; 11 points to the reserve is about 4.7M, about 45 code
+  reviews at this week's 104k average, under one day at 57 to 123 a day: the reserve binds about 2026-11-01, so it
+  is built first, and it acts on the meter, never on this estimate.
   Verdict: supports
 - 5. Request: his request rewritten, beside his words (L1 to L5): "Make the double review one Claude reader and one
-  Codex reader, blind, on the same frozen material: on every plan, design and document that proposes something, and
-  on every small code change besides code's two reviews; announce each read with its cost and the phrase that skips
+  Codex reader, blind, on the same frozen material: on everything that proposes something (a plan, a design, an
+  analysis with figures, a protocol, a document), and on every small code change besides code's two reviews; announce each read with its cost and the phrase that skips
   it, skip it only on my words, and never on my short replies or taps; record every finding so that on 2026-11-16 we
   judge what each reader adds; below 10% of Codex's weekly limit, a second Claude reader replaces Codex and code keeps
-  a Codex debt the merge door lists; never spend my reset credit without asking; say it in one text, through rules
+  a Codex debt the merge door lists and Codex pays after the reset; never spend my reset credit without asking; tell
+  me how to try it; say it in one text, through rules
   change, retiring my D5 by name; then align every older text that contradicts rule 1 or this, listing each first;
   and plan the owed eval without running it."
   Adds: none
@@ -128,9 +139,10 @@ eval; anything that would change his answers 145 to 148.
 6. The eval of PR 737's brief, with and without the rule, owed by 2026-11-30 (`docs/ROADMAP.md:716`): planned here.
 
 ## Older texts
-Each text found that contradicts rule 1 or this design, before it changes; the search: `grep -n "two (read-only
+Each text found that contradicts rule 1 or this design, before it changes; the search: `grep -rnE "two (read-only
 )?readers|double review|double-review|attacks its claims|what is missing"` over the repository outside `odd/tasks/`,
-`docs/sessions/`, `docs/origin.md` and `docs/proposals/`, and the roadmap's list (`docs/ROADMAP.md:714`).
+`docs/sessions/`, `docs/origin.md` and `docs/proposals/`, the roadmap's list (`docs/ROADMAP.md:714`), and the two
+readers of this plan (L8), who found items 11 to 17.
 1. `bin/lib/protocols-skill.mjs:43`, section 1: D5's scope and two roles. Becomes his design (T4).
 2. `bin/lib/project.mjs:411`, `claudeBlock`: a second scope text with the two roles. Becomes a pointer to
    `rule:double-review` (T4).
@@ -147,8 +159,19 @@ Each text found that contradicts rule 1 or this design, before it changes; the s
 9. `sync`: never offers `depthPassSince`, which `bin/contract.mjs:438` reads and nothing writes. Offers it (T5).
 10. `docs/ROADMAP.md:897`: "Each item that needs a design passes two readers that did not write it". Names the
     double review (T5).
-Checked and left: `bin/lib/manifest.mjs:140` and section 6 name the rule; `bin/lib/onboard.mjs:747` and the
-roadmap's "Design, past its two readers" items still have two readers, now of two families.
+11. `docs/RULES.md:53` and `bin/lib/rules-data.mjs:197`: D5's subject and phrases, rendered. `rules change` rewrites
+    both (T4).
+12. `docs/ROADMAP.md:709`: "`codex-review` needs a mode that reviews a plan". Says the command of L7 (T5).
+13. `bin/lib/protocols-skill.mjs:65`, section 3: a skip is only "a review that cannot run". Gains the reserve's skip,
+    which `codex-review` records itself (T2).
+14. `bin/lib/protocols-skill.test.mjs:130` and `:135`, `bin/lib/project.test.mjs:1980`: assert D5's text. Assert
+    the new one (T4).
+15. `docs/FAILURES.md:1219`: its control names the test of item 14 by its title. Follows the title (T4).
+16. `docs/ROADMAP.md:704` to `:712`, the alignment item itself: ticked with this document's names when it lands (T6).
+17. `bin/lib/protocols-skill.mjs:117`, section 7's cost: "two readers only with a candidate list". Still true, now
+    of two families; left.
+Checked and left: `bin/lib/manifest.mjs:140` and section 6 name the rule and its home; `bin/lib/onboard.mjs:747` and
+the roadmap's "Design, past its two readers" items still have two readers, now of two families.
 
 ## Eval plan
 The eval owed by 2026-11-30 (spec 6), not run here: the case built from PR 737's brief runs on the current arm and
@@ -158,15 +181,22 @@ scores lower. Cost, estimated from the two proofs on record ($2.00 and $4.43, `o
 $2 to $5, and Codex none. Run only on his word, through the lead.
 
 ## Tasks
-- [ ] T1 (kind: docs) This document with its depth pass, committed with documents alone; spec all; commit pending.
-- [ ] T2 (kind: build) `rules change codex-reserve`, then `codex-review` reads the meter before it launches and,
-  below the reserve, records the `codex-reserve` skip itself; the Review row says so; spec 5; route codex-review.
-- [ ] T3 (kind: build) `js-harness double-review`: `read` (frozen copy, both readers in two processes, the reserve,
-  `--plan` announces), `take`, `skip`, `tally`, records under the git common dir; spec 1, 3, 4, 5.
-- [ ] T4 (kind: build) `rules change double-review`: section 1's one text, `claudeBlock` and section 7 name it,
-  D5 retired by name; spec 2, 6.
-- [ ] T5 (kind: docs) Older texts 5, 6, 8, 9, 10; spec 5.
-- [ ] T6 (kind: verify) Reviews (Codex, lenses, an independent verifier: T2 touches a guard's input), gate, PR.
+- [x] T1 (kind: docs) This document with its depth pass, committed with documents alone; spec all; 0fc1287e.
+- [ ] T2 (kind: build) `rules change codex-reserve` (after L9's answer), then `codex-review` reads the meter just
+  before it launches and, under the reserve, records the `codex-reserve` skip itself (a failed or missing reading
+  records none and says so; exactly 10% left is not under it; concurrent sessions each read before they launch, so
+  use may still cross it, unguaranteed); `codex-meter` lists the reserve skips no review has paid, by commit, after
+  their merge too, with the worktree command that pays each; older texts 4 and 13; spec 4; route codex-review.
+- [ ] T3 (kind: build) `js-harness double-review`: `read` (the frozen copy, both readers started at once, each echoing
+  its hash, the Claude reader on `rule:subagent-reader-model` confined by `--add-dir`, the reserve, `--plan`
+  announces), `take` (taken and shared), `skip`, `tally`; records under the git common dir, which no review row
+  reads, with the test that a read leaves code uncovered; spec 1, 2, 3, 4.
+- [ ] T4 (kind: build) `rules change double-review` (after L9's answer): section 1's one text, `claudeBlock` and
+  section 7 name it, D5 retired by name, his rules on disagreement and rounds kept; older texts 1 to 3, 11, 14, 15;
+  spec 2.
+- [ ] T5 (kind: build) Older texts 5, 6, 8, 9, 10, 12; spec 5.
+- [ ] T6 (kind: verify) Reviews (Codex, lenses, an independent verifier for T2, a guard's input, and T3, two
+  processes at once), gate, PR, older text 16; the report tells him how to try it (L1); spec all.
 
 ## Log
 - L1 (2026-10-31, his words, the lead's transcript `0f71b2c6`, line 43297): "Excelente cuando me tengas ya tomo dime
@@ -192,3 +222,24 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   kept; each reader's yield recorded; the reserve; a read never covers code.
 - L7 (2026-10-31, decision): a command of its own, `js-harness double-review`, rather than a mode of `codex-review`
   (Depth pass, item 1); the reserve is built first because it binds about 2026-11-01 (item 4).
+- L8 (2026-10-31, this plan's double review, blind, on 0fc1287e, run by hand as the design asks before its command
+  exists; announced to the lead with its cost): Codex 8 findings (55,396 tokens; meter 79% to 80% weekly), Claude on
+  Opus 7 findings (116,030 tokens); answers kept outside the repository in the session's job folder. Both found:
+  "Codex paga después" had no repayment, a skip's debt leaves every list once its branch merges (Codex 1, Claude 2,
+  checked: the skips owed are read from the default branch to the tip, `bin/lib/lens-review-rows.mjs:40`), taken as
+  T2's debt list in `codex-meter`; blindness was intention, since a reader with tools reads any file (Codex 2,
+  Claude 5), taken as the hash echo and `--add-dir` (a print run reads outside its folder only with permission, which
+  it cannot ask for); the meter's failed, missing and exact readings and concurrent sessions (Codex 3, Claude 5),
+  taken in T2; no test that a read leaves code uncovered (Codex 4, Claude 5), taken in T3; the bar numbered apart
+  from `## Specs` (Codex 6, Claude 3), renumbered; older texts missing (Codex 7, Claude 7), items 11 to 17. Codex
+  alone: the tally's sameness of two findings and the fallback's cohort (5), taken as `take --shared` and the
+  `claude-sin-codex` row; the forecast is an estimate (8), said in item 4. Claude alone: `rules change` refuses a
+  tapped answer (1, checked at `bin/lib/rules-change.mjs:232`), which is L9; "dime para probartelo" was dropped and
+  analyses and protocols left the scope (4), restored; the refutation ran on Haiku (6), now measured on Opus above;
+  T5 changes code, the verifier must cover T3, `leanFlags` is private, the dispatcher and the README are in scope
+  (7), taken. Not taken: Claude 4's doubt on "taps" (the roadmap's line 704 and item 5 say the same: a read is never
+  started by his short reply or tap). Codex 4 of 8 and Claude 3 of 7 were found by the other too.
+- L9 (2026-10-31, decision): 145 and 146 are typed and carry the double review ("en todo" covers the small code
+  change of 147); 147 and 148 were tapped, and the reserve's 10% exists only in 148's option text. A rule of his takes
+  only his typed words, so one question goes to him through the lead, asking him to write his acceptance of 147 and
+  148; the two rule commits (T2's first step, T4) wait for it, and T3, T5 and T2's code that reads no rule go on.
