@@ -791,9 +791,12 @@ test('a record whose head lies past the pushed tip covers nothing there, as merg
   assert.match(row.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
   assert.deepEqual(row.lines.slice(0, 2), [
     `${short(root, first)} feat: two`,
-    `${short(root, first)} lies in a range reviewed up to ${second.slice(0, 7)}, past this commit: push up to ${second.slice(0, 7)}, or make a record that ends here`,
+    `${short(root, first)} lies in a range reviewed up to ${second.slice(0, 7)}, past ${first.slice(0, 7)}, the commit checked: push up to ${second.slice(0, 7)}, or check out ${first.slice(0, 7)} and make its record with the command below, which reviews up to HEAD`,
   ]);
   assert.equal(checkCodexReviews(root, second).pass, true, 'pushed up to its head');
+  // The plain row reads the same records and names the same head (a reliability review of 2b678054).
+  git(root, 'checkout', '--quiet', '--detach', first);
+  assert.ok(checkCodexReviewDebt(root).lines.includes(row.lines[1]), JSON.stringify(checkCodexReviewDebt(root)));
 });
 
 test('a record of nothing to review covers its commits only when what is pushed holds its head', () => {
@@ -1730,7 +1733,9 @@ test('check --push refuses a cut inside a reviewed range on both rows, as the me
   assert.equal(code, 1, output);
   assert.match(output, /FAIL {2}codex-review {2}2 of 2 code commits since origin\/main have no Codex review record/);
   assert.match(output, /FAIL {2}lens-review {2}1 of 1 code commit since origin\/main have no complete Claude lens record/);
-  const named = `${short(root, cut)} lies in a range reviewed up to ${short(root, past)}, past this commit: push up to ${short(root, past)}, or make a record that ends here`;
+  // JH 112's verifier, finding 1: pushed below HEAD, the commands the rows print review up to HEAD, past the cut, so the
+  // line says to check the cut out first.
+  const named = `${short(root, cut)} lies in a range reviewed up to ${short(root, past)}, past ${short(root, cut)}, the commit checked: push up to ${short(root, past)}, or check out ${short(root, cut)} and make its record with the command below, which reviews up to HEAD`;
   assert.ok(output.split('\n').filter((line) => line.includes(named)).length === 2, output);
   // Pushed up to the head of its records, the same commit is covered.
   const whole = await runCheck(['--push', '--head', past, '--cwd', root, '--home', home]);

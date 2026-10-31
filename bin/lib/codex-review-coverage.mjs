@@ -277,11 +277,14 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
 }
 
 /** The line of each `uncovered` commit that a record of `beyond` (`reviewCoverage` with `beyondTip: false`) covers
- * from past the commit checked: what the push of the whole reviewed range, or a record that ends at that commit, would
- * cover. Both review rows print it, so a cut says why its review does not count and where it would. */
-export const beyondLines = (uncovered, beyond = []) => uncovered.flatMap((commit) => {
+ * from past `tip`, the commit checked: what the push of the whole reviewed range, or a record that ends at `tip`, would
+ * cover. Both review rows print it, so a cut says why its review does not count and where it would. The commands the
+ * rows print review up to HEAD, which a push below HEAD is not at, so the line says to check `tip` out first (JH 112's
+ * verifier, finding 1). */
+export const beyondLines = (uncovered, beyond = [], tip = '') => uncovered.flatMap((commit) => {
   const head = beyond.find(({ covered }) => covered.has(commit.id))?.rec.head.slice(0, 7);
-  return head ? [`${commit.shortId} lies in a range reviewed up to ${head}, past this commit: push up to ${head}, or make a record that ends here`] : [];
+  const at = tip.slice(0, 7);
+  return head ? [`${commit.shortId} lies in a range reviewed up to ${head}, past ${at}, the commit checked: push up to ${head}, or check out ${at} and make its record with the command below, which reviews up to HEAD`] : [];
 });
 
 // The outcomes of a record that is no review of Codex's, each with what a row calls it.
@@ -486,8 +489,9 @@ export function mergeStart(cwd, { given, tip: head, spawn = spawnSync, where, re
     if (before.unknown !== undefined || before.uncovered.length > 0) return null;
   }
   // A merge a record already covers is no review to start: the range is then read as without this, and the
-  // records say it is covered, instead of a second paid review of the same merge (Codex, 2026-10-14).
-  const atMerge = reviewCoverage(cwd, { from: first, tip: head, spawn, where });
+  // records say it is covered, instead of a second paid review of the same merge (Codex, 2026-10-14). A record past
+  // the merge covers nothing the push takes (`beyondTip`), so it is no record of the merge here either.
+  const atMerge = reviewCoverage(cwd, { from: first, tip: head, spawn, where, beyondTip: false });
   if (atMerge.unknown !== undefined || atMerge.covers.some(({ covered }) => covered.has(head))) return null;
   // And only a merge the push check counts as code: one that took a side whole has a remerge-diff of the
   // markers it removed, and no line anybody wrote (verifier B1, 2026-10-14).

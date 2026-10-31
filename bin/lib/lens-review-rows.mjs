@@ -110,11 +110,11 @@ const uncoveredDetail = ({ uncovered, codeCommits, base, note }) => `${uncovered
 
 /** The lines that name the `uncovered` commits since `base`, those a record covers only from past the tip (`beyond`),
  * and the command that makes their record, from `lensCoverage`'s state. */
-const uncoveredLines = ({ uncovered, base, beyond }) => {
+const uncoveredLines = ({ uncovered, base, beyond, tip }) => {
   const oldest = uncovered[uncovered.length - 1];
   return [
     ...uncovered.map((commit) => `${commit.shortId} ${commit.subject}`),
-    ...beyondLines(uncovered, beyond),
+    ...beyondLines(uncovered, beyond, tip),
     `make the record with: js-harness lens-review --base ${oldest.isRoot ? base : `${oldest.shortId}^`} --lenses <lens,...> --reason "<what it touched and how>"`,
   ];
 };

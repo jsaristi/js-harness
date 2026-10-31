@@ -124,5 +124,35 @@ question (`js-harness notify --to orchestrator --kind question`, in Spanish).
   in a file the local run did not hold, now asserting the push of the branch refuses it too. Then `node --test
   bin/lib/merge-queue-reviews.test.mjs bin/conventions-structure.test.mjs`: 14 of 14.
 
+- L8 (2026-10-31): T1 is `2b678054` (gate on CI green on its second try). Codex over `f178018..2b67805`: correct
+  (0.88), no finding. Lenses risk, reliability and readability: 0 findings each. gentle-ai, the hook's candidate
+  being this commit alone (`f178018b..HEAD`): its `granted` invocation run as `CLAUDE.md` says, approved, one
+  SUGGESTION (`R3-plain-row-beyond-lines-untested`: no test asserted the new line on the plain rows), acknowledged.
+  The independent verifier, a read-only agent given the code and not this document's conclusion, found no sequence
+  where the push and the door disagree, and three real things, all in what a refusal tells and costs:
+  (1) real: pushed below HEAD (a chain cut pushed from its top), neither printed command makes the record the push
+  asks for: `codex-review` has no `--head` and reviews up to HEAD, where the record past the cut covers all, and the
+  lens hint names no `--head`. The line said "make a record that ends here" without saying how. Fixed: it now says
+  to check the cut out and make the record with the command below, which reviews up to HEAD; checked by reading
+  `bin/codex-review.mjs` (no `--head`) and `bin/lens-review.mjs:160` (`--head` defaults to HEAD).
+  (2) real: `mergeStart` still counted a record past the merge, so `codex-review` at a cut that is a merge of main
+  reviewed the whole branch again instead of the merge's own lines. Fixed, tests first: its `atMerge` reading passes
+  `beyondTip: false`; "a merge of main that only a record past it covers is still read by what was written in it"
+  (`bin/lib/codex-review-coverage.test.mjs`) failed before (`actual: undefined`) and passes after. Its `before`
+  reading keeps the default: its tip is the merge's first parent, below the pushed commit, and a record between the two
+  counts at the push.
+  (3) left as they are: `codexSkipsOwed` and `baseLeftOut` still count a record past the tip; neither refuses
+  anything (a list of skips in `doctor` and the plain row, and a note on a base chosen by hand). Sent to the lead as a
+  follow-up. Limits it named: with two records past the tip the line names the first written, and either head works;
+  a cut inside a record of nothing to review gets no line, since such a record never covers short of its head.
+  gentle-ai's suggestion is taken in the same commit: the first test of the old rule now also checks the plain row's
+  line. Then `node --test` over `bin/check-codex-reviews.test.mjs bin/lib/codex-review-coverage.test.mjs
+  bin/lib/lens-review-rows.test.mjs bin/lib/merge-queue-reviews.test.mjs bin/codex-review.second.test.mjs
+  bin/conventions-structure.test.mjs`: 334 tests, 332 pass, 0 fail; `bin/codex-review.test.mjs`: 160 of 160.
+
+- L9 (2026-10-31): the verifier's fixes failed their gate on CI once (8,342 tests, 1 failed):
+  `bin/lib/gentle-ai-absence.test.mjs`, "no file under bin, evals or scripts names gentle-ai but the named ones": a
+  test comment named the review's tool. Reworded; that test then 3 of 3.
+
 ## Next step
-T1: commit the slice, then Codex and the lenses over it (T2).
+T1: commit the verifier's fixes, Codex and the lenses over that commit, then the push and PR 1 (T2).

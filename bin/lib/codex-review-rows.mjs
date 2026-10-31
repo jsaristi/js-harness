@@ -272,7 +272,7 @@ function codexCoverageRow(cwd, head, { spawn, remote }) {
     const hint = oldest.isRoot
       ? `${oldest.shortId} is a root commit, so ${oldest.shortId}^ does not exist; a range from the default branch reaches it: js-harness codex-review --base ${base} (add --unavailable <reason> to record a skip instead)`
       : `make the record with: js-harness codex-review --base ${before === null ? base : `${before.shortId}^`}`;
-    const lines = [...uncoveredNames(uncovered), ...beyondLines(uncovered, state.beyond), hint];
+    const lines = [...uncoveredNames(uncovered), ...beyondLines(uncovered, state.beyond, tip), hint];
     return fail(`${uncovered.length} of ${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base} have no Codex review record (${codexReviewsPath(cwd, { spawn }) ?? 'no record file'})${note}`, lines);
   }
 
@@ -390,7 +390,7 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   return row(`no Codex review record for ${uncovered.length} of ${counted(codeCommits.length, 'code commit')} since ${base}: ${sized}${note}`, [
     // The base is the one the size above was read from, so the row names one review, not two.
     ...uncoveredNames(uncovered),
-    ...beyondLines(uncovered, state.beyond),
+    ...beyondLines(uncovered, state.beyond, tip),
     `make the record with: js-harness codex-review --base ${baseArg}`,
     ...(over ? ['the cheaper way is to review now: every commit added to this range makes its review larger'] : []),
     `what it would cost, with nothing spent: js-harness codex-review --base ${baseArg} --plan`,
