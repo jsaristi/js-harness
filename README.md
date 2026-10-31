@@ -144,7 +144,8 @@ runs no `sensors`), `documentSensors` (named commands that run at such a commit 
 `depthPassSince` (a day, `YYYY-MM-DD`) holds the `contracts` row to `rule:depth-pass`: a feature
 document first committed on or after that day, or not committed yet, has a `## Depth pass` with
 its five items in order, and the commit that brings its verdict holds documents alone and comes
-before the feature's first code. A project without the key is not held to it.
+before the feature's first code. A project without the key is not held to it, and `sync` offers
+it from the next day on; `null` declines it.
 
 When a `node --test` suite fails, the test files it names as failed run once more, alone. A
 file that passes on that rerun does not block while it has a current entry in `docs/FLAKY.md`,

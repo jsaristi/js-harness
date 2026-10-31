@@ -706,7 +706,8 @@ built in rule 1's pull request.
   `js-harness rules change double-review`, retiring his D5 (2026-10-27) by name and keeping its rules on
   disagreement and rounds; its scope, stated two ways today (`bin/lib/protocols-skill.mjs:43` against
   `bin/lib/project.mjs:412`), becomes one text. Codex reviews code and not Markdown today (the Review row above), so
-  `codex-review` needs a mode that reviews a plan; each run spends his Codex weekly limit, read on the meter first.
+  a command of its own, `js-harness double-review`, reads a plan (`odd/tasks/double-review-alignment.md`, L7); each
+  run spends his Codex weekly limit, read on the meter first.
   When the limit runs low, question 148 (line 44186, tapped): "Claude reemplaza y Codex paga después
   (Recomendada)". Below 10% of the weekly limit (`js-harness codex-meter`), a new Codex read goes to a second Claude
   reader in a fresh context, marked "sin Codex"; code left without a Codex review is a debt Codex reviews after the
@@ -894,7 +895,8 @@ door, not a gate moved off this machine). This is version 2. Baselines are of 20
 | 9 | Windows Defender's real-time protection off on this machine (his change); gates measured against the day's check median of about 150 s | `MsMpEng` 552 CPU-seconds in gate-start samples | the lead measures |
 | 10 | Finished sessions archived, since each open one keeps a `claude` process and its MCP servers | `claude` 5.9 GB, `node` 2.1 GB, 4.5 of 19.7 GB free | the lead, with his yes per session |
 
-Each item that needs a design passes two readers that did not write it before it is built, and
+Each item that needs a design passes the double review, Claude and Codex blind (`rule:double-review`), before it
+is built, and
 its version says what they changed; each build is test first, through the gate, gentle-ai and
 Codex.
 

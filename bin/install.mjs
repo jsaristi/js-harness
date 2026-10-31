@@ -490,6 +490,26 @@ export function reportSyncProject(result) {
   return result.code || (result.actions.some((action) => action.kind === 'failed') ? 1 : 0);
 }
 
+/** Offers `rule:depth-pass` to a project whose `harness.json` has no `depthPassSince` key, from the day after `now`, so
+ * no document opened today turns red (odd/tasks/double-review-alignment.md, older text 9). `harness.json` is a committed
+ * file `sync` never writes, so the project takes the offer by committing the key; `null` declines it and ends the line. */
+function offerDepthPass(root, now) {
+  let declared;
+  try {
+    declared = Object.hasOwn(JSON.parse(fs.readFileSync(path.join(root, 'harness.json'), 'utf8')), 'depthPassSince');
+  } catch {
+    return;
+  }
+  if (declared) return;
+  const at = new Date(now);
+  const tomorrow = new Date(at.getFullYear(), at.getMonth(), at.getDate() + 1);
+  const day = [tomorrow.getFullYear(), tomorrow.getMonth() + 1, tomorrow.getDate()].map((n) => String(n).padStart(2, '0')).join('-');
+  console.log(
+    `rule:depth-pass holds no feature document here: harness.json declares no depthPassSince. To hold those opened from tomorrow on, ` +
+      `add "depthPassSince": "${day}" to harness.json and commit it; null holds none and ends this line`,
+  );
+}
+
 /** Scope by location, the same rule as `uninstallMain` (T4 design): inside a git repository that
  * `js-harness init` touched (`harness.json` or a project manifest present), move the project to its pin;
  * outside any git repository with no `--cwd`, or with `--global`, re-write the machine install exactly as
@@ -518,7 +538,11 @@ export async function syncMain(argv, env = process.env, deps = {}) {
       }
       throw err;
     }
-    if (!projectResult.notGitRepo && !projectResult.notInitialized) return reportSyncProject(projectResult);
+    if (!projectResult.notGitRepo && !projectResult.notInitialized) {
+      const code = reportSyncProject(projectResult);
+      if (code === 0) offerDepthPass(projectResult.root, deps.now ?? Date.now());
+      return code;
+    }
     if (parsed.cwdExplicit || projectResult.notInitialized) {
       console.error(
         `not an initialized project: ${parsed.cwd}; js-harness sync --global syncs the machine install`,

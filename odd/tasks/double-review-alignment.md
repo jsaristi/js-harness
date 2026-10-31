@@ -178,7 +178,8 @@ State at the context pause (2026-10-31, after c1ce70e9). Open: question 150 to h
 acceptance of 147 and 148, L9); it blocks only T2's rule commit and T4. Next, in order: T5, then T3, then T2 and T4
 once 150 is answered. T5 progress: older texts 5 and 6 done in CLAUDE.md (3200 of 3200, `check`'s measure,
 CRLF folded, 2cb04248, a code commit since it refreshed `rules-coverage-data.mjs`: it needs Codex and the lenses),
-and 8, the contract template; left: 9 (`sync` offers `depthPassSince`), 10 and 12 (roadmap). Earlier notes: CLAUDE.md is at 3190 of 3200 tokens as `check` measures it; the two edits (`## Depth
+8, the contract template (5cbbca4c), and 9, 10 and 12 (`sync` offers `depthPassSince` from the next day, `null`
+declines it; the roadmap's two lines): T5 is done, and T3 is next. Earlier notes: CLAUDE.md is at 3190 of 3200 tokens as `check` measures it; the two edits (`## Depth
 pass` (rule 1) in the order at line 24, and line 92 "a skip is a debt `check`, `doctor` and the merge door list until
 a review pays it, and the door refuses a lens skip") measured 3237 with `estimateTokens` after the Edit tool, likely
 line endings; measure as `bin/lib/claude-md-budget.mjs` does before committing, and trim within the same paragraphs
@@ -208,7 +209,7 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
 - [ ] T4 (kind: build) `rules change double-review` (after L9's answer): section 1's one text, `claudeBlock` and
   section 7 name it, D5 retired by name, his rules on disagreement and rounds kept; older texts 1 to 3, 11, 14, 15;
   spec 2.
-- [ ] T5 (kind: build) Older texts 5, 6, 8, 9, 10, 12; spec 5.
+- [x] T5 (kind: build) Older texts 5, 6, 8, 9, 10, 12; spec 5; 2cb04248, 5cbbca4c and the commit of `sync`'s offer.
 - [ ] T6 (kind: verify) Reviews (Codex, lenses, an independent verifier for T2, a guard's input, and T3, two
   processes at once), gate, PR, older text 16; the report tells him how to try it (L1); spec all.
 
