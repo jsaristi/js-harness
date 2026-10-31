@@ -83,8 +83,8 @@ export const COVERAGE = {
       "test": "bin/lib/depth-pass.test.mjs",
       "break": {
         "path": "bin/lib/depth-pass.mjs",
-        "find": "if (mixed.length > 0) errors.push(",
-        "replace": "if (mixed.length < 0) errors.push("
+        "find": "if (at >= 0 && branch[at].code.length > 0) {",
+        "replace": "if (at >= 0 && branch[at].code.length < 0) {"
       }
     },
     "double-review": {

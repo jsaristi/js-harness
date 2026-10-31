@@ -174,7 +174,7 @@ test('section 9 holds the depth pass: large work defined, five items in order, a
   const items = ['1. Method: ', '2. Raw material: ', '3. The bar: ', '4. Refutation: ', '5. Request: '].map((item) => body.indexOf(`- ${item}`));
   assert.ok(items.every((at) => at !== -1), 'all five items');
   assert.deepEqual([...items].sort((a, b) => a - b), items, 'in his order, the rewritten request last');
-  for (const form of ['`spec <n>: <command>: <result>`', '`Verdict: supports`', '`Verdict: refutes`', '`answered: question <n>`', '`Adds: none`']) assert.ok(body.includes(form), form);
+  for (const form of ['`spec <n>:` with its command in a code span','`Verdict: supports`', '`Verdict: refutes`', '`answered: question <n>`', '`Adds: none`']) assert.ok(body.includes(form), form);
   assert.ok(body.includes('never the user\'s summary nor this document'), body);
   assert.ok(body.includes('reaches the user as a question before any code'), body);
   assert.ok(body.includes('The pass reaches the user in the feature\'s report (`rule:reports-spanish-visual`)'), body);

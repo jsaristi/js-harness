@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { depthPassErrors, depthPassFor, depthPassText } from './depth-pass.mjs';
+import { depthPassFor, depthPassText } from './depth-pass.mjs';
 import { checkContracts } from '../check.mjs';
 import { contractMain } from '../contract.mjs';
 
@@ -84,7 +84,7 @@ test('raw material that cites nothing, or only this document, is refused', () =>
 
 test('a numbered spec with no line in the bar is named', () => {
   const short = PASS.replace(/  spec 2: .*\n/, '');
-  assert.deepEqual(depthPassText(document(short), FILE), ['item 3, The bar, has no line for spec 2: `spec 2: <command>: <result>` or `spec 2: left out because <reason>`']);
+  assert.deepEqual(depthPassText(document(short), FILE), ['item 3, The bar, has no line for spec 2: `spec 2:`, its command in a code span, `:` and its result, or `spec 2: left out because <reason>`']);
 });
 
 test('a refutation with no command or no verdict is refused', () => {
@@ -93,6 +93,11 @@ test('a refutation with no command or no verdict is refused', () => {
     'item 4, Refutation, runs no command: name it in a code span with its result',
     'item 4, Refutation, gives no `Verdict: supports` or `Verdict: refutes`',
   ]);
+});
+
+test('a fenced example inside the pass is not read as its items', () => {
+  const fenced = PASS.replace('- 1. Method: a process engineer\'s, the incidents first.\n', '- 1. Method: a process engineer\'s, as in\n  ```\n  - 1. Method: an example\n  ```\n');
+  assert.deepEqual(depthPassText(document(fenced), FILE), []);
 });
 
 test('the request ends with what it adds: none, or what and the question that asked for it', () => {
@@ -107,18 +112,21 @@ function git(root, ...args) {
   return result.stdout.trim();
 }
 
-/** A repository whose `harness.json` declares `since` (or nothing), with one code file committed. */
-function repo(since = '2026-11-01') {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-depth-pass-'));
-  git(root, 'init', '-q');
-  git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
-  git(root, 'config', 'user.name', 'js-harness test');
+/** A repository whose `harness.json` declares `since` (or nothing), with one code file committed and the trunk,
+ * `origin/main`, at that commit, so what follows is the feature's branch. With `sub`, the project is that folder. */
+function repo(since = '2026-11-01', sub = '') {
+  const top = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-depth-pass-'));
+  const root = path.join(top, sub);
+  git(top, 'init', '-q');
+  git(top, 'config', 'user.email', 'js-harness-test@example.invalid');
+  git(top, 'config', 'user.name', 'js-harness test');
+  fs.mkdirSync(path.join(root, 'bin'), { recursive: true });
   fs.writeFileSync(path.join(root, 'harness.json'), JSON.stringify(since ? { depthPassSince: since } : {}));
-  fs.mkdirSync(path.join(root, 'bin'));
   fs.writeFileSync(path.join(root, 'bin', 'a.mjs'), 'one\n');
   fs.mkdirSync(path.join(root, 'odd', 'tasks'), { recursive: true });
-  git(root, 'add', '.');
-  git(root, 'commit', '-q', '-m', 'init');
+  git(top, 'add', '.');
+  git(top, 'commit', '-q', '-m', 'init');
+  git(top, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
   return root;
 }
 
@@ -127,7 +135,7 @@ const commit = (root, message, ...files) => {
   git(root, 'add', ...files);
   git(root, 'commit', '-q', '-m', message);
 };
-const errorsOf = (root, markdown = fs.readFileSync(path.join(root, FILE), 'utf8')) => depthPassErrors({ root, file: FILE, markdown });
+const errorsOf = (root, markdown = fs.readFileSync(path.join(root, FILE), 'utf8'), file = FILE) => depthPassFor(root)(file, markdown);
 
 test('the control holds only where harness.json declares depthPassSince, and only for a document opened since', (t) => {
   const none = repo(null);
@@ -204,6 +212,63 @@ test('a refuting verdict with code on the branch needs the answer that let it go
   assert.deepEqual(errorsOf(root), ['the verdict refutes and code is on the branch with no `answered: question <n>` in the pass']);
   write(root, FILE, document(PASS.replace('Verdict: supports', 'Verdict: refutes\n  answered: question 7')));
   assert.deepEqual(errorsOf(root), []);
+});
+
+test('code committed on the branch before the document opened is refused too', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  write(root, 'bin/a.mjs', 'two\n');
+  commit(root, 'feat: code first', 'bin/a.mjs');
+  write(root, FILE, document());
+  commit(root, 'docs: the pass', FILE);
+  assert.deepEqual(errorsOf(root), ['code was committed before the pass\'s verdict: bin/a.mjs']);
+});
+
+test('a verdict written outside the pass does not count as the pass\'s', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  write(root, FILE, `${CONTRACT}\n## Log\n- L1: the old rule said "Verdict: supports" in an example.\n\n${SPECS}`);
+  commit(root, 'docs: open', FILE);
+  write(root, 'bin/a.mjs', 'two\n');
+  commit(root, 'feat: early code', 'bin/a.mjs');
+  write(root, FILE, document());
+  commit(root, 'docs: the pass', FILE);
+  assert.deepEqual(errorsOf(root), ['code was committed before the pass\'s verdict: bin/a.mjs']);
+});
+
+test('once on the trunk, the order is not judged again: a squash, or a refuted plan and later code', (t) => {
+  const squash = repo();
+  const refuted = repo();
+  t.after(() => [squash, refuted].forEach((root) => fs.rmSync(root, { recursive: true, force: true })));
+  write(squash, FILE, document());
+  write(squash, 'bin/a.mjs', 'two\n');
+  commit(squash, 'feat: squashed (#1)', FILE, 'bin/a.mjs');
+  git(squash, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  assert.deepEqual(errorsOf(squash), []);
+  write(refuted, FILE, document(PASS.replace('Verdict: supports', 'Verdict: refutes')));
+  commit(refuted, 'docs: a plan the material refuted', FILE);
+  git(refuted, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  write(refuted, 'bin/a.mjs', 'two\n');
+  commit(refuted, 'feat: another feature', 'bin/a.mjs');
+  assert.deepEqual(errorsOf(refuted), []);
+});
+
+test('a renamed document keeps the day it opened', (t) => {
+  const root = repo('2026-11-03');
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  write(root, FILE, `${CONTRACT}\n${SPECS}`);
+  commit(root, 'docs: open', FILE);
+  git(root, 'mv', FILE, 'odd/tasks/renamed.md');
+  git(root, 'commit', '-q', '-m', 'docs: rename');
+  assert.deepEqual(depthPassFor(root, { today: '2026-11-05' })('odd/tasks/renamed.md', `${CONTRACT}\n${SPECS}`), []);
+});
+
+test('a project in a folder of its repository reads its documents\' days at their project paths', (t) => {
+  const root = repo('2026-11-03', 'project');
+  t.after(() => fs.rmSync(path.dirname(root), { recursive: true, force: true }));
+  write(root, FILE, `${CONTRACT}\n${SPECS}`);
+  commit(root, 'docs: open', FILE);
+  assert.deepEqual(depthPassFor(root, { today: '2026-11-05' })(FILE, `${CONTRACT}\n${SPECS}`), []);
 });
 
 test('contract check holds a file named on its command line to the control at its repository path', async (t) => {
