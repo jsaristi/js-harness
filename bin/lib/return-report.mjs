@@ -15,11 +15,13 @@
 // read from the transcript, as the live-board check reads its own: a warning that names the same return is not given
 // again.
 
+import path from 'node:path';
 import { readNotices } from './channel.mjs';
 import { harnessHome } from './home.mjs';
 import { linesHolding, personTimesIn } from './person-times.mjs';
 import { comparable, mainCheckout, projectSlug } from './sessions.mjs';
 import { isLeadSession } from './stale-board.mjs';
+import { pageTarget } from './template-gate.mjs';
 import { lastLineWith } from './stop-wake.mjs';
 import { RENDERED_SCHEMA, readRecord, renderedFile } from './template-record.mjs';
 
@@ -57,7 +59,8 @@ export function lastReturn(times) {
   return null;
 }
 
-/** The status-report pages the rendered record holds as written at or after `sinceMs`, as comparable paths. */
+/** The status-report pages the rendered record holds as written at or after `sinceMs`: each page's comparable path
+ * with the times it was written. */
 function pagesSince(file, sinceMs, readFile) {
   let lines;
   try {
@@ -65,12 +68,22 @@ function pagesSince(file, sinceMs, readFile) {
   } catch (err) {
     throw new Error(`the rendered record (${file}): ${err?.code ?? err?.message}`);
   }
-  return new Set(lines.filter((one) => one.template === 'status-report' && typeof one.path === 'string' && Date.parse(one.at) >= sinceMs).map((one) => comparable(one.path)));
+  const pages = new Map();
+  for (const one of lines) {
+    const at = Date.parse(one.at);
+    if (one.template !== 'status-report' || typeof one.path !== 'string' || !(at >= sinceMs)) continue;
+    const key = comparable(one.path);
+    pages.set(key, [...(pages.get(key) ?? []), at]);
+  }
+  return pages;
 }
 
-/** The URLs the `Artifact` calls of the transcript `text` made at or after `sinceMs` publishing one of `pages`: the
- * call's own `url` when it updates an artifact, and the link its result gives. */
-function publishedUrls(text, pages, sinceMs) {
+/** The URLs the `Artifact` calls of the transcript `text` made at or after `sinceMs` publishing one of `pages` after
+ * it was written: the call's own `url` when it updates an artifact, and the link its result gives. A call's files are
+ * read as the template gate reads them (`pageTarget`: the page, its `files` and their `root`), a relative one under
+ * the folder the call ran in (`cwd`). A publish older than every render of its file since then sent the report
+ * before them. */
+function publishedUrls(text, pages, sinceMs, cwd) {
   const calls = new Map();
   for (const written of linesHolding(text, ['"Artifact"'])) {
     let entry;
@@ -79,12 +92,14 @@ function publishedUrls(text, pages, sinceMs) {
     } catch {
       continue;
     }
-    if (entry?.type !== 'assistant' || entry.isSidechain || !(timeOf(entry) >= sinceMs)) continue;
+    const at = timeOf(entry);
+    if (entry?.type !== 'assistant' || entry.isSidechain || !(at >= sinceMs)) continue;
+    const folder = typeof entry.cwd === 'string' && entry.cwd !== '' ? entry.cwd : cwd;
     for (const block of blocksOf(entry)) {
-      const file = block.input?.file_path;
-      if (block.type === 'tool_use' && block.name === 'Artifact' && typeof block.id === 'string' && typeof file === 'string' && pages.has(comparable(file))) {
-        calls.set(block.id, typeof block.input.url === 'string' ? block.input.url : null);
-      }
+      if (block.type !== 'tool_use' || typeof block.id !== 'string') continue;
+      const files = pageTarget(block.name, block.input)?.files ?? [];
+      const carries = files.some((page) => (pages.get(comparable(path.resolve(folder, page))) ?? []).some((rendered) => rendered <= at));
+      if (carries) calls.set(block.id, typeof block.input.url === 'string' ? block.input.url : null);
     }
   }
   const urls = new Set();
@@ -139,7 +154,7 @@ export function returnReportWarning(payload, state, io) {
   if (warned !== null) return null;
 
   const pages = pagesSince(renderedFile(home, slug), backMs, io.readFile);
-  const urls = pages.size === 0 ? new Set() : publishedUrls(text, pages, backMs);
+  const urls = pages.size === 0 ? new Set() : publishedUrls(text, pages, backMs, cwd);
   if (linked(urls, payload.last_assistant_message, text, backMs)) return null;
 
   return `js-harness reply: ${RETURN_MARKER} ${(away / 3600_000).toFixed(1)} hours away (his message at ${hhmm(back)} UTC, `

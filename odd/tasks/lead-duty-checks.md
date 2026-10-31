@@ -70,8 +70,8 @@ Nothing here is his but the question of spec 4: it goes to the lead as a recorde
 - [x] T1 (kind: build) spec 2: the return check, tests first, the planted cases red then green — commits: `ceb2f3e8`
 - [x] T2 (kind: docs) spec 3: the list of the lead's duties and what checks each — commits: this document's
 - [x] T3 (kind: docs) spec 5: the `- Seen:` line and its control — commits: this document's
-- [ ] T4 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice — pending
-- [ ] T5 (kind: docs) spec 4: the recorded question to the lead — pending
+- [ ] T4 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice — in progress
+- [x] T5 (kind: docs) spec 4: the recorded question to the lead — question 135
 - [ ] T6 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice — pending
 
 ## The lead's duties and what checks each (T2)
@@ -228,3 +228,17 @@ The unchecked duties, most failed first, each with the check proposed (spec 4's 
   none holds a page not shown on his return, so two entries: `return-without-report` (`rule-not-acting`, controlled
   by the check of T1) and `board-summary-stale` (`unseen-state`, once, no control yet: row 1's proposal).
   `node bin/js-harness.mjs failures check` exits 0 (128 failures, 299 sightings).
+- L8 (2026-10-31, reviews of `1f19c04..767b6b5`): Claude lenses reliability, resilience, readability: 0 findings
+  each. Codex: part 2 correct (0.9); part 1 incorrect (0.95), two P2 findings, both real and fixed in the next commit,
+  tests first (red 2 of 16, then 16 of 16): (1) a page published through the call's `files` (map, list, `root`, a
+  relative path) was not recognized — the check now reads a call's files by the template gate's `pageTarget`,
+  relative ones under the call's `cwd`; (2) a publish older than the render it would carry was accepted when the
+  path was rendered again later — a publish now counts only after a render of its file since the return. The real
+  replay still warns at line 37935 and passes at 38120. The independent verifier is running.
+- L9 (2026-10-31, T5): question 135 recorded for the lead ("Los tres primeros (Recomendado)" | "Solo el del tablero" |
+  "Los tres y afirmaciones" | "Ninguno por ahora"); nothing of JH 115 waits on it.
+
+## Next step
+Commit the Codex fix; read the verifier's findings and fix the real ones, tests first; run `codex-review` and
+`lens-review` again from `767b6b5c`; push, open the PR, `notify --kind ready --pr <n>`; the summary under
+`docs/sessions/` and `notify --kind closed --summary`.

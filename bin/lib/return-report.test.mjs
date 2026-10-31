@@ -146,6 +146,35 @@ test('the publish call may name the page in another spelling of its path, and up
   assert.notEqual(check({ transcript: failed, renders: PAGE_RENDERED, message: LINKED }), null, 'a call the host refused published nothing');
 });
 
+// Codex's review of 1f19c04..767b6b5, part 1: a page published through the call's `files`, and a publish older than
+// the render it would carry.
+const publishedWith = (input, at = '2026-10-31T01:47:29.192Z', id = 'toolu_files') => [
+  line({ type: 'assistant', timestamp: at, cwd: path.dirname(PAGE), message: { role: 'assistant', content: [{ type: 'tool_use', id, name: 'Artifact', input }] } }),
+  line({ type: 'user', timestamp: at, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: `Published at ${URL} (Version 2).` }] } }),
+];
+
+test('a page published through the call\'s files, a map, a list or a relative path under its root, is the page', () => {
+  const other = path.resolve('/scratch/index.html');
+  for (const input of [
+    { file_path: other, files: { 'report.html': PAGE } },
+    { file_path: other, files: { 'report.html': { from: PAGE } } },
+    { file_path: other, files: [{ path: PAGE }] },
+    { file_path: other, root: path.dirname(PAGE), files: { 'r.html': path.basename(PAGE) } },
+    { file_path: path.basename(PAGE) },
+  ]) {
+    assert.equal(check({ transcript: [...RETURN, ...publishedWith(input)], renders: PAGE_RENDERED, message: LINKED }), null, JSON.stringify(input));
+  }
+  assert.notEqual(check({ transcript: [...RETURN, ...publishedWith({ action: 'read', url: URL, file_path: PAGE })], renders: PAGE_RENDERED, message: LINKED }), null, 'a read publishes nothing');
+});
+
+test('a publish before the render it would carry is not the page: the file it sent held the report before', () => {
+  // The path rendered before he came back, published at 01:40Z, and rendered again at 01:46:50Z: the 01:40Z artifact
+  // holds the old report.
+  const transcript = [...RETURN, ...published('2026-10-31T01:40:00.000Z')];
+  assert.notEqual(check({ transcript, renders: [rendered('2026-10-31T01:00:00.000Z'), ...PAGE_RENDERED], message: LINKED }), null);
+  assert.equal(check({ transcript: [...transcript, ...published('2026-10-31T01:47:29.192Z', PAGE, URL, 'toolu_again')], renders: PAGE_RENDERED, message: LINKED }), null, 'published again after the render');
+});
+
 // --- once a return, and only on Claude Code ---
 
 test('it warns once a return: a warning that names this return lets the next stop through; a later return is warned again', () => {
