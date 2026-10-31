@@ -13,7 +13,7 @@ import { killTree } from './lib/process-tree.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gatesOf, readGateBusiest, readGateLog } from './lib/gate-log.mjs';
-import { treeKey } from './lib/gate-tree.mjs';
+import { filesKey, treeKey } from './lib/gate-tree.mjs';
 import { issueTicket, readTickets } from './lib/gate-first.mjs';
 import { LEFT_MARK, SYNCED_MARK, TIMED_OUT_MARK } from './lib/gate-wsl.mjs';
 
@@ -4873,7 +4873,7 @@ test('a gate that waited for the lock looks for its proof once more: the gate it
     const at = new Date().toISOString();
     const take = async () => {
       appendGateEvent(home, { v: 1, event: 'start', id: 'abcdef0123456789', at, cwd: 'C:\\work\\other', command: 'check', pid: 7, lock: 'own', waitedSeconds: 0, waitedFor: [] });
-      appendGateEvent(home, { v: 1, event: 'end', id: 'abcdef0123456789', at, seconds: 3, result: 'pass', sensors: [], code: key });
+      appendGateEvent(home, { v: 1, event: 'end', id: 'abcdef0123456789', at, seconds: 3, result: 'pass', sensors: [], code: key, files: filesKey(asGit) });
       return { release: () => {}, beat: () => {}, lost: () => false, waitedMs: 5000 };
     };
     const { code, output } = await gate({}, { takeGateLock: take });
@@ -4947,6 +4947,33 @@ test('a tree whose tests failed on CI is not proven by a narrower pass here: the
     assert.equal(sensorRuns(), 1);
     const next = await gate({}, onCi);
     assert.equal(next.code, 1, `the commit entered on a pass narrower than the run that failed:\n${next.output}`);
+    assert.equal(ciRuns, 2, 'the commit did not go to CI again');
+    assert.equal(events().some((event) => event.event === 'same'), false);
+  } finally {
+    remove();
+  }
+});
+
+// JH 112 (odd/tasks/gate-push-holes.md, L4 and L5): the log is two rotating files, so a failure was forgotten once
+// rotation dropped it, and a pass after that proved the tree as if it had never failed.
+test('a tree whose tests failed on CI is not proven by a narrower pass here after the gate log rotated the failure away', async () => {
+  const { home, gate, sensorRuns, events, remove } = sameTreeRepo();
+  try {
+    let ciRuns = 0;
+    const onCi = {
+      ciGateWanted: () => 'the project holds .github/workflows/gate.yml, so a commit\'s tests go to GitHub\'s machines first',
+      runCiGate: async () => {
+        ciRuns += 1;
+        return { ran: true, pass: false, url: 'https://github.com/o/r/actions/runs/42', seconds: 200, output: '✖ failing tests:\n\ntest at bin/a.test.mjs:1:1\n✖ a test that needs .git (1ms)\n' };
+      },
+    };
+    assert.equal((await gate({}, onCi)).code, 1);
+    // Two rotations later neither file of the log holds a line of that gate.
+    for (const name of ['log.jsonl', 'log.1.jsonl']) fs.rmSync(path.join(gateLogDir(home), name), { force: true });
+    assert.equal((await gate()).code, 0);
+    assert.equal(sensorRuns(), 1);
+    const next = await gate({}, onCi);
+    assert.equal(next.code, 1, `the commit entered on a pass narrower than a run that failed and was rotated away:\n${next.output}`);
     assert.equal(ciRuns, 2, 'the commit did not go to CI again');
     assert.equal(events().some((event) => event.event === 'same'), false);
   } finally {
