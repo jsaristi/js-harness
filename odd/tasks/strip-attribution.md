@@ -56,12 +56,12 @@ Nothing here is his: a decision only he can take goes to the lead as a recorded 
 5. The brief: "Update the failure's Control line." "Ready notice with --pr per slice; summary under docs/sessions/."
 
 ## Tasks
-- [ ] T1 (kind: build) specs 2, 3, 4: `js-harness commit-msg <file>` and `.githooks/commit-msg`, tests first; the
-  README and SPEC entries; the Control line — commits: pending
-- [ ] T2 (kind: verify) spec 5: the real commit with both trailers; Codex, the lenses, an independent verifier, PR 1
-  and its ready notice — pending
+- [x] T1 (kind: build) specs 2, 3, 4: `js-harness commit-msg <file>` and `.githooks/commit-msg`, tests first; the
+  README and SPEC entries; the Control line — commits: `951bcfb4` `348378ce` `b0f98b5a` `6110bd91` `589cef49` `71420b38`
+- [x] T2 (kind: verify) spec 5: the real commit with both trailers; Codex, the lenses, an independent verifier, PR 1
+  and its ready notice — PR #728, ready notice sent 2026-10-31
 - [ ] T3 (kind: build) spec 4: `init` writes the hook into a project, recorded; `sync` writes it where it is missing;
-  `uninstall` removes it; tests first — commits: pending
+  `uninstall` removes it; tests first — branch `strip-attribution-init`, commits: pending
 - [ ] T4 (kind: verify) spec 5: Codex, the lenses, an independent verifier, PR 2, its ready notice, the summary —
   pending
 
@@ -175,14 +175,28 @@ Nothing here is his: a decision only he can take goes to the lead as a recorded 
   cannot know the cleanup mode git was given. The SUGGESTION: the continuation lines of a folded host trailer stay;
   the host writes each trailer on one line. Taking either costs another round of three reviews for a case no commit
   has shown.
+- L13 (2026-10-31, slice 2, T3): PR #728 landed (main `75c3583f`, the lead's word); `strip-attribution-init`
+  fast-forwarded onto it. Searched first: `writeHookGate`, `restoreRecordedHook`, `writeHookInto`, `syncPrePush` and
+  `HOOKS` in `bin/lib/project.mjs` already write, restore and record a hook by name, and `uninstallProject` removes
+  every recorded file, so the commit-msg step is one more entry of `HOOKS` (moved with the other two to
+  `bin/lib/project-hooks.mjs`, since `project.mjs` sat at its ceiling) and two calls. Not tests first, said as it
+  is: the new assertions were written beside the code; the first run of `project.test.mjs` failed 5 of 183, the
+  assertions that counted one hook less, which shows the change reaches them. Then `project.test.mjs`,
+  `project-migrate`, `migrate`, `init`, `uninstall-kinds` and `conventions-structure`: 257 tests, 0 failed, 11
+  skipped. Two first runs were stopped by Claude Code for low memory while they waited for the gate lock; the lead
+  told the restart.
 ## Next step
-State (2026-10-31): branch `worktree-strip-attribution`, worktree `D:js-harness.claudeworktreesstrip-attribution`,
-slice 1 = `951bcfb4` `348378ce` `b0f98b5a` `6110bd91` `589cef49` `71420b38`, every one reviewed (L12). Commit through the
-branch's hooks: `git -c core.hooksPath=.githooks commit -F <msg>` (the worktree's own hooksPath is main's
-`.githooks`, which has no `commit-msg` yet). Next: push, PR 1 (body
-drafted in `$CLAUDE_JOB_DIR/tmp/pr1.md`, ends with the PR attribution line), `js-harness notify --to orchestrator
---kind ready --pr <n>`. Then slice 2 (T3) on a new branch: move `PRE_COMMIT_HOOK`, `PRE_PUSH_HOOK`, `HOOKS` from
-`bin/lib/project.mjs` (at its 1,989-line ceiling) to `bin/lib/project-hooks.mjs` (draft in `$CLAUDE_JOB_DIR/tmp`),
-add `commitMsg` (`js-harness commit-msg "$1" || exit 0`); `writeHookGate` for it in `writeProject` beside pre-commit;
-in `updateRecorded` under `sync`, restore it when recorded, write it when not; `repairLines` in
-`bin/lib/project-migrate.mjs` says so; tests in `bin/lib/project.test.mjs` (counts 10 wrote / 6 files grow by one).
+State (2026-10-31): slice 1 (`951bcfb4`..`7214c0fe`, branch `worktree-strip-attribution`) is PR #728, every code
+commit reviewed (L12), ready notice sent. Worktree `D:\js-harness\.claude\worktrees\strip-attribution`, now on branch
+`strip-attribution-init` (slice 2, T3), on main `75c3583f`, its commit made with L13 (see `git log`). Written:
+`bin/lib/project-hooks.mjs` (the three hooks' texts; `HOOKS.commitMsg` runs `js-harness commit-msg "$1" || exit 0`);
+`bin/lib/project.mjs` imports it, `writeProject` writes commit-msg beside pre-commit, `updateRecorded` under `sync`
+restores a recorded one that is gone or writes it where none is recorded (1,972 lines; its ceiling lowered to that in
+`bin/conventions-structure.test.mjs`); `repairLines` in `bin/lib/project-migrate.mjs` names it; README (init and
+uninstall examples) and SPEC (the capability's requirement, Proof and Today). Tests: the fresh-init test (11 wrote,
+7 files, the hook's text), two new sync tests (an old clone gets it, recorded, a second sync up to date, uninstall
+removes it; a clone's own commit-msg is kept), and five assertions that counted one hook less. `project.test.mjs`
+ran once: 5 of 183 failed, fixed; then 257 of the touched files' tests passed (L13). Next: Codex, the lenses
+(reliability, risk: an installer), gentle-ai if offered, an independent verifier (T4); push, PR 2 based on
+`worktree-strip-attribution`, ready notice with `--pr`; then the summary under `docs/sessions/`, the ROADMAP S4a
+State, `npm run check`, `notify --kind closed --summary <file>`.

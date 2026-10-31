@@ -149,7 +149,7 @@ test('codeOfName offers the initials of a project\'s name as its code', () => {
 
 // --- fresh repo: all four actions ---
 
-test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit hook, and runs codegraph init', () => {
+test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit and commit-msg hooks, and runs codegraph init', () => {
   const root = makeCodeRepo();
   try {
     const spawn = makeSpawn({ status: 0, stdout: 'ok', stderr: '' });
@@ -180,15 +180,23 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
       assert.equal(fs.statSync(hookPath).mode & 0o777, 0o755);
     }
 
+    // The step that takes the host's attribution lines out of each commit message (odd/tasks/strip-attribution.md).
+    const commitMsgPath = path.join(root, '.git', 'hooks', 'commit-msg');
+    assert.match(fs.readFileSync(commitMsgPath, 'utf8'), /^#!\/bin\/sh\n# Written by js-harness init; js-harness uninstall removes it\.[^]*\njs-harness commit-msg "\$1" \|\| exit 0\n$/);
+    if (process.platform !== 'win32') {
+      assert.equal(fs.statSync(commitMsgPath).mode & 0o777, 0o755);
+    }
+
     assert.equal(spawn.codegraphCalls.length, 1);
 
-    // Five files (the failures register and CLAUDE.md among them), the push check of a project with code (its Codex
+    // Five files (the failures register and CLAUDE.md among them), the commit-msg step, the push check of a project with code (its Codex
     // review is on), the style and the denies every clone holds (odd/tasks/f8-s10-port.md, T5), and the two keys of
     // this clone's settings a project of JavaScript with no TypeScript asks for.
     const wroteActions = result.actions.filter((a) => a.kind === 'wrote');
     const ranActions = result.actions.filter((a) => a.kind === 'ran');
-    assert.equal(wroteActions.length, 10);
+    assert.equal(wroteActions.length, 11);
     assert.deepEqual(wroteActions.slice(5).map((a) => a.path), [
+      '.git/hooks/commit-msg',
       '.git/hooks/pre-push',
       '.claude/settings.local.json#/outputStyle',
       '.claude/settings.local.json#/permissions/deny',
@@ -203,7 +211,7 @@ test('initProject on a fresh repo writes harness.json, AGENTS.md, the pre-commit
     assert.equal(result.manifest.version, '0.1.0');
     assert.equal(result.manifest.format, 3);
     assert.deepEqual(result.manifest.settings.map((record) => record.key), ['outputStyle', 'denies', 'paste', 'languageServer']);
-    assert.equal(result.manifest.files.length, 6);
+    assert.equal(result.manifest.files.length, 7);
     for (const file of result.manifest.files) {
       const abs = path.join(root, ...file.path.split('/'));
       assert.equal(sha256(fs.readFileSync(abs, 'utf8')), file.sha256);
@@ -615,9 +623,14 @@ test('initProject keeps (never writes) a pre-commit hook whose core.hooksPath re
     assert.match(keptEntry.reason, /\(core\.hooksPath\)/);
     assert.doesNotMatch(keptEntry.reason, /a link/);
 
+    // The commit-msg step is kept outside the same way, naming its own command.
+    const commitMsg = result.manifest.kept.find((k) => k.outside === true && k !== keptEntry);
+    assert.equal(path.resolve(commitMsg.path.split('/').join(path.sep)), path.join(fs.realpathSync(outsideDir), 'commit-msg'));
+    assert.match(commitMsg.reason, /js-harness commit-msg/);
+
     // Every other kept/written entry stays plain (no `outside` field).
     for (const entry of result.manifest.kept) {
-      if (entry !== keptEntry) assert.ok(!('outside' in entry));
+      if (entry !== keptEntry && entry !== commitMsg) assert.ok(!('outside' in entry));
     }
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -1848,9 +1861,10 @@ test('initProject counts a symlink hop that lands at or below a base even though
     // choice — keyed off the lexical, unresolved hooksPath rather than its resolution — was never
     // designed for; out of scope for this fix, which is only about `hadSymlink` detection.)
     assert.equal(fs.existsSync(path.join(actualHooks, 'pre-commit')), false);
-    assert.equal(result.manifest.kept.length, 1);
-    assert.ok(!result.manifest.kept[0].outside);
-    assert.ok(!result.actions.some((a) => a.kind === 'wrote' && a.path.includes('pre-commit')));
+    // The pre-commit gate and the commit-msg step, each kept the same way.
+    assert.equal(result.manifest.kept.length, 2);
+    assert.ok(result.manifest.kept.every((k) => !k.outside));
+    assert.ok(!result.actions.some((a) => a.kind === 'wrote' && /pre-commit|commit-msg/.test(a.path)));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(outsideDir, { recursive: true, force: true });
@@ -2966,12 +2980,13 @@ test('syncProject sets a fresh clone up: the hook, codegraph init and a manifest
     assert.equal(fs.readFileSync(path.join(root, 'harness.json'), 'utf8'), harnessBefore);
     assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), agentsBefore);
 
-    // The two hooks, the style and the denies every clone holds, and the two keys of this clone's own settings (a
+    // The three hooks, the style and the denies every clone holds, and the two keys of this clone's own settings (a
     // clone applies its switches for itself).
     assert.deepEqual(
       result.actions.filter((a) => a.kind === 'wrote').map((a) => a.path),
       [
         '.git/hooks/pre-commit',
+        '.git/hooks/commit-msg',
         '.git/hooks/pre-push',
         '.claude/settings.local.json#/outputStyle',
         '.claude/settings.local.json#/permissions/deny',
@@ -2984,7 +2999,7 @@ test('syncProject sets a fresh clone up: the hook, codegraph init and a manifest
     const onDisk = JSON.parse(fs.readFileSync(path.join(root, ...MANIFEST_REL), 'utf8'));
     assert.deepEqual(onDisk, result.manifest);
     assert.equal(onDisk.version, '0.1.0');
-    assert.deepEqual(onDisk.files.map((f) => f.path), ['.git/hooks/pre-commit', '.git/hooks/pre-push']);
+    assert.deepEqual(onDisk.files.map((f) => f.path), ['.git/hooks/pre-commit', '.git/hooks/commit-msg', '.git/hooks/pre-push']);
     assert.deepEqual(onDisk.files[0], { path: '.git/hooks/pre-commit', sha256: sha256(HOOK_CONTENT) });
     assert.deepEqual(onDisk.kept, [
       { path: 'harness.json', reason: 'committed' },
@@ -3034,7 +3049,7 @@ test('syncProject does not create an AGENTS.md a fresh clone lacks, and reports 
     assert.equal(fs.existsSync(path.join(root, 'docs')), false);
     assert.ok(result.actions.some((a) => a.kind === 'skip' && a.path === 'docs/FAILURES.md'));
     assert.deepEqual(result.manifest.kept, [{ path: 'harness.json', reason: 'committed' }]);
-    assert.deepEqual(result.manifest.files.map((f) => f.path), ['.git/hooks/pre-commit']);
+    assert.deepEqual(result.manifest.files.map((f) => f.path), ['.git/hooks/pre-commit', '.git/hooks/commit-msg']);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -3050,7 +3065,7 @@ test('syncProject keeps a pre-commit hook a fresh clone already has, and never o
 
     assert.equal(result.code, 0);
     assert.equal(fs.readFileSync(hookPath, 'utf8'), '#!/bin/sh\necho theirs\n');
-    assert.deepEqual(result.manifest.files, []);
+    assert.deepEqual(result.manifest.files.map((f) => f.path), ['.git/hooks/commit-msg']);
     const keptHook = result.manifest.kept.find((k) => k.path === '.git/hooks/pre-commit');
     assert.ok(keptHook, 'expected the existing hook in kept');
     assert.match(keptHook.reason, /js-harness check/);
@@ -3199,6 +3214,57 @@ test('syncProject writes a recorded hook that is gone again, leaving the manifes
     assert.deepEqual(result.actions, [{ kind: 'wrote', path: '.git/hooks/pre-commit', sha256: sha256(HOOK_CONTENT) }]);
     assert.equal(fs.readFileSync(hookPath, 'utf8'), HOOK_CONTENT);
     assert.deepEqual(fs.readFileSync(initResult.manifestPath), manifestBytes); // nothing new to record
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('syncProject writes the commit-msg step into a clone init set up before it wrote one, records it, and uninstall takes it out', () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const hookPath = path.join(root, '.git', 'hooks', 'commit-msg');
+    const content = fs.readFileSync(hookPath, 'utf8');
+    // The clone as an older init left it: no commit-msg hook, and none in the manifest.
+    fs.rmSync(hookPath);
+    const manifest = JSON.parse(fs.readFileSync(initResult.manifestPath, 'utf8'));
+    manifest.files = manifest.files.filter((file) => file.path !== '.git/hooks/commit-msg');
+    fs.writeFileSync(initResult.manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+
+    const result = syncProject(root, '0.1.0', syncDeps());
+
+    assert.equal(result.code, 0);
+    assert.deepEqual(result.actions, [{ kind: 'wrote', path: '.git/hooks/commit-msg', sha256: sha256(content) }]);
+    assert.equal(fs.readFileSync(hookPath, 'utf8'), content);
+    const synced = JSON.parse(fs.readFileSync(initResult.manifestPath, 'utf8'));
+    assert.deepEqual(synced.files.find((file) => file.path === '.git/hooks/commit-msg'), { path: '.git/hooks/commit-msg', sha256: sha256(content) });
+    assert.equal(syncProject(root, '0.1.0', syncDeps()).upToDate, true, 'a second sync has nothing to write');
+
+    assert.equal(uninstallProject(root, { spawn: spawnSync }).code, 0);
+    assert.equal(fs.existsSync(hookPath), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("syncProject keeps a commit-msg hook a clone has of its own, and never overwrites it", () => {
+  const root = makeTmpRepo();
+  try {
+    const initResult = initProject(root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const hookPath = path.join(root, '.git', 'hooks', 'commit-msg');
+    const manifest = JSON.parse(fs.readFileSync(initResult.manifestPath, 'utf8'));
+    manifest.files = manifest.files.filter((file) => file.path !== '.git/hooks/commit-msg');
+    fs.writeFileSync(initResult.manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+    fs.writeFileSync(hookPath, '#!/bin/sh\necho mine\n');
+
+    const result = syncProject(root, '0.1.0', syncDeps());
+
+    assert.equal(result.code, 0);
+    assert.equal(fs.readFileSync(hookPath, 'utf8'), '#!/bin/sh\necho mine\n');
+    assert.ok(result.actions.some((a) => a.kind === 'kept' && a.path === '.git/hooks/commit-msg'));
+    assert.ok(!result.actions.some((a) => a.kind === 'wrote'));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

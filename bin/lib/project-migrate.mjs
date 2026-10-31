@@ -176,13 +176,18 @@ function uncommittedOf(root, spawn, names) {
 }
 
 /** What `sync` repairs in the clone that `clonePending` does not read (`updateRecorded`): the pre-commit gate of a
- * manifest `functions apply` wrote or a recorded one that is gone, and the `.atl/` exclude line of a clone with no
- * record of it. */
+ * manifest `functions apply` wrote or a recorded one that is gone, the commit-msg step where none is recorded or the
+ * one recorded is gone, and the `.atl/` exclude line of a clone with no record of it. */
 function repairLines({ root, manifest, spawn }) {
   const lines = [];
-  const gate = manifest.files.find((file) => file.path.split('/').pop() === 'pre-commit');
+  const hook = (name) => manifest.files.find((file) => file.path.split('/').pop() === name);
+  const gone = (entry) => !fs.existsSync(resolveManifestEntryPath(root, entry));
+  const gate = hook('pre-commit');
   if (manifest.scope === 'functions') lines.push('the pre-commit gate: written, as sync sets the clone up the rest of the way');
-  else if (gate && !fs.existsSync(resolveManifestEntryPath(root, gate))) lines.push('the pre-commit gate: written again, since the one recorded is gone');
+  else if (gate && gone(gate)) lines.push('the pre-commit gate: written again, since the one recorded is gone');
+  const commitMsg = hook('commit-msg');
+  if (!commitMsg) lines.push("the commit-msg step that takes the host's attribution lines out: written, or kept where the clone has a commit-msg hook of its own");
+  else if (gone(commitMsg)) lines.push('the commit-msg step: written again, since the one recorded is gone');
   // Only where sync would write it: an exclude file behind a link, or outside the repository, sync keeps as it is.
   if (!manifest.exclude) {
     const target = excludeFile(root, spawn);
