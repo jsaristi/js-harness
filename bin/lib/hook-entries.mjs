@@ -105,7 +105,8 @@ export const SHARE_HOOK_COMMAND = 'js-harness guard --stop || exit 0';
  * more than SHARE_TOLERANCE points from the share its transcript records is turned back to be corrected (odd/tasks/honesty-audit.md,
  * T16), as is a reply that states a forecast with no estimate mark (odd/tasks/estimate-as-fact.md). A `Stop` entry
  * takes no matcher. Claude Code only: the transcript it reads is Claude Code's. Five seconds: it reads the transcript
- * once, and only when the reply states a share; the forecast is read from the reply's text in about 20 ms. */
+ * once, and only when the reply states a share; the forecast is read from the reply's text, its first reading in a fresh process
+ * measured at 11 to 22 ms on a reply of 3,588 characters (odd/tasks/estimate-as-fact.md, L5 and L7). */
 export function shareHookEntry() {
   return {
     hooks: [{ type: 'command', command: SHARE_HOOK_COMMAND, timeout: 5 }],

@@ -119,3 +119,27 @@ changes no rule of his. Spend: one gate, one Codex review, the Claude lenses, on
   sends the reply's text, so the transcript read stays where it was: only for a reply that states a share. The reply
   hook's budget tests (`bin/reply-budget.test.mjs`) time `js-harness reply --hook`, another process, which this
   change does not touch; they are run before the push (T3).
+- L6 (2026-10-31, reviews of 9e22eb36..41f774d8): the Claude lenses reliability and risk, 0 findings (recorded).
+  Codex, "the patch is incorrect" (0.99), one P2: quoted text or inline code holding a sentence's end ("Ready. The
+  gate will take 12 minutes.") was cut into clauses before `proseOf` masked it, so the part after the cut was read
+  as the writer's. Fixed: each prose line is masked first, with masks padded to the same length (`CODE`, `QUOTE`), its
+  clauses cut from the masked line (`clauseSpans`, which also takes the cut after bold marks) and quoted from the
+  line as written. RED: 1 (Codex's two inputs); GREEN: audit 20/20, guard 39/39; counts unchanged (0 of 597, 10 of
+  7,588).
+- L7 (2026-10-31, the independent verifier on 41f774d8, read from `git archive 41f774d8`): `ownShares` identical to
+  before on 100,236 inputs at 4 windows and on 2,043 real replies (0 differences); `guard --stop` identical on 768
+  payload combinations, an old reason always kept, a throw always letting the stop through. Two WARNINGs, fixed:
+  `\b` knows no accented letter, so "lo medí" and "leí" never named a measurement (a real false positive in the
+  status-line worktree's transcript); "I'll" and "I will", the writer's own plan, were read. NOTEs fixed: quadratic
+  time on long single-line clauses (10.2 s on 49 KB of "5 s "): word indexes found by halving over the word starts
+  read once, the future words marked in one array, the path pattern read from a word's start and the cost pattern's
+  adjacent `\s*` made `\s?`; an ISO date read as a range; a curly apostrophe; euros; "Irán" read as a future. NOTEs
+  left, written as known: a scheduled time said in the future tense ("la próxima corrida será a las 3:05", none in
+  the transcripts); a forecast with no future verb ("Listo en 12 minutos", "Quedan 20 minutos"); marks that pass a
+  clause from anywhere in it ("~/repo", "y/o"); a reply stating a share and a forecast with an unreadable transcript,
+  or none sent and no reply with usage, stops quietly (fail open, as every failure of the hook); "-ería" nouns past
+  the list; a counterfactual past ("habría tardado"); indented code and HTML comments read as prose. RED: 3 (the
+  verifier's inputs, and 21 s on the long-line test); GREEN: audit 21/21, guard 39/39. Counts after: 0 of the
+  lead's 597; 9 of 7,588 over the 120 work transcripts, 5 distinct (forks repeat them), 1 true. Cold cost after: the
+  first `forecastRefusal` on 3,588 characters 10.7 to 11.7 ms, import 31 to 34 ms (`cold.mjs`, three runs, a
+  quieter machine than L5's).

@@ -1868,7 +1868,7 @@ or a bound) and no measurement named (a measuring word with the command in backt
 A figure in a code block, inline code, a quote line or quoted text is not the writer's and is not
 read, nor is a past or present figure, a plan of the writer's own ("volveré a las 10:30", "voy a")
 or a figure inside a condition ("si ... en 12 minutos,"). Over the lead's transcript of 2026-10-31
-it turned back none of 596 replies, and 10 of 7,588 over 120 work sessions' transcripts
+it turned back none of 597 replies, and 9 of 7,588 over 120 work sessions' transcripts
 (odd/tasks/estimate-as-fact.md). Both reasons go in one turn-back when both hold.
 
 ```console

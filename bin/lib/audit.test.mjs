@@ -231,6 +231,10 @@ const BARE = [
   'La sesión estará lista a las 11:00.',
   // From a work session's transcript (43523cfc, 2026-10-10), the one bare forecast its replies held.
   'Escribirlos ahora costaría otro gate de 17 minutos, así que van con el próximo commit del registro.',
+  // The verifier on 41f774d8: a date is no range, a curly apostrophe, a cost in euros.
+  'El gate del 2026-10-31 tardará 12 minutos.',
+  'It’ll take 12 minutes.',
+  'La revisión costará 70 euros.',
 ];
 
 // The same forecasts marked as estimates, or naming what measured them: each passes.
@@ -280,6 +284,15 @@ const NOT_FORECASTS = [
   // Two of a third 40 (L4): a bound after a time, and a range in digits joined by "o".
   '- **Lo que no vi en rojo:** el P1, porque recién se manifestaría después de las 19:45 UTC.',
   '**Correr el gate dentro de Linux en tu misma PC (WSL2):** podría bajar los 12 minutos a 3 o 4.',
+  // Codex on 41f774d8: quoted text and inline code that hold a sentence's end are masked before the clauses are cut.
+  'JH said: "Ready. The gate will take 12 minutes."',
+  'I ran `echo ready; sleep 720 # will take 12 min` to hold the lock.',
+  // The verifier on 41f774d8: a measuring word ending in an accented letter, the English first person, a past trip.
+  '`js-harness sessions --json` tardó 24,1 s y el host corta el programa a los 10 s (lo medí una vez en `powershell`).',
+  'Lo leí en gate-log.jsonl: el gate tardará 12 minutos.',
+  'I\'ll report back at 10:30 with the result.',
+  'I will check again at 10:30.',
+  'El vuelo a Irán salió a las 10:30.',
 ];
 
 test('statedFigures reads a bare forecast as one, with the clause it is in', () => {
@@ -292,6 +305,14 @@ test('statedFigures leaves out a forecast marked as an estimate or naming what m
 
 test('statedFigures leaves out a past or present figure, a plan of the writer\'s own, and a figure in code or a quote', () => {
   for (const text of NOT_FORECASTS) assert.deepEqual(statedFigures(text).forecasts, [], text);
+});
+
+test('statedFigures reads a long line of figures in linear time', () => {
+  const started = performance.now();
+  statedFigures('5 s '.repeat(12_500));
+  statedFigures(`según 5 ${'a-'.repeat(25_000)}`);
+  statedFigures(`5${' '.repeat(50_000)}x`);
+  assert.ok(performance.now() - started < 1000, `${Math.round(performance.now() - started)} ms`);
 });
 
 test('statedFigures reads the shares in the same walk, as ownShares reads them', () => {
@@ -310,6 +331,7 @@ test('forecastRefusal names the bare forecast and asks for its mark or its measu
   assert.equal(forecastRefusal('El gate tardará unos 12 minutos.'), null);
   assert.equal(forecastRefusal('Nothing to forecast.'), null);
   assert.equal(forecastRefusal(''), null);
+  assert.match(forecastRefusal('Listo. El gate (`npm run check`) tardará 12 minutos.'), /"El gate \(`npm run check`\) tardará 12 minutos\."/, 'the clause is quoted as written');
   const long = `El gate tardará 12 minutos ${'y algo más '.repeat(40)}.`;
   assert.ok(forecastRefusal(long).length < 600, 'a long clause is cut');
 });

@@ -70,12 +70,13 @@ function sharesOf(clause, window) {
 // A forecast (odd/tasks/estimate-as-fact.md) is a figure of what has not happened yet: no command measured it, so
 // stated bare it is an estimate said as a fact. The figure is a duration, a time of day or a cost; "cada 5 minutos"
 // and "every 5 minutes" are a frequency, not a forecast.
-const FIGURE = /(?<!\b(?:cada|every|per)\s)(?:\b\d+(?:[.,]\d+)?\s*(?:s|seg(?:undos?)?|sec(?:onds?)?|min(?:utos?|utes?|s)?|h|hrs?|horas?|hours?|d[íi]as?|days?|semanas?|weeks?)\b|\b\d{1,2}:\d{2}\b|\$\s?\d|\b\d+(?:[.,]\d+)?\s*(?:k|M|mil|millones?|millions?)?\s*(?:de\s+)?(?:tokens|USD|d[óo]lares|dollars)\b)/giu;
+const FIGURE = /(?<!\b(?:cada|every|per)\s)(?:\b\d+(?:[.,]\d+)?\s*(?:s|seg(?:undos?)?|sec(?:onds?)?|min(?:utos?|utes?|s)?|h|hrs?|horas?|hours?|d[íi]as?|days?|semanas?|weeks?)\b|\b\d{1,2}:\d{2}\b|\$\s?\d|€\s?\d|\d\s?€|\b\d+(?:[.,]\d+)?\s?(?:k|M|mil|millones?|millions?)?\s?(?:de\s)?(?:tokens|USD|d[óo]lares|dollars|euros?)\b)/giu;
 // The future in a word: Spanish's third person future ("tardará", "tendrá", "habrá") and its conditional ("costaría",
 // "podría", "habría"), whose stems are chosen so that the imperfect ("corría", "abría") and "mayoría" are not read;
-// English's "will", "would", "going" and "'ll". The first person future, "volveré", is a plan of the writer's own and
-// is not read; nor are the nouns in -ería of NOT_FUTURE.
-const FUTURE_WORD = /^(?:\p{L}*[aeidbr]r(?:á|án)|\p{L}*(?:[aeid]|hab|sab|cab|quer)r(?:ía|ían)|will|would|going|eta|\p{L}+'ll)$/iu;
+// English's "will", "would", "going" and "'ll". The first person future, "volveré", "I will" or "we'll", is a plan of
+// the writer's own and is not read (FIRST_PERSON); nor are the nouns in -ería of NOT_FUTURE, nor "Irán".
+const FUTURE_WORD = /^(?:\p{L}+[aeidbr]r(?:á|án)|\p{L}*(?:[aeid]|hab|sab|cab|quer)r(?:ía|ían)|will|would|going|eta|\p{L}+['’]ll)$/iu;
+const FIRST_PERSON = /^(?:i|we)(?:['’]ll)?$/iu;
 const NOT_FUTURE = /^(?:librer|galer|bater|ingenier|mensajer|cafeter|tonter|loter|panader|carpinter)ías?$/iu;
 // The future in a phrase: "va a costar", "dentro de 10 minutos", "faltan 20 minutos", "should take", "by 10:30". "Voy a"
 // and "vamos a" are a plan of the writer's own; "para las 3:05" is the time a run is set for, a fact of the schedule.
@@ -85,29 +86,64 @@ const CONDITION = /\b(?:si|if)\b[^,;:]*/giu;
 // How near, in words, a figure stands to the future that it is a forecast of.
 const FORECAST_SPAN = 6;
 // A mark that the writer says the figure is an estimate, a bound or a range, in Spanish or English.
-const ESTIMATE_MARK = /\bunos\b|\bunas\b|\bcerca\b|alrededor\s+de|\bhacia\b|\baprox|estimad|\bestimo\b|estimaci[óo]n|\bcalcul|c[áa]lculo|a\s+ojo|m[áa]s\s+o\s+menos|del\s+orden|quiz[áa]|probablemente|posiblemente|aritm[ée]tica|sin\s+medir|no\s+medid|\bhasta\b|a\s+lo\s+sumo|como\s+m[áa]ximo|como\s+mucho|menos\s+de|m[áa]s\s+de|\bentre\b|~|≈|≲|\babout\b|\baround\b|\bnear(?:ly)?\b|roughly|approx|estimat|\bguess|\bmaybe\b|perhaps|probably|likely|at\s+most|up\s+to|less\s+than|more\s+than|arithmetic|not\s+measured|or\s+so|\bsome\b|antes\s+de|despu[ée]s\s+de|\bbefore\b|\bafter\b|\d\s*(?:a|o|-|–|to|or)\s*\d|\b(?:un[oa]?|dos|tres|one|two|three)\s+(?:o|or)\s+(?:dos|tres|cuatro|two|three|four)\b/iu;
-// A measurement named: a measuring word and where it was read, a command in backticks (here `CODE`) or a file.
-const MEASURED = /medid|\bmed[íi]\b|midi[óo]|measured|\ble[íi]\b|le[íi]d[oa]|\bread\b|seg[úu]n|\bper\b|[úu]ltim[oa]s?|\blast\b/iu;
-const MEASURED_WHERE = /\bCODE\b|[\w-]+\/[\w./-]+|\b[\w-]+\.(?:mjs|js|md|json|jsonl|txt|log)\b/u;
+const ESTIMATE_MARK = /\bunos\b|\bunas\b|\bcerca\b|alrededor\s+de|\bhacia\b|\baprox|estimad|\bestimo\b|estimaci[óo]n|\bcalcul|c[áa]lculo|a\s+ojo|m[áa]s\s+o\s+menos|del\s+orden|quiz[áa]|probablemente|posiblemente|aritm[ée]tica|sin\s+medir|no\s+medid|\bhasta\b|a\s+lo\s+sumo|como\s+m[áa]ximo|como\s+mucho|menos\s+de|m[áa]s\s+de|\bentre\b|~|≈|≲|\babout\b|\baround\b|\bnear(?:ly)?\b|roughly|approx|estimat|\bguess|\bmaybe\b|perhaps|probably|likely|at\s+most|up\s+to|less\s+than|more\s+than|arithmetic|not\s+measured|or\s+so|\bsome\b|antes\s+de|despu[ée]s\s+de|\bbefore\b|\bafter\b|(?<![\d-])\d{1,4}\s*(?:a|o|-|–|to|or)\s*\d{1,4}(?![\d-])|\b(?:un[oa]?|dos|tres|one|two|three)\s+(?:o|or)\s+(?:dos|tres|cuatro|two|three|four)\b/iu;
+// A measurement named: a measuring word and where it was read, a command in backticks (here `CODE`) or a file. `\b`
+// knows no accented letter, so "medí" and "leí" end at `(?!\p{L})` (the verifier on 41f774d8); a path is read from a
+// word's start, so a long word costs one pass.
+const MEASURED = /medid|\bmed[íi](?!\p{L})|midi[óo]|measured|\ble[íi](?!\p{L})|le[íi]d[oa]|\bread\b|seg[úu]n|\bper\b|[úu]ltim[oa]s?|\blast\b/iu;
+const MEASURED_WHERE = /\bCODE\b|(?<![\w-])[\w-]+\/[\w./-]+|(?<![\w-])[\w-]+\.(?:mjs|js|md|json|jsonl|txt|log)\b/u;
 
-/** The words before `offset` of `clause`: the index of the word that starts there. */
-const wordIndex = (clause, offset) => clause.slice(0, offset).split(/\s+/).filter(Boolean).length;
-
-/** The forecasts said as facts in the one clause `clause` of the writer's prose, as `[{ clause }]` (`statedFigures`). */
-function forecastsOf(written) {
-  // A clause with no digit holds no figure, and most clauses hold none: the cheap test runs first.
-  if (!/\d/.test(written) || ESTIMATE_MARK.test(written) || (MEASURED.test(written) && MEASURED_WHERE.test(written))) return [];
-  const clause = written.replace(CONDITION, 'COND');
-  const figures = [...clause.matchAll(FIGURE)].map((match) => wordIndex(clause, match.index));
-  if (figures.length === 0) return [];
-  const isFuture = (word) => FUTURE_WORD.test(word) && !NOT_FUTURE.test(word);
-  const futures = clause.split(/\s+/).filter(Boolean).flatMap((word, at) => (isFuture(word.replace(/^[^\p{L}\d']+|[^\p{L}\d']+$/gu, '')) ? [at] : []));
-  for (const match of clause.matchAll(FUTURE_PHRASE)) futures.push(wordIndex(clause, match.index));
-  return figures.some((figure) => futures.some((future) => Math.abs(figure - future) <= FORECAST_SPAN)) ? [{ clause }] : [];
+/** The index of the word at `offset` of a clause whose words start at the sorted offsets `starts`: the number of words
+ * that start before it, found by halving, so a clause of many figures costs no pass of its own per figure. */
+function wordIndex(starts, offset) {
+  let low = 0;
+  let high = starts.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (starts[middle] < offset) low = middle + 1;
+    else high = middle;
+  }
+  return low;
 }
 
-/** The writer's prose of the one line `line`: inline code and quoted text stand as one word each, `CODE` and `QUOTE`. */
-const proseOf = (line) => line.replace(/`[^`]*`/g, ' CODE ').replace(/"[^"]*"|“[^”]*”|«[^»]*»/g, ' QUOTE ');
+/** Whether the clause `written` of the writer's prose, its code and quotes masked, states a forecast as a fact. */
+function isBareForecast(written) {
+  // A clause with no digit holds no figure, and most clauses hold none: the cheap test runs first.
+  if (!/\d/.test(written) || ESTIMATE_MARK.test(written) || (MEASURED.test(written) && MEASURED_WHERE.test(written))) return false;
+  const clause = written.replace(CONDITION, 'COND');
+  const found = [...clause.matchAll(/\S+/g)];
+  const starts = found.map((match) => match.index);
+  const figures = [...clause.matchAll(FIGURE)].map((match) => wordIndex(starts, match.index));
+  if (figures.length === 0) return false;
+  const words = found.map((match) => match[0].replace(/^[^\p{L}\d'’]+|[^\p{L}\d'’]+$/gu, ''));
+  const future = new Array(words.length + 1).fill(false);
+  words.forEach((word, at) => {
+    if (FUTURE_WORD.test(word) && !NOT_FUTURE.test(word) && !FIRST_PERSON.test(word) && !FIRST_PERSON.test(words[at - 1] ?? '')) future[at] = true;
+  });
+  for (const match of clause.matchAll(FUTURE_PHRASE)) future[wordIndex(starts, match.index)] = true;
+  return figures.some((figure) => future.slice(Math.max(0, figure - FORECAST_SPAN), figure + FORECAST_SPAN + 1).includes(true));
+}
+
+/** `word` padded with spaces to `length`, or spaces alone when it does not fit: a mask that keeps a line's offsets. */
+const maskOf = (word, length) => (length >= word.length ? word.padEnd(length) : ' '.repeat(length));
+
+/** The writer's prose of the one line `line`: inline code and quoted text masked as `CODE` and `QUOTE`, padded to the
+ * same length so a clause cut from it maps back to the line, and masked before the cut so a sentence's end inside a
+ * quote or a command cuts nothing (Codex on 41f774d8). */
+const proseOf = (line) => line.replace(/`[^`]*`|"[^"]*"|“[^”]*”|«[^»]*»/g, (span) => maskOf(span.startsWith('`') ? 'CODE' : 'QUOTE', span.length));
+
+/** The clauses of the one line `line`, as `[start, end]` offsets: a sentence ends at `.`, `;`, `!` or `?` before a
+ * space, bold or italic marks after it included ("**Deja el tope en 1.200 segundos.** Subirlo…"). */
+function clauseSpans(line) {
+  const spans = [];
+  let start = 0;
+  for (const match of line.matchAll(/(?<=[.;!?][*_]*)\s+/g)) {
+    spans.push([start, match.index]);
+    start = match.index + match[0].length;
+  }
+  spans.push([start, line.length]);
+  return spans;
+}
 
 /**
  * The figures `text` states, in one walk over its lines and clauses: `shares`, the shares of its own context
@@ -128,11 +164,12 @@ export function statedFigures(text, window = DEFAULT_CONTEXT_WINDOW) {
     if (fence) inCode = !inCode;
     for (const raw of line.split(/(?<=[.;!?])\s+/)) {
       const clause = raw.trim();
-      if (clause === '') continue;
-      shares.push(...sharesOf(clause, window));
-      if (!prose) continue;
-      // A sentence that ends inside bold or italic marks, "**Deja el tope en 1.200 segundos.** Subirlo…", ends there.
-      for (const part of clause.split(/(?<=[.;!?][*_]+)\s+/)) forecasts.push(...forecastsOf(proseOf(part)).map(() => ({ clause: part })));
+      if (clause !== '') shares.push(...sharesOf(clause, window));
+    }
+    if (!prose) continue;
+    const masked = proseOf(line);
+    for (const [start, end] of clauseSpans(masked)) {
+      if (isBareForecast(masked.slice(start, end).trim())) forecasts.push({ clause: line.slice(start, end).trim() });
     }
   }
   return { shares, forecasts };
