@@ -707,7 +707,10 @@ built in rule 1's pull request.
   disagreement and rounds; its scope, stated two ways today (`bin/lib/protocols-skill.mjs:43` against
   `bin/lib/project.mjs:412`), becomes one text. Codex reviews code and not Markdown today (the Review row above), so
   `codex-review` needs a mode that reviews a plan; each run spends his Codex weekly limit, read on the meter first.
-  Open, his to answer: what happens when the Codex limit runs out.
+  When the limit runs low, question 148 (line 44186, tapped): "Claude reemplaza y Codex paga después
+  (Recomendada)". Below 10% of the weekly limit (`js-harness codex-meter`), a new Codex read goes to a second Claude
+  reader in a fresh context, marked "sin Codex"; code left without a Codex review is a debt Codex reviews after the
+  reset, and the merge door lists it. His one reset credit is not spent without his word.
 - **The older texts:** the feature document's order in `CLAUDE.md` and in the block `init` writes gains `## Depth
   pass` after the contract; the contract template gains its skeleton; `sync` offers `depthPassSince` to a project.
 - **The eval** of PR 737's brief, with and without the rule, owed by 2026-11-30.

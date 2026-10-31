@@ -461,3 +461,23 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   lead's transcript `0f71b2c6`, line 44098, read with `sessions --quote`): "Sí, pero también en el código chico";
   the alignment feature's first item now carries the corrected design and leaves open, his to answer, what happens
   when the Codex limit runs out. Codex's weekly limit stood at 78% used (the lead, `js-harness codex-meter`).
+- L23 (2026-10-31, T6: Codex over b5bf748..c1e482b, recorded, 263,516 input tokens in two parts; the independent
+  verifier, read-only, about 86k tokens; his answer to question 148): Codex, four P2: renames lose a document's
+  history; a `Verdict:` outside the pass counted as the pass's; the validator does its own I/O; section 9 does not
+  say the bar's command goes in a code span. The verifier, no blocker and six to fix: a refuted plan on the trunk
+  turned red at any later code; a renamed old document counted as opened today; a squash merge went red; long
+  histories overflowed one `git show` on Windows and read as no code; code committed before the document opened
+  was not seen; a project in a folder of its repository read every document as opened today; and notes (fenced
+  examples read as items, speed, staged code blamed on every held document). The redesign: the order is judged on
+  the branch alone, the commits `HEAD` holds and the trunk (`origin/HEAD`, `origin/main`, `origin/master`) does not,
+  read by one `git log`; a document the branch does not touch is not judged again; the commit that brings the
+  verdict is the first whose version of the document has one in its pass; openings follow renames and read project
+  paths (`--relative`); fenced lines leave the pass; `depthPassText` and `depthPassOrder` read only what they are
+  handed and `depthPassFor` is the one part that reads, as its header says (`bin/conventions-pure.test.mjs` asks a
+  module to say what it reads, not to read nothing); section 9 now says the command goes in a code span. Each fault
+  got its test first (four red as predicted; the rename and the folder tests were proven by a break each, red, then
+  restored); 22 of 22; the planted break moved to the new line and turns "PR 737's order" red, 21 of 22. Left as
+  they are: the check does not hold "after its contract"; the folding of `realish`'s comment stays, since it keeps
+  `project.mjs` at its ceiling; L17's "`sync` writes" stays as history, L20 records the change. His tapped answer to
+  question 148 (the lead's transcript `0f71b2c6`, line 44186, read with `sessions --quote`): "Claude reemplaza y
+  Codex paga después (Recomendada)", written into the alignment's first item, closing its open point.
