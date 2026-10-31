@@ -225,7 +225,7 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
       (the eval, or its owed date) and the next feature, "harness alignment to the depth pass", opened by the lead
       after this lands. Route: inline. L21.
 - [ ] T6 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
-- [ ] T8 (kind: verify) Codex's two findings its recheck of c1e482b..6b10846 left open (the verdict trail across
+- [x] T8 (kind: verify) Codex's two findings its recheck of c1e482b..6b10846 left open (the verdict trail across
       renames; the reading at the command's edge), fixed in ff8c61a: Codex over them from e2d46f3, `--again`. L24.
 
 ## State for a resume
@@ -236,9 +236,10 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   it (L21).
 - Reviewed and recorded: Codex b5bf748..c1e482b and c1e482b..6b10846 (its recheck: 2 of 4 fixed); lenses over
   both ranges, and over 6b10846..ff8c61a. ff8c61a closes their open findings (L24); the commit after it takes the
-  readability lens's two. Codex over them is T8: `codex-review --base e2d46f3 --again`, one run.
-- Next, in order: (1) T8, then the lenses over ff8c61a..HEAD; (2) push, PR with the merge of origin/main if JH 123
-  has landed, ready notice with `--pr`, `docs/sessions/` summary, closed notice.
+  readability lens's two (e972fec). T8 done: Codex over e2d46f3..e972fec, correct, and the lenses over ff8c61a..e972fec,
+  none (L25).
+- Next, in order: push and the PR (origin/main had nothing new at 09:20, so no merge), ready notice with `--pr`,
+  `docs/sessions/` summary, closed notice.
 
 ## Log
 - L1 (2026-10-31T11:55:49Z, his words, the lead's transcript `0f71b2c6`, line 42804, read with
@@ -495,3 +496,9 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   `isDocument` was imported and unused in `bin/contract.mjs`. Codex refused a second recheck of c1e482b's findings,
   since the first left two open, and asked for a follow-up task (T8) and one run from e2d46f3 with `--again`; that
   run is the next one, over the fix commit as well.
+- L25 (2026-10-31, T8): Codex over e2d46f3..e972fec with `--again`, recorded: "the patch is correct (confidence
+  0.87)", no finding, 103,580 input tokens (70,400 cached), 67 s. The lenses over ff8c61a..e972fec (readability,
+  reliability): none, about 17k input tokens. gentle-ai: its stop hook offered the whole branch (`review status`,
+  applicability "unrelated"), so nothing was started. The independent verifier read the code before the redesign
+  (L23); the redesign and its fixes went through Codex twice and the lenses three times, not through a second
+  verifier. origin/main at 09:20 held nothing the branch lacks: JH 123 had not landed, so no merge.
