@@ -111,6 +111,13 @@ test('the diff git -v leaves under its scissors line is not the end of the messa
   assert.deepEqual(removed, [HOST_CO_AUTHOR]);
 });
 
+test('under auto with git -v, the mark is read above the scissors line, not from the diff under it', () => {
+  const above = `${BODY}\n${HOST_CO_AUTHOR}\n${HOST_SESSION}\n; Please enter the commit message for your changes.\n;\n`;
+  const message = `${above}; ------------------------ >8 ------------------------\n; Do not modify or remove the line above.\ndiff --git a/a.txt b/a.txt\n+added\n context\n`;
+  assert.deepEqual(commentMarks('auto', message), [';']);
+  assert.deepEqual(stripAttribution(message, { comments: commentMarks('auto', message) }).removed, [HOST_CO_AUTHOR, HOST_SESSION]);
+});
+
 test('a message written with CRLF keeps its line endings, and a last line with no ending goes whole', () => {
   const { text, removed } = stripAttribution(`feat: x\r\n\r\nbody\r\n\r\n${HOST_CO_AUTHOR}\r\n${HOST_SESSION}`);
   assert.equal(text, 'feat: x\r\n\r\nbody\r\n\r\n');

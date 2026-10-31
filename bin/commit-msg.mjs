@@ -39,11 +39,14 @@ const AUTO_MARKS = ['#', ';', '@', '!', '$', '%', '^', '&', '|', ':'];
 /** The mark a comment line of the message starts with, from git's comment setting (`value`, null where none is set):
  * `#` by default. Under `auto` git picks one mark and writes its comments under the message, an empty comment line
  * (the mark alone) among them, so the mark is the first character of the last line that is not blank, when that is a
- * mark `auto` may pick and some line is that mark alone; `#` otherwise, as for a message given with `-m`. */
+ * mark `auto` may pick and some line is that mark alone; `#` otherwise, as for a message given with `-m`. Under
+ * `git commit -v` the last line is the diff's, so the lines are read only down to the scissors line, which is git's. */
 export function commentMarks(value, text = '') {
   if (value === null || value === '') return ['#'];
   if (value !== 'auto') return [value];
-  const lines = text.split(/\r?\n/);
+  const all = text.split(/\r?\n/);
+  const scissors = all.findIndex((line) => SCISSORS.test(line));
+  const lines = scissors === -1 ? all : all.slice(0, scissors + 1);
   const mark = (lines.filter((line) => line.trim() !== '').pop() ?? '')[0];
   return [AUTO_MARKS.includes(mark) && lines.includes(mark) ? mark : '#'];
 }
