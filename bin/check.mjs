@@ -72,7 +72,7 @@ export function checkBudget(cwd) {
  * Static only: it never runs a done-when command, which may be `npm run check` itself. */
 export function checkContracts(cwd) {
   const name = 'contracts';
-  const results = validateEntries(discoverContracts(cwd));
+  const results = validateEntries(discoverContracts(cwd), { root: cwd });
   if (results.length === 0) return { name, pass: true, detail: 'no contracts under odd/tasks' };
   const plural = (n) => `${n} contract${n === 1 ? '' : 's'}`;
   const failed = results.filter((result) => !result.ok);

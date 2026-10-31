@@ -10,6 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { CONTRACT_TEMPLATE, doneWhen, isContract, modeLine, parseContract, taskModes, validateContract } from './lib/contract.mjs';
 import { ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
+import { depthPassFor } from './lib/depth-pass.mjs';
 
 export const USAGE =
   'Usage: js-harness contract template | check [file...] [--cwd <dir>] | run <file> [--timeout <minutes>] [--cwd <dir>] | goal <file> [--cwd <dir>] | modes <file> [--task <id>] [--cwd <dir>]';
@@ -127,21 +128,29 @@ export function discoverContracts(
   return found;
 }
 
-/** One `{ label, ok, errors }` per entry from `discoverContracts` or from explicit files. */
-export function validateEntries(entries) {
-  return entries.map(({ label, markdown, error }) => {
+/** One `{ label, ok, errors }` per entry from `discoverContracts` or from explicit files. Given the project's
+ * `root`, each entry is also held to `rule:depth-pass` (./lib/depth-pass.mjs) at its repository path, `file` or
+ * else its label; `run` and `goal` give none, since the pass is a gate's question and not a run's. */
+export function validateEntries(entries, { root } = {}) {
+  const depthPass = root ? depthPassFor(root) : null;
+  return entries.map(({ label, file = label, markdown, error }) => {
     if (error) return { label, ok: false, errors: [`cannot read: ${error}`] };
     if (!isContract(markdown)) return { label, ok: false, errors: ['not a contract: no "## Goal" heading'] };
-    const { ok, errors } = validateContract(markdown);
-    return { label, ok, errors };
+    const { errors } = validateContract(markdown);
+    if (depthPass && file !== null) errors.push(...depthPass(file, markdown));
+    return { label, ok: errors.length === 0, errors };
   });
 }
 
-/** Entries for the files named on the command line, resolved from `cwd`, labelled as given. */
-function explicitEntries(files, cwd) {
+/** Entries for the files named on the command line, resolved from `cwd`, labelled as given; with `root`, each
+ * carries its repository path as `file`, or `null` outside the repository. */
+function explicitEntries(files, cwd, root = null) {
   return files.map((file) => {
+    const absolute = path.resolve(cwd, file);
+    const relative = root && path.relative(root, absolute);
+    const repoPath = relative && !relative.startsWith('..') && !path.isAbsolute(relative) ? relative.split(path.sep).join('/') : null;
     try {
-      return { label: file, markdown: fs.readFileSync(path.resolve(cwd, file), 'utf8') };
+      return { label: file, file: repoPath, markdown: fs.readFileSync(absolute, 'utf8') };
     } catch (err) {
       return { label: file, error: err.code ?? err.message };
     }
@@ -157,12 +166,13 @@ function checkCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn }) {
     return 2;
   }
   const cwd = path.resolve(parsed.cwd ?? defaultCwd);
-  const entries = parsed.files.length ? explicitEntries(parsed.files, cwd) : discoverContracts(projectRoot(cwd, spawn));
+  const root = projectRoot(cwd, spawn);
+  const entries = parsed.files.length ? explicitEntries(parsed.files, cwd, root) : discoverContracts(root);
   if (entries.length === 0) {
     stdout('no contracts under odd/tasks');
     return 0;
   }
-  const results = validateEntries(entries);
+  const results = validateEntries(entries, { root });
   for (const { label, ok, errors } of results) {
     stdout(`${ok ? 'PASS' : 'FAIL'}  ${label}`);
     for (const reason of errors) stdout(`      ${reason}`);

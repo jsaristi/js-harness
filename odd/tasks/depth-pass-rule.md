@@ -52,28 +52,39 @@ replaces it. Nothing of the rule is built before his yes to (a). The behavioural
 recorded owed with a date unless he asks for it (spend outside the plan).
 
 ## Depth pass
-This feature's own pass, in the draft's form (v2, below):
-1. Discipline: writing an operating rule for an agent together with the machine check that audits it, the work of a
-   process engineer. Their first move: the incidents the rule is for, and whether the check would have caught them.
-2. Raw material: his four messages as written (L1 to L4); PR 737's own document on `origin/worktree-estimate-as-fact`,
-   its L3 and L10, and its first code commit 41f774d8; `bin/lib/claude-import.mjs:33`; `bin/lib/project.mjs:397`;
-   `bin/lib/contract.mjs:34`; `bin/check.mjs:73`; `bin/lib/citations.mjs:7`; `bin/lib/rules-coverage-data.mjs:415`;
-   `evals/rule-proof.mjs:1`; `docs/ROADMAP.md:27`; gentle-ai 4.3.1's ODD protocol, steps 2 and 3 (read only).
-3. Methods: measure the budget with the project's estimator; replay PR 737's document as of 41f774d8 against the
-   control and see it refused; plant a break and see the control turn red before green; two blind readers on the text
-   before it reaches him.
-4. Prediction: `node --test bin/lib/contract.test.mjs` refuses PR 737's document as it stood at 41f774d8 (it had no
-   pass) and a pass with a refuting verdict on a branch with code and no recorded answer, and accepts this document.
-   What the material already says: the control reads form, never depth; a writer can still write a hollow pass that
-   passes it. Depth stays on the readers and on him (unguaranteed).
-5. His request rewritten, beside his words (L1 to L4): "Make the depth pass the harness's first rule, named at the
-   head of every `CLAUDE.md` the harness writes, for large work and whenever I ask; give it a check that refuses a
-   new feature document whose pass cites no raw material, names no prediction a command runs or gives no verdict;
-   when the material refutes my request, ask me before any code; and review its text twice before I approve it."
-   (Reader A, L12: an earlier "tell me what it costs per turn" here asked for something his words did not.)
-
-Verdict: supports. The material holds a home for the text, a pointer that fits the budget and a static control; it
-does not hold a way to check depth itself, which the question says.
+This feature's own pass, in the rule's form once the rule existed (L20); the v2 form it replaced, same substance, is
+in commit 8c6d6c7f, committed with documents alone before the first code commit (1722be2d).
+- 1. Method: writing an operating rule for an agent together with the machine check that audits it, the work of a
+  process engineer: the incidents the rule is for first, then whether the check would have caught them. The smallest
+  change: a section in the skill that already holds the protocols, a one-line pointer, and the `contracts` row that
+  already validates every feature document. The search of `rule:reuse-first` found no rule that asked for a pass;
+  `rule:double-review` and `wording-is-the-need` cover parts of it (L11 to L13).
+- 2. Raw material: his four messages as written, the lead's transcript `0f71b2c6`, lines 42804, 42824, 42859 and
+  42878 (L1 to L4); PR 737's own document on `origin/worktree-estimate-as-fact`, its L3 and L10, and its first code
+  commit `41f774d8`; `bin/lib/claude-import.mjs:33`; `bin/lib/project.mjs:397`; `bin/lib/contract.mjs:34`;
+  `bin/check.mjs:73`; `bin/lib/citations.mjs:7`; `evals/rule-proof.mjs:1`; `docs/ROADMAP.md:27`; gentle-ai 4.3.1's
+  ODD protocol, steps 2 and 3 (read only).
+- 3. The bar:
+  spec 1: `node --test bin/lib/protocols-skill.test.mjs`: rule 1 heads the root `CLAUDE.md` and the init block; none,
+  new behaviour before; 0 failed after slice 1.
+  spec 2: left out because it is F8's split of `CLAUDE.md` and `AGENTS.md`, already built (S3); this feature only
+  puts the pointer in `CLAUDE.md`.
+  spec 3: `node --test bin/lib/depth-pass.test.mjs`: a document opened since `depthPassSince` holds the pass in his
+  order, committed with documents alone before code; none, new behaviour before; 15 of 15 pass after slice 2.
+  spec 4: `node bin/js-harness.mjs rules check`: the rule declared from his words; PASS, 72 rules.
+  spec 5: left out because its proof is the roadmap's text (T7), which no command reads.
+- 4. Refutation: did PR 737 fail for want of a test run before code, which the rule would only repeat? `git show
+  --format= --name-only 41f774d8`: its document came in with its first code, 5 documents and 6 other files in one
+  commit, and its L3 had already read the six cases and found 0 of 6 caught. A test was run; the order failed. A
+  check on commit order refuses it, 1 of 1 (`bin/lib/depth-pass.test.mjs`, "PR 737's order"). The control reads form
+  and order, never depth: a hollow pass passes it, and depth stays on the readers and on him (unguaranteed).
+  Verdict: supports
+- 5. Request: his request rewritten, beside his words (L1 to L4): "Make the depth pass the harness's first rule,
+  named at the head of every `CLAUDE.md` the harness writes, for large work and whenever I ask; give it a check that
+  refuses a new feature document whose pass cites no raw material, names no prediction a command runs or gives no
+  verdict; when the material refutes my request, ask me before any code; and review its text twice before I approve
+  it." (Reader A, L12: an earlier "tell me what it costs per turn" here asked for something his words did not.)
+  Adds: none
 
 ## Specs
 1. "Quiero que de ahora en adelante cambiemos un pilar fundamental como primera regla de nuestro arnes que sea como la
@@ -207,9 +218,9 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
 - [x] T4 (kind: build) after his yes to (a): the rule through `js-harness rules change depth-pass` on a `rule/` branch,
       his words quoted with their date; section 9, the pointer in the root `CLAUDE.md` and in `claudeBlock` (v3
       dropped the clause in `wording-is-the-need`, L13). Route: inline. The commit after b5bf7484 (L19).
-- [ ] T5 (kind: build) after his yes to (a): the control, its test first with PR 737's document replayed and a
-      planted break that turns it red, its legacy list, its `rules coverage` entry; rebased on JH 123 and the coverage
-      data regenerated.
+- [x] T5 (kind: build) after his yes to (a): the control, its test first with PR 737's document replayed and a
+      planted break that turns it red, its date exemption, its `rules coverage` entry. Route: inline. The commit
+      after 1722be2d (L20).
 - [ ] T7 (kind: docs) spec 5, after his yes to (a): `docs/ROADMAP.md` gains the rule as an F8 step with its proof
       (the eval, or its owed date) and the next feature, "harness alignment to the depth pass", opened by the lead
       after this lands. Route: inline.
@@ -218,13 +229,10 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
 ## State for a resume
 - Branch `rule/depth-pass` in worktree `D:\js-harness\.claude\worktrees\depth-pass-rule` (from b66e8211; the old
   `worktree-depth-pass-rule` on origin holds the documents only). His yes: 143 (L15) and 144 (L18). Question (c),
-  readers on every large plan, not sent yet: it goes once slice 1 is committed.
-- Slice 1 (T4) is the commit after b5bf7484 (L19). Its control is `protocol` level until slice 2 makes it `check`.
-- Next, in order: (1) question (c) to the lead. (2) Slice 2 (T5), the control: tests first in
-  `bin/lib/contract.test.mjs` with PR 737's document replayed and a planted break, git-aware in `checkContracts`
-  (`bin/check.mjs:73`) and `contract check`, the date exemption, `depthPassSince` written by `sync`, the coverage
-  entry raised to `check`. (3) T7, the roadmap, as 144 says. (4) Merge origin/main (JH 123), Codex, the lenses and a
-  verifier per code slice, `npm run check`, push, PR, ready notice.
+  readers on every large plan, sent as question 145 (L20), open.
+- Slice 1 (T4) is 1722be2d (L19); slice 2 (T5) the commit after it (L20).
+- Next, in order: (1) T7, the roadmap, as 144 says. (2) Merge origin/main (JH 123). (3) Codex, the lenses and a
+  verifier over both code slices, `npm run check`, push, PR, ready notice.
 
 ## Log
 - L1 (2026-10-31T11:55:49Z, his words, the lead's transcript `0f71b2c6`, line 42804, read with
@@ -410,3 +418,18 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   `CLAUDE.md` measures 3190 of 3200 tokens. Run: `node --test` over the protocols, project, template-block,
   conventions-structure and rules test files, 282 passed, 0 failed; `node bin/js-harness.mjs rules check`: PASS, 72
   rules.
+- L20 (2026-10-31, slice 1 committed as 1722be2d, the pre-commit gate PASS; T5 built): question 145, (c), recorded and
+  its context sent to the lead: "No; solo cuando cambia una decisión tuya (Recomendada)", "Sí, en todo trabajo
+  grande", "Sí, solo si el veredicto refuta o añade"; nothing in this pull request waits on it. The control is
+  `bin/lib/depth-pass.mjs`, its test written first and red (the module missing), then green, 15 of 15: the form of
+  the pass (five items in order, a citation outside the document, a `spec <n>:` line per numbered spec, a command and
+  a verdict in item 4, `Adds:` last) and the order of commits read from git (the verdict's first commit holds
+  documents alone, no code on the document's line before it, no code staged while it is uncommitted, a refuting
+  verdict with code needs `answered: question <n>`). `validateEntries` (`bin/contract.mjs`) carries it for the
+  `contracts` row and `contract check`, not for `run` and `goal`. Two changes to the design of L17: the date is
+  `harness.json` `depthPassSince` alone, here `2026-11-01`, so the documents other sessions opened today stay as
+  written; and `sync` writes nothing, so a project is held only when it declares the key itself (the README says
+  so), which the alignment feature can revisit. The planted break (`mixed.length < 0`) turned
+  `bin/lib/depth-pass.test.mjs` red, 1 of 15 ("PR 737's order"), and green again once restored. Replays: PR 737's
+  document at 41f774d8 gives "no `## Depth pass`"; this document, its pass rewritten in the rule's form, gives no
+  fault from `depthPassText`, nor from `depthPassErrors` with its opening day set past the date.

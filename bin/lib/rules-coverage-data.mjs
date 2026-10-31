@@ -79,9 +79,13 @@ export const COVERAGE = {
       "since": "2026-10-28"
     },
     "depth-pass": {
-      "level": "protocol",
-      "path": "bin/lib/protocols-skill.mjs",
-      "phrase": "Deeper, not bigger: the pass grounds the work asked for and adds none"
+      "level": "check",
+      "test": "bin/lib/depth-pass.test.mjs",
+      "break": {
+        "path": "bin/lib/depth-pass.mjs",
+        "find": "if (mixed.length > 0) errors.push(",
+        "replace": "if (mixed.length < 0) errors.push("
+      }
     },
     "double-review": {
       "level": "owed",
