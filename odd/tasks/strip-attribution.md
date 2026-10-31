@@ -196,6 +196,9 @@ Nothing here is his: a decision only he can take goes to the lead as a recorded 
   requirement and the README's "first four files" named no commit-msg step) is taken; its N4 (two linked worktrees'
   manifests recording one shared hook) is the pre-push hook's pattern already, not taken here. The project and migrate
   tests: 222, 0 failed. `project.mjs` is 1,978 lines, its ceiling set to that (main's was 1,989).
+- L15 (2026-10-31, the reviews of `03db395b`): Codex over `7a73e47..03db395`: correct (0.98), the P2 fixed. Lens
+  reliability: 0. The ROADMAP's S4a State says the hook is done and shipped by `init`; the 50-commit count, the
+  hook-count row and D8 stay open there.
 ## Next step
 State (2026-10-31): slice 1 (`951bcfb4`..`7214c0fe`, branch `worktree-strip-attribution`) is PR #728, every code
 commit reviewed (L12), ready notice sent. Worktree `D:\js-harness\.claude\worktrees\strip-attribution`, now on branch
