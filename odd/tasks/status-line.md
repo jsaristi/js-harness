@@ -90,7 +90,7 @@ USERPROFILE, skipped off win32 (red: 2 fail, no file; green: 2 pass). The script
 a script without a BOM as ANSI, so the middle dot is `[char]0x00B7`. `bin/status-line.mjs` and its registration in
 `bin/js-harness.mjs` are done and tried end to end (L9). T8: Codex's P2 fixed in 13c9dfdb (L10); the install and its
 undo tried in scratch places (L11). The verifier's findings and Codex's second pass answered and tried again (L12).
-Next: Codex and the lenses over 13c9dfdb..HEAD, push, pull request, the install question to the lead (the real
+Reviews clean (L13). Next: push, pull request, the install question to the lead (the real
 command: the packaged `status-line-install.ps1 -Project D:\js-harness`, after a release with this command is
 installed), ready, summary, closed. Decided (L8): the writer is `js-harness status-line write`, run by a per-user scheduled task every 5
 minutes that is part of the deferred install (nothing runs today: the app does not read the key); the board takes about
@@ -301,3 +301,8 @@ only with evidence that a claude.ai install reads it, and step 2 of the review b
   (configuration-format doc); a copy under Program Files goes stale when js-harness updates until the install runs
   again, and nothing compares it yet; `uninstall` does not know this install, whose undo lives beside the copy. Not
   checked: an elevated window, whether stopping the task stops its node, the app reading the key.
+- L13 — reviews of the last slice. Codex (`js-harness codex-review --base 1df8e3aa`, it ran 1df8e3a..90366b9, 262
+  changed lines in 11 files, 42,803 input tokens): "the patch is correct (confidence 0.97)", no finding. The Claude
+  lenses over 13c9dfd..90366b9 (`--lenses reliability,readability,risk`): 0 findings each (13,755, 13,759 and 28,304
+  input tokens). gentle-ai: its Stop hook offered the branch (base 7aac3e43, every path); the read-only `review
+  status` answered `applicability: unrelated`, and nothing was started.
