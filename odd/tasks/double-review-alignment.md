@@ -173,6 +173,18 @@ readers of this plan (L8), who found items 11 to 17.
 Checked and left: `bin/lib/manifest.mjs:140` and section 6 name the rule and its home; `bin/lib/onboard.mjs:747` and
 the roadmap's "Design, past its two readers" items still have two readers, now of two families.
 
+## Next step
+State at the context pause (2026-10-31, after c1ce70e9). Open: question 150 to him through the lead (his typed
+acceptance of 147 and 148, L9); it blocks only T2's rule commit and T4. Next, in order: T5, then T3, then T2 and T4
+once 150 is answered. T5 notes: CLAUDE.md is at 3190 of 3200 tokens as `check` measures it; the two edits (`## Depth
+pass` (rule 1) in the order at line 24, and line 92 "a skip is a debt `check`, `doctor` and the merge door list until
+a review pays it, and the door refuses a lens skip") measured 3237 with `estimateTokens` after the Edit tool, likely
+line endings; measure as `bin/lib/claude-md-budget.mjs` does before committing, and trim within the same paragraphs
+if over. T3 drafts, outside the repository and not reviewed: `C:\Users\Oficina\.claude\jobs\9cc00bff\tmp\draft\`
+(`double-review.mjs`, `double-review-records.mjs`, `codex-reserve.mjs`); T3 is built first without the reserve
+(the sin Codex branch comes with T2, which declares the rule), tests first. The plan's two answers:
+`...\tmp\read1\codex\answer.md` and the Claude reader's result in L8.
+
 ## Eval plan
 The eval owed by 2026-11-30 (spec 6), not run here: the case built from PR 737's brief runs on the current arm and
 on `current-without-rule-depth-pass` (`evals/without.mjs`), `MIN_TRIALS` 2 each (`evals/rule-proof.mjs`), and
