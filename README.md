@@ -1143,6 +1143,25 @@ windows-daily: the newest run, https://github.com/jsaristi/js-harness/actions/ru
 WINDOWS: https://github.com/jsaristi/js-harness/actions/runs/39007607383 failure, 168 failing: in shadow the gate traces its suite under the git dir and its end line keeps the counts; …
 ```
 
+### js-harness status-line
+
+Claude Desktop's `sessionStatusLine` setting runs a program and shows its first line above the
+Code tab's message box. The board takes about 24 s and the host stops its program at 10 s, so the
+board is read ahead: `status-line write` runs `js-harness sessions --json` and keeps it as one
+Spanish line, with the time it was written, in `.js-harness/status-line/line.txt` under the home. A
+board that fails leaves the last line as it was. `status-line program` prints the path of
+`bin/lib/status-line.ps1`, the program the setting names: it prints that file's line, its age in
+yellow first when the line is older than 10 minutes, and nothing when there is no file. Installing
+it means a copy under Program Files and a managed setting, so it is not part of `install`:
+`status-line-install.ps1`, beside the program, does it in an elevated Windows PowerShell, with a
+task that runs `write` every 5 minutes, and leaves `status-line-uninstall.ps1` beside the copy to
+undo it. The app reads the setting only on third-party inference today (`odd/tasks/status-line.md`).
+
+```console
+$ js-harness status-line write
+status-line: wrote C:\Users\you\.js-harness\status-line\line.txt: 1 pregunta · 4 trabajando · 2 esperando · 2 PR · gate libre
+```
+
 ### js-harness merge-queue
 
 Builds the candidate the default branch would be: origin's default branch with each ready pull request

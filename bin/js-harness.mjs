@@ -34,6 +34,7 @@ Commands:
   codex-meter  Read Codex's five-hour and weekly limits and its reset credits left, from codex app-server, which answers without running a model, so it spends no tokens: js-harness codex-meter [--json]. It starts one process per read and kills it after; --json prints the numbers, and a field the answer does not hold is printed as unknown.
   lens-review  Run the Claude lenses picked over <base>..HEAD, each a fresh tool-less run on the CLI login, and record the run (--unavailable <reason> records a skip).
   windows-daily  Read the newest run of the daily Windows suite (.github/workflows/windows-daily.yml) on GitHub and say whether it passed; a red run not told before is told to the orchestrator once, with its failing test names. The lead's loop heartbeat runs the same reading every hour.
+  status-line  Keep the line Claude Desktop's sessionStatusLine program shows above the Code tab's message box: status-line write runs the board and keeps it in one Spanish line under the home (.js-harness/status-line/line.txt), leaving the last line when the board fails; status-line program prints the path of the program, which only prints that file, since the board takes longer than the host's 10 s. The app reads the key only on third-party inference today.
   merge-queue  Build the candidate main would be: origin/main with each ready pull request merged in order of number, naming each one left out and why. Each pull request merged into the candidate passes main's rule rows first (check --door), and one that fails leaves the batch. With --land --refresh-copy, a land that moved main also brings the installed copy up to it (pnpm, under the gate lock) and prints the undo; --refresh-copy alone does it now, refusing while anything but a wait runs from the copy, stopping the waits and telling their sessions to run them again. Ready asks each code commit for the review records its project's switches ask (a Codex record, a complete Claude lens record), and the queue prints each code commit's Codex record. --dry-run prints it and pushes nothing; --land tests it on this machine and on GitHub Actions (.github/workflows/gate.yml on a queue/ branch) at the same time and, when both are green, moves main to it by fast-forward. A candidate whose every changed path is a document main's harness.json declares runs no suite on this machine, and its GitHub Actions run is its test. A land asks js-harness gate first to put its gate first in the line, and a gate that ran nothing exits 5 with main not pushed and nothing bisected. A land run from a copy whose bin/ is not origin/main's stops before it builds anything. A land tells the work session of each pull request it leaves out why, by a note in the channel, and removes the worktree of each one it landed when it is clean and idle, keeping its branch. --prune removes, by the same rule, every worktree on a branch origin/main holds. A landed rule/ branch appends to the relief file one line that confirms the newest proposal of each rule it changed that its landed head holds.
   functions   Show each function this project can turn off and on (harness.json "functions"): its value here and why. functions apply makes this clone what they ask (the code map index, the push check, the keys of .claude/settings.local.json), recorded so uninstall undoes it, with no pin needed; functions set <name> <value> writes one switch into harness.json and applies it.
   remote      Keep Claude Code's remote-control server running for this git repository, so the Claude app can start sessions here: start, stop, status. start --at-login also starts it at every Windows login, and again within five minutes whenever it is not running (a scheduled task); stop --at-login undoes both. A server stopped with stop stays stopped until the next start.
@@ -95,6 +96,7 @@ const COMMANDS = {
   'codex-meter': async () => (await import('./codex-meter.mjs')).codexMeterMain,
   'lens-review': async () => (await import('./lens-review.mjs')).lensReviewMain,
   'windows-daily': async () => (await import('./windows-daily.mjs')).windowsDailyMain,
+  'status-line': async () => (await import('./status-line.mjs')).statusLineMain,
   'merge-queue': async () => (await import('./merge-queue.mjs')).mergeQueueMain,
   functions: async () => (await import('./functions.mjs')).functionsMain,
   remote: async () => (await import('./remote.mjs')).remoteMain,
@@ -146,6 +148,7 @@ const HELP = {
   'codex-review': ['./codex-review.mjs', 'USAGE'],
   'codex-meter': ['./codex-meter.mjs', 'USAGE'],
   'lens-review': ['./lens-review.mjs', 'USAGE'],
+  'status-line': ['./status-line.mjs', 'USAGE'],
   functions: ['./functions.mjs', 'USAGE'],
   remote: ['./remote.mjs', 'USAGE'],
   sessions: ['./sessions.mjs', 'USAGE'],

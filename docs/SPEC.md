@@ -719,6 +719,16 @@ check or an eval case ("After F8", directive coverage).
 **Discarded:** Sending the notification from the command: the push notification is a tool of the host, which no command can call. Counting a waiting session as work: it never ends on its own, and the wait would never settle while it waits for him.
 **Today:** `bin/quiet.mjs`, `bin/lib/quiet.mjs`, `bin/lib/process-list.mjs`, `js-harness quiet`
 
+### The board above the message box
+
+**Problem:** Claude Desktop 4.4212.0 added `sessionStatusLine`, a program whose first line shows above the Code tab's message box; the board it would show takes about 24 s, and the host stops the program at 10 s (`odd/tasks/status-line.md`, L5). The app reads the setting only on third-party inference, and he answered question 134 "Construir el programa igual".
+**Requirement:** `js-harness status-line write` runs `sessions --json` and keeps it, with its time, as one Spanish line of at most 200 characters in `.js-harness/status-line/line.txt` under the home: the questions open, red when one is, the sessions working and waiting, the open pull requests and the gate, `?` for what the board could not read; a board that fails or is not JSON leaves the last line and exits 1. `bin/lib/status-line.ps1`, whose path `status-line program` prints, prints that line in Windows PowerShell 5.1, its age in yellow first past 10 minutes, nothing with no file or an unreadable time, well under the host's 10 s.
+**Reason:** The program only reads a file, so it never runs into the host's limit; a line kept from a failed board would be wrong, and an old one says its age.
+The administrator install is `bin/lib/status-line-install.ps1`, run by hand in an elevated Windows PowerShell: it stops at the first error, refuses a shim with no `status-line` command and a `sessionStatusLine` value it did not write, copies the program and its undo under Program Files, sets the value under `HKCU\SOFTWARE\Policies\Claude`, and registers, unelevated, a task that runs the writer through the pnpm shim every 5 minutes; `bin/lib/status-line-uninstall.ps1` removes exactly that and can run again.
+**Proof:** `node --test bin/lib/status-line.test.mjs`, `node --test bin/lib/status-line-program.test.mjs`, `node --test bin/status-line.test.mjs`, `node --test bin/lib/status-line-install.test.mjs`
+**Discarded:** Running the board from the program: 24 s against a limit of 10 s. Writing the line from the lead's heartbeat: it ticks only while the lead runs it, and `bin/sessions.mjs` and `bin/lib/sessions.mjs` are at their size ceilings. Installing it from `install`: it needs a copy under Program Files and a managed setting, which stay a question to the lead.
+**Today:** `bin/status-line.mjs`, `bin/lib/status-line.mjs`, `bin/lib/status-line.ps1`, `bin/lib/status-line-install.ps1`, `bin/lib/status-line-uninstall.ps1`, `js-harness status-line`
+
 ### The owner's words, when they travel
 
 **Problem:** The owner decided on 2026-10-10 (relief file, line 149) that an answer he gives in the orchestrator's chat travels to the session that asked, with his exact words and where they are.
