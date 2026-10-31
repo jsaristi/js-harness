@@ -1633,8 +1633,21 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-10-29 — the lead's note to JH 89 at 16:33Z (claimed; the lead's own) — he was away about
   an hour with no stretch open; the stretch record holds none between the close at 08:11:36Z and the
   open at 16:07:51Z (`stretches.jsonl` under the throughput folder, read by JH 89)
-- Control: protocol — bin/lib/manifest.mjs — "exits 1 when none is open) and show its departure in that reply" — since
-  2026-10-29
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, his "Listo entonces desde ya te dejo solo" at 18:54:39Z (the
+  lead's own, found by JH 123's replay) — no stretch opened until his return at 2026-10-31T01:33:48Z; the record's
+  last close before it is at 13:13:20Z
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, lines 39243 and 41022 (the lead's own) — he left twice, "voy a
+  dejarte entre 1 a 2 horas solo" at 03:23:57Z and "voy a ausentarme una horas mas aproximadamente entre 4 a 8 horas"
+  at 07:41:17Z, and the lead opened no stretch; at "ya regrese" (11:09:21Z, line 42109) `stretch status` said "no
+  stretch is open" and the status report "ningún tramo desde el corte", so he got no estimate against actual and no
+  route map: "el como vamos le faltan varias cosas como el mapa de donde vamos". Fixed by a check at the lead's stop
+  (JH 123, `bin/lib/away-stretch.mjs` in the reply hook): his newest word of leaving with no stretch open, or of coming
+  back with the stretch of his absence open, turns every stop back with the `stretch` command to run. It enters at
+  the first lead stop after the pull request lands and the installed copy is refreshed; its proof is `node --test
+  bin/lib/away-stretch.test.mjs`, and over the lead's transcripts no departure since then is followed by a stop with
+  no stretch open (`odd/tasks/departure-stretch.md`, the replay of T2)
+- Control: check — bin/lib/away-stretch.test.mjs — "a planted departure with no stretch open is turned back, naming
+  stretch open" — since 2026-10-31
 
 ### taskstop-leaves-work-alive
 Stopping a background task of the host ends its shell and not what that shell started, so the work

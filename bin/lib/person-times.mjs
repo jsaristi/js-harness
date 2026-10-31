@@ -1,4 +1,5 @@
-// When the person wrote in a transcript, read fast enough for a Stop hook (odd/tasks/lead-duty-checks.md, spec 2).
+// When the person wrote in a transcript, and what, read fast enough for a Stop hook (odd/tasks/lead-duty-checks.md,
+// spec 2; his words for the departure check, odd/tasks/departure-stretch.md).
 // Whose words an entry is stays `quoteOf`'s one rule (`quoteEntry` in bin/lib/sessions.mjs, with the question calls it
 // pairs an answer with): this module only reads fewer lines. A lead's transcript runs to tens of megabytes and the
 // reply hook has a few seconds for every check: the 38,419 lines of the lead's 0f71b2c6 (59 MB, 2026-10-31) took
@@ -6,24 +7,37 @@
 
 import { parseTranscript, QUESTION_TOOLS, questionCallsOf, quoteEntry } from './sessions.mjs';
 
-/** Every time the person wrote in `entries` (parsed transcript lines), by `quoteOf`'s rule, oldest first: a typed
- * message, a queued one and a tapped answer count, an entry with no time does not. */
-export function personTimesOf(entries) {
+/** Every message of the person in `entries` (parsed transcript lines), by `quoteOf`'s rule, oldest first, as
+ * `{ at, text }`: a typed message, a queued one and a tapped answer count, an entry with no time does not. */
+export function personMessagesOf(entries) {
   const questionCalls = questionCallsOf(entries);
-  const times = [];
+  const messages = [];
   for (const entry of entries) {
     const quote = quoteEntry(entry, questionCalls);
-    if (quote.person && typeof quote.at === 'string') times.push(quote.at);
+    if (quote.person && typeof quote.at === 'string') messages.push({ at: quote.at, text: quote.text });
   }
-  return times.sort();
+  return messages.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
-/** `personTimesOf` for a transcript's `text`, parsing only the lines that can hold the person's words or a question
+/** Every time the person wrote in `entries`, oldest first: `personMessagesOf`'s times. */
+export const personTimesOf = (entries) => personMessagesOf(entries).map((message) => message.at);
+
+// The last transcript read and what it gave: the return and departure checks of one stop read the same text, which the
+// hook reads once (bin/reply.mjs, `stopIo`), so the second check costs a comparison of the same string.
+let lastRead = { text: null, messages: [] };
+
+/** `personMessagesOf` for a transcript's `text`, parsing only the lines that can hold the person's words or a question
  * call: his entries carry the origin `"human"`, his answers `"answers"`, and the calls they answer the tool's name. */
-export function personTimesIn(text) {
+export function personMessagesIn(text) {
+  if (lastRead.text === text) return lastRead.messages;
   const marks = ['"human"', '"answers"', ...QUESTION_TOOLS.map((tool) => `"${tool}"`)];
-  return personTimesOf(parseTranscript(linesHolding(text, marks).join('\n')).entries);
+  const messages = personMessagesOf(parseTranscript(linesHolding(text, marks).join('\n')).entries);
+  lastRead = { text, messages };
+  return messages;
 }
+
+/** `personTimesOf` for a transcript's `text`, as `personMessagesIn` reads it. */
+export const personTimesIn = (text) => personMessagesIn(text).map((message) => message.at);
 
 // What the host writes of its own requests: a copy of the whole prompt, which names every tool and holds any word, and
 // never an entry of the person or of the session. In the lead's 0f71b2c6, 41 such lines of 9 MB held the marks above.

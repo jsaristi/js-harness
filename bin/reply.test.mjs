@@ -8,6 +8,7 @@ import { openingsDir, recordPath } from './lib/channel.mjs';
 import { CURSOR_SCHEMA, liveCursorPath } from './lib/live-rows.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { SUMMARY_MARKER } from './lib/stale-board.mjs';
+import { RECORD_SCHEMA, stretchFile } from './lib/stretch.mjs';
 import { SHOWN_SCHEMA, SUMMARY_SUBJECT, shownFile } from './lib/template-record.mjs';
 
 // `js-harness reply --hook`, the Stop hook of C1 (odd/tasks/rule-hierarchy.md, T2). The files it reads are
@@ -334,6 +335,34 @@ test('the lead answering his return after a long absence without the status page
   assert.deepEqual(soon.answer, {}, 'a short gap is no return');
   const work = await wakeHook({ transcript: [titled('JH 26 · canal'), ...away], record: [] });
   assert.deepEqual(work.answer, {}, 'a work session is never told');
+});
+
+// The departure check (odd/tasks/departure-stretch.md): his word of leaving with no stretch open, and of coming back
+// with the stretch of his absence open; bin/lib/away-stretch.test.mjs holds its cases, this its place in the hook.
+const LEAVING = /he said he is leaving/;
+const BACK = /he said he is back/;
+const told = (at, text) => line({ type: 'user', timestamp: at, origin: { kind: 'human' }, message: { role: 'user', content: text } });
+const STRETCHES = stretchFile(HOME, SLUG);
+const stretchOpened = (at) => JSON.stringify({ schema: RECORD_SCHEMA, event: 'open', id: at, at, plan: { hours: 4 } });
+
+test('the lead whose user says he leaves with no stretch open, or is back with it open, is turned back at every stop', async () => {
+  const leaving = [told('2026-10-17T01:00:00.000Z', 'te dejo solo 3 horas ahora nos vemos')];
+  const lead = await wakeHook({ payload: { session_id: 'lead' }, transcript: leaving });
+  assert.equal(lead.answer.decision, 'block');
+  assert.match(lead.answer.reason, LEAVING);
+  assert.ok(lead.answer.reason.includes('js-harness stretch open --plan <file> --html <file>'));
+  assert.equal(lead.err, '');
+  const opened = await wakeHook({ payload: { session_id: 'lead' }, transcript: leaving, files: { [STRETCHES]: `${stretchOpened('2026-10-17T01:01:00.000Z')}\n` } });
+  assert.deepEqual(opened.answer, {}, 'a stretch is open');
+  const back = [...leaving, told('2026-10-17T03:50:00.000Z', 'ya llegue')];
+  const returned = await wakeHook({ payload: { session_id: 'lead' }, transcript: back, files: { [STRETCHES]: `${stretchOpened('2026-10-17T01:01:00.000Z')}\n` } });
+  assert.match(returned.answer.reason, BACK);
+  assert.ok(returned.answer.reason.includes('js-harness stretch close --html <file>'));
+  const work = await wakeHook({ transcript: [titled('JH 26 · canal'), ...leaving], record: [] });
+  assert.doesNotMatch(work.answer.reason ?? '', LEAVING, 'a work session is never told');
+  const unreadable = await wakeHook({ payload: { session_id: 'lead' }, transcript: leaving, files: { [STRETCHES]: undefined } });
+  assert.deepEqual(unreadable.answer, {});
+  assert.match(unreadable.err, /the stretch record .*EACCES.*the departure check did not run/);
 });
 
 /** A lead's stop in the folder `project`, where the wake, live-board and return checks each ask where the project is
