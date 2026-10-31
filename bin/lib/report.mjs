@@ -37,11 +37,17 @@ export function parseMergeLog(stdout) {
 
 /** The cut a report starts from, `{ at, source, head }`: `since` (ISO) when given, else the latest of the recorded
  * `reports`, with the commit of the default branch it read as `head`, else `REPORT_WINDOW_HOURS` before `now`
- * (milliseconds). `head` is `null` but for a recorded report that names one. */
+ * (milliseconds). `head` is `null` but for a recorded report that names one. A recorded report's `proposals` come
+ * with it, each `{ step, estimate }` with a text step, `estimate` `null` when it gave none. */
 export function cutOf({ since, reports = [], now }) {
   if (since !== undefined) return { at: Date.parse(since), source: 'since', head: null };
   const latest = reports.filter((one) => Number.isFinite(Date.parse(one.at))).reduce((best, one) => (best === null || Date.parse(one.at) > Date.parse(best.at) ? one : best), null);
-  if (latest !== null) return { at: Date.parse(latest.at), source: 'last-report', head: typeof latest.head === 'string' && latest.head !== '' ? latest.head : null };
+  if (latest !== null) {
+    const text = (value) => (typeof value === 'string' && value !== '' ? value : null);
+    const cut = { at: Date.parse(latest.at), source: 'last-report', head: text(latest.head) };
+    if (Array.isArray(latest.proposals)) cut.proposals = latest.proposals.filter((one) => text(one?.step) !== null).map((one) => ({ step: one.step, estimate: text(one.estimate) }));
+    return cut;
+  }
   return { at: now - REPORT_WINDOW_HOURS * 3600_000, source: 'window', head: null };
 }
 

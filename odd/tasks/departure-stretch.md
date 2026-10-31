@@ -20,6 +20,7 @@ already takes; the return is the one moment every absence ends with.
 ## Done when
 - `node bin/js-harness.mjs contract check odd/tasks/departure-stretch.md` exits 0
 - `node --test bin/quiet.test.mjs bin/lib/return-report.test.mjs bin/reply.test.mjs bin/stretch.test.mjs bin/lib/stretch.test.mjs` exits 0
+- `node --test bin/report.test.mjs bin/lib/report-status.test.mjs bin/lib/report.test.mjs bin/lib/channel.test.mjs` exits 0
 - the new cases of `bin/quiet.test.mjs` and `bin/lib/return-report.test.mjs` failed before the code existed and pass
   after it, both runs quoted in `## Log`
 - the cost per stop is measured and the Stop hook's budget tests (`bin/reply-budget.test.mjs`) pass on Windows and on
@@ -105,12 +106,12 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
 ## Tasks
 - [x] T1 (kind: build) spec 2, 3: the free-text check, tests first — commits: `818b1eeb`; dropped by spec 7 (L11)
 - [x] T2 (kind: verify) spec 4: false positives over the real transcript and the hook's budget on both systems — commits: this document's
-- [ ] T3 (kind: docs) spec 5, 8: the `- Seen:` lines, the control and row 45 of the duties, for 1a and 1b — commits: pending
-- [ ] T6 (kind: build) spec 7: `quiet --wait` refuses with no stretch open, tests first — commits: pending
-- [ ] T7 (kind: build) spec 8: the return's stretch warning, tests first, budget measured — commits: pending
+- [x] T3 (kind: docs) spec 5, 8: the `- Seen:` lines, the control and row 45 of the duties, for 1a and 1b — commits: `4d5e7605`
+- [x] T6 (kind: build) spec 7: `quiet --wait` refuses with no stretch open, tests first — commits: `4d5e7605`
+- [x] T7 (kind: build) spec 8: the return's stretch warning, tests first, budget measured — commits: `4d5e7605`
 - [ ] T8 (kind: build) spec 9: the step chain on the status report's map, tests first — commits: pending
 - [ ] T9 (kind: build) spec 9: each proposal's estimate, compared by the next report — commits: pending
-- [ ] T10 (kind: docs) spec 10: the search for a draft plan, built or written as the next task — commits: pending
+- [x] T10 (kind: docs) spec 10: the search for a draft plan; not built, written as the next task (L18) — commits: this document's
 - [ ] T4 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice — PR pending
 - [ ] T5 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice — pending
 
@@ -251,8 +252,26 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
   lead for the sighting rather than writing it (spec 8). `failures check` PASS (131 failures, 306 sightings),
   `contract check` PASS, `rules check` PASS (71 rules).
 
+- L17 (2026-10-31, T3, T6, T7): committed as `4d5e7605`, the gate passed ("PASS check 17 rows passed").
+- L18 (2026-10-31, T8, T9, T10): T8, the step chain: red, "section 4 draws each plan step by step ..." 1 of 11
+  failed; green 11 of 11. `renderStatus` takes `steps` (`comparePlans` at the cut and now, or `{ unavailable }`) and
+  draws `planSections` after the migration's share, before the stretch; `bin/report.mjs` reads both moments with
+  `momentAt` only for `--html`, since it shows every task document a step names. The command's case (the F8 page's
+  S0 `igual`, S13 `avanzó`) was written after the wiring and not seen red. T9, the estimates: red 3 of 94 (`newReport`
+  keeps proposals, `cutOf` carries them, section 6), green 94 of 94; a proposal's `estimate` is optional, a blank one
+  refused, one left out shown "sin estimación"; `--mark` records each proposal's step and estimate in its report
+  line, an optional field the record's readers ignore (`isReport` checks only `schema` and `at`); the next page sets
+  them, under "Lo que propuse el ...", beside what landed since, and whether each was done is his to read from both:
+  no record says it. The command's case, 18 of 18, also after the wiring. Not changed: item 6 of the manifest's
+  report ("each step with its why") is a rule's text (`bin/lib/rules-data.mjs:646`), so asking the lead there for
+  the estimate is a `rules change` for the lead. T10, searched: `stretch`'s options (`--plan`, `--html`, `--goals`,
+  `--json`, ...) hold no draft, `grep -rln draft bin` finds no plan builder, and `parsePlan` needs goals with
+  commands and items with hours, which no record holds. Not built: the next task, for the lead to place —
+  `stretch open --draft <file>` writing a plan to edit from the open sessions (`claude agents --json --all`), the
+  queue (the background record) and the roadmap's next step not done, its goals the open pull requests' `gh pr
+  checks`.
+
 ## Next step
-Commit T3, T6, T7 (1a, 1b, the detector removed, the docs) through the gate; then T8: `planSections` of
-`comparePlans(before plans, after plans)` on the status report's map (`bin/lib/report-status.mjs` `mapHtml`,
-`bin/report.mjs` reading `momentAt` of `bin/lib/report-git.mjs` at the ref and at `cut.head`), tests first in
-`bin/lib/report-status.test.mjs`; then T9 (proposal estimates), T10 (search for a draft plan), the reviews.
+Commit T8 and T9 through the gate; then the reviews of `6bee9e5b..HEAD` (gentle-ai's contract run, then
+`js-harness codex-review --base 6bee9e5b` and `js-harness lens-review --base 6bee9e5b`, then the verifier), push, PR,
+the ready notice and the lead told; the summary under `docs/sessions/`.

@@ -237,6 +237,20 @@ test('a relative --notes and --html both resolve under --cwd, wherever the comma
   assert.match(fs.readFileSync(path.join(project.repo, 'out', 'status.html'), 'utf8'), /Tramo C[\s\S]*faltan páginas/);
 }));
 
+// odd/tasks/departure-stretch.md, spec 9: a marked report's proposals and estimates are the next page's to compare.
+test('--mark records the proposals and their estimates, and the next page sets them beside what landed since', withProject(async (project) => {
+  fs.mkdirSync(project.home, { recursive: true });
+  const notes = path.join(project.home, 'notes.json');
+  fs.writeFileSync(notes, JSON.stringify({ proposals: [{ step: 'Tramo D', why: 'falta el mapa', estimate: '2 h, PR 740 en main' }] }));
+  const recordLoad = async () => ({ renderedFile: () => path.join(project.home, 'rendered.jsonl'), recordRendered: () => ({ sha256: 'e'.repeat(64), bytes: 1 }) });
+  const run = (argv, at) => reportMain([...argv, '--cwd', project.repo, '--home', project.home], { stdout: () => {}, stderr: () => {}, now: () => at, env: {}, recordLoad });
+  assert.equal(await run(['--mark', '--html', path.join(project.home, 'one.html'), '--notes', notes], NOW), 0);
+  assert.deepEqual(readNotices(project.home, project.slug).reports.at(-1).proposals, [{ step: 'Tramo D', estimate: '2 h, PR 740 en main' }]);
+  const next = path.join(project.home, 'two.html');
+  assert.equal(await run(['--html', next], NOW + 3_600_000), 0);
+  assert.match(fs.readFileSync(next, 'utf8').split('6. Lo que propongo')[1], /Lo que propuse el[\s\S]*Tramo D[\s\S]*2 h, PR 740 en main[\s\S]*Desde entonces no entró nada/);
+}));
+
 test('--notes that do not parse are refused before anything is written, and --notes needs --html', withProject(async (project) => {
   const notes = path.join(project.home, 'notes.json');
   fs.mkdirSync(project.home, { recursive: true });
@@ -289,6 +303,8 @@ test("the status page and the printed report carry the F8 share and the last str
   assert.match(printed, /^ {2}forecast F8 plan: 50% at the opening, ~100% at the return \(100% to 100%\); now 100%$/m);
   const four = fs.readFileSync(html, 'utf8').split('4. El mapa')[1].split('5. Lo que espera')[0];
   assert.match(four, /La migración[\s\S]*F8 plan[\s\S]*1 de 2 pasos · 50 %[\s\S]*2 de 2 pasos · 100 %/);
+  // odd/tasks/departure-stretch.md, spec 9: the steps at the cut and now, read from git at both commits.
+  assert.match(four, /F8 plan, paso por paso[\s\S]*S0[\s\S]*igual[\s\S]*S13[\s\S]*avanzó[\s\S]*El último tramo/);
   assert.match(four, /El último tramo[\s\S]*PR 630 en main[\s\S]*sí[\s\S]*exit 0[\s\S]*S12 empezada[\s\S]*no[\s\S]*exit 1/);
   assert.match(four, /F8 plan[\s\S]*1 de 2 · 50 %[\s\S]*~100 %[\s\S]*2 de 2 · 100 %/);
 }));

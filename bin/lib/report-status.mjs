@@ -5,16 +5,18 @@
 // decisions and what they changed, what waits and what the lead proposes are no record's: they come from the lead's
 // notes file, each labelled "del orquestador", and with no notes their sections say no record holds them. Pure.
 import { escapeHtml, page, pill, table, tiles } from './pages.mjs';
-import { mapNowSection, mapSection } from './pages-sections.mjs';
+import { mapNowSection, mapSection, planSections } from './pages-sections.mjs';
 import { compareMaps } from './report-pages.mjs';
 import { stamp } from './report.mjs';
 
 const NOTE_FIELDS = { badNews: null, decisions: ['text', 'changed'], waits: ['what', 'why'], proposals: ['step', 'why'] };
+const OPTIONAL_FIELDS = { proposals: ['estimate'] };
 
 /** The lead's notes from the text of the notes file: `{ badNews: [text], decisions: [{ text, changed }], waits: [{ what,
- * why }], proposals: [{ step, why }] }`, a field left out read as none, and each field of an item a text that is not
- * blank: a proposal's `why` is the criterion he asked to see with every next step. Throws, saying what is wrong, on
- * anything else. */
+ * why }], proposals: [{ step, why, estimate? }] }`, a field left out read as none, and each field of an item a text
+ * that is not blank: a proposal's `why` is the criterion he asked to see with every next step, its `estimate` what it
+ * should reach and when, which the next report sets beside what landed. Throws, saying what is wrong, on anything
+ * else. */
 export function notesOf(text) {
   let raw;
   try {
@@ -31,6 +33,9 @@ export function notesOf(text) {
     list.forEach((one, i) => {
       const fine = fields === null ? typeof one === 'string' : one !== null && typeof one === 'object' && fields.every((field) => typeof one[field] === 'string' && one[field].trim() !== '');
       if (!fine) throw new Error(fields === null ? `${key} is a list of texts` : `${key}[${i}] needs ${fields.join(' and ')}`);
+      for (const field of OPTIONAL_FIELDS[key] ?? []) {
+        if (one[field] !== undefined && (typeof one[field] !== 'string' || one[field].trim() === '')) throw new Error(`${key}[${i}].${field} is a text that is not blank`);
+      }
     });
     notes[key] = list;
   }
@@ -151,13 +156,21 @@ function headHtml(map, before, branch, stretch) {
   return `${tiles(list)}${goals}`;
 }
 
-function mapHtml(map, before, branch, stretch) {
+/** Each plan step by step at the cut and now (`comparePlans`), as the stretch and phase pages draw it: "el mapa de
+ * donde vamos" (odd/tasks/departure-stretch.md, spec 9). */
+function stepsHtml(steps) {
+  if (steps === undefined) return '';
+  if (steps.unavailable) return note(`Los pasos del plan no se pudieron leer: ${steps.unavailable}`);
+  return planSections(steps).map((one) => `<h3>${escapeHtml(one.title)}</h3>${one.html}${note(one.note)}`).join('');
+}
+
+function mapHtml(map, before, branch, stretch, steps) {
   // The migration and the last stretch lead the phases, from the records: his question is how far the migration is.
   // The stretch is its record's and git's, so a roadmap that cannot be read leaves it shown.
   const tramo = stretch === undefined ? '' : stretchHtml(stretch);
   if (map.error) return `${unread(map)}${tramo}`;
   if (map.absent) return `${note(`La rama ${branch} no tiene docs/ROADMAP.md.`)}${tramo}`;
-  const lead = `${map.plans === undefined ? '' : migrationHtml(map, before)}${tramo}`;
+  const lead = `${map.plans === undefined ? '' : migrationHtml(map, before)}${stepsHtml(steps)}${tramo}`;
   const phases = lead === '' ? '' : '<h3>Las fases</h3>';
   if (before?.map) return `${lead}${phases}${mapSection(compareMaps(before.map, map))}`;
   return `${lead}${phases}${note(`Ahora, sin un antes: ${beforeWhy(before)}.`)}${mapNowSection(map)}`;
@@ -182,10 +195,25 @@ function waitsHtml(questions, waits) {
 
 const fromNotes = (notes, key, head, row) => (notes === null ? note(NO_RECORD) : notes[key].length === 0 ? note('Nada esta vez, según las notas del orquestador.') : table([...head, 'De quién'], notes[key].map((one) => [...row(one), LEAD])));
 
+const NO_ESTIMATE = 'sin estimación';
+
+/** What the last report proposed, each with its estimate, beside what landed since it: the estimate against what
+ * happened (odd/tasks/departure-stretch.md, spec 9). Whether a step was done is his to read from both. */
+function proposedHtml(cut, landed) {
+  if (!cut.proposals?.length) return '';
+  const rows = cut.proposals.map((one) => [one.step, one.estimate ?? NO_ESTIMATE]);
+  let since;
+  if (landed.error) since = `Lo que entró desde entonces no se pudo leer: ${landed.error}`;
+  else if (landed.length === 0) since = 'Desde entonces no entró nada a la rama principal.';
+  else since = `Desde entonces entró: ${landed.map((one) => (one.number === null ? one.subject : `PR ${one.number}`)).join(', ')}.`;
+  return `<h3>Lo que propuse el ${escapeHtml(stamp(cut.at))}</h3>${table(['Paso', 'Lo estimado'], rows)}${note(since)}<h3>Lo que propongo ahora</h3>`;
+}
+
 /** The page of a status report from the facts `report` reads (`cut`, `branch`, `landed`, `sessions`, `questions`,
- * `map`), the map before (`{ map }`, `{ unavailable }` or `null`), the last stretch since the cut (`reportStretch`:
- * the view, `null` or `{ unavailable }`; left out, none is shown) and the lead's notes (`notesOf`, or `null`). */
-export function renderStatus({ cut, branch, landed, sessions, questions, map, before, stretch, notes }) {
+ * `map`), the map before (`{ map }`, `{ unavailable }` or `null`), each plan step by step (`comparePlans`, or
+ * `{ unavailable }`; left out, none is shown), the last stretch since the cut (`reportStretch`: the view, `null` or
+ * `{ unavailable }`; left out, none is shown) and the lead's notes (`notesOf`, or `null`). */
+export function renderStatus({ cut, branch, landed, sessions, questions, map, before, steps, stretch, notes }) {
   return page({
     title: 'Cómo vamos',
     heading: 'Cómo vamos desde el último reporte',
@@ -196,9 +224,9 @@ export function renderStatus({ cut, branch, landed, sessions, questions, map, be
       { title: '1. Lo que entró', html: landedHtml(landed) },
       { title: '2. Las sesiones', html: sessionsHtml(sessions) },
       { title: '3. Tus decisiones y qué cambiaron', html: fromNotes(notes, 'decisions', ['Decisión', 'Qué cambió'], (one) => [one.text, one.changed]) },
-      { title: '4. El mapa', html: mapHtml(map, before, branch, stretch) },
+      { title: '4. El mapa', html: mapHtml(map, before, branch, stretch, steps) },
       { title: '5. Lo que espera', html: waitsHtml(questions, notes === null ? null : notes.waits) },
-      { title: '6. Lo que propongo', html: fromNotes(notes, 'proposals', ['Paso', 'Por qué'], (one) => [one.step, one.why]) },
+      { title: '6. Lo que propongo', html: `${proposedHtml(cut, landed)}${fromNotes(notes, 'proposals', ['Paso', 'Por qué', 'Lo estimado'], (one) => [one.step, one.why, one.estimate ?? NO_ESTIMATE])}` },
     ],
   });
 }

@@ -88,6 +88,41 @@ test('section 4 says when no stretch ran since the cut, when the stretch record 
   assert.match(open, /El pronóstico no se pudo leer: git show: bad/);
 });
 
+// odd/tasks/departure-stretch.md, spec 9: "el mapa de donde vamos", the plan's steps as a chain before and now.
+const STEPS = [{ name: 'F8 plan', steps: [
+  { id: 'S1', title: 'One', before: { reported: 'in progress', said: 'started' }, after: { reported: 'done', said: 'all of it' }, change: 'advanced', documents: [{ path: 'odd/tasks/one.md', before: { done: 1, total: 3 }, after: { done: 3, total: 3 } }] },
+  { id: 'S2', title: 'Two', before: { reported: 'to do', said: 'later' }, after: { reported: 'to do', said: 'later' }, change: 'same', documents: [] },
+] }];
+
+test('section 4 draws each plan step by step, before and now, after the migration\'s share and before the stretch', () => {
+  const html = renderStatus({ ...FACTS, map: { ...MAP, plans: [{ name: 'F8 plan', done: 1, total: 2 }] }, steps: STEPS, stretch: STRETCH, notes: null });
+  const four = sectionFour(html);
+  assert.match(four, /<h3>F8 plan, paso por paso<\/h3>[\s\S]*S1[\s\S]*all of it[\s\S]*odd\/tasks\/one\.md: 1\/3 → 3\/3[\s\S]*avanzó[\s\S]*S2[\s\S]*igual/);
+  assert.ok(four.indexOf('La migración') < four.indexOf('paso por paso') && four.indexOf('paso por paso') < four.indexOf('El último tramo'), 'the share, then the steps, then the stretch');
+  const unread = sectionFour(renderStatus({ ...FACTS, map: { ...MAP, plans: [] }, steps: { unavailable: 'git show: bad' }, notes: null }));
+  assert.match(unread, /Los pasos del plan no se pudieron leer: git show: bad/);
+  assert.doesNotMatch(sectionFour(renderStatus({ ...FACTS, notes: null })), /paso por paso|Los pasos del plan/);
+});
+
+// The same spec: "lo que estimabamos avanzar y lo que realmente avanzamos", each proposal's estimate, set beside what
+// landed by the next report.
+const sectionSix = (html) => html.slice(html.indexOf('6. Lo que propongo'));
+
+test('each proposal carries its estimate, and the next report sets the last one\'s beside what landed since', () => {
+  const notes = notesOf(JSON.stringify({ proposals: [{ step: 'Tramo D', why: 'falta el mapa', estimate: '2 h, PR 740 en main' }, { step: 'Tramo E', why: 'luego' }] }));
+  const cut = { ...CUT, proposals: [{ step: 'Tramo C', estimate: 'PR 645 en main en 3 h' }, { step: 'Tramo B', estimate: null }] };
+  const six = sectionSix(renderStatus({ ...FACTS, cut, notes }));
+  assert.match(six, /Tramo D[\s\S]*falta el mapa[\s\S]*2 h, PR 740 en main/);
+  assert.match(six, /Tramo E[\s\S]*sin estimación/);
+  assert.match(six, /Lo que propuse el 2026-10-29 00:00Z[\s\S]*Tramo C[\s\S]*PR 645 en main en 3 h[\s\S]*Tramo B[\s\S]*sin estimación/);
+  assert.match(six, /Desde entonces entró: PR 645\./);
+  assert.match(sectionSix(renderStatus({ ...FACTS, cut, landed: [], notes })), /Desde entonces no entró nada a la rama principal\./);
+  assert.match(sectionSix(renderStatus({ ...FACTS, cut, landed: { error: 'git log: fatal' }, notes })), /Lo que entró desde entonces no se pudo leer: git log: fatal/);
+  assert.match(sectionSix(renderStatus({ ...FACTS, cut, notes: null })), /Lo que propuse el[\s\S]*Tramo C[\s\S]*Ningún registro lo guarda/);
+  assert.doesNotMatch(sectionSix(renderStatus({ ...FACTS, notes })), /Lo que propuse el/);
+  assert.throws(() => notesOf(JSON.stringify({ proposals: [{ step: 'a', why: 'b', estimate: ' ' }] })), /proposals\[0\]\.estimate is a text that is not blank/);
+});
+
 test('a section the records could not give says why, and nothing that landed or wrote is said as such', () => {
   const html = renderStatus({ ...FACTS, landed: { error: 'git log: fatal' }, sessions: [], questions: { error: 'the record: EACCES' }, map: { absent: true }, before: { unavailable: 'c0: bad object' }, notes: null });
   assert.match(html, /1\. Lo que entró<\/h2><p class="note">No se pudo leer: git log: fatal/);
