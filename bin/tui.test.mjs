@@ -18,6 +18,13 @@ import {
   summarizeStackRow,
   computeStackState,
   buildCommands,
+  childCommands,
+  commandArgv,
+  startRun,
+  appendRunOutput,
+  finishRun,
+  sections,
+  REFRESHING,
 } from './tui.mjs';
 import { installMain } from './install.mjs';
 import { manifestPath, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
@@ -61,6 +68,41 @@ function makeFakeStdout() {
 
 function flush() {
   return new Promise((resolve) => setImmediate(resolve));
+}
+
+// The TUI repaints whole frames (`paint`, bin/lib/terminal.mjs): these read them back as text.
+const FRAME_START = '\u001b[H';
+function textOf(chunk) {
+  return chunk
+    .slice(chunk.lastIndexOf(FRAME_START))
+    .replace(/\u001b\[[0-9;?]*[A-Za-z]/g, '')
+    .replace(/\r\n/g, '\n');
+}
+/** The text of the last frame painted. */
+function screen(stdout) {
+  return textOf(stdout.chunks.findLast((chunk) => chunk.includes(FRAME_START)) ?? '');
+}
+/** The last frame with its wrapped rows joined, for a prompt the window wraps. */
+function flatScreen(stdout) {
+  return screen(stdout).replace(/\n/g, ' ');
+}
+/** The text of every frame painted so far. */
+function allText(stdout) {
+  return stdout.chunks.filter((chunk) => chunk.includes(FRAME_START)).map(textOf).join('\n');
+}
+/** Waits until `predicate()` holds: a child run or a deferred read ends on its own clock. */
+async function until(predicate, what = 'the screen to change', ms = 20_000) {
+  const end = Date.now() + ms;
+  while (!predicate()) {
+    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+/** Waits for the result screen of a run, then presses Enter to go back to the menu. */
+async function backToMenu(stdin, stdout) {
+  await until(() => / \(exit \d+\)$|: cancelled;| failed: /m.test(screen(stdout)), 'the result screen');
+  stdin.emit('data', '\r');
+  await flush();
 }
 
 // --- pure: normalizeKey ---
@@ -123,11 +165,11 @@ test('runTui reads the update again after a command: an Upgrade that installed t
     stdin,
     stdout,
   });
-  assert.match(stdout.chunks.at(-1), /^js-harness 1\.0\.0 {2}\(update available: 1\.1\.0\)$/m);
+  assert.match(screen(stdout), /^js-harness 1\.0\.0 {2}\(update available: 1\.1\.0\)$/m);
   stdin.emit('data', '\r');
-  await flush();
-  assert.match(stdout.chunks.at(-1), /^js-harness 1\.0\.0 {2}\(1\.1\.0 installed: quit and open js-harness again to use it\)$/m);
-  assert.doesNotMatch(stdout.chunks.at(-1), /update available/);
+  await backToMenu(stdin, stdout);
+  assert.match(screen(stdout), /^js-harness 1\.0\.0 {2}\(1\.1\.0 installed: quit and open js-harness again to use it\)$/m);
+  assert.doesNotMatch(screen(stdout), /update available/);
   stdin.emit('data', 'q');
   assert.equal(await done, 0);
 });
@@ -243,10 +285,11 @@ test('buildCommands uninstall-snapshots removes the memory snapshots, which unin
   }
 });
 
-test('q, escape, and enter on Quit all request quitting', () => {
+test('q, ctrl+c and enter on Quit request quitting; Esc on the main menu is Back, with nowhere to go back to', () => {
   const state = initialState({ installedVersion: '0.1.0', updateAvailable: null });
   assert.deepEqual(handleKey(state, 'quit').effect, { type: 'quit' });
-  assert.deepEqual(handleKey(state, 'escape').effect, { type: 'quit' });
+  assert.deepEqual(handleKey(state, 'ctrl-c').effect, { type: 'quit' });
+  assert.deepEqual(handleKey(state, 'escape'), { state, effect: null });
 
   const onQuitItem = { ...state, selected: MENU_ITEMS.indexOf('quit') };
   assert.deepEqual(handleKey(onQuitItem, 'enter').effect, { type: 'quit' });
@@ -275,7 +318,7 @@ test('runTui runs the selected command, redraws, and resolves 0 on quit', async 
   const code = await done;
   assert.equal(code, 0);
   assert.deepEqual(calls, ['status']);
-  assert.ok(stdout.chunks.join('').includes('Status'));
+  assert.ok(allText(stdout).includes('Status'));
 });
 
 test('runTui asks for confirmation before uninstalling', async () => {
@@ -295,14 +338,14 @@ test('runTui asks for confirmation before uninstalling', async () => {
   for (let i = 0; i < MENU_ITEMS.indexOf('uninstall'); i++) stdin.emit('data', 'j');
   stdin.emit('data', '\r'); // Enter opens the submenu, on Machine
   await flush();
-  assert.match(stdout.chunks.at(-1), /^> Machine$/m);
+  assert.match(screen(stdout), /^> Machine$/m);
   stdin.emit('data', '\r'); // Enter opens the confirmation
   await flush();
-  assert.ok(stdout.chunks.at(-1).includes('y/N'));
+  assert.ok(screen(stdout).includes('y/N'));
 
   stdin.emit('data', 'y');
-  await flush();
-  assert.match(stdout.chunks.at(-1), /^> Uninstall$/m, 'the menu is drawn again, on Uninstall');
+  await backToMenu(stdin, stdout);
+  assert.match(screen(stdout), /^> Uninstall$/m, 'the menu is drawn again, on Uninstall');
   stdin.emit('data', 'q');
 
   const code = await done;
@@ -336,8 +379,13 @@ test('runTui quits once Uninstall everything succeeds, and stays in the menu whe
       stdin.emit('data', key);
       await flush();
     }
-    if (result !== 0) {
-      // Still in the menu, on Uninstall: back to the top, run Status, then quit.
+    if (result === 0) {
+      // The result says the menu itself is gone, and leaving it ends the menu.
+      assert.match(flatScreen(stdout), /Everything js-harness kept is removed, this menu included: Enter, Esc or q closes it\./);
+      stdin.emit('data', '\r');
+    } else {
+      // Back in the menu, on Uninstall: back to the top, run Status, then quit.
+      await backToMenu(stdin, stdout);
       for (let i = 0; i < MENU_ITEMS.indexOf('uninstall'); i++) stdin.emit('data', 'k');
       stdin.emit('data', '\r');
       await flush();
@@ -391,7 +439,7 @@ test('tuiMain with no source asks no package manager for a release and shows no 
 
     assert.equal(code, 0);
     assert.deepEqual(calls.filter((call) => call.includes('view')), []);
-    assert.ok(!stdout.chunks.join('').includes('update available'));
+    assert.ok(!allText(stdout).includes('update available'));
   } finally {
     fs.rmSync(repo, { recursive: true, force: true });
   }
@@ -408,7 +456,7 @@ test('tuiMain opens the menu when the home\'s manifest cannot be read, as it did
     await flush();
     stdin.emit('data', 'q');
     assert.equal(await done, 0);
-    assert.match(stdout.chunks.join(''), /^ {2}Uninstall$/m);
+    assert.match(allText(stdout), /^ {2}Uninstall$/m);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -423,12 +471,14 @@ test('tuiMain shows the update a named source folder holds, and its commands rea
     const spawn = () => ({ status: 0, stdout: '', stderr: '' });
 
     const done = tuiMain(['--cwd', nonGitDir, '--home', nonGitDir, '--source', source], {}, spawn, { stdin, stdout });
-    await flush();
+    // S5: the first frame comes before the lookup, which fills the header after it.
+    assert.match(allText(stdout).split('js-harness ')[1], /checking for updates/);
+    assert.match(allText(stdout), /stack: checking\.\.\./);
+    await until(() => screen(stdout).includes('update available: 99.0.0'), 'the update in the header');
     stdin.emit('data', 'q');
     const code = await done;
 
     assert.equal(code, 0);
-    assert.ok(stdout.chunks[0].includes('update available: 99.0.0'));
 
     const { result, lines } = await silently(() => buildCommands({ home: nonGitDir, source, env: {}, spawn }).update());
     assert.equal(result, 0);
@@ -438,9 +488,9 @@ test('tuiMain shows the update a named source folder holds, and its commands rea
   }
 });
 
-/** How many steps down Install is in the menu the first frame drew: one more when Install the stack is there. */
+/** How many steps down Install is in the menu the last frame drew: one more when Install the stack is there. */
 function installIndex(stdout) {
-  return MENU_ITEMS.indexOf('install') + (stdout.chunks.join('').includes('Install the stack') ? 1 : 0);
+  return MENU_ITEMS.indexOf('install') + (screen(stdout).includes('Install the stack') ? 1 : 0);
 }
 
 test('tuiMain resolves home from JS_HARNESS_HOME when --home is not given', async () => {
@@ -451,10 +501,12 @@ test('tuiMain resolves home from JS_HARNESS_HOME when --home is not given', asyn
   try {
     const done = tuiMain(['--cwd', nonGitDir], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout });
     await flush();
-    // A home with no context7 has a stack gap (F8 S11, G11), so Install the stack sits above Install.
+    // A home with no context7 has a stack gap (F8 S11, G11), so Install the stack sits above Install once the
+    // stack block, read after the first draw (S5), has filled in.
+    await until(() => !screen(stdout).includes('stack: checking'), 'the stack block');
     for (let i = 0; i < installIndex(stdout); i++) stdin.emit('data', 'j'); // down to Install
-    stdin.emit('data', '\r'); // run it
-    await flush();
+    stdin.emit('data', '\r'); // run it, as a child `js-harness install`
+    await backToMenu(stdin, stdout);
     stdin.emit('data', 'q');
     const code = await done;
 
@@ -482,10 +534,12 @@ test('tuiMain takes an empty JS_HARNESS_HOME as no home: the install goes to the
   try {
     const done = tuiMain(['--cwd', nonGitDir], { JS_HARNESS_HOME: '' }, spawn, { stdin, stdout });
     await flush();
-    // A home with no context7 has a stack gap (F8 S11, G11), so Install the stack sits above Install.
+    // A home with no context7 has a stack gap (F8 S11, G11), so Install the stack sits above Install once the
+    // stack block, read after the first draw (S5), has filled in.
+    await until(() => !screen(stdout).includes('stack: checking'), 'the stack block');
     for (let i = 0; i < installIndex(stdout); i++) stdin.emit('data', 'j'); // down to Install
-    stdin.emit('data', '\r'); // run it
-    await flush();
+    stdin.emit('data', '\r'); // run it, as a child `js-harness install`
+    await backToMenu(stdin, stdout);
     stdin.emit('data', 'q');
     const code = await done;
 
@@ -512,9 +566,8 @@ const noCommands = {
   status: async () => {}, doctor: async () => {}, install: async () => {}, update: async () => {},
   upgrade: async () => {}, uninstall: async () => {},
 };
-const MENU_HEIGHT = 2 + MENU_ITEMS.length; // header, blank line, one line per item
 
-test('runTui redraws the menu in place when the selection moves', async () => {
+test('runTui repaints the whole frame from the top-left when the selection moves, never moving up over what it counted', async () => {
   const stdin = makeFakeStdin();
   const stdout = makeFakeStdout();
   const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands: noCommands, stdin, stdout });
@@ -523,9 +576,94 @@ test('runTui redraws the menu in place when the selection moves', async () => {
   stdin.emit('data', '\u001b[B');
   await flush();
   const redraw = stdout.chunks.slice(before).join('');
-  assert.ok(redraw.startsWith(`\u001b[${MENU_HEIGHT}A\u001b[0J`), `expected a cursor-up redraw, got ${JSON.stringify(redraw.slice(0, 12))}`);
-  assert.match(redraw, /> Doctor/);
+  assert.ok(redraw.startsWith('\u001b[H'), `expected a repaint from home, got ${JSON.stringify(redraw.slice(0, 12))}`);
+  assert.doesNotMatch(redraw, /\u001b\[\d+A/, 'no cursor-up erase, which miscounts wrapped rows');
+  assert.match(screen(stdout), /^> Doctor$/m);
 
+  stdin.emit('data', 'q');
+  await done;
+});
+
+// S2: the frame fits the window it is drawn in, and is drawn again when the window changes.
+test('runTui lays every frame out to the window, and repaints it on resize', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = Object.assign(new EventEmitter(), makeFakeStdout(), { columns: 30, rows: 8 });
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: '0.2.0', stack: [{ id: 'engram', version: '4.2.0', state: 'missing codex' }], commands: noCommands, stdin, stdout });
+  const fits = (columns, rows) => {
+    const lines = screen(stdout).split('\n');
+    assert.ok(lines.length <= rows, `${lines.length} rows in a window of ${rows}`);
+    for (const line of lines) assert.ok(line.length < columns, `${JSON.stringify(line)} in a window ${columns} wide`);
+  };
+  fits(30, 8);
+  assert.match(screen(stdout), /^> Status$/m, 'the selection is on screen');
+  const before = stdout.chunks.length;
+  Object.assign(stdout, { columns: 100, rows: 40 });
+  stdout.emit('resize');
+  assert.ok(stdout.chunks.length > before, 'a resize repaints');
+  fits(100, 40);
+  assert.match(screen(stdout), /^js-harness 0\.1\.0 {2}\(update available: 0\.2\.0\)$/m);
+  stdin.emit('data', 'q');
+  await done;
+  assert.equal(stdout.listenerCount('resize'), 0, 'the menu stops listening once it quits');
+});
+
+// S1: the menu takes the alternate screen and gives the terminal back, however it ends.
+test('runTui opens on the alternate screen with the cursor hidden and raw keys, and restores them on quit', async () => {
+  const stdin = makeFakeStdin();
+  const raw = [];
+  stdin.setRawMode = (on) => raw.push(on);
+  const stdout = makeFakeStdout();
+  const proc = new EventEmitter();
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands: noCommands, stdin, stdout, proc });
+  assert.ok(stdout.chunks[0].startsWith('\u001b[?1049h'), 'the alternate screen first');
+  assert.ok(stdout.chunks[0].includes('\u001b[?25l'), 'the cursor hidden');
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
+  assert.deepEqual(raw, [true, false]);
+  assert.equal(stdout.chunks.at(-1), '\u001b[?25h\u001b[?1049l', 'the cursor and the main screen come back last');
+  assert.equal(proc.listenerCount('SIGINT'), 0);
+});
+
+test('runTui restores the terminal and ends on SIGINT from outside, stopping a running command with it', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const proc = new EventEmitter();
+  let aborted = false;
+  const commands = { ...noCommands, status: (location, { signal }) => new Promise((resolve) => signal.addEventListener('abort', () => { aborted = true; resolve({ code: null, cancelled: true }); })) };
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout, proc });
+  stdin.emit('data', '\r');
+  await flush();
+  proc.emit('SIGINT');
+  assert.equal(await done, 130);
+  assert.equal(aborted, true);
+  assert.equal(stdout.chunks.at(-1), '\u001b[?25h\u001b[?1049l');
+});
+
+test('runTui gives the terminal back when drawing fails, and rejects with the error', async () => {
+  const stdin = makeFakeStdin();
+  const writes = [];
+  let failing = false;
+  const stdout = { write: (s) => { if (failing && s.startsWith('\u001b[H')) throw new Error('write EPIPE'); writes.push(s); } };
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands: noCommands, stdin, stdout, proc: new EventEmitter() });
+  failing = true;
+  stdin.emit('data', 'j');
+  await assert.rejects(done, /EPIPE/);
+  assert.equal(writes.at(-1), '\u001b[?25h\u001b[?1049l');
+});
+
+// S3: keys are read one by one out of a chunk, an Esc alone only after its timeout.
+test('runTui reads every key of a chunk, and an Esc alone leaves the submenu once nothing follows it', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands: noCommands, stdin, stdout, escapeMs: 5 });
+  stdin.emit('data', 'j'.repeat(MENU_ITEMS.indexOf('uninstall')) + '\r');
+  assert.match(screen(stdout), /^> Machine$/m, 'one chunk of keys, all read: down to Uninstall, then Enter');
+  stdin.emit('data', '\u001b');
+  assert.match(screen(stdout), /^> Machine$/m, 'an Esc alone waits');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.match(screen(stdout), /^> Uninstall$/m, 'then it is Back');
+  stdin.emit('data', '\u001b[A');
+  assert.match(screen(stdout), /^> Upgrade$/m, 'an arrow is never an Esc');
   stdin.emit('data', 'q');
   await done;
 });
@@ -737,12 +875,13 @@ test('tuiMain wires the Doctor menu item to the full doctorMain, with network pe
     logged += `${line}\n`;
   };
   try {
-    const done = tuiMain(['--cwd', nonGitDir], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout, fetch: fetchImpl });
+    // In this process, so the fake `fetch` reaches doctor.
+    const done = tuiMain(['--cwd', nonGitDir], { JS_HARNESS_HOME: home }, spawn, { stdin, stdout, fetch: fetchImpl, inProcess: true });
     await flush();
     const doctorIndex = MENU_ITEMS.indexOf('doctor');
     for (let i = 0; i < doctorIndex; i++) stdin.emit('data', 'j');
     stdin.emit('data', '\r');
-    await flush();
+    await backToMenu(stdin, stdout);
     stdin.emit('data', 'q');
     const code = await done;
 
@@ -780,21 +919,171 @@ test('tuiMain never touches the network while opening (the startup stack block s
   }
 });
 
-test('runTui keeps a command\'s output on screen and draws the menu below it', async () => {
+// S4: a command's output fills the run screen's log, never the menu; the keys wait while it runs.
+function controlledCommand() {
+  const control = {};
+  control.command = (location, io) => new Promise((resolve) => {
+    control.io = io;
+    control.end = resolve;
+    io.signal.addEventListener('abort', () => resolve({ code: null, cancelled: true }));
+  });
+  return control;
+}
+
+test('runTui runs a command on a run screen: a spinner, its output in the log, the keys locked but ctrl+c', async () => {
   const stdin = makeFakeStdin();
   const stdout = makeFakeStdout();
-  const commands = { ...noCommands, status: async () => stdout.write('status output\n') };
-  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout });
+  const status = controlledCommand();
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands: { ...noCommands, status: status.command }, stdin, stdout, tickMs: 5 });
 
   stdin.emit('data', '\r'); // run Status
+  assert.match(screen(stdout), /^\| Status: running$/m);
+  assert.match(screen(stdout), /^ctrl\+c cancels it; the other keys wait until it ends$/m);
+  status.io.output('first line\nsecond \u001b[31mred\u001b[0m');
   await flush();
-  const all = stdout.chunks.join('');
-  const afterOutput = all.slice(all.indexOf('status output\n') + 'status output\n'.length);
-  assert.ok(!afterOutput.startsWith('\u001b['), 'the menu after a command must not erase the command output');
-  assert.match(afterOutput, /js-harness 0\.1\.0/);
+  assert.match(screen(stdout), /^first line$/m);
+  assert.doesNotMatch(screen(stdout), /> Status/, 'the menu is not drawn while it runs');
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.match(screen(stdout), /^[/\\|-] Status: running$/m);
+  for (const key of ['q', 'j', '\r', '\u001b[B']) stdin.emit('data', key);
+  assert.match(screen(stdout), /Status: running$/m, 'q, arrows and Enter do nothing while it runs');
 
+  status.end(0);
+  await until(() => /^Status: done \(exit 0\)$/m.test(screen(stdout)), 'the result');
+  assert.match(screen(stdout), /^second red$/m, 'the unfinished last line is kept, its colors removed');
+  assert.match(screen(stdout), /^Back in the menu, Status and Doctor show what changed\.$/m);
+  stdin.emit('data', '\r');
+  assert.match(screen(stdout), /^> Status$/m, 'Enter goes back to the menu');
   stdin.emit('data', 'q');
-  await done;
+  assert.equal(await done, 0);
+});
+
+test('ctrl+c while a command runs stops it, and the result says it was cancelled; the menu keeps working', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  const update = controlledCommand();
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands: { ...noCommands, status: update.command }, stdin, stdout });
+  stdin.emit('data', '\r');
+  stdin.emit('data', '\u0003');
+  assert.equal(update.io.signal.aborted, true, 'the command is told to stop');
+  await until(() => /^Status: cancelled; the command was stopped before it finished$/m.test(screen(stdout)), 'the cancelled result');
+  assert.match(screen(stdout), /^It may have done part of its work: run it again from the menu to finish it\.$/m);
+  stdin.emit('data', '\u001b');
+  await until(() => /^> Status$/m.test(screen(stdout)), 'Esc back to the menu');
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
+});
+
+test('a failed command ends on its exit code, and the log scrolls with the arrows, PgUp/PgDn and Home/End', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = Object.assign(makeFakeStdout(), { columns: 60, rows: 12 });
+  const lines = Array.from({ length: 40 }, (_, i) => `line ${i}`).join('\n');
+  const commands = { ...noCommands, status: async (location, io) => { io.output(`${lines}\n`); return 2; } };
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout });
+  stdin.emit('data', '\r');
+  await until(() => /^Status: failed \(exit 2\)$/m.test(screen(stdout)), 'the failed result');
+  assert.match(flatScreen(stdout), /The log above is its whole output: fix what it names, then run it again from the menu\./);
+  assert.match(screen(stdout), /^line 39$/m, 'the result opens on the tail');
+  stdin.emit('data', '\u001b[H');
+  assert.match(screen(stdout), /^line 0$/m, 'Home goes to the top');
+  stdin.emit('data', '\u001b[6~');
+  assert.doesNotMatch(screen(stdout), /^line 0$/m, 'PgDn moves down a page');
+  stdin.emit('data', '\u001b[F');
+  assert.match(screen(stdout), /^line 39$/m, 'End goes back to the tail');
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0, 'q quits from the result');
+});
+
+test('a log whose lines wrap scrolls by the rows it draws: Home reaches its first row, and Down then moves at once', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = Object.assign(makeFakeStdout(), { columns: 40, rows: 12 });
+  const long = Array.from({ length: 20 }, (_, i) => `entry ${i} ${'word '.repeat(25)}`).join('\n');
+  const commands = { ...noCommands, status: async (location, io) => { io.output(`${long}\n`); return 0; } };
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout });
+  stdin.emit('data', '\r');
+  await until(() => /^Status: done \(exit 0\)$/m.test(screen(stdout)), 'the result');
+  stdin.emit('data', '\u001b[H');
+  assert.match(screen(stdout), /^entry 0 word/m, 'Home shows the first row of the first line');
+  stdin.emit('data', '\u001b[B');
+  assert.doesNotMatch(screen(stdout), /^entry 0 word/m, 'one Down moves off it: Home did not overshoot');
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
+});
+
+test('a line of stderr never lands in the middle of a line of stdout, and a line still being written shows while it runs', () => {
+  let state = startRun(initialState({ installedVersion: '0.1.0', updateAvailable: null }), 'status');
+  state = appendRunOutput(state, 'half of ', 'stdout');
+  state = appendRunOutput(state, 'a warning\n', 'stderr');
+  state = appendRunOutput(state, 'a line\n', 'stdout');
+  assert.deepEqual(state.run.log, ['a warning', 'half of a line']);
+  state = appendRunOutput(state, `${'x'.repeat(10_000)}\r50%`, 'stdout');
+  assert.ok(state.run.partials.stdout.length <= 4096, 'an unfinished line is kept short');
+  assert.equal(sections(state).body.at(-1), '50%', 'the progress line is the last row while it runs');
+  state = finishRun(state, { code: 0 });
+  assert.equal(state.run.log.at(-1), '50%');
+});
+
+test('a command a signal stopped says so on its result', () => {
+  const state = finishRun(startRun(initialState({ installedVersion: '0.1.0', updateAvailable: null }), 'status'), { code: null, signal: 'SIGKILL' });
+  assert.equal(sections(state).top[2], 'Status: failed (stopped by SIGKILL)');
+});
+
+test('nothing is drawn while a command owns the terminal, however long it runs, a resize included', async () => {
+  const stdin = makeFakeStdin();
+  stdin.setRawMode = () => {};
+  const stdout = Object.assign(new EventEmitter(), makeFakeStdout());
+  let frames = null;
+  let release;
+  const install = Object.assign((location, io) => new Promise((resolve) => {
+    frames = stdout.chunks.length;
+    release = () => resolve({ code: 0 });
+    io.signal.addEventListener('abort', () => resolve({ code: null, cancelled: true }));
+  }), { handoff: true });
+  const done = runTui({
+    installedVersion: '0.1.0', updateAvailable: null, commands: { ...noCommands, 'stack-install': install }, stdin, stdout, stackGap: true, tickMs: 5,
+  });
+  stdin.emit('data', 'jj\r'); // Status, Doctor, Install the stack
+  await flush();
+  stdout.emit('resize');
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(stdout.chunks.length, frames, 'no spinner frame and no repaint while it asks');
+  release();
+  await flush();
+  assert.equal(stdout.chunks.filter((chunk, i) => i >= frames && chunk.includes(FRAME_START)).length, 0, 'none while it waits for Enter either');
+  stdin.emit('data', '\r');
+  await until(() => /^Install the stack: done \(exit 0\)$/m.test(screen(stdout)), 'the result once the menu is back');
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
+});
+
+test('a refresh that ends after the user opened a prompt or a submenu keeps it open, and the menu is rebuilt on leaving', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  let finishRead;
+  let reads = 0;
+  const readLocation = () => {
+    reads += 1;
+    return reads === 1 ? new Promise((resolve) => { finishRead = () => resolve({ kind: 'outside' }); }) : { kind: 'outside' };
+  };
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands: noCommands, stdin, stdout, readLocation });
+  stdin.emit('data', '\r'); // Status
+  await until(() => /^Status: done \(exit 0\)$/m.test(screen(stdout)), 'the result');
+  assert.match(screen(stdout), /^js-harness 0\.1\.0 {2}\(reading what it changed\.\.\.\)$/m, 'the header says the menu is still reading');
+  stdin.emit('data', '\r'); // back to the menu while the read is pending
+  const at = screen(stdout).split('\n').findIndex((line) => line === '  Uninstall');
+  assert.ok(at > 0, 'the Uninstall item is on the menu');
+  while (!/^> Uninstall$/m.test(screen(stdout))) stdin.emit('data', 'j');
+  stdin.emit('data', '\r'); // opens the Uninstall submenu
+  const submenu = screen(stdout);
+  finishRead();
+  await flush();
+  await flush();
+  assert.equal(screen(stdout).replace(REFRESHING, ''), submenu.replace(REFRESHING, ''), 'the submenu stays as it was');
+  assert.doesNotMatch(screen(stdout), /reading what it changed/, 'the read is over');
+  stdin.emit('data', '\u001b');
+  await until(() => /^> Uninstall$/m.test(screen(stdout)) && /^  Status$/m.test(screen(stdout)), 'Esc back to the main menu, rebuilt, its selection kept');
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
 });
 
 // The TUI runs outside or inside a project alike, and its Machine kind must reach the machine: it runs
@@ -1079,13 +1368,13 @@ test('runTui rereads the location after a command and redraws the rebuilt menu',
     stdin,
     stdout,
   });
-  assert.match(stdout.chunks.join(''), /^> Init$/m);
+  assert.match(allText(stdout), /^> Init$/m);
 
   stdin.emit('data', '\r'); // Enter on Init
-  await flush();
+  await backToMenu(stdin, stdout);
 
   assert.deepEqual(calls, ['project-init']);
-  const redraw = stdout.chunks.at(-1);
+  const redraw = screen(stdout);
   assert.match(redraw, /^> Sync$/m);
   assert.doesNotMatch(redraw, /Init/);
   assert.match(redraw, /Uninstall/);
@@ -1257,8 +1546,8 @@ test('runTui hands the command the location just read: open outside a repository
   });
 
   stdin.emit('data', '\r'); // Status (machine) runs, then the re-read finds a repository
-  await flush();
-  assert.match(stdout.chunks.at(-1), /^project$/m);
+  await backToMenu(stdin, stdout);
+  assert.match(screen(stdout), /^project$/m);
   // Up, over the [machine] header and the remote items, to Init.
   for (let i = 0; i <= REMOTE_MENU.length; i++) stdin.emit('data', 'k');
   stdin.emit('data', '\r');
@@ -1290,13 +1579,12 @@ for (const [label, fail] of [
     },
   ],
 ]) {
-  test(`runTui survives a command that ${label}: one line on stderr, stdin resumed, menu redrawn, q still quits`, async () => {
+  test(`runTui survives a command that ${label}: one line on the result screen, nothing on stderr, the menu back, q still quits`, async () => {
     const stdin = makeFakeStdin();
     const stdout = makeFakeStdout();
     const input = pausable(stdin);
     const commands = { ...noCommands, status: fail };
     const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout });
-    const before = stdout.chunks.length;
 
     const { lines } = await silently(async () => {
       stdin.emit('data', '\r');
@@ -1304,9 +1592,10 @@ for (const [label, fail] of [
     });
 
     assert.equal(input.paused, false, 'stdin must be resumed');
-    assert.equal(lines.length, 1);
-    assert.match(lines[0], /status failed: boom$/);
-    assert.ok(stdout.chunks.length > before && /^> Status$/m.test(stdout.chunks.at(-1)), 'the menu is drawn again');
+    assert.deepEqual(lines, [], 'nothing is printed over the screen');
+    assert.match(screen(stdout), /^status failed: boom$/m);
+    stdin.emit('data', '\r');
+    assert.match(screen(stdout), /^> Status$/m, 'the menu is drawn again');
 
     stdin.emit('data', 'q');
     assert.equal(await done, 0);
@@ -1324,14 +1613,12 @@ test('runTui strips C0 and C1 control characters from a failed command line (U+0
   };
   const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout });
 
-  const { lines } = await silently(async () => {
-    stdin.emit('data', '\r');
-    await flush();
-  });
-
-  assert.equal(lines.length, 1);
-  assert.doesNotMatch(lines[0], /[\u0000-\u001f\u007f-\u009f]/);
-  assert.match(lines[0], /status failed: bad \[2J 2J {2} end$/);
+  stdin.emit('data', '\r');
+  await flush();
+  const line = screen(stdout).split('\n').find((text) => text.startsWith('status failed:'));
+  assert.doesNotMatch(line, /[\u0000-\u001f\u007f-\u009f]/);
+  assert.equal(line, 'status failed: bad [2J 2J   end');
+  assert.doesNotMatch(stdout.chunks.join(''), /\u009b|bad \u001b/, 'nothing of it reaches the terminal raw');
 
   stdin.emit('data', 'q');
   assert.equal(await done, 0);
@@ -1360,15 +1647,13 @@ for (const [label, fail] of [
       stdout,
     });
     for (let i = 0; i <= REMOTE_MENU.length; i++) stdin.emit('data', 'j'); // past the remote items, to machine Status
-    const { lines } = await silently(async () => {
-      stdin.emit('data', '\r');
-      await flush();
-    });
+    stdin.emit('data', '\r');
+    await flush();
 
     assert.equal(input.paused, false);
-    assert.equal(lines.length, 1);
-    assert.match(lines[0], /reading the project failed: cannot read$/);
-    const redraw = stdout.chunks.at(-1);
+    assert.match(screen(stdout), /^reading the project failed: cannot read$/m, 'the result says what it could not read again');
+    stdin.emit('data', '\r');
+    const redraw = screen(stdout);
     assert.match(redraw, /^project$/m, 'the menu of the previous location is drawn again');
     assert.match(redraw, /^> Status$/m);
     assert.match(redraw, /Init/);
@@ -1409,15 +1694,16 @@ test('tuiMain in a repository shows the project section, inits it, and offers Sy
     const { result: done } = await silently(async () => {
       const running = tuiMain(['--cwd', repo, '--home', home], {}, spawn, { stdin, stdout });
       await flush();
-      const opening = stdout.chunks.join('');
+      const opening = allText(stdout);
       assert.match(opening, /^project$/m);
       assert.match(opening, /^machine$/m);
       assert.match(opening, /^> Init$/m);
 
-      stdin.emit('data', '\r'); // Init, for real, in the fixture repository
-      await flush();
+      stdin.emit('data', '\r'); // Init, for real, in the fixture repository, as a child `js-harness init`
+      await until(() => /^Project init: done \(exit 0\)$/m.test(screen(stdout)), 'init to end');
       assert.ok(fs.existsSync(path.join(repo, 'harness.json')));
-      const afterInit = stdout.chunks.at(-1);
+      stdin.emit('data', '\r');
+      const afterInit = screen(stdout);
       assert.match(afterInit, /^> Sync$/m);
       assert.doesNotMatch(afterInit, /Init/);
 
@@ -1426,12 +1712,13 @@ test('tuiMain in a repository shows the project section, inits it, and offers Sy
       stdin.emit('data', '\r'); // the submenu, on Project
       stdin.emit('data', '\r');
       await flush();
-      assert.match(stdout.chunks.at(-1), /Undo js-harness in this project\? .*\(y\/N\)/);
+      assert.match(flatScreen(stdout), /Undo js-harness in this project\? .*\(y\/N\)/);
       stdin.emit('data', 'y');
-      await flush();
+      await until(() => /^Uninstall project: done \(exit 0\)$/m.test(screen(stdout)), 'the uninstall to end');
       assert.equal(fs.existsSync(path.join(repo, 'harness.json')), false);
-      assert.match(stdout.chunks.at(-1), /^ {2}Init$/m, 'the menu offers Init again once the project is undone');
-      assert.match(stdout.chunks.at(-1), /^> Uninstall$/m, 'the selection stays on Uninstall, which is still there');
+      stdin.emit('data', '\r');
+      assert.match(screen(stdout), /^ {2}Init$/m, 'the menu offers Init again once the project is undone');
+      assert.match(screen(stdout), /^> Uninstall$/m, 'the selection stays on Uninstall, which is still there');
 
       stdin.emit('data', 'q');
       return running;
@@ -1450,7 +1737,7 @@ test('tuiMain --cwd outside any repository opens the machine menu only', async (
   const spawn = () => ({ status: 0, stdout: '', stderr: '' });
   const done = tuiMain(['--cwd', nonGitDir, '--home', nonGitDir], {}, spawn, { stdin, stdout });
   await flush();
-  const opening = stdout.chunks.join('');
+  const opening = allText(stdout);
   assert.doesNotMatch(opening, /^(project|machine)$/m);
   assert.match(opening, /^> Status$/m);
   stdin.emit('data', 'q');
@@ -1480,12 +1767,12 @@ test('runTui reads the stack again after a command and redraws the new block', a
     stdin,
     stdout,
   });
-  assert.match(stdout.chunks.join(''), /codegraph\s+1\.6\.0\s+missing project/);
+  assert.match(allText(stdout), /codegraph\s+1\.6\.0\s+missing project/);
 
   stdin.emit('data', '\r');
-  await flush();
+  await backToMenu(stdin, stdout);
 
-  const redraw = stdout.chunks.at(-1);
+  const redraw = screen(stdout);
   assert.match(redraw, /codegraph\s+1\.6\.0\s+ok/);
   assert.doesNotMatch(redraw, /missing project/);
 
@@ -1513,15 +1800,13 @@ test('a stack read that fails keeps the previous block, and the terminal still c
       stdout,
     });
 
-    const { lines } = await silently(async () => {
-      stdin.emit('data', '\r');
-      await flush();
-    });
+    stdin.emit('data', '\r');
+    await flush();
 
     assert.equal(input.paused, false, 'stdin must be resumed');
-    assert.equal(lines.length, 1);
-    assert.match(lines[0], /refreshing the stack failed: probe$/);
-    assert.match(stdout.chunks.at(-1), /codegraph\s+1\.6\.0\s+missing project/, 'the previous block stays');
+    assert.match(screen(stdout), /^refreshing the stack failed: probe$/m, 'the result says what it could not read again');
+    stdin.emit('data', '\r');
+    assert.match(screen(stdout), /codegraph\s+1\.6\.0\s+missing project/, 'the previous block stays');
 
     stdin.emit('data', 'q');
     assert.equal(await done, 0);
@@ -1541,13 +1826,11 @@ test('a failed location re-read does not stop the stack refresh', async () => {
     stdin,
     stdout,
   });
-  const { lines } = await silently(async () => {
-    stdin.emit('data', '\r');
-    await flush();
-  });
-  assert.equal(lines.length, 1);
-  assert.match(lines[0], /reading the project failed: git vanished$/);
-  assert.match(stdout.chunks.at(-1), /codegraph\s+1\.6\.0\s+ok/, 'the stack was still refreshed');
+  stdin.emit('data', '\r');
+  await flush();
+  assert.match(screen(stdout), /^reading the project failed: git vanished$/m);
+  stdin.emit('data', '\r');
+  assert.match(screen(stdout), /codegraph\s+1\.6\.0\s+ok/, 'the stack was still refreshed');
   stdin.emit('data', 'q');
   assert.equal(await done, 0);
 });
@@ -1569,12 +1852,10 @@ test('a failed stack read does not stop the location re-read', async () => {
     stdout,
   });
   for (let i = 0; i <= REMOTE_MENU.length; i++) stdin.emit('data', 'j'); // past the remote items, to machine Status
-  await silently(async () => {
-    stdin.emit('data', '\r');
-    await flush();
-  });
-  assert.match(stdout.chunks.at(-1), /^> Status$/m);
-  assert.match(stdout.chunks.at(-1), /Sync/, 'the location was still re-read');
+  stdin.emit('data', '\r');
+  await backToMenu(stdin, stdout);
+  assert.match(screen(stdout), /^> Status$/m);
+  assert.match(screen(stdout), /Sync/, 'the location was still re-read');
   stdin.emit('data', 'q');
   await done;
 });
@@ -1596,13 +1877,12 @@ test('tuiMain probes the stack again after a command, offline', async () => {
   };
   try {
     const { result: done } = await silently(async () => {
-      const running = tuiMain(['--cwd', nonGitDir, '--home', home], {}, spawn, { stdin, stdout, fetch: fetchImpl });
-      await flush();
+      const running = tuiMain(['--cwd', nonGitDir, '--home', home], {}, spawn, { stdin, stdout, fetch: fetchImpl, inProcess: true });
+      await until(() => probes.length > 0, 'the stack probes once the menu is drawn');
       const atStart = probes.length;
-      assert.ok(atStart > 0, 'the stack is probed when the TUI opens');
 
       stdin.emit('data', '\r'); // machine Status
-      await flush();
+      await backToMenu(stdin, stdout);
       assert.equal(probes.length, atStart * 2, 'and once more after the command');
       assert.equal(fetchCalled, false, 'never the network');
 
@@ -1631,36 +1911,90 @@ test('buildCommands binds stack-install to the home and the folder', () => {
   assert.equal(typeof buildCommands({ home: '/h', cwd: '/c' })['stack-install'], 'function');
 });
 
-test('runTui hands a command an ask whose key goes to it, never to the menu, then drops the item once nothing is missing', async () => {
+test('the first frame of a result already says the menu is reading what the command changed', async () => {
   const stdin = makeFakeStdin();
   const stdout = makeFakeStdout();
-  const calls = [];
-  const answers = [];
-  const commands = {
-    'stack-install': async (location, io) => {
-      calls.push('stack-install');
-      answers.push(await io.ask('Run it? [y/N] '));
-      answers.push(await io.ask('Run it? [y/N] '));
-    },
-    doctor: async () => calls.push('doctor'),
-  };
-  const done = runTui({
-    installedVersion: '0.1.0', updateAvailable: null, commands, stdin, stdout, stackGap: true,
-    readStackView: async () => ({ stack: [], stackGap: false }),
-  });
-  stdin.emit('data', 'j');
-  stdin.emit('data', 'j'); // Status, Doctor, Install the stack
-  stdin.emit('data', '\r');
-  await flush();
-  stdin.emit('data', 'y');
-  await flush();
-  stdin.emit('data', '\r'); // not y: no
-  await flush();
-  await flush();
-  assert.deepEqual(answers, [true, false]);
-  assert.deepEqual(calls, ['stack-install']);
-  assert.ok(stdout.chunks.join('').includes('Run it? [y/N] '));
-  assert.ok(!stdout.chunks.at(-1).includes('Install the stack'), 'the item is gone once nothing is missing');
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands: noCommands, stdin, stdout, readLocation: () => new Promise(() => {}) });
+  stdin.emit('data', '\r'); // Status
+  await until(() => /^Status: done \(exit 0\)$/m.test(screen(stdout)), 'the result');
+  const first = stdout.chunks.find((chunk) => chunk.includes(FRAME_START) && /Status: done \(exit 0\)/.test(textOf(chunk)));
+  assert.ok(textOf(first).includes(REFRESHING), 'no result frame shows before the reading note');
   stdin.emit('data', 'q');
   assert.equal(await done, 0);
+});
+
+test('a command handed the terminal that throws gives the terminal back to the menu, and the result says it failed', async () => {
+  const stdin = makeFakeStdin();
+  const raw = [];
+  stdin.setRawMode = (on) => raw.push(on);
+  const stdout = makeFakeStdout();
+  const install = Object.assign(async () => { throw new Error('no node'); }, { handoff: true });
+  const done = runTui({ installedVersion: '0.1.0', updateAvailable: null, commands: { ...noCommands, 'stack-install': install }, stdin, stdout, stackGap: true });
+  stdin.emit('data', 'jj\r'); // Status, Doctor, Install the stack
+  await until(() => /^stack-install failed: no node$/m.test(screen(stdout)), 'the failed result');
+  assert.equal(raw.at(-1), true, 'raw keys again');
+  stdin.emit('data', '\r');
+  assert.match(screen(stdout), /^> /m, 'keys reach the menu again');
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
+});
+
+test('a command that asks its own questions is handed the terminal: main screen, keys cooked, back after a key', async () => {
+  const stdin = makeFakeStdin();
+  const raw = [];
+  stdin.setRawMode = (on) => raw.push(on);
+  const stdout = makeFakeStdout();
+  const seen = [];
+  const install = Object.assign(async () => {
+    seen.push({ raw: raw.at(-1), last: stdout.chunks.at(-1) });
+    return { code: 0 };
+  }, { handoff: true });
+  const done = runTui({
+    installedVersion: '0.1.0', updateAvailable: null, commands: { ...noCommands, 'stack-install': install }, stdin, stdout, stackGap: true,
+    readStackView: async () => ({ stack: [], stackGap: false }),
+  });
+  stdin.emit('data', 'jj\r'); // Status, Doctor, Install the stack
+  await flush();
+  assert.deepEqual(seen, [{ raw: false, last: '\u001b[?25h\u001b[?1049l' }], 'it runs on the main screen with cooked keys');
+  assert.match(stdout.chunks.at(-1), /Install the stack ended \(exit 0\)\. Press Enter to go back to the menu\./);
+  stdin.emit('data', '\r');
+  await flush();
+  assert.equal(raw.at(-1), true, 'raw keys again');
+  assert.match(screen(stdout), /^Install the stack: done \(exit 0\)$/m);
+  stdin.emit('data', '\r');
+  assert.ok(!screen(stdout).includes('Install the stack'), 'the item is gone once nothing is missing');
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
+});
+
+test('childCommands runs every item as a child js-harness command line, and hands Install the stack the terminal', async () => {
+  const runs = [];
+  const commands = childCommands({
+    home: '/h', cwd: '/c', env: process.env,
+    runChild: async (command, args, opts) => { runs.push({ command, args, piped: typeof opts.onOutput === 'function' }); return { code: 0, cancelled: false }; },
+    handOff: async (command, args) => { runs.push({ command, args, handoff: true }); return { code: 0 }; },
+  });
+  await commands.doctor(undefined, { output: () => {} });
+  await commands['project-init']({ kind: 'notInitialized', root: '/r' }, { output: () => {} });
+  await commands['stack-install']();
+  const cli = path.join(import.meta.dirname, 'js-harness.mjs');
+  assert.deepEqual(runs, [
+    { command: process.execPath, args: [cli, 'doctor', '--home', '/h', '--cwd', '/c'], piped: true },
+    { command: process.execPath, args: [cli, 'init', '--cwd', '/r', '--home', '/h'], piped: true },
+    { command: process.execPath, args: [cli, 'stack', 'install', '--home', '/h', '--cwd', '/c'], handoff: true },
+  ]);
+  assert.equal(commands['stack-install'].handoff, true);
+  assert.equal(commands.doctor.handoff, undefined);
+});
+
+// Every item's command is one the real CLI has: its --help exits 0. The real children run above (init, uninstall
+// project, install) show their arguments are accepted.
+test('every menu item runs a command the real js-harness has', () => {
+  const cli = path.join(import.meta.dirname, 'js-harness.mjs');
+  const location = { kind: 'initialized', root: nonGitDir };
+  for (const id of ['project-init', 'project-sync', 'project-status', 'uninstall-project', 'status', 'doctor', 'stack-install', 'install', 'update', 'upgrade', 'sync', 'uninstall-machine', 'uninstall-snapshots', 'uninstall-everything']) {
+    const [command] = commandArgv(id, { home: nonGitDir, cwd: nonGitDir, location });
+    const result = spawnSync(process.execPath, [cli, command, '--help'], { encoding: 'utf8', env: { ...process.env, JS_HARNESS_HOME: nonGitDir } });
+    assert.equal(result.status, 0, `${id}: ${command} --help exited ${result.status}: ${result.stderr}`);
+  }
 });
