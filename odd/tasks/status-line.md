@@ -83,7 +83,11 @@ mod: his. Whether the feature closes here or builds a program the app would not 
   exact PowerShell commands and their undo, each tried in a scratch place; pull request, ready, summary, closed — pending
 
 ## Next step
-T7, tests first. Decided (L8): the writer is `js-harness status-line write`, run by a per-user scheduled task every 5
+T7, tests first. Done: `bin/lib/status-line.mjs` and its test (red: module not found; green: 4 pass);
+`bin/lib/status-line.ps1` and `bin/lib/status-line-program.test.mjs`, run through `powershell.exe` in a scratch
+USERPROFILE, skipped off win32 (red: 2 fail, no file; green: 2 pass). The script is ASCII: Windows PowerShell 5.1 reads
+a script without a BOM as ANSI, so the middle dot is `[char]0x00B7`. Next: `bin/status-line.mjs` and its registration
+in `bin/js-harness.mjs`. Decided (L8): the writer is `js-harness status-line write`, run by a per-user scheduled task every 5
 minutes that is part of the deferred install (nothing runs today: the app does not read the key); the board takes about
 24 s, so the program never runs it. The line, Spanish, from the board: open questions (`questions.open`), sessions
 `working` and `waiting` (`sessions[].state`), open pull requests (`pullRequests.items`), the gate (`gateLock.holder`),
