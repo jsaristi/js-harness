@@ -52,8 +52,8 @@ Nothing beyond the brief: the field's shape and the exit code are decided here (
 ## Tasks
 - [x] T1 (kind: build) spec 1: the `applies` field, red then green (`bin/lib/channel.test.mjs`).
 - [x] T2 (kind: build) spec 1: the refusal in the refresh, a planted open question that turns it red, then green.
-- [ ] T3 (kind: build) spec 2: the waiting lines of the resume, a planted waiting notice that turns it red, then green.
-- [ ] T4 (kind: docs) spec 3: the two `- Seen:` lines with their controls.
+- [x] T3 (kind: build) spec 2: the waiting lines of the resume, a planted waiting notice that turns it red, then green.
+- [x] T4 (kind: docs) spec 3: the two `- Seen:` lines with their controls.
 - [ ] T5 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
 
 ## Log
@@ -91,3 +91,20 @@ Nothing beyond the brief: the field's shape and the exit code are decided here (
   `bin/conventions-*.test.mjs`, `bin/lib/spec.test.mjs` and `bin/lib/gentle-ai-absence.test.mjs`: 50 pass. Not tested:
   the `unanswered` line of `refreshNowRun` (`bin/lib/merge-queue-refresh-now.mjs`), whose other effects are this
   machine's processes; it is the same call as the land's, which the end-to-end test holds.
+- L5 (2026-10-31, slice A committed): `3fde3ae2`, its pre-commit gate PASS (17 rows).
+- L6 (2026-10-31, T3, decided and tested first): the orchestrator's resume lists, before its questions, each work
+  session whose newest notice to the orchestrator is `waiting`, by the work number its title names, newest by time then
+  by order written (the board's reading, `recordOfRows`); nothing when none waits, and nothing when the record cannot be
+  read, which the questions' lines already say. A work session is not given them: the notices are to the lead. The
+  code is `waitingLinesOf` in a new `bin/lib/resume-record.mjs`, with `ago` and `cutTo` moved there from
+  `bin/resume.mjs`, which was at its ceiling of 1123 lines and is now 1111 (the ceiling lowered with it). Past the
+  hook's deadline an orchestrator's "Not read" line names "the work sessions waiting" too.
+  `bin/lib/resume-record.test.mjs` red with no module, then 7 of 7; the resume test red with the call planted out (1
+  failing), green after; `node --test --test-concurrency=1` over `bin/resume.test.mjs`,
+  `bin/lib/resume-record.test.mjs`, `bin/conventions-*.test.mjs` and `bin/lib/gentle-ai-absence.test.mjs`: 132 pass.
+- L7 (2026-10-31, T4): `docs/FAILURES.md` gains two entries, both new ids since no entry's text fits:
+  `refresh-applied-unanswered` (rule-not-acting: his consent was the rule, and nothing made the refresh read it;
+  `land-took-pending-pr` is the land's, a step of his on the console) and `compaction-dropped-waiting` (unseen-state;
+  `missed-wake` is the watch missing a session waiting on him). Evidence read in the record: question 140 recorded
+  04:37Z by JH 117 and withdrawn 06:47Z "already applied"; JH 114's `waiting` at 03:06:05Z. The compaction and the 50
+  minutes are the brief's claim. `js-harness failures check` PASS; both entries `controlled`.

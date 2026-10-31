@@ -374,6 +374,16 @@ the cost of more gates.
 - Proof: the row `codex-review` (debt) prints the size of a range (`checkCodexReviewDebt`,
   `bin/check.mjs`), and the row `commit-size` that of each commit before it is made
 
+### compaction-dropped-waiting
+A work session told the lead it was waiting on it, the host compacted the lead, and the resume after the compaction
+listed the open questions and the background tasks but not the sessions waiting on the lead, so the wait went unseen.
+- Class: unseen-state
+- Seen: 2026-10-31 — the channel's record, JH 114's `waiting` of 03:06:05Z (the lead's own; the compaction and the 50
+  minutes are claimed, the lead's brief to JH 121) — "the commit of the L11 fix (staged, tests 27/27) was killed by
+  Claude Code for low memory"; it sat about 50 minutes before the lead saw it
+- Control: check — bin/resume.test.mjs — "an orchestrator is given each work session whose newest notice is
+  waiting" — since 2026-10-31
+
 ### context-cut-by-percentage
 Sessions were told to cut, or proposed a cut, near 70 percent of their context because of a mark of
 73 percent that limits nothing and was never his number.
@@ -1278,6 +1288,17 @@ stood.
 - Was: owed — odd/tasks/commands-and-doctor.md — "a task the change checks off in a feature
   document names a commit, and that commit is reachable from HEAD" — replaced on 2026-10-17: T6 built
   the check in the row citations (odd/tasks/commands-and-doctor.md, L10)
+
+### refresh-applied-unanswered
+`merge-queue --refresh-copy` installed on his machine a change that an open question still asked his yes to apply.
+- Class: rule-not-acting
+- Seen: 2026-10-31 — the channel's record, question 140 (recorded 04:37Z by JH 117, withdrawn 06:47Z "already
+  applied"), and the lead's account in its transcript 0f71b2c6 just before line 40996 (the lead's own) — at 05:59Z the
+  refresh installed main b0c658c with PR 729, whose install pruned the js-harness Codex skills and hooks from his
+  `~/.codex` and moved hook trust in `~/.codex/config.toml`; he then answered question 141 "Dejarlo así" (line 40996,
+  read with `sessions --quote`)
+- Control: check — bin/merge-queue.test.mjs — "lands, then refreshes nothing, exit 77, while an open question asks to
+  apply a pull request main now holds" — since 2026-10-31
 
 ### refresh-wait-false-way-out
 `merge-queue --land --refresh-copy`, when sessions were still at work after its wait, said that the
