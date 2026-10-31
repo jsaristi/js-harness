@@ -27,6 +27,7 @@ import { refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
 import { refreshAfterLand } from './lib/merge-queue-refresh.mjs';
 import { staleBin, UNSHIPPED_GLOBS } from './lib/merge-queue-stale-bin.mjs';
 import { refreshNowRun } from './lib/merge-queue-refresh-now.mjs';
+import { unansweredApply } from './lib/refresh-consent.mjs';
 import { pnpmBinDir } from './update.mjs';
 import { claudeRunner, listAgents } from './lib/background.mjs';
 import { harnessHome } from './lib/home.mjs';
@@ -72,13 +73,16 @@ kept). Then js-harness install and js-harness doctor run, and the stale pnpm sta
 land that moved nothing refreshes nothing and says so. Exit 6 when the copy is not verified or a step after the install
 fails (the landing stands), 75 when the gate lock was not obtained or a session of the project was still at work after
 30 minutes (nothing refreshed): the refresh first waits for every session claude agents lists busy or waiting to be
-between runs.
+between runs. Exit 77 (nothing refreshed, the landing stands) while an open question of the project's channel record
+asks the user's yes to apply a pull request main holds (a question notice with "applies":{"pr":<n>}, js-harness notify
+--help), or while that cannot be told: the refusal names each question, and it is looked at before the wait and again
+under the gate lock, before anything is installed or stopped.
 --refresh-copy alone, run from a checkout (odd/tasks/lead-manual-steps.md), brings the installed copy up to origin's
 default branch now, landing nothing; exit 0 when the copy already names it, 1 when main or pnpm's bin folder cannot be
 read. It reads the processes that run from the copy (Windows): a js-harness wait or quiet --wait, with what it started,
 is a wait, and anything else (a gate, a review, an eval batch) refuses it, exit 75, after three looks ten seconds apart,
 stopping nothing. Under the gate lock it looks again, stops every wait by pid and creation time (75 when one survives),
-and refreshes as above. Then each work session whose wait was stopped, the one session whose transcript (of any
+and refreshes as above, exit 77 as above for an open question that asks to apply what main holds. Then each work session whose wait was stopped, the one session whose transcript (of any
 project) holds that wait still open, gets a note in its project's channel with its wait to run again, and every other
 stopped wait is printed with it. It can wait up to an hour for the gate lock: run it in the background.
 A landed pull request whose branch moved during the land is named after the landing: its new commits
@@ -790,6 +794,7 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
     const list = deps.listAgents ?? (() => listAgents(claudeRunner({ env, timeout: 15000 })));
     exit = await refreshAfterLand({
       code, log, refresh: deps.refreshCopy ?? refreshInstalledCopy, versionOf: (sha) => versionAt(sha, args.cwd, run), home: harnessHomeOf(env), cwd: args.cwd, env, run, list,
+      unanswered: (sha) => unansweredApply({ home: harnessHomeOf(env), cwd: args.cwd, run, sha, landed: true }),
       now, sleep: deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))), stdout: printOut, stderr: printErr,
     });
   }

@@ -19,6 +19,9 @@ import { binDiffers } from './merge-queue-stale-bin.mjs';
 /** The exit of a refresh that ran and could not verify the copy, or could not finish after it (a `js-harness install`
  * that exits non-zero, or a shim the prune finds broken). The land's own exit stands in the printed record. */
 export const REFRESH_FAILED = 6;
+/** The exit of a refresh refused because an open question asks the user's yes to apply what it would install
+ * (bin/lib/refresh-consent.mjs): sysexits' EX_NOPERM, beside GATE_NOT_RUN's 75, since his permission is what is missing. */
+export const REFRESH_UNANSWERED = 77;
 /** The settings backups kept: the newest this many, the older ones removed by the run that writes a newer one. */
 const KEEP_SETTINGS_BACKUPS = 5;
 /** The pnpm global package.json backups kept, as the settings backups are. */
@@ -240,6 +243,8 @@ export async function refreshCopy({
   session = null,
   // One look at the work sessions under the lock: `{ quiet }`, with `why` when not (lookOnce, merge-queue-refresh.mjs).
   stillQuiet = () => ({ quiet: true }),
+  // The line of a refusal while an open question asks to apply what main holds, or null (unansweredApply).
+  unanswered = () => null,
   // What the gate lock says holds it, to the sessions that wait for it.
   command = 'merge-queue --land --refresh-copy',
   stdout = console.log,
@@ -265,6 +270,12 @@ export async function refreshCopy({
   }
   const { lock } = turn;
   try {
+    // He may have been asked while the lock was waited for: that question stops it before any wait is stopped.
+    const refusal = unanswered();
+    if (refusal !== null) {
+      stderr(refusal);
+      return REFRESH_UNANSWERED;
+    }
     // A session may have begun a run while the lock was waited for, and a refresh under it breaks its hooks.
     const quiet = stillQuiet();
     if (!quiet.quiet) {
