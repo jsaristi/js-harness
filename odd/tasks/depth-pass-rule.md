@@ -62,7 +62,7 @@ in commit 8c6d6c7f, committed with documents alone before the first code commit 
 - 2. Raw material: his four messages as written, the lead's transcript `0f71b2c6`, lines 42804, 42824, 42859 and
   42878 (L1 to L4); PR 737's own document on `origin/worktree-estimate-as-fact`, its L3 and L10, and its first code
   commit `41f774d8`; `bin/lib/claude-import.mjs:33`; `bin/lib/project.mjs:397`; `bin/lib/contract.mjs:34`;
-  `bin/check.mjs:73`; `bin/lib/citations.mjs:7`; `evals/rule-proof.mjs:1`; `docs/ROADMAP.md:27`; gentle-ai 4.3.1's
+  `bin/check.mjs:73`; `bin/lib/citations.mjs:7`; `evals/rule-proof.mjs:1`; `docs/ROADMAP.md:29`; gentle-ai 4.3.1's
   ODD protocol, steps 2 and 3 (read only).
 - 3. The bar:
   spec 1: `node --test bin/lib/protocols-skill.test.mjs`: rule 1 heads the root `CLAUDE.md` and the init block; none,
@@ -221,18 +221,19 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
 - [x] T5 (kind: build) after his yes to (a): the control, its test first with PR 737's document replayed and a
       planted break that turns it red, its date exemption, its `rules coverage` entry. Route: inline. The commit
       after 1722be2d (L20).
-- [ ] T7 (kind: docs) spec 5, after his yes to (a): `docs/ROADMAP.md` gains the rule as an F8 step with its proof
+- [x] T7 (kind: docs) spec 5, after his yes to (a): `docs/ROADMAP.md` gains the rule as an F8 step with its proof
       (the eval, or its owed date) and the next feature, "harness alignment to the depth pass", opened by the lead
-      after this lands. Route: inline.
+      after this lands. Route: inline. L21.
 - [ ] T6 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
 
 ## State for a resume
 - Branch `rule/depth-pass` in worktree `D:\js-harness\.claude\worktrees\depth-pass-rule` (from b66e8211; the old
-  `worktree-depth-pass-rule` on origin holds the documents only). His yes: 143 (L15) and 144 (L18). Question (c),
-  readers on every large plan, sent as question 145 (L20), open.
-- Slice 1 (T4) is 1722be2d (L19); slice 2 (T5) the commit after it (L20).
-- Next, in order: (1) T7, the roadmap, as 144 says. (2) Merge origin/main (JH 123). (3) Codex, the lenses and a
-  verifier over both code slices, `npm run check`, push, PR, ready notice.
+  `worktree-depth-pass-rule` on origin holds the documents only). His answers: 143 (L15), 144 (L18), 145 and 146
+  (L21, the double review, written into the alignment feature and not built here). No question of this feature open.
+- Slice 1 (T4) is 1722be2d (L19); slice 2 (T5) is 36439e1e (L20); section 9's line and T7 are the two commits after
+  it (L21).
+- Next, in order: (1) Merge origin/main (JH 123). (2) Codex, the lenses and a verifier over the code commits,
+  `npm run check`, push, PR, ready notice.
 
 ## Log
 - L1 (2026-10-31T11:55:49Z, his words, the lead's transcript `0f71b2c6`, line 42804, read with
@@ -294,7 +295,7 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   `@AGENTS.md` as its first line: the text lives in a home that ships and each `CLAUDE.md` holds a one-line pointer;
   `claude-md-budget` is the project's, not his (the brief was wrong). (2) Amend, do not add (`rule:reuse-first`):
   `wording-is-the-need` covers step 5, the task contract and `rule:double-review` cover step 4, and Principle 7
-  (`docs/ROADMAP.md:27`) holds his 2026-10-18 words calling working to the objective "la filosofia principal del
+  (`docs/ROADMAP.md:29`) holds his 2026-10-18 words calling working to the objective "la filosofia principal del
   harnes"; the depth pass is its operational form unless he says it replaces Principle 7. (3) The control checks
   more than a heading: cited raw material, a falsifiable prediction a Done-when command runs, a verdict; a refuting
   verdict reaches him before code; a legacy list for the existing documents; `CLAUDE.md` is a covered source
@@ -418,7 +419,7 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   `CLAUDE.md` measures 3190 of 3200 tokens. Run: `node --test` over the protocols, project, template-block,
   conventions-structure and rules test files, 282 passed, 0 failed; `node bin/js-harness.mjs rules check`: PASS, 72
   rules.
-- L20 (2026-10-31, slice 1 committed as 1722be2d, the pre-commit gate PASS; T5 built): question 145, (c), recorded and
+- L20 (2026-10-31, slice 1 committed as 1722be2d, the pre-commit gate PASS; T5 built, committed as 36439e1e): question 145, (c), recorded and
   its context sent to the lead: "No; solo cuando cambia una decisión tuya (Recomendada)", "Sí, en todo trabajo
   grande", "Sí, solo si el veredicto refuta o añade"; nothing in this pull request waits on it. The control is
   `bin/lib/depth-pass.mjs`, its test written first and red (the module missing), then green, 15 of 15: the form of
@@ -433,3 +434,17 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   `bin/lib/depth-pass.test.mjs` red, 1 of 15 ("PR 737's order"), and green again once restored. Replays: PR 737's
   document at 41f774d8 gives "no `## Depth pass`"; this document, its pass rewritten in the rule's form, gives no
   fault from `depthPassText`, nor from `depthPassErrors` with its opening day set past the date.
+- L21 (2026-10-31, his typed answers to questions 145 and 146, read with `js-harness sessions --quote` at the lead's
+  transcript `0f71b2c6`, lines 43642 and 43701; the lead's message): 145: "Y si mejor no hacemos dos lectores A y B
+  sino que hacemos una de Claude y una de Codex para tener 2 perspectivas diferentes pero que sean dos revisiones
+  ciegas independientes?" 146: "Me gustaria en todo, pero que me dieras la opcion de cuando si y cuando no, siento
+  que siempre todo se debe revisar doble pero de la forma de nos de criterio y con la filosofia nueva que tenemos ya
+  que todo es importante a menos que yo como usuario te diga que no quiero la revision, esa seria la unica opcion de
+  que no se hiciera." The lead: do not build it here; write it as the alignment feature's first item, replacing the
+  option of two readers on every large plan, and have rule 1's text name `rule:double-review` without restating it.
+  Done: section 9's close line now ends "Its plan is reviewed as `rule:double-review` says." (`rules check` PASS,
+  the protocols and rules tests 53 of 53); T7 wrote `docs/ROADMAP.md`: "Regla 1: el pase de profundidad" heads the
+  principles as Principle 7's practical form, the seven unchanged (144); F8 step 6, rule 1 with its proof and the
+  eval owed by 2026-11-30; "Alignment to the depth pass", its first item the double review with both his quotes,
+  then the older texts (the document's order in `CLAUDE.md` and `init`'s block, the contract template, `sync`
+  offering `depthPassSince`) and the eval. `js-harness progress`: 1125 of 1168, 96%.
