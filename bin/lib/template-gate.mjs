@@ -65,7 +65,7 @@ export function summaryWrites(tool, input) {
   return sources.length > 0 ? sources : null;
 }
 
-const fresh =(line, now) => now - Date.parse(line.at) <= RENDERED_FRESH_HOURS * 3600 * 1000;
+const fresh = (line, now) => now - Date.parse(line.at) <= RENDERED_FRESH_HOURS * 3600 * 1000;
 
 /** Every sentence the gate sends the model, with its slots as `<name>`: a refusal is these, filled, and nothing else.
  * They are the text source `template-gate` of directive coverage (bin/lib/rules-sources.mjs), each span declared in

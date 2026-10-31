@@ -162,8 +162,15 @@ export function staleBoardWarning(payload, state, io, now = Date.now()) {
 
   // The summary only where the gate records its writes now: a project that turned templates off keeps a record that
   // no write refreshes.
-  const summary = io.templates === true ? summaryWarning(payload, io, saved, record, { home, slug }, now) : null;
-  const warnings = [rowsWarning(payload, io, saved, record, now), summary];
-  const due = warnings.filter((warning) => warning !== null);
+  // The rows first: a shown record that cannot be read throws with the rows' warning on the error (`warning`), so the
+  // hook still gives it (bin/reply.mjs, `staleOf`).
+  const rows = rowsWarning(payload, io, saved, record, now);
+  let summary = null;
+  try {
+    summary = io.templates === true ? summaryWarning(payload, io, saved, record, { home, slug }, now) : null;
+  } catch (err) {
+    throw Object.assign(new Error(`${err?.message ?? err}; the summary check did not run`), { warning: rows });
+  }
+  const due = [rows, summary].filter((warning) => warning !== null);
   return due.length === 0 ? null : due.join('\n\n');
 }

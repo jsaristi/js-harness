@@ -203,8 +203,9 @@ function packageTemplates(root = PACKAGE) {
 }
 
 /** Records a call's writes of the board's summary (`summaryWrites`) as one line with the top-level fields they
- * carried, a `file_path` read from `folder`; a file it cannot read or parse records the fields as unknown, and a line
- * it cannot write is said on standard error. Neither stops the call, which has already run. */
+ * carried, a `file_path` read from `folder`; a file it cannot read or parse is said on standard error and adds no
+ * field, and when no write gave one the fields are recorded as unknown; a line it cannot write is said on standard
+ * error. Neither stops the call, which has already run. */
 function recordSummaryWrite(writes, { folder, file, at, session, call }, stderr) {
   const fields = new Set();
   let unreadable = null;
@@ -216,13 +217,13 @@ function recordSummaryWrite(writes, { folder, file, at, session, call }, stderr)
         data = JSON.parse(fs.readFileSync(path.resolve(folder, write.file), 'utf8'));
       } catch (err) {
         unreadable = `cannot read ${write.file} (${err.code ?? err.message})`;
-        stderr(`js-harness template gate: ${unreadable}; its board/summary fields are recorded as unknown`);
+        stderr(`js-harness template gate: ${unreadable}; its board/summary fields are not recorded`);
       }
     }
     if (data !== null && typeof data === 'object' && !Array.isArray(data)) for (const key of Object.keys(data)) fields.add(key);
   }
   try {
-    recordSummary(file, { at, session, call, fields: [...fields], unreadable });
+    recordSummary(file, { at, session, call, fields: [...fields], unreadable: fields.size > 0 ? null : unreadable });
   } catch (err) {
     stderr(`js-harness template gate: cannot append to ${file}: ${err.message}; the board/summary write is not recorded`);
   }

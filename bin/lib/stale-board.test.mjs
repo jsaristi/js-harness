@@ -190,3 +190,9 @@ test('rows waiting and a stale summary are both said, and a shown record it cann
   assert.ok(both.includes(STALE_MARKER) && both.includes(SUMMARY_MARKER), both);
   assert.throws(() => summaryCheck({ shown: UNREADABLE }), /the template gate's shown record .*EACCES/);
 });
+
+test('a shown record it cannot read keeps the rows\' warning on the error it throws, for the hook to give', () => {
+  assert.throws(() => check({ shown: UNREADABLE }), (err) => /the template gate's shown record .*EACCES/.test(err.message)
+    && typeof err.warning === 'string' && err.warning.includes(STALE_MARKER) && !err.warning.includes(SUMMARY_MARKER));
+  assert.throws(() => summaryCheck({ shown: UNREADABLE }), (err) => err.warning === null, 'no row waits: nothing to keep');
+});

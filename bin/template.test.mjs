@@ -265,6 +265,14 @@ test('gate --shown records a summary file it cannot read as fields unknown, and 
   assert.equal(hook('--hook', { ...summaryUpdate('d5', { data: { now: 'x' } }), hook_event_name: 'PreToolUse' }).out, '{}');
   hook('--shown', { ...summaryUpdate('d6', { data: { now: 'x' } }), tool_input: { action: 'update', url: 'u', collection: 'events', doc_id: 'e1', data: { now: 'x' } } });
   assert.deepEqual(summaryLines(home).map((line) => [line[0], line[5].replace(/\(.*\)/, '(…)')]), [['d4', 'fields unknown: cannot read gone.json (…)']]);
+  // The fields that were read are kept when another write of the call cannot be: a batch, and a str_replace's field.
+  const batch = { ...summaryUpdate('d8', {}), tool_input: { action: 'batch', url: 'u', writes: [
+    { op: 'update', collection: 'board', doc_id: 'summary', data: { now: 'x' } },
+    { op: 'set', collection: 'board', doc_id: 'summary', file_path: 'gone.json' },
+  ] } };
+  hook('--shown', batch);
+  hook('--shown', { ...summaryUpdate('d9', {}), tool_input: { action: 'str_replace', url: 'u', collection: 'board', doc_id: 'summary', field: 'status', old_str: 'a', new_str: 'b' } });
+  assert.deepEqual(summaryLines(home).slice(1).map((line) => [line[0], line[5]]), [['d8', 'fields: ["now"]'], ['d9', 'fields: ["status"]']]);
   const off = gateScratch({ on: false });
   t.after(off.done);
   off.hook('--shown', summaryUpdate('d7', { data: { now: 'x' } }));

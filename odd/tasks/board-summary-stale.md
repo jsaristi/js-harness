@@ -118,3 +118,21 @@ changes no rule of his. Spend: one gate, one Codex review, the Claude lenses, on
   RED: `bin/lib/stale-board.test.mjs` 1 of 16 (the templates-off case). GREEN: stale-board and reply 45/45, then reply
   with a hook-level case 30/30, `scripts/reply-hook-time.test.mjs` 8/8, the budget test 4/4 with its fixture's
   `harness.json` now turning templates on (lead p90 739 ms, work p90 633 ms, budget 2500 ms).
+- L7 (2026-10-31, reviews of `cf492335..466c70b` and the slice): Codex on the fix, "the patch is correct" (0.98),
+  its earlier finding fixed, 37,101 input tokens. The Claude lenses reliability, resilience, risk and readability
+  over `2947b29..466c70b`, 0 findings each (55,299, 55,301, 26,944 and 55,119 input tokens). gentle-ai's stop hook
+  offered the whole branch (`2947b29..HEAD`): its status was read and nothing started (CLAUDE.md, a candidate is never
+  the whole branch).
+- L8 (2026-10-31, the independent verifier, read-only, over `466c70b`, given the code and the brief): no blocker;
+  each brief case held end to end in its scratch run of the real `template gate --shown` and `reply --hook` (a
+  real-shape update, a batch, once per stretch); `shownReport` and the other readers of the shown record unaffected.
+  Fixed here, tests first (RED 3 of 78, GREEN 111/111): (1) WARNING, a shown record that could not be read threw
+  before the rows' warning was given, so it was lost: the rows' warning is now computed first and carried on the
+  error (`warning`), which `staleOf` gives while it says the failure on stderr; (2) one unreadable `file_path` dropped
+  the fields other writes of the call gave: now kept, "fields unknown" only when no write gave one; (7) a space lost in
+  `const fresh = ` (my edit). Left, written as known: (3) a write counts by collection and document, not by the board's
+  URL (another artifact's `board/summary` would refresh the stretch; low likelihood); (4) notices are compared by time,
+  so one appended late with an earlier `at`, or from a clock behind, is not counted, and notices between the lead's
+  read and its write count as described; (5) not checked: whether a write `ArtifactData` refuses for `if_version`
+  reaches PostToolUse as a success; (6) no test chains the gate's record into the stop hook (the verifier's scratch
+  run did), and `(summary of none)` is said once a transcript until a content write.

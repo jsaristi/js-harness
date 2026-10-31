@@ -116,12 +116,17 @@ async function wakeOf(payload, state, io, stderr) {
   }
 }
 
-/** The stale-board check's warning (bin/lib/stale-board.mjs), or `null`, read as the wake check is. */
+/** The stale-board check's warning (bin/lib/stale-board.mjs), or `null`, read as the wake check is; a failure of the
+ * summary's part carries the rows' warning (`warning`), which is given. */
 async function staleOf(payload, state, io, stderr) {
   try {
     const { staleBoardWarning } = await import('./lib/stale-board.mjs');
     return staleBoardWarning(payload, state, io, io.now());
   } catch (err) {
+    if (err?.warning !== undefined) {
+      stderr(`js-harness reply: ${err.message}\n`);
+      return err.warning;
+    }
     stderr(`js-harness reply: ${err?.message ?? err}; the stale-board check did not run\n`);
     return null;
   }

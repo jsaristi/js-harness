@@ -311,6 +311,11 @@ test('the lead whose board/summary content is older than the waiting notices is 
   const off = await stop(harness);
   assert.match(off.answer.reason, STALE);
   assert.equal(off.answer.reason.includes(SUMMARY_MARKER), false, 'templates off: the record no write refreshes is not read');
+  // A shown record that is there and cannot be read: the rows' warning still reaches the lead, the failure stderr.
+  const harnessOn = JSON.stringify({ ...harness, templates: true });
+  const locked = await wakeHook({ payload: { session_id: 'lead' }, record: [handed('2026-10-17T01:30:00.000Z')], files: { ...BOARD_CURSOR, [shownFile(HOME, SLUG)]: undefined, [path.join(PROJECT, 'harness.json')]: harnessOn }, transcript: [started] });
+  assert.match(locked.answer.reason, STALE);
+  assert.match(locked.err, /the template gate's shown record .*EACCES.*the summary check did not run/);
 });
 
 // The return check (odd/tasks/lead-duty-checks.md, spec 2): the lead's reply to his message after a long absence links
