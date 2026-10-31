@@ -35,11 +35,11 @@ Adopting the advisor; any spend beyond the plan (credits, extra usage); a Fable 
 
 ## Tasks
 - [x] T1 (kind: build) spec 1: `sessions start --advisor <model>`, test first · inline · f36c272f, PR 740
-- [x] T2 (kind: design) spec 2: answer key, arm briefs and criterion committed · inline · this commit
-- [ ] T3 (kind: verify) spec 3: four arms, one at a time, notes to the lead at each start and end · sessions start
-- [ ] T4 (kind: verify) spec 4: usage per arm from its transcript · scratch `usage.js`
-- [ ] T5 (kind: verify) spec 5: blind scoring by a fresh read-only subagent per task · Agent
-- [ ] T6 (kind: docs) spec 6: result table, verdict, limits; notify the lead
+- [x] T2 (kind: design) spec 2: answer key, arm briefs and criterion committed · inline · 2b2fea3a
+- [x] T3 (kind: verify) spec 3: four arms, one at a time, notes to the lead at each start and end · sessions start
+- [x] T4 (kind: verify) spec 4: usage per arm from its transcript · `D:\advisor-trial-arms\usage.js`
+- [x] T5 (kind: verify) spec 5: blind scoring by a fresh read-only subagent per task · Agent
+- [x] T6 (kind: docs) spec 6: result table, verdict, limits; notify the lead
 
 ## Depth pass
 - 1. Method: a controlled A/B evaluation of a model configuration, the work of an ML evaluation engineer: fix the
@@ -198,6 +198,61 @@ return, raised and not taken; the summary's missing sections, a process slip):
 The advisor is recommended only if, on each of the two tasks, the arm with Fable anticipates at least 2 more of the
 key's defects than the arm without, and its transcript shows the advisor ran. A defect counts as anticipated when
 the scorer finds it named as a risk or prevented by a step of the plan.
+
+## Arms
+Each through `node bin/js-harness.mjs sessions start` of this worktree (L6), `claude-opus-5-5`, effort high,
+`--no-remote-control`, in `D:\advisor-trial-arms\<x>` (L7); each wrote only `PLAN.md` (`find . -newer <brief>`
+listed that file alone), was stopped with `sessions stop` and its folder removed. Plans kept in
+`D:\advisor-trial-arms\plans\`. A note to the lead went before each start and after each end (15:55Z, 16:00Z, 16:00Z,
+16:11Z, 16:12Z, 16:25Z, 16:25Z, 16:32Z). No arm hit a consent prompt; no arm started a subagent (no `subagents`
+folder under any arm's transcript).
+
+| Arm | Session | Advisor calls (Fable 5.1) | Executor tokens: input / cache read / cache creation / output | Advisor tokens: input / output | Minutes |
+|---|---|---|---|---|---|
+| A-without | 9fa225bb | 0 | 32 / 1,345,543 / 116,471 / 14,286 | none | 3.2 |
+| A-with | 89b58341 | 2 | 56 / 2,935,796 / 111,397 / 23,945 | 247,670 / 20,147 | 10.4 |
+| B-with | 048179b9 | 2 | 78 / 4,573,544 / 130,493 / 31,681 | 282,807 / 18,794 | 12.2 |
+| B-without | 01fb07e8 | 0 | 58 / 3,186,473 / 130,122 / 32,636 | none | 6.6 |
+
+Summed by `usage.js` (spec 4) from each transcript: the executor's usage once per API message id, the advisor's from
+`usage.iterations` entries of type `advisor_message`. What the transcripts do not record: what the advisor said (its
+result is encrypted); the plan meter's percentages (the lead read them at each note); a dollar cost (the probe's
+`result` line gave one, the transcripts do not). The advisor's input was never cached (0 cache read in all four
+calls): each call re-sends the whole conversation.
+
+Scoring (spec 5): one fresh read-only subagent per task, plans copied as `plan-X.md` and `plan-Y.md` by a coin
+(`Math.random`), the mapping kept aside until the verdict came back. Both coins put the advisor arm on X. Plan B-with
+said "Correction after advisor review" once (line 65); the scorer's copy read "Correction after review", the kept
+plan is unchanged.
+
+Task A verdicts (key A1 to A16): with Fable, 5 anticipated (A5 named and prevented, A6 named and prevented, A8
+prevented, A4 and A7 partly named), 3 without the partials; without, 3 (A8 prevented, A4 and A7 partly named), 1
+without the partials. Both missed A1, A2, A3, A9 to A16; the Fable plan wrote A3, A13 and A15 into its own steps.
+
+Task B verdicts (key B1 to B13): with Fable, 3 (B2 named, with a holdout step; B3 named, turned back once per
+departure; B5 prevented, the check in `reply --hook`); without, 3 with the partials (B2 partly named, B3 named and
+rebutted, B5 prevented), 1 without them. Both built a phrase classifier (B1 missed) and neither fixed the status
+report (B4 missed); both missed B6 to B13.
+
+## Result
+| Task | Fable arm anticipated | Arm without | Difference (partials counted / not) | Advisor ran |
+|---|---|---|---|---|
+| A, JH 124 | 5 of 16 | 3 of 16 | +2 / +2 | yes, 2 calls |
+| B, JH 123 | 3 of 13 | 3 of 13 | 0 / +2 | yes, 2 calls |
+
+Criterion: not met. It asks for at least 2 more on each task; on task B the difference is 0 when a defect the plan
+names in part counts as named, which is the criterion's word ("named as a risk"). It would be met only by reading
+partial names as misses, a reading the criterion did not fix beforehand, so it is not taken.
+
+Cost of the advisor in these runs: 2 Fable calls an arm, about 248,000 and 283,000 Fable input tokens and 19,000 to
+20,000 output; the executor also read 2.2 and 1.4 times as much cache and ran 3.3 and 1.8 times as long (Fable's
+calls block the turn).
+
+What four arms cannot show: one plan an arm, so the difference between two plans of the same model without an advisor
+is unmeasured, and a gap of 2 defects may be within it; two tasks, both harness process work in this repository; one
+scorer a task, whose partial calls decide task B; plans only, so whether better plans make better code is not
+tested; the slips found while editing (stale comments, dead imports, gate failures, A12 to A14, B8 to B13) are out of
+any plan's reach, so the keys' ceiling for a plan is lower than their size.
 
 ## Log
 - L1 2026-10-31 14:15Z, his answer to question 149 (lead transcript `0f71b2c6`, line 44747): "Sí, con dos tareas".
