@@ -348,7 +348,19 @@ test('the gate of doctor --host-reviewed accepts the first real review, of 4.29.
   assert.equal(hostReviewRefusal({ project, versions: { desktop: '4.4212.0', code: '2.1.309' }, reviewed: { desktop: '4.29.0', code: '2.1.308' } }), null);
 });
 
-// The first real review, desktop 4.4212.0 #24: a Cowork entry that names Code was drafted ignore, outside the Code tab.
+// JH 113 (odd/tasks/status-line.md): #24 was decided adapt as a Code tab feature, but the installed app reads
+// `sessionStatusLine` only in its 3P deployment class. The 3P section is a deployment mode the harness does not run in,
+// not a surface, so neither the Code tab named on its own nor a harness area brings its entries in.
+test('an entry of the 3P section is drafted outside even when it names Code or a harness area touches it', () => {
+  const entry = (text, section) => ({ id: 'desktop 4.5000.0 #9', version: '4.5000.0', section, text });
+  const threeP = 'the 3P section';
+  assert.equal(classify(entry('Added `sessionStatusLine` to show one line of text above the message box in Cowork, Chat and Code, printed by a program that the app runs.', '3P')).outside, threeP);
+  assert.deepEqual(classify(entry('Fixed the token limit set with `inferenceMaxTokensPerWindow` leaving out requests.', '3P')), { areas: ['context'], outside: threeP });
+  assert.equal(classify(entry('Added a status line above the message box in Cowork, Chat and Code.', 'Cowork')).outside, null, 'the Cowork section is a surface: naming Code still brings an entry in');
+  assert.equal(classify(entry('[VSCode] Fixed a panel.', '3P')).outside, '[VSCode]', 'a declared surface still names itself');
+});
+
+// The first real review, desktop 4.4212.0 #24 (`sessionStatusLine`, a 3P entry), was drafted outside before CODE_TAB.
 test('an entry that names Code is not placed outside by an outside word or its section; one that names Claude Code or VS Code still is', () => {
   const entry = (text, section) => ({ id: 'desktop 4.5000.0 #9', version: '4.5000.0', section, text });
   assert.equal(classify(entry('Added a status line above the message box in Cowork, Chat and Code.', 'Cowork')).outside, null);
