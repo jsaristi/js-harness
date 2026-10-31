@@ -337,7 +337,7 @@ test('the lead answering his return after a long absence without the status page
   assert.deepEqual(work.answer, {}, 'a work session is never told');
 });
 
-// The return's stretch (odd/tasks/departure-stretch.md, spec 1b): an absence no stretch covered, or its stretch still
+// The return's stretch (odd/tasks/departure-stretch.md, spec 8): an absence no stretch covered, or its stretch still
 // open; bin/lib/return-report.test.mjs holds its cases, this its place in the hook.
 const NO_STRETCH = /no stretch covered his absence/;
 const STILL_OPEN = /the stretch of his absence is still open/;

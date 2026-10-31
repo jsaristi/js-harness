@@ -200,7 +200,7 @@ test('a record it cannot read throws, so the hook says the check did not run', (
   assert.throws(() => check({ renders: UNREADABLE }), /rendered record/);
 });
 
-// --- the stretch of his absence (odd/tasks/departure-stretch.md, spec 1b) ---
+// --- the stretch of his absence (odd/tasks/departure-stretch.md, spec 8) ---
 // His two absences of 2026-10-31 had no stretch: "voy a dejarte entre 1 a 2 horas solo" at 03:23:57Z, back at
 // 06:20:47Z, and the lead had opened none (the stretch record's last close was at 2026-10-30T13:13:20Z).
 const STRETCHES = stretchFile(HOME, SLUG);

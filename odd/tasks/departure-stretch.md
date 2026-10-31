@@ -280,7 +280,15 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
   gentle-ai's start for `8be755d2` reached its consent envelope (lineage `review-015c4548afc4f7fc`); not granted,
   since this fix moves the head its target names.
 
+- L20 (2026-10-31, T4): the fix committed as `a4ecfc3c` (gate PASS); Codex's recheck of `8be755d..a4ecfc3`, 52,400
+  input tokens, correct (0.99), "1 fixed, 0 not fixed". The Claude lenses over `6bee9e5..a4ecfc3`, four lenses
+  (risk, resilience, readability, reliability), recorded: risk, resilience and reliability no finding; readability
+  one WARNING at `bin/lib/return-report.mjs:128-134`, "Extracting leadReturnOf left the original doc comment of
+  returnReportWarning ... stacked directly above the new doc comment of leadReturnOf." Accepted: the comment moved
+  back above `returnReportWarning`; with it, the code's "spec 1b" and "1a" now say specs 8 and 7.
+  `bin/lib/return-report.test.mjs bin/quiet.test.mjs bin/reply.test.mjs` 75 of 75.
+
 ## Next step
-Commit the P2 fix through the gate; then the reviews of `6bee9e5b..HEAD` (gentle-ai's contract run, then
+Commit the lens fix through the gate, review it (Codex, the readability lens); then the reviews of `6bee9e5b..HEAD` (gentle-ai's contract run, then
 `js-harness codex-review --base 6bee9e5b` and `js-harness lens-review --base 6bee9e5b`, then the verifier), push, PR,
 the ready notice and the lead told; the summary under `docs/sessions/`.

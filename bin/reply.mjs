@@ -19,7 +19,7 @@
 // a return, the lead whose replies since the user's message after a long absence link no status page of
 // `report --html` (bin/lib/return-report.mjs, spec 2 of odd/tasks/lead-duty-checks.md), and, once that return, the lead
 // whose user came back after an absence no stretch covered, or with its stretch still open (`returnStretchWarning`,
-// spec 1b of odd/tasks/departure-stretch.md). And it turns back a
+// spec 8 of odd/tasks/departure-stretch.md). And it turns back a
 // reply that hands the user a shell command block not tagged for his shell, not run by the session with success first,
 // or rejected by his shell's parser (bin/lib/reply-commands.mjs, S1 of odd/tasks/f8-lead-rigor.md).
 import { spawnSync } from 'node:child_process';

@@ -42,7 +42,7 @@ function makeWorld() {
     fs.chmodSync(path.join(world.shim, 'claude'), 0o755);
   }
   setAgents(world, []);
-  // A stretch open for this project, as `quiet --wait` asks one while he is away (odd/tasks/departure-stretch.md, 1a).
+  // A stretch open for this project, as `quiet --wait` asks one while he is away (odd/tasks/departure-stretch.md, spec 7).
   world.stretches = stretchFile(world.home, projectSlug(mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }), process.cwd())));
   fs.mkdirSync(path.dirname(world.stretches), { recursive: true });
   fs.writeFileSync(world.stretches, `${JSON.stringify({ schema: STRETCH_SCHEMA, event: 'open', id: 's1', at: '2026-10-25T11:00:00.000Z', plan: { hours: 4 } })}\n`);

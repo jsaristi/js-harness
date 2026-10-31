@@ -125,9 +125,6 @@ function linked(urls, message, text, sinceMs) {
   return false;
 }
 
-/** The warning for a stop of `payload` whose reply closes with `state`, or `null` when none is due. The records are
- * read through `io` (`readFile`, `run`, `env`, `homedir`, and `readNotices` when the hook shares one parse of the record); one that cannot be read throws, and the hook says so.
- * `state` is not read: a return is answered with the page first, whatever the reply closes with. */
 /** The lead's newest return for a stop of `payload`, read through `io`, as `{ cwd, home, slug, text, before, back,
  * away }`, or `null` when the session is no lead on Claude Code or the transcript holds no return. */
 function leadReturnOf(payload, io) {
@@ -156,6 +153,9 @@ const warnedOf = (text, named, marker) => lastLineWith(text, named, (entry) => e
   && entry.attachment.hookEvent === 'Stop'
   && String(entry.attachment.blockingError?.blockingError ?? '').includes(marker)) !== null;
 
+/** The warning for a stop of `payload` whose reply closes with `state`, or `null` when none is due. The records are
+ * read through `io` (`readFile`, `run`, `env`, `homedir`, and `readNotices` when the hook shares one parse of the record); one that cannot be read throws, and the hook says so.
+ * `state` is not read: a return is answered with the page first, whatever the reply closes with. */
 export function returnReportWarning(payload, state, io) {
   const found = leadReturnOf(payload, io);
   if (found === null) return null;
@@ -196,7 +196,7 @@ function stretchesOf(home, slug, readFile) {
   });
 }
 
-/** The stretch warning for a stop of `payload` (odd/tasks/departure-stretch.md, spec 1b), or `null` when none is due:
+/** The stretch warning for a stop of `payload` (odd/tasks/departure-stretch.md, spec 8), or `null` when none is due:
  * the user's newest return after an absence (`lastReturn`) that no stretch covered (none open at any time between
  * his message before and his return), or whose stretch, opened before the return, is still open. Said once a return,
  * as the page's warning is, and read from the records alone, never from his words: the lead saw both absences of

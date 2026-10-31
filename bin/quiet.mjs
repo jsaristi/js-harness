@@ -134,7 +134,7 @@ export async function quietMain(
     return { quiet: 0, busy: 1, unknown: 3 }[seen.state];
   }
 
-  // The wait runs while he is away, so it asks the stretch of his absence first (odd/tasks/departure-stretch.md, 1a):
+  // The wait runs while he is away, so it asks the stretch of his absence first (odd/tasks/departure-stretch.md, spec 7):
   // on 2026-10-31 the lead started it twice with none open.
   if (parsed.noStretch === null) {
     const file = stretchFile(home, projectSlug(mainCheckout(run, cwd)));
