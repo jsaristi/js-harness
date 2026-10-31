@@ -15,7 +15,9 @@
 // handed it with nothing in its background to wake it (bin/lib/stop-wake.mjs, A(a) of odd/tasks/wake-and-flag.md);
 // both reasons go in one block when both apply. Codex sends no background tasks, so there that check does not run.
 // And it turns back, once a pending set, the lead of a project with a live board whose rows have waited longer than
-// one check of the board holds (bin/lib/stale-board.mjs, spec 3 of odd/tasks/visual-pages.md). And it turns back a
+// one check of the board holds (bin/lib/stale-board.mjs, spec 3 of odd/tasks/visual-pages.md). And it turns back, once
+// a return, the lead whose replies since the user's message after a long absence link no status page of
+// `report --html` (bin/lib/return-report.mjs, spec 2 of odd/tasks/lead-duty-checks.md). And it turns back a
 // reply that hands the user a shell command block not tagged for his shell, not run by the session with success first,
 // or rejected by his shell's parser (bin/lib/reply-commands.mjs, S1 of odd/tasks/f8-lead-rigor.md).
 import { spawnSync } from 'node:child_process';
@@ -30,7 +32,9 @@ const USAGE = 'Usage: js-harness reply --hook\n'
   + '  when the reply does not close with exactly one state (working, decision, question, cut, finished, in the labels\n'
   + '  the key names) and what that state needs, and, once, when a work session ends its turn holding handed work with\n'
   + '  nothing in its background to wake it, and, once, when the lead of a project with a live board ends its turn\n'
-  + '  while the board\'s rows waited longer than one check, and when a fenced block hands the user a shell command\n'
+  + '  while the board\'s rows waited longer than one check, and, once, when the lead\'s replies since the user\'s\n'
+  + '  message after a long absence link no status page of report --html, and when a fenced block hands the user a\n'
+  + '  shell command\n'
   + '  not tagged for his shell, not run by the session with success first, or rejected by his shell\'s parser;\n'
   + '  writes nothing and always exits 0\n';
 
@@ -81,6 +85,17 @@ async function staleOf(payload, state, io, stderr) {
     return staleBoardWarning(payload, state, io, io.now());
   } catch (err) {
     stderr(`js-harness reply: ${err?.message ?? err}; the stale-board check did not run\n`);
+    return null;
+  }
+}
+
+/** The return check's warning (bin/lib/return-report.mjs), or `null`, read as the wake check is. */
+async function returnOf(payload, state, io, stderr) {
+  try {
+    const { returnReportWarning } = await import('./lib/return-report.mjs');
+    return returnReportWarning(payload, state, io);
+  } catch (err) {
+    stderr(`js-harness reply: ${err?.message ?? err}; the return check did not run\n`);
     return null;
   }
 }
@@ -158,9 +173,10 @@ export async function replyMain(argv, {
         const io = { readFile: readOnce, readdir, run, env, homedir, now };
         const wake = await wakeOf(payload, state, io, stderr);
         const stale = await staleOf(payload, state, io, stderr);
+        const back = await returnOf(payload, state, io, stderr);
         // Last, so its one deadline, counted from the hook's start, holds the other checks' time too.
         const commands = commandsOf(payload, message, { readFile: readOnce, platform, parse, now, started }, stderr);
-        for (const warning of [commands, wake, stale]) {
+        for (const warning of [commands, wake, stale, back]) {
           if (warning !== null) reason = reason === null ? warning : `${reason}\n\n${warning}`;
         }
       }
