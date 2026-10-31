@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { depthPassErrors, depthPassText } from './depth-pass.mjs';
+import { depthPassErrors, depthPassFor, depthPassText } from './depth-pass.mjs';
 import { checkContracts } from '../check.mjs';
 import { contractMain } from '../contract.mjs';
 
@@ -138,6 +138,18 @@ test('the control holds only where harness.json declares depthPassSince, and onl
     commit(root, 'docs: open', FILE);
     assert.deepEqual(errorsOf(root), []);
   }
+});
+
+test('a shallow clone, whose history cannot say when a document opened, holds no document', (t) => {
+  const root = repo();
+  const shallow = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-depth-pass-shallow-'));
+  t.after(() => [root, shallow].forEach((dir) => fs.rmSync(dir, { recursive: true, force: true })));
+  write(root, FILE, `${CONTRACT}\n${SPECS}`);
+  commit(root, 'docs: open', FILE);
+  git(root, 'commit', '-q', '--allow-empty', '-m', 'later');
+  git(shallow, 'clone', '-q', '--depth', '1', `file://${root.split(path.sep).join('/')}`, '.');
+  assert.deepEqual(depthPassFor(shallow)(FILE, `${CONTRACT}\n${SPECS}`), []);
+  assert.equal(depthPassFor(root)(FILE, `${CONTRACT}\n${SPECS}`).length, 1);
 });
 
 test('PR 737\'s order, its document and its first code in one commit, is refused', (t) => {

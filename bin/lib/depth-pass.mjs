@@ -57,9 +57,11 @@ export function depthPassText(markdown, file) {
 }
 
 /** The control for every document of `root`, as `(file, markdown) => faults`: nothing at all where the project
- * declares no `depthPassSince`, else `depthPassErrors` with the history of openings read once, at the first call. */
+ * declares no `depthPassSince`, or where its history cannot say when a document opened (no repository, or a shallow
+ * clone, whose first commit shows every file as added that day); else `depthPassErrors` with the history of
+ * openings read once, at the first call. */
 export function depthPassFor(root) {
-  if (sinceOf(root) === null) return () => [];
+  if (sinceOf(root) === null || gitIn(root)(['rev-parse', '--is-shallow-repository'])[0] !== 'false') return () => [];
   let opened;
   return (file, markdown) => depthPassErrors({ root, file, markdown, opened: (opened ??= openedOn(root)) });
 }
