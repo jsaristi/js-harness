@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { replyMain } from './reply.mjs';
 import { openingsDir, recordPath } from './lib/channel.mjs';
@@ -312,6 +314,59 @@ test('the lead answering his return after a long absence without the status page
   assert.deepEqual(soon.answer, {}, 'a short gap is no return');
   const work = await wakeHook({ transcript: [titled('JH 26 · canal'), ...away], record: [] });
   assert.deepEqual(work.answer, {}, 'a work session is never told');
+});
+
+/** A lead's stop in the folder `project`, where the wake, live-board and return checks each ask where the project is
+ * and read the record: the hook's answer, its standard error, how many times git was asked and each file read. */
+async function sharedStop(project) {
+  const slug = projectSlug(project);
+  const record = recordPath(HOME, slug);
+  const files = {
+    [path.join(project, 'harness.json')]: ON[path.join(PROJECT, 'harness.json')],
+    [liveCursorPath(HOME, slug)]: BOARD_CURSOR[liveCursorPath(HOME, SLUG)],
+    [TRANSCRIPT]: `${[his('2026-10-16T18:00:00.000Z'), his('2026-10-17T01:00:00.000Z')].join('\n')}\n`,
+    [record]: `${handed('2026-10-17T01:30:00.000Z')}\n`,
+  };
+  const reads = new Map();
+  let gits = 0;
+  const out = [];
+  const err = [];
+  await replyMain(['--hook'], {
+    readStdin: () => JSON.stringify(stopPayload(CLOSED, { cwd: project, session_id: 'lead', transcript_path: TRANSCRIPT, session_crons: [] })),
+    readFile: (file) => {
+      reads.set(file, (reads.get(file) ?? 0) + 1);
+      if (Object.hasOwn(files, file)) return files[file];
+      throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
+    },
+    readdir: (dir) => {
+      throw Object.assign(new Error(`ENOENT: ${dir}`), { code: 'ENOENT' });
+    },
+    run: (...args) => {
+      gits += 1;
+      return noGit(...args);
+    },
+    env: { JS_HARNESS_HOME: HOME },
+    homedir: () => path.resolve('/elsewhere'),
+    stdout: (text) => out.push(text),
+    stderr: (text) => err.push(text),
+  });
+  return { reason: JSON.parse(out.join('')).reason, err: err.join(''), gits, reads: (file) => reads.get(file) ?? 0, record };
+}
+
+test('the checks of one stop ask git once where the project is, and read each file once (odd/tasks/reply-hook-latency.md)', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reply-shared-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  // Git is asked even where a `.git` folder seems to say: one that git does not take (here an empty one) names another
+  // project than git would, and the project picks the record each check reads.
+  const project = path.join(dir, 'main');
+  fs.mkdirSync(path.join(project, '.git'), { recursive: true });
+  const stop = await sharedStop(project);
+  assert.match(stop.reason, STALE);
+  assert.match(stop.reason, RETURNED);
+  assert.equal(stop.err, '');
+  assert.equal(stop.gits, 1, 'one git answer for the three checks that ask where the project is');
+  assert.equal(stop.reads(stop.record), 1);
+  assert.equal(stop.reads(TRANSCRIPT), 1);
 });
 
 test('a work session holding handed work in a project whose board is stale gets the wake warning alone', async () => {

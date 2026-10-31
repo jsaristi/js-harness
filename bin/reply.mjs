@@ -40,7 +40,7 @@ const USAGE = 'Usage: js-harness reply --hook\n'
 
 /** The parsed `harness.json` nearest above `start` (that folder included), or `null` when none is found. A file that
  * is there and cannot be read or parsed throws. */
-function nearestHarness(start, readFile) {
+export function nearestHarness(start, readFile) {
   let dir = path.resolve(start);
   for (;;) {
     let text;
@@ -64,6 +64,42 @@ function nearestHarness(start, readFile) {
 
 /** How many of the payload's background tasks still run (Claude Code's `background_tasks`; Codex sends none). */
 const runningOf = (tasks) => (Array.isArray(tasks) ? tasks.filter((task) => task?.status === 'running').length : 0);
+
+/** `fn` answering once for each key `keyOf` gives its arguments: a call that throws is not kept. */
+function once(fn, keyOf) {
+  const done = new Map();
+  return (...args) => {
+    const key = keyOf(...args);
+    if (!done.has(key)) done.set(key, fn(...args));
+    return done.get(key);
+  };
+}
+
+/** The `io` the checks of one stop share, over the host's `readFile`, `readdir`, `run`, `env`, `homedir` and `now`.
+ * What the checks share is read once a stop, whichever check asks first: a file (the transcript above all), where the
+ * project is (`mainCheckout`), and the record of notices, parsed (each was read or asked up to three times a lead's
+ * stop, odd/tasks/reply-hook-latency.md). A read that throws is tried again by the next check, which then says so
+ * itself; git's answer, a failure included, is the stop's one answer, as a timed-out git would cost each check its two
+ * seconds. The modules these need are loaded here, only where the reply check is on; when one cannot be loaded it is
+ * said on standard error and each check reads the record and asks git itself, so the reply check still answers.
+ * scripts/reply-hook-time.mjs builds its profile on it, so what it times is what the hook does. */
+export async function stopIo({ readFile, readdir, run, env, homedir, now }, stderr) {
+  const readOnce = once(readFile, (file) => file);
+  const runOnce = once(run, (command, args, options) => JSON.stringify([command, args, options?.cwd ?? null]));
+  let readNotices;
+  let mainCheckout;
+  try {
+    const [channel, sessions] = await Promise.all([import('./lib/channel.mjs'), import('./lib/sessions.mjs')]);
+    readNotices = once((home, slug) => channel.readNotices(home, slug, { readFile: readOnce }), (home, slug) => JSON.stringify([home, slug]));
+    // Asked of git, as each check asked: the `.git` files the inbox hook reads (`mainCheckoutByFiles`) would save a
+    // git process, but name another project than git for a removed worktree, an empty `.git` folder or a folder git
+    // refuses (the verifier's finding, odd/tasks/reply-hook-latency.md), and the project picks the record each check reads.
+    mainCheckout = once((cwd) => sessions.mainCheckout(runOnce, cwd), (cwd) => cwd);
+  } catch (err) {
+    stderr(`js-harness reply: ${err?.message ?? err}; each check reads the record and finds the project by itself\n`);
+  }
+  return { readFile: readOnce, readdir, run: runOnce, env, homedir, now, readNotices, mainCheckout };
+}
 
 /** The wake check's warning (bin/lib/stop-wake.mjs), or `null`; a record it cannot read is said on standard error
  * and costs nothing else: the reply check above still answers. */
@@ -103,7 +139,7 @@ async function returnOf(payload, state, io, stderr) {
 /** The command-block check's warning (bin/lib/reply-commands.mjs), or `null`. The transcript is read only when the
  * reply holds a command block, and the parser gets what is left of the check's one deadline; a check that throws is
  * said on standard error and lets the rest answer. */
-function commandsOf(payload, message, { readFile, platform, parse, now, started }, stderr) {
+export function commandsOf(payload, message, { readFile, platform, parse, now, started }, stderr) {
   try {
     const blocks = fencedBlocks(message);
     if (commandBlocks(blocks).length === 0) return null;
@@ -126,7 +162,9 @@ function commandsOf(payload, message, { readFile, platform, parse, now, started 
 
 export async function replyMain(argv, {
   readStdin = () => fs.readFileSync(0, 'utf8'),
-  readFile = (file) => fs.readFileSync(file, 'utf8'),
+  // Read as bytes, then decoded: the same text, about three times faster on a lead's 60 MB transcript than
+  // `readFileSync(file, 'utf8')` (77–132 ms against 236–385 ms, Node 24.15, odd/tasks/reply-hook-latency.md).
+  readFile = (file) => fs.readFileSync(file).toString('utf8'),
   readdir = (dir) => fs.readdirSync(dir),
   run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: 2000 }),
   env = process.env,
@@ -164,18 +202,12 @@ export async function replyMain(argv, {
       else if (config !== null) {
         reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks) });
         const state = closingState(message, config);
-        // The transcript is read once whichever check reads it first.
-        const read = new Map();
-        const readOnce = (file) => {
-          if (!read.has(file)) read.set(file, readFile(file));
-          return read.get(file);
-        };
-        const io = { readFile: readOnce, readdir, run, env, homedir, now };
+        const io = await stopIo({ readFile, readdir, run, env, homedir, now }, stderr);
         const wake = await wakeOf(payload, state, io, stderr);
         const stale = await staleOf(payload, state, io, stderr);
         const back = await returnOf(payload, state, io, stderr);
         // Last, so its one deadline, counted from the hook's start, holds the other checks' time too.
-        const commands = commandsOf(payload, message, { readFile: readOnce, platform, parse, now, started }, stderr);
+        const commands = commandsOf(payload, message, { readFile: io.readFile, platform, parse, now, started }, stderr);
         for (const warning of [commands, wake, stale, back]) {
           if (warning !== null) reason = reason === null ? warning : `${reason}\n\n${warning}`;
         }
