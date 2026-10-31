@@ -598,8 +598,10 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **Cost:** no eval.
 - **His decisions:** D8 (answered: "Apagarlo"); question 132, the hook takes the lines out and never stops the commit
   (answered: "Quitarlas solo").
-- **State:** the hook in progress (`odd/tasks/strip-attribution.md`: `js-harness commit-msg` and
-  `.githooks/commit-msg`, then `init`); the hook-count row and D8 to do.
+- **State:** the hook done (`odd/tasks/strip-attribution.md`): `js-harness commit-msg` and
+  `.githooks/commit-msg` merged in #728, a scratch commit with both trailers landed without them (`951bcfb4`);
+  `init` and `sync` ship it to projects, recorded so `uninstall` takes it out, in PR 2 of that document; the
+  50-commit count on `main`, the hook-count row and D8 to do.
 
 ### S4b Contradictions to zero
 - **Changes:** contract-first as a `check` refusal for a new feature document; the remaining pairs of
