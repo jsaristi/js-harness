@@ -510,7 +510,6 @@ test('installMain says which hook each entry it registers is, and uninstallMain 
     const installed = await captureConsole(() => installMain(['--home', home]));
     assert.equal(installed.code, 0);
     const settings = path.join(home, '.claude', 'settings.json');
-    const hooks = path.join(home, '.codex', 'hooks.json');
     // One line per declared entry, in declaration order, written from this file's own wording (not install's formatter).
     const registeredLines = entryComponents.map((component) => {
       const entry = component.entry();
@@ -525,18 +524,19 @@ test('installMain says which hook each entry it registers is, and uninstallMain 
     const removed = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.equal(removed.code, 0);
     assert.deepEqual(removed.outLines.filter((line) => line.startsWith('removed hook entry from')).sort(), entryComponents.map((component) => `removed hook entry from ${component.target(home)}`).sort());
-    assert.deepEqual([fs.existsSync(settings), fs.existsSync(hooks)], [false, false]);
+    assert.equal(fs.existsSync(settings), false);
+    assert.equal(fs.existsSync(path.join(home, '.codex')), false, 'install wrote nothing under Codex\'s home');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
 
-// B11: a sync of an up-to-date home writes neither host file, so it says each entry was already there, not registered.
-test('a second sync --global says every entry is already registered and writes neither host file', async () => {
+// B11: a sync of an up-to-date home does not write the host file, so it says each entry was already there, not registered.
+test('a second sync --global says every entry is already registered and does not write the host file', async () => {
   const home = makeTmpHome();
   try {
     assert.equal((await captureConsole(() => installMain(['--home', home]))).code, 0);
-    const files = [path.join(home, '.claude', 'settings.json'), path.join(home, '.codex', 'hooks.json')];
+    const files = [path.join(home, '.claude', 'settings.json')];
     const before = files.map((file) => fs.readFileSync(file, 'utf8'));
     const synced = await captureConsole(() => syncMain(['--global', '--home', home]));
     assert.equal(synced.code, 0);

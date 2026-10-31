@@ -805,7 +805,7 @@ test('probeStack leaves the codex row out only when codexReview resolves off, an
     const ids = (functions) => probeStack({ home, project, spawn: fakeSpawnMissing(), functions }).map((row) => row.id);
     const off = ids({ codexReview: { value: 'off' } });
     assert.equal(off.includes('codex'), false);
-    assert.deepEqual(off, ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'codex-daemon', 'pnpm-lock']);
+    assert.deepEqual(off, ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-daemon', 'pnpm-lock']);
     assert.equal(ids({ codexReview: { value: 'on' } }).includes('codex'), true);
     assert.equal(ids(undefined).includes('codex'), true, 'with no switches resolved the row is shown');
   } finally {
@@ -997,7 +997,7 @@ test('probeStack returns one row per tool, in order, then one per check, never t
     const rows = probeStack({ home, project, spawn: fakeSpawnMissing() });
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'codex-daemon', 'pnpm-lock'],
+      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-daemon', 'pnpm-lock'],
     );
     for (const row of rows) assert.equal(row.upToDate, 'unknown');
   } finally {
@@ -1041,7 +1041,7 @@ function accountState(seed, platform = 'win32') {
 }
 
 test('checks carries the Claude account check and then the remote server one, apart from the tools', () => {
-  assert.deepEqual(checks.map((check) => check.id), ['memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'codex-daemon', 'hook-commands', 'pnpm-lock']);
+  assert.deepEqual(checks.map((check) => check.id), ['memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-daemon', 'hook-commands', 'pnpm-lock']);
   assert.equal(tools.some((tool) => ['claude-account', 'remote-server'].includes(tool.id)), false);
 });
 

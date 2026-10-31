@@ -16,6 +16,7 @@ import { functionsOf, gitIn, harnessOfTree, workingTree } from './project-functi
 import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, planFunctions, settingLabel, settingPending, valueAt } from './project-apply.mjs';
 import { EXCLUDED, addExclude, isValidExcludeRecord, undoExclude } from './project-exclude.mjs';
 import { FAILURES_TEMPLATE, TEMPLATE_BLOCK_MARK, agentsFile, claudeFile, renderBlock } from './project-template.mjs';
+import { HOOKS } from './project-hooks.mjs';
 import { localDay } from './flaky.mjs';
 import { addImport, oneFile } from './claude-import.mjs';
 
@@ -435,31 +436,6 @@ export function codeOfName(name) {
 const SEMVER =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
-const PRE_COMMIT_HOOK =
-  '#!/bin/sh\n# Written by js-harness init; js-harness uninstall removes it.\nexec js-harness check\n';
-
-/** The push check, where the Codex review is on (odd/tasks/on-demand-functions.md, S6): one `check --push`
- * a pushed ref, as this repository's own `.githooks/pre-push` runs it; a delete pushes nothing. */
-const PRE_PUSH_HOOK = [
-  '#!/bin/sh',
-  '# Written by js-harness; js-harness uninstall removes it. Refuses a push whose code commits no Codex',
-  '# review record covers, where the project has the review on (harness.json "functions").',
-  'status=0',
-  'while read -r local_ref local_sha remote_ref remote_sha; do',
-  '  case "$local_sha" in *[!0]*) ;; *) continue ;; esac',
-  '  js-harness check --push --remote "$1" --head "$local_sha" < /dev/null || status=1',
-  'done',
-  'exit $status',
-  '',
-].join('\n');
-
-/** The two hooks the harness writes: the name under the hooks path, the text, and what to add by hand to a
- * hook of that name it does not write. */
-const HOOKS = {
-  preCommit: { name: 'pre-commit', content: PRE_COMMIT_HOOK, command: '`js-harness check`' },
-  prePush: { name: 'pre-push', content: PRE_PUSH_HOOK, command: '`js-harness check --push` for each pushed ref' },
-};
-
 /** codegraph's own fix command, reused from `stack.mjs`'s tool table (never `codegraph upgrade` —
  * user rule) instead of a second copy of it living here. */
 function codegraphFixCommand() {
@@ -538,6 +514,14 @@ function wrote(relPath, hash, gitDir = false) {
  * field. */
 function kept(relPath, reason, outside = false, gitDir = false) {
   const entry = { kind: 'kept', path: relPath, reason };
+  if (outside) entry.outside = true;
+  if (gitDir) entry.gitDir = true;
+  return entry;
+}
+
+/** The manifest's `kept` entry of a `kept` action. */
+function keptRecord({ path: relPath, reason, outside, gitDir }) {
+  const entry = { path: relPath, reason };
   if (outside) entry.outside = true;
   if (gitDir) entry.gitDir = true;
   return entry;
@@ -855,6 +839,7 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     // fresh clone's `sync` runs too. `codegraphCreatedThisRun` lets the rollback below know whether it
     // owns `.codegraph/` (T2e item 2).
     writeHookGate(root, spawn, writeFile, { createdPaths, createdDirs, reportedDirs, files, actions });
+    writeHookGate(root, spawn, writeFile, { createdPaths, createdDirs, reportedDirs, files, actions }, HOOKS.commitMsg);
     if (functions.plan?.prePush) {
       writeHookGate(root, spawn, writeFile, { createdPaths, createdDirs, reportedDirs, files, actions }, HOOKS.prePush);
     }
@@ -883,14 +868,7 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     const manifest = {
       version,
       files,
-      kept: actions
-        .filter((a) => a.kind === 'kept')
-        .map((a) => {
-          const entry = { path: a.path, reason: a.reason };
-          if (a.outside) entry.outside = true;
-          if (a.gitDir) entry.gitDir = true;
-          return entry;
-        }),
+      kept: actions.filter((a) => a.kind === 'kept').map(keptRecord),
       codegraph: codegraphManifest,
       dirs,
     };
@@ -1085,7 +1063,7 @@ export function resolveManifestEntryPath(root, entry) {
 /** Whether `content` (as read from disk) is still what `init` wrote, judged the way T3 design calls
  * for: an exact sha256 match, or a match once CRLF is folded back to LF — git may rewrite line
  * endings on checkout (`core.autocrlf`, a `.gitattributes` rule), but `init` itself only ever writes
- * LF (`PRE_COMMIT_HOOK`, `agentsTemplate`, harness.json's `JSON.stringify(...) + '\n'`), so the
+ * LF (`HOOKS` of `project-hooks.mjs`, `agentsTemplate`, harness.json's `JSON.stringify(...) + '\n'`), so the
  * recorded hash is always for LF content — never the reverse, so no other direction needs checking. */
 export function matchesRecordedHash(content, expectedHash) {
   if (sha256(content) === expectedHash) return true;
@@ -1544,7 +1522,7 @@ export function readRecorded(root, manifestFilePath, spawn) {
 }
 
 /** What `sync` and `functions apply` change in a clone, recorded in `manifest`: with `sync`, the version
- * that ran, a recorded pre-commit gate that is gone and the `.atl/` exclude line of a clone set up before `init`
+ * that ran, a recorded pre-commit gate that is gone, the commit-msg step and the `.atl/` exclude line of a clone set up before `init`
  * added it; for both, what the switches ask (the push check, the index, the keys of the settings). */
 function updateRecorded(root, manifest, gitBases, steps) {
   const { sync, version, manifestFilePath, spawn, platform, writeFile, rm, manifestDeps } = steps;
@@ -1568,6 +1546,17 @@ function updateRecorded(root, manifest, gitBases, steps) {
       delete next.scope;
     } else if (sync) {
       restoreRecordedHook(root, next, gitBases, writeFile, createdPaths, createdDirs, actions);
+    }
+    // The commit-msg step reaches a clone `init` set up before it wrote one; a recorded one that is gone comes back,
+    // and a hook the clone has of its own is recorded as kept, as `init` records it, so no later sync repeats it.
+    const keptCommitMsg = (next.kept ?? []).some((k) => k.path.split('/').pop() === HOOKS.commitMsg.name);
+    if (sync && recordedHook(next, HOOKS.commitMsg)) {
+      restoreRecordedHook(root, next, gitBases, writeFile, createdPaths, createdDirs, actions, HOOKS.commitMsg);
+    } else if (sync && !keptCommitMsg) {
+      const before = actions.length;
+      writeHookInto(root, next, HOOKS.commitMsg, { spawn, writeFile, createdPaths, createdDirs, actions });
+      const keptNow = actions.slice(before).filter((a) => a.kind === 'kept').map(keptRecord);
+      if (keptNow.length > 0) next.kept = [...(next.kept ?? []), ...keptNow];
     }
     const functions = functionsPlan(root, spawn);
     if (functions.errors) actions.push(functionsProblem(functions.errors));

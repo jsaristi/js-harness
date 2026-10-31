@@ -72,10 +72,32 @@ mod: his. Whether the feature closes here or builds a program the app would not 
 - [x] T3 (kind: docs) row #24 of the host review, row 14 of the map, the ROADMAP, the failure entry — commits: with
   this document's second commit
 - [x] T4 (kind: verify) two blind readers of the design (L3); Codex and the lenses over T2's commits (L6)
-- [ ] T5 (kind: docs) specs 3 and 4 are deferred pending the answer to T6's question: the brief's Done-when holds them,
-  and this document does not meet it without his word — pending
-- [ ] T6 (kind: verify) the pull request (726), its ready notice, the question to the lead (134), the summary (L7);
-  open until the pull request is merged
+- [x] T5 (kind: docs) specs 3 and 4 were deferred to question 134; he answered "Construir el programa igual" (L8)
+- [x] T6 (kind: verify) pull request 726 (merged into main as 9f61429), its ready notice, question 134, the summary
+- [x] T7 (kind: build) spec 3, slice 2 on branch `feat/status-line-program` from main 7aac3e43: `bin/lib/status-line.mjs`
+  (`statusLineOf(board)` pure, the line file written atomically under the harness home), `bin/status-line.mjs`
+  (`js-harness status-line write` runs the board and writes the line; `program` prints the program's path),
+  `bin/lib/status-line.ps1` (the program: reads the line file, prints it, marks it stale past 10 minutes, prints
+  nothing when it is missing), their tests first, the program timed in a scratch home (L9) — commits: acc22f30, and
+  the one that adds the command
+- [x] T8 (kind: verify) Codex, the lenses and an independent verifier over T7; spec 4's question to the lead with the
+  exact PowerShell commands and their undo, each tried in a scratch place; pull request, ready, summary, closed —
+  L10 to L14, pull request 730, question 139
+
+## Next step
+T7, tests first. Done: `bin/lib/status-line.mjs` and its test (red: module not found; green: 4 pass);
+`bin/lib/status-line.ps1` and `bin/lib/status-line-program.test.mjs`, run through `powershell.exe` in a scratch
+USERPROFILE, skipped off win32 (red: 2 fail, no file; green: 2 pass). The script is ASCII: Windows PowerShell 5.1 reads
+a script without a BOM as ANSI, so the middle dot is `[char]0x00B7`. `bin/status-line.mjs` and its registration in
+`bin/js-harness.mjs` are done and tried end to end (L9). T8: Codex's P2 fixed in 13c9dfdb (L10); the install and its
+undo tried in scratch places (L11). The verifier's findings and Codex's second pass answered and tried again (L12).
+Reviews clean (L13). Pull request 730 and question 139 (L14). Left: the ready notice and the closed notice; then
+only his answer to question 139, which nothing in the pull request waits on. Decided (L8): the writer is `js-harness status-line write`, run by a per-user scheduled task every 5
+minutes that is part of the deferred install (nothing runs today: the app does not read the key); the board takes about
+24 s, so the program never runs it. The line, Spanish, from the board: open questions (`questions.open`), sessions
+`working` and `waiting` (`sessions[].state`), open pull requests (`pullRequests.items`), the gate (`gateLock.holder`),
+red when a question waits. `bin/sessions.mjs` and `bin/lib/sessions.mjs` are at their size ceilings, so nothing is added
+there. The package ships `bin/` whole (`package.json` files), so the `.ps1` ships too.
 
 ## Design
 
@@ -223,5 +245,69 @@ only with evidence that a claude.ai install reads it, and step 2 of the review b
   its read-only `review status` was run and nothing started, as `CLAUDE.md` says for a branch candidate: not reviewed
   by gentle-ai. No independent verifier: no Task Size high-risk item is touched (no installer was written; the
   administrator install was not built).
+- L8 — 2026-10-31, his answer to question 134 (`js-harness sessions --quote 0f71b2c6-cbce-43ca-a031-276a4b2c381f
+  38878`, 02:58:07Z): "Construir el programa igual". The lead's brief: build the program and its tests in a scratch
+  home, reading a precomputed board file, saying who writes it and how often; nothing under Program Files, no managed
+  setting; the admin install a recorded question with exact PowerShell commands and their undo; Codex, the lenses and
+  an independent verifier (installer, high risk item 5).
 - L7 — pull request 726, ready notice at 2026-10-31T02:11:25Z; question 134 to the lead (close here, or build the
   program for a future host) at 02:09:17Z; summary `docs/sessions/2026-10-31-jh-113-status-line-the-harness-s-state-above-the-code-tab-s.md`.
+- L9 — T7 built, tests first. `bin/lib/status-line.test.mjs`: red (module not found), green 4 pass;
+  `bin/lib/status-line-program.test.mjs`: red 2 fail (no program), green 2 pass; `bin/status-line.test.mjs`: red
+  (module not found), green 4 pass. Commit acc22f30 holds the line and the program. The command first refused its own
+  convention (`every command module declares its own ArgError`), so it throws `StatusLineArgError`. End to end in a
+  scratch home (job scratch `e2e.mjs`): the branch's `status-line write --home <scratch>` exit 0 in 24,371 ms on the real
+  board; the program, run as the host would (`powershell.exe -NoProfile -File`, USERPROFILE the scratch home), exit 0
+  in 683, 606 and 582 ms, 73 bytes: `ESC[31m1 pregunta ESC[0m · 4 trabajando · 2 esperando · 2 PR · gate libre`.
+- L10 — reviews of 7aac3e43..1df8e3aa (code commits acc22f30, 1df8e3aa). Codex (`js-harness codex-review --base
+  7aac3e43`, gpt-6.1-sol at medium, it ran 77fa10a..1df8e3a, 366 changed lines in 7 files, 169,301 input tokens):
+  "the patch is incorrect (confidence 0.95)", one finding, [P2] `bin/lib/status-line.ps1:7`: the writer honors
+  `JS_HARNESS_HOME` through `harnessHome()` and the program read only `USERPROFILE`. Fixed, test first (red: `'del
+  perfil'` printed where `'del home nombrado'` was expected; green 3 pass): the program reads `JS_HARNESS_HOME` when it
+  is an absolute path, else `USERPROFILE`, since the host runs it in System32. The Claude lenses (`js-harness
+  lens-review --base 7aac3e43 --lenses reliability,readability`): reliability 0 findings (13,954 input tokens),
+  readability 0 findings (28,542). gentle-ai: not run; the Stop hook offers the branch, which `CLAUDE.md` says to
+  start nothing for.
+- L11 — the install, tried in scratch places by one script (job scratch `try.ps1`, which dot-sources `body-install.ps1`
+  and `body-undo.ps1`, the bodies the question gives): a scratch folder for Program Files, the registry key
+  `HKCU:\Software\js-harness-scratch\Policies\Claude` for `HKCU:\SOFTWARE\Policies\Claude`, the task name
+  `js-harness-scratch-status-line`, and `--home <scratch>` added to the task's writer. Output: the file copied; the
+  value `{"command":"<scratch>\\Program Files\\js-harness\\status-line.ps1"}`; the task `Ready`, running `conhost.exe
+  --headless node.exe js-harness.mjs status-line write --cwd "D:\js-harness"`, every PT5M, principal Oficina, Limited,
+  Interactive; started by hand, it wrote the line in 22 s, last result 0; the copied program printed it in 966 ms;
+  after the undo no task, no key, no folder, no line folder; the scratch key and folder removed. Not tried: an elevated
+  window, the real `Program Files` and `SOFTWARE\Policies` (that is the question), and the app reading the key.
+- L12 — the independent verifier (a general-purpose agent, read-only, scratch under the job's `verifier\`) over the
+  code and L11's bodies. Corrected: L11's "last result 0" proves nothing, since `conhost.exe --headless` returned 0
+  for a child that exited 3 (its probe); the line's time is the check. Checked by this session before building on it:
+  the installed dispatcher's real path is `...\pnpm\store\v11\links\@\js-harness\0.97.0\<hash>\...\bin\js-harness.mjs`,
+  so a path taken from the package at install time is tied to one version, while `%LOCALAPPDATA%\pnpm\bin\js-harness.cmd`
+  is the shim pnpm rewrites. Its blocking findings: the bodies had no stop on error or precondition (with 0.97.0
+  installed, `status-line program` exits 2 and a half install followed), and they were tied to the version folder
+  and kept only in a job's scratch. Answered by `bin/lib/status-line-install.ps1` and `status-line-uninstall.ps1`,
+  tests first (`bin/lib/status-line-install.test.mjs`, red: ENOENT, green 5 pass): `$ErrorActionPreference = 'Stop'`;
+  the shim probed for `status-line` first; the task runs the shim; `-Force` re-registers; an explicit `Limited`,
+  `Interactive` principal; a `sessionStatusLine` value it did not write is refused and left; the undo is copied beside
+  the program, stops the task and waits before deleting it, skips what is gone, and removes the line last. Its
+  should-fix rename finding (EPERM while a reader holds the file, a staged file left): five tries 50 ms apart, the
+  staged file removed in a `finally`, test first (red: EPERM, green). The board's timeout is 90 s, under the task's
+  2 minutes. Codex's second pass over 13c9dfdb said relative homes still diverge: `write` now refuses a relative
+  `JS_HARNESS_HOME`, test first (red, green 9 pass). Tried in scratch places by job scratch `try2.ps1`: the installed
+  shim refused with nothing written; the scratch shim (the branch's dispatcher) installed twice; the task wrote the
+  line in 60 s (time `04:01:39.580Z`, now `04:01:40.25Z`); the copied program printed it in 1,235 ms; the undo from its
+  copy removed the task, value, key, both files, the folder and the line, and a second run printed nothing and failed
+  on nothing; a foreign value was refused and left. Left as notes, not fixed: a future time reads as fresh (the
+  writer always writes UTC with `Z`); a policy under `HKLM\SOFTWARE\Policies\Claude` makes the app ignore HKCU's
+  (configuration-format doc); a copy under Program Files goes stale when js-harness updates until the install runs
+  again, and nothing compares it yet; `uninstall` does not know this install, whose undo lives beside the copy. Not
+  checked: an elevated window, whether stopping the task stops its node, the app reading the key.
+- L13 — reviews of the last slice. Codex (`js-harness codex-review --base 1df8e3aa`, it ran 1df8e3a..90366b9, 262
+  changed lines in 11 files, 42,803 input tokens): "the patch is correct (confidence 0.97)", no finding. The Claude
+  lenses over 13c9dfd..90366b9 (`--lenses reliability,readability,risk`): 0 findings each (13,755, 13,759 and 28,304
+  input tokens). gentle-ai: its Stop hook offered the branch (base 7aac3e43, every path); the read-only `review
+  status` answered `applicability: unrelated`, and nothing was started.
+- L14 — pull request 730 opened (https://github.com/jsaristi/js-harness/pull/730). Question 139 to the lead, recorded
+  2026-10-31T04:33:12Z: install now or not, with `& (Join-Path (Split-Path (js-harness status-line program))
+  'status-line-install.ps1') -Project 'D:\js-harness'` in an elevated Windows PowerShell once a release with this
+  pull request is installed, and its undo `& "$env:ProgramFiles\js-harness\status-line-uninstall.ps1"`; it recommends
+  not installing while the app does not read the key. Nothing in the pull request waits on it.

@@ -1,6 +1,6 @@
 # js-harness
 
-js-harness sets up Claude Code and Codex for AI-assisted development in a project, on top of a
+js-harness sets up Claude Code, with Codex as its reviewer, for AI-assisted development in a project, on top of a
 stack it does not rebuild: gentle-ai owns the workflow, task documents and TDD, engram owns
 memory, codegraph owns code structure. js-harness adds the thin layer those leave open: a short
 `AGENTS.md`, a pre-commit gate that runs the project's checks, the two reviews every slice gets
@@ -25,8 +25,8 @@ js-harness init
 
 1. `npm i -g` puts the `js-harness` command on the path; npm 12 fetches a package from git only
    with `--allow-git`, and npm 11.12 refuses this one under `root`, so `all`. With pnpm: `pnpm add -g github:jsaristi/js-harness`.
-2. `js-harness install` writes its skills and hooks for Claude Code and Codex under your home,
-   once per machine.
+2. `js-harness install` writes its skills and hooks for Claude Code under your home, once per
+   machine. Codex only reviews, so nothing goes under `~/.codex`.
 3. `js-harness init`, in a git repository, writes `harness.json` (the pin, `"code"`, the project's
    identifier its sessions' titles start with, offered from the initials of its name, and `"reply": true`,
    which turns the reply check on), `AGENTS.md`, an empty failures register (`docs/FAILURES.md`)
@@ -247,6 +247,7 @@ wrote harness.json
 wrote AGENTS.md
 wrote docs/FAILURES.md
 wrote .git/hooks/pre-commit
+wrote .git/hooks/commit-msg
 ran codegraph init
 excluded .atl/ in .git/info/exclude
 manifest: my-project\.git\js-harness\manifest.json
@@ -257,7 +258,9 @@ The last line appears only while the project has no `docs/ROADMAP.md`. The `excl
 gentle-ai's `.atl/` folder out of what git calls untracked, in this clone only; it is not written
 when the lines there already exclude `.atl`, and `uninstall` takes back exactly the line `init`
 added. A project set up before `init` wrote it gets the same line, recorded the same way, from its
-next `js-harness sync`. The example is a project with code. What `init` adds beyond the first four files follows the
+next `js-harness sync`. The `commit-msg` hook runs `js-harness commit-msg`, which takes the host's
+attribution lines out of each commit message and never stops a commit; a clone set up before `init`
+wrote it gets it from its next `sync`, and a `commit-msg` hook the project already has is kept. The example is a project with code. What `init` adds beyond the first four files and its two hooks follows the
 switches in `harness.json` `"functions"` (`js-harness functions` shows each one and why): the
 pre-push check (`.git/hooks/pre-push`) when the Codex review is on, the code map's `codegraph init`
 and the keys of `.claude/settings.local.json` when their switches ask for them. A project whose code
@@ -329,8 +332,12 @@ $ js-harness onboard profile platform --checklist advice --size small
 
 ### js-harness install
 
-Writes the skills and the session hooks for Claude Code and Codex under the home, and records a
-manifest of them. It also holds two things in the user's Claude files, recording only what it
+Writes the skills and the session hooks for Claude Code under the home, and records a manifest of
+them. Nothing goes under `~/.codex`: Codex only reviews. An install by version 0.97.0 or older also
+wrote Codex copies of the three skills and five entries in `~/.codex/hooks.json`; the next
+`install` or `sync` removes each one still as it was written, keeps one you changed, and takes the
+trust records of the removed hooks out of the `config.toml` that install recorded, moving those of
+your own hooks after them to their new places. It also holds two things in the user's Claude files, recording only what it
 wrote so `uninstall` takes out exactly that: the permissions of the Claude settings (an allow for
 codegraph's tools, and denies of a wipe of the root or the home and of a read or edit of the places
 of secrets) and a marked Rules
@@ -343,9 +350,7 @@ what was there.
 $ js-harness install
 installed js-harness 0.9.0 (6 files) into ~
 registered hook entry in ~\.claude\settings.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
-registered hook entry in ~\.codex\hooks.json: js-harness doctor --hook (SessionStart, matcher startup|resume)
 registered hook entry in ~\.claude\settings.json: js-harness resume --hook (SessionStart, matcher compact|clear|startup)
-registered hook entry in ~\.codex\hooks.json: js-harness resume --hook (SessionStart, matcher compact|clear|startup)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUse)
 registered hook entry in ~\.claude\settings.json: js-harness resume --pause || exit 0 (PostToolUseFailure, matcher WebFetch)
 registered hook entry in ~\.claude\settings.json: js-harness guard --hook || exit 0 (PreToolUse, matcher ^(Agent|SendMessage|mcp__ccd_session_mgmt__send_message|Bash|Read|Write|Edit|MultiEdit|NotebookEdit|Grep|mcp__scheduled-tasks__create_scheduled_task|mcp__scheduled-tasks__update_scheduled_task|mcp__scheduled-tasks__run_scheduled_task|RemoteTrigger|mcp__ccd_session__start_session|mcp__terminal__run_in_terminal)$)
@@ -355,15 +360,8 @@ registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exi
 registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (SessionStart, matcher compact|clear|resume)
 registered hook entry in ~\.claude\settings.json: js-harness rules --hook || exit 0 (SubagentStart)
 registered hook entry in ~\.claude\settings.json: js-harness reply --hook || exit 0 (Stop)
-registered hook entry in ~\.codex\hooks.json: js-harness reply --hook || exit 0 (Stop)
 …
 ```
-
-Then trust the Codex hooks: Codex runs no hook of `hooks.json` that its `config.toml` holds no
-trust record for, and says nothing about it (Codex CLI 0.163.0). Run `codex` in a terminal and
-answer its prompt about hooks with "Trust all and continue". Install never writes that record:
-trusting a hook is your security setting, and its hash is Codex's own. Until you do, `doctor`'s
-`codex-trust` row is `missing` and names each hook Codex skips.
 
 ### js-harness loop
 
@@ -499,12 +497,12 @@ removed harness.json
 removed AGENTS.md
 removed docs/FAILURES.md
 removed .git/hooks/pre-commit
+removed .git/hooks/commit-msg
 removed docs
 removed .codegraph/
 removed manifest my-project\.git\js-harness\manifest.json
 $ js-harness uninstall --global
 removed ~\.claude\skills\js-harness\SKILL.md
-removed ~\.codex\skills\js-harness\SKILL.md
 …
 removed hook entry from ~\.claude\settings.json
 ```
@@ -582,15 +580,6 @@ skips of both reviews that still owe one (a pull request holding a lens skip doe
 `--hook` is the session-start hook `install` registers: it computes the same report and prints one
 line only when there are gaps and they differ from the last ones it told, and it exits 0 (2, with
 the usage, for an argument it does not know).
-
-Its `codex-trust` row reads the `config.toml` of the Codex home (`CODEX_HOME` when the home is the
-real one and it is set, else `~/.codex`) for a `trusted_hash` of each harness hook of
-`~/.codex/hooks.json`, at the place Codex keys it by:
-`[hooks.state.'<hooks.json>:<event>:<group>:<handler>']`. A hook with none is `missing`, listed by
-that place and its command, with the step that trusts it; doctor never writes the record. A hash
-that no longer matches its hook, after an upgrade changed it, cannot be told from here.
-`uninstall` takes the trust records of the hooks it removes out of the `config.toml` install
-recorded, and moves the records of your own hooks that come after them to their new places.
 
 Its `engram-plugin` row, shown while engram's Claude Code plugin (`engram@engram`) is installed and
 enabled, compares the plugin with the one the engram binary's own release ships: the version that
@@ -1141,6 +1130,25 @@ never both tell it. The lead's `js-harness loop heartbeat` reads it every hour.
 $ js-harness windows-daily
 windows-daily: the newest run, https://github.com/jsaristi/js-harness/actions/runs/39007607383, failed (failure, ended 1 h ago), 168 failing: in shadow the gate traces its suite under the git dir and its end line keeps the counts; …
 WINDOWS: https://github.com/jsaristi/js-harness/actions/runs/39007607383 failure, 168 failing: in shadow the gate traces its suite under the git dir and its end line keeps the counts; …
+```
+
+### js-harness status-line
+
+Claude Desktop's `sessionStatusLine` setting runs a program and shows its first line above the
+Code tab's message box. The board takes about 24 s and the host stops its program at 10 s, so the
+board is read ahead: `status-line write` runs `js-harness sessions --json` and keeps it as one
+Spanish line, with the time it was written, in `.js-harness/status-line/line.txt` under the home. A
+board that fails leaves the last line as it was. `status-line program` prints the path of
+`bin/lib/status-line.ps1`, the program the setting names: it prints that file's line, its age in
+yellow first when the line is older than 10 minutes, and nothing when there is no file. Installing
+it means a copy under Program Files and a managed setting, so it is not part of `install`:
+`status-line-install.ps1`, beside the program, does it in an elevated Windows PowerShell, with a
+task that runs `write` every 5 minutes, and leaves `status-line-uninstall.ps1` beside the copy to
+undo it. The app reads the setting only on third-party inference today (`odd/tasks/status-line.md`).
+
+```console
+$ js-harness status-line write
+status-line: wrote C:\Users\you\.js-harness\status-line\line.txt: 1 pregunta · 4 trabajando · 2 esperando · 2 PR · gate libre
 ```
 
 ### js-harness merge-queue
@@ -1740,7 +1748,7 @@ js-harness wait: the merge of pull request 133 holds (14:12)
 
 ### js-harness resume
 
-The hook that runs after a compaction or a clear, which `install` registers for Claude Code and Codex.
+The hook that runs after a compaction or a clear, which `install` registers for Claude Code.
 `resume --hook` reads the hook's input and prints the session's title, its opening, the feature
 document it works on and what to read there, so nobody pastes a resume prompt. After a clear it
 prints the same lines under a first line that says the session was cleared, with none of the
@@ -1860,7 +1868,7 @@ $ js-harness guard --stop < stop.json
 
 ### js-harness reply
 
-The reply check. `install` registers `reply --hook` as a `Stop` hook for Claude Code and Codex;
+The reply check. `install` registers `reply --hook` as a `Stop` hook for Claude Code;
 it acts only in a project whose nearest `harness.json` holds a `reply` key, and prints `{}`
 everywhere else. There it reads the reply that ends the turn and turns the stop back, with the
 hooks contract's `decision: "block"` and the shape to follow, when the reply does not close with
@@ -1897,7 +1905,7 @@ session of that number (except the opening the session read, always stored befor
 call the host moved to the background when it outlived its timeout counts as a launch, and Codex, which sends no background tasks, is not checked. When the close
 is refused too, both reasons go in one block.
 
-It also turns back a reply that hands the user a shell command in a fenced block, on both hosts. A
+It also turns back a reply that hands the user a shell command in a fenced block. A
 block is a command block when its info string starts with a shell (`bash`, `powershell`, ...), or
 when it has none and its first line starts with a known program (`git`, `npm`, `js-harness`,
 `rm`, `Remove-Item`, ...). A block handed to him must be tagged for his shell (on win32
@@ -1915,6 +1923,29 @@ already on his screen, so the session tells him not to run it and gives the corr
 ```console
 $ js-harness reply --hook < stop.json
 {"decision":"block","reason":"js-harness reply: the reply has no state line. End the reply with one line that starts with one of: Sigo solo (say what wakes you), Necesito tu decisión (never while background work runs; the question itself goes through the question tool), Te pregunto (an open question the user answers in writing, asked on that line), Corte (one code block of only what the user sends, under the lines Qué es:, Dónde: and Qué pasa:), Terminado (name the session to return to). Your reply is already shown: write the close again in your next words."}
+```
+
+### js-harness commit-msg
+
+The `commit-msg` hook's step. The Claude app tells every session to end a commit message with
+`Co-Authored-By: Claude ...` and `Claude-Session: ...` lines; this takes them out of the message
+git hands the hook, and the commit goes on. A line goes when it is in the trailers that end the
+message (the run of trailer lines that closes its last paragraph, comment lines and the diff under
+`git commit -v`'s scissors left out, never the subject line) and is a whole `Co-Authored-By:` trailer (any case
+of the key) whose name is the host's (`Claude`, alone or with a model: `Claude Opus 5.5`,
+`Claude Code`) or whose address is at `anthropic.com` or a subdomain of it, or a whole
+`Claude-Session:` line. A human co-author (`Claude Dupont <claude@example.fr>` too), a host line
+quoted in the body and every other byte stay as they were, in any encoding. The message is
+replaced through a temporary file and one rename, so a write that fails leaves it whole. What it
+took out is said in one line on standard error, and nothing is said when there was nothing. It
+never stops a commit: a message file it cannot read or write is said and left as it is, exit 0.
+This repository's `.githooks/commit-msg` runs it (`npm run hooks` wires the folder in), and lets
+the commit go as it is when the branch has no `bin/commit-msg.mjs`, when the script fails or when
+no `node` is on the PATH.
+
+```console
+$ git commit -m "fix: a change" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+js-harness commit-msg: removed the host's attribution lines: Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
 
 ### js-harness fetch
@@ -2046,7 +2077,7 @@ the refusal names `backup restore --merge` before `--allow-shrink`. `verify` and
 files from the export and say, by count and never by name, when one differs; `status` names the
 projects and the newest entry; `doctor` calls the backup stale when a success left no `RECENT.md`.
 
-A SessionStart hook in both hosts, `backup --session-start`, resolves the session's project and asks
+A SessionStart hook of Claude Code, `backup --session-start`, resolves the session's project and asks
 `engram stats` for it within 3 seconds. When Engram holds less than nine tenths of what the last
 backup held of it, the session is told so, pointed to its file's head, and given the restore command;
 otherwise it says nothing. An Engram that answers but holds too few is told it holds less than its
@@ -2076,13 +2107,11 @@ and records in `~/.js-harness/restored-bundles`, each with the line that puts it
 for a bundle, `git apply` for a patch, the folder to copy into `.git/js-harness`). `verify --from` restores
 into a scratch home and checks the four counts and every file byte for byte; `verify --summary`
 checks the public summary's sections and privacy; it takes one of `--from`, `--summary` or `--transcripts` at a time. The private clone keeps every byte as written
-(`* -text`), so line endings never change on the way. `backup --hook` is the Stop hook install registers in both hosts: when a
+(`* -text`), so line endings never change on the way. `backup --hook` is the Stop hook install registers for Claude Code: when a
 backup is due (30 minutes since the last success, and Engram, a memory folder, the home, a plugin
 list or Claude Desktop's notes or presets changed since) it starts a run detached and returns; where `init` never ran it does nothing.
-The detached run outlives the hook and the host in both: measured on Claude Code 2.1.301 and Codex
-0.162.1, the child was alive seconds after the host process exited. Codex runs a hook only once its
-config records it as trusted (`hooks.state` in `config.toml`); until then only Claude Code's Stop
-hook starts backups.
+The detached run outlives the hook and the host: measured on Claude Code 2.1.301, the child was
+alive seconds after the host process exited.
 
 ```console
 $ js-harness backup status

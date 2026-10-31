@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
-  realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs, HARNESS_HOOKS, hostHooksProblem,
+  realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs, HARNESS_HOOKS, hooksOfHost, hostHooksProblem,
   pauseReplyLine, pauseHookInput, pauseHookProblem, TEMPLATE_SECTIONS, templateLinesProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem, uninstallExpected,
   channelEnv, channelStepProblem, channelRecord, releasePracticeVerdict,
 } from './practice-lib.mjs';
@@ -396,14 +396,14 @@ const FIXED_WIN = [
   'C:\\Users\\Oficina\\.claude\\skills\\js-harness\\SKILL.md',
   'C:\\Users\\Oficina\\.claude\\skills\\js-harness-orchestrator\\SKILL.md',
   'C:\\Users\\Oficina\\.claude\\skills\\js-harness-protocols\\SKILL.md',
-  'C:\\Users\\Oficina\\.codex\\skills\\js-harness\\SKILL.md',
-  'C:\\Users\\Oficina\\.codex\\skills\\js-harness-orchestrator\\SKILL.md',
-  'C:\\Users\\Oficina\\.codex\\skills\\js-harness-protocols\\SKILL.md',
   'C:\\Users\\Oficina\\.claude\\settings.json',
   'C:\\Users\\Oficina\\.codex\\hooks.json',
 ];
 
-test('realHomeFiles without a manifest is the fixed list: the manifest, six skills, two hook files', () => {
+// No Codex skill is in the fixed list: install writes none any more (odd/tasks/drop-codex-components.md). The Codex
+// hooks file stays, since it is the user's and the practice must never write it; an earlier install's Codex skills are
+// still hashed through the real manifest that records them.
+test('realHomeFiles without a manifest is the fixed list: the manifest, three Claude skills, two hook files', () => {
   assert.deepEqual(realHomeFiles(WIN_HOME, undefined, 'win32'), FIXED_WIN);
   assert.deepEqual(realHomeFiles(WIN_HOME, null, 'win32'), FIXED_WIN);
   assert.deepEqual(realHomeFiles('/home/seb', undefined, 'linux').slice(0, 2), [
@@ -423,8 +423,10 @@ test('realHomeFiles adds what the manifest records, once each, as absolute paths
     files: [
       // As `install` records them: absolute. Windows does not tell these two from the fixed ones.
       { path: 'C:\\Users\\Oficina\\.claude\\skills\\js-harness\\SKILL.md', sha256: 'a', skipped: false },
-      { path: 'c:\\users\\oficina\\.codex\\skills\\js-harness\\skill.md', sha256: 'b', skipped: false },
+      { path: 'c:\\users\\oficina\\.claude\\skills\\js-harness-protocols\\skill.md', sha256: 'b', skipped: false },
       { path: 'C:\\Users\\Oficina\\.claude\\skills\\retired\\SKILL.md', sha256: 'c', skipped: false },
+      // What an install of 0.97.0 or older recorded: a Codex skill, hashed because the manifest names it.
+      { path: 'C:\\Users\\Oficina\\.codex\\skills\\js-harness\\SKILL.md', sha256: 'f', skipped: false },
       { path: '.codex/skills/relative/SKILL.md', sha256: 'd' },
     ],
     entries: [{ path: 'C:\\Users\\Oficina\\.claude\\settings.json', pointer: ['hooks', 'SessionStart'], entry: {} }],
@@ -433,6 +435,7 @@ test('realHomeFiles adds what the manifest records, once each, as absolute paths
   assert.deepEqual(realHomeFiles(WIN_HOME, manifest, 'win32'), [
     ...FIXED_WIN,
     'C:\\Users\\Oficina\\.claude\\skills\\retired\\SKILL.md',
+    'C:\\Users\\Oficina\\.codex\\skills\\js-harness\\SKILL.md',
     'C:\\Users\\Oficina\\.codex\\skills\\relative\\SKILL.md',
     'C:\\Users\\Oficina\\AppData\\Startup\\js-harness-remote.vbs',
   ]);
@@ -802,7 +805,7 @@ test('parseArgs names the argument it refused', () => {
 
 // What `install` grafts on a host file, as its own declaration gives it: the list this library checks a
 // host file against must be that one, or a journey would go on passing against an install that changed.
-test('HARNESS_HOOKS is what install declares for each host: the doctor, resume and reply entries for both hosts, the pause, web failure, guard and share entries for Claude Code', () => {
+test('HARNESS_HOOKS is what install declares, every entry Claude Code\'s: Codex only reviews, so install grafts nothing on its hooks file', () => {
   const declared = (host) => entryComponents.filter((component) => component.id.startsWith(`${host}-`)).map((component) => {
     const entry = component.entry();
     const hook = { event: component.pointer.at(-1), command: entry.hooks.map((item) => item.command).join(' && ') };
@@ -812,18 +815,20 @@ test('HARNESS_HOOKS is what install declares for each host: the doctor, resume a
   const plain = ({ hosts, ...hook }) => hook;
   const listedFor = (host) => HARNESS_HOOKS.filter((hook) => hook.hosts.includes(host)).map(plain);
   assert.deepEqual(declared('claude'), listedFor('claude'));
-  assert.deepEqual(declared('codex'), listedFor('codex'));
-  // One pinned entry per host shape: the pause entry is Claude Code's alone, the reply entry is both hosts'.
-  const pause = HARNESS_HOOKS.find((hook) => hook.event === 'PostToolUse');
-  assert.deepEqual([plain(pause), pause.hosts], [{ event: 'PostToolUse', command: 'js-harness resume --pause || exit 0' }, ['claude']]);
+  // No entry of install's is left out of that comparison by naming another host.
+  assert.deepEqual(entryComponents.filter((component) => !component.id.startsWith('claude-')).map((component) => component.id), []);
+  assert.deepEqual(declared('codex'), []);
+  assert.deepEqual(hooksOfHost('codex'), []);
+  for (const hook of HARNESS_HOOKS) assert.deepEqual(hook.hosts, ['claude'], hook.command);
+  // One pinned entry: the reply entry, which Codex's file also held up to 0.97.0, is Claude Code's alone.
   const reply = HARNESS_HOOKS.find((hook) => hook.command === 'js-harness reply --hook || exit 0');
-  assert.deepEqual([plain(reply), reply.hosts], [{ event: 'Stop', command: 'js-harness reply --hook || exit 0' }, ['claude', 'codex']]);
+  assert.deepEqual(plain(reply), { event: 'Stop', command: 'js-harness reply --hook || exit 0' });
   assert.ok(Object.isFrozen(HARNESS_HOOKS));
 });
 
 const SEEDED = 'echo unrelated-claude-hook';
 const group = (matcher, ...commands) => ({ ...(matcher === undefined ? {} : { matcher }), hooks: commands.map((command) => ({ type: 'command', command, timeout: 5 })) });
-// A Codex hooks file, or a Claude Code file before the pause entry: only a `SessionStart` list.
+// A Codex hooks file, or a Claude Code file before its other lists: only a `SessionStart` list.
 const hostFile = (...groups) => JSON.stringify({ hooks: { SessionStart: groups } }, null, 4);
 // A Claude Code file: the `SessionStart` list, then the `PostToolUse` list (none when `postToolUse` is undefined).
 const hooksFile = (postToolUse, ...groups) => JSON.stringify({ hooks: { SessionStart: groups, PostToolUse: postToolUse } }, null, 4);
@@ -843,11 +848,27 @@ const fallback = group('startup|resume|clear|compact', FALLBACK);
 // A Claude Code file right after install: its SessionStart groups then the rules' own, the PostToolUse list, and the
 // rules' entries under UserPromptSubmit and SubagentStart (`extra` replaces any of those lists).
 const claudeHooksFile = (postToolUse, ...groups) => JSON.stringify({ hooks: { SessionStart: [...groups, rulesStart, fallback], PostToolUse: postToolUse, UserPromptSubmit: [rulesTurn], SubagentStart: [rulesTurn] } }, null, 4);
+// A Claude Code file right after install with the `SessionStart` list given whole, to hold that list alone.
+const claudeStartFile = (...groups) => JSON.stringify({ hooks: { SessionStart: groups, PostToolUse: [pause, shown], UserPromptSubmit: [rulesTurn], SubagentStart: [rulesTurn] } }, null, 4);
+const REPLY = 'js-harness reply --hook || exit 0';
+const BACKUP = 'js-harness backup --hook || exit 0';
 
-test('hostHooksProblem finds none in a Codex file that holds its seeded entry and then each entry of the harness once', () => {
-  assert.equal(hostHooksProblem(hostFile(seeded, doctor, resume, fallback), SEEDED, 'codex'), null);
+test('hostHooksProblem finds none in a Codex file that holds only what the user seeded: install grafts nothing there', () => {
+  assert.equal(hostHooksProblem(hostFile(seeded), SEEDED, 'codex'), null);
   // The keys of an entry in another order, as a host or another tool may write them back.
-  assert.equal(hostHooksProblem(JSON.stringify({ hooks: { SessionStart: [{ hooks: seeded.hooks, matcher: seeded.matcher }, { hooks: doctor.hooks, matcher: doctor.matcher }, resume, fallback] } }), SEEDED, 'codex'), null);
+  assert.equal(hostHooksProblem(JSON.stringify({ hooks: { SessionStart: [{ hooks: seeded.hooks, matcher: seeded.matcher }] } }), SEEDED, 'codex'), null);
+  // The user's own entries under other events are theirs.
+  assert.equal(hostHooksProblem(JSON.stringify({ hooks: { SessionStart: [seeded], Stop: [group(undefined, 'echo their-stop')] } }), SEEDED, 'codex'), null);
+});
+
+test('hostHooksProblem finds what an earlier install left in a Codex file: its SessionStart entries, and its Stop entries', () => {
+  // What 0.97.0 grafted, left after a sync that should have taken it out.
+  assert.equal(
+    hostHooksProblem(hostFile(seeded, doctor, resume, fallback), SEEDED, 'codex'),
+    `expected the seeded entry "${SEEDED}"; found: "${SEEDED}" (matcher startup|resume|clear|compact) | "js-harness doctor --hook" (matcher startup|resume) | "js-harness resume --hook" (matcher compact|clear|startup) | "${FALLBACK}" (matcher startup|resume|clear|compact)`,
+  );
+  const stops = JSON.stringify({ hooks: { SessionStart: [seeded], Stop: [group(undefined, 'echo their-stop'), group(undefined, REPLY), group(undefined, BACKUP)] } });
+  assert.equal(hostHooksProblem(stops, SEEDED, 'codex'), `expected no entry of the harness in hooks.Stop of codex; found: "echo their-stop" (no matcher) | "${REPLY}" (no matcher) | "${BACKUP}" (no matcher)`);
 });
 
 test('hostHooksProblem finds none in a Claude Code file right after install: the seeded entry, the doctor and resume entries, then the pause entry once', () => {
@@ -855,25 +876,27 @@ test('hostHooksProblem finds none in a Claude Code file right after install: the
 });
 
 test('hostHooksProblem says what it expected and what it found: an entry missing, written twice, with another matcher or command, or out of place', () => {
-  const expected = 'expected the seeded entry "echo unrelated-claude-hook", then "js-harness doctor --hook" (matcher startup|resume), then "js-harness resume --hook" (matcher compact|clear|startup), then "' + FALLBACK + '" (matcher startup|resume|clear|compact); found: ';
-  const found = (...groups) => hostHooksProblem(hostFile(...groups), SEEDED, 'codex');
+  const expected = 'expected the seeded entry "echo unrelated-claude-hook", then "js-harness doctor --hook" (matcher startup|resume), then "js-harness resume --hook" (matcher compact|clear|startup), then "' + RULES_HOOK + '" (matcher compact|clear|resume), then "' + FALLBACK + '" (matcher startup|resume|clear|compact); found: ';
+  // A Claude Code file, whose other lists are as install leaves them, so the `SessionStart` list alone is held.
+  const found = (...groups) => hostHooksProblem(claudeStartFile(...groups), SEEDED, 'claude');
+  assert.equal(found(seeded, doctor, resume, rulesStart, fallback), null);
   // What `install` wrote before the resume hook: the doctor's entry alone.
   assert.equal(found(seeded, doctor), `${expected}"echo unrelated-claude-hook" (matcher startup|resume|clear|compact) | "js-harness doctor --hook" (matcher startup|resume)`);
   assert.equal(found(seeded), `${expected}"echo unrelated-claude-hook" (matcher startup|resume|clear|compact)`);
   // A second install that wrote an entry again.
   assert.ok(found(seeded, doctor, resume, resume).endsWith('| "js-harness resume --hook" (matcher compact|clear|startup) | "js-harness resume --hook" (matcher compact|clear|startup)'));
-  assert.ok(found(seeded, doctor, doctor, resume) !== null);
+  assert.ok(found(seeded, doctor, doctor, resume, rulesStart, fallback) !== null);
   // The right command under the wrong matcher, and the other way round: each entry is its matcher and its command.
   assert.ok(found(seeded, doctor, group('startup|resume', 'js-harness resume --hook')).endsWith('| "js-harness resume --hook" (matcher startup|resume)'));
-  assert.ok(found(seeded, group('compact', 'js-harness doctor --hook'), resume) !== null);
-  assert.ok(found(seeded, doctor, group('compact', 'js-harness resume')) !== null);
+  assert.ok(found(seeded, group('compact', 'js-harness doctor --hook'), resume, rulesStart, fallback) !== null);
+  assert.ok(found(seeded, doctor, group('compact', 'js-harness resume'), rulesStart, fallback) !== null);
   assert.ok(found(seeded, doctor, group(undefined, 'js-harness resume --hook')).endsWith('| "js-harness resume --hook" (no matcher)'));
   assert.ok(found(seeded, doctor, group('compact', 'js-harness resume --hook', 'echo more')).endsWith('| "js-harness resume --hook && echo more" (matcher compact)'));
   // The seeded entry is the user's: gone, changed or no longer first, the file is not what install should leave.
-  assert.ok(found(doctor, resume) !== null);
-  assert.ok(found(doctor, seeded, resume) !== null);
-  assert.ok(found(group('startup', SEEDED), doctor, resume, fallback) === null, 'the seeded entry is told by its command: its matcher is the user\'s to choose');
-  assert.ok(found(seeded, resume, doctor) !== null, 'in the order install writes them');
+  assert.ok(found(doctor, resume, rulesStart, fallback) !== null);
+  assert.ok(found(doctor, seeded, resume, rulesStart, fallback) !== null);
+  assert.ok(found(group('startup', SEEDED), doctor, resume, rulesStart, fallback) === null, 'the seeded entry is told by its command: its matcher is the user\'s to choose');
+  assert.ok(found(seeded, resume, doctor, rulesStart, fallback) !== null, 'in the order install writes them');
   assert.equal(found(), `${expected}no entry`);
 });
 
@@ -882,7 +905,20 @@ test('hostHooksProblem holds the turn-start entries of the rules at the end of t
   assert.equal(hostHooksProblem(file({ UserPromptSubmit: [group(undefined, 'echo theirs'), rulesTurn] }), SEEDED, 'claude'), null);
   assert.equal(hostHooksProblem(file({ UserPromptSubmit: [] }), SEEDED, 'claude'), `expected "${RULES_HOOK}" (no matcher) once, at the end of hooks.UserPromptSubmit; found: no entry`);
   assert.equal(hostHooksProblem(file({ SubagentStart: undefined }), SEEDED, 'claude'), 'the file holds no list at hooks.SubagentStart');
-  assert.equal(hostHooksProblem(JSON.stringify({ hooks: { SessionStart: [seeded, doctor, resume, fallback], UserPromptSubmit: [rulesTurn] } }), SEEDED, 'codex'), `expected no entry of the harness in hooks.UserPromptSubmit of codex; found: "${RULES_HOOK}" (no matcher)`);
+  assert.equal(hostHooksProblem(JSON.stringify({ hooks: { SessionStart: [seeded], UserPromptSubmit: [rulesTurn] } }), SEEDED, 'codex'), `expected no entry of the harness in hooks.UserPromptSubmit of codex; found: "${RULES_HOOK}" (no matcher)`);
+});
+
+// A proof of a release that still wrote Codex entries (scripts/release-proof-lib.mjs) holds the Codex file to those.
+test('hostHooksProblem holds a host file to the entries it is given in place of the host\'s own', () => {
+  const earlier = [
+    { event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook' },
+    { event: 'Stop', command: REPLY },
+  ];
+  assert.equal(hostHooksProblem(JSON.stringify({ hooks: { SessionStart: [seeded, doctor], Stop: [group(undefined, REPLY)] } }), SEEDED, 'codex', earlier), null);
+  assert.equal(
+    hostHooksProblem(hostFile(seeded), SEEDED, 'codex', earlier),
+    `expected the seeded entry "${SEEDED}", then "js-harness doctor --hook" (matcher startup|resume); found: "${SEEDED}" (matcher startup|resume|clear|compact)`,
+  );
 });
 
 test('hostHooksProblem says so for a host file that is not one: no JSON, no hooks, a list that is none', () => {
@@ -918,9 +954,9 @@ test('hostHooksProblem keeps a user\'s own PostToolUse entry first: the pause en
 });
 
 test('hostHooksProblem finds the pause entry where Codex has none, and finds none in a Codex file without it', () => {
-  assert.equal(hostHooksProblem(hostFile(seeded, doctor, resume, fallback), SEEDED, 'codex'), null);
-  assert.equal(hostHooksProblem(hooksFile([group(undefined, 'echo user-post-hook')], seeded, doctor, resume, fallback), SEEDED, 'codex'), null);
-  assert.equal(hostHooksProblem(hooksFile([pause], seeded, doctor, resume, fallback), SEEDED, 'codex'), `expected no entry of the harness in hooks.PostToolUse of codex; found: "${PAUSE}" (no matcher)`);
+  assert.equal(hostHooksProblem(hostFile(seeded), SEEDED, 'codex'), null);
+  assert.equal(hostHooksProblem(hooksFile([group(undefined, 'echo user-post-hook')], seeded), SEEDED, 'codex'), null);
+  assert.equal(hostHooksProblem(hooksFile([pause], seeded), SEEDED, 'codex'), `expected no entry of the harness in hooks.PostToolUse of codex; found: "${PAUSE}" (no matcher)`);
 });
 
 // What `uninstall` leaves of a host file is the file as `setup` seeded it, byte for byte: install takes back each list it
