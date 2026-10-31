@@ -44,6 +44,7 @@ import { webBlockNotice } from './lib/web-block.mjs';
 import { appRoot, appSessions } from './lib/app-record.mjs';
 import { ORCHESTRATOR_IS, askingRule, comparable, compactionStretch, isSelf, mainCheckout, parseWorktreeList, projectSlug, QUESTION_WORD, questionPrefix, questionRecordOf, readPlans, recordQuestionsIn, reliefTail, replyOf, roleOfTitle, sameSession, sessionFacts, thousands, titleRead, workNameOf } from './lib/sessions.mjs';
 import { harnessHome, homeIsSet } from './lib/home.mjs';
+import { ago, cutTo, waitingLinesOf } from './lib/resume-record.mjs';
 
 export const USAGE = [
   'Usage: js-harness resume --hook',
@@ -86,6 +87,7 @@ const STEP = {
   worktree: 'the worktree\'s changes',
   flight: 'the work in flight and the machine\'s gate',
   reply: 'this session\'s last reply',
+  waiting: 'the work sessions waiting',
   questions: 'the questions',
 };
 
@@ -287,14 +289,6 @@ function writtenOf(wrote, { run, isFile }) {
 // How many folders of feature documents the hook lists: the lines are read at the start of a turn, and a
 // project has a worktree per feature in flight (fifteen in this one on 2026-10-11).
 const FOLDERS_LISTED = 6;
-
-/** `12m ago`, `5h ago`, `3d ago`: how long before `now` the time `ms` was. */
-function ago(ms, now) {
-  const minutes = Math.max(0, Math.round((now - ms) / 60000));
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return hours < 48 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
-}
 
 /** Why a read failed, as it is printed: the code of the error, or what it says (as `findOpenings` has it). */
 const reasonOf = (err) => err?.code ?? err?.message ?? String(err);
@@ -723,13 +717,6 @@ const ANSWER_LISTED = 300;
 const CLOSED_LISTED = 5;
 const BOARD_QUESTIONS = 'The board lists the questions of every session: js-harness sessions';
 
-/** A text cut to `max` characters, as the reply's cut counts them, so a cut never splits a character; with an ellipsis at
- * its end when it was longer. */
-const cutTo = (text, max) => {
-  const chars = Array.from(text);
-  return chars.length > max ? `${chars.slice(0, max).join('')}…` : text;
-};
-
 /** How long before `now` a notice's time was, as `ago` says it, or that the time is not known: a record holds text, and a
  * notice whose time does not parse says so rather than a number of minutes that is not one. */
 const agoOf = (at, now) => (Number.isNaN(Date.parse(at)) ? 'at an unknown time' : ago(Date.parse(at), now));
@@ -962,9 +949,10 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
     // folder (`quoted`); a transcript is read only when the hook has one.
     lines.push(...beforeLines(transcriptFile, stretch, { transcript, sessionId, target: quoted ? sessionId : null, projectDir, home, tmpdir: tempOf(env), late, left, subject, run, stat, now, gate }));
   }
-  // The questions come after the stretch's lines and before the deadline's line. Past the deadline they are named as not read.
-  if (late()) left.push(STEP.questions);
-  else lines.push(...stepLines('The questions', () => questionLinesOf(record, { transcript, sessionId, orchestrator, now: now(), quoted })));
+  // The questions come after the stretch's lines and before the deadline's line, an orchestrator's after the work sessions
+  // waiting on it (resume-record.mjs). Past the deadline they are named as not read.
+  if (late()) left.push(...(orchestrator ? [STEP.waiting] : []), STEP.questions);
+  else lines.push(...(orchestrator ? stepLines('The work sessions waiting', () => waitingLinesOf(record, now())) : []), ...stepLines('The questions', () => questionLinesOf(record, { transcript, sessionId, orchestrator, now: now(), quoted })));
   if (left.length > 0) lines.push(`Not read before this hook's own deadline (9 s): ${left.join(', ')}.`);
   // A work session tells the orchestrator that it was compacted; the orchestrator has no one above it to tell. After a
   // clear there is no compaction, so the notice is not written.
