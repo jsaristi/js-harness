@@ -25,6 +25,17 @@ export const CONTRACT_TEMPLATE = `## Goal
 ## Ask me before
 <the few decisions that are mine: spend, irreversible, product choices>
 
+## Depth pass
+<large work, before its first code commit (js-harness-protocols section 9); a small task drops this section>
+- 1. Method: <the discipline, its best practitioner's standard, the smallest change that meets it>
+- 2. Raw material: <the rawest sources, each cited by path:line, a commit, a URL or a transcript line>
+- 3. The bar:
+  spec 1: \`<command>\`: <today's result, or "none, new behaviour">
+- 4. Refutation: <the cheapest test that could show the request does not hold, run now: its command and result>
+  Verdict: supports
+- 5. Request: <the request rewritten whole, to ask for exactly what items 1 to 4 found>
+  Adds: none
+
 ## Tasks
 - [ ] T1 (kind: design | build | verify | docs) <the first task; its kind sets its effort and sub-agent models>
 `;

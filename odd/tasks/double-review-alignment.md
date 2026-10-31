@@ -177,7 +177,8 @@ the roadmap's "Design, past its two readers" items still have two readers, now o
 State at the context pause (2026-10-31, after c1ce70e9). Open: question 150 to him through the lead (his typed
 acceptance of 147 and 148, L9); it blocks only T2's rule commit and T4. Next, in order: T5, then T3, then T2 and T4
 once 150 is answered. T5 progress: older texts 5 and 6 done in CLAUDE.md (3200 of 3200, `check`'s measure,
-CRLF folded); left: 8 (contract template), 9 (`sync` offers `depthPassSince`), 10 and 12 (roadmap). Earlier notes: CLAUDE.md is at 3190 of 3200 tokens as `check` measures it; the two edits (`## Depth
+CRLF folded, 2cb04248, a code commit since it refreshed `rules-coverage-data.mjs`: it needs Codex and the lenses),
+and 8, the contract template; left: 9 (`sync` offers `depthPassSince`), 10 and 12 (roadmap). Earlier notes: CLAUDE.md is at 3190 of 3200 tokens as `check` measures it; the two edits (`## Depth
 pass` (rule 1) in the order at line 24, and line 92 "a skip is a debt `check`, `doctor` and the merge door list until
 a review pays it, and the door refuses a lens skip") measured 3237 with `estimateTokens` after the Edit tool, likely
 line endings; measure as `bin/lib/claude-md-budget.mjs` does before committing, and trim within the same paragraphs
