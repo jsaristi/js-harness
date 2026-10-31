@@ -369,3 +369,17 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   tipo tarea", "No, quiero cambiarla"; its context in Spanish (what it is, why v3, where each of his phrases went,
   what a yes covers and does not, the cost per turn and per feature, what stays unguaranteed) sent to the lead
   beside it, since a question's text is one line. Questions (b) and (c) wait for his answer to 143.
+- L15 (2026-10-31T12:35:41Z, his answer to question 143, the lead's transcript `0f71b2c6`, line 43370, read with
+  `js-harness sessions --quote`, tapped): "Sí, v3, trabajo grande y cuando la pida (Recomendada)". Draft v3 is
+  approved as written, for large work and when he asks. The lead: build it, tests first; question (b) next, (c)
+  after it; Codex, the lenses and a verifier on every code slice; JH 123 lands first.
+- L16 (2026-10-31T12:37:04Z, T3): question 144 recorded, (b): "Encabeza los principios y el 7 se queda
+  (Recomendada)", "Solo como forma práctica del 7", "Reemplaza al Principio 7"; it decides only T7's wording in
+  `docs/ROADMAP.md`. Its context sent to the lead. The build goes on: it does not wait on 144.
+- L17 (2026-10-31, the build plan): the pull request is made from a branch `rule/depth-pass`, since the merge door
+  refuses a change to `bin/lib/rules-data.mjs` from any other branch (`checkDoor`, `bin/check.mjs:399`), and
+  `rules change` runs only there (`bin/lib/rules-change-run.mjs:123`). Slice 1, the rule: section 9, the skill's
+  index and description, the declaration by `rules change depth-pass`, the pointer in the root `CLAUDE.md` and in
+  `claudeBlock`, the tests that pin them, the coverage entry. Slice 2, the control, tests first with a planted
+  break. Slice 3, the roadmap (T7) once 144 is answered. In a project the control holds only once `harness.json`
+  declares `depthPassSince`, which `sync` writes when it ships the rule, so no project turns red on upgrade.
