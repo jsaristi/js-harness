@@ -331,8 +331,11 @@ forbids: the host's reminder asks for them, and its own text says the user's ins
   breach only on reading JH 107's summary; nothing is rewritten (main is never rewritten, the branch
   never force-pushed), and the next commits carry neither. Third sighting: the protocol line did not
   stop it, so a `commit-msg` check is the next step (`bin/`), proposed to the lead
-- Control: protocol — bin/lib/rules-block.mjs — "or AI attribution to commits. Use conventional
-  commits only" — since 2026-10-29
+- Control: check — bin/commit-msg.test.mjs — "commit-msg hook makes the commit without the host's lines" — since
+  2026-10-31
+- Was: protocol — bin/lib/rules-block.mjs — "or AI attribution to commits. Use conventional
+  commits only" — replaced on 2026-10-31: the `commit-msg` hook takes the lines out of every commit message, his
+  answer to question 132 (odd/tasks/strip-attribution.md); the protocol line stays
 
 ### commit-too-large-to-review
 A commit passed the gate and was too large for the reviewer, so it went unreviewed or was remade at

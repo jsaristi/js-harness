@@ -596,8 +596,10 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   turns the row red; 0 attribution lines in the next 50 commits on `main`; the row fails above 14
   entries or on a new owner. D8, the engram prompt hook turned off, is applied here.
 - **Cost:** no eval.
-- **His decisions:** D8 (answered: "Apagarlo").
-- **State:** to do.
+- **His decisions:** D8 (answered: "Apagarlo"); question 132, the hook takes the lines out and never stops the commit
+  (answered: "Quitarlas solo").
+- **State:** the hook in progress (`odd/tasks/strip-attribution.md`: `js-harness commit-msg` and
+  `.githooks/commit-msg`, then `init`); the hook-count row and D8 to do.
 
 ### S4b Contradictions to zero
 - **Changes:** contract-first as a `check` refusal for a new feature document; the remaining pairs of

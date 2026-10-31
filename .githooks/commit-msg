@@ -1,0 +1,6 @@
+#!/bin/sh
+# Takes the host's attribution lines out of the commit message and lets the commit go (bin/commit-msg.mjs).
+# Every worktree runs the main checkout's hooks, so a branch older than the command lets the message be.
+script="$(git rev-parse --show-toplevel)/bin/commit-msg.mjs"
+[ -f "$script" ] || exit 0
+exec node "$script" "$1"

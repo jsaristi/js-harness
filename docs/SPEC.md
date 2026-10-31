@@ -251,6 +251,15 @@ check or an eval case ("After F8", directive coverage).
 **Discarded:** Setting `core.hooksPath` in a project: it silently disables `.git/hooks`; `init` writes into the hooks path instead.
 **Today:** `bin/check.mjs`, `.githooks/pre-commit`, `.githooks/pre-merge-commit`, `package.json`, `js-harness check`
 
+### A commit message keeps no attribution of the host
+
+**Problem:** The Claude app tells every session to end a commit message with `Co-Authored-By: Claude ...` and `Claude-Session: ...`, which `CLAUDE.md` forbids; the protocol line did not stop it three times (`docs/FAILURES.md`, commit-attribution-from-host), and his answer to question 132 was to take the lines out without stopping the commit (`odd/tasks/strip-attribution.md`).
+**Requirement:** The `commit-msg` hook takes out of the message every whole `Co-Authored-By:` trailer whose name holds the word Claude or whose address is at `anthropic.com`, and every whole `Claude-Session:` line, leaves every other byte as it was, says in one line what it took out, and never stops the commit. A branch with no `bin/commit-msg.mjs` lets the message be, since every worktree runs the main checkout's hooks.
+**Reason:** His rule acts on every commit only when a hook acts on it; a refusal would cost each session one more try a commit.
+**Proof:** `node --test bin/commit-msg.test.mjs`
+**Discarded:** Refusing the commit until the session takes the lines out: his answer was "Quitarlas solo". Rewriting the commits already on main: main is never rewritten.
+**Today:** `bin/commit-msg.mjs`, `.githooks/commit-msg`, `js-harness commit-msg`
+
 ### The instruction budget
 
 **Problem:** No incident; the founding bet (`docs/origin.md`) and F1, which asked for `AGENTS.md` at about 1.5k tokens and a check that fails over it (`odd/tasks/f1-skeleton.md`). It landed at 691 tokens and stood at 1,478 of 1,500 on 2026-10-15 (`odd/tasks/drop-github-gate.md`).
