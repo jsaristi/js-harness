@@ -52,27 +52,17 @@ Nothing left in this session: the product choice was D4. Applying it to his mach
   install's help and every other reader the search found. Route: inline for `bin/`, a writer sub-agent for
   `scripts/` (disjoint surface, launched beside it). Commit: the slice's one commit.
 - [x] T3 (S1, S2) docs: skill text, README, SPEC, ROADMAP, the proposal's step 6. Route: inline. Commit: the same.
-- [ ] T4 verify: scratch-home proof (fresh, and over 0.97.0), Codex review, lens review, independent verifier.
-- [ ] T5 the apply question to the lead, with the PowerShell commands and their undo, tried in a scratch home.
+- [x] T4 verify: scratch-home proof (fresh, and over 0.97.0), Codex review, lens review, independent verifier
+  (L6, L8, L9, L10). Commits: `57486c74`, `dd397c0d`.
+- [x] T5 the apply question to the lead, with the PowerShell commands and their undo, tried in a scratch home: question
+  140 (L10).
 
-## Next step (state at the context pause, 2026-10-31)
-- The slice is staged, NOT committed: `git commit -F <msg>` ran the pre-commit gate (CI run 41165248260), which
-  failed on three rows (`gh run view 41165248260 --log-failed`):
-  1. `bin/conventions-structure.test.mjs`: `scripts/practice-lib.mjs` grew to 1182 lines over its ceiling 1174 (the
-     writer's change: move code out of it), and `bin/lib/manifest.mjs` is down to 1752: lower its ceiling there
-     from 1793 to 1752.
-  2. `bin/rules-coverage.test.mjs`: "skill: 1 owed span edited in place" (manifest.mjs skill line 63, reworded):
-     `node bin/js-harness.mjs rules coverage --refresh`, then stage what it writes.
-  3. `budget` 1501 estimated tokens (budget 1500) in CI, while `checkBudget('.')` reads 972 locally and AGENTS.md
-     equals origin/main's: read why in the CI log before running anything again.
-  Fixed [checked, each file alone]: 1, three comments of `scripts/practice-lib.mjs` shortened to 1174 lines and the
-  manifest ceiling lowered (`bin/conventions-structure.test.mjs` 7/0); 2, `rules coverage --refresh` wrote
-  `bin/lib/rules-coverage-data.mjs` (`bin/rules-coverage.test.mjs` 8/0); 3 was no failure: the real row reads
-  `PASS budget 972`, and the `FAIL budget 1501` line is a test's own output over a fixture AGENTS.md.
-- Then: commit (message in the job tmp `msg1.txt`; no AI attribution, CLAUDE.md), push, PR, `js-harness codex-review
-  --base 7aac3e43`, `js-harness lens-review --base 7aac3e43 --lenses <pertinent> --reason <why>`, an independent
-  verifier (installer, high risk 5), `notify --kind ready --pr <n>`; then T5, the summary under docs/sessions/, and
-  `notify --kind closed --summary <file>`.
+## Next step (2026-10-31, after the reviews)
+- Done here: the two commits are pushed and reviewed (L8, L10); PR #729 is ready; question 140 is with the lead.
+- The lead: land #729 (this session never merges), then ring question 140; on a yes, the commands it carries run on
+  his machine, and the proof is `Test-Path $HOME\.codex\skills\js-harness` answering False.
+- The first gate failures of this slice (a module ceiling, a rules-coverage span, then `evals/without.mjs`) are in
+  L7 and the commit history; nothing of them is open.
 
 ## Log
 - L1 (2026-10-31, the lead's brief for JH 117, as written): "JH 117 · install: drop the Codex components, Codex stays
@@ -162,3 +152,8 @@ Nothing left in this session: the product choice was D4. Applying it to his mach
   conventions-structure 7/0, js-harness 54/0, manifest-settings 11/0, manifest-stack 7/0, rules-coverage 8/0.
   `apply-try.sh` again: the apply prints the three skills and "removed 5 hook entries from …\.codex\hooks.json: no
   longer shipped", and `.codex` is absent after it; the undo brings both back.
+- L10 (2026-10-31) Reviews of the fix `dd397c0d` (57486c74..dd397c0d) [checked]: Codex "the patch is correct" (0.88);
+  lenses risk, reliability, readability complete, 0 findings each. Not run again: the independent verifier (the fix is
+  its own findings, each with a test that failed first) and gentle-ai (its budget refused the first commit, L8).
+  Pushed; the pre-push hook covered both code commits. The apply question is recorded with the lead: question 140
+  (`js-harness notify --kind question`, 2026-10-31T04:37:04Z), its commands those `apply-try.sh` ran.
