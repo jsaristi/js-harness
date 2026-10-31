@@ -164,7 +164,12 @@ export async function refreshNow({ main, copySha, look, stop, sessions, refresh,
     stdout(`refresh: the installed copy already names ${sha.slice(0, 7)}, origin's main: nothing to refresh`);
     return 0;
   }
-  const refusal = unanswered(sha);
+  let refusal;
+  try {
+    refusal = unanswered(sha);
+  } catch (err) {
+    refusal = `refresh: whether an open question asks to apply what ${sha.slice(0, 7)} holds could not be told (${err.message}): nothing was refreshed`;
+  }
   if (refusal !== null) {
     stderr(refusal);
     return REFRESH_UNANSWERED;

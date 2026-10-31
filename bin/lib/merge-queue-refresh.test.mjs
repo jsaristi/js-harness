@@ -219,6 +219,13 @@ test('refreshNow refuses, exit 77, before any look or stop, while an open questi
   assert.deepEqual([run.looked, run.stopped.length, run.asked.length, shas], [0, 0, 0, [MAIN]]);
 });
 
+test('refreshNow refuses, exit 77, when the look at the questions throws: a look that cannot tell is no "none open"', async () => {
+  const run = await refreshingNow({ unanswered: () => { throw new Error('EMFILE'); } });
+  assert.equal(run.exit, 77);
+  assert.match(run.said, /^refresh: whether an open question asks to apply what 0123456 holds could not be told \(EMFILE\): nothing was refreshed$/);
+  assert.deepEqual([run.looked, run.asked.length], [0, 0]);
+});
+
 test('refreshNow asks again under the lock, and a question recorded meanwhile stops no wait', async () => {
   const shas = [];
   const run = await refreshingNow({ unanswered: (sha) => (shas.push(sha), shas.length > 1 ? ASKED : null) });

@@ -108,3 +108,23 @@ Nothing beyond the brief: the field's shape and the exit code are decided here (
   `missed-wake` is the watch missing a session waiting on him). Evidence read in the record: question 140 recorded
   04:37Z by JH 117 and withdrawn 06:47Z "already applied"; JH 114's `waiting` at 03:06:05Z. The compaction and the 50
   minutes are the brief's claim. `js-harness failures check` PASS; both entries `controlled`.
+- L8 (2026-10-31, T5, Codex over `2947b29..3d02efb`, 2 parts, 349,918 input tokens, recorded): two P2, both taken.
+  (1) `refresh-consent.mjs` failed open in a shallow history, where a merged pull request's commits can be missing
+  though main holds them, and took any `cat-file` failure for a missing commit: it now asks `git rev-parse
+  --is-shallow-repository` first (shallow, or no clear answer, is not known and refuses) and tells a missing commit by
+  `git rev-parse --verify --quiet`'s exit 1 alone (this git: exit 1 for a missing commit, where `cat-file -e` exits
+  128 for both). (2) `resume-record.mjs` printed "JH <n>" whatever the project's code: it names the code the title
+  carries, and keys sessions by code and number. Tests first: 6 red in `refresh-consent.test.mjs` and 1 in
+  `resume-record.test.mjs`, then green (10 of 10, 8 of 8).
+- L9 (2026-10-31, T5, the independent verifier, read-only, over a copy of `3d02efbf`): A1 to A4, B1 and B2 held
+  (channel 64/64, refresh-consent 9/9, merge-queue-refresh 24/24, refresh-copy 24/24, merge-queue "refresh" 9/9,
+  resume-record 7/7, resume 103/103). Its defects 1 and 2 are Codex's two P2, fixed in L8. Defect 4: L6 and the code's
+  comment said the newest notice is "the board's reading"; it is not (the board's last state counts only opened,
+  waiting, closed and relieved). The brief's words are "newest notice", so the code stays and the claim is corrected:
+  a later note or ready ends the wait in the resume, not on the board. Defect 3, in part: a question closed only by an
+  answer no transcript confirmed now stays open to the refresh (the sender's claim is not his yes), test red then
+  green. Its other part stays open (Left): a verified "No" closes the question, and the refresh then installs what he
+  declined, since nothing reads what the answer says; reading it needs the question to name its yes option, a design
+  change beyond spec 1's "open question". Minor ones taken: gh runs with a 30 s limit, and `refreshNow` turns a throw of
+  the early look into the exit-77 refusal (both tests red then green). Not taken: a `waiting` of a session that never
+  closed stays listed whatever its age, as the board keeps it.

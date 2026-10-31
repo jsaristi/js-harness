@@ -26,23 +26,27 @@ export const cutTo = (text, max) => {
 
 /** The lines that name each work session whose newest notice in `record` (`readNotices`) is `waiting`, with its text and
  * how long it has waited (`now`, ms), the one waiting longest first; none when no session is waiting, or when the record
- * could not be read, which the questions' lines already say. A session is the work number its sender's title names
- * (`roleOfTitle`), as the lead addresses it; its newest notice is the newest by time, then by the order written, as the
- * board reads a session's last state. A notice to a work session is not one to the lead, and is not counted. */
+ * could not be read, which the questions' lines already say. A session is the code and the work number its sender's
+ * title names (`roleOfTitle`), as the lead addresses it; its newest notice is the newest of any kind, by time, then by
+ * the order written. That is not the board's last state, which counts only opened, waiting, closed and relieved: a note
+ * or a ready sent after a `waiting` ends the wait here, since the session spoke again, and not on the board. A notice
+ * to a work session is not one to the lead, and is not counted. */
 export function waitingLinesOf(record, now) {
   if (record.unavailable !== undefined) return [];
   const newest = new Map();
   for (const notice of record.notices) {
     const role = roleOfTitle(notice.from?.title);
     if (role?.role !== 'work' || notice.to?.role !== 'orchestrator') continue;
-    const kept = newest.get(role.number);
-    if (kept === undefined || !(Date.parse(notice.at) < Date.parse(kept.at))) newest.set(role.number, notice);
+    // The code its title carries, with its number: the project's own (Codex P2 on 2947b29..3d02efb), and no other's.
+    const name = `${role.code} ${role.number}`;
+    const kept = newest.get(name);
+    if (kept === undefined || !(Date.parse(notice.at) < Date.parse(kept.at))) newest.set(name, notice);
   }
   const waiting = [...newest].filter(([, notice]) => notice.kind === 'waiting').sort(([, one], [, other]) => Date.parse(one.at) - Date.parse(other.at));
   if (waiting.length === 0) return [];
   return [
     `Work sessions whose newest notice in the record is waiting (${waiting.length}), each waiting on this session:`,
-    ...waiting.map(([number, notice]) => `  JH ${number} ${JSON.stringify(notice.from.title)}  waiting since ${ago(Date.parse(notice.at), now)}: ${cutTo(notice.text.replace(/\s+/g, ' ').trim(), WAITING_LISTED)}`),
+    ...waiting.map(([name, notice]) => `  ${name} ${JSON.stringify(notice.from.title)}  waiting since ${ago(Date.parse(notice.at), now)}: ${cutTo(notice.text.replace(/\s+/g, ' ').trim(), WAITING_LISTED)}`),
     'Answer each, or start what it waits for, before other work; the board shows each one: js-harness sessions',
   ];
 }

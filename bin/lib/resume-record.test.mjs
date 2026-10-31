@@ -52,6 +52,12 @@ test('notices of the orchestrator, of a sender with no work title, and to a work
   assert.deepEqual(lines, []);
 });
 
+// Codex P2 on 2947b29..3d02efb: the line named every session "JH <n>", whatever the project's code.
+test('a session is named by the code its title carries, and two codes with one number are two sessions', () => {
+  const lines = waitingLinesOf(record([notice('ABG 3 · contrato', 'waiting', 'the land', 20), notice('JH 3 · other', 'waiting', 'the review', 10)]), NOW);
+  assert.deepEqual(lines.slice(1, 3), ['  ABG 3 "ABG 3 · contrato"  waiting since 20m ago: the land', '  JH 3 "JH 3 · other"  waiting since 10m ago: the review']);
+});
+
 test('a record that could not be read gives no lines here: the questions block already says it was not read', () => {
   assert.deepEqual(waitingLinesOf({ path: '/h/p.jsonl', unavailable: 'EACCES', notices: [] }, NOW), []);
 });

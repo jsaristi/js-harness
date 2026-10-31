@@ -29,18 +29,25 @@ function scratch() {
 
 const ask = (place, fields = {}) => appendNotice(place.home, place.slug, newNotice({ at: AT, from: FROM, to: 'orchestrator', kind: 'question', text: '¿Quito las skills de Codex?', id: `q-${Math.random()}`, options: [], waits: 'PR 729', ...fields }));
 const withdraw = (place, question) => appendNotice(place.home, place.slug, newNotice({ at: AT, from: FROM, to: 'orchestrator', kind: 'withdrawn', question, text: 'no longer needed' }));
-const answered = (place, question) => appendNotice(place.home, place.slug, newNotice({ at: AT, from: FROM, to: '117', kind: 'answer', question, transcript: 's', line: 4, verified: false, copy: null, text: 'Dejarlo así' }));
+const COPY = { tool: 'AskUserQuestion', answers: [{ question: 'Pregunta 1: ¿Quito las skills de Codex?', options: ['Sí', 'No'], answer: 'Sí', how: 'tapped' }] };
+/** His answer to `question`, read at its line (`verified`), or the sender's claim of one, which no transcript confirmed. */
+const answered = (place, question, verified = true) => appendNotice(place.home, place.slug, newNotice({ at: AT, from: FROM, to: '117', kind: 'answer', question, transcript: 's', line: 4, verified, copy: verified ? COPY : null, text: 'Sí' }));
 
-/** A stand-in for spawnSync: gh answers `pr` (or fails), git says which objects are here (`present`) and which are
- * ancestors of SHA (`ancestors`). `calls` keeps every command. Any git rev-parse fails, so the checkout is `cwd`. */
-function runner({ pr = { headRefOid: HEAD, mergeCommit: { oid: MERGE } }, present = [HEAD, MERGE], ancestors = [HEAD, MERGE], ghFails = false, gitFails = false } = {}) {
+/** A stand-in for spawnSync: gh answers `pr` (or fails), git says whether the history is `shallow`, which objects are
+ * here (`present`; `lookFails` makes that look fail as no missing object does) and which are ancestors of SHA
+ * (`ancestors`). `calls` keeps every command. The rev-parse of the checkout fails, so the checkout is `cwd`. */
+function runner({ pr = { headRefOid: HEAD, mergeCommit: { oid: MERGE } }, present = [HEAD, MERGE], ancestors = [HEAD, MERGE], ghFails = false, gitFails = false, shallow = 'false', lookFails = false } = {}) {
   const calls = [];
   const run = (command, args) => {
     calls.push([command, ...args].join(' '));
     if (command === 'gh' && args[0] === 'pr' && args[1] === 'view') return ghFails ? { status: 1, stdout: '', stderr: 'HTTP 502' } : { status: 0, stdout: JSON.stringify(pr), stderr: '' };
+    if (gitFails && !(args[0] === 'rev-parse' && args[1] === '--git-common-dir')) return { error: new Error('spawn git ENOENT'), status: null, stdout: '', stderr: '' };
+    if (command === 'git' && args[0] === 'rev-parse' && args[1] === '--is-shallow-repository') return { status: 0, stdout: `${shallow}\n`, stderr: '' };
+    if (command === 'git' && args[0] === 'rev-parse' && args[1] === '--verify') {
+      if (lookFails) return { status: 128, stdout: '', stderr: 'fatal: unable to read pack' };
+      return { status: present.includes(args[3].replace('^{commit}', '')) ? 0 : 1, stdout: '', stderr: '' };
+    }
     if (command === 'git' && args[0] === 'rev-parse') return { status: 128, stdout: '', stderr: 'not a repository' };
-    if (gitFails) return { error: new Error('spawn git ENOENT'), status: null, stdout: '', stderr: '' };
-    if (command === 'git' && args[0] === 'cat-file') return { status: present.includes(args[2].replace('^{commit}', '')) ? 0 : 1, stdout: '', stderr: '' };
     if (command === 'git' && args[0] === 'merge-base') return { status: ancestors.includes(args[2]) && args[3] === SHA ? 0 : 1, stdout: '', stderr: '' };
     return { status: 1, stdout: '', stderr: 'unexpected' };
   };
@@ -91,6 +98,27 @@ test('nothing refuses when the pull request is not in the main to install, when 
   assert.deepEqual(calls.filter((line) => !line.startsWith('git rev-parse')), [], 'no question left to look up');
 });
 
+// The verifier of JH 121: an answer no transcript confirmed is the sender's claim, not his yes.
+test('a question closed only by an answer no transcript confirmed is still open to the refresh', () => {
+  const place = scratch();
+  ask(place, { applies: { pr: 729 } });
+  answered(place, 1, false);
+  assert.deepEqual(openApplies(readNotices(place.home, place.slug)), [{ number: 1, pr: 729 }]);
+  assert.match(check(place, runner().run), /^refresh: question 1 is open/);
+});
+
+test('gh is given a time limit, so a gh that hangs cannot hold the refresh', () => {
+  const place = scratch();
+  ask(place, { applies: { pr: 729 } });
+  const options = [];
+  const { run } = runner();
+  check(place, (command, args, opts) => {
+    if (command === 'gh') options.push(opts);
+    return run(command, args, opts);
+  });
+  assert.deepEqual(options.map((one) => one.timeout), [30_000]);
+});
+
 test('a question that applies nothing, or no record at all, refuses nothing and asks gh nothing', () => {
   const place = scratch();
   const { run, calls } = runner();
@@ -104,8 +132,18 @@ test('a question whose pull request cannot be looked up refuses as one that is h
   const place = scratch();
   ask(place, { applies: { pr: 729 } });
   assert.match(check(place, runner({ ghFails: true }).run), /^refresh: question 1 is open and asks the user's yes to apply pull request 729, and whether aaaaaaa holds it is not known \(gh pr view 729 failed: HTTP 502\): nothing was refreshed/);
-  assert.match(check(place, runner({ gitFails: true }).run), /whether aaaaaaa holds it is not known \(git could not say whether it has b{7}: spawn git ENOENT\)/);
+  assert.match(check(place, runner({ gitFails: true }).run), /whether aaaaaaa holds it is not known \(git could not say whether the history is shallow: spawn git ENOENT\)/);
+  assert.match(check(place, runner({ lookFails: true }).run), /whether aaaaaaa holds it is not known \(git could not say whether it has b{7}: fatal: unable to read pack\)/);
   assert.match(check(place, runner({ pr: { mergeCommit: null } }).run), /not known \(gh pr view 729 named no head commit\)/);
+});
+
+// Codex P2 on 2947b29..3d02efb: in a shallow checkout a merged pull request's commits may be missing though main
+// holds them, so a missing commit proves nothing there.
+test('in a shallow history a commit that is not here proves nothing, and the refresh refuses as not known', () => {
+  const place = scratch();
+  ask(place, { applies: { pr: 729 } });
+  assert.match(check(place, runner({ shallow: 'true', present: [], ancestors: [] }).run), /whether aaaaaaa holds it is not known \(the history here is shallow, so a commit that is not here may still be in it\)/);
+  assert.match(check(place, runner({ shallow: '' }).run), /not known \(git could not say whether the history is shallow: it answered ""\)/);
 });
 
 test('a record that cannot be read refuses, since no look is not "no question"', () => {
