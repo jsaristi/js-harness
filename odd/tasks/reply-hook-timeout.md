@@ -79,6 +79,14 @@ Any timeout other than the reply hook's.
   line of `bin/reply-budget.test.mjs` was 205 characters; rewrapped. And a finding for applying it: a hand edit of his
   settings to 15 s before an `install` makes the entry be recorded as his (`createdEntry: false`), so `uninstall`
   would leave it; the value reaches his settings through `install` (the lead's refresh), never by hand.
+- L8 (2026-10-31, T3, reviews of `af847c22..1ffe7d02`, the verifier's fixes, comments only): Codex correct (0.99), no
+  finding, 32,217 input tokens; the Claude lens readability 0 findings; gentle-ai (lineage `review-15705bd6ae8edb04`,
+  lens reliability) approved with no finding, acknowledged. Every code commit of the branch is covered by both records.
+
+## Reviews
+- gentle-ai: `af847c22` (lineage `review-61bd159f2559ffe5`), approved, acknowledged.
+- gentle-ai: `1ffe7d02` (lineage `review-15705bd6ae8edb04`), approved, acknowledged.
 
 ## Next step
-Commit the verifier's fixes; Codex and the lenses over them; push, PR, `notify --kind ready --pr <n>`.
+Push, PR, `notify --kind ready --pr <n>`; the summary under `docs/sessions/`; `notify --kind closed`. After the land,
+the lead's refresh (`js-harness install` through `merge-queue --land --refresh-copy`) writes 15 s into his settings.
