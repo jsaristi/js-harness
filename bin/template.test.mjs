@@ -229,6 +229,48 @@ test('gate --hook does nothing where harness.json does not turn templates on, fo
   assert.equal(fs.existsSync(shownFile(on.home, 'p')), false);
 });
 
+// The board summary's writes (odd/tasks/board-summary-stale.md, S2, S3): `--shown` records each one with its fields,
+// which the reply hook's stale-board check reads.
+const summaryUpdate = (call, source) => ({
+  hook_event_name: 'PostToolUse', tool_name: 'ArtifactData', tool_use_id: call,
+  tool_input: { action: 'update', url: 'https://claude.ai/artifact/board', collection: 'board', doc_id: 'summary', if_version: 3, ...source },
+});
+const summaryLines = (home) => shownLines(home).map((line) => [line.call, line.tool, line.subject, line.template, line.decision, line.reason]);
+
+test('gate --shown records an update of board/summary whose file carries now or status, and one carrying only the checked fields', (t) => {
+  const { root, home, hook, done } = gateScratch();
+  t.after(done);
+  fs.writeFileSync(path.join(root, 'summary.json'), JSON.stringify({ now: 'JH 120 trabaja', status: [], yours: [] }));
+  const checked = path.join(root, 'board-checked.json');
+  fs.writeFileSync(checked, `${JSON.stringify({ checked: '2026-10-29T05:00:00.000Z', until: '2026-10-29T05:45:00.000Z', resting: false, stretch: null, running: [], questions: [] })}\n`);
+  for (const [id, source] of [['d1', { file_path: 'summary.json' }], ['d2', { file_path: checked }], ['d3', { data: { status: [] } }]]) {
+    const { code, out, err } = hook('--shown', summaryUpdate(id, source));
+    assert.deepEqual([code, out, err], [0, '{}', '']);
+  }
+  assert.deepEqual(summaryLines(home), [
+    ['d1', 'ArtifactData', 'board/summary', null, 'shown', 'fields: ["now","status","yours"]'],
+    ['d2', 'ArtifactData', 'board/summary', null, 'shown', 'fields: ["checked","until","resting","stretch","running","questions"]'],
+    ['d3', 'ArtifactData', 'board/summary', null, 'shown', 'fields: ["status"]'],
+  ]);
+  const report = call(['shown', '--json'], { root, home, slug: 'p', now: GATE_NOW });
+  assert.deepEqual([report.code, JSON.parse(report.out).escapes, JSON.parse(report.out).templates], [0, [], {}], 'a summary write is no page and no escape');
+});
+
+test('gate --shown records a summary file it cannot read as fields unknown, and nothing for another document, --hook or a project with templates off', (t) => {
+  const { home, hook, done } = gateScratch();
+  t.after(done);
+  const missing = hook('--shown', summaryUpdate('d4', { file_path: 'gone.json' }));
+  assert.equal(missing.out, '{}');
+  assert.match(missing.err, /cannot read gone\.json/);
+  assert.equal(hook('--hook', { ...summaryUpdate('d5', { data: { now: 'x' } }), hook_event_name: 'PreToolUse' }).out, '{}');
+  hook('--shown', { ...summaryUpdate('d6', { data: { now: 'x' } }), tool_input: { action: 'update', url: 'u', collection: 'events', doc_id: 'e1', data: { now: 'x' } } });
+  assert.deepEqual(summaryLines(home).map((line) => [line[0], line[5].replace(/\(.*\)/, '(…)')]), [['d4', 'fields unknown: cannot read gone.json (…)']]);
+  const off = gateScratch({ on: false });
+  t.after(off.done);
+  off.hook('--shown', summaryUpdate('d7', { data: { now: 'x' } }));
+  assert.equal(fs.existsSync(shownFile(off.home, 'p')), false);
+});
+
 test('gate --hook reads the nearest harness.json at or above the payload\'s folder, and answers {} where it does not turn templates on', (t) => {
   const { root, home, done } = gateScratch();
   t.after(done);

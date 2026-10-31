@@ -86,7 +86,7 @@ after the reply is shown (`bin/reply.mjs:3-5`); none refuses before. Checked by 
 
 | # | Duty | Written at | Checked by | Failures |
 |---|---|---|---|---|
-| 1 | Keep `board/summary` (`now`, `status`, `route`, `yours`, links) current | manifest:146 | Nothing. The page's freshness reads only the newest row and the `checked` stamp (`docs/live-board.html:512-518`); `sessions live --out` prints the stamp alone as the summary's update (`bin/sessions-live.mjs:218-220`); the stale-board hook counts rows only (`bin/lib/stale-board.mjs`) | `board-summary-stale` (1, this miss) |
+| 1 | Keep `board/summary` (`now`, `status`, `route`, `yours`, links) current | manifest:146 | Check (JH 120, `odd/tasks/board-summary-stale.md`): `template gate --shown` records each `ArtifactData` write of `board/summary` with its fields (`bin/template.mjs`, `recordSummary`), and the stale-board hook turns the lead back once a stale stretch when notices waited longer than one check since its last write carrying `now` or `status` (`bin/lib/stale-board.mjs`, `summaryWarning`), where `templates` is on | `board-summary-stale` (1, this miss) |
 | 2 | On his return after an absence, show the status page `report --html` writes | protocols:103 (`rule:reports-spanish-visual`) | Check, this feature: `bin/lib/return-report.mjs` in the reply hook | `return-without-report` (1, this miss) |
 | 3 | A background task says what it is for and what ends it, and stops when that resolves | manifest:120 | Partly: `loop run` refuses a loop with no `--purpose` or `--until` (`bin/loop.mjs:127-128`); resume names work in flight (`bin/resume.mjs:585-590`) | none recorded |
 | 4 | Change the roadmap only through small documentation pull requests | manifest:123 | Partly: pre-push refuses main pushed by hand (`.githooks/pre-push:11-15`) | none recorded |
@@ -178,7 +178,8 @@ The unchecked duties, most failed first, each with the check proposed (spec 4's 
    as it reads the context share.
 4. Row 1: `board/summary` stale, 1 sighting (this one, two days). Proposed: the stale-board hook warns once when the
    newest notice the summary describes is newer than the summary's last update carrying `now` or `status`, which the
-   template gate's after-call hook can record from the `ArtifactData` call.
+   template gate's after-call hook can record from the `ArtifactData` call. Built by JH 120
+   (`odd/tasks/board-summary-stale.md`, 2026-10-31), warned only after the notices waited one check; row 1 names it.
 5. Row 59: asked what was not his, 2. Proposed: a recorded question names its item of `rule:owner-decisions`.
 6. Row 13: a plan question not reviewed, 2. Proposed: the template gate refuses the question when its document's log
    has no two reader findings.

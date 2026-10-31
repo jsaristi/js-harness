@@ -4,7 +4,8 @@ import path from 'node:path';
 import { recordPath } from './channel.mjs';
 import { CHECK_MINUTES, CURSOR_SCHEMA, liveCursorPath } from './live-rows.mjs';
 import { mainCheckout, projectSlug } from './sessions.mjs';
-import { isLeadTitle, STALE_MARKER, staleBoardWarning } from './stale-board.mjs';
+import { isLeadTitle, STALE_MARKER, SUMMARY_MARKER, staleBoardWarning } from './stale-board.mjs';
+import { SHOWN_SCHEMA, SUMMARY_SUBJECT, shownFile } from './template-record.mjs';
 
 // The stale-board check (odd/tasks/visual-pages.md, spec 3, T4). Its records are handed in: the cursor of the board,
 // the channel record and the lead's transcript, under a home of the test's own.
@@ -26,8 +27,12 @@ const sentUpTo = (upto) => JSON.stringify({ schema: CURSOR_SCHEMA, url: BOARD, u
 const UNREADABLE = Symbol('unreadable');
 const warned = (reason) => JSON.stringify({ type: 'attachment', timestamp: '2026-10-28T23:00:00.000Z', attachment: { type: 'hook_blocking_error', hookName: 'Stop', hookEvent: 'Stop', blockingError: { blockingError: reason } } });
 
-function check({ record = OLD, cursor = sentUpTo(1), transcript = [], payload = {}, state = 'working', now = NOW } = {}) {
+const SHOWN = shownFile(HOME, SLUG);
+
+function check({ record = OLD, cursor = sentUpTo(1), transcript = [], payload = {}, state = 'working', now = NOW, shown = null } = {}) {
   const files = { [RECORD]: record === UNREADABLE ? undefined : `${record.join('\n')}\n`, [TRANSCRIPT]: `${transcript.join('\n')}\n` };
+  // `null` is no shown record (the template gate never wrote one); UNREADABLE is one that cannot be read.
+  if (shown !== null) files[SHOWN] = shown === UNREADABLE ? undefined : `${shown.join('\n')}\n`;
   // `null` is no cursor file; UNREADABLE is one that is there and cannot be read.
   if (cursor !== null) files[CURSOR] = cursor === UNREADABLE ? undefined : cursor;
   const io = {
@@ -111,4 +116,68 @@ test('a cursor or a record it cannot read throws, for the hook to say', () => {
   assert.throws(() => check({ cursor: '{' }), /is not JSON/);
   assert.throws(() => check({ cursor: UNREADABLE }), /the live board's cursor .*EACCES/);
   assert.throws(() => check({ record: UNREADABLE }), /the record of notices .*EACCES/);
+});
+
+// The summary's warning (odd/tasks/board-summary-stale.md, S3): notices waited longer than one check since the last
+// write of board/summary carrying `now` or `status`, as the template gate's `--shown` records it. With every row sent
+// (`sentUpTo(2)`), the rows' warning is out of the way.
+const summaryWrite = (at, fields) => JSON.stringify({
+  schema: SHOWN_SCHEMA, at, session: 'lead-1', tool: 'ArtifactData', call: `c-${at}`, template: null, subject: SUMMARY_SUBJECT,
+  decision: 'shown', sha256: null, reason: `fields: ${JSON.stringify(fields)}`,
+});
+const CONTENT = ['now', 'status', 'yours', 'route'];
+const CHECKED = ['checked', 'until', 'resting', 'stretch', 'running', 'questions'];
+const summaryCheck = (options) => check({ cursor: sentUpTo(2), ...options });
+
+test('the lead whose summary was last written with now or status before notices that waited longer than one check is told so', () => {
+  const reason = summaryCheck({ shown: [summaryWrite('2026-10-28T21:30:00.000Z', CONTENT)] });
+  assert.ok(reason.includes(SUMMARY_MARKER), reason);
+  assert.match(reason, /^js-harness reply: 1 notices? /);
+  assert.match(reason, /last written with now or status at 21:30 UTC/);
+  assert.match(reason, /the oldest at 22:00 UTC/);
+  assert.match(reason, /\(summary of 2026-10-28T21:30:00\.000Z\)/);
+  assert.ok(reason.includes(BOARD));
+  assert.match(reason, /checked fields .* do not count/);
+  assert.equal(reason.includes(STALE_MARKER), false, 'no row waits');
+});
+
+test('a summary write carrying only the checked fields does not count as its content', () => {
+  const shown = [summaryWrite('2026-10-28T21:30:00.000Z', CONTENT), summaryWrite('2026-10-28T23:00:00.000Z', CHECKED)];
+  assert.match(summaryCheck({ shown }), /\(summary of 2026-10-28T21:30:00\.000Z\)/);
+  const never = summaryCheck({ shown: [summaryWrite('2026-10-28T21:30:00.000Z', CHECKED)] });
+  assert.ok(never.includes(SUMMARY_MARKER), 'only checked writes since the record began');
+  assert.match(never, /no write of board\/summary with now or status is recorded since 21:30 UTC/);
+  assert.match(never, /\(summary of none\)/);
+});
+
+test('no summary warning while the summary is newer than the newest notice, or the notices after it are younger than one check', () => {
+  assert.equal(summaryCheck({ shown: [summaryWrite('2026-10-28T22:30:00.000Z', CONTENT)] }), null);
+  assert.equal(summaryCheck({ shown: [summaryWrite('2026-10-28T22:00:00.000Z', CONTENT)] }), null, 'a notice at the write\'s moment is described');
+  const shown = [summaryWrite('2026-10-28T21:30:00.000Z', CONTENT)];
+  const fresh = Date.parse('2026-10-28T22:00:00.000Z') + CHECK_MINUTES * 60_000;
+  assert.equal(summaryCheck({ shown, now: fresh }), null, 'the oldest notice after the write is exactly one check old');
+  assert.notEqual(summaryCheck({ shown, now: fresh + 1 }), null);
+});
+
+test('no summary warning where the gate recorded no summary write, nor for a work session', () => {
+  assert.equal(summaryCheck({}), null, 'no shown record');
+  assert.equal(summaryCheck({ shown: [] }), null, 'a shown record with no summary write');
+  assert.equal(summaryCheck({ shown: [summaryWrite('2026-10-28T21:30:00.000Z', CONTENT)], payload: { session_id: 'work-1' } }), null);
+  assert.equal(summaryCheck({ shown: [summaryWrite('2026-10-28T21:30:00.000Z', CONTENT)], state: 'decision' }), null);
+});
+
+test('the summary warning is said once a stale stretch: the same last write is not warned again, a newer one is', () => {
+  const shown = [summaryWrite('2026-10-28T21:30:00.000Z', CONTENT)];
+  const reason = summaryCheck({ shown });
+  assert.equal(summaryCheck({ shown, transcript: [warned(reason)] }), null);
+  const more = [...OLD, notice('2026-10-28T22:20:00.000Z', WORK)];
+  assert.equal(summaryCheck({ shown, record: more, cursor: sentUpTo(3), transcript: [warned(reason)] }), null, 'a newer notice is the same stretch');
+  const rewritten = [...shown, summaryWrite('2026-10-28T22:10:00.000Z', CONTENT)];
+  assert.match(summaryCheck({ shown: rewritten, record: more, cursor: sentUpTo(3), transcript: [warned(reason)] }), /\(summary of 2026-10-28T22:10:00\.000Z\)/, 'the next stretch');
+});
+
+test('rows waiting and a stale summary are both said, and a shown record it cannot read throws', () => {
+  const both = check({ shown: [summaryWrite('2026-10-28T21:30:00.000Z', CONTENT)] });
+  assert.ok(both.includes(STALE_MARKER) && both.includes(SUMMARY_MARKER), both);
+  assert.throws(() => summaryCheck({ shown: UNREADABLE }), /the template gate's shown record .*EACCES/);
 });

@@ -11,10 +11,10 @@ import { fileURLToPath } from 'node:url';
 import { SURFACES, registryOfText, sha256, writeRegistry } from './lib/template.mjs';
 import { checkTemplates } from './lib/template-check.mjs';
 import { FIELDS, firstMissing, scaffold } from './lib/template-scaffold.mjs';
-import { askTarget, decideAsk, decidePage, pageTarget, shownReport } from './lib/template-gate.mjs';
+import { askTarget, decideAsk, decidePage, pageTarget, shownReport, summaryWrites } from './lib/template-gate.mjs';
 import { answeredMoments, render as renderQuestion } from './lib/template-question.mjs';
 import { readNotices, recordedQuestions } from './lib/channel.mjs';
-import { RENDERED_SCHEMA, SHOWN_SCHEMA, readRecord, recordShown, renderedFile, shownFile } from './lib/template-record.mjs';
+import { RENDERED_SCHEMA, SHOWN_SCHEMA, readRecord, recordShown, recordSummary, renderedFile, shownFile } from './lib/template-record.mjs';
 import { harnessOfTree } from './lib/project-functions.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
@@ -202,9 +202,35 @@ function packageTemplates(root = PACKAGE) {
   return registry.list;
 }
 
+/** Records a call's writes of the board's summary (`summaryWrites`) as one line with the top-level fields they
+ * carried, a `file_path` read from `folder`; a file it cannot read or parse records the fields as unknown, and a line
+ * it cannot write is said on standard error. Neither stops the call, which has already run. */
+function recordSummaryWrite(writes, { folder, file, at, session, call }, stderr) {
+  const fields = new Set();
+  let unreadable = null;
+  for (const write of writes) {
+    if (write.field !== undefined) fields.add(write.field);
+    let data = write.data;
+    if (write.file !== undefined) {
+      try {
+        data = JSON.parse(fs.readFileSync(path.resolve(folder, write.file), 'utf8'));
+      } catch (err) {
+        unreadable = `cannot read ${write.file} (${err.code ?? err.message})`;
+        stderr(`js-harness template gate: ${unreadable}; its board/summary fields are recorded as unknown`);
+      }
+    }
+    if (data !== null && typeof data === 'object' && !Array.isArray(data)) for (const key of Object.keys(data)) fields.add(key);
+  }
+  try {
+    recordSummary(file, { at, session, call, fields: [...fields], unreadable });
+  } catch (err) {
+    stderr(`js-harness template gate: cannot append to ${file}: ${err.message}; the board/summary write is not recorded`);
+  }
+}
+
 /** `template gate --hook`, before a call: decides each page the call shows, or each question it asks, and records
  * each decision; the hooks contract's deny when one is refused, `{}` otherwise. `--shown`, after a call that succeeded: a `shown` line for each
- * page `--hook` let through in that call. It acts only where `harness.json` holds `"templates": true`, and fails open:
+ * page `--hook` let through in that call, or one for its writes of the board's summary. It acts only where `harness.json` holds `"templates": true`, and fails open:
  * a page or a record it cannot read lets the call through, recorded as unchecked and said on standard error. */
 function runGate(mode, seams, { stdout, stderr }) {
   let payload;
@@ -215,13 +241,19 @@ function runGate(mode, seams, { stdout, stderr }) {
   }
   const tool = payload?.tool_name;
   const target = pageTarget(tool, payload?.tool_input) ?? askTarget(tool, payload?.tool_input);
-  if (target === null) return stdout('{}'), 0;
+  // A write of the board's summary is recorded after it succeeded, for the reply hook's stale-board check.
+  const summary = mode === '--shown' ? summaryWrites(tool, payload?.tool_input) : null;
+  if (target === null && summary === null) return stdout('{}'), 0;
   const folder = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : seams.cwd;
   const on = templatesOn(seams.root ?? nearestHarness(folder));
   if (on === false) return stdout('{}'), 0;
   const places = placesOf(folder, seams);
   const at = new Date(seams.now).toISOString();
   const call = typeof payload.tool_use_id === 'string' ? payload.tool_use_id : null;
+  if (summary !== null) {
+    recordSummaryWrite(summary, { folder, file: places.shown, at, session: payload.session_id ?? null, call }, stderr);
+    return stdout('{}'), 0;
+  }
   const record = (decision) => {
     try {
       recordShown(places.shown, { at, session: payload.session_id ?? null, tool, call, ...decision });

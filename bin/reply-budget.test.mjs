@@ -10,9 +10,9 @@ import { replyHookEntry } from './lib/hook-entries.mjs';
 import { CURSOR_SCHEMA, liveCursorPath } from './lib/live-rows.mjs';
 import { RETURN_MARKER } from './lib/return-report.mjs';
 import { projectSlug } from './lib/sessions.mjs';
-import { STALE_MARKER } from './lib/stale-board.mjs';
+import { STALE_MARKER, SUMMARY_MARKER } from './lib/stale-board.mjs';
 import { WAKE_MARKER } from './lib/stop-wake.mjs';
-import { RENDERED_SCHEMA, renderedFile } from './lib/template-record.mjs';
+import { RENDERED_SCHEMA, SHOWN_SCHEMA, SUMMARY_SUBJECT, renderedFile, shownFile } from './lib/template-record.mjs';
 import { percentile } from '../scripts/reply-hook-time.mjs';
 
 // The reply hook's time budget (odd/tasks/reply-hook-latency.md, spec 4): on a transcript and a channel record of the
@@ -22,8 +22,9 @@ import { percentile } from '../scripts/reply-hook-time.mjs';
 // is 15 s since question 138 (odd/tasks/reply-hook-timeout.md), and the 10 s added are room for the load of a stop, not
 // for the hook's own work, so the budget stays where it was and is held to at most half the timeout. The hook runs as
 // the host runs it, a process of its own, and the fixture makes every check do its whole work: the lead's stop warns
-// of waiting board rows and of a return whose page was published and never linked (so the return check reads every
-// Artifact call and searches the whole transcript for the link), a work session's stop of held work with nothing to
+// of waiting board rows, of a board summary last written with its content before notices that waited (so the check
+// reads the whole shown record of the template gate), and of a return whose page was published and never linked (so
+// the return check reads every Artifact call and searches the whole transcript for the link), a work session's stop of held work with nothing to
 // wake it, each searching the whole transcript for an earlier warning it does not find; and
 // both replies show a block of what was run, which the command-block check reads against every run of the transcript.
 // A block handed to him is also parsed by his PowerShell, a process whose start alone takes 1.4 to 2.3 s on the
@@ -31,13 +32,15 @@ import { percentile } from '../scripts/reply-hook-time.mjs';
 // (odd/tasks/reply-hook-latency.md, `## Measure`).
 //
 // Sizes are the lead's 0f71b2c6 on 2026-10-31: 60.2 MB in 38,990 lines, with accented text (stored by V8 as two bytes a
-// character, which every search pays for), and a channel record of 1.4 MB.
+// character, which every search pays for), and a channel record of 1.4 MB. The template gate's shown record was 33 KB
+// in 95 lines that day; the fixture's is 400 KB, a lead's months of pages and summary writes.
 
 const BIN = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
 const BUDGET_MS = 2500;
 const RUNS = 10;
 const TRANSCRIPT_BYTES = 60_000_000;
 const RECORD_BYTES = 1_400_000;
+const SHOWN_BYTES = 400_000;
 const LEAD = { host: 'claude-code', id: 'lead-budget', title: 'JH ORQ · orquestador' };
 const WORK = { host: 'claude-code', id: 'work-budget', title: 'JH 78 · evals' };
 const HOUR = 3600_000;
@@ -122,6 +125,21 @@ before(() => {
   // The board was sent up to ten rows before the end: the oldest waiting row is older than one check.
   fs.mkdirSync(path.dirname(liveCursorPath(home, slug)), { recursive: true });
   fs.writeFileSync(liveCursorPath(home, slug), JSON.stringify({ schema: CURSOR_SCHEMA, url: 'https://claude.ai/artifact/board', upto: record.count - 10, sent: [] }));
+  // The template gate's shown record: pages shown and summary writes, the last one carrying now and status two hours
+  // ago, before the notices of the last hour; checked-only writes after it.
+  const shown = [];
+  for (let i = 0, size = 0; size < SHOWN_BYTES; i += 1) {
+    const at = new Date(now - 2 * HOUR - (4000 - i) * 60_000).toISOString();
+    const written = i % 2 === 0
+      ? line({ schema: SHOWN_SCHEMA, at, session: LEAD.id, tool: 'Artifact', call: `toolu_s${i}`, template: 'status-report', subject: 'status', decision: 'shown', sha256: 'a'.repeat(64), reason: null })
+      : line({ schema: SHOWN_SCHEMA, at, session: LEAD.id, tool: 'ArtifactData', call: `toolu_s${i}`, template: null, subject: SUMMARY_SUBJECT, decision: 'shown', sha256: null, reason: `fields: ${JSON.stringify(i % 4 === 1 ? ['now', 'status', 'yours', 'route', 'links'] : ['checked', 'until', 'resting', 'stretch', 'running', 'questions'])}` });
+    shown.push(written);
+    size += written.length + 1;
+  }
+  shown.push(line({ schema: SHOWN_SCHEMA, at: new Date(now - 2 * HOUR).toISOString(), session: LEAD.id, tool: 'ArtifactData', call: 'toolu_content', template: null, subject: SUMMARY_SUBJECT, decision: 'shown', sha256: null, reason: 'fields: ["now","status","yours"]' }));
+  shown.push(line({ schema: SHOWN_SCHEMA, at: new Date(now - 5 * 60_000).toISOString(), session: LEAD.id, tool: 'ArtifactData', call: 'toolu_checked', template: null, subject: SUMMARY_SUBJECT, decision: 'shown', sha256: null, reason: 'fields: ["checked","until"]' }));
+  fs.mkdirSync(path.dirname(shownFile(home, slug)), { recursive: true });
+  fs.writeFileSync(shownFile(home, slug), `${shown.join('\n')}\n`);
   // The status page, rendered after his return and published, its link never given to him.
   page = path.join(dir, 'status.html');
   fs.mkdirSync(path.dirname(renderedFile(home, slug)), { recursive: true });
@@ -170,6 +188,7 @@ test('the fixture is the lead\'s size', () => {
   assert.ok(fs.statSync(leadTranscript).size >= TRANSCRIPT_BYTES);
   const text = fs.readFileSync(leadTranscript, 'utf8');
   assert.ok(text.split('\n').length > 38_000, 'about as many lines as the lead\'s');
+  assert.ok(fs.statSync(shownFile(home, projectSlug(project))).size >= SHOWN_BYTES, 'a shown record larger than the lead\'s');
   assert.ok(/[áéíóúñ¿]/.test(text), 'accented text, so the transcript is stored two bytes a character');
 });
 
@@ -177,6 +196,7 @@ test('the lead\'s stop, every check doing its whole work, stays within the budge
   const { times, answer } = timeStops(LEAD, leadTranscript);
   assert.equal(answer.decision, 'block', JSON.stringify(answer));
   assert.ok(answer.reason.includes(STALE_MARKER), 'the live-board check searched the transcript and warned');
+  assert.ok(answer.reason.includes(SUMMARY_MARKER), 'the summary check read the shown record, searched the transcript and warned');
   assert.ok(answer.reason.includes(RETURN_MARKER), 'the return check read the publish of the page, searched for its link and warned');
   const p90 = percentile(times, 0.9);
   t.diagnostic(`p90 ${p90.toFixed(0)} ms, budget ${BUDGET_MS} ms, runs ${times.map((ms) => ms.toFixed(0)).join(' ')}`);

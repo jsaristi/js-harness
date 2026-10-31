@@ -12,15 +12,28 @@
 // handover's `ORQ nueva`): a session that sent no notice is not taken for one. "Once" is read from the transcript, as
 // the wake check reads its own (bin/lib/stop-wake.mjs): a warning that names the same oldest row is not given again,
 // and a newer oldest row (the lead sent some) is warned again.
+//
+// The summary (odd/tasks/board-summary-stale.md). Rows are not all the board shows: `board/summary` carries what the
+// lead writes from the record, `now`, `status`, `yours`. From 2026-10-29 to 2026-10-31 the lead sent it only the
+// `checked` fields of `sessions live --out`, so it showed questions long answered as open, and he asked whether they
+// were. The template gate's after-call hook records each write of the summary with its fields (bin/template.mjs,
+// `recordSummary`); the lead is turned back once a stale stretch when notices have waited longer than one check since
+// its last write carrying `now` or `status`. "Once" names that write, so a newer notice is the same stretch and a new
+// write starts the next. Where the gate recorded no write of the summary (templates off, or the hook new), nothing is
+// said: the record cannot tell.
 
 import { readNotices } from './channel.mjs';
 import { harnessHome } from './home.mjs';
 import { CHECK_MINUTES, CURSOR_SCHEMA, cursorOf, liveCursorPath, pendingRows } from './live-rows.mjs';
 import { mainCheckout, projectSlug, roleOfTitle, sameSession } from './sessions.mjs';
 import { lastLineWith } from './stop-wake.mjs';
+import { SHOWN_SCHEMA, isSummaryWrite, readRecord, shownFile, summaryContent } from './template-record.mjs';
 
 /** The words only this warning has, by which an earlier one is found in the transcript. */
 export const STALE_MARKER = 'rows of the channel record wait for the live board';
+
+/** The words only the summary's warning has. */
+export const SUMMARY_MARKER = 'arrived since board/summary was last written with now or status';
 
 // With no cursor saved, `sessions live` sends the rows of the last 24 hours: the same window counts here.
 const FIRST_WINDOW_MS = 24 * 3600_000;
@@ -67,9 +80,67 @@ function savedBoard(file, readFile) {
 
 const hhmm = (iso) => new Date(iso).toISOString().slice(11, 16);
 
-/** The warning for a stop of `payload` whose reply closes with `state`, or `null` when none is due. The records are
- * read through `io` (`readFile`, `run`, `env`, `homedir`, and `readNotices` when the hook shares one parse of the record) at the time `now` (ms); one that cannot be read throws, and
- * the hook says so. */
+/** Whether the transcript of `payload` holds a Stop warning of this hook with `marker` and `named`. */
+function warnedBefore(payload, io, marker, named) {
+  if (typeof payload.transcript_path !== 'string' || payload.transcript_path === '') return false;
+  const text = io.readFile(payload.transcript_path);
+  return lastLineWith(text, named, (entry) => entry.type === 'attachment'
+    && entry.attachment?.type === 'hook_blocking_error'
+    && entry.attachment.hookEvent === 'Stop'
+    && String(entry.attachment.blockingError?.blockingError ?? '').includes(marker)) !== null;
+}
+
+/** The rows' warning: rows of `record` past the board's cursor `saved` waited longer than one check. */
+function rowsWarning(payload, io, saved, record, now) {
+  const rows = pendingRows(record.notices, cursorOf(saved), new Date(now - FIRST_WINDOW_MS).toISOString());
+  if (rows.length === 0) return null;
+  const oldest = rows[0];
+  if (now - Date.parse(oldest.time) <= CHECK_MINUTES * 60_000) return null;
+
+  const named = `(oldest ${oldest.id})`;
+  if (warnedBefore(payload, io, `${STALE_MARKER} ${named}`, named)) return null;
+  return `js-harness reply: ${rows.length} ${STALE_MARKER} ${named}, the oldest since ${hhmm(oldest.time)} UTC, `
+    + `longer than one check holds (${CHECK_MINUTES} min): ${saved.url} shows the record as it was then. Send them: `
+    + '`js-harness sessions live --out <dir>`, each `ArtifactData` set it prints with each row\'s Spanish `sesion` and `texto` '
+    + 'added, then `js-harness sessions live --sent <file>` for each file sent. This is said once for these rows.';
+}
+
+/** The summary's warning: notices of `record` waited longer than one check since the last write of the summary that
+ * carried its content, by the template gate's shown record of the project under `home`. */
+function summaryWarning(payload, io, saved, record, { home, slug }, now) {
+  let lines;
+  try {
+    lines = readRecord(shownFile(home, slug), SHOWN_SCHEMA, { readFileSync: (file) => io.readFile(file) });
+  } catch (err) {
+    throw new Error(`the template gate's shown record (${shownFile(home, slug)}): ${err?.code ?? err?.message}`);
+  }
+  const writes = lines.filter(isSummaryWrite);
+  if (writes.length === 0) return null;
+  const content = writes.findLast(summaryContent);
+  // With no content write recorded, the stretch runs from the first write the gate recorded.
+  const since = Date.parse((content ?? writes[0]).at);
+  if (Number.isNaN(since)) return null;
+  const after = record.notices.map((notice) => Date.parse(notice.at ?? '')).filter((at) => at > since);
+  if (after.length === 0) return null;
+  const oldest = Math.min(...after);
+  if (now - oldest <= CHECK_MINUTES * 60_000) return null;
+
+  const named = `(summary of ${content?.at ?? 'none'})`;
+  if (warnedBefore(payload, io, SUMMARY_MARKER, named)) return null;
+  const noun = after.length === 1 ? 'notice' : 'notices';
+  const when = content === undefined
+    ? `${named}: no write of board/summary with now or status is recorded since ${hhmm(since)} UTC`
+    : `at ${hhmm(since)} UTC ${named}`;
+  return `js-harness reply: ${after.length} ${noun} ${SUMMARY_MARKER} ${when}, the oldest at ${hhmm(oldest)} UTC, `
+    + `longer than one check holds (${CHECK_MINUTES} min): ${saved.url} shows now, status and yours as they were then. `
+    + 'Write them from the record (`js-harness sessions` for the sessions and the open questions): `ArtifactData` update '
+    + 'of collection `board`, doc_id `summary`, carrying `now` and `status`; the checked fields that `sessions live --out` '
+    + 'writes do not count. This is said once for this summary.';
+}
+
+/** The warning for a stop of `payload` whose reply closes with `state`, or `null` when none is due: the rows', the
+ * summary's, or both. The records are read through `io` (`readFile`, `run`, `env`, `homedir`, and `readNotices` when
+ * the hook shares one parse of the record) at the time `now` (ms); one that cannot be read throws, and the hook says so. */
 export function staleBoardWarning(payload, state, io, now = Date.now()) {
   // Codex sends no background tasks, and cannot send a row: no command reaches an artifact's database.
   if (!Array.isArray(payload?.background_tasks)) return null;
@@ -88,22 +159,7 @@ export function staleBoardWarning(payload, state, io, now = Date.now()) {
   if (record.unavailable !== undefined) throw new Error(`the record of notices (${record.path}): ${record.unavailable}`);
   if (!isLeadSession(record.notices, payload.session_id)) return null;
 
-  const rows = pendingRows(record.notices, cursorOf(saved), new Date(now - FIRST_WINDOW_MS).toISOString());
-  if (rows.length === 0) return null;
-  const oldest = rows[0];
-  if (now - Date.parse(oldest.time) <= CHECK_MINUTES * 60_000) return null;
-
-  const named = `(oldest ${oldest.id})`;
-  if (typeof payload.transcript_path === 'string' && payload.transcript_path !== '') {
-    const text = io.readFile(payload.transcript_path);
-    const warned = lastLineWith(text, named, (entry) => entry.type === 'attachment'
-      && entry.attachment?.type === 'hook_blocking_error'
-      && entry.attachment.hookEvent === 'Stop'
-      && String(entry.attachment.blockingError?.blockingError ?? '').includes(`${STALE_MARKER} ${named}`));
-    if (warned !== null) return null;
-  }
-  return `js-harness reply: ${rows.length} ${STALE_MARKER} ${named}, the oldest since ${hhmm(oldest.time)} UTC, `
-    + `longer than one check holds (${CHECK_MINUTES} min): ${saved.url} shows the record as it was then. Send them: `
-    + '`js-harness sessions live --out <dir>`, each `ArtifactData` set it prints with each row\'s Spanish `sesion` and `texto` '
-    + 'added, then `js-harness sessions live --sent <file>` for each file sent. This is said once for these rows.';
+  const warnings = [rowsWarning(payload, io, saved, record, now), summaryWarning(payload, io, saved, record, { home, slug }, now)];
+  const due = warnings.filter((warning) => warning !== null);
+  return due.length === 0 ? null : due.join('\n\n');
 }
