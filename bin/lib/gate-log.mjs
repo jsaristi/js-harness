@@ -22,7 +22,8 @@
 // that gate's lines in the log. Of its own so that no reader of the log's lines meets a new field: gates
 // of several versions of the harness write the one log of a machine, and a field one version adds is a
 // line another version may refuse (odd/tasks/gate-wait.md, T19). It is bounded the same way, by the same
-// figure, into `busiest.1.jsonl`, so the folder holds four files at most.
+// figure, into `busiest.1.jsonl`. So are `test-times.jsonl` (`appendGateTestTimes`) and `failed.jsonl`, the
+// failing ends a proof of a tree reads past the log's rotation (`appendGateFailure`): each two files at most.
 //
 // Nothing here throws to a gate, and nothing a gate proves depends on its record.
 import fs from 'node:fs';
@@ -62,6 +63,8 @@ const BUSIEST_CURRENT = 'busiest.jsonl';
 const BUSIEST_OLDER = 'busiest.1.jsonl';
 const TIMES_CURRENT = 'test-times.jsonl';
 const TIMES_OLDER = 'test-times.1.jsonl';
+const FAILED_CURRENT = 'failed.jsonl';
+const FAILED_OLDER = 'failed.1.jsonl';
 
 /** Appends `event` to the log of `home` as a line of its own, making the folder: `{ ok: true }`, or
  * `{ error }` with what the system answered, in one sentence. It never throws.
@@ -119,6 +122,15 @@ export function appendGateBusiest(home, line, { maxBytes = GATE_LOG_MAX_BYTES, f
  * on each end line would rotate the log far sooner (odd/tasks/throughput-review.md, B5). */
 export function appendGateTestTimes(home, line, { maxBytes = GATE_LOG_MAX_BYTES, fileSystem: io = fs } = {}) {
   return appendLine(home, [TIMES_CURRENT, TIMES_OLDER], line, { maxBytes, io });
+}
+
+/** Appends the end of a gate whose sensors did not all pass to `failed.jsonl`, beside the log, as `appendGateBusiest`
+ * appends its line: rotated past `maxBytes` into `failed.1.jsonl`, `{ ok: true }` or `{ error }`, never a throw. The
+ * line is the gate's end line in the log, whole. A failure holds a proof back for as long as a reader has it
+ * (`provenBy`), and the log forgets it in days, the pass after it staying: about 14 failures a day of some 200 bytes
+ * keep months here (JH 112, odd/tasks/gate-push-holes.md, L4 and L5). `gateRecord` writes it (`end`). */
+export function appendGateFailure(home, line, { maxBytes = GATE_LOG_MAX_BYTES, fileSystem: io = fs } = {}) {
+  return appendLine(home, [FAILED_CURRENT, FAILED_OLDER], line, { maxBytes, io });
 }
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -261,6 +273,51 @@ export function readGateLog(home, { fileSystem: io = fs } = {}) {
   return { dir, events, skipped, ...(unavailable.length && { unavailable }) };
 }
 
+/** The failures of `home` kept beside the log (`appendGateFailure`): the ends of both files that did not pass, whole as
+ * `readGateLog` takes an end, the older first and each once. A torn or misshapen line is left out; a home with none has
+ * none. `null` where a file that is there cannot be read: the failure it holds may be the one that stands against a
+ * pass, so no answer is given. The newer file is read first, as `readGateLog` reads the log. */
+export function readGateFailures(home, { fileSystem: io = fs } = {}) {
+  const dir = gateLogDir(home);
+  const texts = [];
+  for (const name of [FAILED_CURRENT, FAILED_OLDER]) {
+    try {
+      texts.unshift(io.readFileSync(path.join(dir, name), 'utf8'));
+    } catch (err) {
+      if (!['ENOENT', 'ENOTDIR'].includes(err.code)) return null;
+    }
+  }
+  const failures = [];
+  const seen = new Set();
+  for (const line of texts.flatMap((text) => text.split('\n'))) {
+    let parsed;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (hasHead(parsed) && parsed.event === 'end' && parsed.result !== 'pass' && hasBody(parsed) && !seen.has(parsed.id)) {
+      seen.add(parsed.id);
+      failures.push(parsed);
+    }
+  }
+  return failures;
+}
+
+/** The events a proof of a tree is read from (`provenBy`): the failures of `home` the log no longer holds
+ * (`readGateFailures`), then the events of the log. A line rotated out of the log is older than every line the log
+ * keeps, so they stay in the order they were written. `null` where the failures cannot be read, which is no proof.
+ *
+ * The failures are read before the log: a failure written between the two readings is then in the log, where a
+ * reading the other way round would miss it in both. */
+export function readGateProof(home, { fileSystem } = {}) {
+  const failures = readGateFailures(home, { fileSystem });
+  if (failures === null) return null;
+  const { events } = readGateLog(home, { fileSystem });
+  const ended = new Set(events.filter((event) => event.event === 'end').map((event) => event.id));
+  return [...failures.filter((failure) => !ended.has(failure.id)), ...events];
+}
+
 /** A process that spent the processor over a gate's run, as far as a reader prints it: its name, its
  * script or `null` or none, its seconds and its pid where it is there. Asked by the reader of
  * `busiest.jsonl` and by its writer (`gateRecord`), so that the two cannot come apart. */
@@ -395,8 +452,8 @@ function stopSaid({ rows }) {
   return `stopped before its sensors${names.length ? ` (${names.join(', ')})` : ''}`;
 }
 
-/** The gate that proved the tree `code` (`isTreeKey`), among `events` (`readGateLog`): the last `end` line
- * whose result is `pass` and whose `code` is that key, as `{ id, at, cwd }`, with `cwd` `null` when the
+/** The gate that proved the tree `code` (`isTreeKey`), among `events` (`readGateProof`): the last `end` line
+ * whose result is `pass` and whose `code` and `files` are those keys, as `{ id, at, cwd }`, with `cwd` `null` when the
  * start of that gate is no longer in the log. `null` when there is none, and for a `code` that is no key.
  *
  * Only such a line is a proof. A gate writes `code` on its end when it ran every sensor, all passed, and
@@ -409,10 +466,13 @@ function stopSaid({ rows }) {
  * than the pass's: a gate writes the key it ran under as `tried`, and one on GitHub's machines has none, so a failure
  * there, or in another WSL2 distribution, under another node or other sensors, is answered by no pass here. JH 109,
  * 2026-10-30 (odd/tasks/gate-narrow-pass.md, L2): a commit's tests failed on CI, a pass of the same tree in the WSL
- * mirror, where the failing test skips itself, proved it, and two commits entered with a red test. */
+ * mirror, where the failing test skips itself, proved it, and two commits entered with a red test.
+ *
+ * A pass whose end names no `files` is none: it was written before failures named theirs, so none of them could be told
+ * against it (JH 112, odd/tasks/gate-push-holes.md, L5). */
 export function provenBy(events, code, files) {
   if (!isTreeKey(code) || !isTreeKey(files) || !Array.isArray(events)) return null;
-  const at = events.findLastIndex((event) => event.event === 'end' && event.result === 'pass' && event.code === code);
+  const at = events.findLastIndex((event) => event.event === 'end' && event.result === 'pass' && event.code === code && event.files === files);
   if (at === -1) return null;
   const end = events[at];
   if (events.some((event, index) => standsAgainst(event, files) && (index > at || event.tried !== code))) return null;
@@ -513,9 +573,9 @@ function loadWritten(load) {
  * - `failure()`: `undefined`, or why the log could not be written and what is missing from it, to be said
  *   after `the gate log`. A gate has one such sentence at most, and `onFailure` is called with it once.
  *
- * None of them throws. `append`, `appendBusiest`, `now` and `id` stand in for the writer of the log, the
- * writer of `busiest.jsonl`, the clock and the random id. */
-export function gateRecord({ home, cwd, command, pid = process.pid, session, append = appendGateEvent, appendBusiest = appendGateBusiest, appendTestTimes = appendGateTestTimes, now = Date.now, id = randomUUID, onFailure }) {
+ * None of them throws. `append`, `appendBusiest`, `appendFailure`, `now` and `id` stand in for the writer of the log,
+ * the writer of `busiest.jsonl`, the writer of `failed.jsonl`, the clock and the random id. */
+export function gateRecord({ home, cwd, command, pid = process.pid, session, append = appendGateEvent, appendBusiest = appendGateBusiest, appendTestTimes = appendGateTestTimes, appendFailure = appendGateFailure, now = Date.now, id = randomUUID, onFailure }) {
   const gate = id();
   // The session that ran it, where the host gives one: what lets `sessions` tell whose gate it was (./stall.mjs).
   const said = { cwd, command: String(command).slice(0, GATE_COMMAND_MAX), pid, ...(isText(session) && session !== '' && { session }) };
@@ -575,7 +635,10 @@ export function gateRecord({ home, cwd, command, pid = process.pid, session, app
       // The key of the tree, where the gate has one to give: what makes this line a proof (`provenBy`). The key of
       // its files and the key it ran under, whatever the result: what lets a failure stand against a pass of the same
       // files under another key.
-      write('the end of this gate', at, { event: 'end', seconds: seconds(at - startedAt), result, ...(sensors && { sensors }), ...(isTreeKey(code) && { code }), ...(isTreeKey(files) && { files }), ...(isTreeKey(tried) && { tried }) });
+      const line = { v: GATE_LOG_VERSION, event: 'end', id: gate, at: new Date(at).toISOString(), seconds: seconds(at - startedAt), result, ...(sensors && { sensors }), ...(isTreeKey(code) && { code }), ...(isTreeKey(files) && { files }), ...(isTreeKey(tried) && { tried }) };
+      handed('the end of this gate', append, line);
+      // A failure a proof can tell against a pass (`standsAgainst`) is kept apart too, past the log's rotation.
+      if (result !== 'pass' && isTreeKey(files) && Array.isArray(sensors)) handed('the failure the proof of a tree reads', appendFailure, line);
     },
     same({ code, by }) {
       // Written only whole: a line of this kind with no key or no gate behind it says nothing.

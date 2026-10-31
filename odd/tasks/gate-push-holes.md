@@ -51,11 +51,12 @@ question (`js-harness notify --to orchestrator --kind question`, in Spanish).
 3. The brief: "Ready notice with --pr per slice; summary under docs/sessions/."
 
 ## Tasks
-- [ ] T1 (kind: build) spec 1: a record whose head lies past the tip covers nothing at the push, the plain row or
-  `codex-review`; the planted cut red then green; the failure's Control line — commits: pending
-- [ ] T2 (kind: verify) spec 3: Codex, the lenses, an independent verifier, PR 1 and its ready notice — pending
-- [ ] T3 (kind: design) spec 2: the decision for the forgotten failure, with its evidence, in `## Log` — pending
-- [ ] T4 (kind: build) spec 2: the fix, tests first, the planted case red then green — commits: pending
+- [x] T1 (kind: build) spec 1: a record whose head lies past the tip covers nothing at the push, the plain row or
+  `codex-review`; the planted cut red then green; the failure's Control line — commits: `2b678054`, `1283e5f2`
+- [ ] T2 (kind: verify) spec 3: Codex, the lenses, an independent verifier, PR 1 and its ready notice — PR 723 open,
+  reviewed (L8-L12); waits for its merge
+- [x] T3 (kind: design) spec 2: the decision for the forgotten failure, with its evidence, in `## Log` — L4, L5
+- [ ] T4 (kind: build) spec 2: the fix, tests first, the planted case red then green — L13; commit pending
 - [ ] T5 (kind: verify) spec 3: Codex, the lenses, an independent verifier, PR 2, its ready notice, the summary — pending
 
 ## Log
@@ -165,12 +166,31 @@ question (`js-harness notify --to orchestrator --kind question`, in Spanish).
   (`R3-beyond-lines-empty-tip-default`: `beyondLines`'s `tip` defaults to ''; `R3-tip-abbrev-length-mismatch`: the
   line slices ids to 7 where git's short ids may be longer), acknowledged. Slice 1 is reviewed whole.
 
+- L12 (2026-10-31): slice 1 pushed (the pre-push hook passed) and opened as PR 723; `js-harness notify --kind ready
+  --pr 723` recorded at 00:54Z. T2 is done but for the merge. Slice 2 goes on branch `gate-forgotten-failure`, made
+  from `9d30c96d` in this worktree, so this document stays one line of history; its PR is based on main once 723 lands.
+  The follow-ups (L8 item 3, the two SUGGESTIONs of L11) went to the lead as a note at 00:55Z.
+
+- L13 (2026-10-31, slice 2, red then green): searched first: codegraph and `grep` over `bin/` for the readers of an
+  end's `code` (`provenBy` alone, L4) and for the files beside the log (`busiest.jsonl`, `test-times.jsonl`, each by
+  `appendLine`); `js-harness rules` names `gate-log-size`, the bound the new file takes. Built as L5 says:
+  `appendGateFailure` (`failed.jsonl`, rotated by `appendLine` into `failed.1.jsonl`), written by `gateRecord.end` with
+  the end line itself where the result is not a pass, the files are a key and the sensors a list (what
+  `standsAgainst` reads); `readGateFailures` (`null` where a file that is there cannot be read: no proof);
+  `readGateProof`, the failures the log no longer holds and then the log, which `proven` in `bin/check.mjs` now reads;
+  `provenBy` takes only a pass whose end names those `files`. The planted case, "a tree whose tests failed on CI is not
+  proven by a narrower pass here after the gate log rotated the failure away" (`bin/check.test.mjs`), before:
+  `AssertionError: the commit entered on a pass narrower than a run that failed and was rotated away`; after: `✔`.
+  The pass's files: "provenBy: nothing but a passed end with that very key is a proof", with the rule taken out,
+  `actual: { id: 'g1', ... }, expected: null`; with it, `✔`. `bin/lib/gate-log.test.mjs` could not load before the two
+  new readers existed, 51 of 51 after. One older test wrote a pass with no files ("a gate that waited for the lock
+  looks for its proof once more"); it now writes the files' key. Then `node --test` over `bin/check.test.mjs
+  bin/gate.test.mjs bin/check-ci-gate.test.mjs bin/check-ci-record.test.mjs bin/conventions-structure.test.mjs
+  bin/lib/gentle-ai-absence.test.mjs bin/lib/gate-log.test.mjs bin/throughput.test.mjs bin/rules.test.mjs`: 476 of 476.
+  `uninstall` removes the whole folder (`removeGateLogFolder`), the new files with it.
+
 ## Next step
-State at the context pause (2026-10-31): branch `worktree-gate-push-holes`, worktree
-`D:\js-harness\.claude\worktrees\gate-push-holes`, slice 1 = `2b678054` + `1283e5f2`, every review done (L8-L11).
-Next: commit this document; `git push -u origin worktree-gate-push-holes`; open PR 1 (`gh pr create`, body ends with the PR attribution
-line of the session); `js-harness notify --to orchestrator --kind ready --pr <n> "<one line>"`; notice of follow-ups
-to the lead (`codexSkipsOwed`, `baseLeftOut` still count records past the tip, L8 item 3). Then slice 2 (T3 decided
-in L5) on a new branch from main: `failed.jsonl` beside the log, read before it in `proven` (`bin/check.mjs:1560`),
-`provenBy` requiring the pass's `files`; planted test in `bin/check.test.mjs` beside "a tree whose tests failed on CI
-is not proven by a narrower pass here", with both log files removed after the CI failure to stand for rotation.
+Slice 2 on branch `gate-forgotten-failure` (worktree `D:\js-harness\.claude\worktrees\gate-push-holes`, stacked on
+`9d30c96d` until PR 723 lands): commit T4 (L13); then Codex and the lenses over it, gentle-ai if the Stop hook offers
+the commit, an independent verifier; push, PR 2 based on main once 723 lands, ready notice; summary under
+`docs/sessions/`, `closed` notice when both PRs are on main.

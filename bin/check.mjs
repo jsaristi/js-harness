@@ -25,7 +25,7 @@ import { GATE_WAIT_MS } from './lib/gate-lock.mjs';
 import { cancelTicket, logTicket } from './lib/gate-first.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { watchBusiest } from './lib/machine-busiest.mjs';
-import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
+import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog, readGateProof } from './lib/gate-log.mjs';
 import { filesKey, treeKey } from './lib/gate-tree.mjs';
 import { addedLines, checkedOff, checkedTasks, resolveCitations, resolveTicks, taskText } from './lib/citations.mjs';
 import { flakyTestsOf, selectTests, testFilesOf } from './lib/select-tests.mjs';
@@ -1557,7 +1557,7 @@ export async function checkSensors(cwd, deps = {}, lock) {
   // The rows of a gate that runs no sensor because the gate log holds the proof of `key`, after its own
   // line is written; `null` when there is no key or no proof.
   const proven = (key) => {
-    const proof = key === null ? null : provenBy(readGateLog(lock.home).events, key, filesNow());
+    const proof = key === null ? null : provenBy(readGateProof(lock.home), key, filesNow());
     if (proof === null) return null;
     record.same({ code: key, by: proof.id });
     return [sameTreeRow(sensors, proof), ...gateLogRows(record)];
