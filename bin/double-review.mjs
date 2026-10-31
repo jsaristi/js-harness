@@ -32,6 +32,7 @@ import { REVIEW_EFFORT, REVIEW_MODEL, childEnv, leanEnv, leanFlags } from './cod
 import { lensEnv } from './lens-review.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { resolveClaude } from './lib/claude-path.mjs';
+import { transcriptOf as findTranscript } from './lib/channel.mjs';
 import { launchCodex } from './lib/codex-launch.mjs';
 import { createLeanHome, leanHomesDir, realCodexHome } from './lib/codex-review-home.mjs';
 import { readerPrompt } from './lib/double-review-prompt.mjs';
@@ -40,8 +41,7 @@ import { harnessHome } from './lib/home.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { RuleChangeError, quotationOf } from './lib/rules-change.mjs';
 import { ruleHere } from './lib/rules.mjs';
-import { isSessionId } from './lib/session-id.mjs';
-import { mainCheckout, projectSlug } from './lib/sessions.mjs';
+import { mainCheckout, projectDirsOf } from './lib/sessions.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 
 export const USAGE =
@@ -473,12 +473,15 @@ function takeCommand(args, root, deps, { log, error }) {
   return 0;
 }
 
-/** The text of the session transcript `session` of the project at `root`, where `rules change` reads it, or `null`. */
+/** git through `spawnSync`, its output as text, as the sessions helpers read it. */
+const gitText = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true });
+
+/** The text of the session transcript `session` of the project at `root`, or `null`: read where the board reads the
+ * sessions, the main checkout's folder and each worktree's, since a session opened in a worktree is filed under it. */
 function projectTranscript(root, env, session) {
-  if (!isSessionId(session)) return null;
-  const folder = path.join(env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'projects', projectSlug(mainCheckout(spawnSync, root)));
-  const file = path.join(folder, `${session}.jsonl`);
-  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+  const claudeHome = env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+  const found = findTranscript(session, projectDirsOf(gitText, mainCheckout(gitText, root), claudeHome), fs.readdirSync);
+  return found === null ? null : fs.readFileSync(found.file, 'utf8');
 }
 
 /** Records a skip only on words the user typed at that line, as `rules change` takes a rule of his: never a tapped

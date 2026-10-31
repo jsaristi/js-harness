@@ -10,6 +10,7 @@ import { doubleReviewMain, parseArgs, readerModel, SKIP_PHRASE } from './double-
 import { readDoubleReviews } from './lib/double-review-records.mjs';
 import { readCodexReviews } from './lib/codex-reviews.mjs';
 import { ruleHere } from './lib/rules.mjs';
+import { projectSlug } from './lib/sessions.mjs';
 
 const finding = (claim) => ({ severity: 'high', claim, evidence: 'plan.md:1', fix: 'fix it' });
 
@@ -309,6 +310,24 @@ test('skip records the user\'s typed words that skip a read, checked at the line
   assert.equal(await doubleReviewMain(skipArgv('no quiero la revisión de este', 1), {}, run.deps), 0);
   const [skip] = readDoubleReviews(root);
   assert.deepEqual([skip.kind, skip.what, skip.words, skip.transcript, skip.line, skip.date], ['skip', 'the plan of JH 130', 'no quiero la revisión de este', 's1', 1, '2026-10-31']);
+});
+
+test('skip reads the transcript where the board does, in the sessions folder of the checkout or of any of its worktrees', async (t) => {
+  const root = makeRepo(t);
+  const claudeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-double-review-claude-'));
+  t.after(() => fs.rmSync(claudeHome, { recursive: true, force: true }));
+  const tree = `${root}-tree`;
+  spawnSync('git', ['worktree', 'add', '-q', '--detach', tree], { cwd: root });
+  t.after(() => fs.rmSync(tree, { recursive: true, force: true }));
+  const listed = spawnSync('git', ['worktree', 'list', '--porcelain'], { cwd: root, encoding: 'utf8' }).stdout;
+  const treeAsGit = [...listed.matchAll(/^worktree (.+)$/gm)].map(([, one]) => one.trim())[1];
+  const session = '5d0c3f7e-1111-4222-8333-944455556666';
+  const folder = path.join(claudeHome, 'projects', projectSlug(treeAsGit));
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, `${session}.jsonl`), TRANSCRIPT);
+  const run = deps(t, root, fakeSpawn(() => ({})).spawn);
+  assert.equal(await doubleReviewMain(['skip', '--what', 'the plan', '--words', 'no quiero la revisión de este', '--transcript', session, '--line', '1'], { CLAUDE_CONFIG_DIR: claudeHome }, run.deps), 0, run.lines.error.join('\n'));
+  assert.equal(readDoubleReviews(root)[0].transcript, session);
 });
 
 test('skip refuses words he did not type at that line: a tapped answer, words not in the line, a missing transcript', async (t) => {
