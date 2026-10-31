@@ -192,9 +192,12 @@ loses both readers' findings, is fixed in the commit after bcd2dd4a, and Codex r
 (L11). Codex recorded `d22f33e..1a7638c` (487,468 input tokens; meter 80% weekly before): 3 P2 in
 `bin/double-review.mjs`, all checked and fixed in the next commit with tests (14 of 14 pass): `dispose`'s returned
 diagnostic is said; the frozen diff passes `--no-ext-diff --no-textconv --no-color`; a reader that cannot be killed
-past its timeout is said, its streams let go, and its lean home and copy kept. Next: Codex (`--base 1a7638cf`) and the
-lens resilience over that fix commit, reading the meter first and touching no tracked file while they run; then T2
-and T4 once 150 is answered, else T6. Earlier notes: CLAUDE.md is at 3190 of 3200 tokens as `check` measures it; the two edits (`## Depth
+past its timeout is said, its streams let go, and its lean home and copy kept (c59e58b0). Codex recorded
+`1a7638c..c59e58b` correct (0.96); lenses resilience 0, reliability 1 (the timeout reason now in seconds, not
+minutes), not taken: the command is unreleased and nothing reads that text. All code on the branch is reviewed by
+both. Next: T2 and T4 once 150 is answered, else T6 (the first real read, announced with its cost; the verifier;
+gate, push, PR). The gentle-ai Stop hook offers the whole branch (base 3ac49fa8): status only, start nothing.
+Earlier notes: CLAUDE.md is at 3190 of 3200 tokens as `check` measures it; the two edits (`## Depth
 pass` (rule 1) in the order at line 24, and line 92 "a skip is a debt `check`, `doctor` and the merge door list until
 a review pays it, and the door refuses a lens skip") measured 3237 with `estimateTokens` after the Edit tool, likely
 line endings; measure as `bin/lib/claude-md-budget.mjs` does before committing, and trim within the same paragraphs
