@@ -80,8 +80,9 @@ mod: his. Whether the feature closes here or builds a program the app would not 
   `bin/lib/status-line.ps1` (the program: reads the line file, prints it, marks it stale past 10 minutes, prints
   nothing when it is missing), their tests first, the program timed in a scratch home (L9) — commits: acc22f30, and
   the one that adds the command
-- [ ] T8 (kind: verify) Codex, the lenses and an independent verifier over T7; spec 4's question to the lead with the
-  exact PowerShell commands and their undo, each tried in a scratch place; pull request, ready, summary, closed — pending
+- [x] T8 (kind: verify) Codex, the lenses and an independent verifier over T7; spec 4's question to the lead with the
+  exact PowerShell commands and their undo, each tried in a scratch place; pull request, ready, summary, closed —
+  L10 to L14, pull request 730, question 139
 
 ## Next step
 T7, tests first. Done: `bin/lib/status-line.mjs` and its test (red: module not found; green: 4 pass);
@@ -90,9 +91,8 @@ USERPROFILE, skipped off win32 (red: 2 fail, no file; green: 2 pass). The script
 a script without a BOM as ANSI, so the middle dot is `[char]0x00B7`. `bin/status-line.mjs` and its registration in
 `bin/js-harness.mjs` are done and tried end to end (L9). T8: Codex's P2 fixed in 13c9dfdb (L10); the install and its
 undo tried in scratch places (L11). The verifier's findings and Codex's second pass answered and tried again (L12).
-Reviews clean (L13). Next: push, pull request, the install question to the lead (the real
-command: the packaged `status-line-install.ps1 -Project D:\js-harness`, after a release with this command is
-installed), ready, summary, closed. Decided (L8): the writer is `js-harness status-line write`, run by a per-user scheduled task every 5
+Reviews clean (L13). Pull request 730 and question 139 (L14). Left: the ready notice and the closed notice; then
+only his answer to question 139, which nothing in the pull request waits on. Decided (L8): the writer is `js-harness status-line write`, run by a per-user scheduled task every 5
 minutes that is part of the deferred install (nothing runs today: the app does not read the key); the board takes about
 24 s, so the program never runs it. The line, Spanish, from the board: open questions (`questions.open`), sessions
 `working` and `waiting` (`sessions[].state`), open pull requests (`pullRequests.items`), the gate (`gateLock.holder`),
@@ -306,3 +306,8 @@ only with evidence that a claude.ai install reads it, and step 2 of the review b
   lenses over 13c9dfd..90366b9 (`--lenses reliability,readability,risk`): 0 findings each (13,755, 13,759 and 28,304
   input tokens). gentle-ai: its Stop hook offered the branch (base 7aac3e43, every path); the read-only `review
   status` answered `applicability: unrelated`, and nothing was started.
+- L14 — pull request 730 opened (https://github.com/jsaristi/js-harness/pull/730). Question 139 to the lead, recorded
+  2026-10-31T04:33:12Z: install now or not, with `& (Join-Path (Split-Path (js-harness status-line program))
+  'status-line-install.ps1') -Project 'D:\js-harness'` in an elevated Windows PowerShell once a release with this
+  pull request is installed, and its undo `& "$env:ProgramFiles\js-harness\status-line-uninstall.ps1"`; it recommends
+  not installing while the app does not read the key. Nothing in the pull request waits on it.
