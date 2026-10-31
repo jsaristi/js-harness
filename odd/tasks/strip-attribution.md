@@ -60,10 +60,10 @@ Nothing here is his: a decision only he can take goes to the lead as a recorded 
   README and SPEC entries; the Control line — commits: `951bcfb4` `348378ce` `b0f98b5a` `6110bd91` `589cef49` `71420b38`
 - [x] T2 (kind: verify) spec 5: the real commit with both trailers; Codex, the lenses, an independent verifier, PR 1
   and its ready notice — PR #728, ready notice sent 2026-10-31
-- [ ] T3 (kind: build) spec 4: `init` writes the hook into a project, recorded; `sync` writes it where it is missing;
-  `uninstall` removes it; tests first — branch `strip-attribution-init`, commits: pending
-- [ ] T4 (kind: verify) spec 5: Codex, the lenses, an independent verifier, PR 2, its ready notice, the summary —
-  pending
+- [x] T3 (kind: build) spec 4: `init` writes the hook into a project, recorded; `sync` writes it where it is missing;
+  `uninstall` removes it; tests first — branch `strip-attribution-init`, commits: `7a73e476` `03db395b`
+- [x] T4 (kind: verify) spec 5: Codex, the lenses, an independent verifier, PR 2, its ready notice, the summary —
+  PR #731, ready notice sent; `docs/sessions/2026-10-31-jh-114-commits-strip-the-host-s-attribution-lines-from-every.md`
 
 ## Log
 - L1 (2026-10-31, the brief as written, title): "JH 114 · commits: strip the host's attribution lines from every
