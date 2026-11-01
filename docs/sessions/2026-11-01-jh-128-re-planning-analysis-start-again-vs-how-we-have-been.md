@@ -45,7 +45,7 @@ a recommendation (keep, adjust or restart) with its first three steps. Opened by
 - Whether the branch lands on main: the lead.
 
 ## Cost
-- Time: brief 18:11Z; first notice 18:25Z; closed about 19:10Z.
+- Time: brief 18:11Z; first notice 18:25Z; closed notice 18:42Z (13:42 local).
 - Reviews: gentle-ai on 27977325, approved low risk with no lenses (lineage review-ca6182a2bbc23a8c); two blind Claude
   readers, about 111k and 128k tokens; no Codex run; no Claude lens run (no code).
 - Gates: three pre-commit `check` runs on documents, each PASS.
