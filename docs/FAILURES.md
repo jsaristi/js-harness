@@ -1660,6 +1660,10 @@ the reply before he leaves; so the return had no goals to check and no forecast 
   without saying he was leaving; the stretch record's last close is at 19:27:50Z and none opened after it. The
   reply hook's turn-back asked for this sighting at his return, the check of the line above acting; the absence
   itself was unannounced, which no departure check sees
+- Seen: 2026-11-01 — the lead's transcript 0f71b2c6, lines 47160 and 47608 (the lead's own, sent to JH 126 at 18:04Z
+  and checked there) — after "listo colocalo en el arnes de siempre dar la hora local" at 05:56:03Z he was away until
+  18:03:39Z, 12.1 h, the machine off ("deje el computador apagado bastante tiempo"), without saying he was leaving;
+  no stretch opened between the close at 2026-10-31T19:27:50Z and the open at 18:13:57Z, after his return
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 
