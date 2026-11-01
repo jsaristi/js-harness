@@ -185,17 +185,18 @@ two readers" items (`docs/ROADMAP.md:256`, `:271`, mirrored at `README.md:766`) 
 is the one item 18 makes the onboarding ask for.
 
 ## Next step
-State on 2026-10-31, after 09725fbd. Done: T1 and T5. T3 is built and reviewed, and stays open until T2 gives `read`
-the reserve and the `claude-sin-codex` reader (Claude 5 of L12). T6 has begun: the first real read ran (L12), its
-14 findings are taken, and its code fixes are aad73210 and 09725fbd, each reviewed by Codex (aad7321: 2 findings,
-both fixed in 09725fb; 09725fb: correct, 0.98) and by the lenses (0 findings on both). Every code commit on the
-branch has both reviews. Open: question 150 (his typed acceptance of 147 and 148, L9), which blocks T2's rule
-commit and T4; after it, and only then, the question of Claude 6 (L12) on D5's two exemptions. Next: T2 and T4 once
-150 is answered; meanwhile what of T6 waits on nothing (the independent verifier waits for T2's code, since it
-covers T2 and T3 together). Meter: 82% of the weekly limit used, reset 2026-11-04 01:44, one reset credit, never
-spent without his word. `bin/lib/rules-coverage-data.mjs` sits at 988 of its 1,000-line ceiling, so T4's text
-changes replace spans in place. The gentle-ai Stop hook offers the whole branch (base 3ac49fa8): status only, start
-nothing. Never edit a tracked file while a Codex review runs (L11).
+State on 2026-11-01 (context pause, after 608181b5). Resumed after the machine's shutdown (brief
+`2026-11-01T19-49-18-699Z-c21b9b30.md`). Main 8d7a8ec is merged (224c7e3e); before it, b92d669a cut the readers'
+prompt to 7 sentences so the coverage register stays under 1,000 lines (998 after the merge), and cc394be1 fixed
+`openedOn` (`bin/contract.mjs`), which held a document a merge brings from the trunk as opened today. Both
+sightings of stretch-not-opened of 2026-11-01 are in `docs/FAILURES.md` (64e911d6, 608181b5). Running: Codex and
+the lenses (reliability, resilience) over `64e911d..cc394be` in the temporary worktree
+`D:\js-harness\.claude\worktrees\harness-alignment-review` (detached at cc394be1; remove it with `git worktree
+remove` once both are recorded); main's commits and the merge already have their records. Then: push, and T6's
+rest that waits on nothing (the PR of what is done, `notify --kind ready`). Open: question 150 still has no typed
+words (0f71b2c6:46616 was a tap); T2 and T4 wait on them, then Claude 6 of L12 (D5's two exemptions). Meter 86%
+of the weekly limit, reset 2026-11-04, reserve 10%: a run that would cross it waits. Never edit a tracked file
+while a Codex review runs (L11). Done: T1, T5; T3 built and reviewed, open until T2.
 
 ## Eval plan
 The eval owed by 2026-11-30 (spec 6), not run here: the case built from PR 737's brief runs on the current arm and
