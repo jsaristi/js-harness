@@ -96,11 +96,12 @@ Nothing planned: the rule is his typed words (L2) and the work is the brief's. A
    once.
 
 ## Tasks
-- [x] T1 (kind: docs) this document and its depth pass, documents alone, before any code — spec 1-3
-- [ ] T2 (kind: build) the rule's text in section 6 and `js-harness rules change local-time` — spec 1
-- [ ] T3 (kind: build) `bin/lib/reply-time.mjs`, test first with a planted break, wired into `bin/reply.mjs`; its
-  `rules coverage` entry — spec 2
-- [ ] T4 (kind: build) `bin/lib/local-time.mjs` and the six renderers on it, the zone said once per page — spec 3
+- [x] T1 (kind: docs) this document and its depth pass, documents alone, before any code — spec 1-3 — 9a80707f
+- [x] T2 (kind: build) the rule's text in section 6 and `js-harness rules change local-time` — spec 1 — 01abfff4
+- [x] T3 (kind: build) `bin/lib/reply-time.mjs`, test first with a planted break, wired into `bin/reply.mjs`; its
+  `rules coverage` entry — spec 2 — afac6f7b
+- [x] T4 (kind: build) `bin/lib/local-time.mjs` and the six renderers on it, the zone said once per page — spec 3 —
+  a1b23d9c (`local-time.mjs` itself came in afac6f7b, since the control names local times)
 - [ ] T5 (kind: verify) Codex and the Claude lenses over the code commits; the gate; PR; `notify --kind ready` — all
 
 ## Log
@@ -111,3 +112,26 @@ Nothing planned: the rule is his typed words (L2) and the work is the brief's. A
   records stay in UTC; the surfaces named: the lead's replies, `stretch close --html`, `report --html`, the Stop hook's
   messages and the live board. Searched the rest: `git grep` for `toISOString().slice`, `}Z`, `UTC` in `bin/`, and
   `toLocale` in `docs/`; the live board already renders local (Out of scope).
+- L4 (2026-11-01, this session) The rule's home is a bullet of section 6, beside `rule:reports-spanish-visual`,
+  since it governs what he reads, not how a reply closes. Its source's "accepted" is his line 47160 itself: it answers
+  the lead's reply at line 47154, which proposed the hook check. `rules check`: PASS, 73 rules.
+- L5 The control also counts a time followed by "UTC" ("05:46 UTC"), since his words ask for local time always and
+  the Stop hook's own messages wrote it that way; an offset such as `UTC-05:00` is a zone and passes. The warning
+  names each time with its local equivalent, so the session can rewrite it. Planted break
+  (`times.length >= 0`): 3 pass, 1 fail; reverted.
+- L6 The zone is said once: with "Generada el" where a page says when it was made, else through `page`'s new
+  `zoneAt`; the status, feature and return pages pass it. The printed report and the hook messages say it on their
+  first time. The markers the hooks match on (`(return at <ISO>)`, a notice's id) keep UTC: they are record keys.
+- L7 Result against item 3: spec 1, `rules local-time` exits 0 (predicted 0); spec 2, 4 of 4 tests of
+  `reply-time.test.mjs` pass and the hook test turns back "05:46Z" (predicted caught); spec 3, the `git grep` finds 0
+  lines, from 6 (predicted 0). Against item 4: the 21 of 951 replies are what the control now turns back; the
+  unguaranteed case, a UTC time with no Z nor "UTC", stays unguaranteed.
+- L8 Reviews: Codex over b0af203a..a1b23d9c, 2 parts, estimated 218,000 to 270,000 input tokens, weekly meter at
+  82% before it; the Claude lenses readability and reliability, about 20,000 input tokens each.
+- L9 Mistake: this document was edited (L4 to L8) while the Codex review ran, so its part 1 of 2 passed and was not
+  kept; 189,665 input tokens spent, nothing recorded (`edit-during-review` in `docs/FAILURES.md`, its eighth sighting).
+  The lenses, which ran beside it, completed: readability 0 findings, reliability 0 findings, about 38,000 input
+  tokens each, nearly twice their plan. Fix now: this document committed first, then the review run again with no
+  edit while it runs; meter before the rerun, weekly 83%. What stops it coming back is not in this feature: the
+  control today is a check that detects it after the spend; a guard that refuses a Write or Edit in a worktree while
+  its Codex review runs would prevent it, proposed to the lead.
