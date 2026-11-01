@@ -46,7 +46,8 @@ test('a converted time carries the zone of its own instant: one zone is said onc
     assert.match(two, /"2026-11-02T10:00:00Z" \(line 1\) is 2026-11-02 05:00 UTC-05:00/);
     assert.doesNotMatch(two, /, local time UTC/);
   } finally {
-    process.env.TZ = before;
+    if (before === undefined) delete process.env.TZ;
+    else process.env.TZ = before;
   }
 });
 
