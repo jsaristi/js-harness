@@ -722,9 +722,9 @@ built in rule 1's pull request.
   limit lets in as fixes (re-planning analysis, C2 and E2 step 2).
 - **Probe and pass:** the pull request in his project with both reviews recorded, and the notes.
 - **Cost** [i]: one session.
-- **His decisions:** the project (question 151) and the feature; the merge, since a merge to
-  abogadaclaudiajimenez's `main` deploys the site (`.github/workflows/deploy.yml` there).
-- **State:** waits for question 151; beside S2 or right after it, before S8.
+- **His decisions:** the project, plataforma-preproyecto (question 151, his answer of
+  2026-11-01T19:12:54Z, the lead's transcript `0f71b2c6`, line 48234); the feature, asked next; the merge.
+- **State:** waits for his choice of the feature; beside S2 or right after it, before S8.
 
 ### S8 Certification (step 5)
 - **Changes:** nothing; it measures. Section 7's S0 and S8 measures; a Claude audit and a Codex audit,
@@ -788,7 +788,7 @@ crecimiento?"). What it changes, carried out by [replan-execute](../odd/tasks/re
   --pace` says whether the week is red and what may still open.
 - **An outside outcome**: one real feature in one of his projects, built with the harness, before
   S8, as an F8 step ([F8 plan](#the-outside-feature-the-re-plan-of-2026-11-01)). Which project
-  and which feature are his: question 151 asks the project, with "Todavía no" among its options.
+  and which feature are his: he chose plataforma-preproyecto (question 151); the feature is asked next.
 
 His yes covers the adjustment where it changes none of his recorded decisions. The analysis's E3
 lists the ones it would change, and each stays as decided until he answers it, asked by the lead
