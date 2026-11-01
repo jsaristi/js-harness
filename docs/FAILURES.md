@@ -1652,6 +1652,11 @@ the reply before he leaves; so the return had no goals to check and no forecast 
   `returnStretchWarning`). It enters at the first wait and the first return after the pull request lands and the
   installed copy is refreshed; its proof is `node --test bin/quiet.test.mjs bin/lib/return-report.test.mjs`, and no
   later sighting of this class without the turn-back's time beside it
+- Seen: 2026-11-01 — the lead's transcript 0f71b2c6, lines 46673 and 46938 (the lead's own, sent to JH 126 at 05:46Z
+  and checked there) — he was quiet from 2026-10-31T20:04:00Z to "dime que hemos avanzado" at 05:44:19Z, 9.7 h,
+  without saying he was leaving; the stretch record's last close is at 19:27:50Z and none opened after it. The
+  reply hook's turn-back asked for this sighting at his return, the check of the line above acting; the absence
+  itself was unannounced, which no departure check sees
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 
