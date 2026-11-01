@@ -5,14 +5,14 @@ per stage on the branch; the result reaches him as a Spanish visual page through
 
 ## Goal
 He gets one evidence-backed answer to "were we doing it wrong?": how the project has been going, how it would be
-planned if it started today, the two side by side with what each difference costs or saves, and a recommendation
-(keep, adjust or restart) with its first three steps, every decision in it left to him.
+planned if it started today, the options side by side with what each difference costs or saves, and a
+recommendation (keep, adjust or restart) with its first three steps, every decision in it named as his.
 
 ## Why
 His words (L1): "excelente hazme un analisis completo de como deberiamos empezar de nuevo y alinear todo y me lo
 contrastas y comparas de como veniamos, osea como hacer un reajuste del plan por si depronto lo estabamos haciendo
-mal". He asked it on his return after twelve hours in which the whole flow stood still on one question (question
-150, L2). Rule 1 applies: this is a depth pass he asked for, and it passes `rule:double-review` before it reaches him.
+mal". He asked it on his return, when the flow had stood still on one open question (question 150, L2). Rule 1
+applies: this is a depth pass he asked for, and it passes `rule:double-review` before it reaches him.
 
 ## Done when
 - `js-harness contract check odd/tasks/replan-analysis.md` exits 0
@@ -32,41 +32,41 @@ mal". He asked it on his return after twelve hours in which the whole flow stood
 - Read-only on the records and the machine — because the analysis must not change what it measures.
 
 ## Ask me before
-Everything in "Recommendation" is his: whether to keep, adjust or restart, and each step that changes one of his
-decisions. Nothing is asked before the page reaches him; a question goes to the lead with `notify --kind question`.
+Everything in section E is his: which option, and each step that changes one of his decisions (the table in E3).
+Nothing is asked before the page reaches him; a question goes to the lead with `notify --kind question`.
 
 ## Depth pass
-- 1. Method: a project post-mortem and re-baseline, as a delivery lead or an engineering manager runs one when a
-  plan keeps growing: separate output from outcome, find the loop that feeds the growth (Goldratt's constraint, the
-  "second-system effect" of Brooks), and re-plan from the outcome backwards with the smallest set of moves; for each
-  component, the subtraction test the project already wrote as Principle 2 ("remove one piece, measure, keep what still
-  matters"). The search of `rule:reuse-first`: `docs/proposals/harness-diet.md` (F8) is the nearest existing
-  re-plan; it targets the per-turn payload and the gentle-ai replacement (its section 0), not the code volume nor the
-  operating model, so this analysis builds on it and does not replace it.
-- 2. Raw material: the records, not summaries. The plan, `docs/ROADMAP.md:90-106` (phases) and `docs/origin.md`
-  (the founding estimate, "~9–12 sessions, 2–3 calendar weeks"); `js-harness progress` and `progress --pace`;
-  `js-harness failures` and `failures weeks` over `docs/FAILURES.md`; the Codex runs in
-  `.git/js-harness/codex-review-runs.jsonl` (1,506 lines) and the lands in `.git/js-harness/lands.jsonl` (396 lines);
-  the channel `~/.js-harness/channel/D--js-harness.jsonl` (1,979 notices); `js-harness throughput`; the transcripts
-  under `~/.claude/projects/`; his request, the lead's transcript `0f71b2c6`, line 47737, and his return just before
-  it, the same transcript, line 47608 ("creo que tenias el flujo de trabajo parado").
-- 3. The bar: excellent here means every claim checkable by him from a command, the cause named and not only the
-  symptoms, and a recommendation small enough to start tomorrow.
+- 1. Method: a project post-mortem and re-baseline, as a delivery lead runs one when a plan keeps growing: separate
+  output from outcome, find the loop that feeds the growth, check which remedies were already tried and why they did
+  not hold, and compare the options (keep, adjust, restart) on cost, risk and the owner's time. The search of
+  `rule:reuse-first`: F8 (`docs/ROADMAP.md`, "F8 plan"; `docs/proposals/harness-diet.md`, section 10) is the existing
+  re-plan, half done; this analysis judges it and proposes changes to it rather than a second plan beside it.
+- 2. Raw material: the records, not summaries. The plan, `docs/ROADMAP.md:90-106` (phases), `docs/ROADMAP.md:328-729`
+  (F8's steps and states) and `docs/origin.md` (the founding estimate); `js-harness progress` and `progress --pace`;
+  `js-harness failures` and `failures weeks`; `git log -- docs/FAILURES.md` (first commit e9de5e32, 2026-10-11); the
+  Codex runs in `.git/js-harness/codex-review-runs.jsonl` (1,506 lines) and the lands in `.git/js-harness/lands.jsonl`;
+  the channel `~/.js-harness/channel/D--js-harness.jsonl` (1,979 notices); `js-harness throughput`;
+  `js-harness check --verbose`; the transcripts under `~/.claude/projects/`; his request, the lead's transcript
+  `0f71b2c6`, line 47737, and his return, the same transcript, line 47608.
+- 3. The bar: excellent here means every claim checkable by him from a command, the cause named only where the
+  evidence carries it, each option costed in money and in his time, and steps a fresh session can run tomorrow.
   spec 1: `js-harness progress --pace`: measured, 488 steps closed and 539 added over 14 days (section A).
-  spec 2: left out because a plan has no command that proves it; the two blind readers judge it (`rule:double-review`).
-  spec 3: `js-harness failures`: measured, 131 failures and 307 sightings, the base of the contrast's evidence.
-  spec 4: left out because the recommendation is his to judge; the readers check that each step names its cost.
+  spec 2: left out because a plan has no command that proves it; the two blind readers judged it (`rule:double-review`).
+  spec 3: `js-harness failures`: measured, 131 failures and 307 sightings, part of the contrast's evidence.
+  spec 4: left out because the recommendation is his to judge; the readers checked that each step names its cost.
   spec 5: left out because the page is published at the end; its URL is named in the Log.
-- 4. Refutation: the request holds only if something is off. The cheapest test that could show nothing is off: is the
-  plan closing faster than it grows, and did the measured changes of F8 move the measured behaviour? Run:
-  `js-harness progress --pace` gives closed 488, added 539 in 14 days, so the open work grew; and the incident set,
-  read from `docs/ROADMAP.md` (S0, S3, S1 and S10 rows), scored 13, 13, 13 and 13 of 20 after each step, so the
-  steps did not move it. Both point the same way as his doubt.
+- 4. Refutation: if nothing were off, a limit on new work would have made the open work fall, and the plan's measured
+  target would have moved. Two runs. `js-harness progress --pace`, the five days after F8's "work that does not serve
+  a step waits" (2026-10-27 to 10-31): 299 steps closed, 329 added, so the limit did not hold. `js-harness check
+  --verbose`: the first-turn load is 76,614 tokens against 107.8k at the start (`docs/ROADMAP.md:35`), so F8's own
+  target moved. The incident set stayed at 13 of 20 through S3, S1 and S10, which is each step's pass line ("no
+  worse"), not a failure. The evidence supports an adjustment, not a restart: the direction works where it is
+  measured; the growth and the missing outcome do not.
   Verdict: supports
 - 5. Request: an analysis, in English in this document and in Spanish as a visual page, of (A) how the project has
-  been going, measured; (B) the cause behind the measures; (C) how it would be planned today; (D) the contrast, each
-  difference with its evidence and its cost or saving; (E) a recommendation and its first three steps, every decision
-  in it his. It builds nothing and changes no rule.
+  been going, measured; (B) the cause, only as far as the evidence carries it; (C) three options, keep F8, adjust F8
+  or restart, each costed in money and in his time; (D) the contrast; (E) a recommendation, its first three steps
+  with a done-when each, the decisions of his it touches and its risks. It builds nothing and changes no rule.
   Adds: none
 
 ## Specs
@@ -79,7 +79,7 @@ decisions. Nothing is asked before the page reaches him; a question goes to the 
 ## Tasks
 - [x] T1 (kind: design) Read the records and measure (specs 1, 3). Route: inline.
 - [x] T2 (kind: docs) Write the analysis, sections A to E (specs 1-4). Route: inline.
-- [ ] T3 (kind: verify) Two blind read-only readers, one attacking the claims, one looking for what is missing
+- [x] T3 (kind: verify) Two blind read-only readers, one attacking the claims, one looking for what is missing
   (`rule:double-review`); each finding answered in the Log. Route: two Claude sub-agents.
 - [ ] T4 (kind: docs) The Spanish visual page, published; the lead notified with the path and the URL (spec 5).
   Route: inline.
@@ -87,25 +87,31 @@ decisions. Nothing is asked before the page reaches him; a question goes to the 
 ## A. How we have been going
 
 ### A1. The plan against its own estimate
-- The founding plan, F0 to F7, estimated "~9–12 sessions, 2–3 calendar weeks" (`docs/origin.md`, Phases). It was
-  met almost on time: F0 to F5 by 2026-10-03, F6's slices by 2026-10-13, F7 on 2026-10-14
-  (`docs/ROADMAP.md:92-105`). The thing the founding plan asked for was, in substance, built in 18 days.
-- What came after was not in it. 37 days in, the repository holds 4,136 commits and 753 merges on main
-  (`git log --first-parent --merges origin/main | wc -l`), 164 feature documents, and v1.0.0 is not tagged
-  (`git tag -l 'v*'`: v0.9.0, v0.95.0, v0.96.0, v0.97.0). F8, the reorganization opened 2026-10-26, is 3 of 7
-  steps (`js-harness progress`).
-- The step change is on 2026-10-10/11, when work moved to many sessions in parallel: commits a day went from 13–75
-  (2026-09-26 to 10-10) to 47–401 after, above 100 on 15 of 21 days (`git log --format=%ad --date=short origin/main | uniq -c`);
-  feature documents opened went from 1–4 a day to up to 27 (`git log --diff-filter=A -- odd/tasks/`).
+- The founding plan, F0 to F7, estimated "~9–12 sessions, 2–3 calendar weeks" (`docs/origin.md`, Phases). Its
+  phases closed by 2026-10-14 (`docs/ROADMAP.md:92-105`), with two loose ends: F2 is 4 of 6 steps and F7's procedure
+  "cannot run on a new model until its gaps are built" (`docs/ROADMAP.md:105`).
+- 37 days in: 4,136 commits, 753 merges on main (`git log --first-parent --merges origin/main`), 164 feature
+  documents; v0.97.0 is the last tag and 1.0.0 is not tagged (`git tag -l 'v*'`). F8, opened 2026-10-26, is 3 of 7
+  checklist steps; inside its step 4, S0, S3, the directives pass, S1, S10, S11, S5c-a, S13 and S12 are done, and S2,
+  S4b, S5, S5c-b, S6, S7 and S8 are to do (`docs/ROADMAP.md:328-729`).
+- Work moved to several sessions at once from about 2026-10-07 to 10-09 (`docs/ROADMAP.md:1057`; the orchestrator's
+  charter of 10-09 in the relief file). Commits a day went from 13–75 before 10-10 to 12–401 after, above 100 on 15
+  of 21 days (`git log --format=%ad --date=short origin/main | uniq -c`).
 
-### A2. Shares and throughput
-- `js-harness progress`: the roadmap 100 of 110 rows (91%), the features 1,045 of 1,080 (97%), 1,145 of 1,190 in all
-  (96%). The share has sat in the 90s for weeks because the denominator moves.
-- `js-harness progress --pace`, the last 14 days on main: closed 488, added 539, removed 25. **The plan grows faster
-  than it closes**: 34.9 steps closed a day against 38.5 added. On 2026-10-31 alone (`js-harness throughput`): 69
-  closed, 79 added, open steps from 34 to 44, while 18 pull requests merged.
-- Lands (`.git/js-harness/lands.jsonl`): 396 runs of `merge-queue --land`, 326 green (82%), 60 exit 1, 10 exit 4;
-  381 pull requests landed; 39.4 hours of land time.
+### A2. Shares, throughput, and growth
+- `js-harness progress`: 1,145 of 1,190 steps (96%) when measured; the roadmap 91%, the features 97%. The share sits
+  in the 90s because the denominator moves.
+- `js-harness progress --pace`, the last 14 days: closed 488, added 539, removed 25; 34.9 a day closed, 38.5 added.
+  The open backlog is small, about 45 steps, a day and a half at that pace; it never empties because it refills.
+- **The limits on growth were tried and did not hold.** On 2026-10-16 he froze the scope ("Sí, congelá
+  (Recomendada)", `docs/ROADMAP.md:831-841`); on 2026-10-17 he chose "No, sigue entrando" against the recommended
+  "Sí, después de 1.0" (`docs/ROADMAP.md:75`), and three days earlier he had written that corrections come first
+  even if the date slips ("tiene que quedar funcionando como un reloj suizo"). On 2026-10-26 F8's "Next" said work
+  that does not serve a step waits (`docs/ROADMAP.md:767-775`); the five days after it closed 299 steps and added 329.
+- Lands (`.git/js-harness/lands.jsonl`, recorded from 2026-10-17): 396 runs, 326 green (82%), 60 exit 1, 10 exit 4;
+  364 distinct pull requests landed; 39.4 hours. Gates run on GitHub Actions since 2026-10-27 (`docs/ROADMAP.md:47`):
+  on 2026-10-31, 80 commit gates on GitHub against 5 local, the lock busy 2.0 h of 24, ready to merged a median of
+  6 minutes (`js-harness throughput`).
 
 ### A3. Failures and how often they recur
 `js-harness failures`: 131 failures, 307 sightings, 60 seen more than once, 26 controls replaced, 5 not settled.
@@ -122,167 +128,225 @@ decisions. Nothing is asked before the page reaches him; a question goes to the 
 
 - Most seen: `told-him-unverified` 12 (still "seen again"), `chained-step-not-conditional` 10, `stray-folder-untracked`
   10, `hours-guessed` 9, `edit-during-review` 8 (seen again), `gate-at-its-bound` 8, `heavy-run-beside-gate` 7.
-- By week (`js-harness failures weeks`): 1 and 2 sightings in the first two weeks, 158 in the week of 2026-10-05,
-  86, 5, then 55 in the week of 2026-10-26. The jump starts with the parallel sessions.
-- **Where they come from (estimate).** A keyword pass over the 131 ids and their first lines (gate, session, board,
-  merge, queue, land, copy, wake, lock, worktree, folder, process, load, push…) puts about 97 failures and 206
-  sightings, about two thirds, in the machinery of running many sessions on one machine (the gate lock, the merge
-  queue, worktrees, background sessions, the channel, wakes); about 13 failures and 63 sightings in the model's own
-  conduct toward him (unverified claims, guessed hours, estimates told as facts); about 21 and 38 in the product's
-  commands. The pass is coarse, a hand count could move any group by a tenth; the proportion is the finding.
+- By week (`js-harness failures weeks`): 1, 2, 158, 86, 5, 55. The register was first committed on 2026-10-11,
+  seeded from the relief file that begins on 10-09 (`git log --diff-filter=A -- docs/FAILURES.md`: e9de5e32), so the
+  first two weeks are empty because nothing recorded them, and the jump marks when recording began, not a cause.
+- Their origin is not settled. A keyword pass over the ids puts between about a third (a strict list: board, queue,
+  land, wake, lock, channel, lead, sessions; 49 failures, 98 sightings, the second reader's count) and two thirds (a
+  broad one that also catches `hours-guessed` and `stray-folder-untracked`) in the machinery of running sessions in
+  parallel. A hand classification would settle it; this analysis does not lean on either figure.
 
 ### A4. Review spend
-- Codex (`.git/js-harness/codex-review-runs.jsonl`): 1,506 runs since 2026-10-07, 1,477 reviewed, 27 failed;
-  207.7 million input tokens (148.9 million cached), 1.49 million output; 20.9 hours of wall time. By week: 147
-  runs, 668, 279, 412. About two runs per merged pull request (1,506 for 753).
-- The weekly limit stands at 84% on 2026-11-01, resetting 2026-11-04 (`js-harness codex-meter`). The lead's question
-  of 2026-10-31 13:21Z already said that at 318 reviews that week the limit runs out before the reset, and that the
-  pre-push requires a Codex record on every code commit, so **no code ships once it runs out**. Review volume follows
-  code volume: the lever on Codex is how much code is written, not the review rule.
-- Claude lenses: 243 runs (`lens-review-runs.jsonl`), cents each (`docs/ROADMAP.md`, S1: $0.006 to $0.051).
-- Proposals: the diet plan was graded by two blind readers four times and rewritten seven times in one day
-  (`docs/proposals/harness-diet.md`, section 0). F8's eval spend so far: $98.55 (`docs/ROADMAP.md`, "Spent so far").
+- Codex (`.git/js-harness/codex-review-runs.jsonl`): 1,506 runs since 2026-10-07, 1,477 reviewed, 27 failed; 207.7
+  million input tokens (148.9 million cached), 1.49 million output; 20.9 hours. By week: 147, 668, 279, 412 runs.
+- About two runs a merged pull request over the whole period (1,506 for 753), 3.9 on 2026-10-31 (70 attempts for 18
+  pull requests, `js-harness throughput`). The rule sets the multiplier (a review on every code commit, review parts,
+  re-runs after an edit during review: `edit-during-review`, 8 sightings); activity sets the base.
+- The weekly limit reads 84% on 2026-11-01, resetting 2026-11-04 (`js-harness codex-meter`). Question 148's forecast
+  that it would run out by 11-01 did not hold. The pre-push needs a Codex record on every code commit, so if it does
+  run out, no code ships until the reset or until his reserve rule (questions 147-148, still open) says otherwise.
+- Claude lenses: 243 runs, cents each (`docs/ROADMAP.md`, S1). F8's eval spend: $98.55 to S10 (`docs/ROADMAP.md`,
+  "Spent so far"). The diet plan had seven passes, four graded by two blind readers.
 
 ### A5. What he had to answer, and when the flow stopped on him
-- 150 questions recorded on the channel since 2026-10-14, 18 days: about 8 a day, 31 on 2026-10-24 alone
-  (`kind: question` in `~/.js-harness/channel/D--js-harness.jsonl`). 125 answer notices; 60 `waiting` notices.
-- He answers fast once a question reaches him: median 4 minutes from shown to answered on 2026-10-31
-  (`js-harness throughput`). The cost is not his speed; it is that work stops between his turns. On that day the
-  sessions' waits add up to 9.9 session-hours (an upper bound: a session may work while it waits).
-- A rough topic count of the 150 (first keyword that matches): 34 about rules, 27 about spend or limits, 16 about
-  merges, 10 about the machine, 10 about a design, 53 other (estimate). A large share is about the harness's own
-  process, not about what the harness is for.
-- The example of today: question 150 asks whether two of his answers given by tapping count as his words, because
-  the command that records his rules accepts only typed words (`bin/lib/rules-change.mjs:232`). It was asked on
-  2026-10-31 at 10:52 local and was still open on his return at 13:03 on 2026-11-01, after twelve hours away; it held
-  the only session with work left (the lead's
-  transcript `0f71b2c6`, lines 47608 and 47677). A rule about how to record his decisions blocked the work his
-  decisions were for.
+- 150 questions recorded on the channel since 2026-10-14, about 8 a day, 31 on 2026-10-24; 125 answers; 60 `waiting`
+  notices. At least 48 of the 125 answers (38%) repeat the "(Recomendada)" option word for word. The three recorded
+  times he chose against the recommendation, each chose more scope or a longer wait: "Seguir sumando" (10-14), "No,
+  sigue entrando" and "Sí, la espera" (10-17) (`docs/ROADMAP.md:75-76`).
+- He answers fast once a question reaches him: a median of 4 minutes from shown to answered on 2026-10-31
+  (`js-harness throughput`), when the sessions' waits added up to 9.9 session-hours (an upper bound).
+- A rough topic count of the 150 (first keyword that matches; estimate): 34 rules, 27 spend or limits, 16 merges, 10
+  the machine, 10 a design, 53 other.
+- Question 150 asks whether two answers he gave by tapping count as his words, because the command that records his
+  rules accepts only typed words (`bin/lib/rules-change.mjs:232`). It was recorded at 10:52 local on 2026-10-31 and was
+  still open 26 hours later, on his return at 13:03 on 11-01. He had been away since 00:56 with the computer off part
+  of that time ("deje el computador apagado bastante tiempo", line 47608), and JH 126 was the only session with work
+  left (line 47677). One rule about how his answers are recorded held the only work in flight.
 
 ### A6. The harness's size against its bet
-The bet (`docs/origin.md`, Principles 1 and 2; AGENTS.md): a stronger model needs a smaller harness, few
+The bet (`docs/origin.md`, Principles 1 and 2; `AGENTS.md`): a stronger model needs a smaller harness, few
 instructions and many sensors, every component earning its place by measurement.
 
-| Measure | At the start | Today | Source |
-|---|---|---|---|
-| Instructions every turn, this repo | `AGENTS.md` 691 tokens (target ≤ 1.5k) | `AGENTS.md` 972 + `CLAUDE.md` 3,190 (its budget raised 2,500 → 3,200) | `docs/ROADMAP.md:93`; `js-harness check --verbose` |
-| Skills loaded on demand | none | orchestrator 34 KB, protocols 20 KB, js-harness 12 KB (about 16k tokens, estimate at 4 chars a token) | `~/.claude/skills/js-harness*/SKILL.md` |
-| Commands | a `check` | 49 | `js-harness --help` |
-| Code | — | 73,397 lines in 263 modules, plus 118,462 lines of tests in 274 files and 40,173 of evals | `find bin evals …` |
-| Rules | — | 73 | `js-harness rules` |
-| Plan and its documents | origin 165 lines | `ROADMAP.md` 1,231 lines (its "Next" alone 345), `FAILURES.md` 1,905, proposals 298 KB, all docs 6.5 MB | `wc` |
+| Measure | At the start | Today | Direction | Source |
+|---|---|---|---|---|
+| First-turn load, Claude | ~107.8k tokens (09-26); ~110k (10-15) | 76,614, median of the last 5 sessions | down 29% | `docs/ROADMAP.md:35`, `:98`; `check --verbose` |
+| Per-turn files, Claude | global `CLAUDE.md` 17.5k–28.2k + `AGENTS.md` 691 | `AGENTS.md` 972 + `CLAUDE.md` 3,190 + the rest, 5,766; the global file excluded | down | same |
+| Per-turn files, Codex | ~14.5k (injected, partial) | 31,504 | up | same |
+| Skills on demand | none | orchestrator 34 KB, protocols 20 KB, js-harness 12 KB (about 16k tokens; estimate) | new | `~/.claude/skills/js-harness*/SKILL.md` |
+| Commands | a `check` | 49 | up | `js-harness --help` |
+| Code | — | 73,397 lines in 263 modules; 118,462 lines of tests in 274 files; 40,173 of evals | up | `find bin evals` |
+| Rules | — | 73: 46 his, 27 the project's, 4 of them retired | up | `js-harness rules` |
+| Plan and its documents | origin 165 lines | `ROADMAP.md` 1,231 lines (144,791 bytes, about 36k tokens; "Next" alone 345 lines), `FAILURES.md` 1,905, proposals 298 KB | up | `wc` |
 
+- What loads every turn went down, and F8 did that (S3's exclusion of the global file). What a session has to read,
+  test, review and keep consistent went up: code, rules, commands, the plan's own size.
 - The origin's list "Not built (the stack already does it)" named the handoff machinery, the usage census and the
-  context meter. Each has its own command today: `resume` and the relief file (1.49 MB), `throughput`, `pace` and
-  `codex-meter`, `status-line`.
-- By rough module name (estimate), about 40% of the code serves the operating model of many sessions (sessions,
-  channel, gate lock, merge queue, stretch, resume, wake, templates, pages), about 28% the product (install, init,
-  check, doctor, stack, contract, manifest, backup), 12% rules and guards, 9% reviews.
-- **The project's own measures back the bet, and the growth went the other way.** F5: the minimal config scores as
-  the full stack does at about half the cost (1.68× to 2.54×; `docs/ROADMAP.md`, "F5 result"); F6 the same on Codex.
-  F8's incident set: 13 of 20 at S0, S3 (on both arms), S1 and S10, with cases 01, 02 and 05 failing every trial
-  (`odd/tasks/f8-s10-port.md:355`): four measured steps and $98.55 did not move it.
+  context meter; each has its own command today (`resume` and the relief file, 1.49 MB; `throughput`, `pace`,
+  `codex-meter`; `status-line`).
+- The project's own measures back the bet: F5, the minimal config scores as the full stack at about half the cost;
+  F6 the same on Codex (`docs/ROADMAP.md`, "F5 result", "F6 result"). F8's steps kept the incident set at 13 of 20, their
+  pass line, while cutting the payload. Cases 01, 02 and 05 fail on every trial (`odd/tasks/f8-s10-port.md:355`).
 
 ### A7. Who the harness has served
-Claude transcripts since 2026-09-26 (`~/.claude/projects/`, by folder): js-harness and its worktrees 230 transcripts,
-1,675 MB; abogadaclaudiajimenez 13 transcripts, 46 MB; plataforma-preproyecto 1, 2 MB. About 97% of the work went
-into the harness itself. The channel agrees: 1.52 MB for js-harness, 512 bytes and 770 bytes for the two projects.
-The onboarding design, the way a real project would start with the harness, is still open (`docs/ROADMAP.md`,
-Onboarding).
+- Claude transcripts since 2026-09-26 (`~/.claude/projects/`): js-harness and its worktrees 230 transcripts, 1,675 MB;
+  abogadaclaudiajimenez 13, 46 MB; plataforma-preproyecto 1, 2 MB. By bytes 97% went to the harness, by count 94%.
+- His two projects were moved to js-harness on 2026-10-30 (S12, question 112, "Ambos proyectos"), with the changes
+  left uncommitted there and two items owed (`docs/ROADMAP.md:568-574`). No feature has yet been built in either
+  with the harness; the onboarding design is open (`docs/ROADMAP.md`, Onboarding).
 
-## B. The cause behind the measures
+## B. The cause, as far as the evidence carries it
 
-1. **The harness became its own only customer.** With no real project in the loop, every defect of the harness's own
-   way of working became the next feature of the harness (A7, A2). There was no outside outcome to stop at.
-2. **The operating model feeds a loop.** Many sessions on one slow machine need a gate lock, a merge queue, a channel,
-   wakes, a board and a lead; each of those fails in its own ways (two thirds of the failures, A3); each failure gets a
-   control (a check, a rule, a test); each control is more code for the next session to read, test and review; and the
-   plan grows faster than it closes (A2). The failure register itself shows the jump on the week the parallel
-   sessions began (A3).
-3. **Review cost follows code volume.** Two reviews on every code slice is his decision and a sound one; its cost is
-   about two Codex runs a pull request, so 753 pull requests turned the reviewer's weekly limit into the constraint
-   on shipping (A4).
-4. **Governance outgrew its purpose.** 73 rules, each with his quoted words, a transcript line, a failure and a
-   review date; 150 questions in 18 days, many about the process itself; and a rule on how his answers are recorded
-   that stopped the flow for half a day (A5).
-5. **Measures of process, few of outcome.** The project measures its throughput, pace, failures by week and gate
-   waits in detail; the outcome measures it has (F5, F6, the incident set) said the extra harness did not add score,
-   and the growth went on (A6).
+1. **No outside outcome.** The harness has served itself (A7). With no feature of a real project to measure against,
+   each defect of its own way of working became its next feature, and "done" kept moving (A2).
+2. **Growth has no limit that holds.** Two limits were set and neither held (A2). What enters comes from three
+   sources: failures turned into controls (131 failures, 26 controls replaced, A3); his own requests, which the plan
+   rightly takes in (rule 1 and the depth pass, local time, the double review with Codex, all of 10-31 and 11-01); and
+   his three choices for more scope or a longer wait (A5). Nothing measures the growth against a ceiling.
+3. **Review cost is rule times activity.** Two reviews on every code slice is his decision (Decided, "Direction") and
+   a sound one; its multiplier, about two to four Codex runs a pull request, times 753 pull requests, brought the
+   reviewer's weekly limit near the line where no code ships (A4).
+4. **The process asks him about itself.** 150 questions in 18 days, many about rules, spend and merges; 38% at least
+   answered with the recommended option word for word; one rule on how answers are recorded holding the only work in
+   flight (A5). Many questions are ceremony around decisions he delegates in practice.
+5. **What went right.** The founding plan met its estimate in substance (A1); the first-turn load fell 29% (A6); the
+   gate moved to GitHub (A2); his projects are moved (A7); F5 and F6 confirmed the bet. F8 is half done and its
+   measured steps passed. The mistake is of direction and limits, not of craft.
 
-None of this says the work was careless: the product's core (install and an exact uninstall, `init`, `check` and
-its sensors, the task contract, the reviews' records, `doctor`, the memory backup) works, is tested, and is what the
-founding plan asked for. The mistake is of direction, not of craft.
+## C. How we would start again today: three options
 
-## C. How we would start again today
+### C1. Keep F8 as it stands
+Finish S2, S4b, S5, S5c-b, S6, S7 and S8 in that order (`docs/ROADMAP.md:576-729`). Its strengths are real: frozen
+thresholds (S8's incident target `max(17, min(20, L + 3))`), a probe and a pass line per step, a register of his
+decisions, and steps that already cover much of what a re-plan would ask for: S5 classifies every rule for retirement,
+S6 cuts the roadmap's Next and Decided to at most 10k, S7 sets the topology. Its gaps: nothing in it limits growth,
+and S8 certifies the harness on evals, not on a real project's feature. Cost (estimate): the forecast $141 plus
+S5c-b's $34-65 (`docs/ROADMAP.md`, "Spent so far", S5c-b); seven steps, about one a day at the pace of 10-28 to 10-30,
+so one to two weeks if nothing else enters, longer at the measured growth.
 
-Knowing all of the above, a plan started today would keep the founding principles and Rule 1, and add four that the
-37 days taught. Each is stated so a check can hold it:
+### C2. Adjust F8 (the recommended option)
+F8 stays the spine, in its order, with four changes:
+- **A growth limit that holds**: a week whose `progress --pace` shows more added than closed stops new work, except a
+  break of shipped behaviour or an F8 step, until it closes; what waits goes to a "Later" list he reads once a week.
+  This replaces his "No, sigue entrando" (his decision, E3).
+- **An outcome**: one real feature in one of his projects, built with the harness, before S8; 1.0.0 is the version it
+  ran on, after S8. This replaces the wait on gentle-ai #4036, which is moot once S2 removes gentle-ai (his decision).
+- **Fewer questions about the process**: the reversible ones decided with their stated default and listed for him
+  once a day, and an answer he taps counts as his (both his decisions; the second ends question 150's kind).
+- **Less new machinery**: S5c-b deferred until S8 shows it is needed ($34-65 saved, estimate); no new orchestration
+  feature while the limit is red.
 
-- **A real project is the customer.** A phase is done when it shipped something in one of his projects, not in
-  js-harness alone.
-- **One work session at a time on this machine** until a measure shows a second one pays for its failures.
-- **The plan closes faster than it grows**: `progress --pace` over a week shows closed above added, or new work
-  waits.
-- **A control is built for a failure seen twice, or once at a high cost** (the rule-making test AGENTS.md already
-  states), and a component that a subtraction trial shows adds no score is retired.
+| Step | F8 today | Adjusted |
+|---|---|---|
+| Growth limit | none | new, first |
+| S2 removal | next | same, next |
+| A real feature in his project | none (S12 moved the projects) | new, beside S2 or right after it |
+| S4b, S5, S6, S7 | in order | same |
+| S5c-b | before S8 | deferred, by S8's result |
+| S8 certification | evals | evals plus the real feature |
+| 1.0.0 | waits for #4036 and "everything verified" | the real feature's version, after S8 |
 
-The plan, in order:
-
-| Step | What | Done when | Drops or freezes |
-|---|---|---|---|
-| R0 Re-plan | A `ROADMAP` v2 of at most about 200 lines; today's file frozen beside `origin.md` as history | v2 merged; `progress` reads it | new features, except a break of shipped behaviour, for the week of R0-R2 |
-| R1 Subtraction trial | Principle 2 run for real: the incident set and the F5 tasks with the core only (product modules, two reviews, `CLAUDE.md` cut to what the core needs) against today's full harness | the eval verdict rule (`docs/ROADMAP.md`, "Eval verdict") says which arm wins | nothing yet; it decides R3 |
-| R2 Operating model | One work session at a time; the full suite on GitHub Actions (free since the repository is public), the local pre-commit kept to fast checks; merges on the green of that run | a week measured against last week's numbers in this document | the local gate lock and WSL mirror as a requirement; background fan-out |
-| R3 Retire | What R1 shows adds no score leaves, through git (code) and `rules change` (rules) | the share of code in the operating model falls; rules counted again | per R1: candidates are the stretch protocol, templates' gate, per-moment page generators, the throughput protocol's daily snapshots, directive coverage (S5c, $95-130 forecast) |
-| R4 Finish F8's subtraction | F8's own removal and cuts: S2 (gentle-ai, Orca, herdr leave), S4a to S7 | as F8 states | S5c (above); the wait on gentle-ai #4036, moot once gentle-ai leaves |
-| R5 First real project | S13's rehearsal, then S12's migration, on abogadaclaudiajimenez; one real feature built there with the harness | that feature merged in his project, measured | — |
-| R6 1.0.0 | 1.0.0 is the version that R5 ran on, after S8's certification | tag | the condition "1.0.0 waits for #4036" |
+### C3. Restart, done well
+A new repository with only the product (install and an exact uninstall, `init`, `check` and sensors, contract,
+`doctor`, `stack`, `progress`, the review records, backup), about 20.6k lines of code by a rough module count plus their
+tests; the old one frozen. Its strongest case: the operating model's code, the rules and the plan's size would not
+carry over, and no rule would need retiring. Its costs: the new package must still undo exactly what the old one
+wrote on his machine and in his two projects, or the four purge scripts of the predecessor come back (`AGENTS.md`, the
+reversibility rule); the 753 reviewed pull requests' records stay behind; the features he uses daily (remote
+sessions, the backups, the board) are rebuilt or lost; one to two weeks with no outcome (estimate). And it does not
+fix the cause by itself: without a growth limit and an outcome, the new repository grows the same way.
 
 ## D. The contrast
 
-| # | Dimension | How we have been going | How we would go | Evidence | Cost or saving |
+| # | Dimension | How we have been going | Adjusted F8 | Evidence | Cost or saving |
 |---|---|---|---|---|---|
-| 1 | Customer | the harness itself | his projects | A7: 97% of transcripts on js-harness | saves the self-feeding loop (B1); costs nothing to switch |
-| 2 | Plan | 1,231-line roadmap, 1,190 steps, grows +38.5/day | ≤ ~200 lines, closes faster than it grows | A2 | saves the re-reading of a plan no session can hold (estimate: the roadmap's 144,791 bytes are about 36k tokens at 4 characters a token) |
-| 3 | Sessions | a lead and many sessions at once | one at a time, a lead only to plan | A3: about two thirds of failures in that machinery (estimate) | saves most failure sightings (estimate); costs wall-clock parallelism, which A2's lands suggest was eaten by gate waits and reds |
-| 4 | Gate | local lock, WSL mirror, merge queue | GitHub Actions; fast local pre-commit | A2: 39.4 h of lands, 18% not green; `throughput`: lock busy 2 h a day | saves the gate machinery's failures (`gate-at-its-bound`, `heavy-run-beside-gate`, `two-gates-at-once`: 19 sightings); costs CI latency (median 235 s on GitHub against 350 s here, `throughput`) |
-| 5 | Reviews | Codex + lenses on every code slice; two blind readers and many passes on proposals | the same two reviews (his rule), on far less code; proposals read once by two readers | A4: 1,506 Codex runs, 84% weekly, ~2 runs a PR | Codex use falls with code volume; no review is weakened |
-| 6 | Rules | 73, each with quotes and transcript lines | fewer, each with a check; one way his decision is recorded, typed or tapped | A5: question 150 | saves questions about the process; whether a tap counts is his decision |
-| 7 | Questions | ~8 a day, one at a time, work stops between | his decisions gathered once a day, the reversible ones decided with their default | A5 | saves stalled session-hours (9.9 upper bound on one day); costs him one read a day |
-| 8 | Measures | process in detail; outcome flat | outcome first: the incident set and a real project's feature | A6 | redirects eval spend to the question "does this help?" |
-| 9 | Per-turn load | 4.2k tokens and skills of 16k on demand | what the core needs | A6 | most of `CLAUDE.md` describes the operating model; it shrinks with it |
-| 10 | Release | 1.0.0 waits for everything, and for #4036 | 1.0.0 is the version a real project ran on | `docs/ROADMAP.md:75-78` | a date he can see |
+| 1 | Outcome | the harness itself; projects moved, no feature built | one real feature before S8 | A7 | costs one session and his choice of feature; gives "done" an outside measure |
+| 2 | Growth | +38.5 a day against 34.9 closed; two limits that did not hold | a limit read from `progress --pace` | A2 | saves the refill; costs ideas waiting a week |
+| 3 | Plan | 1,231 lines, about 36k tokens | S6's ≤ 10k for Next and Decided | A6 | already planned in F8 |
+| 4 | Payload | first turn 107.8k → 76.6k | S2's ≤ 80k over five sessions | A6 | already moving |
+| 5 | Reviews | Codex and lenses on every code slice, 2-4 runs a PR, 84% weekly | the same rule, on less new code | A4 | Codex use falls with activity; no review weakened |
+| 6 | Questions | about 8 a day; 38% the recommended option | defaults decided and listed daily; taps count | A5 | saves stalls like question 150's; costs him one read a day |
+| 7 | Rules | 73 (46 his) | S5's classification, as planned | A6 | already planned |
+| 8 | Sessions | the lead and up to 12 work sessions (`rule:work-sessions-public`) | unchanged unless S7 measures otherwise | A1, A3 | the origin of failures is not settled (A3), so no change is argued here |
+| 9 | Release | 1.0.0 waits for #4036 and everything | the version a real feature ran on | `docs/ROADMAP.md:75-78` | a date he can see |
 
 ## E. Recommendation
 
-**Adjust, deeply; do not restart.** A restart throws away the 18 days that met the founding plan and the core that
-works, and it would not remove the cause, which is the direction and the operating model, not the code. What to
-restart is the plan, not the repository: a short v2 aimed at his projects, the subtraction trial the principles
-already promised, and one session at a time until a measure says otherwise.
+### E1. Adjust F8; do not restart
+F8's direction is measured to work (the payload fell, every step passed its line). What failed is the limit on growth
+and the absence of an outside outcome. A restart costs one to two weeks and the exact-undo work, and repeats the
+growth unless those two are fixed; keeping F8 unchanged keeps the growth. Adjusting fixes the two with the least
+change. Every step below that changes one of his decisions is his.
 
-Every one of these is his to decide. The first three steps, if he says yes:
+### E2. The first three steps
+1. **His decision on the growth limit.** One question: replace "No, sigue entrando" (10-17) with the limit of C2.
+   A yes covers recording the rule from his typed words and the lead holding new work while the week is red; it does
+   not stop a fix of shipped behaviour or an F8 step. No means things go on as today. His time: one answer. Done
+   when: the rule is recorded (`js-harness rules <id>` exits 0) and `progress --pace` over the next 7 days shows
+   closed at or above added.
+2. **His choice of the real feature.** Which project (abogadaclaudiajimenez or plataforma-preproyecto) and which
+   feature, small enough for one session. His time: one answer and a review of the result. Cost: one session
+   (estimate). Done when: the feature is merged in his project with both reviews recorded, and the session's notes
+   name what the harness helped or got in the way of.
+3. **S2, as planned.** Writers quiesced, a full backup, a restore drill, each removal asked at that moment, the probe
+   (hooks 32 → 14, `fixed load` ≤ 80,000 over five sessions, `docs/ROADMAP.md:576-592`). Cost: about $18 (estimate).
+   His time: three or four answers at the moment of each removal, and D4 right after.
 
-1. **R0, the re-plan (his decision).** A yes covers: no new feature starts for about a week except a break of what
-   already works; one session writes `ROADMAP` v2 and freezes today's file as history; F8's open work is mapped into
-   v2. It does not authorize removing any code or rule. The other option is to keep the current roadmap and its
-   order. Cost: one session of documents, no Codex run.
-2. **R1, the subtraction trial.** The incident set and the F5 tasks, core only against the full harness, under the
-   eval verdict rule. Cost (estimate): about $60, S0's three runs as reference (`docs/ROADMAP.md`, S0: $59.64), on
-   his plan's limits with no fixed cap (D2). It decides what R3 retires.
-3. **R2, a measured week of one session at a time with the gate on GitHub Actions.** Compared with this document's
-   numbers: failures a week (55 last week), pull requests a week, Codex share used, questions a day (about 8), steps
-   closed against added (488 against 539). Whether two reviews stay on every slice stays as he decided; only their
-   volume changes.
+### E3. His decisions this touches
 
-What is not known: how much of the operating model's code R1 will show to be dead weight (the trial says); whether
-one session at a time ships less (R2 measures it); the share of failures by origin is a keyword estimate (A3); the waits and the answer times are measured
+| His decision | Where | His words | The change |
+|---|---|---|---|
+| First version's scope | `docs/ROADMAP.md:75` | "No, sigue entrando"; "reloj suizo" | the growth limit (step 1) |
+| 1.0.0 waits for #4036 | `docs/ROADMAP.md:76` | "Sí, la espera" | 1.0.0 after the real feature and S8 |
+| Releases before 1.0.0 | `docs/ROADMAP.md:78` | "hasta que no verifiquemos bien que todo esta bien" | the real feature becomes part of "verified" |
+| 1.0.0 review and record | `docs/ROADMAP.md:77` | "revision completa de todo el proyecto" | unchanged; stays before the tag |
+| Directive coverage | `docs/ROADMAP.md:159` | "Listo, añadámosla" | S5c-b deferred to S8's result |
+| Questions | `rule:questions-one-place`, the kept line "One question at a time" | — | defaults listed once a day; one at a time stays for the rest |
+| How his rules are recorded | `bin/lib/rules-change.mjs:232` | (question 150, open) | a tap counts as his |
+| Two reviews on every slice | Decided, "Direction" | "revision siempre…" | unchanged |
+| Session caps | `rule:work-sessions-public` 12, `work-sessions-private-wsl` 6 | his | unchanged |
+
+### E4. Risks of the adjustment, and how each would be noticed
+
+| Risk | Noticed by | Way back |
+|---|---|---|
+| The limit holds back a real fix | a break of shipped behaviour waits: the lead's report names it | the limit exempts breaks by its own text |
+| The real feature finds the harness in the way of his project | its notes and the two reviews | it is one feature; the project's `uninstall` restores it exactly (S12, L20-L22) |
+| Codex runs out before 11-04 with code in flight | `js-harness codex-meter` before each run | his reserve rule (questions 147-148) or wait for the reset |
+| Fewer questions hides a decision of his | the daily list | he can reverse any listed default |
+
+### E5. What is not known
+The origin of the failures (A3: a third to two thirds, by keyword); whether one feature in a real project is enough
+to judge the harness; whether the growth limit slows the fixes he values; the waits and the answer times are measured
 for one day, 2026-10-31, because `js-harness throughput --since 2026-10-13 --until 2026-11-01` printed nothing within
-300 seconds and was not run again.
+300 seconds and was not run again. The model-conduct failures (`told-him-unverified` 12, `hours-guessed` 9,
+`estimate-passed-as-fact` 6) get no new remedy here; S8 counts their classes, and the incident cases 01, 02 and 05
+that fail on every trial are where a remedy would be measured.
 
 ## Log
 - L1 2026-11-01 13:11 local — his request, typed (the lead's transcript `0f71b2c6`, line 47737): "excelente hazme un
   analisis completo de como deberiamos empezar de nuevo y alinear todo y me lo contrastas y comparas de como
   veniamos, osea como hacer un reajuste del plan por si depronto lo estabamos haciendo mal".
 - L2 2026-11-01 — the context: on his return he wrote "creo que tenias el flujo de trabajo parado" (line 47608); the
-  lead answered that question 150 had held the only working session (line 47677).
-- L3 2026-11-01 — T1 and T2 done in this session (JH 128). Commands and their outputs as cited in sections A1-A7.
+  lead answered that question 150 held the only working session (line 47677).
+- L3 2026-11-01 — T1 and T2 done in this session (JH 128); first draft committed as 27977325.
+- L4 2026-11-01 — gentle-ai: 27977325 approved at low risk with no lenses (`non_executable_only`), lineage
+  review-ca6182a2bbc23a8c, acknowledged. No Codex run: documents only, and the weekly limit is at 84%.
+- L5 2026-11-01 — the double review (`rule:double-review`), two blind Claude readers on 27977325, 5 of 10 each.
+  The claims reader (128k tokens), each finding fixed: (1) the refutation read the incident set's "no worse" pass as a
+  failure and left out the payload's fall: rewritten in item 4 and A6; (2) "two thirds of failures from the parallel
+  sessions" rested on a broad keyword list (a strict one gives about a third): A3 now gives the range and B no longer
+  leans on it; (3) the weekly jump of failures marks when the register began (2026-10-11): said in A3; (4) six of his
+  decisions changed without being named: E3; (5) the gate is on GitHub since 10-27 and GitHub is the faster: A2 and D
+  rewritten, the "gate" step dropped; (6) the per-turn comparison left out the global file: A6 compares the whole
+  payload, Codex's growth included; (7) question 150's wait was 26 hours with the computer off part of it: A5;
+  (8) the Codex multiplier is set by the rule, and question 148's forecast did not hold: A4 and B3; (9) slips fixed
+  (commits a day 12-401, 364 distinct PRs, rules by owner, 94% by count, seven passes).
+  The missing-things reader (111k tokens), each answered: (1) the freeze and F8's waiting rule were tried and did not
+  hold: A2 and B2; (2) no fair comparison with finishing F8: C1 and the mapping table in C2; (3) his decisions
+  unflagged: E3; (4) his part in the growth: A5 and B2; (5) risks: E4, and the gate risk is gone with the gate step;
+  (6) his time and dates: in C1 and E2; (7) steps not runnable: each step in E2 has a done-when, and "one session at a
+  time" is no longer proposed since its evidence did not hold; (8) the restart dismissed: C3 costs it; (9) the fixed
+  load: A6; (10) no outcome objective: C2 and E2 step 2; (11) the model-conduct failures: E5 says they get no new
+  remedy here; (12) the waits measured one day: said in E5. Rejected: none. Not done: the reader's suggestion to put the
+  open in-flight feature documents (JH 116, 119, 121, 123, 124, 126) in a disposition table, since the adjustment keeps
+  them as they are and the lead routes them.
