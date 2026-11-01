@@ -76,6 +76,16 @@ test('a reply that closes with its state lets the session stop: the answer is an
   assert.deepEqual([result.code, result.out, result.err], [0, PASS, '']);
 });
 
+test('a reply that gives a UTC clock time in its prose is turned back with rule:local-time; one in a code span passes', async () => {
+  const utc = await hook(stopPayload('Volviste a las 05:46Z.\n\n**Sigo solo** — espero el gate.'));
+  const answer = JSON.parse(utc.out);
+  assert.equal(answer.decision, 'block');
+  assert.match(answer.reason, /"05:46Z" \(line 1\) is \d{2}:\d{2}/);
+  assert.match(answer.reason, /rule:local-time/);
+  const quoted = await hook(stopPayload('El aviso dice `2026-11-01T05:46:19Z`.\n\n**Sigo solo** — espero el gate.'));
+  assert.deepEqual([quoted.code, quoted.out], [0, PASS]);
+});
+
 test('a stop the hooks already turned back is let through without reading the project, so it cannot loop', async () => {
   const result = await hook(stopPayload('No state here.', { stop_hook_active: true }));
   assert.deepEqual([result.code, result.out, result.read], [0, PASS, []]);

@@ -18,6 +18,7 @@
 import path from 'node:path';
 import { readNotices } from './channel.mjs';
 import { harnessHome } from './home.mjs';
+import { localHour, localZone } from './local-time.mjs';
 import { linesHolding, personTimesIn } from './person-times.mjs';
 import { comparable, mainCheckout, projectSlug } from './sessions.mjs';
 import { isLeadSession } from './stale-board.mjs';
@@ -41,7 +42,6 @@ const ARTIFACT_URL = /https:\/\/claude\.ai\/(?:code\/)?artifact\/[A-Za-z0-9_-]+/
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const blocksOf = (entry) => (Array.isArray(entry?.message?.content) ? entry.message.content.filter(isObject) : []);
 const timeOf = (entry) => Date.parse(entry?.timestamp ?? '');
-const hhmm = (iso) => new Date(iso).toISOString().slice(11, 16);
 
 /** The text a tool result holds: its content as a string, or its text blocks joined. */
 function resultText(block) {
@@ -169,8 +169,8 @@ export function returnReportWarning(payload, state, io) {
   const urls = pages.size === 0 ? new Set() : publishedUrls(text, pages, backMs, cwd);
   if (linked(urls, payload.last_assistant_message, text, backMs)) return null;
 
-  return `js-harness reply: ${RETURN_MARKER} ${(away / 3600_000).toFixed(1)} hours away (his message at ${hhmm(back)} UTC, `
-    + `the one before at ${hhmm(before)} UTC) and no reply since links the status page (rule:reports-spanish-visual). `
+  return `js-harness reply: ${RETURN_MARKER} ${(away / 3600_000).toFixed(1)} hours away (his message at ${localHour(back)}, `
+    + `the one before at ${localHour(before)}, local time ${localZone(back)}) and no reply since links the status page (rule:reports-spanish-visual). `
     + 'Run `js-harness report --mark --html <file> --notes <file>`, publish the file it wrote unchanged with Artifact, '
     + `and link its URL in your reply. This is said once for this return ${named}.`;
 }
@@ -212,12 +212,12 @@ export function returnStretchWarning(payload, state, io) {
   const stretches = stretchesOf(home, slug, io.readFile);
   const open = stretches.findLast((one) => one.closedAt === null && one.openedAt < backMs);
   if (open !== undefined) {
-    return `js-harness reply: he came back at ${hhmm(back)} UTC and ${OPEN_STRETCH_MARKER} (${open.id}; rule:away-autonomy). `
+    return `js-harness reply: he came back at ${localHour(back)} local time (${localZone(back)}) and ${OPEN_STRETCH_MARKER} (${open.id}; rule:away-autonomy). `
       + 'Close it with `js-harness stretch close --html <file>` and show its return page in your reply. '
       + `This is said once for this return ${named}.`;
   }
   if (stretches.some((one) => one.openedAt <= backMs && (one.closedAt === null || one.closedAt >= beforeMs))) return null;
-  return `js-harness reply: he came back at ${hhmm(back)} UTC after ${hhmm(before)} UTC and ${NO_STRETCH_MARKER} `
+  return `js-harness reply: he came back at ${localHour(back)} after ${localHour(before)}, local time (${localZone(back)}), and ${NO_STRETCH_MARKER} `
     + '(rule:away-autonomy), so his return has no estimate to measure against. Tell him so in your report, and add a '
     + '`- Seen:` line to `stretch-not-opened` in docs/FAILURES.md with the times of his absence. '
     + `This is said once for this return ${named}.`;

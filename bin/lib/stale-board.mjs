@@ -24,6 +24,7 @@
 
 import { readNotices } from './channel.mjs';
 import { harnessHome } from './home.mjs';
+import { localHour, localZone } from './local-time.mjs';
 import { CHECK_MINUTES, CURSOR_SCHEMA, cursorOf, liveCursorPath, pendingRows } from './live-rows.mjs';
 import { mainCheckout, projectSlug, roleOfTitle, sameSession } from './sessions.mjs';
 import { lastLineWith } from './stop-wake.mjs';
@@ -78,7 +79,6 @@ function savedBoard(file, readFile) {
   }
 }
 
-const hhmm = (iso) => new Date(iso).toISOString().slice(11, 16);
 
 /** Whether the transcript of `payload` holds a Stop warning of this hook with `marker` and `named`. */
 function warnedBefore(payload, io, marker, named) {
@@ -99,7 +99,7 @@ function rowsWarning(payload, io, saved, record, now) {
 
   const named = `(oldest ${oldest.id})`;
   if (warnedBefore(payload, io, `${STALE_MARKER} ${named}`, named)) return null;
-  return `js-harness reply: ${rows.length} ${STALE_MARKER} ${named}, the oldest since ${hhmm(oldest.time)} UTC, `
+  return `js-harness reply: ${rows.length} ${STALE_MARKER} ${named}, the oldest since ${localHour(oldest.time)} local time (${localZone(oldest.time)}), `
     + `longer than one check holds (${CHECK_MINUTES} min): ${saved.url} shows the record as it was then. Send them: `
     + '`js-harness sessions live --out <dir>`, each `ArtifactData` set it prints with each row\'s Spanish `sesion` and `texto` '
     + 'added, then `js-harness sessions live --sent <file>` for each file sent. This is said once for these rows.';
@@ -129,9 +129,9 @@ function summaryWarning(payload, io, saved, record, { home, slug }, now) {
   if (warnedBefore(payload, io, SUMMARY_MARKER, named)) return null;
   const noun = after.length === 1 ? 'notice' : 'notices';
   const when = content === undefined
-    ? `${named}: no write of board/summary with now or status is recorded since ${hhmm(since)} UTC`
-    : `at ${hhmm(since)} UTC ${named}`;
-  return `js-harness reply: ${after.length} ${noun} ${SUMMARY_MARKER} ${when}, the oldest at ${hhmm(oldest)} UTC, `
+    ? `${named}: no write of board/summary with now or status is recorded since ${localHour(since)}`
+    : `at ${localHour(since)} ${named}`;
+  return `js-harness reply: ${after.length} ${noun} ${SUMMARY_MARKER} ${when}, the oldest at ${localHour(oldest)}, local time (${localZone(oldest)}), `
     + `longer than one check holds (${CHECK_MINUTES} min): ${saved.url} shows now, status and yours as they were then. `
     + 'Write them from the record (`js-harness sessions` for the sessions and the open questions): `ArtifactData` update '
     + 'of collection `board`, doc_id `summary`, carrying `now` and `status`; the checked fields that `sessions live --out` '

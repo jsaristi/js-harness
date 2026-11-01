@@ -7,9 +7,12 @@ import { mainCheckout, projectSlug } from './sessions.mjs';
 import { RECORD_SCHEMA as STRETCH_SCHEMA, stretchFile } from './stretch.mjs';
 import { RENDERED_SCHEMA, renderedFile } from './template-record.mjs';
 
+// Its times are shown in local time (rule:local-time): the zone is pinned so no machine's own decides a result.
+process.env.TZ = 'America/Bogota';
+
 // The return check (odd/tasks/lead-duty-checks.md, spec 2). Its records are handed in: the channel record, the
 // rendered record of the templates and the lead's transcript, under a home of the test's own. The times are the
-// lead's transcript 0f71b2c6 of 2026-10-31: his message before he left at 18:54Z, his return at 01:33:48Z, the page
+// lead's transcript 0f71b2c6 of 2026-10-31: his message before he left at 13:54, his return at 01:33:48Z, the page
 // published at 01:47:29Z and linked at 01:47:49Z (lines 38106 to 38120).
 const PROJECT = path.resolve('/work/project');
 const HOME = path.resolve('/home/me');
@@ -72,7 +75,7 @@ test('a planted return without the page is turned back once, with what to run', 
   assert.ok(reason.includes(RETURN_MARKER), reason);
   assert.match(reason, /^js-harness reply: /);
   assert.match(reason, /6\.7 hours/, 'how long he was away');
-  assert.match(reason, /01:33 UTC/, 'when he came back');
+  assert.match(reason, /20:33, the one before at \d{2}:\d{2}, local time UTC-05:00/, 'when he came back, in local time');
   assert.match(reason, /js-harness report --mark --html <file> --notes <file>/);
   assert.match(reason, /Artifact/);
   assert.match(reason, /rule:reports-spanish-visual/);
@@ -94,7 +97,7 @@ test('short messages after his return keep it a return: the lead\'s first reply 
   // The lead's 0f71b2c6: "ya llegue" at 01:33:48Z, then 01:34:51Z, 01:42:11Z and 01:42:44Z, and the first reply at 01:43:11Z.
   const transcript = [...RETURN, his('2026-10-31T01:34:51.980Z'), his('2026-10-31T01:42:11.327Z'), his('2026-10-31T01:42:44.417Z')];
   const reason = check({ transcript });
-  assert.match(reason, /his message at 01:33 UTC/);
+  assert.match(reason, /his message at 20:33,/);
   assert.match(reason, /\(return at 2026-10-31T01:33:48\.205Z\)/);
   assert.equal(check({ transcript: [...transcript, ...published('2026-10-31T01:47:29.192Z')], renders: PAGE_RENDERED, message: LINKED }), null);
 });
@@ -169,7 +172,7 @@ test('a page published through the call\'s files, a map, a list or a relative pa
 });
 
 test('a publish before the render it would carry is not the page: the file it sent held the report before', () => {
-  // The path rendered before he came back, published at 01:40Z, and rendered again at 01:46:50Z: the 01:40Z artifact
+  // The path rendered before he came back, published at 20:40, and rendered again at 01:46:50Z: the 20:40 artifact
   // holds the old report.
   const transcript = [...RETURN, ...published('2026-10-31T01:40:00.000Z')];
   assert.notEqual(check({ transcript, renders: [rendered('2026-10-31T01:00:00.000Z'), ...PAGE_RENDERED], message: LINKED }), null);

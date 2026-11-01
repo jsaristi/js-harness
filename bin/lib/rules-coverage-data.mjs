@@ -139,6 +139,15 @@ export const COVERAGE = {
       "level": "owed",
       "since": "2026-10-28"
     },
+    "local-time": {
+      "level": "check",
+      "test": "bin/lib/reply-time.test.mjs",
+      "break": {
+        "path": "bin/lib/reply-time.mjs",
+        "find": "if (times.length === 0) return null;",
+        "replace": "if (times.length >= 0) return null;"
+      }
+    },
     "memory-feedback-home": {
       "level": "owed",
       "since": "2026-10-28"

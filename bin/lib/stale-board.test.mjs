@@ -7,6 +7,9 @@ import { mainCheckout, projectSlug } from './sessions.mjs';
 import { isLeadTitle, STALE_MARKER, SUMMARY_MARKER, staleBoardWarning } from './stale-board.mjs';
 import { SHOWN_SCHEMA, SUMMARY_SUBJECT, shownFile } from './template-record.mjs';
 
+// Its times are shown in local time (rule:local-time): the zone is pinned so no machine's own decides a result.
+process.env.TZ = 'America/Bogota';
+
 // The stale-board check (odd/tasks/visual-pages.md, spec 3, T4). Its records are handed in: the cursor of the board,
 // the channel record and the lead's transcript, under a home of the test's own.
 const PROJECT = path.resolve('/work/project');
@@ -54,7 +57,7 @@ test('the lead whose rows waited longer than one check is told how many, since w
   const reason = check();
   assert.ok(reason.includes(STALE_MARKER));
   assert.match(reason, /^js-harness reply: 1 rows/);
-  assert.match(reason, /since 22:00 UTC/);
+  assert.match(reason, /since 17:00 local time \(UTC-05:00\)/);
   assert.match(reason, /\(oldest 2026-10-28T22:00:00\.000Z-work-1\)/);
   assert.ok(reason.includes(BOARD));
   assert.match(reason, /Spanish `sesion` and `texto`/, 'rows sent from the warning alone reach him in Spanish');
@@ -135,8 +138,8 @@ test('the lead whose summary was last written with now or status before notices 
   const reason = summaryCheck({ shown: [summaryWrite('2026-10-28T21:30:00.000Z', CONTENT)] });
   assert.ok(reason.includes(SUMMARY_MARKER), reason);
   assert.match(reason, /^js-harness reply: 1 notices? /);
-  assert.match(reason, /last written with now or status at 21:30 UTC/);
-  assert.match(reason, /the oldest at 22:00 UTC/);
+  assert.match(reason, /last written with now or status at 16:30 /);
+  assert.match(reason, /the oldest at 17:00, local time \(UTC-05:00\)/);
   assert.match(reason, /\(summary of 2026-10-28T21:30:00\.000Z\)/);
   assert.ok(reason.includes(BOARD));
   assert.match(reason, /checked fields .* do not count/);
@@ -148,7 +151,7 @@ test('a summary write carrying only the checked fields does not count as its con
   assert.match(summaryCheck({ shown }), /\(summary of 2026-10-28T21:30:00\.000Z\)/);
   const never = summaryCheck({ shown: [summaryWrite('2026-10-28T21:30:00.000Z', CHECKED)] });
   assert.ok(never.includes(SUMMARY_MARKER), 'only checked writes since the record began');
-  assert.match(never, /no write of board\/summary with now or status is recorded since 21:30 UTC/);
+  assert.match(never, /no write of board\/summary with now or status is recorded since 16:30\b/);
   assert.match(never, /\(summary of none\)/);
 });
 

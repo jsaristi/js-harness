@@ -2,6 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { failuresOf, problemsOf } from './stretch-why.mjs';
 
+// Its times are shown in local time (rule:local-time): the zone is pinned so no machine's own decides a result.
+process.env.TZ = 'America/Bogota';
+
 const H = 3_600_000;
 const T0 = Date.parse('2026-10-28T12:00:00Z');
 const at = (hours) => new Date(T0 + hours * H).toISOString();
@@ -47,9 +50,9 @@ test('a cell says only what a record says, with its source, and is empty, "no re
   const rows = problemsOf(view, { notices: [], explains: [] });
   const goal = rows.find((row) => row.target === 'G2');
   assert.deepEqual(cells(goal), { why: ['su comando terminó con exit 1'], fix: [], open: [], fixed: false });
-  assert.match(goal.why[0].source, /revisión de las 20:00Z/);
+  assert.match(goal.why[0].source, /revisión de las 15:00/);
   const fixed = rows.find((row) => row.kind === 'failure' && row.target === at(1));
-  assert.deepEqual(cells(fixed), { why: ['gate fail: bin/a.test.mjs'], fix: ['una corrida posterior pasó a las 13:30Z'], open: [], fixed: true });
+  assert.deepEqual(cells(fixed), { why: ['gate fail: bin/a.test.mjs'], fix: ['una corrida posterior pasó a las 08:30'], open: [], fixed: true });
   assert.match(fixed.what, /JH 69/);
   const land = rows.find((row) => row.kind === 'failure' && row.target === at(4));
   assert.deepEqual(cells(land), { why: ['land exit 1'], fix: [], open: [], fixed: false });
@@ -65,8 +68,8 @@ test('an item not finished says its state at its last record, and its session\'s
     notice(9, 'JH 70 · tablero', 'waiting', 'después del cierre'),
   ];
   const row = problemsOf(view, { notices, explains: [] }).find((one) => one.target === 'W2');
-  assert.deepEqual(cells(row).why, ['seguía en curso al cierre; su último registro, 19:30Z', 'su último aviso de espera o pregunta: «Q12: ¿partimos la PR?»']);
-  assert.match(row.why[1].source, /JH 70 · tablero.*17:00Z/);
+  assert.deepEqual(cells(row).why, ['seguía en curso al cierre; su último registro, 14:30', 'su último aviso de espera o pregunta: «Q12: ¿partimos la PR?»']);
+  assert.match(row.why[1].source, /JH 70 · tablero.*12:00/);
 });
 
 test('an explanation names its target and source; each of its texts wins over the derived cell, the last one over earlier ones', () => {
@@ -99,7 +102,7 @@ test('a failure is named by its start: its explanation reaches that failure alon
   assert.match(rows[1].why[0].source, /aviso de JH ORQ/);
   assert.deepEqual(cells(rows[2]), { why: ['gate exit 1'], fix: [], open: ['espera la revisión del líder'], fixed: false });
   // The one fixed by a later run keeps what its records say.
-  assert.deepEqual(cells(rows[0]).fix, ['una corrida posterior pasó a las 13:30Z']);
+  assert.deepEqual(cells(rows[0]).fix, ['una corrida posterior pasó a las 08:30']);
 });
 
 test('a failure is named by the start its own record holds, so two cut to the opening differ and a later one takes no name', () => {
@@ -136,5 +139,5 @@ test('an explanation of a goal never reaches an item of the same id, nor the oth
 
 test('the open stretch says its items are still running, not at the close', () => {
   const row = problemsOf({ ...view, state: 'open' }, { notices: [], explains: [] }).find((one) => one.target === 'W2');
-  assert.match(row.why[0].text, /^sigue en curso; su último registro, 19:30Z/);
+  assert.match(row.why[0].text, /^sigue en curso; su último registro, 14:30/);
 });
