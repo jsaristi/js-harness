@@ -185,18 +185,14 @@ two readers" items (`docs/ROADMAP.md:256`, `:271`, mirrored at `README.md:766`) 
 is the one item 18 makes the onboarding ask for.
 
 ## Next step
-State on 2026-11-01 (context pause, after 608181b5). Resumed after the machine's shutdown (brief
-`2026-11-01T19-49-18-699Z-c21b9b30.md`). Main 8d7a8ec is merged (224c7e3e); before it, b92d669a cut the readers'
-prompt to 7 sentences so the coverage register stays under 1,000 lines (998 after the merge), and cc394be1 fixed
-`openedOn` (`bin/contract.mjs`), which held a document a merge brings from the trunk as opened today. Both
-sightings of stretch-not-opened of 2026-11-01 are in `docs/FAILURES.md` (64e911d6, 608181b5). Running: Codex and
-the lenses (reliability, resilience) over `64e911d..cc394be` in the temporary worktree
-`D:\js-harness\.claude\worktrees\harness-alignment-review` (detached at cc394be1; remove it with `git worktree
-remove` once both are recorded); main's commits and the merge already have their records. Then: push, and T6's
-rest that waits on nothing (the PR of what is done, `notify --kind ready`). Open: question 150 still has no typed
-words (0f71b2c6:46616 was a tap); T2 and T4 wait on them, then Claude 6 of L12 (D5's two exemptions). Meter 86%
-of the weekly limit, reset 2026-11-04, reserve 10%: a run that would cross it waits. Never edit a tracked file
-while a Codex review runs (L11). Done: T1, T5; T3 built and reviewed, open until T2.
+State on 2026-11-01, after 2ea4eb52. Main 8d7a8ec merged (224c7e3e), after b92d669a (prompt in 7 sentences, register
+998 lines) and cc394be1 (`openedOn` reads the trunk and MERGE_HEAD while a merge is committed). Lenses on
+64e911d..cc394be: 0; Codex: one P2 (a branch document could take a trunk document's day at the same path), fixed in
+2ea4eb52 (HEAD's history first, the other sides fill only missing paths). Both stretch-not-opened sightings of
+2026-11-01 are in `docs/FAILURES.md`. Next: Codex and the lenses over `d0913255..2ea4eb52`, then push, the PR of
+what is done and `notify --kind ready`. Open: question 150 has no typed words (0f71b2c6:46616 was a tap); T2 and T4
+wait on them, then Claude 6 of L12. Meter 86% weekly, reserve 10%. The gentle-ai Stop hook's slice from 64e911d6
+spans the merge of main: status only, start nothing. Never edit a tracked file while a Codex review runs (L11).
 
 ## Eval plan
 The eval owed by 2026-11-30 (spec 6), not run here: the case built from PR 737's brief runs on the current arm and
