@@ -190,9 +190,8 @@ Today's line (`node bin/js-harness.mjs progress --pace`, 2026-11-01): "Last 7 da
   remote first; the outside step's first unit there is to finish that onboarding, which starts with his answer.
 
 ## Next step
-- State 2026-11-01 14:35 local: pull request #743 open and ready on `rule/growth-limit` (234f0f75, 2b182296,
-  dad80c75, 28c0a708); Codex and the lenses cover every code commit; the gentle-ai slice review was not run.
+- State 2026-11-01 15:00 local: pull request #743 landed in two lands (main 8d7a8ec, then a316b7ce with 90ccf1b0);
+  Codex and the lenses cover every code commit; the gentle-ai slice review was not run. L10 travels as PR 744.
 - Question 151 answered: plataforma-preproyecto (2026-11-01T19:12:54Z, the lead's transcript `0f71b2c6`, line
   48234), recorded in the roadmap. Next, for the lead: the feature there, his choice, after its onboarding (L10); S2
   after JH 126 lands; the E3 rows one at a time; the week's line read on 2026-11-08; the rule reviewed on 2026-11-15.
-- PR 743 landed (main 8d7a8ec); its last commit, 90ccf1b0, missed the land and travels as PR 744.
