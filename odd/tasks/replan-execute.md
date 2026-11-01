@@ -103,7 +103,7 @@ and each of its removals; any reading of the limit wider than what the lead aske
   2b182296.
 - [x] T4 (kind: build) The rule, by `rules change`, a value rule of this repository, and the lead's routing line
   (spec 2). Route: inline. Commit: 2b182296.
-- [ ] T5 (kind: docs) The outside outcome and S2 proposed to the lead (specs 4, 5). Route: inline, `notify`.
+- [x] T5 (kind: docs) The outside outcome and S2 proposed to the lead (specs 4, 5). Route: inline, `notify`: question 151 and the note of 2026-11-01T19:30:33Z.
 
 ## The rule, as recorded
 
@@ -184,10 +184,8 @@ Today's line (`node bin/js-harness.mjs progress --pace`, 2026-11-01): "Last 7 da
   `rules change` took line 48080 and the week is red by 19 open steps. Item 1's home, section 9, did not hold (L6).
 
 ## Next step
-- State 2026-11-01 14:30 local: branch `rule/growth-limit`, not pushed; commits 234f0f75 (docs), 2b182296 (the
-  rule and the week's line), dad80c75 (docs). Codex and the lenses were started on `--base af3d44cc`; read their
-  records (`js-harness check --push` names what is not covered), fix their findings in a commit of their own and
-  re-review that commit only. gentle-ai: review my slice with base a179007a (JH 128's commits had their own review).
-- Then: push, open the pull request, `notify --kind ready --pr <n>`; a note to the lead for S2 (its own F8 step and
-  session: writers quiesced, so after JH 126 lands; each removal his) and for E3's rows after question 151 (T5).
-- Question 151 (the project) is open with the lead; nothing starts in his projects before his answer.
+- State 2026-11-01 14:35 local: pull request #743 open and ready on `rule/growth-limit` (234f0f75, 2b182296,
+  dad80c75, 28c0a708); Codex and the lenses cover every code commit; the gentle-ai slice review was not run.
+- Question 151 answered: plataforma-preproyecto (2026-11-01T19:12:54Z, the lead's transcript `0f71b2c6`, line
+  48234), recorded in the roadmap. Next, for the lead: the feature there, his choice; S2 after JH 126 lands; the E3
+  rows one at a time; the week's line read on 2026-11-08; the rule reviewed on 2026-11-15.
