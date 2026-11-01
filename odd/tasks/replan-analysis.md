@@ -81,7 +81,7 @@ Nothing is asked before the page reaches him; a question goes to the lead with `
 - [x] T2 (kind: docs) Write the analysis, sections A to E (specs 1-4). Route: inline.
 - [x] T3 (kind: verify) Two blind read-only readers, one attacking the claims, one looking for what is missing
   (`rule:double-review`); each finding answered in the Log. Route: two Claude sub-agents.
-- [ ] T4 (kind: docs) The Spanish visual page, published; the lead notified with the path and the URL (spec 5).
+- [x] T4 (kind: docs) The Spanish visual page, published; the lead notified with the path and the URL (spec 5).
   Route: inline.
 
 ## A. How we have been going
@@ -350,3 +350,7 @@ that fail on every trial are where a remedy would be measured.
   remedy here; (12) the waits measured one day: said in E5. Rejected: none. Not done: the reader's suggestion to put the
   open in-flight feature documents (JH 116, 119, 121, 123, 124, 126) in a disposition table, since the adjustment keeps
   them as they are and the lead routes them.
+- L6 2026-11-01 — the Spanish visual page, built by hand from this document (no command renders an analysis, so it
+  is marked `free` for the template gate), published at https://claude.ai/artifact/1EPj6FTbsB6C6n9aAT5iyJ (private;
+  he opens it from his account). Result against item 3 and item 4: spec 1 and spec 3 measured as predicted; the
+  refutation's first form was wrong (L5), its second supports an adjustment, not a restart.
