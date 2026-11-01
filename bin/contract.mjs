@@ -402,11 +402,15 @@ const gitIn = (root) => (args) => {
 };
 
 /** The commit and the day each document under `odd/tasks/` first came into `root`'s history, by its path today: one
- * `git log` oldest first, a rename carrying the day of the path it came from. Paths are the project's (`--relative`). */
-function openedOn(git) {
+ * `git log` oldest first over HEAD and the refs of `also` that exist, a rename carrying the day of the path it came
+ * from. Paths are the project's (`--relative`). */
+function openedOn(git, also = []) {
   const opened = new Map();
   let commit = null;
-  for (const line of git(['log', '--reverse', '--relative', '-M', '--diff-filter=AR', '--name-status', '--format=>%H %cs', '--', 'odd/tasks']) ?? []) {
+  // HEAD's history alone misses a document a merge in progress brings from the trunk or from MERGE_HEAD: it would
+  // count as opened today, and be held, though it opened on the side it comes from.
+  const revs = ['HEAD', ...also.filter((ref) => ref && git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]) !== null)];
+  for (const line of git(['log', '--reverse', '--relative', '-M', '--diff-filter=AR', '--name-status', '--format=>%H %cs', ...revs, '--', 'odd/tasks']) ?? []) {
     if (line.startsWith('>')) {
       const [hash, day] = line.slice(1).split(' ');
       commit = { hash, day };
@@ -461,7 +465,7 @@ function readJudge(git, since, today) {
   return depthPassJudge({
     since,
     today,
-    opened: openedOn(git),
+    opened: openedOn(git, [trunk, 'MERGE_HEAD']),
     branch: branch?.commits ?? null,
     staged: git(['diff', '--cached', '--relative', '--name-only']) ?? [],
     onTrunk: (file) => text(`${trunk}:./${file}`),
