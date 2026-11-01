@@ -135,3 +135,11 @@ Nothing planned: the rule is his typed words (L2) and the work is the brief's. A
   edit while it runs; meter before the rerun, weekly 83%. What stops it coming back is not in this feature: the
   control today is a check that detects it after the spend; a guard that refuses a Write or Edit in a worktree while
   its Codex review runs would prevent it, proposed to the lead.
+- L10 Codex over `9a80707..49c1e90`, run again: passed, 2 parts, 307,736 input tokens (above the 270,000 the plan
+  gave as its higher figure), four P2 findings on `bin/lib/reply-time.mjs`: one-digit hours, a Markdown link's label,
+  a code span over two lines, and the zone of each converted instant. Each became a failing test, then the fix,
+  c9f4999a. Codex over `49c1e90..c9f4999`: correct, 0.97, 4 of 4 fixed, 34,044 input tokens. The lenses over it found
+  one defect twice (readability, reliability): a test restored an unset `TZ` as the string "undefined"; fixed in
+  46e5c327. Codex over `c9f4999..46e5c32`: correct, 0.99, 27,335 input tokens; the reliability lens: 0 findings.
+  gentle-ai: the Stop hook offered the whole branch three times; its read-only status was run each time and nothing
+  started (CLAUDE.md), so no gentle-ai line covers a commit here.
