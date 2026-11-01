@@ -405,12 +405,21 @@ const gitIn = (root) => (args) => {
  * `git log` oldest first over HEAD and the refs of `also` that exist, a rename carrying the day of the path it came
  * from. Paths are the project's (`--relative`). */
 function openedOn(git, also = []) {
+  const opened = openedIn(git, 'HEAD');
+  // HEAD's history alone misses a document a merge in progress brings from the trunk or from MERGE_HEAD: it would
+  // count as opened today, and be held, though it opened on the side it comes from. Those sides only fill paths HEAD's
+  // history lacks, so a document of this branch never takes the day of another at the same path there (Codex P2).
+  for (const ref of also.filter((one) => one && git(['rev-parse', '--verify', '--quiet', `${one}^{commit}`]) !== null)) {
+    for (const [file, commit] of openedIn(git, ref)) if (!opened.has(file)) opened.set(file, commit);
+  }
+  return opened;
+}
+
+/** The opening of each document in the history of `rev` alone. */
+function openedIn(git, rev) {
   const opened = new Map();
   let commit = null;
-  // HEAD's history alone misses a document a merge in progress brings from the trunk or from MERGE_HEAD: it would
-  // count as opened today, and be held, though it opened on the side it comes from.
-  const revs = ['HEAD', ...also.filter((ref) => ref && git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]) !== null)];
-  for (const line of git(['log', '--reverse', '--relative', '-M', '--diff-filter=AR', '--name-status', '--format=>%H %cs', ...revs, '--', 'odd/tasks']) ?? []) {
+  for (const line of git(['log', '--reverse', '--relative', '-M', '--diff-filter=AR', '--name-status', '--format=>%H %cs', rev, '--', 'odd/tasks']) ?? []) {
     if (line.startsWith('>')) {
       const [hash, day] = line.slice(1).split(' ');
       commit = { hash, day };
