@@ -11,7 +11,7 @@ Codex and the Claude lenses, judged against what was asked, every finding answer
 raised to him and a stronger model (`## Redesign after question 150`, proposed to him, L15 and L17; 147's read on
 every small code change leaves it); a command
 runs both readers on the same frozen material and records every finding for the judgement of 2026-11-16; below the
-Codex reserve, if his answer keeps 148, a second Claude reader takes Codex's place and code keeps a Codex debt the
+Codex floor, 2% of the weekly limit left (L18), he is told and decides the reset, and only on his no a second Claude review takes Codex's place and code keeps a Codex debt the
 merge door lists; and the older texts that contradict rule 1 or this design are listed here and aligned.
 
 ## Why
@@ -19,23 +19,25 @@ On 2026-10-31 he asked to "alinear todo el arnes para que no vaya a quedar contr
 rule 1 landed (PR 738). His answers 145 to 148 (L2 to L5) replaced the double review he narrowed on 2026-10-27 (his D5)
 with a Claude reader and a Codex reader on everything, and decided what happens when Codex's weekly limit runs low.
 That limit read 79% used this morning (`js-harness codex-meter`), and this week's 328 code reviews alone reach the
-reserve before the reset on 2026-11-04 (Depth pass, item 2), so the reserve is built first.
+reserve before the reset on 2026-11-04 (Depth pass, item 2). On 2026-11-01 he replaced the reserve: Codex reviews to
+2% left, then he is told and decides the reset (L18).
 
 ## Done when
 - `node bin/js-harness.mjs contract check odd/tasks/double-review-alignment.md` exits 0
-- `node bin/js-harness.mjs rules codex-reserve` exits 0
+- `node bin/js-harness.mjs rules codex-floor` exits 0
+- `node bin/js-harness.mjs rules escalation-model` exits 0
 - `node bin/js-harness.mjs rules check` exits 0
-- `node --test bin/double-review.test.mjs bin/lib/double-review-records.test.mjs bin/codex-review-reserve.test.mjs bin/lib/codex-reserve.test.mjs` exits 0
+- `node --test bin/double-review.test.mjs bin/lib/double-review-records.test.mjs bin/codex-review-floor.test.mjs bin/lib/codex-floor.test.mjs` exits 0
 - `node --test bin/lib/protocols-skill.test.mjs bin/lib/project.test.mjs bin/lib/template-block.test.mjs bin/contract.test.mjs` exits 0, with `protocols-skill.test.mjs` asserting section 1's new text
 - `node --test bin/codex-review.test.mjs bin/lens-review.test.mjs bin/lib/codex-review-recheck.test.mjs` exits 0, with spec 7's request input, recheck and answers asserted
 - `npm run check` exits 0
 - the pull request is merged into main, named in `## Log`, with Codex and the Claude lenses recorded over its code
 
 ## In scope / Out of scope
-- In: `rule:double-review` and a new rule, `codex-reserve`, through `js-harness rules change`; the protocols skill's
+- In: `rule:double-review` and two new rules, `codex-floor` and `escalation-model`, through `js-harness rules change`; the protocols skill's
   source (`bin/lib/protocols-skill.mjs`, sections 1, 6, 7); `claudeBlock` (`bin/lib/project.mjs`); a new command
   `js-harness double-review` (`bin/double-review.mjs`, `bin/lib/double-review-*.mjs`, the dispatcher
-  `bin/js-harness.mjs`, `README.md`); the reserve in `codex-review` (`bin/codex-review.mjs`, `bin/lib/codex-reserve.mjs`)
+  `bin/js-harness.mjs`, `README.md`); the floor in `codex-review` (`bin/codex-review.mjs`, `bin/lib/codex-floor.mjs`)
   and its debt in `codex-meter` (`bin/codex-meter.mjs`); spec 7 in `codex-review` and its recheck
   (`bin/lib/codex-review-recheck.mjs`) and in `lens-review` (`bin/lens-review.mjs`, `bin/lib/lens-*.mjs`); the older texts of `## Older texts` below, each named there before it
   changes (`CLAUDE.md` and `AGENTS.md` only where that list names them); `docs/ROADMAP.md`; this document.
@@ -227,6 +229,10 @@ and T4 are rewritten on his answer to it, and no rule is recorded before.
 8. "obvio que si se hace una revision y no encuentra nada se aprueba y ya osea la idea es maximo hacer 3 revisiones y
    si no presentar un problema y ver que es lo que pasa y pasarlo a un modelo mas inteligente aprovechando que esta
    semana sale Fable 5.5" (L17, typed, his addition to question 150).
+9. "Aunque siempre avisame para reiniciar el limite semana" (L18, typed, to question 152).
+10. "me avisas cuando al uso semanal le quede el 2 al 1 porciento" (L18, typed).
+11. "Listo, entonces continua solo unas 2 horas" (L18, typed: his approval of the design with the notice at 2 to 1
+    percent in place of the 10% reserve).
 
 ## Older texts
 Each text found that contradicts rule 1 or this design, before it changes; the search: `grep -rnE "two (read-only
@@ -278,10 +284,12 @@ sweep, a record of that day (L16, Claude 10).
 ## Next step
 State on 2026-11-01, on `rule/review-flow` from main f063429 (PR 745 landed T1, T3 and T5). He answered question
 150 in his own words (L14) and added the bound (L17): `## Redesign after question 150`, decided in L15, read blind
-in L16 and its findings taken; it went to him as question 152 through the lead (2026-11-01 23:04 UTC, the reserve
-said apart, no options, so his answer is typed). Next: wait for it; T2 and T4 are rewritten on his answer (what it
-approves, and any change he writes), then Claude 6 of L12; T6 keeps T2's verifier,
-older text 16 and the report of how to try it. Meter 87% weekly; the reserve is not his rule yet.
+in L16 and its findings taken; question 152 put it to him, and he approved it with point 5 changed: no reserve, a
+notice at 2% left and his decision on the reset (L18). Next, in order, each a slice with Codex and the lenses: T4
+(section 1's text, then `rules change double-review`), T7, T8, T9, T2; D5's two exemptions (Claude 6 of L12) are
+kept in T4's text, since a question of fact proposes nothing and a reviewed text named by path is not read again, and
+the report says so for him to change. T6 keeps T2's verifier, older text 16 and the report of how to try it.
+Meter 87% weekly; floor 2% left.
 The gentle-ai Stop hook: status only, start nothing. Never edit a tracked file while a Codex review runs (L11).
 
 ## Eval plan
@@ -293,18 +301,28 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
 
 ## Tasks
 - [x] T1 (kind: docs) This document with its depth pass, committed with documents alone; spec all; 0fc1287e.
-- [ ] T2 (kind: build) `rules change codex-reserve` (after L9's answer), then `codex-review` reads the meter just
-  before it launches and, under the reserve, records the `codex-reserve` skip itself (a failed or missing reading
-  records none and says so; exactly 10% left is not under it; concurrent sessions each read before they launch, so
-  use may still cross it, unguaranteed); `codex-meter` lists the reserve skips no review has paid, by commit, after
-  their merge too, with the worktree command that pays each; older texts 4 and 13; spec 4; route codex-review.
+- [ ] T2 (kind: build) Point 5 as approved (L18): `rules change codex-floor` (2 percent of the weekly limit left,
+  his words of lines 49536, 49661 and 49690), then `codex-review` reads the meter just before it launches and, at or
+  under the floor, starts nothing and tells the lead to ask him about the reset (a failed or missing reading says so
+  and runs); only on his typed no a second Claude review runs in Codex's place and records a Codex debt that
+  `codex-meter` and the merge door list until a Codex review pays it, after the reset; never his reset credit; older
+  texts 4 and 13; spec 4, 9, 10, 11; route codex-review.
 - [x] T3 (kind: build) bcd2dd4a, 1a7638cf, c59e58b0, aad73210, 09725fbd, 532f4215; `js-harness double-review`: `read` (the frozen copy, both readers started at once, each echoing
   its read tokens, the Claude reader on `rule:subagent-reader-model`, blind by sequence (L12), the reserve, `--plan`
   announces), `take` (taken and shared), `skip`, `tally`; records under the git common dir, which no review row
   reads, with the test that a read leaves code uncovered; spec 1, 2, 3, 4.
-- [ ] T4 (kind: build) `rules change double-review` (after L9's answer): section 1's one text, `claudeBlock` and
-  section 7 name it, D5 retired by name, his rules on disagreement and rounds kept; older texts 1 to 3, 11, 14, 15,
-  18; spec 2.
+- [ ] T4 (kind: build) `rules change double-review` on his words of questions 145, 146, 150 and 152 (L2, L3, L14,
+  L17, L18): section 1's one text says points 1 to 4 of `## Redesign after question 150`, `claudeBlock` and section 7
+  name it, D5 retired by name; older texts 1 to 3, 11, 14, 15, 18, 20 and 21; spec 2, 7, 8.
+- [ ] T7 (kind: build) Point 2: `codex-review` and `lens-review` are given what was asked, every time: the feature
+  document's specs and contract for large work, `--request <text>` for small work, the gate turn included, and a
+  review with none says so; their prompts judge against it; spec 7; route codex-review, lens-review.
+- [ ] T8 (kind: build) Point 3: every finding of code's pair gets an answer, taken with its commit or rebutted with
+  evidence, recorded, and a tally gives each reviewer taken and rebutted; Codex's recheck blocks a regression the
+  correction brought into what it changed (a seeded test); the lenses get the recheck; spec 7.
+- [ ] T9 (kind: build) Point 4: at most three reviews of one change (the recheck allows a second recheck, not a
+  third); past them `codex-review` refuses, says the problem and what is open, and names the strongest model, one
+  rule value (`rules change escalation-model`, today `claude-fable-5-1`); spec 8.
 - [x] T5 (kind: build) Older texts 5, 6, 8, 9, 10, 12; spec 5; 2cb04248, 5cbbca4c and the commit of `sync`'s offer.
 - [ ] T6 (kind: verify) Reviews (Codex, lenses, an independent verifier for T2, a guard's input, and T3, two
   processes at once), gate, PR, older text 16; the report tells him how to try it (L1); spec all.
@@ -427,3 +445,14 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   once, at most three reviews, then the problem is raised and the work passes to a stronger model. "Fable 5.5" is
   his word, not verified: the strongest model this machine knows today is `claude-fable-5-1`, so the design names one
   value the rules hold. The lead (23:01 UTC): "Fold it into T2/T4 and the one question to him."
+- L18 (2026-11-01, typed, the lead's transcript `0f71b2c6`, read with `js-harness sessions --quote`, each with the
+  lead's question before it read in the transcript): line 49536, to question 152 as the lead put it at line 49530:
+  "Aunque siempre avisame para reiniciar el limite semana"; line 49661, to the lead's line 49655 (did he approve the
+  design with that change): "me avisas cuando al uso semanal le quede el 2 al 1 porciento"; line 49690, to the lead's
+  line 49684, which asked "¿apruebas el diseño con el aviso al 2–1 % en lugar de la reserva del 10 %?", and said that
+  a written "apruebo así" lets JH 126 record the rules and build points 2 to 5, spending no credit and running no
+  eval: "Listo, entonces continua solo unas 2 horas". Read as his approval of the redesign with point 5 changed: no
+  10% reserve; Codex reviews until 2% of the weekly limit is left; then the lead tells him and he decides the reset;
+  only on his no a second Claude review runs, with the code as a debt for Codex. The lead (23:35 UTC, to 126):
+  "Record the rules with his words (lines 49536, 49661, 49690) and build points 2 to 5. He is away about 2 hours."
+  Order: T4 (the rule text), T7, T8, T9, T2, each a slice with its reviews.
