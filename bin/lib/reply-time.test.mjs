@@ -1,0 +1,42 @@
+// The UTC-time check of a reply (bin/lib/reply-time.mjs, rule:local-time): a clock time in UTC in the reply's prose is
+// found, and one in a code block, inline code, a quoted line or a path is not. The zone is named, so the local times
+// the warning gives do not depend on the machine.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { utcTimesIn, utcTimeWarning } from './reply-time.mjs';
+
+process.env.TZ = 'America/Bogota';
+const NOW = Date.parse('2026-11-01T06:00:00Z');
+
+test('the lead\'s reply of 2026-11-01 is caught: its HH:MMZ and its ISO time, each with its line', () => {
+  const reply = 'Te fuiste a las 20:04Z y volviste.\nEl informe es de 2026-10-31T19:29:00.000Z.\n\n**Sigo solo** — espero.';
+  assert.deepEqual(utcTimesIn(reply).map(({ text, line }) => [text, line]), [['20:04Z', 1], ['2026-10-31T19:29:00.000Z', 2]]);
+});
+
+test('a time with "UTC" after it is UTC too, and a date with its minute; a zone named as an offset is not a time', () => {
+  assert.deepEqual(utcTimesIn('volvió a las 05:46 UTC, el 2026-10-31 14:08Z').map(({ text }) => text), ['05:46 UTC', '2026-10-31 14:08Z']);
+  assert.deepEqual(utcTimesIn('a las 00:46 (hora local, UTC-05:00), y 08:15:12 sin zona, a las 12:30'), []);
+});
+
+test('a code block, inline code, a quoted line and a path or URL keep their UTC times: a record shown as a record', () => {
+  const reply = [
+    'El aviso: `recorded at 00:46 local (2026-11-01T05:46:19Z)`.',
+    '> 2026-11-01T05:46:19Z sent by the user',
+    'El archivo C:\\logs\\run-05:46Z.txt y https://example.test/at/05:46Z',
+    '```',
+    'started 2026-10-31T19:29:00Z',
+    '```',
+  ].join('\n');
+  assert.deepEqual(utcTimesIn(reply), []);
+});
+
+test('the warning names each time with its local time and the rule, and asks for the times again; none when there is none', () => {
+  const warning = utcTimeWarning('Te fuiste a las 20:04Z; el informe es de 2026-10-31T19:29:00Z.', { now: NOW });
+  assert.match(warning, /^js-harness reply: /);
+  assert.match(warning, /rule:local-time/);
+  assert.match(warning, /"20:04Z" \(line 1\) is 15:04/);
+  assert.match(warning, /"2026-10-31T19:29:00Z" \(line 1\) is 2026-10-31 14:29/);
+  assert.match(warning, /UTC-05:00/);
+  assert.equal(utcTimeWarning('A las 15:04, hora local (UTC-05:00).', { now: NOW }), null);
+  assert.equal(utcTimeWarning('', { now: NOW }), null);
+});

@@ -140,9 +140,13 @@ export const COVERAGE = {
       "since": "2026-10-28"
     },
     "local-time": {
-      "level": "protocol",
-      "path": "bin/lib/protocols-skill.mjs",
-      "phrase": "a UTC time reaches the user only inside a code block, a quoted output or a path"
+      "level": "check",
+      "test": "bin/lib/reply-time.test.mjs",
+      "break": {
+        "path": "bin/lib/reply-time.mjs",
+        "find": "if (times.length === 0) return null;",
+        "replace": "if (times.length >= 0) return null;"
+      }
     },
     "memory-feedback-home": {
       "level": "owed",
