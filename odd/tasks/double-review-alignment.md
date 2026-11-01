@@ -5,11 +5,14 @@ Locator: `odd/tasks/double-review-alignment.md` · Engram mirror: `odd/double-re
 request to main each · Test runner: `node --test`
 
 ## Goal
-`rule:double-review` says, in one home, what he answered to questions 145 to 148: two blind reads, one of Claude and
-one of Codex, on plans, designs, proposing documents and every small code change, beside code's two reviews, skipped
-only by his words; a command runs both readers on the same frozen material and records every finding for the
-judgement of 2026-11-16; below the Codex reserve a second Claude reader takes Codex's place and code keeps a Codex
-debt the merge door lists; and the older texts that contradict rule 1 or this design are listed here and aligned.
+`rule:double-review` says, in one home, what he answered to questions 145, 146 and 150: two blind reads, one of
+Claude and one of Codex, on plans, designs and proposing documents, skipped only by his words; code's two reviews,
+Codex and the Claude lenses, judged against what was asked, every finding answered, at most three reviews and then
+raised to him and a stronger model (`## Redesign after question 150`, proposed to him, L15 and L17; 147's read on
+every small code change leaves it); a command
+runs both readers on the same frozen material and records every finding for the judgement of 2026-11-16; below the
+Codex reserve, if his answer keeps 148, a second Claude reader takes Codex's place and code keeps a Codex debt the
+merge door lists; and the older texts that contradict rule 1 or this design are listed here and aligned.
 
 ## Why
 On 2026-10-31 he asked to "alinear todo el arnes para que no vaya a quedar contradicciones o algo antiguo" (L1) once
@@ -24,6 +27,7 @@ reserve before the reset on 2026-11-04 (Depth pass, item 2), so the reserve is b
 - `node bin/js-harness.mjs rules check` exits 0
 - `node --test bin/double-review.test.mjs bin/lib/double-review-records.test.mjs bin/codex-review-reserve.test.mjs bin/lib/codex-reserve.test.mjs` exits 0
 - `node --test bin/lib/protocols-skill.test.mjs bin/lib/project.test.mjs bin/lib/template-block.test.mjs bin/contract.test.mjs` exits 0, with `protocols-skill.test.mjs` asserting section 1's new text
+- `node --test bin/codex-review.test.mjs bin/lens-review.test.mjs bin/lib/codex-review-recheck.test.mjs` exits 0, with spec 7's request input, recheck and answers asserted
 - `npm run check` exits 0
 - the pull request is merged into main, named in `## Log`, with Codex and the Claude lenses recorded over its code
 
@@ -32,7 +36,8 @@ reserve before the reset on 2026-11-04 (Depth pass, item 2), so the reserve is b
   source (`bin/lib/protocols-skill.mjs`, sections 1, 6, 7); `claudeBlock` (`bin/lib/project.mjs`); a new command
   `js-harness double-review` (`bin/double-review.mjs`, `bin/lib/double-review-*.mjs`, the dispatcher
   `bin/js-harness.mjs`, `README.md`); the reserve in `codex-review` (`bin/codex-review.mjs`, `bin/lib/codex-reserve.mjs`)
-  and its debt in `codex-meter` (`bin/codex-meter.mjs`); the older texts of `## Older texts` below, each named there before it
+  and its debt in `codex-meter` (`bin/codex-meter.mjs`); spec 7 in `codex-review` and its recheck
+  (`bin/lib/codex-review-recheck.mjs`) and in `lens-review` (`bin/lens-review.mjs`, `bin/lib/lens-*.mjs`); the older texts of `## Older texts` below, each named there before it
   changes (`CLAUDE.md` and `AGENTS.md` only where that list names them); `docs/ROADMAP.md`; this document.
 - Out: running the eval of PR 737's brief (planned below, paid, his); his reset credit; his `~/.claude`, `~/.codex`
   and credentials; gentle-ai's review; JH 125's `/advisor` trial and its files.
@@ -78,12 +83,12 @@ rule commits wait and the work that does not depend on them goes on.
   123, 57, 61 a day), 34,067,580 input tokens, about 0.43M a point of the weekly limit; `js-harness codex-meter`
   this morning: weekly 79% used, resets 2026-11-04 01:44, 1 reset credit; `js-harness rules double-review` (D5's
   reading, 2026-10-27); `bin/lib/protocols-skill.mjs:43` and `bin/lib/project.mjs:411` (the scope said two ways);
-  `bin/lib/protocols-skill.mjs:112` (section 7 restates the roles); `docs/ROADMAP.md:68` (the Review row: a spent
+  `bin/lib/protocols-skill.mjs:113` (section 7 restates the roles); `docs/ROADMAP.md:68` (the Review row: a spent
   limit is never a skip, 2026-10-11); `bin/lib/codex-review-coverage.mjs:291` (a skip covers a commit);
   `bin/lib/merge-queue-reviews.mjs:78` (the door lists a Codex skip, passes); `bin/lib/lens-review-rows.mjs:60` (the
   door refuses a lens skip); `CLAUDE.md:92` ("the merge door refuses until a review pays it", one rule for both);
   `CLAUDE.md:24` and `bin/lib/project.mjs:395` (the feature order; the init block holds none);
-  `bin/contract.mjs:438` (`depthPassSince` read, written by nobody).
+  `bin/contract.mjs:451` (`depthPassSince` read, written by nobody).
 - 3. The bar:
   spec 1: `node --test bin/double-review.test.mjs`: one command starts a Claude reader and a Codex reader at once on
   one frozen copy, each echoing every copy's read token (a read that does not counts for nothing), neither answer on
@@ -138,41 +143,65 @@ and it changes 147 (L15). This pass grounds the redesign before it reaches him a
 and T4 are rewritten on his answer to it, and no rule is recorded before.
 - 1. Method: as a journal editor or a code-review lead runs review. Reviewers judge the submission against its brief
   (here the request, its specs and contract), not their taste; a plan's reviewers bring failures and improvements;
-  the author answers each point, taken or rebutted on evidence; one revise-and-resubmit round, where the reviewers
-  check only that their points were met and the fix works; then acceptance. The editor stops when what is left is
-  taste. The smallest change here: give code's existing pair, Codex and the Claude lenses, what was asked; bound the
-  rounds; keep the plan's blind pair (`double-review read`); build no new reviewer.
+  the author answers each point, taken or rebutted on evidence, and the editor weighs the answers; one
+  revise-and-resubmit round, where the reviewers check that their points were met and that the revision broke
+  nothing it touched; then acceptance. The search of `rule:reuse-first` (codegraph and grep for "recheck", "round",
+  "--doc"; the first draft missed it, L16): Codex's half of the flow is built, `bin/lib/codex-review-recheck.mjs`
+  (the review of a correction checks the earlier findings once, a new finding is a follow-up, a second recheck is
+  refused, no flag skips it); `codex-review --doc` passes a document's Goal and Done when. The smallest change: give
+  code's existing pair, Codex and the Claude lenses, what was asked; give the lenses the recheck Codex has; record
+  the answer to every finding; keep the plan's blind pair (`double-review read`); build no new reviewer. His
+  addition (L17, spec 8) sets the bound: a clean review approves at once; at most three reviews; past them the
+  problem is raised, what is happening found, and the work passes to a stronger model, as an editor sends a paper
+  that two revisions did not settle to a senior referee.
 - 2. Raw material: `.git/js-harness/codex-review-runs.jsonl`, `lens-reviews.jsonl` and `double-reviews.jsonl`, since
-  2026-10-01, a range reviewed in parts counted once (a read-only script in the session's job folder, not kept).
-  Codex: 1061 reviewed ranges, 340 (32%) with findings: 32 P1, 665 P2, 1 P3, no P0. Rounds: of 290 chains that began
-  with findings (a range, then the review whose base is its head), 209 ended clean at round 2, 7 at round 3 and 2 at
-  round 4; 71 have no later review on that base (their fix reviewed inside a wider range, or not by base). The 10
-  chains past round 2 found 4 findings there, all P2, none P1. Lenses: 581 complete lens runs in 271 records, 50 (9%)
-  with findings. What was asked: `codex-review --doc` (Goal and Done when, `bin/codex-review.mjs:83`) is in 85 of the
-  1452 distinct `codex-review --base` command lines of this project's transcripts, an estimate (lines, not runs; the
-  run log does not record it); the lens prompt (`bin/lib/lens-prompts.mjs`) has no input for it. Code already has a
-  Claude and a Codex review: the pre-push hook refuses a code commit either record lacks (its output on 532f4215).
-  The one double-review read (L12): 14 findings, 14 taken, at 1% of Codex's weekly limit. Not measured: how many of
-  code's findings were false, "criticando incluso cuando está todo bien": no record says which were taken.
+  2026-10-01, a range reviewed in parts counted once (a read-only script in the session's job folder, not kept; the
+  grouping: by base and head; a chain: a range with findings, then the next review whose base is its head).
+  Codex: 1061 reviewed ranges, 340 (32%) with findings: 32 P1, 665 P2, 1 P3, no P0; P2 is a real failure on Codex's
+  scale. Rounds: of 290 chains that began with findings, 209 ended clean at round 2, 7 at round 3 and 2 at round 4;
+  36 had no later review on that base after round 1, 35 after round 2 and 1 after round 4 (their fix reviewed inside
+  a wider range, or not by base: unknown). The 10 chains past round 2 found 4 findings there, all P2: a yield of 4 in
+  10, not proof that later rounds find nothing, since the recheck's prompt already holds new edges back; 3 chains
+  reached a fourth review (2 clean, 1 open), which the bound of three would have raised. Lenses: 581
+  complete lens runs in 271 records, 50 (9%) with findings; the lenses have no recheck. What was asked: `--doc` is in
+  85 of the 1452 distinct `codex-review --base` command lines of this project's transcripts, an estimate (lines, not
+  runs; the run log does not record it); it carries Goal and Done when, not the specs (`bin/codex-review.mjs:83`),
+  and needs `--prompt own`, while a gate turn runs `--prompt codex` (`:226`, `:1200`); the lens prompt
+  (`bin/lib/lens-prompts.mjs`) has no input for it; small work has no feature document (`CLAUDE.md:22`). Code already
+  has a Claude and a Codex review: the pre-push hook refuses a code commit either record lacks (its output on
+  532f4215). The double-review reads: L12, 14 findings, 14 taken; L16, 16 findings, 15 taken. Not measured: how many
+  of code's findings were false, "criticando incluso cuando está todo bien": no record says which were taken.
 - 3. The bar:
-  spec 7: `node --test bin/codex-review.test.mjs bin/lens-review.test.mjs bin/lib/protocols-skill.test.mjs`: a code
-  review is given what was asked, the branch's feature document (its specs and contract), by default, and its prompt
-  says to judge against it, a finding naming a real failure or, at a plan, a concrete improvement; the fix's review
-  reads the first round's findings and the fix, and a third round reads only a real failure the second found, never
-  the whole again; the protocol's section 1 says this flow for plans and code; today about 6% of Codex's command
-  lines and no lens run carry what was asked, and 10 of 290 chains went past round 2.
+  spec 7: `node --test bin/codex-review.test.mjs bin/lens-review.test.mjs bin/lib/codex-review-recheck.test.mjs bin/lib/protocols-skill.test.mjs`:
+  a code review is given what was asked, every time: the feature document's specs and contract for large work, the
+  request as written for small work (an input of both commands), the gate turn included, and a review with none says
+  so; its prompt says to judge against it, a finding naming a real failure. A clean review approves at once. A
+  correction gets a confirming review: Codex's recheck, plus a regression the correction itself brought into what it
+  changed, which blocks (a seeded test); the lenses get the same. At most three reviews of one change (spec 8): where
+  the third still finds a real failure, nothing more is reviewed; the problem is raised to him with what is happening,
+  and the work passes to the strongest model the rules name, one value (today `claude-fable-5-1`; his "Fable 5.5"
+  when it ships, by changing that value). Every finding of code's pair gets an answer, taken with the commit or
+  rebutted with evidence, recorded, and a tally gives each reviewer what was taken and rebutted. Section 1 says this
+  flow for plans and code. Today: Codex's recheck allows two reviews and makes the rest a follow-up
+  (`codex-review-recheck.mjs`), the lenses have no recheck; about 6% of Codex's command lines and no lens run carry
+  what was asked; no answer to a code finding is recorded; nothing raises a change that three reviews did not settle.
   spec 3, changed by spec 7: left out because a small code change gets no read beside its two reviews; its pair is
-  those two reviews, judged against what was asked.
-- 4. Refutation: could a bound on rounds drop real failures, and does code need its own extra pair? Measured above:
-  the rounds past the second found 4 findings in 1061 ranges, all P2; code's two reviews are already one Claude and
-  one Codex. 147's extra read at 1% of the weekly limit each, on this week's 328 code reviews (Depth pass, item 2),
-  would ask for over three weekly limits. Verdict: supports
+  those two reviews, judged against the request.
+- 4. Refutation: does code need its own extra pair, and does one confirming round lose real failures? Code's two
+  reviews are already one Claude and one Codex, so 147's read adds a third and a fourth on every small change (its
+  cost not measured; estimated at least one more Codex session each, where a code review costs about 104k input
+  tokens a run and a point about 0.8M). Rounds past the second found 4 P2 findings in 10 chains, and 3 chains in a
+  month needed a fourth: a confirming review can miss what a correction breaks, which the bar answers by blocking a
+  regression in what the correction changed, and three reviews leave a change unsettled about once in ten days,
+  which his bound raises instead of reviewing on. Verdict: supports
 - 5. Request: his request rewritten, beside his words (L14): "Review what Claude does, and the reviewers themselves,
   for what really fails and whether the task or the feature came out as it was asked. At the plan, the Claude and
   Codex readers bring failures and improvements; in code, its two reviews, Codex and the Claude lenses, judge against
-  what was asked. Claude gets every finding back, fixes or improves, and one review confirms it works; then approval.
-  A third round only for a real failure the confirming review found, reading only that fix; never endless review.
-  A precise plan, then an impeccable implementation, under rule 1."
+  what was asked. A review that finds nothing approves at once. Otherwise Claude gets every finding back and answers
+  each, taken or rebutted; it fixes or improves, and a review confirms the fixes work and broke nothing they touched;
+  at most three reviews, and where the third still fails, raise it to me as a problem, find what is happening and
+  pass the work to the strongest model. Never endless review. A precise plan, then an impeccable implementation,
+  under rule 1."
   Adds: none
 
 ## Specs
@@ -184,7 +213,7 @@ and T4 are rewritten on his answer to it, and no rule is recorded before.
 3. "Sí, pero también en el código chico" (L4, tapped, to question 147's corrected design).
 4. "Claude reemplaza y Codex paga después (Recomendada)" (L5, tapped, to question 148).
 5. "entiendo que tenemos que alinear todo el arnes para que no vaya a quedar contradicciones o algo antiguo" (L1).
-6. The eval of PR 737's brief, with and without the rule, owed by 2026-11-30 (`docs/ROADMAP.md:716`): planned here.
+6. The eval of PR 737's brief, with and without the rule, owed by 2026-11-30 (`docs/ROADMAP.md:717`): planned here.
 7. "La idea es que los modelos de ia son muy buenos criticandos incluso cuando esta todo bien, la idea es revisar lo
    que haga claude e incluso el mismo claude revisor y codex revisor, ver que realmente falla y con criterio y si la
    tarea que se pidio o la funcionalidad quedo como fue pedida ya que la idea es que se pida algo en especifico y se
@@ -195,17 +224,20 @@ and T4 are rewritten on his answer to it, and no rule is recorded before.
    criterio de profesional top por eso el plan inicial debe quedar preciso y luego debe quedar impecable la
    implementacion y asi yo creo que tendria flujo de trabajo perfecto, ahora la idea es utilizar nuestra filosofia
    principal que fue la que colocamos dentro de la regla del arnes recuerdas?" (L14, typed, to question 150).
+8. "obvio que si se hace una revision y no encuentra nada se aprueba y ya osea la idea es maximo hacer 3 revisiones y
+   si no presentar un problema y ver que es lo que pasa y pasarlo a un modelo mas inteligente aprovechando que esta
+   semana sale Fable 5.5" (L17, typed, his addition to question 150).
 
 ## Older texts
 Each text found that contradicts rule 1 or this design, before it changes; the search: `grep -rnE "two (read-only
 )?readers|double review|double-review|attacks its claims|what is missing"` over the repository outside `odd/tasks/`,
 `docs/sessions/`, `docs/origin.md` and `docs/proposals/`, the roadmap's list (`docs/ROADMAP.md:715`), the two
 readers of this plan (L8), who found items 11 to 17, and the first read of the command (L12), who found 18 and 19.
-Line numbers re-checked on 2026-10-31 after T5 (L12, Claude 7).
+Line numbers re-checked on 2026-11-01 on main f063429 (L16, Claude 9).
 1. `bin/lib/protocols-skill.mjs:43`, section 1: D5's scope and two roles. Becomes his design (T4).
 2. `bin/lib/project.mjs:412`, `claudeBlock`: a second scope text with the two roles. Becomes a pointer to
    `rule:double-review` (T4).
-3. `bin/lib/protocols-skill.mjs:112`, section 7: restates the roles ("one rerunning the figures ..., one looking for
+3. `bin/lib/protocols-skill.mjs:113`, section 7: restates the roles ("one rerunning the figures ..., one looking for
    what is missing"). Names the rule only (T4).
 4. `docs/ROADMAP.md:68`, the Review row: a spent weekly limit is "never recorded as a skip" (2026-10-11). Below the
    reserve it now is, by question 148 (T2).
@@ -215,7 +247,7 @@ Line numbers re-checked on 2026-10-31 after T5 (L12, Claude 7).
 7. The block `init` writes (`claudeBlock`): the roadmap says it holds the feature order; it holds none
    (`bin/lib/project.mjs:395`), so nothing changes there; item 19 corrects the roadmap.
 8. `js-harness contract template`: no `## Depth pass` skeleton. Gains it (T5).
-9. `sync`: never offers `depthPassSince`, which `bin/contract.mjs:438` reads and nothing writes. Offers it (T5).
+9. `sync`: never offers `depthPassSince`, which `bin/contract.mjs:451` reads and nothing writes. Offers it (T5).
 10. `docs/ROADMAP.md:898`: "Each item that needs a design passes two readers that did not write it". Names the
     double review (T5).
 11. `docs/RULES.md:54` and `bin/lib/rules-data.mjs:197`: D5's subject and phrases, rendered. `rules change` rewrites
@@ -225,25 +257,30 @@ Line numbers re-checked on 2026-10-31 after T5 (L12, Claude 7).
     which `codex-review` records itself (T2).
 14. `bin/lib/protocols-skill.test.mjs:130` and `:135`, `bin/lib/project.test.mjs:1980`: assert D5's text. Assert
     the new one (T4).
-15. `docs/FAILURES.md:1222`: its control names the test of item 14 by its title. Follows the title (T4).
+15. `docs/FAILURES.md:1225`: its control names the test of item 14 by its title. Follows the title (T4).
 16. `docs/ROADMAP.md:689` to `:717`, the alignment item itself: ticked with this document's names when it lands (T6).
-17. `bin/lib/protocols-skill.mjs:117`, section 7's cost: "two readers only with a candidate list". Still true, now
+17. `bin/lib/protocols-skill.mjs:118`, section 7's cost: "two readers only with a candidate list". Still true, now
     of two families; left.
 18. `bin/lib/onboard.mjs:108`, `:747`, `:885` and `:902`, with `bin/lib/onboard.test.mjs:262` and
     `bin/lib/onboard.testkit.mjs:208`: the onboarding asks "two readers" of no stated family for the pre-plan and the
     roadmap, both proposing documents put to the owner (L12, Claude 4). Name `rule:double-review` (T4).
 19. `docs/ROADMAP.md:715`: said the block `init` writes gains `## Depth pass`; it holds no feature order (item 7).
     Says `CLAUDE.md` alone (L12, Codex 5; done with this list).
+20. `docs/ROADMAP.md:700` to `:702`, the alignment item: "a small code change also gets the blind Claude and Codex
+    read", 147's design, which L15 drops. Says the design his answer to the redesign sets (T4; L16, Claude 7).
+21. `docs/ROADMAP.md:79`, the throughput row: "two readers run only before a proposal reaches him", D5's scope.
+    Names `rule:double-review` (T4; L16, Claude 10).
 Checked and left: `bin/lib/manifest.mjs:140` and section 6 name the rule and its home; the roadmap's "Design, past its
 two readers" items (`docs/ROADMAP.md:256`, `:271`, mirrored at `README.md:766`) are titles of items, and their reading
-is the one item 18 makes the onboarding ask for.
+is the one item 18 makes the onboarding ask for; `docs/sweep-2026-10-11.md:100` ("never recorded as a skip") is a dated
+sweep, a record of that day (L16, Claude 10).
 
 ## Next step
 State on 2026-11-01, on `rule/review-flow` from main f063429 (PR 745 landed T1, T3 and T5). He answered question
-150 in his own words (L14): a redesign of the review, `## Redesign after question 150`, decided in L15. Next: the
-redesign's blind read (`double-review read` of this document), its findings taken here, then one question to him
-through the lead (`notify --kind question`); T2 and T4 are rewritten on his answer, then Claude 6 of L12; T6 keeps
-T2's verifier, older text 16 and the report of how to try it. Meter 86% weekly; the reserve is not his rule yet.
+150 in his own words (L14) and added the bound (L17): `## Redesign after question 150`, decided in L15, read blind
+in L16 and its findings taken. Next: one question to him through the lead (`notify --kind question`), the redesign
+and the reserve said apart; T2 and T4 are rewritten on his answer, then Claude 6 of L12; T6 keeps T2's verifier,
+older text 16 and the report of how to try it. Meter 87% weekly; the reserve is not his rule yet.
 The gentle-ai Stop hook: status only, start nothing. Never edit a tracked file while a Codex review runs (L11).
 
 ## Eval plan
@@ -369,3 +406,23 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   redesign passes the blind pair (`double-review read`) before it reaches him, as spec 2 and today's
   `rule:double-review` ask; its findings are taken here first. T2 and T4 are rewritten on his answer, on
   `rule/review-flow` from main f063429, since PR 745 landed `rule/double-review`.
+- L16 (2026-11-01, the redesign's blind read, `66806ba7`, of this document at 68b417d6, announced with its cost):
+  Claude 10 findings (905,314 tokens), Codex 6 (1,184,787 tokens); the meter moved 86% to 87% weekly. Found by both:
+  Codex's half of the flow is built, `bin/lib/codex-review-recheck.mjs` (a correction's review rechecks the earlier
+  findings once, refuses a second recheck, no flag skips it), which the first draft's reuse search missed, and its
+  third round was neither his nor defined past failure (Claude 1 and 2, Codex 1; checked at
+  `codex-review-recheck.mjs:1-20` and `:115-130`); small work has no feature document and a gate turn's prompt
+  refuses `--doc` (Claude 5, Codex 2; checked, `bin/codex-review.mjs:226`, `:1200`); no answer to a code finding is
+  recorded, so the false findings he names stay unmeasured (Claude 3, Codex 4); the contract still described 147's
+  design (Claude 7, Codex 6); the rounds' counts did not add up and their reading overreached (Claude 8, Codex 5:
+  the 290th chain is the one still open after round 4). Claude alone: the "three weekly limits" figure multiplied a
+  plan read's cost by review runs, dropped for an estimate (6); five stale citations, corrected (9); two older texts
+  missing, items 20 and 21 and one checked and left (10); the reserve is not built while the meter nears it (4), not
+  taken: its 10% is a rule of his still without his typed words, so the question says how near it is instead.
+  Codex alone: a confirming review can miss what a correction breaks (3), taken as a blocking regression in what
+  the correction changed. Taken: Claude 9 of 10, Codex 6 of 6 (`double-review take`).
+- L17 (2026-11-01, typed, the lead's transcript `0f71b2c6`, line 49467, his addition to question 150, read with
+  `js-harness sessions --quote`): spec 8 as written. It sets the bound the read asked for: a clean review approves at
+  once, at most three reviews, then the problem is raised and the work passes to a stronger model. "Fable 5.5" is
+  his word, not verified: the strongest model this machine knows today is `claude-fable-5-1`, so the design names one
+  value the rules hold. The lead (23:01 UTC): "Fold it into T2/T4 and the one question to him."
