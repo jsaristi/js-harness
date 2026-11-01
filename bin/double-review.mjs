@@ -169,10 +169,11 @@ export function codexReaderArgs(platform, root, schemaFile) {
   return ['exec', '--json', '--ephemeral', ...leanFlags(platform, REVIEW_EFFORT), '-C', root, '--output-schema', schemaFile, '-'];
 }
 
-/** Runs a child to its end: `{ status, stdout, stderr, error, durationMs }`; killed with its tree past `timeoutMs`.
- * A kill that fails leaves the reader running: `stillRunning` says so, and its streams are let go so it does not hold
- * this process open. */
-function runChild(start, { input, timeoutMs, kill }) {
+/** Runs a child to its end: `{ status, stdout, stderr, error, durationMs }`; killed with its tree past `timeoutMs` or
+ * on SIGINT or SIGTERM, since off Windows the child is detached and Ctrl-C no longer reaches it. After a kill its
+ * streams are let go, since a descendant the kill missed could hold them and this process open; a kill that fails
+ * leaves the reader running, and `stillRunning` says so. */
+function runChild(start, { input, timeoutMs, kill, signals }) {
   return new Promise((resolve) => {
     const startedAt = Date.now();
     let child;
@@ -190,20 +191,27 @@ function runChild(start, { input, timeoutMs, kill }) {
       if (done) return;
       done = true;
       clearTimeout(timer);
+      signals.removeListener('SIGINT', interrupted);
+      signals.removeListener('SIGTERM', interrupted);
       resolve({ stdout, stderr, durationMs: Date.now() - startedAt, ...fields });
     };
-    timer = setTimeout(() => {
-      const late = `no answer within ${Math.round(timeoutMs / 1000)} seconds`;
+    const stop = (reason) => {
+      let failure = null;
       try {
         kill(child, { startedAt });
       } catch (err) {
-        for (const stream of [child.stdin, child.stdout, child.stderr]) stream?.destroy?.();
-        child.unref?.();
-        finish({ status: null, stillRunning: true, error: new Error(`${late}, and it could not be stopped: ${err.message}`) });
-        return;
+        failure = err.message;
       }
-      finish({ status: null, error: new Error(late) });
-    }, timeoutMs);
+      for (const stream of [child.stdin, child.stdout, child.stderr]) stream?.destroy?.();
+      child.unref?.();
+      finish(failure === null
+        ? { status: null, error: new Error(reason) }
+        : { status: null, stillRunning: true, error: new Error(`${reason}, and it could not be stopped: ${failure}`) });
+    };
+    const interrupted = () => stop('interrupted');
+    timer = setTimeout(() => stop(`no answer within ${Math.round(timeoutMs / 1000)} seconds`), timeoutMs);
+    signals.once('SIGINT', interrupted);
+    signals.once('SIGTERM', interrupted);
     child.stdout?.setEncoding?.('utf8');
     child.stderr?.setEncoding?.('utf8');
     child.stdout?.on('data', (chunk) => { stdout += chunk; });
@@ -324,9 +332,10 @@ function repositoryState(root) {
   return { head: head.stdout.trim(), files };
 }
 
-/** What moved between two states of `repositoryState`: the HEAD and the files whose change is not the same, or none. */
+/** What moved between two states of `repositoryState`: the HEAD and the files whose change is not the same, none, or
+ * `null` when either state is unknown, which must not read as nothing moved. */
 function movedBetween(before, after) {
-  if (before === null || after === null) return [];
+  if (before === null || after === null) return null;
   const moved = before.head === after.head ? [] : [`HEAD ${before.head.slice(0, 7)} to ${after.head.slice(0, 7)}`];
   for (const name of new Set([...before.files.keys(), ...after.files.keys()])) {
     if (before.files.get(name) !== after.files.get(name)) moved.push(name);
@@ -341,6 +350,7 @@ async function readBoth({ root, model, prompt, tokens, folder, material, env, de
   const spawn = deps.spawn ?? spawnChild;
   const kill = deps.kill ?? ((child, lifetime) => killTree(child, lifetime, { platform }));
   const timeoutMs = deps.readTimeoutMs ?? READ_TIMEOUT_MS;
+  const signals = deps.signals ?? process;
   const settingsFile = path.join(folder, 'settings.json');
   const schemaFile = path.join(folder, 'schema.json');
   fs.writeFileSync(settingsFile, JSON.stringify(CLAUDE_SETTINGS), 'utf8');
@@ -353,7 +363,7 @@ async function readBoth({ root, model, prompt, tokens, folder, material, env, de
     ? Promise.resolve({ error: new Error('the Claude CLI was not found on the PATH') })
     : runChild(() => (claude.shell
       ? spawn(windowsCommandLine(quoteWindowsArg(claude.path), claudeArgs), [], { ...options, env: lensEnv(env), shell: true })
-      : spawn(claude.path, claudeArgs, { ...options, env: lensEnv(env) })), { input: prompt, timeoutMs, kill });
+      : spawn(claude.path, claudeArgs, { ...options, env: lensEnv(env) })), { input: prompt, timeoutMs, kill, signals });
 
   let lean = null;
   let codexRan;
@@ -361,7 +371,7 @@ async function readBoth({ root, model, prompt, tokens, folder, material, env, de
     const homedir = deps.homedir ?? os.homedir;
     lean = (deps.makeLeanHome ?? createLeanHome)({ realHome: realCodexHome(env, homedir(), platform), parent: leanHomesDir(harnessHome({ env, homedir })), id: `double-review-${path.basename(folder)}` });
     const codexEnv = leanEnv(childEnv(env, platform), lean.home, platform);
-    codexRan = runChild(() => launchCodex(spawn, platform, codexReaderArgs(platform, root, schemaFile), { ...options, env: codexEnv }), { input: prompt, timeoutMs, kill });
+    codexRan = runChild(() => launchCodex(spawn, platform, codexReaderArgs(platform, root, schemaFile), { ...options, env: codexEnv }), { input: prompt, timeoutMs, kill, signals });
   } catch (err) {
     codexRan = Promise.resolve({ error: err });
   }
@@ -435,14 +445,15 @@ async function readCommand(args, root, env, deps, { log, error }) {
     const { readers, stillRunning } = await readBoth({ root, model, prompt, tokens, folder, material: copies, env, deps, error });
     keep = stillRunning;
     const moved = movedBetween(before, repositoryState(root));
-    if (moved.length > 0) error(`the repository moved while the readers read it: ${moved.join(', ')}; each may have checked the cited paths in a different state`);
+    if (moved === null) error('could not tell whether the repository moved while the readers read it: git did not answer before or after the read');
+    else if (moved.length > 0) error(`the repository moved while the readers read it: ${moved.join(', ')}; each may have checked the cited paths in a different state`);
     const id = (deps.id ?? randomUUID)();
     const at = (deps.now ?? (() => new Date()))().toISOString();
     // What the readers found is printed first: it cost both readers' tokens, and a record that cannot be written must
     // not lose it.
     for (const line of readLines(id, readers)) log(line);
     try {
-      appendDoubleReview(root, { kind: 'read', id, at, files: sources.map((one) => one.rel), ...(args.diff === undefined ? {} : { diff: args.diff }), hash, ...(moved.length > 0 ? { moved: true } : {}), readers });
+      appendDoubleReview(root, { kind: 'read', id, at, files: sources.map((one) => one.rel), ...(args.diff === undefined ? {} : { diff: args.diff }), hash, ...(moved?.length > 0 ? { moved: true } : {}), readers });
     } catch (err) {
       error(`the read could not be recorded: ${err.message}; its findings are above, and take cannot judge them until a read is recorded`);
       return 1;
@@ -493,6 +504,11 @@ function skipCommand(args, root, env, deps, { log, error }) {
   } catch (err) {
     if (!(err instanceof RuleChangeError)) throw err;
     error(`not recorded: ${err.message}; only the user's own typed words skip a read`);
+    return 1;
+  }
+  // His words, but also the ones the announce gave: a typed "no" to something else is no skip.
+  if (!quoted.quote.toLowerCase().includes(SKIP_PHRASE)) {
+    error(`not recorded: the words do not hold "${SKIP_PHRASE}", the phrase each read's announce gives for a skip`);
     return 1;
   }
   const at = (deps.now ?? (() => new Date()))().toISOString();

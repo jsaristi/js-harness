@@ -1107,8 +1107,9 @@ open them and does not count. Both answers are recorded together once both have 
 read, and the copy is removed. No push and no merge
 door reads that file: a read covers no code, which keeps its Codex and lens reviews. `--plan` says
 what a read costs and the words that skip it, and starts nothing; only the user's own words skip a
-read: `skip` records them only where the session transcript holds them typed at that line, never a
-tapped answer or a paste. `take` records which of a reader's findings the writer took and which
+read: `skip` records them only where they hold that phrase and the session transcript holds them
+typed at that line, never a tapped answer or a paste. An interrupted read stops both readers and
+leaves no copy behind. `take` records which of a reader's findings the writer took and which
 the other reader also found, and `tally` gives each reader its reads, findings, taken and found by it
 alone. A reader that could not answer exits 1, its reason recorded; a usage error exits 2.
 

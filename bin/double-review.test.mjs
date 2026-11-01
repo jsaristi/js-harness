@@ -266,6 +266,36 @@ test('a reader past its timeout that cannot be stopped is said, and its lean hom
   assert.ok(fs.existsSync(kept), 'the copy a reader may still read is kept');
 });
 
+test('an interrupted read stops both readers, lets their pipes go, and leaves no copy or lean home behind', async (t) => {
+  const root = makeRepo(t);
+  const signals = new EventEmitter();
+  const { spawn, calls } = fakeSpawn(() => ({ hang: true }));
+  const kills = [];
+  const run = deps(t, root, spawn, { signals, kill: (child) => { kills.push(child); } });
+  const reading = doubleReviewMain(['read', 'plan.md'], {}, run.deps);
+  while (calls.filter((call) => call.prompt === undefined).length < 2 || signals.listenerCount('SIGINT') < 2) await new Promise((resolve) => setTimeout(resolve, 5));
+  signals.emit('SIGINT');
+  assert.equal(await reading, 1);
+  assert.equal(kills.length, 2, 'both readers are stopped');
+  assert.ok(kills.every((child) => child.stdout.destroyed), 'a descendant the kill missed cannot hold the pipe open');
+  assert.equal(signals.listenerCount('SIGINT') + signals.listenerCount('SIGTERM'), 0);
+  assert.deepEqual(fs.readdirSync(run.tmp), [], 'the copy is removed');
+  assert.equal(run.disposed.length, 1, 'the lean home is removed');
+  assert.match(readDoubleReviews(root)[0].readers[0].reason, /interrupted/);
+});
+
+test('a read whose repository state cannot be read afterwards says the move went unchecked', async (t) => {
+  const root = makeRepo(t);
+  const { spawn } = fakeSpawn((command, args, prompt) => {
+    if (command === 'codex') return codexAnswer(args, prompt, []);
+    fs.renameSync(path.join(root, '.git'), path.join(root, '.git-away'));
+    return { stdout: claudeOut(prompt, []) };
+  });
+  const run = deps(t, root, spawn);
+  await doubleReviewMain(['read', 'plan.md'], {}, run.deps);
+  assert.match(run.lines.error.join('\n'), /could not tell whether the repository moved/);
+});
+
 test('a missing file is refused before anything starts', async (t) => {
   const root = makeRepo(t);
   const { spawn, calls } = fakeSpawn(() => ({}));
@@ -339,6 +369,8 @@ test('skip refuses words he did not type at that line: a tapped answer, words no
   assert.match(run.lines.error.at(-1), /not in what he typed/);
   assert.equal(await doubleReviewMain([...skipArgv('no quiero la revisión', 1).slice(0, 5), '--transcript', 's9', '--line', '1'], {}, run.deps), 1);
   assert.match(run.lines.error.at(-1), /no transcript "s9"/);
+  assert.equal(await doubleReviewMain(skipArgv('Sigue con el plan', 1), {}, run.deps), 1, 'his words, but not the ones that skip');
+  assert.match(run.lines.error.at(-1), /do not hold "no quiero la revisión"/);
   assert.deepEqual(readDoubleReviews(root), [], 'nothing is recorded');
 });
 
