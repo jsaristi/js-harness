@@ -724,7 +724,9 @@ built in rule 1's pull request.
 - **Cost** [i]: one session.
 - **His decisions:** the project, plataforma-preproyecto (question 151, his answer of
   2026-11-01T19:12:54Z, the lead's transcript `0f71b2c6`, line 48234); the feature, asked next; the merge.
-- **State:** waits for his choice of the feature; beside S2 or right after it, before S8.
+- **State:** waits for his choice of the feature; beside S2 or right after it, before S8. The project
+  has no code, roadmap, `main` or remote yet: its onboarding (`odd/tasks/onboarding.md` there, branch
+  `onboarding`) stopped at L14 on his answer, so its pre-plan and roadmap come first (JH 129's L10).
 
 ### S8 Certification (step 5)
 - **Changes:** nothing; it measures. Section 7's S0 and S8 measures; a Claude audit and a Codex audit,

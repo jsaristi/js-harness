@@ -182,10 +182,17 @@ Today's line (`node bin/js-harness.mjs progress --pace`, 2026-11-01): "Last 7 da
   land together; the branch became `rule/growth-limit`, which `rules change` requires.
 - L9 2026-11-01 — result against the depth pass: item 4 predicted the words suffice and the week is red; measured,
   `rules change` took line 48080 and the week is red by 19 open steps. Item 1's home, section 9, did not hold (L6).
+- L10 2026-11-01 14:55 local — read before the feature question: `D:\plataforma-preproyecto` holds four files
+  (`git ls-files`: `AGENTS.md`, `docs/FAILURES.md`, `harness.json`, `odd/tasks/onboarding.md`), one branch,
+  `onboarding`, no `main` and no remote (`git branch -a`, `git remote -v`). Its onboarding has no pre-plan or
+  roadmap (O2 to O6 open) and stopped at L14 on a question to him: whether the business exists already. So the
+  question 151 promised, options from the project's roadmap, has no roadmap to draw from, and a pull request needs a
+  remote first; the outside step's first unit there is to finish that onboarding, which starts with his answer.
 
 ## Next step
 - State 2026-11-01 14:35 local: pull request #743 open and ready on `rule/growth-limit` (234f0f75, 2b182296,
   dad80c75, 28c0a708); Codex and the lenses cover every code commit; the gentle-ai slice review was not run.
 - Question 151 answered: plataforma-preproyecto (2026-11-01T19:12:54Z, the lead's transcript `0f71b2c6`, line
-  48234), recorded in the roadmap. Next, for the lead: the feature there, his choice; S2 after JH 126 lands; the E3
-  rows one at a time; the week's line read on 2026-11-08; the rule reviewed on 2026-11-15.
+  48234), recorded in the roadmap. Next, for the lead: the feature there, his choice, after its onboarding (L10); S2
+  after JH 126 lands; the E3 rows one at a time; the week's line read on 2026-11-08; the rule reviewed on 2026-11-15.
+- PR 743 landed (main 8d7a8ec); its last commit, 90ccf1b0, missed the land and travels as PR 744.
