@@ -537,11 +537,7 @@ export const COVERAGE = {
     ],
     "double-review-prompt": [
       {
-        "hash": "12821789cf74",
-        "context": "the double review's prompt: the reader's read-only tools and Codex's read-only sandbox hold it on the run itself (bin/double-review.test.mjs), so no prose rule carries it"
-      },
-      {
-        "hash": "16960367979f",
+        "hash": "2bd610bf6d58",
         "context": "the double review's prompt: a fact of the read, which the command makes true by starting both readers at once on one copy and recording both after both return (bin/double-review.test.mjs)"
       },
       {
@@ -557,23 +553,11 @@ export const COVERAGE = {
         "context": "the double review's prompt: the command counts no answer without every copy's read token (bin/double-review.test.mjs), so no prose rule carries it"
       },
       {
-        "hash": "6d66e3b4c352",
+        "hash": "4d4353ddfd31",
         "context": "the double review's prompt: what a one-shot reader is asked to look for in the material, an instruction of that read and no rule of the harness"
       },
       {
-        "hash": "536f83c7e90c",
-        "context": "the double review's prompt: what a one-shot reader is asked to look for in the material, an instruction of that read and no rule of the harness"
-      },
-      {
-        "hash": "e2ad673f5a99",
-        "context": "the double review's prompt: what a one-shot reader is asked to look for in the material, an instruction of that read and no rule of the harness"
-      },
-      {
-        "hash": "9ef7852ee081",
-        "context": "the double review's prompt: what a one-shot reader is asked to look for in the material, an instruction of that read and no rule of the harness"
-      },
-      {
-        "hash": "b1faf64805e7",
+        "hash": "4df4c366d640",
         "context": "the double review's prompt: what a one-shot reader is asked to look for in the material, an instruction of that read and no rule of the harness"
       },
       {

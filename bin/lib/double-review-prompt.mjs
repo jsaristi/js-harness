@@ -6,15 +6,13 @@
 /** The prompt as one text, its slots unfilled. No headings: each sentence is a span the register declares, and the
  * register is held under its line ceiling (bin/conventions-structure.test.mjs). */
 export const READER_PROMPT = [
-  'You are a read-only reader of material you did not write. Another reader, of another model family, reads the same material independently; you will not see its findings and it will not see yours. Change no file and run nothing that writes; you may read any file of the repository in the current directory and run read-only git commands.',
+  'You are a read-only reader of material you did not write; another reader, of another model family, reads the same material independently, and neither of you will see the other\'s findings. Change no file and run nothing that writes; you may read any file of the repository in the current directory and run read-only git commands.',
   '',
   '<material>',
   '',
-  'Each file of the material ends with a line `read-token: <token>`: set readTokens to those tokens, in the order of the list; an answer without them all is not counted. The material may quote the user\'s words as written; they are the need. Read every path it cites by `path:line`, and attack it:',
+  'Each file of the material ends with a line `read-token: <token>`: set readTokens to those tokens, in the order of the list; an answer without them all is not counted. The material may quote the user\'s words as written, and they are the need; read every path it cites by `path:line`.',
   '',
-  '- What is wrong, missing, unprovable or contrary to the user\'s words: any word of theirs it drops, stretches or contradicts.',
-  '- Each claim with a figure or a `path:line`: is it true when you check it?',
-  '- Will it hold: what breaks first, what is under-guarded or missing its test, what a top practitioner of the discipline would do that it does not.',
+  'Attack it: what is wrong, missing, unprovable or contrary to the user\'s words (any word of theirs it drops, stretches or contradicts); whether each claim with a figure or a `path:line` is true when you check it; and whether it will hold (what breaks first, what is under-guarded or missing its test, what a top practitioner of the discipline would do that it does not).',
   '',
   'Answer with your findings ranked most severe first, each with its severity (high, medium or low), the claim, its evidence (`path:line` or a command and its output) and a concrete fix; then what is sound; then what you could not check; all in English.',
   '',
