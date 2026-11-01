@@ -8,13 +8,15 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseRoadmap, parseFeature } from './lib/progress.mjs';
-import { PACE_DAYS, PACE_REF_ARGS, paceLines, paceLogArgs, paceOf, paceRef, parsePaceLog, windowStart } from './lib/progress-pace.mjs';
+import { PACE_DAYS, PACE_REF_ARGS, paceLines, paceLogArgs, paceOf, paceRef, parsePaceLog, WEEK_DAYS, windowStart } from './lib/progress-pace.mjs';
+import { ruleHere } from './lib/rules.mjs';
 
 export const USAGE = [
   'Usage: js-harness progress [--cwd <path>] [--json] [--pace [--days <n>]]',
   `  --pace  the tasks closed, reopened, added and removed on each of the last ${PACE_DAYS} days (or --days), read`,
   '          from the first-parent line of the default branch: origin/HEAD, else main, else HEAD. A task is',
   '          matched by its ID (T3); a task reworded without an ID, or in a moved file, counts as removed and added.',
+  `          With ${WEEK_DAYS} whole days in the window, a last line says whether the week's open steps grew: red or green.`,
 ].join('\n');
 
 // How long each git process of `--pace` may run, and how much it may print: the whole history of this
@@ -107,8 +109,20 @@ function paceMain(root, parsed, { stdout, stderr, spawn, now }) {
     stdout(JSON.stringify({ root, branch: name, ref, ...pace }, null, 2));
     return 0;
   }
-  for (const line of paceLines({ branch: name, ...pace })) stdout(line);
+  for (const line of paceLines({ branch: name, ...pace, limit: growthLimitOf(root) })) stdout(line);
   return 0;
+}
+
+/** What may still open while the week is red, the value of rule:growth-limit, where the project at `root` holds
+ * that rule of this repository; `undefined` anywhere else, or where its rules file cannot be read. */
+function growthLimitOf(root) {
+  let text = null;
+  try {
+    text = fs.readFileSync(path.join(root, 'bin', 'lib', 'rules-data.mjs'), 'utf8');
+  } catch {
+    // no rules file: a project that installs the harness, where the limit does not hold
+  }
+  return ruleHere('growth-limit', undefined, text).value;
 }
 
 function toRepoRelative(root, absolutePath) {

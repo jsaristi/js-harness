@@ -131,6 +131,24 @@ export const COVERAGE = {
         "replace": "('gate-wait', 'minutes') + 1"
       }
     },
+    "growth-limit": [
+      {
+        "of": "the week is red when its open steps grew",
+        "level": "check",
+        "test": "bin/lib/progress-pace.test.mjs",
+        "break": {
+          "path": "bin/lib/progress-pace.mjs",
+          "find": "red: grew > 0 };",
+          "replace": "red: grew < 0 };"
+        }
+      },
+      {
+        "of": "the lead opens no new work but what it names while the week is red",
+        "level": "protocol",
+        "path": "bin/lib/manifest.mjs",
+        "phrase": "while it says red, open only what it names, and write anything else in the roadmap's Later list"
+      }
+    ],
     "lead-charter": {
       "level": "owed",
       "since": "2026-10-28"
@@ -647,7 +665,6 @@ export const COVERAGE = {
       "d040f5b3e611",
       "61d4053f44ed",
       "c2766d62b95e",
-      "b859f8a8ed87",
       "e007182d082f",
       "46a073ebf76c",
       "764a9864c861",

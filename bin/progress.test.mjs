@@ -4,7 +4,11 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { progressMain } from './progress.mjs';
+import { ruleOf } from './lib/rules.mjs';
+
+const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // `--pace` runs git. A git hook runs with GIT_DIR, GIT_INDEX_FILE and friends pointing at the repository being
 // committed; inherited, they would send the git calls of these tests, and those of `progressMain`, there. An
@@ -648,10 +652,30 @@ test('progress --pace counts, for each of the last days of main\'s first-parent 
     const json = await runProgress(['--cwd', root, '--pace', '--json'], { now: () => NOW });
     assert.equal(json.code, 0, json.stderr);
     const pace = JSON.parse(json.stdout);
-    assert.deepEqual(Object.keys(pace), ['root', 'branch', 'ref', 'days', 'from', 'to', 'perDay', 'total', 'meanPerDay']);
+    assert.deepEqual(Object.keys(pace), ['root', 'branch', 'ref', 'days', 'from', 'to', 'perDay', 'total', 'meanPerDay', 'week']);
     assert.deepEqual([pace.branch, pace.ref, pace.days, pace.from, pace.to, pace.perDay.length], ['main', 'refs/heads/main', 14, '2026-10-03', '2026-10-16', 14]);
     assert.deepEqual(pace.total, { closed: 3, reopened: 0, added: 4, removed: 0 });
     assert.deepEqual(pace.perDay.find((day) => day.date === '2026-10-07'), { date: '2026-10-07', closed: 0, reopened: 0, added: 2, removed: 0, partial: false });
+    // The week, 10-09 to 10-15: T1 closed and a roadmap step opened, so its open steps did not grow.
+    assert.deepEqual(pace.week, { from: '2026-10-09', to: '2026-10-15', closed: 1, reopened: 0, added: 1, removed: 0, grew: 0, red: false });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('progress --pace ends on the week\'s line, which names what still opens while it is red where the growth limit holds', async () => {
+  const { root, commit } = makeRepo();
+  try {
+    commit({ 'README.md': 'x' }, daysAgo(10));
+    commit({ 'odd/tasks/f.md': doc('- [ ] T1 a') }, daysAgo(3));
+    const elsewhere = await runProgress(['--cwd', root, '--pace'], { now: () => NOW });
+    assert.equal(elsewhere.code, 0, elsewhere.stderr);
+    assert.equal(elsewhere.stdout.split('\n').at(-1), 'Last 7 days 2026-10-09 to 2026-10-15: closed 0  reopened 0  added 1  removed 0; the open steps grew by 1: red');
+    // A project whose rules file is this repository's holds the limit, so the line names its value.
+    writeFile(path.join(root, 'bin', 'lib', 'rules-data.mjs'), fs.readFileSync(path.join(PACKAGE_ROOT, 'bin', 'lib', 'rules-data.mjs'), 'utf8'));
+    const here = await runProgress(['--cwd', root, '--pace'], { now: () => NOW });
+    assert.equal(here.code, 0, here.stderr);
+    assert.equal(here.stdout.split('\n').at(-1), `Last 7 days 2026-10-09 to 2026-10-15: closed 0  reopened 0  added 1  removed 0; the open steps grew by 1: red, new work waits but ${ruleOf('growth-limit').value} (rule:growth-limit)`);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
