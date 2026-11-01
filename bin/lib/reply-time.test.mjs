@@ -30,6 +30,26 @@ test('a code block, inline code, a quoted line and a path or URL keep their UTC 
   assert.deepEqual(utcTimesIn(reply), []);
 });
 
+test('Codex\'s cases: a one-digit hour is a time, a link\'s label is prose, and a code span over two lines keeps its line', () => {
+  assert.deepEqual(utcTimesIn('Volvió a las 5:46 UTC, no a las 15:46Z.').map(({ text }) => text), ['5:46 UTC', '15:46Z']);
+  assert.deepEqual(utcTimesIn('El aviso es de [05:46Z](https://example.test/record).').map(({ text }) => text), ['05:46Z']);
+  assert.deepEqual(utcTimesIn('El registro `started\n2026-10-31T19:29:00Z` y luego\na las 20:04Z.').map(({ text, line }) => [text, line]), [['20:04Z', 3]]);
+});
+
+test('a converted time carries the zone of its own instant: one zone is said once, two are said with each time', () => {
+  const before = process.env.TZ;
+  process.env.TZ = 'America/New_York';
+  try {
+    const now = Date.parse('2026-11-02T12:00:00Z');
+    const two = utcTimeWarning('El 2026-07-01T19:29:00Z y el 2026-11-02T10:00:00Z.', { now });
+    assert.match(two, /"2026-07-01T19:29:00Z" \(line 1\) is 2026-07-01 15:29 UTC-04:00/);
+    assert.match(two, /"2026-11-02T10:00:00Z" \(line 1\) is 2026-11-02 05:00 UTC-05:00/);
+    assert.doesNotMatch(two, /, local time UTC/);
+  } finally {
+    process.env.TZ = before;
+  }
+});
+
 test('the warning names each time with its local time and the rule, and asks for the times again; none when there is none', () => {
   const warning = utcTimeWarning('Te fuiste a las 20:04Z; el informe es de 2026-10-31T19:29:00Z.', { now: NOW });
   assert.match(warning, /^js-harness reply: /);
