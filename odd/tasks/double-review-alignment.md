@@ -1,7 +1,8 @@
 # JH 126 · Align the harness to the depth pass, first the Claude and Codex double review
 
 Locator: `odd/tasks/double-review-alignment.md` · Engram mirror: `odd/double-review-alignment/tasks` · Branch:
-`rule/double-review` (worktree `harness-alignment`) · Delivery: one pull request to main · Test runner: `node --test`
+`rule/double-review` (PR 745, landed), then `rule/review-flow` (worktree `harness-alignment`) · Delivery: a pull
+request to main each · Test runner: `node --test`
 
 ## Goal
 `rule:double-review` says, in one home, what he answered to questions 145 to 148: two blind reads, one of Claude and
@@ -131,6 +132,49 @@ rule commits wait and the work that does not depend on them goes on.
   and plan the owed eval without running it."
   Adds: none
 
+## Redesign after question 150
+His typed answer to question 150 (L14, spec 7) is not the acceptance it asked for: it designs the review, under rule 1,
+and it changes 147 (L15). This pass grounds the redesign before it reaches him as one question through the lead; T2
+and T4 are rewritten on his answer to it, and no rule is recorded before.
+- 1. Method: as a journal editor or a code-review lead runs review. Reviewers judge the submission against its brief
+  (here the request, its specs and contract), not their taste; a plan's reviewers bring failures and improvements;
+  the author answers each point, taken or rebutted on evidence; one revise-and-resubmit round, where the reviewers
+  check only that their points were met and the fix works; then acceptance. The editor stops when what is left is
+  taste. The smallest change here: give code's existing pair, Codex and the Claude lenses, what was asked; bound the
+  rounds; keep the plan's blind pair (`double-review read`); build no new reviewer.
+- 2. Raw material: `.git/js-harness/codex-review-runs.jsonl`, `lens-reviews.jsonl` and `double-reviews.jsonl`, since
+  2026-10-01, a range reviewed in parts counted once (a read-only script in the session's job folder, not kept).
+  Codex: 1061 reviewed ranges, 340 (32%) with findings: 32 P1, 665 P2, 1 P3, no P0. Rounds: of 290 chains that began
+  with findings (a range, then the review whose base is its head), 209 ended clean at round 2, 7 at round 3 and 2 at
+  round 4; 71 have no later review on that base (their fix reviewed inside a wider range, or not by base). The 10
+  chains past round 2 found 4 findings there, all P2, none P1. Lenses: 581 complete lens runs in 271 records, 50 (9%)
+  with findings. What was asked: `codex-review --doc` (Goal and Done when, `bin/codex-review.mjs:83`) is in 85 of the
+  1452 distinct `codex-review --base` command lines of this project's transcripts, an estimate (lines, not runs; the
+  run log does not record it); the lens prompt (`bin/lib/lens-prompts.mjs`) has no input for it. Code already has a
+  Claude and a Codex review: the pre-push hook refuses a code commit either record lacks (its output on 532f4215).
+  The one double-review read (L12): 14 findings, 14 taken, at 1% of Codex's weekly limit. Not measured: how many of
+  code's findings were false, "criticando incluso cuando está todo bien": no record says which were taken.
+- 3. The bar:
+  spec 7: `node --test bin/codex-review.test.mjs bin/lens-review.test.mjs bin/lib/protocols-skill.test.mjs`: a code
+  review is given what was asked, the branch's feature document (its specs and contract), by default, and its prompt
+  says to judge against it, a finding naming a real failure or, at a plan, a concrete improvement; the fix's review
+  reads the first round's findings and the fix, and a third round reads only a real failure the second found, never
+  the whole again; the protocol's section 1 says this flow for plans and code; today about 6% of Codex's command
+  lines and no lens run carry what was asked, and 10 of 290 chains went past round 2.
+  spec 3, changed by spec 7: left out because a small code change gets no read beside its two reviews; its pair is
+  those two reviews, judged against what was asked.
+- 4. Refutation: could a bound on rounds drop real failures, and does code need its own extra pair? Measured above:
+  the rounds past the second found 4 findings in 1061 ranges, all P2; code's two reviews are already one Claude and
+  one Codex. 147's extra read at 1% of the weekly limit each, on this week's 328 code reviews (Depth pass, item 2),
+  would ask for over three weekly limits. Verdict: supports
+- 5. Request: his request rewritten, beside his words (L14): "Review what Claude does, and the reviewers themselves,
+  for what really fails and whether the task or the feature came out as it was asked. At the plan, the Claude and
+  Codex readers bring failures and improvements; in code, its two reviews, Codex and the Claude lenses, judge against
+  what was asked. Claude gets every finding back, fixes or improves, and one review confirms it works; then approval.
+  A third round only for a real failure the confirming review found, reading only that fix; never endless review.
+  A precise plan, then an impeccable implementation, under rule 1."
+  Adds: none
+
 ## Specs
 1. "Y si mejor no hacemos dos lectores A y B sino que hacemos una de Claude y una de Codex para tener 2 perspectivas
    diferentes pero que sean dos revisiones ciegas independientes?" (L2)
@@ -141,6 +185,16 @@ rule commits wait and the work that does not depend on them goes on.
 4. "Claude reemplaza y Codex paga después (Recomendada)" (L5, tapped, to question 148).
 5. "entiendo que tenemos que alinear todo el arnes para que no vaya a quedar contradicciones o algo antiguo" (L1).
 6. The eval of PR 737's brief, with and without the rule, owed by 2026-11-30 (`docs/ROADMAP.md:716`): planned here.
+7. "La idea es que los modelos de ia son muy buenos criticandos incluso cuando esta todo bien, la idea es revisar lo
+   que haga claude e incluso el mismo claude revisor y codex revisor, ver que realmente falla y con criterio y si la
+   tarea que se pidio o la funcionalidad quedo como fue pedida ya que la idea es que se pida algo en especifico y se
+   haga eso por eso en la planeacion la aportacion de los revisores es diferente ya que es aportar mejoras o fallos
+   en el plan inicial pero siempre es, identificar problemas con aporte de mejoras, claude se le devuelve el trabajo
+   con toda esta informacion, se corrige o se mejora y entra nuevo a revision para terminar de comprobar si realmente
+   funciona y al final aprobar, la idea no es quedarse revisando infinitamente y sin sentido sino siempre con
+   criterio de profesional top por eso el plan inicial debe quedar preciso y luego debe quedar impecable la
+   implementacion y asi yo creo que tendria flujo de trabajo perfecto, ahora la idea es utilizar nuestra filosofia
+   principal que fue la que colocamos dentro de la regla del arnes recuerdas?" (L14, typed, to question 150).
 
 ## Older texts
 Each text found that contradicts rule 1 or this design, before it changes; the search: `grep -rnE "two (read-only
@@ -185,12 +239,12 @@ two readers" items (`docs/ROADMAP.md:256`, `:271`, mirrored at `README.md:766`) 
 is the one item 18 makes the onboarding ask for.
 
 ## Next step
-State on 2026-11-01, after 532f4215. T1, T3 and T5 are done and in PR 745 (`rule/double-review`), every code
-commit covered by Codex and the lenses; T3's independent verifier ran (L13) and its fixes were reviewed. Next:
-`notify --kind ready --pr 745`, then wait for notices to 126. Open: question 150 has no typed words
-(0f71b2c6:46616 was a tap); T2 and T4 wait on them, on a new `rule/` branch from main once PR 745 lands, then
-Claude 6 of L12; T6 keeps T2's verifier, older text 16 and the report of how to try it. Meter 86% weekly, reserve
-10%. The gentle-ai Stop hook: status only, start nothing. Never edit a tracked file while a Codex review runs (L11).
+State on 2026-11-01, on `rule/review-flow` from main f063429 (PR 745 landed T1, T3 and T5). He answered question
+150 in his own words (L14): a redesign of the review, `## Redesign after question 150`, decided in L15. Next: the
+redesign's blind read (`double-review read` of this document), its findings taken here, then one question to him
+through the lead (`notify --kind question`); T2 and T4 are rewritten on his answer, then Claude 6 of L12; T6 keeps
+T2's verifier, older text 16 and the report of how to try it. Meter 86% weekly; the reserve is not his rule yet.
+The gentle-ai Stop hook: status only, start nothing. Never edit a tracked file while a Codex review runs (L11).
 
 ## Eval plan
 The eval owed by 2026-11-30 (spec 6), not run here: the case built from PR 737's brief runs on the current arm and
@@ -302,3 +356,16 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   low: a retried read's new readers could find the earlier read's record under the git common dir by a deliberate
   read (outside "until both return" within one read); a change between the frozen diff and the first state, a
   window of milliseconds.
+- L14 (2026-11-01, typed, the lead's transcript `0f71b2c6`, line 49332, his answer to question 150, read with
+  `js-harness sessions --quote`): spec 7 as written. It is not the written acceptance of 147 and 148 the question
+  asked for: it designs the review (reviewers judge against what was asked, with a top professional's criterion; at
+  the plan they bring failures and improvements; Claude fixes, one review confirms it works, then approval; never
+  endless; under rule 1). The lead (22:49 UTC, to 126): "It changes 147. Redo T2/T4 on his words and send the
+  redesign to him through me as one question before recording rules."
+- L15 (2026-11-01, decision, on L14 and `## Redesign after question 150`): 147's extra read on every small code
+  change leaves the design, since code's two reviews are already a Claude and a Codex review and that read would ask
+  for over three weekly limits of Codex; code's pair gets what was asked and the bounded rounds instead. 148's
+  reserve is still not in his typed words, so the question carries it as part of the redesign, said apart. The
+  redesign passes the blind pair (`double-review read`) before it reaches him, as spec 2 and today's
+  `rule:double-review` ask; its findings are taken here first. T2 and T4 are rewritten on his answer, on
+  `rule/review-flow` from main f063429, since PR 745 landed `rule/double-review`.
