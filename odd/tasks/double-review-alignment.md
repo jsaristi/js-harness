@@ -278,8 +278,9 @@ sweep, a record of that day (L16, Claude 10).
 ## Next step
 State on 2026-11-01, on `rule/review-flow` from main f063429 (PR 745 landed T1, T3 and T5). He answered question
 150 in his own words (L14) and added the bound (L17): `## Redesign after question 150`, decided in L15, read blind
-in L16 and its findings taken. Next: one question to him through the lead (`notify --kind question`), the redesign
-and the reserve said apart; T2 and T4 are rewritten on his answer, then Claude 6 of L12; T6 keeps T2's verifier,
+in L16 and its findings taken; it went to him as question 152 through the lead (2026-11-01 23:04 UTC, the reserve
+said apart, no options, so his answer is typed). Next: wait for it; T2 and T4 are rewritten on his answer (what it
+approves, and any change he writes), then Claude 6 of L12; T6 keeps T2's verifier,
 older text 16 and the report of how to try it. Meter 87% weekly; the reserve is not his rule yet.
 The gentle-ai Stop hook: status only, start nothing. Never edit a tracked file while a Codex review runs (L11).
 
