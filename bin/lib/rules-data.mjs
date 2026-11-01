@@ -266,6 +266,15 @@ export const RULES = [
     ]
   },
   {
+    "id": "growth-limit",
+    "subject": "his growth limit: while js-harness progress --pace says the last seven days are red, the plan's open steps grown, the lead opens no new work in this repository but what this rule's value names, and writes the rest in the roadmap's Later list with its source; his own word that something goes now opens it all the same",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-11-01",
+    "value": "a fix or a step of F8",
+    "review": "2026-11-15"
+  },
+  {
     "id": "lead-charter",
     "subject": "what the lead does alone and tells him after, and what stays his, asked one at a time",
     "owner": "sebastian",

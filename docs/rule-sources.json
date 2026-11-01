@@ -340,6 +340,23 @@
     "kind": "design",
     "path": "odd/tasks/gate-lock.md"
   },
+  "growth-limit": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Listo entonces continuemos y reactives todo para hacer le plan",
+        "date": "2026-11-01",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 48080
+      }
+    ],
+    "reading": "His answer names no limit: it confirms the lead's question in the entry before it (same session, line 48066, an assistant entry read by this session): \"¿adoptas el ajuste, es decir, seguir con F8 y poner el límite al crecimiento?\", whose message described the limit as \"Mientras la semana esté en rojo, no entraría trabajo nuevo, salvo arreglos y pasos de F8\", after the page he read (https://claude.ai/artifact/1EPj6FTbsB6C6n9aAT5iyJ, step 1: \"que el líder detenga lo nuevo mientras la semana esté en rojo. No frena arreglos de lo que ya funciona ni los pasos de F8\"). The value is the lead's exemption in English, \"arreglos y pasos de F8\". The week is red when the open steps grew over the last seven whole days: added and reopened more than closed and removed. The page said \"más agregados que cerrados\"; removals are counted because the double review found that a reworded roadmap step counts as one removed and one added (odd/tasks/replan-execute.md, L6), so without them a rewording would read as new work. That precision is this session's, and his to correct.",
+    "accepted": "A message he typed to the lead, answering that question after reading the page; the count's precision was not put to him.",
+    "checked": {
+      "date": "2026-11-01",
+      "by": "command"
+    }
+  },
   "lead-charter": {
     "kind": "words",
     "quotes": [

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compareSteps, dayKey, PACE_DAYS, paceLines, paceLogArgs, paceOf, paceRef, parsePaceLog, stepsOf, windowStart } from './progress-pace.mjs';
+import { compareSteps, dayKey, PACE_DAYS, paceLines, paceLogArgs, paceOf, paceRef, parsePaceLog, stepsOf, WEEK_DAYS, windowStart } from './progress-pace.mjs';
 
 const step = (text, done = false) => ({ text, done });
 
@@ -171,6 +171,7 @@ test('each day of the window counts the tasks closed, reopened, added and remove
     ],
     total: { closed: 2, reopened: 0, added: 3, removed: 0 },
     meanPerDay: { closed: 0.7, reopened: 0, added: 1, removed: 0 },
+    week: null,
   });
 });
 
@@ -198,4 +199,47 @@ test('the pace is said as a line a day under the branch it read, then the totals
     'Total       closed 1  reopened 0  added 0  removed 0',
     'A day       closed 0.5  reopened 0  added 0  removed 0',
   ]);
+});
+
+// The week of the growth limit (rule:growth-limit, odd/tasks/replan-execute.md): the last seven whole days.
+const weekOf = (commits) => paceOf({ commits, now: NOW, days: PACE_DAYS }).week;
+
+test('the week is the last seven whole days of the window, today left out, and none when the window holds fewer', () => {
+  const commits = [
+    // Today: not in the week, since a morning's merges would turn it.
+    commit('today', daysAgo(0), [{ path: 'odd/tasks/f.md', before: null, after: feature('- [ ] T1 a', '- [ ] T2 b') }]),
+    commit('in', daysAgo(7), [{ path: 'odd/tasks/g.md', before: null, after: feature('- [ ] T1 a') }]),
+    commit('out', daysAgo(8), [{ path: 'odd/tasks/h.md', before: null, after: feature('- [ ] T1 a') }]),
+  ];
+  assert.equal(WEEK_DAYS, 7);
+  assert.deepEqual(weekOf(commits), { from: '2026-10-09', to: '2026-10-15', closed: 0, reopened: 0, added: 1, removed: 0, grew: 1, red: true });
+  assert.equal(paceOf({ commits, now: NOW, days: 7 }).week, null);
+});
+
+test('the week is red when its open steps grew, and a step reworded or a document landed finished grows nothing', () => {
+  const finished = commit('done', daysAgo(2), [{ path: 'odd/tasks/f.md', before: null, after: feature('- [x] T1 a', '- [x] T2 b') }]);
+  // A roadmap step without an ID, reworded: one removed, one added.
+  const reworded = commit('reword', daysAgo(3), [{ path: 'docs/ROADMAP.md', before: '## Checklist\n### F8\n- [ ] 4. Migration\n', after: '## Checklist\n### F8\n- [ ] 4. Migration, one step at a time\n' }]);
+  // A finished document moved to a new path: its steps are removed at one and added, closed, at the other.
+  const moved = commit('move', daysAgo(4), [
+    { path: 'odd/tasks/old.md', before: feature('- [x] T1 a'), after: null },
+    { path: 'odd/tasks/new.md', before: null, after: feature('- [x] T1 a') },
+  ]);
+  assert.equal(weekOf([moved]).grew, 0);
+  assert.deepEqual(weekOf([finished, reworded]), { from: '2026-10-09', to: '2026-10-15', closed: 2, reopened: 0, added: 3, removed: 1, grew: 0, red: false });
+  const opened = commit('open', daysAgo(1), [{ path: 'odd/tasks/g.md', before: null, after: feature('- [x] T1 a', '- [ ] T2 b') }]);
+  assert.equal(weekOf([finished, reworded, opened]).red, true);
+  const closedMore = commit('close', daysAgo(1, 13), [{ path: 'odd/tasks/k.md', before: feature('- [ ] T1 a', '- [ ] T2 b'), after: feature('- [x] T1 a', '- [x] T2 b') }]);
+  assert.deepEqual(weekOf([opened, closedMore]), { from: '2026-10-09', to: '2026-10-15', closed: 3, reopened: 0, added: 2, removed: 0, grew: -1, red: false });
+});
+
+test('the week is said after the mean a day, with what waits while it is red where the limit holds', () => {
+  const opened = commit('open', daysAgo(1), [{ path: 'odd/tasks/g.md', before: null, after: feature('- [ ] T1 a') }]);
+  const pace = paceOf({ commits: [opened], now: NOW, days: PACE_DAYS });
+  assert.equal(paceLines({ ...pace, branch: 'main', limit: 'a fix or a step of F8' }).at(-1), 'Last 7 days 2026-10-09 to 2026-10-15: closed 0  reopened 0  added 1  removed 0; the open steps grew by 1: red, new work waits but a fix or a step of F8 (rule:growth-limit)');
+  assert.equal(paceLines({ ...pace, branch: 'main' }).at(-1), 'Last 7 days 2026-10-09 to 2026-10-15: closed 0  reopened 0  added 1  removed 0; the open steps grew by 1: red');
+  const quiet = paceOf({ commits: [], now: NOW, days: PACE_DAYS });
+  assert.equal(paceLines({ ...quiet, branch: 'main', limit: 'a fix or a step of F8' }).at(-1), 'Last 7 days 2026-10-09 to 2026-10-15: closed 0  reopened 0  added 0  removed 0; the open steps did not grow: green');
+  // A window of two days holds no whole week: the heading, two days, the totals and the mean, and no week line.
+  assert.equal(paceLines({ ...paceOf({ commits: [], now: NOW, days: 2 }), branch: 'main' }).length, 5);
 });

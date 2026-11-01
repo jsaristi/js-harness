@@ -9,6 +9,9 @@ import { taskId } from './sessions.mjs';
 /** How many days `--pace` reads when it is not told. */
 export const PACE_DAYS = 14;
 
+/** The days of the week the growth limit reads (rule:growth-limit): a week, the last whole days before today. */
+export const WEEK_DAYS = 7;
+
 /** What git reads: the roadmap and every feature document, the same files `progress` reads. */
 const PACE_PATHS = ['docs/ROADMAP.md', ':(glob)odd/tasks/*.md'];
 
@@ -168,26 +171,45 @@ export const windowStart = (now, days) => new Date(now.getFullYear(), now.getMon
 const KINDS = ['closed', 'reopened', 'added', 'removed'];
 const zero = () => Object.fromEntries(KINDS.map((kind) => [kind, 0]));
 
+/** How many of `steps` are open. */
+const openOf = (steps) => steps.filter((one) => !one.done).length;
+
 /** The pace of `commits` (`parsePaceLog`) over the last `days` days up to `now`: `{ days, from, to, perDay,
- * total, meanPerDay }`. Each day is cut by the committer date in this machine's time zone; a day with no commit
- * is 0, and today is `partial`. A commit with no parent is the start of a history, shallow or not, and counts
- * nothing. The mean a day is to one decimal. */
+ * total, meanPerDay, week }`. Each day is cut by the committer date in this machine's time zone; a day with no
+ * commit is 0, and today is `partial`. A commit with no parent is the start of a history, shallow or not, and
+ * counts nothing. The mean a day is to one decimal. `week` is the last `WEEK_DAYS` whole days, today left out so
+ * that a morning's merges do not turn it, or `null` when the window holds fewer: its counts, how many open steps
+ * it `grew` by, the open steps of each file after each commit less those before, so a step reworded or a document
+ * moved or landed finished grows nothing, and `red` when that is more than none (rule:growth-limit). */
 export function paceOf({ commits, now, days }) {
   const start = windowStart(now, days);
   const keys = Array.from({ length: days }, (_, at) => dayKey(new Date(start.getFullYear(), start.getMonth(), start.getDate() + at)));
   const perDay = new Map(keys.map((key) => [key, zero()]));
+  const grewOn = new Map(keys.map((key) => [key, 0]));
   for (const commit of commits) {
     if (commit.parents.length === 0) continue;
-    const day = perDay.get(dayKey(new Date(commit.date)));
+    const key = dayKey(new Date(commit.date));
+    const day = perDay.get(key);
     if (day === undefined) continue;
     for (const file of commit.files) {
-      const counts = compareSteps(stepsOf(file.path, file.before), stepsOf(file.path, file.after));
+      const before = stepsOf(file.path, file.before);
+      const after = stepsOf(file.path, file.after);
+      const counts = compareSteps(before, after);
       for (const kind of KINDS) day[kind] += counts[kind];
+      grewOn.set(key, grewOn.get(key) + openOf(after) - openOf(before));
     }
   }
   const today = dayKey(now);
   const total = zero();
   for (const counts of perDay.values()) for (const kind of KINDS) total[kind] += counts[kind];
+  const whole = keys.filter((key) => key !== today).slice(-WEEK_DAYS);
+  let week = null;
+  if (whole.length === WEEK_DAYS) {
+    const counts = zero();
+    for (const key of whole) for (const kind of KINDS) counts[kind] += perDay.get(key)[kind];
+    const grew = whole.reduce((sum, key) => sum + grewOn.get(key), 0);
+    week = { from: whole[0], to: whole.at(-1), ...counts, grew, red: grew > 0 };
+  }
   return {
     days,
     from: keys[0],
@@ -195,18 +217,29 @@ export function paceOf({ commits, now, days }) {
     perDay: keys.map((key) => ({ date: key, ...perDay.get(key), partial: key === today })),
     total,
     meanPerDay: Object.fromEntries(KINDS.map((kind) => [kind, Math.round((total[kind] / days) * 10) / 10])),
+    week,
   };
 }
 
 const countsSaid = (counts) => KINDS.map((kind) => `${kind} ${counts[kind]}`).join('  ');
 
-/** The pace as `progress --pace` prints it: the branch read, a line a day, the totals and the mean a day. */
-export function paceLines({ branch, days, perDay, total, meanPerDay }) {
+/** The week as its line says it: its counts, how its open steps moved, and red or green; `limit` is the value of
+ * rule:growth-limit where it holds, what may still open while the week is red. */
+function weekSaid(week, limit) {
+  const moved = week.grew > 0 ? `grew by ${week.grew}` : week.grew < 0 ? `fell by ${-week.grew}` : 'did not grow';
+  const state = !week.red ? 'green' : limit === undefined ? 'red' : `red, new work waits but ${limit} (rule:growth-limit)`;
+  return `Last 7 days ${week.from} to ${week.to}: ${countsSaid(week)}; the open steps ${moved}: ${state}`;
+}
+
+/** The pace as `progress --pace` prints it: the branch read, a line a day, the totals, the mean a day and, when the
+ * window holds a whole week, the week's line. */
+export function paceLines({ branch, days, perDay, total, meanPerDay, week = null, limit }) {
   const label = (text) => text.padEnd(12);
   return [
     `Pace of ${branch}, its first-parent line, by committer day over the last ${days === 1 ? 'day' : `${days} days`}:`,
     ...perDay.map((day) => `  ${day.date}  ${countsSaid(day)}${day.partial ? '  (today, so far)' : ''}`),
     `${label('Total')}${countsSaid(total)}`,
     `${label('A day')}${countsSaid(meanPerDay)}`,
+    ...(week === null ? [] : [weekSaid(week, limit)]),
   ];
 }
