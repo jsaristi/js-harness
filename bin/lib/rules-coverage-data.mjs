@@ -139,6 +139,11 @@ export const COVERAGE = {
       "level": "owed",
       "since": "2026-10-28"
     },
+    "local-time": {
+      "level": "protocol",
+      "path": "bin/lib/protocols-skill.mjs",
+      "phrase": "a UTC time reaches the user only inside a code block, a quoted output or a path"
+    },
     "memory-feedback-home": {
       "level": "owed",
       "since": "2026-10-28"

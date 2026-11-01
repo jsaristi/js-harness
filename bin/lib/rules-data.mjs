@@ -288,6 +288,19 @@ export const RULES = [
     ]
   },
   {
+    "id": "local-time",
+    "subject": "a clock time he reads, in a reply, a page or a message, is in his local time, the offset read from the machine's clock and never a constant, with the zone said once; the records keep UTC, and a UTC time reaches him only inside a code block, a quoted output or a path",
+    "owner": "sebastian",
+    "since": "2026-11-01",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "A clock time the user reads, in a reply, a page or a message, is given in their local time",
+      "the offset read from the machine's clock at that instant, never a constant, and the zone said once",
+      "The records (git, the channel, the transcripts, the logs) keep UTC",
+      "a UTC time reaches the user only inside a code block, a quoted output or a path"
+    ]
+  },
+  {
     "id": "memory-feedback-home",
     "subject": "where a rule he states lives: a feedback note of the project's Claude Code memory folder is written only when it names the rule's home in the repository, and js-harness guard refuses it otherwise",
     "owner": "project",

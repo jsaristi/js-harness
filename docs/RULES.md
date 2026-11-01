@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `e1a5347d3d12`. In force: 68 (41 of Sebastián, 27 of the project). Retired: 4.
+Hash `e63e1ff3020d`. In force: 69 (42 of Sebastián, 27 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -70,6 +70,11 @@ What the lead does alone and tells him after, and what stays his, asked one at a
 The harness never works as a black box: work sessions write each event as a notice (a session starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends them to the live board, a page that updates by itself, and points every reply to it: "- Every event of your work reaches the user's live board as a notice: \`js-harness notify --to orchestrator\` with \`opened\` when you start, \`note\` when a step of your plan finishes, a pull request opens or merges, a decision is made or you report spend, and \`ready\` and \`closed\` as below."
 - Home: `bin/lib/manifest.mjs`.
 - Since 2026-10-27. Row: reports. Source: his words of 2026-10-27, 2026-10-27, 2026-10-27, 2026-10-27, checked by the command on 2026-10-27.
+
+### local-time
+A clock time he reads, in a reply, a page or a message, is in his local time, the offset read from the machine's clock and never a constant, with the zone said once; the records keep UTC, and a UTC time reaches him only inside a code block, a quoted output or a path: "- A clock time the user reads, in a reply, a page or a message, is given in their local time (\`rule:local-time\`): the offset read from the machine's clock at that instant, never a constant, and the zone said once."
+- Home: `bin/lib/protocols-skill.mjs`.
+- Since 2026-11-01. Row: reports. Source: his words of 2026-11-01, 2026-11-01, checked by the command on 2026-11-01.
 
 ### mistake-report
 A mistake is reported with what it was, its fix, what prevents it, how it enters the harness and how it is proven later: "What stops it from happening again: a check before a line, a line before a protocol."
