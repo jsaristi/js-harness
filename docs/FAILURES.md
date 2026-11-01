@@ -554,6 +554,9 @@ not the committed range, wrote no record and had to be run again.
 - Seen: 2026-10-31 — `odd/tasks/reply-hook-latency.md` L8 (JH 116) — that document edited, after the lenses had
   finished, during the Codex review of `f91cbcc..8dd55c8`; 128,821 input tokens spent on part 3 of 3, nothing
   recorded, that part run again (parts 1 and 2 kept)
+- Seen: 2026-10-31 — `odd/tasks/double-review-alignment.md` L11 (JH 126) — that document edited, with the lenses
+  running beside it, during the Codex review of `d22f33e..bcd2dd4`; 28,500 input tokens spent on part 1 of 4,
+  nothing recorded, run again
 - Seen: 2026-11-01 — `odd/tasks/local-time.md` L9 (JH 127) — that document edited, with the lenses running beside
   it, during the Codex review of `9a80707..a1b23d9`; 189,665 input tokens spent on part 1 of 2, which passed and was
   not kept, nothing recorded, the review run again
@@ -1652,6 +1655,15 @@ the reply before he leaves; so the return had no goals to check and no forecast 
   `returnStretchWarning`). It enters at the first wait and the first return after the pull request lands and the
   installed copy is refreshed; its proof is `node --test bin/quiet.test.mjs bin/lib/return-report.test.mjs`, and no
   later sighting of this class without the turn-back's time beside it
+- Seen: 2026-11-01 — the lead's transcript 0f71b2c6, lines 46673 and 46938 (the lead's own, sent to JH 126 at 05:46Z
+  and checked there) — he was quiet from 2026-10-31T20:04:00Z to "dime que hemos avanzado" at 05:44:19Z, 9.7 h,
+  without saying he was leaving; the stretch record's last close is at 19:27:50Z and none opened after it. The
+  reply hook's turn-back asked for this sighting at his return, the check of the line above acting; the absence
+  itself was unannounced, which no departure check sees
+- Seen: 2026-11-01 — the lead's transcript 0f71b2c6, lines 47160 and 47608 (the lead's own, sent to JH 126 at 18:04Z
+  and checked there) — after "listo colocalo en el arnes de siempre dar la hora local" at 05:56:03Z he was away until
+  18:03:39Z, 12.1 h, the machine off ("deje el computador apagado bastante tiempo"), without saying he was leaving;
+  no stretch opened between the close at 2026-10-31T19:27:50Z and the open at 18:13:57Z, after his return
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 

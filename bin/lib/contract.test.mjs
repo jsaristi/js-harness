@@ -52,9 +52,11 @@ test('the template fails validation: it is all placeholders', () => {
   assert.ok(errors.some((e) => /^task T1 names the kind/.test(e)), errors.join('\n'));
 });
 
-test('the template is a contract with every section, in order, then a task line that names its kind', () => {
+// Rule 1 puts the depth pass after the contract (odd/tasks/double-review-alignment.md, older text 8).
+test('the template is a contract with every section, in order, then the depth pass and a task line that names its kind', () => {
   assert.equal(isContract(CONTRACT_TEMPLATE), true);
-  assert.deepEqual([...parseContract(CONTRACT_TEMPLATE).keys()], [...SECTIONS, 'Tasks']);
+  assert.deepEqual([...parseContract(CONTRACT_TEMPLATE).keys()], [...SECTIONS, 'Depth pass', 'Tasks']);
+  assert.match(parseContract(CONTRACT_TEMPLATE).get('Depth pass'), /- 1\. Method:[\s\S]*- 5\. Request:[\s\S]*Adds: none/);
   assert.match(parseContract(CONTRACT_TEMPLATE).get('Tasks'), /^- \[ \] T1 \(kind: design \| build \| verify \| docs\)/);
 });
 

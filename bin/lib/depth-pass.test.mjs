@@ -264,6 +264,21 @@ test('a renamed document keeps the day it opened', (t) => {
   assert.deepEqual(depthPassFor(root, { today: '2026-11-05' })('odd/tasks/renamed.md', `${CONTRACT}\n${SPECS}`), []);
 });
 
+test('a document a merge of the trunk brings keeps the day it opened on the trunk, while the merge is committed', (t) => {
+  const root = repo('2026-11-03');
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  git(root, 'checkout', '-q', '-b', 'feature');
+  write(root, 'bin/a.mjs', 'two\n');
+  commit(root, 'feat: the branch', 'bin/a.mjs');
+  git(root, 'checkout', '-q', '-b', 'side', 'origin/main');
+  write(root, FILE, `${CONTRACT}\n${SPECS}`);
+  commit(root, 'docs: opened on the trunk', FILE);
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  git(root, 'checkout', '-q', 'feature');
+  git(root, 'merge', '-q', '--no-commit', '--no-ff', 'origin/main');
+  assert.deepEqual(depthPassFor(root, { today: '2026-11-05' })(FILE, `${CONTRACT}\n${SPECS}`), []);
+});
+
 test('a pass renamed on its branch after its code keeps the commit that brought its verdict', (t) => {
   const root = repo();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

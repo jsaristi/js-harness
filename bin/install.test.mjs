@@ -1795,13 +1795,30 @@ test('syncMain --cwd sets a fresh clone up, prints what it wrote, and a second r
     assert.ok(first.errLines.includes('kept AGENTS.md (committed)'));
     assert.ok(fs.existsSync(path.join(root, '.git', 'hooks', 'pre-commit')));
 
-    const second = await captureConsole(() => syncMain(['--cwd', root], process.env, projectDeps()));
+    const second = await captureConsole(() => syncMain(['--cwd', root], process.env, { ...projectDeps(), now: new Date(2026, 9, 31, 23, 30).getTime() }));
 
     assert.equal(second.code, 0);
-    assert.deepEqual(second.outLines, [`up to date at ${currentVersion()}`]);
+    assert.deepEqual(second.outLines, [`up to date at ${currentVersion()}`, depthPassOffer('2026-11-01')]);
     assert.deepEqual(second.errLines, []);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+const depthPassOffer = (day) =>
+  `rule:depth-pass holds no feature document here: harness.json declares no depthPassSince. To hold those opened from tomorrow on, add "depthPassSince": "${day}" to harness.json and commit it; null holds none and ends this line`;
+
+test('syncMain offers depthPassSince only where harness.json has no such key: a day or null ends the offer', async () => {
+  for (const [declared, offered] of [[undefined, true], ['2026-11-01', false], [null, false]]) {
+    const root = withProgram(makeTmpClone());
+    try {
+      if (declared !== undefined) fs.writeFileSync(path.join(root, 'harness.json'), JSON.stringify({ version: currentVersion(), depthPassSince: declared }, null, 2) + '\n', 'utf8');
+      const { code, outLines } = await captureConsole(() => syncMain(['--cwd', root], process.env, { ...projectDeps(), now: new Date(2026, 11, 31, 9).getTime() }));
+      assert.equal(code, 0);
+      assert.equal(outLines.includes(depthPassOffer('2027-01-01')), offered, `depthPassSince ${declared}`);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   }
 });
 

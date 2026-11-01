@@ -459,7 +459,7 @@ export const COVERAGE = {
       "7774030582f5",
       "7e910ca794b1",
       "fbb4d5c957e3",
-      "21d376a28bac",
+      "87be64196dc8",
       "49cf30e33785",
       "e4c63656c08a",
       "14f96c7a3917",
@@ -491,7 +491,7 @@ export const COVERAGE = {
       "c229836fd437",
       "d5219ae27553",
       "79cc5349ca6b",
-      "cfc60ba8255a",
+      "31fbf6069818",
       "14e804ceab59",
       "f2fa66aaec3a",
       "4dd2781f9b9e",
@@ -561,6 +561,36 @@ export const COVERAGE = {
       "d46a74a7cb70",
       "c21bc63d564e",
       "342a4048fed1"
+    ],
+    "double-review-prompt": [
+      {
+        "hash": "2bd610bf6d58",
+        "context": "the double review's prompt: a fact of the read, which the command makes true by starting both readers at once on one copy and recording both after both return (bin/double-review.test.mjs)"
+      },
+      {
+        "hash": "53d232dddb82",
+        "context": "the double review's prompt: the reader's read-only tools and Codex's read-only sandbox hold it on the run itself (bin/double-review.test.mjs), so no prose rule carries it"
+      },
+      {
+        "hash": "8d6884151a0e",
+        "context": "the double review's prompt: a heading or the slot of the material, no obligation"
+      },
+      {
+        "hash": "fcd7f3e5defc",
+        "context": "the double review's prompt: the command counts no answer without every copy's read token (bin/double-review.test.mjs), so no prose rule carries it"
+      },
+      {
+        "hash": "4d4353ddfd31",
+        "context": "the double review's prompt: what a one-shot reader is asked to look for in the material, an instruction of that read and no rule of the harness"
+      },
+      {
+        "hash": "4df4c366d640",
+        "context": "the double review's prompt: what a one-shot reader is asked to look for in the material, an instruction of that read and no rule of the harness"
+      },
+      {
+        "hash": "c5e91a9afad3",
+        "context": "the double review's prompt: the CLI holds the answer to its schema (ANSWER_SCHEMA, bin/double-review.mjs), and its language is an instruction of that read, which the Claude reader's settings also set"
+      }
     ],
     "init-agents": [
       "76433bc095fa",

@@ -114,7 +114,7 @@ that leads other sessions, and are rarely typed by hand:
 
 | For you | For hooks and the orchestrator |
 |---|---|
-| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, summary, failures, rules, codex-review, codex-meter, lens-review, functions, remote, memory, fetch, backup, clean | hooks: guard, reply, resume, permit; the orchestrator and its sessions: loop, report, throughput, windows-daily, merge-queue, sessions, unseen, subagents, audit, notify, wake, quiet, wait; the host watch: host-watch |
+| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, summary, failures, rules, codex-review, codex-meter, double-review, lens-review, functions, remote, memory, fetch, backup, clean | hooks: guard, reply, resume, permit; the orchestrator and its sessions: loop, report, throughput, windows-daily, merge-queue, sessions, unseen, subagents, audit, notify, wake, quiet, wait; the host watch: host-watch |
 
 Every example below is the output of a real run. Paths are shortened: `~` is the home and
 `my-project` is the project's folder. A line `…` marks output left out; output that grows with
@@ -144,7 +144,8 @@ runs no `sensors`), `documentSensors` (named commands that run at such a commit 
 `depthPassSince` (a day, `YYYY-MM-DD`) holds the `contracts` row to `rule:depth-pass`: a feature
 document first committed on or after that day, or not committed yet, has a `## Depth pass` with
 its five items in order, and the commit that brings its verdict holds documents alone and comes
-before the feature's first code. A project without the key is not held to it.
+before the feature's first code. A project without the key is not held to it, and `sync` offers
+it from the next day on; `null` declines it.
 
 When a `node --test` suite fails, the test files it names as failed run once more, alone. A
 file that passes on that rerun does not block while it has a current entry in `docs/FLAKY.md`,
@@ -1090,6 +1091,33 @@ $ js-harness codex-meter
 five-hour: 3% used, resets at 2026-10-24 06:01
 weekly: 8% used, resets at 2026-10-30 13:38
 reset credits left: 1
+```
+
+### js-harness double-review
+
+The double review of `rule:double-review`: one Claude reader and one Codex reader, blind, on a plan, a
+design, a document that proposes something, or a small code change (`--diff <rev>` adds the diff
+`<rev>...HEAD`). `read` copies the files into a folder outside the repository, hashes the copy, ends
+each copy with a read token no prompt holds, and starts both readers at once on the same prompt:
+Claude with read-only tools; Codex in the lean session `codex-review` uses. A reader with tools can
+open any file, so the read is blind by sequence: neither answer is on disk until both have returned,
+and neither CLI keeps a session file. A reader whose answer does not echo every copy's token did not
+open them and does not count. Both answers are recorded together once both have returned, in
+`double-reviews.jsonl` under the git common folder, with a mark when the repository moved while they
+read, and the copy is removed. No push and no merge
+door reads that file: a read covers no code, which keeps its Codex and lens reviews. `--plan` says
+what a read costs and the words that skip it, and starts nothing; only the user's own words skip a
+read: `skip` records them only where they hold that phrase and the session transcript holds them
+typed at that line, never a tapped answer or a paste. An interrupted read stops both readers and
+leaves no copy behind. `take` records which of a reader's findings the writer took and which
+the other reader also found, and `tally` gives each reader its reads, findings, taken and found by it
+alone. A reader that could not answer exits 1, its reason recorded; a usage error exits 2.
+
+```console
+$ js-harness double-review read odd/tasks/plan.md --plan
+double review of odd/tasks/plan.md: a Claude reader on <subagent-reader-model> and a Codex reader on <review-model>, blind, started at once on one frozen copy
+cost: measured once, about 116k tokens of Claude and 55k of Codex, about 1% of Codex's weekly limit (odd/tasks/double-review-alignment.md, L8); js-harness codex-meter reads what is left
+only the user's own words skip it, "no quiero la revisión", recorded with js-harness double-review skip
 ```
 
 ### js-harness lens-review
