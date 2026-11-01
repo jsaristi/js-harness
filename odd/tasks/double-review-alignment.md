@@ -185,14 +185,12 @@ two readers" items (`docs/ROADMAP.md:256`, `:271`, mirrored at `README.md:766`) 
 is the one item 18 makes the onboarding ask for.
 
 ## Next step
-State on 2026-11-01, after 2ea4eb52. Main 8d7a8ec merged (224c7e3e), after b92d669a (prompt in 7 sentences, register
-998 lines) and cc394be1 (`openedOn` reads the trunk and MERGE_HEAD while a merge is committed). Lenses on
-64e911d..cc394be: 0; Codex: one P2 (a branch document could take a trunk document's day at the same path), fixed in
-2ea4eb52 (HEAD's history first, the other sides fill only missing paths). Both stretch-not-opened sightings of
-2026-11-01 are in `docs/FAILURES.md`. Next: Codex and the lenses over `d0913255..2ea4eb52`, then push, the PR of
-what is done and `notify --kind ready`. Open: question 150 has no typed words (0f71b2c6:46616 was a tap); T2 and T4
-wait on them, then Claude 6 of L12. Meter 86% weekly, reserve 10%. The gentle-ai Stop hook's slice from 64e911d6
-spans the merge of main: status only, start nothing. Never edit a tracked file while a Codex review runs (L11).
+State on 2026-11-01, after 532f4215. T1, T3 and T5 are done and in PR 745 (`rule/double-review`), every code
+commit covered by Codex and the lenses; T3's independent verifier ran (L13) and its fixes were reviewed. Next:
+`notify --kind ready --pr 745`, then wait for notices to 126. Open: question 150 has no typed words
+(0f71b2c6:46616 was a tap); T2 and T4 wait on them, on a new `rule/` branch from main once PR 745 lands, then
+Claude 6 of L12; T6 keeps T2's verifier, older text 16 and the report of how to try it. Meter 86% weekly, reserve
+10%. The gentle-ai Stop hook: status only, start nothing. Never edit a tracked file while a Codex review runs (L11).
 
 ## Eval plan
 The eval owed by 2026-11-30 (spec 6), not run here: the case built from PR 737's brief runs on the current arm and
@@ -208,7 +206,7 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   records none and says so; exactly 10% left is not under it; concurrent sessions each read before they launch, so
   use may still cross it, unguaranteed); `codex-meter` lists the reserve skips no review has paid, by commit, after
   their merge too, with the worktree command that pays each; older texts 4 and 13; spec 4; route codex-review.
-- [ ] T3 (kind: build) `js-harness double-review`: `read` (the frozen copy, both readers started at once, each echoing
+- [x] T3 (kind: build) bcd2dd4a, 1a7638cf, c59e58b0, aad73210, 09725fbd, 532f4215; `js-harness double-review`: `read` (the frozen copy, both readers started at once, each echoing
   its read tokens, the Claude reader on `rule:subagent-reader-model`, blind by sequence (L12), the reserve, `--plan`
   announces), `take` (taken and shared), `skip`, `tally`; records under the git common dir, which no review row
   reads, with the test that a read leaves code uncovered; spec 1, 2, 3, 4.
@@ -292,3 +290,15 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   re-checked (Claude 7); the reserve's estimate restated from measured points (Claude 8). Claude 5 is T2. Claude 6,
   whether D5's two exemptions (a question of fact; a step whose reviewed text the question names) survive "en todo",
   is his: it goes to him with T4, through the lead, after question 150.
+- L13 (2026-11-01, T6's independent verifier of T3, two processes at once; a read-only Opus sub-agent, 120k
+  tokens, no reader launched): no break of blindness within a read, of the read tokens, of the moved mark or of the
+  records. Three defects, each checked in the code before the fix. Off Windows the readers are detached and nothing
+  handled SIGINT or SIGTERM, so an interrupted read left both running with the copy and the lean home behind
+  (`codex-review.mjs` `runReview` handles them). A kill that returned normally left the child's pipes attached, so a
+  descendant it missed could hold the CLI open. `skip` took any typed words, not the announced phrase. A state git
+  could not read also passed as nothing moved. Fixed in 532f4215, tests first (the interrupt test hung before the
+  fix): `runChild` kills each tree on either signal and always lets the pipes go, `skip` needs `SKIP_PHRASE` in his
+  words, and an unknown state is said. Codex: correct (0.88); lenses reliability and resilience: 0. Left as they are,
+  low: a retried read's new readers could find the earlier read's record under the git common dir by a deliberate
+  read (outside "until both return" within one read); a change between the frozen diff and the first state, a
+  window of milliseconds.
