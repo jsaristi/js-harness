@@ -5,22 +5,22 @@
 // an item's state and its session's last wait, a failure's record and the later run that passed), and an `explain`
 // event, which `js-harness stretch explain` writes with a commit or a notice as its source and which wins. Pure: the
 // view, the channel's notices and the explanations in, the rows out, in Spanish, the user's language.
+import { localHour } from './local-time.mjs';
 
 const ms = (iso) => Date.parse(iso);
-const timeZ = (iso) => `${new Date(iso).toISOString().slice(11, 16)}Z`;
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** How an explanation's source is named on the page: a commit by its short hash, a notice by its sender and time. */
 export function sourceName(source) {
   if (source?.kind === 'commit') return `commit ${String(source.ref).slice(0, 8)}`;
-  if (source?.kind === 'notice') return `aviso de ${source.from ?? 'sin nombre'} (${timeZ(source.at)})`;
+  if (source?.kind === 'notice') return `aviso de ${source.from ?? 'sin nombre'} (${localHour(source.at)})`;
   return 'sin fuente';
 }
 
 /** What an item's state says of why it did not finish, from its own record. */
 function stateWhy(item, closed) {
   if (item.waitsFor) return { text: `espera ${item.waitsFor}`, source: 'el plan del tramo' };
-  const last = item.lastAt ? timeZ(item.lastAt) : null;
+  const last = item.lastAt ? localHour(item.lastAt) : null;
   const source = 'los registros de su sesión';
   if (item.state === 'running') return { text: `${closed ? 'seguía en curso al cierre' : 'sigue en curso'}; su último registro, ${last}`, source };
   if (item.state === 'silent') return { text: `sin señal desde las ${last}`, source };
@@ -38,7 +38,7 @@ function lastWait(session, notices, { from, to }) {
     .filter((one) => ['waiting', 'question'].includes(one.kind) && head.test(String(one.from?.title ?? '')) && ms(one.at) >= from && ms(one.at) <= to)
     .sort((a, b) => ms(a.at) - ms(b.at))
     .at(-1);
-  return wait ? { text: `su último aviso de espera o pregunta: «${wait.text}»`, source: `aviso de ${wait.from.title} (${timeZ(wait.at)})` } : null;
+  return wait ? { text: `su último aviso de espera o pregunta: «${wait.text}»`, source: `aviso de ${wait.from.title} (${localHour(wait.at)})` } : null;
 }
 
 /** The failures of `view`, its items' and its own, oldest first, each with `who` and `target`, its name: the start its
@@ -59,9 +59,9 @@ function failureRow(one) {
   return {
     kind: 'failure',
     target: one.target,
-    what: `${one.who} · ${timeZ(one.at)} · ${Math.round(one.seconds / 60)} min`,
+    what: `${one.who} · ${localHour(one.at)} · ${Math.round(one.seconds / 60)} min`,
     why: [{ text: one.what, source }],
-    fix: one.fixedAt ? [{ text: `una corrida posterior pasó a las ${timeZ(one.fixedAt)}`, source }] : [],
+    fix: one.fixedAt ? [{ text: `una corrida posterior pasó a las ${localHour(one.fixedAt)}`, source }] : [],
     open: [],
     fixed: Boolean(one.fixedAt),
   };
@@ -96,7 +96,7 @@ export function problemsOf(view, { notices = [], explains = [] }) {
     kind: 'goal',
     target: goal.id,
     what: goal.text,
-    why: [{ text: `su comando terminó con ${goal.said}`, source: view.goals.checkedAt ? `la revisión de las ${timeZ(view.goals.checkedAt)}` : 'la revisión de metas' }],
+    why: [{ text: `su comando terminó con ${goal.said}`, source: view.goals.checkedAt ? `la revisión de las ${localHour(view.goals.checkedAt)}` : 'la revisión de metas' }],
     fix: [],
     open: [],
     fixed: false,

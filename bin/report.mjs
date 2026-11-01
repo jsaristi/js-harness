@@ -14,6 +14,7 @@ import { PACE_REF_ARGS, paceRef } from './lib/progress-pace.mjs';
 import { REPORT_WINDOW_HOURS, cutOf, landedOf, mapOf, mergeCommitsArgs, mergeLogArgs, parseMergeLog, questionsOf, reportLines, sessionsOf, stamp } from './lib/report.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { localZone } from './lib/local-time.mjs';
 import { recordPageRendered } from './lib/pages-rendered.mjs';
 import { notesOf, renderStatus } from './lib/report-status.mjs';
 import { momentAt } from './lib/report-git.mjs';
@@ -215,6 +216,6 @@ export async function reportMain(argv, options = {}) {
     return 1;
   }
   stdout('');
-  stdout(`Recorded this report at ${stamp(at)}`);
+  stdout(`Recorded this report at ${stamp(at)}, local time ${localZone(at)}`);
   return 0;
 }

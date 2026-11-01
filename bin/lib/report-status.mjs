@@ -217,6 +217,7 @@ export function renderStatus({ cut, branch, landed, sessions, questions, map, be
   return page({
     title: 'Cómo vamos',
     heading: 'Cómo vamos desde el último reporte',
+    zoneAt: cut.at,
     lead: `Desde ${stamp(cut.at)}. Lo que entró, las sesiones, el mapa y las preguntas salen de git y del registro; tus decisiones, lo que espera y lo que propongo, de las notas del orquestador.`,
     badNews: notes?.badNews ?? [],
     top: headHtml(map, before, branch, stretch),

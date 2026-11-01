@@ -4,6 +4,7 @@
 // the desktop's in-chat visual tool takes it whole, so one output serves both. Its colours are tokens scoped to the
 // page's wrapper, so a fragment shown inside a host page leaves the host's own alone. Pure: parts in, text out. Every
 // text from a record is escaped, so a page shows it and never runs it.
+import { localHour, localMinute, localZone } from './local-time.mjs';
 
 export const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -72,12 +73,10 @@ export function table(head, rows) {
   return `<div class="tbl"><table><tr>${head.map((name) => `<th>${escapeHtml(name)}</th>`).join('')}</tr>${rows.map((row) => `<tr>${row.map(cell).join('')}</tr>`).join('')}</table></div>`;
 }
 
-const timeZ = (iso) => `${new Date(iso).toISOString().slice(11, 16)}Z`;
-
-/** A timeline: each `{ at, kind, text }` in the order given, at its UTC time, its dot by kind (`ok`, `part`, `bad`,
- * `mark`, `mut`). */
+/** A timeline: each `{ at, kind, text }` in the order given, at its local time (rule:local-time), its dot by kind
+ * (`ok`, `part`, `bad`, `mark`, `mut`). */
 export function timeline(rows) {
-  return `<ol class="tl">${rows.map(({ at, kind, text }) => `<li><span class="t">${timeZ(at)}</span><span class="dot ${escapeHtml(kind)}"></span><span>${escapeHtml(text)}</span></li>`).join('')}</ol>`;
+  return `<ol class="tl">${rows.map(({ at, kind, text }) => `<li><span class="t">${localHour(at)}</span><span class="dot ${escapeHtml(kind)}"></span><span>${escapeHtml(text)}</span></li>`).join('')}</ol>`;
 }
 
 /** A plan's steps in order, each `{ id, state, moved }`: `state` one of `done`, `moving`, `todo`, `other`; `moved`
@@ -103,19 +102,21 @@ export function agoText(at, now) {
 // would be false on a later look.
 const AGO_SCRIPT = `<script>(() => { const ago = ${agoText}; const show = () => { for (const one of document.querySelectorAll('.js-page [data-ago]')) { const text = ago(Date.parse(one.dataset.ago), Date.now()); one.textContent = text ? \` · \${text}\` : ''; } }; show(); setInterval(show, 60000); })();</script>`;
 
-/** When the page was made, `at` as the renderer wrote it, and the place `AGO_SCRIPT` fills. */
+/** When the page was made, `at` as the renderer wrote it, in local time with its zone, and the place `AGO_SCRIPT` fills. */
 function generated(at) {
   const iso = new Date(at).toISOString();
-  return `<p class="note">Generada el <time datetime="${iso}">${iso.slice(0, 16).replace('T', ' ')}Z</time><span data-ago="${iso}"></span></p>`;
+  return `<p class="note">Generada el <time datetime="${iso}">${localMinute(at)}</time> (hora local, ${localZone(at)})<span data-ago="${iso}"></span></p>`;
 }
 
 /** The page: `<title>`, the style, then in its wrapper the heading and its lead, when it was made (`generatedAt`, when
  * given, and then the script that says how long ago), the bad news first, the `top` numbers, and each section `{ title, html, note? }`,
- * `html` built from the parts above. */
-export function page({ title, heading, lead = '', generatedAt = null, badNews = [], top = '', sections = [] }) {
+ * `html` built from the parts above. Its times are local, and the zone is said once: by when it was made, or, on a page
+ * with no `generatedAt`, by a note at the zone of `zoneAt`, an instant the page shows. */
+export function page({ title, heading, lead = '', generatedAt = null, zoneAt = null, badNews = [], top = '', sections = [] }) {
   const bad = badNews.length === 0 ? '' : `<div class="badnews"><strong>Primero lo malo.</strong> ${badNews.map(escapeHtml).join(' ')}</div>`;
   const body = sections.map((one) => `<section><h2>${escapeHtml(one.title)}</h2>${one.html}${one.note ? `<p class="note">${escapeHtml(one.note)}</p>` : ''}</section>`).join('\n');
-  const made = generatedAt === null ? '' : generated(generatedAt);
+  const zone = zoneAt === null ? '' : `<p class="note">Las horas son hora local, ${localZone(zoneAt)}.</p>`;
+  const made = generatedAt === null ? zone : generated(generatedAt);
   // `top`, HTML from the parts here, is the numbers a reader asks for first: after the bad news, before any section.
-  return `<title>${escapeHtml(title)}</title>${STYLE}<div class="js-page"><header><h1>${escapeHtml(heading)}</h1>${lead ? `<p class="lead">${escapeHtml(lead)}</p>` : ''}${made}</header>${bad}${top ? `<div class="top">${top}</div>` : ''}\n${body}</div>${made ? AGO_SCRIPT : ''}`;
+  return `<title>${escapeHtml(title)}</title>${STYLE}<div class="js-page"><header><h1>${escapeHtml(heading)}</h1>${lead ? `<p class="lead">${escapeHtml(lead)}</p>` : ''}${made}</header>${bad}${top ? `<div class="top">${top}</div>` : ''}\n${body}</div>${generatedAt === null ? '' : AGO_SCRIPT}`;
 }

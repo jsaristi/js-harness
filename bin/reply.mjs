@@ -21,13 +21,16 @@
 // whose user came back after an absence no stretch covered, or with its stretch still open (`returnStretchWarning`,
 // spec 8 of odd/tasks/departure-stretch.md). And it turns back a
 // reply that hands the user a shell command block not tagged for his shell, not run by the session with success first,
-// or rejected by his shell's parser (bin/lib/reply-commands.mjs, S1 of odd/tasks/f8-lead-rigor.md).
+// or rejected by his shell's parser (bin/lib/reply-commands.mjs, S1 of odd/tasks/f8-lead-rigor.md). And it turns back a
+// reply that gives a clock time in UTC outside a code block, a quoted output or a path (bin/lib/reply-time.mjs,
+// rule:local-time, spec 2 of odd/tasks/local-time.md).
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { closingState, fencedBlocks, replyConfig, replyRefusal } from './lib/reply.mjs';
 import { COMMANDS_DEADLINE_MS, commandBlocks, commandRefusals, commandsWarning, shellParser } from './lib/reply-commands.mjs';
+import { utcTimeWarning } from './lib/reply-time.mjs';
 
 const USAGE = 'Usage: js-harness reply --hook\n'
   + '  reads a Stop payload on standard input; where the nearest harness.json holds a "reply" key, turns the stop back\n'
@@ -224,6 +227,7 @@ export async function replyMain(argv, {
       if (config?.error) stderr(`js-harness reply: ${config.error}; the reply check did not run\n`);
       else if (config !== null) {
         reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks) });
+        const times = utcTimeWarning(message, { now: now() });
         const state = closingState(message, config);
         const io = await stopIo({ readFile, readdir, run, env, homedir, now, templates: harness?.templates === true }, stderr);
         const wake = await wakeOf(payload, state, io, stderr);
@@ -232,7 +236,7 @@ export async function replyMain(argv, {
         const stretch = await returnStretchOf(payload, state, io, stderr);
         // Last, so its one deadline, counted from the hook's start, holds the other checks' time too.
         const commands = commandsOf(payload, message, { readFile: io.readFile, platform, parse, now, started }, stderr);
-        for (const warning of [commands, wake, stale, back, stretch]) {
+        for (const warning of [times, commands, wake, stale, back, stretch]) {
           if (warning !== null) reason = reason === null ? warning : `${reason}\n\n${warning}`;
         }
       }

@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { notesOf, renderStatus } from './report-status.mjs';
 
+// Its times are shown in local time (rule:local-time): the zone is pinned so no machine's own decides a result.
+process.env.TZ = 'America/Bogota';
+
 const CUT = { at: Date.parse('2026-10-29T00:00:00Z'), source: 'last-report', head: 'c0' };
 const MAP = { done: 3, total: 5, phases: [{ title: 'F1 Skeleton', done: 2, total: 2, open: [] }, { title: 'F2 Board', done: 1, total: 3, open: ['y', 'z'] }] };
 const BEFORE = { done: 1, total: 5, phases: [{ title: 'F1 Skeleton', done: 1, total: 2, open: ['b'] }, { title: 'F2 Board', done: 0, total: 3, open: ['x', 'y', 'z'] }] };
@@ -19,6 +22,7 @@ test('the status report is the six sections as a page, the records\' facts and t
   const notes = notesOf(JSON.stringify({ badNews: ['#644 fue rechazado al empujar.'], decisions: [{ text: 'Aterrizar 644 dentro de 645', changed: 'una revisión menos' }], waits: [{ what: 'T5f', why: 'otra sesión' }], proposals: [{ step: 'Tramo C', why: 'faltan páginas' }] }));
   const html = renderStatus({ ...FACTS, notes });
   assert.match(html, /^<title>Cómo vamos<\/title>/);
+  assert.equal(html.match(/Las horas son hora local, UTC-05:00\./g)?.length, 1, 'its times are local and the zone is said once');
   assert.match(html, /Primero lo malo\.[\s\S]*#644 fue rechazado al empujar\./);
   const order = ['1. Lo que entró', '2. Las sesiones', '3. Tus decisiones y qué cambiaron', '4. El mapa', '5. Lo que espera', '6. Lo que propongo'].map((title) => html.indexOf(title));
   assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), `the six sections in order: ${order}`);
@@ -83,7 +87,7 @@ test('section 4 says when no stretch ran since the cut, when the stretch record 
   assert.match(partial, /real 7 h[\s\S]*No se pudo leer gate log \(EACCES\): las horas son parciales\./);
   const open = sectionFour(renderStatus({ ...FACTS, map: { ...MAP, plans: [] }, stretch: { ...STRETCH, state: 'open', goals: { checkedAt: null, met: 0, total: 1, list: [{ id: 'G1', text: 'PR 630 en main', met: null, said: null }] }, forecast: { unavailable: 'git show: bad' } }, notes: null }));
   assert.match(open, /La hoja de ruta no tiene una sección de plan/);
-  assert.match(open, /abierto[\s\S]*vuelve 2026-10-29 11:00Z/);
+  assert.match(open, /abierto[\s\S]*vuelve 2026-10-29 06:00/);
   assert.match(open, /PR 630 en main[\s\S]*sin revisar/);
   assert.match(open, /El pronóstico no se pudo leer: git show: bad/);
 });
@@ -114,7 +118,7 @@ test('each proposal carries its estimate, and the next report sets the last one\
   const six = sectionSix(renderStatus({ ...FACTS, cut, notes }));
   assert.match(six, /Tramo D[\s\S]*falta el mapa[\s\S]*2 h, PR 740 en main/);
   assert.match(six, /Tramo E[\s\S]*sin estimación/);
-  assert.match(six, /Lo que propuse el 2026-10-29 00:00Z[\s\S]*Tramo C[\s\S]*PR 645 en main en 3 h[\s\S]*Tramo B[\s\S]*sin estimación/);
+  assert.match(six, /Lo que propuse el 2026-10-28 19:00[\s\S]*Tramo C[\s\S]*PR 645 en main en 3 h[\s\S]*Tramo B[\s\S]*sin estimación/);
   assert.match(six, /Desde entonces entró: PR 645\./);
   assert.match(sectionSix(renderStatus({ ...FACTS, cut, landed: [], notes })), /Desde entonces no entró nada a la rama principal\./);
   assert.match(sectionSix(renderStatus({ ...FACTS, cut, landed: { error: 'git log: fatal' }, notes })), /Lo que entró desde entonces no se pudo leer: git log: fatal/);

@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `e1a5347d3d12`. In force: 68 (41 of Sebastián, 27 of the project). Retired: 4.
+Hash `5a509bfd2442`. In force: 70 (43 of Sebastián, 27 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -61,6 +61,13 @@ The fixed load of a session at its first turn, the median of its latest sessions
 - Read by: `bin/lib/fixed-load.mjs`.
 - Since 2026-10-24. Row: reports. Source: his words of 2026-10-15, checked by the command on 2026-10-24.
 
+### growth-limit
+His growth limit: while js-harness progress --pace says the last seven days are red, the plan's open steps grown, the lead opens no new work in this repository but what this rule's value names, and writes the rest in the roadmap's Later list with its source; his own word that something goes now opens it all the same: a fix or a step of F8.
+- Of this repository only: not in force in a project that installs the harness.
+- Looked at again on 2026-11-15.
+- Read by: `bin/progress.mjs`.
+- Since 2026-11-01. Row: reports. Source: his words of 2026-11-01, checked by the command on 2026-11-01.
+
 ### lead-charter
 What the lead does alone and tells him after, and what stays his, asked one at a time: "Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command."
 - Home: `bin/lib/manifest.mjs`.
@@ -70,6 +77,11 @@ What the lead does alone and tells him after, and what stays his, asked one at a
 The harness never works as a black box: work sessions write each event as a notice (a session starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends them to the live board, a page that updates by itself, and points every reply to it: "- Every event of your work reaches the user's live board as a notice: \`js-harness notify --to orchestrator\` with \`opened\` when you start, \`note\` when a step of your plan finishes, a pull request opens or merges, a decision is made or you report spend, and \`ready\` and \`closed\` as below."
 - Home: `bin/lib/manifest.mjs`.
 - Since 2026-10-27. Row: reports. Source: his words of 2026-10-27, 2026-10-27, 2026-10-27, 2026-10-27, checked by the command on 2026-10-27.
+
+### local-time
+A clock time he reads, in a reply, a page or a message, is in his local time, the offset read from the machine's clock and never a constant, with the zone said once; the records keep UTC, and a UTC time reaches him only inside a code block, a quoted output or a path: "- A clock time the user reads, in a reply, a page or a message, is given in their local time (\`rule:local-time\`): the offset read from the machine's clock at that instant, never a constant, and the zone said once."
+- Home: `bin/lib/protocols-skill.mjs`.
+- Since 2026-11-01. Row: reports. Source: his words of 2026-11-01, 2026-11-01, checked by the command on 2026-11-01.
 
 ### mistake-report
 A mistake is reported with what it was, its fix, what prevents it, how it enters the harness and how it is proven later: "What stops it from happening again: a check before a line, a line before a protocol."

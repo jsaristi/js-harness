@@ -20,8 +20,9 @@ export { LIVE_USAGE, sessionsLiveMain } from './sessions-live.mjs';
 
 export const START_USAGE = [
   'Usage: js-harness sessions start --title <title> --brief <file> [--worktree <name>] [--model <model>] [--effort <level>]',
-  '                                 [--no-remote-control] [--cwd <path>] [--home <path>]',
-  '       js-harness sessions start --resume <id> [--brief <file>] [--model <model>] [--effort <level>] [--no-remote-control] [--home <path>]',
+  '                                 [--advisor <model>] [--no-remote-control] [--cwd <path>] [--home <path>]',
+  '       js-harness sessions start --resume <id> [--brief <file>] [--model <model>] [--effort <level>] [--advisor <model>]',
+  '                                 [--no-remote-control] [--home <path>]',
   '       js-harness sessions stop <id> [--home <path>]',
   '         start runs claude --bg in the folder (a worktree of its own with --worktree), titled as start_session titles a session,',
   '         with Remote Control on (claude.ai/code and the phone reach it) unless --no-remote-control; the session reads a copy',
@@ -29,8 +30,9 @@ export const START_USAGE = [
   '         the start under <home>/.js-harness/background/; exit 1 when claude is missing or refuses (nothing is recorded), 2 for a',
   '         usage error or a title or effort the rules session-title and session-effort refuse, where they are declared.',
   '         A run of claude that does not finish (a timeout) is looked for in claude agents and recorded when it started.',
+  '         --advisor passes claude --advisor <model> (a stronger model the session consults); it is recorded with the start.',
   '         --resume resumes a recorded session whose job stopped (a restart ends every one) with claude --bg --resume, in a',
-  '         new job in its folder, under its title, model and effort, and records the new job; one that still runs is refused.',
+  '         new job in its folder, under its title, model, effort and advisor, and records the new job; one that still runs is refused.',
   '         The lead uses it only on a turn the user did not type, where start_session would leave a card: a background session',
   '         is not a row in the desktop sidebar. The board lists the project\'s background sessions, what each waits for',
   '         (a permission prompt included) and whether start recorded it; --watch returns when one starts waiting.',
@@ -42,7 +44,7 @@ export const START_USAGE = [
 
 class StartArgError extends Error {}
 
-const VALUED = new Map([['--title', 'title'], ['--brief', 'brief'], ['--worktree', 'worktree'], ['--model', 'model'], ['--effort', 'effort'], ['--cwd', 'cwd'], ['--home', 'home'], ['--resume', 'resume']]);
+const VALUED = new Map([['--title', 'title'], ['--brief', 'brief'], ['--worktree', 'worktree'], ['--model', 'model'], ['--effort', 'effort'], ['--advisor', 'advisor'], ['--cwd', 'cwd'], ['--home', 'home'], ['--resume', 'resume']]);
 
 function parseStart(argv) {
   const parsed = { remoteControl: true };
@@ -211,7 +213,7 @@ export function sessionsStartMain(argv, given = {}) {
   }
   const entry = {
     event: 'started', at: new Date(now()).toISOString(), id, sessionId: agent?.sessionId ?? null, title: parsed.title, root, cwd,
-    worktree: parsed.worktree ?? null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: parsed.model ?? null, effort: parsed.effort ?? null, remoteControl: parsed.remoteControl, brief: copy,
+    worktree: parsed.worktree ?? null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: parsed.model ?? null, effort: parsed.effort ?? null, advisor: parsed.advisor ?? null, remoteControl: parsed.remoteControl, brief: copy,
   };
   try {
     appendRecord(home, entry);
@@ -253,8 +255,8 @@ export function sessionsStartMain(argv, given = {}) {
 }
 
 /** `sessions start --resume <id>`: the recorded session `id` names, whose job stopped (a restart of the machine ends every
- * one), resumed with `claude --bg --resume` in a new job, in the folder it worked in, under its title, model and effort
- * (`--model`, `--effort` and `--brief` replace the record's), held to the effort rule as a start is. The new job is
+ * one), resumed with `claude --bg --resume` in a new job, in the folder it worked in, under its title, model, effort and
+ * advisor (`--model`, `--effort`, `--advisor` and `--brief` replace the record's), held to the effort rule as a start is. The new job is
  * recorded with `resumedFrom`, and replaces the stopped one, which stays recorded: the two share a worktree and a brief,
  * so they are undone together (`undoSession`). Exit 0 once the new job runs and is recorded; 1 when the record holds no
  * such session or cannot be written, a job works its conversation or that cannot be told, its folder is gone, or claude
@@ -299,6 +301,7 @@ function resumeStart(parsed, deps) {
   }
   const model = parsed.model ?? entry.model ?? undefined;
   const effort = parsed.effort ?? entry.effort ?? undefined;
+  const advisor = parsed.advisor ?? entry.advisor ?? undefined;
   const refusal = sessionEffortRefusal({ prompt: text, effort }, rulesText(topLevel(run, folder), readFile), { cli: true });
   if (refusal !== null) return refuse(refusal, 2);
   const unwritable = recordUnwritable(home);
@@ -313,7 +316,7 @@ function resumeStart(parsed, deps) {
   const remoteControl = parsed.remoteControl && entry.remoteControl !== false;
   let result;
   try {
-    result = claude(startArgs({ title: entry.title, briefs: briefsDirOf(home), model, effort, remoteControl, prompt: resumePrompt(copy), resume: entry.sessionId }), { cwd: folder });
+    result = claude(startArgs({ title: entry.title, briefs: briefsDirOf(home), model, effort, advisor, remoteControl, prompt: resumePrompt(copy), resume: entry.sessionId }), { cwd: folder });
   } catch (err) {
     drop();
     return refuse(`claude was not started: ${err.message}`);
@@ -344,7 +347,7 @@ function resumeStart(parsed, deps) {
   }
   const job = {
     event: 'started', at: new Date(now()).toISOString(), id, sessionId: resumed?.sessionId ?? entry.sessionId, title: entry.title, root: entry.root, cwd: entry.cwd,
-    worktree: entry.worktree ?? null, worktreePath: worktreeOf(entry), model: model ?? null, effort: effort ?? null, remoteControl, brief: copy, resumedFrom: entry.id,
+    worktree: entry.worktree ?? null, worktreePath: worktreeOf(entry), model: model ?? null, effort: effort ?? null, advisor: advisor ?? null, remoteControl, brief: copy, resumedFrom: entry.id,
   };
   try {
     appendRecord(home, job);

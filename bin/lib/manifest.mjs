@@ -161,7 +161,7 @@ What you may do:
 
 When the user asks for something, place it with the roadmap and the board:
 - work of a feature whose session is open goes to that session: the user says it there in their own words, or here, and you carry it with \`--kind answer\` and the line where they said it;
-- new work gets the opening prompt of a new work session; a design conversation is a session of its own too;
+- new work gets the opening prompt of a new work session; a design conversation is a session of its own too. Where \`rule:growth-limit\` holds, read the last line of \`js-harness progress --pace\` before you open new work: while it says red, open only what it names, and write anything else in the roadmap's Later list with its source and tell the user it waits, unless they say it goes now; a session already open goes on with its own tasks;
 - note in the relief file what was asked and where it went, and go on.
 
 Teaching, where the roadmap holds \`## Advice mode\` (a project planned with \`js-harness onboard\`): the work session that puts a decision to the user writes into the question's text what the line's \`Teaching\` value calls for, and you show that text unchanged. When the user asks to stop or resume the teaching, or says they already know an area, it takes effect at once: send a one-line notice of it to the open work sessions, and carry it in the opening prompt of any work session you open before the roadmap holds it; the work session that next changes the roadmap writes it into \`## Advice mode\`. A roadmap without that section changes nothing here.

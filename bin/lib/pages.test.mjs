@@ -3,8 +3,11 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { agoText, chain, escapeHtml, page, pill, shareText, table, tiles, timeline } from './pages.mjs';
 
+// Its times are shown in local time (rule:local-time): the zone is pinned so no machine's own decides a result.
+process.env.TZ = 'America/Bogota';
+
 test('a page is one fragment that opens with its title, its tokens scoped to its wrapper, bad news first', () => {
-  const html = page({ title: 'Regreso <1>', heading: 'Lo que pasó', lead: 'De 12:11Z a 22:54Z', badNews: ['No se abrió un tramo'], sections: [{ title: 'Metas', html: '<p>x</p>', note: 'nota' }] });
+  const html = page({ title: 'Regreso <1>', heading: 'Lo que pasó', lead: 'De 07:11 a 17:54', badNews: ['No se abrió un tramo'], sections: [{ title: 'Metas', html: '<p>x</p>', note: 'nota' }] });
   assert.match(html, /^<title>Regreso &lt;1&gt;<\/title>/);
   assert.doesNotMatch(html, /:root\s*\{/, 'a fragment shown inside a host page leaves the host\'s :root alone');
   assert.match(html, /\.js-page\{/);
@@ -49,9 +52,9 @@ test('a cell may be a pill or a mono number, and a cell object\'s text is escape
   assert.match(html, /<span class="pill ok">hecho &lt;x&gt;<\/span>/);
 });
 
-test('the timeline lists each event at its UTC time with a dot of its kind, oldest first as given', () => {
+test('the timeline lists each event at its local time with a dot of its kind, oldest first as given', () => {
   const html = timeline([{ at: '2026-10-28T12:11:00Z', kind: 'mark', text: 'Te vas' }, { at: '2026-10-28T12:19:30Z', kind: 'bad', text: 'Falla <1>' }]);
-  assert.match(html, /12:11Z[\s\S]*dot mark[\s\S]*Te vas[\s\S]*12:19Z[\s\S]*dot bad[\s\S]*Falla &lt;1&gt;/);
+  assert.match(html, /07:11[\s\S]*dot mark[\s\S]*Te vas[\s\S]*07:19[\s\S]*dot bad[\s\S]*Falla &lt;1&gt;/);
 });
 
 test('the chain draws each step in order by its state, and outlines the ones that moved', () => {
@@ -59,10 +62,19 @@ test('the chain draws each step in order by its state, and outlines the ones tha
   assert.match(html, /step done">S0[\s\S]*step moving moved">S11[\s\S]*step todo">S13/);
 });
 
+test('a page says its zone once: with when it was made, or by a note at zoneAt where it has no generatedAt; never twice', () => {
+  const made = page({ title: 't', heading: 'h', generatedAt: Date.parse('2026-10-29T14:00:00Z'), zoneAt: Date.parse('2026-10-29T14:00:00Z') });
+  assert.equal(made.match(/UTC-05:00/g).length, 1);
+  const noted = page({ title: 't', heading: 'h', zoneAt: Date.parse('2026-10-29T14:00:00Z') });
+  assert.match(noted, /<header><h1>h<\/h1><p class="note">Las horas son hora local, UTC-05:00\.<\/p><\/header>/);
+  assert.doesNotMatch(noted, /<script>/);
+  assert.doesNotMatch(page({ title: 't', heading: 'h' }), /hora local/);
+});
+
 test('a page made at a time says when, and its "hace" is counted when it is looked at, so a later look stays true', () => {
   const at = '2026-10-29T14:00:00.000Z';
   const html = page({ title: 't', heading: 'h', lead: 'l', generatedAt: at, sections: [] });
-  assert.match(html, /<header>.*<p class="note">Generada el <time datetime="2026-10-29T14:00:00.000Z">2026-10-29 14:00Z<\/time><span data-ago="2026-10-29T14:00:00.000Z"><\/span><\/p><\/header>/);
+  assert.match(html, /<header>.*<p class="note">Generada el <time datetime="2026-10-29T14:00:00.000Z">2026-10-29 09:00<\/time> \(hora local, UTC-05:00\)<span data-ago="2026-10-29T14:00:00.000Z"><\/span><\/p><\/header>/);
   // The script runs where the page is shown: a look 2 h 15 min later reads that, whatever the clock said at render.
   const script = /<script>([\s\S]*?)<\/script>/.exec(html)[1];
   const shown = { dataset: { ago: at }, textContent: '' };

@@ -152,13 +152,13 @@ function withWorld(body, options) {
 }
 
 test('sessions start starts claude --bg with the title, a pointer to the brief and Remote Control, and records it', withWorld((world) => {
-  const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing', '--model', 'haiku', '--effort', 'high']);
+  const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing', '--model', 'haiku', '--effort', 'high', '--advisor', 'fable']);
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /^started 0db8bc5e · Build the thing$/m);
   assert.match(result.stdout, /js-harness sessions stop 0db8bc5e/);
   const [call] = actions(world);
   const briefs = path.join(world.home, '.js-harness', 'background', 'briefs');
-  assert.deepEqual(call.slice(0, -1), ['--bg', '--add-dir', briefs, '-n', 'Build the thing', '-w', 'thing', '--model', 'haiku', '--effort', 'high', '--remote-control', 'Build the thing']);
+  assert.deepEqual(call.slice(0, -1), ['--bg', '--add-dir', briefs, '-n', 'Build the thing', '-w', 'thing', '--model', 'haiku', '--effort', 'high', '--advisor', 'fable', '--remote-control', 'Build the thing']);
   const prompt = call.at(-1);
   assert.doesNotMatch(prompt, /\n/);
   const [record] = recordLines(world);
@@ -167,6 +167,7 @@ test('sessions start starts claude --bg with the title, a pointer to the brief a
   assert.equal(record.title, 'Build the thing');
   assert.equal(record.worktree, 'thing');
   assert.equal(record.remoteControl, true);
+  assert.equal(record.advisor, 'fable');
   assert.equal(path.dirname(record.brief), briefs);
   assert.ok(prompt.includes(record.brief), prompt);
   const copy = fs.readFileSync(record.brief, 'utf8');
@@ -536,8 +537,8 @@ const endJob = (world, id) => {
 };
 
 // The review of slice C of JH 72 (7d8db831..73fc8cf7): resume paths that no test held.
-test('sessions start --resume resumes a job claude no longer lists, with --model and --no-remote-control, and refuses a claude that refuses or a folder that is gone', withWorld((world) => {
-  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+test('sessions start --resume resumes a job claude no longer lists, with --model and --no-remote-control and the recorded --advisor, and refuses a claude that refuses or a folder that is gone', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing', '--advisor', 'fable']).code, 0);
   const [first] = recordLines(world);
   // After a restart claude agents may not list the stopped job at all.
   patchState(world, { agents: [], nextId: 'c779ed44', refuseStart: 'resume refused: made up' });
@@ -549,9 +550,9 @@ test('sessions start --resume resumes a job claude no longer lists, with --model
   const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--model', 'haiku', '--no-remote-control']);
   assert.equal(resumed.code, 0, resumed.stderr);
   const call = actions(world).at(-1);
-  assert.deepEqual([call[call.indexOf('--model') + 1], call.includes('--remote-control')], ['haiku', false]);
+  assert.deepEqual([call[call.indexOf('--model') + 1], call.includes('--remote-control'), call[call.indexOf('--advisor') + 1]], ['haiku', false, 'fable']);
   const entry = recordLines(world).at(-1);
-  assert.deepEqual([entry.id, entry.model, entry.remoteControl], ['c779ed44', 'haiku', false]);
+  assert.deepEqual([entry.id, entry.model, entry.remoteControl, entry.advisor], ['c779ed44', 'haiku', false, 'fable']);
   // A folder that is gone is not resumed into.
   endJob(world, 'c779ed44');
   fs.rmSync(path.join(first.root, '.claude', 'worktrees', 'thing'), { recursive: true, force: true });

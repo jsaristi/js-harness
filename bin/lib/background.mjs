@@ -55,12 +55,13 @@ export function resumePrompt(copy) {
 
 /** The arguments of `claude` that start the session, or resume the conversation `resume` (a session id) in a new job.
  * `--add-dir` lets it read its brief's copy without a prompt; it takes several folders, so `-n` ends it. */
-export function startArgs({ title, briefs, worktree, model, effort, remoteControl, prompt, resume }) {
+export function startArgs({ title, briefs, worktree, model, effort, advisor, remoteControl, prompt, resume }) {
   return [
     '--bg', ...(resume === undefined ? [] : ['--resume', resume]), '--add-dir', briefs, '-n', title,
     ...(worktree === undefined ? [] : ['-w', worktree]),
     ...(model === undefined ? [] : ['--model', model]),
     ...(effort === undefined ? [] : ['--effort', effort]),
+    ...(advisor === undefined ? [] : ['--advisor', advisor]),
     ...(remoteControl ? ['--remote-control', title] : []),
     prompt,
   ];

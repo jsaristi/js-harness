@@ -219,9 +219,12 @@ function mapHtml(view) {
 
 /** The page of a feature's close, in Spanish. */
 export function renderFeature(view) {
+  // The zone is said once, at the first time the page shows: a merge, else a failed gate.
+  const shown = [...(view.prs.unknown ? [] : view.prs.map((pr) => pr.at)), ...(view.failures.runs ?? []).map((one) => Date.parse(one.startedAt))];
   return page({
     title: `Cierre de ${view.title}`,
     heading: `Cierre de ${view.title}`,
+    zoneAt: shown[0] ?? null,
     lead: `Lo que prometió ${view.path} y lo que entregó, sus pull requests, el tiempo, las revisiones, el gasto, los fallos y el mapa, de git y de los registros.`,
     sections: [
       { title: 'Lo prometido y lo entregado', html: promisedHtml(view.promised) },

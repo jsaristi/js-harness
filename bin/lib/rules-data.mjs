@@ -266,6 +266,15 @@ export const RULES = [
     ]
   },
   {
+    "id": "growth-limit",
+    "subject": "his growth limit: while js-harness progress --pace says the last seven days are red, the plan's open steps grown, the lead opens no new work in this repository but what this rule's value names, and writes the rest in the roadmap's Later list with its source; his own word that something goes now opens it all the same",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-11-01",
+    "value": "a fix or a step of F8",
+    "review": "2026-11-15"
+  },
+  {
     "id": "lead-charter",
     "subject": "what the lead does alone and tells him after, and what stays his, asked one at a time",
     "owner": "sebastian",
@@ -285,6 +294,19 @@ export const RULES = [
     "phrases": [
       "Every event of your work reaches the user's live board as a notice",
       "point every reply of yours to the board's link"
+    ]
+  },
+  {
+    "id": "local-time",
+    "subject": "a clock time he reads, in a reply, a page or a message, is in his local time, the offset read from the machine's clock and never a constant, with the zone said once; the records keep UTC, and a UTC time reaches him only inside a code block, a quoted output or a path",
+    "owner": "sebastian",
+    "since": "2026-11-01",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "A clock time the user reads, in a reply, a page or a message, is given in their local time",
+      "the offset read from the machine's clock at that instant, never a constant, and the zone said once",
+      "The records (git, the channel, the transcripts, the logs) keep UTC",
+      "a UTC time reaches the user only inside a code block, a quoted output or a path"
     ]
   },
   {
