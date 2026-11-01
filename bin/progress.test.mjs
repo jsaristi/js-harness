@@ -676,6 +676,11 @@ test('progress --pace ends on the week\'s line, which names what still opens whi
     const here = await runProgress(['--cwd', root, '--pace'], { now: () => NOW });
     assert.equal(here.code, 0, here.stderr);
     assert.equal(here.stdout.split('\n').at(-1), `Last 7 days 2026-10-09 to 2026-10-15: closed 0  reopened 0  added 1  removed 0; the open steps grew by 1: red, new work waits but ${ruleOf('growth-limit').value} (rule:growth-limit)`);
+    // A running copy whose list is not the project's still names the exemption, as the project declares it.
+    const own = fs.readFileSync(path.join(PACKAGE_ROOT, 'bin', 'lib', 'rules-data.mjs'), 'utf8').replace(JSON.stringify(ruleOf('growth-limit').value), '"a fix"');
+    writeFile(path.join(root, 'bin', 'lib', 'rules-data.mjs'), own);
+    const behind = await runProgress(['--cwd', root, '--pace'], { now: () => NOW });
+    assert.equal(behind.stdout.split('\n').at(-1), 'Last 7 days 2026-10-09 to 2026-10-15: closed 0  reopened 0  added 1  removed 0; the open steps grew by 1: red, new work waits but a fix (rule:growth-limit)');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseRoadmap, parseFeature } from './lib/progress.mjs';
 import { PACE_DAYS, PACE_REF_ARGS, paceLines, paceLogArgs, paceOf, paceRef, parsePaceLog, WEEK_DAYS, windowStart } from './lib/progress-pace.mjs';
-import { ruleHere } from './lib/rules.mjs';
+import { projectListOf, ruleHere } from './lib/rules.mjs';
 
 export const USAGE = [
   'Usage: js-harness progress [--cwd <path>] [--json] [--pace [--days <n>]]',
@@ -114,7 +114,9 @@ function paceMain(root, parsed, { stdout, stderr, spawn, now }) {
 }
 
 /** What may still open while the week is red, the value of rule:growth-limit, where the project at `root` holds
- * that rule of this repository; `undefined` anywhere else, or where its rules file cannot be read. */
+ * that rule of this repository: the running copy's value, or the project's own where the two lists differ (an
+ * installed copy behind the checkout it reads), since the limit is the project's; `undefined` anywhere else, or
+ * where its rules file cannot be read. */
 function growthLimitOf(root) {
   let text = null;
   try {
@@ -122,7 +124,9 @@ function growthLimitOf(root) {
   } catch {
     // no rules file: a project that installs the harness, where the limit does not hold
   }
-  return ruleHere('growth-limit', undefined, text).value;
+  const here = ruleHere('growth-limit', undefined, text);
+  if (here.off !== 'behind' || here.held === undefined) return here.value;
+  return projectListOf(text).find((item) => item?.id === 'growth-limit').value;
 }
 
 function toRepoRelative(root, absolutePath) {

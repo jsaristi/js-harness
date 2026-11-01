@@ -182,3 +182,12 @@ Today's line (`node bin/js-harness.mjs progress --pace`, 2026-11-01): "Last 7 da
   land together; the branch became `rule/growth-limit`, which `rules change` requires.
 - L9 2026-11-01 — result against the depth pass: item 4 predicted the words suffice and the week is red; measured,
   `rules change` took line 48080 and the week is red by 19 open steps. Item 1's home, section 9, did not hold (L6).
+
+## Next step
+- State 2026-11-01 14:30 local: branch `rule/growth-limit`, not pushed; commits 234f0f75 (docs), 2b182296 (the
+  rule and the week's line), dad80c75 (docs). Codex and the lenses were started on `--base af3d44cc`; read their
+  records (`js-harness check --push` names what is not covered), fix their findings in a commit of their own and
+  re-review that commit only. gentle-ai: review my slice with base a179007a (JH 128's commits had their own review).
+- Then: push, open the pull request, `notify --kind ready --pr <n>`; a note to the lead for S2 (its own F8 step and
+  session: writers quiesced, so after JH 126 lands; each removal his) and for E3's rows after question 151 (T5).
+- Question 151 (the project) is open with the lead; nothing starts in his projects before his answer.
