@@ -8,6 +8,9 @@ import { RECORD_SCHEMA, reportStretch, stretchFile, stretchMain } from './stretc
 import { newNotice } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 
+// Its times are shown in local time (rule:local-time): the zone is pinned so no machine's own decides a result.
+process.env.TZ = 'America/Bogota';
+
 const H = 3_600_000;
 const T0 = Date.parse('2026-10-28T12:00:00Z');
 const at = (hours) => new Date(T0 + hours * H).toISOString();
@@ -346,8 +349,8 @@ test('the return says when its page was made: show, a day later, writes that hou
   const back = path.join(place.home, 'out', 'vuelta.html');
   assert.equal((await stretch(place, ['show', '--html', back], { hours: 33, deps })).code, 0);
   const html = fs.readFileSync(back, 'utf8');
-  assert.match(html, /al 2026-10-28 21:00Z/, 'the stretch is measured to its close');
-  assert.match(html, /Generada el <time datetime="2026-10-29T21:00:00.000Z">2026-10-29 21:00Z<\/time><span data-ago="2026-10-29T21:00:00.000Z">/);
+  assert.match(html, /al 2026-10-28 16:00/, 'the stretch is measured to its close');
+  assert.match(html, /Generada el <time datetime="2026-10-29T21:00:00.000Z">2026-10-29 16:00<\/time> \(hora local, UTC-05:00\)<span data-ago="2026-10-29T21:00:00.000Z">/);
 });
 
 test('the departure shows what exists now: the map at the opening commit', async () => {
