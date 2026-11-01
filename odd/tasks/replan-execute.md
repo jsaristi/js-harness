@@ -1,8 +1,7 @@
 # JH 129 · Carry out the re-plan: adjust F8, the growth limit first
 
-Locator: `odd/tasks/replan-execute.md` · Branch: `worktree-replan-execute`, then `rule/growth-limit` for the rule ·
-Delivery: a docs PR (the roadmap's record), then the rule with its control in a PR of its own · Test runner:
-`node --test`
+Locator: `odd/tasks/replan-execute.md` · Branch: `rule/growth-limit` (started as `worktree-replan-execute`) ·
+Delivery: one pull request, the roadmap's record, the rule and its control (L8) · Test runner: `node --test`
 
 ## Goal
 The re-plan he adopted on 2026-11-01 is in force: the roadmap records it, his growth limit is a rule with a command
@@ -18,18 +17,19 @@ command, not judged by a session.
 - `js-harness contract check odd/tasks/replan-execute.md` exits 0
 - `js-harness rules check` exits 0
 - `js-harness rules growth-limit` exits 0
-- `node --test bin/lib/progress-pace.test.mjs` exits 0
-- the lead is notified with `notify --kind ready --pr <n>` for each pull request, and asked for the outside
-  outcome's project and feature, and for S2's start
+- `node --test bin/lib/progress-pace.test.mjs bin/progress.test.mjs` exits 0
+- `js-harness rules coverage --strict` exits 0
+- on 2026-11-08 the last line of `js-harness progress --pace` is read and written in the Log: the result of the
+  analysis's E2 step 1 ("closed at or above added" over the next seven days), whatever it says; a week still red on
+  the rule's review day, 2026-11-15, goes back to him with the counts
 
 ## In scope / Out of scope
 - In: `docs/ROADMAP.md`; this document; `bin/lib/progress-pace.mjs`, `bin/progress.mjs` and their tests for the
-  week's line; the protocols skill's source (`bin/lib/protocols-skill.mjs`) for the rule's text; the rule's
-  declaration and source through `js-harness rules change`.
+  week's line; the lead's routing line in `bin/lib/manifest.mjs`; the rule's declaration, source and controls
+  through `js-harness rules change` and `bin/lib/rules-coverage-data.mjs`.
 - Out: question 150 and every rule JH 126 holds (the brief); his projects, until he names one (the brief, item 3);
-  S2's removals, which need every writer quiesced while JH 126 runs, and his answer at each removal; the other
-  changes of the analysis's C2 (1.0.0 and gentle-ai #4036, S5c-b's deferral, the daily list of defaults, a tap
-  counting as his), which the lead's question did not name (L2).
+  S2's removals, which need every writer quiesced while JH 126 runs, and his answer at each removal; the changes of
+  the analysis's E3 that touch a decision of his (L2), each his.
 
 ## Constraints
 - His words are quoted as written and only what he was asked is recorded as his — because a decision of his changes
@@ -95,40 +95,39 @@ and each of its removals; any reading of the limit wider than what the lead aske
 5. S2 is routed as planned (the analysis, E2 step 3).
 
 ## Tasks
-- [ ] T1 (kind: docs) The roadmap's record of the adjustment, and this document (spec 1). Route: inline. Commit: the
-  docs PR.
-- [ ] T2 (kind: verify) The double review of the rule's text and the record (`rule:double-review`): two blind
-  read-only readers (spec 2). Route: two Claude sub-agents.
-- [ ] T3 (kind: build) The week's line in `progress --pace`, its tests first (spec 3). Route: inline. Commit: on
-  `rule/growth-limit`.
-- [ ] T4 (kind: build) The rule, by `rules change`, its text in section 9 of the protocols skill (spec 2). Route:
-  inline. Commit: on `rule/growth-limit`.
+- [x] T1 (kind: docs) The roadmap's record of the adjustment, and this document (spec 1). Route: inline. Commit:
+  234f0f75, then the answers to the review.
+- [x] T2 (kind: verify) The double review of the rule's text and the record (`rule:double-review`): two blind
+  read-only readers (spec 2). Route: two Claude sub-agents. Result: L6.
+- [x] T3 (kind: build) The week's line in `progress --pace`, its tests first (spec 3). Route: inline. Commit:
+  2b182296.
+- [x] T4 (kind: build) The rule, by `rules change`, a value rule of this repository, and the lead's routing line
+  (spec 2). Route: inline. Commit: 2b182296.
 - [ ] T5 (kind: docs) The outside outcome and S2 proposed to the lead (specs 4, 5). Route: inline, `notify`.
 
-## The rule, as proposed
+## The rule, as recorded
 
-Id `growth-limit`, his (`owner: sebastian`), in section 9 of the protocols skill (`bin/lib/protocols-skill.mjs`),
-which a session reads before it starts large work; one bullet before the section's `- Cost:` line:
+`rule:growth-limit`, his (`owner: sebastian`), of scope `repository`, review day 2026-11-15; read it whole with
+`js-harness rules growth-limit`. Its value is the exemption in the lead's words, "a fix or a step of F8" ("salvo
+arreglos y pasos de F8"); its subject says the rest: while the week is red the lead opens no new work here but that,
+writes the rest in the roadmap's Later list with its source, and his own word that something goes now opens it.
 
-> - A red week holds new work (the user's growth limit, `rule:` and its id once declared): when `js-harness progress --pace` says
->   the last seven days are red, more steps added than closed, no new work opens but a fix of behaviour that shipped
->   and broke, or a step of the phase the roadmap's Next puts first; what waits is written in the roadmap's
->   `## Later`, one line each, and opens once the week is green.
+Where it acts:
+- `js-harness progress --pace` ends on the week's line: the last seven whole days, today left out, red when their
+  open steps grew. It counts each file's open steps after each commit less those before, so a reworded step, a moved
+  document or one landed finished grows nothing (L6). Where the rule holds, the red line names the value. Seven is a
+  week, not a tunable: a constant, `WEEK_DAYS`, beside `PACE_DAYS`. A window of under eight days prints no week.
+- The lead's routing, in the orchestrator skill (`bin/lib/manifest.mjs`, "When the user asks for something"): where
+  the rule holds, read that line before opening new work; while red, open only what it names, write the rest in
+  Later and tell him it waits unless he says it goes now; a session already open goes on with its own tasks.
+- Its controls (`bin/lib/rules-coverage-data.mjs`): the week's test with a planted break, and the lead's line.
 
-Subject: "a week whose pace shows more steps added than closed takes no new work but a fix of what shipped and broke
-or a step of the first phase, until it is green; what waits is written down". Phrases: "the last seven days are red,
-more steps added than closed"; "no new work opens but a fix of behaviour that shipped and broke, or a step of the
-phase the roadmap's Next puts first"; "what waits is written in the roadmap's". Source: words, line 48080; reading:
-his answer names no limit, it confirms the lead's question at line 48066 ("seguir con F8 y poner el límite al
-crecimiento"), whose message said "Mientras la semana esté en rojo, no entraría trabajo nuevo, salvo arreglos y pasos
-de F8", after the page whose step 1 said what a yes covers; accepted: a message he typed to the lead, answering that
-question.
+His words, its reading and where he accepted it are in `docs/rule-sources.json`. Counting open steps rather than
+"más agregados que cerrados" is this session's precision, said in the reading as his to correct.
 
-The control: `progress --pace` adds a line over the last seven days of its window, `Last 7 days closed <n>  added
-<m>: red` or `: green`, red when added is more than closed; `--json` gives it as `week`. Seven is the length of a
-week, not a tunable, so it is a constant beside `PACE_DAYS`, not a rule's value. A window under seven days
-(`--days`) prints no week line. Known limit: a feature document moved to a new path counts its open steps as added
-there, as `--pace` already counts a move.
+Today's line (`node bin/js-harness.mjs progress --pace`, 2026-11-01): "Last 7 days 2026-10-25 to 2026-10-31: closed
+315  reopened 0  added 352  removed 19; the open steps grew by 19: red, new work waits but a fix or a step of F8
+(rule:growth-limit)".
 
 ## Log
 - L1 2026-11-01 13:44 local — his answer, typed (the lead's transcript `0f71b2c6`, line 48080, read with
@@ -146,3 +145,40 @@ there, as `--pace` already counts a move.
   register (`codex-review-floor`). No question to the lead is needed.
 - L4 2026-11-01 — JH 128's branch (a179007a, documents only, no pull request) merged into this one, so the roadmap's
   record points at an analysis that lands with it.
+- L5 2026-11-01 13:57 local — question 151 recorded for the lead: which project for the outside outcome,
+  abogadaclaudiajimenez (recommended: it has code, `astro build` and `astro check`, and a list in `docs/roadmap.md`),
+  plataforma-preproyecto (documents of onboarding only, no commit since 2026-10-22), or not yet. Its text says a merge
+  to abogadaclaudiajimenez's `main` deploys the site, so the merge stays his. Its roadmap is stale: items 3 and 6 are
+  done in the code (`src/styles/global.css:117-129`, `src/pages/404.astro`), so the feature's options are read from
+  the code, not the list.
+- L6 2026-11-01 — the double review (`rule:double-review`), two blind Claude readers on 234f0f75. The claims reader,
+  4 of 10 (122k tokens), each answered: (1) added against closed is mostly bookkeeping: a step born checked counts
+  both, a reworded roadmap step without an ID counts one removed and one added (12 times that week), F8's planning
+  and each document's last open task add: fixed, the week counts each file's open steps before and after each
+  commit, with tests for a rewording, a move and a document landed finished; (2) the text was wider than his words
+  on F8 and narrower on fixes, three exemption texts: fixed, the value is his "a fix or a step of F8" and the roadmap
+  cites the rule; (3) section 9 of the protocols skill ships to every project and is read after the lead opens a
+  session: fixed, a value rule of scope `repository` and a line in the lead's routing; a refusal in `sessions start`
+  was not built, since `start_session` opens sessions outside it (`rule:sessions-open-in-sidebar`); (4) the outcome
+  read as adopted while E3's rows were not: answered in Next, his yes covers the adjustment where it changes no
+  recorded decision of his; the project is his, question 151; (5) the precedent is weaker, his words name nothing:
+  said in the reading, with the count's precision as his to correct; (6) the contract missed E2's measure: added for
+  2026-11-08; (7) today's partial day could flip the line: the week leaves today out. The missing-things reader,
+  5 of 10 (101k tokens), each answered: (1) nobody acts where work enters: the lead's routing line, and the week's
+  line every `progress --pace`; a heartbeat line was not built, the routing line is read when work enters; (2) three
+  exemption texts: one, the rule's value; (3) no measure of success: the 2026-11-08 reading, the review day
+  2026-11-15 and a red week then goes back to him; (4) the outcome blocked by the exemption: it is an F8 step in
+  "F8 plan"; (5) work in flight and his requests: a session already open goes on with its own tasks, and his word
+  opens anything; (6) two Later lists: one, the existing list in Next, renamed; (7) E3's rows without an owner: the
+  lead asks each after question 151, listed in Next, "Releases before 1.0.0" added; (8) "reactives todo" unread: L7;
+  (9) the placeholder, the prose done-when and the citing task: fixed. Rejected: none. Not done: a `contracts`
+  refusal of a new feature document while red, since an exemption would need a field every document declares, and
+  the measure on 2026-11-08 says first whether the line is enough.
+- L7 2026-11-01 — "reactives todo para hacer le plan" read as: start the sessions again to carry out the plan; the
+  lead started this session from it. It opens nothing the limit holds, since carrying out F8 and its adjustment is
+  the exemption.
+- L8 2026-11-01 — one pull request instead of a docs PR first: the record cites `rule:growth-limit`, and `rules
+  check` refuses a text naming an undeclared rule (its first commit did, and was fixed), so the record and the rule
+  land together; the branch became `rule/growth-limit`, which `rules change` requires.
+- L9 2026-11-01 — result against the depth pass: item 4 predicted the words suffice and the week is red; measured,
+  `rules change` took line 48080 and the week is red by 19 open steps. Item 1's home, section 9, did not hold (L6).

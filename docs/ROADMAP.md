@@ -72,7 +72,7 @@ First request of a one-word prompt, estimated tokens:
 | Effort | Claude: designing the harness, planning and verifying run on Opus 5.5 at `high` effort at least, or on Fable 5.5 at `high` once it exists, and on no other model (Sebastián, 2026-10-10). In this repository's way of working a sub-agent that writes scoped code is launched on Haiku 5.5, by the model on its call (`rule:subagent-writer-model`; Sebastián, 2026-10-11, on "Subagent models result" below), one that explores, reviews or verifies on Opus 5.5 at least (`rule:subagent-reader-model`), and every one at `high` (`rule:subagent-effort`); what the harness turns on by default in a project is not decided. `medium` runs only as a trial, on the main thread of a closed-scope build, alternated by slice with `high` (`docs/model-effort.md`, C2). The cap is `maxEffortLevel: "high"` in user settings. Codex review (`gpt-6.1-sol`): the effort of `rule:review-effort`, fixed by the command, in the one session there is, the lean one (2026-10-08; `--session current` was removed that day because its model could not be verified; see Review) |
 | Autonomy | Native `/goal <condition>`, not a loop of our own |
 | Context | `autoCompactWindow: 350000` (his setting of 2026-10-15), which the context pause reads to know where the host compacts; a session holds one feature, and when it cuts is `AGENTS.md`'s ("Working with Sebastián"); the context pause, which decides between finishing a task and compacting inside it, is designed in `odd/tasks/session-channel.md`; state lives in files, not a handoff ritual |
-| First version's scope | **Since 2026-11-01, a growth limit.** A week whose `progress --pace` shows more steps added than closed takes no new work, except a fix of shipped behaviour and a step of F8, until it is green again; what waits is written down, not lost. Asked by the lead, after he read [the re-planning analysis](../odd/tasks/replan-analysis.md) (section E) and its page: "¿adoptas el ajuste, es decir, seguir con F8 y poner el límite al crecimiento?" (the lead's transcript `0f71b2c6`, line 48066), he typed "Listo entonces continuemos y reactives todo para hacer le plan" (line 48080, 2026-11-01T18:44:12Z, read with `js-harness sessions --quote`). It replaces his "No, sigue entrando" of 2026-10-17 (transcript `e152c9d8`, line 17535), the answer that kept new work entering the first version; his reason of 2026-10-14 still holds inside the limit, since a fix of what does not work as it must is exempt ("tiene que quedar funcionando como un reloj suizo", transcript `ffe99ebf`, line 5853). It becomes a rule of his, with the command line that computes the week, by [replan-execute](../odd/tasks/replan-execute.md) |
+| First version's scope | **Since 2026-11-01, his growth limit, `rule:growth-limit`.** Asked by the lead, after he read [the re-planning analysis](../odd/tasks/replan-analysis.md) (section E) and its page: "¿adoptas el ajuste, es decir, seguir con F8 y poner el límite al crecimiento?" (the lead's transcript `0f71b2c6`, line 48066), he typed "Listo entonces continuemos y reactives todo para hacer le plan" (line 48080, 2026-11-01T18:44:12Z, read with `js-harness sessions --quote`). What it holds and how the week is computed are the rule's, read with `js-harness rules growth-limit` and the last line of `js-harness progress --pace`. It replaces his "No, sigue entrando" of 2026-10-17 (transcript `e152c9d8`, line 17535), the answer that kept new work entering the first version, and his reason of 2026-10-14 for it ("tiene que quedar funcionando como un reloj suizo", transcript `ffe99ebf`, line 5853) ([replan-execute](../odd/tasks/replan-execute.md)) |
 | 1.0.0 and gentle-ai #4036 | 1.0.0 waits for the three tasks that wait for gentle-ai to publish its issue #4036, though nobody knows whether it will. Asked, between "No la espera (Recomendada)" and "Sí, la espera", he tapped "Sí, la espera" (the lead's transcript `e152c9d8`, line 17535, 2026-10-17T01:22:06Z) |
 | 1.0.0 review and record | Before the 1.0.0 tag, the whole project is reviewed and documented so that it can later be rebuilt exactly by reverse engineering: "Quiero que cuando lleguemos a la version 1.0.0 hagamos una revision completa de todo el proyecto y de una ve documentamos para poder en un futuro hacer un ingenieria inversa exacta y precisa." (typed, the lead's transcript `e152c9d8`, line 21180, 2026-10-17T09:32Z). Its scope, readers and record are designed when 1.0.0's other tasks are done; the per-session summaries (`odd/tasks/session-close.md`, his order of the same day, line 21112) are part of what it reads |
 | Releases before 1.0.0 | Releases go on as 0.x minors (0.98.0, 0.99.0, 0.100.0, 0.101.0…) until everything is verified to be right; only then is 1.0.0 analyzed and tagged: "yo creo que vamos a seguir como el 0.100.0 o 0.101.0 etc hasta que no verifiquemos bien que todo esta bien para hacer el lanzamiento" (typed, 2026-10-24, the lead's transcript `908805db`). `compareSemver` orders them numerically: 0.100.0 is newer than 0.99.0 (`bin/lib/version.mjs:15`, checked by the lead on 2026-10-24). |
@@ -715,6 +715,17 @@ built in rule 1's pull request.
   pass` after the contract; the contract template gains its skeleton; `sync` offers `depthPassSince` to a project.
 - **The eval** of PR 737's brief, with and without the rule, owed by 2026-11-30.
 
+### The outside feature (the re-plan of 2026-11-01)
+- **Changes:** none in this repository: one small feature of one of his projects, built there with the
+  harness in one session, on a branch, with both reviews, up to a pull request. What the harness helped
+  or got in the way of is written in that session's notes and becomes defects here, which the growth
+  limit lets in as fixes (re-planning analysis, C2 and E2 step 2).
+- **Probe and pass:** the pull request in his project with both reviews recorded, and the notes.
+- **Cost** [i]: one session.
+- **His decisions:** the project (question 151) and the feature; the merge, since a merge to
+  abogadaclaudiajimenez's `main` deploys the site (`.github/workflows/deploy.yml` there).
+- **State:** waits for question 151; beside S2 or right after it, before S8.
+
 ### S8 Certification (step 5)
 - **Changes:** nothing; it measures. Section 7's S0 and S8 measures; a Claude audit and a Codex audit,
   three runs each, side by side with the baseline; the closing count of each failure class (tool,
@@ -773,15 +784,19 @@ adjustment: "Listo entonces continuemos y reactives todo para hacer le plan" (li
 2026-11-01, typed, answering "¿adoptas el ajuste, es decir, seguir con F8 y poner el límite al
 crecimiento?"). What it changes, carried out by [replan-execute](../odd/tasks/replan-execute.md):
 - **F8 stays the spine**, its steps in their order below.
-- **The growth limit** (Decided, "First version's scope") holds first: while the week is red, only
-  a fix of shipped behaviour or an F8 step starts.
+- **His growth limit**, `rule:growth-limit`, holds first. The last line of `js-harness progress
+  --pace` says whether the week is red and what may still open.
 - **An outside outcome**: one real feature in one of his projects, built with the harness, before
-  S8. Which project and which feature are his to choose; nothing starts there before he does.
+  S8, as an F8 step ([F8 plan](#the-outside-feature-the-re-plan-of-2026-11-01)). Which project
+  and which feature are his: question 151 asks the project, with "Todavía no" among its options.
 
-The analysis's other changes (1.0.0 after the real feature instead of waiting for gentle-ai #4036,
-S5c-b deferred to S8's result, reversible questions decided by default and listed once a day, a
-tapped answer counting as his) were not in the question he answered, so each stays as decided
-until he answers it.
+His yes covers the adjustment where it changes none of his recorded decisions. The analysis's E3
+lists the ones it would change, and each stays as decided until he answers it, asked by the lead
+one at a time once question 151 is answered: 1.0.0 after the real feature and S8 instead of
+waiting for gentle-ai #4036 (Decided, "1.0.0 and gentle-ai #4036"); the real feature as part of
+"verified" (Decided, "Releases before 1.0.0"); S5c-b deferred to S8's result (Decided by "Listo,
+añadámosla"); reversible questions decided by their default and listed once a day; a tapped answer
+counting as his (question 150, JH 126's).
 
 **First: reorganize the harness (F8), in order, by his word of 2026-10-26.** Told that sessions
 lose judgment and break rules, he asked for one order over everything in flight: "necesito que
@@ -917,7 +932,9 @@ Each item that needs a design passes two readers that did not write it before it
 its version says what they changed; each build is test first, through the gate, gentle-ai and
 Codex.
 
-**Later (found after the freeze; not in the first version).**
+**Later.** What waits: since 2026-11-01, what `rule:growth-limit` holds back while the week is red, one
+line each with its day and its source; before it, what was found after the freeze of 2026-10-16 and kept out
+of the first version.
 
 - [ ] Stalled-session detection: the board, the lead's watch and its heartbeat name a work session that holds
   handed work and has made no commit, notice or gate for an hour. On 2026-10-16 three sessions sat five to six
@@ -1124,12 +1141,6 @@ reasons, is under [Session channel](#session-channel). Also open:
    Where it lives: `AGENTS.md`, "Working with Sebastián". Still to build, in T2 of the rule
    hierarchy: a check that refuses a reply that closes with none of the states, so the
    rule stops depending on the agent reading prose.
-
-## Later
-
-What waits while the week is red (Decided, "First version's scope"): one line each, with the day
-it was set aside and where it came from. It opens once `js-harness progress --pace` says the week
-is green. Nothing waits yet.
 
 ## Stack doctor notes
 
