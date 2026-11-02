@@ -409,8 +409,8 @@ need that was understood, what would be done differently from their words and wh
 costs or is not known; only then is it recorded.
 
 A design before it is built, and a plan, an analysis with figures or a protocol put to the owner,
-first passes two readers that did not write it: one attacks its claims, one looks only for what is
-missing. The owner gets the improved version, with what each reader changed and what stays
+first passes the double review, a Claude reader and a Codex reader, blind, judging it against what
+was asked, and the owner gets the improved version, with what each reader changed and what stays
 unguaranteed.
 
 A moment's page is the one \`js-harness stretch\` or \`js-harness report\` makes from the records,

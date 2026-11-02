@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `5a509bfd2442`. In force: 70 (43 of Sebastián, 27 of the project). Retired: 4.
+Hash `5f7fa6c22391`. In force: 70 (43 of Sebastián, 27 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -51,10 +51,10 @@ Before large work is built, and whenever he asks, its feature document holds a d
 - Since 2026-10-31. Row: reports. Source: his words of 2026-10-31, 2026-10-31, 2026-10-31, checked by the command on 2026-10-31.
 
 ### double-review
-A proposal that changes one of his decisions passes two read-only readers that did not write it: "- A proposal that changes one of the user's decisions, whether a design before it is built, a plan, an analysis with figures, a protocol or a change of the charter, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing."
+Everything that proposes something passes a blind Claude and Codex read, code passes its own pair, both judged against what was asked, at most three reviews: "- Everything that proposes something, whether a plan, a design before it is built, an analysis with figures, a protocol or a document put to the user, asked or reported, first passes a Claude reader and a Codex reader, blind, on one frozen copy (\`js-harness double-review read\`), each bringing the failures and improvements it finds against what was asked."
 - Home: `bin/lib/protocols-skill.mjs`.
 - Looked at again on 2026-11-16.
-- Since 2026-10-27. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-11, 2026-10-27, checked by the command on 2026-10-27.
+- Since 2026-11-01. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-31, 2026-10-31, 2026-11-01, 2026-11-01, 2026-11-01, checked by the command on 2026-11-01.
 
 ### fixed-load-budget
 The fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns: 100,000 tokens.
