@@ -37,6 +37,8 @@ export const START_USAGE = [
   '         is not a row in the desktop sidebar. The board lists the project\'s background sessions, what each waits for',
   '         (a permission prompt included) and whether start recorded it; --watch returns when one starts waiting.',
   '         stop removes a session start recorded (claude stop, then claude rm; its transcript stays), and only such a one:',
+  '         it waits up to a minute for the job\'s process claude\'s lock still names after the stop, and tries claude rm',
+  '         again while claude says files of the worktree are busy (EBUSY); it kills nothing.',
   '         exit 1 for any other id, or when claude refuses (unpushed commits in its worktree), which keeps it recorded;',
   '         a worktree with uncommitted changes stays, and stop says where.',
   '         js-harness uninstall machine removes every recorded session that is not at work, and fails while one is.',

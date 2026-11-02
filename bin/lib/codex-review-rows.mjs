@@ -11,7 +11,7 @@ import { beyondLines, defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REV
 import { mergeTurn, turnsCheaper } from './codex-review-turns.mjs';
 import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './codex-reviews.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
-import { classifyRecheck, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
+import { classifyRecheck, ESCALATION_SAID, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
 import { counted, leftOutOf, reviewScope } from './codex-review-scope.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './project-functions.mjs';
 // The Claude lens rows, beside Codex's, for `check` to import from one place (odd/tasks/f8-s1-reviews.md, T4).
@@ -90,10 +90,10 @@ function coveredDetail({ codeCommits, base }) {
  * after Codex called its head incorrect (2026-10-14: two P2 findings, then "all covered by a Codex review
  * record"). The review the branch ends on is the last record that covers its newest code commit; what it
  * owes is what `codex-review` reads to decide whether the next range is a recheck (`recheckState`). So this
- * refuses the head whose next review would be a recheck, and nothing else. The head of a recheck that left
- * findings open passes with a warning that names them: a second recheck is not run, so refusing it would
- * leave a session away from the user no way forward, and whether a disputed finding is waived is the user's
- * call (decided 2026-10-15: no waiver, the warning is enough). Coverage is still read from the records alone (./codex-review-runs.mjs says why);
+ * refuses the head whose next review would be a first recheck, and nothing else. The head of a recheck that
+ * left findings open passes with a warning that names them, and names the second recheck when one may still
+ * run (at most three reviews, `recheckState`): whether a disputed finding is waived is the user's call
+ * (decided 2026-10-15: no waiver, the warning is enough). Coverage is still read from the records alone (./codex-review-runs.mjs says why);
  * the run log, where the findings are kept, only adds this refusal, and a log that cannot be read proves
  * nothing owed. Documents committed after that head change nothing here: they are no code commit. */
 function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
@@ -116,7 +116,7 @@ function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
   if (state.kind === 'review' || (state.kind === 'refused' && state.open === 0)) return null;
   const shortOf = (id) => gitOut(spawn, cwd, ['rev-parse', '--short', id]) ?? id.slice(0, 7);
   const findings = (n) => `${n} finding${n === 1 ? '' : 's'}`;
-  if (state.kind === 'recheck') {
+  if (state.kind === 'recheck' && state.second !== true) {
     const at = shortOf(from);
     return {
       refuse: true,
@@ -139,12 +139,17 @@ function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
   const read = answered !== null && Number.isInteger(prior) ? classifyRecheck({ findings: answered }, prior) : null;
   const open = read === null ? [] : [...read.notFixed, ...read.blocking, ...read.unmarked];
   const at = shortOf(recheck.head);
-  const left = state.open === null ? 'findings open (its counts were not kept)' : `${findings(state.open)} open`;
+  const counts = line?.recheck;
+  const left = Number.isInteger(counts?.notFixed) && Number.isInteger(counts?.blocking)
+    ? `${findings(counts.notFixed + counts.blocking + (Number.isInteger(counts.unmarked) ? counts.unmarked : 0))} open`
+    : 'findings open (its counts were not kept)';
   return {
     refuse: false,
     lines: [
-      `warning: the Codex recheck that ended at ${at} left ${left} of the review that ended at ${shortOf(state.of)}`,
+      `warning: the Codex recheck that ended at ${at} left ${left} of the review that ended at ${shortOf(recheck.recheckOf)}`,
       ...open.map(priorLine),
+      ...(state.reviews === 3 ? [`three reviews did not settle this change: ${ESCALATION_SAID}`] : []),
+      ...(state.kind === 'recheck' ? [`a second recheck, the last of three reviews, takes them up: js-harness codex-review --base ${shortOf(from)}`] : []),
       // No skip is offered: a skip records no correction.
       `the push passes; the user decides whether they are waived, or a correction is committed as code and reviewed`,
     ],

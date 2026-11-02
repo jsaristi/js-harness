@@ -3,8 +3,10 @@ import test from 'node:test';
 import {
   BLOCKS,
   classifyRecheck,
+  openAfterRecheck,
   FOLLOW_UP,
   NOT_FIXED,
+  RECHECK_PROMPT_VERSION,
   recheckAnchor,
   recheckPrompt,
   recheckState,
@@ -12,10 +14,12 @@ import {
   runsLogged,
   secondRecheckRefused,
 } from './codex-review-recheck.mjs';
+import { RULES } from './rules-data.mjs';
 
 const A = 'a'.repeat(40);
 const B = 'b'.repeat(40);
 const C = 'c'.repeat(40);
+const D = 'd'.repeat(40);
 
 const finding = (title, extra = {}) => ({ file: 'bin/x.mjs', start: 3, end: 4, severity: 'P2', title, body: 'The last line is lost.', confidence: 0.9, ...extra });
 const record = (base, head, extra = {}) => ({ schema: 'js-harness.codex-review/v1', base, head, reviewedAt: '2026-10-14T00:00:00.000Z', outcome: 'reviewed', ...extra });
@@ -59,7 +63,7 @@ test('a range is a review as any other when no review ends at its start, or that
   assert.deepEqual(recheckState({ from: B, records: [record(A, B, { run: 'r2', runs: [null, 'r2'] })], runs: [runLine('r2', { answer: { findings: [finding('x')] } })] }), { kind: 'review' });
 });
 
-test('a range that starts at the head of a recheck that left a finding open is refused; one that left none is a review', () => {
+test('a range from the head of a recheck that left a finding open, its findings not kept, is refused; one that left none is a review', () => {
   const recheck = record(B, C, { run: 'r2', recheckOf: B });
   const counts = (over) => ({ of: B, findings: 2, fixed: 2, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0, ...over });
   const at = (over) => recheckState({ from: C, records: [recheck], runs: [runLine('r2', { recheck: counts(over) })] });
@@ -70,6 +74,26 @@ test('a range that starts at the head of a recheck that left a finding open is r
   assert.deepEqual(at({ followUps: 4 }), { kind: 'review' });
   // Its counts were not kept: taken as open, so no second recheck is made on a guess.
   assert.deepEqual(recheckState({ from: C, records: [recheck], runs: [] }), { kind: 'refused', of: B, open: null });
+});
+
+test('at most three reviews: from the head of a recheck that left findings open, a second recheck of those findings; past it, refused', () => {
+  const open = finding('[not fixed] 1 Still drops the last line');
+  const later = finding('[follow-up] A name could be clearer');
+  const counts = (notFixed) => ({ findings: 1, fixed: 1 - notFixed, notFixed, followUps: 0, blocking: 0, unmarked: 0 });
+  const records = [record(A, B, { run: 'r1' }), record(B, C, { run: 'r2', recheckOf: B })];
+  const runs = [
+    runLine('r1', { answer: { findings: [finding('[P2] Drops the last line')], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [open, later], verdict: 'incorrect' }, recheck: counts(1) }),
+  ];
+  assert.deepEqual(recheckState({ from: C, records, runs }), { kind: 'recheck', of: C, findings: [open], second: true });
+  // The second recheck is the third review: from its head, a fourth is refused with what it left open.
+  const third = [...records, record(C, D, { run: 'r3', recheckOf: C })];
+  const left = (notFixed) => [...runs, runLine('r3', { answer: { findings: notFixed ? [open] : [], verdict: notFixed ? 'incorrect' : 'correct' }, recheck: counts(notFixed) })];
+  assert.deepEqual(recheckState({ from: D, records: third, runs: left(1) }), { kind: 'refused', of: D, open: 1, reviews: 3, findings: [open] });
+  // Run again from the first recheck's head, it would be a fourth too.
+  assert.deepEqual(recheckState({ from: C, records: third, runs: left(1) }), { kind: 'refused', of: D, open: 1, reviews: 3, findings: [open] });
+  // A second recheck that fixed everything leaves the next range a review as any other.
+  assert.deepEqual(recheckState({ from: D, records: third, runs: left(0) }), { kind: 'review' });
 });
 
 test('the findings of a review are rechecked once: from its own head again, after a recheck of them, the range is refused whatever that recheck left', () => {
@@ -133,7 +157,11 @@ test('the recheck prompt keeps the review prompt and lists each earlier finding 
   const text = recheckPrompt('Review the range a..b.\n', [finding('[P2] Drops a record'), finding('Slow', { file: 'lib/y.mjs', start: 9, end: 9, severity: null, body: 'Two\nlines.' })]);
   assert.ok(text.startsWith('Review the range a..b.\n\n## A recheck of earlier findings\n'), text);
   for (const mark of [NOT_FIXED, FOLLOW_UP, BLOCKS]) assert.ok(text.includes(`"${mark}"`), mark);
-  assert.ok(text.includes('could make a failing check pass, or that exposes data'), text);
+  assert.ok(text.includes('could make a failing check pass, that exposes data'), text);
+  // odd/tasks/double-review-alignment.md, spec 7: a confirming review can miss what a correction breaks (L16), so a
+  // regression the correction brought into what it changed blocks.
+  assert.ok(text.includes('or a regression this range brought into what it changed: something the changed code did before this range that it no longer does'), text);
+  assert.equal(RECHECK_PROMPT_VERSION, 'js-harness.codex-review-recheck-prompt/v2');
   // The review prompt says to report nothing of code the diff leaves as it was; an earlier finding still
   // open may be on such code, so the recheck says that rule does not hold for it.
   assert.ok(text.includes('An earlier finding that is still open is reported even when this range leaves its lines as they were'), text);
@@ -184,6 +212,25 @@ test('the refusal of a second recheck says why and what to record instead', () =
   assert.ok(!said.includes('--again'), said);
   assert.match(secondRecheckRefused({ of: C, open: 0, base: 'x' }), /not run: the first found every one fixed\./);
   assert.match(secondRecheckRefused({ of: C, open: null, base: 'x' }), /not run: the counts of the first were not kept\./);
+});
+
+test('past three reviews the refusal says the change is not settled, lists what is open and names the strongest model', () => {
+  const model = RULES.find((rule) => rule.id === 'escalation-model').value;
+  const open = finding('[not fixed] 1 Still drops the last line');
+  const said = secondRecheckRefused({ of: D, open: 1, base: C, reviews: 3, findings: [open] });
+  assert.match(said, /^Three reviews of this change did not settle it: the third, a second recheck that ended at ddddddd, left 1 finding not fixed or blocking. Nothing more is reviewed, and nothing was started or recorded./);
+  assert.ok(said.includes('  1. bin/x.mjs:3-4 P2 [not fixed] 1 Still drops the last line'), said);
+  assert.ok(said.includes(`pass the work to ${model}, the strongest model the rules name (rule:escalation-model)`), said);
+  assert.ok(said.includes('Raise it to the user as a problem'), said);
+  assert.ok(!said.includes('follow-up task'), said);
+});
+
+test('a recheck that left findings open names what comes next: a second recheck, or after it the problem raised and the model named', () => {
+  const model = RULES.find((rule) => rule.id === 'escalation-model').value;
+  assert.equal(openAfterRecheck({ head: C, second: false }), 'A range that starts at ccccccc is a second recheck of what is open, the last of three reviews: fix it in this branch, then run it.');
+  const third = openAfterRecheck({ head: D, second: true });
+  assert.match(third, /^Three reviews of this change did not settle it. Raise it to the user as a problem/);
+  assert.ok(third.includes(`pass the work to ${model}, the strongest model the rules name (rule:escalation-model)`), third);
 });
 
 test('the refusal of a range that holds code no record covers names the review that reads it, and no skip', () => {

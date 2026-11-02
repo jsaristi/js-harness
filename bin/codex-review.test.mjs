@@ -7,10 +7,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import {
-  childEnv, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS, turnSaid, turnStopped,
+  childEnv, CODEX_WEEKLY_FLOOR, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS, turnSaid, turnStopped,
   reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
 import { NO_TEST_EXIT, NO_TEST_LINE, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
+import { ESCALATION_MODEL } from './lib/codex-review-recheck.mjs';
 import { checkCodexReviewDebt, checkCodexReviews } from './check.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
 import { mergeStart, rangeDiff } from './lib/codex-review-coverage.mjs';
@@ -384,6 +385,8 @@ async function run(argv, extra = {}, env = IN_TURN) {
     error: (line) => err.push(line),
     write: (text) => shown.push(text),
     platform: 'linux',
+    // A reading of Codex's weekly limit well above its floor, so no test starts `codex app-server`.
+    readMeter: async () => ({ ok: true, result: { rateLimits: { secondary: { usedPercent: 50 } } } }),
     ...extra,
   });
   return { code, out: out.join('\n'), err: err.join('\n'), shown: shown.join('') };
@@ -915,6 +918,41 @@ test('the `codex --version` probe goes through the same launch path and environm
   assert.deepEqual(win.probes[0].args, []);
   assert.equal(win.probes[0].opts.shell, true);
   assert.deepEqual(win.probes[0].opts.env, { Path: 'C:\\Windows' });
+});
+
+test('at or under the floor of the weekly limit nothing is started or recorded, and the user is asked about the reset', async () => {
+  const { root, base } = makeRepo();
+  for (const usedPercent of [100 - CODEX_WEEKLY_FLOOR, 100]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, readMeter: async () => ({ ok: true, result: { rateLimits: { secondary: { usedPercent } } } }) });
+    assert.equal(result.code, 1, result.out);
+    assert.match(result.err, /at or under its floor of \d+(\.\d+)?% \(rule:codex-weekly-floor\)/);
+    assert.match(result.err, /whether to reset the weekly limit/);
+    assert.match(result.err, /--base HEAD~1 --unavailable "weekly limit at its floor/);
+    assert.equal(wrote(root), false);
+    assert.equal(fake.calls.length, 0, 'the review is not spawned');
+  }
+});
+
+test('an interrupted read of the weekly limit starts nothing and records nothing', async () => {
+  const { root, base } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, readMeter: async () => ({ ok: false, reason: 'interrupted' }) });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /The read of Codex's weekly limit was interrupted, so the review was not started and nothing was recorded\./);
+  assert.equal(wrote(root), false);
+  assert.equal(fake.calls.length, 0, 'the review is not spawned');
+});
+
+test('a reading of the weekly limit that fails, or that holds none, says so and the review runs', async () => {
+  const { root, base } = makeRepo();
+  for (const readMeter of [async () => ({ ok: false, reason: 'missing' }), async () => ({ ok: true, result: {} })]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fake, readMeter });
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /Codex's weekly limit could not be read before the launch: .+ The review runs without it\./);
+    assert.equal(fake.calls.length, 1, 'the review is spawned');
+  }
 });
 
 test('no probe is run for --unavailable, or when the tree is dirty', async () => {
@@ -3524,6 +3562,19 @@ function fakeCodexInParts(...sessions) {
 // The three files of `makeThreeFileRepo` as two parts of at most six changed lines, and as three of at most four.
 const TWO_PARTS = ['--session', 'lean', '--part-lines', '6'];
 const THREE_PARTS = ['--session', 'lean', '--part-lines', '4'];
+
+test('the weekly limit is read before each part: a part that spent down to the floor stops the next, and nothing is recorded', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const mine = fakeHome();
+  const fake = fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt', 'b.txt') }, { stdout: partShown(root, base, head, 'c.txt') });
+  const used = [50, 100 - CODEX_WEEKLY_FLOOR];
+  const readMeter = async () => ({ ok: true, result: { rateLimits: { secondary: { usedPercent: used.shift() } } } });
+  const result = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...fake, homedir: mine.homedir, randomUUID: runIds(), readMeter });
+  assert.equal(result.code, 1, result.out);
+  assert.deepEqual(fake.order, ['start 1', 'end 1'], 'the second part is not launched');
+  assert.match(result.err, /so part 2 of 2 was not started, the parts before it kept for the next run, and nothing was recorded/);
+  assert.deepEqual(readCodexReviews(root), []);
+});
 
 test('a lean range over the bound is reviewed in parts: one session after another, each over its own files and in a home of its own, and one record for the whole range', async () => {
   const { root, base, head } = makeThreeFileRepo();
@@ -6939,11 +6990,12 @@ test('a range that starts at the head of a review that found something is a rech
   assert.deepEqual(lines.slice(at + 1, at + 4).map((one) => one.replace(`${top}/`, '')), ['  1. not fixed: f.txt:1 P1 [P1] Drops the last record', '  2. fixed: lib/deep.mjs:3-9 P3 Slow on large input', '  3. fixed: f.txt:2-4 No priority given']);
   assert.ok(lines.includes('A recheck is asked with this command\'s own prompt, which lists the findings it checks: the sentence Codex writes for `--base` cannot.'), result.out);
   assert.ok(lines.includes('Follow-ups, which do not block (record them as a task): 1.'), result.out);
+  assert.ok(lines.includes(`A range that starts at ${fixed.slice(0, 7)} is a second recheck of what is open, the last of three reviews: fix it in this branch, then run it.`), result.out);
   const record = readCodexReviews(root).at(-1);
   assert.deepEqual(record, { ...reviewedRecord(head, fixed), run: RECHECK_ID, recheckOf: head });
   const line = readCodexReviewRuns(root).at(-1);
   assert.deepEqual(line.recheck, { of: head, findings: 3, fixed: 2, notFixed: 1, followUps: 1, blocking: 0, unmarked: 0 });
-  assert.deepEqual([line.prompt, line.promptVersion], ['own', 'js-harness.codex-review-recheck-prompt/v1']);
+  assert.deepEqual([line.prompt, line.promptVersion], ['own', 'js-harness.codex-review-recheck-prompt/v2']);
 });
 
 test('a second recheck of the same findings is refused before anything runs, and nothing is recorded', async () => {
@@ -6964,20 +7016,24 @@ test('a second recheck of the same findings is refused before anything runs, and
   assert.equal(git(root, 'rev-parse', 'HEAD'), fixed);
 });
 
-test('a refused range that holds a code commit no record covers names a review that reads it, and offers no skip', async () => {
+test('a fourth review refused over a code commit no record covers names a review that reads it, and offers no skip', async () => {
   const { root, base, head, fixed } = await reviewedThenCorrected();
   const second = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });
   assert.equal(second.code, 0, second.err);
+  const refixed = commitOne(root, 'f.txt', 'four\n');
+  const third = await run(['--base', fixed, '--cwd', root], { ...fakeCodex(reviewed(root, fixed), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => THIRD_ID });
+  assert.equal(third.code, 0, third.err);
   const added = commitOne(root, 'g.txt', 'new code\n');
   const records = readCodexReviews(root).length;
-  const fake = fakeCodex(reviewed(root, fixed));
-  const third = await run(['--base', fixed, '--cwd', root], { ...fake, randomUUID: () => THIRD_ID });
-  assert.equal(third.code, 1, third.out);
-  assert.ok(third.err.startsWith(`A second recheck of the findings of the review that ended at ${head.slice(0, 7)} is not run: the first left 1 finding not fixed or blocking.`), third.err);
-  assert.ok(third.err.includes(`1 code commit no Codex review record covers (${added.slice(0, 7)})`), third.err);
-  // The reviewed head is the base of the recheck, refused as well; the commit before it starts a review.
-  assert.ok(third.err.includes(`\`codex-review --base ${base} --again\``), third.err);
-  assert.ok(!third.err.includes('--unavailable '), third.err);
+  const fake = fakeCodex(reviewed(root, refixed));
+  const fourth = await run(['--base', refixed, '--cwd', root], { ...fake, randomUUID: () => '00000000-0000-4000-8000-000000000005' });
+  assert.equal(fourth.code, 1, fourth.out);
+  assert.ok(fourth.err.startsWith(`Three reviews of this change did not settle it: the third, a second recheck that ended at ${refixed.slice(0, 7)}, left 1 finding not fixed or blocking.`), fourth.err);
+  assert.ok(fourth.err.includes(`pass the work to ${ESCALATION_MODEL}`), fourth.err);
+  assert.ok(fourth.err.includes(`1 code commit no Codex review record covers (${added.slice(0, 7)})`), fourth.err);
+  // Each head of the three reviews is refused as well; the commit before the first starts a review.
+  assert.ok(fourth.err.includes(`\`codex-review --base ${base} --again\``), fourth.err);
+  assert.ok(!fourth.err.includes('--unavailable '), fourth.err);
   assert.equal(fake.calls.length, 0, 'no Codex was launched');
   assert.equal(readCodexReviews(root).length, records);
   // The command it names runs, as a review, and its record covers the new commit.
@@ -7030,7 +7086,7 @@ test('a new finding that blocks is said apart from the follow-ups, and keeps the
   const { root, head } = await reviewedThenCorrected();
   const result = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root, { blocks: true })), randomUUID: () => RECHECK_ID });
   assert.equal(result.code, 0, result.err);
-  assert.ok(result.out.split('\n').includes('Blocking, a new finding that could make a failing check pass or exposes data: 1.'), result.out);
+  assert.ok(result.out.split('\n').includes('Blocking, a new finding that could make a failing check pass, exposes data or is a regression the correction brought: 1.'), result.out);
   assert.deepEqual(readCodexReviewRuns(root).at(-1).recheck, { of: head, findings: 3, fixed: 2, notFixed: 1, followUps: 1, blocking: 1, unmarked: 0 });
 });
 
@@ -7073,17 +7129,25 @@ test('a document committed between the reviewed head and the fix does not move w
   assert.equal(readCodexReviews(root).at(-1).head, fixed);
 });
 
-test('a document committed after a recheck that left a finding open does not open a new review: the range is refused', async () => {
+test('after a recheck that left a finding open, a document committed does not open a new review: the range is a second recheck of what is open', async () => {
   const { root, head, fixed } = await reviewedThenCorrected();
   const second = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });
   assert.equal(second.code, 0, second.err);
   commitOne(root, 'notes.md', 'what is still open\n');
   commitOne(root, 'f.txt', 'four');
-  const fake = fakeCodex(reviewed(root, fixed));
+  const plan = await run(['--base', fixed, '--plan', '--cwd', root], fakeCodex(''));
+  assert.ok(plan.out.split('\n').includes(`A run of this range is a second recheck, the last of three reviews, of the 1 finding the recheck that ended at ${fixed.slice(0, 7)} left open.`), plan.out);
+  const fake = fakeCodex(reviewed(root, fixed), {}, PROBE_OK, recheckAnswer(root));
   const third = await run(['--base', fixed, '--cwd', root], { ...fake, randomUUID: () => THIRD_ID });
-  assert.equal(third.code, 1, third.out);
-  assert.ok(third.err.startsWith(`A second recheck of the findings of the review that ended at ${head.slice(0, 7)} is not run`), third.err);
-  assert.equal(fake.calls.length, 0, 'no Codex was launched');
+  assert.equal(third.code, 0, third.err);
+  const asked = fake.calls[0].child.received.text;
+  assert.ok(asked.includes('## A recheck of earlier findings'), asked);
+  assert.ok(asked.includes('Drops the last record'), asked);
+  assert.ok(!asked.includes('Slow on large input'), 'a finding the first recheck found fixed is not asked again');
+  // It left the finding open: three reviews did not settle the change, so it is raised and passed on now.
+  assert.ok(third.out.includes(`Three reviews of this change did not settle it. Raise it to the user as a problem`), third.out);
+  assert.ok(third.out.includes(`pass the work to ${ESCALATION_MODEL}`), third.out);
+  assert.equal(readCodexReviews(root).at(-1).recheckOf, fixed);
 });
 
 test('--again from the head of a review whose findings were rechecked is a second recheck, and is refused', async () => {

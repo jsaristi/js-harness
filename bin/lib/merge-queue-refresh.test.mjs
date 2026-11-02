@@ -27,6 +27,17 @@ test('atWorkIn names the project\'s sessions that are busy, waiting on a prompt 
   assert.equal(atWorkIn(agents, { roots, self: null }).length, 4);
 });
 
+// JH 131 (odd/tasks/defect-trio.md, spec 3): claude agents calls a background session busy while a js-harness wait of
+// its runs, so the land waited 30 minutes on sessions that only waited, and exited 75.
+test('atWorkIn leaves out a busy session that only waits, as its transcript says, and keeps every other', () => {
+  const agents = [agent({ name: 'waits', status: 'busy', state: 'working', sessionId: 'w-1' }), agent({ name: 'runs', status: 'busy', sessionId: 'r-1' })];
+  const asked = [];
+  const onlyWaits = (one) => { asked.push(one.name); return one.sessionId === 'w-1'; };
+  assert.deepEqual(atWorkIn(agents, { roots, self: null, onlyWaits }).map((one) => one.name), ['runs']);
+  assert.deepEqual(asked, ['waits', 'runs'], 'only sessions at work are read');
+  assert.deepEqual(lookOnce({ list: () => agents.slice(0, 1), roots, onlyWaits }), { quiet: true });
+});
+
 /** A clock that `sleep` moves, and what the wait printed. */
 function clock() {
   let at = 0;
@@ -68,6 +79,28 @@ test('waitForQuiet gives up after its minutes with the sessions still at work, a
   // Not known is never "none": a listing that fails refreshes nothing.
   const blind = await waitForQuiet({ list: () => { throw new Error('claude is not on PATH'); }, roots, self: null, ...clock() });
   assert.deepEqual(blind, { quiet: false, why: 'claude agents could not say which sessions are at work (claude is not on PATH)' });
+});
+
+test('waitForQuiet does not wait for a session that only waits, and says so once', async () => {
+  const time = clock();
+  const listings = [[agent({ status: 'busy', sessionId: 'w-1', name: 'JH 130 · e3' })], [agent({ status: 'busy', sessionId: 'w-1', name: 'JH 130 · e3' })]];
+  const quiet = await waitForQuiet({ list: () => listings.shift(), roots, self: null, onlyWaits: () => true, ...time });
+  assert.deepEqual(quiet, { quiet: true });
+  assert.equal(time.at(), 0, 'it did not wait');
+  assert.deepEqual(time.said, ['refresh: JH 130 · e3 (busy) only waits (js-harness wait): the refresh does not wait for it']);
+});
+
+test('refreshAfterLand refreshes at once beside a session that only waits, and still waits for one that runs', async () => {
+  const run = (command, args) => (args[0] === 'rev-parse' ? { status: 0, stdout: `${path.join(ROOT, '.git')}\n`, stderr: '' } : { status: 1, stdout: '', stderr: '' });
+  const log = { landedBranches: new Set(['feat/a']), record: { candidate: 'a'.repeat(40) } };
+  const waiting = agent({ status: 'busy', cwd: ROOT, sessionId: 'w-1' });
+  const looks = [];
+  const refresh = async ({ stillQuiet }) => { looks.push(stillQuiet()); return 0; };
+  const time = clock();
+  const exit = await refreshAfterLand({ code: 0, log, versionOf: () => '1.0.0', home: '/h', cwd: ROOT, env: {}, run, list: () => [waiting], onlyWaits: (one) => one.sessionId === 'w-1', ...time, refresh, stderr: () => {} });
+  assert.deepEqual([exit, time.at(), looks], [0, 0, [{ quiet: true }]], 'the look under the lock reads it the same way');
+  const busy = await refreshAfterLand({ code: 0, log, versionOf: () => '1.0.0', home: '/h', cwd: ROOT, env: {}, run, list: () => [waiting, agent({ status: 'busy', cwd: ROOT, sessionId: 'r-1' })], onlyWaits: (one) => one.sessionId === 'w-1', ...clock(), refresh, stderr: () => {} });
+  assert.equal(busy, 75);
 });
 
 // The review of slice B of JH 72 (e30ae69d..7d8db831): no test held a worktree outside the main checkout, where a sibling

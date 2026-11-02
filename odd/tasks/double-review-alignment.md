@@ -24,20 +24,20 @@ reserve before the reset on 2026-11-04 (Depth pass, item 2). On 2026-11-01 he re
 
 ## Done when
 - `node bin/js-harness.mjs contract check odd/tasks/double-review-alignment.md` exits 0
-- `node bin/js-harness.mjs rules codex-floor` exits 0
+- `node bin/js-harness.mjs rules codex-weekly-floor` exits 0
 - `node bin/js-harness.mjs rules escalation-model` exits 0
 - `node bin/js-harness.mjs rules check` exits 0
-- `node --test bin/double-review.test.mjs bin/lib/double-review-records.test.mjs bin/codex-review-floor.test.mjs bin/lib/codex-floor.test.mjs` exits 0
+- `node --test bin/double-review.test.mjs bin/lib/double-review-records.test.mjs bin/codex-meter.test.mjs bin/lib/codex-meter.test.mjs` exits 0
 - `node --test bin/lib/protocols-skill.test.mjs bin/lib/project.test.mjs bin/lib/template-block.test.mjs bin/contract.test.mjs` exits 0, with `protocols-skill.test.mjs` asserting section 1's new text
 - `node --test bin/codex-review.test.mjs bin/lens-review.test.mjs bin/lib/codex-review-recheck.test.mjs` exits 0, with spec 7's request input, recheck and answers asserted
 - `npm run check` exits 0
 - the pull request is merged into main, named in `## Log`, with Codex and the Claude lenses recorded over its code
 
 ## In scope / Out of scope
-- In: `rule:double-review` and two new rules, `codex-floor` and `escalation-model`, through `js-harness rules change`; the protocols skill's
+- In: `rule:double-review` and two new rules, `codex-weekly-floor` and `escalation-model`, through `js-harness rules change`; the protocols skill's
   source (`bin/lib/protocols-skill.mjs`, sections 1, 6, 7); `claudeBlock` (`bin/lib/project.mjs`); a new command
   `js-harness double-review` (`bin/double-review.mjs`, `bin/lib/double-review-*.mjs`, the dispatcher
-  `bin/js-harness.mjs`, `README.md`); the floor in `codex-review` (`bin/codex-review.mjs`, `bin/lib/codex-floor.mjs`)
+  `bin/js-harness.mjs`, `README.md`); the floor in `codex-review` and `double-review` (`bin/codex-review.mjs`, `bin/lib/codex-meter.mjs`, `bin/lib/codex-launch.mjs`, `bin/lib/lens-review-rows.mjs`)
   and its debt in `codex-meter` (`bin/codex-meter.mjs`); spec 7 in `codex-review` and its recheck
   (`bin/lib/codex-review-recheck.mjs`) and in `lens-review` (`bin/lens-review.mjs`, `bin/lib/lens-*.mjs`); the older texts of `## Older texts` below, each named there before it
   changes (`CLAUDE.md` and `AGENTS.md` only where that list names them); `docs/ROADMAP.md`; this document.
@@ -286,11 +286,17 @@ State on 2026-11-01, on `rule/review-flow` from main f063429 (PR 745 landed T1, 
 150 in his own words (L14) and added the bound (L17): `## Redesign after question 150`, decided in L15, read blind
 in L16 and its findings taken; question 152 put it to him, and he approved it with point 5 changed: no reserve, a
 notice at 2% left and his decision on the reset (L18). T4 is done (85d8ee7f, L19), landed as PR 746 (main 5823566).
-T7 is done (64a588eb, L20) on `feat/review-request`, its own pull request. Next, in order, each a slice with
-Codex and the lenses: T8, T9, T2; D5's two exemptions (Claude 6 of L12) are
+T7 is done (64a588eb, L20) on `feat/review-request`, PR 748. T8 is split in three commits on the same branch:
+T8b f58c4027 (the recheck blocks a regression the correction brought, prompt v2) and T8a 071dc6d7 (`double-review
+answer <run id> <reviewer> --taken --rebutted --why`, and `tally` rows per reviewer of code) are committed, not yet
+reviewed. T8c 5c67d309 (the lenses recheck their earlier findings, `recheckOf`) is committed too. T8 is done and reviewed (L21), PR 749 from `feat/review-answers` (left out of one land by a timing test under
+load, L22). T9 is done and reviewed (L22), landed as PR 753 (main a0b5334). T2 is done and reviewed (L23) on
+`rule/codex-weekly-floor`: b9a92dcf, 52cd8390, c0ca22e7, landed as PR 754 (main 064f5c7). T6's verifier found
+gaps (L24); T10 fixed them on `feat/floor-followups`, reviewed (L25), with older text 16. PR 755 landed (main 65e40fd).
+The feature is closed (L26); the eval of PR 737's brief stays owed by 2026-11-30, on his word. D5's two exemptions (Claude 6 of L12) are
 kept in T4's text, since a question of fact proposes nothing and a reviewed text named by path is not read again, and
 the report says so for him to change. T6 keeps T2's verifier, older text 16 and the report of how to try it.
-Meter 87% weekly; floor 2% left.
+Meter 5% weekly on 2026-11-02 at 09:40 (2 credits left); floor `rule:codex-weekly-floor`.
 The gentle-ai Stop hook: status only, start nothing. Never edit a tracked file while a Codex review runs (L11).
 
 ## Eval plan
@@ -302,7 +308,8 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
 
 ## Tasks
 - [x] T1 (kind: docs) This document with its depth pass, committed with documents alone; spec all; 0fc1287e.
-- [ ] T2 (kind: build) Point 5 as approved (L18): `rules change codex-floor` (2 percent of the weekly limit left,
+- [x] T2 (kind: build) b9a92dcf, 52cd8390, c0ca22e7 (L23); the rule is `codex-weekly-floor`, not `codex-floor`, so it is
+  not read as `codex-review-floor`, the cap of one review. Point 5 as approved (L18): `rules change codex-floor` (2 percent of the weekly limit left,
   his words of lines 49536, 49661 and 49690), then `codex-review` reads the meter just before it launches and, at or
   under the floor, starts nothing and tells the lead to ask him about the reset (a failed or missing reading says so
   and runs); only on his typed no a second Claude review runs in Codex's place and records a Codex debt that
@@ -318,14 +325,21 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
 - [x] T7 (kind: build) 64a588eb; Point 2: `codex-review` and `lens-review` are given what was asked, every time: the feature
   document's specs and contract for large work, `--request <text>` for small work, the gate turn included, and a
   review with none says so; their prompts judge against it; spec 7; route codex-review, lens-review.
-- [ ] T8 (kind: build) Point 3: every finding of code's pair gets an answer, taken with its commit or rebutted with
+- [x] T8 (kind: build) Point 3: every finding of code's pair gets an answer, taken with its commit or rebutted with
   evidence, recorded, and a tally gives each reviewer taken and rebutted; Codex's recheck blocks a regression the
-  correction brought into what it changed (a seeded test); the lenses get the recheck; spec 7.
-- [ ] T9 (kind: build) Point 4: at most three reviews of one change (the recheck allows a second recheck, not a
+  correction brought into what it changed (a seeded test); the lenses get the recheck; spec 7. Done: f58c4027,
+  071dc6d7, 5c67d309, fixes 4bf5ee75 and fb1ff505; branch `feat/review-answers` (L21).
+- [x] T9 (kind: build) Point 4: at most three reviews of one change (the recheck allows a second recheck, not a
   third); past them `codex-review` refuses, says the problem and what is open, and names the strongest model, one
-  rule value (`rules change escalation-model`, today `claude-fable-5-1`); spec 8.
+  rule value (`rules change escalation-model`, today `claude-fable-5-1`); spec 8. Done: 462f9d69 (the register's
+  room), 2d07711c (the rule and the bound), fix 30197b3a; branch `rule/escalation-model`, stacked on PR 749 (L22).
 - [x] T5 (kind: build) Older texts 5, 6, 8, 9, 10, 12; spec 5; 2cb04248, 5cbbca4c and the commit of `sync`'s offer.
-- [ ] T6 (kind: verify) Reviews (Codex, lenses, an independent verifier for T2, a guard's input, and T3, two
+- [x] T10 (kind: build) 2f9c2216, 7f851374 (L25); the independent verifier's findings on T2 (L24): a floor skip is listed by `codex-meter` on
+  every branch, a merged one among them, with the command that pays it, until a Codex review of its range pays it;
+  `double-review read` reads the floor before both readers start; the debts' read cannot cost the reading; the share
+  left is said to one decimal; the weekly window is found by its length; the contract's names follow the rule's;
+  spec 4, 10; route codex-meter, double-review.
+- [x] T6 (kind: verify) L24, L26; Reviews (Codex, lenses, an independent verifier for T2, a guard's input, and T3, two
   processes at once), gate, PR, older text 16; the report tells him how to try it (L1); spec all.
 
 ## Log
@@ -472,3 +486,76 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   4e4ff5c..64a588e with `--doc` this document: correct, confidence 0.87, no findings, 325,405 input tokens; lenses
   reliability and readability: 0 findings each. A mistake of cost: the commit was run twice on a red gate, two
   GitHub runs where one was owed; the second read nothing new.
+- L21 (2026-11-02, evidence): T8 done. Codex reviewed 026cc2a..4ab62a6 with `--doc` (run 645a50c0): incorrect at
+  0.95, two P2: `--unavailable` threw on `picked.names` over a rechecked range, and a lens with no tools counted fixed
+  an earlier finding whose code is not in the patches. Both taken, fixed in 4bf5ee75, answered with `double-review
+  answer`; the recheck run of 4ab62a6..cbfd282 found both fixed (0.97, 66,053 input tokens). Lenses reliability and
+  readability over 64a588e..cbfd282 (run 25553a4f): reliability 0, readability 1 SUGGESTION, true: `codeTallyOf`
+  read an answer line's counts unchecked, so one malformed line threw the whole tally. Taken, fixed in fb1ff505 with
+  its test; Codex over cbfd282..7af1fcd correct at 0.98 (48,259 input tokens), and readability's recheck, the T8c
+  path in a real run, found it fixed. The lead (05:48): PR 748 landed T7 alone (main 47d96a3, checked with `gh pr
+  view 748`: merged at head 026cc2a), so T8 moved to `feat/review-answers` with main merged in, for its own PR.
+- L22 (2026-11-02, evidence): T9 done. The coverage register sat at 999 of 1000 lines, with no room for a new rule's
+  control (`rules coverage --refresh` freed none; the size convention has no data exemption): `writeCoverage` now writes
+  a control that fits in 120 characters on one line (462f9d69), 852 lines; the scan of restated values leaves the
+  register out like rules-data.mjs, since on one line an owed control's id and day matched a pattern, as three planted
+  breaks already did on main (counted with a script over both registers). `rules change escalation-model` (2d07711c):
+  his words at lines 49467 and 49690. The bound: from the head of a recheck that left findings open, a second recheck
+  of those alone, the third review; past it refused, with what is open and the model. The push row keeps his decision
+  of 2026-10-15, a warning and no refusal. The first commit was red once (gate run 41438460265: the push row read a
+  second recheck as a correction owed), read and fixed before the second try. Reviews: Codex 6a5c626..2d07711, 2 parts,
+  297,411 input tokens: incorrect at 0.95, one P2, the third review did not raise the problem when it ended, only a
+  fourth did; lenses reliability, readability, risk: readability one WARNING, true, a string replacement in
+  `writeCoverage` would rewrite `$&` in a planted break; gentle-ai (lineage review-0bb14477be51f1f7, review-reliability)
+  approved and acknowledged. Both taken, fixed in 30197b3a, answered with `double-review answer`; Codex's recheck
+  1 fixed (0.97, 43,964 input tokens), readability's recheck 1 fixed, reliability 0. PR 749 was left out of a land by
+  reply-budget's p90 in WSL2; T8 touches no module the reply hook imports, and the test alone here passed (p90 2220
+  and 1737 ms of 2500); told to the lead (06:38). The lead (06:11): he reset Codex's weekly limit; the meter read 2%
+  used and 2 credits left.
+- L23 (2026-11-02, evidence): T2 done. Named `codex-weekly-floor` so it is not read as `codex-review-floor` (told to
+  the lead). b9a92dcf: `weeklyFloor` and `floorStopped` in `bin/lib/codex-meter.mjs`, and `codex-meter` lists the
+  branch's Codex debts through `owedSkipLines`. After PR 753 landed, `rules change codex-weekly-floor` (value 2, his
+  words of lines 49536, 49661 and 49690, each read as typed) in 52cd8390 with `codex-review`'s read before the launch,
+  older texts 4 and 13, the control (a check with a planted break, proven red) and the version probe moved to
+  `bin/lib/codex-launch.mjs` so `codex-review.mjs` stays under its ceiling (2272). A first merge of main carried a
+  `wip` commit made with `--no-verify`; its gate was red on the undeclared rule, and it was undone and the merge
+  redone on b9a92dcf alone, so the `wip` commit is in no pushed history. The rule commit was red once (gate run
+  41459609490: the sentence changed in section 3 left a stale span in the coverage register), fixed with `rules
+  coverage --refresh`. Reviews: Codex 5e8872b..b9a92dc (run 6938e212, 155,679 input tokens): incorrect at 0.92, one
+  P2, `--json` printed plain debt lines on a failed read; lenses reliability and readability one WARNING each, the
+  same; risk and resilience 0. Codex da87bcf..52cd839 (run 12500d41, 107,981): incorrect at 0.97, two P2, the floor
+  read once before a review in parts, and a Ctrl-C of the meter's read launched the review; the four lenses 0. All
+  taken, fixed in c0ca22e7 with tests proven red on the old source, answered with `double-review answer`. Codex's
+  recheck 52cd839..c0ca22e: 2 fixed, correct at 0.97 (69,739); lenses resilience, reliability, readability 0.
+  gentle-ai: not reviewed; its Stop hook offered the branch (base a0b5334, off the head's first-parent line), and
+  its read-only status ended in `operation_timeout` twice, so nothing was started. Not built: a second Claude review
+  is not forced in Codex's place on his no; the stop says to run it (`lens-review`), and T6's verifier judges that.
+- L24 (2026-11-02, evidence): T6's independent verifier of T2 (Opus, read-only, 162,166 tokens), run while PR 754
+  waited and finished after it landed. Verdict: the guard holds with gaps. Inside `codex-review` every launch goes
+  through the floor read (`attempt`, so parts, rechecks, merge and gate turns), `left <= floor` at the boundary, odd
+  values handled, a hang ends at 15 s, a Ctrl-C stops; his three quotations checked with `sessions --quote`. Gaps,
+  each checked here before building on it: (1) a floor skip stops being listed once its pull request merges, since
+  the debts compare HEAD with main, against spec 4 and the bar's "after their merge too"; (2) `double-review read`
+  launches Codex with no floor read (`bin/double-review.mjs:390`, confirmed); (3) the second Claude review on his no
+  is prose only; (4) the weekly window is taken by position; (5) the debts' read is unguarded; (6) after a merge turn
+  the floor's stop says nothing was recorded while the turn's record exists; (7) the contract named `rules
+  codex-floor` and two test files that do not exist (confirmed); (8) no test pins the default meter reader, and the
+  debts were parsed from text; (9) a cold meter read takes about 10 s before every session, an estimate of 10 to 20
+  minutes a day; (10) the share printed raw. Taken in T10: 1, 2, 4, 5, 7, the text half of 8 and 10. Left open, for
+  the report: 3 (his words, 49536 and 49661, ask to be told and to decide; the second Claude review is the approved
+  design, not enforced), 6 (a wrong word in one rare path), 8's default reader (a test needs the app-server's launch
+  injected through `spawnAsync`), 9 (a cost, not a fault; a later part could skip the read while the earlier
+  reading and the parts' cost stay above the floor).
+- L25 (2026-11-02, evidence): T10 done. 2f9c2216: floor debts listed on any branch from valid records with the command
+  that pays them, the branch's skips read as records, the debts' read guarded, the floor in `double-review read`, the
+  weekly window by its length, the share to one decimal; tests proven red on the old source. Reviews: Codex
+  dcce067..2f9c221 (run 46e19138, 164,953 input tokens): incorrect at 0.94, one P2, a damaged floor-skip record threw
+  while its line was written and the catch hid every valid floor debt; lenses resilience, reliability, readability 0.
+  Taken, fixed in 7f851374 (test red first), answered; Codex's recheck 1 fixed, correct at 0.98 (36,107); lenses
+  reliability and resilience 0. gentle-ai: not reviewed; its Stop hook offered the branch (base 064f5c7) three times,
+  its status answered once with an execute and timed out before, and nothing was started, by `CLAUDE.md`'s rule for a
+  branch candidate. Older text 16: the roadmap's alignment item says what was done, and that the eval stays owed.
+  PR 755 carries T10 and older text 16.
+- L26 (2026-11-02, evidence): T6 done. PR 755 landed as main 65e40fd; the independent verifier's findings are in L24,
+  those taken fixed in T10; the report of how to try it went to the lead with the closed notice. Left open: L24's 3, 6, 8's
+  default reader and 9; the eval, planned, not run.

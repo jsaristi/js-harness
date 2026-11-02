@@ -11,8 +11,8 @@
 // A correction is checked against its findings once (./lib/codex-review-recheck.mjs). A range that starts at
 // the head of a review that found something is a recheck: its prompt lists those findings and asks whether
 // each is fixed, anything new is a follow-up that does not block unless it could make a failing check pass
-// or exposes data, and its record names that head (`recheckOf`). A range that starts at the head of a
-// recheck that left a finding open is refused, with what to record instead. No flag skips it.
+// exposes data or is a regression the correction brought, and its record names that head (`recheckOf`). From the head of a recheck that
+// left findings open, a second recheck of them is the third and last review; past it the run is refused (rule:escalation-model). No flag skips it.
 //
 // A merge of the default branch at HEAD, after a branch whose other code commits all have a record, is
 // reviewed from its first parent by what was written in it (`mergeStart` in ./lib/codex-review-coverage.mjs):
@@ -180,12 +180,13 @@ import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, re
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews, withSubjectHash } from './lib/codex-reviews.mjs';
 import { addTurnWorktree, mergeTurn, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, turnsCheaper } from './lib/codex-review-turns.mjs';
 import {
-  classifyRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, REVIEW_FROM_LOOK_BACK, runsLogged, secondRecheckRefused,
+  classifyRecheck, openAfterRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, REVIEW_FROM_LOOK_BACK, runsLogged, secondRecheckRefused,
 } from './lib/codex-review-recheck.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './lib/project-functions.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
 import { leftOutOf, leftOutSaid, patchOfRead, reviewScope } from './lib/codex-review-scope.mjs';
-import { launchCodex } from './lib/codex-launch.mjs';
+import { codexVersion, launchCodex } from './lib/codex-launch.mjs';
+import { launchWord, readRateLimits } from './lib/codex-meter.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { gitDirs, gitDirsAndCommits, isFullCommitId } from './lib/project.mjs';
 import { ruleValue } from './lib/rules.mjs';
@@ -201,6 +202,9 @@ import { harnessHome } from './lib/home.mjs';
 // change of the effort is written with its date; the figures above are of the day they were first set.
 export const REVIEW_MODEL = ruleValue('review-model');
 export const REVIEW_EFFORT = ruleValue('review-effort');
+// The percent of Codex's weekly limit that must be left for a review to start (`codex-weekly-floor`), read just before
+// the launch (odd/tasks/double-review-alignment.md, T2).
+export const CODEX_WEEKLY_FLOOR = ruleValue('codex-weekly-floor', 'percent of the weekly limit left');
 
 // `--home` is where the harness keeps its machine state (`<home>/.js-harness/`), as in the other
 // commands: `--home`, else `JS_HARNESS_HOME`, else the OS home. A review keeps one thing there, the Codex
@@ -579,29 +583,6 @@ const truncate = (text, length) => (text.length > length ? `${text.slice(0, leng
 /** One command as one line, `  exit N  <command>`, cut to 100 characters. */
 function commandLine(command, exitCode) {
   return `  exit ${exitCode ?? '?'}  ${truncate(command.replace(/\s+/g, ' ').trim(), 100)}`;
-}
-
-const PROBE_TIMEOUT_MS = 15000;
-
-// A version as `codex --version` prints it after the name: `0.160.0`, or `0.161.0-alpha.2`.
-const CLI_VERSION = /\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?/;
-
-/** The version `codex --version` answers with (`0.160.0`), through the launch path and environment
- * of the review, or `null` when it does not answer with one: a missing CLI is told apart here, so a
- * bad `-c`, a broken config or a failed login is never reported as one. */
-function codexVersion(spawn, platform, env) {
-  try {
-    const result = launchCodex(spawn, platform, ['--version'], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      encoding: 'utf8',
-      timeout: PROBE_TIMEOUT_MS,
-      env,
-    });
-    if (!result || result.error || result.status !== 0) return null;
-    return CLI_VERSION.exec(result.stdout ?? '')?.[0] ?? null;
-  } catch {
-    return null;
-  }
 }
 
 /** Runs the review as an async child and resolves, like `spawnSync`, with `{ status, signal, stdout,
@@ -1176,6 +1157,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   // A run of the turn at a merge below HEAD (`firstTurn`): the intent its parent already read, and that it must
   // be read as a merge at HEAD, or it would review what the merged branch brought in.
   const { turnIntent = null, mergeTurnOnly = false } = deps;
+  const readMeter = deps.readMeter ?? (() => readRateLimits({ platform }));
   const kill = deps.killTree ?? ((child, lifetime) => killTree(child, lifetime, { platform }));
   const write = deps.write ?? ((text) => process.stdout.write(text));
   let args;
@@ -1355,7 +1337,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       const behind = git(spawn, root, ['rev-list', '--first-parent', `--max-count=${REVIEW_FROM_LOOK_BACK + 1}`, from]);
       reviewFrom = (behind ?? '').split('\n').filter(Boolean).slice(1).find((commit) => recheckFor(commit).kind === 'review') ?? null;
     }
-    return secondRecheckRefused({ of: state.of, open: state.open, base: from, uncovered, reviewFrom });
+    return secondRecheckRefused({ ...state, base: from, uncovered, reviewFrom });
   };
 
   /** Where this run starts, once the Codex review records have been read against its range, `given..head`
@@ -1476,8 +1458,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       }
       log(methodRecordLine(methodRecord({ records, runs: readRunLog() })));
     }
-    if (state.kind === 'recheck') log(`A run of this range is a recheck of the ${counted(state.findings.length, 'finding')} of the review that ended at ${state.of.slice(0, 7)}.`);
-    if (state.kind === 'refused') log(`A run of this range is refused: ${secondRecheckRefused({ of: state.of, open: state.open, base: from }).split('\n')[0]}`);
+    if (state.kind === 'recheck') log(state.second ? `A run of this range is a second recheck, the last of three reviews, of the ${counted(state.findings.length, 'finding')} the recheck that ended at ${state.of.slice(0, 7)} left open.` : `A run of this range is a recheck of the ${counted(state.findings.length, 'finding')} of the review that ended at ${state.of.slice(0, 7)}.`);
+    if (state.kind === 'refused') log(`A run of this range is refused: ${secondRecheckRefused({ ...state, base: from }).split('\n')[0]}`);
     // After the plan's own lines, whose last is the estimate, and before the one that asks for a flag.
     const allowance = allowanceLine(reviewAllowance(plan, readProjectRules(root)));
     if (allowance !== null) log(allowance);
@@ -1650,7 +1632,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       error(secondRecheckSaid(from, state));
       return 1;
     }
-    if (state.kind === 'recheck') recheck = { of: state.of, findings: state.findings };
+    if (state.kind === 'recheck') recheck = { of: state.of, findings: state.findings, second: state.second === true };
     // The patch Codex has to have seen; the buffer holds a large diff, far above Node's 1 MiB default.
     // With renames as git detects them, as Codex's own review diffs a range; a merge has no other diff than its own.
     const patchArgs = merge === null ? ['diff', '--no-color', '--no-ext-diff', from, head] : rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff']);
@@ -1763,7 +1745,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         for (const finding of read.unmarked) log(findingLine(finding));
       }
       if (read.blocking.length > 0) {
-        log(`Blocking, a new finding that could make a failing check pass or exposes data: ${thousands(read.blocking.length)}.`);
+        log(`Blocking, a new finding that could make a failing check pass, exposes data or is a regression the correction brought: ${thousands(read.blocking.length)}.`);
         for (const finding of read.blocking) log(findingLine(finding));
       }
       if (read.followUps.length > 0) {
@@ -1771,9 +1753,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         for (const finding of read.followUps) log(findingLine(finding));
       }
       const open = notFixed + read.blocking.length + read.unmarked.length;
-      if (open > 0) {
-        log(`A range that starts at ${head.slice(0, 7)} is not rechecked again: fix what is open in this branch and record a follow-up task for it.`);
-      }
+      if (open > 0) log(openAfterRecheck({ head, second: recheck.second }));
     };
     /** One attempt: one Codex session, over the whole range or over one `part` of it (see `planParts`),
      * from the making of its lean home to its line in the run log. `expectedKeys` are the changed lines
@@ -1840,6 +1820,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         if (headNow !== head) return `HEAD moved from ${head.slice(0, 7)} to ${headNow.slice(0, 7)}`;
         return tree === '' ? null : 'tracked files differ from HEAD';
       };
+      // The weekly limit, read before each session: at or under its floor nothing more is started and the user decides
+      // on the reset, so a part that spent down to it stops the next; a reading that is not there says so and runs.
+      const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, base: args.base, part });
+      if (weekly.note !== null) log(weekly.note);
+      if (weekly.stop !== null) {
+        error(weekly.stop);
+        return { exit: 1 };
+      }
       // The session's own Codex home, named after the run: the id is made here, before the launch, and the
       // run line reuses it. Until the home exists nothing is launched, so a failure here writes no run line
       // and no record.

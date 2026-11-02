@@ -28,6 +28,7 @@
 // CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 import { askedText } from './codex-review-prompt.mjs';
+import { BLOCKS, FOLLOW_UP, NOT_FIXED } from './codex-review-recheck.mjs';
 import { CONTEXT_END, CONTEXT_START, SUBJECT_LINE } from './lens-candidate.mjs';
 
 /** Each lens: its title, what it inspects, and when a session picks it (gentle-ai's "Lens selection", copied for
@@ -62,8 +63,9 @@ export const SEVERITIES = ['BLOCKER', 'CRITICAL', 'WARNING', 'SUGGESTION'];
 /** The system prompt of the lens `name`. With an `intent` (`reviewIntent`'s or `requestIntent`'s, of
  * `./codex-review-prompt.mjs`) it carries what was asked after the scope, the section Codex's prompt carries, so
  * code's two reviews judge against one request (odd/tasks/double-review-alignment.md, spec 7); it is in the system
- * prompt because the block is evidence, never instructions. Throws on a name that is no lens. */
-export function lensPrompt(name, intent = null) {
+ * prompt because the block is evidence, never instructions. With `prior`, the findings this lens made in the review
+ * whose head the range starts at, it ends with a recheck of them (`lensRecheck`). Throws on a name that is no lens. */
+export function lensPrompt(name, intent = null, prior = []) {
   const lens = LENSES[name];
   if (!lens) throw new Error(`${name} is not a lens: ${LENS_NAMES.join(', ')}`);
   return `# ${lens.title} lens review
@@ -110,5 +112,22 @@ Status "completed" requires every manifest path, each once, in any order. Listin
 Required top-level fields: subject_hash, inspection, findings, evidence. Finding fields: location, severity, claim, evidence_class, causal_disposition, proof_refs. Emit no unknown fields.
 
 When clean, return the subject's hash, a completed inspection, "findings":[], and one evidence entry.
-`;
+${prior.length === 0 ? '' : `\n${lensRecheck(prior)}\n`}`;
+}
+
+/** What makes a lens run a recheck of `prior`, the findings the same lens made in the review whose head the range
+ * starts at: Codex's recheck in the lens's words (`./codex-review-recheck.mjs`), its marks at the start of a claim, so
+ * `classifyRecheck` reads both alike (odd/tasks/double-review-alignment.md, spec 7: "the lenses get the recheck"). */
+export function lensRecheck(prior) {
+  return [
+    '## A recheck of earlier findings',
+    'This range corrects the findings an earlier review of this lens made, listed below. Check each of them: does this range fix it?',
+    `- For each finding this range does not fix, report one finding whose claim starts with "${NOT_FIXED}", then its number in the list below, and say what is still missing. A fixed finding needs nothing.`,
+    `- A finding whose code is not in the block cannot be checked: report it with "${NOT_FIXED}" and its number, and say its code is not in the patches, so it stays open.`,
+    `- A new finding that could make a failing check pass, that exposes data, or a regression this range brought into what it changed (something the changed code did before this range that it no longer does): its claim starts with "${BLOCKS}".`,
+    `- Anything else you notice is a follow-up: its claim starts with "${FOLLOW_UP}". Do not look for new edges beyond these findings.`,
+    '',
+    '### The earlier findings',
+    ...prior.map((finding, at) => `${at + 1}. ${finding.location} ${finding.severity} ${finding.claim}`),
+  ].join('\n');
 }

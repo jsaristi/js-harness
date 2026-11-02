@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { METER_TIMEOUT_MS, failureLine, parseRateLimits, readRateLimits } from './codex-meter.mjs';
+import { FLOOR_SKIP, METER_TIMEOUT_MS, failureLine, floorDebtLines, floorStopped, launchWord, parseRateLimits, readRateLimits, weeklyFloor } from './codex-meter.mjs';
 
 // A fake `codex app-server`: a child whose stdin answers each request line with what `answer` returns for it.
 // Nothing here starts Codex. `answer` returns the lines the server writes back, objects or already-written text.
@@ -222,4 +222,98 @@ test('a read that ends by its answer leaves no signal handler behind', async () 
   const signals = new EventEmitter();
   await readRateLimits({ spawn: fake.spawn, kill: fake.kill, platform: 'linux', timeoutMs: 2000, signals });
   assert.equal(signals.listenerCount('SIGINT') + signals.listenerCount('SIGTERM'), 0);
+});
+
+// The floor of the weekly limit (rule:codex-weekly-floor), as `codex-review` reads it just before a launch.
+const weeklyUsed = (usedPercent) => ({ ok: true, result: { rateLimits: { secondary: { usedPercent, resetsAt: null } } } });
+
+test('the weekly floor stops a launch at or under it, and lets one through above it', () => {
+  assert.deepEqual(weeklyFloor(weeklyUsed(98), 2), { stop: true, left: 2 });
+  assert.deepEqual(weeklyFloor(weeklyUsed(99.5), 2), { stop: true, left: 0.5 });
+  assert.deepEqual(weeklyFloor(weeklyUsed(97), 2), { stop: false, left: 3 });
+  assert.deepEqual(weeklyFloor(weeklyUsed(104), 2), { stop: true, left: 0 });
+});
+
+test('a reading that failed, or that holds no weekly limit, stops nothing and says why', () => {
+  const failed = weeklyFloor({ ok: false, reason: 'missing' }, 2);
+  assert.equal(failed.stop, false);
+  assert.equal(failed.unread, failureLine({ ok: false, reason: 'missing' }));
+  const none = weeklyFloor({ ok: true, result: {} }, 2);
+  assert.equal(none.stop, false);
+  assert.match(none.unread, /no weekly limit/);
+});
+
+test('the stop at the floor starts nothing, asks the user about the reset and says what a typed no runs', () => {
+  const said = floorStopped({ left: 2, floor: 2, base: 'abc1234' });
+  assert.match(said, /2% left, at or under its floor of 2% \(rule:codex-weekly-floor\)/);
+  assert.match(said, /not started and nothing was recorded/);
+  assert.match(said, /whether to reset/);
+  assert.match(said, /js-harness codex-review --base abc1234 --unavailable/);
+  assert.match(said, /js-harness lens-review --base abc1234/);
+  assert.match(said, /codex-meter lists on every branch, and the merge door shows, until a Codex review of its range pays it/);
+});
+
+test('an interrupted read of the weekly limit stops the launch: the Ctrl-C was meant for the command', () => {
+  assert.deepEqual(weeklyFloor({ ok: false, reason: 'interrupted' }, 2), { stop: true, interrupted: true });
+  const word = launchWord({ ok: false, reason: 'interrupted' }, { floor: 2, base: 'abc1234' });
+  assert.equal(word.note, null);
+  assert.match(word.stop, /interrupted, so the review was not started and nothing was recorded/);
+});
+
+test('a later part of a review in parts stopped at the floor says the parts before it are kept for the next run', () => {
+  const word = launchWord(weeklyUsed(99), { floor: 2, base: 'abc1234', part: { index: 2, of: 3 } });
+  assert.match(word.stop, /so part 2 of 3 was not started, the parts before it kept for the next run, and nothing was recorded/);
+  assert.match(launchWord(weeklyUsed(99), { floor: 2, base: 'abc1234', part: { index: 1, of: 3 } }).stop, /so the review was not started/);
+  assert.deepEqual(launchWord(weeklyUsed(50), { floor: 2, base: 'abc1234' }), { note: null, stop: null });
+  assert.match(launchWord({ ok: false, reason: 'missing' }, { floor: 2, base: 'abc1234' }).note, /could not be read before the launch: .+ The review runs without it\./);
+});
+
+test('the weekly window is the one whose length says a week, wherever the answer puts it', () => {
+  const swapped = parseRateLimits({ rateLimits: { primary: { usedPercent: 99, windowDurationMins: 10080 }, secondary: { usedPercent: 4, windowDurationMins: 300 } } });
+  assert.equal(swapped.weekly.usedPercent, 99);
+  assert.equal(swapped.fiveHour.usedPercent, 4);
+  const alone = parseRateLimits({ rateLimits: { primary: { usedPercent: 99, windowDurationMins: 10080 }, secondary: null } });
+  assert.equal(alone.weekly.usedPercent, 99);
+  assert.equal(parseRateLimits({ rateLimits: { primary: { usedPercent: 3 }, secondary: { usedPercent: 8 } } }).weekly.usedPercent, 8);
+});
+
+test('the share left at the floor is said to one decimal, and a read of a plan says neither reader started and what a no runs', () => {
+  assert.match(launchWord(weeklyUsed(98.1), { floor: 2, base: 'abc1234' }).stop, /has 1\.9% left/);
+  const read = launchWord(weeklyUsed(99), { floor: 2, read: true });
+  assert.match(read.stop, /so neither reader was started and nothing was recorded/);
+  assert.match(read.stop, /js-harness double-review skip/);
+  assert.match(launchWord({ ok: false, reason: 'missing' }, { floor: 2, read: true }).note, /The read runs without it\./);
+  assert.match(floorStopped({ left: 1, floor: 2, base: 'abc1234' }), new RegExp(`--unavailable "${FLOOR_SKIP}: `));
+});
+
+test('the floor debts are the skips made at the floor that no Codex review paid, each with the command that pays it', () => {
+  const base = 'a'.repeat(40);
+  const head = 'b'.repeat(40);
+  const records = [
+    { outcome: 'unavailable', base, head, reason: `${FLOOR_SKIP}: no` },
+    { outcome: 'unavailable', base, head: 'c'.repeat(40), reason: `${FLOOR_SKIP}: no` },
+    { outcome: 'unavailable', base, head, reason: 'codex is not installed here' },
+    { outcome: 'reviewed', base, head },
+  ];
+  const owed = (rec) => rec.head === head;
+  const lines = floorDebtLines(records, owed, (rec) => `unavailable ${rec.base.slice(0, 7)}..${rec.head.slice(0, 7)}: ${rec.reason}`);
+  assert.deepEqual(lines, [`unavailable aaaaaaa..bbbbbbb: ${FLOOR_SKIP}: no; a Codex review pays it: git worktree add --detach <folder> bbbbbbb && js-harness codex-review --base aaaaaaa --again --cwd <folder>`]);
+});
+
+test('a damaged record, or one whose debt cannot be told, hides no other floor debt', () => {
+  const base = 'a'.repeat(40);
+  const lineOf = (rec) => `unavailable ${rec.base.slice(0, 7)}..${rec.head.slice(0, 7)}: ${rec.reason}`;
+  const records = [
+    { outcome: 'unavailable', reason: `${FLOOR_SKIP}: no` },
+    { outcome: 'unavailable', base, head: 'd'.repeat(40), reason: `${FLOOR_SKIP}: no` },
+    { outcome: 'unavailable', base, head: 'b'.repeat(40), reason: `${FLOOR_SKIP}: no` },
+  ];
+  const owedOf = (rec) => {
+    if (rec.head.startsWith('d')) throw new Error('git could not list the range');
+    return true;
+  };
+  const lines = floorDebtLines(records, owedOf, lineOf);
+  assert.equal(lines.length, 2, lines.join('\n'));
+  assert.ok(lines[0].startsWith('unavailable aaaaaaa..ddddddd'), 'a debt that cannot be told is listed, not hidden');
+  assert.ok(lines[1].startsWith('unavailable aaaaaaa..bbbbbbb'));
 });

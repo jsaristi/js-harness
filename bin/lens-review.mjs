@@ -17,12 +17,13 @@ import path from 'node:path';
 import { unknownArgument } from './lib/args.mjs';
 import { claudeRunner } from './lib/background.mjs';
 import { NO_ASKED } from './lib/codex-review-prompt.mjs';
+import { classifyRecheck } from './lib/codex-review-recheck.mjs';
 import { AskedError, askedIntent } from './lib/review-asked.mjs';
 import { NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
 import { LENS_NAMES, LENSES, lensPrompt } from './lib/lens-prompts.mjs';
 import { LENS_ANSWER_SCHEMA, lensResult } from './lib/lens-result.mjs';
-import { appendLensReview, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
+import { appendLensReview, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, readLensReviews, startLensRun } from './lib/lens-reviews.mjs';
 
 // The model the lens agents name (`model: sonnet`), as an alias, so the newest Sonnet answers.
 export const LENS_MODEL = 'sonnet';
@@ -198,6 +199,10 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
     return 1;
   }
   const range = `${candidate.base.slice(0, 7)}..${candidate.head.slice(0, 7)}`;
+  // A range that starts where a reviewed lens record ended rechecks what each of its lenses found there (spec 7).
+  const earlier = readLensReviews(cwd).findLast((rec) => rec?.outcome === 'reviewed' && rec.head === candidate.base && Array.isArray(rec.results));
+  const priorOf = (lens) => earlier?.results.find((one) => one?.lens === lens)?.findings ?? [];
+  const rechecks = earlier !== undefined && (picked.names ?? []).some((lens) => priorOf(lens).length > 0);
   const record = {
     schema: LENS_REVIEW_SCHEMA,
     base: candidate.base,
@@ -243,10 +248,10 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
   for (const lens of picked.names) {
     stdout(`${lens}: running over ${range}...`);
     const keep = (text) => keepLensAnswer(cwd, { run: runId, lens, text });
-    results.push(lensOutcome(lens, run({ lens, prompt: lensPrompt(lens, intent), block: candidate.block, env: lensEnv(env), cwd }), candidate, keep));
+    results.push(lensOutcome(lens, run({ lens, prompt: lensPrompt(lens, intent, priorOf(lens)), block: candidate.block, env: lensEnv(env), cwd }), candidate, keep));
   }
   const complete = results.every((result) => result.outcome === 'complete');
-  const file = write({ outcome: complete ? 'reviewed' : INCOMPLETE, lenses: picked.names, lensReason: reason, results });
+  const file = write({ outcome: complete ? 'reviewed' : INCOMPLETE, lenses: picked.names, lensReason: reason, results, ...(rechecks ? { recheckOf: earlier.run } : {}) });
   for (const result of results) {
     if (result.outcome !== 'complete') {
       stderr(`${result.lens}: incomplete, ${result.why}${result.answered === undefined ? '' : `; it answered: ${JSON.stringify(result.answered)}`}`);
@@ -256,6 +261,11 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
     }
     stdout(`${result.lens}: complete, ${result.findings.length} finding${result.findings.length === 1 ? '' : 's'}, ${result.inputTokens} input and ${result.outputTokens} output tokens`);
     for (const finding of result.findings) stdout(`  ${finding.severity} ${finding.location}: ${finding.claim}`);
+    const prior = priorOf(result.lens);
+    if (prior.length > 0) {
+      const { fixed, notFixed, blocking } = classifyRecheck({ findings: result.findings.map((one) => ({ title: one.claim })) }, prior.length).counts;
+      stdout(`${result.lens}: rechecked ${prior.length} earlier finding${prior.length === 1 ? '' : 's'} of ${earlier.run}: ${fixed} fixed, ${notFixed} not fixed, ${blocking} blocking`);
+    }
   }
   if (!complete) {
     stderr(`The lens run over ${range} is incomplete and covers nothing; recorded in ${file}. Read why above before running it again.`);
