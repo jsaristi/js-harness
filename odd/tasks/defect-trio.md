@@ -81,7 +81,7 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   Route: inline. L4.
 - [x] T2 (kind: build) spec 2: `undoSession` waits for the lock's process and retries on EBUSY; tests first. Route: inline. L5.
 - [x] T3 (kind: build) spec 3: the land's quiet look reads a busy session's transcript; tests first. Route: inline. L6.
-- [ ] T4 (kind: verify) Codex and the Claude lenses over the code slice; FAILURES `Seen:` lines; PR; ready notice.
+- [x] T4 (kind: verify) Codex and the Claude lenses over the code slice; FAILURES `Seen:` lines; PR; ready notice. L7, L10.
 - [x] T5 (kind: build) spec 3, Codex's recheck on 7f918a9..b9a1512: a wait is told by the command it runs, not a word of
   it (`bash -c '...; js-harness wait'`); test first. Route: inline. L8.
 - [x] T6 (kind: build) spec 3, Codex on fa61c36..5a411a9: a heredoc is work, an empty segment between `;` or line
@@ -149,3 +149,8 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   the land its 30 minutes. Fixed: a line with `<<` is work; an empty segment between `;` (a line break is one) or the
   line's ends is skipped, and one beside `&&` or `|` is still refused. Red first: `js-harness wait --notice-to 130\n`
   failed (false for true); the heredoc case was not shown red alone. Green after: the three refresh test files 44 of 44.
+- L10 (2026-11-02, T4): Codex's recheck of 5a411a9..f691a9c (55,508 input tokens): correct, both P2 fixed; the lenses
+  reliability and resilience on it, 0 findings. Every code commit has a Codex and a lens record (be294ca..7f918a9,
+  7f918a9..b9a1512, fa61c36..5a411a9 `--again`, 5a411a9..f691a9c; lenses over each). `js-harness contract run`: `met`.
+  gentle-ai's Stop hook offered the whole branch (base 76f1294) three times: its status was read, nothing started.
+  Pull request jsaristi/js-harness#750, branch `worktree-defect-trio`.
