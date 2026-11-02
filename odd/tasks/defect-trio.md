@@ -119,3 +119,15 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   30-minute wait and the one under the gate lock, read it. Left as before: such a session's wait keeps running from the
   old copy through the refresh, as the idle lead's background wait already did; `merge-queue --refresh-copy` alone
   still stops waits and tells their sessions.
+- L7 (2026-11-02, T4, the reviews of 76f1294..7f918a9): the Claude lenses reliability, resilience and readability,
+  0 findings each (about 28,000 input tokens a lens). Codex (be294ca..7f918a9, 2 parts, 265,080 input tokens) found
+  three, each checked in the code before the fix: P1, `onlyWaits` took a wait anywhere in a command line for a wait
+  (`isWaitCommand`, `bin/lib/wake.mjs:20`, matches a substring), so `js-harness wait --for 1; npm run check` only
+  waited; P1, it read only the last open call (`pendingCall`, `bin/lib/sessions.mjs:719`), so a check run in parallel
+  before a wait was not seen; P2, the CLI stop test's fake process lived a set 2 s, which a slow first `claude rm` could
+  outlast. Fixed: `waitAlone` reads the line with `shellWords` and takes only `cd`, the wait, `2>&1` and a pipe into
+  `tail` or `head` (the most common shapes of the waits in four days of this machine's transcripts: `cd <dir> && js-harness wait ...`
+  and `js-harness wait ... 2>&1 | tail -3`; a line that writes a note before its wait counts as work); every open call
+  of the transcript must be such a wait; the fake's process ends when rm has refused for it. Red first: the two new
+  `onlyWaits` tests failed (true for false), green after, 13 of 13; the stop test's change is to the test itself, not
+  shown red (a slow machine is needed).

@@ -70,9 +70,12 @@ if (argv[0] === 'stop') {
   delete agent.pid;
   agent.status = 'idle';
   agent.state = 'stopped';
-  // claude stop returns while the job's process still ends, and its lock on the worktree names that process.
+  // claude stop returns while the job's process still ends, and its lock on the worktree names that process. It ends
+  // once rm has refused for it (the release file), not after a set time a slow machine could outlast (Codex P2 on
+  // be294ca..7f918a9); lockMs only bounds a run that never gets there.
   if (state.lockMs) {
-    const job = spawn(process.execPath, ['-e', 'setTimeout(() => {}, ' + state.lockMs + ')'], { cwd: os.tmpdir(), detached: true, stdio: 'ignore', windowsHide: true });
+    const ends = 'const fs = require("fs"); const until = Date.now() + ' + state.lockMs + '; const look = setInterval(() => { if (fs.existsSync(' + JSON.stringify(file + '.release') + ') || Date.now() > until) clearInterval(look); }, 50);';
+    const job = spawn(process.execPath, ['-e', ends], { cwd: os.tmpdir(), detached: true, stdio: 'ignore', windowsHide: true });
     job.unref();
     state.lockPid = job.pid;
   }
@@ -85,6 +88,7 @@ if (argv[0] === 'rm') {
   const running = (pid) => { try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; } };
   if (state.lockPid && running(state.lockPid)) {
     out('kept ' + argv[1] + ' — its worktree is still at “' + (agent?.worktree ?? process.cwd()) + '”\n  A Claude Code lock on the worktree names a process that is still running (pid ' + state.lockPid + ').');
+    fs.writeFileSync(file + '.release', '');
     save();
     process.exit(1);
   }
@@ -442,7 +446,7 @@ test('sessions stop stops and removes a recorded session, drops its brief and re
 
 test('sessions stop waits for the job\'s process claude\'s lock names after the stop, then removes the session', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
-  patchState(world, { lockMs: 2000 });
+  patchState(world, { lockMs: 60_000 });
   const result = js(world, ['sessions', 'stop', '0db8bc5e']);
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /removed 0db8bc5e · Build the thing/);

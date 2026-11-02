@@ -13,23 +13,52 @@ import { NOTICE_TEXT_MAX } from './channel.mjs';
 import { shellWords } from './guard.mjs';
 import { isWaitCommand } from './wake.mjs';
 
-/** Whether the session of transcript `text` only waits: every work it has open is a `js-harness wait`, and it is
- * between turns with at least one open, or in its turn blocked in a wait it runs in the foreground. claude agents calls
- * a background session busy while a wait of its runs (JH 130 on 2026-11-02, odd/tasks/defect-trio.md), so the land's
- * refresh reads this before it waits for one. Anything else open, a turn with no call open (the session writes its
+/** Whether the command line `typed` does nothing but wait, as its shell reads it (`shellWords`): simple commands joined
+ * by `;` or `&&`, each a `cd` or a `js-harness wait` (`isWaitCommand`), the wait's output piped at most into `tail` or
+ * `head`, with no redirection but `2>&1`, no substitution and nothing sent to the background. A wait in a line that
+ * runs anything else is no wait (Codex P1 on be294ca..7f918a9: `js-harness wait --for 1; npm run check`). */
+function waitAlone(typed) {
+  if (!isWaitCommand(typed)) return false;
+  const words = shellWords(typed, { groups: true });
+  let waited = false;
+  let start = 0;
+  for (let at = 0; at <= words.length; at += 1) {
+    if (at < words.length && !words.operators.has(at)) continue;
+    const [name, ...rest] = words.slice(start, at);
+    const before = start === 0 ? null : words[start - 1];
+    const after = at === words.length ? null : words[at];
+    if (name === undefined || ![null, ';', '&&', '|'].includes(before) || ![null, ';', '&&', '|'].includes(after)) return false;
+    if (rest.some((word) => /[<>`]|\$/.test(word) && !/^\d?>&\d$/.test(word))) return false;
+    const wait = isWaitCommand(words.slice(start, at).join(' '));
+    if (before === '|' ? !/^(tail|head)$/.test(name) : after === '|' ? !wait : !(wait || (name === 'cd' && rest.length <= 1))) return false;
+    waited ||= wait;
+    start = at + 1;
+  }
+  return waited;
+}
+
+/** Whether the session of transcript `text` only waits: every work it has open is a `js-harness wait` (`waitAlone`),
+ * and it is between turns with at least one open, or in its turn with every call it has open such a wait. claude
+ * agents calls a background session busy while a wait of its runs (JH 130 on 2026-11-02,
+ * odd/tasks/defect-trio.md), so the land's refresh reads this before it waits for one. Anything else open, calls run
+ * in parallel beside a wait included (Codex P1 on be294ca..7f918a9), a turn with no call open (the session writes its
  * next step, whose hooks the copy runs), or a transcript that shows no wait, is a session at work. */
 export function onlyWaits(text) {
   const facts = sessionFacts(text);
-  const commands = new Map();
+  const calls = new Map(); // the session's own tool_use id -> { tool, command }
+  const answered = new Set();
   for (const entry of parseTranscript(text).entries) {
-    if (entry.type !== 'assistant' || !Array.isArray(entry.message?.content)) continue;
-    for (const block of entry.message.content) if (block?.type === 'tool_use' && block.name === 'Bash') commands.set(block.id, block.input?.command);
+    if (entry.isSidechain || !Array.isArray(entry.message?.content)) continue;
+    for (const block of entry.message.content) {
+      if (entry.type === 'assistant' && block?.type === 'tool_use' && !calls.has(block.id)) calls.set(block.id, { tool: block.name, command: block.input?.command });
+      if (entry.type === 'user' && block?.type === 'tool_result') answered.add(block.tool_use_id);
+    }
   }
-  const waits = (id, tool) => tool === 'Bash' && isWaitCommand(commands.get(id));
+  const waits = (id) => calls.get(id)?.tool === 'Bash' && waitAlone(calls.get(id).command);
   const open = facts.work.filter((work) => !work.ended);
-  if (!open.every((work) => waits(work.toolUseId, work.tool))) return false;
-  if (facts.turnEndedAt !== null) return open.length > 0;
-  return facts.pendingCall !== null && waits(facts.pendingCall.id, facts.pendingCall.tool);
+  const pending = [...calls.keys()].filter((id) => !answered.has(id));
+  if (!open.every((work) => waits(work.toolUseId)) || !pending.every(waits)) return false;
+  return facts.turnEndedAt !== null ? open.length > 0 : pending.length > 0;
 }
 
 /** The index of the script a command line's `args` run (the dispatcher or another `.mjs`), or -1. */

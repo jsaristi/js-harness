@@ -1320,6 +1320,17 @@ before it lands while main's `bin/` differs from it, so it refreshes nothing.
 - Control: check — bin/merge-queue.test.mjs — "a land run from that copy is refused while main" —
   since 2026-10-29
 
+### refresh-waits-on-waiting-session
+`merge-queue --land --refresh-copy` waited for every session `claude agents` called busy, and claude calls a background
+session busy while a `js-harness wait` of its runs: the land waited its 30 minutes for sessions that only waited,
+exited 75, and the lead refreshed the copy by hand.
+- Class: unseen-state
+- Seen: 2026-11-02 — odd/tasks/defect-trio.md, the depth pass's item 2 — `claude agents --json --all` at 10:05Z listed
+  JH 130 `status: busy, state: working` while its transcript's turn had ended at 09:31:10Z and its only open work was
+  the background `js-harness wait --notice-to 130` started at 09:30:29Z
+- Control: check — bin/merge-queue.test.mjs — "--land --refresh-copy refreshes at once beside a busy session whose
+  transcript only waits, and waits for one that runs" — since 2026-11-02
+
 ### refusal-in-system-words
 A path helper let a system error through, so a run was refused in the system's words and not in
 the harness's.
@@ -1352,6 +1363,19 @@ computes the merge ref later.
 - Class: tool
 - Seen: 2026-10-14 — relief file, line 765 — at 14:34; in place since 14:39, outside the repository:
   the lead's script reopens only once `refs/pull/<n>/merge^1` equals `main` (line 767)
+
+### reply-budget-wall-flake
+The two 90th-percentile tests of `bin/reply-budget.test.mjs` timed the reply hook by the wall clock, which the
+machine's load moves: under load they went red with the hook's own work unchanged, and the merge queue left pull
+requests out of lands for it. They now hold the same 2500 ms on the hook's main-thread CPU time and the processes it
+starts, which load does not move (odd/tasks/defect-trio.md, L3 and L4).
+- Class: machine
+- Seen: 2026-10-31 — odd/tasks/refresh-open-apply.md:138 — PR 736 left out of the land at 08:48Z, red in WSL on the
+  two time-budget tests, Windows Defender at 142 CPU s in the load log
+- Seen: 2026-10-31 — odd/tasks/advisor-trial.md:271 — PR 740 left out of a land at 15:53Z, red only on the two
+  stop-budget timing tests while another session ran its reviews
+- Control: check — bin/reply-budget.test.mjs — "stop, every check doing its whole work, stays within the budget at the
+  90th percentile" — since 2026-11-02
 
 ### resume-names-wrong-maker
 The resume hook said the host had compacted a session by itself when he had typed the command.
@@ -1587,6 +1611,42 @@ nothing warned the lead that a report marked without notes leaves sections 3, 5 
   8 PRs and the sessions table, where his phone never reached them (brief JH 92)
 - Control: check — bin/lib/report-status.test.mjs — "the numbers head the page before section 1: the
   migration now and at the cut, the map, the stretch goals each sí or no" — since 2026-10-30
+
+### stop-before-process-exits
+`js-harness sessions stop` ran `claude rm` right after `claude stop`, which returns before the job's process ends:
+claude refused to remove the session because its lock on the worktree named that process, still running, and the
+lead removed the worktree by hand after the pull request landed. Each line below is the lead's transcript 0f71b2c6,
+the first refusal for each pid. Since 2026-11-02 stop waits up to a minute for the pid claude names and tries again
+while claude says files are busy (EBUSY), and kills nothing.
+- Class: machine
+- Seen: 2026-10-27 — the lead's transcript 0f71b2c6, line 1151 — pid 51836, JH 60
+- Seen: 2026-10-27 — the lead's transcript 0f71b2c6, line 2170 — pid 50492, JH 63
+- Seen: 2026-10-28 — the lead's transcript 0f71b2c6, line 10054 — pid 25956, JH 71
+- Seen: 2026-10-28 — the lead's transcript 0f71b2c6, line 11527 — pid 6176
+- Seen: 2026-10-29 — the lead's transcript 0f71b2c6, line 12782 — pid 10640, JH 78
+- Seen: 2026-10-29 — the lead's transcript 0f71b2c6, line 21013 — pid 32144
+- Seen: 2026-10-29 — the lead's transcript 0f71b2c6, line 22342 — pid 29524, JH 85
+- Seen: 2026-10-29 — the lead's transcript 0f71b2c6, line 23163 — pid 41176, JH 84, then EBUSY
+- Seen: 2026-10-29 — the lead's transcript 0f71b2c6, line 24025 — pid 25408, JH 89
+- Seen: 2026-10-29 — the lead's transcript 0f71b2c6, line 24506 — pid 45604, JH 88
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 25712 — pid 41020, JH 91
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 27085 — pid 37900, JH 93
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 30681 — pid 41360, JH 97
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 35968 — pid 43460, JH 106
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 37160 — pid 31724, JH 109
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 38521 — pid 7688
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 40058 — pid 47040
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 40293 — pid 58608, JH 113
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 40481 — pid 48324, JH 116, gone 11 s after the refusal,
+  then EBUSY once
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 41160 — pid 50500, JH 120
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 41382 — pid 59972
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 45254 — pid 60796
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 46297 — pid 2292, JH 123, 124 and 125
+- Seen: 2026-11-01 — the lead's transcript 0f71b2c6, line 47529 — pid 63648, JH 127
+- Seen: 2026-11-02 — the lead's transcript 0f71b2c6, line 51984 — pid 904
+- Control: check — bin/sessions-background.test.mjs — "lock names after the stop, then removes the session" — since
+  2026-11-02
 
 ### stop-read-as-refusal
 The app words a turn stopped by another session as his refusal of a tool call, so the stopped

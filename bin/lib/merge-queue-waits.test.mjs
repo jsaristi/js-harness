@@ -156,3 +156,26 @@ test('onlyWaits: a session running anything else is at work, and so is one whose
   assert.equal(onlyWaits(transcript(prompt('go', at(20)), ...background('t1', 'b1', 'js-harness gate --wait 60', at(30)), reply('Esperando.', at(31)))), false);
   assert.equal(onlyWaits(''), false);
 });
+
+test('onlyWaits: a wait counts only when its whole command line is the wait, in the shapes sessions type it', () => {
+  const between = (command) => onlyWaits(transcript(prompt('go', at(20)), ...background('t1', 'b1', command, at(30)), reply('Esperando.', at(31))));
+  for (const typed of ['cd /d/js-harness && js-harness wait --notice-to orchestrator', 'cd D:/js-harness; js-harness wait --notice-to 130', 'cd "D:/a b" && js-harness wait --notice-to 130 --for 60', 'js-harness wait --notice-to 130 2>&1 | tail -3', 'node D:/js-harness/bin/js-harness.mjs wait --pr 748']) {
+    assert.equal(between(typed), true, typed);
+  }
+  // Codex P1 on be294ca..7f918a9: a wait in the line does not make the rest of it a wait.
+  for (const typed of ['js-harness wait --for 1; npm run check', 'npm run check && js-harness wait --pr 748', 'cd /d/x; echo "- 09:30Z" >> relief.md; js-harness wait --notice-to orchestrator', 'js-harness wait --pr 748 | xargs npm run check', 'js-harness wait --pr 748 & npm run check', 'js-harness wait --pr 748 || npm run check', 'js-harness wait --pr "$(npm run check)"', 'js-harness wait --notice-to 130 > /dev/null', '(js-harness wait --pr 748)']) {
+    assert.equal(between(typed), false, typed);
+  }
+});
+
+test('onlyWaits: a turn with calls running in parallel only waits when every call it has open is a wait', () => {
+  // Codex P1 on be294ca..7f918a9: the last open call alone hid a check started beside it.
+  const check = call('t2', { command: 'npm run check' }, at(32));
+  const wait = call('t3', { command: 'js-harness wait --pr 748' }, at(32));
+  assert.equal(onlyWaits(transcript(prompt('go', at(20)), check, wait)), false);
+  assert.equal(onlyWaits(transcript(prompt('go', at(20)), wait, check)), false);
+  assert.equal(onlyWaits(transcript(prompt('go', at(20)), call('t4', { command: 'js-harness wait --notice-to 130' }, at(32)), wait)), true);
+  // A call another tool runs is no wait either.
+  const read = { type: 'assistant', ...entryAt(at(32)), message: { role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't5', name: 'Read', input: { file_path: 'x' } }] } };
+  assert.equal(onlyWaits(transcript(prompt('go', at(20)), wait, read)), false);
+});
