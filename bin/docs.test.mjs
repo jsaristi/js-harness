@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { USAGE, checkDocs, docsMain } from './docs.mjs';
+import { INFERRED_LABEL } from './lib/docs-cross.mjs';
 
 const SPEC = [
   '# The specification',
@@ -107,8 +108,102 @@ test('docs plan names a tracked file it cannot read and exits 1, since its figur
   });
 });
 
+const RULES = [
+  '# Rules',
+  '',
+  "## Sebastián's",
+  '',
+  '### reply-states',
+  'A reply closes in a state.',
+  '- Home: `bin/reply.mjs`.',
+  '- Since 2026-10-01. Row: reports, against the failure `reply-unchecked`. Source: design.',
+  '',
+  '### gate-max',
+  'How long a gate runs.',
+  '- Read by: `bin/gate.mjs`.',
+  '',
+].join('\n');
+
+const FAILURES = [
+  '# Failures',
+  '',
+  '## Classes',
+  '',
+  '- `tool`: a command failed.',
+  '',
+  '## Entries',
+  '',
+  '### reply-unchecked',
+  'A reply closed with no state.',
+  '- Class: tool',
+  '- Seen: 2026-10-01 — a transcript, line 4 — the reply closed bare',
+  '- Control: check — bin/reply.test.mjs — "a reply closes with a state line" — since 2026-10-02',
+  '',
+  '### stale-gate',
+  'A gate ran on.',
+  '- Class: tool',
+  '- Seen: 2026-10-01 — a transcript, line 9 — the gate ran on',
+  '',
+].join('\n');
+
+/** The repository with the rules and the failure register the cross index joins, and their rows in the index. */
+const CROSS = {
+  ...REPO,
+  'docs/README.md': `${INDEX}| \`docs/RULES.md\` | live | | the rules |\n| \`docs/FAILURES.md\` | live | | the failures |\n`,
+  'docs/RULES.md': RULES,
+  'docs/FAILURES.md': FAILURES,
+  'odd/tasks/gate.md': '# Gate\n',
+};
+
+test('docs index prints each capability with its explicit links, its inferred ones apart with their files, then what no capability reaches', async () => {
+  await withRepo(CROSS, async (dir) => {
+    const { code, out } = await run(['index'], dir);
+    assert.equal(code, 0);
+    assert.match(out, /^Cross index of 1 capability: 1 cites a document, 0 name a rule, 0 a failure entry; 1 reaches a rule and 1 a failure entry by inference/);
+    assert.ok(out.includes(`The reply check (line 5)
+  cites: odd/tasks/reply.md
+  ${INFERRED_LABEL}: rule reply-states through bin/reply.mjs; failure reply-unchecked through bin/reply.test.mjs`), out);
+    assert.match(out, /Reached by no capability:\n {2}rules: gate-max\n {2}failure entries: stale-gate\n {2}feature documents: odd\/tasks\/gate\.md/);
+  });
+});
+
+test('docs index --json prints the index whole', async () => {
+  await withRepo(CROSS, async (dir) => {
+    const { code, out } = await run(['index', '--json'], dir);
+    assert.equal(code, 0);
+    const index = JSON.parse(out);
+    assert.deepEqual(index.capabilities[0].inferred.rules, [{ id: 'reply-states', via: 'bin/reply.mjs' }]);
+    assert.deepEqual(index.unreached.features, ['odd/tasks/gate.md']);
+  });
+});
+
+test('docs index says which input it cannot read and exits 1', async () => {
+  const { 'docs/FAILURES.md': _gone, ...rest } = CROSS;
+  await withRepo(rest, async (dir) => {
+    const { code, err } = await run(['index'], dir);
+    assert.equal(code, 1);
+    assert.match(err, /docs\/FAILURES\.md is not tracked: the cross index joins the specification, docs\/RULES\.md and docs\/FAILURES\.md/);
+  });
+});
+
+test('the docs row fails on an explicit link of a capability that does not resolve, and reports the rest', () => {
+  withRepo({ ...CROSS, 'docs/SPEC.md': SPEC.replace('Seen in odd/tasks/reply.md.', 'Seen in odd/tasks/gone.md and `rule:no-such-rule`.') }, (dir) => {
+    const [row] = checkDocs(dir, { own: true });
+    assert.equal(row.pass, false);
+    assert.deepEqual(row.lines, [
+      '"The reply check" (line 5) cites odd/tasks/gone.md, which is not a tracked file',
+      '"The reply check" (line 5) names rule:no-such-rule, which is no rule',
+    ]);
+  });
+  withRepo(CROSS, (dir) => {
+    const [row] = checkDocs(dir, { own: true });
+    assert.equal(row.pass, true);
+    assert.match(row.detail, /; every explicit link of the cross index resolves, 2 links inferred, 3 reached by no capability \(js-harness docs index\)$/);
+  });
+});
+
 test('docs refuses an argument it does not know with exit 2 and the usage', async () => {
-  for (const argv of [['plan', '--nope'], ['nope'], [], ['plan', '--budget', 'many']]) {
+  for (const argv of [['plan', '--nope'], ['nope'], [], ['plan', '--budget', 'many'], ['index', '--budget', '3']]) {
     const { code, err } = await run(argv, os.tmpdir());
     assert.equal(code, 2, argv.join(' '));
     assert.ok(err.endsWith(USAGE), argv.join(' '));

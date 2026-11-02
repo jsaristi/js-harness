@@ -273,8 +273,9 @@ Found by the search of item 2; each changes in T2.
 - [x] T1 (kind: docs) this document, its depth pass, committed before any code; the plan's double review
   (`js-harness double-review read`), every finding answered (spec 1 to 6); done: `8a07203`, the reviews L6 to L8
 - [x] T2 (kind: docs) the stale texts; pull request 1 (spec 5); done: `41862442`, with `AGENTS.md` in T3 (L4)
-- [ ] T3 (kind: build) `js-harness docs plan`, test first, and `docs/README.md` with its index and the row's index
-  part, `AGENTS.md` and GUIDE's command table; pull request 2 (specs 1, 2, 5, 6; spec 5 measured at its close)
+- [x] T3 (kind: build) `js-harness docs plan`, test first, and `docs/README.md` with its index and the row's index
+  part, `AGENTS.md` and GUIDE's command table; pull request 2 (specs 1, 2, 5, 6; spec 5 measured at its close);
+  done: `c51daf56` and its fix `1fb4f34a`, pull request 752
 - [ ] T4 (kind: build) `js-harness docs index`, test first, and the row's link part; pull request 3 (specs 3, 6)
 - [ ] T5 (kind: build) SPEC's record table completed, `docs/RECORDS.md` and its test, and the row's record part;
   pull request 4 (specs 4, 6)
@@ -379,6 +380,28 @@ Found by the search of item 2; each changes in T2.
   taken: `## Next step` is one current state. Codex 1 taken: composed paths, non-JSON records, families and their
   planted breaks in spec 4. Codex 2 taken (with Claude 1). Codex 4 taken: 1,432 on `47d96a3`, and the inference
   figures labelled by the rules that made them. Shared: Claude 1 and Codex 2, 5 and 3.
+- L9 2026-11-02, T4's first run (`node bin/js-harness.mjs docs index`, on `d195f663` with T4's tree): 76
+  capabilities; 64 cite a document, 0 name a rule by id (the four `rule:` ids of SPEC sit outside its capabilities,
+  `docs/SPEC.md:104-117` and `:976`), 6 name a failure entry; 34 reach a rule and 41 a failure entry by inference,
+  263 inferred links in all. Against the depth pass's figures: 64 against the prototype's 60 (one capability added
+  since, and the cut now reads `docs/` paths too), 34 rules as Codex recounted (read 9b105375), 41 failures against 42.
+  Too shared: `bin/check.mjs` (4 rules, 15 Today lines), `bin/lib/manifest.mjs` (18 rules),
+  `bin/lib/protocols-skill.mjs` (9 rules). Reached by none: 32 rules (24 of them homed in a too-shared file), 48
+  failure entries, 104 feature documents. Two explicit links did not resolve, both stale quotes of SPEC, fixed:
+  `docs/SPEC.md:819` quoted "The Codex review's allowance" of `odd/tasks/rule-hierarchy.md`, whose section is "The
+  plan against its allowance" (`:1279`); `docs/SPEC.md:909` quoted "The specification of the harness" of
+  `docs/ROADMAP.md`, which is in `odd/tasks/rule-hierarchy.md:5196`. The hand check (spec 3's bar): every 13th of the
+  263 inferred links, 20 in all, each read against its failure entry's or rule's text: right 10 (lock-not-a-queue,
+  init-leaves-codegraph-files, throughput-compare-days, edit-during-review, wait-every, context-fills-unnoticed,
+  hours-guessed for the notices' record, host-restart-unseen, block-referred-by-hour, control-phrase-min), wrong 10
+  (broken-wait-script twice, check-survivor-test-fails, documents-merge-runs-gate and gate-narrow-pass-stood, all
+  through `bin/check.test.mjs`; context-cut-by-percentage twice through `bin/sessions.test.mjs`; hours-guessed for a
+  session that starts at once; context-pause through `bin/lib/sessions.mjs`; board-read-loads-gate through
+  `bin/lib/test-run-warning.test.mjs`). 10 of 20 is under 14, so the inferred links print as unverified
+  (`INFERRED_CHECK` in `bin/lib/docs-cross.mjs`), as the plan said. Seen, not built: 7 of the 10 wrong came
+  through a test file that many failures' controls name and that the Today-line count does not see, since a test is
+  named in Proof (9 of the 10 came through a test file); counting Proof lines in the cut is a change of spec 3, left
+  to the audit.
 
 ## Next step
 State at 2026-11-02 ~11:50Z, branch `worktree-audit-pack` (worktree `audit-pack`). The plan's reviews are done
@@ -407,3 +430,7 @@ T6 (the close, with the model he means by "Fable 5.5" asked of the lead).
   branch (752's); the lead says when 751 lands, then rebase 752 on main and notify it ready. T4 starts with
   `bin/lib/docs-cross.test.mjs`, written first: explicit links from a capability's text (`odd/`/`docs/` paths,
   `rule:<id>`, failure ids), inferred ones apart, too-shared files (over 8 rules or over 8 Today lines) printed.
+- Update ~14:00Z: T4 built, test first (`bin/lib/docs-cross.mjs` and its test, `docs index` and the row's link part
+  in `bin/docs.mjs`, README, the help line, SPEC's capability), its first run and hand check in L9, SPEC's two stale
+  quotes fixed. Next: T4's commit; Codex and the Claude lenses over it (base `d195f663`), cost said first; push;
+  then T5.
