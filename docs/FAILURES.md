@@ -1783,6 +1783,9 @@ ran.
   five code pull requests for a merge of `main` (line 759); his order to fix it, the lead's
   transcript ffe99ebf, line 5141. The fix owed is JH 5's `js-harness wait` and its rule: while he is
   not there, a turn never ends waiting; it arms a wait and works on (line 760)
+- Seen: 2026-11-01 — odd/tasks/double-review-alignment.md, L19 — JH 126 ended its turn at 18:58 local near the
+  end of its window, waiting for a compaction that comes only on a new turn, with no wait armed; nothing ran for
+  about two hours until the lead woke it at 20:53 (the lead's notice, claimed)
 - Control: protocol — bin/lib/manifest.mjs — "Never end a turn waiting for a message or an event,
   whether the user is present or not" — since 2026-10-15
 

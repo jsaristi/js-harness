@@ -285,8 +285,8 @@ sweep, a record of that day (L16, Claude 10).
 State on 2026-11-01, on `rule/review-flow` from main f063429 (PR 745 landed T1, T3 and T5). He answered question
 150 in his own words (L14) and added the bound (L17): `## Redesign after question 150`, decided in L15, read blind
 in L16 and its findings taken; question 152 put it to him, and he approved it with point 5 changed: no reserve, a
-notice at 2% left and his decision on the reset (L18). Next, in order, each a slice with Codex and the lenses: T4
-(section 1's text, then `rules change double-review`), T7, T8, T9, T2; D5's two exemptions (Claude 6 of L12) are
+notice at 2% left and his decision on the reset (L18). T4 is done (85d8ee7f, L19), its own pull request from
+`rule/review-flow`. Next, in order, each a slice with Codex and the lenses: T7, T8, T9, T2; D5's two exemptions (Claude 6 of L12) are
 kept in T4's text, since a question of fact proposes nothing and a reviewed text named by path is not read again, and
 the report says so for him to change. T6 keeps T2's verifier, older text 16 and the report of how to try it.
 Meter 87% weekly; floor 2% left.
@@ -311,7 +311,7 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   its read tokens, the Claude reader on `rule:subagent-reader-model`, blind by sequence (L12), the reserve, `--plan`
   announces), `take` (taken and shared), `skip`, `tally`; records under the git common dir, which no review row
   reads, with the test that a read leaves code uncovered; spec 1, 2, 3, 4.
-- [ ] T4 (kind: build) `rules change double-review` on his words of questions 145, 146, 150 and 152 (L2, L3, L14,
+- [x] T4 (kind: build) 85d8ee7f; `rules change double-review` on his words of questions 145, 146, 150 and 152 (L2, L3, L14,
   L17, L18): section 1's one text says points 1 to 4 of `## Redesign after question 150`, `claudeBlock` and section 7
   name it, D5 retired by name; older texts 1 to 3, 11, 14, 15, 18, 20 and 21; spec 2, 7, 8.
 - [ ] T7 (kind: build) Point 2: `codex-review` and `lens-review` are given what was asked, every time: the feature
@@ -456,3 +456,10 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   only on his no a second Claude review runs, with the code as a debt for Codex. The lead (23:35 UTC, to 126):
   "Record the rules with his words (lines 49536, 49661, 49690) and build points 2 to 5. He is away about 2 hours."
   Order: T4 (the rule text), T7, T8, T9, T2, each a slice with its reviews.
+- L19 (2026-11-01, evidence): T4 committed as 85d8ee7f. The coverage register sat at 999 of its 1000 lines and the
+  new `claudeBlock` sentence needed a span in two lists, so its two sentences became one: `--refresh` settled the
+  old span (ad3655173cc6) and the new one took its two lines; `rules check` and `rules coverage --strict` PASS, 278
+  tests of the five touched files pass, the block hash moved to de748fbd. Codex reviewed afcd81c..85d8ee7: correct,
+  confidence 0.87, no findings, 79,452 input tokens; lenses readability and risk: 0 findings each. Meter before it:
+  weekly 87% used. A mistake: the turn ended at 18:58 local waiting for a compaction that only comes on a new turn,
+  and nothing ran for about two hours (the lead's notice of 20:53, claimed); `docs/FAILURES.md` `turn-ended-waiting`.
