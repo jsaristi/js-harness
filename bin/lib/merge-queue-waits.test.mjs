@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readCopy, reArmNote, sessionOf, verbOf, waitAgain } from './merge-queue-waits.mjs';
+import { onlyWaits, readCopy, reArmNote, sessionOf, verbOf, waitAgain } from './merge-queue-waits.mjs';
 import { NOTICE_TEXT_MAX } from './channel.mjs';
 
 // The machine of S4 and S5 (odd/tasks/lead-manual-steps.md): pnpm's global folder holds the installed copy, and the
@@ -119,4 +119,40 @@ test("reArmNote names the copy's sha, the refresh's end and the waits to run aga
   assert.equal(reArmNote({ sha, code: 0, again: ['js-harness wait --pr 1'] }), 'The installed copy was refreshed to 0123456 by merge-queue --refresh-copy, and the wait you ran from it was stopped for it: run it again: js-harness wait --pr 1');
   assert.match(reArmNote({ sha, code: 6, again: ['a', 'b'] }), /^The refresh of the installed copy to 0123456 ended with exit 6 \(merge-queue --refresh-copy says why\), and the 2 waits you ran from it were stopped for it: run them again: a; b$/);
   assert.ok(reArmNote({ sha, code: 0, again: ['x'.repeat(900)] }).length <= NOTICE_TEXT_MAX);
+});
+
+// Transcripts for onlyWaits, in the shapes of bin/lib/wake.test.mjs. On 2026-11-02 at 10:05Z claude agents listed JH 130
+// busy and working while its turn had ended at 09:31:10Z and its one open work was a background js-harness wait.
+const at = (minute) => `2026-11-02T09:${String(minute).padStart(2, '0')}:00.000Z`;
+const entryAt = (time) => ({ timestamp: time, cwd: 'D:\\proj', isSidechain: false });
+const transcript = (...entries) => `${entries.map((entry) => JSON.stringify(entry)).join('\n')}\n`;
+const prompt = (text, time) => ({ type: 'user', ...entryAt(time), origin: { kind: 'human' }, message: { role: 'user', content: text } });
+const call = (id, input, time) => ({ type: 'assistant', ...entryAt(time), message: { role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id, name: 'Bash', input }] } });
+const result = (id, toolUseResult, time) => ({ type: 'user', ...entryAt(time), toolUseResult, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }] } });
+const reply = (text, time) => ({ type: 'assistant', ...entryAt(time), message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text }] } });
+const background = (id, task, command, time) => [call(id, { command, run_in_background: true }, time), result(id, { stdout: '', stderr: '', backgroundTaskId: task }, time)];
+const ended = (task, id, time) => ({ type: 'user', ...entryAt(time), origin: { kind: 'task-notification' }, message: { role: 'user', content: `<task-notification>\n<task-id>${task}</task-id>\n<tool-use-id>${id}</tool-use-id>\n<status>completed</status>\n</task-notification>` } });
+const WAITING = 'js-harness wait --notice-to 130';
+
+test('onlyWaits: a session between turns whose open work is only js-harness waits, or one blocked in a wait in its turn', () => {
+  assert.equal(onlyWaits(transcript(prompt('go', at(20)), ...background('t1', 'b1', WAITING, at(30)), reply('Esperando la nota del líder.', at(31)))), true);
+  // Waits that ended, and other work that ended, leave only the open wait.
+  const settled = transcript(prompt('go', at(10)), ...background('t2', 'b2', 'npm run check', at(11)), ended('b2', 't2', at(15)), ...background('t1', 'b1', WAITING, at(30)), reply('Listo.', at(31)));
+  assert.equal(onlyWaits(settled), true);
+  // In its turn, the session waits in a foreground wait it is still running.
+  assert.equal(onlyWaits(transcript(prompt('go', at(20)), call('t3', { command: 'cd /d/proj && js-harness wait --pr 748 --for 60' }, at(30)))), true);
+});
+
+test('onlyWaits: a session running anything else is at work, and so is one whose transcript says nothing of a wait', () => {
+  // A background gate beside the wait.
+  assert.equal(onlyWaits(transcript(prompt('go', at(20)), ...background('t1', 'b1', WAITING, at(30)), ...background('t2', 'b2', 'npm run check', at(30)), reply('Corriendo.', at(31)))), false);
+  // In its turn running a test, with its wait in the background.
+  assert.equal(onlyWaits(transcript(prompt('go', at(20)), ...background('t1', 'b1', WAITING, at(30)), call('t2', { command: 'node --test bin/x.test.mjs' }, at(32)))), false);
+  // In its turn with no call open: it is writing its next step, which runs the hooks.
+  assert.equal(onlyWaits(transcript(prompt('go', at(20)), ...background('t1', 'b1', WAITING, at(30)), prompt('y ahora?', at(33)))), false);
+  // Between turns with nothing open: claude's busy is not a wait's.
+  assert.equal(onlyWaits(transcript(prompt('go', at(20)), reply('Hecho.', at(21)))), false);
+  // gate --wait and quiet are not js-harness wait.
+  assert.equal(onlyWaits(transcript(prompt('go', at(20)), ...background('t1', 'b1', 'js-harness gate --wait 60', at(30)), reply('Esperando.', at(31)))), false);
+  assert.equal(onlyWaits(''), false);
 });

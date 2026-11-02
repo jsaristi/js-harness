@@ -80,7 +80,7 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
 - [x] T1 (kind: build) spec 1: the budget held on the hook's main-thread CPU and its child count; red under load first.
   Route: inline. L4.
 - [x] T2 (kind: build) spec 2: `undoSession` waits for the lock's process and retries on EBUSY; tests first. Route: inline. L5.
-- [ ] T3 (kind: build) spec 3: the land's quiet look reads a busy session's transcript; tests first. Route: inline.
+- [x] T3 (kind: build) spec 3: the land's quiet look reads a busy session's transcript; tests first. Route: inline. L6.
 - [ ] T4 (kind: verify) Codex and the Claude lenses over the code slice; FAILURES `Seen:` lines; PR; ready notice.
 
 ## Log
@@ -109,3 +109,13 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   `bin/lib/background.test.mjs`, `bin/install-session-messages.test.mjs` 299 of 299. The fake's first run also showed
   the EBUSY side: its process, started in the test's folder, kept that folder from being removed (EPERM), so it starts in
   the temp folder. `uninstall machine` undoes each session through `undoSession` too, so it waits the same way.
+- L6 (2026-11-02, T3, red first): `onlyWaits` (`bin/lib/merge-queue-waits.mjs`) failed on the missing export; three tests
+  of `bin/lib/merge-queue-refresh.test.mjs` (atWorkIn, waitForQuiet, refreshAfterLand with `onlyWaits`) failed 25 of 28;
+  the land test `--land --refresh-copy refreshes at once beside a busy session whose transcript only waits` was red with
+  the wiring line of `bin/merge-queue.mjs` taken out and green with it. Green: the three refresh test files 42 of 42; with
+  the conventions, `bin/merge-queue.test.mjs` and `bin/lib/wake.test.mjs`, 200 of 200. The rule: a busy session only
+  waits when every open work of its transcript is a `js-harness wait` and it is between turns with one open, or in its
+  turn blocked in one; anything else, a turn with no call open, or a transcript not found, is at work. Both looks, the
+  30-minute wait and the one under the gate lock, read it. Left as before: such a session's wait keeps running from the
+  old copy through the refresh, as the idle lead's background wait already did; `merge-queue --refresh-copy` alone
+  still stops waits and tells their sessions.
