@@ -256,3 +256,18 @@ Found by the search of item 2; each changes in T2.
   project and each variant of a record are in spec 4, with writer lines checked; checking fields against writer
   contracts is not taken, since no schema exists to check them against (spec 4). Codex 5 taken (with Claude 1).
   Codex 7 taken (with Claude 2). Shared: Claude 1 and Codex 5, 2 and 7, 3 and 1, 4 and 6, 5 and 3, 6 and 4.
+
+## Next step
+State at 2026-11-02 ~11:40Z, branch `worktree-audit-pack` (worktree `audit-pack`), commits `8a07203` (T1) and
+`41862442` (T2, docs only), not pushed, no PR yet. The plan's confirming double review runs in the background
+(output `C:/Users/Oficina/.claude/jobs/f94a63ab/tmp/dr2.txt`); answer it with `double-review take` as L6 did. T3 is
+written, uncommitted: `bin/lib/docs-plan.mjs` (+test, 13 pass), `bin/lib/docs-index.mjs` (+test, 5 pass),
+`bin/docs.mjs` (+`bin/docs.test.mjs`, 6 of 7 pass: the oversized-file row test fails, look at `checkDocs` with a
+1.7M-character `evals/huge.txt`). Left in T3: the dispatcher (`COMMANDS`, `HELP`, help line in `bin/js-harness.mjs`),
+the `docs` row in `bin/check.mjs` (at its 2010-line ceiling: move code out first), a SPEC capability claiming
+`js-harness docs`, README's reference, `docs/README.md` (the index, statuses defined, how to run the plan), and
+`AGENTS.md` (the diff in `C:/Users/Oficina/.claude/jobs/f94a63ab/tmp/agents.diff` plus a pointer to
+`docs/README.md`) with its spans declared by `js-harness rules coverage --refresh` or as context in
+`bin/lib/rules-coverage-data.mjs`; the cross index's module is `bin/lib/docs-cross.mjs`, so Done-when gains its test.
+Then Codex (the lead says the weekly limit was reset: read `js-harness codex-meter` first) and the Claude lenses,
+push, PR, `js-harness notify --to orchestrator --kind ready --pr <n>`.
