@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { recordPath } from './lib/channel.mjs';
 import { replyHookEntry } from './lib/hook-entries.mjs';
 import { CURSOR_SCHEMA, liveCursorPath } from './lib/live-rows.mjs';
@@ -35,10 +35,33 @@ import { percentile } from '../scripts/reply-hook-time.mjs';
 // Sizes are the lead's 0f71b2c6 on 2026-10-31: 60.2 MB in 38,990 lines, with accented text (stored by V8 as two bytes a
 // character, which every search pays for), and a channel record of 1.4 MB. The template gate's shown record was 33 KB
 // in 95 lines that day; the fixture's is 400 KB, a lead's months of pages and summary writes.
+//
+// The hook's own work is its main thread's CPU time, read at its exit by a module loaded before it (odd/tasks/defect-
+// trio.md, L3). Wall time is the machine's: under ten busy loops the same runs took 3.4 to 9.4 s against 1.0 to 1.8 s
+// quiet, and the main thread's CPU 1.1 to 1.4 s both ways, so the wall p90 turned lands red on another session's load
+// (PR 736, PR 740). The GC and compile threads run beside the main thread and are not counted; the processes the hook
+// starts are counted instead, since their time is not in this measure: git, once, where the project is.
 
 const BIN = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
 const BUDGET_MS = 2500;
 const RUNS = 10;
+const CHILDREN = 1;
+// Loaded with --import before the hook: counts every process it starts, and at its exit writes its main thread's CPU.
+const MEASURE = String.raw`
+import fs from 'node:fs';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
+let children = 0;
+for (const name of ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync', 'fork']) {
+  const started = childProcess[name];
+  childProcess[name] = (...args) => { children += 1; return started(...args); };
+}
+syncBuiltinESMExports();
+process.on('exit', () => {
+  const { user, system } = process.threadCpuUsage();
+  fs.appendFileSync(process.env.BUDGET_MEASURE, JSON.stringify({ cpuMs: (user + system) / 1000, children }) + '\n');
+});
+`;
 const TRANSCRIPT_BYTES = 60_000_000;
 const RECORD_BYTES = 1_400_000;
 const SHOWN_BYTES = 400_000;
@@ -54,6 +77,7 @@ let home;
 let leadTranscript;
 let workTranscript;
 let page;
+let measure;
 
 const line = (entry) => JSON.stringify(entry);
 
@@ -167,30 +191,47 @@ before(() => {
   workTranscript = path.join(dir, 'work.jsonl');
   fs.writeFileSync(leadTranscript, transcriptOf(LEAD.title, TRANSCRIPT_BYTES, now, published));
   fs.writeFileSync(workTranscript, transcriptOf(WORK.title, TRANSCRIPT_BYTES, now));
+  measure = path.join(dir, 'measure.mjs');
+  fs.writeFileSync(measure, MEASURE);
 });
 
 after(() => {
   if (dir) fs.rmSync(dir, { recursive: true, force: true });
 });
 
-/** The wall times of `RUNS` runs of the hook on the stop of `session`, and the last answer. */
+/** `RUNS` runs of the hook on the stop of `session`: each one's main-thread CPU (`times`), the processes it started
+ * (`children`) and its wall time (`walls`), and the last answer. */
 function timeStops(session, transcript) {
   const input = JSON.stringify({
     session_id: session.id, transcript_path: transcript, cwd: project, hook_event_name: 'Stop', stop_hook_active: false,
     last_assistant_message: MESSAGE,
     background_tasks: [], session_crons: [],
   });
-  const times = [];
+  const measured = path.join(dir, `${session.id}.jsonl`);
+  const walls = [];
   let answer = null;
   for (let i = 0; i < RUNS; i += 1) {
     const started = performance.now();
-    const result = spawnSync(process.execPath, [BIN, 'reply', '--hook'], { input, encoding: 'utf8', windowsHide: true, env: { ...process.env, JS_HARNESS_HOME: home } });
-    times.push(performance.now() - started);
+    const env = { ...process.env, JS_HARNESS_HOME: home, BUDGET_MEASURE: measured };
+    const result = spawnSync(process.execPath, ['--import', pathToFileURL(measure).href, BIN, 'reply', '--hook'], { input, encoding: 'utf8', windowsHide: true, env });
+    walls.push(performance.now() - started);
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stderr, '', 'every check ran: none said on standard error that it did not');
     answer = JSON.parse(result.stdout);
   }
-  return { times, answer };
+  const runs = fs.readFileSync(measured, 'utf8').trim().split('\n').map((one) => JSON.parse(one));
+  assert.equal(runs.length, RUNS, 'every run wrote its measure at its exit');
+  return { times: runs.map((run) => run.cpuMs), children: runs.map((run) => run.children), walls, answer };
+}
+
+/** Holds the runs of `timeStops` to the budget: the main thread's CPU at the 90th percentile, and the processes each run
+ * started, whose time that measure does not hold. */
+function withinBudget(t, { times, children, walls }) {
+  const p90 = percentile(times, 0.9);
+  const each = (values) => values.map((ms) => ms.toFixed(0)).join(' ');
+  t.diagnostic(`main-thread CPU p90 ${p90.toFixed(0)} ms, budget ${BUDGET_MS} ms, runs ${each(times)}; wall ${each(walls)} ms; processes started ${children.join(' ')}`);
+  assert.ok(p90 <= BUDGET_MS, `main-thread CPU p90 ${p90.toFixed(0)} ms over ${RUNS} runs is above the budget of ${BUDGET_MS} ms: ${each(times)}`);
+  assert.ok(children.every((count) => count <= CHILDREN), `a run started more than ${CHILDREN} process (${children.join(' ')}): a check that starts one costs time this measure does not see, so the budget counts it`);
 }
 
 test('the budget is at most half the timeout install gives the hook', () => {
@@ -207,22 +248,19 @@ test('the fixture is the lead\'s size', () => {
 });
 
 test('the lead\'s stop, every check doing its whole work, stays within the budget at the 90th percentile', (t) => {
-  const { times, answer } = timeStops(LEAD, leadTranscript);
+  const runs = timeStops(LEAD, leadTranscript);
+  const { answer } = runs;
   assert.equal(answer.decision, 'block', JSON.stringify(answer));
   assert.ok(answer.reason.includes(STALE_MARKER), 'the live-board check searched the transcript and warned');
   assert.ok(answer.reason.includes(SUMMARY_MARKER), 'the summary check read the shown record, searched the transcript and warned');
   assert.ok(answer.reason.includes(RETURN_MARKER), 'the return check read the publish of the page, searched for its link and warned');
   assert.ok(answer.reason.includes(OPEN_STRETCH_MARKER), 'the return\'s stretch check read the whole stretch record and warned');
-  const p90 = percentile(times, 0.9);
-  t.diagnostic(`p90 ${p90.toFixed(0)} ms, budget ${BUDGET_MS} ms, runs ${times.map((ms) => ms.toFixed(0)).join(' ')}`);
-  assert.ok(p90 <= BUDGET_MS, `p90 ${p90.toFixed(0)} ms over ${RUNS} runs is above the budget of ${BUDGET_MS} ms: ${times.map((ms) => ms.toFixed(0)).join(' ')}`);
+  withinBudget(t, runs);
 });
 
 test('a work session\'s stop, its wake check doing its whole work, stays within the budget at the 90th percentile', (t) => {
-  const { times, answer } = timeStops(WORK, workTranscript);
-  assert.equal(answer.decision, 'block', JSON.stringify(answer));
-  assert.ok(answer.reason.includes(WAKE_MARKER), 'the wake check searched the transcript and warned');
-  const p90 = percentile(times, 0.9);
-  t.diagnostic(`p90 ${p90.toFixed(0)} ms, budget ${BUDGET_MS} ms, runs ${times.map((ms) => ms.toFixed(0)).join(' ')}`);
-  assert.ok(p90 <= BUDGET_MS, `p90 ${p90.toFixed(0)} ms over ${RUNS} runs is above the budget of ${BUDGET_MS} ms: ${times.map((ms) => ms.toFixed(0)).join(' ')}`);
+  const runs = timeStops(WORK, workTranscript);
+  assert.equal(runs.answer.decision, 'block', JSON.stringify(runs.answer));
+  assert.ok(runs.answer.reason.includes(WAKE_MARKER), 'the wake check searched the transcript and warned');
+  withinBudget(t, runs);
 });

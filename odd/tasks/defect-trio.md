@@ -77,8 +77,8 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
    never run under a session that is really running a command."
 
 ## Tasks
-- [ ] T1 (kind: build) spec 1: the budget held on the hook's main-thread CPU and its child count; red under load first.
-  Route: inline.
+- [x] T1 (kind: build) spec 1: the budget held on the hook's main-thread CPU and its child count; red under load first.
+  Route: inline. L4.
 - [ ] T2 (kind: build) spec 2: `undoSession` waits for the lock's process and retries on EBUSY; tests first. Route: inline.
 - [ ] T3 (kind: build) spec 3: the land's quiet look reads a busy session's transcript; tests first. Route: inline.
 - [ ] T4 (kind: verify) Codex and the Claude lenses over the code slice; FAILURES `Seen:` lines; PR; ready notice.
@@ -97,3 +97,8 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   the main thread, so on a quiet machine they do not add to his wait, and their CPU varies more under load
   (1187-2327 ms). The wall time of the hook's children is load's, so it is not added; their count is held instead, so
   a check that starts a process is seen. Wall time stays in the diagnostic.
+- L4 (2026-11-02, T1, red first): the wall-time test under ten busy loops (`load.mjs 10 150` beside
+  `node --test bin/reply-budget.test.mjs`) was red, lead p90 9349 ms and work p90 6837 ms. The CPU test, same load:
+  green, lead main-thread p90 1265 ms (wall 4755-7393 ms), work 1030 ms (wall 3725-5986 ms), one process a run; quiet:
+  lead 1421 ms, work 952 ms. Not weakened: with a module that burns 1.5 s on the main thread and starts `git --version`
+  in each hook run, it is red on both, lead p90 2686 ms over 2500 and work "started more than 1 process (2 2 ...)".
