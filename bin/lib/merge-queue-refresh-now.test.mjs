@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { appendReading, newReading } from './channel.mjs';
-import { openSessions } from './merge-queue-refresh-now.mjs';
+import { agentOnlyWaits, openSessions } from './merge-queue-refresh-now.mjs';
 
 // Whose waits `merge-queue --refresh-copy` stops (S5 of odd/tasks/lead-manual-steps.md): the installed copy is the
 // machine's, so the sessions are read from every project's transcripts, and a session opened from the phone, whose
@@ -64,4 +64,23 @@ test("openSessions reads every project's open sessions, each with its main check
 test('openSessions reads none when the projects folder is missing', () => {
   const { home, here } = machine();
   assert.deepEqual(openSessions({ claudeHome: path.join(home, 'none'), home, here, now: () => NOW }), []);
+});
+
+// JH 131 (odd/tasks/defect-trio.md, spec 3): the land's refresh reads a busy session's transcript by the id and folder
+// claude agents gives, as JH 130's was on 2026-11-02 under D--js-harness--claude-worktrees-e3-answers.
+test('agentOnlyWaits reads the transcript claude agents names, by its folder or by its id, and says no when it finds none', () => {
+  const { claudeHome } = machine();
+  const id = 'd7b86460-7e86-436a-90ca-adaad612aa80';
+  const replied = { type: 'assistant', ...base(at(29)), message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'Esperando.' }] } };
+  const folder = path.join(claudeHome, 'projects', 'D--js-harness--claude-worktrees-e3-answers');
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, `${id}.jsonl`), `${waiting('js-harness wait --notice-to 130')}${JSON.stringify(replied)}\n`);
+  assert.equal(agentOnlyWaits({ sessionId: id, cwd: 'D:\\js-harness\\.claude\\worktrees\\e3-answers' }, { claudeHome }), true);
+  assert.equal(agentOnlyWaits({ sessionId: id, cwd: 'D:\\moved' }, { claudeHome }), true, 'found by its id in another folder');
+  // A transcript of open work and no reply after it is a session at work.
+  assert.equal(agentOnlyWaits({ sessionId: 'main-1', cwd: 'D:\\js-harness' }, { claudeHome }), false);
+  // None found, or no id that names a file: at work, since it cannot be read.
+  for (const sessionId of ['ffffffff-0000-4000-8000-000000000000', '../D--js-harness/main-1', undefined]) {
+    assert.equal(agentOnlyWaits({ sessionId, cwd: 'D:\\js-harness' }, { claudeHome }), false, String(sessionId));
+  }
 });

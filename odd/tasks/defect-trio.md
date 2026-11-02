@@ -1,0 +1,203 @@
+# JH 131 · three defects that cost the lead: stop-budget flakes, the sessions stop lock, the busy refresh
+
+Locator: `odd/tasks/defect-trio.md` · Engram mirror: `odd/defect-trio/tasks` · Branch: `worktree-defect-trio`
+Delivery: one pull request to main · Test runner: `node --test`
+
+## Goal
+The reply hook's budget tests pass or fail on the hook's own work whatever the machine's load, `sessions stop` removes a
+session whose job process is still ending, and the land's refresh no longer waits on a session that only waits.
+
+## Why
+Each one costs the lead a red land or a hand step: the two budget tests left PR 736 and PR 740 out of lands while other
+sessions loaded the machine; `sessions stop` refused six sessions since 2026-10-30 because claude's lock still named the
+job's process; and `merge-queue --land --refresh-copy` waited its 30 minutes on sessions that only ran a
+`js-harness wait`, exited 75, and the lead refreshed by hand. All three are fixes, which `rule:growth-limit` lets open.
+
+## Done when
+- `node bin/js-harness.mjs contract check odd/tasks/defect-trio.md` exits 0
+- `node --test bin/reply-budget.test.mjs bin/sessions-background.test.mjs bin/lib/merge-queue-refresh.test.mjs` exits 0
+- `node bin/js-harness.mjs rules check` exits 0
+- `npm run check` exits 0
+- the pull request is named in `## Log`, with Codex and the Claude lenses recorded over its code
+
+## In scope / Out of scope
+- In: `bin/reply-budget.test.mjs`; `undoSession` (`bin/lib/background.mjs`) and its tests in
+  `bin/sessions-background.test.mjs`; the quiet look of `bin/lib/merge-queue-refresh.mjs`, the wiring in
+  `bin/merge-queue.mjs` and their tests; `docs/FAILURES.md`; `docs/sessions/`.
+- Out: the review flow (JH 126, worktree harness-alignment) and `rule/daily-questions` (JH 130): none of their files;
+  `merge-queue --refresh-copy` run alone (`refreshNow`), which already stops waits and refuses any other work.
+
+## Constraints
+- No check weakens: the budget stays 2500 ms at the 90th percentile over ten runs, on the same fixture, with every check
+  doing its whole work — because AGENTS.md holds every check and test.
+- A refresh never runs under a session that is really running a command; a session it cannot read is at work — because
+  a refresh under a running session breaks its hooks (2026-10-28).
+- `sessions stop` kills nothing; it waits for what claude names — because a pid names a process only with its creation
+  time (`bin/lib/process-tree.mjs`), and the lock's pid comes as words.
+- Codex has about 13% of its week left: one Codex review over the code slice, its cost said before it runs.
+
+## Ask me before
+Nothing in this brief is his: three fixes inside shipped behaviour.
+
+## Depth pass
+- 1. Method: a timing test is held on a measure the thing under test controls (CPU time, not wall time under shared
+  load); a race is closed by waiting for the condition the refusal names, bounded, never by a fixed sleep; a busy flag
+  is read from the evidence that sets it, not from a summary of it.
+- 2. Raw material: the two red lands, `odd/tasks/refresh-open-apply.md` L10 (PR 736, Defender at 142 CPU s) and
+  `odd/tasks/advisor-trial.md` L6 (PR 740); the lead's transcript `0f71b2c6`, `sessions stop` results 2026-10-30T19:59Z
+  to 2026-11-01T07:25Z, each "A Claude Code lock on the worktree names a process that is still running (pid N)", and
+  at 05:58:47Z pid 48324 "gone" 11 s after the refusal, then EBUSY once; `claude agents --json --all` at 10:05Z:
+  JH 130 `status: busy, state: working` while its transcript's turn ended at 09:31:10Z and its only open work is the
+  background `js-harness wait --notice-to 130` started 09:30:29Z; the lead, interactive, `idle` with a background wait.
+  The code: `bin/reply-budget.test.mjs:218` (the wall p90), `bin/lib/background.mjs:321` (one `claude rm` right after
+  `claude stop`), `bin/lib/merge-queue-refresh.mjs:28` (busy by `claude agents` alone).
+- 3. The bar:
+  spec 1: `node --test bin/reply-budget.test.mjs`: red under ten busy loops, lead p90 9349 ms, work p90 6837 ms (wall)
+  spec 2: `node --test bin/sessions-background.test.mjs`: none, new behaviour (stop waits for the lock's process)
+  spec 3: `node --test bin/lib/merge-queue-refresh.test.mjs`: none, new behaviour (a busy session that only waits is quiet)
+- 4. Refutation: if the hook's own work were what grew under load, a CPU measure would grow too. Run now: the hook with
+  a preload that writes `process.threadCpuUsage()` at exit, ten runs each, quiet and under ten busy loops: lead main
+  thread 1124-1406 ms quiet and 1139-1358 ms loaded, work session 781-1077 and 874-1015, while wall went from 990-1803
+  to 3403-5464 ms. Whole-process CPU (GC and compile threads) 1187-2327 ms. For spec 2, the six pids the refusals named
+  are all gone (`process.kill(pid, 0)`: ESRCH), and the lead's later retries removed those sessions.
+  Verdict: supports
+- 5. Request: hold the reply hook's 2500 ms p90 on its main thread's CPU time and on the child processes it starts,
+  which load does not move; let `sessions stop` wait, bounded, for the process claude's lock names and retry while
+  claude says files are busy; let the land's refresh read a busy session's transcript and count it quiet only when all
+  its open work is `js-harness wait`, in its turn or in the background.
+  Adds: none
+
+## Specs
+1. "Stop-budget p90 tests flake under load (the merge queue's local run and the gates): they cost red lands. Find them
+   (bin/*stop*budget*.test.mjs or by name), make them deterministic without weakening what they prove."
+2. "`js-harness sessions stop <id>` leaves a live process that holds the worktree lock (seen on JH 114, 121, 123, 124,
+   125, 127), so the worktree cannot be removed after its PR lands."
+3. "`merge-queue --refresh-copy` counts a session that is only waiting (a `js-harness wait` in its background, or
+   waiting in its turn) as busy and exits 75 after 30 minutes; the lead then refreshes by hand. A refresh must still
+   never run under a session that is really running a command."
+
+## Tasks
+- [x] T1 (kind: build) spec 1: the budget held on the hook's main-thread CPU and its child count; red under load first.
+  Route: inline. L4.
+- [x] T2 (kind: build) spec 2: `undoSession` waits for the lock's process and retries on EBUSY; tests first. Route: inline. L5.
+- [x] T3 (kind: build) spec 3: the land's quiet look reads a busy session's transcript; tests first. Route: inline. L6.
+- [x] T4 (kind: verify) Codex and the Claude lenses over the code slice; FAILURES `Seen:` lines; PR; ready notice. L7, L10.
+- [x] T5 (kind: build) spec 3, Codex's recheck on 7f918a9..b9a1512: a wait is told by the command it runs, not a word of
+  it (`bash -c '...; js-harness wait'`); test first. Route: inline. L8.
+- [x] T6 (kind: build) spec 3, Codex on fa61c36..5a411a9: a heredoc is work, an empty segment between `;` or line
+  breaks is nothing; test first. Route: inline. L9.
+- [x] T7 (kind: build) spec 1, the land of PR 750 red in WSL2: the hook's CPU held against reference runs between its
+  runs; red first under load in WSL2. Route: inline. L11.
+- [x] T8 (kind: build) spec 1, gentle-ai's findings on 2459147: the reference count asserted, the divisor bounded. L12;
+  Windows quiet 728 and 569 ms, 2 s more in the hook red at 2754 and 2829 ms.
+- [x] T9 (kind: build) spec 1, Codex's and the resilience lens's finding on 3db0ca0: each run's divisor the median of
+  the reference runs around it, no global cap; two pure tests on `scaledTimes`, red first. Route: inline. L13.
+
+## Log
+- L1 (2026-11-02, his request through the lead's brief
+  `C:\Users\Oficina\.js-harness\background\briefs\2026-11-02T10-02-20-253Z-97cbb19c.md`, "JH 131 · fix three defects that
+  keep costing the lead: stop-budget flakes, the sessions stop lock, the busy refresh"; the specs above are its words).
+- L2 (2026-11-02, searched before writing): `bin/*budget*` gives only `bin/reply-budget.test.mjs`, the two p90 tests;
+  `docs/FLAKY.md` holds no entry for it; `docs/FAILURES.md` has no entry for any of the three symptoms (grep for
+  `reply-budget`, `p90`, `sessions stop`, `still running`, `busy`). Reused: `parseTranscript`/`sessionFacts`
+  (`bin/lib/sessions.mjs`) for open work and the turn, `isWaitCommand` (`bin/lib/wake.mjs`), `saidBy` and `lostSaid`
+  (`bin/lib/background.mjs`), the `exists` idiom of `bin/lib/launcher.mjs:175`.
+- L3 (2026-11-02, decided): the budget measure is the main thread's CPU (`process.threadCpuUsage`, Node 24, which
+  `package.json` engines and both CI workflows hold), not the whole process's: the GC and compile threads run beside
+  the main thread, so on a quiet machine they do not add to his wait, and their CPU varies more under load
+  (1187-2327 ms). The wall time of the hook's children is load's, so it is not added; their count is held instead, so
+  a check that starts a process is seen. Wall time stays in the diagnostic.
+- L4 (2026-11-02, T1, red first): the wall-time test under ten busy loops (`load.mjs 10 150` beside
+  `node --test bin/reply-budget.test.mjs`) was red, lead p90 9349 ms and work p90 6837 ms. The CPU test, same load:
+  green, lead main-thread p90 1265 ms (wall 4755-7393 ms), work 1030 ms (wall 3725-5986 ms), one process a run; quiet:
+  lead 1421 ms, work 952 ms. Not weakened: with a module that burns 1.5 s on the main thread and starts `git --version`
+  in each hook run, it is red on both, lead p90 2686 ms over 2500 and work "started more than 1 process (2 2 ...)".
+- L5 (2026-11-02, T2, red first): four unit tests of `undoSession` (`bin/lib/background.test.mjs`) failed on the missing
+  exports, and the CLI test "sessions stop waits for the job's process claude's lock names after the stop" (a fake claude
+  whose stop leaves a real process alive 2 s and whose rm refuses with claude's words while it runs) exited 1, not 0.
+  Green after `removeJob`: 11 of 11, and `node --test` over `bin/sessions-background.test.mjs`, `bin/sessions.test.mjs`,
+  `bin/lib/background.test.mjs`, `bin/install-session-messages.test.mjs` 299 of 299. The fake's first run also showed
+  the EBUSY side: its process, started in the test's folder, kept that folder from being removed (EPERM), so it starts in
+  the temp folder. `uninstall machine` undoes each session through `undoSession` too, so it waits the same way.
+- L6 (2026-11-02, T3, red first): `onlyWaits` (`bin/lib/merge-queue-waits.mjs`) failed on the missing export; three tests
+  of `bin/lib/merge-queue-refresh.test.mjs` (atWorkIn, waitForQuiet, refreshAfterLand with `onlyWaits`) failed 25 of 28;
+  the land test `--land --refresh-copy refreshes at once beside a busy session whose transcript only waits` was red with
+  the wiring line of `bin/merge-queue.mjs` taken out and green with it. Green: the three refresh test files 42 of 42; with
+  the conventions, `bin/merge-queue.test.mjs` and `bin/lib/wake.test.mjs`, 200 of 200. The rule: a busy session only
+  waits when every open work of its transcript is a `js-harness wait` and it is between turns with one open, or in its
+  turn blocked in one; anything else, a turn with no call open, or a transcript not found, is at work. Both looks, the
+  30-minute wait and the one under the gate lock, read it. Left as before: such a session's wait keeps running from the
+  old copy through the refresh, as the idle lead's background wait already did; `merge-queue --refresh-copy` alone
+  still stops waits and tells their sessions.
+- L7 (2026-11-02, T4, the reviews of 76f1294..7f918a9): the Claude lenses reliability, resilience and readability,
+  0 findings each (about 28,000 input tokens a lens). Codex (be294ca..7f918a9, 2 parts, 265,080 input tokens) found
+  three, each checked in the code before the fix: P1, `onlyWaits` took a wait anywhere in a command line for a wait
+  (`isWaitCommand`, `bin/lib/wake.mjs:20`, matches a substring), so `js-harness wait --for 1; npm run check` only
+  waited; P1, it read only the last open call (`pendingCall`, `bin/lib/sessions.mjs:719`), so a check run in parallel
+  before a wait was not seen; P2, the CLI stop test's fake process lived a set 2 s, which a slow first `claude rm` could
+  outlast. Fixed: `waitAlone` reads the line with `shellWords` and takes only `cd`, the wait, `2>&1` and a pipe into
+  `tail` or `head` (the most common shapes of the waits in four days of this machine's transcripts: `cd <dir> && js-harness wait ...`
+  and `js-harness wait ... 2>&1 | tail -3`; a line that writes a note before its wait counts as work); every open call
+  of the transcript must be such a wait; the fake's process ends when rm has refused for it. Red first: the two new
+  `onlyWaits` tests failed (true for false), green after, 13 of 13; the stop test's change is to the test itself, not
+  shown red (a slow machine is needed).
+- L8 (2026-11-02, T5): the reviews of b9a1512 (7f918a9..b9a1512): the lenses reliability and resilience, 0 findings
+  (about 8,600 input tokens each); Codex's recheck (85,136 input tokens): P1 a and P2 fixed, P1 b open, as
+  `bash -c 'npm run check; js-harness wait --for 1'` kept the shell's body in one word and `isWaitCommand` found the
+  wait in it. Fixed: `runsWait` takes a simple command for a wait only by its executable and verb (`js-harness wait`,
+  `node <dispatcher> wait`, `wait.mjs`). Red first: the cases `bash -c`, `sh -c`, `echo js-harness wait` and
+  `env X=1 js-harness wait` failed (true for false); green after, the three refresh test files 44 of 44.
+  The lenses on b9a1512..5a411a9: 0 findings (about 6,000 input tokens each). Codex would not recheck a second time
+  and asked for `--again` from fa61c361.
+- L9 (2026-11-02, T6): Codex on fa61c36..5a411a9 `--again` (241,056 input tokens), two P2, both read in
+  `shellWords` (`bin/lib/guard.mjs:325-343`): a heredoc and its body leave no word, so `$(npm run check)` in one passed
+  for a wait; and a line break or `;` before or after a wait made an empty segment, refused, so such a wait still held
+  the land its 30 minutes. Fixed: a line with `<<` is work; an empty segment between `;` (a line break is one) or the
+  line's ends is skipped, and one beside `&&` or `|` is still refused. Red first: `js-harness wait --notice-to 130\n`
+  failed (false for true); the heredoc case was not shown red alone. Green after: the three refresh test files 44 of 44.
+- L10 (2026-11-02, T4): Codex's recheck of 5a411a9..f691a9c (55,508 input tokens): correct, both P2 fixed; the lenses
+  reliability and resilience on it, 0 findings. Every code commit has a Codex and a lens record (be294ca..7f918a9,
+  7f918a9..b9a1512, fa61c36..5a411a9 `--again`, 5a411a9..f691a9c; lenses over each). `js-harness contract run`: `met`.
+  gentle-ai's Stop hook offered the whole branch (base 76f1294) three times: its status was read, nothing started.
+  Pull request jsaristi/js-harness#750, branch `worktree-defect-trio`.
+- L11 (2026-11-02, T7, the lead's brief after a restart: "PR 750 was red on this machine in the merge queue"): the
+  gate's run cbfb161f (12:16Z, candidate main 5e8872b with PR 750) failed in WSL2 on one test, the lead's stop of
+  `bin/reply-budget.test.mjs`; PR 749 changed the review flow only (`git diff --stat 76f1294c origin/main`), so the
+  failure is this change's. The depth pass's refutation (item 4) was measured on Windows only, and it does not hold in
+  WSL2: the test alone there took a main-thread CPU p90 of 976 ms, in the whole suite 2101 ms, beside 24 busy loops
+  2768 ms (red, and the work stop 2837 ms). Reference runs of the hook's main work (the transcript read, each line
+  parsed, the text searched), measured between the hook's runs, grew the same way: the ratio was 1.37 to 1.71 quiet
+  and 1.21 to 1.54 in the suite for the lead, 1.08 to 1.37 and 0.84 to 1.27 for the work stop. Decided: each run's CPU
+  over the mean of the reference runs before and after it, times 450 ms (the reference's quiet median: 405 ms on
+  Windows, 443 ms in WSL2, the larger taken), at the 90th percentile, against the same 2500 ms; the larger of the two
+  neighbours read low on a 905 ms reference outlier, and the median of all of them read 1513 ms for a work stop when
+  load ended halfway. Green: Windows quiet, lead 724 and work 518 ms; WSL2 beside 24 busy loops, 797 and 770 ms (the
+  measured CPU up to 2.3 s). Not weakened: 2 s more of main-thread work in each hook run, no process added, is red on
+  both, 3073 and 2886 ms; 1.5 s and a `git --version` is red on the process count. The machine's Windows hook took
+  1.1 to 1.4 s before the restart and 0.64 to 0.67 s after it, so even quiet CPU is not one machine's constant.
+- L12 (2026-11-02, T8): the reviews of 2459147 (43aaff9..2459147): Codex correct (65,281 input tokens); the lenses
+  reliability and resilience 0 findings; gentle-ai (lineage review-07233a25fb153da1, its reliability lens) approved and
+  acknowledged, with three non-blocking findings: the reference count is not asserted (a missing one reads as NaN over
+  the budget); one slow reference outlier scales the hook down up to about twice and could hide a regression; the
+  reference runs add about RUNS + 1 parses of 60 MB to each test. Taken as Codex's: T8 asserts RUNS + 1 references and
+  bounds each run's divisor at 1.5 times their median; the cost is kept (about 5 s a test), said here.
+- L13 (2026-11-02, T9): the reviews of 3db0ca0 (2459147..3db0ca0): Codex incorrect, P2 (52,408 input tokens): the cap
+  at 1.5 times the median of all references scores a hook under load that comes for a minority of the runs at up to
+  twice its work (seven references at 450 ms and four at 1350 cap the divisor at 675); the resilience lens the same
+  finding, the reliability lens 0. gentle-ai's start for 3db0ca0 failed before it began (`--cwd` in single quotes run
+  through cmd: "The filename, directory name, or volume label syntax is incorrect"); its lineage holds no entry, and
+  the fix is reviewed in its place. T9: `scaledTimes`, a pure function, divides each run by the true median of the
+  reference runs from i - 1 to i + 2, which follows load that lasts and leaves one slow reference run out; red first
+  on both cases (2667 ms for 2000, 1500 for 2250), then green; the file 6 of 6 on Windows quiet, 753 and 569 ms, and in
+  WSL2 beside 24 busy loops, 1135 and 631 ms where the hook measured up to 4160 (the load ended during the second).
+- L14 (2026-11-02, T9): the reviews of 93c6ec6: Codex correct on 3db0ca0..93c6ec6 (25,542 input tokens), its P2
+  fixed; the lenses reliability and resilience 0 findings; gentle-ai (lineage review-a8cff5883f56f249, 2459147..93c6ec6,
+  its reliability lens) approved and acknowledged with one suggestion: the slow-reference case built its times from
+  RUNS against eleven fixed references, so a change of RUNS would break the case, not the code. Taken: its times now
+  follow its references (7a8ea8c). Its reviews: Codex correct (32,962 input tokens); the reliability lens 0 findings;
+  gentle-ai (lineage review-eed140552615f5f7) approved with no finding and acknowledged.
+
+## Next step
+None in this session: push, `js-harness notify --to orchestrator --kind ready --pr 750`, then `--kind closed` with
+`docs/sessions/2026-11-02-jh-131-fix-stop-budget-flakes-the-stop-lock-and-the-busy-refresh.md`. PR 750 lands by the lead's
+merge queue.

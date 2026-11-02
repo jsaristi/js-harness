@@ -207,6 +207,13 @@ export const RULES = [
     "review": "2026-11-16"
   },
   {
+    "id": "escalation-model",
+    "subject": "the strongest model a change passes to when three reviews of it did not settle it",
+    "owner": "sebastian",
+    "since": "2026-11-02",
+    "value": "claude-fable-5-1"
+  },
+  {
     "id": "fixed-load-budget",
     "subject": "the fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns",
     "owner": "sebastian",

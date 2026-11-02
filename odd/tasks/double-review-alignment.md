@@ -289,11 +289,11 @@ notice at 2% left and his decision on the reset (L18). T4 is done (85d8ee7f, L19
 T7 is done (64a588eb, L20) on `feat/review-request`, PR 748. T8 is split in three commits on the same branch:
 T8b f58c4027 (the recheck blocks a regression the correction brought, prompt v2) and T8a 071dc6d7 (`double-review
 answer <run id> <reviewer> --taken --rebutted --why`, and `tally` rows per reviewer of code) are committed, not yet
-reviewed. T8c 5c67d309 (the lenses recheck their earlier findings, `recheckOf`) is committed too. T8 is done and reviewed (L21); PR 748 landed T7 only (main 47d96a3), so T8 goes in its own PR from
-`feat/review-answers`. Next, in order, each a slice with Codex and the lenses: T9, T2; D5's two exemptions (Claude 6 of L12) are
+reviewed. T8c 5c67d309 (the lenses recheck their earlier findings, `recheckOf`) is committed too. T8 is done and reviewed (L21), PR 749 from `feat/review-answers` (left out of one land by a timing test under
+load, L22). T9 is done and reviewed (L22) on `rule/escalation-model`, stacked on 749, in its own PR. Next, a slice with Codex and the lenses: T2; D5's two exemptions (Claude 6 of L12) are
 kept in T4's text, since a question of fact proposes nothing and a reviewed text named by path is not read again, and
 the report says so for him to change. T6 keeps T2's verifier, older text 16 and the report of how to try it.
-Meter 89% weekly; floor 2% left.
+Meter 2% weekly after his reset of 2026-11-02 (2 credits left); floor 2% left.
 The gentle-ai Stop hook: status only, start nothing. Never edit a tracked file while a Codex review runs (L11).
 
 ## Eval plan
@@ -325,9 +325,10 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   evidence, recorded, and a tally gives each reviewer taken and rebutted; Codex's recheck blocks a regression the
   correction brought into what it changed (a seeded test); the lenses get the recheck; spec 7. Done: f58c4027,
   071dc6d7, 5c67d309, fixes 4bf5ee75 and fb1ff505; branch `feat/review-answers` (L21).
-- [ ] T9 (kind: build) Point 4: at most three reviews of one change (the recheck allows a second recheck, not a
+- [x] T9 (kind: build) Point 4: at most three reviews of one change (the recheck allows a second recheck, not a
   third); past them `codex-review` refuses, says the problem and what is open, and names the strongest model, one
-  rule value (`rules change escalation-model`, today `claude-fable-5-1`); spec 8.
+  rule value (`rules change escalation-model`, today `claude-fable-5-1`); spec 8. Done: 462f9d69 (the register's
+  room), 2d07711c (the rule and the bound), fix 30197b3a; branch `rule/escalation-model`, stacked on PR 749 (L22).
 - [x] T5 (kind: build) Older texts 5, 6, 8, 9, 10, 12; spec 5; 2cb04248, 5cbbca4c and the commit of `sync`'s offer.
 - [ ] T6 (kind: verify) Reviews (Codex, lenses, an independent verifier for T2, a guard's input, and T3, two
   processes at once), gate, PR, older text 16; the report tells him how to try it (L1); spec all.
@@ -485,3 +486,20 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   its test; Codex over cbfd282..7af1fcd correct at 0.98 (48,259 input tokens), and readability's recheck, the T8c
   path in a real run, found it fixed. The lead (05:48): PR 748 landed T7 alone (main 47d96a3, checked with `gh pr
   view 748`: merged at head 026cc2a), so T8 moved to `feat/review-answers` with main merged in, for its own PR.
+- L22 (2026-11-02, evidence): T9 done. The coverage register sat at 999 of 1000 lines, with no room for a new rule's
+  control (`rules coverage --refresh` freed none; the size convention has no data exemption): `writeCoverage` now writes
+  a control that fits in 120 characters on one line (462f9d69), 852 lines; the scan of restated values leaves the
+  register out like rules-data.mjs, since on one line an owed control's id and day matched a pattern, as three planted
+  breaks already did on main (counted with a script over both registers). `rules change escalation-model` (2d07711c):
+  his words at lines 49467 and 49690. The bound: from the head of a recheck that left findings open, a second recheck
+  of those alone, the third review; past it refused, with what is open and the model. The push row keeps his decision
+  of 2026-10-15, a warning and no refusal. The first commit was red once (gate run 41438460265: the push row read a
+  second recheck as a correction owed), read and fixed before the second try. Reviews: Codex 6a5c626..2d07711, 2 parts,
+  297,411 input tokens: incorrect at 0.95, one P2, the third review did not raise the problem when it ended, only a
+  fourth did; lenses reliability, readability, risk: readability one WARNING, true, a string replacement in
+  `writeCoverage` would rewrite `$&` in a planted break; gentle-ai (lineage review-0bb14477be51f1f7, review-reliability)
+  approved and acknowledged. Both taken, fixed in 30197b3a, answered with `double-review answer`; Codex's recheck
+  1 fixed (0.97, 43,964 input tokens), readability's recheck 1 fixed, reliability 0. PR 749 was left out of a land by
+  reply-budget's p90 in WSL2; T8 touches no module the reply hook imports, and the test alone here passed (p90 2220
+  and 1737 ms of 2500); told to the lead (06:38). The lead (06:11): he reset Codex's weekly limit; the meter read 2%
+  used and 2 credits left.

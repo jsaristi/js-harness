@@ -325,6 +325,29 @@
       "by": "command"
     }
   },
+  "escalation-model": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "pasarlo a un modelo mas inteligente aprovechando que esta semana sale Fable 5.5",
+        "date": "2026-11-01",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 49467
+      },
+      {
+        "quote": "Listo, entonces continua solo unas 2 horas",
+        "date": "2026-11-01",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 49690
+      }
+    ],
+    "reading": "His addition to question 150 (spec 8 of odd/tasks/double-review-alignment.md, point 4 of its redesign): at most three reviews of one change, and where the third still finds a real failure, nothing more is reviewed, the problem is raised to him with what is happening, and the work passes to a more intelligent model. That model is one value: the strongest this machine knows today, claude-fable-5-1. His \"Fable 5.5\" is his word, not a model this machine knows yet; when it ships, it takes this value by a change of it.",
+    "accepted": "He typed \"Listo, entonces continua solo unas 2 horas\" at line 49690 of 0f71b2c6, answering the lead's question at line 49684, which asked whether he approved the redesign of question 152 and said that a written yes lets JH 126 record the rules and build points 2 to 5; point 4 of that redesign is this reading.",
+    "checked": {
+      "date": "2026-11-02",
+      "by": "command"
+    }
+  },
   "fixed-load-budget": {
     "kind": "words",
     "quotes": [

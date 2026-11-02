@@ -26,7 +26,7 @@ import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
 import { refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
 import { refreshAfterLand } from './lib/merge-queue-refresh.mjs';
 import { staleBin, UNSHIPPED_GLOBS } from './lib/merge-queue-stale-bin.mjs';
-import { refreshNowRun } from './lib/merge-queue-refresh-now.mjs';
+import { agentOnlyWaits, refreshNowRun } from './lib/merge-queue-refresh-now.mjs';
 import { unansweredApply } from './lib/refresh-consent.mjs';
 import { pnpmBinDir } from './update.mjs';
 import { claudeRunner, listAgents } from './lib/background.mjs';
@@ -794,7 +794,7 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
     const list = deps.listAgents ?? (() => listAgents(claudeRunner({ env, timeout: 15000 })));
     exit = await refreshAfterLand({
       code, log, refresh: deps.refreshCopy ?? refreshInstalledCopy, versionOf: (sha) => versionAt(sha, args.cwd, run), home: harnessHomeOf(env), cwd: args.cwd, env, run, list,
-      unanswered: (sha) => unansweredApply({ home: harnessHomeOf(env), cwd: args.cwd, run, sha, landed: true }),
+      unanswered: (sha) => unansweredApply({ home: harnessHomeOf(env), cwd: args.cwd, run, sha, landed: true }), onlyWaits: deps.onlyWaits ?? ((agent) => agentOnlyWaits(agent, { env })),
       now, sleep: deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))), stdout: printOut, stderr: printErr,
     });
   }

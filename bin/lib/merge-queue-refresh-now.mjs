@@ -12,7 +12,7 @@ import { appendNotice, newNotice, readNotices } from './channel.mjs';
 import { defaultBranchOf } from './default-branch.mjs';
 import { harnessHome } from './home.mjs';
 import { refreshNow } from './merge-queue-refresh.mjs';
-import { readCopy } from './merge-queue-waits.mjs';
+import { onlyWaits, readCopy } from './merge-queue-waits.mjs';
 import { listCommandLines } from './process-list.mjs';
 import { killProcesses, takeSnapshot } from './process-tree.mjs';
 import { unansweredApply } from './refresh-consent.mjs';
@@ -60,6 +60,35 @@ export async function refreshNowRun(args, { run = spawnSync, env, now, stdout, s
     main, copySha: binDir ? namedSha(binDir) : null, look, stop: (targets) => killProcesses(targets, { spawnSync: run }), sessions, refresh,
     versionOf, tell, home, cwd: args.cwd, env, sleep, stdout, stderr, unanswered: (sha) => unansweredApply({ home, cwd: args.cwd, run, sha }),
   });
+}
+
+/** A session id as claude writes one, which names a transcript file and nothing else. */
+const SESSION_ID = /^[0-9A-Za-z][0-9A-Za-z-]*$/;
+
+/** Whether the session `agent` of a `claude agents` listing only waits (`onlyWaits`, ./merge-queue-waits.mjs), read from
+ * its transcript under `claudeHome`: `projects/<slug of its folder>/<session id>.jsonl`, else the file of that id in any
+ * project's folder, `claudeHome` being Claude Code's of `env` by default. A session whose transcript cannot be found or
+ * read is at work: `false`. */
+export function agentOnlyWaits(agent, { env = process.env, claudeHome = env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
+  const id = agent?.sessionId;
+  if (typeof id !== 'string' || !SESSION_ID.test(id)) return false;
+  const projects = path.join(claudeHome, 'projects');
+  const candidates = typeof agent.cwd === 'string' ? [path.join(projects, projectSlug(agent.cwd), `${id}.jsonl`)] : [];
+  try {
+    for (const name of fs.readdirSync(projects)) candidates.push(path.join(projects, name, `${id}.jsonl`));
+  } catch {
+    // No projects folder: only the first place is tried.
+  }
+  for (const file of candidates) {
+    let text;
+    try {
+      text = readFile(file);
+    } catch {
+      continue;
+    }
+    return onlyWaits(text);
+  }
+  return false;
 }
 
 /** The folder the session of transcript `text` ran in: the first entry's `cwd` that names one, or null. */

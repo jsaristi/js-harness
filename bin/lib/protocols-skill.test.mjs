@@ -132,7 +132,7 @@ test('a proposal reaches the user only after two readers, and a handoff names th
   assert.match(asking, /Everything that proposes something, whether a plan, a design before it is built, an analysis with figures, a protocol or a document put to the user, asked or reported, first passes a Claude reader and a Codex reader, blind, on one frozen copy/);
   assert.match(asking, /only the user's typed "no quiero la revisión" skips it\./);
   assert.match(asking, /Code passes its own pair, Codex and the Claude lenses \(section 3\), judged against what was asked\./);
-  assert.match(asking, /In both, a review that finds nothing approves at once; a correction gets a confirming review; at most three reviews, and where the third still finds a real failure the user gets it as a problem and the work passes to a stronger model\./);
+  assert.match(asking, /In both, a review that finds nothing approves at once; a correction gets a confirming review; at most three reviews, and where the third still finds a real failure the user gets it as a problem and the work passes to the strongest model the rules name, `rule:escalation-model`\./);
   assert.match(asking, /Not for a question of fact \(a figure or an outcome looked up, nothing proposed\), nor for a step or a choice whose reviewed text the question names by path\./);
   assert.ok(handoff.includes('- A plan or a design handed on has passed its double review first (`rule:double-review`, section 1).'), handoff);
   assert.ok(handoff.includes('- What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in their language as a visual, didactic page (`rule:reports-spanish-visual`)'), handoff);
