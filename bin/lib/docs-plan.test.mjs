@@ -130,6 +130,16 @@ test('every slice but the first opens with the entry document, counted in its bu
   assert.deepEqual(slices.map((slice) => slice.oversized === true), [false, false, true, true]);
 });
 
+test('the opening counted from the second slice on splits a capability that would overflow it, by file and by group', () => {
+  const files = [file('docs/README.md', 20), file('bin/a.mjs', 45), file('bin/b.mjs', 45), file('bin/c.mjs', 75)];
+  const capabilities = [{ title: 'AB', today: ['bin/a.mjs', 'bin/b.mjs'], proof: [] }, { title: 'C', today: ['bin/c.mjs'], proof: [] }];
+  const plan = readingPlan({ files, capabilities, imports: {}, budget: 100, preamble: 'docs/README.md' });
+  const slices = plan.tiers[0].slices;
+  assert.deepEqual(slices.map(paths), [['docs/README.md'], ['bin/a.mjs'], ['bin/b.mjs'], ['bin/c.mjs']]);
+  assert.deepEqual(slices.map((slice) => slice.tokens), [20, 65, 65, 95]);
+  assert.ok(slices.every((slice) => slice.tokens <= 100 && slice.oversized !== true));
+});
+
 test('slices are numbered across the tiers, and the plan counts the files and the tokens', () => {
   const files = [file('README.md', 5), file('bin/a.test.mjs', 5), file('evals/x.mjs', 5)];
   const plan = readingPlan({ files, capabilities: [], imports: {}, budget: 100 });

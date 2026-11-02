@@ -148,8 +148,8 @@ function parseArgs(argv) {
 }
 
 /** `js-harness docs plan` prints the reading plan of the repository `cwd` is in and exits 0; `docs check` runs the
- * `docs` row alone and exits 1 when it fails. Exit 1 too where git cannot list the files; 2, with the usage on stderr,
- * for an argument it does not know. */
+ * `docs` row alone and exits 1 when it fails. Exit 1 too where git cannot list the files, and from `plan` where a
+ * tracked file cannot be read, after the plan; 2, with the usage on stderr, for an argument it does not know. */
 export async function docsMain(argv, { cwd = process.cwd(), stdout = console.log, stderr = console.error, spawn = spawnSync, readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
   let parsed;
   try {
@@ -177,5 +177,7 @@ export async function docsMain(argv, { cwd = process.cwd(), stdout = console.log
   const plan = readingPlan({ files: corpus.files, capabilities: corpus.capabilities, imports: corpus.imports, budget: parsed.budget, preamble: ENTRY_PATH });
   if (parsed.json) stdout(JSON.stringify(plan, null, 2));
   else for (const line of renderPlan(plan)) stdout(line);
-  return 0;
+  if (corpus.unreadable.length === 0) return 0;
+  stderr([...corpus.unreadable, 'the plan counts it as empty, so its figures are short'].join('\n'));
+  return 1;
 }

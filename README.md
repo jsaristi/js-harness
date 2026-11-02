@@ -1129,8 +1129,8 @@ task boxes) and the rest. Every slice after the first opens with the entry, coun
 from the tracked files each time and never stored. `docs check` runs the `docs` row of `check` alone: in
 the harness's own repository it fails where `docs/README.md` is missing, a file or folder of `docs/` has
 no row under its `## Index`, a tracked file cannot be read, or one file alone outgrows a slice; in any
-other project it says so and exits 0. Exit 1 on a failing row or where git cannot list the files; 2 on a
-usage error.
+other project it says so and exits 0. Exit 1 on a failing row, where git cannot list the files, or from
+`plan` where a tracked file cannot be read, named on stderr after the plan; 2 on a usage error.
 
 ```console
 $ js-harness docs plan

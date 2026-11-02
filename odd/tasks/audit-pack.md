@@ -141,7 +141,7 @@ refuting verdict, a change of the plan's order or a step that touches his decisi
   it in fewer steps, ties to the first; one none reaches closes the tier. One file over the budget is its own slice,
   flagged, never cut, and fails the row at `SLICE_BUDGET` (none today). Every slice after the first opens with
   `docs/README.md`, counted in its budget, which gives the reading method (spec 1). `docs plan` exits 0 with any
-  budget; 1 only when git cannot list the files. Today none, new behaviour; the core tier, re-measured under this definition
+  budget; 1 when git cannot list the files or one cannot be read (Codex, T3). Today none, new behaviour; the core tier, re-measured under this definition
   at T3, does not fit a 1M window (1,331,453 tokens for its Markdown and source alone).
   spec 3: `node bin/js-harness.mjs docs index`: for each capability, its explicit links first, from what its own text
   cites (an `odd/tasks/` or `docs/` path with the section it quotes, a `rule:<id>`, a failure id of
@@ -393,3 +393,8 @@ up to `f2ca50f8` (branch `audit-pack-docs`) and PR 2 this branch on it; Codex an
 (base: `f2ca50f8`), their cost said first; push both, open both, `js-harness notify --to orchestrator --kind ready
 --pr <n>` for each. Then T4 (`docs index`, `bin/lib/docs-cross.mjs`), T5 (SPEC's record table, `docs/RECORDS.md`),
 T6 (the close, with the model he means by "Fable 5.5" asked of the lead).
+- Update ~12:10Z: T3 committed (`c51daf56`, gate green). Its reviews over `f2ca50f..c51daf5`: the Claude lenses
+  (reliability, readability, resilience) 0 findings, about 31,500 input tokens each; Codex, 3 parts, 338,437 input
+  tokens, 2 P2 taken and fixed test first: `docs plan` now names an unreadable file and exits 1, and the packer
+  asks again whether a group fits after closing the first slice, which brings in the opening. Next: the fix's
+  commit, its Codex review (base `c51daf56`), push, the two pull requests.

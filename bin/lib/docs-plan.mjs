@@ -149,22 +149,22 @@ function pack(groups, budget, preamble, first) {
     current.tokens += one.tokens;
   };
   const fits = (tokens) => (current ? current.tokens : reserve()) + tokens <= budget;
+  // `fits` is asked again after each close: closing the plan's first slice brings in the opening, so what fitted an
+  // empty first slice may not fit an empty second one.
   for (const one of groups.filter((candidate) => candidate.files.length > 0)) {
-    if (reserve() + one.tokens <= budget) {
-      if (!fits(one.tokens)) close();
+    if (!fits(one.tokens)) close();
+    if (fits(one.tokens)) {
       add(one);
       continue;
     }
-    close();
     for (const piece of one.files) {
-      if (reserve() + piece.tokens > budget) {
-        close();
-        const slice = open();
-        slices.push({ ...slice, tokens: slice.tokens + piece.tokens, groups: [group(one.name, [piece])], oversized: true });
+      if (!fits(piece.tokens)) close();
+      if (fits(piece.tokens)) {
+        add(group(one.name, [piece]));
         continue;
       }
-      if (!fits(piece.tokens)) close();
-      add(group(one.name, [piece]));
+      const slice = open();
+      slices.push({ ...slice, tokens: slice.tokens + piece.tokens, groups: [group(one.name, [piece])], oversized: true });
     }
   }
   close();

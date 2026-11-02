@@ -93,6 +93,20 @@ test('docs plan --budget sets the slice budget, and --json prints the plan whole
   });
 });
 
+test('docs plan names a tracked file it cannot read and exits 1, since its figures would undercount', async () => {
+  await withRepo(REPO, async (dir) => {
+    const out = [];
+    const err = [];
+    const readFile = (file) => {
+      if (file.endsWith('x.mjs')) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+      return fs.readFileSync(file, 'utf8');
+    };
+    const code = await docsMain(['plan'], { cwd: dir, stdout: (line) => out.push(line), stderr: (line) => err.push(line), readFile });
+    assert.equal(code, 1);
+    assert.equal(err.join('\n'), 'bin/lib/x.mjs cannot be read: permission denied\nthe plan counts it as empty, so its figures are short');
+  });
+});
+
 test('docs refuses an argument it does not know with exit 2 and the usage', async () => {
   for (const argv of [['plan', '--nope'], ['nope'], [], ['plan', '--budget', 'many']]) {
     const { code, err } = await run(argv, os.tmpdir());
