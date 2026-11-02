@@ -1115,6 +1115,35 @@ cost: measured once, about 116k tokens of Claude and 55k of Codex, about 1% of C
 only the user's own words skip it, "no quiero la revisión", recorded with js-harness double-review skip
 ```
 
+### js-harness docs
+
+What a model or a person starting cold reads to audit the harness whole; `docs/README.md` is its entry.
+`docs plan` prints every file git tracks in exactly one slice of at most 400,000 estimated tokens
+(characters over four), 40% of a 1M window so the auditor keeps room to reason and write, in four tiers
+read in order: the core (the entry, the map and the other documents of the root and `docs/`, then the
+source of `bin/` beside its capability of `docs/SPEC.md`, a module no capability names going with the
+capability whose files import it in the fewest steps), the tests (beside the capability whose proof or
+source names them), the feature documents (each of `odd/tasks/` with its state, open or closed, from its
+task boxes) and the rest. Every slice after the first opens with the entry, counted in its budget.
+`--budget <n>` sizes the slices for another window; `--json` prints the plan whole. The plan is computed
+from the tracked files each time and never stored. `docs check` runs the `docs` row of `check` alone: in
+the harness's own repository it fails where `docs/README.md` is missing, a file or folder of `docs/` has
+no row under its `## Index`, a tracked file cannot be read, or one file alone outgrows a slice; in any
+other project it says so and exits 0. Exit 1 on a failing row, where git cannot list the files, or from
+`plan` where a tracked file cannot be read, named on stderr after the plan; 2 on a usage error.
+
+```console
+$ js-harness docs plan
+Reading plan of 1,434 tracked files, 5,773,980 estimated tokens (characters over four), in 18 slices of at most 400,000
+Read the tiers in order, one slice a context: the core first, then the tests, the feature documents and the rest. --json gives the plan whole.
+
+core: 4 slices, 1,371,082 estimated tokens
+  slice 1, 374,950 tokens
+    orientation (255,703): docs/README.md, docs/SPEC.md, AGENTS.md, CLAUDE.md, docs/ROADMAP.md, ...
+$ js-harness docs check
+PASS  docs  19 entries of docs/ indexed; 1,434 tracked files in 18 slices of at most 400,000 estimated tokens (js-harness docs plan)
+```
+
 ### js-harness lens-review
 
 The Claude half of the two reviews every slice gets; Codex is the other. The session picks one to four

@@ -160,4 +160,4 @@ leads other sessions; you rarely type those by hand. The README lists all of the
 
 | For you | For hooks and the orchestrator |
 |---|---|
-| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, failures, rules, codex-review, lens-review, codex-meter, functions, remote, memory, backup, fetch, clean, summary | guard, reply, resume, permit (hooks); notify, wake, sessions, wait, loop, merge-queue, report, throughput, windows-daily, unseen, subagents, audit, quiet (the orchestrator and its sessions) |
+| check, gate, init, onboard, install, sync, migrate, uninstall, status, update, upgrade, doctor, stack, progress, contract, failures, rules, codex-review, lens-review, codex-meter, docs, functions, remote, memory, backup, fetch, clean, summary | guard, reply, resume, permit, commit-msg, status-line (hooks); notify, wake, sessions, wait, loop, merge-queue, report, throughput, windows-daily, unseen, subagents, audit, quiet, double-review, stretch, template, host-watch (the orchestrator and its sessions) |

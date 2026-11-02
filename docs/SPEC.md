@@ -913,6 +913,15 @@ The administrator install is `bin/lib/status-line-install.ps1`, run by hand in a
 **Discarded:** A description of the pieces as they stand in place of the requirements: it reads as today's architecture, and a rebuild would copy it; the map under "The architecture" is kept apart from the entries and says it is today's. Principles alone: nothing can be rebuilt from a philosophy.
 **Today:** `docs/SPEC.md`, `bin/lib/spec.mjs`, `bin/check.mjs`
 
+### A model starting cold can audit the whole harness
+
+**Problem:** The owner wants the strongest model to audit the whole project in depth, saying what is right, wrong, improvable, redundant, blocking or unnecessary (`odd/tasks/audit-pack.md`, L1); the tracked files hold about 5.8M estimated tokens, no context holds them, and nothing told a cold reader which document is in force and which is history.
+**Requirement:** `docs/README.md` is the entry: what the project is, an index under `## Index` giving every file and folder of `docs/` one of four statuses (live, frozen, historical, closed) and, when it is no longer live, what supersedes it, and the reading method. `js-harness docs plan` prints every tracked file in exactly one slice of at most 400,000 estimated tokens, in four tiers (core, tests, feature documents, the rest), the source beside its capability here and each feature document with its state from its task boxes, every slice after the first opening with the entry. In the harness's own repository, the `docs` row of `check` fails where the entry is missing, an entry of `docs/` has no row, a tracked file cannot be read, or one file alone outgrows a slice.
+**Reason:** A plan computed from the tracked files each time cannot fall behind them, and an index held by the gate cannot miss a document added after it.
+**Proof:** `node --test bin/docs.test.mjs bin/lib/docs-plan.test.mjs bin/lib/docs-entry.test.mjs`
+**Discarded:** A stored inventory of every file with its class (`odd/tasks/launch-audit/inventory.tsv`): it rotted within a week. A status written in each feature document: the task boxes already say whether it is open. One slice the size of the window: it leaves the auditor no room to reason and write.
+**Today:** `js-harness docs`, `docs/README.md`, `bin/docs.mjs`, `bin/lib/docs-plan.mjs`, `bin/lib/docs-entry.mjs`, `bin/check.mjs`
+
 ### An output the owner sees again is a template of five parts
 
 **Problem:** On 2026-10-29 the owner saw a page made by hand where a command should have made it, and asked that everything he sees again and again be made by a command and held by a gate, so a model's taste cannot reach him (transcript `0f71b2c6`, lines 14721 and 15262; `odd/tasks/templates.md`, Specs).

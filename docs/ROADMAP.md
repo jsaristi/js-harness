@@ -1002,7 +1002,7 @@ recommended; everything keeps entering as today; everything is noted, his too), 
 same way). So an improvement that appears becomes a task of the first version, not a note for
 after it.
 
-**`docs/SPEC.md` was to be written last**, when everything else of the first version is finished and
+**`docs/SPEC.md` is written last**, when everything else of the first version is finished and
 the code is still, before the practice run and the tag; it stays rule-hierarchy's (T1). Asked
 who writes it, he tapped "Al final, con el código quieto" (the lead's transcript `65318fd5`,
 line 13982, 2026-10-13, read with `sessions --quote`), among a seventh session (the one
