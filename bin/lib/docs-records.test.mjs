@@ -113,6 +113,11 @@ test('a row whose path no source names is a finding, unless the row is written b
   assert.deepEqual(findings({ rows, records: `${RECORDS}\n## Old records\n\nFields.\n` }), ['"Old records" (line 8) names old-records, which no source file names: the record is gone, or its row is written by hand']);
 });
 
+test('a row whose folder no source names is a finding, though the source names its file', () => {
+  const rows = [...ROWS, ['Lands moved', '`<git common dir>/js-harness/no-such-folder/lands.jsonl`', '`bin/merge-queue.mjs` `recordLand`', '`throughput`']];
+  assert.deepEqual(findings({ rows, records: `${RECORDS}\n## Lands moved\n\nFields.\n` }), ['"Lands moved" (line 8) names no-such-folder, which no source file names: the record is gone, or its row is written by hand']);
+});
+
 test('a record moved to another file under the same name is a finding: its row names a writer that no longer holds it', () => {
   const sources = new Map([...SOURCES, ['bin/lib/remote.mjs', "const dir = path.join(home, '.js-harness', 'remote');\n"], ['bin/lib/remote-start.mjs', "export function startRemote(home, id) {\n  fs.writeFileSync(path.join(dir, `${id}.json`), '{}');\n  fs.writeFileSync(path.join(dir, `${id}.lock`), '');\n}\n"]]);
   assert.deepEqual(findings({ sources }), [

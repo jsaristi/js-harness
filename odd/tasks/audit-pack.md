@@ -458,6 +458,15 @@ Found by the search of item 2; each changes in T2.
   written by `bin/lib/trace-reads.cjs`, which made the detector read `.cjs`). One section checked by hand against
   its writer: "Lands" against `landLog` in `bin/merge-queue.mjs`, every field right. Not checked: the other 43
   sections field by field. `docs check` on the branch: PASS, 44 records held.
+- L15 2026-11-02, T5's reviews over `7d90257..3dc9e9e`: Codex incorrect at 0.98 (170,109 input tokens; estimated
+  200,000 to 280,000), one P2 taken: a row's path was held to the source by its last segment alone, so a record
+  moved to a folder no source names passed (`~/.js-harness/nonexistent-folder/manifest.json`, its repro); now every
+  literal segment of a path must be named by the source, test first, and the real table still holds (0 findings).
+  The reliability and readability lenses (17,152 and 17,153 input tokens) found the same one thing, rebutted: an
+  unreadable tracked file would give `recordSources` an undefined text and crash the row, but `readCorpus` sets a
+  text for every listed file, `''` on any read error (its `catch`), so none is undefined; the repository test
+  filters with `existsSync` because it reads the disk itself. gentle-ai's Stop hook offered `c166e115..HEAD`, which
+  spans T4's fixes, T4r and T5: the read-only status was run and nothing started, a candidate being one slice.
 
 ## Next step
 State at 2026-11-02 ~11:50Z, branch `worktree-audit-pack` (worktree `audit-pack`). The plan's reviews are done

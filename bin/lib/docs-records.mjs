@@ -121,8 +121,9 @@ function inFamily(name, paths) {
   });
 }
 
-/** The last segment of a path that holds no placeholder, which a source that writes the record must name. */
-const lastLiteral = (one) => segments(one).filter((part) => !part.includes('<*>')).filter((part) => !['~', '.js-harness', 'js-harness'].includes(part)).at(-1);
+/** The segments of a path that hold no placeholder, each of which the source must name, folders as much as the file,
+ * since a path is joined from separate literals; the home and the harness's folder in the git folder are everyone's. */
+const pathLiterals = (one) => segments(one).filter((part) => !part.includes('<*>') && !['~', '.js-harness', 'js-harness'].includes(part));
 
 /** What does not hold between the table, docs/RECORDS.md and the source, as lines: a detected name no row holds (a name
  * made of a placeholder and an extension only by a row whose writer is the file that names it) and that `notRecords`
@@ -142,7 +143,7 @@ export function recordFindings({ rows, sections, detected, sources, notRecords =
   }
   const texts = [...sources.values()];
   for (const row of rows.filter((one) => !one.byHand)) {
-    for (const literal of row.paths.map(lastLiteral).filter(Boolean)) {
+    for (const literal of [...new Set(row.paths.flatMap(pathLiterals))]) {
       if (!texts.some((text) => text.includes(literal))) lines.push(`"${row.record}" (line ${row.line}) names ${literal}, which no source file names: the record is gone, or its row is written by hand`);
     }
   }
