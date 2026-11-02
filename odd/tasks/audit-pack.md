@@ -286,8 +286,8 @@ Found by the search of item 2; each changes in T2.
 - [x] T5r (kind: verify) Codex reads T5 again whole (`codex-review --base 7d90257e --again`), since its recheck of
   `7e00be65` left its one finding fixed in part, then narrowed to the writers' files (L16), and a second recheck is
   not run; done: correct, no finding (L17)
-- [ ] T6 (kind: verify) the close: the bar measured again, the Log's result against items 3 and 4, the report to the
-  lead (`js-harness notify --to orchestrator --kind closed`)
+- [x] T6 (kind: verify) the close: the bar measured again, the Log's result against items 3 and 4, the report to the
+  lead (`js-harness notify --to orchestrator --kind closed`); done: L18 and the session summary
 
 ## Log
 - L1 2026-11-02T10:26:53Z, his request (the lead's transcript `0f71b2c6`, line 51906): "Necesito por favor que me
@@ -492,6 +492,22 @@ Found by the search of item 2; each changes in T2.
   function after it is dropped rather than failed; a function name is put in a RegExp unescaped (no name in the
   table holds `$`); a family written as separate spans cannot hold a name the detector builds as folder plus child
   (it fails loudly, never silently); findings sort by the machine's locale.
+- L18 2026-11-02, T6, the close: the bar measured again on `audit-pack-records` (`287fdeac`), against item 3.
+  spec 1, `node --test bin/lib/docs-entry.test.mjs`: 6 of 6 pass; the index holds 20 entries of `docs/` (was 0 of 13
+  files and 0 of 5 folders). spec 2, `docs plan`: 1,445 tracked files, 5,829,121 estimated tokens, 18 slices of at
+  most 400,000 (core 4, 1,409,565; tests 5; feature documents 5; the rest 4); the core alone does not fit a 1M
+  window, as predicted. spec 3, `docs index`: 76 capabilities, 64 cite a document, 0 name a rule, 5 a failure entry,
+  34 reach a rule and 41 a failure entry by inference; 32 rules, 48 failure entries and 104 feature documents no
+  capability reaches; 0 broken; predicted 60, 42 and 42 of 75 from the prototype, measured 64 and 34 and 41 of 76;
+  the hand check 10 of 20, under the bar of 14, so inferred links stay "inferred, unverified". spec 4, `node --test
+  bin/lib/docs-records.test.mjs`: 15 of 15 pass; the bar of at least 10 names (4 home names, 6 review records):
+  predicted 10 of 10, measured 8 of 10 at the first run and 10 of 10 after the fix (L14); 44 rows, 0 findings.
+  spec 5, the grep: 0 lines (was 6). spec 6, `docs check`: PASS, and `npm run check` green at every commit. Item 4:
+  (a) predicted the corpus does not fit one context, measured 5,829,121 tokens: holds; (b) no landing page routed a
+  cold reader: `docs/README.md` now does; (c) predicted 19 of 75 capabilities complete through generated links: not
+  measured again at the close, the index printing per capability rather than this count. Not done here: the model
+  he named, "Fable 5.5", is not known to this session (the models it knows are Fable 5.1, Opus 5.5, Sonnet 5.5 and
+  Haiku 5.5), so its window, and the `--budget` it asks, goes to the lead with the close.
 
 ## Next step
 State at 2026-11-02 ~11:50Z, branch `worktree-audit-pack` (worktree `audit-pack`). The plan's reviews are done
@@ -540,7 +556,10 @@ T6 (the close, with the model he means by "Fable 5.5" asked of the lead).
 - Update ~15:45Z: T4 and T4r done and reviewed (L13); branch `audit-pack-index` at T4's line, pushed as pull request
   3. Next: T5 on a branch stacked on it (`audit-pack-records`), test first, the detector's prototype in the job's
   scratch (`detect.mjs`, 85 names found, reads such as `AGENTS.md` and `package.json` to sort out); then T6.
-- Update ~16:30Z: T5 built (L14), `docs check` passes on the branch. Next: its commit, Codex and the Claude lenses
+- Update ~15:50Z: T5 built (L14), `docs check` passes on the branch. Next: its commit, Codex and the Claude lenses
   over it (base `7d90257e`), push `audit-pack-records`, pull request 4 on PR 757; then T6.
-- Update ~17:20Z: T5 and T5r done and reviewed (L14 to L17); PR 757 landed (16:00Z), so pull request 4 goes on main.
+- Update ~16:10Z: T5 and T5r done and reviewed (L14 to L17); PR 757 landed (16:00Z), so pull request 4 goes on main.
   Next: push `audit-pack-records`, open it, notify ready; then T6, the close.
+- Update ~16:25Z: PR 758 open and told ready (11:14 local). T6 done (L18), the session summary written. Next:
+  commit and push them on `audit-pack-records`, then `notify --kind closed --summary` and the "Fable 5.5" question
+  to the lead. Nothing else is open in this session.
