@@ -290,10 +290,11 @@ T7 is done (64a588eb, L20) on `feat/review-request`, PR 748. T8 is split in thre
 T8b f58c4027 (the recheck blocks a regression the correction brought, prompt v2) and T8a 071dc6d7 (`double-review
 answer <run id> <reviewer> --taken --rebutted --why`, and `tally` rows per reviewer of code) are committed, not yet
 reviewed. T8c 5c67d309 (the lenses recheck their earlier findings, `recheckOf`) is committed too. T8 is done and reviewed (L21), PR 749 from `feat/review-answers` (left out of one land by a timing test under
-load, L22). T9 is done and reviewed (L22) on `rule/escalation-model`, stacked on 749, in its own PR. Next, a slice with Codex and the lenses: T2; D5's two exemptions (Claude 6 of L12) are
+load, L22). T9 is done and reviewed (L22), landed as PR 753 (main a0b5334). T2 is done and reviewed (L23) on
+`rule/codex-weekly-floor`: b9a92dcf, 52cd8390, c0ca22e7, in its own PR. Next: T6. D5's two exemptions (Claude 6 of L12) are
 kept in T4's text, since a question of fact proposes nothing and a reviewed text named by path is not read again, and
 the report says so for him to change. T6 keeps T2's verifier, older text 16 and the report of how to try it.
-Meter 2% weekly after his reset of 2026-11-02 (2 credits left); floor 2% left.
+Meter 5% weekly on 2026-11-02 at 09:40 (2 credits left); floor `rule:codex-weekly-floor`.
 The gentle-ai Stop hook: status only, start nothing. Never edit a tracked file while a Codex review runs (L11).
 
 ## Eval plan
@@ -305,7 +306,8 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
 
 ## Tasks
 - [x] T1 (kind: docs) This document with its depth pass, committed with documents alone; spec all; 0fc1287e.
-- [ ] T2 (kind: build) Point 5 as approved (L18): `rules change codex-floor` (2 percent of the weekly limit left,
+- [x] T2 (kind: build) b9a92dcf, 52cd8390, c0ca22e7 (L23); the rule is `codex-weekly-floor`, not `codex-floor`, so it is
+  not read as `codex-review-floor`, the cap of one review. Point 5 as approved (L18): `rules change codex-floor` (2 percent of the weekly limit left,
   his words of lines 49536, 49661 and 49690), then `codex-review` reads the meter just before it launches and, at or
   under the floor, starts nothing and tells the lead to ask him about the reset (a failed or missing reading says so
   and runs); only on his typed no a second Claude review runs in Codex's place and records a Codex debt that
@@ -503,3 +505,21 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   reply-budget's p90 in WSL2; T8 touches no module the reply hook imports, and the test alone here passed (p90 2220
   and 1737 ms of 2500); told to the lead (06:38). The lead (06:11): he reset Codex's weekly limit; the meter read 2%
   used and 2 credits left.
+- L23 (2026-11-02, evidence): T2 done. Named `codex-weekly-floor` so it is not read as `codex-review-floor` (told to
+  the lead). b9a92dcf: `weeklyFloor` and `floorStopped` in `bin/lib/codex-meter.mjs`, and `codex-meter` lists the
+  branch's Codex debts through `owedSkipLines`. After PR 753 landed, `rules change codex-weekly-floor` (value 2, his
+  words of lines 49536, 49661 and 49690, each read as typed) in 52cd8390 with `codex-review`'s read before the launch,
+  older texts 4 and 13, the control (a check with a planted break, proven red) and the version probe moved to
+  `bin/lib/codex-launch.mjs` so `codex-review.mjs` stays under its ceiling (2272). A first merge of main carried a
+  `wip` commit made with `--no-verify`; its gate was red on the undeclared rule, and it was undone and the merge
+  redone on b9a92dcf alone, so the `wip` commit is in no pushed history. The rule commit was red once (gate run
+  41459609490: the sentence changed in section 3 left a stale span in the coverage register), fixed with `rules
+  coverage --refresh`. Reviews: Codex 5e8872b..b9a92dc (run 6938e212, 155,679 input tokens): incorrect at 0.92, one
+  P2, `--json` printed plain debt lines on a failed read; lenses reliability and readability one WARNING each, the
+  same; risk and resilience 0. Codex da87bcf..52cd839 (run 12500d41, 107,981): incorrect at 0.97, two P2, the floor
+  read once before a review in parts, and a Ctrl-C of the meter's read launched the review; the four lenses 0. All
+  taken, fixed in c0ca22e7 with tests proven red on the old source, answered with `double-review answer`. Codex's
+  recheck 52cd839..c0ca22e: 2 fixed, correct at 0.97 (69,739); lenses resilience, reliability, readability 0.
+  gentle-ai: not reviewed; its Stop hook offered the branch (base a0b5334, off the head's first-parent line), and
+  its read-only status ended in `operation_timeout` twice, so nothing was started. Not built: a second Claude review
+  is not forced in Codex's place on his no; the stop says to run it (`lens-review`), and T6's verifier judges that.
