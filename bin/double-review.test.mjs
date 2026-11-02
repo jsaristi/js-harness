@@ -95,6 +95,8 @@ function deps(t, root, spawn, extra = {}) {
         return { home, dispose: () => disposed.push(home) };
       },
       cwd: root,
+      // A reading of Codex's weekly limit well above its floor, so no test starts `codex app-server`.
+      readMeter: async () => ({ ok: true, result: { rateLimits: { secondary: { usedPercent: 50 } } } }),
       ...extra,
     },
   };
@@ -192,6 +194,19 @@ test('read starts both readers at once on one frozen copy outside the repository
   assert.deepEqual(readCodexReviews(root), [], 'a read covers no code');
   assert.ok(!fs.existsSync(material), 'the frozen copy is removed once recorded');
   assert.match(run.lines.log.join('\n'), /double-review take read-1 claude --taken/);
+});
+
+test('at or under the floor of the weekly limit neither reader starts and nothing is recorded; a reading not there is said and the read runs', async (t) => {
+  const root = makeRepo(t);
+  const { spawn, calls } = fakeSpawn((command, args, prompt) => (command === 'codex' ? codexAnswer(args, prompt, []) : { stdout: claudeOut(prompt, []) }));
+  const stopped = deps(t, root, spawn, { readMeter: async () => ({ ok: true, result: { rateLimits: { secondary: { usedPercent: 99 } } } }) });
+  assert.equal(await doubleReviewMain(['read', 'plan.md'], {}, stopped.deps), 1);
+  assert.equal(calls.length, 0, 'no reader is started');
+  assert.match(stopped.lines.error.join('\n'), /so neither reader was started and nothing was recorded/);
+  const unread = deps(t, root, spawn, { readMeter: async () => ({ ok: false, reason: 'missing' }) });
+  assert.equal(await doubleReviewMain(['read', 'plan.md'], {}, unread.deps), 0);
+  assert.match(unread.lines.log.join('\n'), /could not be read before the launch: .+ The read runs without it\./);
+  assert.equal(calls.length, 2, 'both readers start');
 });
 
 test('a reader that does not echo the read token of every copy did not open them: the read is recorded as failed for it, exit 1', async (t) => {

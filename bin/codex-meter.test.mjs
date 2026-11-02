@@ -90,7 +90,7 @@ test('the human form: a line for the five-hour window, one for the weekly, and t
       `five-hour: 3% used, resets at ${localClock(1792839680)}`,
       `weekly: 8% used, resets at ${localClock(1793385515)}`,
       'reset credits left: 1',
-      'Codex debts on this branch: none',
+      'Codex debts: none',
     ].join('\n'),
   );
 });
@@ -159,18 +159,18 @@ test('the Codex debts of the branch, the skips no Codex review has paid yet, are
   const debt = 'unavailable abc1234..def5678: weekly limit at its floor: no';
   const listed = await run([], fakeCodex(answering()), { codexDebts: () => [debt] });
   assert.equal(listed.code, 0, listed.err);
-  assert.ok(listed.out.split('\n').includes(`Codex debt on this branch: ${debt}`), listed.out);
+  assert.ok(listed.out.split('\n').includes(`Codex debt: ${debt}`), listed.out);
   const json = await run(['--json'], fakeCodex(answering()), { codexDebts: () => [debt] });
   assert.deepEqual(JSON.parse(json.out).codexDebts, [debt]);
   const unknown = await run([], fakeCodex(answering()), { codexDebts: () => null });
-  assert.match(unknown.out, /^Codex debts on this branch: unknown/m);
+  assert.match(unknown.out, /^Codex debts: unknown/m);
 });
 
 test('a read that fails still lists the Codex debts of the branch', async () => {
   const failing = fakeCodex(answering(), { spawnError: Object.assign(new Error('nope'), { code: 'ENOENT' }) });
   const { code, out } = await run([], failing, { codexDebts: () => ['unavailable abc1234..def5678: floor'] });
   assert.equal(code, 1);
-  assert.ok(out.split('\n').includes('Codex debt on this branch: unavailable abc1234..def5678: floor'), out);
+  assert.ok(out.split('\n').includes('Codex debt: unavailable abc1234..def5678: floor'), out);
 });
 
 test('--json keeps standard output JSON when the read fails: the debts alone, and the exit 1', async () => {
