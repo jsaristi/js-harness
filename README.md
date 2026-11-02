@@ -1,8 +1,9 @@
 # js-harness
 
 js-harness sets up Claude Code, with Codex as its reviewer, for AI-assisted development in a project, on top of a
-stack it does not rebuild: gentle-ai owns the workflow, task documents and TDD, engram owns
-memory, codegraph owns code structure. js-harness adds the thin layer those leave open: a short
+stack it does not rebuild: engram owns memory, codegraph owns code structure. js-harness carries the
+workflow, the task documents and test-first work itself since F8's S11 (gentle-ai, which owned them,
+leaves the machine at S2), and adds the thin layer those leave open: a short
 `AGENTS.md`, a pre-commit gate that runs the project's checks, the two reviews every slice gets
 (Codex's, `codex-review`, and the Claude lenses', `lens-review`), task contracts whose end is a set
 of commands that exit 0, and a record of everything it writes, so that it can be removed exactly.
@@ -635,12 +636,10 @@ rules that differ; a list that cannot be read is `unknown`. `--json` adds both h
 ```console
 $ js-harness doctor --offline
 tool            version   claude    codex     project   up to date
-gentle-ai       4.1.1     missing   missing   n/a       unknown
 engram          3.4.0     missing   missing   n/a       unknown
 codegraph       1.6.0     missing   missing   ok        unknown
 …
 Fix:
-  gentle-ai (claude): gentle-ai install
   codegraph (claude): claude mcp add -s user codegraph -- codegraph serve --mcp
 …
 ```
@@ -651,10 +650,9 @@ Read-only. Lists the tools the harness requires that are missing on this machine
 project, in the order `stack install` runs them, each with its command and its exact undo:
 the Codex CLI while the project's `codexReview` switch is not off, codegraph while `codeMap`
 is not off, and codegraph's registrations in Claude Code and Codex. What it never runs is
-named as your own step: gentle-ai's installer (its uninstall is not an exact undo, so it
-stays yours, with gentle-ai's own undo beside it), engram, which that installer brings, a
-login, and the prerequisites `git` and `gh`. context7 and typescript-lsp are listed as
-optional. The package manager is `--pm`, else `JS_HARNESS_PM`, else the one that installed
+named as your own step: engram and its Claude Code plugin, by engram's own install and
+`engram setup claude-code`, since that setup writes more than one thing and reads its own entry
+back; a login; and the prerequisites `git` and `gh`. typescript-lsp is listed as optional. The package manager is `--pm`, else `JS_HARNESS_PM`, else the one that installed
 this copy. `--json` prints `{ mandatory, manual, optional }`. It exits 0 when nothing
 required is missing, 1 when something is.
 
@@ -784,10 +782,7 @@ and `CI fallbacks` read the gate log's lines of gates sent to GitHub's machines;
 the recorder of a row reached main says `not recorded` on that row, since nothing wrote a line.
 `test files` reads the time of each test file from the local gates that traced their tests
 (exact tests on), kept beside the gate log in `test-times.jsonl`; a day kept from copies of the
-gate log has no times and says so. `gentle-ai reviews` counts the reviews gentle-ai acknowledged from the
-records it keeps in the git common folder, so it reaches back before the row existed; when each started is
-kept by the pause hook while the review runs, from the first tool call that sees it, so a day before this
-machine began recording them says `started not recorded`. `uninstall` keeps those starts with the snapshots.
+gate log has no times and says so.
 `questions` reads the channel's question notices to the answer or withdrawal that closed each, numbered as the
 board numbers them: how long an answer took to be relayed, and, from answer notices that keep them, when the
 question was shown and answered.
@@ -1190,8 +1185,7 @@ Builds the candidate the default branch would be: origin's default branch with e
 merged into it in order of number, and names each one it leaves out and why. The default branch is
 the one origin's HEAD names, else the one `gh repo view` names; when neither does, the queue refuses
 and names both commands, so a project whose default is not `main` lands on its own branch.
-Ready means the pull request is open, not a draft, mergeable, based on the default branch and with a
-gentle-ai line in its body, has a Codex review record and a complete Claude lens record (no lens skip) for every code commit, and merges into the
+Ready means the pull request is open, not a draft, mergeable, based on the default branch, has a Codex review record and a complete Claude lens record (no lens skip) for every code commit, and merges into the
 candidate so far with no conflict; one whose mergeability GitHub has not computed yet is decided by
 its merge into the candidate. Each pull request merged into the candidate passes main's rule rows
 first (`check --door`), and one that fails leaves the batch. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
@@ -1263,13 +1257,8 @@ those worktrees in its `worktrees` row, a gap that names `--prune` and each one;
 session start, does not count them, since that asks a `git status` of each. Each git call of that count
 stops after 20 seconds, as the heartbeat bounds its commands: a worktree whose git hangs is not counted.
 
-A code commit made after the cut-over needs gentle-ai's evidence written on its own branch, beside
-the line in the body: its hash (seven characters or more), or a range `a..b` that holds it (`a` and
-what `git rev-list a..b` lists), on a line the pull request adds to a feature document
-(`odd/tasks/<name>.md`) that says gentle-ai, such as `gentle-ai: 6b58f85..3d0cc94 high, approved`.
-The queue resolves each range itself; a merge of main needs no line, and a pull request of documents
-asks for none. A rebase changes the hashes, and the refusal says so. For each ready pull request
-the queue prints, commit by commit, the Codex record that covers it and the line that names it.
+For each ready pull request the queue prints, commit by commit, the Codex record that covers it, or
+that the Codex review is off; since F8's S11 no gentle-ai line is asked for.
 
 A landed pull request from a `rule/` branch closes what `js-harness rules change` opened: for each
 rule it changed in `bin/lib/rules-data.mjs`, the newest relief line "rule:<id> proposed on
@@ -1568,7 +1557,7 @@ A pull request ready to land is announced with `--kind ready --pr <number>`: the
 the number, and the board shows it ("ready for pull request 344"), so the land can tell which
 session a pull request belongs to from the record, even when the notice was sent from `main`. It
 is refused with exit 1, and nothing written, while the land would leave that pull request out: its
-state, its body's gentle-ai line, its reviews.
+state or its reviews.
 
 A session gives its work back with `--kind closed --summary <file>`, the summary it leaves
 (`js-harness summary`, above): the record keeps the file, and the lead reads it before it archives
