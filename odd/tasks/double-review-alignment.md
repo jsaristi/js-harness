@@ -555,3 +555,4 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   reliability and resilience 0. gentle-ai: not reviewed; its Stop hook offered the branch (base 064f5c7) three times,
   its status answered once with an execute and timed out before, and nothing was started, by `CLAUDE.md`'s rule for a
   branch candidate. Older text 16: the roadmap's alignment item says what was done, and that the eval stays owed.
+  PR 755 carries T10 and older text 16.
