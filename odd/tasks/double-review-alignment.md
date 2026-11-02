@@ -289,12 +289,7 @@ notice at 2% left and his decision on the reset (L18). T4 is done (85d8ee7f, L19
 T7 is done (64a588eb, L20) on `feat/review-request`, PR 748. T8 is split in three commits on the same branch:
 T8b f58c4027 (the recheck blocks a regression the correction brought, prompt v2) and T8a 071dc6d7 (`double-review
 answer <run id> <reviewer> --taken --rebutted --why`, and `tally` rows per reviewer of code) are committed, not yet
-reviewed. T8c (the lenses get the recheck) is mid-way, uncommitted: its test is written in `bin/lens-review.test.mjs`
-("a range that starts at the head of a lens review with findings rechecks them"); to build: `lensPrompt(name,
-intent, prior)` appends a recheck section using `NOT_FIXED`/`FOLLOW_UP`/`BLOCKS` of `codex-review-recheck.mjs`;
-`lens-review` finds the last reviewed lens record whose head is the range's base, passes each lens its own prior
-findings, records `recheckOf: <that run>`, and prints `<lens>: rechecked N earlier finding(s) of <run>: F fixed, N
-not fixed, B blocking` (`classifyRecheck` on the claims mapped to titles). Then Codex (`--base 64a588eb`) and lenses
+reviewed. T8c 5c67d309 (the lenses recheck their earlier findings, `recheckOf`) is committed too. Then Codex (`--base 64a588eb`) and lenses
 over T8a-T8c, push, and point T8 in PR 748 or its own PR. Next, in order, each a slice with Codex and the lenses: T9, T2; D5's two exemptions (Claude 6 of L12) are
 kept in T4's text, since a question of fact proposes nothing and a reviewed text named by path is not read again, and
 the report says so for him to change. T6 keeps T2's verifier, older text 16 and the report of how to try it.
