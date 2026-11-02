@@ -346,6 +346,22 @@ test('a folder that became a link since the backup is never written through: con
   assert.match(out.join('\n'), /skip .*D--p.*a link now, never followed/);
 });
 
+test('a root that became a link since the backup is skipped whole, its target never written', (t) => {
+  const { home, dest, deps } = backedUp(t);
+  const outside = scratch(t, 'stack-backup-outside-');
+  write(path.join(outside, 'settings.json'), '{}\n');
+  const why = relink(outside, path.join(home, '.claude'));
+  if (why) return t.skip(`this machine cannot make a folder link: ${why}`);
+  const out = [];
+  assert.equal(restoreBackup({ from: dest, home, yes: true, deps: { ...deps, log: (line) => out.push(line) } }).ok, true);
+  // Codex P1 recheck on 0b9f98a..d9806c8: the ancestors were checked below the root, never the root itself.
+  assert.deepEqual(fs.readdirSync(outside), ['settings.json']);
+  assert.equal(fs.readFileSync(path.join(outside, 'settings.json'), 'utf8'), '{}\n');
+  assert.ok(fs.lstatSync(path.join(home, '.claude')).isSymbolicLink(), 'the link is left for him to put back by hand');
+  assert.match(out.join('\n'), /skip claude-config: .* is a link now, never followed/);
+  assert.match(out.join('\n'), /skip claude-data: .* is a link now, never followed/);
+});
+
 test('on Windows a config file renamed only in case is kept, never deleted as one the backup lacks', { skip: process.platform !== 'win32' && 'only Windows reads two names that differ in case as one file' }, (t) => {
   const { home, dest, deps } = backedUp(t);
   const agents = path.join(home, '.claude', 'agents');

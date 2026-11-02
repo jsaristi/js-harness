@@ -325,3 +325,8 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   acknowledged; 3 advisory findings, all taken in the same fix: a config file renamed only in case was deleted on
   Windows (the deletion now compares case-blind there); the link test never proved the drill's cleanup spares a link's
   target (it now does); `--expect` was not checked as a number (a usage error now).
+- L12 2026-11-02: the fixes `9b90257b`, `427aa8a9` reviewed over `0b9f98a..d9806c8`. Lenses: 0 findings each (risk
+  43,953 input tokens, reliability 21,319, resilience 21,311). Codex's recheck: 7 of 8 fixed; the P1 not fixed, since
+  the root itself was never checked, so a `~/.claude` turned into a junction was still written through. A root that is
+  a link now is skipped whole and named, never removed (`~/.claude` holds a config and a data root). Codex's next
+  range is its last recheck of three.

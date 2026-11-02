@@ -342,6 +342,11 @@ function planRoot({ root, manifest, from, withSecrets, platform }) {
   const steps = [];
   const recorded = manifest.roots.find((r) => r.id === root.id);
   if (!recorded?.present) return [{ line: `skip ${root.id}: not in the backup, left as it is`, apply: () => {} }];
+  // A root that is a link now is never written through, nor removed: `~/.claude` holds a config and a data root, and
+  // what it points to may hold his files (Codex P1 recheck on 0b9f98a..d9806c8).
+  if (root.kind !== 'file' && lstatOrNull(root.from)?.isSymbolicLink()) {
+    return [{ line: `skip ${root.id}: ${root.from} is a link now, never followed; put it back by hand`, apply: () => {} }];
+  }
   if (root.id === 'engram' && walkRoot(root.from).files.length > 0) {
     return [{ line: `skip engram: ${root.from} holds files; its store goes back only into an empty one (merge with js-harness backup restore --merge)`, apply: () => {} }];
   }
