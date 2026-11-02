@@ -9,6 +9,8 @@ import { PassThrough } from 'node:stream';
 import { doubleReviewMain, parseArgs, readerModel, SKIP_PHRASE } from './double-review.mjs';
 import { readDoubleReviews } from './lib/double-review-records.mjs';
 import { readCodexReviews } from './lib/codex-reviews.mjs';
+import { appendCodexReviewRun } from './lib/codex-review-runs.mjs';
+import { appendLensReview } from './lib/lens-reviews.mjs';
 import { ruleHere } from './lib/rules.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 
@@ -108,6 +110,10 @@ test('parseArgs refuses an unknown argument, a missing verb, a take with no --ta
   assert.throws(() => parseArgs(['skip', '--what', 'the plan']), /skip needs --words/);
   assert.throws(() => parseArgs(['tally', '--since', 'yesterday']), /YYYY-MM-DD/);
   assert.deepEqual(parseArgs(['take', 'r1', 'codex', '--taken', '1,3', '--shared', '3']).taken, [1, 3]);
+  assert.throws(() => parseArgs(['answer', 'run-1']), /answer needs a run id and a reviewer/);
+  assert.throws(() => parseArgs(['answer', 'run-1', 'claude', '--taken', '1']), /not a reviewer of code: claude \(codex, risk, resilience, readability, reliability\)/);
+  assert.throws(() => parseArgs(['answer', 'run-1', 'codex']), /answer needs --taken/);
+  assert.deepEqual(parseArgs(['answer', 'run-1', 'risk', '--taken', 'none', '--rebutted', '2', '--why', 'w']), { verb: 'answer', run: 'run-1', reviewer: 'risk', taken: [], rebutted: [2], why: 'w', cwd: parseArgs(['tally']).cwd });
 });
 
 test('a usage error exits 2 with the one line and the usage, and starts nothing', async (t) => {
@@ -322,6 +328,34 @@ test('take records which findings the writer took and which the other reader als
   assert.deepEqual(run.lines.log, [
     'claude: 1 read, 1 finding, 1 judged, 0 taken, 0 found by it alone',
     'codex: 1 read, 2 findings, 2 judged, 2 taken, 1 found by it alone',
+  ]);
+});
+
+// odd/tasks/double-review-alignment.md, spec 7: every finding of code's pair gets an answer, taken or rebutted with
+// evidence, recorded, and a tally gives each reviewer what was taken and rebutted.
+test('answer records every finding of a code review taken or rebutted, refuses one left out, and tally counts each reviewer', async (t) => {
+  const root = makeRepo(t);
+  const run = deps(t, root, null);
+  const codeFinding = (title) => ({ title, body: 'why', file: 'bin/x.mjs', start: 3, end: 3, severity: 'P2' });
+  appendCodexReviewRun(root, { id: 'run-c', answer: { findings: [codeFinding('Drops a line'), codeFinding('Leaks a handle')] } });
+  appendLensReview(root, { run: 'run-l', outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [{ severity: 'WARNING', location: 'bin/x.mjs:3', claim: 'prints a path' }] }] });
+  const answer = (...argv) => doubleReviewMain(['answer', ...argv], {}, run.deps);
+  assert.equal(await answer('run-c', 'codex', '--taken', '1'), 1, 'finding 2 is left without an answer');
+  assert.equal(await answer('run-c', 'codex', '--taken', '1', '--rebutted', '1,2', '--why', 'x'), 1, 'one finding taken and rebutted');
+  assert.equal(await answer('run-c', 'codex', '--taken', '1', '--rebutted', '2'), 2, 'a rebuttal needs its evidence');
+  assert.equal(await answer('run-x', 'codex', '--taken', '1'), 1, 'no such run');
+  assert.equal(await answer('run-l', 'reliability', '--taken', 'none'), 1, 'that lens did not run in it');
+  assert.match(run.lines.error.join('\n'), /finding 2 of codex's 2 in run-c has no answer/);
+  assert.equal(await answer('run-c', 'codex', '--taken', '1', '--rebutted', '2', '--why', 'bin/x.mjs:9 already closes it'), 0);
+  assert.equal(await answer('run-l', 'risk', '--taken', 'none', '--rebutted', '1', '--why', 'the path is the user\'s own'), 0);
+  const answers = readDoubleReviews(root).filter((entry) => entry.kind === 'answer');
+  assert.deepEqual(answers.map((entry) => [entry.run, entry.reviewer, entry.findings, entry.taken, entry.rebutted]), [['run-c', 'codex', 2, [1], [2]], ['run-l', 'risk', 1, [], [1]]]);
+  run.lines.log.length = 0;
+  assert.equal(await doubleReviewMain(['tally'], {}, run.deps), 0);
+  assert.deepEqual(run.lines.log, [
+    'no double review read',
+    'codex on code: 1 review answered, 2 findings, 1 taken, 1 rebutted',
+    'risk on code: 1 review answered, 1 finding, 0 taken, 1 rebutted',
   ]);
 });
 

@@ -5,7 +5,9 @@
 // It lives beside the review records, so every worktree of a clone shares it and deleting the one file undoes what
 // this module writes. No push and no merge door reads it: a read of a plan covers no code, and a line here is no
 // evidence that a code commit was reviewed. What it is for is the judgement of 2026-11-16, what each reader adds:
-// `tallyOf` gives each reader its reads, its findings, the findings the writer took and those it alone found. Only
+// `tallyOf` gives each reader its reads, its findings, the findings the writer took and those it alone found. The
+// answers to the findings of code's own pair, Codex and the Claude lenses, are recorded here too, and `codeTallyOf`
+// gives each of those reviewers what was taken and rebutted; they are no review record either. Only
 // `appendDoubleReview` and `readDoubleReviews` touch the file, through ./codex-reviews.mjs; the rest takes entries.
 import { appendJsonLine, readJsonLines } from './codex-reviews.mjs';
 
@@ -66,4 +68,26 @@ export function tallyOf(entries, { since } = {}) {
     }
   }
   return READERS.filter((reader) => rows.has(reader)).map((reader) => rows.get(reader));
+}
+
+const isAnswer = (entry) => entry?.schema === DOUBLE_REVIEW_SCHEMA && entry.kind === 'answer' && typeof entry.run === 'string' && typeof entry.reviewer === 'string';
+
+/** Each reviewer of code's yield over the answers of `entries` on or after `since`, in the order each first appears:
+ * `{ reviewer, answered, findings, taken, rebutted }`. The answer to a review's findings is the last of that run and
+ * reviewer (odd/tasks/double-review-alignment.md, spec 7: every finding taken or rebutted, and a tally of both). */
+export function codeTallyOf(entries, { since } = {}) {
+  const last = new Map();
+  for (const entry of entries) {
+    if (isAnswer(entry) && (since === undefined || String(entry.at).slice(0, 10) >= since)) last.set(`${entry.run} ${entry.reviewer}`, entry);
+  }
+  const rows = new Map();
+  for (const entry of last.values()) {
+    const row = rows.get(entry.reviewer) ?? { reviewer: entry.reviewer, answered: 0, findings: 0, taken: 0, rebutted: 0 };
+    row.answered += 1;
+    row.findings += entry.findings;
+    row.taken += entry.taken.length;
+    row.rebutted += entry.rebutted.length;
+    rows.set(entry.reviewer, row);
+  }
+  return [...rows.values()];
 }
