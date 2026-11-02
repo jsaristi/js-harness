@@ -172,8 +172,9 @@ import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAn
 import { baseLeftOut, MARKS_UNREAD, mergeStart, notReviews, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './lib/codex-review-parts.mjs';
-import { MAX_PARTS_WITHOUT_FLAG, methodRecord, methodRecordLine, needsFlagLine, partPlanned, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
-import { IntentError, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
+import { counted, MAX_PARTS_WITHOUT_FLAG, methodRecord, methodRecordLine, needsFlagLine, partPlanned, partsBound, planLines, reviewPlan, thousands } from './lib/codex-review-plan.mjs';
+import { NO_ASKED, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt } from './lib/codex-review-prompt.mjs';
+import { AskedError, askedIntent } from './lib/review-asked.mjs';
 import { EXCUSED_REFUSED_TESTS, excusedByRefusal, isRefusal, NO_TEST_EXIT, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, readCodexReviewRuns, runKept } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews, withSubjectHash } from './lib/codex-reviews.mjs';
@@ -217,7 +218,7 @@ export const REVIEW_EFFORT = ruleValue('review-effort');
 // reviews less than it was asked, or nothing, must not come as a surprise, and `--again` is the way round it.
 // `--session` is not in the usage: there is one session, so there is nothing to choose (see `SESSION`).
 export const USAGE =
-  'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
+  'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--request <text>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
   '[--unavailable <reason>] [--cwd <path>] [--home <path>]\n' +
   'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
   `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.\n` +
@@ -226,7 +227,7 @@ export const USAGE =
   '`--prompt codex` is the default in a turn of the gate lock; out of one, a run by hand, every review is asked with `own`, and the command says so when `codex` was given.\n' +
   'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
   'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in. So is a merge of a stacked base, a branch off that default branch each of whose own code commits has a record.\n' +
-  '`--doc <feature document>` judges the change against that document\'s Goal and Done when, and needs `--prompt own`.\n' +
+  '`--doc <feature document>` judges the change against that document\'s Goal, Done when and Specs, for large work; `--request <text>` against the request as written, for small work. Either asks the own prompt, in a turn too, and neither goes with `--prompt codex`; a review given neither says it judges the code alone.\n' +
   '`--part-lines <n>` is how many changed lines a part of a large range holds at most, in place of the default.\n' +
   '`--fresh` reviews every part of a range again, where a run otherwise keeps the parts that passed in an earlier run of it.\n' +
   '`--keep-home` leaves the Codex home of the run in place after it.\n' +
@@ -260,7 +261,7 @@ function requireValue(argv, i, flag) {
 }
 
 const KNOWN = {
-  valued: ['--base', '--unavailable', '--home', '--session', '--prompt', '--doc', '--part-lines', '--max-parts', '--cwd'],
+  valued: ['--base', '--unavailable', '--home', '--session', '--prompt', '--doc', '--request', '--part-lines', '--max-parts', '--cwd'],
   bare: ['--keep-home', '--plan', '--again', '--fresh'],
 };
 
@@ -297,6 +298,7 @@ function parseArgs(argv) {
   // A `--doc` beside another prompt is refused in `codexReviewMain`, once it is known whether out of a turn the
   // own prompt is forced (harness review b10).
   const doc = get('--doc');
+  const request = get('--request');
   /** The count `flag` was given, a positive integer, or `undefined` when the flag is not there; `what` says
    * what it counts, for the error of one that is anything else. */
   const count = (flag, what) => {
@@ -317,7 +319,7 @@ function parseArgs(argv) {
   const again = argv.includes('--again');
   // The parts that passed in earlier runs of the range are asked again, not taken from the run log.
   const fresh = argv.includes('--fresh');
-  return { base, unavailable, home, keepHome, prompt, doc, partLines, maxParts, plan, again, fresh, cwd: get('--cwd') ?? process.cwd() };
+  return { base, unavailable, home, keepHome, prompt, doc, request, partLines, maxParts, plan, again, fresh, cwd: get('--cwd') ?? process.cwd() };
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
@@ -731,8 +733,6 @@ function progressLine(line, log) {
   }
 }
 
-const thousands = (count) => String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-
 /** A count for a person: grouped by thousands, and `unknown` for one Codex did not report. */
 const spoken = (count) => (count === null ? 'unknown' : thousands(count));
 
@@ -836,9 +836,6 @@ function listed(names) {
   const more = names.length > FILES_SHOWN ? `, and ${names.length - FILES_SHOWN} more` : '';
   return `${names.slice(0, FILES_SHOWN).join(', ')}${more}`;
 }
-
-/** `count` things, with `noun` in the singular for one: `1 file`, `2 files`. */
-const counted = (count, noun) => `${thousands(count)} ${noun}${count === 1 ? '' : 's'}`;
 
 /** The sum of what `pick` gives for each of `attempts`, or `null` when one of them is `null`: a total with
  * a part that was not measured is not known, and is never the sum of the rest. */
@@ -1191,26 +1188,26 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   }
   // Out of a turn of the gate lock the review runs no test suite (odd/tasks/faster-check.md, part 2): Codex's
   // `node --test` is refused by a preload (`leanEnv`), and the review is asked with the own prompt, the one
-  // that says so (`SUITE_RAN`). A skip launches nothing, and is left as it was asked.
+  // that says so (`SUITE_RAN`). A skip launches nothing, and is left as it was asked. What was asked rides on the
+  // own prompt alone, so a --doc or a --request asks it in a turn too (spec 7: "the gate turn included").
   const outOfTurn = env.JS_HARNESS_GATE_HELD !== '1';
-  if (outOfTurn && args.unavailable === undefined && args.prompt !== 'own') {
-    if (argv.includes('--prompt')) log(OWN_OUT_OF_TURN);
+  const askedFlag = args.doc !== undefined ? '--doc' : args.request !== undefined ? '--request' : null;
+  if (args.prompt !== 'own' && ((outOfTurn && args.unavailable === undefined) || (askedFlag !== null && !argv.includes('--prompt')))) {
+    if (outOfTurn && argv.includes('--prompt')) log(OWN_OUT_OF_TURN);
     args = { ...args, prompt: 'own' };
   }
-  if (args.doc !== undefined && args.prompt !== 'own') {
-    error(`--doc needs --prompt own: only this command's own prompt carries the intent of a feature document\n\n${USAGE}`);
+  if (askedFlag !== null && args.prompt !== 'own') {
+    error(`${askedFlag} needs --prompt own: only this command's own prompt carries what was asked\n\n${USAGE}`);
     return 2;
   }
-  // The intent the own prompt carries, read before anything runs: a document that cannot be read, or that
-  // holds no Goal or no Done when, is a flag given wrong, and no review is started to find that out.
   let intent = turnIntent;
-  if (args.doc !== undefined) {
-    try {
-      intent = reviewIntent(fs.readFileSync(path.resolve(args.cwd, args.doc), 'utf8'));
-    } catch (err) {
-      error(`--doc ${args.doc}: ${err instanceof IntentError ? err.message : `cannot read it (${err.code ?? err.message})`}\n\n${USAGE}`);
-      return 2;
-    }
+  let saidNoAsked = false;
+  try {
+    intent = askedIntent(args) ?? intent;
+  } catch (err) {
+    if (!(err instanceof AskedError)) throw err;
+    error(`${err.message}\n\n${USAGE}`);
+    return 2;
   }
 
   const root = git(spawn, args.cwd, ['rev-parse', '--show-toplevel']);
@@ -1891,6 +1888,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           : part.of === 1 ? `${counted(part.files.length, 'file')} of ${range} (${counted(part.changedLines, 'changed line')})`
             : `part ${part.index} of ${part.of} of ${range} (${counted(part.files.length, 'file')}, ${counted(part.changedLines, 'changed line')})`;
         log(`Codex is reviewing ${what}${how}; this can take several minutes.`);
+        // Once, after the first launch's line (odd/tasks/double-review-alignment.md, spec 7: "a review with none says so").
+        if (intent === null && !saidNoAsked) log(NO_ASKED);
+        saidNoAsked = true;
         startedAt = now();
         launchedAt = readClock(monotonicNow);
         // stdin is ignored under the default prompt (Codex would wait to read it) and carries the prompt

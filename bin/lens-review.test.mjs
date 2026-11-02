@@ -7,6 +7,8 @@ import path from 'node:path';
 import { claudeArgs, LENS_ANSWER_KEPT, lensEnv, lensReviewMain, runLens } from './lens-review.mjs';
 import { admittedLensReviews, readLensReviews, readLensRuns } from './lib/lens-reviews.mjs';
 import { LENS_ANSWER_SCHEMA } from './lib/lens-result.mjs';
+import { askedText, NO_ASKED, requestIntent, reviewIntent } from './lib/codex-review-prompt.mjs';
+import { lensPrompt } from './lib/lens-prompts.mjs';
 import { UNCLOSED_INSPECTION_STDOUT } from './lib/lens-review-answers.testkit.mjs';
 import { withoutAutoMaintenance } from './lib/git-fixture.testkit.mjs';
 
@@ -286,6 +288,56 @@ test('a Claude CLI that is an npm shim runs as one quoted command line: the empt
   } finally {
     fs.rmSync(bin, { recursive: true, force: true });
   }
+});
+
+// odd/tasks/double-review-alignment.md, spec 7: code's two reviews, Codex and the lenses, judge against what was
+// asked, so every lens's prompt carries the same section Codex's does.
+test('--request or --doc puts what was asked in every lens prompt, as Codex is given it', () => {
+  const docFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'lens-review-doc-')), 'feature.md');
+  fs.writeFileSync(docFile, '# F\n\n## Goal\nMeasure every attempt.\n\n## Done when\n- `npm run check` exits 0\n\n## Specs\n1. "Measure it" (L1)\n');
+  const cases = [
+    [['--request', 'Make `wait` say the session it woke for.'], askedText(requestIntent('Make `wait` say the session it woke for.'))],
+    [['--doc', docFile], askedText(reviewIntent(fs.readFileSync(docFile, 'utf8')))],
+  ];
+  for (const [flags, asked] of cases) {
+    const claude = fakeClaude(clean);
+    const { code, out } = run(['--base', 'HEAD~1', '--lenses', 'risk,reliability', '--reason', 'a constant', ...flags], { runLens: claude.runLens });
+    assert.equal(code, 0, out);
+    for (const call of claude.calls) {
+      assert.ok(call.prompt.includes(`\n${asked}\n`), call.prompt);
+      assert.equal(call.prompt, lensPrompt(call.lens, flags[0] === '--request' ? requestIntent(flags[1]) : reviewIntent(fs.readFileSync(docFile, 'utf8'))));
+    }
+    assert.equal(out.includes(NO_ASKED), false, out);
+  }
+  fs.rmSync(path.dirname(docFile), { recursive: true, force: true });
+});
+
+test('a lens run given neither --doc nor --request says it judges the code alone, and its prompts say nothing of a request', () => {
+  const claude = fakeClaude(clean);
+  // The range of the first two commits, which changes code whatever the tests before this one committed.
+  const second = git('log', '--format=%H', '--grep=^second$');
+  const { code, out } = run(['--base', `${second}~1`, '--head', second, '--lenses', 'risk', '--reason', 'a constant'], { runLens: claude.runLens });
+  assert.equal(code, 0, out);
+  assert.ok(out.split('\n').includes(NO_ASKED), out);
+  assert.equal(claude.calls[0].prompt, lensPrompt('risk'));
+  assert.doesNotMatch(claude.calls[0].prompt, /## What was asked/);
+});
+
+test('--doc and --request together, an empty request or a document with no Goal are usage errors, and no lens runs', () => {
+  const docFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'lens-review-doc-')), 'notes.md');
+  fs.writeFileSync(docFile, '# Notes\n\nNo contract here.\n');
+  for (const [flags, message] of [
+    [['--doc', docFile, '--request', 'fix it'], /--doc and --request do not go together/],
+    [['--request', '   '], /--request needs a value/],
+    [['--doc', docFile], /--doc .*notes\.md: .*no `## Goal` heading/],
+  ]) {
+    const claude = fakeClaude(clean);
+    const { code, err } = run(['--base', 'HEAD~1', '--lenses', 'risk', '--reason', 'a constant', ...flags], { runLens: claude.runLens });
+    assert.equal(code, 2, flags.join(' '));
+    assert.match(err, message, flags.join(' '));
+    assert.equal(claude.calls.length, 0);
+  }
+  fs.rmSync(path.dirname(docFile), { recursive: true, force: true });
 });
 
 test('--plan starts nothing and records nothing; a usage error is exit 2', () => {
