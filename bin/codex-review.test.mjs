@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import {
-  childEnv, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS, turnSaid, turnStopped,
+  childEnv, CODEX_WEEKLY_FLOOR, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS, turnSaid, turnStopped,
   reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
 import { NO_TEST_EXIT, NO_TEST_LINE, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
@@ -385,6 +385,8 @@ async function run(argv, extra = {}, env = IN_TURN) {
     error: (line) => err.push(line),
     write: (text) => shown.push(text),
     platform: 'linux',
+    // A reading of Codex's weekly limit well above its floor, so no test starts `codex app-server`.
+    readMeter: async () => ({ ok: true, result: { rateLimits: { secondary: { usedPercent: 50 } } } }),
     ...extra,
   });
   return { code, out: out.join('\n'), err: err.join('\n'), shown: shown.join('') };
@@ -916,6 +918,31 @@ test('the `codex --version` probe goes through the same launch path and environm
   assert.deepEqual(win.probes[0].args, []);
   assert.equal(win.probes[0].opts.shell, true);
   assert.deepEqual(win.probes[0].opts.env, { Path: 'C:\\Windows' });
+});
+
+test('at or under the floor of the weekly limit nothing is started or recorded, and the user is asked about the reset', async () => {
+  const { root, base } = makeRepo();
+  for (const usedPercent of [100 - CODEX_WEEKLY_FLOOR, 100]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, readMeter: async () => ({ ok: true, result: { rateLimits: { secondary: { usedPercent } } } }) });
+    assert.equal(result.code, 1, result.out);
+    assert.match(result.err, /at or under its floor of \d+(\.\d+)?% \(rule:codex-weekly-floor\)/);
+    assert.match(result.err, /whether to reset the weekly limit/);
+    assert.match(result.err, /--base HEAD~1 --unavailable "weekly limit at its floor/);
+    assert.equal(wrote(root), false);
+    assert.equal(fake.calls.length, 0, 'the review is not spawned');
+  }
+});
+
+test('a reading of the weekly limit that fails, or that holds none, says so and the review runs', async () => {
+  const { root, base } = makeRepo();
+  for (const readMeter of [async () => ({ ok: false, reason: 'missing' }), async () => ({ ok: true, result: {} })]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fake, readMeter });
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /Codex's weekly limit could not be read before the launch: .+ The review runs without it\./);
+    assert.equal(fake.calls.length, 1, 'the review is spawned');
+  }
 });
 
 test('no probe is run for --unavailable, or when the tree is dirty', async () => {
