@@ -216,18 +216,24 @@ function claudeDirsRow(home, platform) {
 }
 
 /** The lines of `[mcp_servers.<name>]` and its sub-tables in a TOML text, each trimmed, blanks and comments dropped,
- * so two files that hold one entry in another place compare equal; `[]` for none. Never printed: one holds a key. */
+ * each table's header bare and its lines sorted, the tables sorted too, so two files that hold one entry in another
+ * place, order or comment compare equal (gentle-ai R3 on 0b9f98a..35e67e1); `[]` for none. A value written over several
+ * lines is compared line by line. Never printed: one holds a key. */
 function codexEntry(toml, name) {
-  const out = [];
+  const tables = new Map();
   let table = null;
   for (const raw of toml.split(/\r?\n/)) {
     const line = raw.trim();
-    const header = line.match(/^\[\[?([^\]]+)\]\]?$/);
-    if (header) table = header[1].replace(/"/g, '').trim();
+    const header = line.match(/^\[\[?([^\]]+)\]\]?\s*(?:#.*)?$/);
+    if (header) {
+      table = header[1].replace(/"/g, '').trim();
+      continue;
+    }
     if (table !== `mcp_servers.${name}` && !table?.startsWith(`mcp_servers.${name}.`)) continue;
-    if (line !== '' && !line.startsWith('#')) out.push(line);
+    if (!tables.has(table)) tables.set(table, []);
+    if (line !== '' && !line.startsWith('#')) tables.get(table).push(line);
   }
-  return out;
+  return [...tables.keys()].sort().flatMap((key) => [`[${key}]`, ...tables.get(key).sort()]);
 }
 
 function codexRow(home, backupToml) {
@@ -244,7 +250,7 @@ function codexRow(home, backupToml) {
   const left = GENTLE_CODEX_SKILLS.filter((name) => skills.includes(name));
   if (left.length > 0) problems.push(`skills holds ${left.join(', ')}`);
   const toml = readText(path.join(codex, 'config.toml')) ?? '';
-  const sections = new Set([...toml.matchAll(/^[ \t]*\[mcp_servers\.(?:"([^"\]]+)"|([A-Za-z0-9_-]+))\][ \t]*$/gm)].map((m) => m[1] ?? m[2]));
+  const sections = new Set([...toml.matchAll(/^[ \t]*\[mcp_servers\.(?:"([^"\]]+)"|([A-Za-z0-9_-]+))\][ \t]*(?:#.*)?$/gm)].map((m) => m[1] ?? m[2]));
   const absent = COMPLEMENTS.filter((name) => !sections.has(name));
   if (absent.length > 0) problems.push(`config.toml lacks [mcp_servers.${absent.join('], [mcp_servers.')}]`);
   // Each entry as the backup holds it, so a lost context7 key or a changed command fails here, where `claude mcp list`

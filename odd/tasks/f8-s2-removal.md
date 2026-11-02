@@ -330,3 +330,7 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   the root itself was never checked, so a `~/.claude` turned into a junction was still written through. A root that is
   a link now is skipped whole and named, never removed (`~/.claude` holds a config and a data root). Codex's next
   range is its last recheck of three.
+- gentle-ai: review `review-4afe163c6f24ba12` on `0b9f98a..35e67e1` (the reliability lens), approved and
+  acknowledged; 2 advisory findings, both taken: a TOML header followed by a comment was not read as one, so its lines
+  went to the entry above (the codex row now reads such a header, and compares each table's lines sorted); a manifest
+  with no export hashes failed without saying what to do (it now says to take a new backup).

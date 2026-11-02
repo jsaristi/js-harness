@@ -522,7 +522,7 @@ export function verifyBackup({ from, deps = {}, marker, expectId, tmp = os.tmpdi
     });
     check('exports', () => {
       const sealed = Object.entries(manifest.exports?.sha256 ?? {});
-      if (sealed.length === 0) return 'the manifest records no hash of its exports';
+      if (sealed.length === 0) return 'the manifest records no hash of its exports: take a new backup with js-harness stack backup run';
       const bad = sealed.filter(([rel, sha256]) => {
         const file = path.join(from, ...rel.split('/'));
         return !fs.existsSync(file) || hashFile(file) !== sha256;

@@ -383,6 +383,11 @@ test('verify fails when an export changed or is gone, and when no marker is give
   assert.match(result.lines.join('\n'), /^FAIL exports: 2 differ or are gone, first exports\/user-path\.txt/m);
   // Codex P2 on 84997f7..0b9f98a: a drill that never searched engram is no proof the store answers.
   assert.match(result.lines.join('\n'), /^FAIL engram: no marker to search/m);
+  // A manifest from before the exports were hashed says what to do (gentle-ai R3 on 0b9f98a..35e67e1).
+  delete manifest.exports.sha256;
+  write(path.join(dest, 'manifest.json'), json(manifest));
+  const legacy = verifyBackup({ from: dest, deps, marker: 's2drillmarker20261102', expectId: '6431', tmp: scratch(t, 'stack-backup-tmp-') });
+  assert.match(legacy.lines.join('\n'), /^FAIL exports: the manifest records no hash of its exports: take a new backup with js-harness stack backup run$/m);
 });
 
 test('restore without yes prints the plan by path and writes nothing', (t) => {

@@ -311,6 +311,21 @@ test('the codex row fails when a complement\'s entry in config.toml differs from
   for (const text of said) assert.ok(!text.includes(KEY) && !text.includes(OTHER_KEY), 'a key reached the output');
 });
 
+test('a comment after a header, or keys in another order, is no difference in the codex row', (t) => {
+  // gentle-ai R3 on 0b9f98a..35e67e1: a header with a comment was not read as one, so its lines went to the entry above.
+  const fx = fixture(t);
+  write(path.join(fx.home, '.codex', 'config.toml'), [
+    'model = "gpt-5"', '[mcp_servers.engram] # memory', 'command = "engram"', '[mcp_servers.codegraph]', 'command = "codegraph"',
+    '[mcp_servers.context7]', 'url = "https://mcp.context7.com/mcp"', 'enabled = true', '[mcp_servers.context7.http_headers]', `CONTEXT7_API_KEY = "${KEY}"`, '',
+  ].join('\n'));
+  write(path.join(fx.backup, 'roots', 'codex-config', 'config.toml'), [
+    '[mcp_servers.engram]', 'command = "engram"', '[mcp_servers.codegraph]  # graph', 'command = "codegraph"',
+    '[mcp_servers.context7]', 'enabled = true', 'url = "https://mcp.context7.com/mcp"', '[mcp_servers.context7.http_headers]', `CONTEXT7_API_KEY = "${KEY}"`,
+    '[mcp_servers.node_repl]', 'command = "node"', '',
+  ].join('\n'));
+  assert.deepEqual(failing(verify(fx)), []);
+});
+
 test('a home with no GEMINI.md passes the gemini row, and an entry missing from .claude.json fails the mcp-claude row', (t) => {
   const fx = fixture(t);
   fs.rmSync(path.join(fx.home, '.gemini'), { recursive: true });
