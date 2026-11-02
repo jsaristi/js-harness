@@ -251,22 +251,46 @@ function timeStops(session, transcript) {
   return { times: runs.map((run) => run.cpuMs), children: runs.map((run) => run.children), walls, references, answer };
 }
 
-/** Holds the runs of `timeStops` to the budget: the main thread's CPU of each run in milliseconds of the machine that
- * set the budget (its CPU over the mean of the reference runs before and after it, times `REFERENCE_MS`) at the 90th
- * percentile, and the processes each run started, whose time that measure does not hold. The two runs beside it follow
- * load that comes or goes during the test, which the median of all of them did not (a work stop scaled to 1513 ms when
- * busy loops ended halfway); their mean, not the larger, since one reference run of a quiet Windows took 905 ms where
- * the others took 358 to 812; and that mean at most 1.5 times the median of all of them, so one slow reference run
- * cannot halve a run's measure and hide a hook grown slower (the reliability review of 2459147, odd/tasks/defect-trio.md, L12). */
+/** The main thread's CPU of each run of `timeStops` in milliseconds of the machine that set the budget: its CPU over the
+ * median of the reference runs around it, the one before the run before it to the one after the run after it, times
+ * `REFERENCE_MS`. Runs near it follow load that comes or goes during the test, which the median of all of them did not
+ * (a work stop scaled to 1513 ms when busy loops ended halfway, and a cap at 1.5 times that median scored a hook under
+ * load that came for four runs at twice its work: Codex and the resilience lens on 3db0ca0, odd/tasks/defect-trio.md,
+ * L13); their median, not the mean of the two beside it, so one slow reference run, as one of a quiet Windows took
+ * 905 ms where the others took 358 to 812, cannot halve a run's measure and hide a hook grown slower (L12). */
+function scaledTimes(times, references) {
+  const median = (values) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    const half = sorted.length / 2;
+    return Number.isInteger(half) ? (sorted[half - 1] + sorted[half]) / 2 : sorted[Math.floor(half)];
+  };
+  return times.map((ms, i) => (ms / median(references.slice(Math.max(0, i - 1), i + 3))) * REFERENCE_MS);
+}
+
+/** Holds the runs of `timeStops` to the budget: their CPU as `scaledTimes` puts it at the 90th percentile, and the
+ * processes each run started, whose time that measure does not hold. */
 function withinBudget(t, { times, children, walls, references }) {
-  const bound = 1.5 * percentile(references, 0.5);
-  const scaled = times.map((ms, i) => (ms / Math.min((references[i] + references[i + 1]) / 2, bound)) * REFERENCE_MS);
+  const scaled = scaledTimes(times, references);
   const p90 = percentile(scaled, 0.9);
   const each = (values) => values.map((ms) => ms.toFixed(0)).join(' ');
   t.diagnostic(`main-thread CPU p90 ${p90.toFixed(0)} ms where the reference takes ${REFERENCE_MS} ms, budget ${BUDGET_MS} ms, runs ${each(scaled)}; measured ${each(times)}, reference ${each(references)}, wall ${each(walls)} ms; processes started ${children.join(' ')}`);
   assert.ok(p90 <= BUDGET_MS, `main-thread CPU p90 ${p90.toFixed(0)} ms over ${RUNS} runs, where the reference takes ${REFERENCE_MS} ms, is above the budget of ${BUDGET_MS} ms: ${each(scaled)} (measured ${each(times)}, reference ${each(references)})`);
   assert.ok(children.every((count) => count <= CHILDREN), `a run started more than ${CHILDREN} process (${children.join(' ')}): a check that starts one costs time this measure does not see, so the budget counts it`);
 }
+
+test('a load that comes partway through the runs scales them back to the quiet machine', () => {
+  // Codex's case on 3db0ca0: seven reference runs at 450 ms, then four at 1350; a hook of 2000 ms takes three times that
+  // under the load, and the run between the two takes twice.
+  const references = [450, 450, 450, 450, 450, 450, 450, 1350, 1350, 1350, 1350];
+  const times = [2000, 2000, 2000, 2000, 2000, 2000, 4000, 6000, 6000, 6000];
+  for (const ms of scaledTimes(times, references)) assert.ok(Math.abs(ms - 2000) < 1, `${ms.toFixed(0)} ms, not 2000`);
+});
+
+test('one slow reference run does not scale down the runs beside it', () => {
+  const references = [400, 400, 400, 400, 400, 905, 400, 400, 400, 400, 400];
+  const times = Array(RUNS).fill(2000);
+  for (const ms of scaledTimes(times, references)) assert.ok(Math.abs(ms - 2250) < 1, `${ms.toFixed(0)} ms, not 2250`);
+});
 
 test('the budget is at most half the timeout install gives the hook', () => {
   const timeoutMs = replyHookEntry().hooks[0].timeout * 1000;

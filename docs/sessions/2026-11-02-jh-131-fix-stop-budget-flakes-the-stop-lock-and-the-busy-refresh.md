@@ -17,6 +17,8 @@ None in this session: the brief is the lead's, and its specs are quoted in `odd/
 - fa61c361 fix(sessions): stop waits for the pid claude's lock names, retries on EBUSY, kills nothing.
 - 7f918a92 fix(merge-queue): the land's refresh leaves out a busy session whose transcript only waits.
 - b9a1512d, 5a411a95, f691a9c6 fix(merge-queue): Codex's findings on what counts as a wait alone; FAILURES entries.
+- 2459147d, 3db0ca0b and T9 test(reply): after PR 750 was red in the merge queue's WSL2 gate (L11), the hook's CPU
+  is held against reference runs between its runs; each run divided by the median of those around it (L12, L13).
 
 ## Decisions
 - This session's, his to correct: the budget measure is the main thread's CPU, not the whole process's (L3); a
@@ -27,7 +29,10 @@ None in this session: the brief is the lead's, and its specs are quoted in `odd/
 - The first `onlyWaits` trusted `isWaitCommand`, a detector made to find waits to re-arm, as proof that a command does
   nothing else; Codex took four rounds to close every shape (compound line, parallel calls, `bash -c`, heredoc).
   A detector written for one purpose is not a guard for another.
-- The host compacted this session once (06:10 local); it resumed from the feature document.
+- The depth pass refuted load on main-thread CPU on Windows only; in WSL2, where the merge queue runs the gate, that
+  CPU grew two to three and a half times under load, and the merge queue refused PR 750 red. A measure proven steady
+  on one machine is proven there only.
+- The host compacted this session twice (06:10 and 08:15 local); it resumed each time from the feature document.
 
 ## Left
 - Pull request 750 to land (the lead's merge queue); the worktree `defect-trio` to remove after it lands.
@@ -38,4 +43,5 @@ None in this session: the brief is the lead's, and its specs are quoted in `odd/
 
 ## Cost
 Codex: 265,080 + 85,136 + 241,056 + 55,508 input tokens (one recheck refused before it ran). Claude lenses: about
-28,000 a lens for three lenses, then two lenses at 6,000 to 13,000 for each fix.
+28,000 a lens for three lenses, then two lenses at 6,000 to 13,000 for each fix. After the restart: Codex 65,281 and
+52,408 input tokens; the lenses about 6,000 and 13,000 each round.

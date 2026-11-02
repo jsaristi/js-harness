@@ -90,6 +90,8 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   runs; red first under load in WSL2. Route: inline. L11.
 - [x] T8 (kind: build) spec 1, gentle-ai's findings on 2459147: the reference count asserted, the divisor bounded. L12;
   Windows quiet 728 and 569 ms, 2 s more in the hook red at 2754 and 2829 ms.
+- [x] T9 (kind: build) spec 1, Codex's and the resilience lens's finding on 3db0ca0: each run's divisor the median of
+  the reference runs around it, no global cap; two pure tests on `scaledTimes`, red first. Route: inline. L13.
 
 ## Log
 - L1 (2026-11-02, his request through the lead's brief
@@ -179,10 +181,18 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   the budget); one slow reference outlier scales the hook down up to about twice and could hide a regression; the
   reference runs add about RUNS + 1 parses of 60 MB to each test. Taken as Codex's: T8 asserts RUNS + 1 references and
   bounds each run's divisor at 1.5 times their median; the cost is kept (about 5 s a test), said here.
+- L13 (2026-11-02, T9): the reviews of 3db0ca0 (2459147..3db0ca0): Codex incorrect, P2 (52,408 input tokens): the cap
+  at 1.5 times the median of all references scores a hook under load that comes for a minority of the runs at up to
+  twice its work (seven references at 450 ms and four at 1350 cap the divisor at 675); the resilience lens the same
+  finding, the reliability lens 0. gentle-ai's start for 3db0ca0 failed before it began (`--cwd` in single quotes run
+  through cmd: "The filename, directory name, or volume label syntax is incorrect"); its lineage holds no entry, and
+  the fix is reviewed in its place. T9: `scaledTimes`, a pure function, divides each run by the true median of the
+  reference runs from i - 1 to i + 2, which follows load that lasts and leaves one slow reference run out; red first
+  on both cases (2667 ms for 2000, 1500 for 2250), then green; the file 6 of 6 on Windows quiet, 753 and 569 ms, and in
+  WSL2 beside 24 busy loops, 1135 and 631 ms where the hook measured up to 4160 (the load ended during the second).
 
 ## Next step
-T8 in `bin/reply-budget.test.mjs`, on branch `worktree-defect-trio` (worktree `defect-trio`, pushed at 2459147): in
-`timeStops` assert `references.length === RUNS + 1`; in `withinBudget` divide by
-`Math.min((references[i] + references[i + 1]) / 2, 1.5 * percentile(references, 0.5))`. Then: run the test (Windows),
-commit, Codex `--base 2459147d` and lenses reliability,resilience, push, `js-harness notify --to orchestrator --kind ready
---pr 750`, then `--kind closed --summary docs/sessions/2026-11-02-jh-131-...md` (add L11-L12 to it first).
+T9 committed on `worktree-defect-trio` (pushed at 2459147): its reviews, Codex `--base 2459147d` and the lenses
+reliability,resilience, and gentle-ai when the Stop hook offers it (start run through bash, `--cwd` in double quotes);
+then push, `js-harness notify --to orchestrator --kind ready --pr 750`, then `--kind closed --summary
+docs/sessions/2026-11-02-jh-131-fix-stop-budget-flakes-the-stop-lock-and-the-busy-refresh.md` (add L11-L13 to it first).
