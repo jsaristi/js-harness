@@ -294,3 +294,16 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   tests inject them), a file symlink on Windows (needs a privilege), a full-size run over the 3.2 GB `~/.claude`.
   Next: Codex over `84997f7d..d4b3c62c` (6 parts, about 1.1M to 1.45M input tokens) and the lenses, the independent
   verifier, PR.
+- L9 2026-11-02 ~21:40Z, state (written at 85% of the window): running in the background, started on `628bace0`:
+  `js-harness codex-review --base 84997f7d` and `js-harness lens-review --base 84997f7d --lenses
+  risk,reliability,resilience --doc odd/tasks/f8-s2-removal.md` (plan: about 37,578 input tokens a lens); a `js-harness
+  wait --notice-to 134`. T6's read: `D:\plataforma-preproyecto` and `D:\abogadaclaudiajimenez` select `outputStyle:
+  js-harness` in their `.claude/settings.local.json`; `D:\js-harness` selects none, so after the removal only this
+  repository loses the style it has (gentle-ai's user-level "Neutral"), which goes to him as the style question. Next:
+  read both reviews, answer each finding (`double-review answer`), fix test first; the independent verifier over
+  `84997f7d..HEAD`; PR with `--pr` ready notice; then the sitting's plan to the lead (T6), its first question being
+  the sitting itself.
+- L10 2026-11-02 ~21:50Z: the lenses over `84997f7..628bace` complete, 0 findings each (risk 139,423 input tokens,
+  reliability 68,991, resilience 68,983). Codex's first run discarded part 1 of 6 (160,754 input tokens) because L9
+  was written into this document while it ran: `edit-during-review`, its `Seen:` line added. Next: commit this, then
+  run `js-harness codex-review --base 84997f7d` once more, nothing edited until it ends; then the verifier, the PR.
