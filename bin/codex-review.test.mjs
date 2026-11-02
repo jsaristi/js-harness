@@ -6943,7 +6943,7 @@ test('a range that starts at the head of a review that found something is a rech
   assert.deepEqual(record, { ...reviewedRecord(head, fixed), run: RECHECK_ID, recheckOf: head });
   const line = readCodexReviewRuns(root).at(-1);
   assert.deepEqual(line.recheck, { of: head, findings: 3, fixed: 2, notFixed: 1, followUps: 1, blocking: 0, unmarked: 0 });
-  assert.deepEqual([line.prompt, line.promptVersion], ['own', 'js-harness.codex-review-recheck-prompt/v1']);
+  assert.deepEqual([line.prompt, line.promptVersion], ['own', 'js-harness.codex-review-recheck-prompt/v2']);
 });
 
 test('a second recheck of the same findings is refused before anything runs, and nothing is recorded', async () => {
@@ -7030,7 +7030,7 @@ test('a new finding that blocks is said apart from the follow-ups, and keeps the
   const { root, head } = await reviewedThenCorrected();
   const result = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root, { blocks: true })), randomUUID: () => RECHECK_ID });
   assert.equal(result.code, 0, result.err);
-  assert.ok(result.out.split('\n').includes('Blocking, a new finding that could make a failing check pass or exposes data: 1.'), result.out);
+  assert.ok(result.out.split('\n').includes('Blocking, a new finding that could make a failing check pass, exposes data or is a regression the correction brought: 1.'), result.out);
   assert.deepEqual(readCodexReviewRuns(root).at(-1).recheck, { of: head, findings: 3, fixed: 2, notFixed: 1, followUps: 1, blocking: 1, unmarked: 0 });
 });
 

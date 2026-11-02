@@ -5,6 +5,7 @@ import {
   classifyRecheck,
   FOLLOW_UP,
   NOT_FIXED,
+  RECHECK_PROMPT_VERSION,
   recheckAnchor,
   recheckPrompt,
   recheckState,
@@ -133,7 +134,11 @@ test('the recheck prompt keeps the review prompt and lists each earlier finding 
   const text = recheckPrompt('Review the range a..b.\n', [finding('[P2] Drops a record'), finding('Slow', { file: 'lib/y.mjs', start: 9, end: 9, severity: null, body: 'Two\nlines.' })]);
   assert.ok(text.startsWith('Review the range a..b.\n\n## A recheck of earlier findings\n'), text);
   for (const mark of [NOT_FIXED, FOLLOW_UP, BLOCKS]) assert.ok(text.includes(`"${mark}"`), mark);
-  assert.ok(text.includes('could make a failing check pass, or that exposes data'), text);
+  assert.ok(text.includes('could make a failing check pass, that exposes data'), text);
+  // odd/tasks/double-review-alignment.md, spec 7: a confirming review can miss what a correction breaks (L16), so a
+  // regression the correction brought into what it changed blocks.
+  assert.ok(text.includes('or a regression this range brought into what it changed: something the changed code did before this range that it no longer does'), text);
+  assert.equal(RECHECK_PROMPT_VERSION, 'js-harness.codex-review-recheck-prompt/v2');
   // The review prompt says to report nothing of code the diff leaves as it was; an earlier finding still
   // open may be on such code, so the recheck says that rule does not hold for it.
   assert.ok(text.includes('An earlier finding that is still open is reported even when this range leaves its lines as they were'), text);

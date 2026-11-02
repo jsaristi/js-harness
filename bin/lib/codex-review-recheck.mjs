@@ -11,7 +11,7 @@
 //   change only documents between that head and the start of the range do not move it: a feature document
 //   committed before the fix is how a correction is usually made. Its prompt lists those findings and asks,
 //   for each, whether the range fixes it (`recheckPrompt`). Anything new is a follow-up that does not
-//   block, except a finding that could make a failing check pass, or that exposes data, which blocks
+//   block, except a finding that could make a failing check pass, exposes data or is a regression, which blocks
 //   (`classifyRecheck`). A finding the answer does not mark is taken as open, never as fixed.
 // - Its record stays `reviewed`, so it covers its commits as any review does, and names the head whose
 //   findings it checked (`recheckOf`); its run line counts what it found (`recheck`).
@@ -30,7 +30,7 @@ import { isValidCodexReview } from './codex-reviews.mjs';
 import { EXCUSED_REFUSED_TESTS } from './no-test-outside-turn.mjs';
 
 /** The version of the text a recheck adds to the review prompt. */
-export const RECHECK_PROMPT_VERSION = 'js-harness.codex-review-recheck-prompt/v1';
+export const RECHECK_PROMPT_VERSION = 'js-harness.codex-review-recheck-prompt/v2';
 
 /** The marks a recheck's answer puts at the start of a finding's title. */
 export const NOT_FIXED = '[not fixed]';
@@ -162,7 +162,7 @@ export function recheckPrompt(text, findings) {
     '- A finding that is fixed needs nothing: do not report it.',
     '- An earlier finding that is still open is reported even when this range leaves its lines as they were, or changes another file: for these findings, the rule above to report nothing of code the diff leaves as it was does not hold.',
     `- Anything else you notice is a follow-up: its title starts with "${FOLLOW_UP}". It does not block, so report it once and briefly.`,
-    `- Except a new finding that could make a failing check pass, or that exposes data (a secret, a credential, or a person's data): its title starts with "${BLOCKS}".`,
+    `- Except a new finding that could make a failing check pass, that exposes data (a secret, a credential, or a person's data), or a regression this range brought into what it changed: something the changed code did before this range that it no longer does. Its title starts with "${BLOCKS}".`,
     'Every finding you report starts with one of these three marks.',
     'Do not look for new edges of the corrected code beyond these findings: this is a recheck of them, not a new review of the range.',
     '',
