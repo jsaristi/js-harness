@@ -70,7 +70,8 @@ export function tallyOf(entries, { since } = {}) {
   return READERS.filter((reader) => rows.has(reader)).map((reader) => rows.get(reader));
 }
 
-const isAnswer = (entry) => entry?.schema === DOUBLE_REVIEW_SCHEMA && entry.kind === 'answer' && typeof entry.run === 'string' && typeof entry.reviewer === 'string';
+const isAnswer = (entry) => entry?.schema === DOUBLE_REVIEW_SCHEMA && entry.kind === 'answer' && typeof entry.run === 'string' && typeof entry.reviewer === 'string'
+  && Number.isInteger(entry.findings) && Array.isArray(entry.taken) && Array.isArray(entry.rebutted);
 
 /** Each reviewer of code's yield over the answers of `entries` on or after `since`, in the order each first appears:
  * `{ reviewer, answered, findings, taken, rebutted }`. The answer to a review's findings is the last of that run and

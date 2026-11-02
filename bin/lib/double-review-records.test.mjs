@@ -86,3 +86,9 @@ test('codeTallyOf counts the last answer of each run and reviewer, since a day, 
   assert.deepEqual(codeTallyOf(entries)[0], { reviewer: 'codex', answered: 2, findings: 5, taken: 4, rebutted: 1 });
   assert.deepEqual(codeTallyOf([]), []);
 });
+
+test('codeTallyOf leaves out an answer line whose counts are not numbers and lists, as tallyOf leaves out a malformed read', () => {
+  const good = { schema: DOUBLE_REVIEW_SCHEMA, kind: 'answer', run: 'c1', reviewer: 'codex', at: '2026-11-01T10:00:00Z', findings: 1, taken: [1], rebutted: [] };
+  const entries = [good, { ...good, run: 'c2', taken: undefined }, { ...good, run: 'c3', findings: '2' }, { ...good, run: 'c4', rebutted: 'none' }];
+  assert.deepEqual(codeTallyOf(entries), [{ reviewer: 'codex', answered: 1, findings: 1, taken: 1, rebutted: 0 }]);
+});
