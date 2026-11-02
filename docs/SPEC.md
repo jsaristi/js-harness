@@ -72,7 +72,7 @@ of the capabilities, not to this layout ("The specification stays alive", Discar
  the host: Claude Code works, Codex reviews
      │  loads every turn: CLAUDE.md → @AGENTS.md, ~/.claude/CLAUDE.md, the output style,
      │  skill descriptions, the MCP servers' instructions, what hooks print
-     │  runs hooks: `js-harness <command> --hook` (13 Claude entries, 5 Codex entries)
+     │  runs hooks: `js-harness <command> --hook` (Claude's, `entryComponents`; none for Codex)
      ├──────────────────────────────┬────────────────────────────────────┐
      ▼                              ▼                                    ▼
  js-harness (bin/, the package)    the stack (MCP servers, CLIs)        the owner's other tools

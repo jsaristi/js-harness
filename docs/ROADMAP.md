@@ -1002,7 +1002,7 @@ recommended; everything keeps entering as today; everything is noted, his too), 
 same way). So an improvement that appears becomes a task of the first version, not a note for
 after it.
 
-**`docs/SPEC.md` is written last**, when everything else of the first version is finished and
+**`docs/SPEC.md` was to be written last**, when everything else of the first version is finished and
 the code is still, before the practice run and the tag; it stays rule-hierarchy's (T1). Asked
 who writes it, he tapped "Al final, con el código quieto" (the lead's transcript `65318fd5`,
 line 13982, 2026-10-13, read with `sessions --quote`), among a seventh session (the one
@@ -1012,7 +1012,10 @@ con ese documento". Its design is in "Rule hierarchy" above. Meanwhile each feat
 close, sends the lead one note per capability it built in the document's five parts, which the
 lead keeps for whoever writes it. That is the lead's reading of his answer to how the sessions
 leave those notes (line 14050, tapped "Que me lo manden a mí", among a section in each document,
-the one recommended, and a file for each capability).
+the one recommended, and a file for each capability). Done otherwise since: `docs/SPEC.md` was written on
+2026-10-16 (`794b7feb`), before the code was still, with the `spec` row of `check` that holds it to the code
+at every commit, so it is kept alive rather than written last (its capability "The specification stays
+alive").
 
 **Defects in shipped behaviour that had no task, read in the code on 2026-10-13** (`main` at
 `f98f478`). They came as claims of the lead's readers and of the session-channel session;
