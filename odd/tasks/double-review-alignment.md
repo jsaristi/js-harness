@@ -292,8 +292,8 @@ answer <run id> <reviewer> --taken --rebutted --why`, and `tally` rows per revie
 reviewed. T8c 5c67d309 (the lenses recheck their earlier findings, `recheckOf`) is committed too. T8 is done and reviewed (L21), PR 749 from `feat/review-answers` (left out of one land by a timing test under
 load, L22). T9 is done and reviewed (L22), landed as PR 753 (main a0b5334). T2 is done and reviewed (L23) on
 `rule/codex-weekly-floor`: b9a92dcf, 52cd8390, c0ca22e7, landed as PR 754 (main 064f5c7). T6's verifier found
-gaps (L24); T10 fixed them on `feat/floor-followups`, reviewed (L25), with older text 16. Next: the PR lands, then
-T6 closes with the report of how to try it. D5's two exemptions (Claude 6 of L12) are
+gaps (L24); T10 fixed them on `feat/floor-followups`, reviewed (L25), with older text 16. PR 755 landed (main 65e40fd).
+The feature is closed (L26); the eval of PR 737's brief stays owed by 2026-11-30, on his word. D5's two exemptions (Claude 6 of L12) are
 kept in T4's text, since a question of fact proposes nothing and a reviewed text named by path is not read again, and
 the report says so for him to change. T6 keeps T2's verifier, older text 16 and the report of how to try it.
 Meter 5% weekly on 2026-11-02 at 09:40 (2 credits left); floor `rule:codex-weekly-floor`.
@@ -339,7 +339,7 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   `double-review read` reads the floor before both readers start; the debts' read cannot cost the reading; the share
   left is said to one decimal; the weekly window is found by its length; the contract's names follow the rule's;
   spec 4, 10; route codex-meter, double-review.
-- [ ] T6 (kind: verify) Reviews (Codex, lenses, an independent verifier for T2, a guard's input, and T3, two
+- [x] T6 (kind: verify) L24, L26; Reviews (Codex, lenses, an independent verifier for T2, a guard's input, and T3, two
   processes at once), gate, PR, older text 16; the report tells him how to try it (L1); spec all.
 
 ## Log
@@ -556,3 +556,6 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   its status answered once with an execute and timed out before, and nothing was started, by `CLAUDE.md`'s rule for a
   branch candidate. Older text 16: the roadmap's alignment item says what was done, and that the eval stays owed.
   PR 755 carries T10 and older text 16.
+- L26 (2026-11-02, evidence): T6 done. PR 755 landed as main 65e40fd; the independent verifier's findings are in L24,
+  those taken fixed in T10; the report of how to try it went to the lead with the closed notice. Left open: L24's 3, 6, 8's
+  default reader and 9; the eval, planned, not run.
