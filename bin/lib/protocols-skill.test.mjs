@@ -82,6 +82,8 @@ test('the protocol for changing a rule opens with the stale 73 percent, and its 
 test('protocol 3 sends every slice of code through Codex and the Claude lenses where their switches are on', () => {
   const protocol3 = sections(TEXT)[2].lines.join('\n');
   assert.match(protocol3, /every slice of code goes through Codex where the project's `codexReview` switch is on/);
+  // odd/tasks/double-review-alignment.md, spec 7: code's two reviews are given what was asked.
+  assert.match(protocol3, /each given what was asked, `--doc <feature document>` for large work or `--request "<the request as written>"` for small work/);
   assert.match(protocol3, /through the Claude lenses where its `lensReview` switch is on/);
 });
 

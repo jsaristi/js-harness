@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INTENT_MAX_CHARS, IntentError, quotedPath, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt, SUITE_RAN, CONVENTIONS } from './codex-review-prompt.mjs';
+import { INTENT_MAX_CHARS, IntentError, quotedPath, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, requestIntent, reviewIntent, reviewPrompt, SUITE_RAN, CONVENTIONS } from './codex-review-prompt.mjs';
 import { NO_TEST_LINE } from './no-test-outside-turn.mjs';
 
 const FROM = 'a'.repeat(40);
@@ -18,9 +18,10 @@ function body(text) {
 // --- the prompt ---
 
 test('the prompt is versioned', () => {
-  // `v2` of the whole range and `v3` of a merge: the text ends with CONVENTIONS.
-  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v2');
-  assert.equal(REVIEW_MERGE_PROMPT_VERSION, 'js-harness.codex-review-merge-prompt/v3');
+  // `v2` of the whole range and `v3` of a merge: the text ends with CONVENTIONS. `v3` and `v4`: what was asked, a
+  // feature document's specs or a request as written, judged for real failures.
+  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v3');
+  assert.equal(REVIEW_MERGE_PROMPT_VERSION, 'js-harness.codex-review-merge-prompt/v4');
 });
 
 // odd/tasks/conventions.md, S6: what no test can judge is asked of the reviewer on each diff, in words that hold for
@@ -110,13 +111,49 @@ test('reviewPrompt with an intent adds the goal and the done-when under a headin
   const prompt = reviewPrompt({ from: FROM, head: HEAD, intent });
   assert.ok(body(prompt).startsWith(body(reviewPrompt({ from: FROM, head: HEAD }))), 'the intent comes after the range, which stays as it was');
   const added = body(prompt).slice(body(reviewPrompt({ from: FROM, head: HEAD })).length);
-  assert.match(added, /^\n## What the change is for\n/);
+  assert.match(added, /^\n## What was asked\n/);
   assert.match(added, /judge the change against/i);
   // A reviewed range is a slice of its feature, so a criterion a later slice meets is not a defect of this one.
   assert.match(added, /one step .* not a finding/i);
   assert.ok(added.includes('### Goal\nThe command measures every attempt.\n'), added);
   assert.ok(added.includes('### Done when\n- `npm run check` exits 0\n- The roadmap records the result\n'), added);
   assert.ok(added.indexOf('### Goal') < added.indexOf('### Done when'));
+});
+
+// odd/tasks/double-review-alignment.md, spec 7: a code review is given what was asked, the feature document's specs
+// and contract for large work, the request as written for small work, and judges for a real failure.
+test('reviewPrompt with a feature document carries its specs after the done-when, when the document has them', () => {
+  const intent = { goal: 'The command measures every attempt.', doneWhen: '- `npm run check` exits 0', specs: '1. "Measure every attempt" (L1)' };
+  const added = body(reviewPrompt({ from: FROM, head: HEAD, intent })).slice(body(reviewPrompt({ from: FROM, head: HEAD })).length);
+  assert.ok(added.includes('### Specs\n1. "Measure every attempt" (L1)\n'), added);
+  assert.ok(added.indexOf('### Done when') < added.indexOf('### Specs'));
+  assert.doesNotMatch(body(reviewPrompt({ from: FROM, head: HEAD, intent: { goal: intent.goal, doneWhen: intent.doneWhen } })), /### Specs/);
+});
+
+test('reviewPrompt with a request carries it as written, under what was asked, to judge the change against', () => {
+  const intent = requestIntent('Make `wait` print the session it woke for. Sebastián: "que diga cuál"');
+  const prompt = reviewPrompt({ from: FROM, head: HEAD, intent });
+  assert.ok(body(prompt).startsWith(body(reviewPrompt({ from: FROM, head: HEAD }))), 'the request comes after the range');
+  const added = body(prompt).slice(body(reviewPrompt({ from: FROM, head: HEAD })).length);
+  assert.match(added, /^\n## What was asked\n/);
+  assert.match(added, /judge the change against/i);
+  assert.ok(added.includes(`### The request\n${intent.request}\n`), added);
+  assert.doesNotMatch(added, /### Goal|### Done when|feature document/);
+});
+
+test('whatever was asked, the prompt asks for real failures and says a preference that breaks nothing is no finding', () => {
+  for (const intent of [{ goal: 'g', doneWhen: '- d' }, requestIntent('r')]) {
+    const prompt = reviewPrompt({ from: FROM, head: HEAD, intent });
+    assert.match(prompt, /a real failure/i);
+    assert.match(prompt, /a preference that breaks nothing is not a finding/i);
+  }
+});
+
+test('requestIntent takes the request trimmed and bounded, and refuses an empty one', () => {
+  assert.deepEqual(requestIntent('  fix the wait\n'), { request: 'fix the wait' });
+  for (const empty of ['', '   ', '\n\t', undefined, null]) assert.throws(() => requestIntent(empty), (err) => err instanceof IntentError && /empty/.test(err.message), JSON.stringify(empty));
+  const { request } = requestIntent('word '.repeat(600));
+  assert.match(request, /\n\[Cut here: this section is 2,999 characters long, and only its first 2,000 are given\.\]$/);
 });
 
 test('reviewPrompt carries the intent as written: quotes, percent signs, ampersands and other alphabets', () => {
@@ -142,8 +179,8 @@ const PART = { index: 2, of: 3, files: ['bin/a.mjs', 'docs/my notes.md'] };
 test('the prompt of a part has a version of its own, and the prompt of a whole range keeps its text before the conventions', () => {
   // `v2`: the command of a part reads its file names literally (`--literal-pathspecs`), which `v1` did not.
   // `v3`: it says so when the range leaves files out of the review, and a range of one part that does is
-  // asked with it. `v4`: it ends with CONVENTIONS.
-  assert.equal(REVIEW_PART_PROMPT_VERSION, 'js-harness.codex-review-part-prompt/v4');
+  // asked with it. `v4`: it ends with CONVENTIONS. `v5`: what was asked, as the whole range's `v3`.
+  assert.equal(REVIEW_PART_PROMPT_VERSION, 'js-harness.codex-review-part-prompt/v5');
   assert.notEqual(REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION);
   // The text a whole range was asked with in the runs recorded under `v1`, to the character, which `v2` ends with
   // CONVENTIONS.
@@ -312,6 +349,13 @@ test('reviewIntent reads the Goal and the Done when of a feature document, trimm
     doneWhen: '- `npm run check` exits 0\n- The roadmap records the result',
   });
   assert.deepEqual(reviewIntent(DOC.replaceAll('\n', '\r\n')), reviewIntent(DOC), 'a document checked out with CRLF reads the same');
+});
+
+test('reviewIntent adds the Specs of a feature document that has them, bounded as the other sections are', () => {
+  const withSpecs = `${DOC}\n## Specs\n1. "Measure every attempt" (L1)\n`;
+  assert.deepEqual(reviewIntent(withSpecs), { ...reviewIntent(DOC), specs: '1. "Measure every attempt" (L1)' });
+  assert.equal('specs' in reviewIntent(`${DOC}\n## Specs\n\n`), false, 'an empty Specs section adds nothing');
+  assert.match(reviewIntent(`${DOC}\n## Specs\n${'word '.repeat(600)}`).specs, /\[Cut here: /);
 });
 
 test('reviewIntent takes the real headings, not the ones inside a fenced example', () => {

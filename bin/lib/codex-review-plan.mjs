@@ -214,10 +214,11 @@ export function reviewPlan({ base, head, model, effort, parts, runs = [], maxPar
   };
 }
 
-const thousands = (count) => String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+/** `count` grouped by thousands, for a person: `1,234`. */
+export const thousands = (count) => String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
 /** `count` things, with `noun` in the singular for one: `1 part`, `2 parts`. */
-const counted = (count, noun) => `${thousands(count)} ${noun}${count === 1 ? '' : 's'}`;
+export const counted = (count, noun) => `${thousands(count)} ${noun}${count === 1 ? '' : 's'}`;
 
 /** What the estimate of `plan` is and what it rests on, as one line; or that there is none, and why.
  *

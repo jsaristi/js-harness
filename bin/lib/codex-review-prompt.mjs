@@ -31,8 +31,9 @@ import { NO_TEST_EXIT, NO_TEST_LINE } from './no-test-outside-turn.mjs';
 
 // The version of the text `reviewPrompt` writes, kept in the run line of every review that used it, so that
 // two reviews are only compared knowing whether they were asked the same thing. Any change to the wording
-// below is a new version. `v2` is `v1` ending with `CONVENTIONS`.
-export const REVIEW_PROMPT_VERSION = 'js-harness.codex-review-prompt/v2';
+// below is a new version. `v2` is `v1` ending with `CONVENTIONS`. `v3` is `v2` with what was asked (`askedText`):
+// a feature document's specs beside its goal and criteria, or a request as written, and a finding a real failure.
+export const REVIEW_PROMPT_VERSION = 'js-harness.codex-review-prompt/v3';
 
 // The version of the text `reviewPrompt` writes for one part of a range, kept in the run line of that part.
 // It is a version of its own because it is another text: a change to the wording of a part leaves the
@@ -40,13 +41,14 @@ export const REVIEW_PROMPT_VERSION = 'js-harness.codex-review-prompt/v2';
 // names of the part read literally by the command it names (`git --literal-pathspecs diff`, see `scope`).
 // `v3` is `v2` where the range leaves no file out of the review, to the character; where it does, the last
 // line says so, and a range of one part is asked with this text as well. `v4` is `v3` ending with `CONVENTIONS`.
-export const REVIEW_PART_PROMPT_VERSION = 'js-harness.codex-review-part-prompt/v4';
+// `v5` is `v4` with what was asked, as the whole range's `v3`.
+export const REVIEW_PART_PROMPT_VERSION = 'js-harness.codex-review-part-prompt/v5';
 
 // The version of the text `reviewPrompt` writes for a part of the review of a merge (`merge`): another text,
 // which names what was written in the merge, the diff of the automatic merge's tree and the merge, instead
 // of a diff of two commits. `v1` named `git show --remerge-diff`, which shows nothing in a read-only sandbox.
-// `v3` is `v2` ending with `CONVENTIONS`.
-export const REVIEW_MERGE_PROMPT_VERSION = 'js-harness.codex-review-merge-prompt/v3';
+// `v3` is `v2` ending with `CONVENTIONS`. `v4` is `v3` with what was asked, as the whole range's `v3`.
+export const REVIEW_MERGE_PROMPT_VERSION = 'js-harness.codex-review-merge-prompt/v4';
 
 // How much of each section of the intent goes into the prompt: a feature document is written by hand and
 // has no bound of its own, and the prompt is paid on every request of the review.
@@ -209,12 +211,38 @@ function promptText({ from, head, intent, part, leftOut, merge }) {
   }
   const range = scope(from, head, part, leftOut, merge);
   if (intent === null) return `${range.join('\n')}\n`;
-  const purpose = [
-    '## What the change is for',
-    'The goal and the completion criteria below come from the feature document this change belongs to. Judge the change against them: where it works against what they ask, or does something they rule out, that is a finding.',
+  return `${range.join('\n')}\n\n${askedText(intent)}\n`;
+}
+
+/** What `codex-review` and `lens-review` say of a review given neither a feature document nor a request: it still
+ * runs, and whoever reads its verdict knows it did not judge what was asked (spec 7: "a review with none says so"). */
+export const NO_ASKED = 'No request was given, so this review judges the code alone and not what was asked: pass --doc <feature document> for large work, or --request "<the request as written>" for small work.';
+
+// What both kinds of what was asked add (odd/tasks/double-review-alignment.md, spec 7: models criticize "incluso
+// cuando está todo bien", and a review is to find what really fails).
+const REAL_FAILURE = 'Report a real failure: something that breaks, or that works against what was asked; a preference that breaks nothing is not a finding.';
+
+/** The section that says what was asked of the change, for `intent` as `reviewIntent` or `requestIntent` gives
+ * it: a feature document's goal, completion criteria and specs, or a request as written. No trailing newline.
+ * The Claude lenses are given the same section (`./lens-prompts.mjs`), so code's two reviews judge one thing. */
+export function askedText(intent) {
+  if (typeof intent.request === 'string') {
+    return [
+      '## What was asked',
+      'The request below is what was asked of this change, as it was written. Judge the change against it: where the change does not do what it asks, or works against it, that is a finding.',
+      REAL_FAILURE,
+      '',
+      '### The request',
+      intent.request,
+    ].join('\n');
+  }
+  const asked = [
+    '## What was asked',
+    'The goal, the completion criteria and any specs below come from the feature document this change belongs to. Judge the change against them: where it works against what they ask, or does something they rule out, that is a finding.',
     // A reviewed range is a work unit or a slice, never the whole feature, and the criteria are the whole
     // feature's: without this line every slice but the last would be reported as incomplete.
     'The change may be one step towards them, so a criterion it has not reached yet is not a finding by itself.',
+    REAL_FAILURE,
     '',
     '### Goal',
     intent.goal,
@@ -222,7 +250,8 @@ function promptText({ from, head, intent, part, leftOut, merge }) {
     '### Done when',
     intent.doneWhen,
   ];
-  return `${range.join('\n')}\n\n${purpose.join('\n')}\n`;
+  if (typeof intent.specs === 'string') asked.push('', '### Specs', intent.specs);
+  return asked.join('\n');
 }
 
 /** A feature document that holds no intent to carry: `heading` is the section that is missing or empty. */
@@ -253,6 +282,7 @@ function bounded(text, maxChars) {
 /** The intent of the feature document `markdown`, as `{ goal, doneWhen }`: the bodies of its `## Goal` and
  * `## Done when` sections (the task contract's, found as `parseContract` finds them, so a heading inside a
  * fenced example is not one), trimmed, each bounded to `maxChars` characters with a note where it was cut.
+ * A document with a `## Specs` section that holds text adds it as `specs`, bounded the same way.
  * Throws an `IntentError` that names the heading when a section is missing or empty. */
 export function reviewIntent(markdown, { maxChars = INTENT_MAX_CHARS } = {}) {
   const sections = parseContract(markdown);
@@ -262,5 +292,14 @@ export function reviewIntent(markdown, { maxChars = INTENT_MAX_CHARS } = {}) {
     if (text === '') throw new IntentError(`The \`## ${heading}\` section of the feature document is empty, so it holds no intent for the review to carry.`, heading);
     return bounded(text, maxChars);
   };
-  return { goal: body('Goal'), doneWhen: body('Done when') };
+  const specs = sections.get('Specs') ?? '';
+  return { goal: body('Goal'), doneWhen: body('Done when'), ...(specs === '' ? {} : { specs: bounded(specs, maxChars) }) };
+}
+
+/** The intent of a small change, which has no feature document: the request as it was written, trimmed and
+ * bounded to `maxChars` characters, as `{ request }`. Throws an `IntentError` when it is empty. */
+export function requestIntent(text, { maxChars = INTENT_MAX_CHARS } = {}) {
+  const request = typeof text === 'string' ? text.trim() : '';
+  if (request === '') throw new IntentError('The request is empty, so it holds no intent for the review to carry.', null);
+  return { request: bounded(request, maxChars) };
 }

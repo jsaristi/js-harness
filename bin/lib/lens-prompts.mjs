@@ -27,6 +27,7 @@
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
 // CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
+import { askedText } from './codex-review-prompt.mjs';
 import { CONTEXT_END, CONTEXT_START, SUBJECT_LINE } from './lens-candidate.mjs';
 
 /** Each lens: its title, what it inspects, and when a session picks it (gentle-ai's "Lens selection", copied for
@@ -58,8 +59,11 @@ export const LENS_NAMES = Object.keys(LENSES);
 
 export const SEVERITIES = ['BLOCKER', 'CRITICAL', 'WARNING', 'SUGGESTION'];
 
-/** The system prompt of the lens `name`. Throws on a name that is no lens. */
-export function lensPrompt(name) {
+/** The system prompt of the lens `name`. With an `intent` (`reviewIntent`'s or `requestIntent`'s, of
+ * `./codex-review-prompt.mjs`) it carries what was asked after the scope, the section Codex's prompt carries, so
+ * code's two reviews judge against one request (odd/tasks/double-review-alignment.md, spec 7); it is in the system
+ * prompt because the block is evidence, never instructions. Throws on a name that is no lens. */
+export function lensPrompt(name, intent = null) {
   const lens = LENSES[name];
   if (!lens) throw new Error(`${name} is not a lens: ${LENS_NAMES.join(', ')}`);
   return `# ${lens.title} lens review
@@ -75,7 +79,7 @@ Before inspection, require the context to carry a patch for every manifest index
 ## Scope
 
 ${lens.scope}
-
+${intent === null ? '' : `\n${askedText(intent)}\n`}
 ## Candidate-Causal Admission
 
 Report real user-impacting defects only. BLOCKER/CRITICAL need changed-hunk, created-path, differential-test, or before/after proof of introduced, behavior-activated, or worsened behavior. Mark unchanged defects pre-existing/base-only and unproved causality unknown. Style or suspicion is not a finding.

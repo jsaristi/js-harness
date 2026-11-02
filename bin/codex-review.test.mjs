@@ -16,7 +16,7 @@ import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
 import { mergeStart, rangeDiff } from './lib/codex-review-coverage.mjs';
 import { numstatFiles } from './lib/codex-review-parts.mjs';
 import { methodRecord, methodRecordLine, PLAN_METHOD, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
-import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt, SUITE_RAN } from './lib/codex-review-prompt.mjs';
+import { NO_ASKED, requestIntent, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt, SUITE_RAN } from './lib/codex-review-prompt.mjs';
 import * as reviewRuns from './lib/codex-review-runs.mjs';
 import { runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
 import * as reviewRecords from './lib/codex-reviews.mjs';
@@ -1486,7 +1486,7 @@ test(`the usage names no session: its flags are those of a review, and its secon
   const result = await run(['--cwd', '.']);
   assert.equal(result.code, 2);
   const [, , usage, loads, ...more] = result.err.split('\n');
-  assert.equal(usage, 'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] [--unavailable <reason>] [--cwd <path>] [--home <path>]');
+  assert.equal(usage, 'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--request <text>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] [--unavailable <reason>] [--cwd <path>] [--home <path>]');
   assert.equal(
     loads,
     `Codex gets the diff, the repository to read and the project's AGENTS.md, and none of your Codex configuration; the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.`,
@@ -1498,7 +1498,8 @@ test(`the usage names no session: its flags are those of a review, and its secon
     'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
     PROMPT_DEFAULT_SAID,
     STARTS_WHERE_RECORDS_END,
-    '`--doc <feature document>` judges the change against that document\'s Goal and Done when, and needs `--prompt own`.',
+    '`--doc <feature document>` judges the change against that document\'s Goal, Done when and Specs, for large work; `--request <text>` against the request as written, for small work. ' +
+      'Either asks the own prompt, in a turn too, and neither goes with `--prompt codex`; a review given neither says it judges the code alone.',
     '`--part-lines <n>` is how many changed lines a part of a large range holds at most, in place of the default.',
     '`--fresh` reviews every part of a range again, where a run otherwise keeps the parts that passed in an earlier run of it.',
     '`--keep-home` leaves the Codex home of the run in place after it.',
@@ -2315,7 +2316,7 @@ test('the run line says which prompt the review was asked with, and the version 
   await run(['--base', 'HEAD~1', '--again', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base)));
   await run(['--base', 'HEAD~1', '--again', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base), { status: 7 }));
   const runs = readCodexReviewRuns(root);
-  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v2');
+  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v3');
   assert.deepEqual(runs.map((line) => [line.outcome, line.session, line.prompt, line.promptVersion]), [
     ['reviewed', 'lean', 'codex', null],
     ['reviewed', 'lean', 'own', REVIEW_PROMPT_VERSION],
@@ -2343,10 +2344,12 @@ test('--prompt and --doc: a prompt that is not one, and a document with no own p
     [['--session', 'lean', '--prompt', 'mine'], /--prompt must be `codex` or `own`/],
     [['--prompt', 'OWN'], /--prompt must be `codex` or `own`/],
     [['--session', 'lean', '--prompt'], /--prompt requires a value/],
-    [['--session', 'lean', '--doc', doc], /--doc needs --prompt own/],
     [['--session', 'lean', '--prompt', 'codex', '--doc', doc], /--doc needs --prompt own/],
-    [['--doc', doc], /--doc needs --prompt own/],
+    [['--prompt', 'codex', '--request', 'fix it'], /--request needs --prompt own/],
     [[...OWN, '--doc'], /--doc requires a value/],
+    [[...OWN, '--request'], /--request requires a value/],
+    [[...OWN, '--request', '  '], /--request: The request is empty/],
+    [[...OWN, '--doc', doc, '--request', 'fix it'], /--doc and --request do not go together/],
   ];
   for (const [flags, message] of cases) {
     const fake = fakeCodex(reviewed(root, base));
@@ -2372,6 +2375,39 @@ test('out of a turn, --doc with no --prompt or with --prompt codex goes into the
     assert.equal(result.code, 0, `${flags.join(' ')}: ${result.err}`);
     assert.equal(fake.calls[0].child.received.text, expected, flags.join(' '));
   }
+});
+
+// odd/tasks/double-review-alignment.md, spec 7: a code review is given what was asked every time, the gate turn
+// included, so in a turn a --doc or a --request with no --prompt asks the own prompt, the one that carries it.
+test('in a turn, --doc or --request with no --prompt goes into the own prompt; --request carries the request as written', async () => {
+  const { root, base, head } = makeRepo();
+  const request = 'Make `wait` say the session it woke for & keep 100% of it.';
+  const cases = [
+    [['--doc', featureDoc()], reviewPrompt({ from: base, head, intent: { goal: GOAL, doneWhen: DONE_WHEN } })],
+    [['--request', request], reviewPrompt({ from: base, head, intent: requestIntent(request) })],
+    [[...OWN, '--request', request], reviewPrompt({ from: base, head, intent: requestIntent(request) })],
+  ];
+  for (const [flags, expected] of cases) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], fake);
+    assert.equal(result.code, 0, `${flags.join(' ')}: ${result.err}`);
+    assert.deepEqual(fake.calls[0].args, ownArgv(), flags.join(' '));
+    assert.equal(fake.calls[0].child.received.text, expected, flags.join(' '));
+    assert.equal(result.out.includes(NO_ASKED), false, result.out);
+  }
+});
+
+test('a review given neither --doc nor --request says it judges the code alone, in a turn and out of one', async () => {
+  const { root, base } = makeRepo();
+  for (const env of [IN_TURN, {}]) {
+    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], fakeCodex(reviewed(root, base)), env);
+    assert.equal(result.code, 0, result.err);
+    assert.ok(result.out.split('\n').includes(NO_ASKED), result.out);
+  }
+  assert.match(NO_ASKED, /--doc <feature document>.*--request/);
+  // A skip launches no review, so there is nothing to judge.
+  const skip = await run(['--base', 'HEAD~1', '--again', '--unavailable', 'no Codex here', '--cwd', root], fakeCodex(reviewed(root, base)));
+  assert.equal(skip.out.includes(NO_ASKED), false, skip.out);
 });
 
 test('a --doc that cannot be read, or holds no Goal or no Done when, is a usage error that names what is missing', async () => {
@@ -4637,7 +4673,8 @@ test('a run prints its plan before its first session starts, and the estimate of
   const onScreen = [];
   const whole = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...watching(fakeCodex(reviewed(root, base)), () => onScreen.push([...out])), log: (line) => out.push(line) });
   assert.equal(whole.code, 0, whole.err);
-  assert.equal(onScreen[0].length, 4, 'the header, the part and the estimate, and the session that is announced');
+  assert.equal(onScreen[0].length, 5, 'the header, the part and the estimate, the session that is announced, and that no request was given');
+  assert.equal(onScreen[0][4], NO_ASKED);
   assert.equal(onScreen[0][0], `Plan of the Codex review of ${base.slice(0, 7)}..${head.slice(0, 7)}: ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, 1 part, 8 changed lines in 3 files.`);
   assert.match(onScreen[0][1], /^ {2}part 1 of 1: 3 files, 8 changed lines, about [\d,]+ input tokens$/);
   assert.match(onScreen[0][3], /^Codex is reviewing /);
@@ -6441,7 +6478,7 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
   // The whole usage: the flags, then the line that says what a review loads and what it runs on, then the
   // one that says how its cost is seen first, then the one that says what it leaves out.
   assert.deepEqual(usage.err.split('\n').slice(2), [
-    'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
+    'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--request <text>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
       '[--unavailable <reason>] [--cwd <path>] [--home <path>]',
     'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
       `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.`,
@@ -6449,7 +6486,8 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
     'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
     PROMPT_DEFAULT_SAID,
     STARTS_WHERE_RECORDS_END,
-    '`--doc <feature document>` judges the change against that document\'s Goal and Done when, and needs `--prompt own`.',
+    '`--doc <feature document>` judges the change against that document\'s Goal, Done when and Specs, for large work; `--request <text>` against the request as written, for small work. ' +
+      'Either asks the own prompt, in a turn too, and neither goes with `--prompt codex`; a review given neither says it judges the code alone.',
     '`--part-lines <n>` is how many changed lines a part of a large range holds at most, in place of the default.',
     '`--fresh` reviews every part of a range again, where a run otherwise keeps the parts that passed in an earlier run of it.',
     '`--keep-home` leaves the Codex home of the run in place after it.',

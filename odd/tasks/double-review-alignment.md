@@ -285,8 +285,9 @@ sweep, a record of that day (L16, Claude 10).
 State on 2026-11-01, on `rule/review-flow` from main f063429 (PR 745 landed T1, T3 and T5). He answered question
 150 in his own words (L14) and added the bound (L17): `## Redesign after question 150`, decided in L15, read blind
 in L16 and its findings taken; question 152 put it to him, and he approved it with point 5 changed: no reserve, a
-notice at 2% left and his decision on the reset (L18). T4 is done (85d8ee7f, L19), its own pull request from
-`rule/review-flow`. Next, in order, each a slice with Codex and the lenses: T7, T8, T9, T2; D5's two exemptions (Claude 6 of L12) are
+notice at 2% left and his decision on the reset (L18). T4 is done (85d8ee7f, L19), landed as PR 746 (main 5823566).
+T7 is done (64a588eb, L20) on `feat/review-request`, its own pull request. Next, in order, each a slice with
+Codex and the lenses: T8, T9, T2; D5's two exemptions (Claude 6 of L12) are
 kept in T4's text, since a question of fact proposes nothing and a reviewed text named by path is not read again, and
 the report says so for him to change. T6 keeps T2's verifier, older text 16 and the report of how to try it.
 Meter 87% weekly; floor 2% left.
@@ -314,7 +315,7 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
 - [x] T4 (kind: build) 85d8ee7f; `rules change double-review` on his words of questions 145, 146, 150 and 152 (L2, L3, L14,
   L17, L18): section 1's one text says points 1 to 4 of `## Redesign after question 150`, `claudeBlock` and section 7
   name it, D5 retired by name; older texts 1 to 3, 11, 14, 15, 18, 20 and 21; spec 2, 7, 8.
-- [ ] T7 (kind: build) Point 2: `codex-review` and `lens-review` are given what was asked, every time: the feature
+- [x] T7 (kind: build) 64a588eb; Point 2: `codex-review` and `lens-review` are given what was asked, every time: the feature
   document's specs and contract for large work, `--request <text>` for small work, the gate turn included, and a
   review with none says so; their prompts judge against it; spec 7; route codex-review, lens-review.
 - [ ] T8 (kind: build) Point 3: every finding of code's pair gets an answer, taken with its commit or rebutted with
@@ -463,3 +464,11 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   confidence 0.87, no findings, 79,452 input tokens; lenses readability and risk: 0 findings each. Meter before it:
   weekly 87% used. A mistake: the turn ended at 18:58 local waiting for a compaction that only comes on a new turn,
   and nothing ran for about two hours (the lead's notice of 20:53, claimed); `docs/FAILURES.md` `turn-ended-waiting`.
+- L20 (2026-11-02, evidence): T7 committed as 64a588eb after the night's pause. The `NO_ASKED` line logged before
+  the plan broke about 30 exact-output tests (gate run 41379003377), and on stderr 59; logged once after the first
+  launch's line it broke 2, which pin it. `bin/codex-review.mjs` stays at its ceiling of 2284 lines: the reading of
+  `--doc` and `--request` moved to `bin/lib/review-asked.mjs`, shared with `lens-review`, and `thousands` and
+  `counted` are `codex-review-plan.mjs`'s. 445 tests of the touched files pass; `npm run check` PASS. Codex reviewed
+  4e4ff5c..64a588e with `--doc` this document: correct, confidence 0.87, no findings, 325,405 input tokens; lenses
+  reliability and readability: 0 findings each. A mistake of cost: the commit was run twice on a red gate, two
+  GitHub runs where one was owed; the second read nothing new.
