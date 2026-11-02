@@ -62,6 +62,7 @@ nothing there.
 | `docs/README.md` | live | | this page: the entry of a cold audit |
 | `docs/SPEC.md` | live | | the map: every capability with its reason and proof, then the architecture as it stands |
 | `docs/ROADMAP.md` | live | | the plan: principles, phases, what is decided, done, next and open |
+| `docs/RECORDS.md` | live | | the fields of each record the harness writes, a section per row of SPEC's "Where state lives" |
 | `docs/RULES.md` | live | | the rules, rendered from `bin/lib/rules-data.mjs` by `js-harness rules render`; not edited by hand |
 | `docs/rule-sources.json` | live | | the source of each rule: the owner's quoted words or the design that set it |
 | `docs/FAILURES.md` | live | | the failures register: each failure, its sightings and the control that stops it |

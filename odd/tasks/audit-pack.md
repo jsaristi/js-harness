@@ -436,6 +436,28 @@ Found by the search of item 2; each changes in T2.
   input tokens). Delivery: PR 752 merged `d195f663` into main (`0c1b0205`), so the branch `audit-pack-index` is this
   line at `cc051204`, T4's commits keeping their ids and so their review records; a cherry-pick onto main was made
   and dropped unpushed, since new ids would have owed T4's whole review again.
+- L14 2026-11-02, T5 built test first (`bin/lib/docs-records.mjs` and its test, the row's record part in
+  `bin/docs.mjs`). The detector's first run against SPEC's table as it stood: 107 names, 101 findings: 28 rows without
+  a section (no `docs/RECORDS.md` yet), 7 line anchors no source names, and 66 names no row held. The bar of spec 4: of the 4 home names the table lacked and the 6 review records, 8 of 10 found at first;
+  `codex-review-runs.jsonl` (a bare `FILE` constant) and `lens-answers` (`LENS_ANSWERS_FOLDER`, and
+  `REVIEW_RECORD_FILES` frozen) were missed, so the constant rule now takes a bare name, `_FOLDER` and
+  `Object.freeze`, test first: 10 of 10. The table rewritten from 28 rows to 44, writers by file and function and no
+  line anchors (so `refresh-copy.mjs:287` and `project.mjs:1063` are gone, not moved), from a read-only explorer's
+  map of the 85 names (134,002 subagent tokens); new rows: the project's instructions, onboarding, the audit entry,
+  host updates, the host's files the harness edits, review turns, test traces, a session's pause and reach, the live
+  board's cursor, the permit relay, the WSL gate, pages shown, stretches, templates, the status line, a restore.
+  The six home folders no literal names (`lead/`, `pace/`, `spec-notes/`, `research/`, `patches/`, `backups/`): no
+  source under `bin/` writes any (the explorer's search of the six names joined, made or written), so none is a row.
+  Not as planned: the allow-list. Three literals are no names at all (`SKILL.md`, `bin`, `claude`, as planned); the
+  list of names that are no records of the harness holds 22 more, each with why (the hosts' and Codex's files read,
+  Claude's transcripts, scratch in a temporary folder), since the detector reads every file name joined to a path and
+  the harness reads many it does not own. `docs/RECORDS.md` (44 sections, 1,098 lines) written by three Opus readers
+  in parallel from the writers' code (about 213,000, 220,000 and 238,000 subagent tokens), each to a fragment in the
+  job's scratch; their reports corrected the table four times (a memory pass's `snapshots/<stamp>/`, the backup's
+  transcript clones, the host-watch brief in `background/`, `~/.codex/hooks.json` only removed now, the traces
+  written by `bin/lib/trace-reads.cjs`, which made the detector read `.cjs`). One section checked by hand against
+  its writer: "Lands" against `landLog` in `bin/merge-queue.mjs`, every field right. Not checked: the other 43
+  sections field by field. `docs check` on the branch: PASS, 44 records held.
 
 ## Next step
 State at 2026-11-02 ~11:50Z, branch `worktree-audit-pack` (worktree `audit-pack`). The plan's reviews are done
@@ -484,3 +506,5 @@ T6 (the close, with the model he means by "Fable 5.5" asked of the lead).
 - Update ~15:45Z: T4 and T4r done and reviewed (L13); branch `audit-pack-index` at T4's line, pushed as pull request
   3. Next: T5 on a branch stacked on it (`audit-pack-records`), test first, the detector's prototype in the job's
   scratch (`detect.mjs`, 85 names found, reads such as `AGENTS.md` and `package.json` to sort out); then T6.
+- Update ~16:30Z: T5 built (L14), `docs check` passes on the branch. Next: its commit, Codex and the Claude lenses
+  over it (base `7d90257e`), push `audit-pack-records`, pull request 4 on PR 757; then T6.

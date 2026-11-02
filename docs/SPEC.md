@@ -184,36 +184,56 @@ and S4a's row holds it there.
 ### Where state lives
 
 Each fact has one home. Committed documents are canonical; engram and `MEMORY.md` mirror or point
-to them (diet section 10, "The rule pass").
+to them (diet section 10, "The rule pass"). The table names each record's writers by file and function and its
+family by folder and child names; the fields of each are in `docs/RECORDS.md`, a section per row. The `docs` row of
+`check` holds both to the source (`bin/lib/docs-records.mjs`).
 
 | Record | Where | Written by | Read by |
 |---|---|---|---|
-| The project's settings | `harness.json`: the pin, `code`, `functions`, the reply check | `init`, `functions apply`, `sync` | nearly every command |
-| The clone's Claude keys | `.claude/settings.local.json`: the style and the denies | `init`, `sync` (`bin/lib/project-apply.mjs:12`) | the host; `uninstall` by the clone's manifest |
-| The project's own rules | `docs/rules.json` | sessions | `rules`, `rules check` |
+| The project's settings | `harness.json`: the pin, the switches of `functions`, the reply check | `bin/lib/project.mjs` `initProject` `syncProject`; `bin/functions.mjs` `functionsMain` | nearly every command |
+| The clone's Claude keys | `.claude/settings.local.json`: the style and the denies | `bin/lib/project-apply.mjs` `applySettings` | the host; `uninstall` by the clone's manifest |
+| The project's instructions | `AGENTS.md`, `CLAUDE.md` | `bin/lib/project.mjs` `initProject` `syncProject`; `bin/lib/claude-import.mjs` `addImport` | the host on every turn, Codex, `doctor`, `check` |
+| The project's own rules | `docs/rules.json` | sessions, by hand | `rules`, `rules check` |
 | The plan | `docs/ROADMAP.md`; frozen origin `docs/origin.md` | sessions, by hand | `progress`, `report`, every session at start |
-| A feature | `odd/tasks/<feature>.md`, mirrored in engram (`odd/<feature>/tasks`) | the session that holds it | `contract`, `check`'s `contracts` row, `resume` |
-| Rules | `bin/lib/rules-data.mjs`, sources in `docs/rule-sources.json`, rendered to `docs/RULES.md` | `js-harness rules change` on a `rule/` branch | `ruleValue` in code, `rules check`, `rules --hook` |
-| Failures | `docs/FAILURES.md` | sessions, one `Seen:` line per sighting | `failures`, `check`'s row |
+| A feature | `odd/tasks/<feature>.md`, mirrored in engram (`odd/<feature>/tasks`) | the session that holds it, by hand | `contract`, `check`'s `contracts` row, `resume` |
+| Onboarding | `odd/tasks/onboarding.md`, `docs/adr/` | `bin/onboard.mjs` `onboardMain` `writeAdr` | `onboard`, `check` |
+| Rules | `bin/lib/rules-data.mjs`, sources in `docs/rule-sources.json`, rendered to `docs/RULES.md`; coverage in `bin/lib/rules-coverage-data.mjs` | `js-harness rules change` on a `rule/` branch, by hand; `bin/lib/rules-coverage.mjs` `writeCoverage` | `ruleValue` in code, `rules check`, `rules --hook` |
+| Failures | `docs/FAILURES.md` | sessions, one `Seen:` line per sighting, by hand; `bin/lib/project.mjs` `initProject` writes an empty register | `failures`, `check`'s row |
 | Flaky tests | `docs/FLAKY.md` | sessions, by hand | `check` |
-| This specification | `docs/SPEC.md` | sessions | `check`'s `spec` row |
-| Session summaries | `docs/sessions/<date>-<slug>.md` | `summary`, then the session | the lead, the 1.0.0 review |
-| The machine manifest | `~/.js-harness/manifest.json` | `install`, `stack install`, opt-ins | `uninstall`, `status`, `doctor` |
-| A clone's manifest | `js-harness/manifest.json` at `git rev-parse --git-path` (`bin/lib/project.mjs:1063`) | `init` | `uninstall` in the project, `sync` |
-| Review records | `<git common dir>/js-harness/codex-reviews.jsonl`, `codex-review-runs.jsonl`, `lens-reviews.jsonl`, `lens-review-runs.jsonl`, and an incomplete lens's whole stdout in `lens-answers/`, which no check reads | `codex-review`, `lens-review` | `check --push`, the merge door, `doctor`, `throughput` |
-| Double review reads | `<git common dir>/js-harness/double-reviews.jsonl`: each read, take and skip | `double-review` | `double-review tally`; no push and no merge door |
-| Lands | `<git common dir>/js-harness/lands.jsonl` | `merge-queue --land` | `throughput` |
-| Codex review homes | `~/.js-harness/codex-review-homes` (`bin/lib/codex-review-home.mjs:65`) | `codex-review` | `codex-review` (`--keep-home`) |
-| The channel | `~/.js-harness/channel/<project>.jsonl`; the lead's relief file in `~/.js-harness/relief/` | `notify` | `wait`, `sessions`, `report`, `sessions live`, `resume` |
-| Background sessions | `~/.js-harness/background/` | `sessions start` | `sessions`, `sessions stop`, `uninstall` |
-| Loops | `~/.js-harness/loops/<project>/` | `loop` | `loop status`, the heartbeat |
-| Gates | `~/.js-harness/gate-log`; the lock under `~/.js-harness/gate`; the gate-first tickets in `gate-first` (`bin/lib/gate-first.mjs:41`); the WSL gate's state in `gate-wsl.json` (`bin/lib/gate-wsl.mjs:38`) | `gate`, `check` | `gate`, `throughput`, `quiet` |
-| Throughput snapshots | `~/.js-harness/throughput/` | `throughput snapshot`, and each tick of `loop heartbeat` for settled days without one | `throughput` |
-| The remote server | `~/.js-harness/remote/`: the supervisor record, log, lock, stop marker and task file (`bin/lib/remote.mjs:632-643`) | `remote` | `remote status`, `remote stop` |
-| Refresh backups | `~/.js-harness/refresh-backups` (`bin/lib/refresh-copy.mjs:287`) | `merge-queue --land --refresh-copy`, the settings before it brings the installed copy up to main | the undo line that refresh prints |
-| The doctor's cache and reviews | `~/.js-harness/doctor.json` | `doctor` | `doctor` and its hook |
-| Clean | `~/.js-harness/clean.json`, `clean-log.jsonl` | `clean` | `clean`, `doctor` |
-| Memory | engram's store (`~/.engram`); Claude's memory folders; the backup clones under `~/.js-harness/memory-backup/`; a memory pass's lock, snapshots and journal under `~/.js-harness/memory-hygiene/<project>` (`bin/lib/memory-hygiene.mjs:37-52`) | engram, the host, `backup run`, `memory` | sessions; `backup`, the fallback hook |
+| This specification | `docs/SPEC.md` | sessions, by hand | `check`'s `spec` and `docs` rows |
+| The audit entry | `docs/README.md`, `docs/RECORDS.md` | sessions, by hand | `docs`, `check`'s `docs` row |
+| Host updates | `docs/host-updates/`: the review `claude-desktop-<version>.md` the session saves from `draft`, the sources `sources/claude-desktop-<desktop>.<key>.md`; the brief `~/.js-harness/background/host-watch-<version>.md` the heartbeat writes | `bin/host-watch.mjs` `hostWatchMain` `hostWatchTick` | `host-watch`, sessions |
+| Session summaries | `docs/sessions/<date>-<slug>.md` | `bin/summary.mjs` `summaryMain`, then the session | the lead, the 1.0.0 review |
+| The machine manifest | `~/.js-harness/manifest.json` | `bin/lib/manifest.mjs` `install` | `uninstall`, `status`, `doctor` |
+| The host's files the harness edits | `~/.claude/settings.json`, `~/.claude/CLAUDE.md`, `~/.claude/output-styles/<style>.md`; in `~/.codex/hooks.json` only the entries versions up to 0.97.0 wrote, which `sync` and `uninstall` remove | `bin/lib/manifest.mjs` `install`; `bin/lib/rules-block.mjs` `holdRulesBlock`; `bin/lib/user-settings.mjs` `acceptSessionMessages` | the hosts; `uninstall` by the machine manifest |
+| A clone's manifest | `<git common dir>/js-harness/manifest.json` | `bin/lib/project.mjs` `initProject` | `uninstall` in the project, `sync` |
+| Review records | `<git common dir>/js-harness/`: `codex-reviews.jsonl`, `codex-review-runs.jsonl`, `lens-reviews.jsonl`, `lens-review-runs.jsonl`, and an incomplete lens's whole stdout in `lens-answers/`, which no check reads | `bin/lib/codex-reviews.mjs` `appendCodexReview`; `bin/lib/lens-reviews.mjs` `appendLensReview` `startLensRun` `keepLensAnswer` | `check --push`, the merge door, `doctor`, `throughput` |
+| Review turns | `<git common dir>/js-harness/review-turn-<pid>-<ms>/`, a worktree a turn of a cut range is read in | `bin/lib/codex-review-turns.mjs` `addTurnWorktree` | `codex-review`, which removes it (`sweepTurnWorktrees`) |
+| Double review reads | `<git common dir>/js-harness/double-reviews.jsonl`: each read, take and skip | `bin/double-review.mjs` `doubleReviewMain` | `double-review tally`; no push and no merge door |
+| Lands | `<git common dir>/js-harness/lands.jsonl` | `bin/merge-queue.mjs` `mergeQueueMain` | `throughput` |
+| Test traces | `<git common dir>/js-harness/traces/<place>/<test>/<key>.json` | `bin/check.mjs` `tracesDir`; `bin/lib/trace-reads.cjs` `writeTrace` | `check`, `gate` |
+| Codex review homes | `~/.js-harness/codex-review-homes/` | `bin/lib/codex-review-home.mjs` `createLeanHome` | `codex-review` (`--keep-home`) |
+| The channel | `~/.js-harness/channel/<project>.jsonl`; a session's opening in `channel/openings/<project>/`; the lead's relief file in `~/.js-harness/relief/<project>.md` | `bin/lib/channel.mjs` `appendNotice` `writeOpening` `appendRelief` | `wait`, `sessions`, `report`, `sessions live`, `resume` |
+| A session's pause and reach | `~/.js-harness/channel/pause/<session>.json`, its copy `js-harness-pause-<session>.json` in the temporary folder; `channel/rules-seen/<session>.json`; `channel/inbox/<session>.json` | `bin/lib/pause.mjs` `pauseNotice`; `bin/lib/rules-reach.mjs` `reachHook`; `bin/lib/inbox.mjs` `inboxNotice` | the hooks that wrote them, once a session |
+| The live board's cursor | `~/.js-harness/channel/live/<project>.json`; `board-checked.json` in the folder `sessions live --out` names | `bin/sessions-live.mjs` `sessionsLiveMain`; `bin/lib/live-rows.mjs` `liveCursorPath` | `sessions live` |
+| The permit relay | `~/.js-harness/channel/permits/<project>/`: `lease.json`, `log.jsonl`, `requests/<id>.json`, `verdicts/<id>.json` | `bin/permit.mjs` `permitMain` | `permit`, the lead |
+| Background sessions | `~/.js-harness/background/`: `sessions.jsonl`, `briefs/`, `stranded/<id>.json` | `bin/lib/background.mjs` `appendRecord` `strandEntry`; `bin/sessions-background.mjs` `sessionsStartMain` | `sessions`, `sessions stop`, `uninstall` |
+| Loops | `~/.js-harness/loops/<project>/<name>.json` | `bin/lib/loops.mjs` `writeRecord` | `loop status`, the heartbeat |
+| Gates | `~/.js-harness/gate-log/`; the lock under `~/.js-harness/gate/`: `lock/holder-<token>.json`, `wait-<token>/`; the gate-first tickets in `gate-first/<id>.json` | `bin/lib/gate-log.mjs` `appendGateEvent`; `bin/lib/gate-lock.mjs` `takeGateLock`; `bin/lib/gate-first.mjs` `issueTicket` | `gate`, `throughput`, `quiet` |
+| The WSL gate | `~/.js-harness/gate-wsl.json` | the person who sets the WSL gate up, by hand | `gate`, `check` |
+| Throughput snapshots | `~/.js-harness/throughput/<project>/<day>.json`, `outcomes.jsonl` | `bin/throughput.mjs` `throughputMain` | `throughput` |
+| Pages shown | `~/.js-harness/throughput/<project>/pages.jsonl` | `bin/lib/pages-record.mjs` `appendPage` | `throughput`, `report` |
+| Stretches | `~/.js-harness/throughput/<project>/stretches.jsonl` | `bin/stretch.mjs` `stretchMain` | `stretch`, `report feature` |
+| Templates | `~/.js-harness/throughput/<project>/templates-rendered.jsonl`, `templates-shown.jsonl` | `bin/lib/template-record.mjs` `recordRendered` `recordShown` | `template`, `throughput` |
+| The remote server | `~/.js-harness/remote/`: `<id>.json`, `<id>.lock`, `<id>.log`, `<id>.stopped`, `<id>.task.xml` | `bin/remote.mjs` `remoteMain`; `bin/lib/remote.mjs` `supervise` | `remote status`, `remote stop` |
+| Refresh backups | `~/.js-harness/refresh-backups/settings-<stamp>.json`, and pnpm's global `package.json` | `bin/lib/refresh-copy.mjs` `refreshCopy` | the undo line that refresh prints |
+| The doctor's cache and reviews | `~/.js-harness/doctor.json` | `bin/lib/cache.mjs` `writeCache` | `doctor` and its hook |
+| Clean | `~/.js-harness/clean.json`, `clean-log.jsonl` | `bin/lib/clean.mjs` `writeMeasure` `applyKinds` | `clean`, `doctor` |
+| The status line | `~/.js-harness/status-line/line.txt` | `bin/lib/status-line.mjs` `writeStatusLine` | the host's status line |
+| The memory backup | `~/.js-harness/memory-backup/`: `config.json`, `last.json`, `transcripts.json`, `transcripts.lock`, the transcript clones `transcripts/<repo>/`, and the clone `repo/` with `manifest.json`, `RECENT.md`, `RESTORE.md`, `engram/export.json` | `bin/backup.mjs` `runBackup` `backupMain`; `bin/lib/backup.mjs` `exportEngram`; `bin/lib/backup-transcripts.mjs` `copyTranscripts` | `backup`, `backup restore`, `doctor` |
+| A restore | `~/.js-harness/restore-progress.json`, `restored-config/`, `restored-bundles/` | `bin/lib/backup-restore.mjs` `restoreBackup` | `backup restore` |
+| A memory pass | `~/.js-harness/memory-hygiene/<project>/`: `journal.jsonl`, `told`, `lock`, and `snapshots/<stamp>/` with `manifest.json`, `after.json`, `after-index.txt`, `files/` | `bin/lib/memory-pass.mjs` `planPass` `verifyPass` `undoPass`; `bin/lib/memory-hygiene.mjs` `dueNotice` | `memory`, the fallback hook |
+| Memory | engram's store (`~/.engram`); Claude's memory folders and their `MEMORY.md` | engram and the host, never the harness, so the table holds it as written by hand | sessions; `backup`, the fallback hook |
 
 ### Sessions and the lead
 
@@ -916,11 +936,11 @@ The administrator install is `bin/lib/status-line-install.ps1`, run by hand in a
 ### A model starting cold can audit the whole harness
 
 **Problem:** The owner wants the strongest model to audit the whole project in depth, saying what is right, wrong, improvable, redundant, blocking or unnecessary (`odd/tasks/audit-pack.md`, L1); the tracked files hold about 5.8M estimated tokens, no context holds them, and nothing told a cold reader which document is in force and which is history.
-**Requirement:** `docs/README.md` is the entry: what the project is, an index under `## Index` giving every file and folder of `docs/` one of four statuses (live, frozen, historical, closed) and, when it is no longer live, what supersedes it, and the reading method. `js-harness docs plan` prints every tracked file in exactly one slice of at most 400,000 estimated tokens, in four tiers (core, tests, feature documents, the rest), the source beside its capability here and each feature document with its state from its task boxes, every slice after the first opening with the entry. `js-harness docs index` joins each capability to the documents, rules and failure entries its text cites, keeps apart, marked unverified, the ones inferred through a file it shares with them, and lists what no capability reaches. In the harness's own repository, the `docs` row of `check` fails where the entry is missing, an entry of `docs/` has no row, a tracked file cannot be read, one file alone outgrows a slice, or an explicit link of the cross index does not resolve.
+**Requirement:** `docs/README.md` is the entry: what the project is, an index under `## Index` giving every file and folder of `docs/` one of four statuses (live, frozen, historical, closed) and, when it is no longer live, what supersedes it, and the reading method. `js-harness docs plan` prints every tracked file in exactly one slice of at most 400,000 estimated tokens, in four tiers (core, tests, feature documents, the rest), the source beside its capability here and each feature document with its state from its task boxes, every slice after the first opening with the entry. `js-harness docs index` joins each capability to the documents, rules and failure entries its text cites, keeps apart, marked unverified, the ones inferred through a file it shares with them, and lists what no capability reaches. In the harness's own repository, the `docs` row of `check` fails where the entry is missing, an entry of `docs/` has no row, a tracked file cannot be read, one file alone outgrows a slice, an explicit link of the cross index does not resolve, or the table of records under "Where state lives" drifts from the source: a name the source joins into a path that no row holds, a row no source names, a writer that no longer holds its function, or a row with no section of fields in `docs/RECORDS.md`.
 **Reason:** A plan computed from the tracked files each time cannot fall behind them, and an index held by the gate cannot miss a document added after it.
-**Proof:** `node --test bin/docs.test.mjs bin/lib/docs-plan.test.mjs bin/lib/docs-entry.test.mjs bin/lib/docs-cross.test.mjs`
+**Proof:** `node --test bin/docs.test.mjs bin/lib/docs-plan.test.mjs bin/lib/docs-entry.test.mjs bin/lib/docs-cross.test.mjs bin/lib/docs-records.test.mjs`
 **Discarded:** A stored inventory of every file with its class (`odd/tasks/launch-audit/inventory.tsv`): it rotted within a week. A status written in each feature document: the task boxes already say whether it is open. One slice the size of the window: it leaves the auditor no room to reason and write.
-**Today:** `js-harness docs`, `docs/README.md`, `bin/docs.mjs`, `bin/lib/docs-plan.mjs`, `bin/lib/docs-entry.mjs`, `bin/lib/docs-cross.mjs`, `bin/check.mjs`
+**Today:** `js-harness docs`, `docs/README.md`, `bin/docs.mjs`, `bin/lib/docs-plan.mjs`, `bin/lib/docs-entry.mjs`, `bin/lib/docs-cross.mjs`, `bin/lib/docs-records.mjs`, `docs/RECORDS.md`, `bin/check.mjs`
 
 ### An output the owner sees again is a template of five parts
 

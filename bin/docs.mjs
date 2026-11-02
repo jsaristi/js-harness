@@ -12,6 +12,7 @@ import { SPEC_PATH, isHarnessRepository, parseSpec } from './lib/spec.mjs';
 import { SLICE_BUDGET, capabilityFiles, importsOf, planFindings, readingPlan } from './lib/docs-plan.mjs';
 import { ENTRY_PATH, indexFindings } from './lib/docs-entry.mjs';
 import { INFERRED_CHECK, INFERRED_LABEL, crossIndex, parseRules } from './lib/docs-cross.mjs';
+import { detectRecordNames, parseRecordSections, parseRecordTable, recordFindings, recordSources } from './lib/docs-records.mjs';
 import { parseRegister } from './lib/failures.mjs';
 import { gitTopLevel } from './lib/project.mjs';
 import { parseFeature } from './lib/progress.mjs';
@@ -92,6 +93,18 @@ function readCross(corpus) {
   return { index };
 }
 
+const RECORDS_PATH = 'docs/RECORDS.md';
+
+/** The table of records of the specification held to the source and to the fields of docs/RECORDS.md
+ * (bin/lib/docs-records.mjs): `{ rows, findings }`, the rows counted. A file missing reads as empty, so a row then
+ * has no section and the part fails rather than switching off. */
+function readRecords(corpus) {
+  const rows = parseRecordTable(corpus.texts.get(SPEC_PATH) ?? '');
+  const sources = recordSources(corpus.listed, (file) => corpus.texts.get(file));
+  const findings = recordFindings({ rows, sections: parseRecordSections(corpus.texts.get(RECORDS_PATH) ?? ''), detected: detectRecordNames(sources), sources });
+  return { rows: rows.length, findings };
+}
+
 const inferredCount = (index) => index.capabilities.reduce((sum, one) => sum + one.inferred.rules.length + one.inferred.failures.length, 0);
 const unreachedCount = (index) => index.unreached.rules.length + index.unreached.failures.length + index.unreached.features.length;
 
@@ -151,7 +164,8 @@ const sliceCount = (plan) => plan.tiers.reduce((sum, tier) => sum + tier.slices.
  * `isHarnessRepository`), since a project's `docs/README.md` holds no index of this kind. It fails where
  * `docs/README.md` is missing, so deleting it cannot switch the row off; on an entry of `docs/` the index lacks or a
  * row it should not hold (`indexFindings`); on a tracked file it cannot read; on a file too big for one slice; and on
- * a tracked file the reading plan does not place once (`planFindings`, a self-check of the packer); and on an explicit
+ * a tracked file the reading plan does not place once (`planFindings`, a self-check of the packer); on a record that
+ * drifts from the source or has no fields (`readRecords`); and on an explicit
  * link of the cross index that does not resolve, or on one of its inputs gone or unreadable as a register, so deleting
  * one cannot switch that part off; its inferred links and unreached records it only counts. The repository is the one
  * `cwd` is in, read at its top. */
@@ -167,9 +181,10 @@ export function checkDocs(cwd, { spawn = spawnSync, readFile = (file) => fs.read
   const index = corpus.texts.get(ENTRY_PATH) ?? readFile(path.join(root, ENTRY_PATH));
   const cross = readCross(corpus);
   const crossFindings = cross.index?.broken ?? [cross.problem];
-  const findings = [...corpus.unreadable, ...indexFindings(index, entries, corpus.listed), ...oversizedFindings(plan), ...planFindings(plan, corpus.files), ...crossFindings];
-  if (findings.length > 0) return [{ name, pass: false, detail: `${count(findings.length, 'finding')} in the index of ${ENTRY_PATH} or the reading plan`, lines: findings }];
-  const detail = `${count(entries.length, 'entry', 'entries')} of docs/ indexed; ${figure(plan.files)} tracked files in ${count(sliceCount(plan), 'slice')} of at most ${figure(plan.budget)} estimated tokens (js-harness docs plan)${crossDetail(cross.index)}`;
+  const records = readRecords(corpus);
+  const findings = [...corpus.unreadable, ...indexFindings(index, entries, corpus.listed), ...oversizedFindings(plan), ...planFindings(plan, corpus.files), ...records.findings, ...crossFindings];
+  if (findings.length > 0) return [{ name, pass: false, detail: `${count(findings.length, 'finding')} in the index of ${ENTRY_PATH}, the reading plan, the records or the cross index`, lines: findings }];
+  const detail = `${count(entries.length, 'entry', 'entries')} of docs/ indexed; ${figure(plan.files)} tracked files in ${count(sliceCount(plan), 'slice')} of at most ${figure(plan.budget)} estimated tokens (js-harness docs plan); ${count(records.rows, 'record')} of ${SPEC_PATH} held to the source and to ${RECORDS_PATH}${crossDetail(cross.index)}`;
   return [{ name, pass: true, detail }];
 }
 
