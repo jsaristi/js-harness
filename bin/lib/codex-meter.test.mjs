@@ -299,3 +299,21 @@ test('the floor debts are the skips made at the floor that no Codex review paid,
   const lines = floorDebtLines(records, owed, (rec) => `unavailable ${rec.base.slice(0, 7)}..${rec.head.slice(0, 7)}: ${rec.reason}`);
   assert.deepEqual(lines, [`unavailable aaaaaaa..bbbbbbb: ${FLOOR_SKIP}: no; a Codex review pays it: git worktree add --detach <folder> bbbbbbb && js-harness codex-review --base aaaaaaa --again --cwd <folder>`]);
 });
+
+test('a damaged record, or one whose debt cannot be told, hides no other floor debt', () => {
+  const base = 'a'.repeat(40);
+  const lineOf = (rec) => `unavailable ${rec.base.slice(0, 7)}..${rec.head.slice(0, 7)}: ${rec.reason}`;
+  const records = [
+    { outcome: 'unavailable', reason: `${FLOOR_SKIP}: no` },
+    { outcome: 'unavailable', base, head: 'd'.repeat(40), reason: `${FLOOR_SKIP}: no` },
+    { outcome: 'unavailable', base, head: 'b'.repeat(40), reason: `${FLOOR_SKIP}: no` },
+  ];
+  const owedOf = (rec) => {
+    if (rec.head.startsWith('d')) throw new Error('git could not list the range');
+    return true;
+  };
+  const lines = floorDebtLines(records, owedOf, lineOf);
+  assert.equal(lines.length, 2, lines.join('\n'));
+  assert.ok(lines[0].startsWith('unavailable aaaaaaa..ddddddd'), 'a debt that cannot be told is listed, not hidden');
+  assert.ok(lines[1].startsWith('unavailable aaaaaaa..bbbbbbb'));
+});

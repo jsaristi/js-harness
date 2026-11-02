@@ -160,10 +160,19 @@ export function launchWord(outcome, { floor, base, part = null, read = false }) 
 
 /** The skips among `records` made at the floor of the weekly limit (their reason starts `FLOOR_SKIP`) that `owedOf(rec)`
  * says no Codex review has paid, each as `lineOf(rec)` with the command that pays it: a review of its range from a
- * worktree at its head, since a review reads up to HEAD and the branch may have merged. */
+ * worktree at its head, since a review reads up to HEAD and the branch may have merged. A record with no commit ids is
+ * left out, and one whose debt `owedOf` cannot tell (it throws) is listed, so neither hides the others. */
 export function floorDebtLines(records, owedOf, lineOf) {
+  const owed = (rec) => {
+    try {
+      return owedOf(rec);
+    } catch {
+      return true;
+    }
+  };
   return records
-    .filter((rec) => rec.outcome === 'unavailable' && typeof rec.reason === 'string' && rec.reason.startsWith(FLOOR_SKIP) && owedOf(rec))
+    .filter((rec) => rec.outcome === 'unavailable' && typeof rec.reason === 'string' && rec.reason.startsWith(FLOOR_SKIP))
+    .filter((rec) => typeof rec.base === 'string' && typeof rec.head === 'string' && owed(rec))
     .map((rec) => `${lineOf(rec)}; a Codex review pays it: git worktree add --detach <folder> ${rec.head.slice(0, 7)} && js-harness codex-review --base ${rec.base.slice(0, 7)} --again --cwd <folder>`);
 }
 

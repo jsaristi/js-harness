@@ -17,7 +17,7 @@
 import { unknownArgument } from './lib/args.mjs';
 import { failureLine, humanLines, parseRateLimits, readRateLimits } from './lib/codex-meter.mjs';
 import { floorDebtLines } from './lib/codex-meter.mjs';
-import { readCodexReviews } from './lib/codex-reviews.mjs';
+import { isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
 import { branchCodexSkips, codexSkipsOwed, skipLine } from './lib/lens-review-rows.mjs';
 
 /** What `fn` gives, or `fallback` when it throws: a debt that cannot be read must not cost the reading. */
@@ -35,7 +35,7 @@ function orElse(fn, fallback) {
 function workingDebts(cwd = process.cwd()) {
   const branch = orElse(() => branchCodexSkips(cwd), null);
   const paid = (rec) => !(codexSkipsOwed(cwd, { from: rec.base, tip: rec.head }) ?? [rec]).some((owed) => owed.base === rec.base && owed.head === rec.head);
-  const floor = orElse(() => floorDebtLines(readCodexReviews(cwd), (rec) => !paid(rec), skipLine), []);
+  const floor = orElse(() => floorDebtLines(readCodexReviews(cwd).filter(isValidCodexReview), (rec) => !paid(rec), skipLine), []);
   if (branch === null && floor.length === 0) return null;
   // A floor skip of this branch is listed once, with the command that pays it.
   const lines = (branch ?? []).map(skipLine).filter((line) => !floor.some((one) => one.startsWith(`${line};`)));
