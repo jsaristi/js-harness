@@ -163,7 +163,9 @@ test('onlyWaits: a wait counts only when its whole command line is the wait, in 
     assert.equal(between(typed), true, typed);
   }
   // Codex P1 on be294ca..7f918a9: a wait in the line does not make the rest of it a wait.
-  for (const typed of ['js-harness wait --for 1; npm run check', 'npm run check && js-harness wait --pr 748', 'cd /d/x; echo "- 09:30Z" >> relief.md; js-harness wait --notice-to orchestrator', 'js-harness wait --pr 748 | xargs npm run check', 'js-harness wait --pr 748 & npm run check', 'js-harness wait --pr 748 || npm run check', 'js-harness wait --pr "$(npm run check)"', 'js-harness wait --notice-to 130 > /dev/null', '(js-harness wait --pr 748)']) {
+  for (const typed of ['js-harness wait --for 1; npm run check', 'npm run check && js-harness wait --pr 748', 'cd /d/x; echo "- 09:30Z" >> relief.md; js-harness wait --notice-to orchestrator', 'js-harness wait --pr 748 | xargs npm run check', 'js-harness wait --pr 748 & npm run check', 'js-harness wait --pr 748 || npm run check', 'js-harness wait --pr "$(npm run check)"', 'js-harness wait --notice-to 130 > /dev/null', '(js-harness wait --pr 748)',
+    // Codex P1 on 7f918a9..b9a1512: a shell given the line as one word runs all of it.
+    "bash -c 'npm run check; js-harness wait --for 1'", 'sh -c "js-harness wait --pr 748 && npm run check"', 'echo js-harness wait', 'env X=1 js-harness wait --pr 748']) {
     assert.equal(between(typed), false, typed);
   }
 });

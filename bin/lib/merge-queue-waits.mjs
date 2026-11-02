@@ -13,8 +13,16 @@ import { NOTICE_TEXT_MAX } from './channel.mjs';
 import { shellWords } from './guard.mjs';
 import { isWaitCommand } from './wake.mjs';
 
+/** Whether the words of one simple command run `js-harness wait` itself: the command name or the dispatcher, run by
+ * node or not, followed by `wait`, or `wait.mjs`. A wait that is only a word of it, as a shell's `-c` body or an echo's
+ * argument, is not (Codex P1 on 7f918a9..b9a1512: `bash -c 'npm run check; js-harness wait --for 1'`). */
+function runsWait([name, ...rest]) {
+  const [script, verb] = /(^|[/\\])node(\.exe)?$/i.test(name) ? rest : [name, rest[0]];
+  return (/(^|[/\\])js-harness(\.mjs)?$/.test(script ?? '') && verb === 'wait') || /(^|[/\\])wait\.mjs$/.test(script ?? '');
+}
+
 /** Whether the command line `typed` does nothing but wait, as its shell reads it (`shellWords`): simple commands joined
- * by `;` or `&&`, each a `cd` or a `js-harness wait` (`isWaitCommand`), the wait's output piped at most into `tail` or
+ * by `;` or `&&`, each a `cd` or a `js-harness wait` (`runsWait`), the wait's output piped at most into `tail` or
  * `head`, with no redirection but `2>&1`, no substitution and nothing sent to the background. A wait in a line that
  * runs anything else is no wait (Codex P1 on be294ca..7f918a9: `js-harness wait --for 1; npm run check`). */
 function waitAlone(typed) {
@@ -29,7 +37,7 @@ function waitAlone(typed) {
     const after = at === words.length ? null : words[at];
     if (name === undefined || ![null, ';', '&&', '|'].includes(before) || ![null, ';', '&&', '|'].includes(after)) return false;
     if (rest.some((word) => /[<>`]|\$/.test(word) && !/^\d?>&\d$/.test(word))) return false;
-    const wait = isWaitCommand(words.slice(start, at).join(' '));
+    const wait = runsWait([name, ...rest]);
     if (before === '|' ? !/^(tail|head)$/.test(name) : after === '|' ? !wait : !(wait || (name === 'cd' && rest.length <= 1))) return false;
     waited ||= wait;
     start = at + 1;

@@ -82,6 +82,8 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
 - [x] T2 (kind: build) spec 2: `undoSession` waits for the lock's process and retries on EBUSY; tests first. Route: inline. L5.
 - [x] T3 (kind: build) spec 3: the land's quiet look reads a busy session's transcript; tests first. Route: inline. L6.
 - [ ] T4 (kind: verify) Codex and the Claude lenses over the code slice; FAILURES `Seen:` lines; PR; ready notice.
+- [x] T5 (kind: build) spec 3, Codex's recheck on 7f918a9..b9a1512: a wait is told by the command it runs, not a word of
+  it (`bash -c '...; js-harness wait'`); test first. Route: inline. L8.
 
 ## Log
 - L1 (2026-11-02, his request through the lead's brief
@@ -131,3 +133,9 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   of the transcript must be such a wait; the fake's process ends when rm has refused for it. Red first: the two new
   `onlyWaits` tests failed (true for false), green after, 13 of 13; the stop test's change is to the test itself, not
   shown red (a slow machine is needed).
+- L8 (2026-11-02, T5): the reviews of b9a1512 (7f918a9..b9a1512): the lenses reliability and resilience, 0 findings
+  (about 8,600 input tokens each); Codex's recheck (85,136 input tokens): P1 a and P2 fixed, P1 b open, as
+  `bash -c 'npm run check; js-harness wait --for 1'` kept the shell's body in one word and `isWaitCommand` found the
+  wait in it. Fixed: `runsWait` takes a simple command for a wait only by its executable and verb (`js-harness wait`,
+  `node <dispatcher> wait`, `wait.mjs`). Red first: the cases `bash -c`, `sh -c`, `echo js-harness wait` and
+  `env X=1 js-harness wait` failed (true for false); green after, the three refresh test files 44 of 44.
