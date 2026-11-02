@@ -18,8 +18,9 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
 - `node --test bin/lib/stack-backup.test.mjs bin/stack.test.mjs scripts/s2-verify.test.mjs` exits 0
 - `node bin/js-harness.mjs contract check odd/tasks/f8-s2-removal.md` exits 0
 - `npm run check` exits 0
-- `js-harness stack backup verify --from <the backup>` exits 0 on his machine's backup, recorded in `## Log` (the
-  drill: every file byte for byte, credentials by hash in place, engram returns observation 6431, the `permissions`
+- `js-harness stack backup verify --from <the backup> --marker s2drillmarker20261102 --expect 6431` exits 0 on his
+  machine's backup, recorded in `## Log` (the drill: every file and export byte for byte, credentials by hash in
+  place, engram returns observation 6431, the `permissions`
   object equal, the MCP entries named, row 12's deleted and created files, a transcript newer than the backup kept)
 - every configuration-changing operation in `## Log` (each uninstall, restore of an entry, `install`, `stack install`,
   each leftover removed, the style chosen) carries the yes that named it, quoted with its transcript line, before the
@@ -307,3 +308,20 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   reliability 68,991, resilience 68,983). Codex's first run discarded part 1 of 6 (160,754 input tokens) because L9
   was written into this document while it ran: `edit-during-review`, its `Seen:` line added. Next: commit this, then
   run `js-harness codex-review --base 84997f7d` once more, nothing edited until it ends; then the verifier, the PR.
+- L11 2026-11-02 ~22:00Z: the session compacted by the host at 16:23 local, after L10 was committed (`0b9f98a0`);
+  resumed from this document. Codex over `84997f7..0b9f98a`, 6 parts, 770,891 input tokens: 8 findings, all taken and
+  fixed test first. P1: a restore wrote through a folder that became a link since the backup, then deleted the link
+  (a config root now removes the link first; a data root skips what lies below it). P2: a short write was counted as
+  whole (the copy loops until the chunk is written, and throws on a write that takes nothing); the copy dropped a
+  POSIX mode (kept outside Windows, where a mode is a read-only bit that would block the drill's cleanup); the drill
+  passed without searching engram (`stack backup verify` now requires `--marker` and `--expect`, and the drill fails
+  without them) — two findings, one fix; the exports carried no hash (the manifest's `exports.sha256`, checked by the
+  drill's `exports` row); `s2-verify`'s hooks row passed with no hooks (every js-harness and codegraph hook of the
+  backup's `settings.json` must remain); its codex row checked only the headers (each complement's entry is compared
+  with the backup's, by lines, never printed). Open for T9: `stack install` re-adds Codex's engram entry, which may
+  differ from the one gentle-ai wrote; the codex row then fails and the backup's entry is the reference, put back
+  only with his yes.
+- gentle-ai: review `review-4a964a2ba09d3cb3` on `84997f7..0b9f98a` (the reliability lens), approved and
+  acknowledged; 3 advisory findings, all taken in the same fix: a config file renamed only in case was deleted on
+  Windows (the deletion now compares case-blind there); the link test never proved the drill's cleanup spares a link's
+  target (it now does); `--expect` was not checked as a number (a usage error now).
