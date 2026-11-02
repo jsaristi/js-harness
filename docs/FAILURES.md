@@ -1986,7 +1986,7 @@ with its working directory in the test's folder, which Windows refuses to remove
 Node 24's rmSync fails an EPERM at once (a busy folder, retried: 0 ms with rmSync, 3,048 ms with `fs.promises.rm`).
 - Class: machine
 - Seen: 2026-10-28 — windows-daily run 40702921457 — `EPERM, Permission denied` removing `jh-home-stack-0sFeX4`,
-  bin/stack.test.mjs:186, in 5,581 ms
+  the cleanup of the test (line 186 before the fix), in 5,581 ms
 - Seen: 2026-10-30 — windows-daily run 41071093780 — the same removal, `jh-home-stack-N7Bx4a`, in 5,511 ms
 - Seen: 2026-11-02 — windows-daily run 41489272123 — the same removal, `jh-home-stack-uz7ytQ`, in 5,627 ms;
   reproduced here with a `codegraph.cmd` that waits 8 s first on the PATH
