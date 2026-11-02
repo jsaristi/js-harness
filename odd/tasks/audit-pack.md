@@ -276,9 +276,11 @@ Found by the search of item 2; each changes in T2.
 - [x] T3 (kind: build) `js-harness docs plan`, test first, and `docs/README.md` with its index and the row's index
   part, `AGENTS.md` and GUIDE's command table; pull request 2 (specs 1, 2, 5, 6; spec 5 measured at its close);
   done: `c51daf56` and its fix `1fb4f34a`, pull request 752
-- [ ] T4 (kind: build) `js-harness docs index`, test first, and the row's link part; pull request 3 (specs 3, 6)
-- [ ] T4r (kind: verify) Codex reads T4 again whole (`codex-review --base d195f663 --again`), since its recheck of
-  `651290fc` left one finding fixed in part, then fixed in `f53617f3` (L11), and a second recheck is not run
+- [x] T4 (kind: build) `js-harness docs index`, test first, and the row's link part; pull request 3 (specs 3, 6);
+  done: `c166e115` and its fixes `651290fc`, `f53617f3`, branch `audit-pack-index`
+- [x] T4r (kind: verify) Codex reads T4 again whole (`codex-review --base d195f663 --again`), since its recheck of
+  `651290fc` left one finding fixed in part, then fixed in `f53617f3` (L11), and a second recheck is not run;
+  done: its two findings fixed in `cc051204` (L13)
 - [ ] T5 (kind: build) SPEC's record table completed, `docs/RECORDS.md` and its test, and the row's record part;
   pull request 4 (specs 4, 6)
 - [ ] T6 (kind: verify) the close: the bar measured again, the Log's result against items 3 and 4, the report to the
@@ -429,6 +431,11 @@ Found by the search of item 2; each changes in T2.
   `holdsWord`) taken in the test. The row half of the "gone" test failed for a reason of the test: `withRepo` in
   `bin/docs.test.mjs` was synchronous, so an async body's directory was removed at its first `await` and the row read
   "docs/README.md is missing"; it now awaits its body, and every call of it is awaited (21 of 21 pass).
+- L13 2026-11-02, T4r's fix `cc051204` reviewed over `f6d3b35..cc05120`: Codex, a recheck of L12's 2 findings, both
+  fixed, correct at 0.94 (75,292 input tokens; estimated 77,000 to 110,000); the reliability lens 0 findings (25,081
+  input tokens). Delivery: PR 752 merged `d195f663` into main (`0c1b0205`), so the branch `audit-pack-index` is this
+  line at `cc051204`, T4's commits keeping their ids and so their review records; a cherry-pick onto main was made
+  and dropped unpushed, since new ids would have owed T4's whole review again.
 
 ## Next step
 State at 2026-11-02 ~11:50Z, branch `worktree-audit-pack` (worktree `audit-pack`). The plan's reviews are done
@@ -474,3 +481,6 @@ T6 (the close, with the model he means by "Fable 5.5" asked of the lead).
   PR 752 lands with 755 (10:18), so this branch is not pushed again. T4r's fixes committed here; T4 to T4r go on a
   new branch from main once 752 is in, then Codex and the reliability lens over the T4r fix (base `f6d3b355`), push,
   the pull request, ready.
+- Update ~15:45Z: T4 and T4r done and reviewed (L13); branch `audit-pack-index` at T4's line, pushed as pull request
+  3. Next: T5 on a branch stacked on it (`audit-pack-records`), test first, the detector's prototype in the job's
+  scratch (`detect.mjs`, 85 names found, reads such as `AGENTS.md` and `package.json` to sort out); then T6.
