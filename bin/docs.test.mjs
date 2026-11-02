@@ -35,7 +35,8 @@ const INDEX = [
 ].join('\n');
 
 /** A git repository holding `files` (`{ path: text }`), all staged, removed after `body` runs with its folder. */
-function withRepo(files, body) {
+// An async body is awaited before the directory goes, so a step after its first await still finds the repository.
+async function withRepo(files, body) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-docs-'));
   try {
     assert.equal(spawnSync('git', ['init', '-q'], { cwd: dir }).status, 0);
@@ -44,7 +45,7 @@ function withRepo(files, body) {
       fs.writeFileSync(path.join(dir, file), text);
     }
     assert.equal(spawnSync('git', ['add', '-A'], { cwd: dir }).status, 0);
-    return body(dir);
+    return await body(dir);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -189,6 +190,17 @@ test('docs index says which input it lacks and exits 1, for each of the three it
   }
 });
 
+test('an input of the cross index deleted from the tree but still tracked is gone: docs index and the row fail on it', async () => {
+  await withRepo(CROSS, async (dir) => {
+    fs.rmSync(path.join(dir, 'docs/SPEC.md'));
+    const { code, err } = await run(['index'], dir);
+    assert.equal(code, 1);
+    assert.equal(err, 'docs/SPEC.md is gone from the tree: the cross index joins docs/SPEC.md, docs/RULES.md and docs/FAILURES.md');
+    const [row] = checkDocs(dir, { own: true });
+    assert.ok((row.lines ?? []).includes('docs/SPEC.md is gone from the tree: the cross index joins docs/SPEC.md, docs/RULES.md and docs/FAILURES.md'), JSON.stringify(row));
+  });
+});
+
 test('docs index names a tracked file it cannot read and exits 1', async () => {
   await withRepo(CROSS, async (dir) => {
     const err = [];
@@ -215,10 +227,10 @@ test('docs index names an input of its own it cannot read before what that does 
   });
 });
 
-test('in the harness\'s own repository the row fails on any input of the cross index that is gone, so deleting one cannot switch it off', () => {
+test('in the harness\'s own repository the row fails on any input of the cross index that is gone, so deleting one cannot switch it off', async () => {
   for (const file of ['docs/RULES.md', 'docs/FAILURES.md']) {
     const { [file]: _gone, ...rest } = CROSS;
-    withRepo(rest, (dir) => {
+    await withRepo(rest, (dir) => {
       const [row] = checkDocs(dir, { own: true });
       assert.equal(row.pass, false, file);
       assert.ok(row.lines.includes(`${file} is not tracked: the cross index joins docs/SPEC.md, docs/RULES.md and docs/FAILURES.md`), file);
@@ -226,8 +238,8 @@ test('in the harness\'s own repository the row fails on any input of the cross i
   }
 });
 
-test('the docs row fails on an explicit link of a capability that does not resolve, and reports the rest', () => {
-  withRepo({ ...CROSS, 'docs/SPEC.md': SPEC.replace('Seen in odd/tasks/reply.md.', 'Seen in odd/tasks/gone.md and `rule:no-such-rule`.') }, (dir) => {
+test('the docs row fails on an explicit link of a capability that does not resolve, and reports the rest', async () => {
+  await withRepo({ ...CROSS, 'docs/SPEC.md': SPEC.replace('Seen in odd/tasks/reply.md.', 'Seen in odd/tasks/gone.md and `rule:no-such-rule`.') }, (dir) => {
     const [row] = checkDocs(dir, { own: true });
     assert.equal(row.pass, false);
     assert.deepEqual(row.lines, [
@@ -235,7 +247,7 @@ test('the docs row fails on an explicit link of a capability that does not resol
       '"The reply check" (line 5) names rule:no-such-rule, which is no rule',
     ]);
   });
-  withRepo(CROSS, (dir) => {
+  await withRepo(CROSS, (dir) => {
     const [row] = checkDocs(dir, { own: true });
     assert.equal(row.pass, true);
     assert.match(row.detail, /; every explicit link of the cross index resolves, 2 links inferred, 3 reached by no capability \(js-harness docs index\)$/);
@@ -251,8 +263,8 @@ test('docs refuses an argument it does not know with exit 2 and the usage', asyn
   assert.match((await run(['plan', '--nope'], os.tmpdir())).err, /^unknown argument: --nope/);
 });
 
-test('the docs row passes where the index has every entry of docs/ and the plan places every tracked file', () => {
-  withRepo(CROSS, (dir) => {
+test('the docs row passes where the index has every entry of docs/ and the plan places every tracked file', async () => {
+  await withRepo(CROSS, (dir) => {
     const [row] = checkDocs(dir, { own: true });
     assert.equal(row.name, 'docs');
     assert.equal(row.pass, true);
@@ -260,32 +272,32 @@ test('the docs row passes where the index has every entry of docs/ and the plan 
   });
 });
 
-test('the docs row fails on an entry of docs/ that has no row, naming it', () => {
-  withRepo({ ...CROSS, 'docs/todo.md': '# Todo\n' }, (dir) => {
+test('the docs row fails on an entry of docs/ that has no row, naming it', async () => {
+  await withRepo({ ...CROSS, 'docs/todo.md': '# Todo\n' }, (dir) => {
     const [row] = checkDocs(dir, { own: true });
     assert.equal(row.pass, false);
     assert.deepEqual(row.lines, ['docs/todo.md has no row in the index of docs/README.md']);
   });
 });
 
-test('the docs row fails on a file too big for one slice, naming it', () => {
-  withRepo({ ...CROSS, 'evals/huge.txt': 'x'.repeat(1_700_000) }, (dir) => {
+test('the docs row fails on a file too big for one slice, naming it', async () => {
+  await withRepo({ ...CROSS, 'evals/huge.txt': 'x'.repeat(1_700_000) }, (dir) => {
     const [row] = checkDocs(dir, { own: true });
     assert.equal(row.pass, false);
     assert.deepEqual(row.lines, ['evals/huge.txt alone is 425,000 estimated tokens, over a slice of 400,000 with its opening: split the file']);
   });
 });
 
-test('the docs row takes a row for a tracked file inside a folder of docs/', () => {
+test('the docs row takes a row for a tracked file inside a folder of docs/', async () => {
   const index = `${CROSS['docs/README.md']}| \`docs/host-updates/\` | historical | each release record | releases |\n| \`docs/host-updates/README.md\` | live | | the format |\n`;
-  withRepo({ ...CROSS, 'docs/README.md': index, 'docs/host-updates/README.md': '# Format\n', 'docs/host-updates/one.md': '# One\n' }, (dir) => {
+  await withRepo({ ...CROSS, 'docs/README.md': index, 'docs/host-updates/README.md': '# Format\n', 'docs/host-updates/one.md': '# One\n' }, (dir) => {
     const [row] = checkDocs(dir, { own: true });
     assert.equal(row.pass, true, (row.lines ?? []).join('\n'));
   });
 });
 
-test('only the harness\'s own repository has a docs row: a project\'s docs/README.md is its own business', () => {
-  withRepo({ ...REPO, 'docs/README.md': '# Our docs\n', 'docs/guide.md': '# Guide\n' }, (dir) => assert.deepEqual(checkDocs(dir), []));
+test('only the harness\'s own repository has a docs row: a project\'s docs/README.md is its own business', async () => {
+  await withRepo({ ...REPO, 'docs/README.md': '# Our docs\n', 'docs/guide.md': '# Guide\n' }, (dir) => assert.deepEqual(checkDocs(dir), []));
 });
 
 test('docs check says a project is not the harness\'s own and exits 0', async () => {
@@ -296,16 +308,16 @@ test('docs check says a project is not the harness\'s own and exits 0', async ()
   });
 });
 
-test('in the harness\'s own repository the row fails where docs/README.md is gone, so deleting it cannot switch it off', () => {
-  withRepo({ 'docs/SPEC.md': SPEC }, (dir) => {
+test('in the harness\'s own repository the row fails where docs/README.md is gone, so deleting it cannot switch it off', async () => {
+  await withRepo({ 'docs/SPEC.md': SPEC }, (dir) => {
     const [row] = checkDocs(dir, { own: true });
     assert.equal(row.pass, false);
     assert.match(row.detail, /^docs\/README\.md is missing/);
   });
 });
 
-test('the row fails on a tracked file it cannot read, and reads a file deleted from the tree as empty', () => {
-  withRepo(CROSS, (dir) => {
+test('the row fails on a tracked file it cannot read, and reads a file deleted from the tree as empty', async () => {
+  await withRepo(CROSS, (dir) => {
     fs.rmSync(path.join(dir, 'evals/run.mjs'));
     const readFile = (file) => {
       if (file.endsWith('x.mjs')) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
@@ -317,9 +329,9 @@ test('the row fails on a tracked file it cannot read, and reads a file deleted f
   });
 });
 
-test('the index is the table under "## Index": another table of the page holds no rows of it', () => {
+test('the index is the table under "## Index": another table of the page holds no rows of it', async () => {
   const index = `${CROSS['docs/README.md']}\n## Commands\n\n| Command | What |\n|---|---|\n| \`docs/elsewhere.md\` | a path in another table |\n`;
-  withRepo({ ...CROSS, 'docs/README.md': index }, (dir) => {
+  await withRepo({ ...CROSS, 'docs/README.md': index }, (dir) => {
     const [row] = checkDocs(dir, { own: true });
     assert.equal(row.pass, true, (row.lines ?? []).join('\n'));
   });

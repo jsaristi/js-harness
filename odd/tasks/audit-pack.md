@@ -421,6 +421,14 @@ Found by the search of item 2; each changes in T2.
   input tokens (estimated 100,000 to 150,000), 2 of its 3 findings fixed and the third in part: an unreadable input of
   the index itself was reported as its consequence (a register that does not read) and not as the file. Now the
   unreadable files are named first; test first.
+- L12 2026-11-02, T4r: Codex read `d195f66..f6d3b35` again whole (291,485 input tokens; estimated 320,000 to 490,000),
+  2 P2 taken: a cross-index input deleted from the tree but still tracked read as empty and passed (now "gone from the
+  tree", from `readCorpus`'s `gone`); a failure cited beside the register with an id it lacks vanished (now
+  `citedFailures`, the parenthesis holding `docs/FAILURES.md`, held to the register). gentle-ai over `c166e11..f6d3b35`
+  (lineage review-abdd0fcaada95320) approved, acknowledged; its suggestion (the `.md` and leading-dot edges of
+  `holdsWord`) taken in the test. The row half of the "gone" test failed for a reason of the test: `withRepo` in
+  `bin/docs.test.mjs` was synchronous, so an async body's directory was removed at its first `await` and the row read
+  "docs/README.md is missing"; it now awaits its body, and every call of it is awaited (21 of 21 pass).
 
 ## Next step
 State at 2026-11-02 ~11:50Z, branch `worktree-audit-pack` (worktree `audit-pack`). The plan's reviews are done
@@ -453,3 +461,16 @@ T6 (the close, with the model he means by "Fable 5.5" asked of the lead).
   in `bin/docs.mjs`, README, the help line, SPEC's capability), its first run and hand check in L9, SPEC's two stale
   quotes fixed. Next: T4's commit; Codex and the Claude lenses over it (base `d195f663`), cost said first; push;
   then T5.
+- Update ~14:15Z: T4 `c166e115`, fixes `651290fc` and `f53617f3`, task T4r `f6d3b355`, all reviewed (L10 to L12), not
+  pushed. Uncommitted: T4r's two fixes (L12) in `bin/docs.mjs`, `bin/lib/docs-cross.mjs` and both tests; the test "an
+  input of the cross index deleted from the tree" fails on its row half (the row passes; `docs index` already fails
+  right). Next: find why `checkDocs` misses `corpus.gone`, commit, Codex and the reliability lens over the fix (base
+  `f6d3b355`), push, mark T4 and T4r done, then T5. PR 752 waits for 751 (the lead notifies).
+- Update ~14:25Z: the merge queue left PR 751 out of a land (its note, 09:23 local): "FAIL contracts 1 of 161
+  contracts fail". First: find which with `js-harness check` on branch `audit-pack-docs` (`f2ca50f8`); the likely one
+  is this document's contract, whose done-when names `bin/docs.test.mjs` and the docs tests that only PR 752 brings.
+  Fix on `audit-pack-docs` (documents only), push, tell the lead; then the T4r work above.
+- Update ~15:30Z: PR 751 landed on main (`064f5c7`, the lead's note, 10:16 local), so its contracts failure is moot;
+  PR 752 lands with 755 (10:18), so this branch is not pushed again. T4r's fixes committed here; T4 to T4r go on a
+  new branch from main once 752 is in, then Codex and the reliability lens over the T4r fix (base `f6d3b355`), push,
+  the pull request, ready.

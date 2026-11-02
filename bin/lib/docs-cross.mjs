@@ -60,6 +60,17 @@ const squash = (text) => text.replace(/\s+/g, ' ');
  * (`odd/tasks/gate-max.md`) or a rule id (`rule:gate-max`); a full stop that ends a sentence still ends the word. */
 const holdsWord = (text, id) => new RegExp(`(?<![\\w/:.-])${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-]|\\.\\w)`).test(text);
 
+const REGISTER = 'docs/FAILURES.md';
+const BESIDE_REGISTER = /\(([^()]*docs\/FAILURES\.md[^()]*)\)/g;
+const FAILURE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
+
+/** The failure ids a text cites beside the register, as SPEC writes them: an id and `docs/FAILURES.md` in one
+ * parenthesis, in either order, with or without code marks. Read apart from the register, so an id it lacks is
+ * found; a part of the parenthesis that is prose, not an id, is no citation. */
+const citedFailures = (text) => [...text.matchAll(BESIDE_REGISTER)].flatMap((match) => match[1].split(/[,;]/)
+  .map((part) => part.trim().replace(/^`|`$/g, ''))
+  .filter((part) => part !== REGISTER && FAILURE_ID.test(part)));
+
 /** How many rules and Today lines name each file, and the files more than `SHARED_LIMIT` of either name. */
 function sharedFiles(rules, claims) {
   const counts = new Map();
@@ -113,6 +124,7 @@ export function crossIndex({ capabilities, rules, failures, tracked, texts }) {
       if (entries.has(failure)) declared.push(failure);
       else broken.push(`${where} names rule:${id}, whose failure ${failure} is no entry of the register`);
     }
+    for (const id of citedFailures(text)) if (!entries.has(id)) broken.push(`${where} cites the failure ${id}, which is no entry of ${REGISTER}`);
     const explicitFailures = sorted([...failures.filter((entry) => holdsWord(text, entry.id)).map((entry) => entry.id), ...declared]);
 
     const { today, proof } = claims[i];

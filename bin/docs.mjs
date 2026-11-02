@@ -50,13 +50,15 @@ function readCorpus(root, { spawn, readFile }) {
   if (listed === null) return null;
   const texts = new Map();
   const unreadable = [];
+  const gone = new Set(); // tracked files deleted from the tree, read as empty
   for (const file of listed) {
     try {
       texts.set(file, readFile(path.join(root, file)));
     } catch (err) {
       // A file in the index and gone from the tree (deleted, not staged) is read as empty: it still has its slice.
       // Any other error is said, since a file read as empty would count no tokens and pass unseen.
-      if (err.code !== 'ENOENT') unreadable.push(`${file} cannot be read: ${err.message}`);
+      if (err.code === 'ENOENT') gone.add(file);
+      else unreadable.push(`${file} cannot be read: ${err.message}`);
       texts.set(file, '');
     }
   }
@@ -64,7 +66,7 @@ function readCorpus(root, { spawn, readFile }) {
   const files = listed.map((file) => ({ path: file, tokens: estimateTokens(texts.get(file)), ...stateOf(file, texts.get(file)) }));
   const capabilities = tracked.has(SPEC_PATH) ? parseSpec(texts.get(SPEC_PATH)).capabilities.map((one) => capabilityFiles(one, tracked)) : [];
   const imports = Object.fromEntries(listed.filter((file) => /^bin\/.*\.[cm]?js$/.test(file)).map((file) => [file, importsOf(file, texts.get(file), tracked)]));
-  return { listed, texts, files, capabilities, imports, unreadable };
+  return { listed, texts, files, capabilities, imports, unreadable, gone };
 }
 
 const RULES_PATH = 'docs/RULES.md';
@@ -76,6 +78,8 @@ function readCross(corpus) {
   const tracked = new Set(corpus.listed);
   const missing = [SPEC_PATH, RULES_PATH, FAILURES_PATH].find((file) => !tracked.has(file));
   if (missing) return { problem: `${missing} is not tracked: the cross index joins ${SPEC_PATH}, ${RULES_PATH} and ${FAILURES_PATH}` };
+  const gone = [SPEC_PATH, RULES_PATH, FAILURES_PATH].find((file) => corpus.gone.has(file));
+  if (gone) return { problem: `${gone} is gone from the tree: the cross index joins ${SPEC_PATH}, ${RULES_PATH} and ${FAILURES_PATH}` };
   const register = parseRegister(corpus.texts.get(FAILURES_PATH));
   if (register.errors.length > 0) return { problem: `${FAILURES_PATH} does not read as a register (${register.errors[0]}): js-harness failures check names each fault` };
   const index = crossIndex({

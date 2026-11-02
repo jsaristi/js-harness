@@ -124,13 +124,22 @@ test('a quoted section wrapped across lines still resolves, since prose reflowed
 });
 
 test('a failure id is read only as a whole word, so an id inside a longer one, a path or a rule id is no link', () => {
-  const index = crossIndex(inputs([capability('The gate', { Reason: 'Not `gate-left-running-twice`, nor proposal-unreviewed-again, nor `odd/tasks/gate-left-running.md` or `rule:gate-left-running`.' })], {
+  const index = crossIndex(inputs([capability('The gate', { Reason: 'Not `gate-left-running-twice`, nor proposal-unreviewed-again, nor `odd/tasks/gate-left-running.md` or `rule:gate-left-running`, nor gate-left-running.md alone or .proposal-unreviewed.' })], {
     tracked: new Set(['odd/tasks/gate-left-running.md']),
     rules: [{ id: 'gate-left-running', files: [], failure: null }],
   }));
   assert.deepEqual(index.capabilities[0].explicit.failures, []);
   const ended = crossIndex(inputs([capability('The gate', { Reason: 'Against gate-left-running.' })]));
   assert.deepEqual(ended.capabilities[0].explicit.failures, ['gate-left-running']);
+});
+
+test('a failure cited beside the register, in either order, is held to the register: one it does not hold is broken', () => {
+  const tracked = new Set([...inputs([]).tracked, 'docs/FAILURES.md']);
+  const index = crossIndex(inputs([
+    capability('The gate', { Reason: 'Seen twice (`docs/FAILURES.md`, gate-left-runing) and once (`proposal-unreviewed`, `docs/FAILURES.md`), as decided (`docs/FAILURES.md`, declaring no class).' }),
+  ], { tracked }));
+  assert.deepEqual(index.capabilities[0].explicit.failures, ['proposal-unreviewed']);
+  assert.deepEqual(index.broken, ['"The gate" (line 1) cites the failure gate-left-runing, which is no entry of docs/FAILURES.md']);
 });
 
 test('the failure a named rule declares is a link only where the register holds it, and is broken otherwise', () => {
