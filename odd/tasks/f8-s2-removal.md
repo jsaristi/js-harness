@@ -276,4 +276,21 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   envelope); Claude 9 (done in PR 759, L4, and only clarified here).
 - L6 2026-11-02, two corrections for the lead, not redefined here: hooks after S2 are 16, not 14 (js-harness holds 15
   entries today; S4a's row and row 8 say 14); `~/.engram` cannot hash as before with sessions writing during the
-  removal, so spec 6 checks it by hash in the sitting and by function after.
+  removal, so spec 6 checks it by hash in the sitting and by function after. Sent to the lead as a note, 20:29:36Z.
+- L7 2026-11-02 ~20:35Z, state: T2-T3 and T4 handed to two writers in parallel (disjoint files; the manifest's shape
+  fixed in both briefs: `schema js-harness.stack-backup/v1`, `roots`, `files` with `secret`, `links`, `exports`,
+  `named.permissions`, `named.mcpClaude`, `engram.observations`); neither commits. Next: read their diffs and run their
+  tests here, commit test-first pairs, Codex and the lenses (`--base 84997f7d`), the independent verifier, PR; then
+  T6, the sitting's plan to the lead. A `js-harness wait --notice-to 134` runs in the background.
+- L8 2026-11-02, T2-T4 built and committed, each gate green: `47c22307` (the strict walker), `1edd8539` (the backup,
+  drill and undo), `c72c2bcd` (`stack backup` and the test that the memory backup never walks the S2 backup),
+  `d4b3c62c` (`scripts/s2-verify.mjs`); 93 of 93 tests here before the commits. The first try of `1edd8539` failed
+  the gate on `bin/lib/gentle-ai-absence.test.mjs`: the new files name gentle-ai and joined its named list, each with
+  why. Writer deviations kept: `~/.codex` and `~/.gemini` split into config and data parts like `~/.claude`;
+  `~/.gentle-ai`, `~/bin` and Orca's and herdr's folders are data roots (a restore never deletes there); single
+  files written back when they differ, never deleted; `restore` without `--yes` prints its plan on any home. Row 11
+  of `s2-verify` runs `claude mcp list`, which starts each MCP server briefly to check it: no config is written, but
+  the run is not read-only in the strictest sense. Not tested here: the real `tasklist`, `reg` and `engram` calls (the
+  tests inject them), a file symlink on Windows (needs a privilege), a full-size run over the 3.2 GB `~/.claude`.
+  Next: Codex over `84997f7d..d4b3c62c` (6 parts, about 1.1M to 1.45M input tokens) and the lenses, the independent
+  verifier, PR.
