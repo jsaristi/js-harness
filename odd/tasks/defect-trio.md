@@ -86,6 +86,8 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   it (`bash -c '...; js-harness wait'`); test first. Route: inline. L8.
 - [x] T6 (kind: build) spec 3, Codex on fa61c36..5a411a9: a heredoc is work, an empty segment between `;` or line
   breaks is nothing; test first. Route: inline. L9.
+- [x] T7 (kind: build) spec 1, the land of PR 750 red in WSL2: the hook's CPU held against reference runs between its
+  runs; red first under load in WSL2. Route: inline. L11.
 
 ## Log
 - L1 (2026-11-02, his request through the lead's brief
@@ -154,3 +156,18 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   7f918a9..b9a1512, fa61c36..5a411a9 `--again`, 5a411a9..f691a9c; lenses over each). `js-harness contract run`: `met`.
   gentle-ai's Stop hook offered the whole branch (base 76f1294) three times: its status was read, nothing started.
   Pull request jsaristi/js-harness#750, branch `worktree-defect-trio`.
+- L11 (2026-11-02, T7, the lead's brief after a restart: "PR 750 was red on this machine in the merge queue"): the
+  gate's run cbfb161f (12:16Z, candidate main 5e8872b with PR 750) failed in WSL2 on one test, the lead's stop of
+  `bin/reply-budget.test.mjs`; PR 749 changed the review flow only (`git diff --stat 76f1294c origin/main`), so the
+  failure is this change's. The depth pass's refutation (item 4) was measured on Windows only, and it does not hold in
+  WSL2: the test alone there took a main-thread CPU p90 of 976 ms, in the whole suite 2101 ms, beside 24 busy loops
+  2768 ms (red, and the work stop 2837 ms). Reference runs of the hook's main work (the transcript read, each line
+  parsed, the text searched), measured between the hook's runs, grew the same way: the ratio was 1.37 to 1.71 quiet
+  and 1.21 to 1.54 in the suite for the lead, 1.08 to 1.37 and 0.84 to 1.27 for the work stop. Decided: each run's CPU
+  over the mean of the reference runs before and after it, times 450 ms (the reference's quiet median: 405 ms on
+  Windows, 443 ms in WSL2, the larger taken), at the 90th percentile, against the same 2500 ms; the larger of the two
+  neighbours read low on a 905 ms reference outlier, and the median of all of them read 1513 ms for a work stop when
+  load ended halfway. Green: Windows quiet, lead 724 and work 518 ms; WSL2 beside 24 busy loops, 797 and 770 ms (the
+  measured CPU up to 2.3 s). Not weakened: 2 s more of main-thread work in each hook run, no process added, is red on
+  both, 3073 and 2886 ms; 1.5 s and a `git --version` is red on the process count. The machine's Windows hook took
+  1.1 to 1.4 s before the restart and 0.64 to 0.67 s after it, so even quiet CPU is not one machine's constant.

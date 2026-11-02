@@ -1367,13 +1367,18 @@ computes the merge ref later.
 ### reply-budget-wall-flake
 The two 90th-percentile tests of `bin/reply-budget.test.mjs` timed the reply hook by the wall clock, which the
 machine's load moves: under load they went red with the hook's own work unchanged, and the merge queue left pull
-requests out of lands for it. They now hold the same 2500 ms on the hook's main-thread CPU time and the processes it
-starts, which load does not move (odd/tasks/defect-trio.md, L3 and L4).
+requests out of lands for it. The first fix held the hook's main-thread CPU time, which load did not move on Windows
+but did in WSL2, where the gate runs; they now hold that CPU against reference runs of the same kind of work between
+the hook's runs, read in milliseconds of the machine that set the 2500 ms, and the processes it starts
+(odd/tasks/defect-trio.md, L3, L4 and L11).
 - Class: machine
 - Seen: 2026-10-31 — odd/tasks/refresh-open-apply.md:138 — PR 736 left out of the land at 08:48Z, red in WSL on the
   two time-budget tests, Windows Defender at 142 CPU s in the load log
 - Seen: 2026-10-31 — odd/tasks/advisor-trial.md:271 — PR 740 left out of a land at 15:53Z, red only on the two
   stop-budget timing tests while another session ran its reviews
+- Seen: 2026-11-02 — the gate log's failed.jsonl, run cbfb161f at 12:16Z — PR 750's candidate on main 5e8872b, red in
+  WSL2 on the lead's stop with the main-thread CPU measure; the same test in WSL2 alone took 976 ms at the 90th
+  percentile, and 2101 ms in the whole suite
 - Control: check — bin/reply-budget.test.mjs — "stop, every check doing its whole work, stays within the budget at the
   90th percentile" — since 2026-11-02
 
