@@ -1138,8 +1138,8 @@ under the bar of 14 that would drop the mark. `--json` prints the index whole. `
 file or folder of `docs/` has no row under its `## Index`, a tracked file cannot be read, one file alone
 outgrows a slice, or an explicit link of the cross index does not resolve; in any other project it says so
 and exits 0. Exit 1 on a failing row, where git cannot list the files, from `plan` where a tracked file
-cannot be read, named on stderr after the plan, and from `index` on a link that does not resolve or an
-input it lacks; 2 on a usage error.
+cannot be read, named on stderr after the plan, and from `index` on a link that does not resolve, an
+input it lacks or a tracked file it cannot read, named on stderr; 2 on a usage error.
 
 ```console
 $ js-harness docs plan
@@ -1150,7 +1150,7 @@ core: 4 slices, 1,371,082 estimated tokens
   slice 1, 374,950 tokens
     orientation (255,703): docs/README.md, docs/SPEC.md, AGENTS.md, CLAUDE.md, docs/ROADMAP.md, ...
 $ js-harness docs index
-Cross index of 76 capabilities: 64 cites a document, 0 name a rule, 6 a failure entry; 34 reaches a rule and 41 a failure entry by inference
+Cross index of 76 capabilities: 64 cites a document, 0 name a rule, 5 a failure entry; 34 reaches a rule and 41 a failure entry by inference
 ...
 Too shared to infer from:
   bin/check.mjs: 4 rules, 15 Today lines

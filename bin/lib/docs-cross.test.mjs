@@ -118,7 +118,32 @@ test('an explicit link that does not resolve is broken: a path not tracked, a qu
   assert.deepEqual(index.capabilities[0].explicit.rules, []);
 });
 
-test('a failure id is read only as a whole word, so an id inside a longer one is no link', () => {
-  const index = crossIndex(inputs([capability('The gate', { Reason: 'Not `gate-left-running-twice`, nor proposal-unreviewed-again.' })]));
+test('a quoted section wrapped across lines still resolves, since prose reflowed is the same section', () => {
+  const index = crossIndex(inputs([capability('The gate', { Reason: 'Decided in `odd/tasks/gate.md`, "How the lock\nis held".' })]));
+  assert.deepEqual(index.broken, []);
+});
+
+test('a failure id is read only as a whole word, so an id inside a longer one, a path or a rule id is no link', () => {
+  const index = crossIndex(inputs([capability('The gate', { Reason: 'Not `gate-left-running-twice`, nor proposal-unreviewed-again, nor `odd/tasks/gate-left-running.md` or `rule:gate-left-running`.' })], {
+    tracked: new Set(['odd/tasks/gate-left-running.md']),
+    rules: [{ id: 'gate-left-running', files: [], failure: null }],
+  }));
   assert.deepEqual(index.capabilities[0].explicit.failures, []);
+  const ended = crossIndex(inputs([capability('The gate', { Reason: 'Against gate-left-running.' })]));
+  assert.deepEqual(ended.capabilities[0].explicit.failures, ['gate-left-running']);
+});
+
+test('the failure a named rule declares is a link only where the register holds it, and is broken otherwise', () => {
+  const index = crossIndex(inputs([capability('The gate', { Reason: 'Held by `rule:gate-max`.' })], {
+    rules: [{ id: 'gate-max', files: [], failure: 'gone-failure' }],
+  }));
+  assert.deepEqual(index.capabilities[0].explicit.failures, []);
+  assert.deepEqual(index.broken, ['"The gate" (line 1) names rule:gate-max, whose failure gone-failure is no entry of the register']);
+});
+
+test('a retired rule with no successor is said to have none', () => {
+  const index = crossIndex(inputs([capability('The gate', { Reason: 'Held by `rule:lost`.' })], {
+    rules: [{ id: 'lost', retired: true, successors: [] }],
+  }));
+  assert.deepEqual(index.broken, ['"The gate" (line 1) names rule:lost, retired with no successor']);
 });

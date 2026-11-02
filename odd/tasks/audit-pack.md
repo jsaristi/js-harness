@@ -402,6 +402,19 @@ Found by the search of item 2; each changes in T2.
   through a test file that many failures' controls name and that the Today-line count does not see, since a test is
   named in Proof (9 of the 10 came through a test file); counting Proof lines in the cut is a change of spec 3, left
   to the audit.
+- L10 2026-11-02, T4's reviews over `d195f66..c166e11`. Codex: 2 parts, 417,589 input tokens (estimated 266,000 to
+  400,000; allowance 548,400), 3 P2 taken: a quoted section is compared with its white space squashed, so a quote
+  reflowed across lines still resolves; `--json` carries `inferredLinks` (the label and the hand check); `index`
+  names an unreadable file on stderr. The Claude lenses: reliability 0 findings (41,992 input tokens), readability 1
+  warning taken (20,363): the row now fails on any of the three inputs gone, from the structured result and not a
+  message's prefix, so deleting `docs/RULES.md` cannot switch the part off. gentle-ai (lineage
+  review-720df49713aaec63, reliability lens, the standing consent): approved with 2 warnings and 4 suggestions, none
+  blocking, acknowledged. Taken: a failure id inside a path or a `rule:` id is no link (this dropped one false link,
+  `board-summary-stale` read inside `odd/tasks/board-summary-stale.md` at `docs/SPEC.md:711`, so 5 capabilities name a
+  failure, not 6); a rule's declared failure absent from the register is broken; a retired rule with no successor
+  says so. Rebutted: the crash on a tracked file deleted from the tree, since `readCorpus` gives every tracked file a
+  text, empty when it cannot be read (`bin/docs.mjs:60`). Left: counting Proof lines in the cut (L9), and a command
+  test of the "Too shared" block, which the module's test covers (`SHARED_LIMIT`).
 
 ## Next step
 State at 2026-11-02 ~11:50Z, branch `worktree-audit-pack` (worktree `audit-pack`). The plan's reviews are done

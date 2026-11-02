@@ -53,8 +53,12 @@ const FEATURE = /^odd\/tasks\/[^/]+\.md$/;
 
 const sorted = (values) => [...new Set(values)].sort();
 
-/** Whether `text` holds `id` as a whole word, so `gate-max` is not read inside `gate-max-two`. */
-const holdsWord = (text, id) => new RegExp(`(?<![\\w-])${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`).test(text);
+/** `text` with each run of white space as one space, so a quote reflowed across lines still matches its section. */
+const squash = (text) => text.replace(/\s+/g, ' ');
+
+/** Whether `text` holds `id` as a whole word, so `gate-max` is not read inside `gate-max-two`, a path
+ * (`odd/tasks/gate-max.md`) or a rule id (`rule:gate-max`); a full stop that ends a sentence still ends the word. */
+const holdsWord = (text, id) => new RegExp(`(?<![\\w/:.-])${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-]|\\.\\w)`).test(text);
 
 /** How many rules and Today lines name each file, and the files more than `SHARED_LIMIT` of either name. */
 function sharedFiles(rules, claims) {
@@ -74,6 +78,7 @@ function sharedFiles(rules, claims) {
 export function crossIndex({ capabilities, rules, failures, tracked, texts }) {
   const inForce = new Map(rules.filter((rule) => !rule.retired).map((rule) => [rule.id, rule]));
   const retired = new Map(rules.filter((rule) => rule.retired).map((rule) => [rule.id, rule]));
+  const entries = new Set(failures.map((entry) => entry.id));
   const claims = capabilities.map((one) => capabilityFiles(one, tracked));
   const shared = sharedFiles([...inForce.values()], claims);
   const tooShared = new Set(shared.map((one) => one.file));
@@ -91,19 +96,24 @@ export function crossIndex({ capabilities, rules, failures, tracked, texts }) {
       }
       documents.push(file);
       const quote = QUOTED.exec(text.slice(match.index + file.length))?.[1];
-      if (quote !== undefined && !(texts.get(file) ?? '').includes(quote)) broken.push(`${where} quotes "${quote}" of ${file}, which that file does not hold`);
+      if (quote !== undefined && !squash(texts.get(file) ?? '').includes(squash(quote))) broken.push(`${where} quotes "${quote}" of ${file}, which that file does not hold`);
     }
     const named = [];
     for (const [, id] of text.matchAll(RULE_ID)) {
       if (inForce.has(id)) named.push(id);
-      else if (retired.has(id)) broken.push(`${where} names rule:${id}, retired: read ${retired.get(id).successors.join(', ')} instead`);
-      else broken.push(`${where} names rule:${id}, which is no rule`);
+      else if (!retired.has(id)) broken.push(`${where} names rule:${id}, which is no rule`);
+      else if (retired.get(id).successors.length === 0) broken.push(`${where} names rule:${id}, retired with no successor`);
+      else broken.push(`${where} names rule:${id}, retired: read ${retired.get(id).successors.join(', ')} instead`);
     }
     const explicitRules = sorted(named);
-    const explicitFailures = sorted([
-      ...failures.filter((entry) => holdsWord(text, entry.id)).map((entry) => entry.id),
-      ...explicitRules.map((id) => inForce.get(id).failure).filter((id) => id !== null),
-    ]);
+    const declared = [];
+    for (const id of explicitRules) {
+      const { failure } = inForce.get(id);
+      if (failure === null) continue;
+      if (entries.has(failure)) declared.push(failure);
+      else broken.push(`${where} names rule:${id}, whose failure ${failure} is no entry of the register`);
+    }
+    const explicitFailures = sorted([...failures.filter((entry) => holdsWord(text, entry.id)).map((entry) => entry.id), ...declared]);
 
     const { today, proof } = claims[i];
     const usable = (file) => !tooShared.has(file);

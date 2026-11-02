@@ -11,7 +11,7 @@ import { estimateTokens } from './lib/payload.mjs';
 import { SPEC_PATH, isHarnessRepository, parseSpec } from './lib/spec.mjs';
 import { SLICE_BUDGET, capabilityFiles, importsOf, planFindings, readingPlan } from './lib/docs-plan.mjs';
 import { ENTRY_PATH, indexFindings } from './lib/docs-entry.mjs';
-import { INFERRED_LABEL, crossIndex, parseRules } from './lib/docs-cross.mjs';
+import { INFERRED_CHECK, INFERRED_LABEL, crossIndex, parseRules } from './lib/docs-cross.mjs';
 import { parseRegister } from './lib/failures.mjs';
 import { gitTopLevel } from './lib/project.mjs';
 import { parseFeature } from './lib/progress.mjs';
@@ -75,7 +75,7 @@ const FAILURES_PATH = 'docs/FAILURES.md';
 function readCross(corpus) {
   const tracked = new Set(corpus.listed);
   const missing = [SPEC_PATH, RULES_PATH, FAILURES_PATH].find((file) => !tracked.has(file));
-  if (missing) return { problem: `${missing} is not tracked: the cross index joins the specification, ${RULES_PATH} and ${FAILURES_PATH}` };
+  if (missing) return { problem: `${missing} is not tracked: the cross index joins ${SPEC_PATH}, ${RULES_PATH} and ${FAILURES_PATH}` };
   const register = parseRegister(corpus.texts.get(FAILURES_PATH));
   if (register.errors.length > 0) return { problem: `${FAILURES_PATH} does not read as a register (${register.errors[0]}): js-harness failures check names each fault` };
   const index = crossIndex({
@@ -148,9 +148,9 @@ const sliceCount = (plan) => plan.tiers.reduce((sum, tier) => sum + tier.slices.
  * `docs/README.md` is missing, so deleting it cannot switch the row off; on an entry of `docs/` the index lacks or a
  * row it should not hold (`indexFindings`); on a tracked file it cannot read; on a file too big for one slice; and on
  * a tracked file the reading plan does not place once (`planFindings`, a self-check of the packer); and on an explicit
- * link of the cross index that does not resolve, whose inferred links and unreached records it only counts. A
- * repository without its rules or its register has no cross index to hold. The repository is the one `cwd` is in,
- * read at its top. */
+ * link of the cross index that does not resolve, or on one of its inputs gone or unreadable as a register, so deleting
+ * one cannot switch that part off; its inferred links and unreached records it only counts. The repository is the one
+ * `cwd` is in, read at its top. */
 export function checkDocs(cwd, { spawn = spawnSync, readFile = (file) => fs.readFileSync(file, 'utf8'), own } = {}) {
   const root = path.resolve(gitTopLevel(cwd, spawn) ?? cwd);
   if (!(own ?? isHarnessRepository(root))) return [];
@@ -162,7 +162,7 @@ export function checkDocs(cwd, { spawn = spawnSync, readFile = (file) => fs.read
   const plan = readingPlan({ files: corpus.files, capabilities: corpus.capabilities, imports: corpus.imports, preamble: ENTRY_PATH });
   const index = corpus.texts.get(ENTRY_PATH) ?? readFile(path.join(root, ENTRY_PATH));
   const cross = readCross(corpus);
-  const crossFindings = cross.index?.broken ?? (cross.problem.startsWith(FAILURES_PATH) ? [cross.problem] : []);
+  const crossFindings = cross.index?.broken ?? [cross.problem];
   const findings = [...corpus.unreadable, ...indexFindings(index, entries, corpus.listed), ...oversizedFindings(plan), ...planFindings(plan, corpus.files), ...crossFindings];
   if (findings.length > 0) return [{ name, pass: false, detail: `${count(findings.length, 'finding')} in the index of ${ENTRY_PATH} or the reading plan`, lines: findings }];
   const detail = `${count(entries.length, 'entry', 'entries')} of docs/ indexed; ${figure(plan.files)} tracked files in ${count(sliceCount(plan), 'slice')} of at most ${figure(plan.budget)} estimated tokens (js-harness docs plan)${crossDetail(cross.index)}`;
@@ -246,8 +246,9 @@ export async function docsMain(argv, { cwd = process.cwd(), stdout = console.log
       stderr(cross.problem);
       return 1;
     }
-    if (parsed.json) stdout(JSON.stringify(cross.index, null, 2));
+    if (parsed.json) stdout(JSON.stringify({ ...cross.index, inferredLinks: { label: INFERRED_LABEL, check: INFERRED_CHECK } }, null, 2));
     else for (const line of renderCross(cross.index)) stdout(line);
+    if (corpus.unreadable.length > 0) stderr([...corpus.unreadable, 'the index reads it as empty, so a link through it may be missing'].join('\n'));
     return cross.index.broken.length === 0 && corpus.unreadable.length === 0 ? 0 : 1;
   }
   const plan = readingPlan({ files: corpus.files, capabilities: corpus.capabilities, imports: corpus.imports, budget: parsed.budget, preamble: ENTRY_PATH });
