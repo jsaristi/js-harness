@@ -11,10 +11,12 @@ import { estimateTokens } from './lib/payload.mjs';
 import { SPEC_PATH, isHarnessRepository, parseSpec } from './lib/spec.mjs';
 import { SLICE_BUDGET, capabilityFiles, importsOf, planFindings, readingPlan } from './lib/docs-plan.mjs';
 import { ENTRY_PATH, indexFindings } from './lib/docs-entry.mjs';
+import { INFERRED_CHECK, INFERRED_LABEL, crossIndex, parseRules } from './lib/docs-cross.mjs';
+import { parseRegister } from './lib/failures.mjs';
 import { gitTopLevel } from './lib/project.mjs';
 import { parseFeature } from './lib/progress.mjs';
 
-export const USAGE = 'Usage: js-harness docs plan [--budget <n>] [--json] | docs check';
+export const USAGE = 'Usage: js-harness docs plan [--budget <n>] [--json] | docs index [--json] | docs check';
 
 class DocsArgError extends Error {}
 
@@ -48,13 +50,15 @@ function readCorpus(root, { spawn, readFile }) {
   if (listed === null) return null;
   const texts = new Map();
   const unreadable = [];
+  const gone = new Set(); // tracked files deleted from the tree, read as empty
   for (const file of listed) {
     try {
       texts.set(file, readFile(path.join(root, file)));
     } catch (err) {
       // A file in the index and gone from the tree (deleted, not staged) is read as empty: it still has its slice.
       // Any other error is said, since a file read as empty would count no tokens and pass unseen.
-      if (err.code !== 'ENOENT') unreadable.push(`${file} cannot be read: ${err.message}`);
+      if (err.code === 'ENOENT') gone.add(file);
+      else unreadable.push(`${file} cannot be read: ${err.message}`);
       texts.set(file, '');
     }
   }
@@ -62,7 +66,65 @@ function readCorpus(root, { spawn, readFile }) {
   const files = listed.map((file) => ({ path: file, tokens: estimateTokens(texts.get(file)), ...stateOf(file, texts.get(file)) }));
   const capabilities = tracked.has(SPEC_PATH) ? parseSpec(texts.get(SPEC_PATH)).capabilities.map((one) => capabilityFiles(one, tracked)) : [];
   const imports = Object.fromEntries(listed.filter((file) => /^bin\/.*\.[cm]?js$/.test(file)).map((file) => [file, importsOf(file, texts.get(file), tracked)]));
-  return { listed, texts, files, capabilities, imports, unreadable };
+  return { listed, texts, files, capabilities, imports, unreadable, gone };
+}
+
+const RULES_PATH = 'docs/RULES.md';
+const FAILURES_PATH = 'docs/FAILURES.md';
+
+/** The cross index of the corpus (bin/lib/docs-cross.mjs), from the specification, the rendered rules and the failure
+ * register, as `{ index }`; `{ problem }` where one of them is not tracked or the register does not read. */
+function readCross(corpus) {
+  const tracked = new Set(corpus.listed);
+  const missing = [SPEC_PATH, RULES_PATH, FAILURES_PATH].find((file) => !tracked.has(file));
+  if (missing) return { problem: `${missing} is not tracked: the cross index joins ${SPEC_PATH}, ${RULES_PATH} and ${FAILURES_PATH}` };
+  const gone = [SPEC_PATH, RULES_PATH, FAILURES_PATH].find((file) => corpus.gone.has(file));
+  if (gone) return { problem: `${gone} is gone from the tree: the cross index joins ${SPEC_PATH}, ${RULES_PATH} and ${FAILURES_PATH}` };
+  const register = parseRegister(corpus.texts.get(FAILURES_PATH));
+  if (register.errors.length > 0) return { problem: `${FAILURES_PATH} does not read as a register (${register.errors[0]}): js-harness failures check names each fault` };
+  const index = crossIndex({
+    capabilities: parseSpec(corpus.texts.get(SPEC_PATH)).capabilities,
+    rules: parseRules(corpus.texts.get(RULES_PATH)),
+    failures: register.entries.map((entry) => ({ id: entry.id, control: entry.control?.path ?? null })),
+    tracked,
+    texts: corpus.texts,
+  });
+  return { index };
+}
+
+const inferredCount = (index) => index.capabilities.reduce((sum, one) => sum + one.inferred.rules.length + one.inferred.failures.length, 0);
+const unreachedCount = (index) => index.unreached.rules.length + index.unreached.failures.length + index.unreached.features.length;
+
+/** The lines of `docs index`: the counts, each capability with its links, the files too shared to infer from, what no
+ * capability reaches and the explicit links that do not resolve. */
+function renderCross(index) {
+  const all = index.capabilities;
+  const having = (test) => all.filter(test).length;
+  const lines = [
+    `Cross index of ${count(all.length, 'capability', 'capabilities')}: ${having((one) => one.explicit.documents.length > 0)} cites a document, ${having((one) => one.explicit.rules.length > 0)} name a rule, ${having((one) => one.explicit.failures.length > 0)} a failure entry; ${having((one) => one.inferred.rules.length > 0)} reaches a rule and ${having((one) => one.inferred.failures.length > 0)} a failure entry by inference`,
+    `Explicit links are what a capability's text cites; an ${INFERRED_LABEL} link comes from a file its Today or Proof line shares with a rule or a failure's control. --json gives the index whole.`,
+  ];
+  for (const one of all) {
+    lines.push('', `${one.title} (line ${one.line})`);
+    const { documents, rules, failures } = one.explicit;
+    if (documents.length > 0) lines.push(`  cites: ${documents.join(', ')}`);
+    if (rules.length > 0) lines.push(`  rules: ${rules.join(', ')}`);
+    if (failures.length > 0) lines.push(`  failure entries: ${failures.join(', ')}`);
+    const inferred = [...one.inferred.rules.map((link) => `rule ${link.id} through ${link.via}`), ...one.inferred.failures.map((link) => `failure ${link.id} through ${link.via}`)];
+    if (inferred.length > 0) lines.push(`  ${INFERRED_LABEL}: ${inferred.join('; ')}`);
+    if (documents.length + rules.length + failures.length + inferred.length === 0) lines.push('  no link, explicit or inferred');
+  }
+  if (index.shared.length > 0) {
+    lines.push('', 'Too shared to infer from:');
+    for (const one of index.shared) lines.push(`  ${one.file}: ${count(one.rules, 'rule')}, ${count(one.todays, 'Today line')}`);
+  }
+  const { rules, failures, features } = index.unreached;
+  lines.push('', 'Reached by no capability:');
+  lines.push(`  rules: ${rules.map((rule) => (rule.shared ? `${rule.id} (homed in ${rule.shared}, too shared)` : rule.id)).join(', ') || 'none'}`);
+  lines.push(`  failure entries: ${failures.join(', ') || 'none'}`);
+  lines.push(`  feature documents: ${features.join(', ') || 'none'}`);
+  if (index.broken.length > 0) lines.push('', 'Explicit links that do not resolve:', ...index.broken.map((line) => `  ${line}`));
+  return lines;
 }
 
 /** The files and folders directly under `docs/` among the tracked `files`, a folder written with its closing `/`. */
@@ -89,8 +151,10 @@ const sliceCount = (plan) => plan.tiers.reduce((sum, tier) => sum + tier.slices.
  * `isHarnessRepository`), since a project's `docs/README.md` holds no index of this kind. It fails where
  * `docs/README.md` is missing, so deleting it cannot switch the row off; on an entry of `docs/` the index lacks or a
  * row it should not hold (`indexFindings`); on a tracked file it cannot read; on a file too big for one slice; and on
- * a tracked file the reading plan does not place once (`planFindings`, a self-check of the packer). The repository
- * is the one `cwd` is in, read at its top. */
+ * a tracked file the reading plan does not place once (`planFindings`, a self-check of the packer); and on an explicit
+ * link of the cross index that does not resolve, or on one of its inputs gone or unreadable as a register, so deleting
+ * one cannot switch that part off; its inferred links and unreached records it only counts. The repository is the one
+ * `cwd` is in, read at its top. */
 export function checkDocs(cwd, { spawn = spawnSync, readFile = (file) => fs.readFileSync(file, 'utf8'), own } = {}) {
   const root = path.resolve(gitTopLevel(cwd, spawn) ?? cwd);
   if (!(own ?? isHarnessRepository(root))) return [];
@@ -101,11 +165,16 @@ export function checkDocs(cwd, { spawn = spawnSync, readFile = (file) => fs.read
   const entries = docsEntries(corpus.listed);
   const plan = readingPlan({ files: corpus.files, capabilities: corpus.capabilities, imports: corpus.imports, preamble: ENTRY_PATH });
   const index = corpus.texts.get(ENTRY_PATH) ?? readFile(path.join(root, ENTRY_PATH));
-  const findings = [...corpus.unreadable, ...indexFindings(index, entries, corpus.listed), ...oversizedFindings(plan), ...planFindings(plan, corpus.files)];
+  const cross = readCross(corpus);
+  const crossFindings = cross.index?.broken ?? [cross.problem];
+  const findings = [...corpus.unreadable, ...indexFindings(index, entries, corpus.listed), ...oversizedFindings(plan), ...planFindings(plan, corpus.files), ...crossFindings];
   if (findings.length > 0) return [{ name, pass: false, detail: `${count(findings.length, 'finding')} in the index of ${ENTRY_PATH} or the reading plan`, lines: findings }];
-  const detail = `${count(entries.length, 'entry', 'entries')} of docs/ indexed; ${figure(plan.files)} tracked files in ${count(sliceCount(plan), 'slice')} of at most ${figure(plan.budget)} estimated tokens (js-harness docs plan)`;
+  const detail = `${count(entries.length, 'entry', 'entries')} of docs/ indexed; ${figure(plan.files)} tracked files in ${count(sliceCount(plan), 'slice')} of at most ${figure(plan.budget)} estimated tokens (js-harness docs plan)${crossDetail(cross.index)}`;
   return [{ name, pass: true, detail }];
 }
+
+/** What the row says of the cross index when it passes: its inferred links and its unreached records, counted. */
+const crossDetail = (index) => (index === undefined ? '' : `; every explicit link of the cross index resolves, ${count(inferredCount(index), 'link')} inferred, ${unreachedCount(index)} reached by no capability (js-harness docs index)`);
 
 /** The lines of `docs plan`: the totals, then each tier and its slices, each group of a slice with its files. */
 function renderPlan(plan) {
@@ -130,14 +199,14 @@ function formatRow(row) {
   return `${row.pass ? 'PASS' : 'FAIL'}  ${row.name}  ${row.detail}${lines}`;
 }
 
-/** Walks argv token by token: `plan` takes `--budget <n>` and `--json`; `check` takes nothing. */
+/** Walks argv token by token: `plan` takes `--budget <n>` and `--json`, `index` takes `--json`; `check` takes nothing. */
 function parseArgs(argv) {
   const [sub, ...rest] = argv;
-  if (sub !== 'plan' && sub !== 'check') throw new DocsArgError(sub === undefined ? 'name a subcommand: plan or check' : `unknown argument: ${sub}`);
+  if (!['plan', 'index', 'check'].includes(sub)) throw new DocsArgError(sub === undefined ? 'name a subcommand: plan, index or check' : `unknown argument: ${sub}`);
   const parsed = { sub, budget: SLICE_BUDGET, json: false };
   for (let i = 0; i < rest.length; i++) {
     const token = rest[i];
-    if (sub === 'plan' && token === '--json') parsed.json = true;
+    if (sub !== 'check' && token === '--json') parsed.json = true;
     else if (sub === 'plan' && token === '--budget') {
       const value = rest[++i];
       if (!/^[1-9]\d*$/.test(value ?? '')) throw new DocsArgError(`--budget takes a whole number of estimated tokens, not ${value ?? 'nothing'}`);
@@ -147,7 +216,8 @@ function parseArgs(argv) {
   return parsed;
 }
 
-/** `js-harness docs plan` prints the reading plan of the repository `cwd` is in and exits 0; `docs check` runs the
+/** `js-harness docs plan` prints the reading plan of the repository `cwd` is in and exits 0; `docs index` prints its
+ * cross index and exits 0, or 1 where an explicit link does not resolve or an input is missing; `docs check` runs the
  * `docs` row alone and exits 1 when it fails. Exit 1 too where git cannot list the files, and from `plan` where a
  * tracked file cannot be read, after the plan; 2, with the usage on stderr, for an argument it does not know. */
 export async function docsMain(argv, { cwd = process.cwd(), stdout = console.log, stderr = console.error, spawn = spawnSync, readFile = (file) => fs.readFileSync(file, 'utf8') } = {}) {
@@ -173,6 +243,18 @@ export async function docsMain(argv, { cwd = process.cwd(), stdout = console.log
   if (corpus === null) {
     stderr(`git cannot list the tracked files of ${root}: the reading plan is made from them`);
     return 1;
+  }
+  if (parsed.sub === 'index') {
+    // An unreadable file is named first, since an input of the index read as empty is what makes it fail.
+    if (corpus.unreadable.length > 0) stderr([...corpus.unreadable, 'the index reads it as empty, so a link through it may be missing'].join('\n'));
+    const cross = readCross(corpus);
+    if (cross.problem) {
+      stderr(cross.problem);
+      return 1;
+    }
+    if (parsed.json) stdout(JSON.stringify({ ...cross.index, inferredLinks: { label: INFERRED_LABEL, check: INFERRED_CHECK } }, null, 2));
+    else for (const line of renderCross(cross.index)) stdout(line);
+    return cross.index.broken.length === 0 && corpus.unreadable.length === 0 ? 0 : 1;
   }
   const plan = readingPlan({ files: corpus.files, capabilities: corpus.capabilities, imports: corpus.imports, budget: parsed.budget, preamble: ENTRY_PATH });
   if (parsed.json) stdout(JSON.stringify(plan, null, 2));

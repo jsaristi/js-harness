@@ -816,7 +816,7 @@ The administrator install is `bin/lib/status-line-install.ps1`, run by hand in a
 
 ### The Codex review's allowance
 
-**Problem:** Three of the owner's rules set what a review may cost without asking him; nothing read them, and each session did the sum by hand, differently (`odd/tasks/rule-hierarchy.md`, "The Codex review's allowance").
+**Problem:** Three of the owner's rules set what a review may cost without asking him; nothing read them, and each session did the sum by hand, differently (`odd/tasks/rule-hierarchy.md`, "The plan against its allowance").
 **Requirement:** The review's plan adds one line: the allowance is the larger of a floor and a rate times the changed lines of the files the review reads. The verdict is on the estimate, in whole numbers: inside, over within the margin (which counts as inside), over, or no estimate. No line where the project does not declare the rules. The exit stays 0, and a run never prints the line.
 **Reason:** Every session gets the same sum, and only this project's rules are shown as its rules. The figure that decides was the owner's: "Dejarla como está" (lead's transcript `65318fd5`, line 8668).
 **Proof:** `node --test bin/lib/codex-review-allowance.test.mjs`
@@ -906,7 +906,7 @@ The administrator install is `bin/lib/status-line-install.ps1`, run by hand in a
 
 ### The specification stays alive
 
-**Problem:** The owner asked for one complete document that says what the harness is, alive and updated as changes are made, from which a more capable model could rebuild it "perfecto solo con ese documento" (lead's transcript `65318fd5`, line 13936; `docs/ROADMAP.md`, "The specification of the harness").
+**Problem:** The owner asked for one complete document that says what the harness is, alive and updated as changes are made, from which a more capable model could rebuild it "perfecto solo con ese documento" (lead's transcript `65318fd5`, line 13936; `odd/tasks/rule-hierarchy.md`, "The specification of the harness").
 **Requirement:** This file holds one entry per capability with the six fields, and a commit is refused when an entry lacks a field or a proof command, when a file its Today line names does not exist, or when a command of the dispatcher, an entry the manifest installs or a file written under the home is claimed by no entry.
 **Reason:** A document kept alive by remembering goes stale; one held by the gate cannot lose a piece silently.
 **Proof:** `node --test bin/lib/spec.test.mjs`
@@ -916,11 +916,11 @@ The administrator install is `bin/lib/status-line-install.ps1`, run by hand in a
 ### A model starting cold can audit the whole harness
 
 **Problem:** The owner wants the strongest model to audit the whole project in depth, saying what is right, wrong, improvable, redundant, blocking or unnecessary (`odd/tasks/audit-pack.md`, L1); the tracked files hold about 5.8M estimated tokens, no context holds them, and nothing told a cold reader which document is in force and which is history.
-**Requirement:** `docs/README.md` is the entry: what the project is, an index under `## Index` giving every file and folder of `docs/` one of four statuses (live, frozen, historical, closed) and, when it is no longer live, what supersedes it, and the reading method. `js-harness docs plan` prints every tracked file in exactly one slice of at most 400,000 estimated tokens, in four tiers (core, tests, feature documents, the rest), the source beside its capability here and each feature document with its state from its task boxes, every slice after the first opening with the entry. In the harness's own repository, the `docs` row of `check` fails where the entry is missing, an entry of `docs/` has no row, a tracked file cannot be read, or one file alone outgrows a slice.
+**Requirement:** `docs/README.md` is the entry: what the project is, an index under `## Index` giving every file and folder of `docs/` one of four statuses (live, frozen, historical, closed) and, when it is no longer live, what supersedes it, and the reading method. `js-harness docs plan` prints every tracked file in exactly one slice of at most 400,000 estimated tokens, in four tiers (core, tests, feature documents, the rest), the source beside its capability here and each feature document with its state from its task boxes, every slice after the first opening with the entry. `js-harness docs index` joins each capability to the documents, rules and failure entries its text cites, keeps apart, marked unverified, the ones inferred through a file it shares with them, and lists what no capability reaches. In the harness's own repository, the `docs` row of `check` fails where the entry is missing, an entry of `docs/` has no row, a tracked file cannot be read, one file alone outgrows a slice, or an explicit link of the cross index does not resolve.
 **Reason:** A plan computed from the tracked files each time cannot fall behind them, and an index held by the gate cannot miss a document added after it.
-**Proof:** `node --test bin/docs.test.mjs bin/lib/docs-plan.test.mjs bin/lib/docs-entry.test.mjs`
+**Proof:** `node --test bin/docs.test.mjs bin/lib/docs-plan.test.mjs bin/lib/docs-entry.test.mjs bin/lib/docs-cross.test.mjs`
 **Discarded:** A stored inventory of every file with its class (`odd/tasks/launch-audit/inventory.tsv`): it rotted within a week. A status written in each feature document: the task boxes already say whether it is open. One slice the size of the window: it leaves the auditor no room to reason and write.
-**Today:** `js-harness docs`, `docs/README.md`, `bin/docs.mjs`, `bin/lib/docs-plan.mjs`, `bin/lib/docs-entry.mjs`, `bin/check.mjs`
+**Today:** `js-harness docs`, `docs/README.md`, `bin/docs.mjs`, `bin/lib/docs-plan.mjs`, `bin/lib/docs-entry.mjs`, `bin/lib/docs-cross.mjs`, `bin/check.mjs`
 
 ### An output the owner sees again is a template of five parts
 

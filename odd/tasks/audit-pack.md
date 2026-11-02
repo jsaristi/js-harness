@@ -273,9 +273,14 @@ Found by the search of item 2; each changes in T2.
 - [x] T1 (kind: docs) this document, its depth pass, committed before any code; the plan's double review
   (`js-harness double-review read`), every finding answered (spec 1 to 6); done: `8a07203`, the reviews L6 to L8
 - [x] T2 (kind: docs) the stale texts; pull request 1 (spec 5); done: `41862442`, with `AGENTS.md` in T3 (L4)
-- [ ] T3 (kind: build) `js-harness docs plan`, test first, and `docs/README.md` with its index and the row's index
-  part, `AGENTS.md` and GUIDE's command table; pull request 2 (specs 1, 2, 5, 6; spec 5 measured at its close)
-- [ ] T4 (kind: build) `js-harness docs index`, test first, and the row's link part; pull request 3 (specs 3, 6)
+- [x] T3 (kind: build) `js-harness docs plan`, test first, and `docs/README.md` with its index and the row's index
+  part, `AGENTS.md` and GUIDE's command table; pull request 2 (specs 1, 2, 5, 6; spec 5 measured at its close);
+  done: `c51daf56` and its fix `1fb4f34a`, pull request 752
+- [x] T4 (kind: build) `js-harness docs index`, test first, and the row's link part; pull request 3 (specs 3, 6);
+  done: `c166e115` and its fixes `651290fc`, `f53617f3`, branch `audit-pack-index`
+- [x] T4r (kind: verify) Codex reads T4 again whole (`codex-review --base d195f663 --again`), since its recheck of
+  `651290fc` left one finding fixed in part, then fixed in `f53617f3` (L11), and a second recheck is not run;
+  done: its two findings fixed in `cc051204` (L13)
 - [ ] T5 (kind: build) SPEC's record table completed, `docs/RECORDS.md` and its test, and the row's record part;
   pull request 4 (specs 4, 6)
 - [ ] T6 (kind: verify) the close: the bar measured again, the Log's result against items 3 and 4, the report to the
@@ -379,6 +384,58 @@ Found by the search of item 2; each changes in T2.
   taken: `## Next step` is one current state. Codex 1 taken: composed paths, non-JSON records, families and their
   planted breaks in spec 4. Codex 2 taken (with Claude 1). Codex 4 taken: 1,432 on `47d96a3`, and the inference
   figures labelled by the rules that made them. Shared: Claude 1 and Codex 2, 5 and 3.
+- L9 2026-11-02, T4's first run (`node bin/js-harness.mjs docs index`, on `d195f663` with T4's tree): 76
+  capabilities; 64 cite a document, 0 name a rule by id (the four `rule:` ids of SPEC sit outside its capabilities,
+  `docs/SPEC.md:104-117` and `:976`), 6 name a failure entry; 34 reach a rule and 41 a failure entry by inference,
+  263 inferred links in all. Against the depth pass's figures: 64 against the prototype's 60 (one capability added
+  since, and the cut now reads `docs/` paths too), 34 rules as Codex recounted (read 9b105375), 41 failures against 42.
+  Too shared: `bin/check.mjs` (4 rules, 15 Today lines), `bin/lib/manifest.mjs` (18 rules),
+  `bin/lib/protocols-skill.mjs` (9 rules). Reached by none: 32 rules (24 of them homed in a too-shared file), 48
+  failure entries, 104 feature documents. Two explicit links did not resolve, both stale quotes of SPEC, fixed:
+  `docs/SPEC.md:819` quoted "The Codex review's allowance" of `odd/tasks/rule-hierarchy.md`, whose section is "The
+  plan against its allowance" (`:1279`); `docs/SPEC.md:909` quoted "The specification of the harness" of
+  `docs/ROADMAP.md`, which is in `odd/tasks/rule-hierarchy.md:5196`. The hand check (spec 3's bar): every 13th of the
+  263 inferred links, 20 in all, each read against its failure entry's or rule's text: right 10 (lock-not-a-queue,
+  init-leaves-codegraph-files, throughput-compare-days, edit-during-review, wait-every, context-fills-unnoticed,
+  hours-guessed for the notices' record, host-restart-unseen, block-referred-by-hour, control-phrase-min), wrong 10
+  (broken-wait-script twice, check-survivor-test-fails, documents-merge-runs-gate and gate-narrow-pass-stood, all
+  through `bin/check.test.mjs`; context-cut-by-percentage twice through `bin/sessions.test.mjs`; hours-guessed for a
+  session that starts at once; context-pause through `bin/lib/sessions.mjs`; board-read-loads-gate through
+  `bin/lib/test-run-warning.test.mjs`). 10 of 20 is under 14, so the inferred links print as unverified
+  (`INFERRED_CHECK` in `bin/lib/docs-cross.mjs`), as the plan said. Seen, not built: 7 of the 10 wrong came
+  through a test file that many failures' controls name and that the Today-line count does not see, since a test is
+  named in Proof (9 of the 10 came through a test file); counting Proof lines in the cut is a change of spec 3, left
+  to the audit.
+- L10 2026-11-02, T4's reviews over `d195f66..c166e11`. Codex: 2 parts, 417,589 input tokens (estimated 266,000 to
+  400,000; allowance 548,400), 3 P2 taken: a quoted section is compared with its white space squashed, so a quote
+  reflowed across lines still resolves; `--json` carries `inferredLinks` (the label and the hand check); `index`
+  names an unreadable file on stderr. The Claude lenses: reliability 0 findings (41,992 input tokens), readability 1
+  warning taken (20,363): the row now fails on any of the three inputs gone, from the structured result and not a
+  message's prefix, so deleting `docs/RULES.md` cannot switch the part off. gentle-ai (lineage
+  review-720df49713aaec63, reliability lens, the standing consent): approved with 2 warnings and 4 suggestions, none
+  blocking, acknowledged. Taken: a failure id inside a path or a `rule:` id is no link (this dropped one false link,
+  `board-summary-stale` read inside `odd/tasks/board-summary-stale.md` at `docs/SPEC.md:711`, so 5 capabilities name a
+  failure, not 6); a rule's declared failure absent from the register is broken; a retired rule with no successor
+  says so. Rebutted: the crash on a tracked file deleted from the tree, since `readCorpus` gives every tracked file a
+  text, empty when it cannot be read (`bin/docs.mjs:60`). Left: counting Proof lines in the cut (L9), and a command
+  test of the "Too shared" block, which the module's test covers (`SHARED_LIMIT`).
+- L11 2026-11-02, the fix `651290fc` reviewed: the reliability lens 0 findings (13,506 input tokens); Codex 81,279
+  input tokens (estimated 100,000 to 150,000), 2 of its 3 findings fixed and the third in part: an unreadable input of
+  the index itself was reported as its consequence (a register that does not read) and not as the file. Now the
+  unreadable files are named first; test first.
+- L12 2026-11-02, T4r: Codex read `d195f66..f6d3b35` again whole (291,485 input tokens; estimated 320,000 to 490,000),
+  2 P2 taken: a cross-index input deleted from the tree but still tracked read as empty and passed (now "gone from the
+  tree", from `readCorpus`'s `gone`); a failure cited beside the register with an id it lacks vanished (now
+  `citedFailures`, the parenthesis holding `docs/FAILURES.md`, held to the register). gentle-ai over `c166e11..f6d3b35`
+  (lineage review-abdd0fcaada95320) approved, acknowledged; its suggestion (the `.md` and leading-dot edges of
+  `holdsWord`) taken in the test. The row half of the "gone" test failed for a reason of the test: `withRepo` in
+  `bin/docs.test.mjs` was synchronous, so an async body's directory was removed at its first `await` and the row read
+  "docs/README.md is missing"; it now awaits its body, and every call of it is awaited (21 of 21 pass).
+- L13 2026-11-02, T4r's fix `cc051204` reviewed over `f6d3b35..cc05120`: Codex, a recheck of L12's 2 findings, both
+  fixed, correct at 0.94 (75,292 input tokens; estimated 77,000 to 110,000); the reliability lens 0 findings (25,081
+  input tokens). Delivery: PR 752 merged `d195f663` into main (`0c1b0205`), so the branch `audit-pack-index` is this
+  line at `cc051204`, T4's commits keeping their ids and so their review records; a cherry-pick onto main was made
+  and dropped unpushed, since new ids would have owed T4's whole review again.
 
 ## Next step
 State at 2026-11-02 ~11:50Z, branch `worktree-audit-pack` (worktree `audit-pack`). The plan's reviews are done
@@ -407,3 +464,23 @@ T6 (the close, with the model he means by "Fable 5.5" asked of the lead).
   branch (752's); the lead says when 751 lands, then rebase 752 on main and notify it ready. T4 starts with
   `bin/lib/docs-cross.test.mjs`, written first: explicit links from a capability's text (`odd/`/`docs/` paths,
   `rule:<id>`, failure ids), inferred ones apart, too-shared files (over 8 rules or over 8 Today lines) printed.
+- Update ~14:00Z: T4 built, test first (`bin/lib/docs-cross.mjs` and its test, `docs index` and the row's link part
+  in `bin/docs.mjs`, README, the help line, SPEC's capability), its first run and hand check in L9, SPEC's two stale
+  quotes fixed. Next: T4's commit; Codex and the Claude lenses over it (base `d195f663`), cost said first; push;
+  then T5.
+- Update ~14:15Z: T4 `c166e115`, fixes `651290fc` and `f53617f3`, task T4r `f6d3b355`, all reviewed (L10 to L12), not
+  pushed. Uncommitted: T4r's two fixes (L12) in `bin/docs.mjs`, `bin/lib/docs-cross.mjs` and both tests; the test "an
+  input of the cross index deleted from the tree" fails on its row half (the row passes; `docs index` already fails
+  right). Next: find why `checkDocs` misses `corpus.gone`, commit, Codex and the reliability lens over the fix (base
+  `f6d3b355`), push, mark T4 and T4r done, then T5. PR 752 waits for 751 (the lead notifies).
+- Update ~14:25Z: the merge queue left PR 751 out of a land (its note, 09:23 local): "FAIL contracts 1 of 161
+  contracts fail". First: find which with `js-harness check` on branch `audit-pack-docs` (`f2ca50f8`); the likely one
+  is this document's contract, whose done-when names `bin/docs.test.mjs` and the docs tests that only PR 752 brings.
+  Fix on `audit-pack-docs` (documents only), push, tell the lead; then the T4r work above.
+- Update ~15:30Z: PR 751 landed on main (`064f5c7`, the lead's note, 10:16 local), so its contracts failure is moot;
+  PR 752 lands with 755 (10:18), so this branch is not pushed again. T4r's fixes committed here; T4 to T4r go on a
+  new branch from main once 752 is in, then Codex and the reliability lens over the T4r fix (base `f6d3b355`), push,
+  the pull request, ready.
+- Update ~15:45Z: T4 and T4r done and reviewed (L13); branch `audit-pack-index` at T4's line, pushed as pull request
+  3. Next: T5 on a branch stacked on it (`audit-pack-records`), test first, the detector's prototype in the job's
+  scratch (`detect.mjs`, 85 names found, reads such as `AGENTS.md` and `package.json` to sort out); then T6.

@@ -1126,11 +1126,20 @@ capability whose files import it in the fewest steps), the tests (beside the cap
 source names them), the feature documents (each of `odd/tasks/` with its state, open or closed, from its
 task boxes) and the rest. Every slice after the first opens with the entry, counted in its budget.
 `--budget <n>` sizes the slices for another window; `--json` prints the plan whole. The plan is computed
-from the tracked files each time and never stored. `docs check` runs the `docs` row of `check` alone: in
-the harness's own repository it fails where `docs/README.md` is missing, a file or folder of `docs/` has
-no row under its `## Index`, a tracked file cannot be read, or one file alone outgrows a slice; in any
-other project it says so and exits 0. Exit 1 on a failing row, where git cannot list the files, or from
-`plan` where a tracked file cannot be read, named on stderr after the plan; 2 on a usage error.
+from the tracked files each time and never stored. `docs index` prints why each capability is there: its
+explicit links, the documents of `odd/` and `docs/` its text cites (a quoted section held to its file), the
+rules it names as `rule:<id>` and the failure entries of `docs/FAILURES.md` it names, with the failure each
+such rule guards against; then, apart and marked unverified, the rules and failure entries inferred from a
+file its Today or Proof line shares with a rule's home or reader or a failure's control, never through a
+file more than 8 rules or 8 Today lines name, which it prints as too shared; then the rules, failure
+entries and feature documents no capability reaches. 10 of 20 inferred links read by hand were right,
+under the bar of 14 that would drop the mark. `--json` prints the index whole. `docs check` runs the
+`docs` row of `check` alone: in the harness's own repository it fails where `docs/README.md` is missing, a
+file or folder of `docs/` has no row under its `## Index`, a tracked file cannot be read, one file alone
+outgrows a slice, or an explicit link of the cross index does not resolve; in any other project it says so
+and exits 0. Exit 1 on a failing row, where git cannot list the files, from `plan` where a tracked file
+cannot be read, named on stderr after the plan, and from `index` on a link that does not resolve, an
+input it lacks or a tracked file it cannot read, named on stderr; 2 on a usage error.
 
 ```console
 $ js-harness docs plan
@@ -1140,6 +1149,13 @@ Read the tiers in order, one slice a context: the core first, then the tests, th
 core: 4 slices, 1,371,082 estimated tokens
   slice 1, 374,950 tokens
     orientation (255,703): docs/README.md, docs/SPEC.md, AGENTS.md, CLAUDE.md, docs/ROADMAP.md, ...
+$ js-harness docs index
+Cross index of 76 capabilities: 64 cites a document, 0 name a rule, 5 a failure entry; 34 reaches a rule and 41 a failure entry by inference
+...
+Too shared to infer from:
+  bin/check.mjs: 4 rules, 15 Today lines
+  bin/lib/manifest.mjs: 18 rules, 3 Today lines
+  bin/lib/protocols-skill.mjs: 9 rules, 1 Today line
 $ js-harness docs check
 PASS  docs  19 entries of docs/ indexed; 1,434 tracked files in 18 slices of at most 400,000 estimated tokens (js-harness docs plan)
 ```
