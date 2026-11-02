@@ -88,6 +88,8 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   breaks is nothing; test first. Route: inline. L9.
 - [x] T7 (kind: build) spec 1, the land of PR 750 red in WSL2: the hook's CPU held against reference runs between its
   runs; red first under load in WSL2. Route: inline. L11.
+- [x] T8 (kind: build) spec 1, gentle-ai's findings on 2459147: the reference count asserted, the divisor bounded. L12;
+  Windows quiet 728 and 569 ms, 2 s more in the hook red at 2754 and 2829 ms.
 
 ## Log
 - L1 (2026-11-02, his request through the lead's brief
@@ -171,3 +173,16 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   measured CPU up to 2.3 s). Not weakened: 2 s more of main-thread work in each hook run, no process added, is red on
   both, 3073 and 2886 ms; 1.5 s and a `git --version` is red on the process count. The machine's Windows hook took
   1.1 to 1.4 s before the restart and 0.64 to 0.67 s after it, so even quiet CPU is not one machine's constant.
+- L12 (2026-11-02, T8): the reviews of 2459147 (43aaff9..2459147): Codex correct (65,281 input tokens); the lenses
+  reliability and resilience 0 findings; gentle-ai (lineage review-07233a25fb153da1, its reliability lens) approved and
+  acknowledged, with three non-blocking findings: the reference count is not asserted (a missing one reads as NaN over
+  the budget); one slow reference outlier scales the hook down up to about twice and could hide a regression; the
+  reference runs add about RUNS + 1 parses of 60 MB to each test. Taken as Codex's: T8 asserts RUNS + 1 references and
+  bounds each run's divisor at 1.5 times their median; the cost is kept (about 5 s a test), said here.
+
+## Next step
+T8 in `bin/reply-budget.test.mjs`, on branch `worktree-defect-trio` (worktree `defect-trio`, pushed at 2459147): in
+`timeStops` assert `references.length === RUNS + 1`; in `withinBudget` divide by
+`Math.min((references[i] + references[i + 1]) / 2, 1.5 * percentile(references, 0.5))`. Then: run the test (Windows),
+commit, Codex `--base 2459147d` and lenses reliability,resilience, push, `js-harness notify --to orchestrator --kind ready
+--pr 750`, then `--kind closed --summary docs/sessions/2026-11-02-jh-131-...md` (add L11-L12 to it first).

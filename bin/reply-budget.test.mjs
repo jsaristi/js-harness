@@ -247,6 +247,7 @@ function timeStops(session, transcript) {
   const runs = fs.readFileSync(measured, 'utf8').trim().split('\n').map((one) => JSON.parse(one));
   assert.equal(runs.length, RUNS, 'every run wrote its measure at its exit');
   const references = fs.readFileSync(referenced, 'utf8').trim().split('\n').map((one) => JSON.parse(one).cpuMs);
+  assert.equal(references.length, RUNS + 1, 'every reference run, before the first and after each, wrote its measure');
   return { times: runs.map((run) => run.cpuMs), children: runs.map((run) => run.children), walls, references, answer };
 }
 
@@ -255,9 +256,11 @@ function timeStops(session, transcript) {
  * percentile, and the processes each run started, whose time that measure does not hold. The two runs beside it follow
  * load that comes or goes during the test, which the median of all of them did not (a work stop scaled to 1513 ms when
  * busy loops ended halfway); their mean, not the larger, since one reference run of a quiet Windows took 905 ms where
- * the others took 358 to 812. */
+ * the others took 358 to 812; and that mean at most 1.5 times the median of all of them, so one slow reference run
+ * cannot halve a run's measure and hide a hook grown slower (the reliability review of 2459147, odd/tasks/defect-trio.md, L12). */
 function withinBudget(t, { times, children, walls, references }) {
-  const scaled = times.map((ms, i) => (ms / ((references[i] + references[i + 1]) / 2)) * REFERENCE_MS);
+  const bound = 1.5 * percentile(references, 0.5);
+  const scaled = times.map((ms, i) => (ms / Math.min((references[i] + references[i + 1]) / 2, bound)) * REFERENCE_MS);
   const p90 = percentile(scaled, 0.9);
   const each = (values) => values.map((ms) => ms.toFixed(0)).join(' ');
   t.diagnostic(`main-thread CPU p90 ${p90.toFixed(0)} ms where the reference takes ${REFERENCE_MS} ms, budget ${BUDGET_MS} ms, runs ${each(scaled)}; measured ${each(times)}, reference ${each(references)}, wall ${each(walls)} ms; processes started ${children.join(' ')}`);
