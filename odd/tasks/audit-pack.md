@@ -415,6 +415,10 @@ Found by the search of item 2; each changes in T2.
   says so. Rebutted: the crash on a tracked file deleted from the tree, since `readCorpus` gives every tracked file a
   text, empty when it cannot be read (`bin/docs.mjs:60`). Left: counting Proof lines in the cut (L9), and a command
   test of the "Too shared" block, which the module's test covers (`SHARED_LIMIT`).
+- L11 2026-11-02, the fix `651290fc` reviewed: the reliability lens 0 findings (13,506 input tokens); Codex 81,279
+  input tokens (estimated 100,000 to 150,000), 2 of its 3 findings fixed and the third in part: an unreadable input of
+  the index itself was reported as its consequence (a register that does not read) and not as the file. Now the
+  unreadable files are named first; test first.
 
 ## Next step
 State at 2026-11-02 ~11:50Z, branch `worktree-audit-pack` (worktree `audit-pack`). The plan's reviews are done

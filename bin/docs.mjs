@@ -241,6 +241,8 @@ export async function docsMain(argv, { cwd = process.cwd(), stdout = console.log
     return 1;
   }
   if (parsed.sub === 'index') {
+    // An unreadable file is named first, since an input of the index read as empty is what makes it fail.
+    if (corpus.unreadable.length > 0) stderr([...corpus.unreadable, 'the index reads it as empty, so a link through it may be missing'].join('\n'));
     const cross = readCross(corpus);
     if (cross.problem) {
       stderr(cross.problem);
@@ -248,7 +250,6 @@ export async function docsMain(argv, { cwd = process.cwd(), stdout = console.log
     }
     if (parsed.json) stdout(JSON.stringify({ ...cross.index, inferredLinks: { label: INFERRED_LABEL, check: INFERRED_CHECK } }, null, 2));
     else for (const line of renderCross(cross.index)) stdout(line);
-    if (corpus.unreadable.length > 0) stderr([...corpus.unreadable, 'the index reads it as empty, so a link through it may be missing'].join('\n'));
     return cross.index.broken.length === 0 && corpus.unreadable.length === 0 ? 0 : 1;
   }
   const plan = readingPlan({ files: corpus.files, capabilities: corpus.capabilities, imports: corpus.imports, budget: parsed.budget, preamble: ENTRY_PATH });
