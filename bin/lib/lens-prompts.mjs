@@ -123,6 +123,7 @@ export function lensRecheck(prior) {
     '## A recheck of earlier findings',
     'This range corrects the findings an earlier review of this lens made, listed below. Check each of them: does this range fix it?',
     `- For each finding this range does not fix, report one finding whose claim starts with "${NOT_FIXED}", then its number in the list below, and say what is still missing. A fixed finding needs nothing.`,
+    `- A finding whose code is not in the block cannot be checked: report it with "${NOT_FIXED}" and its number, and say its code is not in the patches, so it stays open.`,
     `- A new finding that could make a failing check pass, that exposes data, or a regression this range brought into what it changed (something the changed code did before this range that it no longer does): its claim starts with "${BLOCKS}".`,
     `- Anything else you notice is a follow-up: its claim starts with "${FOLLOW_UP}". Do not look for new edges beyond these findings.`,
     '',

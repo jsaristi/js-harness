@@ -202,7 +202,7 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
   // A range that starts where a reviewed lens record ended rechecks what each of its lenses found there (spec 7).
   const earlier = readLensReviews(cwd).findLast((rec) => rec?.outcome === 'reviewed' && rec.head === candidate.base && Array.isArray(rec.results));
   const priorOf = (lens) => earlier?.results.find((one) => one?.lens === lens)?.findings ?? [];
-  const rechecks = earlier !== undefined && picked.names.some((lens) => priorOf(lens).length > 0);
+  const rechecks = earlier !== undefined && (picked.names ?? []).some((lens) => priorOf(lens).length > 0);
   const record = {
     schema: LENS_REVIEW_SCHEMA,
     base: candidate.base,

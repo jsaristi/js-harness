@@ -341,6 +341,10 @@ test('a range that starts at the head of a lens review with findings rechecks th
   assert.ok(readability.prompt.includes('a regression this range brought into what it changed'), readability.prompt);
   assert.doesNotMatch(risk.prompt, /A recheck of earlier findings/, 'a lens that found nothing there reviews as it would');
   assert.equal(readLensReviews(dir).at(-1).recheckOf, 'run-earlier');
+  assert.ok(readability.prompt.includes('A finding whose code is not in the block cannot be checked'), 'an unchecked finding stays open, never counted fixed');
+  // A skip over the same range picks no lens, and is recorded as before.
+  assert.equal(run(['--base', first, '--head', second, '--unavailable', 'no CLI here'], { runLens: claude.runLens }).code, 0);
+  assert.equal(readLensReviews(dir).at(-1).outcome, 'unavailable');
   assert.ok(out.split('\n').includes('readability: rechecked 1 earlier finding of run-earlier: 0 fixed, 1 not fixed, 0 blocking'), out);
 });
 
