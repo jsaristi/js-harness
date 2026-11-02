@@ -33,8 +33,18 @@ import { isValidCodexReview } from './codex-reviews.mjs';
 import { EXCUSED_REFUSED_TESTS } from './no-test-outside-turn.mjs';
 import { ruleValue } from './rules.mjs';
 
-/** The model a change passes to when three reviews of it did not settle it. */
+/** The model a change passes to when three reviews of it did not settle it, and what is done then. */
 export const ESCALATION_MODEL = ruleValue('escalation-model');
+export const ESCALATION_SAID = `Raise it to the user as a problem, with what is happening and what is still open, and pass the work to ${ESCALATION_MODEL}, the strongest model the rules name (rule:escalation-model)`;
+
+/** What a recheck that left findings open says of what comes after it (spec 8): a range from `head` is a second
+ * recheck, the last of three reviews; after a second (`second`), three reviews did not settle the change, so it is
+ * raised and passed on now, not when a fourth is tried. */
+export function openAfterRecheck({ head, second }) {
+  return second
+    ? `Three reviews of this change did not settle it. ${ESCALATION_SAID}.`
+    : `A range that starts at ${head.slice(0, 7)} is a second recheck of what is open, the last of three reviews: fix it in this branch, then run it.`;
+}
 
 /** The version of the text a recheck adds to the review prompt. */
 export const RECHECK_PROMPT_VERSION = 'js-harness.codex-review-recheck-prompt/v2';
@@ -279,9 +289,7 @@ export function secondRecheckRefused({ of, open, base, uncovered = [], reviewFro
   const refused = reviews === 3
     ? `Three reviews of this change did not settle it: the third, a second recheck that ended at ${of.slice(0, 7)}, left ${left}. Nothing more is reviewed, and nothing was started or recorded.\n${findings.map((finding, at) => `  ${at + 1}. ${priorLine(finding)}\n`).join('')}`
     : `A second recheck of the findings of the review that ended at ${of.slice(0, 7)} is not run: ${first}. Nothing was started or recorded.\n`;
-  const task = reviews === 3
-    ? `Raise it to the user as a problem, with what is happening and what is still open, and pass the work to ${ESCALATION_MODEL}, the strongest model the rules name (rule:escalation-model)`
-    : 'Record a follow-up task for what is still open in the feature document';
+  const task = reviews === 3 ? ESCALATION_SAID : 'Record a follow-up task for what is still open in the feature document';
   // Every code commit has a record: there is nothing to review and no skip to record, which would name a covered
   // range as unreviewed (codex-review.mjs, the skip), so none is advised.
   if (Array.isArray(uncovered) && uncovered.length === 0) {

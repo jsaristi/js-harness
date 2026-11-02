@@ -471,5 +471,5 @@ export function writeCoverage(register) {
     return one.length <= CONTROL_LINE ? one : `    ${JSON.stringify(id)}: ${JSON.stringify(control, null, 2).replace(/\n/g, '\n    ')}`;
   });
   const written = lines.length === 0 ? '{}' : `{\n${lines.join(',\n')}\n  }`;
-  return `${COVERAGE_HEADER}export const COVERAGE = ${JSON.stringify(ordered, null, 2).replace(JSON.stringify(CONTROLS_MARK), written)};\n`;
+  return `${COVERAGE_HEADER}export const COVERAGE = ${JSON.stringify(ordered, null, 2).replace(JSON.stringify(CONTROLS_MARK), () => written)};\n`;
 }

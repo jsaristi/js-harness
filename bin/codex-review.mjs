@@ -180,7 +180,7 @@ import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, re
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews, withSubjectHash } from './lib/codex-reviews.mjs';
 import { addTurnWorktree, mergeTurn, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, turnsCheaper } from './lib/codex-review-turns.mjs';
 import {
-  classifyRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, REVIEW_FROM_LOOK_BACK, runsLogged, secondRecheckRefused,
+  classifyRecheck, openAfterRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, REVIEW_FROM_LOOK_BACK, runsLogged, secondRecheckRefused,
 } from './lib/codex-review-recheck.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './lib/project-functions.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
@@ -1650,7 +1650,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       error(secondRecheckSaid(from, state));
       return 1;
     }
-    if (state.kind === 'recheck') recheck = { of: state.of, findings: state.findings };
+    if (state.kind === 'recheck') recheck = { of: state.of, findings: state.findings, second: state.second === true };
     // The patch Codex has to have seen; the buffer holds a large diff, far above Node's 1 MiB default.
     // With renames as git detects them, as Codex's own review diffs a range; a merge has no other diff than its own.
     const patchArgs = merge === null ? ['diff', '--no-color', '--no-ext-diff', from, head] : rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff']);
@@ -1771,9 +1771,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         for (const finding of read.followUps) log(findingLine(finding));
       }
       const open = notFixed + read.blocking.length + read.unmarked.length;
-      if (open > 0) {
-        log(`A range that starts at ${head.slice(0, 7)} is not rechecked again: fix what is open in this branch and record a follow-up task for it.`);
-      }
+      if (open > 0) log(openAfterRecheck({ head, second: recheck.second }));
     };
     /** One attempt: one Codex session, over the whole range or over one `part` of it (see `planParts`),
      * from the making of its lean home to its line in the run log. `expectedKeys` are the changed lines

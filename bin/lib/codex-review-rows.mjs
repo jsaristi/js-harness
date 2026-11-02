@@ -11,7 +11,7 @@ import { beyondLines, defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REV
 import { mergeTurn, turnsCheaper } from './codex-review-turns.mjs';
 import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './codex-reviews.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
-import { classifyRecheck, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
+import { classifyRecheck, ESCALATION_SAID, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
 import { counted, leftOutOf, reviewScope } from './codex-review-scope.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './project-functions.mjs';
 // The Claude lens rows, beside Codex's, for `check` to import from one place (odd/tasks/f8-s1-reviews.md, T4).
@@ -148,6 +148,7 @@ function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
     lines: [
       `warning: the Codex recheck that ended at ${at} left ${left} of the review that ended at ${shortOf(recheck.recheckOf)}`,
       ...open.map(priorLine),
+      ...(state.reviews === 3 ? [`three reviews did not settle this change: ${ESCALATION_SAID}`] : []),
       ...(state.kind === 'recheck' ? [`a second recheck, the last of three reviews, takes them up: js-harness codex-review --base ${shortOf(from)}`] : []),
       // No skip is offered: a skip records no correction.
       `the push passes; the user decides whether they are waived, or a correction is committed as code and reviewed`,

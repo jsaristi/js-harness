@@ -11,7 +11,7 @@ import { MAX_PARTS_WITHOUT_FLAG } from './lib/codex-review-plan.mjs';
 import * as reviewRecords from './lib/codex-reviews.mjs';
 import { CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-review-runs.mjs';
-import { priorLine } from './lib/codex-review-recheck.mjs';
+import { ESCALATION_MODEL, priorLine } from './lib/codex-review-recheck.mjs';
 import { gitDirs } from './lib/project.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
 import { reviewCoverage } from './lib/codex-review-coverage.mjs';
@@ -254,6 +254,25 @@ test('a recheck that left a finding not fixed passes, with a warning that names 
   assert.match(lines, new RegExp('of the review that ended at ' + short(root, head)));
   // A skip records no correction: it is not offered.
   assert.ok(!lines.includes('--unavailable'), lines);
+});
+
+test('past three reviews the push passes with the warning, which says the change is not settled and names the model', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const fix = commit(root, 'b.js', 'two, half fixed', 'fix: read the right field, once');
+  const left = { ...finding, title: '[not fixed] 1 The guard reads the wrong field' };
+  const counts = { findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 };
+  run(root, { id: 'run-2', answer: { verdict: 'incorrect', findings: [left] }, recheck: { of: head, ...counts } });
+  record(root, head, fix, { run: 'run-2', recheckOf: head });
+  const again = commit(root, 'b.js', 'two, fixed again', 'fix: read the right field, twice');
+  run(root, { id: 'run-3', answer: { verdict: 'incorrect', findings: [left] }, recheck: { of: fix, ...counts } });
+  record(root, fix, again, { run: 'run-3', recheckOf: fix });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  const lines = row.lines.join('\n');
+  assert.match(lines, new RegExp(`warning: the Codex recheck that ended at ${short(root, again)} left 1 finding open`));
+  assert.ok(lines.includes(`three reviews did not settle this change: Raise it to the user as a problem`), lines);
+  assert.ok(lines.includes(ESCALATION_MODEL), lines);
+  assert.ok(!lines.includes('a second recheck, the last of three reviews'), lines);
 });
 
 test('a recheck whose counts were not kept passes with the warning too', () => {

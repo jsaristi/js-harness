@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   BLOCKS,
   classifyRecheck,
+  openAfterRecheck,
   FOLLOW_UP,
   NOT_FIXED,
   RECHECK_PROMPT_VERSION,
@@ -222,6 +223,14 @@ test('past three reviews the refusal says the change is not settled, lists what 
   assert.ok(said.includes(`pass the work to ${model}, the strongest model the rules name (rule:escalation-model)`), said);
   assert.ok(said.includes('Raise it to the user as a problem'), said);
   assert.ok(!said.includes('follow-up task'), said);
+});
+
+test('a recheck that left findings open names what comes next: a second recheck, or after it the problem raised and the model named', () => {
+  const model = RULES.find((rule) => rule.id === 'escalation-model').value;
+  assert.equal(openAfterRecheck({ head: C, second: false }), 'A range that starts at ccccccc is a second recheck of what is open, the last of three reviews: fix it in this branch, then run it.');
+  const third = openAfterRecheck({ head: D, second: true });
+  assert.match(third, /^Three reviews of this change did not settle it. Raise it to the user as a problem/);
+  assert.ok(third.includes(`pass the work to ${model}, the strongest model the rules name (rule:escalation-model)`), third);
 });
 
 test('the refusal of a range that holds code no record covers names the review that reads it, and no skip', () => {

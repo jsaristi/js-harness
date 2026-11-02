@@ -289,4 +289,8 @@ test('a control that fits on one line is written on one, a longer one over sever
   assert.match(text, /^ {4}"long": \{\n {6}"level": "line",$/m);
   assert.deepEqual(JSON.parse(text.slice(text.indexOf('= {') + 2, text.lastIndexOf(';'))).controls, given.controls);
   assert.match(writeCoverage({ ...register(), controls: {} }), /"controls": \{\},/);
+  // A planted break is code, and code holds $: written as it is, never read as a replacement pattern.
+  const dollars = { level: 'check', test: 'bin/a.test.mjs', break: { path: 'bin/a.mjs', find: "'$&' + '$$'", replace: "'$`' + '$''" } };
+  const read = writeCoverage({ ...register(), controls: { dollars } });
+  assert.deepEqual(JSON.parse(read.slice(read.indexOf('= {') + 2, read.lastIndexOf(';'))).controls, { dollars });
 });

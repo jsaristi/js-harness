@@ -6940,6 +6940,7 @@ test('a range that starts at the head of a review that found something is a rech
   assert.deepEqual(lines.slice(at + 1, at + 4).map((one) => one.replace(`${top}/`, '')), ['  1. not fixed: f.txt:1 P1 [P1] Drops the last record', '  2. fixed: lib/deep.mjs:3-9 P3 Slow on large input', '  3. fixed: f.txt:2-4 No priority given']);
   assert.ok(lines.includes('A recheck is asked with this command\'s own prompt, which lists the findings it checks: the sentence Codex writes for `--base` cannot.'), result.out);
   assert.ok(lines.includes('Follow-ups, which do not block (record them as a task): 1.'), result.out);
+  assert.ok(lines.includes(`A range that starts at ${fixed.slice(0, 7)} is a second recheck of what is open, the last of three reviews: fix it in this branch, then run it.`), result.out);
   const record = readCodexReviews(root).at(-1);
   assert.deepEqual(record, { ...reviewedRecord(head, fixed), run: RECHECK_ID, recheckOf: head });
   const line = readCodexReviewRuns(root).at(-1);
@@ -7093,6 +7094,9 @@ test('after a recheck that left a finding open, a document committed does not op
   assert.ok(asked.includes('## A recheck of earlier findings'), asked);
   assert.ok(asked.includes('Drops the last record'), asked);
   assert.ok(!asked.includes('Slow on large input'), 'a finding the first recheck found fixed is not asked again');
+  // It left the finding open: three reviews did not settle the change, so it is raised and passed on now.
+  assert.ok(third.out.includes(`Three reviews of this change did not settle it. Raise it to the user as a problem`), third.out);
+  assert.ok(third.out.includes(`pass the work to ${ESCALATION_MODEL}`), third.out);
   assert.equal(readCodexReviews(root).at(-1).recheckOf, fixed);
 });
 
