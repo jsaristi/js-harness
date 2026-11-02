@@ -100,7 +100,7 @@ const RECORDS_PATH = 'docs/RECORDS.md';
  * has no section and the part fails rather than switching off. */
 function readRecords(corpus) {
   const rows = parseRecordTable(corpus.texts.get(SPEC_PATH) ?? '');
-  const sources = recordSources(corpus.listed, (file) => corpus.texts.get(file));
+  const sources = recordSources(corpus.listed, (file) => corpus.texts.get(file) ?? '');
   const findings = recordFindings({ rows, sections: parseRecordSections(corpus.texts.get(RECORDS_PATH) ?? ''), detected: detectRecordNames(sources), sources });
   return { rows: rows.length, findings };
 }

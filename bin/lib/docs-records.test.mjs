@@ -109,13 +109,18 @@ test('a name that is no record is left out where the list of names that are no r
 });
 
 test('a row whose path no source names is a finding, unless the row is written by hand', () => {
-  const rows = [...ROWS, ['Old records', '`~/.js-harness/old-records/`', '`bin/lib/remote.mjs` `startRemote`', '`status`']];
+  const rows = [...ROWS, ['Old records', '`~/.js-harness/old-records/`', 'the `old` command', '`status`']];
   assert.deepEqual(findings({ rows, records: `${RECORDS}\n## Old records\n\nFields.\n` }), ['"Old records" (line 8) names old-records, which no source file names: the record is gone, or its row is written by hand']);
 });
 
 test('a row whose folder no source names is a finding, though the source names its file', () => {
   const rows = [...ROWS, ['Lands moved', '`<git common dir>/js-harness/no-such-folder/lands.jsonl`', '`bin/merge-queue.mjs` `recordLand`', '`throughput`']];
-  assert.deepEqual(findings({ rows, records: `${RECORDS}\n## Lands moved\n\nFields.\n` }), ['"Lands moved" (line 8) names no-such-folder, which no source file names: the record is gone, or its row is written by hand']);
+  assert.deepEqual(findings({ rows, records: `${RECORDS}\n## Lands moved\n\nFields.\n` }), ['"Lands moved" (line 8) names no-such-folder, which none of its writers\' files names: the record is gone, or its row is written by hand']);
+});
+
+test("a row's folder named elsewhere in the source, but not by its writers, is a finding", () => {
+  const rows = [...ROWS, ['Lands moved', '`<git common dir>/js-harness/remote/lands.jsonl`', '`bin/merge-queue.mjs` `recordLand`', '`throughput`']];
+  assert.deepEqual(findings({ rows, records: `${RECORDS}\n## Lands moved\n\nFields.\n` }), ['"Lands moved" (line 8) names remote, which none of its writers\' files names: the record is gone, or its row is written by hand']);
 });
 
 test('a record moved to another file under the same name is a finding: its row names a writer that no longer holds it', () => {

@@ -283,6 +283,9 @@ Found by the search of item 2; each changes in T2.
   done: its two findings fixed in `cc051204` (L13)
 - [ ] T5 (kind: build) SPEC's record table completed, `docs/RECORDS.md` and its test, and the row's record part;
   pull request 4 (specs 4, 6)
+- [ ] T5r (kind: verify) Codex reads T5 again whole (`codex-review --base 7d90257e --again`), since its recheck of
+  `7e00be65` left its one finding fixed in part, then narrowed to the writers' files (L16), and a second recheck is
+  not run
 - [ ] T6 (kind: verify) the close: the bar measured again, the Log's result against items 3 and 4, the report to the
   lead (`js-harness notify --to orchestrator --kind closed`)
 
@@ -467,6 +470,17 @@ Found by the search of item 2; each changes in T2.
   text for every listed file, `''` on any read error (its `catch`), so none is undefined; the repository test
   filters with `existsSync` because it reads the disk itself. gentle-ai's Stop hook offered `c166e115..HEAD`, which
   spans T4's fixes, T4r and T5: the read-only status was run and nothing started, a candidate being one slice.
+- L16 2026-11-02, the fix `7e00be65` reviewed over `3dc9e9e..7e00be6`: Codex's recheck not fixed, incorrect at 1.0
+  (98,150 input tokens): a wrong folder still passed where its name stood anywhere in the source. Taken in part: a
+  row's literal segments must now be named by its writers' files, not by any file (a row with no writer, by any),
+  test first with a folder another file names; on the real table this found 5 true faults, fixed: the session
+  summaries' writer is `bin/lib/summary.mjs` (`summaryPath`), the review runs' `appendCodexReviewRun`, the double
+  review's `appendDoubleReview`, and a command written as a path. Left, and said in the module's header: a folder
+  the writers' files also name for another record still passes, since the check is lexical and resolving the
+  composed paths is another feature. The reliability lens kept its rebutted finding open, as its code was not in
+  the range; `readRecords` now reads a missing text as `''`, which changes nothing (`readCorpus` sets every text)
+  and puts the guarantee in the code itself. gentle-ai over `7d90257..7e00be6` (lineage review-d52e38820df729f3)
+  was started with the granted consent; its candidate is overtaken by this fix, so it runs on the next candidate.
 
 ## Next step
 State at 2026-11-02 ~11:50Z, branch `worktree-audit-pack` (worktree `audit-pack`). The plan's reviews are done

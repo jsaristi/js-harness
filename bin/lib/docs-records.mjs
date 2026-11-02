@@ -3,7 +3,9 @@
 // An auditor reads the map to know what a file under the home is; a map that drifted from the code would send them to a
 // record that moved or hide one that was added, so this reads the record names the source joins into paths and fails on
 // a name no row holds, a row no source names, a writer that no longer holds its function and a row without fields. The
-// fields themselves are not checked: no schema exists to check them against. Pure: the command reads the files.
+// fields themselves are not checked: no schema exists to check them against. The check is lexical: a row's folder must
+// be named by its writers' files, which catches a folder that moved, but not one those files also name for another
+// record; resolving the paths the source composes would be another feature. Pure: the command reads the files.
 
 /** The extensions of a file name the source joins to a path that make it a record, or a read of another tool's. */
 const RECORD_FILE = /^[^/\s'"`]*\.(?:json|jsonl|tsv|log|md|lock|stopped|xml)$/;
@@ -143,8 +145,11 @@ export function recordFindings({ rows, sections, detected, sources, notRecords =
   }
   const texts = [...sources.values()];
   for (const row of rows.filter((one) => !one.byHand)) {
+    // A row's writers must name its path: a folder named anywhere else in the source is no proof the record is there.
+    const own = [...new Set(row.writers.map((writer) => writer.file))].map((file) => sources.get(file) ?? '');
+    const where = own.length > 0 ? own : texts;
     for (const literal of [...new Set(row.paths.flatMap(pathLiterals))]) {
-      if (!texts.some((text) => text.includes(literal))) lines.push(`"${row.record}" (line ${row.line}) names ${literal}, which no source file names: the record is gone, or its row is written by hand`);
+      if (!where.some((text) => text.includes(literal))) lines.push(`"${row.record}" (line ${row.line}) names ${literal}, which ${own.length > 0 ? 'none of its writers\' files names' : 'no source file names'}: the record is gone, or its row is written by hand`);
     }
   }
   for (const row of rows) {
