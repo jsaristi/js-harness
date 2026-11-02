@@ -67,6 +67,12 @@ export function codexSkipsOwed(cwd, { from, tip, spawn = spawnSync }) {
   return coverage.unknown ? null : owedSkips(coverage, coverage.codeCommits);
 }
 
+/** The Codex skips that still owe a review on the branch at HEAD of `cwd`, as records; `null` when it cannot be told. */
+export function branchCodexSkips(cwd, { spawn = spawnSync, remote = 'origin' } = {}) {
+  const state = lensCoverage(cwd, 'HEAD', { spawn, remote });
+  return state.unknown ? null : codexSkipsOwed(cwd, { from: state.baseRef, tip: state.tip, spawn });
+}
+
 /** Whether the review is switched off at the commit `head`, read from that commit's own files as the Codex rows read it
  * (`codexReviewOffAt`); one that cannot be read is on. */
 function reviewOffAt(cwd, head, spawn) {

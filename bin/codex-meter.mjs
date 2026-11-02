@@ -4,8 +4,9 @@
 // Why a command of its own and not `codex-review --plan`. `codex-review` runs a model over a range of commits and
 // records the answer; this command reads an account's limits and runs no model, writes nothing, and answers a
 // person's question about how much of the window is left. It also lists the Codex debts of the branch, the skips no
-// Codex review has paid yet, among them those made at the floor of the weekly limit (rule:codex-weekly-floor), so the
-// reading that tells a reset came also tells what is owed after it. Putting the read inside the review would make one
+// Codex review has paid yet, and every skip made at the floor of the weekly limit (rule:codex-weekly-floor) that no Codex
+// review has paid, on any branch, a merged one among them, so the reading that tells a reset came also tells what is
+// owed after it. Putting the read inside the review would make one
 // command do two unrelated things, and the review's plan is about what a review will cost, not what the account
 // has left.
 //
@@ -15,21 +16,36 @@
 // no process.
 import { unknownArgument } from './lib/args.mjs';
 import { failureLine, humanLines, parseRateLimits, readRateLimits } from './lib/codex-meter.mjs';
-import { owedSkipLines } from './lib/lens-review-rows.mjs';
+import { floorDebtLines } from './lib/codex-meter.mjs';
+import { isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
+import { branchCodexSkips, codexSkipsOwed, skipLine } from './lib/lens-review-rows.mjs';
 
-const CODEX_SKIP = 'codex: ';
+/** What `fn` gives, or `fallback` when it throws: a debt that cannot be read must not cost the reading. */
+function orElse(fn, fallback) {
+  try {
+    return fn();
+  } catch {
+    return fallback;
+  }
+}
 
-/** The Codex skips that still owe a review on the branch at HEAD of the working directory, each as its line; `null` when
- * it cannot be told. */
-function branchCodexDebts() {
-  const lines = owedSkipLines(process.cwd());
-  return lines === null ? null : lines.filter((line) => line.startsWith(CODEX_SKIP)).map((line) => line.slice(CODEX_SKIP.length));
+/** The Codex debts of the working directory, each as its line: the skips of the branch at HEAD that still owe a review,
+ * and the skips made at the floor of the weekly limit that no Codex review has paid, on any branch, with the command
+ * that pays each. `null` when neither can be told. */
+function workingDebts(cwd = process.cwd()) {
+  const branch = orElse(() => branchCodexSkips(cwd), null);
+  const paid = (rec) => !(codexSkipsOwed(cwd, { from: rec.base, tip: rec.head }) ?? [rec]).some((owed) => owed.base === rec.base && owed.head === rec.head);
+  const floor = orElse(() => floorDebtLines(readCodexReviews(cwd).filter(isValidCodexReview), (rec) => !paid(rec), skipLine), []);
+  if (branch === null && floor.length === 0) return null;
+  // A floor skip of this branch is listed once, with the command that pays it.
+  const lines = (branch ?? []).map(skipLine).filter((line) => !floor.some((one) => one.startsWith(`${line};`)));
+  return [...lines, ...floor];
 }
 
 /** The lines that list `debts`: none, unknown, or one for each. */
 function debtLines(debts) {
-  if (debts === null) return ['Codex debts on this branch: unknown (no branch with a default branch to compare with here)'];
-  return debts.length === 0 ? ['Codex debts on this branch: none'] : debts.map((debt) => `Codex debt on this branch: ${debt}`);
+  if (debts === null) return ['Codex debts: unknown (no branch with a default branch to compare with here, and no record read)'];
+  return debts.length === 0 ? ['Codex debts: none'] : debts.map((debt) => `Codex debt: ${debt}`);
 }
 
 export const USAGE = 'Usage: js-harness codex-meter [--json]';
@@ -47,7 +63,7 @@ function parseArgs(argv) {
  * `platform`, `timeoutMs`, `now`), `codexDebts` gives the Codex debts of the branch, and `log` and `error` take the
  * lines printed, so the tests run no server and read no repository. */
 export async function codexMeterMain(argv = process.argv.slice(2), deps = {}) {
-  const { log = console.log, error = console.error, codexDebts = branchCodexDebts } = deps;
+  const { log = console.log, error = console.error, codexDebts = workingDebts } = deps;
   let json;
   try {
     ({ json } = parseArgs(argv));

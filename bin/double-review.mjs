@@ -28,7 +28,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { REVIEW_EFFORT, REVIEW_MODEL, childEnv, leanEnv, leanFlags } from './codex-review.mjs';
+import { CODEX_WEEKLY_FLOOR, REVIEW_EFFORT, REVIEW_MODEL, childEnv, leanEnv, leanFlags } from './codex-review.mjs';
 import { lensEnv } from './lens-review.mjs';
 import { runAnswerFindings } from './lib/codex-review-recheck.mjs';
 import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
@@ -38,6 +38,7 @@ import { unknownArgument } from './lib/args.mjs';
 import { resolveClaude } from './lib/claude-path.mjs';
 import { transcriptOf as findTranscript } from './lib/channel.mjs';
 import { launchCodex } from './lib/codex-launch.mjs';
+import { launchWord, readRateLimits } from './lib/codex-meter.mjs';
 import { createLeanHome, leanHomesDir, realCodexHome } from './lib/codex-review-home.mjs';
 import { readerPrompt } from './lib/double-review-prompt.mjs';
 import { appendDoubleReview, codeTallyOf, findingsOf, READERS, readDoubleReviews, readOf, SEVERITIES, tallyOf } from './lib/double-review-records.mjs';
@@ -440,6 +441,14 @@ async function readCommand(args, root, env, deps, { log, error }) {
   const model = readerModel(root);
   for (const line of announceLines({ files: sources.map((one) => one.rel), diff: args.diff, model })) log(line);
   if (args.plan) return 0;
+  // The weekly limit, read before both readers start (rule:codex-weekly-floor): at or under its floor neither starts.
+  const readMeter = deps.readMeter ?? (() => readRateLimits({ platform: deps.platform ?? process.platform }));
+  const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, read: true });
+  if (weekly.note !== null) log(weekly.note);
+  if (weekly.stop !== null) {
+    error(weekly.stop);
+    return 1;
+  }
   let diffText = null;
   if (args.diff !== undefined) {
     // Git's own patch: an external diff tool or a text conversion in the user's config would freeze its output instead.

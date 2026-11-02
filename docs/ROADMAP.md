@@ -725,7 +725,12 @@ built in rule 1's pull request.
   reset, and the merge door lists it. His one reset credit is not spent without his word.
 - **The older texts:** the feature document's order in `CLAUDE.md` gains `## Depth pass` after the contract (the
   block `init` writes holds no such order, `bin/lib/project.mjs:395`); the contract template gains its skeleton; `sync` offers `depthPassSince` to a project.
-- **The eval** of PR 737's brief, with and without the rule, owed by 2026-11-30.
+- **Done** (2026-11-02, `odd/tasks/double-review-alignment.md`, T1 to T10): `rule:double-review` (his D5 retired by
+  name), `rule:escalation-model` and `rule:codex-weekly-floor`, which replaced the 10% reserve; `js-harness
+  double-review` reads a plan; code's two reviews are given what was asked, every finding answered, a recheck for both,
+  at most three reviews; the older texts aligned; pull requests 745, 746, 748, 749, 753, 754 and 755.
+- **The eval** of PR 737's brief, with and without the rule, owed by 2026-11-30: planned in the feature document,
+  not run; it runs on his word.
 
 ### The outside feature (the re-plan of 2026-11-01)
 - **Changes:** none in this repository: one small feature of one of his projects, built there with the
