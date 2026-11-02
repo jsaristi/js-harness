@@ -186,7 +186,7 @@ import { commitTree, functionsOf, gitIn, harnessOfCommit } from './lib/project-f
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
 import { leftOutOf, leftOutSaid, patchOfRead, reviewScope } from './lib/codex-review-scope.mjs';
 import { codexVersion, launchCodex } from './lib/codex-launch.mjs';
-import { floorStopped, readRateLimits, weeklyFloor } from './lib/codex-meter.mjs';
+import { launchWord, readRateLimits } from './lib/codex-meter.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { gitDirs, gitDirsAndCommits, isFullCommitId } from './lib/project.mjs';
 import { ruleValue } from './lib/rules.mjs';
@@ -1713,14 +1713,6 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       error(NO_CODEX);
       return 1;
     }
-    // The weekly limit, read just before the launch: at or under its floor nothing is started and the user decides on
-    // the reset; a reading that is not there says so and the review runs.
-    const weekly = weeklyFloor(await readMeter(), CODEX_WEEKLY_FLOOR);
-    if (weekly.unread !== undefined) log(`Codex's weekly limit could not be read before the launch: ${weekly.unread} The review runs without it.`);
-    if (weekly.stop) {
-      error(floorStopped({ left: weekly.left, floor: CODEX_WEEKLY_FLOOR, base: args.base }));
-      return 1;
-    }
     // This command's own prompt, for the range the record will claim: from the merge-base to the commit
     // HEAD is now, both by id, so what the model is told to diff cannot move under it. `undefined` under
     // the default prompt, where Codex writes its sentence from `--base`. Built before anything is made
@@ -1828,6 +1820,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         if (headNow !== head) return `HEAD moved from ${head.slice(0, 7)} to ${headNow.slice(0, 7)}`;
         return tree === '' ? null : 'tracked files differ from HEAD';
       };
+      // The weekly limit, read before each session: at or under its floor nothing more is started and the user decides
+      // on the reset, so a part that spent down to it stops the next; a reading that is not there says so and runs.
+      const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, base: args.base, part });
+      if (weekly.note !== null) log(weekly.note);
+      if (weekly.stop !== null) {
+        error(weekly.stop);
+        return { exit: 1 };
+      }
       // The session's own Codex home, named after the run: the id is made here, before the launch, and the
       // run line reuses it. Until the home exists nothing is launched, so a failure here writes no run line
       // and no record.

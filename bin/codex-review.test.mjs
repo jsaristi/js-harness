@@ -934,6 +934,16 @@ test('at or under the floor of the weekly limit nothing is started or recorded, 
   }
 });
 
+test('an interrupted read of the weekly limit starts nothing and records nothing', async () => {
+  const { root, base } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, readMeter: async () => ({ ok: false, reason: 'interrupted' }) });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /The read of Codex's weekly limit was interrupted, so the review was not started and nothing was recorded\./);
+  assert.equal(wrote(root), false);
+  assert.equal(fake.calls.length, 0, 'the review is not spawned');
+});
+
 test('a reading of the weekly limit that fails, or that holds none, says so and the review runs', async () => {
   const { root, base } = makeRepo();
   for (const readMeter of [async () => ({ ok: false, reason: 'missing' }), async () => ({ ok: true, result: {} })]) {
@@ -3552,6 +3562,19 @@ function fakeCodexInParts(...sessions) {
 // The three files of `makeThreeFileRepo` as two parts of at most six changed lines, and as three of at most four.
 const TWO_PARTS = ['--session', 'lean', '--part-lines', '6'];
 const THREE_PARTS = ['--session', 'lean', '--part-lines', '4'];
+
+test('the weekly limit is read before each part: a part that spent down to the floor stops the next, and nothing is recorded', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const mine = fakeHome();
+  const fake = fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt', 'b.txt') }, { stdout: partShown(root, base, head, 'c.txt') });
+  const used = [50, 100 - CODEX_WEEKLY_FLOOR];
+  const readMeter = async () => ({ ok: true, result: { rateLimits: { secondary: { usedPercent: used.shift() } } } });
+  const result = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...fake, homedir: mine.homedir, randomUUID: runIds(), readMeter });
+  assert.equal(result.code, 1, result.out);
+  assert.deepEqual(fake.order, ['start 1', 'end 1'], 'the second part is not launched');
+  assert.match(result.err, /so part 2 of 2 was not started, the parts before it kept for the next run, and nothing was recorded/);
+  assert.deepEqual(readCodexReviews(root), []);
+});
 
 test('a lean range over the bound is reviewed in parts: one session after another, each over its own files and in a home of its own, and one record for the whole range', async () => {
   const { root, base, head } = makeThreeFileRepo();

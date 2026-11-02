@@ -172,3 +172,11 @@ test('a read that fails still lists the Codex debts of the branch', async () => 
   assert.equal(code, 1);
   assert.ok(out.split('\n').includes('Codex debt on this branch: unavailable abc1234..def5678: floor'), out);
 });
+
+test('--json keeps standard output JSON when the read fails: the debts alone, and the exit 1', async () => {
+  const failing = fakeCodex(answering(), { spawnError: Object.assign(new Error('nope'), { code: 'ENOENT' }) });
+  const { code, out, err } = await run(['--json'], failing, { codexDebts: () => ['unavailable abc1234..def5678: floor'] });
+  assert.equal(code, 1);
+  assert.deepEqual(JSON.parse(out), { codexDebts: ['unavailable abc1234..def5678: floor'] });
+  assert.match(err, /codex is not on PATH/);
+});

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { METER_TIMEOUT_MS, failureLine, floorStopped, parseRateLimits, readRateLimits, weeklyFloor } from './codex-meter.mjs';
+import { METER_TIMEOUT_MS, failureLine, floorStopped, launchWord, parseRateLimits, readRateLimits, weeklyFloor } from './codex-meter.mjs';
 
 // A fake `codex app-server`: a child whose stdin answers each request line with what `answer` returns for it.
 // Nothing here starts Codex. `answer` returns the lines the server writes back, objects or already-written text.
@@ -251,4 +251,19 @@ test('the stop at the floor starts nothing, asks the user about the reset and sa
   assert.match(said, /js-harness codex-review --base abc1234 --unavailable/);
   assert.match(said, /js-harness lens-review --base abc1234/);
   assert.match(said, /codex-meter and the merge door list/);
+});
+
+test('an interrupted read of the weekly limit stops the launch: the Ctrl-C was meant for the command', () => {
+  assert.deepEqual(weeklyFloor({ ok: false, reason: 'interrupted' }, 2), { stop: true, interrupted: true });
+  const word = launchWord({ ok: false, reason: 'interrupted' }, { floor: 2, base: 'abc1234' });
+  assert.equal(word.note, null);
+  assert.match(word.stop, /interrupted, so the review was not started and nothing was recorded/);
+});
+
+test('a later part of a review in parts stopped at the floor says the parts before it are kept for the next run', () => {
+  const word = launchWord(weeklyUsed(99), { floor: 2, base: 'abc1234', part: { index: 2, of: 3 } });
+  assert.match(word.stop, /so part 2 of 3 was not started, the parts before it kept for the next run, and nothing was recorded/);
+  assert.match(launchWord(weeklyUsed(99), { floor: 2, base: 'abc1234', part: { index: 1, of: 3 } }).stop, /so the review was not started/);
+  assert.deepEqual(launchWord(weeklyUsed(50), { floor: 2, base: 'abc1234' }), { note: null, stop: null });
+  assert.match(launchWord({ ok: false, reason: 'missing' }, { floor: 2, base: 'abc1234' }).note, /could not be read before the launch: .+ The review runs without it\./);
 });

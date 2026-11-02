@@ -60,7 +60,9 @@ export async function codexMeterMain(argv = process.argv.slice(2), deps = {}) {
   if (outcome.killError) error(`could not stop codex app-server: ${outcome.killError}`);
   if (!outcome.ok) {
     error(failureLine(outcome));
-    for (const line of debtLines(codexDebts())) log(line);
+    const debts = codexDebts();
+    if (json) log(JSON.stringify({ codexDebts: debts }, null, 2));
+    else for (const line of debtLines(debts)) log(line);
     return 1;
   }
   const reading = parseRateLimits(outcome.result);
