@@ -277,6 +277,8 @@ Found by the search of item 2; each changes in T2.
   part, `AGENTS.md` and GUIDE's command table; pull request 2 (specs 1, 2, 5, 6; spec 5 measured at its close);
   done: `c51daf56` and its fix `1fb4f34a`, pull request 752
 - [ ] T4 (kind: build) `js-harness docs index`, test first, and the row's link part; pull request 3 (specs 3, 6)
+- [ ] T4r (kind: verify) Codex reads T4 again whole (`codex-review --base d195f663 --again`), since its recheck of
+  `651290fc` left one finding fixed in part, then fixed in `f53617f3` (L11), and a second recheck is not run
 - [ ] T5 (kind: build) SPEC's record table completed, `docs/RECORDS.md` and its test, and the row's record part;
   pull request 4 (specs 4, 6)
 - [ ] T6 (kind: verify) the close: the bar measured again, the Log's result against items 3 and 4, the report to the
