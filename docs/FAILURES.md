@@ -1664,6 +1664,10 @@ the reply before he leaves; so the return had no goals to check and no forecast 
   and checked there) — after "listo colocalo en el arnes de siempre dar la hora local" at 05:56:03Z he was away until
   18:03:39Z, 12.1 h, the machine off ("deje el computador apagado bastante tiempo"), without saying he was leaving;
   no stretch opened between the close at 2026-10-31T19:27:50Z and the open at 18:13:57Z, after his return
+- Seen: 2026-11-02 — the lead's note to JH 130 at 09:18Z (claimed; the lead's own) — from 2026-11-01 21:35 to
+  2026-11-02 04:01 local (UTC-05:00) he turned the machine off for the night with every session paused on purpose,
+  and no stretch covered it; the reply hook flagged it at his return. The stretch record's last close is at
+  2026-11-02T01:53:56Z and none opened after it (`stretches.jsonl` under the throughput folder, read by JH 130)
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 
