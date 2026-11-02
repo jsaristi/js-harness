@@ -105,6 +105,31 @@ export function failureLine(outcome) {
   }
 }
 
+/** What the weekly limit says of a review about to launch, from an outcome of `readRateLimits` and `floor`, the percent
+ * of the weekly limit that must be left (rule:codex-weekly-floor): `{ stop: true, left }` at or under it, `{ stop:
+ * false, left }` above it, and `{ stop: false, unread }` with why when the read failed or its answer held no weekly
+ * limit, since a reading that is not there stops nothing (odd/tasks/double-review-alignment.md, T2). */
+export function weeklyFloor(outcome, floor) {
+  if (!outcome.ok) return { stop: false, unread: failureLine(outcome) };
+  const used = parseRateLimits(outcome.result).weekly.usedPercent;
+  if (used === null) return { stop: false, unread: 'its answer held no weekly limit.' };
+  const left = Math.max(0, 100 - used);
+  return { stop: left <= floor, left };
+}
+
+/** Why a review was not started at the floor of the weekly limit, and what each answer of the user's runs: a reset
+ * credit is spent only on the user's word, and on a typed no a second Claude review takes Codex's place and the skip
+ * stays a Codex debt until a Codex review pays it. */
+export function floorStopped({ left, floor, base }) {
+  return (
+    `Codex's weekly limit has ${left}% left, at or under its floor of ${floor}% (rule:codex-weekly-floor), so the review was not started and nothing was recorded.\n` +
+    "Ask the user, through the lead where one leads, whether to reset the weekly limit: a reset credit is spent only on the user's word, and after a reset this runs again.\n" +
+    `On the user's typed no, record the skip with \`js-harness codex-review --base ${base} --unavailable "weekly limit at its floor: <the user's words>"\`, ` +
+    `and run a second Claude review in Codex's place, \`js-harness lens-review --base ${base} --lenses <the lenses not run yet> --reason "in Codex's place"\`. ` +
+    'The skip is a Codex debt that codex-meter and the merge door list until a Codex review pays it.'
+  );
+}
+
 /** Starts `codex app-server`, asks it for the limits and resolves with the outcome, never rejects:
  *  - `{ ok: true, result }`: the answer's `result`, as the server gave it (see `parseRateLimits`);
  *  - `{ ok: false, reason }` with `reason` one of `missing` (no `codex` to start), `timeout` (no answer within

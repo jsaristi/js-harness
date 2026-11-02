@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { METER_TIMEOUT_MS, failureLine, parseRateLimits, readRateLimits } from './codex-meter.mjs';
+import { METER_TIMEOUT_MS, failureLine, floorStopped, parseRateLimits, readRateLimits, weeklyFloor } from './codex-meter.mjs';
 
 // A fake `codex app-server`: a child whose stdin answers each request line with what `answer` returns for it.
 // Nothing here starts Codex. `answer` returns the lines the server writes back, objects or already-written text.
@@ -222,4 +222,33 @@ test('a read that ends by its answer leaves no signal handler behind', async () 
   const signals = new EventEmitter();
   await readRateLimits({ spawn: fake.spawn, kill: fake.kill, platform: 'linux', timeoutMs: 2000, signals });
   assert.equal(signals.listenerCount('SIGINT') + signals.listenerCount('SIGTERM'), 0);
+});
+
+// The floor of the weekly limit (rule:codex-weekly-floor), as `codex-review` reads it just before a launch.
+const weeklyUsed = (usedPercent) => ({ ok: true, result: { rateLimits: { secondary: { usedPercent, resetsAt: null } } } });
+
+test('the weekly floor stops a launch at or under it, and lets one through above it', () => {
+  assert.deepEqual(weeklyFloor(weeklyUsed(98), 2), { stop: true, left: 2 });
+  assert.deepEqual(weeklyFloor(weeklyUsed(99.5), 2), { stop: true, left: 0.5 });
+  assert.deepEqual(weeklyFloor(weeklyUsed(97), 2), { stop: false, left: 3 });
+  assert.deepEqual(weeklyFloor(weeklyUsed(104), 2), { stop: true, left: 0 });
+});
+
+test('a reading that failed, or that holds no weekly limit, stops nothing and says why', () => {
+  const failed = weeklyFloor({ ok: false, reason: 'missing' }, 2);
+  assert.equal(failed.stop, false);
+  assert.equal(failed.unread, failureLine({ ok: false, reason: 'missing' }));
+  const none = weeklyFloor({ ok: true, result: {} }, 2);
+  assert.equal(none.stop, false);
+  assert.match(none.unread, /no weekly limit/);
+});
+
+test('the stop at the floor starts nothing, asks the user about the reset and says what a typed no runs', () => {
+  const said = floorStopped({ left: 2, floor: 2, base: 'abc1234' });
+  assert.match(said, /2% left, at or under its floor of 2% \(rule:codex-weekly-floor\)/);
+  assert.match(said, /not started and nothing was recorded/);
+  assert.match(said, /whether to reset/);
+  assert.match(said, /js-harness codex-review --base abc1234 --unavailable/);
+  assert.match(said, /js-harness lens-review --base abc1234/);
+  assert.match(said, /codex-meter and the merge door list/);
 });

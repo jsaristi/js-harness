@@ -74,6 +74,7 @@ async function run(argv, fake, extra = {}) {
     platform: 'linux',
     log: (text) => out.push(text),
     error: (text) => err.push(text),
+    codexDebts: () => [],
     ...extra,
   });
   return { code, out: out.join('\n'), err: err.join('\n') };
@@ -89,6 +90,7 @@ test('the human form: a line for the five-hour window, one for the weekly, and t
       `five-hour: 3% used, resets at ${localClock(1792839680)}`,
       `weekly: 8% used, resets at ${localClock(1793385515)}`,
       'reset credits left: 1',
+      'Codex debts on this branch: none',
     ].join('\n'),
   );
 });
@@ -101,6 +103,7 @@ test('--json prints the parsed numbers, and no account identifier; exit 0', asyn
     fiveHour: { usedPercent: 3, resetsAt: 1792839680 },
     weekly: { usedPercent: 8, resetsAt: 1793385515 },
     resetCredits: 1,
+    codexDebts: [],
   });
   assert.ok(!out.includes('acct-test-123'), 'no account identifier is printed');
 });
@@ -150,4 +153,22 @@ test('an unknown argument: exit 2 with the usage, and codex is not started', asy
 
 test('the usage line names the command and its one option', () => {
   assert.match(USAGE, /^Usage: js-harness codex-meter \[--json\]$/m);
+});
+
+test('the Codex debts of the branch, the skips no Codex review has paid yet, are listed after the reading', async () => {
+  const debt = 'unavailable abc1234..def5678: weekly limit at its floor: no';
+  const listed = await run([], fakeCodex(answering()), { codexDebts: () => [debt] });
+  assert.equal(listed.code, 0, listed.err);
+  assert.ok(listed.out.split('\n').includes(`Codex debt on this branch: ${debt}`), listed.out);
+  const json = await run(['--json'], fakeCodex(answering()), { codexDebts: () => [debt] });
+  assert.deepEqual(JSON.parse(json.out).codexDebts, [debt]);
+  const unknown = await run([], fakeCodex(answering()), { codexDebts: () => null });
+  assert.match(unknown.out, /^Codex debts on this branch: unknown/m);
+});
+
+test('a read that fails still lists the Codex debts of the branch', async () => {
+  const failing = fakeCodex(answering(), { spawnError: Object.assign(new Error('nope'), { code: 'ENOENT' }) });
+  const { code, out } = await run([], failing, { codexDebts: () => ['unavailable abc1234..def5678: floor'] });
+  assert.equal(code, 1);
+  assert.ok(out.split('\n').includes('Codex debt on this branch: unavailable abc1234..def5678: floor'), out);
 });
