@@ -11,6 +11,7 @@ import { fixedLoadRow } from './lib/fixed-load.mjs';
 import { depthPassFor, discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
 import { checkSpec } from './lib/spec.mjs';
+import { checkDocs } from './docs.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { readRules, ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
@@ -1907,17 +1908,15 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     return rows.every((row) => row.pass) ? 0 : 1;
   }
   // A push runs the Codex review row and the row `rules` of the lines it brings, as INFO. The budget, payload and sensor rows read the working tree,
-  // not the commit being pushed, and the pre-commit gate already ran them on every commit.
-  //
-  // The other list is the static rows: all a gate knows of the working tree before its sensors, each in a
-  // second or less. One of them that fails stops the gate before its sensors (below), whichever it is: the
+  // not the commit being pushed, and the pre-commit gate already ran them on every commit. The other list is the
+  // static rows: all a gate knows of the working tree before its sensors, each in a second or less. One of them that fails stops the gate before its sensors (below), whichever it is: the
   // rule names no row, so a row added to this list stops the gate by being in it. A row that states a rule
   // of the project (`rules`, `failures`) goes first in the list, before `budget`: it is the first thing a
   // reader of a stopped gate must see. A row that could not be computed stops the gate only if it is
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote }), checkLensReviews(cwd, head, { ...deps, remote }), ...checkPushRules(cwd, { rules: deps.rules, spawn: deps.git, head, remote }), ...checkTagRow(cwd, { ref, head, spawn: deps.git })]
-    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), ...checkClaudeBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
+    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), ...checkClaudeBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkDocs(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
   if (!push) rows.push(...checkLedger(cwd));

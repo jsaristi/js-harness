@@ -33,6 +33,7 @@ Commands:
   codex-review  Run the Codex review of <base>..HEAD and record it (--unavailable <reason> records a skip).
   codex-meter  Read Codex's five-hour and weekly limits and its reset credits left, from codex app-server, which answers without running a model, so it spends no tokens: js-harness codex-meter [--json]. It starts one process per read and kills it after; --json prints the numbers, and a field the answer does not hold is printed as unknown.
   double-review  Give a plan, a design, a proposing document or a small code change to a Claude reader and a Codex reader at once, blind, on one frozen copy, and record what each found (rule:double-review): js-harness double-review read <file>... [--diff <rev>] [--plan]; take records the findings the writer took, skip the user's words that skip a read, tally what each reader adds. A read covers no code.
+  docs        What an auditor starting cold reads (docs/README.md is the entry): docs plan prints every tracked file in slices one context holds, in four tiers (core, tests, feature documents, the rest), the source beside its capability of docs/SPEC.md and each feature document with its state, at most 400,000 estimated tokens a slice (--budget <n> for another window, --json for the whole plan); docs check runs check's docs row alone: the index of docs/README.md against docs/, and no file over a slice.
   lens-review  Run the Claude lenses picked over <base>..HEAD, each a fresh tool-less run on the CLI login, and record the run (--unavailable <reason> records a skip).
   windows-daily  Read the newest run of the daily Windows suite (.github/workflows/windows-daily.yml) on GitHub and say whether it passed; a red run not told before is told to the orchestrator once, with its failing test names. The lead's loop heartbeat runs the same reading every hour.
   status-line  Keep the line Claude Desktop's sessionStatusLine program shows above the Code tab's message box: status-line write runs the board and keeps it in one Spanish line under the home (.js-harness/status-line/line.txt), leaving the last line when the board fails; status-line program prints the path of the program, which only prints that file, since the board takes longer than the host's 10 s. The app reads the key only on third-party inference today.
@@ -96,6 +97,7 @@ const COMMANDS = {
   'codex-review': async () => (await import('./codex-review.mjs')).codexReviewMain,
   'codex-meter': async () => (await import('./codex-meter.mjs')).codexMeterMain,
   'double-review': async () => (await import('./double-review.mjs')).doubleReviewMain,
+  docs: async () => (await import('./docs.mjs')).docsMain,
   'lens-review': async () => (await import('./lens-review.mjs')).lensReviewMain,
   'windows-daily': async () => (await import('./windows-daily.mjs')).windowsDailyMain,
   'status-line': async () => (await import('./status-line.mjs')).statusLineMain,
@@ -150,6 +152,7 @@ const HELP = {
   'codex-review': ['./codex-review.mjs', 'USAGE'],
   'codex-meter': ['./codex-meter.mjs', 'USAGE'],
   'double-review': ['./double-review.mjs', 'USAGE'],
+  docs: ['./docs.mjs', 'USAGE'],
   'lens-review': ['./lens-review.mjs', 'USAGE'],
   'status-line': ['./status-line.mjs', 'USAGE'],
   functions: ['./functions.mjs', 'USAGE'],
