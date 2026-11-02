@@ -26,7 +26,8 @@ function runsWait([name, ...rest]) {
  * `head`, with no redirection but `2>&1`, no substitution and nothing sent to the background. A wait in a line that
  * runs anything else is no wait (Codex P1 on be294ca..7f918a9: `js-harness wait --for 1; npm run check`). */
 function waitAlone(typed) {
-  if (!isWaitCommand(typed)) return false;
+  // `shellWords` leaves a heredoc's body out, and bash expands it before the command runs (Codex P2 on fa61c36..5a411a9).
+  if (!isWaitCommand(typed) || typed.includes('<<')) return false;
   const words = shellWords(typed, { groups: true });
   let waited = false;
   let start = 0;
@@ -35,6 +36,11 @@ function waitAlone(typed) {
     const [name, ...rest] = words.slice(start, at);
     const before = start === 0 ? null : words[start - 1];
     const after = at === words.length ? null : words[at];
+    // A line break or a `;` with nothing beside it runs nothing (Codex P2 on fa61c36..5a411a9).
+    if (name === undefined && [null, ';'].includes(before) && [null, ';'].includes(after)) {
+      start = at + 1;
+      continue;
+    }
     if (name === undefined || ![null, ';', '&&', '|'].includes(before) || ![null, ';', '&&', '|'].includes(after)) return false;
     if (rest.some((word) => /[<>`]|\$/.test(word) && !/^\d?>&\d$/.test(word))) return false;
     const wait = runsWait([name, ...rest]);

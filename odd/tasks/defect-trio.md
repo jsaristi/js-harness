@@ -84,6 +84,8 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
 - [ ] T4 (kind: verify) Codex and the Claude lenses over the code slice; FAILURES `Seen:` lines; PR; ready notice.
 - [x] T5 (kind: build) spec 3, Codex's recheck on 7f918a9..b9a1512: a wait is told by the command it runs, not a word of
   it (`bash -c '...; js-harness wait'`); test first. Route: inline. L8.
+- [x] T6 (kind: build) spec 3, Codex on fa61c36..5a411a9: a heredoc is work, an empty segment between `;` or line
+  breaks is nothing; test first. Route: inline. L9.
 
 ## Log
 - L1 (2026-11-02, his request through the lead's brief
@@ -139,3 +141,11 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   wait in it. Fixed: `runsWait` takes a simple command for a wait only by its executable and verb (`js-harness wait`,
   `node <dispatcher> wait`, `wait.mjs`). Red first: the cases `bash -c`, `sh -c`, `echo js-harness wait` and
   `env X=1 js-harness wait` failed (true for false); green after, the three refresh test files 44 of 44.
+  The lenses on b9a1512..5a411a9: 0 findings (about 6,000 input tokens each). Codex would not recheck a second time
+  and asked for `--again` from fa61c361.
+- L9 (2026-11-02, T6): Codex on fa61c36..5a411a9 `--again` (241,056 input tokens), two P2, both read in
+  `shellWords` (`bin/lib/guard.mjs:325-343`): a heredoc and its body leave no word, so `$(npm run check)` in one passed
+  for a wait; and a line break or `;` before or after a wait made an empty segment, refused, so such a wait still held
+  the land its 30 minutes. Fixed: a line with `<<` is work; an empty segment between `;` (a line break is one) or the
+  line's ends is skipped, and one beside `&&` or `|` is still refused. Red first: `js-harness wait --notice-to 130\n`
+  failed (false for true); the heredoc case was not shown red alone. Green after: the three refresh test files 44 of 44.

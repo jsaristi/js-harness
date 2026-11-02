@@ -159,13 +159,17 @@ test('onlyWaits: a session running anything else is at work, and so is one whose
 
 test('onlyWaits: a wait counts only when its whole command line is the wait, in the shapes sessions type it', () => {
   const between = (command) => onlyWaits(transcript(prompt('go', at(20)), ...background('t1', 'b1', command, at(30)), reply('Esperando.', at(31))));
-  for (const typed of ['cd /d/js-harness && js-harness wait --notice-to orchestrator', 'cd D:/js-harness; js-harness wait --notice-to 130', 'cd "D:/a b" && js-harness wait --notice-to 130 --for 60', 'js-harness wait --notice-to 130 2>&1 | tail -3', 'node D:/js-harness/bin/js-harness.mjs wait --pr 748']) {
+  for (const typed of ['cd /d/js-harness && js-harness wait --notice-to orchestrator', 'cd D:/js-harness; js-harness wait --notice-to 130', 'cd "D:/a b" && js-harness wait --notice-to 130 --for 60', 'js-harness wait --notice-to 130 2>&1 | tail -3', 'node D:/js-harness/bin/js-harness.mjs wait --pr 748',
+    // Codex P2 on fa61c36..5a411a9: a line break or a `;` before or after the wait runs nothing more.
+    'js-harness wait --notice-to 130\n', '\njs-harness wait --notice-to 130', 'cd /d/x;\njs-harness wait --pr 748;']) {
     assert.equal(between(typed), true, typed);
   }
   // Codex P1 on be294ca..7f918a9: a wait in the line does not make the rest of it a wait.
   for (const typed of ['js-harness wait --for 1; npm run check', 'npm run check && js-harness wait --pr 748', 'cd /d/x; echo "- 09:30Z" >> relief.md; js-harness wait --notice-to orchestrator', 'js-harness wait --pr 748 | xargs npm run check', 'js-harness wait --pr 748 & npm run check', 'js-harness wait --pr 748 || npm run check', 'js-harness wait --pr "$(npm run check)"', 'js-harness wait --notice-to 130 > /dev/null', '(js-harness wait --pr 748)',
     // Codex P1 on 7f918a9..b9a1512: a shell given the line as one word runs all of it.
-    "bash -c 'npm run check; js-harness wait --for 1'", 'sh -c "js-harness wait --pr 748 && npm run check"', 'echo js-harness wait', 'env X=1 js-harness wait --pr 748']) {
+    "bash -c 'npm run check; js-harness wait --for 1'", 'sh -c "js-harness wait --pr 748 && npm run check"', 'echo js-harness wait', 'env X=1 js-harness wait --pr 748',
+    // Codex P2 on fa61c36..5a411a9: bash expands a heredoc's body, which shellWords leaves out, before the wait starts.
+    'js-harness wait --notice-to 130 <<EOF\n$(npm run check)\nEOF\njs-harness wait --notice-to 130', 'js-harness wait --pr 748 && && npm run check']) {
     assert.equal(between(typed), false, typed);
   }
 });
