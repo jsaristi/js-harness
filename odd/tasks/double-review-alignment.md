@@ -292,7 +292,8 @@ answer <run id> <reviewer> --taken --rebutted --why`, and `tally` rows per revie
 reviewed. T8c 5c67d309 (the lenses recheck their earlier findings, `recheckOf`) is committed too. T8 is done and reviewed (L21), PR 749 from `feat/review-answers` (left out of one land by a timing test under
 load, L22). T9 is done and reviewed (L22), landed as PR 753 (main a0b5334). T2 is done and reviewed (L23) on
 `rule/codex-weekly-floor`: b9a92dcf, 52cd8390, c0ca22e7, landed as PR 754 (main 064f5c7). T6's verifier found
-gaps (L24); T10 fixes them on `feat/floor-followups`. Next: T10's reviews and PR, then the rest of T6. D5's two exemptions (Claude 6 of L12) are
+gaps (L24); T10 fixed them on `feat/floor-followups`, reviewed (L25), with older text 16. Next: the PR lands, then
+T6 closes with the report of how to try it. D5's two exemptions (Claude 6 of L12) are
 kept in T4's text, since a question of fact proposes nothing and a reviewed text named by path is not read again, and
 the report says so for him to change. T6 keeps T2's verifier, older text 16 and the report of how to try it.
 Meter 5% weekly on 2026-11-02 at 09:40 (2 credits left); floor `rule:codex-weekly-floor`.
@@ -333,7 +334,7 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   rule value (`rules change escalation-model`, today `claude-fable-5-1`); spec 8. Done: 462f9d69 (the register's
   room), 2d07711c (the rule and the bound), fix 30197b3a; branch `rule/escalation-model`, stacked on PR 749 (L22).
 - [x] T5 (kind: build) Older texts 5, 6, 8, 9, 10, 12; spec 5; 2cb04248, 5cbbca4c and the commit of `sync`'s offer.
-- [ ] T10 (kind: build) The independent verifier's findings on T2 (L24): a floor skip is listed by `codex-meter` on
+- [x] T10 (kind: build) 2f9c2216, 7f851374 (L25); the independent verifier's findings on T2 (L24): a floor skip is listed by `codex-meter` on
   every branch, a merged one among them, with the command that pays it, until a Codex review of its range pays it;
   `double-review read` reads the floor before both readers start; the debts' read cannot cost the reading; the share
   left is said to one decimal; the weekly window is found by its length; the contract's names follow the rule's;
@@ -545,3 +546,12 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   design, not enforced), 6 (a wrong word in one rare path), 8's default reader (a test needs the app-server's launch
   injected through `spawnAsync`), 9 (a cost, not a fault; a later part could skip the read while the earlier
   reading and the parts' cost stay above the floor).
+- L25 (2026-11-02, evidence): T10 done. 2f9c2216: floor debts listed on any branch from valid records with the command
+  that pays them, the branch's skips read as records, the debts' read guarded, the floor in `double-review read`, the
+  weekly window by its length, the share to one decimal; tests proven red on the old source. Reviews: Codex
+  dcce067..2f9c221 (run 46e19138, 164,953 input tokens): incorrect at 0.94, one P2, a damaged floor-skip record threw
+  while its line was written and the catch hid every valid floor debt; lenses resilience, reliability, readability 0.
+  Taken, fixed in 7f851374 (test red first), answered; Codex's recheck 1 fixed, correct at 0.98 (36,107); lenses
+  reliability and resilience 0. gentle-ai: not reviewed; its Stop hook offered the branch (base 064f5c7) three times,
+  its status answered once with an execute and timed out before, and nothing was started, by `CLAUDE.md`'s rule for a
+  branch candidate. Older text 16: the roadmap's alignment item says what was done, and that the eval stays owed.
