@@ -11,6 +11,7 @@ import {
   reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
 import { NO_TEST_EXIT, NO_TEST_LINE, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
+import { ESCALATION_MODEL } from './lib/codex-review-recheck.mjs';
 import { checkCodexReviewDebt, checkCodexReviews } from './check.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
 import { mergeStart, rangeDiff } from './lib/codex-review-coverage.mjs';
@@ -6939,6 +6940,7 @@ test('a range that starts at the head of a review that found something is a rech
   assert.deepEqual(lines.slice(at + 1, at + 4).map((one) => one.replace(`${top}/`, '')), ['  1. not fixed: f.txt:1 P1 [P1] Drops the last record', '  2. fixed: lib/deep.mjs:3-9 P3 Slow on large input', '  3. fixed: f.txt:2-4 No priority given']);
   assert.ok(lines.includes('A recheck is asked with this command\'s own prompt, which lists the findings it checks: the sentence Codex writes for `--base` cannot.'), result.out);
   assert.ok(lines.includes('Follow-ups, which do not block (record them as a task): 1.'), result.out);
+  assert.ok(lines.includes(`A range that starts at ${fixed.slice(0, 7)} is a second recheck of what is open, the last of three reviews: fix it in this branch, then run it.`), result.out);
   const record = readCodexReviews(root).at(-1);
   assert.deepEqual(record, { ...reviewedRecord(head, fixed), run: RECHECK_ID, recheckOf: head });
   const line = readCodexReviewRuns(root).at(-1);
@@ -6964,20 +6966,24 @@ test('a second recheck of the same findings is refused before anything runs, and
   assert.equal(git(root, 'rev-parse', 'HEAD'), fixed);
 });
 
-test('a refused range that holds a code commit no record covers names a review that reads it, and offers no skip', async () => {
+test('a fourth review refused over a code commit no record covers names a review that reads it, and offers no skip', async () => {
   const { root, base, head, fixed } = await reviewedThenCorrected();
   const second = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });
   assert.equal(second.code, 0, second.err);
+  const refixed = commitOne(root, 'f.txt', 'four\n');
+  const third = await run(['--base', fixed, '--cwd', root], { ...fakeCodex(reviewed(root, fixed), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => THIRD_ID });
+  assert.equal(third.code, 0, third.err);
   const added = commitOne(root, 'g.txt', 'new code\n');
   const records = readCodexReviews(root).length;
-  const fake = fakeCodex(reviewed(root, fixed));
-  const third = await run(['--base', fixed, '--cwd', root], { ...fake, randomUUID: () => THIRD_ID });
-  assert.equal(third.code, 1, third.out);
-  assert.ok(third.err.startsWith(`A second recheck of the findings of the review that ended at ${head.slice(0, 7)} is not run: the first left 1 finding not fixed or blocking.`), third.err);
-  assert.ok(third.err.includes(`1 code commit no Codex review record covers (${added.slice(0, 7)})`), third.err);
-  // The reviewed head is the base of the recheck, refused as well; the commit before it starts a review.
-  assert.ok(third.err.includes(`\`codex-review --base ${base} --again\``), third.err);
-  assert.ok(!third.err.includes('--unavailable '), third.err);
+  const fake = fakeCodex(reviewed(root, refixed));
+  const fourth = await run(['--base', refixed, '--cwd', root], { ...fake, randomUUID: () => '00000000-0000-4000-8000-000000000005' });
+  assert.equal(fourth.code, 1, fourth.out);
+  assert.ok(fourth.err.startsWith(`Three reviews of this change did not settle it: the third, a second recheck that ended at ${refixed.slice(0, 7)}, left 1 finding not fixed or blocking.`), fourth.err);
+  assert.ok(fourth.err.includes(`pass the work to ${ESCALATION_MODEL}`), fourth.err);
+  assert.ok(fourth.err.includes(`1 code commit no Codex review record covers (${added.slice(0, 7)})`), fourth.err);
+  // Each head of the three reviews is refused as well; the commit before the first starts a review.
+  assert.ok(fourth.err.includes(`\`codex-review --base ${base} --again\``), fourth.err);
+  assert.ok(!fourth.err.includes('--unavailable '), fourth.err);
   assert.equal(fake.calls.length, 0, 'no Codex was launched');
   assert.equal(readCodexReviews(root).length, records);
   // The command it names runs, as a review, and its record covers the new commit.
@@ -7073,17 +7079,25 @@ test('a document committed between the reviewed head and the fix does not move w
   assert.equal(readCodexReviews(root).at(-1).head, fixed);
 });
 
-test('a document committed after a recheck that left a finding open does not open a new review: the range is refused', async () => {
+test('after a recheck that left a finding open, a document committed does not open a new review: the range is a second recheck of what is open', async () => {
   const { root, head, fixed } = await reviewedThenCorrected();
   const second = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });
   assert.equal(second.code, 0, second.err);
   commitOne(root, 'notes.md', 'what is still open\n');
   commitOne(root, 'f.txt', 'four');
-  const fake = fakeCodex(reviewed(root, fixed));
+  const plan = await run(['--base', fixed, '--plan', '--cwd', root], fakeCodex(''));
+  assert.ok(plan.out.split('\n').includes(`A run of this range is a second recheck, the last of three reviews, of the 1 finding the recheck that ended at ${fixed.slice(0, 7)} left open.`), plan.out);
+  const fake = fakeCodex(reviewed(root, fixed), {}, PROBE_OK, recheckAnswer(root));
   const third = await run(['--base', fixed, '--cwd', root], { ...fake, randomUUID: () => THIRD_ID });
-  assert.equal(third.code, 1, third.out);
-  assert.ok(third.err.startsWith(`A second recheck of the findings of the review that ended at ${head.slice(0, 7)} is not run`), third.err);
-  assert.equal(fake.calls.length, 0, 'no Codex was launched');
+  assert.equal(third.code, 0, third.err);
+  const asked = fake.calls[0].child.received.text;
+  assert.ok(asked.includes('## A recheck of earlier findings'), asked);
+  assert.ok(asked.includes('Drops the last record'), asked);
+  assert.ok(!asked.includes('Slow on large input'), 'a finding the first recheck found fixed is not asked again');
+  // It left the finding open: three reviews did not settle the change, so it is raised and passed on now.
+  assert.ok(third.out.includes(`Three reviews of this change did not settle it. Raise it to the user as a problem`), third.out);
+  assert.ok(third.out.includes(`pass the work to ${ESCALATION_MODEL}`), third.out);
+  assert.equal(readCodexReviews(root).at(-1).recheckOf, fixed);
 });
 
 test('--again from the head of a review whose findings were rechecked is a second recheck, and is refused', async () => {

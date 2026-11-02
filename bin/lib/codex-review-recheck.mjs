@@ -15,11 +15,14 @@
 //   (`classifyRecheck`). A finding the answer does not mark is taken as open, never as fixed.
 // - Its record stays `reviewed`, so it covers its commits as any review does, and names the head whose
 //   findings it checked (`recheckOf`); its run line counts what it found (`recheck`).
-// - A second recheck of the same findings is refused before anything runs: from the head of a recheck that
-//   left one open, and from the head of a review whose findings were already rechecked (`--again` included).
-//   What is still open becomes a follow-up task (`secondRecheckRefused`). A range whose every code commit
-//   has a record needs nothing more; one that holds code no record covers is reviewed from the nearest
-//   commit behind it that starts a review, with `--again`, so that no skip leaves new code unread.
+// - At most three reviews of one change (spec 8 of odd/tasks/double-review-alignment.md): from the head of a
+//   recheck that left findings open, a second recheck of those findings is the third. Past it nothing more is
+//   reviewed: from the head of a second recheck that left one open, or again from a head already rechecked, the
+//   run is refused before anything runs, with what is open and the strongest model the rules name, which the
+//   work passes to (`rule:escalation-model`); a recheck whose open findings were not kept is refused as one
+//   recheck too many, with a follow-up task (`secondRecheckRefused`). A range whose every code commit has a
+//   record needs nothing more; one that holds code no record covers is reviewed from the nearest commit behind
+//   it that starts a review, with `--again`, so that no skip leaves new code unread.
 //
 // Its limit: new code committed in the same range as a correction is read as a follow-up, not reviewed;
 // only a blocking finding stops it. A session that wants new work reviewed in full commits the correction
@@ -28,6 +31,20 @@
 import { isDocument } from './codex-review-scope.mjs';
 import { isValidCodexReview } from './codex-reviews.mjs';
 import { EXCUSED_REFUSED_TESTS } from './no-test-outside-turn.mjs';
+import { ruleValue } from './rules.mjs';
+
+/** The model a change passes to when three reviews of it did not settle it, and what is done then. */
+export const ESCALATION_MODEL = ruleValue('escalation-model');
+export const ESCALATION_SAID = `Raise it to the user as a problem, with what is happening and what is still open, and pass the work to ${ESCALATION_MODEL}, the strongest model the rules name (rule:escalation-model)`;
+
+/** What a recheck that left findings open says of what comes after it (spec 8): a range from `head` is a second
+ * recheck, the last of three reviews; after a second (`second`), three reviews did not settle the change, so it is
+ * raised and passed on now, not when a fourth is tried. */
+export function openAfterRecheck({ head, second }) {
+  return second
+    ? `Three reviews of this change did not settle it. ${ESCALATION_SAID}.`
+    : `A range that starts at ${head.slice(0, 7)} is a second recheck of what is open, the last of three reviews: fix it in this branch, then run it.`;
+}
 
 /** The version of the text a recheck adds to the review prompt. */
 export const RECHECK_PROMPT_VERSION = 'js-harness.codex-review-recheck-prompt/v2';
@@ -101,6 +118,11 @@ export function recheckAnchor({ from, records, back, changedBetween }) {
  *   ended there owed no correction (`owesCorrection`), or kept nothing of what it found (one recorded
  *   before findings were kept); or it was a recheck that left nothing open.
  * - `{ kind: 'recheck', of, findings }`: a check of the `findings` of the review that ended at `of`.
+ * - `{ kind: 'recheck', of, findings, second: true }`: a second recheck, the third review, of the `findings` the
+ *   recheck that ended at `of` left open (not fixed, blocking or unmarked), when its answer kept them.
+ * - `{ kind: 'refused', of, open, reviews: 3, findings }`: a fourth review, from the head of a second recheck that
+ *   left `open` findings (`findings`, those its answer kept), or again from a head a second recheck rechecked;
+ *   `of` is that second recheck's head.
  * - `{ kind: 'refused', of, open }`: a second recheck of the findings of the review that ended at `of`,
  *   whose first recheck left `open` findings not fixed, blocking or unmarked (`null` when its counts were
  *   not kept, which is taken as open). It is refused: from the head of that recheck when it left some open,
@@ -117,13 +139,29 @@ export function recheckState({ from, records, runs, holds = () => null }) {
     if (!Number.isInteger(counts?.notFixed) || !Number.isInteger(counts?.blocking)) return null;
     return counts.notFixed + counts.blocking + (Number.isInteger(counts.unmarked) ? counts.unmarked : 0);
   };
+  // What a recheck left open, as its answer kept it: `[]` when it kept none.
+  const openFindings = (rec) => {
+    const answer = runAnswer(linesOf(rec).at(-1));
+    if (answer === null) return [];
+    const read = classifyRecheck(answer, 0);
+    return [...read.notFixed, ...read.blocking, ...read.unmarked];
+  };
   const prior = reviewed.filter((rec) => rec.head === from).at(-1);
   if (prior === undefined) return { kind: 'review' };
+  const rechecked = reviewed.filter((rec) => rec.recheckOf === from).at(-1);
   if (typeof prior.recheckOf === 'string') {
     const open = openOf(prior);
-    return open === 0 ? { kind: 'review' } : { kind: 'refused', of: prior.recheckOf, open };
+    if (open === 0) return { kind: 'review' };
+    const second = typeof reviewed.filter((rec) => rec.head === prior.recheckOf).at(-1)?.recheckOf === 'string';
+    if (second) return { kind: 'refused', of: from, open, reviews: 3, findings: openFindings(prior) };
+    if (rechecked !== undefined) {
+      if (holds(rechecked.head) === false) return { kind: 'review' };
+      const left = openOf(rechecked);
+      return left === 0 ? { kind: 'refused', of: from, open: 0 } : { kind: 'refused', of: rechecked.head, open: left, reviews: 3, findings: openFindings(rechecked) };
+    }
+    const findings = openFindings(prior);
+    return findings.length === 0 ? { kind: 'refused', of: prior.recheckOf, open } : { kind: 'recheck', of: from, findings, second: true };
   }
-  const rechecked = reviewed.filter((rec) => rec.recheckOf === from).at(-1);
   // A second recheck only on the line the recheck continues. A range whose head forked from `from` before
   // the recheck holds none of the correction it read: its commits are new code, a review as any other
   // (L8 of odd/tasks/merge-queue.md, pull request 167). Unknown is refused, as before.
@@ -244,10 +282,14 @@ export function classifyRecheck(review, prior) {
  * Only a range whose every code commit has a record is offered the skip. One that holds code no review read
  * is offered the review that reads it: a skip is for when Codex cannot run (AGENTS.md), and on 2026-10-19 a
  * session that followed the skip this refusal offered left a new commit no review had read. */
-export function secondRecheckRefused({ of, open, base, uncovered = [], reviewFrom = null }) {
-  const first = open === null ? 'the counts of the first were not kept' : open === 0 ? 'the first found every one fixed' : `the first left ${open === 1 ? '1 finding' : `${open} findings`} not fixed or blocking`;
-  const refused = `A second recheck of the findings of the review that ended at ${of.slice(0, 7)} is not run: ${first}. Nothing was started or recorded.\n`;
-  const task = 'Record a follow-up task for what is still open in the feature document';
+export function secondRecheckRefused({ of, open, base, uncovered = [], reviewFrom = null, reviews, findings = [] }) {
+  const left = open === null ? 'findings whose counts were not kept, taken as open' : `${open === 1 ? '1 finding' : `${open} findings`} not fixed or blocking`;
+  const first = open === 0 ? 'the first found every one fixed' : open === null ? 'the counts of the first were not kept' : `the first left ${left}`;
+  // Past three reviews the change is not settled: it is raised and passed on, not reviewed again (`recheckState`).
+  const refused = reviews === 3
+    ? `Three reviews of this change did not settle it: the third, a second recheck that ended at ${of.slice(0, 7)}, left ${left}. Nothing more is reviewed, and nothing was started or recorded.\n${findings.map((finding, at) => `  ${at + 1}. ${priorLine(finding)}\n`).join('')}`
+    : `A second recheck of the findings of the review that ended at ${of.slice(0, 7)} is not run: ${first}. Nothing was started or recorded.\n`;
+  const task = reviews === 3 ? ESCALATION_SAID : 'Record a follow-up task for what is still open in the feature document';
   // Every code commit has a record: there is nothing to review and no skip to record, which would name a covered
   // range as unreviewed (codex-review.mjs, the skip), so none is advised.
   if (Array.isArray(uncovered) && uncovered.length === 0) {
