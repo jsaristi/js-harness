@@ -68,6 +68,15 @@ export const COVERAGE = {
       "path": "bin/lib/protocols-skill.mjs",
       "phrase": "it first passes the double review of section 1"
     },
+    "escalation-model": {
+      "level": "check",
+      "test": "bin/lib/codex-review-recheck.test.mjs",
+      "break": {
+        "path": "bin/lib/codex-review-recheck.mjs",
+        "find": "('escalation-model')",
+        "replace": "('review-model')"
+      }
+    },
     "fixed-load-budget": {"level":"owed","since":"2026-10-28"},
     "gate-log-command": {
       "level": "check",

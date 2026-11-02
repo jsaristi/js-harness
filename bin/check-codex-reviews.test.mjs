@@ -249,6 +249,9 @@ test('a recheck that left a finding not fixed passes, with a warning that names 
   assert.match(lines, new RegExp(`warning: the Codex recheck that ended at ${short(root, fix)} left 1 finding open`));
   assert.ok(lines.includes(priorLine(left)), lines);
   assert.match(lines, /the user decides whether they are waived/);
+  // Its findings are open to a second recheck, the last of three reviews, which the warning names.
+  assert.ok(lines.includes('a second recheck, the last of three reviews, takes them up: js-harness codex-review --base ' + short(root, fix)), lines);
+  assert.match(lines, new RegExp('of the review that ended at ' + short(root, head)));
   // A skip records no correction: it is not offered.
   assert.ok(!lines.includes('--unavailable'), lines);
 });

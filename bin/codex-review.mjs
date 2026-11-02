@@ -11,8 +11,8 @@
 // A correction is checked against its findings once (./lib/codex-review-recheck.mjs). A range that starts at
 // the head of a review that found something is a recheck: its prompt lists those findings and asks whether
 // each is fixed, anything new is a follow-up that does not block unless it could make a failing check pass
-// exposes data or is a regression the correction brought, and its record names that head (`recheckOf`). A range that starts at the head of a
-// recheck that left a finding open is refused, with what to record instead. No flag skips it.
+// exposes data or is a regression the correction brought, and its record names that head (`recheckOf`). From the head of a recheck that
+// left findings open, a second recheck of them is the third and last review; past it the run is refused (rule:escalation-model). No flag skips it.
 //
 // A merge of the default branch at HEAD, after a branch whose other code commits all have a record, is
 // reviewed from its first parent by what was written in it (`mergeStart` in ./lib/codex-review-coverage.mjs):
@@ -1355,7 +1355,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       const behind = git(spawn, root, ['rev-list', '--first-parent', `--max-count=${REVIEW_FROM_LOOK_BACK + 1}`, from]);
       reviewFrom = (behind ?? '').split('\n').filter(Boolean).slice(1).find((commit) => recheckFor(commit).kind === 'review') ?? null;
     }
-    return secondRecheckRefused({ of: state.of, open: state.open, base: from, uncovered, reviewFrom });
+    return secondRecheckRefused({ ...state, base: from, uncovered, reviewFrom });
   };
 
   /** Where this run starts, once the Codex review records have been read against its range, `given..head`
@@ -1476,8 +1476,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       }
       log(methodRecordLine(methodRecord({ records, runs: readRunLog() })));
     }
-    if (state.kind === 'recheck') log(`A run of this range is a recheck of the ${counted(state.findings.length, 'finding')} of the review that ended at ${state.of.slice(0, 7)}.`);
-    if (state.kind === 'refused') log(`A run of this range is refused: ${secondRecheckRefused({ of: state.of, open: state.open, base: from }).split('\n')[0]}`);
+    if (state.kind === 'recheck') log(state.second ? `A run of this range is a second recheck, the last of three reviews, of the ${counted(state.findings.length, 'finding')} the recheck that ended at ${state.of.slice(0, 7)} left open.` : `A run of this range is a recheck of the ${counted(state.findings.length, 'finding')} of the review that ended at ${state.of.slice(0, 7)}.`);
+    if (state.kind === 'refused') log(`A run of this range is refused: ${secondRecheckRefused({ ...state, base: from }).split('\n')[0]}`);
     // After the plan's own lines, whose last is the estimate, and before the one that asks for a flag.
     const allowance = allowanceLine(reviewAllowance(plan, readProjectRules(root)));
     if (allowance !== null) log(allowance);

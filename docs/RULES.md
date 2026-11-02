@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `5f7fa6c22391`. In force: 70 (43 of Sebastián, 27 of the project). Retired: 4.
+Hash `0cad3a21c062`. In force: 71 (44 of Sebastián, 27 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -55,6 +55,11 @@ Everything that proposes something passes a blind Claude and Codex read, code pa
 - Home: `bin/lib/protocols-skill.mjs`.
 - Looked at again on 2026-11-16.
 - Since 2026-11-01. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-31, 2026-10-31, 2026-11-01, 2026-11-01, 2026-11-01, checked by the command on 2026-11-01.
+
+### escalation-model
+The strongest model a change passes to when three reviews of it did not settle it: claude-fable-5-1.
+- Read by: `bin/lib/codex-review-recheck.mjs`.
+- Since 2026-11-02. Row: reports. Source: his words of 2026-11-01, 2026-11-01, checked by the command on 2026-11-02.
 
 ### fixed-load-budget
 The fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns: 100,000 tokens.
