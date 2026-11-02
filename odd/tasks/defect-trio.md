@@ -194,7 +194,8 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   fixed; the lenses reliability and resilience 0 findings; gentle-ai (lineage review-a8cff5883f56f249, 2459147..93c6ec6,
   its reliability lens) approved and acknowledged with one suggestion: the slow-reference case built its times from
   RUNS against eleven fixed references, so a change of RUNS would break the case, not the code. Taken: its times now
-  follow its references.
+  follow its references (7a8ea8c). Its reviews: Codex correct (32,962 input tokens); the reliability lens 0 findings;
+  gentle-ai (lineage review-eed140552615f5f7) approved with no finding and acknowledged.
 
 ## Next step
 None in this session: push, `js-harness notify --to orchestrator --kind ready --pr 750`, then `--kind closed` with
