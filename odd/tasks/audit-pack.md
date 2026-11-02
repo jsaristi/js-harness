@@ -403,3 +403,7 @@ T6 (the close, with the model he means by "Fable 5.5" asked of the lead).
   `audit-pack-docs`) refused by `notify --kind ready` until 751 merges: then `gh pr edit 752 --base main` and
   `js-harness notify --to orchestrator --kind ready --pr 752`. Next: T4, `js-harness docs index` with
   `bin/lib/docs-cross.mjs`, test first, on a branch from this one.
+- Update ~13:20Z: the lead (note, 08:20 local): do not wait for 751, which lands with 750 and 753; T4 goes on this
+  branch (752's); the lead says when 751 lands, then rebase 752 on main and notify it ready. T4 starts with
+  `bin/lib/docs-cross.test.mjs`, written first: explicit links from a capability's text (`odd/`/`docs/` paths,
+  `rule:<id>`, failure ids), inferred ones apart, too-shared files (over 8 rules or over 8 Today lines) printed.
