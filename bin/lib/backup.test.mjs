@@ -347,6 +347,19 @@ test('collectFiles leaves out gate-log and copies the config files under config/
   ]);
 });
 
+// F8 S2 (odd/tasks/f8-s2-removal.md, T3): the S2 backup holds his credentials, so the memory backup, which pushes to
+// GitHub, never walks it.
+test('collectFiles never lists a file of the S2 backup in ~/js-harness-s2-backup', (t) => {
+  const home = scratch(t);
+  write(path.join(home, 'js-harness-s2-backup', 'x', '.claude', '.credentials.json'), '{"claudeAiOauth":{}}\n');
+  write(path.join(home, 'js-harness-s2-backup', 'x', 'manifest.json'), '{}\n');
+  write(path.join(home, '.js-harness', 'manifest.json'), '{"v":1}\n');
+
+  const { files } = collectFiles({ home, dest: scratch(t), write: false });
+
+  assert.deepEqual(files.map((f) => f.path), ['js-harness-home/manifest.json']);
+});
+
 test('collectFiles copies the plugin lists and Claude Desktop\'s notes and presets as reference copies, secrets blanked', (t) => {
   const home = scratch(t);
   const desktop = scratch(t);
