@@ -190,9 +190,13 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   reference runs from i - 1 to i + 2, which follows load that lasts and leaves one slow reference run out; red first
   on both cases (2667 ms for 2000, 1500 for 2250), then green; the file 6 of 6 on Windows quiet, 753 and 569 ms, and in
   WSL2 beside 24 busy loops, 1135 and 631 ms where the hook measured up to 4160 (the load ended during the second).
+- L14 (2026-11-02, T9): the reviews of 93c6ec6: Codex correct on 3db0ca0..93c6ec6 (25,542 input tokens), its P2
+  fixed; the lenses reliability and resilience 0 findings; gentle-ai (lineage review-a8cff5883f56f249, 2459147..93c6ec6,
+  its reliability lens) approved and acknowledged with one suggestion: the slow-reference case built its times from
+  RUNS against eleven fixed references, so a change of RUNS would break the case, not the code. Taken: its times now
+  follow its references.
 
 ## Next step
-T9 committed on `worktree-defect-trio` (pushed at 2459147): its reviews, Codex `--base 2459147d` and the lenses
-reliability,resilience, and gentle-ai when the Stop hook offers it (start run through bash, `--cwd` in double quotes);
-then push, `js-harness notify --to orchestrator --kind ready --pr 750`, then `--kind closed --summary
-docs/sessions/2026-11-02-jh-131-fix-stop-budget-flakes-the-stop-lock-and-the-busy-refresh.md` (add L11-L13 to it first).
+None in this session: push, `js-harness notify --to orchestrator --kind ready --pr 750`, then `--kind closed` with
+`docs/sessions/2026-11-02-jh-131-fix-stop-budget-flakes-the-stop-lock-and-the-busy-refresh.md`. PR 750 lands by the lead's
+merge queue.

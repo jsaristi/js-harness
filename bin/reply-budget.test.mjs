@@ -288,7 +288,7 @@ test('a load that comes partway through the runs scales them back to the quiet m
 
 test('one slow reference run does not scale down the runs beside it', () => {
   const references = [400, 400, 400, 400, 400, 905, 400, 400, 400, 400, 400];
-  const times = Array(RUNS).fill(2000);
+  const times = Array(references.length - 1).fill(2000);
   for (const ms of scaledTimes(times, references)) assert.ok(Math.abs(ms - 2250) < 1, `${ms.toFixed(0)} ms, not 2250`);
 });
 
