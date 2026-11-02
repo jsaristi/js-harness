@@ -3,13 +3,77 @@
 // the copy's node processes by its folder, stopped the waits, and told each session whose wait he stopped to run it
 // again; anything else running from the copy (an eval batch, a Codex or lens review, a gate) meant no refresh. This
 // reads the same from one process table and one listing of command lines, so the refresh stops a wait and never other
-// work. A wait's session is the one whose transcript holds the same wait still open (wakePlan, ./wake.mjs). Pure: the
-// listings are handed in. Zero dependencies.
+// work. A wait's session is the one whose transcript holds the same wait still open (wakePlan, ./wake.mjs). The land's
+// refresh asks here too whether a session claude calls busy only waits (`onlyWaits`). Pure: the listings and the
+// transcripts are handed in. Zero dependencies.
 import path from 'node:path';
 import { CLOCK_TOLERANCE_MS, selectDescendants } from './process-tree.mjs';
-import { argumentsOf, comparable, DISPATCHER_PATTERN } from './sessions.mjs';
+import { argumentsOf, comparable, DISPATCHER_PATTERN, parseTranscript, sessionFacts } from './sessions.mjs';
 import { NOTICE_TEXT_MAX } from './channel.mjs';
 import { shellWords } from './guard.mjs';
+import { isWaitCommand } from './wake.mjs';
+
+/** Whether the words of one simple command run `js-harness wait` itself: the command name or the dispatcher, run by
+ * node or not, followed by `wait`, or `wait.mjs`. A wait that is only a word of it, as a shell's `-c` body or an echo's
+ * argument, is not (Codex P1 on 7f918a9..b9a1512: `bash -c 'npm run check; js-harness wait --for 1'`). */
+function runsWait([name, ...rest]) {
+  const [script, verb] = /(^|[/\\])node(\.exe)?$/i.test(name) ? rest : [name, rest[0]];
+  return (/(^|[/\\])js-harness(\.mjs)?$/.test(script ?? '') && verb === 'wait') || /(^|[/\\])wait\.mjs$/.test(script ?? '');
+}
+
+/** Whether the command line `typed` does nothing but wait, as its shell reads it (`shellWords`): simple commands joined
+ * by `;` or `&&`, each a `cd` or a `js-harness wait` (`runsWait`), the wait's output piped at most into `tail` or
+ * `head`, with no redirection but `2>&1`, no substitution and nothing sent to the background. A wait in a line that
+ * runs anything else is no wait (Codex P1 on be294ca..7f918a9: `js-harness wait --for 1; npm run check`). */
+function waitAlone(typed) {
+  // `shellWords` leaves a heredoc's body out, and bash expands it before the command runs (Codex P2 on fa61c36..5a411a9).
+  if (!isWaitCommand(typed) || typed.includes('<<')) return false;
+  const words = shellWords(typed, { groups: true });
+  let waited = false;
+  let start = 0;
+  for (let at = 0; at <= words.length; at += 1) {
+    if (at < words.length && !words.operators.has(at)) continue;
+    const [name, ...rest] = words.slice(start, at);
+    const before = start === 0 ? null : words[start - 1];
+    const after = at === words.length ? null : words[at];
+    // A line break or a `;` with nothing beside it runs nothing (Codex P2 on fa61c36..5a411a9).
+    if (name === undefined && [null, ';'].includes(before) && [null, ';'].includes(after)) {
+      start = at + 1;
+      continue;
+    }
+    if (name === undefined || ![null, ';', '&&', '|'].includes(before) || ![null, ';', '&&', '|'].includes(after)) return false;
+    if (rest.some((word) => /[<>`]|\$/.test(word) && !/^\d?>&\d$/.test(word))) return false;
+    const wait = runsWait([name, ...rest]);
+    if (before === '|' ? !/^(tail|head)$/.test(name) : after === '|' ? !wait : !(wait || (name === 'cd' && rest.length <= 1))) return false;
+    waited ||= wait;
+    start = at + 1;
+  }
+  return waited;
+}
+
+/** Whether the session of transcript `text` only waits: every work it has open is a `js-harness wait` (`waitAlone`),
+ * and it is between turns with at least one open, or in its turn with every call it has open such a wait. claude
+ * agents calls a background session busy while a wait of its runs (JH 130 on 2026-11-02,
+ * odd/tasks/defect-trio.md), so the land's refresh reads this before it waits for one. Anything else open, calls run
+ * in parallel beside a wait included (Codex P1 on be294ca..7f918a9), a turn with no call open (the session writes its
+ * next step, whose hooks the copy runs), or a transcript that shows no wait, is a session at work. */
+export function onlyWaits(text) {
+  const facts = sessionFacts(text);
+  const calls = new Map(); // the session's own tool_use id -> { tool, command }
+  const answered = new Set();
+  for (const entry of parseTranscript(text).entries) {
+    if (entry.isSidechain || !Array.isArray(entry.message?.content)) continue;
+    for (const block of entry.message.content) {
+      if (entry.type === 'assistant' && block?.type === 'tool_use' && !calls.has(block.id)) calls.set(block.id, { tool: block.name, command: block.input?.command });
+      if (entry.type === 'user' && block?.type === 'tool_result') answered.add(block.tool_use_id);
+    }
+  }
+  const waits = (id) => calls.get(id)?.tool === 'Bash' && waitAlone(calls.get(id).command);
+  const open = facts.work.filter((work) => !work.ended);
+  const pending = [...calls.keys()].filter((id) => !answered.has(id));
+  if (!open.every((work) => waits(work.toolUseId)) || !pending.every(waits)) return false;
+  return facts.turnEndedAt !== null ? open.length > 0 : pending.length > 0;
+}
 
 /** The index of the script a command line's `args` run (the dispatcher or another `.mjs`), or -1. */
 const scriptAt = (args) => args.findIndex((arg, at) => at > 0 && (DISPATCHER_PATTERN.test(arg) || /\.mjs$/i.test(arg)));

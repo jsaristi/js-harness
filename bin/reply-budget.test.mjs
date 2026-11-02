@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { recordPath } from './lib/channel.mjs';
 import { replyHookEntry } from './lib/hook-entries.mjs';
 import { CURSOR_SCHEMA, liveCursorPath } from './lib/live-rows.mjs';
@@ -35,10 +35,47 @@ import { percentile } from '../scripts/reply-hook-time.mjs';
 // Sizes are the lead's 0f71b2c6 on 2026-10-31: 60.2 MB in 38,990 lines, with accented text (stored by V8 as two bytes a
 // character, which every search pays for), and a channel record of 1.4 MB. The template gate's shown record was 33 KB
 // in 95 lines that day; the fixture's is 400 KB, a lead's months of pages and summary writes.
+//
+// The hook's own work is its main thread's CPU time, read at its exit by a module loaded before it (odd/tasks/defect-
+// trio.md, L3). Wall time is the machine's: under ten busy loops the same runs took 3.4 to 9.4 s against 1.0 to 1.8 s
+// quiet, and the main thread's CPU 1.1 to 1.4 s both ways, so the wall p90 turned lands red on another session's load
+// (PR 736, PR 740). The GC and compile threads run beside the main thread and are not counted; the processes the hook
+// starts are counted instead, since their time is not in this measure: git, once, where the project is. In WSL2, where
+// the gate runs, load moves CPU time too: the whole suite beside the hook took its main thread from about 650 ms to
+// 1.4-2.4 s, and the gate's run past 2500 ms (PR 750, L11). So the runs are held against reference runs between them,
+// the same machine's work of the same kind, whose CPU grew the same way (the ratio held at 1.2 to 1.7 quiet and
+// loaded), and their CPU is read in milliseconds of the machine that set the budget.
 
 const BIN = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
 const BUDGET_MS = 2500;
 const RUNS = 10;
+const CHILDREN = 1;
+// Loaded with --import before the hook: counts every process it starts, and at its exit writes its main thread's CPU.
+const MEASURE = String.raw`
+import fs from 'node:fs';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
+let children = 0;
+for (const name of ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync', 'fork']) {
+  const started = childProcess[name];
+  childProcess[name] = (...args) => { children += 1; return started(...args); };
+}
+syncBuiltinESMExports();
+process.on('exit', () => {
+  const { user, system } = process.threadCpuUsage();
+  fs.appendFileSync(process.env.BUDGET_MEASURE, JSON.stringify({ cpuMs: (user + system) / 1000, children }) + '\n');
+});
+`;
+// The reference: the work the hook does most of, with none of its checks — the transcript read, each line parsed, and
+// the whole of it searched for a mark it does not hold. Its main-thread CPU on the machine that set the budget, quiet:
+// a median of 405 ms on Windows and 443 ms in its WSL2 on 2026-11-02, the larger taken (odd/tasks/defect-trio.md, L11).
+const REFERENCE_MS = 450;
+const REFERENCE = String.raw`
+import fs from 'node:fs';
+const text = fs.readFileSync(process.argv[2], 'utf8');
+for (const one of text.split('\n')) if (one !== '') JSON.parse(one);
+if (text.includes('a mark no transcript holds')) process.exitCode = 1;
+`;
 const TRANSCRIPT_BYTES = 60_000_000;
 const RECORD_BYTES = 1_400_000;
 const SHOWN_BYTES = 400_000;
@@ -54,6 +91,8 @@ let home;
 let leadTranscript;
 let workTranscript;
 let page;
+let measure;
+let reference;
 
 const line = (entry) => JSON.stringify(entry);
 
@@ -167,31 +206,91 @@ before(() => {
   workTranscript = path.join(dir, 'work.jsonl');
   fs.writeFileSync(leadTranscript, transcriptOf(LEAD.title, TRANSCRIPT_BYTES, now, published));
   fs.writeFileSync(workTranscript, transcriptOf(WORK.title, TRANSCRIPT_BYTES, now));
+  measure = path.join(dir, 'measure.mjs');
+  fs.writeFileSync(measure, MEASURE);
+  reference = path.join(dir, 'reference.mjs');
+  fs.writeFileSync(reference, REFERENCE);
 });
 
 after(() => {
   if (dir) fs.rmSync(dir, { recursive: true, force: true });
 });
 
-/** The wall times of `RUNS` runs of the hook on the stop of `session`, and the last answer. */
+/** `RUNS` runs of the hook on the stop of `session`: each one's main-thread CPU (`times`), the processes it started
+ * (`children`) and its wall time (`walls`), the main-thread CPU of the reference run before the first and after each
+ * (`references`, one more than the runs), and the last answer. */
 function timeStops(session, transcript) {
   const input = JSON.stringify({
     session_id: session.id, transcript_path: transcript, cwd: project, hook_event_name: 'Stop', stop_hook_active: false,
     last_assistant_message: MESSAGE,
     background_tasks: [], session_crons: [],
   });
-  const times = [];
+  const measured = path.join(dir, `${session.id}.jsonl`);
+  const referenced = path.join(dir, `${session.id}-reference.jsonl`);
+  const walls = [];
   let answer = null;
+  const runReference = () => {
+    const ran = spawnSync(process.execPath, ['--import', pathToFileURL(measure).href, reference, transcript], { encoding: 'utf8', windowsHide: true, env: { ...process.env, BUDGET_MEASURE: referenced } });
+    assert.equal(ran.status, 0, ran.stderr);
+  };
+  runReference();
   for (let i = 0; i < RUNS; i += 1) {
     const started = performance.now();
-    const result = spawnSync(process.execPath, [BIN, 'reply', '--hook'], { input, encoding: 'utf8', windowsHide: true, env: { ...process.env, JS_HARNESS_HOME: home } });
-    times.push(performance.now() - started);
+    const env = { ...process.env, JS_HARNESS_HOME: home, BUDGET_MEASURE: measured };
+    const result = spawnSync(process.execPath, ['--import', pathToFileURL(measure).href, BIN, 'reply', '--hook'], { input, encoding: 'utf8', windowsHide: true, env });
+    walls.push(performance.now() - started);
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stderr, '', 'every check ran: none said on standard error that it did not');
     answer = JSON.parse(result.stdout);
+    runReference();
   }
-  return { times, answer };
+  const runs = fs.readFileSync(measured, 'utf8').trim().split('\n').map((one) => JSON.parse(one));
+  assert.equal(runs.length, RUNS, 'every run wrote its measure at its exit');
+  const references = fs.readFileSync(referenced, 'utf8').trim().split('\n').map((one) => JSON.parse(one).cpuMs);
+  assert.equal(references.length, RUNS + 1, 'every reference run, before the first and after each, wrote its measure');
+  return { times: runs.map((run) => run.cpuMs), children: runs.map((run) => run.children), walls, references, answer };
 }
+
+/** The main thread's CPU of each run of `timeStops` in milliseconds of the machine that set the budget: its CPU over the
+ * median of the reference runs around it, the one before the run before it to the one after the run after it, times
+ * `REFERENCE_MS`. Runs near it follow load that comes or goes during the test, which the median of all of them did not
+ * (a work stop scaled to 1513 ms when busy loops ended halfway, and a cap at 1.5 times that median scored a hook under
+ * load that came for four runs at twice its work: Codex and the resilience lens on 3db0ca0, odd/tasks/defect-trio.md,
+ * L13); their median, not the mean of the two beside it, so one slow reference run, as one of a quiet Windows took
+ * 905 ms where the others took 358 to 812, cannot halve a run's measure and hide a hook grown slower (L12). */
+function scaledTimes(times, references) {
+  const median = (values) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    const half = sorted.length / 2;
+    return Number.isInteger(half) ? (sorted[half - 1] + sorted[half]) / 2 : sorted[Math.floor(half)];
+  };
+  return times.map((ms, i) => (ms / median(references.slice(Math.max(0, i - 1), i + 3))) * REFERENCE_MS);
+}
+
+/** Holds the runs of `timeStops` to the budget: their CPU as `scaledTimes` puts it at the 90th percentile, and the
+ * processes each run started, whose time that measure does not hold. */
+function withinBudget(t, { times, children, walls, references }) {
+  const scaled = scaledTimes(times, references);
+  const p90 = percentile(scaled, 0.9);
+  const each = (values) => values.map((ms) => ms.toFixed(0)).join(' ');
+  t.diagnostic(`main-thread CPU p90 ${p90.toFixed(0)} ms where the reference takes ${REFERENCE_MS} ms, budget ${BUDGET_MS} ms, runs ${each(scaled)}; measured ${each(times)}, reference ${each(references)}, wall ${each(walls)} ms; processes started ${children.join(' ')}`);
+  assert.ok(p90 <= BUDGET_MS, `main-thread CPU p90 ${p90.toFixed(0)} ms over ${RUNS} runs, where the reference takes ${REFERENCE_MS} ms, is above the budget of ${BUDGET_MS} ms: ${each(scaled)} (measured ${each(times)}, reference ${each(references)})`);
+  assert.ok(children.every((count) => count <= CHILDREN), `a run started more than ${CHILDREN} process (${children.join(' ')}): a check that starts one costs time this measure does not see, so the budget counts it`);
+}
+
+test('a load that comes partway through the runs scales them back to the quiet machine', () => {
+  // Codex's case on 3db0ca0: seven reference runs at 450 ms, then four at 1350; a hook of 2000 ms takes three times that
+  // under the load, and the run between the two takes twice.
+  const references = [450, 450, 450, 450, 450, 450, 450, 1350, 1350, 1350, 1350];
+  const times = [2000, 2000, 2000, 2000, 2000, 2000, 4000, 6000, 6000, 6000];
+  for (const ms of scaledTimes(times, references)) assert.ok(Math.abs(ms - 2000) < 1, `${ms.toFixed(0)} ms, not 2000`);
+});
+
+test('one slow reference run does not scale down the runs beside it', () => {
+  const references = [400, 400, 400, 400, 400, 905, 400, 400, 400, 400, 400];
+  const times = Array(references.length - 1).fill(2000);
+  for (const ms of scaledTimes(times, references)) assert.ok(Math.abs(ms - 2250) < 1, `${ms.toFixed(0)} ms, not 2250`);
+});
 
 test('the budget is at most half the timeout install gives the hook', () => {
   const timeoutMs = replyHookEntry().hooks[0].timeout * 1000;
@@ -207,22 +306,19 @@ test('the fixture is the lead\'s size', () => {
 });
 
 test('the lead\'s stop, every check doing its whole work, stays within the budget at the 90th percentile', (t) => {
-  const { times, answer } = timeStops(LEAD, leadTranscript);
+  const runs = timeStops(LEAD, leadTranscript);
+  const { answer } = runs;
   assert.equal(answer.decision, 'block', JSON.stringify(answer));
   assert.ok(answer.reason.includes(STALE_MARKER), 'the live-board check searched the transcript and warned');
   assert.ok(answer.reason.includes(SUMMARY_MARKER), 'the summary check read the shown record, searched the transcript and warned');
   assert.ok(answer.reason.includes(RETURN_MARKER), 'the return check read the publish of the page, searched for its link and warned');
   assert.ok(answer.reason.includes(OPEN_STRETCH_MARKER), 'the return\'s stretch check read the whole stretch record and warned');
-  const p90 = percentile(times, 0.9);
-  t.diagnostic(`p90 ${p90.toFixed(0)} ms, budget ${BUDGET_MS} ms, runs ${times.map((ms) => ms.toFixed(0)).join(' ')}`);
-  assert.ok(p90 <= BUDGET_MS, `p90 ${p90.toFixed(0)} ms over ${RUNS} runs is above the budget of ${BUDGET_MS} ms: ${times.map((ms) => ms.toFixed(0)).join(' ')}`);
+  withinBudget(t, runs);
 });
 
 test('a work session\'s stop, its wake check doing its whole work, stays within the budget at the 90th percentile', (t) => {
-  const { times, answer } = timeStops(WORK, workTranscript);
-  assert.equal(answer.decision, 'block', JSON.stringify(answer));
-  assert.ok(answer.reason.includes(WAKE_MARKER), 'the wake check searched the transcript and warned');
-  const p90 = percentile(times, 0.9);
-  t.diagnostic(`p90 ${p90.toFixed(0)} ms, budget ${BUDGET_MS} ms, runs ${times.map((ms) => ms.toFixed(0)).join(' ')}`);
-  assert.ok(p90 <= BUDGET_MS, `p90 ${p90.toFixed(0)} ms over ${RUNS} runs is above the budget of ${BUDGET_MS} ms: ${times.map((ms) => ms.toFixed(0)).join(' ')}`);
+  const runs = timeStops(WORK, workTranscript);
+  assert.equal(runs.answer.decision, 'block', JSON.stringify(runs.answer));
+  assert.ok(runs.answer.reason.includes(WAKE_MARKER), 'the wake check searched the transcript and warned');
+  withinBudget(t, runs);
 });

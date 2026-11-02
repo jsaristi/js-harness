@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { BACKGROUND_SCHEMA, backgroundChanges, backgroundOf, idOfStart, readRecord, recordFileOf, resumedChain, startArgs, worktreeOf } from './background.mjs';
+import { BACKGROUND_SCHEMA, LOCK_WAIT_MS, RM_TRIES, backgroundChanges, backgroundOf, idOfStart, readRecord, recordFileOf, resumedChain, startArgs, undoSession, worktreeOf } from './background.mjs';
 
 test('idOfStart reads the id claude --bg prints, and the attach hint when the first line is missing', () => {
   assert.equal(idOfStart('backgrounded · 0db8bc5e · jh-bg-probe-1\n  claude agents             list sessions\n'), '0db8bc5e');
@@ -89,4 +89,70 @@ test('backgroundChanges names a session that waits now, and compares nothing whe
   assert.deepEqual(backgroundChanges(look('busy'), look('waiting')), ['background session aaaa1111 · A waits for permission prompt']);
   assert.deepEqual(backgroundChanges(look('waiting'), look('waiting')), []);
   assert.deepEqual(backgroundChanges({ available: false, reason: 'x' }, look('waiting')), []);
+});
+
+// What claude rm said on 2026-10-31 to the lead (its transcript 0f71b2c6, 05:58Z): first the lock, while the job's
+// process was still ending after claude stop, then, with that process gone, files of the worktree still held.
+const LOCKED = (id, pid) => `kept ${id} — its worktree is still at “D:/js-harness/.claude/worktrees/thing”\n  A Claude Code lock on the worktree names a process that is still running (pid ${pid}).\n  exit that session, or run 'git worktree unlock' on the worktree if the process is unrelated, then run 'claude rm ${id}' again`;
+const BUSY = (id) => `  Worktree not removed. Claude Code couldn't remove it (“some of its files could not be deleted: EBUSY; a program may have them open, so try removing it again”). The session stays until the directory is gone.\n  close anything using the directory or fix its permissions, then retry: claude rm ${id} --force-remove-worktree f98bcff49ef0a4f1807575c96fccc98e`;
+
+/** A home with an empty record, a clock that only `pause` moves, and a claude whose rm answers from `answers` in turn. */
+function undoWorld(answers) {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-undo-'));
+  let clock = Date.parse('2026-11-02T10:00:00Z');
+  const calls = [];
+  const paused = [];
+  const run = (args) => {
+    calls.push(args);
+    if (args[0] === 'stop') return { status: 0, stdout: `stopped ${args[1]}`, stderr: '' };
+    const said = answers.length > 1 ? answers.shift() : answers[0];
+    return said === null ? { status: 0, stdout: `removed ${args[1]}`, stderr: '' } : { status: 1, stdout: said, stderr: '' };
+  };
+  const options = { home, run, now: () => clock, pause: (ms) => { paused.push(ms); clock += ms; } };
+  return { home, calls, paused, options };
+}
+
+const entry = { id: '4a9694ea', title: 'JH 114 · commits', cwd: 'D:\js-harness' };
+
+test('undoSession waits for the process claude\'s lock names, then removes the session', (t) => {
+  const world = undoWorld([LOCKED('4a9694ea', 48324), null]);
+  t.after(() => fs.rmSync(world.home, { recursive: true, force: true }));
+  let looks = 0;
+  const done = undoSession(entry, { ...world.options, alive: (pid) => pid === 48324 && (looks += 1) < 3 });
+  assert.equal(done.outcome, 'removed');
+  assert.deepEqual(world.calls, [['stop', '4a9694ea'], ['rm', '4a9694ea'], ['rm', '4a9694ea']]);
+  assert.equal(looks, 3, 'it looked until the process was gone');
+  assert.equal(readRecord(world.home).sessions.length, 0);
+});
+
+test('undoSession keeps the session when the lock\'s process outlives the wait, and says which', (t) => {
+  const world = undoWorld([LOCKED('4a9694ea', 48324)]);
+  t.after(() => fs.rmSync(world.home, { recursive: true, force: true }));
+  const done = undoSession(entry, { ...world.options, alive: () => true });
+  assert.equal(done.outcome, 'kept');
+  assert.match(done.why, /pid 48324, still ran 60 s after claude stop/);
+  assert.deepEqual(world.calls, [['stop', '4a9694ea'], ['rm', '4a9694ea']]);
+  assert.ok(world.paused.reduce((sum, ms) => sum + ms, 0) >= LOCK_WAIT_MS, 'it waited the whole bound');
+});
+
+test('undoSession tries claude rm again while claude says the worktree\'s files are busy, up to its tries', (t) => {
+  const freed = undoWorld([BUSY('4a9694ea'), BUSY('4a9694ea'), null]);
+  t.after(() => fs.rmSync(freed.home, { recursive: true, force: true }));
+  assert.equal(undoSession(entry, { ...freed.options, alive: () => false }).outcome, 'removed');
+  assert.equal(freed.calls.filter((call) => call[0] === 'rm').length, 3);
+  const held = undoWorld([BUSY('4a9694ea')]);
+  t.after(() => fs.rmSync(held.home, { recursive: true, force: true }));
+  const done = undoSession(entry, { ...held.options, alive: () => false });
+  assert.equal(done.outcome, 'kept');
+  assert.match(done.why, /EBUSY/);
+  assert.equal(held.calls.filter((call) => call[0] === 'rm').length, RM_TRIES);
+});
+
+test('undoSession tries nothing again when claude refuses for another reason', (t) => {
+  const world = undoWorld(['Worktree has 2 unpushed commits: pass --discard-unpushed abc@wt1 to discard them']);
+  t.after(() => fs.rmSync(world.home, { recursive: true, force: true }));
+  const done = undoSession(entry, { ...world.options, alive: () => true });
+  assert.equal(done.outcome, 'kept');
+  assert.deepEqual(world.calls, [['stop', '4a9694ea'], ['rm', '4a9694ea']]);
+  assert.deepEqual(world.paused, []);
 });

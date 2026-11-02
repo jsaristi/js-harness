@@ -23,9 +23,10 @@ export const QUIET_WAIT_MINUTES = 30;
 const QUIET_LOOK_SECONDS = 30;
 
 /** The sessions of `agents`, a listing of `claude agents --json --all`, at work in a folder of `roots`; the one whose
- * session id is `self` is left out, since it is the session that refreshes. */
-export function atWorkIn(agents, { roots, self, platform = process.platform }) {
-  return agents.filter((agent) => atWork(agent) && typeof agent.cwd === 'string' && roots.some((root) => within(agent.cwd, root, platform)) && !(self && agent.sessionId === self));
+ * session id is `self` is left out, since it is the session that refreshes, and so is one `onlyWaits(agent)` says only
+ * waits (`agentOnlyWaits`, ./merge-queue-refresh-now.mjs), which claude calls busy while its wait runs. */
+export function atWorkIn(agents, { roots, self, platform = process.platform, onlyWaits = () => false }) {
+  return agents.filter((agent) => atWork(agent) && typeof agent.cwd === 'string' && roots.some((root) => within(agent.cwd, root, platform)) && !(self && agent.sessionId === self) && !onlyWaits(agent));
 }
 
 const named = (agent) => `${agent.name ?? agent.id ?? '(no title)'} (${agent.status ?? agent.state})`;
@@ -33,10 +34,10 @@ const unlisted = (err) => `claude agents could not say which sessions are at wor
 
 /** One look with `list` at the sessions of `roots`, the refresh's under the gate lock, which waits for none of them: a
  * session waiting for that lock is at work, and would wait for the refresh in turn. `{ quiet }`, with `why` when not. */
-export function lookOnce({ list, roots, self, platform }) {
+export function lookOnce({ list, roots, self, platform, onlyWaits }) {
   let busy;
   try {
-    busy = atWorkIn(list(), { roots, self, platform });
+    busy = atWorkIn(list(), { roots, self, platform, onlyWaits });
   } catch (err) {
     return { quiet: false, why: unlisted(err) };
   }
@@ -45,14 +46,25 @@ export function lookOnce({ list, roots, self, platform }) {
 
 /** Waits until no session of `roots` is at work, looking with `list` every QUIET_LOOK_SECONDS: `{ quiet: true }`, or
  * `{ quiet: false, why }` when one still is after `waitMinutes`, or the listing failed, which cannot tell. Whom it waits
- * for is said once, and again when that changes. */
-export async function waitForQuiet({ list, roots, self, now, sleep, stdout, waitMinutes = QUIET_WAIT_MINUTES, platform }) {
+ * for is said once, and again when that changes; a session it does not wait for since it only waits, once. */
+export async function waitForQuiet({ list, roots, self, now, sleep, stdout, waitMinutes = QUIET_WAIT_MINUTES, platform, onlyWaits = () => false }) {
   const until = now() + waitMinutes * 60000;
   let said = null;
+  const toldWaiting = new Set();
   for (;;) {
     let busy;
     try {
-      busy = atWorkIn(list(), { roots, self, platform });
+      const waiting = [];
+      const waits = (agent) => {
+        if (!onlyWaits(agent)) return false;
+        waiting.push(agent);
+        return true;
+      };
+      busy = atWorkIn(list(), { roots, self, platform, onlyWaits: waits });
+      for (const agent of waiting.filter((one) => !toldWaiting.has(named(one)))) {
+        toldWaiting.add(named(agent));
+        stdout(`refresh: ${named(agent)} only waits (js-harness wait): the refresh does not wait for it`);
+      }
     } catch (err) {
       return { quiet: false, why: unlisted(err) };
     }
@@ -81,15 +93,16 @@ function projectRoots(run, cwd) {
  * lock, `unanswered(sha)` gives the line of a refusal while an open question asks to apply what main holds
  * (`unansweredApply`, bin/lib/refresh-consent.mjs), or null. Returns the land's exit when the refresh did its part, the
  * refresh's code when it failed, REFRESH_UNANSWERED for such a question, and GATE_NOT_RUN when a session was still at
- * work, which refreshes nothing; the landing stands in every case. */
-export async function refreshAfterLand({ code, log, refresh, versionOf, home, cwd, env, run, list, now, sleep, stdout, stderr, unanswered = () => null }) {
+ * work, which refreshes nothing; the landing stands in every case. A session `onlyWaits(agent)` says only waits is not
+ * at work in either look. */
+export async function refreshAfterLand({ code, log, refresh, versionOf, home, cwd, env, run, list, now, sleep, stdout, stderr, unanswered = () => null, onlyWaits = () => false }) {
   const landed = code === 0 && (log.landedBranches?.size ?? 0) > 0;
   const sha = landed ? log.record.candidate : null;
   const session = env.CLAUDE_CODE_SESSION_ID || null;
   let refreshed;
   try {
     const roots = landed ? projectRoots(run, cwd) : [];
-    const stillQuiet = () => lookOnce({ list, roots, self: session });
+    const stillQuiet = () => lookOnce({ list, roots, self: session, onlyWaits });
     if (landed) {
       // His open question is looked at first: no one waits half an hour for a refresh that question refuses.
       const refusal = unanswered(sha);
@@ -97,7 +110,7 @@ export async function refreshAfterLand({ code, log, refresh, versionOf, home, cw
         stderr(refusal);
         return REFRESH_UNANSWERED;
       }
-      const quiet = await waitForQuiet({ list, roots, self: session, now, sleep, stdout });
+      const quiet = await waitForQuiet({ list, roots, self: session, now, sleep, stdout, onlyWaits });
       if (!quiet.quiet) {
         stderr(`refresh: ${quiet.why}: nothing was refreshed, and the installed copy still names its previous main; a land run from that copy is refused while main's bin/ differs from it: run js-harness merge-queue --refresh-copy from a checkout at origin/main once only waits run from the copy`);
         return GATE_NOT_RUN;
