@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -147,10 +148,33 @@ test('parseRecordSections reads the second-level headings, and the third-level o
 // The repository's own records: SPEC's table and docs/RECORDS.md held to the source as `docs check` holds them.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
+/** The files under `bin` of the tree at `root`: what git tracks there, or, with no `.git` as in the gate's WSL mirror
+ * (synced without it), every file on disk, so the table is held on Linux too and not against an empty listing. */
+function sourceFiles(root) {
+  if (!fs.existsSync(path.join(root, '.git'))) {
+    return fs.readdirSync(path.join(root, 'bin'), { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => path.relative(root, path.join(entry.parentPath, entry.name)).split(path.sep).join('/'));
+  }
+  const listed = spawnSync('git', ['ls-files', 'bin'], { cwd: root, encoding: 'utf8' }).stdout.split('\n').filter(Boolean);
+  return listed.filter((file) => fs.existsSync(path.join(root, file)));
+}
+
+test('with no .git, as in the gate\'s WSL mirror, the files of bin are read from the disk', () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'records-mirror-'));
+  try {
+    fs.mkdirSync(path.join(scratch, 'bin', 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(scratch, 'bin', 'a.mjs'), '');
+    fs.writeFileSync(path.join(scratch, 'bin', 'lib', 'b.mjs'), '');
+    assert.deepEqual(sourceFiles(scratch).sort(), ['bin/a.mjs', 'bin/lib/b.mjs']);
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
 test("the harness's own table of records holds against its source", () => {
-  const listed = spawnSync('git', ['ls-files', 'bin'], { cwd: ROOT, encoding: 'utf8' }).stdout.split('\n').filter(Boolean);
   const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
-  const sources = recordSources(listed.filter((file) => fs.existsSync(path.join(ROOT, file))), read);
+  const sources = recordSources(sourceFiles(ROOT), read);
   const found = recordFindings({
     rows: parseRecordTable(read('docs/SPEC.md')),
     sections: parseRecordSections(read('docs/RECORDS.md')),
