@@ -1989,6 +1989,22 @@ context until it has to be relieved.
   request 65 (2026-10-11): bin/sessions.test.mjs:2095 holds the watch quiet for a notice to
   another role and for its own, and :2080 wakes it for a notice to the orchestrator
 
+### windows-probe-holds-test-folder
+On Windows a stack probe goes through cmd.exe, and its 5 s timeout kills cmd.exe alone: the tool under it lives on
+with its working directory in the test's folder, which Windows refuses to remove while it runs. The test that ran
+`stack` in that folder failed in its cleanup, with its assertion met, and `fs.rmSync`'s `maxRetries` did not help:
+Node 24's rmSync fails an EPERM at once (a busy folder, retried: 0 ms with rmSync, 3,048 ms with `fs.promises.rm`).
+- Class: machine
+- Seen: 2026-10-28 — windows-daily run 40702921457 — `EPERM, Permission denied` removing `jh-home-stack-0sFeX4`,
+  the cleanup of the test (line 186 before the fix), in 5,581 ms
+- Seen: 2026-10-30 — windows-daily run 41071093780 — the same removal, `jh-home-stack-N7Bx4a`, in 5,511 ms
+- Seen: 2026-11-02 — windows-daily run 41489272123 — the same removal, `jh-home-stack-uz7ytQ`, in 5,627 ms;
+  reproduced here with a `codegraph.cmd` that waits 8 s first on the PATH
+- Control: check — bin/stack.test.mjs — "stack takes an empty JS_HARNESS_HOME as unset: the engram plugin is read
+  from the user home, not the working directory" — since 2026-11-02
+- Proof: the windows-daily runs after the merge name no failing test of bin/stack.test.mjs (`js-harness
+  windows-daily`)
+
 ### written-question-buried
 A question he had to answer in writing was put at the end of long reports, so it did not read as a question and
 waited.
