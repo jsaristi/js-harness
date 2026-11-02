@@ -252,7 +252,7 @@ test('verify drills the backup on a scratch home with no credential in it, remov
   const result = verifyBackup({ from: dest, deps, marker: 's2drillmarker20261102', expectId: '6431', tmp });
   assert.deepEqual(result.lines.filter((line) => !line.startsWith('ok ')), []);
   assert.equal(result.ok, true);
-  for (const name of ['files', 'links', 'secrets', 'engram', 'permissions', 'mcp claude', 'mcp codex', 'row 12']) {
+  for (const name of ['files', 'links', 'exports', 'secrets', 'engram', 'permissions', 'mcp claude', 'mcp codex', 'row 12']) {
     assert.ok(result.lines.some((line) => line.startsWith(`ok ${name}`)), name);
   }
   const search = seen.find((call) => call.args[0] === 'search');
@@ -310,8 +310,63 @@ test('a junction or symlink is backed up as a link and restored as one', (t) => 
   const restored = path.join(target, '.claude', 'skills', 'mine');
   assert.ok(fs.lstatSync(restored).isSymbolicLink());
   assert.equal(path.resolve(fs.readlinkSync(restored)), path.resolve(outside));
-  const drill = verifyBackup({ from: dest, deps, tmp: scratch(t, 'stack-backup-tmp-') });
+  const drill = verifyBackup({ from: dest, deps, marker: 's2drillmarker20261102', expectId: '6431', tmp: scratch(t, 'stack-backup-tmp-') });
   assert.ok(drill.lines.includes('ok links: 1 restored as links'), drill.lines.join('\n'));
+  // The drill removes its home, links included, and never what a link points to (gentle-ai R3 on 84997f7..0b9f98a).
+  assert.equal(fs.readFileSync(path.join(outside, 'SKILL.md'), 'utf8'), 'skill');
+});
+
+/** Replaces the folder `at` with a link to `target`; the reason when this machine cannot make one. */
+function relink(target, at) {
+  fs.rmSync(at, { recursive: true, force: true });
+  try {
+    fs.symlinkSync(target, at, process.platform === 'win32' ? 'junction' : 'dir');
+    return null;
+  } catch (error) {
+    return error.code ?? error.message;
+  }
+}
+
+test('a folder that became a link since the backup is never written through: config replaces the link, data skips it', (t) => {
+  const { home, dest, deps } = backedUp(t);
+  const outside = scratch(t, 'stack-backup-outside-');
+  write(path.join(outside, 'reader.md'), 'not his agent\n');
+  const why = relink(outside, path.join(home, '.claude', 'agents'));
+  if (why) return t.skip(`this machine cannot make a folder link: ${why}`);
+  const empty = scratch(t, 'stack-backup-outside-');
+  assert.equal(relink(empty, path.join(home, '.claude', 'projects', 'D--p')), null);
+  const out = [];
+  const result = restoreBackup({ from: dest, home, yes: true, deps: { ...deps, log: (line) => out.push(line) } });
+  assert.equal(result.ok, true, out.join('\n'));
+  // Codex P1 on 84997f7..0b9f98a: the write followed the link and the deletion then removed it.
+  assert.equal(fs.readFileSync(path.join(outside, 'reader.md'), 'utf8'), 'not his agent\n');
+  assert.ok(!fs.lstatSync(path.join(home, '.claude', 'agents')).isSymbolicLink());
+  assert.equal(fs.readFileSync(path.join(home, '.claude', 'agents', 'reader.md'), 'utf8'), 'an agent\n');
+  assert.deepEqual(fs.readdirSync(empty), [], 'a data folder that is a link now is left as it is');
+  assert.match(out.join('\n'), /skip .*D--p.*a link now, never followed/);
+});
+
+test('on Windows a config file renamed only in case is kept, never deleted as one the backup lacks', { skip: process.platform !== 'win32' && 'only Windows reads two names that differ in case as one file' }, (t) => {
+  const { home, dest, deps } = backedUp(t);
+  const agents = path.join(home, '.claude', 'agents');
+  fs.renameSync(path.join(agents, 'reader.md'), path.join(agents, 'Reader.md'));
+  assert.equal(restoreBackup({ from: dest, home, yes: true, deps }).ok, true);
+  assert.deepEqual(fs.readdirSync(agents).map((name) => name.toLowerCase()), ['reader.md']);
+  assert.equal(fs.readFileSync(path.join(agents, 'reader.md'), 'utf8'), 'an agent\n');
+});
+
+test('verify fails when an export changed or is gone, and when no marker is given to search', (t) => {
+  const { dest } = backedUp(t);
+  const manifest = JSON.parse(fs.readFileSync(path.join(dest, 'manifest.json'), 'utf8'));
+  assert.ok(Object.keys(manifest.exports.sha256).length >= 3, 'the user PATH, a registry key and a shortcut are hashed');
+  fs.appendFileSync(path.join(dest, 'exports', 'user-path.txt'), 'x');
+  fs.rmSync(path.join(dest, manifest.exports.registry[0]));
+  const { deps } = seams();
+  const result = verifyBackup({ from: dest, deps, tmp: scratch(t, 'stack-backup-tmp-') });
+  assert.equal(result.ok, false);
+  assert.match(result.lines.join('\n'), /^FAIL exports: 2 differ or are gone, first exports\/user-path\.txt/m);
+  // Codex P2 on 84997f7..0b9f98a: a drill that never searched engram is no proof the store answers.
+  assert.match(result.lines.join('\n'), /^FAIL engram: no marker to search/m);
 });
 
 test('restore without yes prints the plan by path and writes nothing', (t) => {

@@ -68,8 +68,10 @@ export function walkRoot(from, filter = {}, fsx = fs) {
 }
 
 /** Copies `source` to `target` in chunks, hashing it and, when it is text, reading it for a secret `redactSecrets`
- * names; the copy keeps the source's times. Returns `{ bytes, sha256, flagged }`; throws naming the file. */
-export function copyAndHash(source, target, { fsx = fs, chunk = CHUNK } = {}) {
+ * names; the copy keeps the source's times and, outside Windows, its mode, so a program in `~/bin` still runs once
+ * restored. On Windows a mode is only a read-only bit, kept off so a drill can remove its scratch copy. Returns
+ * `{ bytes, sha256, flagged }`; throws naming the file. */
+export function copyAndHash(source, target, { fsx = fs, chunk = CHUNK, platform = process.platform } = {}) {
   fsx.mkdirSync(path.dirname(target), { recursive: true });
   const hash = createHash('sha256');
   const decoder = new StringDecoder('utf8');
@@ -88,7 +90,12 @@ export function copyAndHash(source, target, { fsx = fs, chunk = CHUNK } = {}) {
         const part = buffer.subarray(0, read);
         if (text === null) text = !part.subarray(0, SNIFF).includes(0);
         hash.update(part);
-        strictly(target, 'write', () => fsx.writeSync(output, part));
+        // A write may take part of the chunk, as on a disk near full; one that takes nothing stops the copy.
+        for (let written = 0; written < read;) {
+          const took = strictly(target, 'write', () => fsx.writeSync(output, part, written, read - written));
+          if (!(took > 0)) throw new Error(`cannot write ${target}: the write took no bytes`);
+          written += took;
+        }
         bytes += read;
         if (text && !flagged) {
           const window = carry + decoder.write(part);
@@ -102,7 +109,8 @@ export function copyAndHash(source, target, { fsx = fs, chunk = CHUNK } = {}) {
   } finally {
     fsx.closeSync(input);
   }
-  const { atime, mtime } = strictly(source, 'read', () => fsx.statSync(source));
+  const { atime, mtime, mode } = strictly(source, 'read', () => fsx.statSync(source));
+  if (platform !== 'win32') strictly(target, 'chmod', () => fsx.chmodSync(target, mode & 0o7777));
   fsx.utimesSync(target, atime, mtime);
   return { bytes, sha256: hash.digest('hex'), flagged };
 }

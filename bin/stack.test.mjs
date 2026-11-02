@@ -234,6 +234,10 @@ test('stack backup refuses a usage error with exit 2 and its usage', async () =>
     ['backup', 'run', '--to'],
     ['backup', 'verify'],
     ['backup', 'verify', '--from', 'x', '--marker', 'm'],
+    // The drill always searches engram, so the token and the id are required, the id a number (Codex P2 and gentle-ai
+    // R3 on 84997f7..0b9f98a).
+    ['backup', 'verify', '--from', 'x'],
+    ['backup', 'verify', '--from', 'x', '--marker', 'm', '--expect', '64.31'],
     ['backup', 'restore'],
     ['backup', 'restore', '--from', 'x', '--only', 'nope'],
   ]) {
@@ -270,7 +274,7 @@ test('stack backup run, verify and restore exit 0 in scratch homes, 1 on a faile
     const busy = await run(['backup', 'run', '--home', home, '--to', path.join(root, 'b2')], backupSeams({ processes: () => ['codex.exe'] }));
     assert.equal(busy.code, 1);
     assert.match(busy.out, /FAIL quiesce: codex\.exe runs/);
-    const missing = await run(['backup', 'verify', '--from', path.join(root, 'none')], backupSeams());
+    const missing = await run(['backup', 'verify', '--from', path.join(root, 'none'), '--marker', 'm', '--expect', '6431'], backupSeams());
     assert.equal(missing.code, 1);
     assert.match(missing.err, /holds no js-harness\.stack-backup\/v1 manifest/);
   } finally {

@@ -107,6 +107,41 @@ test('copyAndHash copies byte for byte, keeps the time, and flags a key even acr
   assert.equal(copyAndHash(path.join(dir, 'store.db'), path.join(dir, 'copy', 'store.db')).flagged, false);
 });
 
+test('copyAndHash writes a chunk whole when a write takes part of it, and throws naming the file when one takes none', (t) => {
+  const dir = scratch(t);
+  const text = 'abcdefghijklmnopqrstuvwxyz\n'.repeat(5);
+  write(path.join(dir, 'k.txt'), text);
+  // A disk near full takes a few bytes a write; the copy goes on with the rest of the chunk (Codex P2 on 84997f7..0b9f98a).
+  const short = { ...fs, writeSync: (fd, buffer, offset = 0, length = buffer.length - offset) => fs.writeSync(fd, buffer, offset, Math.min(length, 7)) };
+  const out = path.join(dir, 'copy', 'k.txt');
+  assert.equal(copyAndHash(path.join(dir, 'k.txt'), out, { fsx: short, chunk: 32 }).sha256, sha(text));
+  assert.equal(fs.readFileSync(out, 'utf8'), text);
+  const full = { ...fs, writeSync: () => 0 };
+  const stuck = path.join(dir, 'copy', 'stuck.txt');
+  assert.throws(() => copyAndHash(path.join(dir, 'k.txt'), stuck, { fsx: full }), (error) => error.message.includes(stuck));
+});
+
+test('copyAndHash keeps the source\'s mode outside Windows, so a backed-up program still runs once restored', (t) => {
+  const dir = scratch(t);
+  write(path.join(dir, 'tool'), '#!/bin/sh\necho hi\n');
+  const modes = [];
+  // The mode a chmod is asked for, read through a seam: Windows keeps only a read-only bit, so the real one is read on POSIX.
+  const fsx = { ...fs, statSync: (file) => Object.assign(fs.statSync(file), file.endsWith('tool') ? { mode: 0o100755 } : {}), chmodSync: (file, mode) => modes.push([path.basename(file), mode]) };
+  copyAndHash(path.join(dir, 'tool'), path.join(dir, 'copy', 'tool'), { fsx, platform: 'linux' });
+  assert.deepEqual(modes, [['tool', 0o755]]);
+  modes.length = 0;
+  copyAndHash(path.join(dir, 'tool'), path.join(dir, 'copy', 'tool-win'), { fsx, platform: 'win32' });
+  assert.deepEqual(modes, [], 'on Windows a mode is a read-only bit, which a scratch drill could not then remove');
+});
+
+test('copyAndHash really keeps an executable bit', { skip: process.platform === 'win32' && 'Windows has no executable bit' }, (t) => {
+  const dir = scratch(t);
+  write(path.join(dir, 'tool'), '#!/bin/sh\n');
+  fs.chmodSync(path.join(dir, 'tool'), 0o755);
+  copyAndHash(path.join(dir, 'tool'), path.join(dir, 'copy', 'tool'));
+  assert.equal(fs.statSync(path.join(dir, 'copy', 'tool')).mode & 0o777, 0o755);
+});
+
 test('inside tells a path within a folder from a sibling with the same prefix, case-blind on Windows', () => {
   assert.equal(inside('/h/.js-harness/x', '/h/.js-harness', 'linux'), true);
   assert.equal(inside('/h/.js-harness', '/h/.js-harness', 'linux'), true);

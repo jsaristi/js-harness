@@ -30,7 +30,7 @@ const INSTALL_KNOWN = { valued: ['--home', '--cwd', '--pm', '--prefix', '--tool'
 const RUNNABLE_TOOLS = [...new Set(RUNNABLE.map((row) => row.tool))];
 const BACKUP_USAGE = [
   'Usage: js-harness stack backup run [--home <dir>] [--to <dir>]',
-  '       js-harness stack backup verify --from <dir> [--marker <token> --expect <id>]',
+  '       js-harness stack backup verify --from <dir> --marker <token> --expect <id>',
   '       js-harness stack backup restore --from <dir> [--home <dir>] [--only <permissions|mcp:<name>|<root id>>]... [--yes]',
 ].join('\n');
 const BACKUP_KNOWN = {
@@ -327,9 +327,11 @@ function parseBackupArgs(argv) {
   });
   for (const flag of BACKUP_KNOWN[form].valued) values(flag);
   if (form !== 'run' && values('--from').length === 0) throw new StackArgError(`stack backup ${form} needs --from <dir>`);
-  if (form === 'verify' && (values('--marker').length === 0) !== (values('--expect').length === 0)) {
-    throw new StackArgError('--marker and --expect go together: the token to search and the observation id it must find');
+  // The drill always searches the restored engram, so a verify names what it must find (Codex P2 on 84997f7..0b9f98a).
+  if (form === 'verify' && (values('--marker').length === 0 || values('--expect').length === 0)) {
+    throw new StackArgError('stack backup verify needs --marker <token> and --expect <id>: the token to search and the observation id it must find');
   }
+  if (form === 'verify' && !/^\d+$/.test(values('--expect')[0])) throw new StackArgError('--expect takes an observation id, a number');
   const wrong = values('--only').find((only) => only !== 'permissions' && !/^mcp:.+/.test(only) && !ROOT_IDS.includes(only));
   if (wrong !== undefined) throw new StackArgError(`--only ${wrong}: permissions, mcp:<name> or one of ${ROOT_IDS.join(', ')}`);
   return { form, values, has: (flag) => rest.includes(flag) };

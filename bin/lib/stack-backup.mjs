@@ -75,6 +75,20 @@ export const ROOT_IDS = backupRoots({ home: os.tmpdir() }).map((root) => root.id
 /** Where a file of `root` lives: the root itself for a file root, else under it. */
 const targetOf = (root, rel) => (root.kind === 'file' ? root.from : path.join(root.from, ...rel.split('/')));
 
+/** The first folder between `root.from` and `target` that is a link or junction now, or null: a write below it would
+ * land wherever the link points. */
+function linkedAncestor(root, target) {
+  if (root.kind === 'file') return null;
+  let at = root.from;
+  for (const part of path.relative(root.from, path.dirname(target)).split(path.sep).filter(Boolean)) {
+    at = path.join(at, part);
+    const stat = lstatOrNull(at);
+    if (!stat) return null;
+    if (stat.isSymbolicLink()) return at;
+  }
+  return null;
+}
+
 function isSecretPath(home, root, rel, platform) {
   const homeRel = path.relative(home, targetOf(root, rel)).split(path.sep).join('/');
   const norm = (p) => (platform === 'win32' ? p.toLowerCase() : p);
@@ -131,15 +145,18 @@ const CLASSES_KEY = 'HKCU\\Software\\Classes\\orca';
 const SHORTCUT = /^(?:orca|herdr)/i;
 
 /** The user PATH, Orca's registry keys as `.reg` files and Orca's and herdr's Start menu shortcuts, under
- * `<partial>/exports`; returns the manifest's `exports`. On another system than Windows there is no registry. */
+ * `<partial>/exports`; returns the manifest's `exports`, each file's hash in its `sha256` so the drill proves the
+ * undo of the Orca and herdr removals is whole (Codex P2 on 84997f7..0b9f98a). On another system than Windows there
+ * is no registry. */
 function writeExports({ partial, startMenu, platform, reg, fsx, say }) {
   const exportsDir = path.join(partial, 'exports');
   fs.mkdirSync(exportsDir, { recursive: true });
   const result = { path: 'exports/user-path.txt', registry: [], shortcuts: [] };
+  const sealed = () => ({ ...result, sha256: Object.fromEntries([result.path, ...result.registry, ...result.shortcuts].map((rel) => [rel, hashFile(path.join(partial, ...rel.split('/')))])) });
   if (platform !== 'win32') {
     fs.writeFileSync(path.join(exportsDir, 'user-path.txt'), '');
     say('- exports: no Windows registry on this system');
-    return result;
+    return sealed();
   }
   const query = reg(['query', 'HKCU\\Environment', '/v', 'Path']);
   const value = /^\s*Path\s+REG_\w+\s+(.*?)\s*$/m.exec(query.stdout);
@@ -163,7 +180,7 @@ function writeExports({ partial, startMenu, platform, reg, fsx, say }) {
     result.shortcuts.push(`exports/shortcuts/${file.path}`);
   }
   say(`- exports: user PATH, ${result.registry.length} registry keys, ${result.shortcuts.length} shortcuts`);
-  return result;
+  return sealed();
 }
 
 /** The observation count of the store in `dir`, by `engram stats --all` on that store alone. */
@@ -342,18 +359,37 @@ function planRoot({ root, manifest, from, withSecrets, platform }) {
     },
   });
   let kept = 0;
+  // A folder that became a link since the backup is never written through (Codex P1 on 84997f7..0b9f98a): in a
+  // config root the link goes first, as the snapshot would remove it anyway; in a data root its entries are skipped.
+  const unlinked = new Set();
+  const skipped = new Set();
+  /** 'skip' when `target` lies below a link in a data root, 'replaced' below one in a config root, else null. */
+  const below = (target) => {
+    const at = linkedAncestor(root, target);
+    if (at === null) return null;
+    const [seen, line] = snapshot ? [unlinked, `unlink ${at}: a link now, where the backup holds a folder`] : [skipped, `skip ${at}: a link now, never followed`];
+    if (!seen.has(at)) {
+      seen.add(at);
+      steps.push({ line, apply: snapshot ? () => fs.rmSync(at, { recursive: true, force: true }) : () => {} });
+    }
+    return snapshot ? 'replaced' : 'skip';
+  };
   for (const file of files) {
     if (file.secret && !withSecrets) continue;
     const source = path.join(from, 'roots', root.id, ...file.path.split('/'));
     const target = targetOf(root, file.path);
-    const stat = lstatOrNull(target);
+    const via = below(target);
+    if (via === 'skip') continue;
+    const stat = via === 'replaced' ? null : lstatOrNull(target);
     if (!stat) steps.push(write(source, target));
     else if (!snapshot) kept += 1;
     else if (!stat.isFile() || hashFile(target) !== file.sha256) steps.push(write(source, target));
   }
   for (const link of links) {
     const at = targetOf(root, link.path);
-    const stat = lstatOrNull(at);
+    const via = below(at);
+    if (via === 'skip') continue;
+    const stat = via === 'replaced' ? null : lstatOrNull(at);
     if (stat?.isSymbolicLink() && fs.readlinkSync(at) === link.target) continue;
     if (stat && !snapshot) {
       kept += 1;
@@ -368,9 +404,11 @@ function planRoot({ root, manifest, from, withSecrets, platform }) {
     });
   }
   if (root.kind === 'config' && lstatOrNull(root.from)) {
-    const held = new Set([...files, ...links].map((entry) => entry.path));
+    // Case-blind on Windows, where a file renamed only in case is the backed-up one (gentle-ai R3 on 84997f7..0b9f98a).
+    const key = (rel) => (platform === 'win32' ? rel.toLowerCase() : rel);
+    const held = new Set([...files, ...links].map((entry) => key(entry.path)));
     const live = walkRoot(root.from, root);
-    const gone = [...live.files, ...live.links].filter((e) => !held.has(e.path));
+    const gone = [...live.files, ...live.links].filter((e) => !held.has(key(e.path)) && !unlinked.has(e.source));
     for (const entry of gone) steps.push({ line: `delete ${entry.source}`, apply: () => fs.rmSync(entry.source, { force: true }) });
     // Only when a deletion may have emptied a folder; a restore that deletes nothing leaves every folder as it is.
     if (gone.length > 0) steps.push({ line: null, apply: () => (root.include ?? ['']).forEach((name) => pruneEmpty(path.join(root.from, name), name !== '')) });
@@ -477,6 +515,15 @@ export function verifyBackup({ from, deps = {}, marker, expectId, tmp = os.tmpdi
       });
       return bad.length === 0 ? { ok: `${manifest.links.length} restored as links` } : `${bad.length} differ, first ${bad[0].root}/${bad[0].path}`;
     });
+    check('exports', () => {
+      const sealed = Object.entries(manifest.exports?.sha256 ?? {});
+      if (sealed.length === 0) return 'the manifest records no hash of its exports';
+      const bad = sealed.filter(([rel, sha256]) => {
+        const file = path.join(from, ...rel.split('/'));
+        return !fs.existsSync(file) || hashFile(file) !== sha256;
+      });
+      return bad.length === 0 ? { ok: `${sealed.length} hash as recorded` } : `${bad.length} differ or are gone, first ${bad[0][0]}`;
+    });
     check('secrets', () => {
       const secret = manifest.files.filter((f) => f.secret);
       const bad = secret.filter((f) => hashFile(path.join(from, 'roots', f.root, ...f.path.split('/'))) !== f.sha256);
@@ -484,12 +531,12 @@ export function verifyBackup({ from, deps = {}, marker, expectId, tmp = os.tmpdi
       if (leaked.length > 0) return `${leaked.length} reached the scratch home, first ${leaked[0].root}/${leaked[0].path}`;
       return bad.length === 0 ? { ok: `${secret.length} hash as recorded, in place` } : `${bad.length} differ, first ${bad[0].root}/${bad[0].path}`;
     });
-    if (marker) {
-      check('engram', () => {
-        const found = (deps.run ?? defaultRun)('engram', ['search', marker, '--all'], { env: { ...env, ENGRAM_DATA_DIR: path.join(scratch, '.engram') } });
-        return new RegExp(`#${expectId}\\b`).test(found.stdout ?? '') ? { ok: `#${expectId} found on the restored store` } : `#${expectId} not found on the restored store`;
-      });
-    } else check('engram', () => ({ ok: 'not searched (no --marker)' }));
+    // A drill that never searched engram is no proof the restored store answers (Codex P2 on 84997f7..0b9f98a).
+    check('engram', () => {
+      if (!marker || !/^\d+$/.test(String(expectId ?? ''))) return 'no marker to search: --marker <token> and --expect <id> name what the restored store must answer';
+      const found = (deps.run ?? defaultRun)('engram', ['search', marker, '--all'], { env: { ...env, ENGRAM_DATA_DIR: path.join(scratch, '.engram') } });
+      return new RegExp(`#${expectId}(?!\\d)`).test(found.stdout ?? '') ? { ok: `#${expectId} found on the restored store` } : `#${expectId} not found on the restored store`;
+    });
     check('permissions', () => {
       const restored = path.join(scratch, '.claude', 'settings.json');
       const backedUp = path.join(from, 'roots', 'claude-config', 'settings.json');
