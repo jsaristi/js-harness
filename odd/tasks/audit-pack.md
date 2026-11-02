@@ -271,3 +271,13 @@ the `docs` row in `bin/check.mjs` (at its 2010-line ceiling: move code out first
 `bin/lib/rules-coverage-data.mjs`; the cross index's module is `bin/lib/docs-cross.mjs`, so Done-when gains its test.
 Then Codex (the lead says the weekly limit was reset: read `js-harness codex-meter` first) and the Claude lenses,
 push, PR, `js-harness notify --to orchestrator --kind ready --pr <n>`.
+- Update ~11:50Z: `bin/docs.test.mjs` fixed (the huge file is slice 4: files sort by name); 25 of 25 pass;
+  `docs plan` on this tree: 1,433 files, 5,768,121 tokens, 18 slices (core 4, tests 5, feature documents 5, the
+  rest 4). The confirming review returned: read `279ba83f-7b5f-4866-a8a7-2a07c5f55309`, Claude 15 findings, Codex 6
+  (full text in `C:/Users/Oficina/.claude/jobs/f94a63ab/tmp/dr2.txt`). This is review 2 of at most 3. First, before any
+  more code: Claude 1 (SPEC's architecture already maps where state lives, so `docs/RECORDS.md` may be an amendment
+  of SPEC, not a new file; check `docs/SPEC.md` "Where state lives") and Claude 2 (an earlier whole-harness audit
+  built a per-file inventory with statuses and a check, now stale: find it, `docs/audits/` and `odd/tasks/` with
+  `grep -rln "inventory" docs/audits odd/tasks`, and reuse or retire it). Then answer every finding in the Log
+  (L7) with `double-review take 279ba83f-... claude|codex`, amend specs, and run the third and last review only if
+  a correction is made; a real failure left after it goes to the lead as a problem.
