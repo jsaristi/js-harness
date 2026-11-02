@@ -259,7 +259,7 @@ test('a CRLF checkout hashes as its LF one', () => {
 
 test('each review needs its round under ## Reviews', () => {
   assert.deepEqual(messages(check({ onboarding: onboardingDoc({ reviews: ['- Roadmap round 1: two readers.'] }) })), [
-    'odd/tasks/onboarding.md (stage 4): ## Reviews has no "Pre-plan" round: two readers read the pre-plan before the owner',
+    'odd/tasks/onboarding.md (stage 4): ## Reviews has no "Pre-plan" round: a Claude reader and a Codex reader read the pre-plan before the owner',
   ]);
 });
 

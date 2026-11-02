@@ -195,13 +195,13 @@ export const RULES = [
   },
   {
     "id": "double-review",
-    "subject": "a proposal that changes one of his decisions passes two read-only readers that did not write it",
+    "subject": "everything that proposes something passes a blind Claude and Codex read, code passes its own pair, both judged against what was asked, at most three reviews",
     "owner": "sebastian",
-    "since": "2026-10-27",
+    "since": "2026-11-01",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
-      "first passes two read-only readers that did not write it",
-      "one attacks its claims, one looks only for what is missing"
+      "first passes a Claude reader and a Codex reader, blind, on one frozen copy",
+      "In both, a review that finds nothing approves at once"
     ],
     "failure": "proposal-unreviewed",
     "review": "2026-11-16"

@@ -88,8 +88,9 @@ export const COVERAGE = {
       }
     },
     "double-review": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "line",
+      "path": "bin/lib/protocols-skill.mjs",
+      "phrase": "it first passes the double review of section 1"
     },
     "fixed-load-budget": {
       "level": "owed",
@@ -626,7 +627,7 @@ export const COVERAGE = {
       "f90ecec2f93e",
       "45777c183381",
       "a58d21586dd4",
-      "ad3655173cc6",
+      "07812c405c9e",
       "289a68a5c975",
       "7c9dcab419cd",
       "064241ea6747",
@@ -637,7 +638,7 @@ export const COVERAGE = {
       "3aa8b271c3e4",
       "45777c183381",
       "a58d21586dd4",
-      "ad3655173cc6",
+      "07812c405c9e",
       "289a68a5c975"
     ],
     "init-failures": [

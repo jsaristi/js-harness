@@ -76,7 +76,7 @@ test('a file checked out with Windows line ends keeps them, and its unedited blo
 // his yes to question 143 (odd/tasks/depth-pass-rule.md, L15) opened the owner's half with rule 1, `rule:depth-pass`.
 test('the whole block is the two halves, and stays the bytes every project holds today', () => {
   assert.equal(templateBlock(), `${agentsBlock()}\n${claudeBlock()}`);
-  assert.equal(sha256(templateBlock()), 'a572b2b87e4616b88b9a4ca5c62e7589de05f5d0524be1238d10a1373b4d1a2f');
+  assert.equal(sha256(templateBlock()), 'de748fbdc764f8afd0f767b06462bcc48755e541093cdb4c333568724d18dd9c');
   assert.ok(agentsBlock().startsWith('## What good looks like\n'));
   assert.ok(claudeBlock().startsWith('## Working with the owner\n'));
   assert.doesNotMatch(agentsBlock(), /Working with the owner/);

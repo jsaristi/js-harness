@@ -105,7 +105,7 @@ ${SUMMARY_LINE}
 - [ ] O6 Closed
 
 ## Reviews
-<!-- One item per round of the two readers: "Pre-plan round <n>: ..." or "Roadmap round <n>: ...", what each reader found and what changed. -->
+<!-- One item per round of the double review, a Claude reader and a Codex reader: "Pre-plan round <n>: ..." or "Roadmap round <n>: ...", what each reader found and what changed. -->
 
 ## Log
 - L1 <date> The owner's request, verbatim: "<their words>"
@@ -744,7 +744,7 @@ export function checkOnboarding({ onboarding, origin, roadmap, agents, adrs = ne
     const reviews = (parseContract(onboarding).get('Reviews') ?? '').split('\n').map((line) => line.replace(/^\s*[-*+]\s+/, ''));
     for (const [round, stage, what] of [['Pre-plan', 4, 'the pre-plan'], ['Roadmap', 6, 'the roadmap']]) {
       if (!reviews.some((line) => line.toLowerCase().startsWith(round.toLowerCase()))) {
-        findings.push({ file: ONBOARDING_PATH, stage, message: `## Reviews has no "${round}" round: two readers read ${what} before the owner` });
+        findings.push({ file: ONBOARDING_PATH, stage, message: `## Reviews has no "${round}" round: a Claude reader and a Codex reader read ${what} before the owner` });
       }
     }
     for (const line of templateLinesLeft(onboarding, featureTemplate())) {
@@ -882,7 +882,7 @@ function stageLines(at, files, git) {
     case 4:
       return [
         heading(at.changed ? `${ORIGIN_PATH} changed since its approval.` : `${ORIGIN_PATH} waits for the owner's approval.`),
-        `Do: two readers read ${ORIGIN_PATH} and docs/adr/ against the conversation; record their round under ## Reviews as "Pre-plan round <n>: ..." and take what they find. Then ask the owner one question, "Is the pre-plan approved, with its ADRs?", whose text is a summary a phone shows whole: the plan in a few lines, and every area in one line with its proposal and ADR, so a yes confirms them.`,
+        `Do: a Claude reader and a Codex reader, blind (the double review), read ${ORIGIN_PATH} and docs/adr/ against the conversation; record their round under ## Reviews as "Pre-plan round <n>: ..." and take what they find. Then ask the owner one question, "Is the pre-plan approved, with its ADRs?", whose text is a summary a phone shows whole: the plan in a few lines, and every area in one line with its proposal and ADR, so a yes confirms them.`,
         `Record: a yes is logged verbatim, and O3 checked with "(origin sha256:${current.origin}, adrs sha256:${current.adrs}; L<n>)". A no is logged verbatim, the file revised, a new round reads only the blockers, and the owner is asked again. A no on one area edits its ADR in place, keeping its number: its Status becomes "proposed (L<the no>)" and the area's suffix "the owner's, ADR-<nnnn> (L<the no>)", which sends the work back to stage 3.`,
         THEN,
       ];
@@ -899,7 +899,7 @@ function stageLines(at, files, git) {
           : `${ROADMAP_PATH} waits for the owner's approval.`;
       return [
         heading(what),
-        `Do: two readers read ${ROADMAP_PATH} against the approved pre-plan; record their round under ## Reviews as "Roadmap round <n>: ..." and take what they find. Then ask the owner one question: is the roadmap approved?`,
+        `Do: a Claude reader and a Codex reader, blind (the double review), read ${ROADMAP_PATH} against the approved pre-plan; record their round under ## Reviews as "Roadmap round <n>: ..." and take what they find. Then ask the owner one question: is the roadmap approved?`,
         `Record: a yes is logged verbatim, and O5 checked with "(roadmap sha256:${current.roadmap}, origin sha256:${current.origin}, adrs sha256:${current.adrs}; L<n>)". A no is logged verbatim, the file revised, a new round reads only the blockers, and the owner is asked again.`,
         THEN,
       ];
