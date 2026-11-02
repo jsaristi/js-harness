@@ -1530,6 +1530,12 @@ Sessions told to start after an event armed no wait for it, so nothing woke them
 - Seen: 2026-10-16 — throughput-v3-measure.md (the lead's notes, the window 10-15T00Z to 10-17T00Z) — 31
   turn ends followed by more than 30 minutes of silence with no background task, 64.4 session-hours
   in two days (an upper bound: some had nothing to do)
+- Seen: 2026-11-02 — PP 1's transcript 7eb85479 (plataforma-preproyecto), lines 349 to 378, and that project's
+  channel record, the lead's note at 10:22:54Z (the end of the idle time claimed; the lead's own, in JH 134's brief)
+  — PP 1 recorded its waiting at 10:05:53Z and ended its turn at 10:06:25Z on a Decision line with nothing in the
+  background; the lead's note carrying his answer, "Solo la página", reached its channel 16 minutes later and woke
+  nothing, so it sat idle about 7 h, 05:26 to 12:35 local. The heartbeat that would have flagged it watches only
+  js-harness sessions, and the reply hook let the turn end, since a Decision line holds no handed work
 - Control: check — bin/reply.test.mjs — "a work session that ends its turn holding handed work with
   nothing in the background is turned back once, with what to arm" — since 2026-10-16
 - Was: protocol — bin/lib/manifest.mjs — "every session that waits has a declared wait running
@@ -1733,6 +1739,10 @@ the reply before he leaves; so the return had no goals to check and no forecast 
   2026-11-02 04:01 local (UTC-05:00) he turned the machine off for the night with every session paused on purpose,
   and no stretch covered it; the reply hook flagged it at his return. The stretch record's last close is at
   2026-11-02T01:53:56Z and none opened after it (`stretches.jsonl` under the throughput folder, read by JH 130)
+- Seen: 2026-11-02 — the lead's transcript 0f71b2c6, lines 55168 and 55186 (the lead's own, read by JH 134) — his
+  question 165 was asked at 18:00:21Z (12:59 local) and answered at 20:01:59Z (15:01 local); it waited two hours
+  and no stretch covered it: the stretch record's last close is at 17:50:20Z and none opened after it
+  (`stretches.jsonl` under the throughput folder)
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 
