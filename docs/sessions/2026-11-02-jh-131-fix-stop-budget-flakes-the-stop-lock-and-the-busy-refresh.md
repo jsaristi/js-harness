@@ -29,6 +29,13 @@ None in this session: the brief is the lead's, and its specs are quoted in `odd/
   A detector written for one purpose is not a guard for another.
 - The host compacted this session once (06:10 local); it resumed from the feature document.
 
-## Spent
+## Left
+- Pull request 750 to land (the lead's merge queue); the worktree `defect-trio` to remove after it lands.
+- Not checked: the stop wait against a real `claude stop` (only against claude's words in a fake); the heredoc case of
+  `onlyWaits` red on its own.
+- A session that only waits keeps running its wait from the old copy through the refresh, as the idle lead's
+  background wait already did (L6).
+
+## Cost
 Codex: 265,080 + 85,136 + 241,056 + 55,508 input tokens (one recheck refused before it ran). Claude lenses: about
 28,000 a lens for three lenses, then two lenses at 6,000 to 13,000 for each fix.
