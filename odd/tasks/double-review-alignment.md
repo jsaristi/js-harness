@@ -286,11 +286,14 @@ State on 2026-11-01, on `rule/review-flow` from main f063429 (PR 745 landed T1, 
 150 in his own words (L14) and added the bound (L17): `## Redesign after question 150`, decided in L15, read blind
 in L16 and its findings taken; question 152 put it to him, and he approved it with point 5 changed: no reserve, a
 notice at 2% left and his decision on the reset (L18). T4 is done (85d8ee7f, L19), landed as PR 746 (main 5823566).
-T7 is done (64a588eb, L20) on `feat/review-request`, its own pull request. Next, in order, each a slice with
-Codex and the lenses: T8, T9, T2; D5's two exemptions (Claude 6 of L12) are
+T7 is done (64a588eb, L20) on `feat/review-request`, PR 748. T8 is split in three commits on the same branch:
+T8b f58c4027 (the recheck blocks a regression the correction brought, prompt v2) and T8a 071dc6d7 (`double-review
+answer <run id> <reviewer> --taken --rebutted --why`, and `tally` rows per reviewer of code) are committed, not yet
+reviewed. T8c 5c67d309 (the lenses recheck their earlier findings, `recheckOf`) is committed too. T8 is done and reviewed (L21); PR 748 landed T7 only (main 47d96a3), so T8 goes in its own PR from
+`feat/review-answers`. Next, in order, each a slice with Codex and the lenses: T9, T2; D5's two exemptions (Claude 6 of L12) are
 kept in T4's text, since a question of fact proposes nothing and a reviewed text named by path is not read again, and
 the report says so for him to change. T6 keeps T2's verifier, older text 16 and the report of how to try it.
-Meter 87% weekly; floor 2% left.
+Meter 89% weekly; floor 2% left.
 The gentle-ai Stop hook: status only, start nothing. Never edit a tracked file while a Codex review runs (L11).
 
 ## Eval plan
@@ -318,9 +321,10 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
 - [x] T7 (kind: build) 64a588eb; Point 2: `codex-review` and `lens-review` are given what was asked, every time: the feature
   document's specs and contract for large work, `--request <text>` for small work, the gate turn included, and a
   review with none says so; their prompts judge against it; spec 7; route codex-review, lens-review.
-- [ ] T8 (kind: build) Point 3: every finding of code's pair gets an answer, taken with its commit or rebutted with
+- [x] T8 (kind: build) Point 3: every finding of code's pair gets an answer, taken with its commit or rebutted with
   evidence, recorded, and a tally gives each reviewer taken and rebutted; Codex's recheck blocks a regression the
-  correction brought into what it changed (a seeded test); the lenses get the recheck; spec 7.
+  correction brought into what it changed (a seeded test); the lenses get the recheck; spec 7. Done: f58c4027,
+  071dc6d7, 5c67d309, fixes 4bf5ee75 and fb1ff505; branch `feat/review-answers` (L21).
 - [ ] T9 (kind: build) Point 4: at most three reviews of one change (the recheck allows a second recheck, not a
   third); past them `codex-review` refuses, says the problem and what is open, and names the strongest model, one
   rule value (`rules change escalation-model`, today `claude-fable-5-1`); spec 8.
@@ -472,3 +476,12 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   4e4ff5c..64a588e with `--doc` this document: correct, confidence 0.87, no findings, 325,405 input tokens; lenses
   reliability and readability: 0 findings each. A mistake of cost: the commit was run twice on a red gate, two
   GitHub runs where one was owed; the second read nothing new.
+- L21 (2026-11-02, evidence): T8 done. Codex reviewed 026cc2a..4ab62a6 with `--doc` (run 645a50c0): incorrect at
+  0.95, two P2: `--unavailable` threw on `picked.names` over a rechecked range, and a lens with no tools counted fixed
+  an earlier finding whose code is not in the patches. Both taken, fixed in 4bf5ee75, answered with `double-review
+  answer`; the recheck run of 4ab62a6..cbfd282 found both fixed (0.97, 66,053 input tokens). Lenses reliability and
+  readability over 64a588e..cbfd282 (run 25553a4f): reliability 0, readability 1 SUGGESTION, true: `codeTallyOf`
+  read an answer line's counts unchecked, so one malformed line threw the whole tally. Taken, fixed in fb1ff505 with
+  its test; Codex over cbfd282..7af1fcd correct at 0.98 (48,259 input tokens), and readability's recheck, the T8c
+  path in a real run, found it fixed. The lead (05:48): PR 748 landed T7 alone (main 47d96a3, checked with `gh pr
+  view 748`: merged at head 026cc2a), so T8 moved to `feat/review-answers` with main merged in, for its own PR.

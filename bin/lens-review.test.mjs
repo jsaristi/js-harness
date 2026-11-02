@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { claudeArgs, LENS_ANSWER_KEPT, lensEnv, lensReviewMain, runLens } from './lens-review.mjs';
-import { admittedLensReviews, readLensReviews, readLensRuns } from './lib/lens-reviews.mjs';
+import { admittedLensReviews, appendLensReview, LENS_REVIEW_SCHEMA, readLensReviews, readLensRuns } from './lib/lens-reviews.mjs';
+import { NOT_FIXED } from './lib/codex-review-recheck.mjs';
 import { LENS_ANSWER_SCHEMA } from './lib/lens-result.mjs';
 import { askedText, NO_ASKED, requestIntent, reviewIntent } from './lib/codex-review-prompt.mjs';
 import { lensPrompt } from './lib/lens-prompts.mjs';
@@ -321,6 +322,30 @@ test('a lens run given neither --doc nor --request says it judges the code alone
   assert.ok(out.split('\n').includes(NO_ASKED), out);
   assert.equal(claude.calls[0].prompt, lensPrompt('risk'));
   assert.doesNotMatch(claude.calls[0].prompt, /## What was asked/);
+});
+
+// odd/tasks/double-review-alignment.md, spec 7: the lenses get the recheck Codex has. A range that starts where a
+// reviewed lens record with findings ended is a correction of them: each lens that found something there checks it.
+test('a range that starts at the head of a lens review with findings rechecks them: each lens is given its own, and the record says so', () => {
+  const second = git('log', '--format=%H', '--grep=^second$');
+  const first = git('rev-parse', `${second}~1`);
+  const earlier = { severity: 'WARNING', location: 'a.mjs:1', claim: 'the constant is unexplained', evidence_class: 'deterministic', causal_disposition: 'introduced', proof_refs: ['a.mjs:1'] };
+  appendLensReview(dir, { schema: LENS_REVIEW_SCHEMA, base: first, head: first, outcome: 'reviewed', run: 'run-earlier', lenses: ['readability', 'risk'], results: [{ lens: 'readability', outcome: 'complete', findings: [earlier] }, { lens: 'risk', outcome: 'complete', findings: [] }] });
+  const notFixed = (lens, subject) => JSON.stringify({ subject_hash: subject.subject_hash, inspection: { status: 'completed', paths: ['a.mjs'] }, findings: lens === 'readability' ? [{ ...earlier, claim: `${NOT_FIXED} 1 the constant is still unexplained` }] : [], evidence: [`${lens}: read a.mjs`] });
+  const claude = fakeClaude(notFixed);
+  const { code, out } = run(['--base', first, '--head', second, '--lenses', 'readability,risk', '--reason', 'a constant', '--request', 'explain the constant'], { runLens: claude.runLens });
+  assert.equal(code, 0, out);
+  const [readability, risk] = claude.calls;
+  assert.match(readability.prompt, /## A recheck of earlier findings\n/);
+  assert.ok(readability.prompt.includes('1. a.mjs:1 WARNING the constant is unexplained'), readability.prompt);
+  assert.ok(readability.prompt.includes('a regression this range brought into what it changed'), readability.prompt);
+  assert.doesNotMatch(risk.prompt, /A recheck of earlier findings/, 'a lens that found nothing there reviews as it would');
+  assert.equal(readLensReviews(dir).at(-1).recheckOf, 'run-earlier');
+  assert.ok(readability.prompt.includes('A finding whose code is not in the block cannot be checked'), 'an unchecked finding stays open, never counted fixed');
+  // A skip over the same range picks no lens, and is recorded as before.
+  assert.equal(run(['--base', first, '--head', second, '--unavailable', 'no CLI here'], { runLens: claude.runLens }).code, 0);
+  assert.equal(readLensReviews(dir).at(-1).outcome, 'unavailable');
+  assert.ok(out.split('\n').includes('readability: rechecked 1 earlier finding of run-earlier: 0 fixed, 1 not fixed, 0 blocking'), out);
 });
 
 test('--doc and --request together, an empty request or a document with no Goal are usage errors, and no lens runs', () => {

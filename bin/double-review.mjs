@@ -30,13 +30,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { REVIEW_EFFORT, REVIEW_MODEL, childEnv, leanEnv, leanFlags } from './codex-review.mjs';
 import { lensEnv } from './lens-review.mjs';
+import { runAnswerFindings } from './lib/codex-review-recheck.mjs';
+import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
+import { LENS_NAMES } from './lib/lens-prompts.mjs';
+import { readLensReviews } from './lib/lens-reviews.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { resolveClaude } from './lib/claude-path.mjs';
 import { transcriptOf as findTranscript } from './lib/channel.mjs';
 import { launchCodex } from './lib/codex-launch.mjs';
 import { createLeanHome, leanHomesDir, realCodexHome } from './lib/codex-review-home.mjs';
 import { readerPrompt } from './lib/double-review-prompt.mjs';
-import { appendDoubleReview, findingsOf, READERS, readDoubleReviews, readOf, SEVERITIES, tallyOf } from './lib/double-review-records.mjs';
+import { appendDoubleReview, codeTallyOf, findingsOf, READERS, readDoubleReviews, readOf, SEVERITIES, tallyOf } from './lib/double-review-records.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { RuleChangeError, quotationOf } from './lib/rules-change.mjs';
@@ -47,10 +51,11 @@ import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 export const USAGE =
   'Usage: js-harness double-review read <file>... [--diff <rev>] [--plan] [--cwd <path>]\n' +
   '       js-harness double-review take <read id> <reader> --taken <n,...|none> [--shared <n,...>] [--why <text>] [--cwd <path>]\n' +
+  '       js-harness double-review answer <run id> <reviewer> --taken <n,...|none> [--rebutted <n,...> --why <evidence>] [--cwd <path>]\n' +
   '       js-harness double-review skip --what <text> --words <the user\'s words> --transcript <session id> --line <n> [--cwd <path>]\n' +
   '       js-harness double-review tally [--since <YYYY-MM-DD>] [--cwd <path>]\n' +
   'read gives the files, and with --diff the diff <rev>...HEAD, to a Claude reader and a Codex reader at once, blind, on one frozen copy, and records what each found; --plan says what a read costs and the words that skip it, and starts nothing. ' +
-  'take records which of a reader\'s findings the writer took, and which of those the other reader also found. skip records the user\'s words that skip a read, and where they are read. tally gives each reader its reads, findings, taken and found by it alone.';
+  'take records which of a reader\'s findings the writer took, and which of those the other reader also found. answer records, for each finding a code review gave (a Codex run, or one lens of a lens-review run), whether it was taken or rebutted with evidence; every finding gets one. skip records the user\'s words that skip a read, and where they are read. tally gives each reader its reads, findings, taken and found by it alone, and each reviewer of code what was taken and rebutted.';
 
 // The phrase that skips a read: the user's words of question 146, "a menos que yo como usuario te diga que no quiero la revision".
 export const SKIP_PHRASE = 'no quiero la revisión';
@@ -90,8 +95,10 @@ export const ANSWER_SCHEMA = {
 
 class DoubleReviewArgError extends Error {}
 
-const VERBS = ['read', 'take', 'skip', 'tally'];
-const VALUED = { read: ['--diff', '--cwd'], take: ['--taken', '--shared', '--why', '--cwd'], skip: ['--what', '--words', '--transcript', '--line', '--cwd'], tally: ['--since', '--cwd'] };
+const VERBS = ['read', 'take', 'answer', 'skip', 'tally'];
+const VALUED = { read: ['--diff', '--cwd'], take: ['--taken', '--shared', '--why', '--cwd'], answer: ['--taken', '--rebutted', '--why', '--cwd'], skip: ['--what', '--words', '--transcript', '--line', '--cwd'], tally: ['--since', '--cwd'] };
+// The reviewers of code whose findings `answer` records: Codex and each Claude lens.
+const CODE_REVIEWERS = ['codex', ...LENS_NAMES];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** The numbers of a list `1,3`: distinct integers from 1, else a usage error naming `flag`. */
@@ -109,7 +116,7 @@ export function parseArgs(argv, defaultCwd = process.cwd()) {
   if (verb?.startsWith('-')) throw new DoubleReviewArgError(`unknown argument: ${verb}`);
   if (!VERBS.includes(verb)) throw new DoubleReviewArgError(verb === undefined ? 'a verb is needed' : `not a verb: ${verb}`);
   const valued = VALUED[verb];
-  const unknown = unknownArgument(rest, { valued, bare: verb === 'read' ? ['--plan'] : [], positional: verb === 'read' || verb === 'take' });
+  const unknown = unknownArgument(rest, { valued, bare: verb === 'read' ? ['--plan'] : [], positional: verb === 'read' || verb === 'take' || verb === 'answer' });
   if (unknown !== null) throw new DoubleReviewArgError(`unknown argument: ${unknown}`);
   const values = {};
   const positional = [];
@@ -135,6 +142,15 @@ export function parseArgs(argv, defaultCwd = process.cwd()) {
     const taken = values['--taken'] === 'none' ? [] : numbers(values['--taken'], '--taken');
     const shared = values['--shared'] === undefined ? [] : numbers(values['--shared'], '--shared');
     return { verb, read, reader, taken, shared, why: values['--why'], cwd };
+  }
+  if (verb === 'answer') {
+    const [run, reviewer, more] = positional;
+    if (run === undefined || reviewer === undefined || more !== undefined) throw new DoubleReviewArgError('answer needs a run id and a reviewer');
+    if (!CODE_REVIEWERS.includes(reviewer)) throw new DoubleReviewArgError(`not a reviewer of code: ${reviewer} (${CODE_REVIEWERS.join(', ')})`);
+    if (values['--taken'] === undefined) throw new DoubleReviewArgError('answer needs --taken (none for no finding taken)');
+    const rebutted = values['--rebutted'] === undefined ? [] : numbers(values['--rebutted'], '--rebutted');
+    if (rebutted.length > 0 && !values['--why']?.trim()) throw new DoubleReviewArgError('a finding rebutted needs its evidence in --why');
+    return { verb, run, reviewer, taken: values['--taken'] === 'none' ? [] : numbers(values['--taken'], '--taken'), rebutted, why: values['--why'], cwd };
   }
   if (verb === 'skip') {
     for (const flag of VALUED.skip.slice(0, 4)) {
@@ -484,6 +500,37 @@ function takeCommand(args, root, deps, { log, error }) {
   return 0;
 }
 
+/** The findings the run `run` gave as `reviewer`: a Codex run line's answer, or that lens's result in the lens-review
+ * record that names the run; `null` when no such run or result is recorded. */
+function codeFindings(root, run, reviewer) {
+  if (reviewer === 'codex') return runAnswerFindings(readCodexReviewRuns(root).findLast((line) => line?.id === run));
+  const result = readLensReviews(root).findLast((rec) => rec?.run === run)?.results?.find((one) => one?.lens === reviewer);
+  return Array.isArray(result?.findings) ? result.findings : null;
+}
+
+function answerCommand(args, root, deps, { log, error }) {
+  const findings = codeFindings(root, args.run, args.reviewer);
+  if (findings === null) {
+    error(`no findings of ${args.reviewer} recorded for run ${args.run}; the run id is on the run line of codex-review, or names the lens-review record`);
+    return 1;
+  }
+  const count = findings.length;
+  const both = args.taken.filter((n) => args.rebutted.includes(n));
+  const past = [...args.taken, ...args.rebutted].filter((n) => n > count);
+  const missing = Array.from({ length: count }, (_, at) => at + 1).filter((n) => !args.taken.includes(n) && !args.rebutted.includes(n));
+  const wrong = past.length > 0 ? `there is no finding ${past.join(', ')}`
+    : both.length > 0 ? `finding ${both.join(', ')} is both taken and rebutted`
+      : missing.length > 0 ? `finding ${missing.join(', ')} of ${args.reviewer}'s ${count} in ${args.run} has no answer` : null;
+  if (wrong !== null) {
+    error(`not recorded: ${wrong}; every finding is taken or rebutted with evidence`);
+    return 1;
+  }
+  const at = (deps.now ?? (() => new Date()))().toISOString();
+  appendDoubleReview(root, { kind: 'answer', at, run: args.run, reviewer: args.reviewer, findings: count, taken: args.taken, rebutted: args.rebutted, ...(args.why === undefined ? {} : { why: args.why }) });
+  log(`recorded: of ${args.reviewer}'s ${plural(count, 'finding')} in ${args.run}, ${args.taken.length} taken and ${args.rebutted.length} rebutted`);
+  return 0;
+}
+
 /** git through `spawnSync`, its output as text, as the sessions helpers read it. */
 const gitText = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true });
 
@@ -518,13 +565,14 @@ function skipCommand(args, root, env, deps, { log, error }) {
 }
 
 function tallyCommand(args, root, { log }) {
-  const rows = tallyOf(readDoubleReviews(root), { since: args.since });
-  if (rows.length === 0) {
-    log(`no double review read${args.since === undefined ? '' : ` since ${args.since}`}`);
-    return 0;
-  }
+  const entries = readDoubleReviews(root);
+  const rows = tallyOf(entries, { since: args.since });
+  if (rows.length === 0) log(`no double review read${args.since === undefined ? '' : ` since ${args.since}`}`);
   for (const row of rows) {
     log(`${row.reader}: ${plural(row.reads, 'read')}, ${plural(row.findings, 'finding')}, ${row.judged} judged, ${row.taken} taken, ${row.alone} found by it alone`);
+  }
+  for (const row of codeTallyOf(entries, { since: args.since })) {
+    log(`${row.reviewer} on code: ${plural(row.answered, 'review')} answered, ${plural(row.findings, 'finding')}, ${row.taken} taken, ${row.rebutted} rebutted`);
   }
   return 0;
 }
@@ -550,6 +598,7 @@ export async function doubleReviewMain(argv = process.argv.slice(2), env = proce
   try {
     if (args.verb === 'read') return await readCommand(args, root, env, deps, out);
     if (args.verb === 'take') return takeCommand(args, root, deps, out);
+    if (args.verb === 'answer') return answerCommand(args, root, deps, out);
     if (args.verb === 'skip') return skipCommand(args, root, env, deps, out);
     return tallyCommand(args, root, out);
   } catch (err) {

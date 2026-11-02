@@ -11,7 +11,7 @@
 // A correction is checked against its findings once (./lib/codex-review-recheck.mjs). A range that starts at
 // the head of a review that found something is a recheck: its prompt lists those findings and asks whether
 // each is fixed, anything new is a follow-up that does not block unless it could make a failing check pass
-// or exposes data, and its record names that head (`recheckOf`). A range that starts at the head of a
+// exposes data or is a regression the correction brought, and its record names that head (`recheckOf`). A range that starts at the head of a
 // recheck that left a finding open is refused, with what to record instead. No flag skips it.
 //
 // A merge of the default branch at HEAD, after a branch whose other code commits all have a record, is
@@ -1763,7 +1763,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         for (const finding of read.unmarked) log(findingLine(finding));
       }
       if (read.blocking.length > 0) {
-        log(`Blocking, a new finding that could make a failing check pass or exposes data: ${thousands(read.blocking.length)}.`);
+        log(`Blocking, a new finding that could make a failing check pass, exposes data or is a regression the correction brought: ${thousands(read.blocking.length)}.`);
         for (const finding of read.blocking) log(findingLine(finding));
       }
       if (read.followUps.length > 0) {
