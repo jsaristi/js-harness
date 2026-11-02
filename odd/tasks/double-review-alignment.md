@@ -289,8 +289,7 @@ notice at 2% left and his decision on the reset (L18). T4 is done (85d8ee7f, L19
 T7 is done (64a588eb, L20) on `feat/review-request`, PR 748. T8 is split in three commits on the same branch:
 T8b f58c4027 (the recheck blocks a regression the correction brought, prompt v2) and T8a 071dc6d7 (`double-review
 answer <run id> <reviewer> --taken --rebutted --why`, and `tally` rows per reviewer of code) are committed, not yet
-reviewed. T8c 5c67d309 (the lenses recheck their earlier findings, `recheckOf`) is committed too. Then Codex (`--base 64a588eb`) and lenses
-over T8a-T8c, push, and point T8 in PR 748 or its own PR. Next, in order, each a slice with Codex and the lenses: T9, T2; D5's two exemptions (Claude 6 of L12) are
+reviewed. T8c 5c67d309 (the lenses recheck their earlier findings, `recheckOf`) is committed too. Codex reviewed 026cc2a..4ab62a6 (run 645a50c0): incorrect, 2 P2 (a lens skip threw over a rechecked range; an earlier finding outside the patches counted fixed), both taken, fixed in 4bf5ee75 and answered with `double-review answer`. Next: the confirming Codex review `--base 4ab62a6a` (a recheck), lenses over 64a588eb..HEAD, push, PR. Next, in order, each a slice with Codex and the lenses: T9, T2; D5's two exemptions (Claude 6 of L12) are
 kept in T4's text, since a question of fact proposes nothing and a reviewed text named by path is not read again, and
 the report says so for him to change. T6 keeps T2's verifier, older text 16 and the report of how to try it.
 Meter 87% weekly; floor 2% left.
