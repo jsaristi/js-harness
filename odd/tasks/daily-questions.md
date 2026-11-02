@@ -130,3 +130,10 @@ his option text; anything that changes `rule:owner-decisions`.
   time") is JH 126's file today, and a line there waits for its pull requests to land.
 - L4 2026-11-02 — the double review of T1 waits for his typed words, since they may reshape the rule it serves; its
   Codex read is not spent before then.
+- L5 2026-11-02 — parked, by the lead's note to JH 130 at 05:24 local (UTC-05:00). The lead asked him for the rule
+  in his own words as question 160; he tapped "La escribo en Other" and typed nothing (the lead's transcript
+  `0f71b2c6`, line 51642, 2026-11-02T10:17:57Z, read with `js-harness sessions --quote`), so the rule still has no
+  source. State: this document and its depth pass are on `rule/daily-questions` (cdf12d7b), approved by gentle-ai
+  (lineage `review-f6a18015e36cfe84`, low risk, documents only); T1 to T4 are open, none started. Resume: when his
+  typed words arrive, quote them in a new Log line and in spec 1, rebase on main (after JH 126's pull requests if
+  they have landed), then T1, T2's double review with its cost said first, T3 and T4.
