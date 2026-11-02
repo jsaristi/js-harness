@@ -185,7 +185,8 @@ import {
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './lib/project-functions.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
 import { leftOutOf, leftOutSaid, patchOfRead, reviewScope } from './lib/codex-review-scope.mjs';
-import { launchCodex } from './lib/codex-launch.mjs';
+import { codexVersion, launchCodex } from './lib/codex-launch.mjs';
+import { launchWord, readRateLimits } from './lib/codex-meter.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { gitDirs, gitDirsAndCommits, isFullCommitId } from './lib/project.mjs';
 import { ruleValue } from './lib/rules.mjs';
@@ -201,6 +202,9 @@ import { harnessHome } from './lib/home.mjs';
 // change of the effort is written with its date; the figures above are of the day they were first set.
 export const REVIEW_MODEL = ruleValue('review-model');
 export const REVIEW_EFFORT = ruleValue('review-effort');
+// The percent of Codex's weekly limit that must be left for a review to start (`codex-weekly-floor`), read just before
+// the launch (odd/tasks/double-review-alignment.md, T2).
+export const CODEX_WEEKLY_FLOOR = ruleValue('codex-weekly-floor', 'percent of the weekly limit left');
 
 // `--home` is where the harness keeps its machine state (`<home>/.js-harness/`), as in the other
 // commands: `--home`, else `JS_HARNESS_HOME`, else the OS home. A review keeps one thing there, the Codex
@@ -579,29 +583,6 @@ const truncate = (text, length) => (text.length > length ? `${text.slice(0, leng
 /** One command as one line, `  exit N  <command>`, cut to 100 characters. */
 function commandLine(command, exitCode) {
   return `  exit ${exitCode ?? '?'}  ${truncate(command.replace(/\s+/g, ' ').trim(), 100)}`;
-}
-
-const PROBE_TIMEOUT_MS = 15000;
-
-// A version as `codex --version` prints it after the name: `0.160.0`, or `0.161.0-alpha.2`.
-const CLI_VERSION = /\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?/;
-
-/** The version `codex --version` answers with (`0.160.0`), through the launch path and environment
- * of the review, or `null` when it does not answer with one: a missing CLI is told apart here, so a
- * bad `-c`, a broken config or a failed login is never reported as one. */
-function codexVersion(spawn, platform, env) {
-  try {
-    const result = launchCodex(spawn, platform, ['--version'], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      encoding: 'utf8',
-      timeout: PROBE_TIMEOUT_MS,
-      env,
-    });
-    if (!result || result.error || result.status !== 0) return null;
-    return CLI_VERSION.exec(result.stdout ?? '')?.[0] ?? null;
-  } catch {
-    return null;
-  }
 }
 
 /** Runs the review as an async child and resolves, like `spawnSync`, with `{ status, signal, stdout,
@@ -1176,6 +1157,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   // A run of the turn at a merge below HEAD (`firstTurn`): the intent its parent already read, and that it must
   // be read as a merge at HEAD, or it would review what the merged branch brought in.
   const { turnIntent = null, mergeTurnOnly = false } = deps;
+  const readMeter = deps.readMeter ?? (() => readRateLimits({ platform }));
   const kill = deps.killTree ?? ((child, lifetime) => killTree(child, lifetime, { platform }));
   const write = deps.write ?? ((text) => process.stdout.write(text));
   let args;
@@ -1838,6 +1820,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         if (headNow !== head) return `HEAD moved from ${head.slice(0, 7)} to ${headNow.slice(0, 7)}`;
         return tree === '' ? null : 'tracked files differ from HEAD';
       };
+      // The weekly limit, read before each session: at or under its floor nothing more is started and the user decides
+      // on the reset, so a part that spent down to it stops the next; a reading that is not there says so and runs.
+      const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, base: args.base, part });
+      if (weekly.note !== null) log(weekly.note);
+      if (weekly.stop !== null) {
+        error(weekly.stop);
+        return { exit: 1 };
+      }
       // The session's own Codex home, named after the run: the id is made here, before the launch, and the
       // run line reuses it. Until the home exists nothing is launched, so a failure here writes no run line
       // and no record.

@@ -51,6 +51,8 @@ async function review(root, ...argv) {
   const err = [];
   const launched = [];
   const code = await codexReviewMain(['--cwd', root, ...argv], {}, {
+    // A reading of Codex's weekly limit well above its floor, so no test starts `codex app-server`.
+    readMeter: async () => ({ ok: true, result: { rateLimits: { secondary: { usedPercent: 50 } } } }),
     log: (line) => out.push(line),
     error: (line) => err.push(line),
     spawnAsync: (...call) => {

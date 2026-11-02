@@ -35,6 +35,15 @@ export const COVERAGE = {
     "codex-review-floor": {"level":"owed","since":"2026-10-28"},
     "codex-review-margin": {"level":"owed","since":"2026-10-28"},
     "codex-review-rate": {"level":"owed","since":"2026-10-28"},
+    "codex-weekly-floor": {
+      "level": "check",
+      "test": "bin/codex-review-switch.test.mjs",
+      "break": {
+        "path": "bin/codex-review.mjs",
+        "find": "('codex-weekly-floor'",
+        "replace": "('review-model'"
+      }
+    },
     "context-pause": {
       "level": "check",
       "test": "bin/lib/rules-bindings.test.mjs",
@@ -678,7 +687,6 @@ export const COVERAGE = {
       "e2d2678259be",
       "33bc068e8075",
       "97a9ae8d5e03",
-      "051cd2519258",
       "94142d07402a",
       "57923c87d60b",
       "c9c0030dd3ea",

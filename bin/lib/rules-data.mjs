@@ -140,6 +140,14 @@ export const RULES = [
     ]
   },
   {
+    "id": "codex-weekly-floor",
+    "subject": "the share of Codex's weekly limit left at or under which a Codex review starts nothing and the user decides on the reset",
+    "owner": "sebastian",
+    "since": "2026-11-02",
+    "value": 2,
+    "unit": "percent of the weekly limit left"
+  },
+  {
     "id": "context-pause",
     "subject": "the share of its context window at which a session pauses, writes its state and judges whether what is left fits before the host compacts",
     "owner": "sebastian",
