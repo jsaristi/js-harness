@@ -4,8 +4,9 @@
 import { fenceWalk } from './rules-check.mjs';
 import { patternOf } from './rules.mjs';
 
-// The homes of the list, which show a value, and the texts that quote what was said or are frozen.
-const NOT_IN_FORCE = new Set(['bin/lib/rules-data.mjs', 'docs/rule-sources.json', 'docs/RULES.md', 'docs/FAILURES.md', 'docs/origin.md']);
+// The homes of the list, which show a value, and the texts that quote what was said or are frozen. The coverage
+// register is data of the list too: rule ids, days and planted breaks, never a value said again in prose.
+const NOT_IN_FORCE = new Set(['bin/lib/rules-data.mjs', 'bin/lib/rules-coverage-data.mjs', 'docs/rule-sources.json', 'docs/RULES.md', 'docs/FAILURES.md', 'docs/origin.md']);
 // Where the history of a feature document starts: what was said and done there is not in force.
 const HISTORY_LINE = /^## (?:Progress|Log)\r?$/;
 const FEATURE_DOCUMENT = /^odd\/tasks\/[^/]+\.md$/;

@@ -455,10 +455,21 @@ export function readCoverageText(text) {
   return { register };
 }
 
+// What stands for the controls while the rest is written, and the widest line a control takes on its own.
+const CONTROLS_MARK = '\0controls';
+const CONTROL_LINE = 120;
+
 /** The whole text of rules-coverage-data.mjs for `register`, its keys in one order and its controls sorted by id. */
 export function writeCoverage(register) {
   const controls = Object.fromEntries(Object.keys(register.controls).sort().map((id) => [id, register.controls[id]]));
   const sources = Object.fromEntries(Object.keys(register.sources).sort().map((id) => [id, register.sources[id]]));
-  const ordered = { baseline: register.baseline, controls, cases: [...register.cases].sort(), messages: [...register.messages].sort(), sources };
-  return `${COVERAGE_HEADER}export const COVERAGE = ${JSON.stringify(ordered, null, 2)};\n`;
+  const ordered = { baseline: register.baseline, controls: CONTROLS_MARK, cases: [...register.cases].sort(), messages: [...register.messages].sort(), sources };
+  // A control that fits on one line is written on one, so the register stays under the module size limit as rules
+  // are added (bin/conventions-structure.test.mjs); a longer one is written as JSON indents it.
+  const lines = Object.entries(controls).map(([id, control]) => {
+    const one = `    ${JSON.stringify(id)}: ${JSON.stringify(control)}`;
+    return one.length <= CONTROL_LINE ? one : `    ${JSON.stringify(id)}: ${JSON.stringify(control, null, 2).replace(/\n/g, '\n    ')}`;
+  });
+  const written = lines.length === 0 ? '{}' : `{\n${lines.join(',\n')}\n  }`;
+  return `${COVERAGE_HEADER}export const COVERAGE = ${JSON.stringify(ordered, null, 2).replace(JSON.stringify(CONTROLS_MARK), written)};\n`;
 }

@@ -14,19 +14,13 @@ export const COVERAGE = {
         "replace": "('agents-budget', 'estimated tokens') + 1"
       }
     },
-    "announce-finished": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "announce-finished": {"level":"owed","since":"2026-10-28"},
     "away-autonomy": {
       "level": "line",
       "path": "bin/lib/manifest.mjs",
       "phrase": "the share of the planned that was met, the map by phase before and after, the timeline"
     },
-    "background-task-declared": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "background-task-declared": {"level":"owed","since":"2026-10-28"},
     "chained-steps": {
       "level": "check",
       "test": "bin/lib/chained-step-guard.test.mjs",
@@ -36,26 +30,11 @@ export const COVERAGE = {
         "replace": "if (step !== null && before && Object.hasOwn(JOINERS, joiner) && step === '') return { step, joiner };"
       }
     },
-    "ci-gate-bound": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "claude-md-budget": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "codex-review-floor": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "codex-review-margin": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "codex-review-rate": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "ci-gate-bound": {"level":"owed","since":"2026-10-28"},
+    "claude-md-budget": {"level":"owed","since":"2026-10-28"},
+    "codex-review-floor": {"level":"owed","since":"2026-10-28"},
+    "codex-review-margin": {"level":"owed","since":"2026-10-28"},
+    "codex-review-rate": {"level":"owed","since":"2026-10-28"},
     "context-pause": {
       "level": "check",
       "test": "bin/lib/rules-bindings.test.mjs",
@@ -74,10 +53,7 @@ export const COVERAGE = {
         "replace": "('contract-run-timeout', 'minutes') + 1"
       }
     },
-    "control-phrase-min": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "control-phrase-min": {"level":"owed","since":"2026-10-28"},
     "depth-pass": {
       "level": "check",
       "test": "bin/lib/depth-pass.test.mjs",
@@ -92,10 +68,7 @@ export const COVERAGE = {
       "path": "bin/lib/protocols-skill.mjs",
       "phrase": "it first passes the double review of section 1"
     },
-    "fixed-load-budget": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "fixed-load-budget": {"level":"owed","since":"2026-10-28"},
     "gate-log-command": {
       "level": "check",
       "test": "bin/lib/rules-bindings.test.mjs",
@@ -150,14 +123,8 @@ export const COVERAGE = {
         "phrase": "while it says red, open only what it names, and write anything else in the roadmap's Later list"
       }
     ],
-    "lead-charter": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "live-board": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "lead-charter": {"level":"owed","since":"2026-10-28"},
+    "live-board": {"level":"owed","since":"2026-10-28"},
     "local-time": {
       "level": "check",
       "test": "bin/lib/reply-time.test.mjs",
@@ -167,96 +134,36 @@ export const COVERAGE = {
         "replace": "if (times.length >= 0) return null;"
       }
     },
-    "memory-feedback-home": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "memory-index-bytes": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "memory-pass-days": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "mistake-report": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "memory-feedback-home": {"level":"owed","since":"2026-10-28"},
+    "memory-index-bytes": {"level":"owed","since":"2026-10-28"},
+    "memory-pass-days": {"level":"owed","since":"2026-10-28"},
+    "mistake-report": {"level":"owed","since":"2026-10-28"},
     "owner-decisions": {
       "level": "protocol",
       "path": "bin/lib/protocols-skill.mjs",
       "phrase": "Decide everything else, say what it costs, and go on."
     },
-    "person-present": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "question-context": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "questions-one-place": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "recap-effort-line": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "remote-control-yes": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "reply-five-states": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "report-table": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "person-present": {"level":"owed","since":"2026-10-28"},
+    "question-context": {"level":"owed","since":"2026-10-28"},
+    "questions-one-place": {"level":"owed","since":"2026-10-28"},
+    "recap-effort-line": {"level":"owed","since":"2026-10-28"},
+    "remote-control-yes": {"level":"owed","since":"2026-10-28"},
+    "reply-five-states": {"level":"owed","since":"2026-10-28"},
+    "report-table": {"level":"owed","since":"2026-10-28"},
     "reports-spanish-visual": {
       "level": "protocol",
       "path": "bin/lib/protocols-skill.mjs",
       "phrase": "the page is the one a command makes from the records"
     },
-    "restart-announce": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "reuse-first": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "review-effort": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "review-model": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "review-part-files": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "review-part-lines": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "review-parts-unflagged": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "review-timeout": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "reviewed-commit-lines": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "restart-announce": {"level":"owed","since":"2026-10-28"},
+    "reuse-first": {"level":"owed","since":"2026-10-28"},
+    "review-effort": {"level":"owed","since":"2026-10-28"},
+    "review-model": {"level":"owed","since":"2026-10-28"},
+    "review-part-files": {"level":"owed","since":"2026-10-28"},
+    "review-part-lines": {"level":"owed","since":"2026-10-28"},
+    "review-parts-unflagged": {"level":"owed","since":"2026-10-28"},
+    "review-timeout": {"level":"owed","since":"2026-10-28"},
+    "reviewed-commit-lines": {"level":"owed","since":"2026-10-28"},
     "rules-live-in-the-harness": {
       "level": "protocol",
       "path": "bin/lib/protocols-skill.mjs",
@@ -280,71 +187,26 @@ export const COVERAGE = {
         "replace": "('sensor-timeout', 'minutes') + 1"
       }
     },
-    "session-effort": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "session-housekeeping": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "session-model": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "session-prompts": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "session-stall": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "session-title": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "sessions-open-in-sidebar": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "session-effort": {"level":"owed","since":"2026-10-28"},
+    "session-housekeeping": {"level":"owed","since":"2026-10-28"},
+    "session-model": {"level":"owed","since":"2026-10-28"},
+    "session-prompts": {"level":"owed","since":"2026-10-28"},
+    "session-stall": {"level":"owed","since":"2026-10-28"},
+    "session-title": {"level":"owed","since":"2026-10-28"},
+    "sessions-open-in-sidebar": {"level":"owed","since":"2026-10-28"},
     "status-report": {
       "level": "protocol",
       "path": "bin/lib/manifest.mjs",
       "phrase": "6. What you propose next, each step with its why: the criterion that puts it there, never a step alone."
     },
-    "subagent-effort": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "subagent-reader-model": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "subagent-writer-model": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "terminal-note": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "throughput-backfill-days": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "throughput-compare-days": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "throughput-quiet-days": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "throughput-quiet-runs": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "subagent-effort": {"level":"owed","since":"2026-10-28"},
+    "subagent-reader-model": {"level":"owed","since":"2026-10-28"},
+    "subagent-writer-model": {"level":"owed","since":"2026-10-28"},
+    "terminal-note": {"level":"owed","since":"2026-10-28"},
+    "throughput-backfill-days": {"level":"owed","since":"2026-10-28"},
+    "throughput-compare-days": {"level":"owed","since":"2026-10-28"},
+    "throughput-quiet-days": {"level":"owed","since":"2026-10-28"},
+    "throughput-quiet-runs": {"level":"owed","since":"2026-10-28"},
     "wait-every": {
       "level": "check",
       "test": "bin/lib/rules-bindings.test.mjs",
@@ -363,18 +225,9 @@ export const COVERAGE = {
         "replace": "('wait-for', 'minutes') + 1"
       }
     },
-    "wording-is-the-need": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "work-sessions-private-wsl": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "work-sessions-public": {
-      "level": "owed",
-      "since": "2026-10-28"
-    }
+    "wording-is-the-need": {"level":"owed","since":"2026-10-28"},
+    "work-sessions-private-wsl": {"level":"owed","since":"2026-10-28"},
+    "work-sessions-public": {"level":"owed","since":"2026-10-28"}
   },
   "cases": [
     "commit-no-attribution",
