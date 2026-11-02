@@ -250,7 +250,15 @@ test('the docs row fails on an explicit link of a capability that does not resol
   await withRepo(CROSS, (dir) => {
     const [row] = checkDocs(dir, { own: true });
     assert.equal(row.pass, true);
-    assert.match(row.detail, /; every explicit link of the cross index resolves, 2 links inferred, 3 reached by no capability \(js-harness docs index\)$/);
+    assert.match(row.detail, /; 0 records of docs\/SPEC\.md held to the source and to docs\/RECORDS\.md; every explicit link of the cross index resolves, 2 links inferred, 3 reached by no capability \(js-harness docs index\)$/);
+  });
+});
+
+test('the docs row fails on a record the source writes that no row of the table of records holds', async () => {
+  await withRepo({ ...CROSS, 'bin/lib/x.mjs': "export const x = path.join(home, '.js-harness', 'pace');\n" }, (dir) => {
+    const [row] = checkDocs(dir, { own: true });
+    assert.equal(row.pass, false);
+    assert.deepEqual(row.lines, ['pace (bin/lib/x.mjs) is a record the source writes and no row of the table holds: add it to its family, or to the names that are no records with why']);
   });
 });
 

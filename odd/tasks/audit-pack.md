@@ -281,10 +281,13 @@ Found by the search of item 2; each changes in T2.
 - [x] T4r (kind: verify) Codex reads T4 again whole (`codex-review --base d195f663 --again`), since its recheck of
   `651290fc` left one finding fixed in part, then fixed in `f53617f3` (L11), and a second recheck is not run;
   done: its two findings fixed in `cc051204` (L13)
-- [ ] T5 (kind: build) SPEC's record table completed, `docs/RECORDS.md` and its test, and the row's record part;
-  pull request 4 (specs 4, 6)
-- [ ] T6 (kind: verify) the close: the bar measured again, the Log's result against items 3 and 4, the report to the
-  lead (`js-harness notify --to orchestrator --kind closed`)
+- [x] T5 (kind: build) SPEC's record table completed, `docs/RECORDS.md` and its test, and the row's record part;
+  pull request 4 (specs 4, 6); done: `3dc9e9e9` and its fixes `7e00be65`, `6ff1be13`, branch `audit-pack-records`
+- [x] T5r (kind: verify) Codex reads T5 again whole (`codex-review --base 7d90257e --again`), since its recheck of
+  `7e00be65` left its one finding fixed in part, then narrowed to the writers' files (L16), and a second recheck is
+  not run; done: correct, no finding (L17)
+- [x] T6 (kind: verify) the close: the bar measured again, the Log's result against items 3 and 4, the report to the
+  lead (`js-harness notify --to orchestrator --kind closed`); done: L18 and the session summary
 
 ## Log
 - L1 2026-11-02T10:26:53Z, his request (the lead's transcript `0f71b2c6`, line 51906): "Necesito por favor que me
@@ -436,6 +439,75 @@ Found by the search of item 2; each changes in T2.
   input tokens). Delivery: PR 752 merged `d195f663` into main (`0c1b0205`), so the branch `audit-pack-index` is this
   line at `cc051204`, T4's commits keeping their ids and so their review records; a cherry-pick onto main was made
   and dropped unpushed, since new ids would have owed T4's whole review again.
+- L14 2026-11-02, T5 built test first (`bin/lib/docs-records.mjs` and its test, the row's record part in
+  `bin/docs.mjs`). The detector's first run against SPEC's table as it stood: 107 names, 101 findings: 28 rows without
+  a section (no `docs/RECORDS.md` yet), 7 line anchors no source names, and 66 names no row held. The bar of spec 4: of the 4 home names the table lacked and the 6 review records, 8 of 10 found at first;
+  `codex-review-runs.jsonl` (a bare `FILE` constant) and `lens-answers` (`LENS_ANSWERS_FOLDER`, and
+  `REVIEW_RECORD_FILES` frozen) were missed, so the constant rule now takes a bare name, `_FOLDER` and
+  `Object.freeze`, test first: 10 of 10. The table rewritten from 28 rows to 44, writers by file and function and no
+  line anchors (so `refresh-copy.mjs:287` and `project.mjs:1063` are gone, not moved), from a read-only explorer's
+  map of the 85 names (134,002 subagent tokens); new rows: the project's instructions, onboarding, the audit entry,
+  host updates, the host's files the harness edits, review turns, test traces, a session's pause and reach, the live
+  board's cursor, the permit relay, the WSL gate, pages shown, stretches, templates, the status line, a restore.
+  The six home folders no literal names (`lead/`, `pace/`, `spec-notes/`, `research/`, `patches/`, `backups/`): no
+  source under `bin/` writes any (the explorer's search of the six names joined, made or written), so none is a row.
+  Not as planned: the allow-list. Three literals are no names at all (`SKILL.md`, `bin`, `claude`, as planned); the
+  list of names that are no records of the harness holds 22 more, each with why (the hosts' and Codex's files read,
+  Claude's transcripts, scratch in a temporary folder), since the detector reads every file name joined to a path and
+  the harness reads many it does not own. `docs/RECORDS.md` (44 sections, 1,098 lines) written by three Opus readers
+  in parallel from the writers' code (about 213,000, 220,000 and 238,000 subagent tokens), each to a fragment in the
+  job's scratch; their reports corrected the table four times (a memory pass's `snapshots/<stamp>/`, the backup's
+  transcript clones, the host-watch brief in `background/`, `~/.codex/hooks.json` only removed now, the traces
+  written by `bin/lib/trace-reads.cjs`, which made the detector read `.cjs`). One section checked by hand against
+  its writer: "Lands" against `landLog` in `bin/merge-queue.mjs`, every field right. Not checked: the other 43
+  sections field by field. `docs check` on the branch: PASS, 44 records held.
+- L15 2026-11-02, T5's reviews over `7d90257..3dc9e9e`: Codex incorrect at 0.98 (170,109 input tokens; estimated
+  200,000 to 280,000), one P2 taken: a row's path was held to the source by its last segment alone, so a record
+  moved to a folder no source names passed (`~/.js-harness/nonexistent-folder/manifest.json`, its repro); now every
+  literal segment of a path must be named by the source, test first, and the real table still holds (0 findings).
+  The reliability and readability lenses (17,152 and 17,153 input tokens) found the same one thing, rebutted: an
+  unreadable tracked file would give `recordSources` an undefined text and crash the row, but `readCorpus` sets a
+  text for every listed file, `''` on any read error (its `catch`), so none is undefined; the repository test
+  filters with `existsSync` because it reads the disk itself. gentle-ai's Stop hook offered `c166e115..HEAD`, which
+  spans T4's fixes, T4r and T5: the read-only status was run and nothing started, a candidate being one slice.
+- L16 2026-11-02, the fix `7e00be65` reviewed over `3dc9e9e..7e00be6`: Codex's recheck not fixed, incorrect at 1.0
+  (98,150 input tokens): a wrong folder still passed where its name stood anywhere in the source. Taken in part: a
+  row's literal segments must now be named by its writers' files, not by any file (a row with no writer, by any),
+  test first with a folder another file names; on the real table this found 5 true faults, fixed: the session
+  summaries' writer is `bin/lib/summary.mjs` (`summaryPath`), the review runs' `appendCodexReviewRun`, the double
+  review's `appendDoubleReview`, and a command written as a path. Left, and said in the module's header: a folder
+  the writers' files also name for another record still passes, since the check is lexical and resolving the
+  composed paths is another feature. The reliability lens kept its rebutted finding open, as its code was not in
+  the range; `readRecords` now reads a missing text as `''`, which changes nothing (`readCorpus` sets every text)
+  and puts the guarantee in the code itself. gentle-ai over `7d90257..7e00be6` (lineage review-d52e38820df729f3)
+  was started with the granted consent; its candidate is overtaken by this fix, so it runs on the next candidate.
+- L17 2026-11-02, T5r and T5's last reviews. Codex read `7d90257..6ff1be1` again whole: correct at 0.87, no finding
+  (93,797 input tokens; estimated 190,000 to 310,000). The reliability lens over `7e00be6..6ff1be1`: 0 findings, its
+  open finding fixed (15,792 input tokens). gentle-ai over `7d90257..6ff1be1` (lineage review-1e0b973ec438bfb7, the
+  granted consent, an Opus reader of about 98,000 subagent tokens): approved and acknowledged, one WARNING and five
+  SUGGESTIONs, none blocking. The WARNING (a folder with a common name, as `remote`, can never fail) is rebutted:
+  it is the limit the module's header states, a folder the writers' files also name for another record. Not taken,
+  each left open for a later change, since each is a refinement and none a fault of the row today: a row written
+  partly by hand skips the path check for its whole Where cell (Rules, Failures); a writer file named with no
+  function after it is dropped rather than failed; a function name is put in a RegExp unescaped (no name in the
+  table holds `$`); a family written as separate spans cannot hold a name the detector builds as folder plus child
+  (it fails loudly, never silently); findings sort by the machine's locale.
+- L18 2026-11-02, T6, the close: the bar measured again on `audit-pack-records` (`287fdeac`), against item 3.
+  spec 1, `node --test bin/lib/docs-entry.test.mjs`: 6 of 6 pass; the index holds 20 entries of `docs/` (was 0 of 13
+  files and 0 of 5 folders). spec 2, `docs plan`: 1,445 tracked files, 5,829,121 estimated tokens, 18 slices of at
+  most 400,000 (core 4, 1,409,565; tests 5; feature documents 5; the rest 4); the core alone does not fit a 1M
+  window, as predicted. spec 3, `docs index`: 76 capabilities, 64 cite a document, 0 name a rule, 5 a failure entry,
+  34 reach a rule and 41 a failure entry by inference; 32 rules, 48 failure entries and 104 feature documents no
+  capability reaches; 0 broken; predicted 60, 42 and 42 of 75 from the prototype, measured 64 and 34 and 41 of 76;
+  the hand check 10 of 20, under the bar of 14, so inferred links stay "inferred, unverified". spec 4, `node --test
+  bin/lib/docs-records.test.mjs`: 15 of 15 pass; the bar of at least 10 names (4 home names, 6 review records):
+  predicted 10 of 10, measured 8 of 10 at the first run and 10 of 10 after the fix (L14); 44 rows, 0 findings.
+  spec 5, the grep: 0 lines (was 6). spec 6, `docs check`: PASS, and `npm run check` green at every commit. Item 4:
+  (a) predicted the corpus does not fit one context, measured 5,829,121 tokens: holds; (b) no landing page routed a
+  cold reader: `docs/README.md` now does; (c) predicted 19 of 75 capabilities complete through generated links: not
+  measured again at the close, the index printing per capability rather than this count. Not done here: the model
+  he named, "Fable 5.5", is not known to this session (the models it knows are Fable 5.1, Opus 5.5, Sonnet 5.5 and
+  Haiku 5.5), so its window, and the `--budget` it asks, goes to the lead with the close.
 
 ## Next step
 State at 2026-11-02 ~11:50Z, branch `worktree-audit-pack` (worktree `audit-pack`). The plan's reviews are done
@@ -484,3 +556,10 @@ T6 (the close, with the model he means by "Fable 5.5" asked of the lead).
 - Update ~15:45Z: T4 and T4r done and reviewed (L13); branch `audit-pack-index` at T4's line, pushed as pull request
   3. Next: T5 on a branch stacked on it (`audit-pack-records`), test first, the detector's prototype in the job's
   scratch (`detect.mjs`, 85 names found, reads such as `AGENTS.md` and `package.json` to sort out); then T6.
+- Update ~15:50Z: T5 built (L14), `docs check` passes on the branch. Next: its commit, Codex and the Claude lenses
+  over it (base `7d90257e`), push `audit-pack-records`, pull request 4 on PR 757; then T6.
+- Update ~16:10Z: T5 and T5r done and reviewed (L14 to L17); PR 757 landed (16:00Z), so pull request 4 goes on main.
+  Next: push `audit-pack-records`, open it, notify ready; then T6, the close.
+- Update ~16:25Z: PR 758 open and told ready (11:14 local). T6 done (L18), the session summary written. Next:
+  commit and push them on `audit-pack-records`, then `notify --kind closed --summary` and the "Fable 5.5" question
+  to the lead. Nothing else is open in this session.

@@ -1136,7 +1136,10 @@ entries and feature documents no capability reaches. 10 of 20 inferred links rea
 under the bar of 14 that would drop the mark. `--json` prints the index whole. `docs check` runs the
 `docs` row of `check` alone: in the harness's own repository it fails where `docs/README.md` is missing, a
 file or folder of `docs/` has no row under its `## Index`, a tracked file cannot be read, one file alone
-outgrows a slice, or an explicit link of the cross index does not resolve; in any other project it says so
+outgrows a slice, an explicit link of the cross index does not resolve, or SPEC's table of records drifts
+from the source (a name the source joins into a path that no row holds, a row no source names, a writer
+that no longer holds its function, or a row without its section of fields in `docs/RECORDS.md`); in any
+other project it says so
 and exits 0. Exit 1 on a failing row, where git cannot list the files, from `plan` where a tracked file
 cannot be read, named on stderr after the plan, and from `index` on a link that does not resolve, an
 input it lacks or a tracked file it cannot read, named on stderr; 2 on a usage error.
@@ -1157,7 +1160,7 @@ Too shared to infer from:
   bin/lib/manifest.mjs: 18 rules, 3 Today lines
   bin/lib/protocols-skill.mjs: 9 rules, 1 Today line
 $ js-harness docs check
-PASS  docs  19 entries of docs/ indexed; 1,434 tracked files in 18 slices of at most 400,000 estimated tokens (js-harness docs plan)
+PASS  docs  20 entries of docs/ indexed; 1,445 tracked files in 18 slices of at most 400,000 estimated tokens (js-harness docs plan); 44 records of docs/SPEC.md held to the source and to docs/RECORDS.md; every explicit link of the cross index resolves, 264 links inferred, 184 reached by no capability (js-harness docs index)
 ```
 
 ### js-harness lens-review
