@@ -301,14 +301,63 @@ export function recordedFolders(home, root, { readFile, platform = process.platf
 
 const lostSaid = (result) => result.status !== 0 && /no job matching/i.test(saidBy(result));
 
+/** How long a removal waits for the process claude's lock on the worktree names, and how often it looks: `claude stop`
+ * returns while the job's process still ends, and claude rm refuses until it has (six sessions from 2026-10-30 to
+ * 11-01, each gone seconds later: odd/tasks/defect-trio.md). */
+export const LOCK_WAIT_MS = 60_000;
+const LOCK_LOOK_MS = 500;
+/** The tries of claude rm while claude says files of the worktree are busy, and the pause before each try after the
+ * first: what the job started ends a little after it (the lead's retry on 2026-10-31, 05:58Z, found EBUSY). */
+export const RM_TRIES = 4;
+const BUSY_PAUSE_MS = 5000;
+const LOCK_PID = /lock on the worktree names a process that is still running \(pid (\d+)\)/i;
+const FILES_BUSY = /\bEBUSY\b/;
+
+/** Whether a process with this pid exists: one this process may not signal does. */
+function exists(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err.code === 'EPERM';
+  }
+}
+
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+/** claude rm of the job `id` after its stop: tried again once the process claude's lock names has ended (looked for
+ * with `alive` up to LOCK_WAIT_MS), and up to RM_TRIES times while claude says files are busy. Kills nothing: a pid in
+ * claude's words names no process surely. The last answer, with `why` when the wait gave up. */
+function removeJob(id, { run, now, alive, pause }) {
+  let rm = run(['rm', id]);
+  for (let tries = 1; tries < RM_TRIES && (rm.error || rm.status !== 0) && !lostSaid(rm); tries += 1) {
+    const said = saidBy(rm);
+    const pid = Number(LOCK_PID.exec(said)?.[1]);
+    if (Number.isInteger(pid)) {
+      const from = now();
+      let running;
+      while ((running = alive(pid)) && now() - from < LOCK_WAIT_MS) pause(LOCK_LOOK_MS);
+      if (running) return { ...rm, why: `the process claude's lock names, pid ${pid}, still ran ${Math.round((now() - from) / 1000)} s after claude stop` };
+    } else if (FILES_BUSY.test(said)) {
+      pause(BUSY_PAUSE_MS);
+    } else {
+      break;
+    }
+    rm = run(['rm', id]);
+  }
+  return rm;
+}
+
 /** Stops and removes the recorded session `entry` with `claude stop` and `claude rm`, deletes the copy of its brief,
  * then records the removal: `{ outcome: 'removed', worktreeKept, worktreeGone }`, or `'gone'` when claude no longer
  * knows it, or `{ outcome: 'kept', why }` when claude refused or the brief could not be deleted, which keeps it
  * recorded, so a second run finishes it. `worktreeKept` is the session's worktree when it is still there: claude keeps
  * one that holds uncommitted changes (odd/tasks/background-sessions.md, L10); `worktreeGone` is the one it removed;
  * `worktreeMissing` one that was not there before the stop, which claude never made or something else removed (R3-004).
- * The jobs it resumed (`resumedChain`) are undone with it, after it: they share its worktree and brief. */
-export function undoSession(entry, { home, run, now }) {
+ * The jobs it resumed (`resumedChain`) are undone with it, after it: they share its worktree and brief. Each claude rm
+ * waits for the job's process to end and tries again while files are busy (`removeJob`); `alive` and `pause` are the
+ * look at a pid and the wait, handed in by the tests. */
+export function undoSession(entry, { home, run, now, alive = exists, pause = sleepSync }) {
   let stopped;
   let removed;
   const record = readRecord(home);
@@ -318,8 +367,8 @@ export function undoSession(entry, { home, run, now }) {
   for (const job of chain) {
     const stop = run(['stop', job.id]);
     if ((stop.error || stop.status !== 0) && !lostSaid(stop)) return { outcome: 'kept', why: `claude stop ${job.id}: ${saidBy(stop)}` };
-    const rm = run(['rm', job.id]);
-    if ((rm.error || rm.status !== 0) && !lostSaid(rm)) return { outcome: 'kept', why: `claude rm ${job.id}: ${saidBy(rm)}` };
+    const rm = removeJob(job.id, { run, now, alive, pause });
+    if ((rm.error || rm.status !== 0) && !lostSaid(rm)) return { outcome: 'kept', why: `claude rm ${job.id}: ${saidBy(rm)}${rm.why ? `\n  ${rm.why}` : ''}` };
     if (job === entry) [stopped, removed] = [stop, rm];
   }
   for (const brief of new Set(chain.map((job) => job.brief).filter((brief) => typeof brief === 'string'))) {

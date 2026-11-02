@@ -79,7 +79,7 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
 ## Tasks
 - [x] T1 (kind: build) spec 1: the budget held on the hook's main-thread CPU and its child count; red under load first.
   Route: inline. L4.
-- [ ] T2 (kind: build) spec 2: `undoSession` waits for the lock's process and retries on EBUSY; tests first. Route: inline.
+- [x] T2 (kind: build) spec 2: `undoSession` waits for the lock's process and retries on EBUSY; tests first. Route: inline. L5.
 - [ ] T3 (kind: build) spec 3: the land's quiet look reads a busy session's transcript; tests first. Route: inline.
 - [ ] T4 (kind: verify) Codex and the Claude lenses over the code slice; FAILURES `Seen:` lines; PR; ready notice.
 
@@ -102,3 +102,10 @@ Nothing in this brief is his: three fixes inside shipped behaviour.
   green, lead main-thread p90 1265 ms (wall 4755-7393 ms), work 1030 ms (wall 3725-5986 ms), one process a run; quiet:
   lead 1421 ms, work 952 ms. Not weakened: with a module that burns 1.5 s on the main thread and starts `git --version`
   in each hook run, it is red on both, lead p90 2686 ms over 2500 and work "started more than 1 process (2 2 ...)".
+- L5 (2026-11-02, T2, red first): four unit tests of `undoSession` (`bin/lib/background.test.mjs`) failed on the missing
+  exports, and the CLI test "sessions stop waits for the job's process claude's lock names after the stop" (a fake claude
+  whose stop leaves a real process alive 2 s and whose rm refuses with claude's words while it runs) exited 1, not 0.
+  Green after `removeJob`: 11 of 11, and `node --test` over `bin/sessions-background.test.mjs`, `bin/sessions.test.mjs`,
+  `bin/lib/background.test.mjs`, `bin/install-session-messages.test.mjs` 299 of 299. The fake's first run also showed
+  the EBUSY side: its process, started in the test's folder, kept that folder from being removed (EPERM), so it starts in
+  the temp folder. `uninstall machine` undoes each session through `undoSession` too, so it waits the same way.

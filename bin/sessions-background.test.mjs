@@ -20,6 +20,8 @@ const RULES_DATA = fileURLToPath(new URL('./lib/rules-data.mjs', import.meta.url
 const FAKE = String.raw`
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { spawn } from 'node:child_process';
 const file = process.env.FAKE_CLAUDE_STATE;
 const state = JSON.parse(fs.readFileSync(file, 'utf8'));
 const argv = process.argv.slice(2);
@@ -68,12 +70,24 @@ if (argv[0] === 'stop') {
   delete agent.pid;
   agent.status = 'idle';
   agent.state = 'stopped';
+  // claude stop returns while the job's process still ends, and its lock on the worktree names that process.
+  if (state.lockMs) {
+    const job = spawn(process.execPath, ['-e', 'setTimeout(() => {}, ' + state.lockMs + ')'], { cwd: os.tmpdir(), detached: true, stdio: 'ignore', windowsHide: true });
+    job.unref();
+    state.lockPid = job.pid;
+  }
   save();
   out('stopped ' + argv[1]);
   process.exit(0);
 }
 if (argv[0] === 'rm') {
   if (state.refuseRm) { out(state.refuseRm); save(); process.exit(1); }
+  const running = (pid) => { try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; } };
+  if (state.lockPid && running(state.lockPid)) {
+    out('kept ' + argv[1] + ' — its worktree is still at “' + (agent?.worktree ?? process.cwd()) + '”\n  A Claude Code lock on the worktree names a process that is still running (pid ' + state.lockPid + ').');
+    save();
+    process.exit(1);
+  }
   if (!agent) lost(argv[1]);
   state.agents = state.agents.filter((item) => item !== agent);
   // claude rm keeps a worktree that holds uncommitted changes (odd/tasks/background-sessions.md, L10).
@@ -424,6 +438,16 @@ test('sessions stop stops and removes a recorded session, drops its brief and re
   assert.equal(again.code, 1);
   assert.match(again.stderr, /no session js-harness sessions start recorded is named by "0db8bc5e"/);
   assert.equal(actions(world).length, 3);
+}));
+
+test('sessions stop waits for the job\'s process claude\'s lock names after the stop, then removes the session', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
+  patchState(world, { lockMs: 2000 });
+  const result = js(world, ['sessions', 'stop', '0db8bc5e']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /removed 0db8bc5e · Build the thing/);
+  assert.deepEqual(actions(world).slice(1), [['stop', '0db8bc5e'], ['rm', '0db8bc5e'], ['rm', '0db8bc5e']]);
+  assert.equal(recordLines(world).at(-1).event, 'removed');
 }));
 
 test('sessions stop refuses a session it did not start and runs nothing', withWorld((world) => {
