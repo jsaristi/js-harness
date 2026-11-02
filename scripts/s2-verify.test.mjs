@@ -38,13 +38,16 @@ function fixture(t) {
   const home = path.join(root, 'home');
   const backup = path.join(root, 'backup');
   const ours = Array.from({ length: 15 }, (_, i) => hook(`js-harness hook-${i} --hook`));
+  const kept = { SessionStart: [...ours.slice(0, 10), hook('codegraph hook session-start')], Stop: ours.slice(10) };
   write(path.join(home, '.claude', 'CLAUDE.md'), '# Global\n\n<!-- js-harness:rules -->\n## Rules\n- one\n<!-- /js-harness:rules -->\n');
   write(path.join(home, '.claude', 'settings.json'), {
     // Key order and the order of the denies differ from the backup's: neither is a difference.
     permissions: { defaultMode: 'bypassPermissions', deny: [...DENY].reverse(), allow: ['Bash(git status:*)'] },
-    hooks: { SessionStart: [...ours.slice(0, 10), hook('codegraph hook session-start')], Stop: ours.slice(10) },
+    hooks: kept,
     outputStyle: 'js-harness',
   });
+  // The backup holds the same hooks, beside gentle-ai's and Orca's, which leave.
+  write(path.join(backup, 'roots', 'claude-config', 'settings.json'), { permissions: PERMISSIONS, hooks: { ...kept, PreToolUse: [hook('gentle-ai hook pre-tool'), hook('C:/Users/x/AppData/Roaming/orca/claude-hook.cmd')] } });
   write(path.join(home, '.claude.json'), { numStartups: 3, mcpServers: { context7: MCP.context7, codegraph: MCP.codegraph, engram: MCP.engram } });
   // js-harness's own skill names gentle-ai, and the machine manifest records it as installed.
   const protocols = path.join(home, '.claude', 'skills', 'js-harness-protocols', 'SKILL.md');
@@ -60,6 +63,12 @@ function fixture(t) {
     'model = "gpt-5"', '[mcp_servers.node_repl]', 'command = "node"', '[mcp_servers.codegraph]', 'command = "codegraph"',
     '[mcp_servers.context7]', 'url = "https://mcp.context7.com/mcp"', '[mcp_servers.context7.http_headers]', `CONTEXT7_API_KEY = "${KEY}"`,
     '[mcp_servers.engram]', 'command = "engram"', '',
+  ].join('\n'));
+  // The backup's, in another order and with gentle-ai's section beside them: neither is a difference.
+  write(path.join(backup, 'roots', 'codex-config', 'config.toml'), [
+    'model = "gpt-5"', '[mcp_servers.engram]', 'command = "engram"', '', '[mcp_servers.gentle-ai]', 'command = "gentle-ai"',
+    '[mcp_servers.context7]', 'url = "https://mcp.context7.com/mcp"', '[mcp_servers.context7.http_headers]', `CONTEXT7_API_KEY = "${KEY}"`,
+    '[mcp_servers.codegraph]', 'command = "codegraph"', '',
   ].join('\n'));
   write(path.join(home, '.gemini', 'GEMINI.md'), '# Gemini\n');
   write(path.join(backup, 'manifest.json'), {
@@ -252,6 +261,54 @@ test('the codex row fails on a gentle-ai marker, a herdr hook or a section gone 
     plant(fx);
     assert.ok(failing(verify(fx)).includes('codex'));
   }
+});
+
+test('the hooks row fails when a hook the backup held for js-harness or codegraph is gone, or none was backed up', (t) => {
+  // Codex P2 on 84997f7..0b9f98a: a settings.json with no hooks passed as `js-harness 0, codegraph 0`.
+  const plants = [
+    (fx) => write(path.join(fx.home, '.claude', 'settings.json'), { permissions: PERMISSIONS, outputStyle: 'js-harness' }),
+    (fx) => {
+      const file = path.join(fx.home, '.claude', 'settings.json');
+      const settings = JSON.parse(fs.readFileSync(file, 'utf8'));
+      settings.hooks.SessionStart = settings.hooks.SessionStart.filter((group) => !group.hooks[0].command.startsWith('codegraph'));
+      write(file, settings);
+    },
+    (fx) => fs.rmSync(path.join(fx.backup, 'roots', 'claude-config', 'settings.json')),
+  ];
+  const said = plants.map((plant) => {
+    const fx = fixture(t);
+    plant(fx);
+    const result = verify(fx);
+    assert.deepEqual(failing(result), ['hooks']);
+    return result.rows.find((row) => row.id === 'hooks').said;
+  });
+  assert.match(said[0], /16 hooks the backup held for js-harness or codegraph are gone, first SessionStart js-harness hook-0/);
+  assert.match(said[1], /1 hook the backup held for js-harness or codegraph is gone, first SessionStart codegraph hook session-start/);
+  assert.match(said[2], /the backup's settings\.json missing/);
+});
+
+test('the codex row fails when a complement\'s entry in config.toml differs from the backup\'s, and never prints its key', (t) => {
+  // Codex P2 on 84997f7..0b9f98a: the three headers alone passed with context7's key lost or a command changed.
+  const plants = [
+    (fx) => {
+      const file = path.join(fx.home, '.codex', 'config.toml');
+      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(KEY, OTHER_KEY));
+    },
+    (fx) => {
+      const file = path.join(fx.home, '.codex', 'config.toml');
+      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('command = "codegraph"', 'command = "codegraph-old"'));
+    },
+  ];
+  const said = plants.map((plant) => {
+    const fx = fixture(t);
+    plant(fx);
+    const result = verify(fx);
+    assert.deepEqual(failing(result), ['codex']);
+    return result.rows.find((row) => row.id === 'codex').said;
+  });
+  assert.match(said[0], /\[mcp_servers\.context7\] differs from the backup's/);
+  assert.match(said[1], /\[mcp_servers\.codegraph\] differs from the backup's/);
+  for (const text of said) assert.ok(!text.includes(KEY) && !text.includes(OTHER_KEY), 'a key reached the output');
 });
 
 test('a home with no GEMINI.md passes the gemini row, and an entry missing from .claude.json fails the mcp-claude row', (t) => {

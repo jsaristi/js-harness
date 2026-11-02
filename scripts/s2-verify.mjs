@@ -136,17 +136,29 @@ function markerRow(id, file, label) {
   return row(id, found === 0, found === 0 ? `${label} holds no gentle-ai marker` : `${label} holds ${plural(found, 'gentle-ai marker')}`);
 }
 
-function hooksRow(settings) {
+/** Who owns a hook command that stays: js-harness, codegraph, or null for one that leaves. */
+const keptOwner = (command) => (command.startsWith('js-harness ') ? 'js-harness' : command.includes('codegraph') ? 'codegraph' : null);
+
+/** Only js-harness's and codegraph's hooks, and every one of theirs the backup held still there: a settings.json that
+ * lost them all is the integrations gone, not a clean removal (Codex P2 on 84997f7..0b9f98a). */
+function hooksRow(settings, backupSettings) {
   if (!settings.value) return row('hooks', false, `settings.json ${settings.absent ? 'missing' : 'not valid JSON'}`);
+  if (!backupSettings.value) return row('hooks', false, `the backup's settings.json ${backupSettings.absent ? 'missing' : 'not valid JSON'}`);
   const owners = { 'js-harness': 0, codegraph: 0 };
   const others = [];
-  for (const { command } of hookCommands(settings.value)) {
-    if (command.startsWith('js-harness ')) owners['js-harness'] += 1;
-    else if (command.includes('codegraph')) owners.codegraph += 1;
+  const live = new Set();
+  for (const { event, command } of hookCommands(settings.value)) {
+    live.add(`${event} ${command}`);
+    const owner = keptOwner(command);
+    if (owner) owners[owner] += 1;
     else others.push(command.slice(0, 60));
   }
+  const lost = hookCommands(backupSettings.value).filter(({ command }) => keptOwner(command)).map(({ event, command }) => `${event} ${command}`).filter((hook) => !live.has(hook));
   const counts = `js-harness ${owners['js-harness']}, codegraph ${owners.codegraph}`;
-  return others.length === 0 ? row('hooks', true, counts) : row('hooks', false, `${counts}, ${plural(others.length, 'other hook')}: ${others.join(' | ')}`);
+  const problems = [];
+  if (lost.length > 0) problems.push(`${plural(lost.length, 'hook')} the backup held for js-harness or codegraph ${lost.length === 1 ? 'is' : 'are'} gone, first ${lost[0].slice(0, 60)}`);
+  if (others.length > 0) problems.push(`${plural(others.length, 'other hook')}: ${others.join(' | ')}`);
+  return problems.length === 0 ? row('hooks', true, counts) : row('hooks', false, `${counts}; ${problems.join('; ')}`);
 }
 
 function permissionsRow(settings, backupPermissions) {
@@ -203,7 +215,22 @@ function claudeDirsRow(home, platform) {
   return row('claude-dirs', false, `${plural(found.length, 'file')} of gentle-ai: ${shown}${found.length > 10 ? ', ...' : ''}`);
 }
 
-function codexRow(home) {
+/** The lines of `[mcp_servers.<name>]` and its sub-tables in a TOML text, each trimmed, blanks and comments dropped,
+ * so two files that hold one entry in another place compare equal; `[]` for none. Never printed: one holds a key. */
+function codexEntry(toml, name) {
+  const out = [];
+  let table = null;
+  for (const raw of toml.split(/\r?\n/)) {
+    const line = raw.trim();
+    const header = line.match(/^\[\[?([^\]]+)\]\]?$/);
+    if (header) table = header[1].replace(/"/g, '').trim();
+    if (table !== `mcp_servers.${name}` && !table?.startsWith(`mcp_servers.${name}.`)) continue;
+    if (line !== '' && !line.startsWith('#')) out.push(line);
+  }
+  return out;
+}
+
+function codexRow(home, backupToml) {
   const codex = path.join(home, '.codex');
   const problems = [];
   const markers = count(readText(path.join(codex, 'AGENTS.md')), GENTLE_MARKER);
@@ -220,6 +247,16 @@ function codexRow(home) {
   const sections = new Set([...toml.matchAll(/^[ \t]*\[mcp_servers\.(?:"([^"\]]+)"|([A-Za-z0-9_-]+))\][ \t]*$/gm)].map((m) => m[1] ?? m[2]));
   const absent = COMPLEMENTS.filter((name) => !sections.has(name));
   if (absent.length > 0) problems.push(`config.toml lacks [mcp_servers.${absent.join('], [mcp_servers.')}]`);
+  // Each entry as the backup holds it, so a lost context7 key or a changed command fails here, where `claude mcp list`
+  // cannot see it (Codex P2 on 84997f7..0b9f98a).
+  if (backupToml === null) problems.push('the backup\'s config.toml missing');
+  else {
+    for (const name of COMPLEMENTS.filter((each) => sections.has(each))) {
+      const held = codexEntry(backupToml, name);
+      if (held.length === 0) problems.push(`[mcp_servers.${name}] missing in the backup's config.toml`);
+      else if (held.join('\n') !== codexEntry(toml, name).join('\n')) problems.push(`[mcp_servers.${name}] differs from the backup's`);
+    }
+  }
   if (problems.length > 0) return row('codex', false, problems.join('; '));
   return row('codex', true, `nothing of gentle-ai, herdr or Orca; config.toml has ${COMPLEMENTS.join(', ')}`);
 }
@@ -334,11 +371,11 @@ export function verifyRemoval({ home, env = {}, backup, deps = {}, platform = pr
   const settings = readJson(path.join(home, '.claude', 'settings.json'));
   const checks = {
     'claude-md': () => markerRow('claude-md', path.join(home, '.claude', 'CLAUDE.md'), 'CLAUDE.md'),
-    hooks: () => hooksRow(settings),
+    hooks: () => hooksRow(settings, readJson(path.join(backup, 'roots', 'claude-config', 'settings.json'))),
     permissions: () => permissionsRow(settings, named('permissions')),
     'mcp-claude': () => mcpClaudeRow(readJson(path.join(home, '.claude.json')), named('mcpClaude')),
     'claude-dirs': () => claudeDirsRow(home, platform),
-    codex: () => codexRow(home),
+    codex: () => codexRow(home, readText(path.join(backup, 'roots', 'codex-config', 'config.toml'))),
     'settings-owners': () => settingsOwnersRow(settings, readJson(path.join(home, '.codex', 'hooks.json'))),
     engram: () => engramRow({ run, env: childEnv, marker, expect, manifest }),
     gone: () => goneRow({ home, env: childEnv, run, platform }),
