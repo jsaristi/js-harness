@@ -7,29 +7,33 @@ Locator: `odd/tasks/audit-pack.md` · Engram mirror: `odd/audit-pack/tasks` · B
 A model that has never seen js-harness can audit it whole, in slices that each fit one context, starting from one
 entry document that says what the project is, which document is live and which is history, in what order to read
 it all and at what measured cost, where the why of each capability is (its rules, its failures, its feature
-documents) and what each record the harness writes holds, with every one of those texts held true by a command.
+documents) and what each record the harness writes holds. A command holds the structure of those texts true (the
+index against the folder, the plan against the tracked files, the links and the record paths against the source);
+the truth of their prose is what the audit itself reads.
 
 ## Why
 He wants the strongest model to audit the whole project in extreme depth, saying what is right, wrong, improvable,
 redundant, blocking or unnecessary, and asked whether the documentation holds a detailed map of how it works, the
 why of each thing and the plan with its criteria (L1). The map exists (`docs/SPEC.md`), but the corpus does not fit
-one context, nothing routes a cold reader to it, the why is spread over four kinds of record, the record formats
-live only in code, and some texts are stale (Depth pass, item 2). He approved building this pack first (L2).
+one context, nothing routes a cold reader to it, the why is spread over four kinds of record, SPEC's table says
+where each record lives but its fields live only in code, and some texts are stale (Depth pass, item 2). He approved building this pack first (L2).
 
 ## Done when
 - `node bin/js-harness.mjs contract check odd/tasks/audit-pack.md` exits 0
-- `node --test bin/docs.test.mjs bin/lib/docs-plan.test.mjs bin/lib/docs-index.test.mjs bin/lib/docs-records.test.mjs` exits 0
-- `node bin/js-harness.mjs docs plan` exits 0, every slice under its budget and every file `git ls-files` lists in
-  exactly one slice
+- `node --test bin/docs.test.mjs bin/lib/docs-plan.test.mjs bin/lib/docs-index.test.mjs bin/lib/docs-cross.test.mjs bin/lib/docs-records.test.mjs` exits 0
+- `node bin/js-harness.mjs docs plan` exits 0, every slice under its budget (no file alone over it) and every file
+  `git ls-files` lists in exactly one slice
 - `node bin/js-harness.mjs docs index` exits 0
+- `git grep -nE "13 Claude entries|5 Codex entries|gentle-ai owns|is written last|hooks for Claude Code and Codex|gentle-ai install" -- AGENTS.md README.md docs ':!docs/proposals' ':!docs/sessions'` prints nothing (spec 5)
 - `npm run check` exits 0, its `docs` row passing
 - each pull request is merged into main, named in `## Log`, with Codex and the Claude lenses recorded over its code
 
 ## In scope / Out of scope
 - In: a new entry document `docs/README.md`; a new command `js-harness docs` (`bin/docs.mjs`,
   `bin/lib/docs-*.mjs`, the dispatcher `bin/js-harness.mjs`, `README.md`'s reference); a `docs` row of `check`
-  (`bin/check.mjs`); a new record-formats document `docs/RECORDS.md`; one capability in `docs/SPEC.md` and the
-  stale texts of `## Stale texts`; one line in `AGENTS.md`; `docs/ROADMAP.md`; this document.
+  (`bin/check.mjs`); SPEC's "Where state lives" table completed and a fields document `docs/RECORDS.md` keyed by
+  its record names; one capability in `docs/SPEC.md` and the stale texts of `## Stale texts`, `docs/GUIDE.md`'s
+  command table among them; one line in `AGENTS.md`; `docs/ROADMAP.md`; this document.
 - Out: the files of JH 126 (worktree `harness-alignment`: the review flow, `bin/codex-review*`, `bin/lens-review*`,
   `bin/lib/lens-*`, `bin/lib/double-review-*`, `bin/lib/protocols-skill.mjs`, `bin/lib/project.mjs`, the
   `CLAUDE.md` lines its `## Older texts` names) and of JH 131 (worktree `defect-trio`: `bin/reply-budget.test.mjs`,
@@ -61,11 +65,19 @@ refuting verdict, a change of the plan's order or a step that touches his decisi
   (`docs/README.md`, the place a repository host shows for the folder) with the index written by hand and two
   generated views printed by one command, `js-harness docs plan` and `docs index`, computed from the files that
   already hold the data (`docs/SPEC.md` and its Today lines, `docs/RULES.md`, `docs/FAILURES.md`, the source tree),
-  so no new annotation is asked of any document; one data dictionary, `docs/RECORDS.md`, its paths held to the code
-  by a test; and one `check` row that fails when a document is missing from the index, a slice outgrows its budget,
-  a link of the index does not resolve or a record path drifts. The search of `rule:reuse-first`: GUIDE is the
-  user's guide (`docs/GUIDE.md:1-12`) and SPEC's head says it never describes how the repository is today
-  (`docs/SPEC.md:3-7`), so neither can hold a docs status list or a reading order; `README.md` is the command
+  so no new annotation is asked of any document; SPEC's "Where state lives" table (`docs/SPEC.md:184`), which
+  already maps each record to its writer and readers, completed and held to the source by a test, with one data
+  dictionary of fields, `docs/RECORDS.md`, keyed by that table's record names; and one `check` row that fails when
+  a document is missing from the index, a file outgrows a slice, a link of the index does not resolve or a record
+  path drifts. The search of `rule:reuse-first`: GUIDE is the user's guide (`docs/GUIDE.md:1-12`) and SPEC is the
+  map whose head keeps rationale and today apart (`docs/SPEC.md:3-7`, `:62`), so neither holds a docs status list
+  or a reading order; the pre-launch audit (`odd/tasks/launch-audit.md`, closed, sign-off L29) built a per-file
+  inventory, `odd/tasks/launch-audit/inventory.tsv`, with classes by kind of file (live, history, generated, fixture,
+  internal, compatibility) and reading areas by import reach, held by `scripts/inventory.mjs --check`; it is a
+  stored copy and has rotted (580 findings on this branch, its last row on 2026-10-24), and `scripts/` is not
+  shipped, so `bin/` cannot import it; the plan computes the same placement each time and `docs/README.md` names it
+  historical, superseded by `docs plan`, with its ledger and refuter files as the precedent for where an audit's
+  findings go; `README.md` is the command
   reference at 39,550 tokens; no command measures documents for reading (`check`'s `payload` and `fixed load` rows
   measure what loads every turn, `bin/lib/payload.mjs`, `bin/lib/fixed-load.mjs`); `rules render` and `failures`
   each read one record and join none; `spec.mjs` already parses SPEC (`parseSpec`, `bin/lib/spec.mjs:31`) and
@@ -80,12 +92,16 @@ refuting verdict, a change of the plan's order or a step that touches his decisi
   here: 60 capabilities name a feature document, 42 reach a rule whose Home or Read-by file is in their Today line
   (homes carrying more than 8 rules left out: `bin/lib/manifest.mjs` 18, `bin/lib/protocols-skill.mjs` 9), 42 reach a
   failure entry whose control file is in their Today or Proof line, 19 reach all three; no capability names a rule
-  by `rule:<id>`; only 3 of 74 rules declare a `failure`; `docs/SPEC.md:75` says "13 Claude entries, 5 Codex
+  by `rule:<id>`; only 3 of 74 rules declare a `failure`; 27 of 74 rules are homed in the two files left out, and
+  `bin/check.mjs`, Read-by file of 4 rules, is on 14 Today lines; `docs/SPEC.md:75` says "13 Claude entries, 5 Codex
   entries" where `entryComponents` (`bin/lib/manifest.mjs`) holds 15, all Claude, none for Codex; `HOME_FILES`
   (`bin/lib/spec.mjs:21`) holds 2 paths and says why run-time names are not listed; 21 distinct names joined under
   `.js-harness` in the source outside tests (`grep -rhoE "'\.js-harness', '[a-z0-9.-]+'" --exclude='*.test.mjs'
   bin`; 25 with the tests), plus `codex-review-homes`, held in a constant (`bin/lib/codex-review-home.mjs:65`) that
-  no such grep sees; every tracked file (`git ls-files`): 1,433, none binary, 5,766,060 estimated tokens, of which
+  no such grep sees; SPEC's table (`docs/SPEC.md:184-216`) names 17 of those 21 with writers and readers, the six
+  review records of the git folder, and two line anchors that have drifted (`bin/lib/refresh-copy.mjs:287`, the name
+  now at `:332`; `bin/lib/project.mjs:1063`, a comment); every tracked file (`git ls-files` on `8a07203`, 1,432 on
+  `47d96a3` by `git ls-tree -r --name-only 47d96a3 | wc -l`): 1,433, none binary, 5,766,060 estimated tokens, of which
   `scripts/` 186,406, `docs/` subfolders but sessions 102,108, the root's files 47,341; `AGENTS.md` 972 estimated
   tokens against its budget of 1,500 (`check`'s `budget` row on `8a07203`), and 6 folders under his
   `~/.js-harness` that no such literal names (`lead/`, `pace/`, `spec-notes/`, `research/`, `patches/`, `backups/`);
@@ -98,45 +114,66 @@ refuting verdict, a change of the plan's order or a step that touches his decisi
   spec 1: `node --test bin/lib/docs-index.test.mjs`: every file directly under `docs/` (Markdown, HTML and JSON) and
   every folder of `docs/` has a row of the index in `docs/README.md` with one status of four, each defined there
   (live: in force and kept true; frozen: kept as written, never edited; historical: true when written, superseded,
-  naming what supersedes it; closed: work that ended, naming where its result lives); `README.md` and `AGENTS.md`
-  name it; today no index: 0 of 13 files, 0 of 5 folders.
+  naming what supersedes it; closed: work that ended, naming where its result lives); a folder's row is the status
+  of its files, and a file deeper in it may have its own row, which overrides it (as `docs/host-updates/README.md`,
+  a live format beside the records of single releases); `README.md` and `AGENTS.md` name it; the feature documents
+  of `odd/tasks/` get no stored status: `docs plan` prints each one's open or closed state, computed from its task
+  boxes as `js-harness progress` counts them; today no index: 0 of 13 files, 0 of 5 folders.
   spec 2: `node bin/js-harness.mjs docs plan`: the corpus is every file `git ls-files` lists (1,433 on `47d96a3`,
   none binary, 5,766,060 estimated tokens); each lands in exactly one slice, each slice under `SLICE_BUDGET`, 400,000
   estimated tokens (40% of a 1M window: room for the auditor's instructions, reasoning and findings, and for
-  `estimateTokens` undercounting code and Spanish by up to 1.5 times; `--budget <n>` for another window), in four
-  tiers printed in order with their cost: core (the documents of the root and `docs/` top level, then the source of
-  `bin/` in SPEC's order of capabilities), tests (by the capability whose Proof or Today names them), feature
-  documents (`odd/`, `docs/` subfolders), and the rest (`evals/`, `scripts/`, `templates/`, configuration, CI). A
-  capability's files stay in one slice unless they alone outgrow the budget, then they split by file; a file claimed
-  by two capabilities goes with the first; a source file no Today line claims goes with the first capability whose
-  files import it, else to its tier's last slice; one file over the budget is its own slice and is flagged, never
-  cut. Today none, new behaviour; the core tier alone, 1,331,453 tokens, does not fit a 1M window.
+  `estimateTokens` undercounting code and Spanish by up to 1.5 times; the window of the model he named, "Fable 5.5"
+  (L1), is not known here, so 1M is an assumption and `docs/README.md` says to pass `--budget` at 40% of the
+  auditor's window), in four tiers printed in order with their cost: core (every file of the root and every file
+  directly under `docs/`, of any extension, the orientation documents first, then the source of `bin/` that is not a
+  test in SPEC's order of capabilities), tests (`*.test.*js` and `*.testkit.mjs` of `bin/`, by the capability whose
+  Proof or Today names them), feature documents (`odd/`, `docs/` subfolders, each feature document of `odd/tasks/`
+  with its computed state), and the rest (`evals/`, `scripts/`, `templates/`, configuration, CI). A capability's
+  files stay in one slice unless they alone outgrow the budget, then they split by file; a file claimed by two
+  capabilities goes with the first; a source file no Today line claims goes with the first capability whose files
+  import it, else to its tier's last slice; one file over the budget is its own slice, flagged, never cut, and fails
+  the row at `SLICE_BUDGET` (none today). Every slice after the first opens with `docs/README.md`, counted in its
+  budget, whose findings convention carries what one slice learns to the next. `docs plan` exits 0 with any budget;
+  1 only when git cannot list the files. Today none, new behaviour; the core tier, re-measured under this definition
+  at T3, does not fit a 1M window (1,331,453 tokens for its Markdown and source alone).
   spec 3: `node bin/js-harness.mjs docs index`: for each capability, its explicit links first, from what its own text
   cites (an `odd/tasks/` or `docs/` path with the section it quotes, a `rule:<id>`, a failure id of
   `docs/FAILURES.md`) and from what the records declare (a rule's `failure`); then its inferred candidates, marked as
   such with the file that made each: a rule whose Home or Read-by file is in its Today line, a failure entry whose
   control file is in its Today or Proof line, a file that more than 8 rules share (`bin/lib/manifest.mjs`,
-  `bin/lib/protocols-skill.mjs` today) printed as too shared to infer from, never dropped in silence; then the rules,
-  failure entries and feature documents no capability reaches; `--json`. Today's figures, a prototype run here with
-  these rules and not committed: 60 of 75 cite a feature document, 42 reach a rule and 42 a failure entry by
-  inference, 19 reach all three, 0 name a rule by id; the bar's numbers are T4's first run, recorded in the Log.
-  spec 4: `node --test bin/lib/docs-records.test.mjs`: `docs/RECORDS.md` gives each record the harness writes under
-  the home, in the clone's git folder (`.git/js-harness/`) and in the project, with its fields (each variant of a
-  record that holds several, as the channel's notices by kind), its writer and readers by `path:line`; the test fails
-  when a name the source outside tests joins under `.js-harness` or under the git folder's `js-harness`, or holds in
-  a constant that names a home folder (as `HOMES_DIR` of `bin/lib/codex-review-home.mjs:65`), is missing from it,
-  when a writer it cites by `path:line` no longer holds that name on that line, or when a path it lists is in no
-  source file and not marked as written by hand. Fields are written from the writer's code and not checked against
-  it: no schema exists to check them against, and making one is another feature. Today 1 of the 21 home names in a
-  document (`~/.js-harness/manifest.json` in `HOME_FILES`; filter: `--exclude='*.test.mjs'`), 0 with fields.
+  `bin/lib/protocols-skill.mjs` today) or that more than 8 Today lines claim (`bin/check.mjs`, 14) printed as too
+  shared to infer from, never dropped in silence; then the rules, failure entries and feature documents no
+  capability reaches, the rules homed in a too-shared file said as such; `--json`. Today's figures, a prototype run
+  here with these rules and not committed: 60 of 75 cite a feature document, 42 reach a rule and 42 a failure entry
+  by inference, 19 reach all three, 0 name a rule by id; the bar's numbers are T4's first run, recorded in the Log
+  with the precision of 20 inferred links read by hand.
+  spec 4: `node --test bin/lib/docs-records.test.mjs`: SPEC's "Where state lives" table stays the one map of
+  records (where, writer, reader), completed: every record the harness writes under the home, in the clone's git
+  folder (`<git common dir>/js-harness/`) and in the project, nested records included (as `background/`'s
+  `sessions.jsonl` and briefs, `bin/lib/background.mjs:21-24`, and the channel's files, `bin/lib/channel.mjs:80,85`);
+  its writers named by file and exported function, never by line. `docs/RECORDS.md` holds only the fields, a section
+  per record named as its table row (each variant of a record that holds several, as the channel's notices by kind),
+  so no fact has two homes. The detector reads the source outside tests: a name joined under `.js-harness`, the
+  second argument of `jsonLinesPath` and `appendJsonLine`, a `--git-path js-harness/` literal, a record file name
+  (`*.json`, `*.jsonl`, `*.tsv`, `*.log`) joined to a path, and the constants that name record files (`HOMES_DIR`,
+  `bin/lib/codex-review-home.mjs:65`; `REVIEW_RECORD_FILES`, `bin/lib/guard.mjs:491`), less a short allow-list of
+  names that are no records (`SKILL.md`, `bin`, `claude`); the test fails when a detected name is in no table row,
+  when a row's path is in no source file and not marked as written by hand, when a writer file no longer holds its
+  name, or when a section of `docs/RECORDS.md` names no row or a row has no section, with a planted break of each
+  form (a new home name, a nested record, a git-folder record, a project record). Fields are written from the
+  writer's code and not checked against it: no schema exists, and making one is another feature; each section names
+  the function that builds the record, where an auditor checks it. Today 17 of the 21 home names and the 6 review
+  records in SPEC's table, 2 of its anchors drifted, 0 with fields; the git-folder and project counts are T5's first
+  run of the detector, recorded in the Log.
   spec 5: `grep -rnE "13 Claude entries|5 Codex entries|gentle-ai owns|is written last|hooks for Claude Code and Codex|gentle-ai install" --exclude-dir=proposals --exclude-dir=sessions AGENTS.md README.md docs`: no line
   left, each stale text of `## Stale texts` rewritten to what the code does; today 7 lines on `47d96a3`
   (`AGENTS.md:4`, `README.md:4`, `README.md:643`, `docs/GUIDE.md:53`, `docs/GUIDE.md:74`, `docs/ROADMAP.md:1005`,
   `docs/SPEC.md:75`).
-  spec 6: `npm run check`: a `docs` row that fails on a file or folder of `docs/` missing from the index, a slice
-  over budget that is not one flagged file, a file of `git ls-files` in no slice, an explicit link of the index that
-  does not resolve, or a record path that drifts, with a planted break of each in its test, and that only reports
-  the inferred links and what no capability reaches; none, new behaviour.
+  spec 6: `npm run check`: a `docs` row that fails on a file or folder of `docs/` missing from the index, a file
+  alone over `SLICE_BUDGET`, an explicit link of the index that does not resolve, or a record that drifts (spec 4),
+  with a planted break of each in its test, and that only reports the inferred links and what no capability reaches;
+  the plan's own placement (every file in one slice, no slice over budget but a lone file) is a self-check of the
+  packer, kept because it costs one pass and fails only on a bug of it; none, new behaviour.
 - 4. Refutation: the cheapest tests that could show the request does not hold, run on `47d96a3`: (a) the corpus
   fits one context, so no reading plan is needed: core documents and source measure 1,331,453 estimated tokens,
   above a 1M window before any test, log or feature document, and the whole tracked corpus 5,766,060; it does not
@@ -147,16 +184,18 @@ refuting verdict, a change of the plan's order or a step that touches his decisi
   so a generated index carries most links, and its gaps (19 of 75 complete) are themselves audit findings, printed
   as such rather than hidden.
   Verdict: supports
-- 5. Request: "Make js-harness ready for an outside model to audit cold: one entry document, `docs/README.md`, that
-  says what the project is and gives every document one of four defined statuses and its successor; a command that
-  prints a reading plan of every tracked file in slices of at most 400,000 estimated tokens, in four tiers (core,
-  tests, feature documents, the rest) with costs it measures, the source in the order of SPEC's 75 capabilities; a
-  command that prints, for each capability, the feature documents, rules and failure entries its text cites, apart
-  from the ones inferred through shared files, and what no capability reaches; a document of every record the
-  harness writes in the home, the git folder and the project, its fields, writer and readers, held to the code's
-  paths and writer lines by a test; the stale texts fixed, each against the code, the hook count named from its
-  source rather than checked as a number; and one `check` row so none of it can drift. As small pull requests, each
-  through Codex and the Claude lenses."
+- 5. Request, the plan's rewrite of L1 and L2 (his words are those two, not this): make js-harness ready for an
+  outside model to audit cold: one entry document, `docs/README.md`, that says what the project is and gives every
+  document of `docs/` one of four defined statuses and its successor, and the feature documents their computed
+  state; a command that prints a reading plan of every tracked file in slices of at most 400,000 estimated tokens,
+  in four tiers (core, tests, feature documents, the rest) with costs it measures, the source in the order of
+  SPEC's 75 capabilities; a command that prints, for each capability, the feature documents, rules and failure
+  entries its text cites, apart from the ones inferred through shared files, and what no capability reaches; SPEC's
+  record table completed and a document of each record's fields, held to the source's record names by a test; the
+  stale texts fixed, each against the code; and one `check` row so the structure of it cannot drift. As small pull
+  requests, each through Codex and the Claude lenses. What came after his yes is the plan's means, not his words:
+  the 400,000 budget, the four statuses, the `check` row, 75 capabilities where his question said 85, and the
+  reviews, which the project's rules ask of every slice.
   Adds: none
 
 ## Specs
@@ -171,7 +210,8 @@ refuting verdict, a change of the plan's order or a step that touches his decisi
    roadmap: 9 of 75 capability titles appear in `docs/ROADMAP.md` and 5 capabilities cite it, so no key exists to
    join the rest; the decisions reach the auditor through the roadmap's own sections in the core tier and through
    the feature documents, which carry his answers (L6, Claude 7).
-4. Record formats. "como funciona" (L1): `docs/RECORDS.md`, its paths and writer lines held by a test.
+4. Record formats. "como funciona" (L1): SPEC's "Where state lives" table completed and `docs/RECORDS.md`, the
+   fields of each of its records, both held to the source's record names by a test (item 3, spec 4).
 5. Stale texts. "si todo esta bien o esta mal" (L1): `## Stale texts` fixed.
 6. The `docs` row of `check`, which holds 1 to 4.
 
@@ -190,7 +230,7 @@ Found by the search of item 2; each changes in T2.
    as future), `:53` and `:74` (`install` writing hooks for Codex, where `entryComponents` holds Claude's alone and
    `bin/lib/manifest.mjs:270` writes nothing under `~/.codex`) and `:83` (`stack install` leaves "gentle-ai's
    installer" to him), changed.
-5. Found in T2 by `grep -n gentle README.md`, each checked against the code: the `doctor` sample's gentle-ai row and
+5. Found in T2 by `grep -n gentle README.md`, lines as on `47d96a3`, each checked against the code: the `doctor` sample's gentle-ai row and
    fix (`README.md:638`, `:643`); `stack` leaving gentle-ai's installer to him and context7 optional (`:654`; the
    plan's `manual` is engram's own commands, a login and the prerequisites, `optional` typescript-lsp alone,
    `bin/lib/stack-install.mjs:107-112`); the throughput's `gentle-ai reviews` row (`:787`; no file of `bin/` reads
@@ -201,16 +241,22 @@ Found by the search of item 2; each changes in T2.
    `migrate` say of `.atl/` (`:264`, `:445`, `:455`).
 6. Found and left to JH 126 and to him: `CLAUDE.md` still tells a session to name gentle-ai reviews on a feature
    document's line and to run `gentle-ai review start`'s consent envelope ("Running what costs, and review"); its
-   lines are his and that section is JH 126's (`## Older texts` of `odd/tasks/double-review-alignment.md`).
+   lines are his. JH 126's `## Older texts` (`odd/tasks/double-review-alignment.md`) names `CLAUDE.md:24` and `:92`
+   but not `:74-91` (Codex 3 of read `279ba83f`), so no task owns them: the lead is told so in T3, and the close
+   reports them as an open contradiction until he changes them.
+7. `docs/GUIDE.md:157-163`, the command table, omits `migrate`, `stretch`, `template`, `double-review`,
+   `status-line`, `host-watch` and `commit-msg` of the dispatcher (Claude 11 of read `279ba83f`); T3 adds them with
+   `docs`.
 
 ## Tasks
 - [ ] T1 (kind: docs) this document, its depth pass, committed before any code; the plan's double review
   (`js-harness double-review read`), every finding answered (spec 1 to 6)
 - [ ] T2 (kind: docs) the stale texts; pull request 1 (spec 5)
 - [ ] T3 (kind: build) `js-harness docs plan`, test first, and `docs/README.md` with its index and the row's index
-  part; pull request 2 (specs 1, 2, 6)
+  part, `AGENTS.md` and GUIDE's command table; pull request 2 (specs 1, 2, 5, 6; spec 5 measured at its close)
 - [ ] T4 (kind: build) `js-harness docs index`, test first, and the row's link part; pull request 3 (specs 3, 6)
-- [ ] T5 (kind: build) `docs/RECORDS.md` and its test, and the row's record part; pull request 4 (specs 4, 6)
+- [ ] T5 (kind: build) SPEC's record table completed, `docs/RECORDS.md` and its test, and the row's record part;
+  pull request 4 (specs 4, 6)
 - [ ] T6 (kind: verify) the close: the bar measured again, the Log's result against items 3 and 4, the report to the
   lead (`js-harness notify --to orchestrator --kind closed`)
 
@@ -256,6 +302,35 @@ Found by the search of item 2; each changes in T2.
   project and each variant of a record are in spec 4, with writer lines checked; checking fields against writer
   contracts is not taken, since no schema exists to check them against (spec 4). Codex 5 taken (with Claude 1).
   Codex 7 taken (with Claude 2). Shared: Claude 1 and Codex 5, 2 and 7, 3 and 1, 4 and 6, 5 and 3, 6 and 4.
+- L7 2026-11-02, the plan's confirming review (read `279ba83f`): Claude on claude-opus-5-5, 15 findings, 2,639,531
+  tokens; Codex on gpt-6.1-sol, 6 findings, 934,240 tokens, about 1% of its weekly limit. Answered, each in this
+  document: Claude 1 taken: SPEC's "Where state lives" (`docs/SPEC.md:184`) is the map of records, completed, and
+  `docs/RECORDS.md` holds only fields keyed by its rows (spec 4, item 1, Why). Claude 2 taken in part: the
+  launch audit is in item 1's search and `docs/README.md` names its inventory historical, superseded by `docs plan`,
+  and its ledger as where findings go; its code is not reused, since `scripts/` does not ship and `bin/` cannot
+  import it, and the test classification it holds is the one `docs-plan.mjs` already uses (`*.testkit.mjs` a test);
+  its classes say what kind a file is, the four statuses how long a document holds, so they are not mapped; deleting
+  the stale inventory is not this pack's, its feature being closed. Claude 3 taken: writers named by file and
+  function, never a line, and SPEC's two drifted anchors fixed in T5. Claude 4 and Codex 2 taken: the detector's
+  forms, nested and project records, an allow-list, a planted break of each, the counts at T5's first run. Claude 5
+  taken: the Today-line fan-out cap and 20 links read by hand for precision; the 27 rules in the two shared homes
+  are said as not joinable by inference. Claude 6 taken in part: spec 5's grep is a Done-when line and the Goal says
+  a command holds the structure, not the prose; a row of forbidden phrases is not taken, a check a sentence (L6).
+  Claude 7 and Codex 4 taken: `odd/tasks/` documents get a computed state in `docs plan`, and a file under a folder
+  of `docs/` may have its own row over its folder's (spec 1); not every file of every folder, which would store a
+  status for each of about a hundred records of one kind. Claude 8 taken in part: "Fable 5.5" and the unknown window
+  are named, 1M stated as an assumption and `--budget` as the way to fit another; the lead is not asked, since the
+  plan does not wait on it. Claude 9 taken: item 5 is labelled the plan's rewrite and lists what came after his yes;
+  none of it changes the pack he approved. Claude 10 taken: T3 holds spec 5. Claude 11 taken in part: GUIDE's table
+  is stale text 7, fixed in T3; a check of it against `COMMANDS` is not taken (GUIDE is prose for him). Claude 12 and
+  Codex 5 taken: a file alone over `SLICE_BUDGET` fails the row (none today: `docs plan --json` on this tree flags no
+  slice), Done-when says so, and the slice checks are named a self-check. Claude 13 taken: the core tier is defined
+  by pattern, testkits are tests, the figure re-measured at T3. Claude 14 taken: every slice after the first opens
+  with `docs/README.md`, whose findings convention carries across slices. Claude 15 taken: stale text 5's lines are
+  on `47d96a3`. Codex 1 taken in part: the Goal no longer claims fields are held; tests of every writer's
+  serialization are not taken, being a test for each of about thirty writers, another feature. Codex 3 taken: stale
+  text 6, the lead told in T3, the close reports it open. Codex 6 taken: 1,432 on `47d96a3`, 1,433 on `8a07203`.
+  Shared: Claude 6 and Codex 1, 4 and 2, 7 and 4, 12 and 5. Corrections made, so the third and last review runs.
 
 ## Next step
 State at 2026-11-02 ~11:40Z, branch `worktree-audit-pack` (worktree `audit-pack`), commits `8a07203` (T1) and
@@ -281,3 +356,7 @@ push, PR, `js-harness notify --to orchestrator --kind ready --pr <n>`.
   `grep -rln "inventory" docs/audits odd/tasks`, and reuse or retire it). Then answer every finding in the Log
   (L7) with `double-review take 279ba83f-... claude|codex`, amend specs, and run the third and last review only if
   a correction is made; a real failure left after it goes to the lead as a problem.
+- Update ~12:30Z: review 2 answered (L7) and recorded with `double-review take`; the specs amended. Next: the third
+  and last review of this document (`js-harness double-review read odd/tasks/audit-pack.md`); a real failure it
+  still finds goes to the lead as a problem (`notify --kind waiting`); then T3 as above, plus `AGENTS.md`, GUIDE's
+  command table, the feature documents' computed state, the slice preamble and the oversized file failing the row.
