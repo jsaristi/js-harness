@@ -324,6 +324,23 @@ test('a comment after a header, or keys in another order, is no difference in th
     '[mcp_servers.node_repl]', 'command = "node"', '',
   ].join('\n'));
   assert.deepEqual(failing(verify(fx)), []);
+  // An array written over several lines keeps its order: reordered arguments are another command (gentle-ai R3 on
+  // 0b9f98a..0275e71d).
+  const args = (order) => ['[mcp_servers.engram]', 'command = "engram"', 'args = [', ...order.map((arg) => `  "${arg}",`), ']'];
+  const live = fs.readFileSync(path.join(fx.home, '.codex', 'config.toml'), 'utf8').replace('[mcp_servers.engram] # memory\ncommand = "engram"', args(['mcp', '--tools=agent']).join('\n'));
+  write(path.join(fx.home, '.codex', 'config.toml'), live);
+  const held = fs.readFileSync(path.join(fx.backup, 'roots', 'codex-config', 'config.toml'), 'utf8').replace('[mcp_servers.engram]\ncommand = "engram"', args(['mcp', '--tools=agent']).join('\n'));
+  write(path.join(fx.backup, 'roots', 'codex-config', 'config.toml'), held);
+  assert.deepEqual(failing(verify(fx)), []);
+  write(path.join(fx.home, '.codex', 'config.toml'), live.replace('  "mcp",\n  "--tools=agent",', '  "--tools=agent",\n  "mcp",'));
+  assert.deepEqual(failing(verify(fx)), ['codex']);
+  // An argument that holds `=` is no key: moving it within its array is a difference too.
+  const three = (order) => live.replace('  "mcp",\n  "--tools=agent",', order.map((arg) => `  "${arg}",`).join('\n'));
+  write(path.join(fx.backup, 'roots', 'codex-config', 'config.toml'), held.replace('  "mcp",\n  "--tools=agent",', '  "mcp",\n  "--tools=agent",\n  "--x=1",'));
+  write(path.join(fx.home, '.codex', 'config.toml'), three(['mcp', '--tools=agent', '--x=1']));
+  assert.deepEqual(failing(verify(fx)), []);
+  write(path.join(fx.home, '.codex', 'config.toml'), three(['mcp', '--x=1', '--tools=agent']));
+  assert.deepEqual(failing(verify(fx)), ['codex']);
 });
 
 test('a home with no GEMINI.md passes the gemini row, and an entry missing from .claude.json fails the mcp-claude row', (t) => {

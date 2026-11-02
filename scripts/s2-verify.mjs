@@ -215,10 +215,14 @@ function claudeDirsRow(home, platform) {
   return row('claude-dirs', false, `${plural(found.length, 'file')} of gentle-ai: ${shown}${found.length > 10 ? ', ...' : ''}`);
 }
 
+/** A TOML line that opens with a key and `=`: bare, quoted or dotted, so `"--tools=agent",` in an array is no key. */
+const TOML_KEY = /^(?:[A-Za-z0-9_-]+|"[^"]*"|'[^']*')(?:\s*\.\s*(?:[A-Za-z0-9_-]+|"[^"]*"|'[^']*'))*\s*=/;
+
 /** The lines of `[mcp_servers.<name>]` and its sub-tables in a TOML text, each trimmed, blanks and comments dropped,
- * each table's header bare and its lines sorted, the tables sorted too, so two files that hold one entry in another
- * place, order or comment compare equal (gentle-ai R3 on 0b9f98a..35e67e1); `[]` for none. A value written over several
- * lines is compared line by line. Never printed: one holds a key. */
+ * each table's header bare and its keys sorted, the tables sorted too, so two files that hold one entry in another
+ * place, key order or comment compare equal (gentle-ai R3 on 0b9f98a..35e67e1); `[]` for none. A key's value written
+ * over several lines stays one statement in its own order, since reordered arguments are another command (gentle-ai R3
+ * on 0b9f98a..0275e71d). Never printed: one holds a key. */
 function codexEntry(toml, name) {
   const tables = new Map();
   let table = null;
@@ -231,7 +235,11 @@ function codexEntry(toml, name) {
     }
     if (table !== `mcp_servers.${name}` && !table?.startsWith(`mcp_servers.${name}.`)) continue;
     if (!tables.has(table)) tables.set(table, []);
-    if (line !== '' && !line.startsWith('#')) tables.get(table).push(line);
+    if (line === '' || line.startsWith('#')) continue;
+    const statements = tables.get(table);
+    // A line that opens with `key =` starts a statement; any other line continues the one before it.
+    if (TOML_KEY.test(line) || statements.length === 0) statements.push(line);
+    else statements[statements.length - 1] += `\n${line}`;
   }
   return [...tables.keys()].sort().flatMap((key) => [`[${key}]`, ...tables.get(key).sort()]);
 }

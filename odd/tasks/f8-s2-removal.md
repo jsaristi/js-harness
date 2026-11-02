@@ -334,3 +334,9 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   acknowledged; 2 advisory findings, both taken: a TOML header followed by a comment was not read as one, so its lines
   went to the entry above (the codex row now reads such a header, and compares each table's lines sorted); a manifest
   with no export hashes failed without saying what to do (it now says to take a new backup).
+- gentle-ai: review `review-0f17a2885b6cc5e5` on `0b9f98a..0275e71d` (the reliability lens), approved and
+  acknowledged; 2 advisory findings. Taken: sorting each line let a multi-line `args` array reordered compare equal
+  (a key's lines now stay one statement in their order; a key is a bare, quoted or dotted TOML key, so an argument
+  holding `=` is none). Answered with a test, no change: a POSIX mode kept read-only would not block a second restore,
+  since the write step removes the target and copies anew (`bin/lib/stack-backup.mjs`, the `write` step), which a
+  read-only file allows (checked on this Windows machine: `copyFileSync` keeps mode 444, `rmSync` removes it).

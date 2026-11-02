@@ -362,6 +362,17 @@ test('a root that became a link since the backup is skipped whole, its target ne
   assert.match(out.join('\n'), /skip claude-data: .* is a link now, never followed/);
 });
 
+test('a restore puts back a file that is read-only now, since it replaces a file and never writes into one', (t) => {
+  // gentle-ai R3 on 0b9f98a..0275e71d asked whether a kept read-only mode blocks a second restore: the write step removes
+  // the target and copies anew, which a read-only file allows on Windows and in a writable folder elsewhere.
+  const { home, dest, deps } = backedUp(t);
+  const reader = path.join(home, '.claude', 'agents', 'reader.md');
+  fs.writeFileSync(reader, 'changed\n');
+  fs.chmodSync(reader, 0o444);
+  assert.equal(restoreBackup({ from: dest, home, yes: true, deps }).ok, true);
+  assert.equal(fs.readFileSync(reader, 'utf8'), 'an agent\n');
+});
+
 test('on Windows a config file renamed only in case is kept, never deleted as one the backup lacks', { skip: process.platform !== 'win32' && 'only Windows reads two names that differ in case as one file' }, (t) => {
   const { home, dest, deps } = backedUp(t);
   const agents = path.join(home, '.claude', 'agents');
