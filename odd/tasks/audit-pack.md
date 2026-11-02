@@ -398,3 +398,8 @@ T6 (the close, with the model he means by "Fable 5.5" asked of the lead).
   tokens, 2 P2 taken and fixed test first: `docs plan` now names an unreadable file and exits 1, and the packer
   asks again whether a group fits after closing the first slice, which brings in the opening. Next: the fix's
   commit, its Codex review (base `c51daf56`), push, the two pull requests.
+- Update ~12:15Z: the fix `1fb4f34` reviewed (Codex correct at 0.98, the reliability lens 0 findings). Pushed
+  `audit-pack-docs` (at `f2ca50f8`) and this branch; PR 751 (documents, base main) told ready; PR 752 (T3, base
+  `audit-pack-docs`) refused by `notify --kind ready` until 751 merges: then `gh pr edit 752 --base main` and
+  `js-harness notify --to orchestrator --kind ready --pr 752`. Next: T4, `js-harness docs index` with
+  `bin/lib/docs-cross.mjs`, test first, on a branch from this one.
