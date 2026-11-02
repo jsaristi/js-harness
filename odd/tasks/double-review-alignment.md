@@ -285,8 +285,18 @@ sweep, a record of that day (L16, Claude 10).
 State on 2026-11-01, on `rule/review-flow` from main f063429 (PR 745 landed T1, T3 and T5). He answered question
 150 in his own words (L14) and added the bound (L17): `## Redesign after question 150`, decided in L15, read blind
 in L16 and its findings taken; question 152 put it to him, and he approved it with point 5 changed: no reserve, a
-notice at 2% left and his decision on the reset (L18). T4 is done (85d8ee7f, L19), its own pull request from
-`rule/review-flow`. Next, in order, each a slice with Codex and the lenses: T7, T8, T9, T2; D5's two exemptions (Claude 6 of L12) are
+notice at 2% left and his decision on the reset (L18). T4 is done (85d8ee7f, L19), landed as PR 746 (main 5823566).
+Paused 2026-11-01 21:40 local at the lead's word (he turned the PC off). T7 is mid-way, NOT committed, in this
+worktree on branch `feat/review-request` (from `rule/review-flow` at cc19ab85): `--request`, Specs in `--doc`'s
+intent, either asking the own prompt in a turn too, `askedText` shared with the lens prompts, the `NO_ASKED` line.
+Its own tests pass (codex-review 162, codex-review-prompt 35+, lens-review 20), but the gate's run 41379003377
+failed about 30 tests in the split `bin/codex-review-*.test.mjs` files that compare the plan's output line by line:
+`NO_ASKED` is logged first, before the plan. Resume: (1) merge origin/main into the branch; (2) log `NO_ASKED`
+where it breaks no exact output, e.g. only when Codex is launched, after the plan, or update those tests; run
+`node --test bin/codex-review*.test.mjs bin/lens-review.test.mjs bin/lib/codex-review-prompt.test.mjs`; (3) section
+3 of the protocols skill names `--doc`/`--request` for both commands; (4) commit (`C:\Users\Oficina\.claude\jobs\9cc00bff\tmp\msg-t7.txt`
+may be gone: rewrite it), Codex and lenses with `--doc` this document, push, PR. Next, in order, each a slice with
+Codex and the lenses: T8, T9, T2; D5's two exemptions (Claude 6 of L12) are
 kept in T4's text, since a question of fact proposes nothing and a reviewed text named by path is not read again, and
 the report says so for him to change. T6 keeps T2's verifier, older text 16 and the report of how to try it.
 Meter 87% weekly; floor 2% left.
