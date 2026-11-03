@@ -114,6 +114,19 @@ test('open refuses while a stretch is open (exit 1), a plan it does not accept (
   assert.match(unknown.err, /unknown argument: --fast/);
 });
 
+// JH 136: a goal with `$( )` ran in cmd.exe, which passed it to `test` as written, and a met goal read "not met".
+test('open on Windows refuses a goal whose $( ) cmd.exe cannot run, and says how to write it (exit 2)', async () => {
+  const shellGoal = { id: 'prs', text: 'tres PR', command: 'git fetch -q origin && test $(git rev-list --count --merges HEAD) -ge 3' };
+  const plan = { ...PLAN, goals: [shellGoal] };
+  const windows = scratch();
+  const refused = await stretch(windows, ['open', '--plan', planFile(windows, plan)], { deps: { platform: 'win32' } });
+  assert.equal(refused.code, 2);
+  assert.match(refused.err, /goal prs: .*\$\( \).*cmd\.exe.*node -e/);
+  assert.equal(fs.existsSync(stretchFile(windows.home, projectSlug(windows.project))) && events(windows).some((event) => event.event === 'open'), false);
+  const linux = scratch();
+  assert.equal((await stretch(linux, ['open', '--plan', planFile(linux, plan)], { deps: { platform: 'linux' } })).code, 0);
+});
+
 test('status measures each item from its session\'s records, runs no goal, and --goals runs and records them', async () => {
   const place = scratch({
     notices: [

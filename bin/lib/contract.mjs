@@ -140,11 +140,45 @@ export function commandsIn(text) {
   return commands;
 }
 
+// The programs that read a `$( )` of their own in the argument cmd.exe hands them as written: `bash -c "..."`.
+const SUBSTITUTING_PROGRAMS = new Set(['bash', 'sh', 'pwsh', 'powershell', 'node']);
+
+/** `command` cut at cmd.exe's `&&`, `||`, `&` and `|` outside double quotes, the only quotes it has. */
+function cmdParts(command) {
+  const parts = [''];
+  let quoted = false;
+  for (let i = 0; i < command.length; i += 1) {
+    const char = command[i];
+    if (char === '"') quoted = !quoted;
+    if (!quoted && (char === '&' || char === '|')) {
+      if (command[i + 1] === char) i += 1;
+      parts.push('');
+    } else parts[parts.length - 1] += char;
+  }
+  return parts;
+}
+
+/** Why cmd.exe, the shell a goal or done-when command runs in on Windows (`runSensor`, `shell: true`), cannot run
+ * `command`, or `null`: a `$( )` in a part that no program of its own reads. cmd.exe has no command substitution and
+ * passes the text on as written, so the command fails, or passes, on a value it never computed (JH 136: a met goal
+ * read "not met (exit 2)"). */
+export function cmdShellGap(command) {
+  for (const part of cmdParts(command)) {
+    if (!part.includes('$(')) continue;
+    const program = /^[\s(@]*(?:"([^"]+)"|(\S+))/.exec(part);
+    const name = (program?.[1] ?? program?.[2] ?? '').split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '');
+    if (!SUBSTITUTING_PROGRAMS.has(name)) {
+      return `\`${part.trim()}\` uses $( ), which cmd.exe, the shell it runs in on Windows, does not have: it passes the text on as written. Compute the value inside one program instead, such as node -e "..."`;
+    }
+  }
+  return null;
+}
+
 /** `{ ok, errors }`: one human-readable reason per problem — a missing or empty section, a `Done
- * when` with no command, a command still holding a placeholder, an `Effort` that is not `medium` or
- * `high` when there is one, a task whose `(kind: …)` is not one of TASK_KINDS. Static only: it never runs
- * a command. */
-export function validateContract(markdown) {
+ * when` with no command, a command still holding a placeholder, a command cmd.exe cannot run when `platform` is
+ * Windows (`cmdShellGap`), an `Effort` that is not `medium` or `high` when there is one, a task whose `(kind: …)`
+ * is not one of TASK_KINDS. Static only: it never runs a command. */
+export function validateContract(markdown, { platform = process.platform } = {}) {
   const errors = [];
   const bodies = parseContract(markdown);
   const usable = new Set();
@@ -161,6 +195,8 @@ export function validateContract(markdown) {
     }
     for (const command of commands) {
       if (PLACEHOLDER_PATTERN.test(command)) errors.push(`command \`${command}\` still holds a template placeholder`);
+      const gap = platform === 'win32' ? cmdShellGap(command) : null;
+      if (gap) errors.push(`command \`${command}\` cannot run: ${gap}`);
     }
   }
 
