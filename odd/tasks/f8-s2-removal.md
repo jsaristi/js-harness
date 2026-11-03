@@ -226,18 +226,20 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
 ## Tasks
 - [x] T1 (kind: design) this document, its plan through the double review (Codex and a Claude reader) — S1-S9;
   inline; `bb6d22eb`, read `e432a072` (L5)
-- [ ] T2 (kind: build) `bin/lib/stack-backup.mjs`: the roots; the quiesce checks; a strict walker (throws on an
+- [x] T2 (kind: build) `bin/lib/stack-backup.mjs`: the roots; the quiesce checks; a strict walker (throws on an
   unreadable entry, keeps links with their targets, refuses other kinds); `run`'s copy into a `.partial` folder, its
   count against an independent count, its manifest, the registry and PATH exports; `verify`'s drill; `restore` with
   config roots as snapshots, data roots without deletion, engram only into an empty store, `--only`. Test first in
   scratch homes with planted fake credentials and a fake context7 key that no output may print, an unreadable folder,
-  a junction, an interrupted copy, a transcript newer than the backup — S1, S4-S7, S9; inline
-- [ ] T3 (kind: build) `stack backup` in `bin/stack.mjs`, its usage and help; the test that `collectFiles`
-  over a home holding `~/js-harness-s2-backup/x/.credentials.json` lists none of it — S4; inline
-- [ ] T4 (kind: build) `scripts/s2-verify.mjs`, step 8 read only (no `doctor`: it writes its cache; `doctor` runs
+  a junction, an interrupted copy, a transcript newer than the backup — S1, S4-S7, S9; inline;
+  `47c22307`, `1edd8539`, fixes through `662c3742` (L8, L11-L16)
+- [x] T3 (kind: build) `stack backup` in `bin/stack.mjs`, its usage and help; the test that `collectFiles`
+  over a home holding `~/js-harness-s2-backup/x/.credentials.json` lists none of it — S4; inline; `c72c2bcd` (L8)
+- [x] T4 (kind: build) `scripts/s2-verify.mjs`, step 8 read only (no `doctor`: it writes its cache; `doctor` runs
   apart and its cache write is named), the entries compared deeply with the backup's, engram by spec 6; test first on
-  a fixture home whose engram grew, compared whole before and after the run — S2; inline
-- [ ] T5 (kind: verify) Codex and the lenses on T2-T4, the independent verifier (high risk), PR — inline
+  a fixture home whose engram grew, compared whole before and after the run — S2; inline;
+  `d4b3c62c`, `427aa8a9` (L8, L11)
+- [x] T5 (kind: verify) Codex and the lenses on T2-T4, the independent verifier (high risk), PR — inline; PR 761 (L11-L17)
 - [ ] T6 (kind: verify) before the sitting, read only: each project's effective output style; the lead's yes to the
   plan of the sitting; the corrections of L6 to the lead — S3
 - [ ] T7 (kind: verify) the sitting, with the lead: his yes to close every session; he runs `stack backup run` and
@@ -381,3 +383,11 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   reliability 6,417, resilience 13,444). gentle-ai `review-82e895b46672ea75` approved, acknowledged; 1 suggestion, not
   taken: the new cases assert only `.claude`, which is the one folder both `claude-config` and `claude-data` name, so
   where one of them ends up is where the other does. Next: push, the PR, the ready notice, T6.
+- L17 2026-11-02 19:39 local: PR 761 opened at `2d9ea6b0`, the lead told ready (`notify --kind ready --pr 761`); it
+  shows no checks, since CI runs on `gate/**` and `queue/**` pushes (`.github/workflows/gate.yml:12-16`), so the lead's
+  landing runs it. T6 sent to the lead as a note at 19:40: after PR 761 lands and js-harness is updated, ask him (q1) to
+  close every session, the lead's included, and run from a plain terminal `js-harness stack backup run`, then
+  `js-harness stack backup verify --from <dir it prints> --marker s2drillmarker20261102 --expect 6431`; both exit 0,
+  then q2 gentle-ai's uninstall with its permissions and MCP restore, then Orca and herdr, one question each, and the
+  output style for `D:\js-harness` alone. The host compacted this session at 19:41; resumed from this document. A
+  `js-harness wait --notice-to 134` runs in the background until the lead's notice.
