@@ -143,32 +143,36 @@ export function commandsIn(text) {
 // The programs that read a `$( )` of their own in the argument cmd.exe hands them as written: `bash -c "..."`.
 const SUBSTITUTING_PROGRAMS = new Set(['bash', 'sh', 'pwsh', 'powershell', 'node']);
 
-/** `command` cut at cmd.exe's `&&`, `||`, `&` and `|` outside double quotes, the only quotes it has. */
+/** `command` cut at cmd.exe's `&&`, `||`, `&` and `|` outside double quotes, the only quotes it has: each part's
+ * `text`, and whether it holds a `$(` outside double quotes (`bare`) or inside them (`quoted`). */
 function cmdParts(command) {
-  const parts = [''];
+  const parts = [{ text: '', bare: false, quoted: false }];
   let quoted = false;
   for (let i = 0; i < command.length; i += 1) {
     const char = command[i];
     if (char === '"') quoted = !quoted;
     if (!quoted && (char === '&' || char === '|')) {
       if (command[i + 1] === char) i += 1;
-      parts.push('');
-    } else parts[parts.length - 1] += char;
+      parts.push({ text: '', bare: false, quoted: false });
+      continue;
+    }
+    const part = parts.at(-1);
+    if (char === '$' && command[i + 1] === '(') part[quoted ? 'quoted' : 'bare'] = true;
+    part.text += char;
   }
   return parts;
 }
 
 /** Why cmd.exe, the shell a goal or done-when command runs in on Windows (`runSensor`, `shell: true`), cannot run
- * `command`, or `null`: a `$( )` in a part that no program of its own reads. cmd.exe has no command substitution and
- * passes the text on as written, so the command fails, or passes, on a value it never computed (JH 136: a met goal
- * read "not met (exit 2)"). */
+ * `command`, or `null`: a `$( )` that no program of its own reads, one outside double quotes or in a part whose
+ * program has no substitution. cmd.exe has none and passes the text on as written, so the command fails, or passes,
+ * on a value it never computed (JH 136: a met goal read "not met (exit 2)"). */
 export function cmdShellGap(command) {
-  for (const part of cmdParts(command)) {
-    if (!part.includes('$(')) continue;
-    const program = /^[\s(@]*(?:"([^"]+)"|(\S+))/.exec(part);
+  for (const { text, bare, quoted } of cmdParts(command)) {
+    const program = /^[\s(@]*(?:"([^"]+)"|(\S+))/.exec(text);
     const name = (program?.[1] ?? program?.[2] ?? '').split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '');
-    if (!SUBSTITUTING_PROGRAMS.has(name)) {
-      return `\`${part.trim()}\` uses $( ), which cmd.exe, the shell it runs in on Windows, does not have: it passes the text on as written. Compute the value inside one program instead, such as node -e "..."`;
+    if (bare || (quoted && !SUBSTITUTING_PROGRAMS.has(name))) {
+      return `\`${text.trim()}\` uses $( ), which cmd.exe, the shell it runs in on Windows, does not have: it passes the text on as written. Compute the value inside one program instead, such as node -e "..."`;
     }
   }
   return null;

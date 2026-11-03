@@ -105,7 +105,7 @@ where an auditor checks them, since no schema holds the fields and nothing check
 
 - `## Goal`: one sentence. A document is a contract when it has this heading (`isContract`).
 - `## Why`, `## In scope / Out of scope`, `## Constraints`, `## Ask me before`: required and non-empty (`validateContract`, for `contract` and `check`'s `contracts` row).
-- `## Done when`: list items. An item that opens with an inline code span and says `exits 0` is a command `/goal` runs; any other item is a check for a person (`doneWhen`). At least one command is required, and none may still be a `<placeholder>`; on Windows, where it runs in cmd.exe, none may use `$( )` outside an argument of `bash`, `sh`, `pwsh`, `powershell` or `node` (`cmdShellGap`).
+- `## Done when`: list items. An item that opens with an inline code span and says `exits 0` is a command `/goal` runs; any other item is a check for a person (`doneWhen`). At least one command is required, and none may still be a `<placeholder>`; on Windows, where it runs in cmd.exe, none may use `$( )` outside a double-quoted argument of `bash`, `sh`, `pwsh`, `powershell` or `node` (`cmdShellGap`).
 - `## Effort` (optional, legacy): `medium` or `high`.
 - `## Depth pass`: required for documents opened on or after `harness.json` `depthPassSince`. It holds the items `1. Method`, `2. Raw material`, `3. The bar`, `4. Refutation` and `5. Request` in that order, a `Verdict: supports|refutes` line, and an `Adds: none` (or `Adds: … (question <n>)`) line (`bin/lib/depth-pass.mjs` `depthPassText`, `verdictOf`).
 - `## Specs`: numbered items `<n>. …` quoting the owner's words. The depth pass's bar refers to them, and the Codex review prompt carries the section (`bin/lib/codex-review-prompt.mjs`).
