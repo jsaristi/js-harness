@@ -742,6 +742,17 @@ configuration to bare.
 - Control: check — bin/js-harness.test.mjs — "run from the pre-commit hook of a linked worktree,
   this file leaves the repository being committed as it was" — since 2026-10-04
 
+### goal-written-for-another-shell
+A goal written for sh ran in cmd.exe, the shell goals and done-when commands run in on Windows, which
+passed its `$( )` on as written, so a goal that was met read "not met".
+- Class: tool
+- Seen: 2026-11-02 — the stretch closed at 12:50, plan `stretch-plan-1102b.json` in the scratchpad of
+  the lead's transcript 0f71b2c6 (brief JH 136) — goal `prs`, `git fetch -q origin && test $(git rev-list
+  --count --merges 47d96a3..origin/main) -ge 3`, read "not met (exit 2)" with 13 merges since 47d96a3;
+  run again through `runSensor` (JH 136): exit 2, "test: extra argument 'rev-list'"
+- Control: check — bin/stretch.test.mjs — "open on Windows refuses a goal whose $( ) cmd.exe cannot
+  run, and says how to write it (exit 2)" — since 2026-11-02
+
 ### guard-off-when-copy-behind
 The guard let sessions open with a title that carried no project code and number, because the
 installed copy the hooks run was behind the project's rules file: `ruleHere` gave `off: 'behind'`
