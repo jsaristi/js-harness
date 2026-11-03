@@ -48,6 +48,12 @@ const NAMED = {
   'bin/lib/project-migrate.mjs': 'the migration names what gentle-ai left in a project',
   'bin/lib/project-migrate.test.mjs': 'the migration names what gentle-ai left in a project',
   'bin/migrate.mjs': 'migrate prints what gentle-ai left in a project',
+  // S2's backup and its verification name the folders and blocks gentle-ai leaves, to back them up and check them gone
+  // (odd/tasks/f8-s2-removal.md, T2 and T4).
+  'bin/lib/stack-backup.mjs': 'the S2 backup names gentle-ai\'s folders, which it backs up before the removal',
+  'bin/lib/stack-backup.test.mjs': 'the S2 backup names gentle-ai\'s folders, which it backs up before the removal',
+  'scripts/s2-verify.mjs': 'S2\'s verification checks that gentle-ai is gone',
+  'scripts/s2-verify.test.mjs': 'S2\'s verification checks that gentle-ai is gone',
   'evals/suite.test.mjs': `${ABSENCE}: a run recorded with it in its stack still resumes`,
   'evals/proofs/codex-isolation.md': RESULT,
   ...Object.fromEntries(['f8-s0-a', 'f8-s0-b', 'f8-s0-c'].flatMap((run) => ['honesty', 'incidents', 'three'].map((name) => [`evals/results/${run}-${name}.json`, RESULT]))),
