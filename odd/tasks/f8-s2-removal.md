@@ -391,3 +391,8 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   then q2 gentle-ai's uninstall with its permissions and MCP restore, then Orca and herdr, one question each, and the
   output style for `D:\js-harness` alone. The host compacted this session at 19:41; resumed from this document. A
   `js-harness wait --notice-to 134` runs in the background until the lead's notice.
+- L18 2026-11-02 19:56 local: PR 761 landed (`gh pr view 761`: merged 2026-11-03T00:56:22Z as `698c5311`); the lead
+  refreshed the installed copy to it, and the installed `js-harness stack backup verify` answers with its usage. His
+  answer to question 171, "Hoy, cuando esté lista" (the lead's transcript `0f71b2c6`, line 56857,
+  2026-11-03T00:47:19Z, read with `js-harness sessions --quote`); then, by the lead, he is away 4 to 6 hours from
+  19:50, so T7 waits for his return, about 00:00 to 02:00 local. The lead messages this session then.
