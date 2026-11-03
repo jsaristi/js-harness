@@ -140,11 +140,48 @@ export function commandsIn(text) {
   return commands;
 }
 
+// The programs that read a `$( )` of their own in the code cmd.exe hands them as written, and the flags before that
+// code: `bash -c "..."`, `node -e "..."`, `powershell -Command "..."`.
+const CODE_FLAGS = new Map([['bash', ['-c']], ['sh', ['-c']], ['pwsh', ['-c', '-command']], ['powershell', ['-c', '-command']], ['node', ['-e', '--eval', '-p', '--print']]]);
+
+/** Whether a double quote after `before`, the text of its part of the command so far, opens the code of one of
+ * CODE_FLAGS' programs: its program is one of them and the word right before the quote one of its flags. */
+function opensCode(before) {
+  const program = /^[\s(@]*(?:"([^"]+)"|(\S+))/.exec(before);
+  const name = (program?.[1] ?? program?.[2] ?? '').split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '');
+  const flag = /(\S+)\s+$/.exec(before)?.[1].toLowerCase();
+  return CODE_FLAGS.get(name)?.includes(flag) ?? false;
+}
+
+/** Why cmd.exe, the shell a goal or done-when command runs in on Windows (`runSensor`, `shell: true`), cannot run
+ * `command`, or `null`: a `$( )` outside the double-quoted code of a program with its own (`opensCode`). cmd.exe has
+ * none and passes the text on as written, so the command fails, or passes, on a value it never computed (JH 136: a
+ * met goal read "not met (exit 2)"). Its parts are cut at `&&`, `||`, `&` and `|` outside double quotes, the only
+ * quotes cmd.exe has. */
+export function cmdShellGap(command) {
+  let start = 0;
+  let quoted = false;
+  let code = false;
+  for (let i = 0; i < command.length; i += 1) {
+    const char = command[i];
+    if (char === '"') {
+      quoted = !quoted;
+      code = quoted && opensCode(command.slice(start, i));
+    } else if (!quoted && (char === '&' || char === '|')) {
+      if (command[i + 1] === char) i += 1;
+      start = i + 1;
+    } else if (char === '$' && command[i + 1] === '(' && !code) {
+      return 'it uses $( ), which cmd.exe, the shell it runs in on Windows, does not have: it passes the text on as written. Compute the value inside one program instead, such as node -e "..."';
+    }
+  }
+  return null;
+}
+
 /** `{ ok, errors }`: one human-readable reason per problem — a missing or empty section, a `Done
- * when` with no command, a command still holding a placeholder, an `Effort` that is not `medium` or
- * `high` when there is one, a task whose `(kind: …)` is not one of TASK_KINDS. Static only: it never runs
- * a command. */
-export function validateContract(markdown) {
+ * when` with no command, a command still holding a placeholder, a command cmd.exe cannot run when `platform` is
+ * Windows (`cmdShellGap`), an `Effort` that is not `medium` or `high` when there is one, a task whose `(kind: …)`
+ * is not one of TASK_KINDS. Static only: it never runs a command. */
+export function validateContract(markdown, { platform = process.platform } = {}) {
   const errors = [];
   const bodies = parseContract(markdown);
   const usable = new Set();
@@ -161,6 +198,8 @@ export function validateContract(markdown) {
     }
     for (const command of commands) {
       if (PLACEHOLDER_PATTERN.test(command)) errors.push(`command \`${command}\` still holds a template placeholder`);
+      const gap = platform === 'win32' ? cmdShellGap(command) : null;
+      if (gap) errors.push(`command \`${command}\` cannot run: ${gap}`);
     }
   }
 

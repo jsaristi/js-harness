@@ -14,6 +14,7 @@ import path from 'node:path';
 import { recordFileOf } from './lib/background.mjs';
 import { readNotices } from './lib/channel.mjs';
 import { codexReviewRunsPath } from './lib/codex-review-runs.mjs';
+import { cmdShellGap } from './lib/contract.mjs';
 import { readGateLog } from './lib/gate-log.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { appendPage, pagesFile } from './lib/pages-record.mjs';
@@ -54,8 +55,9 @@ export const USAGE = [
   '    <home>/.js-harness/throughput/<project>/stretches.jsonl, one line an event, which uninstall keeps.',
   '  open: reads the plan, a JSON object { hours, slots, goals: [{ id, text, command }], items: [{ id, title, kind,',
   '    hours: [low, high], session?, waitsFor?, closes?: [{ in, step }] }], waits?: [text] }. A goal is met when its',
-  '    command exits 0. An item is one session\'s work: kind is design, build, verify or docs; hours the work left now;',
-  '    session its label (JH 71) once it has one; waitsFor what of the user it cannot start without, which keeps it out',
+  '    command exits 0; on Windows it runs in cmd.exe, so a goal with $( ) is refused. An item is one session\'s work:',
+  '    kind is design, build, verify or docs; hours the work left now; session its label (JH 71) once it has one;',
+  '    waitsFor what of the user it cannot start without, which keeps it out',
   '    of the lanes; closes the rows of the roadmap it closes, each a phase of its checklist and the start of one open',
   '    step\'s text, or a plan section (F8 plan) and a step id not done (S13). It prints the departure: each estimate as',
   '    written and as the last closed stretches correct it, the items in slots lanes, whether they fill the hours, and',
@@ -448,6 +450,11 @@ async function openCommand(ctx, flags, events) {
   }
   const read = parsePlan(value);
   if (read.error) throw new StretchArgError(`the plan is refused: ${read.error}`);
+  // A goal runs through `runSensor`'s shell, cmd.exe on Windows: one it cannot run is refused here, not read "not met".
+  for (const goal of ctx.platform === 'win32' ? read.plan.goals : []) {
+    const gap = cmdShellGap(goal.command);
+    if (gap) throw new StretchArgError(`the plan is refused: goal ${goal.id}: \`${goal.command}\` cannot run: ${gap}`);
+  }
   const at = new Date(ctx.now()).toISOString();
   // The default branch's commit at the opening, so the return compares the map with what existed then.
   const named = readRef(ctx.run, ctx.root);
@@ -770,6 +777,8 @@ export async function stretchMain(
     // `runSensor` of `check.mjs`, as `contract run` runs a done-when command: it stops the whole tree at the timeout.
     // Imported when a goal runs, since `check.mjs` is large.
     runGoal = async (command, options) => (await import('./check.mjs')).runSensor(command, options),
+    // Where the goals run, which says the shell they run in: `open` refuses what cmd.exe cannot run.
+    platform = process.platform,
     // The rendered record's module, as `recordPageRendered` loads it; the seam the tests stub.
     recordLoad,
   } = {},
@@ -790,7 +799,7 @@ export async function stretchMain(
   const home = harnessHome({ given: parsed.flags.home, env, cwd: defaultCwd, homedir });
   const root = mainCheckout(run, cwd);
   const slug = projectSlug(root);
-  const ctx = { cwd: defaultCwd, root, home, slug, file: stretchFile(home, slug), env, now, run, fileSystem, readCodexRuns, readLands, runGoal, recordLoad, out: stdout, err: stderr };
+  const ctx = { cwd: defaultCwd, root, home, slug, file: stretchFile(home, slug), env, now, run, fileSystem, readCodexRuns, readLands, runGoal, platform, recordLoad, out: stdout, err: stderr };
   let events;
   try {
     events = readEvents(ctx.file, fileSystem);
