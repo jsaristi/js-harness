@@ -367,3 +367,13 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   `projects`, `skills`, `agents`, `~/.codex`, `~/.engram`, `~/go/bin`, `~/.js-harness`, `AppData` and Orca's and
   herdr's folders are real folders today, so the blockers would not have fired on it now. The verifier is not run a
   third time: Codex and the lenses review this fix.
+- L15 2026-11-02 ~19:55 local: over `45d764f..3e3f589`, Codex correct (0.88, 126,334 input tokens), lenses 0
+  findings (risk 29,981, reliability 30,189, resilience 14,668). gentle-ai `review-401a359be262d41f` approved,
+  acknowledged, 2 advisory: taken, a root recorded as a link was skipped even where nothing is there now (the link comes
+  back there, never in the drill); answered, a binary that opens with FF FE read as UTF-16 can only be flagged secret,
+  which keeps it out of the drill (the safe side), and a first read under 2 bytes is a file of 1 byte.
+  State (written at 86% of the window): next, commit this fix and push; Codex and the lenses on `3e3f589a..HEAD`;
+  open the PR from `C:\Users\Oficina\.claude\jobs\e0c43615\tmp\pr-body.md` (refresh its review lines), `notify --kind
+  ready --pr <n>`, then T6: the sitting's plan to the lead (every session closed, the lead's included; after the PR
+  lands and js-harness is updated he runs `js-harness stack backup run`, then `verify --from <dir> --marker
+  s2drillmarker20261102 --expect 6431`, from a plain terminal). Nothing is removed without his yes through the lead.

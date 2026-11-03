@@ -365,8 +365,9 @@ function planRoot({ root, manifest, from, withSecrets, platform, home }) {
   const linkNow = linkAbove(home, root);
   if (linkNow !== null) return [{ line: `skip ${root.id}: ${linkNow} is a link now, never followed; put it back by hand`, apply: () => {} }];
   // A folder root that was itself a link at the backup is never put back over the folder there now: the link step would
-  // remove it whole, data written since included (the independent verifier on 84997f7..45d764f).
-  if (root.kind !== 'file' && manifest.links.some((l) => l.root === root.id && l.path === '')) {
+  // remove it whole, data written since included (the independent verifier on 84997f7..45d764f). Where nothing is there,
+  // the link comes back (gentle-ai R3 on 45d764f..3e3f589), but never in the drill, whose home would reach his folder.
+  if (root.kind !== 'file' && manifest.links.some((l) => l.root === root.id && l.path === '') && (lstatOrNull(root.from) || !withSecrets)) {
     return [{ line: `skip ${root.id}: ${root.from} was a link in the backup; put it back by hand`, apply: () => {} }];
   }
   if (root.id === 'engram') {

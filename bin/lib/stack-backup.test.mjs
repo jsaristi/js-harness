@@ -392,6 +392,14 @@ test('a root that was a link at the backup is never put back over a real folder,
   assert.ok(!fs.lstatSync(path.join(home, '.claude')).isSymbolicLink());
   assert.match(out.join('\n'), /skip claude-config: .* was a link in the backup; put it back by hand/);
   assert.match(out.join('\n'), /skip claude-data: .* was a link in the backup; put it back by hand/);
+  // Where nothing is there now, the link comes back, as before (gentle-ai R3 on 45d764f..3e3f589); never in the drill,
+  // whose home would then reach his real folder, credentials included.
+  const fresh = scratch(t, 'stack-backup-target-');
+  assert.equal(restoreBackup({ from: dest, home: fresh, yes: true, deps }).ok, true);
+  assert.equal(path.resolve(fs.readlinkSync(path.join(fresh, '.claude'))), path.resolve(outside, 'claude'));
+  const drill = scratch(t, 'stack-backup-target-');
+  assert.equal(restoreBackup({ from: dest, home: drill, yes: true, withSecrets: false, deps }).ok, true);
+  assert.ok(!fs.existsSync(path.join(drill, '.claude')));
 });
 
 test('the drill never writes through a junction it restored, and still checks a newer transcript', (t) => {
