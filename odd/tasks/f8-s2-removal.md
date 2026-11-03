@@ -340,3 +340,15 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   holding `=` is none). Answered with a test, no change: a POSIX mode kept read-only would not block a second restore,
   since the write step removes the target and copies anew (`bin/lib/stack-backup.mjs`, the `write` step), which a
   read-only file allows (checked on this Windows machine: `copyFileSync` keeps mode 444, `rmSync` removes it).
+- gentle-ai: review `review-aa530476e8ca85b6` on `0b9f98a..22ff9c3b` (the reliability lens), approved and
+  acknowledged; 1 suggestion, not taken: a line inside a multi-line value that looks like `[a]` would read as a table
+  header. Why not: the Codex entries of engram, codegraph and context7 hold flat string arrays, each element quoted
+  with a comma, which no header pattern matches; a misread entry would fail the row against the backup's, a false
+  `FAIL` read by hand in the sitting, not a false pass of an entry that is broken, unless both files hold the same
+  nested array and differ only after it.
+- L13 2026-11-02 19:17 local: the independent verifier, started at 16:41 over `84997f7d..HEAD`, wrote its transcript
+  last at 16:43 (69 lines, its last step making a scratch folder) and never ended; the lead's heartbeat marked this
+  session stalled at 2h 15m. Stopped; it left no result and no scratch folder. Run once more on a narrower brief (the
+  restore's writes and deletions, the secrets, the drill's proof), beside Codex's last recheck and the lenses over
+  `d9806c8b..HEAD`. What went wrong here: a background agent was waited on with no check of its progress; the lead's
+  heartbeat found it, not this session.
