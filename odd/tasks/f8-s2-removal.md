@@ -352,3 +352,18 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   restore's writes and deletions, the secrets, the drill's proof), beside Codex's last recheck and the lenses over
   `d9806c8b..HEAD`. What went wrong here: a background agent was waited on with no check of its progress; the lead's
   heartbeat found it, not this session.
+- L14 2026-11-02 ~19:40 local: Codex's last recheck of `d9806c8..45d764f`: correct (0.96), the root-link P1 fixed,
+  42,657 input tokens; the lenses 0 findings (risk 22,377, reliability 10,898, resilience 22,560). The verifier's second
+  run (91,080 tokens, 17 tool calls, probes in a scratch home it removed) found what the reviews had not, all taken and
+  fixed test first. Blockers: a folder root recorded as a link at the backup was put back by removing the folder there
+  now, data written since included (such a root is now skipped, to put back by hand); the drill wrote through a
+  junction it had restored, into the real home, and still passed (row 12 writes only where no link is on the way, and a
+  transcript goes to `.claude/js-harness-s2-drill/` when `projects` is one). Should-fix: a file root, or
+  `--only permissions|mcp:<name>`, wrote through a folder on its way from the home that became a link (skipped now).
+  Notes taken: a UTF-16 file with its byte order mark was read as binary, so a key in it went unseen (read as text
+  now); a secret that is a link was put into the drill home (left out like a secret file); a link recorded with a
+  relative target never matched the junction that reads back absolute (targets compared resolved); engram's folder
+  holding only a link counted as empty (it now counts links). Read on his machine first, read only: `~/.claude`,
+  `projects`, `skills`, `agents`, `~/.codex`, `~/.engram`, `~/go/bin`, `~/.js-harness`, `AppData` and Orca's and
+  herdr's folders are real folders today, so the blockers would not have fired on it now. The verifier is not run a
+  third time: Codex and the lenses review this fix.

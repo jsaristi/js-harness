@@ -75,18 +75,35 @@ export const ROOT_IDS = backupRoots({ home: os.tmpdir() }).map((root) => root.id
 /** Where a file of `root` lives: the root itself for a file root, else under it. */
 const targetOf = (root, rel) => (root.kind === 'file' ? root.from : path.join(root.from, ...rel.split('/')));
 
-/** The first folder between `root.from` and `target` that is a link or junction now, or null: a write below it would
- * land wherever the link points. */
-function linkedAncestor(root, target) {
-  if (root.kind === 'file') return null;
-  let at = root.from;
-  for (const part of path.relative(root.from, path.dirname(target)).split(path.sep).filter(Boolean)) {
+/** The first folder below `base` down to the one that holds `target` that is a link or junction now, or null: a write
+ * there would land wherever the link points. */
+function linkOnWay(base, target) {
+  let at = base;
+  for (const part of path.relative(base, path.dirname(target)).split(path.sep).filter(Boolean)) {
     at = path.join(at, part);
     const stat = lstatOrNull(at);
     if (!stat) return null;
     if (stat.isSymbolicLink()) return at;
   }
   return null;
+}
+
+/** `linkOnWay` within a folder root, below `root.from`; null for a file root, which `planRoot` checks from the home. */
+const linkedAncestor = (root, target) => (root.kind === 'file' ? null : linkOnWay(root.from, target));
+
+/** The first folder from `home` down to `root` that is a link now, the root itself included for a folder root, or null.
+ * A root outside the home (an `%APPDATA%` elsewhere) is checked at itself only. */
+function linkAbove(home, root) {
+  const self = root.kind === 'file' ? null : (lstatOrNull(root.from)?.isSymbolicLink() ? root.from : null);
+  if (!inside(root.from, home)) return self;
+  return linkOnWay(home, root.kind === 'file' ? root.from : path.join(root.from, '_')) ?? self;
+}
+
+/** Whether the link at `at` points where `target` says, both read from the link's folder and case-blind on Windows:
+ * a junction reads back absolute where its record may be relative (the independent verifier on 84997f7..45d764f). */
+function sameTarget(at, target, platform) {
+  const norm = (p) => (platform === 'win32' ? path.resolve(path.dirname(at), p).toLowerCase() : path.resolve(path.dirname(at), p));
+  return norm(fs.readlinkSync(at)) === norm(target);
 }
 
 function isSecretPath(home, root, rel, platform) {
@@ -338,17 +355,25 @@ const lstatOrNull = (p) => {
 };
 
 /** The steps that put `root` back from the backup into its place, each `{ line, apply }`. */
-function planRoot({ root, manifest, from, withSecrets, platform }) {
+function planRoot({ root, manifest, from, withSecrets, platform, home }) {
   const steps = [];
   const recorded = manifest.roots.find((r) => r.id === root.id);
   if (!recorded?.present) return [{ line: `skip ${root.id}: not in the backup, left as it is`, apply: () => {} }];
-  // A root that is a link now is never written through, nor removed: `~/.claude` holds a config and a data root, and
-  // what it points to may hold his files (Codex P1 recheck on 0b9f98a..d9806c8).
-  if (root.kind !== 'file' && lstatOrNull(root.from)?.isSymbolicLink()) {
-    return [{ line: `skip ${root.id}: ${root.from} is a link now, never followed; put it back by hand`, apply: () => {} }];
+  // A root, or a folder on its way from the home, that is a link now is never written through, nor removed: `~/.claude`
+  // holds a config and a data root, and what it points to may hold his files (Codex P1 recheck on 0b9f98a..d9806c8;
+  // for a file root, the independent verifier on 84997f7..45d764f).
+  const linkNow = linkAbove(home, root);
+  if (linkNow !== null) return [{ line: `skip ${root.id}: ${linkNow} is a link now, never followed; put it back by hand`, apply: () => {} }];
+  // A folder root that was itself a link at the backup is never put back over the folder there now: the link step would
+  // remove it whole, data written since included (the independent verifier on 84997f7..45d764f).
+  if (root.kind !== 'file' && manifest.links.some((l) => l.root === root.id && l.path === '')) {
+    return [{ line: `skip ${root.id}: ${root.from} was a link in the backup; put it back by hand`, apply: () => {} }];
   }
-  if (root.id === 'engram' && walkRoot(root.from).files.length > 0) {
-    return [{ line: `skip engram: ${root.from} holds files; its store goes back only into an empty one (merge with js-harness backup restore --merge)`, apply: () => {} }];
+  if (root.id === 'engram') {
+    const live = walkRoot(root.from);
+    if (live.files.length + live.links.length > 0) {
+      return [{ line: `skip engram: ${root.from} holds files or links; its store goes back only into an empty one (merge with js-harness backup restore --merge)`, apply: () => {} }];
+    }
   }
   const files = manifest.files.filter((f) => f.root === root.id);
   const links = manifest.links.filter((l) => l.root === root.id);
@@ -391,11 +416,13 @@ function planRoot({ root, manifest, from, withSecrets, platform }) {
     else if (!stat.isFile() || hashFile(target) !== file.sha256) steps.push(write(source, target));
   }
   for (const link of links) {
+    // A secret that is a link goes where a secret file goes: the drill never holds one (the independent verifier).
+    if (!withSecrets && isSecretPath(home, root, link.path, platform)) continue;
     const at = targetOf(root, link.path);
     const via = below(at);
     if (via === 'skip') continue;
     const stat = via === 'replaced' ? null : lstatOrNull(at);
-    if (stat?.isSymbolicLink() && fs.readlinkSync(at) === link.target) continue;
+    if (stat?.isSymbolicLink() && sameTarget(at, link.target, platform)) continue;
     if (stat && !snapshot) {
       kept += 1;
       continue;
@@ -449,17 +476,21 @@ export function restoreBackup({ from, home, only = [], deps = {}, yes = false, w
   const unknown = only.find((o) => !named.includes(o) && !ROOT_IDS.includes(o));
   if (unknown !== undefined) throw new Error(`--only ${unknown}: not permissions, mcp:<name> or a root id (${ROOT_IDS.join(', ')})`);
   const chosen = only.length === 0 ? roots : roots.filter((root) => only.includes(root.id));
-  const steps = chosen.flatMap((root) => planRoot({ root, manifest, from, withSecrets, platform }));
+  const steps = chosen.flatMap((root) => planRoot({ root, manifest, from, withSecrets, platform, home }));
   for (const item of named) {
+    const file = item === 'permissions' ? path.join(home, '.claude', 'settings.json') : path.join(home, '.claude.json');
+    const linkNow = linkOnWay(home, file);
+    if (linkNow !== null) {
+      steps.push({ line: `skip ${item}: ${linkNow} is a link now, never followed; put it back by hand`, apply: () => {} });
+      continue;
+    }
     if (item === 'permissions') {
-      const file = path.join(home, '.claude', 'settings.json');
       const value = readJsonQuiet(path.join(from, manifest.named.permissions));
       steps.push({ line: `write ${file}: permissions`, apply: () => setKey(file, ['permissions'], value) });
     } else {
       const name = item.slice('mcp:'.length);
       const entries = readJsonQuiet(path.join(from, manifest.named.mcpClaude)) ?? {};
       if (!Object.hasOwn(entries, name)) throw new Error(`the backup holds no mcpServers entry ${name}`);
-      const file = path.join(home, '.claude.json');
       steps.push({ line: `write ${file}: mcpServers.${name}`, apply: () => setKey(file, ['mcpServers', name], entries[name]) });
     }
   }
@@ -514,11 +545,13 @@ export function verifyBackup({ from, deps = {}, marker, expectId, tmp = os.tmpdi
       return bad.length === 0 ? { ok: `${plain.length} restored byte for byte` } : `${bad.length} differ, first ${bad[0]}`;
     });
     check('links', () => {
-      const bad = manifest.links.filter((l) => {
+      // Every link the restore puts back: a secret's is left out, and a folder root that was a link is put back by hand.
+      const expected = manifest.links.filter((l) => !(l.path === '' && roots[l.root].kind !== 'file') && !isSecretPath(scratch, roots[l.root], l.path, platform));
+      const bad = expected.filter((l) => {
         const stat = lstatOrNull(at(l));
-        return !stat?.isSymbolicLink() || fs.readlinkSync(at(l)) !== l.target;
+        return !stat?.isSymbolicLink() || !sameTarget(at(l), l.target, platform);
       });
-      return bad.length === 0 ? { ok: `${manifest.links.length} restored as links` } : `${bad.length} differ, first ${bad[0].root}/${bad[0].path}`;
+      return bad.length === 0 ? { ok: `${expected.length} restored as links` } : `${bad.length} differ, first ${bad[0].root}/${bad[0].path}`;
     });
     check('exports', () => {
       const sealed = Object.entries(manifest.exports?.sha256 ?? {});
@@ -561,13 +594,17 @@ export function verifyBackup({ from, deps = {}, marker, expectId, tmp = os.tmpdi
       return missing.length === 0 ? { ok: names.sort().join(', ') } : `missing ${missing.join(', ')}`;
     });
     check('row 12', () => {
-      const configs = plain.filter((f) => manifest.roots.find((r) => r.id === f.root)?.kind === 'config' && f.path.includes('/'));
+      // The drill home holds the backup's junctions, pointing where his do: no write of this row goes through one (the
+      // independent verifier on 84997f7..45d764f).
+      const clear = (file) => linkOnWay(scratch, file) === null;
+      const configs = plain.filter((f) => manifest.roots.find((r) => r.id === f.root)?.kind === 'config' && f.path.includes('/') && clear(at(f)));
       if (configs.length === 0) return 'no config file in a folder to delete';
       const victim = configs[0];
       const created = path.join(roots[victim.root].from, victim.path.split('/')[0], 's2-drill-created.txt');
-      // A transcript's place; its name is no record (docs-records reads a `.jsonl` literal as one), and restore never
-      // tells files apart by extension.
-      const transcript = path.join(scratch, '.claude', 'projects', 'x', 's2-drill-newer.txt');
+      // A transcript's place, in `projects` unless a link is on its way; its name is no record (docs-records reads a
+      // `.jsonl` literal as one), and restore never tells files apart by extension.
+      const transcript = [['projects', 'x'], ['js-harness-s2-drill']].map((dirs) => path.join(scratch, '.claude', ...dirs, 's2-drill-newer.txt')).find(clear);
+      if (transcript === undefined || !clear(created)) return 'no place for its files without a link on the way';
       fs.rmSync(at(victim));
       fs.writeFileSync(created, 'created after the backup\n');
       fs.mkdirSync(path.dirname(transcript), { recursive: true });

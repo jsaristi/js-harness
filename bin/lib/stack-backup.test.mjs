@@ -373,6 +373,104 @@ test('a restore puts back a file that is read-only now, since it replaces a file
   assert.equal(fs.readFileSync(reader, 'utf8'), 'an agent\n');
 });
 
+// The independent verifier's findings on 84997f7..45d764f (odd/tasks/f8-s2-removal.md, L14).
+
+test('a root that was a link at the backup is never put back over a real folder, whose data stays', (t) => {
+  const home = scratch(t, 'stack-backup-home-');
+  plant(home);
+  const outside = scratch(t, 'stack-backup-outside-');
+  fs.renameSync(path.join(home, '.claude'), path.join(outside, 'claude'));
+  if (relink(path.join(outside, 'claude'), path.join(home, '.claude'))) return t.skip('this machine cannot make a folder link');
+  const dest = path.join(scratch(t), 'b');
+  const { deps } = seams();
+  assert.equal(runBackup({ home, env: {}, platform: 'win32', dest, deps }).ok, true);
+  fs.rmSync(path.join(home, '.claude'), { recursive: true, force: true });
+  write(path.join(home, '.claude', 'projects', 'D--p', 'newer.txt'), 'written after the backup\n');
+  const out = [];
+  assert.equal(restoreBackup({ from: dest, home, yes: true, deps: { ...deps, log: (line) => out.push(line) } }).ok, true);
+  assert.equal(fs.readFileSync(path.join(home, '.claude', 'projects', 'D--p', 'newer.txt'), 'utf8'), 'written after the backup\n');
+  assert.ok(!fs.lstatSync(path.join(home, '.claude')).isSymbolicLink());
+  assert.match(out.join('\n'), /skip claude-config: .* was a link in the backup; put it back by hand/);
+  assert.match(out.join('\n'), /skip claude-data: .* was a link in the backup; put it back by hand/);
+});
+
+test('the drill never writes through a junction it restored, and still checks a newer transcript', (t) => {
+  const home = scratch(t, 'stack-backup-home-');
+  plant(home);
+  const outside = scratch(t, 'stack-backup-outside-');
+  write(path.join(outside, 'real.txt'), 'his transcripts\n');
+  if (relink(outside, path.join(home, '.claude', 'projects'))) return t.skip('this machine cannot make a folder link');
+  const dest = path.join(scratch(t), 'b');
+  const { deps } = seams();
+  assert.equal(runBackup({ home, env: {}, platform: 'win32', dest, deps }).ok, true);
+  const result = verifyBackup({ from: dest, deps, marker: 's2drillmarker20261102', expectId: '6431', tmp: scratch(t, 'stack-backup-tmp-') });
+  assert.deepEqual(result.lines.filter((line) => !line.startsWith('ok ')), []);
+  assert.deepEqual(snapshot(outside), { 'real.txt': sha('his transcripts\n') }, 'the drill wrote through the junction');
+});
+
+test('a file root whose folder became a link is skipped, and so is a named entry below one', (t) => {
+  const { home, dest, deps } = backedUp(t);
+  const outside = scratch(t, 'stack-backup-outside-');
+  fs.rmSync(path.join(home, '.js-harness', 'manifest.json'));
+  if (relink(outside, path.join(home, '.js-harness'))) return t.skip('this machine cannot make a folder link');
+  const claude = scratch(t, 'stack-backup-outside-');
+  assert.equal(relink(claude, path.join(home, '.claude')), null);
+  const out = [];
+  const log = (line) => out.push(line);
+  assert.equal(restoreBackup({ from: dest, home, only: ['js-harness-manifest', 'permissions'], yes: true, deps: { ...deps, log } }).ok, true);
+  assert.deepEqual(fs.readdirSync(outside), []);
+  assert.deepEqual(fs.readdirSync(claude), []);
+  assert.match(out.join('\n'), /skip js-harness-manifest: .*\.js-harness is a link now, never followed/);
+  assert.match(out.join('\n'), /skip permissions: .*\.claude is a link now, never followed/);
+});
+
+test('a secret that is a link is left out of the drill like a secret file', (t) => {
+  const home = scratch(t, 'stack-backup-home-');
+  plant(home);
+  const outside = scratch(t, 'stack-backup-outside-');
+  if (relink(outside, path.join(home, '.claude', '.credentials.json'))) return t.skip('this machine cannot make a folder link');
+  const dest = path.join(scratch(t), 'b');
+  const { deps } = seams();
+  assert.equal(runBackup({ home, env: {}, platform: 'win32', dest, deps }).ok, true);
+  // fakeEngram fails the search when the drill home holds .claude/.credentials.json, a link included.
+  const result = verifyBackup({ from: dest, deps, marker: 's2drillmarker20261102', expectId: '6431', tmp: scratch(t, 'stack-backup-tmp-') });
+  assert.deepEqual(result.lines.filter((line) => !line.startsWith('ok ')), []);
+});
+
+test('a link recorded with a relative target is the same link once restored, and is not made again', (t) => {
+  const home = scratch(t, 'stack-backup-home-');
+  plant(home);
+  const outside = path.join(home, 'elsewhere');
+  write(path.join(outside, 'SKILL.md'), 'skill');
+  const at = path.join(home, '.claude', 'skills', 'mine');
+  fs.mkdirSync(path.dirname(at), { recursive: true });
+  if (relink(outside, at)) return t.skip('this machine cannot make a folder link');
+  const dest = path.join(scratch(t), 'b');
+  const { deps } = seams();
+  assert.equal(runBackup({ home, env: {}, platform: 'win32', dest, deps }).ok, true);
+  // A symlink made with a relative target records it so; a Windows junction reads back absolute.
+  const file = path.join(dest, 'manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+  manifest.links[0].target = path.relative(path.dirname(at), outside);
+  fs.writeFileSync(file, json(manifest));
+  fs.rmSync(at, { recursive: true, force: true });
+  assert.equal(restoreBackup({ from: dest, home, yes: true, deps }).ok, true);
+  assert.equal(path.resolve(path.dirname(at), fs.readlinkSync(at)), path.resolve(outside));
+  const again = restoreBackup({ from: dest, home, yes: false, deps: { ...deps, log: () => {} } });
+  assert.ok(!again.lines.some((line) => line.startsWith('link ')), again.lines.join('\n'));
+});
+
+test('engram\'s store is not put back into a folder that holds only a link', (t) => {
+  const { home, dest, deps } = backedUp(t);
+  fs.rmSync(path.join(home, '.engram'), { recursive: true, force: true });
+  fs.mkdirSync(path.join(home, '.engram'));
+  if (relink(scratch(t, 'stack-backup-outside-'), path.join(home, '.engram', 'store'))) return t.skip('this machine cannot make a folder link');
+  const out = [];
+  assert.equal(restoreBackup({ from: dest, home, only: ['engram'], yes: true, deps: { ...deps, log: (line) => out.push(line) } }).ok, true);
+  assert.ok(!fs.existsSync(path.join(home, '.engram', 'engram.db')));
+  assert.match(out.join('\n'), /skip engram: .* holds files or links/);
+});
+
 test('on Windows a config file renamed only in case is kept, never deleted as one the backup lacks', { skip: process.platform !== 'win32' && 'only Windows reads two names that differ in case as one file' }, (t) => {
   const { home, dest, deps } = backedUp(t);
   const agents = path.join(home, '.claude', 'agents');
@@ -438,7 +536,7 @@ test('restore puts config back as a snapshot, never deletes or overwrites data, 
   assert.equal(fs.readFileSync(path.join(home, '.claude', 'projects', 'D--p', 'newer.jsonl'), 'utf8'), '{"after":true}\n');
   assert.equal(fs.readFileSync(path.join(home, '.codex', 'sessions', 's.jsonl'), 'utf8'), '{"codex":1}\n');
   assert.equal(fs.readFileSync(path.join(home, '.engram', 'engram.db'), 'utf8'), 'grown since');
-  assert.match(out.join('\n'), /skip engram: .* holds files; .*js-harness backup restore --merge/);
+  assert.match(out.join('\n'), /skip engram: .* holds files or links; .*js-harness backup restore --merge/);
   noSecret(out.join('\n'));
 });
 

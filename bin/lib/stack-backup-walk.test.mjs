@@ -107,6 +107,14 @@ test('copyAndHash copies byte for byte, keeps the time, and flags a key even acr
   assert.equal(copyAndHash(path.join(dir, 'store.db'), path.join(dir, 'copy', 'store.db')).flagged, false);
 });
 
+test('copyAndHash reads a UTF-16 text with its byte order mark for a key, as PowerShell writes one', (t) => {
+  // The independent verifier on 84997f7..45d764f: its NUL bytes read as binary, so a key in it was never seen.
+  const dir = scratch(t);
+  const key = 'sk-ant-oat01-FAKEtokenFAKEtokenFAKEtoken0123456789';
+  write(path.join(dir, 'token.txt'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(`token = ${key}\r\n`, 'utf16le')]));
+  assert.equal(copyAndHash(path.join(dir, 'token.txt'), path.join(dir, 'copy', 'token.txt'), { chunk: 16 }).flagged, true);
+});
+
 test('copyAndHash writes a chunk whole when a write takes part of it, and throws naming the file when one takes none', (t) => {
   const dir = scratch(t);
   const text = 'abcdefghijklmnopqrstuvwxyz\n'.repeat(5);

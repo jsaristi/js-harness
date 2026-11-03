@@ -74,7 +74,7 @@ export function walkRoot(from, filter = {}, fsx = fs) {
 export function copyAndHash(source, target, { fsx = fs, chunk = CHUNK, platform = process.platform } = {}) {
   fsx.mkdirSync(path.dirname(target), { recursive: true });
   const hash = createHash('sha256');
-  const decoder = new StringDecoder('utf8');
+  let decoder = new StringDecoder('utf8');
   const buffer = Buffer.alloc(chunk);
   let bytes = 0;
   let text = null;
@@ -88,7 +88,13 @@ export function copyAndHash(source, target, { fsx = fs, chunk = CHUNK, platform 
         const read = strictly(source, 'read', () => fsx.readSync(input, buffer, 0, chunk, null));
         if (read === 0) break;
         const part = buffer.subarray(0, read);
-        if (text === null) text = !part.subarray(0, SNIFF).includes(0);
+        if (text === null) {
+          // UTF-16 with its byte order mark, as PowerShell writes a file, is text though it holds NUL bytes (the
+          // independent verifier on 84997f7..45d764f); little-endian, the one Windows writes.
+          const utf16 = part[0] === 0xff && part[1] === 0xfe;
+          if (utf16) decoder = new StringDecoder('utf16le');
+          text = utf16 || !part.subarray(0, SNIFF).includes(0);
+        }
         hash.update(part);
         // A write may take part of the chunk, as on a disk near full; one that takes nothing stops the copy.
         for (let written = 0; written < read;) {
