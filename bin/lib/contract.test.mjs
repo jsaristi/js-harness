@@ -114,10 +114,10 @@ test('a redirect in a real command is not mistaken for a placeholder', () => {
 
 // JH 136: cmd.exe passed `$(git` to `test` as written, and a met goal read "not met (exit 2)".
 test('cmdShellGap names a $( ) cmd.exe would pass on as written, and not one handed to a program that has its own', () => {
-  for (const bad of ['test $(git rev-list --count HEAD) -ge 3', 'git fetch -q origin && test $(git rev-list --count HEAD) -ge 3', 'test "$(git rev-list --count HEAD)" -ge 3', 'bash -c "true" && echo $(date)', 'node -e "process.exit(+process.argv[1] >= 3 ? 0 : 1)" $(git rev-list --count HEAD)']) {
+  for (const bad of ['test $(git rev-list --count HEAD) -ge 3', 'git fetch -q origin && test $(git rev-list --count HEAD) -ge 3', 'test "$(git rev-list --count HEAD)" -ge 3', 'bash -c "true" && echo $(date)', 'node -e "process.exit(+process.argv[1] >= 3 ? 0 : 1)" $(git rev-list --count HEAD)', 'node -e "process.exit(+process.argv[1] >= 3 ? 0 : 1)" "$(git rev-list --count HEAD)"', 'bash x.sh "$(date)"']) {
     assert.match(cmdShellGap(bad) ?? '', /\$\( \).*cmd\.exe.*node -e/, bad);
   }
-  for (const good of ['npm run check', 'git fetch -q && bash -c "test $(git rev-list --count HEAD) -ge 3"', 'powershell -c "$(Get-Date)"', '"C:\\Program Files\\Git\\usr\\bin\\sh.exe" -c "echo $(date)"', 'node -e "process.exit(0)" && node x.mjs']) {
+  for (const good of ['npm run check', 'git fetch -q && bash -c "test $(git rev-list --count HEAD) -ge 3"', 'powershell -c "$(Get-Date)"', 'pwsh -NoProfile -Command "$(Get-Date)"', '"C:\\Program Files\\Git\\usr\\bin\\sh.exe" -c "echo $(date)"', 'node -e "process.exit(0)" && node x.mjs']) {
     assert.equal(cmdShellGap(good), null, good);
   }
 });

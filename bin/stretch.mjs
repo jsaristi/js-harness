@@ -453,7 +453,7 @@ async function openCommand(ctx, flags, events) {
   // A goal runs through `runSensor`'s shell, cmd.exe on Windows: one it cannot run is refused here, not read "not met".
   for (const goal of ctx.platform === 'win32' ? read.plan.goals : []) {
     const gap = cmdShellGap(goal.command);
-    if (gap) throw new StretchArgError(`the plan is refused: goal ${goal.id}: ${gap}`);
+    if (gap) throw new StretchArgError(`the plan is refused: goal ${goal.id}: \`${goal.command}\` cannot run: ${gap}`);
   }
   const at = new Date(ctx.now()).toISOString();
   // The default branch's commit at the opening, so the return compares the map with what existed then.

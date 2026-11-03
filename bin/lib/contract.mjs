@@ -140,39 +140,38 @@ export function commandsIn(text) {
   return commands;
 }
 
-// The programs that read a `$( )` of their own in the argument cmd.exe hands them as written: `bash -c "..."`.
-const SUBSTITUTING_PROGRAMS = new Set(['bash', 'sh', 'pwsh', 'powershell', 'node']);
+// The programs that read a `$( )` of their own in the code cmd.exe hands them as written, and the flags before that
+// code: `bash -c "..."`, `node -e "..."`, `powershell -Command "..."`.
+const CODE_FLAGS = new Map([['bash', ['-c']], ['sh', ['-c']], ['pwsh', ['-c', '-command']], ['powershell', ['-c', '-command']], ['node', ['-e', '--eval', '-p', '--print']]]);
 
-/** `command` cut at cmd.exe's `&&`, `||`, `&` and `|` outside double quotes, the only quotes it has: each part's
- * `text`, and whether it holds a `$(` outside double quotes (`bare`) or inside them (`quoted`). */
-function cmdParts(command) {
-  const parts = [{ text: '', bare: false, quoted: false }];
-  let quoted = false;
-  for (let i = 0; i < command.length; i += 1) {
-    const char = command[i];
-    if (char === '"') quoted = !quoted;
-    if (!quoted && (char === '&' || char === '|')) {
-      if (command[i + 1] === char) i += 1;
-      parts.push({ text: '', bare: false, quoted: false });
-      continue;
-    }
-    const part = parts.at(-1);
-    if (char === '$' && command[i + 1] === '(') part[quoted ? 'quoted' : 'bare'] = true;
-    part.text += char;
-  }
-  return parts;
+/** Whether a double quote after `before`, the text of its part of the command so far, opens the code of one of
+ * CODE_FLAGS' programs: its program is one of them and the word right before the quote one of its flags. */
+function opensCode(before) {
+  const program = /^[\s(@]*(?:"([^"]+)"|(\S+))/.exec(before);
+  const name = (program?.[1] ?? program?.[2] ?? '').split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '');
+  const flag = /(\S+)\s+$/.exec(before)?.[1].toLowerCase();
+  return CODE_FLAGS.get(name)?.includes(flag) ?? false;
 }
 
 /** Why cmd.exe, the shell a goal or done-when command runs in on Windows (`runSensor`, `shell: true`), cannot run
- * `command`, or `null`: a `$( )` that no program of its own reads, one outside double quotes or in a part whose
- * program has no substitution. cmd.exe has none and passes the text on as written, so the command fails, or passes,
- * on a value it never computed (JH 136: a met goal read "not met (exit 2)"). */
+ * `command`, or `null`: a `$( )` outside the double-quoted code of a program with its own (`opensCode`). cmd.exe has
+ * none and passes the text on as written, so the command fails, or passes, on a value it never computed (JH 136: a
+ * met goal read "not met (exit 2)"). Its parts are cut at `&&`, `||`, `&` and `|` outside double quotes, the only
+ * quotes cmd.exe has. */
 export function cmdShellGap(command) {
-  for (const { text, bare, quoted } of cmdParts(command)) {
-    const program = /^[\s(@]*(?:"([^"]+)"|(\S+))/.exec(text);
-    const name = (program?.[1] ?? program?.[2] ?? '').split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '');
-    if (bare || (quoted && !SUBSTITUTING_PROGRAMS.has(name))) {
-      return `\`${text.trim()}\` uses $( ), which cmd.exe, the shell it runs in on Windows, does not have: it passes the text on as written. Compute the value inside one program instead, such as node -e "..."`;
+  let start = 0;
+  let quoted = false;
+  let code = false;
+  for (let i = 0; i < command.length; i += 1) {
+    const char = command[i];
+    if (char === '"') {
+      quoted = !quoted;
+      code = quoted && opensCode(command.slice(start, i));
+    } else if (!quoted && (char === '&' || char === '|')) {
+      if (command[i + 1] === char) i += 1;
+      start = i + 1;
+    } else if (char === '$' && command[i + 1] === '(' && !code) {
+      return 'it uses $( ), which cmd.exe, the shell it runs in on Windows, does not have: it passes the text on as written. Compute the value inside one program instead, such as node -e "..."';
     }
   }
   return null;
