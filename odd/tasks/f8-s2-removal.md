@@ -377,3 +377,7 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   ready --pr <n>`, then T6: the sitting's plan to the lead (every session closed, the lead's included; after the PR
   lands and js-harness is updated he runs `js-harness stack backup run`, then `verify --from <dir> --marker
   s2drillmarker20261102 --expect 6431`, from a plain terminal). Nothing is removed without his yes through the lead.
+- L16: over `3e3f589..662c374`, Codex correct (0.92, 67,181 input tokens), lenses 0 findings (risk 13,432,
+  reliability 6,417, resilience 13,444). gentle-ai `review-82e895b46672ea75` approved, acknowledged; 1 suggestion, not
+  taken: the new cases assert only `.claude`, which is the one folder both `claude-config` and `claude-data` name, so
+  where one of them ends up is where the other does. Next: push, the PR, the ready notice, T6.
