@@ -396,3 +396,18 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   answer to question 171, "Hoy, cuando esté lista" (the lead's transcript `0f71b2c6`, line 56857,
   2026-11-03T00:47:19Z, read with `js-harness sessions --quote`); then, by the lead, he is away 4 to 6 hours from
   19:50, so T7 waits for his return, about 00:00 to 02:00 local. The lead messages this session then.
+- L19 2026-11-03 04:46 local: his answer to question 173, "Ahora" (the lead's transcript `0f71b2c6`, line 58207,
+  `2026-11-03T09:46:16Z`, read with `js-harness sessions --quote`): T7 starts. Read on this machine, read only, before
+  the plan: 16 `claude.exe`, 2 `codex.exe` and 3 `engram.exe` run (`tasklist`); the scheduled task
+  `js-harness-remote-js-harness-86aa68a6ffce` runs `remote.mjs start --watchdog` every 5 minutes, which would start
+  a `claude.exe` again during the backup, while `js-harness remote stop` keeps it stopped until the next `start`
+  (`js-harness remote --help`); `~/.js-harness` is not a root, only its `manifest.json`. The plan sent to the lead:
+  1. what closes first: the lead and every session (JH 56, PP 2, JH 134) write their state; he runs `js-harness
+  remote stop --cwd D:\js-harness`, then quits the Claude app from the tray and any Codex app or CLI, Orca and
+  herdr; the `engram.exe` are the sessions' MCP servers and end with them. 2. In a plain PowerShell, in order:
+  `js-harness stack backup run` (exit 0: none of the quiesce list runs, every root copied and counted twice, the
+  backup published; its last line `backup: <dir>`); `js-harness stack backup verify --from <dir> --marker
+  s2drillmarker20261102 --expect 6431` (exit 0: every row of the drill `ok`, the scratch home removed); `js-harness
+  remote start --cwd D:\js-harness --name js-harness` (exit 0: the server runs again); then he opens the Claude app.
+  A `FAIL quiesce` names what runs, writes nothing, and the run is repeated once it is closed; any other failure is
+  sent here as it printed, not run again.
