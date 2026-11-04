@@ -121,5 +121,9 @@ goes to the lead with `js-harness notify --to orchestrator --kind question`.
   that cannot be appended to left the env file replaced with no undo recorded; 48,988 input tokens, under the
   110,000 planned. Failing test first (a folder where `trims.jsonl` goes: 5 pass, 1 fail), then the fix: a failed
   record puts the file's text back and removes the backup (6 of 6).
+- L8 Reviews of `5787aef..2a768a8`: Codex correct, 0.96, the P2 fixed, 35,910 input tokens; resilience 0 findings;
+  reliability one warning — putting the file back overwrote what the codex hook appended after the replace. Failing
+  test first (5 pass, 1 fail), then the fix: the file is read again, its appended tail is kept after the old text, and
+  a file rewritten by anything else is left alone with its backup kept (6 of 6). Lenses 26,499 input tokens.
 - L5 Left open: the trim's backups are not pruned (each under 9 KB); the `session-env-file-cut` entry (PR 766, open)
   gains its control line once both pull requests are merged; the fix reaches the lead only after a release is synced.

@@ -112,6 +112,32 @@ test('a record that cannot be written puts the file back as it was, with no back
   assert.equal(fs.readFileSync(codex, 'utf8'), before);
   assert.deepEqual(fs.readdirSync(path.join(trims, SESSION)), []);
   assert.deepEqual(fs.readdirSync(path.dirname(codex)), ['sessionstart-hook-6.sh']);
+
+  // The codex hook appends after the replace and before the file is put back: its lines stay, after the old text.
+  let reads = 0;
+  const io = {
+    readFile: (file) => {
+      reads += 1;
+      if (reads === 3) fs.appendFileSync(file, `${START}\n`);
+      return fs.readFileSync(file, 'utf8');
+    },
+  };
+  assert.deepEqual(trimSessionEnv({ envFile, home, now: NOW }, io), []);
+  assert.equal(fs.readFileSync(codex, 'utf8'), `${before}${START}\n`);
+  assert.deepEqual(fs.readdirSync(path.join(trims, SESSION)), []);
+
+  // Something else rewrote the file meanwhile: it is left as that writer left it, and the backup stays.
+  fs.writeFileSync(codex, before);
+  reads = 0;
+  io.readFile = (file) => {
+    reads += 1;
+    if (reads === 3) fs.writeFileSync(file, 'export OTHER=\'x\'\n');
+    return fs.readFileSync(file, 'utf8');
+  };
+  assert.throws(() => trimSessionEnv({ envFile, home, now: NOW }, io));
+  assert.equal(fs.readFileSync(codex, 'utf8'), "export OTHER='x'\n");
+  const [kept] = fs.readdirSync(path.join(trims, SESSION));
+  assert.equal(fs.readFileSync(path.join(trims, SESSION, kept), 'utf8'), before);
 });
 
 test('a file that changed between the read and the replace is left as the other writer left it, with no record', (t) => {

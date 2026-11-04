@@ -74,8 +74,9 @@ function replace(file, text) {
  * on only when it still holds what was read, since the codex hook appends in parallel with this one; the new text
  * replaces the file by a rename, so no reader sees half of it, and a line in `<home>/.js-harness/session-env-trims/
  * trims.jsonl` records the undo. A file that changed, or that cannot be replaced, is left as it is, with no backup and
- * no record; when the record cannot be written, the file gets its text back and the backup goes, and when even that
- * fails the error is thrown with the backup kept. `io.readFile` is for tests. */
+ * no record; when the record cannot be written, the file gets its text back, with what was appended since kept after
+ * it, and the backup goes; when the file was otherwise rewritten, or putting it back fails, the error is thrown with the
+ * backup kept. `io.readFile` is for tests. */
 export function trimSessionEnv({ envFile, home, now }, io = {}) {
   if (typeof envFile !== 'string' || envFile === '') return [];
   const readFile = io.readFile ?? ((file) => fs.readFileSync(file, 'utf8'));
@@ -110,8 +111,11 @@ export function trimSessionEnv({ envFile, home, now }, io = {}) {
     try {
       fs.appendFileSync(path.join(dir, 'trims.jsonl'), `${JSON.stringify(record)}\n`);
     } catch {
-      // No change is left without its record: the file gets its text back, and only then does the backup go.
-      replace(file, text);
+      // No change is left without its record: the file gets its text back, and only then does the backup go. What the
+      // codex hook appended since the replace stays after that text; a file rewritten by anything else is not touched.
+      const current = readFile(file);
+      if (!current.startsWith(next)) throw new Error(`${file} changed after it was trimmed; its backup is ${backup}`);
+      replace(file, text + current.slice(next.length));
       fs.rmSync(backup, { force: true });
       continue;
     }
