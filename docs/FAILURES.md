@@ -1770,6 +1770,9 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-11-03 — the lead's note to JH 137 at 01:38Z on 2026-11-04 (claimed; the lead's own) — from 16:55 to 20:25
   local he was away after his answer to question 179, with no stretch opened; the reply hook flagged it at his return.
   The stretch record, read by JH 137 at 20:40 local, still holds no open after 2026-11-03T09:23:07Z
+- Seen: 2026-11-04 — the lead's message to JH 137 during Orca's removal, 11:44-11:47 local (claimed; the lead's own) — he was away 09:01 to 11:43
+  local with no stretch opened; question 186 waited the whole time on the lead's question tool, so the return had no
+  goals or forecast (the lead's miss)
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 

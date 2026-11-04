@@ -260,7 +260,7 @@ lost, which he accepted once the project's documentation and its memory were on 
   `verify` from a plain terminal; the results into `## Log` — S1, S4-S7; dropped by his answer to question 179
   after four tries copied nothing (L20)
 - [ ] T8 (kind: verify) the removals, each tool asked through the lead and run after its yes, in the order of item 5;
-  each operation and its check into `## Log` — S1, S3, S8. gentle-ai done (L34-L36); Orca and herdr next
+  each operation and its check into `## Log` — S1, S3, S8. gentle-ai done (L34-L36), Orca done (L37); herdr next
 - [ ] T9 (kind: build) the exclusion reverted in `.claude/settings.json` and its sentence in `CLAUDE.md`; every session
   restarted with the lead; the entries checked against gentle-ai's snapshot (L20); the smoke walk; the session checks; the incident set and
   `fixed load`; the root `CLAUDE.md`'s copy of the kept lines goes, and the T13 test in `bin/lib/rules-block.test.mjs`
@@ -644,3 +644,15 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   `gga.cmd`, `gga.ps1`, `lib/gga`) deleted, `~/bin/lib` removed empty; `command -v` finds neither `gentle-ai` nor
   `gga`. The lead told. From here `gentle-ai restore` is gone; its snapshots stay in `~/.gentle-ai`, which T14 asks
   about with the `.atl/` folders. Next, one at a time through the lead: Orca, then herdr, then this repo's style.
+- L37 2026-11-04 16:43:06Z (11:43 local): question 186 answered, "Desinstalar Orca" (tapped; the lead's transcript
+  `0f71b2c6`, line 64405, read with `js-harness sessions --quote`). Orca was closed (no process). Step 1: `orca
+  agent hooks off` (applied offline to `%APPDATA%\orca\profiles\local-default\orca-data.json`); checked: hooks in
+  `~/.claude/settings.json` 29 to 17, Orca's 12 gone, the rest kept. Step 2: `Uninstall Orca.exe /S /currentuser`
+  (through `uninstall-orca.mjs` in the job folder, since the Bash guard refuses a path with a space), exit 0, no
+  uninstaller process left; it removed `%LOCALAPPDATA%\Programs\orca` and its HKCU Uninstall key, and left `~/.orca`,
+  `%APPDATA%\orca`, `%LOCALAPPDATA%\Orca`, `%LOCALAPPDATA%\orca-updater` and the PATH entry, all in question 186's
+  list; no key under HKCU\Software or HKCU\Software\Classes names orca, no shortcut. Step 3: the four folders
+  deleted and checked gone; the PATH entry removed by `strip-user-path.mjs` (19 entries to 18, REG_EXPAND_SZ kept,
+  the rest unchanged, read back with `reg query`). Seen and left: `C:\Users\Oficina\.gentle-ai\bin` is still on his
+  user PATH, which belongs to the `~/.gentle-ai` question (T14). The lead's `Seen:` line under `stretch-not-opened`
+  added, as the lead asked, after Orca. Next: herdr's question.
