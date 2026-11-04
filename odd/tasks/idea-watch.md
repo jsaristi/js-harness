@@ -15,7 +15,7 @@ section 5; question 129 dropped it with the install watch at S11, and his words 
 
 ## Done when
 - `node --test bin/lib/idea-watch.test.mjs bin/idea-watch.test.mjs` exits 0
-- `node --test bin/lib/manifest.test.mjs bin/doctor.test.mjs bin/lib/gentle-ai-absence.test.mjs` exits 0
+- `node --test bin/lib/clones.test.mjs bin/lib/manifest.test.mjs bin/doctor.test.mjs bin/lib/gentle-ai-absence.test.mjs` exits 0
 - `node bin/js-harness.mjs contract check odd/tasks/idea-watch.md` exits 0
 - `npm run check` exits 0
 - `## Probe` records, in a `mktemp -d` home: `idea-watch draft` makes the clone, records it in the machine manifest
@@ -24,10 +24,11 @@ section 5; question 129 dropped it with the install watch at S11, and his words 
   under "To classify by hand"; an `ignore`-only release drafts one batched line (the diet's S9 pass line, a test)
 
 ## In scope / Out of scope
-- In: `bin/lib/idea-watch.mjs`, `bin/idea-watch.mjs` and their tests (new); `bin/lib/manifest.mjs` and its test (the
-  `clones` record and its removal); `bin/doctor.mjs` and its test (the `idea-watch` row); `bin/js-harness.mjs` (the
+- In: `bin/lib/idea-watch.mjs`, `bin/idea-watch.mjs` and their tests (new); `bin/lib/clones.mjs` and its test (new: the `clones` record and its
+  removal), `bin/lib/manifest.mjs` and `bin/install.mjs` (`uninstall` hands the records to it); `bin/doctor.mjs` and its test (the `idea-watch` row); `bin/js-harness.mjs` (the
   command list); `bin/lib/gentle-ai-absence.test.mjs` (the new files on its list, with why);
-  `odd/tasks/gentle-ai-update-check.md` (the record, seeded); `docs/SPEC.md` (the idea watch row); this document.
+  `odd/tasks/gentle-ai-update-check.md` (the record, seeded); `docs/SPEC.md`, `docs/RECORDS.md` and `README.md` (the capability, its
+  records, the command and the doctor row); this document.
 - Out: `docs/ROADMAP.md`, whose S2 and S9 text JH 137 owns (the line it should say goes to the lead, `## Next step`);
   his real home, `~/.claude`, `~/.codex`, credentials and gentle-ai's config; installing, building or running
   gentle-ai; any adoption a read proposes, which is his yes through the lead.
@@ -56,14 +57,14 @@ section 5; question 129 dropped it with the install watch at S11, and his words 
   carry, and one doctor row. The search of `rule:reuse-first`: codegraph and `ls bin` find `host-watch` (the same
   shape for Claude Desktop: a draft with one row an entry, unmatched entries listed by hand,
   `bin/lib/host-watch.mjs:18`), `recordOptionalFile` and `recordStackRow` (`bin/lib/manifest.mjs:775`, `:873`),
-  neither of which holds a folder; the old install watch `bin/lib/gentle-ai-update.mjs` left at 8b724f3d. No command
+  neither of which holds a folder, with `keepRecord` and `removeEmptyDirsUpTo` reused for it; the old install watch `bin/lib/gentle-ai-update.mjs` left at 8b724f3d. No command
   reads an upstream repository today.
 - 2. Raw material: his words, `js-harness sessions --quote 0f71b2c6-cbce-43ca-a031-276a4b2c381f 61838`, `62036`,
   `62099` (S1 to S3); the design, `docs/proposals/gentle-ai-reverse-engineering.md:458-500`; the diet's S9 row and
   pass line, `docs/proposals/harness-diet.md:802`; SPEC's row, `docs/SPEC.md:1032`; the roadmap's "Was" entry,
   `docs/ROADMAP.md:688`; `git ls-remote --tags https://github.com/Gentleman-Programming/gentle-ai.git` today: 408
   refs, newest stable v4.3.1; a bare clone in a scratch folder: 10 s and 98.8 MB; its
-  `git diff --numstat --no-renames v4.2.0 v4.3.1`: 584 paths, of which section 5's table leaves 44 unmatched.
+  `git diff --numstat --no-renames v4.2.0 v4.3.1`: 584 paths, of which section 5's table leaves 54 unmatched (a first count by hand said 44; `bucket` over the numstat says 54, and 0 with the rows below).
 - 3. The bar: excellent here means no changed path is dropped, a reader gets each release's changes already
   grouped by what they could change in the harness, the doctor counts what is owed without a session judging it,
   and nothing is left on his machine that `uninstall machine` does not remove.
@@ -74,7 +75,7 @@ section 5; question 129 dropped it with the install watch at S11, and his words 
   spec 8: `node --test bin/idea-watch.test.mjs`: none, new behaviour.
 - 4. Refutation: if section 5's table were too coarse to be worth a draft, the real v4.2.0 → v4.3.1 diff would land
   mostly unmatched or mostly in one row. Bucketed by hand from its numstat: 274 paths in `internal/shellinstaller`
-  and 105 in `e2e` (ignore), 49 in `internal/tui`, 46 in `internal/cli`, the rest spread over eight rows; 44 match
+  and 105 in `e2e` (ignore), 49 in `internal/tui`, 46 in `internal/cli`, the rest spread over eight rows; 54 match
   no row (`internal/agents`, `internal/app`, `internal/model`, `internal/system`, `scripts`, `.github` and four
   more), each classified below and given its row, as the design asks. If there were nothing to read, every release
   since the review would already be read: v4.3.1 is the newest stable tag and section 13 read it
@@ -85,7 +86,7 @@ section 5; question 129 dropped it with the install watch at S11, and his words 
   (recorded first) and prints a release's section, every changed path in its area and the unmatched ones by hand,
   an `ignore`-only release as one line; `idea-watch status` and a `doctor` row count the releases not yet read
   against the record, seeded with v4.3.1; `uninstall machine` removes the clone. Nothing installs or runs gentle-ai,
-  and nothing is adopted without his yes. The rows the 44 unmatched paths earned are the design's own rule applied,
+  and nothing is adopted without his yes. The rows the 54 unmatched paths earned are the design's own rule applied,
   not an addition.
   Adds: none
 
@@ -110,18 +111,37 @@ section 5; question 129 dropped it with the install watch at S11, and his words 
   in its area; the unmatched one listed for hand classification; an `ignore`-only release adds one batched line".
 
 ## Tasks
-- [ ] T1 (S4, S5, S8, kind: build): `bin/lib/idea-watch.mjs`: `AREAS`, `areaOf`, the numstat parser, the buckets,
-  the stable versions of `ls-remote`, the last version read from the record and the draft. Route: inline.
-- [ ] T2 (S6, kind: build): the machine manifest's `clones` record; `uninstall` removes a recorded clone inside
-  `~/.js-harness` and keeps the record when it cannot. Route: inline.
-- [ ] T3 (S6, S7, kind: build): `bin/idea-watch.mjs`, `status` and `draft`; the command list; the absence list.
-  Route: inline.
-- [ ] T4 (S7, kind: build): the `idea-watch` row of `doctor`. Route: inline.
-- [ ] T5 (S5, S7, kind: docs): the record seeded with v4.3.1; SPEC's row. Route: inline.
-- [ ] T6 (S6, kind: verify): the probe in a `mktemp -d` home. Route: inline.
+- [x] T1 (S4, S5, S8, kind: build, 1c083486): `bin/lib/idea-watch.mjs`: `AREAS`, `areaOf`, the numstat parser, the buckets,
+  the stable versions of `ls-remote`, the last version read from the record and the draft. Route: inline. RED: the
+  test could not load its module. GREEN: 13/13. Over the real v4.2.0 → v4.3.1 numstat: 584 paths, 0 unmatched.
+- [x] T2 (S6, kind: build, 4f2122ed): the machine manifest's `clones` record, in `bin/lib/clones.mjs`, handed to
+  `uninstall` as `deps.removeClones`; it removes a recorded clone inside `~/.js-harness` and keeps the record when it
+  cannot; `uninstall machine` says what it kept and exits 1. Route: inline. RED: 5 new tests failed (no
+  `recordClone`). GREEN: clones 6/6, manifest 214/214 unchanged.
+- [x] T3 (S6, S7, kind: build, 08458520): `bin/idea-watch.mjs`, `status` and `draft`; the command list; the absence list.
+  Route: inline. RED not run on its own: the module was written right after its test. GREEN: 9/9; absence 3/3; README 5/5 after its section.
+- [x] T4 (S7, kind: build, 009dd2e1): the `idea-watch` row of `doctor`. Route: inline. RED: the new test failed (no row).
+  GREEN: doctor 96/96.
+- [x] T5 (S5, S7, kind: docs, 08458520 and 009dd2e1): the record seeded with v4.3.1; SPEC, RECORDS and README. Route: inline.
+- [x] T6 (S6, kind: verify): the probe in a `mktemp -d` home (`## Probe`). Route: inline.
+
+## Probe
+2026-11-04, a `mktemp -d` home (`C:\Users\Oficina\AppData\Local\Temp\tmp.eWiymUoxmX`), the branch's command:
+- `js-harness idea-watch status` (in this checkout, the real record): `0 releases not yet read (the last read is
+  v4.3.1)`, exit 0: `git ls-remote` read the public repository, nothing fetched.
+- `idea-watch draft --from 4.3.0 --to 4.3.1 --home <scratch> --project .`: exit 0, it cloned bare and printed
+  `- v4.3.1 (from v4.3.0, read 2026-11-04): ignore; 1 paths, all in ignored areas, +1 -1` (the release is `go.mod`
+  alone). The scratch manifest then held `clones: [{ path: <scratch>\.js-harness\upstream\gentle-ai, url:
+  https://github.com/Gentleman-Programming/gentle-ai.git }]` and the clone folder held `HEAD`, `config`, `objects`,
+  `refs` and no working tree.
+- `idea-watch draft --from 4.2.0 --to 4.3.0` over the same clone (its tags fetched, not cloned again): exit 0, a
+  section of 11 area rows (workflow 11 paths, review 10, voice 1, skills 1, permissions 2, complements 12, tui 49,
+  install 78, hosts 4, models 3, ignore 412), "To classify by hand: (none)", 583 paths named under their areas.
+- `js-harness uninstall machine --home <scratch>`: `removed <scratch>\.js-harness\upstream\gentle-ai`, exit 0; the
+  scratch home was then empty (`ls -A` listed 0 entries). The scratch home was removed after.
 
 ## Areas the real diff earned
-The 44 paths of v4.2.0 → v4.3.1 that section 5's table leaves unmatched, read by folder name and listing at v4.3.1:
+The 54 paths of v4.2.0 → v4.3.1 that section 5's table leaves unmatched, read by folder name and listing at v4.3.1:
 - `internal/agents/claude/**`, `internal/agents/capabilitymanifest/**`, `internal/agents/*.go`: how gentle-ai adapts
   Claude Code, the one host we serve: a row `hosts`; every other `internal/agents/<host>/**` is ignore.
 - `internal/model/**` (model assignment, presets, `claude_model.go`): a row `models`, against our presets (G14) and
@@ -134,6 +154,15 @@ The 44 paths of v4.2.0 → v4.3.1 that section 5's table leaves unmatched, read 
 - `internal/assets/gga/**`, `internal/copilotconfig/**`, `internal/testsupport/**`, `go.mod`, `go.sum`,
   `.gitignore`, `.deadcode-baseline.txt`: ignore.
 
+## Next step
+- For the lead, since JH 137 owns the roadmap's S2 and S9 text: S9's "Was" entry can say that the idea watch came
+  back by his words of 2026-11-03 (the lead's transcript, line 61838) as `js-harness idea-watch`
+  (`odd/tasks/idea-watch.md`, this pull request): it reads gentle-ai's source in a bare clone that `uninstall machine`
+  removes, never installs or runs it, and `doctor`'s `idea-watch` row counts the releases not yet read.
+- His, after the pull request is ready, through the lead: whether the first `idea-watch draft` runs in his real home,
+  which makes a bare clone of about 99 MB at `~/.js-harness/upstream/gentle-ai` (10 s here), recorded so
+  `uninstall machine` removes it. Nothing needs it today: the newest stable release, v4.3.1, is the one read.
+
 ## Log
 - L1. 2026-11-03, his request, line 61838 (S1), then lines 62036 and 62099 (S2, S3); the lead's brief to JH 138
   (`C:\Users\Oficina\.js-harness\background\briefs\2026-11-04T02-11-47-437Z-ec70b4e5.md`).
@@ -142,3 +171,15 @@ The 44 paths of v4.2.0 → v4.3.1 that section 5's table leaves unmatched, read 
   can run); a folder has no bytes to hash, so it gets its own manifest array, `clones`, rather than `optional`. A
   draft section whose verdicts are still `?`, or whose hand list is not empty, does not count as read, so no
   separate `check` command is needed for `doctor`'s count.
+- L3. 2026-11-03, two gate refusals, each read before the next run. The first commit of T2 grew
+  `bin/lib/manifest.mjs` past its ceiling of 1752 lines (`bin/conventions-structure.test.mjs`): the clone code moved
+  to `bin/lib/clones.mjs`, handed to `uninstall` as `deps.removeClones` the way `stack install`'s rows go to
+  `deps.undoStack`, and manifest.mjs stayed at 1752. The first commit of T3 had no README section for the new command
+  (`bin/readme.test.mjs`); it got one. The session was compacted by the host at 21:57 local, between them; it
+  resumed from this document and the transcript.
+- L4. 2026-11-03, T4: the doctor row first set the last version read as its `version`, which the version column shows
+  only for an installed tool (`bin/doctor.mjs:72`); the row now carries none, and the last read is in its fix line.
+- L5. 2026-11-03, reviews of `70790d9..009dd2e`. The Claude lenses risk, resilience, reliability and readability: 0
+  findings each, recorded in `lens-reviews.jsonl`. Codex: its first run was voided by this document, edited while
+  part 1 of 4 ran (168,141 input tokens, nothing recorded; `docs/FAILURES.md`, edit-during-review); it runs again
+  once this document is committed, and nothing tracked is edited until it ends.
