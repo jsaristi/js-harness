@@ -301,7 +301,7 @@ mapped to the decision the review took and its state. RE is `docs/proposals/gent
 | engram, codegraph, context7 | take over (RE:239-241) | done: `bin/lib/stack.mjs` (S11); the entries back from the snapshot after the uninstall: owed T8 |
 | Permissions object | take over (RE:245) | done: `bin/lib/permissions.mjs`, `bin/lib/deny-paths.mjs` (S10); back from the snapshot: owed T8 |
 | Install, update, sync, uninstall, restore, doctor, backups | keep ours (RE:246-249) | done; gentle-ai's own uninstall and snapshot used once, T8 |
-| Presets | `install` and `init` offer them (RE:248) | `init` done (`bin/lib/functions.mjs:26-30`); `install` takes none (`docs/ROADMAP.md:538`) [c] and no step owns it: **gap** |
+| Presets | `install` and `init` offer them (RE:248) | `init` done (`bin/lib/functions.mjs:26-30`); `install` takes none (`docs/ROADMAP.md:538`) [c]; **only in `init`** by his answer to question 182 (L33), so no gap |
 | TUI | copy the design, not the code (RE:255, 4.6) | owed: "The TUI's rest" (`docs/ROADMAP.md`), not an S step |
 | Telemetry, skill registry and `.atl/` (in all three projects) | drop (RE:243-244) | scan done (`bin/lib/project-migrate.mjs`); removal owed: T14, one project at a time |
 | GGA (`~/bin/gga*`, `~/bin/lib`) | drop (RE:250) | owed: T14 |
@@ -595,3 +595,7 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   `operation_timeout` twice. Its code is `ae79fad2` (gentle-ai approved, L31) and `b0e90be1` (Codex 0.99, the
   reliability lens 0 findings), so nothing in it is unreviewed by Codex and the lenses; no start was run on the
   branch, by `CLAUDE.md`.
+- L33 2026-11-04 11:06:55Z (06:06 local): question 182 answered, "Solo en init" (tapped; the lead's transcript
+  `0f71b2c6`, line 63496, read with `js-harness sessions --quote`), relayed by the lead at 06:07. The presets live
+  only in `init`; RE:248's decision that `install` offers them too changed; nothing is built. Recorded in the T12
+  table's Presets row and in `docs/ROADMAP.md` under S11's decisions, so the table has no gap left.

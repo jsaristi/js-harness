@@ -439,7 +439,12 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   command and undo; `grep -rl gentle-ai bin evals` lists only the idea watch, the named fixtures and
   the tests that assert its absence; `check` and `doctor` green with gentle-ai still installed.
 - **Cost:** no eval (its own probes).
-- **His decisions:** G14, the presets' names, by default (the lead takes the stated default).
+- **His decisions:** G14, the presets' names, by default (the lead takes the stated default). **The presets live
+  only in `init`** (complete, lean, custom), which sets up each project; `install` sets up the machine once and takes
+  none. This changes the reverse-engineering review's decision (RE:248) that both offered them; nothing is built.
+  Asked as question 182 ("Recomiendo dejarlos solo en `init` y anotar en el plan que la decisión cambió"), he
+  tapped "Solo en init" (the lead's transcript `0f71b2c6`, line 63496, 2026-11-04T11:06:55Z, read with `js-harness
+  sessions --quote`).
 - **State:** done (PRs 627, 628, 629, 632, merged 2026-10-28 and 29; `odd/tasks/f8-s11-complements.md`).
 
 ### The Codex daemon row (JH 103, beside S11's doctor rows)
