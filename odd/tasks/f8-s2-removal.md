@@ -588,3 +588,10 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   expected groups from the root `CLAUDE.md` without checking that its two headings are there, so T9's removal of
   that copy would fail it with an unhelpful diff. Fixed in the next commit: the test asserts both headings and
   says what to do, and T9's line now owns freezing the groups inline.
+- L32 2026-11-04 ~03:05Z (22:05 local): main merged in at `2f79e277` (one conflict in `docs/FAILURES.md`, both
+  sides kept, in date order); PR 763 opened, the lead told (ready, 21:52). The host stopped this session's
+  `js-harness wait --notice-to 137` for low memory and said not to restart it; the lead was told to message instead.
+  gentle-ai: `70790d92..2f79e277` (the branch since main) not reviewed: `review status` returned
+  `operation_timeout` twice. Its code is `ae79fad2` (gentle-ai approved, L31) and `b0e90be1` (Codex 0.99, the
+  reliability lens 0 findings), so nothing in it is unreviewed by Codex and the lenses; no start was run on the
+  branch, by `CLAUDE.md`.
