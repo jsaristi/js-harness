@@ -68,7 +68,7 @@ also says that his "mucho mas facil" (L6) is carried forward as its own feature 
   - His words: the lead's transcript `0f71b2c6-cbce-43ca-a031-276a4b2c381f`, lines 64927, 65277, 65317, 65412 and 65518,
     read with `js-harness sessions --quote` (L1, L3, L4, L5).
   - `package.json` `files`: `bin/`, minus `*.test.mjs` and `*.testkit.mjs`, plus `THIRD_PARTY_NOTICES.md`: 270
-    files, 4,610,788 bytes of `.mjs` ship.
+    files, 4,598,336 bytes (LF) of `.mjs` ship.
   - `bin/js-harness.mjs`: 52 commands, the keys of `COMMANDS`. `bin/lib/hook-entries.mjs:8-219`: the hook entries `install`
     registers. `bin/lib/project-hooks.mjs:5-37`: the git hooks `init` writes.
   - The scratch run, 2026-11-04, installed 0.97.0. `js-harness install --home <scratch>/home` wrote 6 files (the 5
@@ -114,7 +114,7 @@ also says that his "mucho mas facil" (L6) is carried forward as its own feature 
     they are 4,598,336 (a reader's count). The figures that follow are all CRLF.
 - 3. The bar:
   spec 1: `js-harness install --home <scratch>/home`: with `init --home` in the scratch project, tables A to D below; 52 commands (the keys of `COMMANDS`), 15 hook entries, 2 git hooks, 6 files, 6 texts and 76 rules classified; 7 commands workshop, 4 both, 41 product; every hook and git hook product; 3 of the 5 skills carry workshop lines.
-  spec 2: `js-harness check --verbose`: in the scratch project, with the measures of table E; before, 2,624 fixed tokens a turn, 15 hook entries, 5 skills (17,843 tokens of bodies), 270 files and 4,610,788 bytes shipped; after the split, estimated, about 2,618 fixed tokens, 15 hook entries, 5 skills (about 17,150 tokens), 253 files and about 4,364,000 bytes; the gate's time after is not measured.
+  spec 2: `js-harness check --verbose`: in the scratch project, with the measures of table E; before, 2,624 fixed tokens a turn, 15 hook entries, 5 skills (17,843 tokens of bodies), 270 files and 4,598,336 bytes (LF) shipped; after the split, estimated, about 2,618 fixed tokens, 15 hook entries, 5 skills (about 17,150 tokens), 253 files and about 4,352,000 bytes (LF); the gate's time after is not measured.
   spec 3: `node --test bin/conventions-workshop.test.mjs scripts/package-contents.test.mjs`: none, new behaviour (the convention test does not exist; the pack test passes today with all of `bin/`).
   spec 4: left out because its proof is S13's rehearsal (`scripts/rehearsal.mjs`) with the workshop's row added, and the open from-zero rehearsal of "Memory that survives the machine" (`docs/ROADMAP.md:265`), which is not run here.
   spec 5: `js-harness double-review tally --since 2026-11-04`: none, new behaviour.
@@ -133,7 +133,7 @@ also says that his "mucho mas facil" (L6) is carried forward as its own feature 
     stage brings small context savings, the same hook registrations and better isolation, and the weight a user
     carries is the product's own, not the workshop's.
   What the workshop adds is risk:
-  - 17 files and 246,622 bytes of it ship, 5.3 %. 14 import sites in product code reach them, plus one text
+  - 17 files and 246,045 bytes (LF) of it ship, 5.3 %. 14 import sites in product code reach them, plus one text
     (table B).
   - Four static sites sit on paths every user runs: `bin/check.mjs:14` and `:42` in the pre-commit gate;
     `bin/doctor.mjs:33` at every SessionStart; and `bin/lib/manifest.mjs:16`, through which nearly every command
@@ -243,7 +243,7 @@ use in his other two projects' transcripts; C, the caller in product code that m
 | Hook output a turn in a fresh project | 0 characters into the context | 0 |
 | Skills | 5 listed; bodies 17,843 tokens, loaded on demand | 5; about 17,150 |
 | Gate in a fresh project | 10 rows, 2.06 s | 10 rows; time not measured |
-| Shipped code (CRLF bytes) | 270 files, 4,610,788 bytes | 270 − 17 = 253 files and 4,610,788 − 246,622 = 4,364,166 bytes, plus the helpers that move into product modules (`audit.mjs`'s share functions and throughput's land readers, a few KB, not counted) |
+| Shipped code (CRLF bytes) | 270 files, 4,598,336 bytes (LF) | 270 − 17 = 253 files and 4,598,336 − 246,045 = 4,352,291 (LF) bytes, plus the helpers that move into product modules (`audit.mjs`'s share functions and throughput's land readers, a few KB, not counted) |
 | Product code that imports workshop code | 14 import sites and 1 text (table B) | 0, held by a test |
 | Files after, counting new modules | 270 | 253 + `bin/lib/share-check.mjs` + `bin/lib/land-records.mjs` = about 255, and the product halves of `audit.test.mjs` and `throughput.test.mjs`, which do not ship |
 | Workshop code left shipped (the "both" halves) | `refresh-copy` and `merge-queue-refresh*` 57 KB, `rules change` and `rules coverage` 89 KB, at least 22 sites that read this repository | the same in the first stage |
@@ -431,7 +431,7 @@ beside the product's one command:
     `node_modules`. 6, re-point his heartbeat and doctor. 7, the import sites listed one by one, 15. 9, the pack
     test names each workshop file. 10, the gate's time after is unmeasured.
   - Rebutted from Claude: 8, and the `windows-args.mjs` part of 7. That module is not among the 17 workshop files:
-    the cut list holds `bin/lib/lines.mjs`, not `windows-args.mjs`, so the 16 tests and the 246,622 bytes stand.
+    the cut list holds `bin/lib/lines.mjs`, not `windows-args.mjs`, so the 16 tests and the 246,045 bytes (LF) stand.
   - Taken from Codex, all 7: 1, the first stage is named and the claim limited. 2, the docs row stays in both
     gates. 3, the same skill line as Claude's 4. 4, the recovery the backup already prints, reused. 5, the CRLF
     bytes said, and the after figure reconciled as 270 − 17 files. 6, a stated threshold for "liviano". 7,
@@ -449,3 +449,34 @@ beside the product's one command:
     `host-update` and `manifest` texts and the packed README. 4, the verdict as a tradeoff for him. 5, 14
     imports and 1 text, 33 moves, about 255 files.
   - A third and last read follows (`rule:double-review`: at most three).
+- L10 (2026-11-04): third and last read `5c92c8ec-8b9c-4092-8a34-ce212962ff0d` on commit 497cb7c6. Claude found 9,
+  Codex 5. Taken, and to be applied to the shape by the build plan, not yet re-read:
+  - Claude 1, high: `checkSpec` cannot read the workshop list without breaking the import check. It keeps
+    `COMMANDS`, and a workshop sensor (`npm run workshop -- spec`) checks SPEC's claims on the workshop commands.
+  - Claude 2, high: a `sensors` key in `harness.json` replaces the `package.json` sensors (`bin/check.mjs:180-198`),
+    so it declares `tests` (`node --test`) beside `docs`, with a test that the gate still runs the suite.
+  - Claude 3 and Codex 5: every shipped text is inventoried, the whole packed README (`:118`, `:1121`, `:1191`,
+    `:1537`, `:1559`, `:1784` and more), `loop`'s usage, and `manifest.mjs:146`'s WINDOWS and HOST promises. The
+    text check also runs every command's `--help`.
+  - Claude 4: the four `throughput-*` rules move to a workshop rule list through `rules change`.
+  - Claude 5 and Codex 3: the convention tests (`conventions-errors` and `conventions-structure` legacy lists,
+    `gentle-ai-absence.test.mjs:104-106`, `ratchet.testkit.mjs`) scan `workshop/` too; costed in slice 1+2.
+  - Claude 6: the idea row and the staleness row run from a project hook in this repository's
+    `.claude/settings.json`, `npm run workshop -- doctor --hook`, with a test that the idea row appears at
+    SessionStart here.
+  - Claude 7: the 57 KB are `refresh-copy.mjs` 21,692, `merge-queue-refresh.mjs` 15,161,
+    `merge-queue-refresh-now.mjs` 8,894, `refresh-consent.mjs` 6,340 and `merge-queue-stale-bin.mjs` 4,939.
+  - Claude 8: per entry, `doctor --hook` 71 characters, a `systemMessage` shown to him and not in the context;
+    `resume --hook` not measured; `rules` 0; `backup` 0.
+  - Claude 9: `manifest.mjs` is imported by most commands.
+  - Codex 2: `bin/lib/lines.mjs` (734 bytes) stays in the product, since `readRecords` uses `linesOf`: 16 files.
+  - Codex 4: the LF baseline, 4,598,336 bytes, measured with `git ls-files` in this worktree. The 4,610,788 came
+    from the main checkout's working files.
+  - Codex 1, partly rebutted: the measured prediction, fewer fixed tokens and hooks a turn, is falsified whatever
+    the threshold (0 hooks and 6 tokens move). Overall lightness, with the hooks' running cost unmeasured, stays
+    his to judge, and the question presents isolation, context, package and runtime apart.
+  - Three reads did not settle the build shape (two high findings in the third), so by `rule:double-review` he gets
+    it as a problem. T6's build plan passes to `claude-fable-5-1` (`rule:escalation-model`) before any slice. The
+    direction, his question, does not depend on these details.
+- Next step (for a resume): push the branch, open the docs PR, send the question with
+  `js-harness notify --to orchestrator --kind question`, then write its number in item 4 and here.
