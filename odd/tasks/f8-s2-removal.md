@@ -684,3 +684,11 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   check` (a removed line may be a rule's text: then T10's `rules change`); `js-harness rules coverage --refresh`;
   `npm run check` through the commit; Codex and the lenses over the code commit; push. Then the restart question
   through the lead (T9's restart needs him present, the lead's note 12:47), then `~/.gentle-ai`, the output style.
+- L41 2026-11-04 19:16Z (14:16 local): T9's build part done at `85d17a02` (Codex correct 0.94; lenses reliability
+  and readability 0 findings), merged with PR 768 (main `b0d55ebb`, `git merge-base --is-ancestor 85d17a02
+  origin/main` exit 0); the lead installed it (install and doctor exit 0, by its message). Question 189, the session
+  restart of T9 (needs him present; a yes covers closing and reopening every open session and the lead's checks in
+  js-harness, plataforma-preproyecto and abogadaclaudiajimenez; it does not authorize the smoke walk, ~$5, the
+  incident set, ~$13, or the style), sent to the lead at 14:16 local. The host compacted this session at 14:16;
+  resumed from this document. Next, after his answer: T9's checks, then `~/.gentle-ai` with its PATH entry (T14),
+  then the output style, then T10 and T11.
