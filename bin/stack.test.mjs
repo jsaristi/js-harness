@@ -164,7 +164,7 @@ test('stack --help and stack install --help print the usage of both, with the --
   assert.equal(read, 0);
 });
 
-test('stack takes an empty JS_HARNESS_HOME as unset: the engram plugin is read from the user home, not the working directory', () => {
+test('stack takes an empty JS_HARNESS_HOME as unset: the engram plugin is read from the user home, not the working directory', async () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-stack-'));
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-user-'));
   try {
@@ -184,8 +184,12 @@ test('stack takes an empty JS_HARNESS_HOME as unset: the engram plugin is read f
     assert.equal(plugin.length, 1, run.stdout);
     assert.deepEqual(plugin[0].dimensions, ['claude'], run.stdout);
   } finally {
-    fs.rmSync(work, { recursive: true, force: true });
-    fs.rmSync(home, { recursive: true, force: true });
+    // On win32 a probe runs through cmd.exe, and its timeout kills only cmd.exe: the tool under it can live on with
+    // its working directory in `work`, which Windows will not remove until it exits (the daily Windows run, three
+    // times from 2026-10-28). The removal waits for it; the promise form, since Node 24's rmSync fails an EPERM at
+    // once whatever its maxRetries.
+    await fs.promises.rm(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    await fs.promises.rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 

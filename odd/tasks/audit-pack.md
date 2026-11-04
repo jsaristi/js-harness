@@ -508,6 +508,10 @@ Found by the search of item 2; each changes in T2.
   measured again at the close, the index printing per capability rather than this count. Not done here: the model
   he named, "Fable 5.5", is not known to this session (the models it knows are Fable 5.1, Opus 5.5, Sonnet 5.5 and
   Haiku 5.5), so its window, and the `--budget` it asks, goes to the lead with the close.
+- L19 2026-11-02T17:49:08Z, his answer to question 163, which offered "Fable 5.1, ventana 1M", "Esperar a Fable 5.5"
+  and "Otro" (the lead's transcript `0f71b2c6`, line 54896, read with `js-harness sessions --quote`): "Esperar a
+  Fable 5.5". The deep audit waits for that model; its reading budget, 40% of the window `docs/README.md` asks of
+  the auditor, is set from that model's window when it is known.
 
 ## Next step
 State at 2026-11-02 ~11:50Z, branch `worktree-audit-pack` (worktree `audit-pack`). The plan's reviews are done

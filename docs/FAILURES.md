@@ -745,6 +745,17 @@ configuration to bare.
 - Control: check — bin/js-harness.test.mjs — "run from the pre-commit hook of a linked worktree,
   this file leaves the repository being committed as it was" — since 2026-10-04
 
+### goal-written-for-another-shell
+A goal written for sh ran in cmd.exe, the shell goals and done-when commands run in on Windows, which
+passed its `$( )` on as written, so a goal that was met read "not met".
+- Class: tool
+- Seen: 2026-11-02 — the stretch closed at 12:50, plan `stretch-plan-1102b.json` in the scratchpad of
+  the lead's transcript 0f71b2c6 (brief JH 136) — goal `prs`, `git fetch -q origin && test $(git rev-list
+  --count --merges 47d96a3..origin/main) -ge 3`, read "not met (exit 2)" with 13 merges since 47d96a3;
+  run again through `runSensor` (JH 136): exit 2, "test: extra argument 'rev-list'"
+- Control: check — bin/stretch.test.mjs — "open on Windows refuses a goal whose $( ) cmd.exe cannot
+  run, and says how to write it (exit 2)" — since 2026-11-02
+
 ### guard-off-when-copy-behind
 The guard let sessions open with a title that carried no project code and number, because the
 installed copy the hooks run was behind the project's rules file: `ruleHere` gave `off: 'behind'`
@@ -1536,6 +1547,12 @@ Sessions told to start after an event armed no wait for it, so nothing woke them
 - Seen: 2026-10-16 — throughput-v3-measure.md (the lead's notes, the window 10-15T00Z to 10-17T00Z) — 31
   turn ends followed by more than 30 minutes of silence with no background task, 64.4 session-hours
   in two days (an upper bound: some had nothing to do)
+- Seen: 2026-11-02 — PP 1's transcript 7eb85479 (plataforma-preproyecto), lines 349 to 378, and that project's
+  channel record, the lead's note at 10:22:54Z (the end of the idle time claimed; the lead's own, in JH 134's brief)
+  — PP 1 recorded its waiting at 10:05:53Z and ended its turn at 10:06:25Z on a Decision line with nothing in the
+  background; the lead's note carrying his answer, "Solo la página", reached its channel 16 minutes later and woke
+  nothing, so it sat idle about 7 h, 05:26 to 12:35 local. The heartbeat that would have flagged it watches only
+  js-harness sessions, and the reply hook let the turn end, since a Decision line holds no handed work
 - Control: check — bin/reply.test.mjs — "a work session that ends its turn holding handed work with
   nothing in the background is turned back once, with what to arm" — since 2026-10-16
 - Was: protocol — bin/lib/manifest.mjs — "every session that waits has a declared wait running
@@ -1739,6 +1756,10 @@ the reply before he leaves; so the return had no goals to check and no forecast 
   2026-11-02 04:01 local (UTC-05:00) he turned the machine off for the night with every session paused on purpose,
   and no stretch covered it; the reply hook flagged it at his return. The stretch record's last close is at
   2026-11-02T01:53:56Z and none opened after it (`stretches.jsonl` under the throughput folder, read by JH 130)
+- Seen: 2026-11-02 — the lead's transcript 0f71b2c6, lines 55168 and 55186 (the lead's own, read by JH 134) — his
+  question 165 was asked at 18:00:21Z (12:59 local) and answered at 20:01:59Z (15:01 local); it waited two hours
+  and no stretch covered it: the stretch record's last close is at 17:50:20Z and none opened after it
+  (`stretches.jsonl` under the throughput folder)
 - Seen: 2026-11-03 — relief file, lines 2250-2251 (claimed; the lead's own) — from 06:17 to 09:59 local (UTC-05:00)
   he was away while the lead's backup script waited for the app to close, and the machine slept at 06:21; no stretch
   covered it and no work session was opened. The stretch record's last close is at 2026-11-03T09:23:07Z and none
@@ -2001,6 +2022,22 @@ context until it has to be relieved.
   stale once T4 was checked off; replaced on 2026-10-15 by the tests T4 left, merged in pull
   request 65 (2026-10-11): bin/sessions.test.mjs:2095 holds the watch quiet for a notice to
   another role and for its own, and :2080 wakes it for a notice to the orchestrator
+
+### windows-probe-holds-test-folder
+On Windows a stack probe goes through cmd.exe, and its 5 s timeout kills cmd.exe alone: the tool under it lives on
+with its working directory in the test's folder, which Windows refuses to remove while it runs. The test that ran
+`stack` in that folder failed in its cleanup, with its assertion met, and `fs.rmSync`'s `maxRetries` did not help:
+Node 24's rmSync fails an EPERM at once (a busy folder, retried: 0 ms with rmSync, 3,048 ms with `fs.promises.rm`).
+- Class: machine
+- Seen: 2026-10-28 — windows-daily run 40702921457 — `EPERM, Permission denied` removing `jh-home-stack-0sFeX4`,
+  the cleanup of the test (line 186 before the fix), in 5,581 ms
+- Seen: 2026-10-30 — windows-daily run 41071093780 — the same removal, `jh-home-stack-N7Bx4a`, in 5,511 ms
+- Seen: 2026-11-02 — windows-daily run 41489272123 — the same removal, `jh-home-stack-uz7ytQ`, in 5,627 ms;
+  reproduced here with a `codegraph.cmd` that waits 8 s first on the PATH
+- Control: check — bin/stack.test.mjs — "stack takes an empty JS_HARNESS_HOME as unset: the engram plugin is read
+  from the user home, not the working directory" — since 2026-11-02
+- Proof: the windows-daily runs after the merge name no failing test of bin/stack.test.mjs (`js-harness
+  windows-daily`)
 
 ### written-question-buried
 A question he had to answer in writing was put at the end of long reports, so it did not read as a question and

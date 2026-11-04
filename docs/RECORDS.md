@@ -105,7 +105,7 @@ where an auditor checks them, since no schema holds the fields and nothing check
 
 - `## Goal`: one sentence. A document is a contract when it has this heading (`isContract`).
 - `## Why`, `## In scope / Out of scope`, `## Constraints`, `## Ask me before`: required and non-empty (`validateContract`, for `contract` and `check`'s `contracts` row).
-- `## Done when`: list items. An item that opens with an inline code span and says `exits 0` is a command `/goal` runs; any other item is a check for a person (`doneWhen`). At least one command is required, and none may still be a `<placeholder>`.
+- `## Done when`: list items. An item that opens with an inline code span and says `exits 0` is a command `/goal` runs; any other item is a check for a person (`doneWhen`). At least one command is required, and none may still be a `<placeholder>`; on Windows, where it runs in cmd.exe, none may use `$( )` outside the double-quoted code of `bash -c`, `sh -c`, `pwsh` or `powershell` `-c`/`-Command`, or `node -e`/`-p` (`cmdShellGap`).
 - `## Effort` (optional, legacy): `medium` or `high`.
 - `## Depth pass`: required for documents opened on or after `harness.json` `depthPassSince`. It holds the items `1. Method`, `2. Raw material`, `3. The bar`, `4. Refutation` and `5. Request` in that order, a `Verdict: supports|refutes` line, and an `Adds: none` (or `Adds: … (question <n>)`) line (`bin/lib/depth-pass.mjs` `depthPassText`, `verdictOf`).
 - `## Specs`: numbered items `<n>. …` quoting the owner's words. The depth pass's bar refers to them, and the Codex review prompt carries the section (`bin/lib/codex-review-prompt.mjs`).
@@ -822,7 +822,7 @@ The record of each stretch of work, one JSON line per event, from which the stre
 Written by `open` once the plan is accepted (`bin/lib/stretch.mjs` `parsePlan`).
 
 - `head`: string or `null`, the default branch's commit at the opening.
-- `plan`: object: `hours` (number above 0), `slots` (integer, work sessions at once), `goals` (array of `{ id, text, command }`, each command one that exits 0 when the goal is met), `items` (array of `{ id, title, kind, hours: [low, high], session, waitsFor?, closes?: [{ in, step }] }`, `kind` one of `design`, `build`, `verify`, `docs`, `session` a string or `null`), `waits` (array of strings).
+- `plan`: object: `hours` (number above 0), `slots` (integer, work sessions at once), `goals` (array of `{ id, text, command }`, each command one that exits 0 when the goal is met; on Windows `open` refuses one cmd.exe cannot run, `cmdShellGap` of `bin/lib/contract.mjs`), `items` (array of `{ id, title, kind, hours: [low, high], session, waitsFor?, closes?: [{ in, step }] }`, `kind` one of `design`, `build`, `verify`, `docs`, `session` a string or `null`), `waits` (array of strings).
 - `corrections`: object keyed by task kind, each `{ factor, samples, from }`, `from` one of `kind`, `all`, `none` (`bin/lib/stretch.mjs` `corrections`).
 
 ### `bind`
