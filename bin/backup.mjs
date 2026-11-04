@@ -19,6 +19,7 @@ import {
   pushRefusal,
   readJson,
   repoOf,
+  sameFolder,
   scopeArgs,
 } from './lib/backup.mjs';
 import { readTerms, renderSummary, seedTerms } from './lib/backup-summary.mjs';
@@ -28,6 +29,7 @@ import { humanSize, readiness } from './lib/backup-ready.mjs';
 import { bundleRefs, checkoutsOf, pathKey, repoFiles, shortKey, unpushedCount, writeBundle } from './lib/backup-repos.mjs';
 import { fallbackNotice, projectOf, readStats, STATS_TIMEOUT_MS } from './lib/backup-fallback.mjs';
 import { copyTranscripts, restoreTranscripts, verifyTranscripts } from './lib/backup-transcripts.mjs';
+import { trimAtSessionStart } from './lib/session-env.mjs';
 import { mainCheckout } from './lib/sessions.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { INSTALL_NEWEST } from './lib/version.mjs';
@@ -89,6 +91,8 @@ const USAGE = [
   '  --session-start  The SessionStart hook install registers: reads the hook input, and when Engram holds less than nine',
   "    tenths of what the last backup held of the session's project (or does not answer within 3 seconds) it tells the",
   "    session to read that project's file in recent/ and how to restore Engram. Silent otherwise; always exits 0.",
+  "    First it trims the session's SessionStart env files past 2 KB to the last copy of each line (the codex plugin",
+  '    appends to its own at every start); each trim leaves a backup and its undo in ~/.js-harness/session-env-trims.',
   '  Its state lives in ~/.js-harness/memory-backup. Deleting that folder removes the clones on this machine and their records,',
   '    not what they pushed (the private repositories and the memory-summary branch) nor what restore wrote in ~/.js-harness',
   '    (restored-config, restored-bundles, restore-progress.json).',
@@ -963,9 +967,10 @@ function sessionNotice(deps) {
   return fallbackNotice({ entry, stats, clone: paths.clone, cloneExists, repo: config.repo });
 }
 
-/** `backup --session-start`: prints the notice in the hooks contract when there is one, and exits 0 whatever happens,
- * since a SessionStart hook never breaks a session. */
+/** `backup --session-start`, the one harness hook on every start: trims the env files the codex plugin grew, then prints
+ * the notice in the hooks contract when there is one, and exits 0 whatever happens, since it never breaks a session. */
 function sessionStartCommand(deps) {
+  trimAtSessionStart({ env: deps.env, home: deps.home, now: deps.now() });
   try {
     const notice = sessionNotice(deps);
     if (notice) deps.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: notice } })}\n`);
@@ -980,12 +985,6 @@ function sessionStartCommand(deps) {
 function checkoutRoot(deps, dir) {
   const top = deps.run('git', ['-C', dir, 'rev-parse', '--show-toplevel']);
   return top.status === 0 && top.stdout.trim() ? path.resolve(top.stdout.trim()) : null;
-}
-
-/** Whether two paths name one folder. Windows folders are case-insensitive, so there the spelling does not decide it. */
-function sameFolder(a, b) {
-  const key = (place) => (process.platform === 'win32' ? path.resolve(place).toLowerCase() : path.resolve(place));
-  return key(a) === key(b);
 }
 
 /** The origin URL of a repository, for RESTORE.md, with its credential removed (`withoutCredentials`), or null when the

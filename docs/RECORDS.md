@@ -936,6 +936,18 @@ Copies taken before `merge-queue --land --refresh-copy` installs main over the i
 - `settings-<stamp>.json`: a byte copy of the Claude settings (`<home>/.claude/settings.json`); the newest 5 are kept.
 - `package.json.<stamp>`: a byte copy of pnpm's global `package.json` that the js-harness shim names, which `pnpm add -g` rewrites; the newest 5 are kept.
 
+## Session env trims
+
+What `backup --session-start` leaves when it rewrites a session's SessionStart env file that the codex plugin grew past
+2,048 bytes to the last occurrence of each line (`odd/tasks/session-env-trim.md`); `bin/lib/session-env.mjs`
+`trimSessionEnv` writes both, the backup before the rewrite and the record after it. Nothing prunes them yet.
+
+- `<session>/sessionstart-hook-<n>.<stamp>.sh`: a byte copy of the file before the rewrite; `<stamp>` is the UTC time
+  with `:` and `.` as `-`, and a `.<k>` before `.sh` when that name is taken.
+- `trims.jsonl`, one line a rewrite: `at` (ISO time), `file` (the env file rewritten), `backup` (its copy), `bytesBefore`
+  and `bytesAfter` (numbers), `sha256Before` (string, of the text copied), `undo` (string, the `cp -p` that puts the copy
+  back).
+
 ## The doctor's cache and reviews
 
 The doctor's cache of the latest versions fetched and of what was last notified or reviewed; `bin/lib/cache.mjs` `writeCache` writes the whole object, and `bin/doctor.mjs` builds each key it changes.
