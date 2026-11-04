@@ -203,6 +203,8 @@ family by folder and child names; the fields of each are in `docs/RECORDS.md`, a
 | This specification | `docs/SPEC.md` | sessions, by hand | `check`'s `spec` and `docs` rows |
 | The audit entry | `docs/README.md`, `docs/RECORDS.md` | sessions, by hand | `docs`, `check`'s `docs` row |
 | Host updates | `docs/host-updates/`: the review `claude-desktop-<version>.md` the session saves from `draft`, the sources `sources/claude-desktop-<desktop>.<key>.md`; the brief `~/.js-harness/background/host-watch-<version>.md` the heartbeat writes | `bin/host-watch.mjs` `hostWatchMain` `hostWatchTick` | `host-watch`, sessions |
+| The idea watch's record | `odd/tasks/gentle-ai-update-check.md`, its `## Releases read` | the session, from `idea-watch draft`, by hand | `idea-watch status`, `doctor` |
+| The idea watch's clone | `~/.js-harness/upstream/gentle-ai`, a bare clone recorded in the machine manifest | `bin/idea-watch.mjs` `fetchClone` | `idea-watch draft`; `uninstall machine` removes it |
 | Session summaries | `docs/sessions/<date>-<slug>.md` | `bin/lib/summary.mjs` `summaryPath` `summaryTemplate`, then the session | the lead, the 1.0.0 review |
 | The machine manifest | `~/.js-harness/manifest.json` | `bin/lib/manifest.mjs` `install` | `uninstall`, `status`, `doctor` |
 | The host's files the harness edits | `~/.claude/settings.json`, `~/.claude/CLAUDE.md`, `~/.claude/output-styles/<style>.md`; in `~/.codex/hooks.json` only the entries versions up to 0.97.0 wrote, which `sync` and `uninstall` remove | `bin/lib/manifest.mjs` `install`; `bin/lib/rules-block.mjs` `holdRulesBlock`; `bin/lib/user-settings.mjs` `acceptSessionMessages` | the hosts; `uninstall` by the machine manifest |
@@ -743,6 +745,15 @@ check or an eval case ("After F8", directive coverage).
 **Discarded:** Deciding `adopt` or `adapt` by pattern: a decision is a reading, and his yes in question 129 covers no adoption. Dropping Cowork entries unread: they default to `ignore` only when no harness area matches, and stay visible rows.
 **Today:** `bin/host-watch.mjs`, `bin/lib/host-watch.mjs`, `bin/lib/host-update.mjs`, `js-harness host-watch`
 
+### Each gentle-ai release is read for ideas
+
+**Problem:** gentle-ai leaves the machine, and it keeps releasing; he asked to read what each release adds or removes and keep what serves the harness, without copying it (`odd/tasks/idea-watch.md`, S1 to S3).
+**Requirement:** `js-harness idea-watch status` lists the stable tags upstream (`git ls-remote`) and prints how many are above the last release `odd/tasks/gentle-ai-update-check.md` holds as read, and which; `doctor`'s `idea-watch` row says the same, in the interactive online report only. `idea-watch draft` fetches a bare clone under `~/.js-harness/upstream`, recorded in the machine manifest's `clones` before it is fetched, and prints the record's entry for the next release: each path its diff changed placed in the first area of `AREAS` that matches, one row an area with its verdict `?` (an ignored area decided `ignore`), the paths no area matches under "To classify by hand"; a release whose paths all fall in ignored areas is one line. A drafted section counts as read only once no verdict is `?` and the hand list is empty. `uninstall machine` removes a recorded clone only inside `~/.js-harness`.
+**Reason:** A release changes hundreds of paths, most of them other hosts, tests and the shell installer; placing them by area keeps the reading on what the harness took over, and a path no area matches is never dropped.
+**Proof:** `node --test bin/lib/idea-watch.test.mjs bin/idea-watch.test.mjs`
+**Discarded:** Watching the installed version (the install watch S11 removed): gentle-ai is not installed. A working-tree clone: a bare one has nothing to build or run. Deciding a verdict by pattern: a decision is a reading, and an adopt or an adapt is his yes.
+**Today:** `bin/idea-watch.mjs`, `bin/lib/idea-watch.mjs`, `bin/lib/clones.mjs`, `js-harness idea-watch`
+
 ### The machine says when nothing runs
 
 **Problem:** The owner leaves the lead alone for 8 hours or more; once every session has finished the PC stays on for nothing, and a session that waits for him moves only when he answers (his words of 2026-10-25: "cuando no haya nada ejecutandose me avises para ver que en vez de dejandote trabajar solo pueda apagar el pc").
@@ -1023,6 +1034,5 @@ Each is designed, with its step, and enters "Capabilities" with its proof when i
 | The full backup and restore drill | S2 | `js-harness stack backup`, run from a plain terminal with every session closed: one backup outside the repository, recorded; a drill on a scratch home that hashes it, restores it, puts back a deleted file and removes a created one, and proves engram answers an observation recorded before | the drill's own checks, which stop at the first failure |
 | The attribution hook and the hook count | S4a | A `commit-msg` hook strips attribution lines; a `check` row counts hook entries by event and owner and fails above 14 or on a new owner | a scratch commit lands without `Co-Authored-By`; one extra `Stop` entry turns the row red |
 | The rehearsal | S13 | The whole path of a project, from `install` to `uninstall machine`, walked on a scratch project, comparing only the paths the manifests recorded | every row of the reverse-engineering document's 11.1 does what it says; exact undo |
-| The idea watch | S9 | Each gentle-ai release read by area and classified adopt, adapt or ignore; nothing installs | a fixture diff with one path per area and one unmatched |
 | The long-session eval | beside, run at S8 | A scripted user drives one session of about 40 turns with five planted moments; a separate grader | at least 90% of moments, five runs per setup (`odd/tasks/f8-s0-baseline.md`, its build plan) |
 | Certification | S8 | The S0 and S8 measures, one row each with its own frozen line and no combined score; Claude and Codex audits, three runs each | the incident set at least 17 of 20; 17 measures pass, 4 deferred reported as not built |

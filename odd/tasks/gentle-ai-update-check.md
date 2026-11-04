@@ -36,6 +36,14 @@ A gentle-ai sync rewrites `~/.claude/CLAUDE.md`, which gentle-ai owns, and nobod
 ## Tasks
 - [x] T1 (S1-S5, kind: build): the row, the snapshot reader, the record, `--gentle-ai-reviewed`, the hook's words, README and the roadmap line. Route: inline. RED: gentle-ai-update.test.mjs could not load its module; cache 13/14; doctor's two new tests failed on the old doctor (2 of 4 matching). GREEN: gentle-ai-update 7/7, cache 14/14, doctor 71/71, doctor-hook 13/13.
 
+## Releases read
+The idea watch's record (odd/tasks/idea-watch.md; the reverse-engineering document's section 5): one line a release
+whose changes all fall in ignored areas, a section for any other, pasted from `js-harness idea-watch draft` and decided.
+`idea-watch status` and `doctor` count the stable releases above the highest one here; a section still holding a `?`
+verdict or a path to classify by hand does not count.
+
+- v4.3.1 (read 2026-10-28): the baseline, read whole for the reverse-engineering document's section 13, at commit `2dba7784`
+
 ## Log
 - L1. 2026-10-16, the lead's order, quoted in S1. What it reported: the gentle-ai 4.1.1 → 4.2.0 sync rewrote ~/.claude/CLAUDE.md; its persona Rules line changed (upstream gentle-ai #4173, a tool mandate that does not hold on Windows), and the delegation triggers became conditional.
 - L2. 2026-10-16, design. gentle-ai takes a backup before each sync (`~/.gentle-ai/backups/<id>/manifest.json` and `snapshot.tar.gz`); the manifest lists each file's `original_path` and its `snapshot_path` in the archive. The diff uses the first backup taken after the review, which holds the file as the review left it; on this machine that is `upgrade-20261016T044339Z`, and the step's command, run live, showed the Rules line change L1 names. The command `cd`s into the backup folder first, because Git Bash's tar reads `C:` in an archive path as a remote host. The row is `gentle-ai-sync`, not `gentle-ai-update`: a 16-character id fills the table's first column and runs into the version.

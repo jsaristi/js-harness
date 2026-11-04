@@ -101,6 +101,8 @@ const NAMED = {
   'bin/lib/lens-reviews.test.mjs': OWNED,
   'bin/lib/rules-coverage.mjs': `${GUARD}: directive coverage reads the markers of gentle-ai's blocks in a text`,
   'bin/lib/rules-coverage.test.mjs': `${GUARD}: directive coverage reads the markers of gentle-ai's blocks in a text`,
+  'bin/idea-watch.mjs': IDEAS,
+  'bin/idea-watch.test.mjs': IDEAS,
   'bin/lib/idea-watch.mjs': IDEAS,
   'bin/lib/idea-watch.test.mjs': IDEAS,
   'scripts/rehearsal-lib.mjs': `${ABSENCE}: S13's walk proves gentle-ai takes no part`,

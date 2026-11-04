@@ -1780,6 +1780,25 @@ while an update has no session titled for its version, ends with a `HOST:` line 
 session and the command that opens it; the `host-update` row and the hook's notice say the review
 is that session's.
 
+### js-harness idea-watch
+
+The idea watch (`odd/tasks/idea-watch.md`) reads each stable release of the upstream harness
+js-harness was built from, for what it adds or removes that could improve this one; nothing of it is
+installed, built or run. `status` lists the upstream's stable tags with `git ls-remote` and says how
+many stand above the last release the record (`odd/tasks/gentle-ai-update-check.md`, its
+`## Releases read`) holds as read.
+
+```console
+$ js-harness idea-watch status
+0 releases not yet read (the last read is v4.3.1)
+```
+
+`draft [--from <v>] [--to <v>]` fetches a bare clone under `~/.js-harness/upstream`, recorded in the
+machine manifest before it is fetched so `uninstall machine` removes it, diffs the last read release
+against the next one and prints the record's entry: one row an area of the harness, its verdict `?`
+until a person decides adopt, adapt or ignore, the paths no area places under "To classify by
+hand". A release whose every path falls in an ignored area prints as one line, already decided.
+
 ### js-harness wait
 
 Waits in the background for one condition and ends when it holds: a pull request merged
