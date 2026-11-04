@@ -553,3 +553,16 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   `gentleman.md` but not `neutral.md` (`service.go:961-1008`); `skills/synced` holds the Claude app's skills. One
   gap only: presets in `install`, decided in RE:248 and owned by no step; it goes to him at his return. The rest
   is done, or owed to T8, T13, T14, S4a-S8 or the TUI's rest.
+- L28 2026-11-04 02:20Z (21:20 local), state (written at 86% of the window): T12 done, `240cd132`; his page
+  https://claude.ai/artifact/GoxigqvxCg2BvRyY23mjSm (marked free: no template renders it); question 182 (presets in
+  `install`, recommended "Solo en init") recorded for his return; the lead told. Questions still to send, one at a
+  time, after his return: the revised gentle-ai question (L21's five steps, plus the four leftover blocks in
+  `CLAUDE.md`, Codex's `AGENTS.md` and `GEMINI.md`, `neutral.md`, and `install` re-rendering the block of T13), then
+  T14's items (Codex, Antigravity, GGA, `.atl/` per project, `~/.gentle-ai`), Orca, herdr, this repo's style. Next
+  step, T13 test first: in `bin/lib/rules-block.mjs` add `KEPT_GROUPS` (CodeGraph 3, Engram 2, Delegation 6, "Task
+  Size and scratch" 2, "Remote operation authorization" 3, word for word as the root `CLAUDE.md`'s "Kept from the
+  global file", graphify left out since graphify's own install writes it there) and render them in `rulesBody()`
+  after the nine lines as `\n<title>:\n- <line>`; a test in `bin/lib/rules-block.test.mjs` holds each group equal to
+  the root `CLAUDE.md`'s; then `npm run check`, Codex and the lenses (`--base 240cd132`), a PR with a ready notice,
+  no merge (the lead's note, 21:14). At T9 the repo's copy of those lines goes, since the global block then loads
+  here too. The script for step 2 lives in this session's job folder (`s2-restore-entries.mjs`), described in L21.
