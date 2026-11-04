@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
-import { agoText, chain, escapeHtml, page, pill, shareText, table, tiles, timeline } from './pages.mjs';
+import { agoText, chain, escapeHtml, page, pill, shareColor, shareText, table, tiles, timeline } from './pages.mjs';
 
 // Its times are shown in local time (rule:local-time): the zone is pinned so no machine's own decides a result.
 process.env.TZ = 'America/Bogota';
@@ -44,6 +44,25 @@ test('a tile shows its big value, a meter at its share and its caption; one with
   const html = tiles([{ value: '75 %', share: 0.75, caption: '3 de 4' }, { value: '+5', caption: 'fuera del plan' }]);
   assert.match(html, /75 %[\s\S]*width:75%[\s\S]*3 de 4/);
   assert.equal(html.match(/class="meter"/g).length, 1);
+});
+
+test('a share\'s colour runs from the page\'s red at 0 through its amber at a half to its green at 1', () => {
+  assert.equal(shareColor(0), 'var(--bad)');
+  assert.equal(shareColor(0.5), 'var(--part)');
+  assert.equal(shareColor(1), 'var(--ok)');
+  assert.equal(shareColor(0.25), 'color-mix(in oklab,var(--part) 50%,var(--bad))');
+  assert.equal(shareColor(0.9), 'color-mix(in oklab,var(--ok) 80%,var(--part))');
+  assert.equal(shareColor(-1), 'var(--bad)');
+  assert.equal(shareColor(2), 'var(--ok)');
+});
+
+test('a tile with a share takes its colour on its meter and border; one with no share keeps the page\'s own', () => {
+  const html = tiles([{ value: '100 %', share: 1, caption: 'todo' }, { value: '0 %', share: 0, caption: 'nada' }, { value: '+5', caption: 'fuera del plan' }]);
+  const [full, empty, plain] = html.match(/<div class="tile[ "][^>]*>/g);
+  assert.equal(full, '<div class="tile shared" style="--share:var(--ok)">');
+  assert.equal(empty, '<div class="tile shared" style="--share:var(--bad)">');
+  assert.equal(plain, '<div class="tile">');
+  assert.match(page({ title: 't', heading: 'h', sections: [] }), /\.tile\.shared\{[^}]*var\(--share\)[\s\S]*\.shared \.meter span\{background:var\(--share\)\}/);
 });
 
 test('a cell may be a pill or a mono number, and a cell object\'s text is escaped too', () => {

@@ -2542,6 +2542,36 @@ test('doctorMain lists the review skips that still owe a review, ok with none, u
   }
 });
 
+// The idea-watch row (odd/tasks/idea-watch.md, S7): the stable upstream releases the record has not read, read only by
+// the interactive online report, since it lists the tags over the network: never by the hook, never offline.
+test('doctorMain says how many upstream releases are not yet read, ok with none, n/a with no record, and never reads them in its hook or offline', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const run = (ideas, flags = []) => runDoctor([...flags, '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, ideas });
+
+    const owed = await run(() => ({ last: '4.3.1', unread: ['4.3.2', '4.4.0'] }));
+    // The version column shows a version only for an installed tool; the last read is in the fix line.
+    assert.match(owed.output, /^idea-watch\s+n\/a\s+n\/a\s+n\/a\s+stale\s+n\/a$/m);
+    assert.ok(owed.output.includes('  idea-watch (project):\n    2 releases not yet read (the last read is v4.3.1): v4.3.2, v4.4.0\n    js-harness idea-watch draft prints the next one\'s entry; paste it into the record and decide it\n'), owed.output);
+    assert.match((await run(() => ({ last: '4.3.1', unread: [] }))).output, /^idea-watch\s+n\/a\s+n\/a\s+n\/a\s+ok\s+n\/a$/m);
+    assert.match((await run(() => null)).output, /^idea-watch\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.match((await run(() => { throw new Error('offline'); })).output, /^idea-watch\s+n\/a\s+n\/a\s+n\/a\s+unknown\s+n\/a$/m);
+
+    let asked = false;
+    const ask = () => { asked = true; return { last: '4.3.1', unread: ['4.3.2'] }; };
+    assert.equal((await run(ask, ['--hook'])).code, 0);
+    assert.doesNotMatch((await run(ask, ['--offline'])).output, /^idea-watch/m);
+    assert.equal(asked, false, 'the hook or the offline report listed the tags');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // The templates row (odd/tasks/templates.md, "Proof"): `template shown --days 7` on the machine, read only by the
 // interactive report, as the review-skips row is: ok when no escape and no unchecked call, stale with each escape, unknown
 // when a call went unchecked or the records cannot be read, n/a where the project does not turn templates on.

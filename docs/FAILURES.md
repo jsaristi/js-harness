@@ -563,6 +563,9 @@ not the committed range, wrote no record and had to be run again.
 - Seen: 2026-11-02 — `odd/tasks/f8-s2-removal.md` L9 (JH 134) — that document edited, to write state at 85% of
   the window, during the Codex review of `84997f7..628bace`; 160,754 input tokens spent on part 1 of 6, not kept,
   nothing recorded, the review run again after the commit
+- Seen: 2026-11-03 — `odd/tasks/idea-watch.md` L5 (JH 138) — that document edited, with the lenses running beside
+  it, during the Codex review of `155a118..009dd2e`; 168,141 input tokens spent on part 1 of 4, not kept, nothing
+  recorded, the review run again after the commit
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 
@@ -1305,6 +1308,9 @@ stood.
   lines 155 and 171 said
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:315-333 — at `51a24db` T3 to T8 are checked off while
   `bin/lib/gate-log.mjs` and `scripts/count-git.mjs` are in no commit of `main`
+- Seen: 2026-11-04 — the channel, JH 137's notes to the lead at 02:01:18Z and 02:01:47Z (this session's own) — the
+  first named commit `18c3a5a0`, written before `git log` printed the real one, `d3b35511`; corrected 29 seconds later,
+  before the lead built on it. The check that stops it: a hash goes into a notice only from an output already read
 - Control: check — bin/check-citations.test.mjs — "a task the change checks off names a commit
   reachable from HEAD, unless it rides with staged work" — since 2026-10-17
 - Was: owed — odd/tasks/commands-and-doctor.md — "a task the change checks off in a feature
@@ -1535,6 +1541,26 @@ report could print a password from a command line.
 - Control: check — bin/lib/machine-busiest.test.mjs — "scriptOf says nothing of an argument that is
   not the whole path of a file that exists, however it is spelled" — since 2026-10-11
 
+### session-env-file-cut
+Every Bash call of a long-lived session failed before it ran: the codex plugin's SessionStart hook
+appends three `export` lines to the session's env file on every start, resume and compaction, and
+Claude Code puts that file into each Bash command line, which was cut at 8,191 characters inside
+an open quote.
+- Class: tool
+- Seen: 2026-11-03 — the lead's transcript 0f71b2c6, lines 59324, 59668, 60114 and 60312 — `echo hi`
+  failed with `-c: line 83: unexpected EOF while looking for matching` a quote, from 11:17Z on; the
+  lead moved to the terminal tool, whose permission prompt held it 7 hours. JH 140 read the cause:
+  `~/.claude/session-env/0f71b2c6-cbce-43ca-a031-276a4b2c381f/sessionstart-hook-6.sh` held 105 lines
+  (35 starts, 10,150 bytes), the command line was 10,420 characters, and cutting it at 8,191
+  reproduced the same message, line 83 and all. Claude Code reads the file once at a start, not on
+  each call (a probe line added to JH 140's own file did not reach its next call). Fix: the file
+  was cut to its last three lines, the only distinct ones; backup in
+  `~/.claude/session-env-backups/jh140/0f71b2c6-cbce-43ca-a031-276a4b2c381f/sessionstart-hook-6.sh`
+  (sha256 556524bf…b42228f); undo: `cp -p ~/.claude/session-env-backups/jh140/0f71b2c6-cbce-43ca-a031-276a4b2c381f/sessionstart-hook-6.sh ~/.claude/session-env/0f71b2c6-cbce-43ca-a031-276a4b2c381f/`.
+  It returns after about 27 more starts of one session, since the hook,
+  `plugins/cache/openai-codex/codex/1.0.6/scripts/session-lifecycle-hook.mjs:39`, appends with no
+  check
+
 ### session-never-woken
 Sessions told to start after an event armed no wait for it, so nothing woke them when it came.
 - Class: unseen-state
@@ -1757,6 +1783,16 @@ the reply before he leaves; so the return had no goals to check and no forecast 
   question 165 was asked at 18:00:21Z (12:59 local) and answered at 20:01:59Z (15:01 local); it waited two hours
   and no stretch covered it: the stretch record's last close is at 17:50:20Z and none opened after it
   (`stretches.jsonl` under the throughput folder)
+- Seen: 2026-11-03 — relief file, lines 2250-2251 (claimed; the lead's own) — from 06:17 to 09:59 local (UTC-05:00)
+  he was away while the lead's backup script waited for the app to close, and the machine slept at 06:21; no stretch
+  covered it and no work session was opened. The stretch record's last close is at 2026-11-03T09:23:07Z and none
+  opened after it (`stretches.jsonl` under the throughput folder, read by JH 137)
+- Seen: 2026-11-03 — relief file, lines 2251-2252 (claimed; the lead's own) — from 10:43 to 15:24 local he was away
+  while the fourth backup try waited an hour for the app to close and then gave up; no stretch covered it and no work
+  session was opened. The same record, read by JH 137, holds no open after 2026-11-03T09:23:07Z
+- Seen: 2026-11-03 — the lead's note to JH 137 at 01:38Z on 2026-11-04 (claimed; the lead's own) — from 16:55 to 20:25
+  local he was away after his answer to question 179, with no stretch opened; the reply hook flagged it at his return.
+  The stretch record, read by JH 137 at 20:40 local, still holds no open after 2026-11-03T09:23:07Z
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 
@@ -1862,6 +1898,13 @@ was not so.
   that stopping ccstatusline freed about 4 GB, read from its WorkingSet64; JH 107 measured 404 MB private and about
   260 MB of free memory gained; the claim came from the wrong measure, with no read of free memory before and after
   by the same probe
+- Seen: 2026-11-03 — relief file, line 2249, and odd/tasks/f8-s2-removal.md, L19 (the lead's own, relaying JH 134's
+  plan) — he was told that quitting the Claude app closes every session, so the backup could start; nobody had checked
+  it, and it was not so: a background session under the claude daemon (JH 134) and an `engram serve` started from a
+  shell kept running, and the backup script gave up at 06:06 local. Fixed then in the script, not in the harness: it
+  logged what still ran every 2 minutes and stopped `engram.exe` once nothing else ran; the backup was later dropped by
+  his answer to question 179 (odd/tasks/f8-s2-removal.md, L20). What stops it recurring is the line on `told-him-unverified`
+  already in force: a claim about what he will see is checked first, here by listing the processes after a quit
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting
