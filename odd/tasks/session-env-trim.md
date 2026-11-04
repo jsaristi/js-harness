@@ -90,8 +90,9 @@ goes to the lead with `js-harness notify --to orchestrator --kind question`.
 2. "Do not edit the Codex plugin's own files or `~/.codex` without asking the lead" (the brief, item 3)
 
 ## Tasks
-- [ ] T1 (kind: docs) this document and its depth pass, before any code — spec 1-2
-- [ ] T2 (kind: build) `bin/lib/session-env.mjs`, test first, and its call from `backup --session-start` — spec 1-2
+- [x] T1 (kind: docs) this document and its depth pass, before any code — spec 1-2 — 9e3f30f4
+- [x] T2 (kind: build) `bin/lib/session-env.mjs`, test first, and its call from `backup --session-start` — spec 1-2 —
+  the commit after 9e3f30f4
 - [ ] T3 (kind: verify) Codex and the Claude lenses over the code commits; the gate; PR; `notify` — all
 
 ## Log
@@ -106,3 +107,14 @@ goes to the lead with `js-harness notify --to orchestrator --kind question`.
   `filechanged-` and `cwdchanged-` ones. No js-harness hook writes there (`CLAUDE_ENV_FILE` appears nowhere in `bin/`).
 - L3 Decision: the trim lives in `backup --session-start`, the one harness hook on all four starts; threshold 2,048
   bytes, about 7 starts of the plugin's lines, which keeps the file under a quarter of the cut and the trims rare.
+- L4 Test first: `node --test bin/lib/session-env.test.mjs` failed with the module missing, then passed 5 of 5. My own
+  first test expected the old transcript path dropped; dedupe of identical lines keeps it before the new one, and the
+  last still wins, so the test now asserts each variable's final value. Planted break (first occurrence instead of
+  last): 4 pass, 1 fail; reverted, 5 of 5. The hook's test in `bin/backup.test.mjs` failed before the call was wired,
+  then the file passed 73 of 73.
+- L6 The first commit's gate failed one test: `bin/backup.mjs` grew to 1,312 lines over its ceiling of 1,303
+  (`bin/conventions-structure.test.mjs`). The hook's guard moved into `trimAtSessionStart` in the new module, and
+  `sameFolder`, a generic helper, moved to `bin/lib/backup.mjs`; the file is 1,302 lines and its ceiling is lowered to
+  it. The records row the docs gate asked for is in `docs/SPEC.md` and `docs/RECORDS.md`.
+- L5 Left open: the trim's backups are not pruned (each under 9 KB); the `session-env-file-cut` entry (PR 766, open)
+  gains its control line once both pull requests are merged; the fix reaches the lead only after a release is synced.

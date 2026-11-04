@@ -364,6 +364,32 @@ test('backup --session-start points a session whose Engram lost its project to t
   assert.equal(state.started.length, 0, 'it starts nothing');
 });
 
+test('backup --session-start trims the session env file the codex plugin grew, on a machine with no backup, saying nothing', async (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'backup-env-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const folder = path.join(home, '.claude', 'session-env', 'aaaaaaaa-1111');
+  fs.mkdirSync(folder, { recursive: true });
+  const line = "export CODEX_COMPANION_SESSION_ID='aaaaaaaa-1111'\nexport CLAUDE_PLUGIN_DATA='C:/Users/x/.claude/plugins/data/codex-openai-codex'\n";
+  const codex = path.join(folder, 'sessionstart-hook-6.sh');
+  fs.writeFileSync(codex, line.repeat(40));
+  const deps = {
+    home,
+    env: { CLAUDE_ENV_FILE: path.join(folder, 'sessionstart-hook-3.sh') },
+    now: () => Date.parse('2026-11-04T07:00:00Z'),
+    stdin: () => JSON.stringify({ cwd: home, hook_event_name: 'SessionStart', source: 'compact' }),
+    stdout: sink(),
+    stderr: sink(),
+    run: () => ({ status: 1, stdout: '', stderr: '' }),
+  };
+  assert.equal(await backupMain(['--session-start'], deps), 0);
+  assert.equal(fs.readFileSync(codex, 'utf8'), line);
+  assert.equal(deps.stdout.text, '');
+  assert.equal(fs.readFileSync(path.join(home, '.js-harness', 'session-env-trims', 'trims.jsonl'), 'utf8').trim().split('\n').length, 1);
+  // A folder it cannot list breaks nothing: the hook still exits 0.
+  deps.env.CLAUDE_ENV_FILE = path.join(codex, 'not-a-folder', 'sessionstart-hook-3.sh');
+  assert.equal(await backupMain(['--session-start'], deps), 0);
+});
+
 test('a wipe of one project keeps its file and its export, and last.json names it', async (t) => {
   const many = (project, n) => Array.from({ length: n }, (_, i) => ({ id: `${project}-${i}`, sync_id: `obs-${project}-${i}`, type: 'decision', title: `${project} ${i}`, content: 'c', project, updated_at: '2026-10-20 10:00:00' }));
   const { paths, deps, state } = setup(t, { engram: { ...EXPORT, observations: [...many('big', 400), ...many('client', 30)] } });

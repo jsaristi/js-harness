@@ -326,6 +326,12 @@ function readText(file) {
   }
 }
 
+/** Whether two paths name one folder. Windows folders are case-insensitive, so there the spelling does not decide it. */
+export function sameFolder(a, b) {
+  const key = (place) => (process.platform === 'win32' ? path.resolve(place).toLowerCase() : path.resolve(place));
+  return key(a) === key(b);
+}
+
 export function readJson(file) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
