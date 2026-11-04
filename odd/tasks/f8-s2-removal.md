@@ -435,3 +435,19 @@ lost, which he accepted once the project's documentation and its memory were on 
   `:1104-1105`); so `~/.gentle-ai` is removed last and apart. What is lost if a removal goes wrong: anything no
   snapshot holds, which each question says. The removals go next, one question each through the lead, in the order of
   item 5: gentle-ai, Orca, herdr; then the output style of `D:\js-harness`.
+- L21 2026-11-04 00:33Z (19:33 local), JH 137: `1492a578` pushed; the lead told (note), then question 180 to him
+  through the lead (`notify --kind question`), the gentle-ai removal: 1) `gentle-ai uninstall --all -y`; 2) the
+  `permissions` object and the `engram` and `context7` entries back from its snapshot; 3) `js-harness install` and
+  `stack install`; 4) the gentle-ai hooks it leaves removed by hand (its source keeps the PowerShell skill-registry
+  one, `service.go:1355-1361`; it removes the review stop-hook and the bash ones); 5) the entries checked equal and
+  `claude mcp list` read, and only then `~/go/bin/gentle-ai.exe` and GGA's files in `~/bin` removed; `~/.gentle-ai`
+  apart at the end of S2; `gentle-ai restore` is the undo until step 5. Read first, read only: the machine as item 2
+  says (hooks js-harness 15, Orca 12, gentle-ai 5, herdr 1, codegraph 1; `permissions` 1 allow, 24 deny,
+  `bypassPermissions`; `outputStyle` "Neutral"; `mcpServers` codegraph, context7, engram; `gentle-ai version` 4.3.1,
+  whose `uninstall` has no dry run). Step 2's tool, written while the answer waits: a script in this session's job
+  folder, `s2-restore-entries.mjs --snapshot <dir> [--apply]`, which reads gentle-ai's `manifest.json` and its
+  `snapshot.tar.gz` in memory (no copy of a file holding a key is written), compares key order aside, prints only
+  "equal", "differs at <key path>", "absent" and "written", and writes each file whole through a rename. Its scratch
+  test (a fake home and snapshot, a fake key): equal, then absent after a simulated uninstall, written, equal again,
+  `outputStyle` and other keys left as they were, a differing `args` named by path, the key printed 0 times. Run
+  read only against his 2026-10-28 gentle-ai snapshot (Go's tar): permissions, engram and context7 equal, exit 0.
