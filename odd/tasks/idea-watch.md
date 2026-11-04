@@ -192,3 +192,6 @@ The 54 paths of v4.2.0 → v4.3.1 that section 5's table leaves unmatched, read 
   evidence. P2, a blank line after "To classify by hand:" hid the list; it is now read whole up to "Paths by area:".
   P2, `-z` numstat was also split on line breaks; a NUL-separated text is now split on NUL alone. RECORDS says both
   rules. GREEN: the seven suites of the feature, 351/351.
+- L7. 2026-11-03, the fix reviewed: Codex over `847a608..426bbfe` (79,692 input tokens), correct at 0.96, the five
+  findings fixed; the Claude lenses risk and reliability, 0 findings. Every code commit of the branch is covered by
+  both records. No gentle-ai review: the Stop hook offered the whole branch, whose status was read and nothing started.
