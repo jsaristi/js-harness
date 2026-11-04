@@ -229,6 +229,11 @@ lost, which he accepted once the project's documentation and its memory were on 
   (gentle-ai, Orca, herdr), every change to his configuration (~/.claude, ~/.codex, gentle-ai's config,
   credentials) and anything irreversible outside the repo is asked to him first, one question at a time".
 - S9 (the brief): "Never copy .credentials.json or Codex auth into scratch homes."
+- S10 (his answer to question 181, the lead's transcript `0f71b2c6`, line 61963, 2026-11-04T02:01:22Z): "Necesito que
+  tengamos nuestro propui Claude.md del arnes con todo el plan que hicimos que es la fusion de todo lo de nosotros mas
+  lo de gentle-ai asi como lo habiamos planeado"
+- S11 (his words, line 62036, 2026-11-04T02:03:32Z): "si pero recuerda que vamos a desintalar completamente gentle-ai
+  de todas partes por que solo va a a quedar unicamente nuestros arnes y debe tener todas las funcionalidades"
 
 ## Tasks
 - [x] T1 (kind: design) this document, its plan through the double review (Codex and a Claude reader) — S1-S9;
@@ -261,6 +266,15 @@ lost, which he accepted once the project's documentation and its memory were on 
   before S2 closes: `CLAUDE.md:12` ("over gentle-ai's"), `:74-91` (its review steps), `AGENTS.md:6` and `:27`; his
   words quoted where a line is his
 - [ ] T11 (kind: docs) S2's roadmap line, the session summary, the closed notice — inline
+- [ ] T12 (kind: docs) before any removal: one table of every gentle-ai function on his machine (Claude, Codex,
+  Antigravity, its CLI, its folders and each project's leftovers), each with its js-harness equivalent, a port, or a
+  drop he decides by name, the twelve skills included; shown to him as a Spanish page; each drop asked — S10, S11
+- [ ] T13 (kind: build) the kept text of the diet's Appendix A.1 ships to every project in js-harness's block of
+  `~/.claude/CLAUDE.md` (today G12's nine Rules lines, `bin/lib/rules-block.mjs`), test first, reviewed, landed and
+  installed before gentle-ai's blocks leave that file; this repo's copy under "Kept from the global file" keeps one
+  home — S10
+- [ ] T14 (kind: verify) the removal from everywhere: every trace T12 lists that he does not keep, gentle-ai's
+  Claude, Codex and Antigravity config, `~/.gentle-ai`, its binaries and each project's `.atl/`, each asked — S11
 
 ## Log
 - L1 2026-11-02T20:04:19Z, his words (the lead's transcript `0f71b2c6`, line 55309): "Sí, abre el S2". The brief
@@ -482,3 +496,13 @@ lost, which he accepted once the project's documentation and its memory were on 
   and its absence-list entry: neither exists (`git ls-tree -r --name-only origin/main` lists no such file; `git log
   --all -- bin/lib/gentle-ai-update.mjs` ends at `8b724f3d`, which removed it), so nothing is kept and the lead is
   told. Nothing of S2 changes with it: the uninstall removes gentle-ai's install, not its repository.
+- L25 2026-11-04 02:05Z (21:05 local): question 181 answered in his words (S10, line 61963, read with `sessions
+  --quote`): not one of its three options. The lead's reading, taken here: the kept text of the diet's Appendix A.1
+  (`docs/proposals/harness-diet.md:1447-1514`), which this repo holds under "Kept from the global file", reaches every
+  project from js-harness, wider than G12's nine lines, before gentle-ai's blocks leave his global file (T13). Then his
+  words S11 (line 62036): gentle-ai leaves from everywhere and js-harness must hold every function, so before any
+  removal he gets one table of every gentle-ai function, each with its equivalent, a port, or a drop he decides by
+  name, none dropped silently (T12; the lead's note at 21:05 local). The source of the table: the
+  reverse-engineering document's matrix (`docs/proposals/gentle-ai-reverse-engineering.md:224-276`), whose twelve
+  skill drops were G8, taken by the lead by default (`docs/ROADMAP.md:157`), never his by name; and the lead's audit
+  (L23). The revised gentle-ai question waits for T12's answers and T13's landing.

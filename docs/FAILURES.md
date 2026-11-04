@@ -1294,6 +1294,9 @@ stood.
   lines 155 and 171 said
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:315-333 — at `51a24db` T3 to T8 are checked off while
   `bin/lib/gate-log.mjs` and `scripts/count-git.mjs` are in no commit of `main`
+- Seen: 2026-11-04 — the channel, JH 137's notes to the lead at 02:01:18Z and 02:01:47Z (this session's own) — the
+  first named commit `18c3a5a0`, written before `git log` printed the real one, `d3b35511`; corrected 29 seconds later,
+  before the lead built on it. The check that stops it: a hash goes into a notice only from an output already read
 - Control: check — bin/check-citations.test.mjs — "a task the change checks off names a commit
   reachable from HEAD, unless it rides with staged work" — since 2026-10-17
 - Was: owed — odd/tasks/commands-and-doctor.md — "a task the change checks off in a feature
