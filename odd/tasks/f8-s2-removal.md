@@ -259,8 +259,8 @@ lost, which he accepted once the project's documentation and its memory were on 
 - [x] T7 (kind: verify) the sitting, with the lead: his yes to close every session; he runs `stack backup run` and
   `verify` from a plain terminal; the results into `## Log` — S1, S4-S7; dropped by his answer to question 179
   after four tries copied nothing (L20)
-- [ ] T8 (kind: verify) the removals, each tool asked through the lead and run after its yes, in the order of item 5;
-  each operation and its check into `## Log` — S1, S3, S8. gentle-ai done (L34-L36), Orca done (L37); herdr next
+- [x] T8 (kind: verify) the removals, each tool asked through the lead and run after its yes, in the order of item 5;
+  each operation and its check into `## Log` — S1, S3, S8. gentle-ai done (L34-L36), Orca done (L37), herdr done (L38)
 - [ ] T9 (kind: build) the exclusion reverted in `.claude/settings.json` and its sentence in `CLAUDE.md`; every session
   restarted with the lead; the entries checked against gentle-ai's snapshot (L20); the smoke walk; the session checks; the incident set and
   `fixed load`; the root `CLAUDE.md`'s copy of the kept lines goes, and the T13 test in `bin/lib/rules-block.test.mjs`
@@ -656,3 +656,13 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   the rest unchanged, read back with `reg query`). Seen and left: `C:\Users\Oficina\.gentle-ai\bin` is still on his
   user PATH, which belongs to the `~/.gentle-ai` question (T14). The lead's `Seen:` line under `stretch-not-opened`
   added, as the lead asked, after Orca. Next: herdr's question.
+- L38 2026-11-04 17:40:16Z (12:40 local): question 187 answered, "Desinstalar herdr" (tapped; the lead's transcript
+  `0f71b2c6`, line 64544, read with `js-harness sessions --quote`). herdr was not running. Step 1: `herdr integration
+  uninstall claude` removed `~/.claude/hooks/herdr-agent-state.ps1` and its entry in `~/.claude/settings.json` (hooks
+  17 to 16); `herdr integration uninstall codex` removed `~/.codex/herdr-agent-state.ps1` and its entry in
+  `~/.codex/hooks.json` (still valid JSON, no event left) and left `config.toml` unchanged. Checked: 0 "herdr" in
+  either file, both scripts gone; nothing left beyond question 187's list (`~/.claude/hooks` is empty and stays).
+  Step 2: `~/.herdr`, `%APPDATA%\herdr` and `%LOCALAPPDATA%\herdr` deleted and checked gone; the PATH entry removed by
+  `strip-user-path.mjs` (18 to 17, REG_EXPAND_SZ kept, read back with `reg query`); `command -v herdr` finds none.
+  T8's three removals are done. Left for their own questions: `~/.gentle-ai` (with `~/.gentle-ai\bin` on his PATH)
+  and each project's `.atl/` (T14), then this repo's output style; then T9.
