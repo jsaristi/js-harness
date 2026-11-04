@@ -71,7 +71,11 @@ lost, which he accepted once the project's documentation and its memory were on 
 - The sitting: closing every session, the lead's included, for the backup (dropped by question 179, L20).
 - gentle-ai: `uninstall --all -y`; the `permissions` object and the `engram` and `context7` entries put back from
   gentle-ai's pre-uninstall snapshot (L20); `install`; `stack install`; the leftovers its scan names; the binary; GGA's
-  files in `~/bin`; `~/.gentle-ai` last and apart, since it holds that snapshot, the only copy there is.
+  files in `~/bin`; `~/.gentle-ai` last and apart, since it holds that snapshot, the only copy there is; the three
+  blocks the uninstall leaves in `~/.claude/CLAUDE.md` (`codegraph-guidance`, `orchestrator`, `agent-routing`), by
+  hand (L23).
+- What his other projects keep of gentle-ai's lines beyond G12's Rules block, above all the remote-operation
+  authorization, asked before the gentle-ai question (L23).
 - gentle-ai's leftovers in each project (`.atl/`, its review store), one project at a time.
 - The output style after the removal (today gentle-ai's "Neutral" at user level).
 - Orca, then herdr, each with its folders, PATH entry and registry keys named.
@@ -457,3 +461,15 @@ lost, which he accepted once the project's documentation and its memory were on 
   tenemos implementado nosotros?". The lead holds the removal, audits what gentle-ai provides against what js-harness
   implements, and asks again; nothing was run on his machine. The lead's `Seen:` line for his absence of 16:55-20:25
   local added to `stretch-not-opened`. T8 waits for the lead's next question.
+- L23 2026-11-04 01:48Z (20:48 local): the lead's audit for question 180 (a read-only auditor; its file in the lead's
+  scratchpad, `gentle-ai-audit-20261103.md`): for `D:\js-harness` everything needed is covered; two gaps in what S2
+  assumed the uninstall leaves. Both checked here, read only. Gap 1: `~/.claude/CLAUDE.md` holds five gentle-ai
+  blocks, `codegraph-guidance` (lines 1-31), `persona` (33-64), `engram-protocol` (66-106), `orchestrator` (108-502)
+  and `agent-routing` (504-608, holding `remote-authorization`, 598-607); the uninstall strips only the second and
+  third (item 2), so the other three, about 500 lines, would stay and load in every session once T9 reverts the
+  exclusion. They are removed by hand, inside the gentle-ai question; the `graphify` lines (609-614) and the
+  js-harness Rules block (616-627) stay. Gap 2: his other projects get only G12's nine Rules lines; neither
+  `CLAUDE.md` nor `AGENTS.md` of `D:\plataforma-preproyecto` or `D:\abogadaclaudiajimenez` holds the remote-operation
+  authorization (`grep -l -i "remote operation"`, no match), so removing `agent-routing` takes it from them. It is
+  his (G12 chose the Rules block), so it goes to him first as its own question, and the revised gentle-ai question
+  after its answer, one at a time.
