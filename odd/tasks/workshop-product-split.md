@@ -147,7 +147,7 @@ also says that his "mucho mas facil" (L6) is carried forward as its own feature 
     them. Each needs its own fix.
   Verdict: refutes
   The part refuted is the lightness he expects from the split; the isolation holds, and it is a tradeoff for him.
-  It reaches him as one question through the orchestrator before any code: answered: question pending (its number
+  It reaches him as one question through the orchestrator before any code: answered: question 190 (asked 2026-11-04T22:12Z, waiting; its number
   is written here once the orchestrator records it).
 - 5. Request: build a first stage of the split, as an isolation step:
   - The seven workshop commands and their ten modules move to a `workshop/` folder with its own dispatcher, run
@@ -478,5 +478,5 @@ beside the product's one command:
   - Three reads did not settle the build shape (two high findings in the third), so by `rule:double-review` he gets
     it as a problem. T6's build plan passes to `claude-fable-5-1` (`rule:escalation-model`) before any slice. The
     direction, his question, does not depend on these details.
-- Next step (for a resume): push the branch, open the docs PR, send the question with
-  `js-harness notify --to orchestrator --kind question`, then write its number in item 4 and here.
+- Next step (for a resume): PR 769 is open (docs, not merged); question 190 waits on him. On his answer: record it
+  here and in item 4, then T6 (plan to claude-fable-5-1 first) or T7, as he chose.
