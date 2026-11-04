@@ -473,3 +473,12 @@ lost, which he accepted once the project's documentation and its memory were on 
   authorization (`grep -l -i "remote operation"`, no match), so removing `agent-routing` takes it from them. It is
   his (G12 chose the Rules block), so it goes to him first as its own question, and the revised gentle-ai question
   after its answer, one at a time.
+- L24 2026-11-04 01:57Z (20:57 local): the lead's note, a plan change. His words (the lead's transcript `0f71b2c6`,
+  line 61838, 2026-11-04T01:54:51Z, read with `js-harness sessions --quote`): "igual quiero que como no vamos a tener
+  instalado gentle-ai y cada cierto tiempo se actualiza, la idea es poder ver lo archivos del repositorio y como
+  nosotros somos una especie de copia ver que de lo que añade o quita nos sirve para optimizar". S2 no longer ends
+  the gentle-ai idea watch; a watch of gentle-ai's repository is a feature of its own after S2. Written into
+  `docs/ROADMAP.md` under S2, S9, item 4 and the ordered plan. The lead asked to keep `bin/lib/gentle-ai-update.mjs`
+  and its absence-list entry: neither exists (`git ls-tree -r --name-only origin/main` lists no such file; `git log
+  --all -- bin/lib/gentle-ai-update.mjs` ends at `8b724f3d`, which removed it), so nothing is kept and the lead is
+  told. Nothing of S2 changes with it: the uninstall removes gentle-ai's install, not its repository.
