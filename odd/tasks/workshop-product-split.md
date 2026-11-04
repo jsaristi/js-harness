@@ -33,8 +33,9 @@ split moves (item 4), so each needs its own fix.
 - In: this document; a scratch project and home under the session's scratchpad, made with the installed
   `js-harness init` and `install` 0.97.0; read-only reading of `bin/`, `scripts/`, `package.json`, his other two
   projects' transcripts and channel records.
-- Out, until his answer to item 4's question: any source change or move. Out entirely: his `~/.claude`,
-  `~/.codex`, credentials; the product's own diet (what the product carries that is his personal process rather
+- Out, until his answer to item 4's question: any source change or move. Never written: his `~/.claude`,
+  `~/.codex` and credentials; read only: the transcripts under `~/.claude/projects` and his two projects' files.
+  Out entirely: the product's own diet (what the product carries that is his personal process rather
   than the workshop, such as Spanish replies and the five reply states), which is F8's measured cuts S4a to S7.
 
 ## Constraints
@@ -46,7 +47,8 @@ split moves (item 4), so each needs its own fix.
 
 ## Ask me before
 One decision, after the double review: item 4's verdict refutes part of the request, so whether to build the split
-as an isolation step (and leave the weight to F8's cuts), build it as first asked, or drop it.
+as an isolation step (and leave the weight to F8's cuts), build it as first asked, or drop it. The question
+also says that his "mucho mas facil" (L6) is carried forward as its own feature (T7).
 
 ## Depth pass
 - 1. Method: release and packaging engineering of a tool built with itself (a compiler that compiles itself, a
@@ -54,7 +56,7 @@ as an isolation step (and leave the weight to F8's cuts), build it as first aske
   repository, run from a checkout. The shipped product is cut by an explicit manifest (`package.json` `files`). A
   dependency rule checked by a test keeps product code from importing workshop code, and a test of the packed list
   proves what ships. The standard: the product never imports the workshop, the pack never holds it, and the
-  workshop is one clone and one documented step away on any machine. The smallest change that meets it: one
+  workshop is one clone and one document away on any machine. The smallest change that meets it: one
   `workshop/` folder with its own dispatcher, no new repository, no new package, and the seams cut by the injection
   the code already uses (`loop.mjs:586-590`, `doctor.mjs:395`). Search of `rule:reuse-first`: `scripts/` and
   `evals/` already live outside `files` and never ship; `scripts/package-contents.test.mjs` already proves the pack
@@ -79,17 +81,32 @@ as an isolation step (and leave the weight to F8's cuts), build it as first aske
     `systemMessage`; `backup --session-start` printed 0. `js-harness check` there gave 10 rows, 6 INFO, in 2.06 s.
   - The import graph of `bin/`, static and literal dynamic imports, read by a scratch script
     (`<scratchpad>/tools/closure.mjs` and `cut.mjs`, not in the repository). Every module of the seven workshop
-    commands is reached from product commands today, through the 15 import sites of table B.
+    commands is reached from product commands today, through the 14 import sites of table B.
   - His other two projects: `D:\abogadaclaudiajimenez` (13 transcripts) and `D:\plataforma-preproyecto`. Their
     transcripts name `onboard`, `notify`, `init`, `reply`, `sessions`, `doctor`, `check`, `stretch`, `report`,
     `functions`, `summary`, `rules`, `memory`, `failures`, `backup`, `guard`, `resume`, `clean`, `sync`, `stack`,
     `install` and `uninstall`. Their channel records (`~/.js-harness/channel/D--plataforma-preproyecto.jsonl`, 10
     notices) hold sessions opened by `sessions start` and questions asked and answered through the orchestrator,
     so the orchestration ships to a project he uses.
-  - Branches of product code that run only in this repository: `bin/docs.mjs:174`, `bin/check.mjs:207`,
-    `bin/rules.mjs:534` and `:546`, and `bin/lib/spec.mjs:165`, five in all. Beside them, four product modules
-    name this repository's `bin/lib/rules-data.mjs` as a constant: `bin/lib/codex-review-allowance.mjs:33`,
-    `bin/lib/rules-change-run.mjs:20`, `bin/lib/rules-reach.mjs:16` and `bin/merge-queue.mjs:423`.
+  - Product code that reads or branches on this repository: `isHarnessRepository` at `bin/docs.mjs:174` and
+    `bin/lib/spec.mjs:165`; `bin/check.mjs:207`, `:299-300`, `:389`, `:627` and `:1705`; `bin/rules.mjs:170`,
+    `:402`, `:534` and `:546`; `bin/guard.mjs:111`; `bin/contract.mjs:345`; `bin/sessions-background.mjs:86`;
+    `bin/double-review.mjs:305`; `bin/progress.mjs:123`; `bin/lib/host-update.mjs:59-63`;
+    `bin/lib/rules-installed.mjs:34-76`; and the constants of `bin/lib/codex-review-allowance.mjs:33`,
+    `bin/lib/rules-change-run.mjs:20`, `bin/lib/rules-reach.mjs:16` and `bin/merge-queue.mjs:423`. At least 22
+    sites (the second reader's search, not yet rerun here). Many read the harness's own rule list, which is
+    legitimate in any project. Their classification, workshop or legitimate product scoping, is the second stage's
+    first task, so this pass gives no count of workshop branches.
+  - His real project, `D:\plataforma-preproyecto` (read only): its `CLAUDE.md` is 418 tokens and its `AGENTS.md`
+    647, and neither names a workshop command. With 1 rule in `docs/rules.json`, `rules --hook` printed 0
+    characters on a prompt. The heartbeat's workshop ticks have written records for `D--js-harness` alone
+    (`~/.js-harness/throughput/`, `channel/host-watch/` and `channel/windows-daily/` each hold that one slug), so
+    no project of his loses what they did.
+  - Load at start (reader's finding, checked): `bin/lib/manifest.mjs:16` imports `bin/lib/audit.mjs` statically,
+    and `audit.mjs` imports `guard.mjs` and `sessions.mjs` (`bin/lib/audit.mjs:7-8`). `manifest.mjs` is imported
+    by `install`, `update`, `stack` and `bin/lib/spec.mjs`, and `check.mjs` imports `spec.mjs`, so nearly every
+    command and the pre-commit gate load a workshop module. `bin/doctor.mjs:33` loads `bin/lib/idea-watch.mjs` at
+    every SessionStart `doctor --hook`.
   - Workshop text inside shipped text: `bin/lib/manifest.mjs:55`, in the `js-harness` skill, tells how the
     harness's own rules change in its own checkout; `bin/lib/rules.mjs:450-452` tells any project's session to run
     `merge-queue --land --refresh-copy` or reinstall from main's sha.
@@ -102,24 +119,28 @@ as an isolation step (and leave the weight to F8's cuts), build it as first aske
   spec 4: left out because its proof is S13's rehearsal (`scripts/rehearsal.mjs`) with the workshop's row added, and the open from-zero rehearsal of "Memory that survives the machine" (`docs/ROADMAP.md:265`), which is not run here.
   spec 5: `js-harness double-review tally --since 2026-11-04`: none, new behaviour.
   spec 6: left out because it is a feature of its own after the split (section "The install path"): today a fresh home on this machine takes 7 typed steps before the first plan (`pnpm add -g`, `install`, `doctor`, `stack install` with 1 y/N, engram's own `engram setup claude-code`, `init`, `onboard` in a session) plus the logins, measured with `js-harness stack` in the scratch home.
-- 4. Refutation: the prediction under test is L4's: the split makes the product light ("liviano"). It would be
-  falsified if what a fresh project and home load fell by less than a tenth in each of fixed context, hooks a turn
-  and skills, the threshold this pass sets, since L4 names none. Run now in the scratch project and home:
+- 4. Refutation: the prediction under test is L4's: the split makes the product light ("liviano"). L4 names no
+  threshold. The one used here, a fall of less than a tenth in each of fixed context, hooks a turn and skills, is
+  this pass's analytical choice, set after the data were taken. He weighs it as such, and whether the result is
+  "liviano" is his to judge. Run now in the scratch project and home, and checked in `D:\plataforma-preproyecto`:
   - 0 of 15 hook entries, 0 of 2 git hooks and 0 of 6 installed files are the workshop's.
   - Of the 2,624 fixed tokens a turn, only the 6 tokens of the protocols skill's listing that name "reviewing
     throughput" are the workshop's, 0.2 %.
   - Of the 17,843 tokens of skill bodies, loaded only on demand, about 690 are the workshop's, 3.9 %: protocols
     section 7 (532 tokens), the two lines of protocols section 4 and the orchestrator, and the `js-harness`
     skill's line (`bin/lib/manifest.mjs:55`).
-  - All three are under the tenth, so the prediction is falsified: the weight a user carries is the product, not
-    the workshop.
+  - All three are under the tenth. Hook registrations, not their running cost, were counted. So, estimated: this
+    stage brings small context savings, the same hook registrations and better isolation, and the weight a user
+    carries is the product's own, not the workshop's.
   What the workshop adds is risk:
-  - 17 files and 246,622 bytes of it ship, 5.3 %, and 15 import sites in product code reach them (table B).
-  - Two of those sites run on every user's machine: `bin/check.mjs:14` and `:42` import `docs.mjs` and
-    `subagents.mjs` statically into the pre-commit gate. The Stop hook `guard --stop` imports `bin/lib/audit.mjs`
-    (`bin/guard.mjs:214`) at every stop whose reply states a context share. A broken workshop module breaks both.
-  - Five branches of product code run only in this repository.
-  - Not measured: whether cutting the seams shortens the gate's 2.06 s or the hooks' start, since parsing fewer
+  - 17 files and 246,622 bytes of it ship, 5.3 %. 14 import sites in product code reach them, plus one text
+    (table B).
+  - Four static sites sit on paths every user runs: `bin/check.mjs:14` and `:42` in the pre-commit gate;
+    `bin/doctor.mjs:33` at every SessionStart; and `bin/lib/manifest.mjs:16`, through which nearly every command
+    and the gate load `bin/lib/audit.mjs`. The Stop hook `guard --stop` imports `audit.mjs` again at
+    `bin/guard.mjs:214`. A broken workshop module breaks all of them.
+  - At least 22 sites of product code read or branch on this repository (item 2), not yet classified.
+  - Not measured: whether cutting the sites shortens the gate's 2.06 s or the hooks' start, since parsing fewer
     modules may.
   - The three failures that prompted L1 sit in code the split leaves where it is: `merge-queue` (both), the
     `contracts` row (product) and the reply hook's board check (product). The split would have prevented none of
@@ -131,14 +152,14 @@ as an isolation step (and leave the weight to F8's cuts), build it as first aske
 - 5. Request: build a first stage of the split, as an isolation step:
   - The seven workshop commands and their ten modules move to a `workshop/` folder with its own dispatcher, run
     from the checkout.
-  - The 15 import sites are cut, so shipped product code never imports workshop code, and a convention test holds
+  - The 14 import sites are cut, so shipped product code never imports workshop code, and a convention test holds
     that.
   - The pack test names every workshop file and proves none ships.
   - The workshop's lines of three shipped skills, and the `refresh-copy` advice of `bin/lib/rules.mjs:450-452`,
     move into a skill in this repository's own `.claude/skills/`.
   - One documented step sets up the workshop on a fresh machine.
-  The "both" halves that stay shipped (`merge-queue --refresh-copy`, `rules change`, `rules coverage`, the five
-  branches) are named, and the isolation claim is limited to the first stage. The lightness he asked for is measured
+  The "both" halves that stay shipped (`merge-queue --refresh-copy`, `rules change`, `rules coverage`, the sites
+  that read this repository) are named, and the isolation claim is limited to the first stage. The lightness he asked for is measured
   and cut in F8's S4a to S7 against what his two other projects use. The day's three failures get their own fixes.
   Adds: none
 
@@ -166,7 +187,7 @@ use in his other two projects' transcripts; C, the caller in product code that m
 | `guard`, `reply`, `resume`, `permit`, `template`, `backup` | product | W the hook entries of table C; U `reply`, `guard`, `resume`, `backup` |
 | `sessions`, `notify`, `wait`, `wake`, `quiet`, `report`, `stretch`, `summary`, `progress`, `remote`, `unseen`, `status-line`, `memory`, `fetch`, `clean` | product | the orchestration and the session's tools; S 17, 11, 5, 1, 1, 6, 9, 1, 4, 0, 0, 0, 4, 0, 0; U `notify` (40 and 36), `sessions`, `stretch`, `report`, `summary`, `memory`, `clean`; `fetch` is the rung the pause hook names after a refused WebFetch (`bin/lib/hook-entries.mjs:50`); `unseen` is a row of `doctor` |
 
-### B. The import sites (product code that imports workshop code today, 15)
+### B. The import sites (product code that reaches workshop code today: 14 imports and 1 text)
 1. `bin/check.mjs:14` `checkDocs`, static, in the pre-commit gate.
 2. `bin/check.mjs:42` `readRecords` and `recordFolders`, static, in the pre-commit gate.
 3. `bin/doctor.mjs:33` `ideaFix`, static.
@@ -223,37 +244,56 @@ use in his other two projects' transcripts; C, the caller in product code that m
 | Skills | 5 listed; bodies 17,843 tokens, loaded on demand | 5; about 17,150 |
 | Gate in a fresh project | 10 rows, 2.06 s | 10 rows; time not measured |
 | Shipped code (CRLF bytes) | 270 files, 4,610,788 bytes | 270 − 17 = 253 files and 4,610,788 − 246,622 = 4,364,166 bytes, plus the helpers that move into product modules (`audit.mjs`'s share functions and throughput's land readers, a few KB, not counted) |
-| Product code that imports workshop code | 15 sites (table B) | 0, held by a test |
-| Workshop code left shipped (the "both" halves) | `refresh-copy` and `merge-queue-refresh*` 57 KB, `rules change` and `rules coverage` 89 KB, 5 branches | the same in the first stage |
+| Product code that imports workshop code | 14 import sites and 1 text (table B) | 0, held by a test |
+| Files after, counting new modules | 270 | 253 + `bin/lib/share-check.mjs` + `bin/lib/land-records.mjs` = about 255, and the product halves of `audit.test.mjs` and `throughput.test.mjs`, which do not ship |
+| Workshop code left shipped (the "both" halves) | `refresh-copy` and `merge-queue-refresh*` 57 KB, `rules change` and `rules coverage` 89 KB, at least 22 sites that read this repository | the same in the first stage |
 
 ## The split's shape (proposed; nothing is built before his answer)
 1. A `workshop/` folder at the repository's root, beside `scripts/` and `evals/`, which already never ship. It holds
    `workshop/js-harness-workshop.mjs`, a dispatcher of the same shape as `bin/js-harness.mjs`, and `workshop/bin/`
    and `workshop/lib/` with the 7 commands, their 10 modules and the 16 tests beside them. It runs from the checkout as
    `npm run workshop -- <command>` (a new `package.json` script). The workshop may import product code
-   (`../bin/lib/...`), never the reverse. `node --test` still finds its tests. Cost: about 20 file moves and 7 lines
-   of the dispatcher. Undo: one revert of the slice.
-2. The 15 sites cut, each in the form the code already uses:
+   (`../bin/lib/...`), never the reverse. `node --test` still finds its tests. The product dispatcher holds each
+   workshop command twice, in `COMMANDS` and in the `HELP` map, and names them in `USAGE`. All three lose them.
+   This repository's spec row (`checkSpec`, `bin/lib/spec.mjs:161-165`) requires `docs/SPEC.md` to claim every key
+   of `COMMANDS`, so it also reads the workshop dispatcher's list, and SPEC keeps claiming them. Cost: 33 file moves
+   (7 commands, 10 modules, 16 tests), both maps, `USAGE`, `docs/SPEC.md` and the spec row. Undo: one revert of the
+   slice.
+2. The 14 import sites cut, each in the form the code already uses; first, the four static ones on every user's
+   path (table B sites 1, 2, 3 and 12):
    - What product code needs leaves the workshop modules: `lastShare`, `shareRefusal`, `ownShares`,
      `SHARE_TOLERANCE` and `windowBefore` of `bin/lib/audit.mjs` go to `bin/lib/share-check.mjs`, and only
      `auditEntries` stays the workshop's. `codexFacts`, `landFacts`, `readLandRecord`, `readRecordLines`,
      `busySeconds` and `median` go to `bin/lib/land-records.mjs`. `handListCount` and the sub-agent record readers
-     go to product modules beside their callers.
+     go to product modules beside their callers. `bin/lib/audit.test.mjs` and `bin/lib/throughput.test.mjs` are
+     split the same way, and their product halves stay under `bin/`.
+   - A test loads `check` and `doctor --hook` and asserts that no workshop module is in the loaded set.
    - The heartbeat's three ticks and doctor's idea row become injected dependencies whose product default is none.
      The workshop's dispatcher runs `loop heartbeat` and `doctor` with them.
    - The machinery that runs them today is re-pointed in the same slice, or the ticks would stop silently after the
-     release: his heartbeat loop moves to `npm run workshop -- loop heartbeat`, written in `docs/workshop.md`. A
-     row of this repository's `doctor` says when the workshop ticks last ran.
+     release: his heartbeat loop moves to `npm run workshop -- loop heartbeat`. The workshop skill replaces the
+     shipped orchestrator's `js-harness loop heartbeat` in this repository. A row of this repository's `doctor`
+     fails, rather than informs, when the workshop ticks are older than their cadence. The installed copy's
+     `loop heartbeat`, run inside this checkout, warns that the workshop ticks are not wired. His other projects'
+     heartbeats lose nothing: the ticks wrote records for this repository alone (item 2).
+   - The texts the moved modules generate point to the workshop's dispatcher and skill:
+     `bin/lib/throughput.mjs:569` and `:587` (`js-harness throughput`, protocols section 7) and
+     `bin/lib/idea-watch.mjs:216` (`js-harness idea-watch draft`), with a test that follows the heartbeat's review
+     line. Product texts that name a moved command change in the same slice: `bin/lib/host-update.mjs:214`
+     (`js-harness host-watch brief`) becomes a product-only message of doctor, and `bin/lib/manifest.mjs:146`
+     stops promising throughput snapshots from the product heartbeat. The packed `README.md` (`:771`, `:1754`)
+     moves those commands to `docs/workshop.md`.
    - The docs row stays in this repository's ordinary gate and in its documents-only gate: `documentSensors` run
      only on a commit of documents alone (`bin/check.mjs:463-467`). So it is declared in both `sensors` and
      `documentSensors`, with a test that a code change adding an undocumented command still fails the gate.
-   Cost: the 15 sites and their tests. Undo: one revert of the slice.
-3. The check, for shipped runtime files only (tests under `bin/` already import `scripts/`, as
+   Cost: the 14 sites, the texts and their tests. Undo: one revert of the slice.
+3. The import check, for shipped runtime files only (tests under `bin/` already import `scripts/`, as
    `bin/reply-budget.test.mjs:17` does, and they do not ship):
    - `bin/conventions-workshop.test.mjs`: every relative import of every non-test file under `bin/`, static or
-     literal dynamic, resolves inside `bin/`, with an empty legacy list once step 2 has landed.
+     literal dynamic, resolves inside `bin/`, with an empty legacy list once step 2 has landed. An `import(` whose
+     argument is not a string literal fails it unless its file is on an explicit list, and the dispatcher's two
+     maps name no file outside `bin/`.
    - The product dispatcher lists no workshop command.
-   - No shipped text names a workshop command, nor the words "own checkout".
    - `scripts/package-contents.test.mjs` names each workshop command and module and asserts none is in the pack,
      so a file moved back into `bin/` is caught. Its existing assertion already refuses any path outside `bin/`.
    Cost: one test file and a few lines. Undo: delete the file.
@@ -262,10 +302,15 @@ use in his other two projects' transcripts; C, the caller in product code that m
    protocols section 4 and of the `js-harness` skill, the orchestrator's `--refresh-copy` line, and the advice of
    `bin/lib/rules.mjs:450-452`. They go to `D:\js-harness\.claude\skills\js-harness-workshop\SKILL.md`, a project
    skill that Claude loads only in this repository and that travels with git. The rules that name them follow
-   through `js-harness rules change`, one commit each. This slice also writes `docs/workshop.md`. Cost: about 690
-   tokens move. Undo: a revert, then `sync`.
+   through `js-harness rules change`, one commit each. This slice also writes `docs/workshop.md`. The text check
+   lands with the removals, in this slice, so each slice passes on its own. Shipped text is defined as the strings
+   `install` and `init` write (the skills, the output style, the Rules block and the `CLAUDE.md` and `AGENTS.md`
+   blocks), read through the same functions `install` uses, not by a grep of `bin/`. The check: no shipped text
+   names a workshop command, nor the words "own checkout". Cost: about 690 tokens move. Undo: a revert, then
+   `sync`.
 5. A second stage, only if measured worth it: the "both" halves (`merge-queue --refresh-copy` 57 KB, `rules change`
-   and `rules coverage` 89 KB, and the five branches that run only here) move behind the same seam. Until then the
+   and `rules coverage` 89 KB, and the sites that read this repository, first classified one by one) move behind the
+   same seam. Until then the
    package still ships that much workshop code. The first stage promises only that shipped product code imports no
    workshop module and that shipped texts name none.
 - Order: 1 and 2 together in one slice (moving before cutting would break the imports), then 3, then 4. Three
@@ -274,7 +319,9 @@ use in his other two projects' transcripts; C, the caller in product code that m
   unchanged, because `install` writes the same 6 files and 15 entries.
 
 ## Setting up the workshop on another machine (spec 4)
-One documented step, `docs/workshop.md`, written in slice 4 (the third slice):
+One document, `docs/workshop.md`, written in slice 4 (the third slice). Its three steps hold more than ten
+commands. Folding them into one command, `npm run workshop -- setup`, belongs to the install-path feature (spec 6),
+beside the product's one command:
 1. The product, as any user installs it: `pnpm add -g github:jsaristi/js-harness#vX.Y.Z`, then `js-harness install`
    and `js-harness stack install`.
 2. The workshop: `git clone https://github.com/jsaristi/js-harness D:\js-harness`, `npm run hooks` (it sets
@@ -344,10 +391,12 @@ One documented step, `docs/workshop.md`, written in slice 4 (the third slice):
 - [x] T1 (kind: design) spec 1: the classification, tables A to D (commit of this document)
 - [x] T2 (kind: verify) spec 2: the scratch project and home measured, table E (commit of this document)
 - [x] T3 (kind: design) spec 3 and spec 4: the shape and the setup on another machine (commit of this document)
-- [ ] T4 (kind: verify) spec 5: the double review, each finding taken or rebutted (first read done, L8; confirming
-  read next)
+- [ ] T4 (kind: verify) spec 5: the double review, each finding taken or rebutted (reads 1 and 2 done, L8 and L9;
+  the third and last read next)
 - [ ] T5 (kind: docs) the docs pull request; the question to the orchestrator
 - [ ] T6 (kind: build) after his answer only: slices 1 and 2, 3, 4 of the shape
+- [ ] T7 (kind: design) spec 6: open `odd/tasks/install-path.md` with the 7 measured steps as its baseline, after the
+  split's slices or beside them if he says so
 
 ## Log
 - L1 (2026-11-04T19:14:05Z, the lead's transcript 0f71b2c6, line 64927, his words): "esos problemas que me
@@ -388,3 +437,15 @@ One documented step, `docs/workshop.md`, written in slice 4 (the third slice):
     bytes said, and the after figure reconciled as 270 − 17 files. 6, a stated threshold for "liviano". 7,
     `update.mjs`, no lockfile tracked, the setup document's slice, and the convention scoped to shipped files.
   - The corrected version goes to a confirming read (`rule:double-review`).
+- L9 (2026-11-04): confirming read `77b1fc31-6872-460a-9224-7acc5fed0fca` on commit 8643db5c. Claude found 12 and
+  Codex 5, all taken.
+  - Claude: 1, four static sites on every user's path (doctor at SessionStart, and `manifest.mjs` through nearly
+    every command). 2, at least 22 sites read this repository, so the count of 5 is dropped. 3, measured: the ticks
+    wrote for this repository alone. 4, the heartbeat re-pointed and its doctor row fails. 5, his real project
+    measured and the threshold flagged as set after the data. 6, T7. 7, both maps and the spec row. 8, shipped text
+    defined by what `install` and `init` write. 9, non-literal imports. 10, the out-of-scope wording. 11, one
+    document. 12, two tests split.
+  - Codex: 1, the text check lands with the removals. 2, the generated texts point to the workshop. 3, the
+    `host-update` and `manifest` texts and the packed README. 4, the verdict as a tradeoff for him. 5, 14
+    imports and 1 text, 33 moves, about 255 files.
+  - A third and last read follows (`rule:double-review`: at most three).
