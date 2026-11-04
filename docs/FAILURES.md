@@ -1793,6 +1793,9 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-11-03 — the lead's note to JH 137 at 01:38Z on 2026-11-04 (claimed; the lead's own) — from 16:55 to 20:25
   local he was away after his answer to question 179, with no stretch opened; the reply hook flagged it at his return.
   The stretch record, read by JH 137 at 20:40 local, still holds no open after 2026-11-03T09:23:07Z
+- Seen: 2026-11-04 — the lead's message to JH 137 during Orca's removal, 11:44-11:47 local (claimed; the lead's own) — he was away 09:01 to 11:43
+  local with no stretch opened; question 186 waited the whole time on the lead's question tool, so the return had no
+  goals or forecast (the lead's miss)
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 
@@ -1905,6 +1908,12 @@ was not so.
   logged what still ran every 2 minutes and stopped `engram.exe` once nothing else ran; the backup was later dropped by
   his answer to question 179 (odd/tasks/f8-s2-removal.md, L20). What stops it recurring is the line on `told-him-unverified`
   already in force: a claim about what he will see is checked first, here by listing the processes after a quit
+- Seen: 2026-11-04 — odd/tasks/f8-s2-removal.md, L34 (JH 137's own) — question 183 named `gentle-ai uninstall --all
+  -y` as step 1 and said a yes did not authorize gentle-ai's skills and hooks in Codex and Antigravity; `--all` runs
+  every supported agent with every component (gentle-ai 4.3.1, `internal/components/uninstall/service.go:387-395`), so
+  it deletes those skills (`:1044-1087`) and the skill-registry hook in `~/.codex/hooks.json` (`:477-496`). Read
+  after his yes and before the run; nothing ran, and question 184 asks him the scope. What stops it recurring: the
+  scope of a command named in a question is read in its source or help before the question is sent
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting

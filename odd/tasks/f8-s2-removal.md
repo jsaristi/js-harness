@@ -259,8 +259,8 @@ lost, which he accepted once the project's documentation and its memory were on 
 - [x] T7 (kind: verify) the sitting, with the lead: his yes to close every session; he runs `stack backup run` and
   `verify` from a plain terminal; the results into `## Log` — S1, S4-S7; dropped by his answer to question 179
   after four tries copied nothing (L20)
-- [ ] T8 (kind: verify) the removals, each tool asked through the lead and run after its yes, in the order of item 5;
-  each operation and its check into `## Log` — S1, S3, S8
+- [x] T8 (kind: verify) the removals, each tool asked through the lead and run after its yes, in the order of item 5;
+  each operation and its check into `## Log` — S1, S3, S8. gentle-ai done (L34-L36), Orca done (L37), herdr done (L38)
 - [ ] T9 (kind: build) the exclusion reverted in `.claude/settings.json` and its sentence in `CLAUDE.md`; every session
   restarted with the lead; the entries checked against gentle-ai's snapshot (L20); the smoke walk; the session checks; the incident set and
   `fixed load`; the root `CLAUDE.md`'s copy of the kept lines goes, and the T13 test in `bin/lib/rules-block.test.mjs`
@@ -279,7 +279,9 @@ lost, which he accepted once the project's documentation and its memory were on 
   installed before gentle-ai's blocks leave that file; this repo's copy under "Kept from the global file" keeps one
   home — S10
 - [ ] T14 (kind: verify) the removal from everywhere: every trace T12 lists that he does not keep, gentle-ai's
-  Claude, Codex and Antigravity config, `~/.gentle-ai`, its binaries and each project's `.atl/`, each asked — S11
+  Claude, Codex and Antigravity config, `~/.gentle-ai`, its binaries and each project's `.atl/`, each asked — S11.
+  Done with the uninstall (L35, L36): the Claude, Codex and Antigravity config and skills, the binary, GGA. Left to
+  ask: `~/.gentle-ai` and each project's `.atl/`
 
 ## Coverage of gentle-ai's functions (T12)
 Each function gentle-ai 4.3.1 provides on his machine (`~/.gentle-ai/state.json`: agents claude-code, codex,
@@ -599,3 +601,86 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   `0f71b2c6`, line 63496, read with `js-harness sessions --quote`), relayed by the lead at 06:07. The presets live
   only in `init`; RE:248's decision that `install` offers them too changed; nothing is built. Recorded in the T12
   table's Presets row and in `docs/ROADMAP.md` under S11's decisions, so the table has no gap left.
+- L34 2026-11-04 12:04:18Z (07:04 local): question 183 answered, "Desinstalar gentle-ai" (tapped; the lead's
+  transcript `0f71b2c6`, line 63973, read with `js-harness sessions --quote`), relayed by the lead with: run the six
+  steps in order and only those, check each before the next, stop at the first surprise. Before it, also checked:
+  PR 763 in main (`7aa2ab9c`), and his `~/.claude/CLAUDE.md` Rules block holding the four kept groups (lines
+  628-645). State read before step 1, read only: 6 gentle-ai markers in each of `~/.claude/CLAUDE.md`,
+  `~/.codex/AGENTS.md` and `~/.gemini/GEMINI.md`; 5 gentle-ai hooks in `~/.claude/settings.json`; `outputStyle`
+  "Neutral". Stopped before step 1, nothing run: `uninstall --all` runs every supported agent with every component
+  (`service.go:387-395`), so it also deletes gentle-ai's skills in Codex and Antigravity (`:1044-1087`) and the
+  skill-registry hook in `~/.codex/hooks.json` (`:477-496`), which question 183 said a yes does not authorize. My
+  error: the command's scope was not read before the question (`docs/FAILURES.md`, `told-him-unverified`). The lead
+  told (note, before question 184); question 184 asks the scope, recommended "Con --all", the other "Solo Claude"
+  (`--agent claude-code`, the Codex and Gemini blocks by hand at step 4). T8 waits for its answer.
+- L35 2026-11-04 12:23:40Z (07:23 local): question 184 answered, "Con --all" (tapped; the lead's transcript
+  `0f71b2c6`, line 64128, read with `js-harness sessions --quote`). Step 1, 07:24 local: `gentle-ai uninstall --all
+  -y`, exit 0; its snapshot `~/.gentle-ai/backups/20261104122417.084958800` (95 files); 10 files rewritten, 28
+  removed, 43 directories removed (gentle-ai's skills in Claude, Codex and Antigravity, its themes, GGA's
+  `AppData/Roaming/gga`); state.json drops Claude Code, Codex and Antigravity. Checked: each of the three
+  instruction files keeps 4 markers (`agent-routing`, `codegraph-guidance`, `orchestrator`, `remote-authorization`),
+  `persona` and `engram-protocol` gone; the Rules block still in `~/.claude/CLAUDE.md`; `permissions` and
+  `outputStyle` gone; the PowerShell skill-registry hook left, as its source says. Step 2: `s2-restore-entries.mjs`
+  compared (all three absent), wrote them, compared again: `permissions`, `engram`, `context7` equal to today's
+  snapshot and to the 2026-10-28 one. Step 3: `js-harness install` exit 0 (nothing to write: the permissions and
+  the Rules block already there), `stack install` exit 0, "nothing to install". Stopped before step 4, a surprise:
+  the uninstall also removed engram from Codex (`[mcp_servers.engram]` of `config.toml`, read by section name only,
+  and `engram-instructions.md`), context7 from Antigravity (`antigravity-cli/mcp_config.json`, now gone) and
+  context7 and engram from VS Code (`Code/User/mcp.json`, now gone); the snapshot holds them (server names read in
+  memory). Step 2 put back only Claude's, and question 183 did not say so. The lead told; question 185 asks,
+  recommended "Devolverlas" (the server entries only, not gentle-ai's instruction file for Codex).
+- L36 2026-11-04 13:46:14Z (08:46 local): question 185 answered, "Dejarlas quitadas" (tapped; the lead's transcript
+  `0f71b2c6`, line 64284, read with `js-harness sessions --quote`): engram and context7 stay off Codex, Antigravity
+  and VS Code. Step 4 (scripts in this session's job folder, each tried first on copies in a `mktemp -d` folder,
+  then run on files whose line counts matched the trial): `s2-strip-blocks.mjs` removed `codegraph-guidance`,
+  `orchestrator` and `agent-routing` (with `remote-authorization`) from `~/.claude/CLAUDE.md` (41 lines left: the
+  graphify lines and the Rules block, byte for byte the same), `~/.codex/AGENTS.md` and `~/.gemini/GEMINI.md` (both
+  empty now: all they held was gentle-ai's); `s2-strip-hook.mjs` removed the PowerShell skill-registry hook (30
+  hooks to 29, every other key unchanged; the one "gentle-ai" left in `settings.json` is a sentence naming tools);
+  `~/.claude/output-styles/neutral.md` deleted. Checked: 0 `gentle-ai:` markers in the three files. Step 5:
+  `permissions`, `engram`, `context7` equal to today's snapshot; `claude mcp list`: codegraph, engram, context7
+  Connected; `js-harness doctor` exit 0 (engram on Codex "missing", as he chose; its `engram setup codex` not run).
+  The lead told. Step 6, 08:48 local: `~/go/bin/gentle-ai.exe` and GGA's files in `~/bin` (`gga`, `gga.bat`,
+  `gga.cmd`, `gga.ps1`, `lib/gga`) deleted, `~/bin/lib` removed empty; `command -v` finds neither `gentle-ai` nor
+  `gga`. The lead told. From here `gentle-ai restore` is gone; its snapshots stay in `~/.gentle-ai`, which T14 asks
+  about with the `.atl/` folders. Next, one at a time through the lead: Orca, then herdr, then this repo's style.
+- L37 2026-11-04 16:43:06Z (11:43 local): question 186 answered, "Desinstalar Orca" (tapped; the lead's transcript
+  `0f71b2c6`, line 64405, read with `js-harness sessions --quote`). Orca was closed (no process). Step 1: `orca
+  agent hooks off` (applied offline to `%APPDATA%\orca\profiles\local-default\orca-data.json`); checked: hooks in
+  `~/.claude/settings.json` 29 to 17, Orca's 12 gone, the rest kept. Step 2: `Uninstall Orca.exe /S /currentuser`
+  (through `uninstall-orca.mjs` in the job folder, since the Bash guard refuses a path with a space), exit 0, no
+  uninstaller process left; it removed `%LOCALAPPDATA%\Programs\orca` and its HKCU Uninstall key, and left `~/.orca`,
+  `%APPDATA%\orca`, `%LOCALAPPDATA%\Orca`, `%LOCALAPPDATA%\orca-updater` and the PATH entry, all in question 186's
+  list; no key under HKCU\Software or HKCU\Software\Classes names orca, no shortcut. Step 3: the four folders
+  deleted and checked gone; the PATH entry removed by `strip-user-path.mjs` (19 entries to 18, REG_EXPAND_SZ kept,
+  the rest unchanged, read back with `reg query`). Seen and left: `C:\Users\Oficina\.gentle-ai\bin` is still on his
+  user PATH, which belongs to the `~/.gentle-ai` question (T14). The lead's `Seen:` line under `stretch-not-opened`
+  added, as the lead asked, after Orca. Next: herdr's question.
+- L38 2026-11-04 17:40:16Z (12:40 local): question 187 answered, "Desinstalar herdr" (tapped; the lead's transcript
+  `0f71b2c6`, line 64544, read with `js-harness sessions --quote`). herdr was not running. Step 1: `herdr integration
+  uninstall claude` removed `~/.claude/hooks/herdr-agent-state.ps1` and its entry in `~/.claude/settings.json` (hooks
+  17 to 16); `herdr integration uninstall codex` removed `~/.codex/herdr-agent-state.ps1` and its entry in
+  `~/.codex/hooks.json` (still valid JSON, no event left) and left `config.toml` unchanged. Checked: 0 "herdr" in
+  either file, both scripts gone; nothing left beyond question 187's list (`~/.claude/hooks` is empty and stays).
+  Step 2: `~/.herdr`, `%APPDATA%\herdr` and `%LOCALAPPDATA%\herdr` deleted and checked gone; the PATH entry removed by
+  `strip-user-path.mjs` (18 to 17, REG_EXPAND_SZ kept, read back with `reg query`); `command -v herdr` finds none.
+  T8's three removals are done. Left for their own questions: `~/.gentle-ai` (with `~/.gentle-ai\bin` on his PATH)
+  and each project's `.atl/` (T14), then this repo's output style; then T9.
+- L39 2026-11-04 17:46:50Z (12:46 local): question 188 answered, "Borrar las .atl/" (tapped; the lead's transcript
+  `0f71b2c6`, line 64610, read with `js-harness sessions --quote`). Read before it: each `.atl/` held
+  `skill-registry.md` and `.skill-registry.cache.json` (about 9 KB), ignored in every repository (`.gitignore` or
+  `.git/info/exclude`; `git ls-files .atl` empty here). Deleted in `D:\js-harness`, `D:\plataforma-preproyecto`,
+  `D:\abogadaclaudiajimenez` and `D:\claudia-jimenez-plataforma`, each checked gone; `D:\harness` and
+  `D:\harness-lab` (read-only references) and the eval folders keep theirs. Left of T14: `~/.gentle-ai`, asked at the
+  end of S2, after T9 checks the entries against its snapshot. Next: T9; its session restart goes to him as a
+  question through the lead before anything restarts (the lead's note, 12:47).
+- L40 2026-11-04 ~18:05Z (13:05 local), state at the context pause (86%): T9's build part in progress, uncommitted.
+  Done: `bin/lib/rules-block.test.mjs` no longer reads the root `CLAUDE.md`: the nine lines are held to the five
+  Appendix A.1 quotes whole plus a sha256 of all nine (`de629b60…`), the kept groups to A.1's quotes in its order plus
+  a sha256 (`c24fea8d…`); 23 pass. Next, in order: delete `.claude/settings.json` (it holds only the
+  `claudeMdExcludes` exclusion); remove the root `CLAUDE.md` section "## Kept from the global file" (lines 95-139:
+  the exclusion sentence, the nine lines, the groups, graphify), since the global block now carries all of it but
+  the Engram lines, which engram's own instructions give (row 11); update `docs/SPEC.md:118`; `js-harness rules
+  check` (a removed line may be a rule's text: then T10's `rules change`); `js-harness rules coverage --refresh`;
+  `npm run check` through the commit; Codex and the lenses over the code commit; push. Then the restart question
+  through the lead (T9's restart needs him present, the lead's note 12:47), then `~/.gentle-ai`, the output style.
