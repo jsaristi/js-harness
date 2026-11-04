@@ -102,6 +102,18 @@ test('a file under the threshold, another kind of file or no CLAUDE_ENV_FILE is 
   assert.equal(fs.existsSync(path.join(home, '.js-harness', 'session-env-trims')), false);
 });
 
+test('a record that cannot be written puts the file back as it was, with no backup left', (t) => {
+  const before = starts(35);
+  const { home, codex, envFile } = scratch(t, before);
+  const trims = path.join(home, '.js-harness', 'session-env-trims');
+  // A folder where the record's file goes: the append fails after the file was replaced.
+  fs.mkdirSync(path.join(trims, 'trims.jsonl'), { recursive: true });
+  assert.deepEqual(trimSessionEnv({ envFile, home, now: NOW }), []);
+  assert.equal(fs.readFileSync(codex, 'utf8'), before);
+  assert.deepEqual(fs.readdirSync(path.join(trims, SESSION)), []);
+  assert.deepEqual(fs.readdirSync(path.dirname(codex)), ['sessionstart-hook-6.sh']);
+});
+
 test('a file that changed between the read and the replace is left as the other writer left it, with no record', (t) => {
   const before = starts(35);
   const { home, codex, envFile } = scratch(t, before);

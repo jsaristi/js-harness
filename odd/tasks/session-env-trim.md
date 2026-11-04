@@ -116,5 +116,10 @@ goes to the lead with `js-harness notify --to orchestrator --kind question`.
   (`bin/conventions-structure.test.mjs`). The hook's guard moved into `trimAtSessionStart` in the new module, and
   `sameFolder`, a generic helper, moved to `bin/lib/backup.mjs`; the file is 1,302 lines and its ceiling is lowered to
   it. The records row the docs gate asked for is in `docs/SPEC.md` and `docs/RECORDS.md`.
+- L7 Reviews of `9e3f30f..5787aef` (Codex) and `70790d9..5787aef` (lenses): the lenses resilience, reliability and risk,
+  0 findings each, 71,887 input tokens in all (the plan said about 21,000). Codex: incorrect, 0.97, one P2 — a record
+  that cannot be appended to left the env file replaced with no undo recorded; 48,988 input tokens, under the
+  110,000 planned. Failing test first (a folder where `trims.jsonl` goes: 5 pass, 1 fail), then the fix: a failed
+  record puts the file's text back and removes the backup (6 of 6).
 - L5 Left open: the trim's backups are not pruned (each under 9 KB); the `session-env-file-cut` entry (PR 766, open)
   gains its control line once both pull requests are merged; the fix reaches the lead only after a release is synced.

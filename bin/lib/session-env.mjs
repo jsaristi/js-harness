@@ -55,13 +55,27 @@ function writeBackup(dir, name, stamp, text) {
   }
 }
 
+/** `file` replaced by `text` through a temporary file beside it and a rename, so no reader sees half of it; the
+ * temporary file is removed when the rename fails, and the failure is thrown. */
+function replace(file, text) {
+  const temp = `${file}.js-harness-trim-${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(temp, text);
+    fs.renameSync(temp, file);
+  } catch (err) {
+    fs.rmSync(temp, { force: true });
+    throw err;
+  }
+}
+
 /** Rewrites each SessionStart env file of the session whose own file is `envFile` that is past `TRIM_AT_BYTES` and
  * `trimmedEnvText` shortens, and returns what it did, `[{ file, backup, bytesBefore, bytesAfter }]`; none when
  * `envFile` is not set or its folder is gone. Each rewrite writes the backup first, then reads the file again and goes
  * on only when it still holds what was read, since the codex hook appends in parallel with this one; the new text
  * replaces the file by a rename, so no reader sees half of it, and a line in `<home>/.js-harness/session-env-trims/
  * trims.jsonl` records the undo. A file that changed, or that cannot be replaced, is left as it is, with no backup and
- * no record. `io.readFile` is for tests. */
+ * no record; when the record cannot be written, the file gets its text back and the backup goes, and when even that
+ * fails the error is thrown with the backup kept. `io.readFile` is for tests. */
 export function trimSessionEnv({ envFile, home, now }, io = {}) {
   if (typeof envFile !== 'string' || envFile === '') return [];
   const readFile = io.readFile ?? ((file) => fs.readFileSync(file, 'utf8'));
@@ -84,19 +98,23 @@ export function trimSessionEnv({ envFile, home, now }, io = {}) {
     const next = trimmedEnvText(text);
     if (next === null) continue;
     const backup = writeBackup(path.join(dir, path.basename(folder)), name, stamp, text);
-    const temp = `${file}.js-harness-trim-${process.pid}.tmp`;
     try {
       if (readFile(file) !== text) throw new Error('changed');
-      fs.writeFileSync(temp, next);
-      fs.renameSync(temp, file);
+      replace(file, next);
     } catch {
-      fs.rmSync(temp, { force: true });
       fs.rmSync(backup, { force: true });
       continue;
     }
     const trim = { file, backup, bytesBefore: Buffer.byteLength(text), bytesAfter: Buffer.byteLength(next) };
     const record = { at, ...trim, sha256Before: createHash('sha256').update(text).digest('hex'), undo: `cp -p ${quoted(backup)} ${quoted(file)}` };
-    fs.appendFileSync(path.join(dir, 'trims.jsonl'), `${JSON.stringify(record)}\n`);
+    try {
+      fs.appendFileSync(path.join(dir, 'trims.jsonl'), `${JSON.stringify(record)}\n`);
+    } catch {
+      // No change is left without its record: the file gets its text back, and only then does the backup go.
+      replace(file, text);
+      fs.rmSync(backup, { force: true });
+      continue;
+    }
     trims.push(trim);
   }
   return trims;
