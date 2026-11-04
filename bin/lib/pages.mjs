@@ -23,6 +23,7 @@ const STYLE = `<style>
 .js-page .tile{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px;display:grid;gap:6px}
 .js-page .tile .big{font-size:2rem;line-height:1;font-weight:600}.js-page .tile .cap{font-size:.88rem;color:var(--muted)}
 .js-page .meter{height:8px;background:var(--track);border-radius:4px;overflow:hidden}.js-page .meter span{display:block;height:100%;background:var(--accent)}
+.js-page .tile.shared{border-color:color-mix(in oklab,var(--share) 55%,var(--line));border-left:4px solid var(--share);background:color-mix(in oklab,var(--share) 9%,var(--surface))}.js-page .shared .meter span{background:var(--share)}
 .js-page .tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:6px}
 .js-page table{border-collapse:collapse;width:100%;font-size:.93rem}
 .js-page th,.js-page td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -51,11 +52,26 @@ export function shareText(share) {
   return `${Math.round((share.met / share.of) * 100)} %`;
 }
 
-/** Tiles: each `{ value, share?, caption }`, `share` from 0 to 1 drawn as a meter, none when it is not a number. */
+const clamp = (share) => Math.max(0, Math.min(1, share));
+
+// Two whole-percent mixes of the page's tokens, so the colour follows its light or dark scheme.
+const mix = (to, from, part) => (part === 0 ? `var(${from})` : part === 100 ? `var(${to})` : `color-mix(in oklab,var(${to}) ${part}%,var(${from}))`);
+
+/** A share's colour, from 0 to 1: the page's red (`--bad`) at none, its amber (`--part`) at a half and its green
+ * (`--ok`) at all, mixed between them so the colour moves with the share; out of range it is held to the ends. */
+export function shareColor(share) {
+  const at = clamp(share);
+  return at <= 0.5 ? mix('--part', '--bad', Math.round(at * 200)) : mix('--ok', '--part', Math.round((at - 0.5) * 200));
+}
+
+/** Tiles: each `{ value, share?, caption }`, `share` from 0 to 1 drawn as a meter in the share's colour, which also
+ * tints the tile; a tile whose share is not a number has no meter and keeps the page's own colours. */
 export function tiles(list) {
   return `<div class="tiles">${list.map(({ value, share, caption }) => {
-    const meter = Number.isFinite(share) ? `<div class="meter"><span style="width:${Math.round(Math.max(0, Math.min(1, share)) * 100)}%"></span></div>` : '';
-    return `<div class="tile"><span class="big">${escapeHtml(value)}</span>${meter}<span class="cap">${escapeHtml(caption)}</span></div>`;
+    const shared = Number.isFinite(share);
+    const meter = shared ? `<div class="meter"><span style="width:${Math.round(clamp(share) * 100)}%"></span></div>` : '';
+    const open = shared ? `<div class="tile shared" style="--share:${shareColor(share)}">` : '<div class="tile">';
+    return `${open}<span class="big">${escapeHtml(value)}</span>${meter}<span class="cap">${escapeHtml(caption)}</span></div>`;
   }).join('')}</div>`;
 }
 
