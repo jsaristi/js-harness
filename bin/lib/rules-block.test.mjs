@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { install, readManifest, uninstall } from './manifest.mjs';
-import { RULES_LINES, rulesBody } from './rules-block.mjs';
+import { KEPT_GROUPS, RULES_LINES, rulesBody } from './rules-block.mjs';
 import { markedBlock } from './project-template.mjs';
 import { renameOver } from './atomic-write.mjs';
 
@@ -36,6 +36,27 @@ test('the lines are the nine of his answer D7, word for word as the root CLAUDE.
   assert.equal(RULES_LINES.length, 9);
   assert.deepEqual(RULES_LINES, kept);
   assert.ok(rulesBody().startsWith('## Rules\n'));
+});
+
+// F8 S2, T13 (odd/tasks/f8-s2-removal.md, S10): every project keeps the rest of the diet's Appendix A.1 once the old stack's
+// blocks leave his global file; graphify's own install writes its lines there, and engram's protocol comes from engram
+// alone (row 11), so neither is repeated.
+test('the kept groups are the root CLAUDE.md\'s, word for word and in order, and the block renders each after the nine', () => {
+  const claude = fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'CLAUDE.md'), 'utf8').replace(/\r\n/g, '\n');
+  const [start, end] = [claude.indexOf('\nCodeGraph:'), claude.indexOf('\ngraphify:')];
+  // T9 takes the repo's copy away once the global block loads here: freeze the expected groups in this test then.
+  assert.ok(start !== -1 && end > start, 'the root CLAUDE.md holds no "CodeGraph:" ... "graphify:" section to compare with');
+  const section = claude.slice(start + 1, end);
+  const groups = section.trim().split('\n\n').map((group) => {
+    const [title, ...lines] = group.split('\n');
+    return { title: title.replace(/:$/, ''), lines: lines.map((line) => line.slice(2)) };
+  });
+  assert.deepEqual(KEPT_GROUPS, groups.filter((group) => group.title !== 'Engram'));
+  assert.deepEqual(KEPT_GROUPS.map((group) => group.title), ['CodeGraph', 'Delegation', 'Task Size and scratch', 'Remote operation authorization']);
+  const body = rulesBody();
+  for (const { title, lines } of KEPT_GROUPS) assert.ok(body.includes(`\n${title}:\n${lines.map((line) => `- ${line}`).join('\n')}\n`), title);
+  assert.ok(body.indexOf(`- ${RULES_LINES[8]}`) < body.indexOf('\nCodeGraph:'));
+  assert.ok(!body.includes('graphify'));
 });
 
 test('in an empty home install writes the file with the block alone, and uninstall takes the file away', () => {

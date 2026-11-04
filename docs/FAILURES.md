@@ -1305,6 +1305,9 @@ stood.
   lines 155 and 171 said
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:315-333 — at `51a24db` T3 to T8 are checked off while
   `bin/lib/gate-log.mjs` and `scripts/count-git.mjs` are in no commit of `main`
+- Seen: 2026-11-04 — the channel, JH 137's notes to the lead at 02:01:18Z and 02:01:47Z (this session's own) — the
+  first named commit `18c3a5a0`, written before `git log` printed the real one, `d3b35511`; corrected 29 seconds later,
+  before the lead built on it. The check that stops it: a hash goes into a notice only from an output already read
 - Control: check — bin/check-citations.test.mjs — "a task the change checks off names a commit
   reachable from HEAD, unless it rides with staged work" — since 2026-10-17
 - Was: owed — odd/tasks/commands-and-doctor.md — "a task the change checks off in a feature
@@ -1757,6 +1760,16 @@ the reply before he leaves; so the return had no goals to check and no forecast 
   question 165 was asked at 18:00:21Z (12:59 local) and answered at 20:01:59Z (15:01 local); it waited two hours
   and no stretch covered it: the stretch record's last close is at 17:50:20Z and none opened after it
   (`stretches.jsonl` under the throughput folder)
+- Seen: 2026-11-03 — relief file, lines 2250-2251 (claimed; the lead's own) — from 06:17 to 09:59 local (UTC-05:00)
+  he was away while the lead's backup script waited for the app to close, and the machine slept at 06:21; no stretch
+  covered it and no work session was opened. The stretch record's last close is at 2026-11-03T09:23:07Z and none
+  opened after it (`stretches.jsonl` under the throughput folder, read by JH 137)
+- Seen: 2026-11-03 — relief file, lines 2251-2252 (claimed; the lead's own) — from 10:43 to 15:24 local he was away
+  while the fourth backup try waited an hour for the app to close and then gave up; no stretch covered it and no work
+  session was opened. The same record, read by JH 137, holds no open after 2026-11-03T09:23:07Z
+- Seen: 2026-11-03 — the lead's note to JH 137 at 01:38Z on 2026-11-04 (claimed; the lead's own) — from 16:55 to 20:25
+  local he was away after his answer to question 179, with no stretch opened; the reply hook flagged it at his return.
+  The stretch record, read by JH 137 at 20:40 local, still holds no open after 2026-11-03T09:23:07Z
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 
@@ -1862,6 +1875,13 @@ was not so.
   that stopping ccstatusline freed about 4 GB, read from its WorkingSet64; JH 107 measured 404 MB private and about
   260 MB of free memory gained; the claim came from the wrong measure, with no read of free memory before and after
   by the same probe
+- Seen: 2026-11-03 — relief file, line 2249, and odd/tasks/f8-s2-removal.md, L19 (the lead's own, relaying JH 134's
+  plan) — he was told that quitting the Claude app closes every session, so the backup could start; nobody had checked
+  it, and it was not so: a background session under the claude daemon (JH 134) and an `engram serve` started from a
+  shell kept running, and the backup script gave up at 06:06 local. Fixed then in the script, not in the harness: it
+  logged what still ran every 2 minutes and stopped `engram.exe` once nothing else ran; the backup was later dropped by
+  his answer to question 179 (odd/tasks/f8-s2-removal.md, L20). What stops it recurring is the line on `told-him-unverified`
+  already in force: a claim about what he will see is checked first, here by listing the processes after a quit
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting

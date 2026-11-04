@@ -4,28 +4,30 @@ Locator: `odd/tasks/f8-s2-removal.md` · Engram mirror: `odd/f8-s2-removal/tasks
 Delivery: pull requests, a chain if one passes 400 lines · Test runner: `node --test`
 
 ## Goal
-gentle-ai, Orca and herdr leave his machine, each by his yes at that moment, after one full backup whose restore was
-proven on a scratch home; what stays (js-harness, engram and its data, codegraph, context7 with its key, Codex as
-reviewer) works as before, shown by a read-only verification, a smoke walk and S2's measures.
+gentle-ai, Orca and herdr leave his machine, each by his yes at that moment, without the full backup and its drill
+(his words and his answer to question 179, 2026-11-03, L20); what stays (js-harness, engram and its data, codegraph, context7 with
+its key, Codex as reviewer) works as before, shown by read-only checks, a smoke walk and S2's measures.
 
 ## Why
 The roadmap: "S2 last of the migration: removal is machine-wide and needs every replacement, a backup and a restore
 drill first" (`docs/ROADMAP.md:318-319`). S11 made js-harness install the complements, S13 rehearsed the path and S12
 moved his projects. gentle-ai's 4.3.1 uninstall deletes his whole `permissions` object and the engram and context7
-registrations (depth pass, item 2), so the backup and the drill are what make the removal undoable.
+registrations (depth pass, item 2), so the backup and the drill were to make the removal undoable. Since his answer
+to question 179 (L20) there is no backup: those entries come back from the snapshot gentle-ai's uninstall takes of
+every file it changes before changing it (`~/.gentle-ai/backups/<UTC stamp>/`, L20), and what no snapshot holds is
+lost, which he accepted once the project's documentation and its memory were on GitHub.
 
 ## Done when
 - `node --test bin/lib/stack-backup.test.mjs bin/stack.test.mjs scripts/s2-verify.test.mjs` exits 0
 - `node bin/js-harness.mjs contract check odd/tasks/f8-s2-removal.md` exits 0
 - `npm run check` exits 0
-- `js-harness stack backup verify --from <the backup> --marker s2drillmarker20261102 --expect 6431` exits 0 on his
-  machine's backup, recorded in `## Log` (the drill: every file and export byte for byte, credentials by hash in
-  place, engram returns observation 6431, the `permissions`
-  object equal, the MCP entries named, row 12's deleted and created files, a transcript newer than the backup kept)
 - every configuration-changing operation in `## Log` (each uninstall, restore of an entry, `install`, `stack install`,
   each leftover removed, the style chosen) carries the yes that named it, quoted with its transcript line, before the
   line that runs it
-- `node scripts/s2-verify.mjs --backup <the backup>` exits 0 after every session restarted, recorded in `## Log`
+- after gentle-ai's removal, the `permissions` object of `~/.claude/settings.json` and the `engram` and `context7`
+  entries of `~/.claude.json` are deep-equal, key order aside, to those of gentle-ai's pre-uninstall snapshot, printed
+  only as "equal" or "differs at <key path>", and `claude mcp list` shows engram, codegraph and context7 connected;
+  each recorded in `## Log` (it replaces `scripts/s2-verify.mjs`, which reads a backup that does not exist, L20)
 - the smoke walk passes on a fresh scratch project with the machine as it is after the removals, recorded in `## Log`
 - the incident set scores at least 10 of 20 (`L − max(s, 3)` with L 13), its run named in `## Log`
 - `fixed load` at most 80,000 in each of five restarted desktop sessions (the `check` row read once in each), the
@@ -66,13 +68,18 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
 - The week is red on `rule:growth-limit`: nothing beyond this step and fixes.
 
 ## Ask me before
-- The sitting: closing every session, the lead's included, for the backup.
-- gentle-ai: `uninstall --all -y`; the `permissions` object and the `engram` and `context7` entries put back from the
-  backup; `install`; `stack install`; the leftovers its scan names; the binary; `~/.gentle-ai`; GGA's files in `~/bin`.
+- The sitting: closing every session, the lead's included, for the backup (dropped by question 179, L20).
+- gentle-ai: `uninstall --all -y`; the `permissions` object and the `engram` and `context7` entries put back from
+  gentle-ai's pre-uninstall snapshot (L20); `install`; `stack install`; the leftovers its scan names; the binary; GGA's
+  files in `~/bin`; `~/.gentle-ai` last and apart, since it holds that snapshot, the only copy there is; the three
+  blocks the uninstall leaves in `~/.claude/CLAUDE.md` (`codegraph-guidance`, `orchestrator`, `agent-routing`), by
+  hand (L23).
+- What his other projects keep of gentle-ai's lines beyond G12's Rules block, above all the remote-operation
+  authorization, asked before the gentle-ai question (L23).
 - gentle-ai's leftovers in each project (`.atl/`, its review store), one project at a time.
 - The output style after the removal (today gentle-ai's "Neutral" at user level).
 - Orca, then herdr, each with its folders, PATH entry and registry keys named.
-- Running `restore` on his real home (the undo).
+- Running `restore` on his real home (the undo; with no backup there is none, L20).
 - Spend: the incident set (about $13) and the smoke walk (about $5).
 
 ## Depth pass
@@ -222,6 +229,13 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   (gentle-ai, Orca, herdr), every change to his configuration (~/.claude, ~/.codex, gentle-ai's config,
   credentials) and anything irreversible outside the repo is asked to him first, one question at a time".
 - S9 (the brief): "Never copy .credentials.json or Codex auth into scratch homes."
+- S10 (his answer to question 181, the lead's transcript `0f71b2c6`, line 61963, 2026-11-04T02:01:22Z): "Necesito que
+  tengamos nuestro propui Claude.md del arnes con todo el plan que hicimos que es la fusion de todo lo de nosotros mas
+  lo de gentle-ai asi como lo habiamos planeado"
+- S11 (his words, line 62036, 2026-11-04T02:03:32Z): "si pero recuerda que vamos a desintalar completamente gentle-ai
+  de todas partes por que solo va a a quedar unicamente nuestros arnes y debe tener todas las funcionalidades"
+- S12 (his words, line 62099, 2026-11-04T02:06:41Z): "Recuerda que no es copiarla lo de gentle-ai, para eso se hizo una
+  revision completa y profunda de como ibamos a cuadrar y a utilizar el arnes completo"
 
 ## Tasks
 - [x] T1 (kind: design) this document, its plan through the double review (Codex and a Claude reader) — S1-S9;
@@ -242,17 +256,60 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
 - [x] T5 (kind: verify) Codex and the lenses on T2-T4, the independent verifier (high risk), PR — inline; PR 761 (L11-L17)
 - [ ] T6 (kind: verify) before the sitting, read only: each project's effective output style; the lead's yes to the
   plan of the sitting; the corrections of L6 to the lead — S3
-- [ ] T7 (kind: verify) the sitting, with the lead: his yes to close every session; he runs `stack backup run` and
-  `verify` from a plain terminal; the results into `## Log` — S1, S4-S7
+- [x] T7 (kind: verify) the sitting, with the lead: his yes to close every session; he runs `stack backup run` and
+  `verify` from a plain terminal; the results into `## Log` — S1, S4-S7; dropped by his answer to question 179
+  after four tries copied nothing (L20)
 - [ ] T8 (kind: verify) the removals, each tool asked through the lead and run after its yes, in the order of item 5;
   each operation and its check into `## Log` — S1, S3, S8
 - [ ] T9 (kind: build) the exclusion reverted in `.claude/settings.json` and its sentence in `CLAUDE.md`; every session
-  restarted with the lead; `s2-verify` on his machine; the smoke walk; the session checks; the incident set and
-  `fixed load` — S1, S2
+  restarted with the lead; the entries checked against gentle-ai's snapshot (L20); the smoke walk; the session checks; the incident set and
+  `fixed load`; the root `CLAUDE.md`'s copy of the kept lines goes, and the T13 test in `bin/lib/rules-block.test.mjs`
+  freezes the expected groups inline in the same commit (L31) — S1, S2
 - [ ] T10 (kind: docs) the rule lines that name gentle-ai, through `js-harness rules change` on a `rule/` branch,
   before S2 closes: `CLAUDE.md:12` ("over gentle-ai's"), `:74-91` (its review steps), `AGENTS.md:6` and `:27`; his
   words quoted where a line is his
 - [ ] T11 (kind: docs) S2's roadmap line, the session summary, the closed notice — inline
+- [ ] T12 (kind: docs) before any removal: one table of every gentle-ai function on his machine (Claude, Codex,
+  Antigravity, its CLI, its folders and each project's leftovers), the twelve skills included, each mapped to what
+  the review decided (the reverse-engineering matrix and 13.5, the diet) and whether that is built: done, owed with
+  its step, or a gap; shown to him as a Spanish page; only a gap, or a function the review never covered, is asked
+  (L26) — S10, S11, S12
+- [ ] T13 (kind: build) the kept text of the diet's Appendix A.1 ships to every project in js-harness's block of
+  `~/.claude/CLAUDE.md` (today G12's nine Rules lines, `bin/lib/rules-block.mjs`), test first, reviewed, landed and
+  installed before gentle-ai's blocks leave that file; this repo's copy under "Kept from the global file" keeps one
+  home — S10
+- [ ] T14 (kind: verify) the removal from everywhere: every trace T12 lists that he does not keep, gentle-ai's
+  Claude, Codex and Antigravity config, `~/.gentle-ai`, its binaries and each project's `.atl/`, each asked — S11
+
+## Coverage of gentle-ai's functions (T12)
+Each function gentle-ai 4.3.1 provides on his machine (`~/.gentle-ai/state.json`: agents claude-code, codex,
+antigravity; components engram, skills, context7, permissions, gga, claude-theme, opencode-gentle-logo, persona),
+mapped to the decision the review took and its state. RE is `docs/proposals/gentle-ai-reverse-engineering.md`, DIET
+`docs/proposals/harness-diet.md`. Built by a read-only explorer (L27); the rows marked [c] were checked here too.
+| Function | Decision | State |
+|---|---|---|
+| `CLAUDE.md` blocks `codegraph-guidance`, `persona`, `engram-protocol`, `orchestrator`, `agent-routing` with `remote-authorization` | drop the blocks, keep Appendix A.1's lines (DIET:1418-1514) | kept lines done in this repo (`CLAUDE.md`, "Kept from the global file"); for every project owed: T13; the blocks' removal owed: T14, since the uninstall strips only `persona` and `engram-protocol` (`service.go:968-975`, `:1003-1008`) [c] |
+| His nine Rules lines | copy (RE:236, G12) | done: `bin/lib/rules-block.mjs:15-25` |
+| Skills `work-unit-commits`, `chained-pr` | port (RE:263-264) | done: `bin/lib/ported-skills.mjs` |
+| The other 12 skills and `_shared` | drop (RE:265-276); `_shared` is the 12's own support files | removal owed: T14 |
+| Agents `review-risk`, `-resilience`, `-readability`, `-reliability` | our own lens prompts (RE:238) | done: `bin/lib/lens-prompts.mjs` |
+| Agents `review-refuter`, `jd-judge-a`, `jd-judge-b`, `jd-fix-agent` | drop (RE:238) | removal owed: T14 |
+| Review engine (RDD, tiers, consent, `review *` commands, stop-hook, review store) | drop; two reviews per slice (RE:234) | replacement done (S1: `bin/lens-review.mjs`, `bin/codex-review.mjs`, pre-push); removal owed: T14 |
+| Hooks: review stop-hook ×2, telemetry ×2, PowerShell skill-registry | drop all five (RE:242) | owed: T8/T14 (the PowerShell one by hand) |
+| Persona and output style | our own style `js-harness` (RE:235) | done: `bin/lib/output-style.mjs`; the uninstall removes `gentleman.md` and `outputStyle` but not `~/.claude/output-styles/neutral.md` (`service.go:977-987`) [c]; this repo's style is the step after the removals |
+| Theme (claude-theme) | drop (RE:251) | no `theme` key on his machine: nothing to remove |
+| engram, codegraph, context7 | take over (RE:239-241) | done: `bin/lib/stack.mjs` (S11); the entries back from the snapshot after the uninstall: owed T8 |
+| Permissions object | take over (RE:245) | done: `bin/lib/permissions.mjs`, `bin/lib/deny-paths.mjs` (S10); back from the snapshot: owed T8 |
+| Install, update, sync, uninstall, restore, doctor, backups | keep ours (RE:246-249) | done; gentle-ai's own uninstall and snapshot used once, T8 |
+| Presets | `install` and `init` offer them (RE:248) | `init` done (`bin/lib/functions.mjs:26-30`); `install` takes none (`docs/ROADMAP.md:538`) [c]; **only in `init`** by his answer to question 182 (L33), so no gap |
+| TUI | copy the design, not the code (RE:255, 4.6) | owed: "The TUI's rest" (`docs/ROADMAP.md`), not an S step |
+| Telemetry, skill registry and `.atl/` (in all three projects) | drop (RE:243-244) | scan done (`bin/lib/project-migrate.mjs`); removal owed: T14, one project at a time |
+| GGA (`~/bin/gga*`, `~/bin/lib`) | drop (RE:250) | owed: T14 |
+| Codex: `~/.codex/AGENTS.md` blocks, 8 skills and `_shared`, 3 hook entries | removal covers Codex (RE:252) | owed: T14; the uninstall leaves its blocks but `persona` and `engram-protocol` [c] |
+| Antigravity: `~/.gemini/GEMINI.md` (6 blocks [c]), 14 skills and `_shared` | not in RE's matrix; leaves by his words S11 | owed: T14 |
+| Model routing, evals, multi-host | keep ours (RE:252-254) | done; rows 9, 13, 14 owed to S7 and S8 |
+| `opencode-gentle-logo` | not in RE | nothing on disk (`~/.config/opencode` absent) [c] |
+Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's own skills) [c].
 
 ## Log
 - L1 2026-11-02T20:04:19Z, his words (the lead's transcript `0f71b2c6`, line 55309): "Sí, abre el S2". The brief
@@ -391,3 +448,154 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   then q2 gentle-ai's uninstall with its permissions and MCP restore, then Orca and herdr, one question each, and the
   output style for `D:\js-harness` alone. The host compacted this session at 19:41; resumed from this document. A
   `js-harness wait --notice-to 134` runs in the background until the lead's notice.
+- L18 2026-11-02 19:56 local: PR 761 landed (`gh pr view 761`: merged 2026-11-03T00:56:22Z as `698c5311`); the lead
+  refreshed the installed copy to it, and the installed `js-harness stack backup verify` answers with its usage. His
+  answer to question 171, "Hoy, cuando esté lista" (the lead's transcript `0f71b2c6`, line 56857,
+  2026-11-03T00:47:19Z, read with `js-harness sessions --quote`); then, by the lead, he is away 4 to 6 hours from
+  19:50, so T7 waits for his return, about 00:00 to 02:00 local. The lead messages this session then.
+- L19 2026-11-03 04:46 local: his answer to question 173, "Ahora" (the lead's transcript `0f71b2c6`, line 58207,
+  `2026-11-03T09:46:16Z`, read with `js-harness sessions --quote`): T7 starts. Read on this machine, read only, before
+  the plan: 16 `claude.exe`, 2 `codex.exe` and 3 `engram.exe` run (`tasklist`); the scheduled task
+  `js-harness-remote-js-harness-86aa68a6ffce` runs `remote.mjs start --watchdog` every 5 minutes, which would start
+  a `claude.exe` again during the backup, while `js-harness remote stop` keeps it stopped until the next `start`
+  (`js-harness remote --help`); `~/.js-harness` is not a root, only its `manifest.json`. The plan sent to the lead:
+  1. what closes first: the lead and every session (JH 56, PP 2, JH 134) write their state; he runs `js-harness
+  remote stop --cwd D:\js-harness`, then quits the Claude app from the tray and any Codex app or CLI, Orca and
+  herdr; the `engram.exe` are the sessions' MCP servers and end with them. 2. In a plain PowerShell, in order:
+  `js-harness stack backup run` (exit 0: none of the quiesce list runs, every root copied and counted twice, the
+  backup published; its last line `backup: <dir>`); `js-harness stack backup verify --from <dir> --marker
+  s2drillmarker20261102 --expect 6431` (exit 0: every row of the drill `ok`, the scratch home removed); `js-harness
+  remote start --cwd D:\js-harness --name js-harness` (exit 0: the server runs again); then he opens the Claude app.
+  A `FAIL quiesce` names what runs, writes nothing, and the run is repeated once it is closed; any other failure is
+  sent here as it printed, not run again.
+- L20 2026-11-03, JH 137: no backup. Four tries on 2026-11-03 copied nothing (the lead's script, log
+  `~/.js-harness/s2-auto-20261103.log`; relief file lines 2248-2252): quitting the app left a background session and
+  `engram serve` running, the machine slept, and the app was never closed for the fourth. His words (the lead's
+  transcript `0f71b2c6`, line 60749, 2026-11-03T21:53:02Z, 16:53 local): "hagamoslo entonves sin la copia de
+  seguridad, despues de que yo tenga toda la documentacion del proyecto y ademas la forma de que un modelo inteligente
+  pueda auditarlo como fue lo que hicimos no importa si se nos borra informacion."; then his answer to question 179,
+  "Sí, sin copia" (line 60802, 2026-11-03T21:55:33Z), to a question that said his Claude and Codex configuration
+  (permissions, MCP servers, hooks) stays without a copy and, if a removal damages it, is rebuilt by hand or by
+  reinstalling, never restored exactly. Both read with `js-harness sessions --quote`; the brief
+  `~/.js-harness/background/briefs/2026-11-04T00-25-10-132Z-72e6695f.md` gave 16:50. The documentation he
+  asked for first, checked here: `origin/main` at `70790d92` holds 121 files under `docs/` and 190 feature documents
+  under `odd/tasks/` (`git ls-tree -r --name-only origin/main`; the lead's count was 194); the engram memory backup,
+  `jsaristi/js-harness-memory` at `ca7da4c`, was checked by the lead, not here. What changes: T7 and the drill are
+  dropped; `stack backup` stays built and tested, unused; the `permissions` object and the `engram` and `context7`
+  entries come back from gentle-ai's own pre-uninstall snapshot, which 4.3.1 writes to `~/.gentle-ai/backups/<UTC
+  stamp>/` before any change (`internal/components/uninstall/service.go:610-622` of its source) and which holds
+  `~/.claude/settings.json` (its `permissions` targets, `:1010-1015`) and `~/.claude.json` (its context7 targets,
+  `:1104-1105`); so `~/.gentle-ai` is removed last and apart. What is lost if a removal goes wrong: anything no
+  snapshot holds, which each question says. The removals go next, one question each through the lead, in the order of
+  item 5: gentle-ai, Orca, herdr; then the output style of `D:\js-harness`.
+- L21 2026-11-04 00:33Z (19:33 local), JH 137: `1492a578` pushed; the lead told (note), then question 180 to him
+  through the lead (`notify --kind question`), the gentle-ai removal: 1) `gentle-ai uninstall --all -y`; 2) the
+  `permissions` object and the `engram` and `context7` entries back from its snapshot; 3) `js-harness install` and
+  `stack install`; 4) the gentle-ai hooks it leaves removed by hand (its source keeps the PowerShell skill-registry
+  one, `service.go:1355-1361`; it removes the review stop-hook and the bash ones); 5) the entries checked equal and
+  `claude mcp list` read, and only then `~/go/bin/gentle-ai.exe` and GGA's files in `~/bin` removed; `~/.gentle-ai`
+  apart at the end of S2; `gentle-ai restore` is the undo until step 5. Read first, read only: the machine as item 2
+  says (hooks js-harness 15, Orca 12, gentle-ai 5, herdr 1, codegraph 1; `permissions` 1 allow, 24 deny,
+  `bypassPermissions`; `outputStyle` "Neutral"; `mcpServers` codegraph, context7, engram; `gentle-ai version` 4.3.1,
+  whose `uninstall` has no dry run). Step 2's tool, written while the answer waits: a script in this session's job
+  folder, `s2-restore-entries.mjs --snapshot <dir> [--apply]`, which reads gentle-ai's `manifest.json` and its
+  `snapshot.tar.gz` in memory (no copy of a file holding a key is written), compares key order aside, prints only
+  "equal", "differs at <key path>", "absent" and "written", and writes each file whole through a rename. Its scratch
+  test (a fake home and snapshot, a fake key): equal, then absent after a simulated uninstall, written, equal again,
+  `outputStyle` and other keys left as they were, a differing `args` named by path, the key printed 0 times. Run
+  read only against his 2026-10-28 gentle-ai snapshot (Go's tar): permissions, engram and context7 equal, exit 0.
+- L22 2026-11-04 01:38Z (20:38 local): question 180 is not a yes. His typed answer (the lead's transcript `0f71b2c6`,
+  line 61446, 2026-11-04T01:33:35Z, read with `js-harness sessions --quote`): "Antes de decirte si debemos comprobar
+  que ya sepamos que hacer dime si ya hemos extraido todo el conocimiento que necesitamos de gentlei-ai y si ya lo
+  tenemos implementado nosotros?". The lead holds the removal, audits what gentle-ai provides against what js-harness
+  implements, and asks again; nothing was run on his machine. The lead's `Seen:` line for his absence of 16:55-20:25
+  local added to `stretch-not-opened`. T8 waits for the lead's next question.
+- L23 2026-11-04 01:48Z (20:48 local): the lead's audit for question 180 (a read-only auditor; its file in the lead's
+  scratchpad, `gentle-ai-audit-20261103.md`): for `D:\js-harness` everything needed is covered; two gaps in what S2
+  assumed the uninstall leaves. Both checked here, read only. Gap 1: `~/.claude/CLAUDE.md` holds five gentle-ai
+  blocks, `codegraph-guidance` (lines 1-31), `persona` (33-64), `engram-protocol` (66-106), `orchestrator` (108-502)
+  and `agent-routing` (504-608, holding `remote-authorization`, 598-607); the uninstall strips only the second and
+  third (item 2), so the other three, about 500 lines, would stay and load in every session once T9 reverts the
+  exclusion. They are removed by hand, inside the gentle-ai question; the `graphify` lines (609-614) and the
+  js-harness Rules block (616-627) stay. Gap 2: his other projects get only G12's nine Rules lines; neither
+  `CLAUDE.md` nor `AGENTS.md` of `D:\plataforma-preproyecto` or `D:\abogadaclaudiajimenez` holds the remote-operation
+  authorization (`grep -l -i "remote operation"`, no match), so removing `agent-routing` takes it from them. It is
+  his (G12 chose the Rules block), so it goes to him first as its own question, and the revised gentle-ai question
+  after its answer, one at a time.
+- L24 2026-11-04 01:57Z (20:57 local): the lead's note, a plan change. His words (the lead's transcript `0f71b2c6`,
+  line 61838, 2026-11-04T01:54:51Z, read with `js-harness sessions --quote`): "igual quiero que como no vamos a tener
+  instalado gentle-ai y cada cierto tiempo se actualiza, la idea es poder ver lo archivos del repositorio y como
+  nosotros somos una especie de copia ver que de lo que añade o quita nos sirve para optimizar". S2 no longer ends
+  the gentle-ai idea watch; a watch of gentle-ai's repository is a feature of its own after S2. Written into
+  `docs/ROADMAP.md` under S2, S9, item 4 and the ordered plan. The lead asked to keep `bin/lib/gentle-ai-update.mjs`
+  and its absence-list entry: neither exists (`git ls-tree -r --name-only origin/main` lists no such file; `git log
+  --all -- bin/lib/gentle-ai-update.mjs` ends at `8b724f3d`, which removed it), so nothing is kept and the lead is
+  told. Nothing of S2 changes with it: the uninstall removes gentle-ai's install, not its repository.
+- L25 2026-11-04 02:05Z (21:05 local): question 181 answered in his words (S10, line 61963, read with `sessions
+  --quote`): not one of its three options. The lead's reading, taken here: the kept text of the diet's Appendix A.1
+  (`docs/proposals/harness-diet.md:1447-1514`), which this repo holds under "Kept from the global file", reaches every
+  project from js-harness, wider than G12's nine lines, before gentle-ai's blocks leave his global file (T13). Then his
+  words S11 (line 62036): gentle-ai leaves from everywhere and js-harness must hold every function, so before any
+  removal he gets one table of every gentle-ai function, each with its equivalent, a port, or a drop he decides by
+  name, none dropped silently (T12; the lead's note at 21:05 local). The source of the table: the
+  reverse-engineering document's matrix (`docs/proposals/gentle-ai-reverse-engineering.md:224-276`), whose twelve
+  skill drops were G8, taken by the lead by default (`docs/ROADMAP.md:157`), never his by name; and the lead's audit
+  (L23). The revised gentle-ai question waits for T12's answers and T13's landing.
+- L26 2026-11-04 02:07Z (21:07 local): his correction S12 (line 62099, read with `sessions --quote`), relayed by the
+  lead: nothing is copied from gentle-ai; the review already decided how the harness covers each function. So T12's
+  table maps each function to that decision and its state (done, owed with its step, or a gap), and asks him only a
+  gap or a function no source covers; the drops already decided are not asked again. A read-only explorer builds the
+  inventory with its evidence; this session checks a sample of its claims before the page.
+- L27 2026-11-04 ~02:30Z (21:30 local): he is away 8 h from 21:12 local (the lead's note, 21:14): the stretch holds
+  T12 and T13; questions wait for his return; no merge, nothing applied to his machine. The explorer's inventory
+  (84,664 tokens, 15 tool calls) is `## Coverage`. Checked here before using it: `install` takes no preset
+  (`docs/ROADMAP.md:538`); `~/.gemini/GEMINI.md` holds 6 gentle-ai markers; `~/.claude/skills/_shared` holds 7 files;
+  the uninstall strips only `persona` and `engram-protocol` from each agent's instruction file and removes
+  `gentleman.md` but not `neutral.md` (`service.go:961-1008`); `skills/synced` holds the Claude app's skills. One
+  gap only: presets in `install`, decided in RE:248 and owned by no step; it goes to him at his return. The rest
+  is done, or owed to T8, T13, T14, S4a-S8 or the TUI's rest.
+- L28 2026-11-04 02:20Z (21:20 local), state (written at 86% of the window): T12 done, `240cd132`; his page
+  https://claude.ai/artifact/GoxigqvxCg2BvRyY23mjSm (marked free: no template renders it); question 182 (presets in
+  `install`, recommended "Solo en init") recorded for his return; the lead told. Questions still to send, one at a
+  time, after his return: the revised gentle-ai question (L21's five steps, plus the four leftover blocks in
+  `CLAUDE.md`, Codex's `AGENTS.md` and `GEMINI.md`, `neutral.md`, and `install` re-rendering the block of T13), then
+  T14's items (Codex, Antigravity, GGA, `.atl/` per project, `~/.gentle-ai`), Orca, herdr, this repo's style. Next
+  step, T13 test first: in `bin/lib/rules-block.mjs` add `KEPT_GROUPS` (CodeGraph 3, Engram 2, Delegation 6, "Task
+  Size and scratch" 2, "Remote operation authorization" 3, word for word as the root `CLAUDE.md`'s "Kept from the
+  global file", graphify left out since graphify's own install writes it there) and render them in `rulesBody()`
+  after the nine lines as `\n<title>:\n- <line>`; a test in `bin/lib/rules-block.test.mjs` holds each group equal to
+  the root `CLAUDE.md`'s; then `npm run check`, Codex and the lenses (`--base 240cd132`), a PR with a ready notice,
+  no merge (the lead's note, 21:14). At T9 the repo's copy of those lines goes, since the global block then loads
+  here too. The script for step 2 lives in this session's job folder (`s2-restore-entries.mjs`), described in L21.
+- L29 2026-11-04 ~02:30Z: T13 built test first: the new test failed (no `KEPT_GROUPS` export), then
+  `KEPT_GROUPS` was generated from the root `CLAUDE.md` by a one-off script (CodeGraph 3, Engram 2, Delegation 6,
+  Task Size and scratch 2, Remote operation authorization 3) and rendered by `rulesBody()`; `node --test
+  bin/lib/rules-block.test.mjs`: 23 pass, 3 skipped (link and mode cases this machine skips), 0 fail. Next: the
+  commit's gate, Codex and the lenses (`--base 240cd132`), a PR, a ready notice; no merge.
+- L30 2026-11-04 ~02:45Z (21:45 local): the commit's gate failed (GitHub run 41760299480) on two tests. (1)
+  `bin/lib/manifest.test.mjs:4446` refuses Engram's tool names in any text js-harness ships (row 11 of
+  `odd/tasks/f8-s11-complements.md`: engram's protocol comes from engram alone), so the Engram group leaves
+  `KEPT_GROUPS`; the test now holds the four other groups equal to the root `CLAUDE.md`'s. (2) the 18 new spans
+  were declared nowhere; they are listed as owed, after the ten already owed, because the same 18 lines are owed
+  in the root `CLAUDE.md` today and T9 removes them there, so the debt moves and does not grow (`rules coverage
+  --strict`: rules-block 28 spans, 28 owed, 0 undeclared). Checked: `node --test` of rules-block, rules-coverage
+  and the manifest's engram test, 49 pass, 0 fail. The second gate run (41761093683) failed once more on
+  `bin/lib/gentle-ai-absence.test.mjs`: the two comments named the old stack; reworded, 26 pass, 0 fail.
+- L31 2026-11-04 ~03:00Z (22:00 local): `ae79fad2` reviewed over `15d9b2a9`: Codex, correct at 0.92, no findings;
+  the Claude lenses risk, reliability and readability, 0 findings each; pushed (pre-push: both records cover it).
+  gentle-ai: `15d9b2a9..ae79fad2` approved and acknowledged (lineage `review-9ec61b2255d993b1`, lens
+  review-reliability), with one informational WARNING, R3-kept-groups-oracle-fragile: the T13 test reads the
+  expected groups from the root `CLAUDE.md` without checking that its two headings are there, so T9's removal of
+  that copy would fail it with an unhelpful diff. Fixed in the next commit: the test asserts both headings and
+  says what to do, and T9's line now owns freezing the groups inline.
+- L32 2026-11-04 ~03:05Z (22:05 local): main merged in at `2f79e277` (one conflict in `docs/FAILURES.md`, both
+  sides kept, in date order); PR 763 opened, the lead told (ready, 21:52). The host stopped this session's
+  `js-harness wait --notice-to 137` for low memory and said not to restart it; the lead was told to message instead.
+  gentle-ai: `70790d92..2f79e277` (the branch since main) not reviewed: `review status` returned
+  `operation_timeout` twice. Its code is `ae79fad2` (gentle-ai approved, L31) and `b0e90be1` (Codex 0.99, the
+  reliability lens 0 findings), so nothing in it is unreviewed by Codex and the lenses; no start was run on the
+  branch, by `CLAUDE.md`.
+- L33 2026-11-04 11:06:55Z (06:06 local): question 182 answered, "Solo en init" (tapped; the lead's transcript
+  `0f71b2c6`, line 63496, read with `js-harness sessions --quote`), relayed by the lead at 06:07. The presets live
+  only in `init`; RE:248's decision that `install` offers them too changed; nothing is built. Recorded in the T12
+  table's Presets row and in `docs/ROADMAP.md` under S11's decisions, so the table has no gap left.
