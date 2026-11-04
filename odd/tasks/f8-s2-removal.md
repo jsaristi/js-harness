@@ -4,28 +4,30 @@ Locator: `odd/tasks/f8-s2-removal.md` · Engram mirror: `odd/f8-s2-removal/tasks
 Delivery: pull requests, a chain if one passes 400 lines · Test runner: `node --test`
 
 ## Goal
-gentle-ai, Orca and herdr leave his machine, each by his yes at that moment, after one full backup whose restore was
-proven on a scratch home; what stays (js-harness, engram and its data, codegraph, context7 with its key, Codex as
-reviewer) works as before, shown by a read-only verification, a smoke walk and S2's measures.
+gentle-ai, Orca and herdr leave his machine, each by his yes at that moment, without the full backup and its drill
+(his words and his answer to question 179, 2026-11-03, L20); what stays (js-harness, engram and its data, codegraph, context7 with
+its key, Codex as reviewer) works as before, shown by read-only checks, a smoke walk and S2's measures.
 
 ## Why
 The roadmap: "S2 last of the migration: removal is machine-wide and needs every replacement, a backup and a restore
 drill first" (`docs/ROADMAP.md:318-319`). S11 made js-harness install the complements, S13 rehearsed the path and S12
 moved his projects. gentle-ai's 4.3.1 uninstall deletes his whole `permissions` object and the engram and context7
-registrations (depth pass, item 2), so the backup and the drill are what make the removal undoable.
+registrations (depth pass, item 2), so the backup and the drill were to make the removal undoable. Since his answer
+to question 179 (L20) there is no backup: those entries come back from the snapshot gentle-ai's uninstall takes of
+every file it changes before changing it (`~/.gentle-ai/backups/<UTC stamp>/`, L20), and what no snapshot holds is
+lost, which he accepted once the project's documentation and its memory were on GitHub.
 
 ## Done when
 - `node --test bin/lib/stack-backup.test.mjs bin/stack.test.mjs scripts/s2-verify.test.mjs` exits 0
 - `node bin/js-harness.mjs contract check odd/tasks/f8-s2-removal.md` exits 0
 - `npm run check` exits 0
-- `js-harness stack backup verify --from <the backup> --marker s2drillmarker20261102 --expect 6431` exits 0 on his
-  machine's backup, recorded in `## Log` (the drill: every file and export byte for byte, credentials by hash in
-  place, engram returns observation 6431, the `permissions`
-  object equal, the MCP entries named, row 12's deleted and created files, a transcript newer than the backup kept)
 - every configuration-changing operation in `## Log` (each uninstall, restore of an entry, `install`, `stack install`,
   each leftover removed, the style chosen) carries the yes that named it, quoted with its transcript line, before the
   line that runs it
-- `node scripts/s2-verify.mjs --backup <the backup>` exits 0 after every session restarted, recorded in `## Log`
+- after gentle-ai's removal, the `permissions` object of `~/.claude/settings.json` and the `engram` and `context7`
+  entries of `~/.claude.json` are deep-equal, key order aside, to those of gentle-ai's pre-uninstall snapshot, printed
+  only as "equal" or "differs at <key path>", and `claude mcp list` shows engram, codegraph and context7 connected;
+  each recorded in `## Log` (it replaces `scripts/s2-verify.mjs`, which reads a backup that does not exist, L20)
 - the smoke walk passes on a fresh scratch project with the machine as it is after the removals, recorded in `## Log`
 - the incident set scores at least 10 of 20 (`L − max(s, 3)` with L 13), its run named in `## Log`
 - `fixed load` at most 80,000 in each of five restarted desktop sessions (the `check` row read once in each), the
@@ -66,13 +68,14 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
 - The week is red on `rule:growth-limit`: nothing beyond this step and fixes.
 
 ## Ask me before
-- The sitting: closing every session, the lead's included, for the backup.
-- gentle-ai: `uninstall --all -y`; the `permissions` object and the `engram` and `context7` entries put back from the
-  backup; `install`; `stack install`; the leftovers its scan names; the binary; `~/.gentle-ai`; GGA's files in `~/bin`.
+- The sitting: closing every session, the lead's included, for the backup (dropped by question 179, L20).
+- gentle-ai: `uninstall --all -y`; the `permissions` object and the `engram` and `context7` entries put back from
+  gentle-ai's pre-uninstall snapshot (L20); `install`; `stack install`; the leftovers its scan names; the binary; GGA's
+  files in `~/bin`; `~/.gentle-ai` last and apart, since it holds that snapshot, the only copy there is.
 - gentle-ai's leftovers in each project (`.atl/`, its review store), one project at a time.
 - The output style after the removal (today gentle-ai's "Neutral" at user level).
 - Orca, then herdr, each with its folders, PATH entry and registry keys named.
-- Running `restore` on his real home (the undo).
+- Running `restore` on his real home (the undo; with no backup there is none, L20).
 - Spend: the incident set (about $13) and the smoke walk (about $5).
 
 ## Depth pass
@@ -242,12 +245,13 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
 - [x] T5 (kind: verify) Codex and the lenses on T2-T4, the independent verifier (high risk), PR — inline; PR 761 (L11-L17)
 - [ ] T6 (kind: verify) before the sitting, read only: each project's effective output style; the lead's yes to the
   plan of the sitting; the corrections of L6 to the lead — S3
-- [ ] T7 (kind: verify) the sitting, with the lead: his yes to close every session; he runs `stack backup run` and
-  `verify` from a plain terminal; the results into `## Log` — S1, S4-S7
+- [x] T7 (kind: verify) the sitting, with the lead: his yes to close every session; he runs `stack backup run` and
+  `verify` from a plain terminal; the results into `## Log` — S1, S4-S7; dropped by his answer to question 179
+  after four tries copied nothing (L20)
 - [ ] T8 (kind: verify) the removals, each tool asked through the lead and run after its yes, in the order of item 5;
   each operation and its check into `## Log` — S1, S3, S8
 - [ ] T9 (kind: build) the exclusion reverted in `.claude/settings.json` and its sentence in `CLAUDE.md`; every session
-  restarted with the lead; `s2-verify` on his machine; the smoke walk; the session checks; the incident set and
+  restarted with the lead; the entries checked against gentle-ai's snapshot (L20); the smoke walk; the session checks; the incident set and
   `fixed load` — S1, S2
 - [ ] T10 (kind: docs) the rule lines that name gentle-ai, through `js-harness rules change` on a `rule/` branch,
   before S2 closes: `CLAUDE.md:12` ("over gentle-ai's"), `:74-91` (its review steps), `AGENTS.md:6` and `:27`; his
@@ -411,3 +415,23 @@ registrations (depth pass, item 2), so the backup and the drill are what make th
   remote start --cwd D:\js-harness --name js-harness` (exit 0: the server runs again); then he opens the Claude app.
   A `FAIL quiesce` names what runs, writes nothing, and the run is repeated once it is closed; any other failure is
   sent here as it printed, not run again.
+- L20 2026-11-03, JH 137: no backup. Four tries on 2026-11-03 copied nothing (the lead's script, log
+  `~/.js-harness/s2-auto-20261103.log`; relief file lines 2248-2252): quitting the app left a background session and
+  `engram serve` running, the machine slept, and the app was never closed for the fourth. His words (the lead's
+  transcript `0f71b2c6`, line 60749, 2026-11-03T21:53:02Z, 16:53 local): "hagamoslo entonves sin la copia de
+  seguridad, despues de que yo tenga toda la documentacion del proyecto y ademas la forma de que un modelo inteligente
+  pueda auditarlo como fue lo que hicimos no importa si se nos borra informacion."; then his answer to question 179,
+  "Sí, sin copia" (line 60802, 2026-11-03T21:55:33Z), to a question that said his Claude and Codex configuration
+  (permissions, MCP servers, hooks) stays without a copy and, if a removal damages it, is rebuilt by hand or by
+  reinstalling, never restored exactly. Both read with `js-harness sessions --quote`; the brief
+  `~/.js-harness/background/briefs/2026-11-04T00-25-10-132Z-72e6695f.md` gave 16:50. The documentation he
+  asked for first, checked here: `origin/main` at `70790d92` holds 121 files under `docs/` and 190 feature documents
+  under `odd/tasks/` (`git ls-tree -r --name-only origin/main`; the lead's count was 194); the engram memory backup,
+  `jsaristi/js-harness-memory` at `ca7da4c`, was checked by the lead, not here. What changes: T7 and the drill are
+  dropped; `stack backup` stays built and tested, unused; the `permissions` object and the `engram` and `context7`
+  entries come back from gentle-ai's own pre-uninstall snapshot, which 4.3.1 writes to `~/.gentle-ai/backups/<UTC
+  stamp>/` before any change (`internal/components/uninstall/service.go:610-622` of its source) and which holds
+  `~/.claude/settings.json` (its `permissions` targets, `:1010-1015`) and `~/.claude.json` (its context7 targets,
+  `:1104-1105`); so `~/.gentle-ai` is removed last and apart. What is lost if a removal goes wrong: anything no
+  snapshot holds, which each question says. The removals go next, one question each through the lead, in the order of
+  item 5: gentle-ai, Orca, herdr; then the output style of `D:\js-harness`.

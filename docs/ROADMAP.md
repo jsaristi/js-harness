@@ -591,7 +591,18 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   most 80,000 over five sessions.
 - **Cost:** about $13 for the incident set, and a scratch walk of about $5 [i].
 - **His decisions:** each removal, asked at that moment; D4, the `fixed load` budget, right after.
-- **State:** to do.
+  **Since 2026-11-03, S2 goes without the backup and its drill.** Four tries that day copied nothing
+  (the app never fully closed, then the machine slept). His words (the lead's transcript `0f71b2c6`,
+  line 60749, 2026-11-03T21:53:02Z): "hagamoslo entonves sin la copia de seguridad, despues de que
+  yo tenga toda la documentacion del proyecto y ademas la forma de que un modelo inteligente pueda
+  auditarlo como fue lo que hicimos no importa si se nos borra informacion."; then question 179,
+  "Sí, sin copia" (line 60802, 21:55:33Z). The `permissions` object and the engram and context7
+  entries come back from gentle-ai's own pre-uninstall snapshot; what no snapshot holds is not
+  restorable. `stack backup` stays built, unused; `~/.engram` is checked by function, not by hash.
+  Kept as history: until then a full backup and its restore drill came first
+  (`odd/tasks/f8-s2-removal.md`, L20).
+- **State:** in progress (`odd/tasks/f8-s2-removal.md`): `stack backup` built (PR 761); the backup
+  dropped by question 179; the removals asked one at a time.
 
 ### S4a The attribution hook and the hook count
 - **Changes:** a `commit-msg` hook that strips attribution lines (`.githooks/` has none today:
