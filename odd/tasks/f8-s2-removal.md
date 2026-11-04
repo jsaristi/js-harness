@@ -611,3 +611,19 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   error: the command's scope was not read before the question (`docs/FAILURES.md`, `told-him-unverified`). The lead
   told (note, before question 184); question 184 asks the scope, recommended "Con --all", the other "Solo Claude"
   (`--agent claude-code`, the Codex and Gemini blocks by hand at step 4). T8 waits for its answer.
+- L35 2026-11-04 12:23:40Z (07:23 local): question 184 answered, "Con --all" (tapped; the lead's transcript
+  `0f71b2c6`, line 64128, read with `js-harness sessions --quote`). Step 1, 07:24 local: `gentle-ai uninstall --all
+  -y`, exit 0; its snapshot `~/.gentle-ai/backups/20261104122417.084958800` (95 files); 10 files rewritten, 28
+  removed, 43 directories removed (gentle-ai's skills in Claude, Codex and Antigravity, its themes, GGA's
+  `AppData/Roaming/gga`); state.json drops Claude Code, Codex and Antigravity. Checked: each of the three
+  instruction files keeps 4 markers (`agent-routing`, `codegraph-guidance`, `orchestrator`, `remote-authorization`),
+  `persona` and `engram-protocol` gone; the Rules block still in `~/.claude/CLAUDE.md`; `permissions` and
+  `outputStyle` gone; the PowerShell skill-registry hook left, as its source says. Step 2: `s2-restore-entries.mjs`
+  compared (all three absent), wrote them, compared again: `permissions`, `engram`, `context7` equal to today's
+  snapshot and to the 2026-10-28 one. Step 3: `js-harness install` exit 0 (nothing to write: the permissions and
+  the Rules block already there), `stack install` exit 0, "nothing to install". Stopped before step 4, a surprise:
+  the uninstall also removed engram from Codex (`[mcp_servers.engram]` of `config.toml`, read by section name only,
+  and `engram-instructions.md`), context7 from Antigravity (`antigravity-cli/mcp_config.json`, now gone) and
+  context7 and engram from VS Code (`Code/User/mcp.json`, now gone); the snapshot holds them (server names read in
+  memory). Step 2 put back only Claude's, and question 183 did not say so. The lead told; question 185 asks,
+  recommended "Devolverlas" (the server entries only, not gentle-ai's instruction file for Codex).
