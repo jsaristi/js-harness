@@ -260,7 +260,7 @@ lost, which he accepted once the project's documentation and its memory were on 
   `verify` from a plain terminal; the results into `## Log` — S1, S4-S7; dropped by his answer to question 179
   after four tries copied nothing (L20)
 - [ ] T8 (kind: verify) the removals, each tool asked through the lead and run after its yes, in the order of item 5;
-  each operation and its check into `## Log` — S1, S3, S8
+  each operation and its check into `## Log` — S1, S3, S8. gentle-ai done (L34-L36); Orca and herdr next
 - [ ] T9 (kind: build) the exclusion reverted in `.claude/settings.json` and its sentence in `CLAUDE.md`; every session
   restarted with the lead; the entries checked against gentle-ai's snapshot (L20); the smoke walk; the session checks; the incident set and
   `fixed load`; the root `CLAUDE.md`'s copy of the kept lines goes, and the T13 test in `bin/lib/rules-block.test.mjs`
@@ -279,7 +279,9 @@ lost, which he accepted once the project's documentation and its memory were on 
   installed before gentle-ai's blocks leave that file; this repo's copy under "Kept from the global file" keeps one
   home — S10
 - [ ] T14 (kind: verify) the removal from everywhere: every trace T12 lists that he does not keep, gentle-ai's
-  Claude, Codex and Antigravity config, `~/.gentle-ai`, its binaries and each project's `.atl/`, each asked — S11
+  Claude, Codex and Antigravity config, `~/.gentle-ai`, its binaries and each project's `.atl/`, each asked — S11.
+  Done with the uninstall (L35, L36): the Claude, Codex and Antigravity config and skills, the binary, GGA. Left to
+  ask: `~/.gentle-ai` and each project's `.atl/`
 
 ## Coverage of gentle-ai's functions (T12)
 Each function gentle-ai 4.3.1 provides on his machine (`~/.gentle-ai/state.json`: agents claude-code, codex,
@@ -627,3 +629,18 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   context7 and engram from VS Code (`Code/User/mcp.json`, now gone); the snapshot holds them (server names read in
   memory). Step 2 put back only Claude's, and question 183 did not say so. The lead told; question 185 asks,
   recommended "Devolverlas" (the server entries only, not gentle-ai's instruction file for Codex).
+- L36 2026-11-04 13:46:14Z (08:46 local): question 185 answered, "Dejarlas quitadas" (tapped; the lead's transcript
+  `0f71b2c6`, line 64284, read with `js-harness sessions --quote`): engram and context7 stay off Codex, Antigravity
+  and VS Code. Step 4 (scripts in this session's job folder, each tried first on copies in a `mktemp -d` folder,
+  then run on files whose line counts matched the trial): `s2-strip-blocks.mjs` removed `codegraph-guidance`,
+  `orchestrator` and `agent-routing` (with `remote-authorization`) from `~/.claude/CLAUDE.md` (41 lines left: the
+  graphify lines and the Rules block, byte for byte the same), `~/.codex/AGENTS.md` and `~/.gemini/GEMINI.md` (both
+  empty now: all they held was gentle-ai's); `s2-strip-hook.mjs` removed the PowerShell skill-registry hook (30
+  hooks to 29, every other key unchanged; the one "gentle-ai" left in `settings.json` is a sentence naming tools);
+  `~/.claude/output-styles/neutral.md` deleted. Checked: 0 `gentle-ai:` markers in the three files. Step 5:
+  `permissions`, `engram`, `context7` equal to today's snapshot; `claude mcp list`: codegraph, engram, context7
+  Connected; `js-harness doctor` exit 0 (engram on Codex "missing", as he chose; its `engram setup codex` not run).
+  The lead told. Step 6, 08:48 local: `~/go/bin/gentle-ai.exe` and GGA's files in `~/bin` (`gga`, `gga.bat`,
+  `gga.cmd`, `gga.ps1`, `lib/gga`) deleted, `~/bin/lib` removed empty; `command -v` finds neither `gentle-ai` nor
+  `gga`. The lead told. From here `gentle-ai restore` is gone; its snapshots stay in `~/.gentle-ai`, which T14 asks
+  about with the `.atl/` folders. Next, one at a time through the lead: Orca, then herdr, then this repo's style.
