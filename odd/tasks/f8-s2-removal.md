@@ -263,7 +263,8 @@ lost, which he accepted once the project's documentation and its memory were on 
   each operation and its check into `## Log` — S1, S3, S8
 - [ ] T9 (kind: build) the exclusion reverted in `.claude/settings.json` and its sentence in `CLAUDE.md`; every session
   restarted with the lead; the entries checked against gentle-ai's snapshot (L20); the smoke walk; the session checks; the incident set and
-  `fixed load` — S1, S2
+  `fixed load`; the root `CLAUDE.md`'s copy of the kept lines goes, and the T13 test in `bin/lib/rules-block.test.mjs`
+  freezes the expected groups inline in the same commit (L31) — S1, S2
 - [ ] T10 (kind: docs) the rule lines that name gentle-ai, through `js-harness rules change` on a `rule/` branch,
   before S2 closes: `CLAUDE.md:12` ("over gentle-ai's"), `:74-91` (its review steps), `AGENTS.md:6` and `:27`; his
   words quoted where a line is his
@@ -580,3 +581,10 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   --strict`: rules-block 28 spans, 28 owed, 0 undeclared). Checked: `node --test` of rules-block, rules-coverage
   and the manifest's engram test, 49 pass, 0 fail. The second gate run (41761093683) failed once more on
   `bin/lib/gentle-ai-absence.test.mjs`: the two comments named the old stack; reworded, 26 pass, 0 fail.
+- L31 2026-11-04 ~03:00Z (22:00 local): `ae79fad2` reviewed over `15d9b2a9`: Codex, correct at 0.92, no findings;
+  the Claude lenses risk, reliability and readability, 0 findings each; pushed (pre-push: both records cover it).
+  gentle-ai: `15d9b2a9..ae79fad2` approved and acknowledged (lineage `review-9ec61b2255d993b1`, lens
+  review-reliability), with one informational WARNING, R3-kept-groups-oracle-fragile: the T13 test reads the
+  expected groups from the root `CLAUDE.md` without checking that its two headings are there, so T9's removal of
+  that copy would fail it with an unhelpful diff. Fixed in the next commit: the test asserts both headings and
+  says what to do, and T9's line now owns freezing the groups inline.

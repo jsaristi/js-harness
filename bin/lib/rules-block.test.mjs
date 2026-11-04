@@ -43,7 +43,10 @@ test('the lines are the nine of his answer D7, word for word as the root CLAUDE.
 // alone (row 11), so neither is repeated.
 test('the kept groups are the root CLAUDE.md\'s, word for word and in order, and the block renders each after the nine', () => {
   const claude = fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'CLAUDE.md'), 'utf8').replace(/\r\n/g, '\n');
-  const section = claude.slice(claude.indexOf('\nCodeGraph:') + 1, claude.indexOf('\ngraphify:'));
+  const [start, end] = [claude.indexOf('\nCodeGraph:'), claude.indexOf('\ngraphify:')];
+  // T9 takes the repo's copy away once the global block loads here: freeze the expected groups in this test then.
+  assert.ok(start !== -1 && end > start, 'the root CLAUDE.md holds no "CodeGraph:" ... "graphify:" section to compare with');
+  const section = claude.slice(start + 1, end);
   const groups = section.trim().split('\n\n').map((group) => {
     const [title, ...lines] = group.split('\n');
     return { title: title.replace(/:$/, ''), lines: lines.map((line) => line.slice(2)) };
