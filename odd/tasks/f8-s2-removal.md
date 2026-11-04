@@ -599,3 +599,15 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   `0f71b2c6`, line 63496, read with `js-harness sessions --quote`), relayed by the lead at 06:07. The presets live
   only in `init`; RE:248's decision that `install` offers them too changed; nothing is built. Recorded in the T12
   table's Presets row and in `docs/ROADMAP.md` under S11's decisions, so the table has no gap left.
+- L34 2026-11-04 12:04:18Z (07:04 local): question 183 answered, "Desinstalar gentle-ai" (tapped; the lead's
+  transcript `0f71b2c6`, line 63973, read with `js-harness sessions --quote`), relayed by the lead with: run the six
+  steps in order and only those, check each before the next, stop at the first surprise. Before it, also checked:
+  PR 763 in main (`7aa2ab9c`), and his `~/.claude/CLAUDE.md` Rules block holding the four kept groups (lines
+  628-645). State read before step 1, read only: 6 gentle-ai markers in each of `~/.claude/CLAUDE.md`,
+  `~/.codex/AGENTS.md` and `~/.gemini/GEMINI.md`; 5 gentle-ai hooks in `~/.claude/settings.json`; `outputStyle`
+  "Neutral". Stopped before step 1, nothing run: `uninstall --all` runs every supported agent with every component
+  (`service.go:387-395`), so it also deletes gentle-ai's skills in Codex and Antigravity (`:1044-1087`) and the
+  skill-registry hook in `~/.codex/hooks.json` (`:477-496`), which question 183 said a yes does not authorize. My
+  error: the command's scope was not read before the question (`docs/FAILURES.md`, `told-him-unverified`). The lead
+  told (note, before question 184); question 184 asks the scope, recommended "Con --all", the other "Solo Claude"
+  (`--agent claude-code`, the Codex and Gemini blocks by hand at step 4). T8 waits for its answer.
