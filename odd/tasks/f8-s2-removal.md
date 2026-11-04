@@ -566,3 +566,17 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   the root `CLAUDE.md`'s; then `npm run check`, Codex and the lenses (`--base 240cd132`), a PR with a ready notice,
   no merge (the lead's note, 21:14). At T9 the repo's copy of those lines goes, since the global block then loads
   here too. The script for step 2 lives in this session's job folder (`s2-restore-entries.mjs`), described in L21.
+- L29 2026-11-04 ~02:30Z: T13 built test first: the new test failed (no `KEPT_GROUPS` export), then
+  `KEPT_GROUPS` was generated from the root `CLAUDE.md` by a one-off script (CodeGraph 3, Engram 2, Delegation 6,
+  Task Size and scratch 2, Remote operation authorization 3) and rendered by `rulesBody()`; `node --test
+  bin/lib/rules-block.test.mjs`: 23 pass, 3 skipped (link and mode cases this machine skips), 0 fail. Next: the
+  commit's gate, Codex and the lenses (`--base 240cd132`), a PR, a ready notice; no merge.
+- L30 2026-11-04 ~02:45Z (21:45 local): the commit's gate failed (GitHub run 41760299480) on two tests. (1)
+  `bin/lib/manifest.test.mjs:4446` refuses Engram's tool names in any text js-harness ships (row 11 of
+  `odd/tasks/f8-s11-complements.md`: engram's protocol comes from engram alone), so the Engram group leaves
+  `KEPT_GROUPS`; the test now holds the four other groups equal to the root `CLAUDE.md`'s. (2) the 18 new spans
+  were declared nowhere; they are listed as owed, after the ten already owed, because the same 18 lines are owed
+  in the root `CLAUDE.md` today and T9 removes them there, so the debt moves and does not grow (`rules coverage
+  --strict`: rules-block 28 spans, 28 owed, 0 undeclared). Checked: `node --test` of rules-block, rules-coverage
+  and the manifest's engram test, 49 pass, 0 fail. The second gate run (41761093683) failed once more on
+  `bin/lib/gentle-ai-absence.test.mjs`: the two comments named the old stack; reworded, 26 pass, 0 fail.
