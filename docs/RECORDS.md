@@ -323,7 +323,7 @@ The brief of the background session that reviews an update. `brief` prints it fr
 
 - A batched line `- v<version> (from v<version>, read <YYYY-MM-DD>): ignore; <n> paths, all in ignored areas, +<added> -<deleted>`, for a release whose paths all fall in ignored areas; the first line, `- v4.3.1 (read 2026-10-28): …`, is the baseline the full review read.
 - Any other release is a section `### v<version> (from v<version>, read <YYYY-MM-DD>)`: a table `| Area | What we look for | Paths | Lines | Verdict | Evidence |` with one row an area (the reader splits a row into one a change), the verdict `adopt`, `adapt`, `ignore`, or `?` until decided; `To classify by hand:` with one `- <path> (+a -d)` line a path no area matches, or `(none)`; `Paths by area:` with one `- <area>: <path> (+a -d)` line a changed path.
-- A section counts as read only when no verdict cell is `?` and its hand list holds no path.
+- A section counts as read only when every row of its table has a verdict that starts with `adopt`, `adapt` or `ignore` (any case) and a non-empty evidence cell, and its hand list, read up to `Paths by area:` across blank lines, holds no path.
 
 ## The idea watch's clone
 
@@ -356,7 +356,7 @@ The record of everything js-harness wrote on the machine outside a repository, s
 - `tasks`: array of `{ name, command, arguments }`, a Windows scheduled task registered on request, from `recordScheduledTask`.
 - `settings`: array of `{ path, key, value, had, previous, createdFile }`, a user setting written on request (`crossSessionInbound: "accept"`), from `acceptSessionMessages`: `had` whether the key was there before, `previous` its earlier value or `null`.
 - `stack`: array of `{ tool, dimension, run, undo, applies, env, at }`, one row `stack install` ran, from `recordStackRow`: `run` and `undo` the words of the command and its undo, `applies` what the undo still applies to (`null` before it ran), `env` the variables given.
-- `clones`: array of `{ path, url }`, a git repository fetched on request (the idea watch's bare clone), from `bin/lib/clones.mjs` `recordClone`: `path` the absolute folder, `url` the repository fetched. `uninstall` removes a recorded clone only inside `~/.js-harness`.
+- `clones`: array of `{ path, url }`, a git repository fetched on request (the idea watch's bare clone), from `bin/lib/clones.mjs` `recordClone`: `path` the absolute folder, `url` the repository fetched. `uninstall` removes a recorded clone only inside `~/.js-harness`, both as written and as it resolves through links.
 
 ## The host's files the harness edits
 

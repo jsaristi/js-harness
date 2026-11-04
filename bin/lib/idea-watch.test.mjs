@@ -57,6 +57,13 @@ test('the numstat parser reads NUL- or newline-separated rows, and a binary file
   assert.deepEqual(parseNumstat(''), []);
 });
 
+test('NUL-separated numstat keeps a line break inside a path, since -z prints the path as it is', () => {
+  assert.deepEqual(parseNumstat('1\t0\tdocs/odd\nname.md\x002\t2\tb.go\0'), [
+    { file: 'docs/odd\nname.md', added: 1, deleted: 0 },
+    { file: 'b.go', added: 2, deleted: 2 },
+  ]);
+});
+
 test('the diet\'s probe: each path in its area, the unmatched one kept apart for hand classification', () => {
   const changes = parseNumstat(numstat([...Object.values(ONE_A_ROW).map((file) => [1, 1, file]), [4, 2, UNMATCHED]]));
   const { areas, unmatched } = bucket(changes);
@@ -144,4 +151,18 @@ test('a drafted section with a verdict still "?" or a path left to classify does
   // The draft itself, pasted as it is printed, is not read until it is decided.
   const draft = draftRelease({ from: '4.3.2', to: '4.5.0', changes: parseNumstat('1\t1\tinternal/tui/model.go'), date: '2026-11-07' });
   assert.equal(lastRead(`${RECORD}\n${draft}\n`), '4.4.0');
+});
+
+test('a verdict counts only as adopt, adapt or ignore with its evidence: a cleared or empty cell is not read', () => {
+  assert.equal(lastRead(RECORD.replace('| adapt |', '|  |')), '4.3.2', 'an emptied verdict');
+  assert.equal(lastRead(RECORD.replace('| adapt |', '| maybe |')), '4.3.2', 'a word that is no verdict');
+  assert.equal(lastRead(RECORD.replace(/\| `internal[^|]*\|$/m, '|  |')), '4.3.2', 'a verdict with no evidence');
+  assert.equal(lastRead(RECORD.replace('| adapt |', '| Adopt |')), '4.4.0', 'the verdict read in any case');
+});
+
+test('a path left to classify counts after a blank line too: the whole hand list is read, up to the paths by area', () => {
+  const spaced = RECORD.replace('To classify by hand:\n(none)', 'To classify by hand:\n\n- `new/place.go` (+1 -0)\n\nPaths by area:\n- workflow: `a.md` (+1 -1)');
+  assert.equal(lastRead(spaced), '4.3.2');
+  const cleared = RECORD.replace('To classify by hand:\n(none)', 'To classify by hand:\n\n(none)\n\nPaths by area:\n- workflow: `a.md` (+1 -1)');
+  assert.equal(lastRead(cleared), '4.4.0', 'the paths by area are no path left to classify');
 });

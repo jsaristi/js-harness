@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { harnessHome } from './lib/home.mjs';
-import { RECORD, UPSTREAM, draftRelease, parseNumstat, unreadLine, watchState } from './lib/idea-watch.mjs';
+import { RECORD, UPSTREAM, draftRelease, parseNumstat, stableVersions, unreadLine, watchState } from './lib/idea-watch.mjs';
 import { recordClone } from './lib/clones.mjs';
 import { resolveProjectRoot } from './lib/stack.mjs';
 import { compareSemver } from './lib/version.mjs';
@@ -69,7 +69,7 @@ function readState(ctx) {
   }
   const listed = ctx.git(['ls-remote', '--tags', UPSTREAM]);
   if (listed.status !== 0) return { error: `could not list the tags of ${UPSTREAM}: ${String(listed.stderr || listed.error?.message || '').trim()}` };
-  return watchState({ tags: listed.stdout, record });
+  return { ...watchState({ tags: listed.stdout, record }), versions: stableVersions(listed.stdout) };
 }
 
 /** What doctor's `idea-watch` row reads in `project`: `{ last, unread }`, `null` where the project keeps no record,
@@ -80,7 +80,7 @@ export function ideaWatchHealth(project, deps = {}) {
   const env = deps.env ?? process.env;
   const state = readState({ project, git: deps.git ?? ((args) => runGit(args, env, 10_000)) });
   if (state.error) throw new Error(state.error);
-  return state;
+  return { last: state.last, unread: state.unread };
 }
 
 /** Records the clone, then fetches it: cloned bare when it is not there, its tags fetched when it is. */
@@ -105,13 +105,14 @@ function draft(ctx, flags) {
     ctx.stderr('js-harness idea-watch: the record holds no release read yet: give the first one with --from');
     return 1;
   }
-  const to = flags['--to'] ?? state.unread.find((version) => compareSemver(version, from) > 0) ?? null;
+  // The oldest stable release above `from`, which --from may set below the last read.
+  const to = flags['--to'] ?? state.versions.find((version) => compareSemver(version, from) > 0) ?? null;
   if (to === null) {
-    ctx.stdout(`nothing to read: no stable release above the last read, v${from}`);
+    ctx.stdout(`nothing to read: no stable release above v${from}`);
     return 0;
   }
   if (compareSemver(to, from) <= 0) {
-    ctx.stdout(`nothing to read: v${to} is not above the last read, v${from}`);
+    ctx.stdout(`nothing to read: v${to} is not above v${from}`);
     return 0;
   }
   const failed = fetchClone(ctx);

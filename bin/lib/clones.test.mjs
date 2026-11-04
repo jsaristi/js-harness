@@ -72,6 +72,23 @@ test('a recorded clone outside ~/.js-harness is never removed: kept, with why, a
   }
 });
 
+test('a recorded clone whose folder above it is a link out of ~/.js-harness is never removed: judged where it resolves', () => {
+  const home = makeHome();
+  try {
+    const elsewhere = path.join(home, 'elsewhere');
+    const theirs = makeClone(home, path.join(elsewhere, 'repo'));
+    fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+    fs.symlinkSync(elsewhere, path.join(home, '.js-harness', 'upstream'), 'junction');
+    const at = path.join(home, '.js-harness', 'upstream', 'repo');
+    recordClone(home, { path: at, url: URL });
+    const result = uninstallMachine(home);
+    assert.deepEqual(result.clonesKept.map((kept) => [kept.path, kept.reason]), [[at, 'outside']]);
+    assert.equal(fs.existsSync(path.join(theirs, 'HEAD')), true, 'the folder the link points to is left whole');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('a clone that cannot be removed keeps its record, so uninstall run again removes it', () => {
   const home = makeHome();
   try {

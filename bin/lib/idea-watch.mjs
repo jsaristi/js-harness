@@ -120,11 +120,12 @@ export function areaOf(file) {
   return PATTERNS.find((area) => area.patterns.some((pattern) => pattern.test(file)))?.id ?? null;
 }
 
-/** `[{ file, added, deleted }]` of `git diff --numstat --no-renames` output, its rows ended by NUL (`-z`) or a line
- * break. A binary file counts no lines (`null`). */
+/** `[{ file, added, deleted }]` of `git diff --numstat --no-renames` output, its rows ended by NUL (`-z`, which prints
+ * a path as it is, a line break and all) or else by a line break. A binary file counts no lines (`null`). */
 export function parseNumstat(text) {
   const count = (cell) => (cell === '-' ? null : Number(cell));
-  return String(text).split(/\0|\r?\n/).filter((row) => row !== '').map((row) => {
+  const all = String(text);
+  return all.split(all.includes('\0') ? '\0' : /\r?\n/).filter((row) => row !== '').map((row) => {
     const [added, deleted, ...file] = row.split('\t');
     return { file: file.join('\t'), added: count(added), deleted: count(deleted) };
   });
@@ -142,6 +143,10 @@ export function bucket(changes) {
   }
   return { areas: areas.filter((area) => area.changes.length > 0), unmatched };
 }
+
+/** The draft's own headings, which `lastRead` reads back. */
+const HAND_HEADING = 'To classify by hand:';
+const PATHS_HEADING = 'Paths by area:';
 
 const lines = (changes) => {
   const sum = (key) => changes.reduce((total, change) => total + (change[key] ?? 0), 0);
@@ -170,10 +175,10 @@ export function draftRelease({ from, to, changes, date }) {
     'A verdict per change: split an area\'s row into one row a change, each adopt, adapt or ignore with its evidence',
     '(file, lines). An adopt or an adapt becomes a task only with the user\'s yes, asked through the lead.',
     '',
-    'To classify by hand:',
+    HAND_HEADING,
     ...(unmatched.length === 0 ? ['(none)'] : unmatched.map((change) => `- ${named(change)}`)),
     '',
-    'Paths by area:',
+    PATHS_HEADING,
     ...areas.flatMap((area) => area.changes.map((change) => `- ${area.id}: ${named(change)}`)),
   ].join('\n');
 }
@@ -210,17 +215,21 @@ export function unreadLine({ last, unread }) {
 /** The fix lines of doctor's `idea-watch` row while a release is owed. */
 export const ideaFix = (state) => [unreadLine(state), 'js-harness idea-watch draft prints the next one\'s entry; paste it into the record and decide it'];
 
-/** Whether the lines of a drafted section are decided: no verdict cell still `?` and no path left under
- * "To classify by hand". */
+const VERDICT = /^(adopt|adapt|ignore)\b/i;
+
+/** Whether the lines of a drafted section are decided (S5): every row of its table has a verdict, adopt, adapt or
+ * ignore, and its evidence, and no path is left in its "To classify by hand" list, read whole, blank lines and all, up
+ * to "Paths by area". A cleared cell is not a verdict, so the release stays owed. */
 function decided(section) {
-  if (section.some((line) => /^\|.*\|\s*\?\s*\|/.test(line))) return false;
-  const hand = section.findIndex((line) => line.trim() === 'To classify by hand:');
-  if (hand === -1) return true;
-  for (const line of section.slice(hand + 1)) {
-    if (line.startsWith('- ')) return false;
-    if (line.trim() === '' || !line.startsWith('(')) break;
+  const rows = section.filter((line) => line.startsWith('|') && !/^\|\s*Area\s*\|/.test(line) && !/^\|[\s|:-]+$/.test(line));
+  for (const row of rows) {
+    const cells = row.split('|').slice(1, -1).map((cell) => cell.trim());
+    if (cells.length < 6 || !VERDICT.test(cells[4]) || cells[5] === '') return false;
   }
-  return true;
+  const hand = section.findIndex((line) => line.trim() === HAND_HEADING);
+  if (hand === -1) return true;
+  const paths = section.findIndex((line, i) => i > hand && line.trim() === PATHS_HEADING);
+  return !section.slice(hand + 1, paths === -1 ? undefined : paths).some((line) => line.trimStart().startsWith('- '));
 }
 
 /** The highest version the record `text` holds as read, or `null`: under its "## Releases read" section, a batched

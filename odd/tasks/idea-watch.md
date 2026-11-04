@@ -183,3 +183,12 @@ The 54 paths of v4.2.0 → v4.3.1 that section 5's table leaves unmatched, read 
   findings each, recorded in `lens-reviews.jsonl`. Codex: its first run was voided by this document, edited while
   part 1 of 4 ran (168,141 input tokens, nothing recorded; `docs/FAILURES.md`, edit-during-review); it runs again
   once this document is committed, and nothing tracked is edited until it ends.
+- L6. 2026-11-03, Codex over `155a118..847a608` (472,277 input tokens, recorded): five findings, each confirmed by
+  reading the code, each fixed test-first (RED: 5 new tests failed, one of them first on an octal escape of its own):
+  P1, `removeClones` judged the clone by its path as written, so a junction under `~/.js-harness` could send the
+  recursive removal out of it; it now also judges where the path resolves (`realpathSync.native` of both). P2, `draft
+  --from` below the last read searched only the unread releases; it now takes the oldest stable tag above `--from`.
+  P2, a cleared or empty verdict cell counted as decided; a row now needs `adopt`, `adapt` or `ignore` and its
+  evidence. P2, a blank line after "To classify by hand:" hid the list; it is now read whole up to "Paths by area:".
+  P2, `-z` numstat was also split on line breaks; a NUL-separated text is now split on NUL alone. RECORDS says both
+  rules. GREEN: the seven suites of the feature, 351/351.

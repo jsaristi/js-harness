@@ -113,14 +113,28 @@ test('draft over a clone already there fetches its tags instead of cloning, and 
   }
 });
 
+test('draft --from below the last read drafts the release right above --from, not the next unread one', async () => {
+  const w = world();
+  try {
+    const { git, calls } = fakeGit(w);
+    const { code, err } = await run(w, ['draft', '--from', '4.3.0'], { git });
+    assert.equal(code, 0, err);
+    assert.ok(calls.some((call) => call.args.join(' ') === `-C ${w.clone} diff --numstat -z --no-renames v4.3.0 v4.3.1`));
+  } finally {
+    w.remove();
+  }
+});
+
 test('draft with every release read prints that there is nothing to read, and fetches nothing', async () => {
   const w = world();
   try {
     const { git, calls } = fakeGit(w);
     const { code, out } = await run(w, ['draft', '--to', '4.3.1'], { git });
     assert.equal(code, 0);
-    assert.equal(out, 'nothing to read: v4.3.1 is not above the last read, v4.3.1');
+    assert.equal(out, 'nothing to read: v4.3.1 is not above v4.3.1');
     assert.deepEqual(calls.map((call) => call.args[0]), ['ls-remote']);
+    const newest = await run(w, ['draft', '--from', '4.4.0'], { git });
+    assert.equal(newest.out, 'nothing to read: no stable release above v4.4.0');
   } finally {
     w.remove();
   }
