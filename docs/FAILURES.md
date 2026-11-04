@@ -1538,6 +1538,26 @@ report could print a password from a command line.
 - Control: check — bin/lib/machine-busiest.test.mjs — "scriptOf says nothing of an argument that is
   not the whole path of a file that exists, however it is spelled" — since 2026-10-11
 
+### session-env-file-cut
+Every Bash call of a long-lived session failed before it ran: the codex plugin's SessionStart hook
+appends three `export` lines to the session's env file on every start, resume and compaction, and
+Claude Code puts that file into each Bash command line, which was cut at 8,191 characters inside
+an open quote.
+- Class: tool
+- Seen: 2026-11-03 — the lead's transcript 0f71b2c6, lines 59324, 59668, 60114 and 60312 — `echo hi`
+  failed with `-c: line 83: unexpected EOF while looking for matching` a quote, from 11:17Z on; the
+  lead moved to the terminal tool, whose permission prompt held it 7 hours. JH 140 read the cause:
+  `~/.claude/session-env/0f71b2c6-cbce-43ca-a031-276a4b2c381f/sessionstart-hook-6.sh` held 105 lines
+  (35 starts, 10,150 bytes), the command line was 10,420 characters, and cutting it at 8,191
+  reproduced the same message, line 83 and all. Claude Code reads the file once at a start, not on
+  each call (a probe line added to JH 140's own file did not reach its next call). Fix: the file
+  was cut to its last three lines, the only distinct ones; backup in
+  `~/.claude/session-env-backups/jh140/0f71b2c6-cbce-43ca-a031-276a4b2c381f/sessionstart-hook-6.sh`
+  (sha256 556524bf…b42228f); undo: `cp -p ~/.claude/session-env-backups/jh140/0f71b2c6-cbce-43ca-a031-276a4b2c381f/sessionstart-hook-6.sh ~/.claude/session-env/0f71b2c6-cbce-43ca-a031-276a4b2c381f/`.
+  It returns after about 27 more starts of one session, since the hook,
+  `plugins/cache/openai-codex/codex/1.0.6/scripts/session-lifecycle-hook.mjs:39`, appends with no
+  check
+
 ### session-never-woken
 Sessions told to start after an event armed no wait for it, so nothing woke them when it came.
 - Class: unseen-state
