@@ -93,7 +93,7 @@ goes to the lead with `js-harness notify --to orchestrator --kind question`.
 - [x] T1 (kind: docs) this document and its depth pass, before any code — spec 1-2 — 9e3f30f4
 - [x] T2 (kind: build) `bin/lib/session-env.mjs`, test first, and its call from `backup --session-start` — spec 1-2 —
   the commit after 9e3f30f4
-- [ ] T3 (kind: verify) Codex and the Claude lenses over the code commits; the gate; PR; `notify` — all
+- [x] T3 (kind: verify) Codex and the Claude lenses over the code commits; the gate; PR; `notify` — all — PR 767
 
 ## Log
 - L1 (2026-11-04, the lead's brief to JH 141): find which hook writes the lines and why it appends; fix it test-first if
@@ -125,5 +125,8 @@ goes to the lead with `js-harness notify --to orchestrator --kind question`.
   reliability one warning — putting the file back overwrote what the codex hook appended after the replace. Failing
   test first (5 pass, 1 fail), then the fix: the file is read again, its appended tail is kept after the old text, and
   a file rewritten by anything else is left alone with its backup kept (6 of 6). Lenses 26,499 input tokens.
+- L9 Reviews of `2a768a8..b1f0285`: Codex correct, 0.94, 57,040 input tokens; resilience and reliability 0 findings,
+  19,356 input tokens. gentle-ai: the Stop hook offered the whole branch three times; its read-only status was run each
+  time and nothing started (CLAUDE.md), so no gentle-ai line covers a commit here. Pull request 767 opened against main.
 - L5 Left open: the trim's backups are not pruned (each under 9 KB); the `session-env-file-cut` entry (PR 766, open)
   gains its control line once both pull requests are merged; the fix reaches the lead only after a release is synced.
