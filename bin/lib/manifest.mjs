@@ -786,7 +786,7 @@ export function forgetOptionalFile(home, file, deps = {}) {
 }
 
 /** The arrays of the manifest that hold what js-harness did only when asked, apart from what `install` writes. */
-const ON_REQUEST = ['optional', 'tasks', 'settings', 'stack'];
+const ON_REQUEST = ['optional', 'tasks', 'settings', 'stack', 'clones'];
 
 /** Puts `record` in the array `key` of the manifest, in place of the one `matches` finds, creating the manifest
  * (with a `null` version: nothing is installed) when there is none. Returns the record. */
@@ -1319,21 +1319,21 @@ function uninstallInstalled(home, deps) {
     }
   }
 
-  // What `stack install` ran is undone by `deps.undoStack`, which `uninstall machine` hands in: the probes that judge a
-  // record live in bin/lib/stack.mjs, which imports this file. It returns `{ undone, kept, failedRecords }`, and only
-  // the failed records stay, for a second run. Without it nothing is run and every record stays as it is.
+  // What `stack install` ran is undone by `deps.undoStack`, and each recorded clone removed by `deps.removeClones`, which
+  // `uninstall machine` hands in from bin/lib/stack.mjs and bin/lib/clones.mjs, both importing this file. Each returns
+  // `kept` and `failedRecords`, and only the failed records stay, for a second run. Without it every record stays.
   const stackRecords = manifest.stack ?? [];
   const stack = stackRecords.length === 0
     ? { undone: [], kept: [], failedRecords: [] }
     : deps.undoStack?.(stackRecords) ?? { undone: [], kept: stackRecords.map(({ tool, dimension }) => ({ tool, dimension, reason: 'not-judged' })), failedRecords: stackRecords };
-
+  const clones = (manifest.clones ?? []).length === 0 ? { removed: [], kept: [], failedRecords: [] } : deps.removeClones?.(manifest.clones) ?? { removed: [], kept: manifest.clones.map((clone) => ({ path: clone.path, reason: 'not-judged' })), failedRecords: manifest.clones };
   fs.rmSync(cachePath(home), { force: true });
   const gate = removeGateFolder(home, removeFile, statFile);
   const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
   const tickets = removeTicketFolder(home, removeFile, statFile);
   const channel = removeChannelFolder(home, removeFile, statFile);
   const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept });
-  removed.push(...gate.removed, ...log.removed, ...tickets.removed, ...channel.removed, ...remote.removed);
+  removed.push(...clones.removed, ...gate.removed, ...log.removed, ...tickets.removed, ...channel.removed, ...remote.removed);
   // An edited task is the user's and loses its record, unless the remote folder is still there: the marker of a
   // stop in it is what keeps that task from starting the server, and an uninstall run again must still know the
   // task to leave the marker under it. It then stays recorded, and its entry says so (`recorded`).
@@ -1342,13 +1342,13 @@ function uninstallInstalled(home, deps) {
   if (guarded) for (const task of tasksKept) if (task.reason === 'edited') task.recorded = true;
   // A setting that could not be written back keeps its record, with the value it had, so a run again restores it
   // (Codex on 05fa584..cdcce6c).
-  if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || stack.failedRecords.length > 0 || permissions?.status === 'failed' || rulesBlock?.status === 'failed') {
+  if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || stack.failedRecords.length > 0 || clones.failedRecords.length > 0 || permissions?.status === 'failed' || rulesBlock?.status === 'failed') {
     // A file install made for its hook entries is the setting's to remove now, as it would have been in this run.
     const madeFile = (record) => ({ ...record, createdFile: Boolean(record.createdFile || (manifest.entries ?? []).some((entry) => entry.path === record.path && entry.createdFile)) });
     writeManifest(home, {
       version: null, files: [], entries: [], tasks: stillRecorded,
       ...(settings.failedRecords.length > 0 && { settings: settings.failedRecords.map(madeFile) }),
-      ...(stack.failedRecords.length > 0 && { stack: stack.failedRecords }), ...(permissions?.status === 'failed' && { permissions: madeFile(manifest.permissions) }),
+      ...(stack.failedRecords.length > 0 && { stack: stack.failedRecords }), ...(clones.failedRecords.length > 0 && { clones: clones.failedRecords }), ...(permissions?.status === 'failed' && { permissions: madeFile(manifest.permissions) }),
       ...(rulesBlock?.status === 'failed' && { rulesBlock: manifest.rulesBlock }),
     });
   } else {
@@ -1362,7 +1362,7 @@ function uninstallInstalled(home, deps) {
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept, settingsFailed: settings.failed } : {};
   // `stackUndone` and `stackKept` likewise, only when the manifest records a row `stack install` ran.
   const stackResult = stackRecords.length > 0 ? { stackUndone: stack.undone, stackKept: stack.kept } : {};
-  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...(trust.trustMoved.length > 0 && { trustMoved: trust.trustMoved }), ...(trust.trustKept.length > 0 && { trustKept: trust.trustKept }), ...settingsResult, ...stackResult, ...(permissions && { permissions }), ...(rulesBlock && { rulesBlock }), tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
+  return { removed, kept, keptOptional, ...(manifest.clones && { clonesKept: clones.kept }), ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...(trust.trustMoved.length > 0 && { trustMoved: trust.trustMoved }), ...(trust.trustKept.length > 0 && { trustKept: trust.trustKept }), ...settingsResult, ...stackResult, ...(permissions && { permissions }), ...(rulesBlock && { rulesBlock }), tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever
