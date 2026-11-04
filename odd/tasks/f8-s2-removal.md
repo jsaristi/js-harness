@@ -234,6 +234,8 @@ lost, which he accepted once the project's documentation and its memory were on 
   lo de gentle-ai asi como lo habiamos planeado"
 - S11 (his words, line 62036, 2026-11-04T02:03:32Z): "si pero recuerda que vamos a desintalar completamente gentle-ai
   de todas partes por que solo va a a quedar unicamente nuestros arnes y debe tener todas las funcionalidades"
+- S12 (his words, line 62099, 2026-11-04T02:06:41Z): "Recuerda que no es copiarla lo de gentle-ai, para eso se hizo una
+  revision completa y profunda de como ibamos a cuadrar y a utilizar el arnes completo"
 
 ## Tasks
 - [x] T1 (kind: design) this document, its plan through the double review (Codex and a Claude reader) — S1-S9;
@@ -267,8 +269,10 @@ lost, which he accepted once the project's documentation and its memory were on 
   words quoted where a line is his
 - [ ] T11 (kind: docs) S2's roadmap line, the session summary, the closed notice — inline
 - [ ] T12 (kind: docs) before any removal: one table of every gentle-ai function on his machine (Claude, Codex,
-  Antigravity, its CLI, its folders and each project's leftovers), each with its js-harness equivalent, a port, or a
-  drop he decides by name, the twelve skills included; shown to him as a Spanish page; each drop asked — S10, S11
+  Antigravity, its CLI, its folders and each project's leftovers), the twelve skills included, each mapped to what
+  the review decided (the reverse-engineering matrix and 13.5, the diet) and whether that is built: done, owed with
+  its step, or a gap; shown to him as a Spanish page; only a gap, or a function the review never covered, is asked
+  (L26) — S10, S11, S12
 - [ ] T13 (kind: build) the kept text of the diet's Appendix A.1 ships to every project in js-harness's block of
   `~/.claude/CLAUDE.md` (today G12's nine Rules lines, `bin/lib/rules-block.mjs`), test first, reviewed, landed and
   installed before gentle-ai's blocks leave that file; this repo's copy under "Kept from the global file" keeps one
@@ -506,3 +510,8 @@ lost, which he accepted once the project's documentation and its memory were on 
   reverse-engineering document's matrix (`docs/proposals/gentle-ai-reverse-engineering.md:224-276`), whose twelve
   skill drops were G8, taken by the lead by default (`docs/ROADMAP.md:157`), never his by name; and the lead's audit
   (L23). The revised gentle-ai question waits for T12's answers and T13's landing.
+- L26 2026-11-04 02:07Z (21:07 local): his correction S12 (line 62099, read with `sessions --quote`), relayed by the
+  lead: nothing is copied from gentle-ai; the review already decided how the harness covers each function. So T12's
+  table maps each function to that decision and its state (done, owed with its step, or a gap), and asks him only a
+  gap or a function no source covers; the drops already decided are not asked again. A read-only explorer builds the
+  inventory with its evidence; this session checks a sample of its claims before the page.
