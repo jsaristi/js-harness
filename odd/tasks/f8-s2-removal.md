@@ -280,6 +280,36 @@ lost, which he accepted once the project's documentation and its memory were on 
 - [ ] T14 (kind: verify) the removal from everywhere: every trace T12 lists that he does not keep, gentle-ai's
   Claude, Codex and Antigravity config, `~/.gentle-ai`, its binaries and each project's `.atl/`, each asked — S11
 
+## Coverage of gentle-ai's functions (T12)
+Each function gentle-ai 4.3.1 provides on his machine (`~/.gentle-ai/state.json`: agents claude-code, codex,
+antigravity; components engram, skills, context7, permissions, gga, claude-theme, opencode-gentle-logo, persona),
+mapped to the decision the review took and its state. RE is `docs/proposals/gentle-ai-reverse-engineering.md`, DIET
+`docs/proposals/harness-diet.md`. Built by a read-only explorer (L27); the rows marked [c] were checked here too.
+| Function | Decision | State |
+|---|---|---|
+| `CLAUDE.md` blocks `codegraph-guidance`, `persona`, `engram-protocol`, `orchestrator`, `agent-routing` with `remote-authorization` | drop the blocks, keep Appendix A.1's lines (DIET:1418-1514) | kept lines done in this repo (`CLAUDE.md`, "Kept from the global file"); for every project owed: T13; the blocks' removal owed: T14, since the uninstall strips only `persona` and `engram-protocol` (`service.go:968-975`, `:1003-1008`) [c] |
+| His nine Rules lines | copy (RE:236, G12) | done: `bin/lib/rules-block.mjs:15-25` |
+| Skills `work-unit-commits`, `chained-pr` | port (RE:263-264) | done: `bin/lib/ported-skills.mjs` |
+| The other 12 skills and `_shared` | drop (RE:265-276); `_shared` is the 12's own support files | removal owed: T14 |
+| Agents `review-risk`, `-resilience`, `-readability`, `-reliability` | our own lens prompts (RE:238) | done: `bin/lib/lens-prompts.mjs` |
+| Agents `review-refuter`, `jd-judge-a`, `jd-judge-b`, `jd-fix-agent` | drop (RE:238) | removal owed: T14 |
+| Review engine (RDD, tiers, consent, `review *` commands, stop-hook, review store) | drop; two reviews per slice (RE:234) | replacement done (S1: `bin/lens-review.mjs`, `bin/codex-review.mjs`, pre-push); removal owed: T14 |
+| Hooks: review stop-hook ×2, telemetry ×2, PowerShell skill-registry | drop all five (RE:242) | owed: T8/T14 (the PowerShell one by hand) |
+| Persona and output style | our own style `js-harness` (RE:235) | done: `bin/lib/output-style.mjs`; the uninstall removes `gentleman.md` and `outputStyle` but not `~/.claude/output-styles/neutral.md` (`service.go:977-987`) [c]; this repo's style is the step after the removals |
+| Theme (claude-theme) | drop (RE:251) | no `theme` key on his machine: nothing to remove |
+| engram, codegraph, context7 | take over (RE:239-241) | done: `bin/lib/stack.mjs` (S11); the entries back from the snapshot after the uninstall: owed T8 |
+| Permissions object | take over (RE:245) | done: `bin/lib/permissions.mjs`, `bin/lib/deny-paths.mjs` (S10); back from the snapshot: owed T8 |
+| Install, update, sync, uninstall, restore, doctor, backups | keep ours (RE:246-249) | done; gentle-ai's own uninstall and snapshot used once, T8 |
+| Presets | `install` and `init` offer them (RE:248) | `init` done (`bin/lib/functions.mjs:26-30`); `install` takes none (`docs/ROADMAP.md:538`) [c] and no step owns it: **gap** |
+| TUI | copy the design, not the code (RE:255, 4.6) | owed: "The TUI's rest" (`docs/ROADMAP.md`), not an S step |
+| Telemetry, skill registry and `.atl/` (in all three projects) | drop (RE:243-244) | scan done (`bin/lib/project-migrate.mjs`); removal owed: T14, one project at a time |
+| GGA (`~/bin/gga*`, `~/bin/lib`) | drop (RE:250) | owed: T14 |
+| Codex: `~/.codex/AGENTS.md` blocks, 8 skills and `_shared`, 3 hook entries | removal covers Codex (RE:252) | owed: T14; the uninstall leaves its blocks but `persona` and `engram-protocol` [c] |
+| Antigravity: `~/.gemini/GEMINI.md` (6 blocks [c]), 14 skills and `_shared` | not in RE's matrix; leaves by his words S11 | owed: T14 |
+| Model routing, evals, multi-host | keep ours (RE:252-254) | done; rows 9, 13, 14 owed to S7 and S8 |
+| `opencode-gentle-logo` | not in RE | nothing on disk (`~/.config/opencode` absent) [c] |
+Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's own skills) [c].
+
 ## Log
 - L1 2026-11-02T20:04:19Z, his words (the lead's transcript `0f71b2c6`, line 55309): "Sí, abre el S2". The brief
   (`~/.js-harness/background/briefs/2026-11-02T20-04-49-764Z-f23ac024.md`): that yes opens the step only; each
@@ -515,3 +545,11 @@ lost, which he accepted once the project's documentation and its memory were on 
   table maps each function to that decision and its state (done, owed with its step, or a gap), and asks him only a
   gap or a function no source covers; the drops already decided are not asked again. A read-only explorer builds the
   inventory with its evidence; this session checks a sample of its claims before the page.
+- L27 2026-11-04 ~02:30Z (21:30 local): he is away 8 h from 21:12 local (the lead's note, 21:14): the stretch holds
+  T12 and T13; questions wait for his return; no merge, nothing applied to his machine. The explorer's inventory
+  (84,664 tokens, 15 tool calls) is `## Coverage`. Checked here before using it: `install` takes no preset
+  (`docs/ROADMAP.md:538`); `~/.gemini/GEMINI.md` holds 6 gentle-ai markers; `~/.claude/skills/_shared` holds 7 files;
+  the uninstall strips only `persona` and `engram-protocol` from each agent's instruction file and removes
+  `gentleman.md` but not `neutral.md` (`service.go:961-1008`); `skills/synced` holds the Claude app's skills. One
+  gap only: presets in `install`, decided in RE:248 and owned by no step; it goes to him at his return. The rest
+  is done, or owed to T8, T13, T14, S4a-S8 or the TUI's rest.
