@@ -128,5 +128,11 @@ goes to the lead with `js-harness notify --to orchestrator --kind question`.
 - L9 Reviews of `2a768a8..b1f0285`: Codex correct, 0.94, 57,040 input tokens; resilience and reliability 0 findings,
   19,356 input tokens. gentle-ai: the Stop hook offered the whole branch three times; its read-only status was run each
   time and nothing started (CLAUDE.md), so no gentle-ai line covers a commit here. Pull request 767 opened against main.
+- L10 (2026-11-04, the lead) PR 767 was left out of a land: on the land's starting main, with PR 764 merged ahead of it
+  in the batch, 1 of 164 contracts failed, the depth-pass control reading trunk..HEAD from that older main. `origin/main`
+  (f72efec4, PR 764) merged in as 090de911; on it `js-harness check` reports 164 contracts checked, PASS, and
+  `npm run check` exits 0, every one of the 3 code commits since origin/main reviewed. The installed `js-harness check`
+  still fails one `spec` row, `js-harness idea-watch`, a command PR 764 brought that no release holds yet. The merge
+  adds no code commit of this branch, so no review ran again.
 - L5 Left open: the trim's backups are not pruned (each under 9 KB); the `session-env-file-cut` entry (PR 766, open)
   gains its control line once both pull requests are merged; the fix reaches the lead only after a release is synced.
