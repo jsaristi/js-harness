@@ -1743,6 +1743,9 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-11-03 — relief file, lines 2251-2252 (claimed; the lead's own) — from 10:43 to 15:24 local he was away
   while the fourth backup try waited an hour for the app to close and then gave up; no stretch covered it and no work
   session was opened. The same record, read by JH 137, holds no open after 2026-11-03T09:23:07Z
+- Seen: 2026-11-03 — the lead's note to JH 137 at 01:38Z on 2026-11-04 (claimed; the lead's own) — from 16:55 to 20:25
+  local he was away after his answer to question 179, with no stretch opened; the reply hook flagged it at his return.
+  The stretch record, read by JH 137 at 20:40 local, still holds no open after 2026-11-03T09:23:07Z
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 
