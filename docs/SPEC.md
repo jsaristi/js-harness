@@ -115,7 +115,7 @@ first-turn median of 105,565 tokens over five desktop sessions (`odd/tasks/f8-s0
 | The host's system prompt and tool definitions | the host | none of ours |
 | The root `CLAUDE.md`, how Claude works here, which imports `@AGENTS.md` | the repository | `rule:claude-md-budget` (3,200 estimated tokens) |
 | `AGENTS.md`, what the project is and what good work looks like; Codex reads it alone | the repository | `rule:agents-budget` (1,500) |
-| `~/.claude/CLAUDE.md`: gentle-ai's blocks and the Rules block `install` writes (G12) | gentle-ai until S2, then js-harness's block only | excluded in this repository by `.claude/settings.json` (`claudeMdExcludes`) until S2 |
+| `~/.claude/CLAUDE.md`: the Rules block `install` writes (G12, with the kept groups of F8 S2's T13) and graphify's lines | js-harness's block; gentle-ai's blocks left at S2 (2026-11-04) | loads in this repository too since S2's T9 reverted the exclusion |
 | The output style `js-harness` (neutral Spanish with tú) | js-harness (`claude-output-style`) | pinned by hash |
 | Skill descriptions: `js-harness`, the orchestrator, the protocols, the two ported skills; gentle-ai's until S2 | js-harness (`claude-skill`, ...) | one line each; bodies load on demand |
 | The auto-memory index, `memory/MEMORY.md` of the main checkout's project folder (`bin/lib/payload.mjs:266`) | the host, written by sessions | measured by `payload`; S5 holds it to 0.5k |

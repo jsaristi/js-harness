@@ -666,3 +666,21 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   `strip-user-path.mjs` (18 to 17, REG_EXPAND_SZ kept, read back with `reg query`); `command -v herdr` finds none.
   T8's three removals are done. Left for their own questions: `~/.gentle-ai` (with `~/.gentle-ai\bin` on his PATH)
   and each project's `.atl/` (T14), then this repo's output style; then T9.
+- L39 2026-11-04 17:46:50Z (12:46 local): question 188 answered, "Borrar las .atl/" (tapped; the lead's transcript
+  `0f71b2c6`, line 64610, read with `js-harness sessions --quote`). Read before it: each `.atl/` held
+  `skill-registry.md` and `.skill-registry.cache.json` (about 9 KB), ignored in every repository (`.gitignore` or
+  `.git/info/exclude`; `git ls-files .atl` empty here). Deleted in `D:\js-harness`, `D:\plataforma-preproyecto`,
+  `D:\abogadaclaudiajimenez` and `D:\claudia-jimenez-plataforma`, each checked gone; `D:\harness` and
+  `D:\harness-lab` (read-only references) and the eval folders keep theirs. Left of T14: `~/.gentle-ai`, asked at the
+  end of S2, after T9 checks the entries against its snapshot. Next: T9; its session restart goes to him as a
+  question through the lead before anything restarts (the lead's note, 12:47).
+- L40 2026-11-04 ~18:05Z (13:05 local), state at the context pause (86%): T9's build part in progress, uncommitted.
+  Done: `bin/lib/rules-block.test.mjs` no longer reads the root `CLAUDE.md`: the nine lines are held to the five
+  Appendix A.1 quotes whole plus a sha256 of all nine (`de629b60…`), the kept groups to A.1's quotes in its order plus
+  a sha256 (`c24fea8d…`); 23 pass. Next, in order: delete `.claude/settings.json` (it holds only the
+  `claudeMdExcludes` exclusion); remove the root `CLAUDE.md` section "## Kept from the global file" (lines 95-139:
+  the exclusion sentence, the nine lines, the groups, graphify), since the global block now carries all of it but
+  the Engram lines, which engram's own instructions give (row 11); update `docs/SPEC.md:118`; `js-harness rules
+  check` (a removed line may be a rule's text: then T10's `rules change`); `js-harness rules coverage --refresh`;
+  `npm run check` through the commit; Codex and the lenses over the code commit; push. Then the restart question
+  through the lead (T9's restart needs him present, the lead's note 12:47), then `~/.gentle-ai`, the output style.
