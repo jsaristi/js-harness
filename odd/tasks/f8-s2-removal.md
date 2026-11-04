@@ -692,3 +692,12 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   incident set, ~$13, or the style), sent to the lead at 14:16 local. The host compacted this session at 14:16;
   resumed from this document. Next, after his answer: T9's checks, then `~/.gentle-ai` with its PATH entry (T14),
   then the output style, then T10 and T11.
+- L42 2026-11-04 19:17Z (14:17 local): question 189 answered, "Reiniciar ahora" (tapped; the lead's transcript
+  `0f71b2c6`, line 64993, checked with `js-harness sessions --quote`). Paused for the restart: nothing left mid-way,
+  `f8-s2-removal` pushed at L41's commit, worktree clean. T9's checks left, after the reopen, each its own Log line:
+  (1) the permissions and MCP entries equal to gentle-ai's snapshot (L20, `~/.gentle-ai/backups/20261104122417.084958800`);
+  (2) in `D:\js-harness`, `D:\plataforma-preproyecto` and `D:\abogadaclaudiajimenez`, a reopened session loads its
+  `CLAUDE.md`, context7, and one engram text in `/context`, and the global file's Rules block with the kept groups;
+  (3) `fixed load` at most 80,000 in five reopened sessions; (4) the smoke walk (~$5) and (5) the incident set
+  (~$13, at least 10 of 20), each asked first as its own question, since a yes to 189 authorized no spend. Then
+  `~/.gentle-ai` with its PATH entry (T14), the output style, T10, T11.
