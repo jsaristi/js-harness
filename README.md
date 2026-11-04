@@ -583,7 +583,8 @@ It also says whether Claude Code and the desktop app are signed into the same ac
 identifier is printed) and whether the remote server of each recorded login launcher is running.
 Its `unseen` row counts what `js-harness unseen` would clear, and an interactive run adds a
 `worktrees` row for the worktrees on branches main already holds and a `review-skips` row for the
-skips of both reviews that still owe one (a pull request holding a lens skip does not land). `--json` prints the rows.
+skips of both reviews that still owe one (a pull request holding a lens skip does not land), and,
+online, an `idea-watch` row for the upstream releases `js-harness idea-watch` has not read yet. `--json` prints the rows.
 `--hook` is the session-start hook `install` registers: it computes the same report and prints one
 line only when there are gaps and they differ from the last ones it told, and it exits 0 (2, with
 the usage, for an argument it does not know).
