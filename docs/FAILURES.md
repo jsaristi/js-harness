@@ -1792,6 +1792,10 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-11-04 — the lead's message to JH 137 during Orca's removal, 11:44-11:47 local (claimed; the lead's own) — he was away 09:01 to 11:43
   local with no stretch opened; question 186 waited the whole time on the lead's question tool, so the return had no
   goals or forecast (the lead's miss)
+- Seen: 2026-11-04 — the lead's message to JH 137 at 20:37 local (claimed; the lead's own) — he was away from 16:31 to
+  19:58 local (UTC-05:00) with no stretch open; the lead passed `quiet --wait --no-stretch` with a reason instead of
+  opening one, so his return had no estimate to measure against. The stretch record's last close is at
+  2026-11-04T10:11:17Z and none opened after it (`stretches.jsonl` under the throughput folder, read by JH 137)
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 
