@@ -812,3 +812,10 @@ leftover is read before S2 closes.
   `0f71b2c6`, line 67993, 2026-11-05T23:12:41Z, checked with `js-harness sessions --quote`). It covers one walk,
   its ceiling 5 USD and its own stop at 1.5 times that; on a failure the cause is read and reported, no rerun. Run
   next from this worktree's clean commit: `js-harness gate -- node scripts/rehearsal.mjs`.
+- L51 2026-11-05 23:23Z (18:23 local): T9's smoke walk passes. `js-harness gate -- node scripts/rehearsal.mjs`, once,
+  on `b26c1099` (L50's commit, clean), 4.1 minutes: all 21 steps PASS, `ok: true`, exit 0; host cost 0.0134 USD of the
+  5 USD estimate, `costProblem` null; no process left, no cleanup problem. `foreign-absent`: "55 commands run and 4893
+  files on the PATH: none of gentle-ai, orca, herdr"; `real-home-before` and `real-home-after`: 16 of his files hashed
+  and as they were; `engram-start` and `engram-compact` bring back the planted observation; `directive` turns the
+  planted rule without a control red, as it must. `guide`'s doctor names the scratch home's gaps (engram outdated,
+  context7 and Codex missing in Codex), each with its fix, as in S13. Next: the incident set's question.
