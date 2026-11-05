@@ -755,6 +755,4 @@ The slices:
     (`doctor --hook` 3,272 ms, the others 344-796 ms), while the merge queue's gate ran on this machine. So the
     about 300 ms that L13 put on the shim's start compared two loads, and is not shown; the D3 candidate stays, to be
     measured with the machine idle, both ways in turn.
-- Next step (for a resume): PR 769 is open (docs, not merged). Slice D0 (T8) is committed (ea016393, L13);
-  its reviews come next (Codex, the lenses, a verifier), then its pull request, chained on PR 769. T7 stays a
-  feature of its own.
+- Next step (for a resume): slice D0 is reviewed: Codex recheck of 1bcba9b9..9927f0d2 correct, 3 of 3 fixed; the lenses 0 findings; the verifier verified (L14). Branch feat/hook-entries-row (worktree D:/js-harness-worktrees/hook-entries-row), chained on PR 769. Next: push it, open its pull request with base docs/workshop-product-split (never merged here), notify the orchestrator; then slice 1+2 of the build plan. T7 stays a feature of its own.
