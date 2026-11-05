@@ -171,7 +171,7 @@ import { allowanceLine, readProjectRules, reviewAllowance } from './lib/codex-re
 import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer } from './lib/codex-review-answer.mjs';
 import { baseLeftOut, MARKS_UNREAD, mergeStart, notReviews, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
-import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './lib/codex-review-parts.mjs';
+import { PART_MAX_CHANGED_LINES, PART_MAX_FILES, RENAMES, reviewParts } from './lib/codex-review-parts.mjs';
 import { counted, MAX_PARTS_WITHOUT_FLAG, methodRecord, methodRecordLine, needsFlagLine, partPlanned, partsBound, planLines, reviewPlan, thousands } from './lib/codex-review-plan.mjs';
 import { NO_ASKED, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt } from './lib/codex-review-prompt.mjs';
 import { AskedError, askedIntent } from './lib/review-asked.mjs';
@@ -184,7 +184,7 @@ import {
 } from './lib/codex-review-recheck.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './lib/project-functions.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
-import { leftOutOf, leftOutSaid, patchOfRead, reviewScope } from './lib/codex-review-scope.mjs';
+import { leftOutOf, leftOutSaid, patchOfRead, rangeFiles, reviewScope } from './lib/codex-review-scope.mjs';
 import { codexVersion, launchCodex } from './lib/codex-launch.mjs';
 import { launchWord, readRateLimits } from './lib/codex-meter.mjs';
 import { killTree } from './lib/process-tree.mjs';
@@ -888,7 +888,7 @@ function totalsLine(attempts) {
  *
  * `{ error }`, a sentence, when git cannot say how large the range is or what the project marks: a file is
  * never left out, nor read, by guess. These are the two git commands a plan needs, so `--plan` runs this
- * and nothing else of a review. Renames are off, as in `planParts`.
+ * and nothing else of a review. Renames are asked for as `rangeFiles` says, `renames`, which `planParts` keeps.
  *
  * With `everyFile`, which only a caller of `codexReviewMain` can ask for, nothing is left out and git is
  * not asked what is marked: every file of the range is in a group, as it was before a review left any out.
@@ -896,17 +896,15 @@ function totalsLine(attempts) {
  * `where` is what the run knows of its repository (`codexReviewMain`), so that git is not asked once more
  * where the top is, nor about a file it has already answered for at `head`. */
 function rangeGroups(spawn, root, { from, head, maxChangedLines, everyFile, where, merge = null }) {
-  const numstat = gitOutput(spawn, root, rangeDiff({ from, head, merge }, ['--numstat', '-z']), { maxBuffer: REVIEW_MAX_BUFFER });
-  if (numstat === null) return { error: `Could not run \`git diff --numstat\` over ${from.slice(0, 7)}..${head.slice(0, 7)} to know how large the range is` };
+  const numstatOf = (renames) => gitOutput(spawn, root, rangeDiff({ from, head, merge, renames }, ['--numstat', '-z']), { maxBuffer: REVIEW_MAX_BUFFER });
   try {
-    const files = numstatFiles(numstat);
-    const paths = files.map((changed) => changed.path);
-    const why = everyFile ? new Map() : leftOutOf(paths, { cwd: root, source: head, spawn, where });
-    if (why === null) {
+    const { files, why, renames, failed } = rangeFiles(numstatOf, (names) => (everyFile ? new Map() : leftOutOf(names, { cwd: root, source: head, spawn, where })));
+    if (failed === 'numstat') return { error: `Could not run \`git diff --numstat\` over ${from.slice(0, 7)}..${head.slice(0, 7)} to know how large the range is` };
+    if (failed === 'marks') {
       return { error: `Could not ask git which files of the range the project leaves out of a review (\`git check-attr --source ${head.slice(0, 7)}\` failed; it needs git 2.40 or later)` };
     }
     const { read, leftOut } = reviewScope(files, why);
-    return { groups: reviewParts(read, maxChangedLines), leftOut, paths, why };
+    return { groups: reviewParts(read, maxChangedLines), leftOut, paths: files.map((changed) => changed.path), why, renames };
   } catch (err) {
     return { error: `Could not read which files the range changes (${err.message})` };
   }
@@ -973,10 +971,11 @@ function turnsLines(turns) {
  * one, and that one part, 1 of 1, is asked and held to its files as any other. The files left out are in no
  * part, so the proof below is made against the patch of the range without their sections.
  *
- * Everything here is with renames off (`--no-renames`), in the count, in the command of each prompt and in
- * what each part must have seen: only then is the diff of some files the diff of each of them, whatever
- * the other files are, so that the parts add up to the range. A renamed file is then two files, the old
- * name removed whole and the new one added whole, and every line of both is to be shown.
+ * Everything here reads renames as the range was read (`renames`, from `rangeFiles`), in the count, in the
+ * command of each prompt and in what each part must have seen, and a renamed file's two names are always in
+ * one part (`reviewParts`): the diff of the files of a part is then their share of the diff of the range, so
+ * that the parts add up to it. A renamed file is shown by the lines it changes, unless the range renames a
+ * file a review leaves out into one it reads, which is read renames off (odd/tasks/rename-counted-by-changes.md).
  *
  * And the files of a part are named to git literally (`--literal-pathspecs`), in the command of its prompt
  * and in what it must have seen: a file name is a pathspec, and one that holds `*`, `?` or `[…]`, or starts
@@ -988,7 +987,7 @@ function turnsLines(turns) {
  * moved, and a session cannot be held to lines its git never prints. The check that the parts add up to the
  * range is made on patches with `SUBMODULE_AS_A_FILE`, where the patch of a range is one section a file
  * whatever is configured, which is what tells the sections of the files left out apart. */
-function planParts(spawn, root, { from, head, groups, intent, paths, why, merge = null, suiteRan = false }) {
+function planParts(spawn, root, { from, head, groups, intent, paths, why, merge = null, suiteRan = false, renames = RENAMES }) {
   const room = { maxBuffer: REVIEW_MAX_BUFFER };
   // A merge is asked by its files as well, also in one part: Codex's own review of a range reads a diff of two
   // commits, never a remerge-diff (`mergeStart`).
@@ -1000,7 +999,7 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why, merge 
     const which = `part ${part.index} of ${part.of}`;
     let prompt;
     try {
-      prompt = reviewPrompt({ from, head, intent, part, leftOut: why.size, merge: merge === null ? null : merge.auto, suiteRan });
+      prompt = reviewPrompt({ from, head, intent, part, leftOut: why.size, merge: merge === null ? null : merge.auto, suiteRan, renames });
     } catch (err) {
       const needs = part.of === 1 ? 'The range leaves files out of its review, so it is asked by the files it reads' : `The range needs ${part.of} parts`;
       return { error: `${needs}, and the prompt of ${which} cannot be written. ${err.message}` };
@@ -1009,7 +1008,7 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why, merge 
     // git, and one such as `app/[id]/page.tsx` or `*.md` is a pattern that takes in the files of other
     // parts. What a part must have seen is the diff of its own files and no more, or the part is held to
     // lines its prompt never asks for and its count of changed lines does not hold.
-    const ofPart = (shape) => git(spawn, root, ['--literal-pathspecs', ...rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff', ...shape], group.files)], room);
+    const ofPart = (shape) => git(spawn, root, ['--literal-pathspecs', ...rangeDiff({ from, head, merge, renames }, ['--no-color', '--no-ext-diff', ...shape], group.files)], room);
     const shown = ofPart([]);
     const proved = shown === null ? null : ofPart([SUBMODULE_AS_A_FILE]);
     if (proved === null) return { error: `Could not run \`git diff\` over the files of ${which} to know what its review must see` };
@@ -1020,8 +1019,8 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why, merge 
   // part show. A path a pathspec reads as something else, or one cut on its way here, would be a file in
   // no part. The files a review leaves out are in no part on purpose, so their sections are taken out of
   // the patch of the range first, by their place in it and never by a name (`patchOfRead`).
-  const whole = git(spawn, root, rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff', SUBMODULE_AS_A_FILE]), room);
-  if (whole === null) return { error: `Could not run \`git diff --no-renames ${from.slice(0, 7)} ${head.slice(0, 7)}\` to check the parts against the range` };
+  const whole = git(spawn, root, rangeDiff({ from, head, merge, renames }, ['--no-color', '--no-ext-diff', SUBMODULE_AS_A_FILE]), room);
+  if (whole === null) return { error: `Could not run \`git diff ${renames} ${from.slice(0, 7)} ${head.slice(0, 7)}\` to check the parts against the range` };
   let read;
   try {
     read = patchOfRead(whole, paths, why);
@@ -1634,12 +1633,12 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     }
     if (state.kind === 'recheck') recheck = { of: state.of, findings: state.findings, second: state.second === true };
     // The patch Codex has to have seen; the buffer holds a large diff, far above Node's 1 MiB default.
-    // With renames as git detects them, as Codex's own review diffs a range; a merge has no other diff than its own.
-    const patchArgs = merge === null ? ['diff', '--no-color', '--no-ext-diff', from, head] : rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff']);
+    // With renames asked for (`RENAMES`), as the range was counted and its prompt asks; a merge has its own diff.
+    const patchArgs = merge === null ? ['diff', '--no-color', '--no-ext-diff', RENAMES, from, head] : rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff']);
     const patch = git(spawn, root, patchArgs, { maxBuffer: REVIEW_MAX_BUFFER });
     if (patch === null) {
       // The command that ran: the remerge diff of a merge (`rangeDiff`), else the diff of the range.
-      const ran = merge === null ? `git diff ${from.slice(0, 7)} HEAD` : `git diff --no-renames ${merge.auto.slice(0, 7)} ${head.slice(0, 7)}`;
+      const ran = merge === null ? `git diff ${RENAMES} ${from.slice(0, 7)} HEAD` : `git diff ${RENAMES} ${merge.auto.slice(0, 7)} ${head.slice(0, 7)}`;
       error(`Could not run \`${ran}\` to know what the review must see, so it was not started and nothing was recorded.`);
       return 1;
     }
@@ -1697,7 +1696,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       return 1;
     }
     // `null` for a range that is one part and leaves no file out.
-    const made = planParts(spawn, root, { from, head, groups: split.groups, intent, paths: split.paths, why: split.why, merge, suiteRan: outOfTurn });
+    const made = planParts(spawn, root, { from, head, groups: split.groups, intent, paths: split.paths, why: split.why, merge, suiteRan: outOfTurn, renames: split.renames });
     if (made.error) return notSplit(made.error);
     ({ parts } = made);
     if (recheck !== null && parts !== null && parts.length > 1) {

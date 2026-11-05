@@ -3,12 +3,32 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { BACKGROUND_SCHEMA, LOCK_WAIT_MS, RM_TRIES, backgroundChanges, backgroundOf, idOfStart, readRecord, recordFileOf, resumedChain, startArgs, undoSession, worktreeOf } from './background.mjs';
+import { BACKGROUND_SCHEMA, LOCK_WAIT_MS, RM_TRIES, backgroundChanges, backgroundOf, idOfStart, readRecord, recordFileOf, resumedChain, startArgs, undoSession, worktreeHolding, worktreeOf } from './background.mjs';
 
 test('idOfStart reads the id claude --bg prints, and the attach hint when the first line is missing', () => {
   assert.equal(idOfStart('backgrounded · 0db8bc5e · jh-bg-probe-1\n  claude agents             list sessions\n'), '0db8bc5e');
   assert.equal(idOfStart('started\n  claude attach c779ed44    open in this terminal\n'), 'c779ed44');
   assert.equal(idOfStart('Workspace not trusted.'), null);
+});
+
+// odd/tasks/stop-keeps-worktree.md: what sessions stop refuses to hand to claude rm.
+test('worktreeHolding names what a worktree holds besides .git, and counts one it cannot read as holding files', () => {
+  const entry = { root: path.join(os.tmpdir(), 'proj'), worktree: 'thing' };
+  const worktree = path.join(entry.root, '.claude', 'worktrees', 'thing');
+  const reading = (names) => (folder) => {
+    assert.equal(folder, worktree);
+    return names;
+  };
+  const failing = (code) => () => {
+    throw Object.assign(new Error(code), { code });
+  };
+  assert.equal(worktreeHolding({ root: entry.root }), null, 'no worktree');
+  assert.equal(worktreeHolding(entry, { readdir: failing('ENOENT') }), null, 'not there');
+  assert.equal(worktreeHolding(entry, { readdir: reading(['.git']) }), null, 'only .git');
+  assert.equal(worktreeHolding(entry, { readdir: reading([]) }), null, 'empty');
+  assert.deepEqual(worktreeHolding(entry, { readdir: reading(['.git', 'src', 'a.js']) }), { worktree, holds: 'a.js, src' });
+  assert.deepEqual(worktreeHolding(entry, { readdir: reading(['e', 'd', 'c', 'b', 'a']) }), { worktree, holds: 'a, b, c and 2 more' });
+  assert.deepEqual(worktreeHolding(entry, { readdir: failing('EPERM') }), { worktree, holds: 'it could not be read: EPERM' });
 });
 
 test('startArgs puts --add-dir first, so -n ends its list of folders, and the prompt last', () => {

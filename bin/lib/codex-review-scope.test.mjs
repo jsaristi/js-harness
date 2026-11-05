@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DOCUMENT, isDocument, leftOutOf, leftOutSaid, MARKED, patchOfRead, REVIEW_ATTRIBUTE, reviewScope, unsetPaths } from './codex-review-scope.mjs';
+import { DOCUMENT, isDocument, leftOutOf, leftOutOfFiles, leftOutSaid, rangeFiles, MARKED, patchOfRead, REVIEW_ATTRIBUTE, reviewScope, unsetPaths } from './codex-review-scope.mjs';
 
 // --- a document ---
 
@@ -307,6 +307,49 @@ test('the files of a range are split into what a review reads and what it leaves
   assert.deepEqual(all.left, []);
   assert.deepEqual(all.leftOut, { files: 0, changedLines: 0, documents: { files: 0, changedLines: 0 }, marked: { files: 0, changedLines: 0 } });
   assert.deepEqual(reviewScope([], why).leftOut.files, 0);
+});
+
+// Classed by its new name alone, a move of code a review reads to a path the project marks left the code unread
+// (odd/tasks/rename-counted-by-changes.md): a rename is left out only when both its names are.
+test('a renamed file is left out only when both its names are, under the reason of its new name', () => {
+  const files = [
+    { ...file('evals/results/a.json', 20), from: 'bin/a.mjs' },
+    { ...file('evals/results/b.json', 2), from: 'evals/results/x.json' },
+    { ...file('docs/b.md', 1), from: 'README.md' },
+    { ...file('notes.md', 4), from: 'bin/c.mjs' },
+    file('evals/results/x.json', 3),
+  ];
+  const marks = () => ({ status: 0, stdout: attrOutput(['evals/results/a.json', 'unset'], ['bin/a.mjs', 'unspecified'], ['evals/results/b.json', 'unset'], ['evals/results/x.json', 'unset'], ['bin/c.mjs', 'unspecified']) });
+  const git = fakeGit(marks);
+  const why = leftOutOfFiles(files, { cwd: path.resolve('/repo'), source: SOURCE, spawn: git.spawn });
+  assert.deepEqual([...why], [['evals/results/b.json', MARKED], ['docs/b.md', DOCUMENT], ['evals/results/x.json', MARKED]]);
+  assert.deepEqual(reviewScope(files, why).read.map((one) => one.path), ['evals/results/a.json', 'notes.md']);
+  // Both names of a rename are asked about; when git cannot say, the answer is `null`.
+  assert.match(git.calls[1].opts.input, /^bin\/a\.mjs\0evals\/results\/a\.json\0/);
+  assert.equal(leftOutOfFiles(files, { cwd: path.resolve('/repo'), source: SOURCE, spawn: () => ({ status: 128, stdout: '' }) }), null);
+});
+
+// A rename from what no review reads into code it reads showed that content as 0 changed lines (the verifier,
+// odd/tasks/rename-counted-by-changes.md, L7): such a range is read renames off, whole, as before.
+test('a range is read renames on, unless a rename brings a file a review leaves out into one it reads', () => {
+  const NUMSTAT = {
+    '--find-renames': '0\t0\t\x00notes.md\x00bin/tool.mjs\x001\t1\t\x00bin/a.mjs\x00workshop/a.mjs\x00',
+    '--no-renames': '0\t300\tnotes.md\x00300\t0\tbin/tool.mjs\x001\t0\tbin/a.mjs\x000\t1\tworkshop/a.mjs\x00',
+  };
+  const asked = [];
+  const numstatOf = (renames) => (asked.push(renames), NUMSTAT[renames]);
+  const leftOut = (paths) => new Map(paths.filter(isDocument).map((one) => [one, DOCUMENT]));
+  const off = rangeFiles(numstatOf, leftOut);
+  assert.deepEqual(asked, ['--find-renames', '--no-renames']);
+  assert.equal(off.renames, '--no-renames');
+  assert.deepEqual(reviewScope(off.files, off.why).read.map((one) => [one.path, one.changedLines]), [['bin/tool.mjs', 300], ['bin/a.mjs', 1], ['workshop/a.mjs', 1]]);
+  // Without that rename, the range is read renames on, and asked once.
+  asked.length = 0;
+  const on = rangeFiles(() => (asked.push('on'), '1\t1\t\x00bin/a.mjs\x00workshop/a.mjs\x002\t0\t\x00a.md\x00b.md\x00'), leftOut);
+  assert.deepEqual([asked.length, on.renames, [...on.why]], [1, '--find-renames', [['b.md', DOCUMENT]]]);
+  // When git cannot say, it is said which question failed.
+  assert.deepEqual(rangeFiles(() => null, leftOut), { failed: 'numstat' });
+  assert.deepEqual(rangeFiles(() => '', () => null), { failed: 'marks' });
 });
 
 test('what was left out is said with how many files and changed lines, and why', () => {

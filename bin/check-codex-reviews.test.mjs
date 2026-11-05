@@ -593,8 +593,9 @@ test('both rows say from a folder below the top of the repository what they say 
 });
 
 test('a commit that moves a file a review reads to a path the project marks is a code commit: the file that went is one it changes', () => {
-  // `js-harness codex-review` reads a range with renames off, so the file that went is removed whole and is
-  // reviewed. With git's detection of renames the commit would list the new path alone, which is marked.
+  // A commit is a code commit by the names it changes, both of a rename's; and `js-harness codex-review` leaves a
+  // rename out only when both its names are, so the move is read, counted by the lines it changes: none here
+  // (odd/tasks/rename-counted-by-changes.md).
   const { root } = makeRepo();
   commit(root, 'src/app.js', lines(20), 'feat: code');
   const base = commit(root, '.gitattributes', 'evals/results/** -codex-review\n', 'chore: say what a review leaves out');
@@ -609,6 +610,23 @@ test('a commit that moves a file a review reads to a path the project marks is a
   assert.match(row.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
   assert.ok(row.lines[0].startsWith(short(root, moved)), row.lines.join('\n'));
   // The plain row counts the same commit, and sizes the review that command would make of it.
+  assert.equal(
+    checkCodexReviewDebt(root).detail,
+    `no Codex review record for 1 of 1 code commit since origin/main: the review of ${short(root, moved)}^..HEAD is 1 part today, 0 changed lines in 1 file`,
+  );
+});
+
+test('a commit that renames a document into code sizes its review by the whole file it adds', () => {
+  // A document had no review, so its content renamed into code is read renames off, whole (`rangeFiles`, L7 of
+  // odd/tasks/rename-counted-by-changes.md).
+  const { root } = makeRepo();
+  const base = commit(root, 'notes.md', lines(20), 'docs: notes');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  feature(root);
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+  git(root, 'mv', 'notes.md', 'src/notes.js');
+  git(root, 'commit', '-m', 'refactor: the notes become code');
+  const moved = git(root, 'rev-parse', 'HEAD');
   assert.equal(
     checkCodexReviewDebt(root).detail,
     `no Codex review record for 1 of 1 code commit since origin/main: the review of ${short(root, moved)}^..HEAD is 1 part today, 20 changed lines in 1 file`,

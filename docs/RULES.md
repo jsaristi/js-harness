@@ -160,10 +160,10 @@ The one model a Codex review runs on: gpt-6.1-sol.
 - Since 2026-10-08. Row: reports. Source: his words of 2026-10-06, 2026-10-08, checked by a session on 2026-10-11.
 
 ### reviewed-commit-lines
-About how many changed lines a commit that will be reviewed stays under: 1,200 changed lines.
+About how many changed lines a commit that will be reviewed stays under, a file it renames counted by the lines it changes: 1,200 changed lines.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/check.mjs`.
-- Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
+- Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by the command on 2026-11-05.
 
 ### rules-live-in-the-harness
 A rule he gives is cemented in the harness where something acts on it, never only in memory; an output he sees again and again, as a template of five parts: "- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`CLAUDE.md\` or \`AGENTS.md\`, a protocol."
