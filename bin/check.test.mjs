@@ -1753,7 +1753,7 @@ test('main started with the mark of a held gate lock takes no lock and runs its 
       "INFO  gate  the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (JS_HARNESS_GATE_HELD=1), so this gate took none",
     ]);
     // Not the inner run of old: every row of a gate is there.
-    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'gate', 'load', 'tests', 'review', 'codex-review']);
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'hook entries', 'gate', 'load', 'tests', 'review', 'codex-review']);
     assert.deepEqual(fs.readdirSync(gateDir(home)), ['lock'], 'it stood in no line');
     assert.equal(readGateHolder(home).pid, 4321);
   } finally {
@@ -1807,7 +1807,7 @@ test('main --no-wait fails the gate row against a held lock, runs no sensor and 
     assert.deepEqual(gateRows(output), [
       `FAIL  gate  no sensor ran: the gate of C:\\work\\other (pid 4321, started ${startedAt}) holds the machine's gate lock, and --no-wait was given`,
     ]);
-    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'gate', 'review', 'codex-review']);
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'hook entries', 'gate', 'review', 'codex-review']);
     // A gate that does not wait says nothing of a wait.
     assert.equal(errOutput, '');
     assert.equal(readGateHolder(home).pid, 4321);
@@ -2781,7 +2781,7 @@ test('a gate samples the load once, before its first sensor and inside its turn,
     assert.deepEqual(events, [['sample', holder], 'run-tests', 'run-lint'], state);
     assert.deepEqual(loadRows(output), [LOAD_ROW], state);
     const names = rowsOf(output).map((row) => row.split('  ')[1]);
-    assert.deepEqual(names, ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', ...gate, 'load', 'tests', 'lint', 'review', 'codex-review'], state);
+    assert.deepEqual(names, ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'hook entries', ...gate, 'load', 'tests', 'lint', 'review', 'codex-review'], state);
   }
 }));
 
@@ -3717,7 +3717,7 @@ test('a gate log that cannot be written is said in one INFO row named gate log, 
     // One row for the gate, not one for each of its two lines.
     assert.deepEqual([code, spawn.ran, logRows(output).length], [exit, 2, 1], output);
     assert.match(logRows(output)[0], NOT_WRITTEN);
-    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'load', 'tests', 'lint', 'gate log', 'review', 'codex-review']);
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'hook entries', 'load', 'tests', 'lint', 'gate log', 'review', 'codex-review']);
     // The same gate with the log switched off: every other row is the same.
     const off = await runCheck(argv, { JS_HARNESS_GATE_LOG: 'off' }, gateDeps({ spawn: () => ({ ...sensorRan(), status }) }));
     assert.deepEqual([off.code, rowsOf(off.output)], [exit, rowsOf(output).filter((row) => !logRows(output).includes(row))]);
@@ -3729,7 +3729,7 @@ test('a gate log that cannot be written is said in one INFO row named gate log, 
   try {
     const { code, output } = await runCheck([...argv, '--no-wait'], {}, gateDeps());
     assert.equal(code, 1);
-    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'gate', 'gate log', 'review', 'codex-review']);
+    assert.deepEqual(rowsOf(output).map((row) => row.split('  ')[1]), ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'hook entries', 'gate', 'gate log', 'review', 'codex-review']);
     assert.match(logRows(output)[0], /^INFO {2}gate log {2}could not be written \(E[A-Z]+: [^\n]*\), so this refusal is not in it$/);
   } finally {
     other.release();
@@ -3750,7 +3750,7 @@ test('a gate log that cannot be written is said in one INFO row named gate log, 
 /** Puts the AGENTS.md of `dir` over its budget: the static row a test fails by itself. */
 const overBudget = (dir) => fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat((TOKEN_BUDGET + 1) * 4));
 const BUDGET_FAILS = `FAIL  budget  ${TOKEN_BUDGET + 1} estimated tokens (budget ${TOKEN_BUDGET})`;
-const STATIC_ROWS = ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load'];
+const STATIC_ROWS = ['budget', 'contracts', 'payload claude', 'payload codex', 'fixed load', 'hook entries'];
 const namesOf = (output) => rowsOf(output).map((row) => row.split('  ')[1]);
 
 const LOCK_NOT_TAKEN = "the machine's gate lock was not taken";

@@ -176,6 +176,14 @@ before any work: the median of the latest five sessions, read from their transcr
 `~/.claude/projects` (and, from a worktree, its main checkout's). It never fails a commit, and warns
 over `rule:fixed-load-budget` tokens.
 
+The `hook entries` row counts the hook entries Claude Code runs for the project, from the home's and
+the project's settings and the enabled plugins, by owner and event: each is one more process on every
+matching event of every session. In a project it informs, and warns on an owner that neither
+js-harness, its stack nor an enabled plugin installs. In the harness's own repository it fails when
+`install` would write more entries than its limit, so a change that adds one is seen at its commit.
+`node scripts/diet-measure.mjs` measures a fresh home and project made by the checkout's own `install`
+and `init`: the tokens of every turn, the skill bodies and each hook entry's time.
+
 The `review` row informs and fails nothing: it names the code commits since the default branch that
 no Claude lens record covers, with the `lens-review` command that makes one, and the skips of both
 reviews (`--unavailable`) that still owe one; where the Codex review is off it says the lenses are
@@ -192,6 +200,7 @@ INFO  payload claude  639 estimated tokens per turn from files (tools and hook o
       project AGENTS.md        639  my-project\AGENTS.md
 …
 INFO  fixed load  95570 tokens at the first turn, median of the latest 5 sessions (budget 100000)
+INFO  hook entries  16 entries in this home and project: js-harness 15, codegraph 1
 …
 INFO  sensors  no sensors declared: add test, lint or typecheck scripts to package.json, or a "sensors" object to harness.json
 ```
