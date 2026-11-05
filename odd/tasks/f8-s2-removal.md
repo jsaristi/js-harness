@@ -281,7 +281,8 @@ lost, which he accepted once the project's documentation and its memory were on 
 - [ ] T14 (kind: verify) the removal from everywhere: every trace T12 lists that he does not keep, gentle-ai's
   Claude, Codex and Antigravity config, `~/.gentle-ai`, its binaries and each project's `.atl/`, each asked — S11.
   Done with the uninstall (L35, L36): the Claude, Codex and Antigravity config and skills, the binary, GGA. Left to
-  ask: `~/.gentle-ai` and each project's `.atl/`
+  ask: `~/.gentle-ai` with its PATH entry and gentle-ai's eight native agents in `~/.claude/agents` (L47); each
+  project's `.atl/` done (L39)
 - [ ] T15 (kind: build) follow-up, proposed to him through the lead, not authorized yet (L43): `sessions stop`
   refuses while the session's worktree holds files unless told to remove it; test first, a stop on a session with a
   live worktree exits non-zero and deletes nothing; the orchestrator's restart steps resume by message
@@ -746,3 +747,30 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   `/context` is read only in a session he or the lead opens, never through `claude -p`; a `claude -p` prompt that
   starts with `/` runs under `MSYS_NO_PATHCONV=1`; a guard check that refuses one without it is proposed through the
   lead (`docs/FAILURES.md`, `headless-prompt-path-converted`).
+- L47 2026-11-05 18:30Z (13:30 local): resumed after the machine slept (22:29 to 06:37 local, the lead's brief);
+  `f8-s2-removal` at `b2632260`, equal to origin, worktree clean. T9 check (2) passes in the three projects. The lead
+  opened six Desktop sessions at his word ("Listo soluciona todo para que avancemos", 2026-11-05 13:25 local, claimed
+  by the lead's brief), each read-only with one brief; their answers read here from their transcripts: JH 146
+  (`D:\plataforma-preproyecto`, `b3ce3a6b`), JH 147 (`D:\abogadaclaudiajimenez`, `d78581f6`), JH 148-151
+  (`D:\js-harness`, `505c3955`, `ea079628`, `6de12297`, `0df67b89`). Each holds the project's `CLAUDE.md` and
+  `AGENTS.md` once each, context7's server instructions, engram's server instructions as its one engram text (with
+  the engram plugin's own skill listing and hooks), and the global Rules block with its four groups CodeGraph,
+  Delegation, Task Size and scratch, Remote operation authorization, after the graphify section; no gentle-ai block,
+  skill or server text. Found beside it, each checked here: (a) `~/.claude/agents` still holds gentle-ai's eight
+  native agents (`jd-fix-agent`, `jd-judge-a`, `jd-judge-b`, `review-readability`, `review-refuter`,
+  `review-reliability`, `review-resilience`, `review-risk`) and its `.gentle-ai-native-agent-ownership.json`, which
+  loads them in every session; nothing of `bin/` reads them (`bin/lib/lens-prompts.mjs` holds its own prompts), so
+  they are T14's to ask with `~/.gentle-ai`. (b) engram's plugin hook asks for `mcp__plugin_engram_engram__*` tools
+  that no session has, beside the `mcp__engram__*` it has; engram's own text, harmless. (c) In
+  `D:\abogadaclaudiajimenez` (JH 147): its `AGENTS.md` still holds `init`'s unfilled template lines; six
+  `.claude/rules/` files load, one of them, `engram-speckit-wiring.md:13`, pointing to
+  `~/.claude/skills/_shared/persistence-contract.md`, gone with gentle-ai; two notes of its Claude memory name
+  gentle-ai. Each is his project's, reported to the lead, nothing changed there.
+- L48 2026-11-05 18:30Z (13:30 local): T9 check (3), `fixed load`, read with `measureFixedLoad`
+  (`bin/lib/fixed-load.mjs`) from each transcript's first turn. `D:\js-harness`, five sessions started after the
+  restart, each at most 80,000: JH 148 77,144; JH 149 77,193; JH 150 77,236; JH 151 77,288 (Desktop) and this
+  session 55,671 (a CLI background session whose first message is its brief, the fifth reading the lead's brief
+  named). `D:\plataforma-preproyecto`: JH 146 76,007. `D:\abogadaclaudiajimenez`: JH 147 96,881, over 80,000, its
+  six rules files and memory, outside spec 8's measure of this repo. The `check` row's median of its latest five is
+  77,236, but that row still counts the lead's resumed session `0f71b2c6` (105,624, a first turn of 2026-10-27), so
+  it is read here per session, not from the row.
