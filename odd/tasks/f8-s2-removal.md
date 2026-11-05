@@ -819,3 +819,13 @@ leftover is read before S2 closes.
   and as they were; `engram-start` and `engram-compact` bring back the planted observation; `directive` turns the
   planted rule without a control red, as it must. `guide`'s doctor names the scratch home's gaps (engram outdated,
   context7 and Codex missing in Codex), each with its fix, as in S13. Next: the incident set's question.
+- L52 2026-11-05 23:36Z (18:36 local): the incident set's question. Question 196 (18:25 local) said the run stops
+  itself at 1.5 times its estimate; `evals/suite.mjs` has no such stop (only `--plan`, an estimate before the run),
+  so it was withdrawn (18:26) and asked again as question 197: the plan read first, no run past 20 USD, one run,
+  no rerun. Answered "Correr el incident set" (tapped; the lead's transcript `0f71b2c6`, line 68237,
+  2026-11-05T23:30:26Z, checked with `js-harness sessions --quote`). The plan, read with `--plan` on S10's arguments
+  (`current` at effort high, 2 repeats, incidents 01-10, `bypassPermissions`, `claude-opus-5-5`), name
+  `f8-s2-incidents`: 20 trials, about 27 minutes and $10.38 of list cost, from `f8-s5c-a-incidents-2`. Under 20 USD,
+  so it runs: `js-harness gate --max 90 -- node evals/suite.mjs` with those arguments, from this worktree's clean
+  commit. The push of L50-L51 failed here three times ("fatal error in commit_refs_rules"); the lead pushed it from
+  its checkout at 18:27 (local and origin `a17c9574`, checked).
