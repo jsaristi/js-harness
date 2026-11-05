@@ -974,11 +974,11 @@
         "line": 2963
       }
     ],
-    "reading": "His answer names no value: it confirms the orchestrator's question in the entry before it (same session, line 2958, an assistant entry read by this session), which asked: \"Commit que va a revisión: hasta unas 1.200 líneas\". The number was derived in `odd/tasks/gate-lock.md` (the rule taken from a commit of 2,250 lines that could not be reviewed).",
-    "accepted": "The answer is the block the orchestrator offered under that question, and he sent it as it was.",
+    "reading": "His answer of 2026-10-11 (the quote) names no value: it confirms the orchestrator's question in the entry before it (same session, line 2958, an assistant entry), which asked: \"Commit que va a revisión: hasta unas 1.200 líneas\"; the number was derived in `odd/tasks/gate-lock.md` (the rule taken from a commit of 2,250 lines that could not be reviewed), and it stays. What is counted changes: a file a commit renames counts by the lines it changes, as git measures a rename, instead of the whole file removed and added again, so a move of files a review has already read is sized by what it changes (odd/tasks/workshop-product-split.md, L19: the staged move was 15,333 changed lines renames off and 569 with them).",
+    "accepted": "His answer to question 193, tapped, 2026-11-05T15:48:42Z (the lead's transcript 0f71b2c6, line 67310): \"Contar lo que cambia\", under a question whose yes covered only this change to his rule, in its own commit through rules change, and neither a higher cap nor any other change.",
     "checked": {
-      "date": "2026-10-11",
-      "by": "session"
+      "date": "2026-11-05",
+      "by": "command"
     }
   },
   "rules-live-in-the-harness": {
