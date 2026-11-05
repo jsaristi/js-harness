@@ -772,8 +772,24 @@ The slices:
   - Each test file was run alone (audit 8, share-check 7, land-records 6, throughput 36 and 36, stretch 32 and 33,
     subagent-records 2, subagents 7, host-update 21, host-watch 24, measures 28): all pass. The suite runs at the
     commit's gate.
-- Next step (for a resume): slice 1+2 on `feat/workshop-move`: the extractions are committed (L15). Next, the move
-  of the 16 files to `workshop/`, the workshop dispatcher, the cut of table B's sites, the spec-row claim form, the
-  `harness.json` sensors, the `.claude/settings.json` ticks hook and the load test, as "The build plan" says; then
-  the gate, Codex, the lenses and a verifier, and a pull request chained on PR 772 (never merged here). If the slice
-  passes about 400 changed lines, the extractions go as their own pull request first. T7 stays a feature of its own.
+  - The first commit was refused by the gate's `commit-size` row: 1,272 changed lines against the 1,200 of
+    `rule:reviewed-commit-lines`. It went as three commits instead, one per extraction, each through its own gate:
+    27e0a501, 81088583, f177b4c8. Since the extractions alone pass about 400 changed lines, they go as their own
+    pull request, chained on PR 772, and the move follows in the next.
+- L16 (2026-11-05): the reviews of the extractions (range ebd79f05..f177b4c8).
+  - Codex: 4 parts, each correct (0.94 to 0.95), no findings; 332,313 input tokens.
+  - The lenses: reliability 0, resilience 0, readability 1: the doc comment of `localHour` left at the end of
+    `share-check.mjs`, cut with the share block.
+  - The independent verifier (opus): verified. Every moved body is byte for byte the base's but for the added
+    `export`s, no import dangles and no cycle forms, and the 17 touched test files pass alone. It found the same
+    comment and four mutations no test caught: the session-window filter and a failed worktree listing in
+    `subagent-records`, a phase with no `ok` in `landFacts`, and `shareRefusal`'s tolerance. It also noted that the
+    sub-agent test relied on `readdir`'s order.
+  - Fix ea6293c9: the comment is back above `localHour`; each mutation now fails a test, checked in a scratch copy;
+    the order is sorted. Its review (f177b4c8..ea6293c9): Codex correct (0.99), the lenses 0 findings.
+- gentle-ai: not run on this slice; Codex and the lenses reviewed 27e0a501, 81088583, f177b4c8 and ea6293c9.
+- Next step (for a resume): the extractions are reviewed (L16) and go as a pull request from `feat/workshop-move`
+  with base `feat/hook-entries-row` (PR 772), never merged here. Then the move, on a new branch chained on it: the 16
+  files to `workshop/`, the workshop dispatcher, the cut of table B's sites 1 and 3 to 7 and the text 15, the
+  spec-row claim form, the `harness.json` sensors, the `.claude/settings.json` ticks hook and the load test, as "The
+  build plan" says; then the gate, Codex, the lenses and a verifier. T7 stays a feature of its own.
