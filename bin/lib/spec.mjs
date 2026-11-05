@@ -166,6 +166,8 @@ export function checkSpec(cwd, deps = {}) {
     commands = Object.keys(COMMANDS),
     entries = [...components, ...entryComponents].map((component) => component.id),
     homeFiles = HOME_FILES,
+    // Given only by the workshop's `spec` command: the gate's row records the workshop's claims, never checks them.
+    workshopCommands = null,
   } = deps;
   const own = deps.own ?? isHarnessRepository(cwd);
   let markdown;
@@ -175,7 +177,7 @@ export function checkSpec(cwd, deps = {}) {
     if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return [];
     return [{ name: 'spec', pass: false, detail: `${SPEC_PATH} cannot be read: ${err.message}` }];
   }
-  const { capabilities, findings } = specFindings(markdown, own ? { exists, commands, entries, homeFiles } : { exists, ids: entries });
+  const { capabilities, findings } = specFindings(markdown, own ? { exists, commands, entries, homeFiles, workshopCommands } : { exists, ids: entries });
   if (findings.length === 0) {
     const counted = `${capabilities.length} ${capabilities.length === 1 ? 'capability' : 'capabilities'}`;
     return [{ name: 'spec', pass: true, detail: `${counted}, each with its proof and its files` }];

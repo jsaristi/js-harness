@@ -38,7 +38,6 @@ const LEGACY = {
   'resume.mjs': 'prints the refusal from its main and returns 2',
   'summary.mjs': 'its parse returns the usage line',
   'wake.mjs': 'throws a plain Error',
-  'windows-daily.mjs': 'prints the refusal from its main and returns 2',
 };
 
 const code = (file) => withoutComments(fs.readFileSync(file, 'utf8'));

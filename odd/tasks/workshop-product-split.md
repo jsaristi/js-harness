@@ -788,8 +788,21 @@ The slices:
   - Fix ea6293c9: the comment is back above `localHour`; each mutation now fails a test, checked in a scratch copy;
     the order is sorted. Its review (f177b4c8..ea6293c9): Codex correct (0.99), the lenses 0 findings.
 - gentle-ai: not run on this slice; Codex and the lenses reviewed 27e0a501, 81088583, f177b4c8 and ea6293c9.
-- Next step (for a resume): the extractions are reviewed (L16) and go as a pull request from `feat/workshop-move`
-  with base `feat/hook-entries-row` (PR 772), never merged here. Then the move, on a new branch chained on it: the 16
-  files to `workshop/`, the workshop dispatcher, the cut of table B's sites 1 and 3 to 7 and the text 15, the
-  spec-row claim form, the `harness.json` sensors, the `.claude/settings.json` ticks hook and the load test, as "The
-  build plan" says; then the gate, Codex, the lenses and a verifier. T7 stays a feature of its own.
+- L17 (2026-11-05): the extractions are PR 773 (`feat/workshop-move`, base `feat/hook-entries-row`, chained on 772).
+  The rest of slice 1+2 goes as two more chained pull requests, safe since no release comes before slice 4
+  (finding 19): this one, the dispatcher, the cuts, the move and the sensors; the next, `ticks --hook` with its
+  stale-ticks row and the texts. On `feat/workshop-dispatch` (worktree D:/js-harness-worktrees/workshop-dispatch):
+  4187754d the `js-harness-workshop <name>` claim form, committed. The dispatcher commit is staged, not committed:
+  `workshop/js-harness-workshop.mjs` and its test, the seven out of `bin/js-harness.mjs`, loop's ticks and doctor's
+  idea row with no product default, check's docs row as a `harness.json` sensor, SPEC's claims, the seven README
+  sections moved to `docs/workshop.md`. Its gate ran twice: the first failed on `conventions-errors`,
+  `conventions-structure` (check.mjs's ceiling 2008) and `readme`, all fixed; the second on two tests of
+  `bin/throughput.test.mjs`, "throughput snapshot --no-such-flag exits 2" and "throughput reviewed --no-such-flag
+  exits 2", not yet read.
+- Next step (for a resume): in D:/js-harness-worktrees/workshop-dispatch, read why those two throughput tests fail
+  (likely they run `bin/js-harness.mjs throughput`, which left the product dispatcher; point them at the workshop
+  dispatcher), fix, commit the staged dispatcher commit through the gate. Then `git mv` the 16 files and their
+  tests to `workshop/bin/` and `workshop/lib/`, re-path their imports and the dispatcher's `../bin` loaders, move the
+  convention lists (finding 11), and add the load test (finding 15); then the gate, Codex, the lenses and a verifier
+  over 6c1bc8ef..HEAD, and a pull request with base `feat/workshop-move` (PR 773), never merged here. T7 stays a
+  feature of its own.

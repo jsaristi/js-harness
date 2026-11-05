@@ -2553,7 +2553,9 @@ test('doctorMain says how many upstream releases are not yet read, ok with none,
     const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
     const run = (ideas, flags = []) => runDoctor([...flags, '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, ideas });
 
-    const owed = await run(() => ({ last: '4.3.1', unread: ['4.3.2', '4.4.0'] }));
+    // The reading is the workshop's and carries its fix (`ideas` in workshop/js-harness-workshop.mjs); doctor prints it.
+    const fix = ['2 releases not yet read (the last read is v4.3.1): v4.3.2, v4.4.0', 'js-harness idea-watch draft prints the next one\'s entry; paste it into the record and decide it'];
+    const owed = await run(() => ({ last: '4.3.1', unread: ['4.3.2', '4.4.0'], fix }));
     // The version column shows a version only for an installed tool; the last read is in the fix line.
     assert.match(owed.output, /^idea-watch\s+n\/a\s+n\/a\s+n\/a\s+stale\s+n\/a$/m);
     assert.ok(owed.output.includes('  idea-watch (project):\n    2 releases not yet read (the last read is v4.3.1): v4.3.2, v4.4.0\n    js-harness idea-watch draft prints the next one\'s entry; paste it into the record and decide it\n'), owed.output);

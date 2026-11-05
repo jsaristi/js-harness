@@ -74,6 +74,18 @@ test('heartbeat ends with one STALL line when neither the gate log nor the chann
   assert.equal(state.out.at(-1), `STALL: no gate-log or channel write since ${hour(T0)}`);
 });
 
+// odd/tasks/workshop-product-split.md, slice 1+2: the three ticks serve only the harness's own repository, so they
+// are the workshop's, and the product's heartbeat given none runs none of them.
+test('heartbeat given no tick runs none: the product has no default for the Windows, throughput and host ticks', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 - 3600000, [CHANNEL]: T0 - 7200000 } });
+  const { windowsDaily, throughputTick, hostWatch, ...product } = deps;
+  assert.deepEqual([typeof windowsDaily, typeof throughputTick, typeof hostWatch], ['function', 'function', 'function']);
+  const code = await loopMain(['heartbeat', '--quiet', '30', '--every', '120', '--windows', '60'], {}, product);
+  assert.equal(code, 0);
+  assert.equal(state.out.at(-1), `STALL: no gate-log or channel write since ${hour(T0)}`);
+  assert.deepEqual(state.out.filter((line) => /windows-daily|host-watch|throughput/.test(line)), [], 'no tick said anything, nor failed');
+});
+
 test('heartbeat: a write to the gate log or the channel starts the quiet again', async () => {
   const { state, deps } = world({
     files: { [GATE_LOG]: T0 - 60000 },

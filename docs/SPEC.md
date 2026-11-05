@@ -375,7 +375,7 @@ check or an eval case ("After F8", directive coverage).
 **Reason:** A regression that only Windows shows is found within a day instead of never, at no cost on a public repository and without the gate lock. He chose the cadence: "Una vez por día (Recomendada)".
 **Proof:** `node --test bin/lib/windows-daily.test.mjs`, `node --test bin/windows-daily.test.mjs`, `node --test bin/loop-bodies.test.mjs`, `node --test scripts/github-workflows.test.mjs`
 **Discarded:** A Windows run after each landed batch: 15 to 19 lock-hours a day. Telling only through the channel: the heartbeat runs in the lead's session, and the lead's channel watch passes over its own notices, so the heartbeat's end line wakes the lead. Silence on a red run whose files cannot be found: it would read as all of them quarantined.
-**Today:** `.github/workflows/windows-daily.yml`, `bin/lib/windows-daily.mjs`, `bin/windows-daily.mjs`, `bin/loop.mjs`, `js-harness windows-daily`
+**Today:** `.github/workflows/windows-daily.yml`, `bin/lib/windows-daily.mjs`, `bin/windows-daily.mjs`, `bin/loop.mjs`, `js-harness-workshop windows-daily`, `js-harness-workshop loop`
 
 ### The gate log
 
@@ -465,7 +465,7 @@ check or an eval case ("After F8", directive coverage).
 **Reason:** A measure taken again the same way is what tells a change that helped from noise, and it cannot depend on someone keeping scripts.
 **Proof:** `node --test bin/throughput.test.mjs`, `node --test bin/lib/throughput.test.mjs`
 **Discarded:** Snapshotting main's history and the Codex runs, which are append-only: a snapshot would freeze what a stale fetch had not seen. GitHub's `mergedAt`, which needs the network on every read.
-**Today:** `bin/throughput.mjs`, `bin/lib/throughput.mjs`, `js-harness throughput` (with snapshot, status, reviewed and shipped)
+**Today:** `bin/throughput.mjs`, `bin/lib/throughput.mjs`, `js-harness-workshop throughput` (with snapshot, status, reviewed and shipped)
 
 ### The stretch
 
@@ -609,7 +609,7 @@ check or an eval case ("After F8", directive coverage).
 **Reason:** What to launch and measure comes from a count, not a guess; and each audited claim has its answer in the transcript, so no reader has to judge it.
 **Proof:** `node --test bin/subagents.test.mjs`, `node --test bin/lib/subagent-count.test.mjs`, `node --test bin/audit.test.mjs`, `node --test bin/lib/audit.test.mjs`
 **Discarded:** A general honesty audit: a transcript reader reaches 2 or 3 of the 14 recorded cases. Keyword rules for hours and shares: precision of about 8 and 33 per cent.
-**Today:** `bin/subagents.mjs`, `bin/lib/subagent-count.mjs`, `bin/audit.mjs`, `bin/lib/audit.mjs`, `js-harness subagents`, `js-harness audit`
+**Today:** `bin/subagents.mjs`, `bin/lib/subagent-count.mjs`, `bin/audit.mjs`, `bin/lib/audit.mjs`, `js-harness-workshop subagents`, `js-harness-workshop audit`
 
 ### The guard
 
@@ -744,7 +744,7 @@ check or an eval case ("After F8", directive coverage).
 **Reason:** The changelogs are long and most entries do not touch the harness; placing them keeps the session's reading on what does, and a check by entry id keeps one decided row from passing for a whole release.
 **Proof:** `node --test bin/host-watch.test.mjs bin/lib/host-watch.test.mjs`
 **Discarded:** Deciding `adopt` or `adapt` by pattern: a decision is a reading, and his yes in question 129 covers no adoption. Dropping Cowork entries unread: they default to `ignore` only when no harness area matches, and stay visible rows.
-**Today:** `bin/host-watch.mjs`, `bin/lib/host-watch.mjs`, `bin/lib/host-update.mjs`, `js-harness host-watch`
+**Today:** `bin/host-watch.mjs`, `bin/lib/host-watch.mjs`, `bin/lib/host-update.mjs`, `js-harness-workshop host-watch`
 
 ### Each gentle-ai release is read for ideas
 
@@ -753,7 +753,7 @@ check or an eval case ("After F8", directive coverage).
 **Reason:** A release changes hundreds of paths, most of them other hosts, tests and the shell installer; placing them by area keeps the reading on what the harness took over, and a path no area matches is never dropped.
 **Proof:** `node --test bin/lib/idea-watch.test.mjs bin/idea-watch.test.mjs`
 **Discarded:** Watching the installed version (the install watch S11 removed): gentle-ai is not installed. A working-tree clone: a bare one has nothing to build or run. Deciding a verdict by pattern: a decision is a reading, and an adopt or an adapt is his yes.
-**Today:** `bin/idea-watch.mjs`, `bin/lib/idea-watch.mjs`, `bin/lib/clones.mjs`, `js-harness idea-watch`
+**Today:** `bin/idea-watch.mjs`, `bin/lib/idea-watch.mjs`, `bin/lib/clones.mjs`, `js-harness-workshop idea-watch`, `js-harness-workshop doctor`
 
 ### The machine says when nothing runs
 
@@ -943,7 +943,7 @@ The administrator install is `bin/lib/status-line-install.ps1`, run by hand in a
 **Reason:** A document kept alive by remembering goes stale; one held by the gate cannot lose a piece silently.
 **Proof:** `node --test bin/lib/spec.test.mjs`
 **Discarded:** A description of the pieces as they stand in place of the requirements: it reads as today's architecture, and a rebuild would copy it; the map under "The architecture" is kept apart from the entries and says it is today's. Principles alone: nothing can be rebuilt from a philosophy.
-**Today:** `docs/SPEC.md`, `bin/lib/spec.mjs`, `bin/check.mjs`
+**Today:** `docs/SPEC.md`, `bin/lib/spec.mjs`, `bin/check.mjs`, `js-harness-workshop spec`, `workshop/js-harness-workshop.mjs`
 
 ### A model starting cold can audit the whole harness
 
@@ -952,7 +952,7 @@ The administrator install is `bin/lib/status-line-install.ps1`, run by hand in a
 **Reason:** A plan computed from the tracked files each time cannot fall behind them, and an index held by the gate cannot miss a document added after it.
 **Proof:** `node --test bin/docs.test.mjs bin/lib/docs-plan.test.mjs bin/lib/docs-entry.test.mjs bin/lib/docs-cross.test.mjs bin/lib/docs-records.test.mjs`
 **Discarded:** A stored inventory of every file with its class (`odd/tasks/launch-audit/inventory.tsv`): it rotted within a week. A status written in each feature document: the task boxes already say whether it is open. One slice the size of the window: it leaves the auditor no room to reason and write.
-**Today:** `js-harness docs`, `docs/README.md`, `bin/docs.mjs`, `bin/lib/docs-plan.mjs`, `bin/lib/docs-entry.mjs`, `bin/lib/docs-cross.mjs`, `bin/lib/docs-records.mjs`, `docs/RECORDS.md`, `bin/check.mjs`
+**Today:** `js-harness-workshop docs`, `docs/README.md`, `bin/docs.mjs`, `bin/lib/docs-plan.mjs`, `bin/lib/docs-entry.mjs`, `bin/lib/docs-cross.mjs`, `bin/lib/docs-records.mjs`, `docs/RECORDS.md`, `bin/check.mjs`
 
 ### An output the owner sees again is a template of five parts
 
