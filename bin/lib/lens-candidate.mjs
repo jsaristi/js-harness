@@ -20,7 +20,7 @@ export const CONTEXT_START = 'JS_HARNESS_LENS_CONTEXT';
 export const CONTEXT_END = 'JS_HARNESS_LENS_CONTEXT_END';
 
 // What every diff of the range is run with: whole paths from the top, no renames (a rename is a removed path and
-// an added one, as Codex reads it), and the patch's own shape fixed rather than left to the configuration.
+// an added one, which Codex reads as a rename since odd/tasks/rename-counted-by-changes.md, a follow-up there), and the patch's own shape fixed rather than left to the configuration.
 const DIFF = ['--no-renames', '--no-relative', '--no-ext-diff', '--no-textconv', '--no-color', '--submodule=short'];
 // `--full-index`: the `index` line of a section names its blobs in full, since an abbreviation's length follows
 // `core.abbrev` and the size of the repository, and would move the hash (the reliability lens, 2026-10-27);
