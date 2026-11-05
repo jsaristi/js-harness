@@ -89,9 +89,9 @@ Nothing planned: question 193 decided the change. A question goes to the lead wi
    his tapped words quoted with the date, test first, reviewed like any slice. The 1,200 cap itself stays."
 
 ## Tasks
-- [ ] T1 (kind: build) specs 1-2: the tests first, then renames on in `commit-size` and `codex-review`, and the
+- [x] T1 (kind: build) specs 1-2: the tests first, then renames on in `commit-size` and `codex-review`, and the
   declaration by `rules change` · `bin/check.mjs`, `bin/lib/codex-review-*.mjs`, `bin/lib/rules-data.mjs`
-- [ ] T2 (kind: verify) Codex, the lenses and an independent verifier over the branch; the pull request
+- [x] T2 (kind: verify) Codex, the lenses and an independent verifier over the branch; the pull request
 
 ## Log
 - L1 2026-11-05, question 193 (the lead's transcript `0f71b2c6`, line 67310), tapped: "Contar lo que cambia".
@@ -134,5 +134,7 @@ Nothing planned: question 193 decided the change. A question goes to the lead wi
   `diff.renames`, while the whole range's patch asks `--find-renames`. They differ only where `diff.renames` is
   `false` or `copies`. git's default is renames on, and Codex's P2 asked for the fixed option. The recheck prompt's
   version stays, as it versions only the text it adds.
-- Next step: commit L9 through the gate; Codex and the lenses over it; push; the pull request to main; then the
-  move of JH 142 on top (its tree `11ba4ee1`, its patch in this session's scratchpad `move.patch`).
+- L10 2026-11-05, `3f9600f` (L9's commit): Codex "the patch is correct" (0.98); the lenses 0 findings, readability's
+  earlier one rechecked fixed. Each code commit of the branch has a Codex and a lens record (the pre-push rows).
+  The pull request: https://github.com/jsaristi/js-harness/pull/775, to main; its merge is the owner's.
+- Next step: none here. The move of JH 142 goes on top of this branch, in `odd/tasks/workshop-product-split.md`.
