@@ -808,3 +808,7 @@ leftover is read before S2 closes.
   "Rule lines that leave with gentle-ai (T10 draft)" above, not applied: three of its lines are the review rules he
   set, so its wording goes to him as its own question after the incident set's. Next: 194's answer; the incident set
   question; T10's; T14's (`~/.gentle-ai` with its PATH entry and the eight agents); the output style; T11.
+- L50 2026-11-05 23:16Z (18:16 local): question 194 answered, "Correr el smoke walk" (tapped; the lead's transcript
+  `0f71b2c6`, line 67993, 2026-11-05T23:12:41Z, checked with `js-harness sessions --quote`). It covers one walk,
+  its ceiling 5 USD and its own stop at 1.5 times that; on a failure the cause is read and reported, no rerun. Run
+  next from this worktree's clean commit: `js-harness gate -- node scripts/rehearsal.mjs`.
