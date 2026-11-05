@@ -38,8 +38,12 @@ export function branchCommand(args, { repo = REPO_ROOT, node = process.execPath 
   return [`"${node}"`, `"${path.join(repo, 'bin', 'js-harness.mjs')}"`, ...args].join(' ');
 }
 
+/** A closing reply of the shape a real one has, for the Stop input: the reply hook checks only a reply it is given,
+ * so without one it would be timed on its fast path and not on the checks every real stop runs. */
+const CLOSING_REPLY = 'Hice el cambio y corrí sus tests: pasan.\n\nSigo solo: esta sesión despierta cuando termine la revisión y te informa de sus hallazgos.';
+
 /** A hook input of the shape Claude Code sends, enough for every js-harness entry to run its path: a tool call for
- * the tool events, a prompt for UserPromptSubmit, a start for SessionStart. */
+ * the tool events, a prompt for UserPromptSubmit, a start for SessionStart, a closing reply for Stop. */
 export function hookInput(event, cwd) {
   return JSON.stringify({
     hook_event_name: event,
@@ -52,8 +56,28 @@ export function hookInput(event, cwd) {
     tool_response: {},
     prompt: 'hola',
     stop_hook_active: false,
+    last_assistant_message: CLOSING_REPLY,
     agent_type: 'Explore',
   });
+}
+
+// What a calling session sets that would point a hook at its own files: the host's session paths and ids, the
+// harness's own home and switches, and Codex's home. Hooks run without `--home`, so each would read or write there.
+const INHERITED = /^(CLAUDE_|CLAUDECODE|JS_HARNESS_|CODEX_HOME$)/;
+
+/** The environment the scratch home's commands and hooks run with: the caller's, with every variable of
+ * `INHERITED` taken out and every home the harness or the host reads pointed into `home`. The caller's object is
+ * not changed. */
+export function scratchEnv(env, home) {
+  const kept = Object.fromEntries(Object.entries(env).filter(([name]) => !INHERITED.test(name)));
+  return {
+    ...kept,
+    HOME: home,
+    USERPROFILE: home,
+    JS_HARNESS_HOME: home,
+    APPDATA: path.join(home, 'AppData', 'Roaming'),
+    LOCALAPPDATA: path.join(home, 'AppData', 'Local'),
+  };
 }
 
 /** The `description:` of a skill's front matter, which Claude Code lists in every turn; '' when it has none. */
@@ -102,8 +126,8 @@ export async function measure({ repo = REPO_ROOT, runs = 3, keep = false } = {})
   const cwd = path.join(root, 'project');
   fs.mkdirSync(home);
   fs.mkdirSync(cwd);
-  // The host reads the home from these; the scratch one keeps every write, and his own, out of reach.
-  const env = { ...process.env, HOME: home, USERPROFILE: home };
+  // Every home and session path points into the scratch folder, so every write stays there and his own are out of reach.
+  const env = scratchEnv(process.env, home);
   try {
     const git = (args) => spawnSync('git', ['-c', 'user.name=diet', '-c', 'user.email=diet@example.invalid', ...args], { cwd, env, encoding: 'utf8' });
     git(['init', '-q']);

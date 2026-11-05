@@ -26,6 +26,9 @@ const command = (line) => ({ hooks: [{ type: 'command', command: line }] });
 
 test('install writes the limit of entries, every one of them js-harness, on the events a session meets', () => {
   const entries = installEntries();
+  // Only Claude Code's settings: an entry another host's file holds under the same pointer is not Claude's.
+  const codex = { target: (home) => path.join(home, '.codex', 'hooks.json'), pointer: ['hooks', 'Stop'], entry: () => command('x') };
+  assert.equal(installEntries([codex]).length, 0);
   assert.equal(entries.length, HOOK_ENTRY_LIMIT);
   assert.deepEqual([...new Set(entries.map(ownerOf))], ['js-harness']);
   const byEvent = Object.fromEntries([...new Set(entries.map((e) => e.event))].map((event) => [event, entries.filter((e) => e.event === event).length]));
@@ -41,6 +44,20 @@ test('the owner of an entry is its plugin, else the name of the program its comm
   assert.equal(ownerOf({ command: 'node workshop/js-harness-workshop.mjs ticks --hook' }), 'workshop');
   assert.equal(ownerOf({ command: 'node ./workshop/js-harness-workshop.mjs ticks --hook' }), 'workshop');
   assert.equal(ownerOf({ command: 'node' }), 'node');
+  // The Windows spelling of a relative script, as a hook written by hand on Windows has it.
+  assert.equal(ownerOf({ command: 'node .\\workshop\\js-harness-workshop.mjs ticks --hook' }), 'workshop');
+  assert.equal(ownerOf({ command: 'node workshop\\js-harness-workshop.mjs' }), 'workshop');
+  // An absolute script is owned by its own name: its top folder is a drive or the root, which names no owner.
+  assert.equal(ownerOf({ command: 'node "C:\\Users\\x\\.claude\\hooks\\guard-hook.mjs"' }), 'guard-hook');
+  assert.equal(ownerOf({ command: 'node /usr/local/lib/tool/run.js' }), 'run');
+  // A flag's value is no script: the script is the first word with a script's extension.
+  assert.equal(ownerOf({ command: 'node --max-old-space-size 4096 tools/a.mjs' }), 'tools');
+  // The package managers' subcommands name no owner; what they run does.
+  assert.equal(ownerOf({ command: 'npm run lint' }), 'lint');
+  assert.equal(ownerOf({ command: 'pnpm exec foo --bar' }), 'foo');
+  assert.equal(ownerOf({ command: 'npx -y some-pkg' }), 'some-pkg');
+  assert.equal(ownerOf({ command: '' }), '(empty)');
+  assert.equal(ownerOf({ command: '   ' }), '(empty)');
 });
 
 test('the live entries are every event of the settings layers and of the enabled plugins, Stop and PermissionRequest included', () => {
@@ -75,7 +92,7 @@ test('in a project the row warns when the home holds more js-harness entries tha
     write(path.join(home, '.claude', 'settings.json'), settings({ Stop: many }));
     const row = hookEntriesRow(cwd, home, { own: false });
     assert.equal(row.pass, true);
-    assert.ok(row.lines.some((line) => /warning: .*js-harness.*16.*15/.test(line)), row.lines.join('\n'));
+    assert.ok(row.lines.some((line) => /warning: js-harness has 16 entries in this home and project, over the limit of 15/.test(line)), row.lines.join('\n'));
   });
 });
 

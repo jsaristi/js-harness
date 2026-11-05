@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { branchCommand, hookArgs, hookInput, parseArgs, report, skillListing, textTokens } from './diet-measure.mjs';
+import { branchCommand, hookArgs, hookInput, parseArgs, report, scratchEnv, skillListing, textTokens } from './diet-measure.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -30,6 +30,22 @@ test('the hook input names the event and the project, with a tool call and a pro
   assert.equal(input.cwd, '/p');
   assert.equal(input.tool_name, 'Bash');
   assert.equal(input.prompt, 'hola');
+  // The reply hook checks only a reply it is given, so the Stop input carries one that closes as a real one does.
+  assert.equal(typeof input.last_assistant_message, 'string');
+  assert.match(input.last_assistant_message, /\n\nSigo solo: /);
+});
+
+test('the hooks run with every home, session and config path of the calling session cleared or pointed into the scratch home', () => {
+  const real = { PATH: '/bin', CLAUDE_ENV_FILE: '/real/env', CLAUDE_CONFIG_DIR: '/real/claude', CLAUDE_CODE_SESSION_ID: 's', JS_HARNESS_HOME: '/real', JS_HARNESS_GATE_HELD: '1', CODEX_HOME: '/real/codex', APPDATA: '/real/appdata', LOCALAPPDATA: '/real/local' };
+  const env = scratchEnv(real, '/scratch/home');
+  assert.equal(env.PATH, '/bin');
+  for (const name of ['CLAUDE_ENV_FILE', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_SESSION_ID', 'JS_HARNESS_GATE_HELD', 'CODEX_HOME']) assert.equal(name in env, false, name);
+  assert.equal(env.HOME, '/scratch/home');
+  assert.equal(env.USERPROFILE, '/scratch/home');
+  assert.equal(env.JS_HARNESS_HOME, '/scratch/home');
+  assert.equal(env.APPDATA, path.join('/scratch/home', 'AppData', 'Roaming'));
+  assert.equal(env.LOCALAPPDATA, path.join('/scratch/home', 'AppData', 'Local'));
+  assert.equal(real.CLAUDE_ENV_FILE, '/real/env', 'the caller\'s env is not changed');
 });
 
 test("a skill's listing is the description of its front matter", () => {

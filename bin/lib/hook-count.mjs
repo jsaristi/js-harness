@@ -18,34 +18,53 @@ export const HOOK_ENTRY_LIMIT = 15;
 // `stack` installs. An enabled plugin is known too, by its id. Any other owner is warned of, never failed.
 const KNOWN_OWNERS = ['js-harness', 'codegraph'];
 
-// Programs that run a script: the owner is the script's top folder, not the program.
+// Programs that run a script or a package: the owner is what they run, not the program.
 const RUNNERS = ['node', 'npm', 'npx', 'pnpm'];
+// The package managers' words that name no package: what follows them does.
+const SUBCOMMANDS = ['run', 'run-script', 'exec', 'dlx', 'x'];
+const SCRIPT = /\.(mjs|cjs|js|mts|ts)$/i;
+const EXTENSION = /\.(cmd|exe|bat|ps1|sh|mjs|cjs|js|mts|ts)$/i;
+
+/** Whether `target` is Claude Code's own settings file, `<home>/.claude/settings.json`. */
+function claudeSettings(target) {
+  const file = target('home');
+  return path.basename(file) === 'settings.json' && path.basename(path.dirname(file)) === '.claude';
+}
 
 /** The hook entries `install` writes into Claude Code's settings, `{ event, command }` each, read from the
- * manifest's entry components so the count is the one `install` acts on. */
-export function installEntries() {
-  return entryComponents
-    .filter((component) => component.pointer[0] === 'hooks')
+ * manifest's entry components so the count is the one `install` acts on. An entry another host's file holds under
+ * the same pointer is not counted. */
+export function installEntries(components = entryComponents) {
+  return components
+    .filter((component) => component.pointer[0] === 'hooks' && claudeSettings(component.target))
     .flatMap((component) => component.entry().hooks.map((hook) => ({ event: component.pointer[1], command: hook.command })));
 }
 
-/** Every hook entry Claude Code runs for the project at `cwd`, from the home's and the project's settings and the
- * enabled plugins (./payload.mjs). */
+/** The command hook entries Claude Code runs for the project at `cwd`, from the home's and the project's settings and
+ * the `hooks/hooks.json` of the enabled plugins (./payload.mjs). Not read: prompt and agent hooks, which have no
+ * command, hooks a plugin declares in its `plugin.json`, and managed settings. */
 export function liveEntries(home, cwd) {
   return claudeHookEntries(home, cwd);
 }
 
 /** The owner of an entry: its plugin's id, else the name of the program its command starts, without folder or
- * extension (`codegraph.cmd` is `codegraph`); for a script runner, the script's top folder. */
+ * extension (`codegraph.cmd` is `codegraph`). For a runner, what it runs: a relative script's top folder
+ * (`node workshop/x.mjs` is `workshop`), an absolute script's own name, a package's name. '(empty)' for no command. */
 export function ownerOf({ command, plugin }) {
   if (plugin) return plugin;
-  const words = command.trim().match(/"[^"]*"|\S+/g) ?? [''];
-  const unquote = (word) => word.replace(/^"|"$/g, '');
-  const program = path.basename(unquote(words[0])).replace(/\.(cmd|exe|bat|ps1|sh|mjs|js)$/i, '');
-  if (!RUNNERS.includes(program.toLowerCase())) return program;
-  const script = words.slice(1).map(unquote).find((word) => !word.startsWith('-'));
-  if (!script) return program;
-  return script.replace(/^\.\//, '').split(/[\\/]/)[0];
+  const words = (command.trim().match(/"[^"]*"|\S+/g) ?? []).map((word) => word.replace(/^"|"$/g, ''));
+  if (words.length === 0) return '(empty)';
+  const name = (file) => file.split(/[\\/]/).pop().replace(EXTENSION, '');
+  const program = name(words[0]);
+  const runner = program.toLowerCase();
+  if (!RUNNERS.includes(runner)) return program;
+  const rest = words.slice(1);
+  // node takes flags with values before its script, so its script is the first word that is one.
+  const target = runner === 'node' ? rest.find((word) => SCRIPT.test(word)) : rest.find((word) => !word.startsWith('-') && !SUBCOMMANDS.includes(word));
+  if (!target) return program;
+  if (/^([a-z]:)?[\\/]/i.test(target)) return name(target);
+  const parts = target.replace(/^\.[\\/]/, '').split(/[\\/]/);
+  return parts.length > 1 ? parts[0] : name(target);
 }
 
 /** `{ owner: count }`, in the order owners are first met. */
@@ -74,7 +93,7 @@ export function hookEntriesRow(cwd, home, deps = {}) {
   }
   const ours = byOwner.get('js-harness') ?? 0;
   if (ours > HOOK_ENTRY_LIMIT) {
-    lines.push(`warning: js-harness has ${ours} entries in this home, over the ${HOOK_ENTRY_LIMIT} this copy writes: an install of another version, or an entry added by hand (js-harness sync writes them again)`);
+    lines.push(`warning: js-harness has ${ours} entries in this home and project, over the limit of ${HOOK_ENTRY_LIMIT}, which is what this copy writes: an install of another version, or an entry added by hand (js-harness sync writes them again)`);
   }
 
   if (!own) return { name: 'hook entries', pass: true, info: true, detail, lines };
