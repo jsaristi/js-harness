@@ -10,7 +10,9 @@ Before any of it is built, he gets a measured, reviewed answer to what the split
 builds, releases and maintains js-harness, run by him from `D:\js-harness`) and the product (what a user's project
 installs to develop software) would take out of every install. The answer says what a fresh project and home load
 before and after, the shape of the split with its cost and undo, and how he sets up the workshop on another
-machine.
+machine. By his answer to question 190 (L11), the split is built together with the product's diet: what a project
+loads (fixed tokens a turn, hook registrations and their running cost, skill bodies) is measured before and after
+in his two projects and cut, each cut moved, never deleted, and undoable (section "The diet").
 
 ## Why
 He asked (L1) whether maintaining the harness is making the harness users install more complex. He confirmed the
@@ -35,8 +37,9 @@ split moves (item 4), so each needs its own fix.
   projects' transcripts and channel records.
 - Out, until his answer to item 4's question: any source change or move. Never written: his `~/.claude`,
   `~/.codex` and credentials; read only: the transcripts under `~/.claude/projects` and his two projects' files.
-  Out entirely: the product's own diet (what the product carries that is his personal process rather
-  than the workshop, such as Spanish replies and the five reply states), which is F8's measured cuts S4a to S7.
+  In since his answer to question 190 (L11): the product's own diet, the parts of F8's S4a and S5 that section
+  "The diet" names. Out: the rest of F8 (S4a's 50-commit count, S4b, S5's memory, rule pass, record rule and lens
+  parity, S5c-b, S6, S7), which F8 keeps.
 
 ## Constraints
 - The split changes what every install ships (Task Size high-risk 3, a contract others consume) and how it is
@@ -48,7 +51,9 @@ split moves (item 4), so each needs its own fix.
 ## Ask me before
 One decision, after the double review: item 4's verdict refutes part of the request, so whether to build the split
 as an isolation step (and leave the weight to F8's cuts), build it as first asked, or drop it. The question
-also says that his "mucho mas facil" (L6) is carried forward as its own feature (T7).
+also says that his "mucho mas facil" (L6) is carried forward as its own feature (T7). Answered: "Separar y
+aligerar juntos" (L11). Still his: merging, applying any slice or cut to his machine, and a fork the build plan's
+review (T6) finds.
 
 ## Depth pass
 - 1. Method: release and packaging engineering of a tool built with itself (a compiler that compiles itself, a
@@ -119,6 +124,7 @@ also says that his "mucho mas facil" (L6) is carried forward as its own feature 
   spec 4: left out because its proof is S13's rehearsal (`scripts/rehearsal.mjs`) with the workshop's row added, and the open from-zero rehearsal of "Memory that survives the machine" (`docs/ROADMAP.md:265`), which is not run here.
   spec 5: `js-harness double-review tally --since 2026-11-04`: none, new behaviour.
   spec 6: left out because it is a feature of its own after the split (section "The install path"): today a fresh home on this machine takes 7 typed steps before the first plan (`pnpm add -g`, `install`, `doctor`, `stack install` with 1 y/N, engram's own `engram setup claude-code`, `init`, `onboard` in a session) plus the logins, measured with `js-harness stack` in the scratch home.
+  spec 7: `js-harness check --verbose`: in each of his two projects and the scratch one, the `fixed load` row and table "The diet"; before, 103,593 and 103,441 first-turn tokens (old sessions, taken again at T8), 15 js-harness hook entries, every tool call about 1.3 s of hooks in the scratch timing, 17,843 tokens of skill bodies; after, not measured yet, each cut's figure written at T9.
 - 4. Refutation: the prediction under test is L4's: the split makes the product light ("liviano"). L4 names no
   threshold. The one used here, a fall of less than a tenth in each of fixed context, hooks a turn and skills, is
   this pass's analytical choice, set after the data were taken. He weighs it as such, and whether the result is
@@ -147,8 +153,8 @@ also says that his "mucho mas facil" (L6) is carried forward as its own feature 
     them. Each needs its own fix.
   Verdict: refutes
   The part refuted is the lightness he expects from the split; the isolation holds, and it is a tradeoff for him.
-  It reaches him as one question through the orchestrator before any code: answered: question 190 (asked 2026-11-04T22:12Z, waiting; its number
-  is written here once the orchestrator records it).
+  It reaches him as one question through the orchestrator before any code: answered: question 190, asked
+  2026-11-04T22:12Z, answered 2026-11-05T01:05Z "Separar y aligerar juntos" (L11).
 - 5. Request: build a first stage of the split, as an isolation step:
   - The seven workshop commands and their ten modules move to a `workshop/` folder with its own dispatcher, run
     from the checkout.
@@ -160,7 +166,8 @@ also says that his "mucho mas facil" (L6) is carried forward as its own feature 
   - One documented step sets up the workshop on a fresh machine.
   The "both" halves that stay shipped (`merge-queue --refresh-copy`, `rules change`, `rules coverage`, the sites
   that read this repository) are named, and the isolation claim is limited to the first stage. The lightness he asked for is measured
-  and cut in F8's S4a to S7 against what his two other projects use. The day's three failures get their own fixes.
+  and cut against what his two other projects use: in F8's S4a to S7 as this pass proposed, and, by his answer
+  to question 190 (L11), in this feature's diet for the parts section "The diet" takes. The day's three failures get their own fixes.
   Adds: none
 
 ## Classification
@@ -367,6 +374,58 @@ beside the product's one command:
   undo, a delivery change (high-risk 5) that needs a depth pass of its own. It is the next feature, after the
   split's slices.
 
+## The diet (spec 7, by his answer to question 190)
+The split alone moves 0 hooks and 6 fixed tokens (item 4), so the lightness he asked for (L4) comes from cutting
+the product itself. Each cut follows F2's rule (`docs/ROADMAP.md:152`): moved, never deleted, measured before and
+after, each undoable. FL7, a paid eval for each cut, was answered "on its measured saving" (`odd/tasks/fixed-load.md:117`)
+and later replaced by his eval spend, which has no cap and is reported per run (`docs/proposals/harness-diet.md:146`).
+
+The bar, three measures, each taken before the first cut and after each one:
+1. Fixed tokens a turn: what the harness puts in every turn, counted with `estimateTokens`
+   (`bin/lib/payload.mjs:10`), and the first turn's whole input, read from the project's transcripts by
+   `measureFixedLoad` (`bin/lib/fixed-load.mjs:127`, the `fixed load` row of `check`).
+2. Hook registrations and their running cost: entries by event and owner, and the time each takes, read from the
+   `hook_success` records (`durationMs`) of the project's transcripts.
+3. Skill bodies: tokens of each shipped skill.
+
+Measured 2026-11-05, read only (scratch scripts `<scratchpad>/tools/fl.mjs`, `hooks.mjs`, `time-hooks.mjs` and
+`proj-tokens.mjs`, not in the repository):
+| Measure | `D:\plataforma-preproyecto` | `D:\abogadaclaudiajimenez` | fresh project, scratch home |
+|---|---|---|---|
+| Project `CLAUDE.md` / `AGENTS.md` | 418 / 647 | 3,017 / 666 | 419 / 312 |
+| His home `CLAUDE.md` (shared by both) | 1,583, its js-harness Rules block lines 7-40 | the same | Rules block 1,333 |
+| First-turn input, median | 103,593 (1 session, 2026-10-21) | 103,441 (5 sessions, the newest 2026-10-30) | no session |
+| Hook entries | his home: 15 js-harness, 1 codegraph; project files: none | the same | 15 js-harness |
+| Hook running cost in the transcripts | 10 js-harness Stop runs, median 1,216 ms; 2 SessionStart, 4,486 ms | 1 Stop, 1,194 ms; codegraph's prompt hook 22 runs, 2,581 ms | see below |
+| Skills | the 5 shipped, 17,843 tokens of bodies (table D) | the same | the same |
+
+The running cost, timed in the scratch project (3 runs each, the median, one machine, noisy): every tool call
+pays `guard --hook` before it (505 ms) and `resume --pause` after it (795 ms); each prompt pays `rules --hook`
+(340 ms); each SessionStart `doctor --hook` (5,954 ms), `resume --hook` (1,434 ms), `rules --hook` (1,255 ms) and
+`backup --session-start` (1,254 ms); each Stop `guard --stop` (389), `reply --hook` (293) and `backup --hook` (396).
+None printed into the context there.
+
+What these figures do not settle: both projects' newest transcripts predate this session's measures (2026-10-21
+and 2026-10-30), so they show fewer js-harness hook runs than the 15 entries installed now. The baseline the cuts
+are measured against is taken again, in the same way, from the newest session of each project when the build
+starts (T8). The host's own share (system prompt, tools, about 100k of the first turn) is not the harness's to cut.
+
+What this feature takes from F8, so F8 does not do it twice (the roadmap says so at S4a and S5):
+- From S4a: the `check` row counting hook entries by event and owner (red above 14 entries or on a new owner) and
+  D8, the engram prompt hook turned off ("Apagarlo"). S4a's count of attribution lines in 50 commits stays in F8.
+- From S5: skill bodies at most 3k each, with the skill lint (13.3 row 7), and the probe that the protocols skill
+  loads in at most 3 of the next 10 sessions. The orchestrator skill (8,559) and protocols (5,085) are over it;
+  what leaves a body moves to a reference file the skill names and loads on demand. S5's `MEMORY.md` budget, the
+  rule pass, the record rule and the lens flag parity stay in F8.
+- Not taken: S4b, S5c-b, S6 and S7, which measure this repository's documents, rules and session topology, not
+  what a project loads.
+
+Candidates, each measured before it is cut and dropped if its saving is below its cost: the Rules block and the
+blocks `init` writes; the hooks a project never uses (the two `template gate` entries, `resume --pause` on every
+tool call); the SessionStart `doctor --hook` time. Each is one commit, undone by reverting it, and what leaves a
+text moves to a file that still ships or to the workshop, never deleted. The cost: the incident rerun F8 priced for
+S5, about $13, once for the skill cuts; no other paid run.
+
 ## Specs
 1. Classify each command, hook, skill, rule and text that `init` or `install` writes as product, workshop or both,
    with who calls it and whether it ships or is wired. His need (L3): "el arnes va a quedar divido y solo se
@@ -386,15 +445,25 @@ beside the product's one command:
 6. The steps from zero to a working project, measured today, and the path with the fewest: one command for the
    machine and one for a project, each with its undo, naming what cannot be folded in; the same for the workshop
    on another machine. His words (L6): "Necesito que sea mucho mas facil se instalar".
+7. The product's diet, built together with the split: fixed tokens a turn, hook registrations and their running
+   cost, and skill bodies, each measured before and after in `D:\plataforma-preproyecto` and
+   `D:\abogadaclaudiajimenez`; each cut moved, never deleted, and undoable. His answer to question 190 (L11):
+   "Separar y aligerar juntos".
 
 ## Tasks
 - [x] T1 (kind: design) spec 1: the classification, tables A to D (commit of this document)
 - [x] T2 (kind: verify) spec 2: the scratch project and home measured, table E (commit of this document)
 - [x] T3 (kind: design) spec 3 and spec 4: the shape and the setup on another machine (commit of this document)
-- [ ] T4 (kind: verify) spec 5: the double review, each finding taken or rebutted (reads 1 and 2 done, L8 and L9;
-  the third and last read next)
-- [ ] T5 (kind: docs) the docs pull request; the question to the orchestrator
-- [ ] T6 (kind: build) after his answer only: slices 1 and 2, 3, 4 of the shape
+- [x] T4 (kind: verify) spec 5: the double review, each finding taken or rebutted, three reads (L8, L9, L10)
+- [x] T5 (kind: docs) the docs pull request (PR 769); question 190 to the orchestrator, answered (L11)
+- [ ] T6 (kind: build) spec 3 and spec 7: the build plan for the split's slices (1 and 2, 3, 4) and the diet's
+  cuts, reviewed by `claude-fable-5-1` (L10) before any code; then the slices, each with Codex, the lenses and an
+  independent verifier
+- [ ] T8 (kind: verify) spec 7: the diet's baseline taken again from the newest session of each of his two projects
+  when the build starts, and the hook-count row of `check` (from F8's S4a), written test first
+- [ ] T9 (kind: build) spec 7: the diet's cuts, one commit each, measured after each against T8's baseline: the
+  skill bodies at most 3k with the skill lint (from F8's S5), D8, and the candidates of section "The diet" whose
+  saving passes their cost
 - [ ] T7 (kind: design) spec 6: open `odd/tasks/install-path.md` with the 7 measured steps as its baseline, after the
   split's slices or beside them if he says so
 
@@ -478,5 +547,13 @@ beside the product's one command:
   - Three reads did not settle the build shape (two high findings in the third), so by `rule:double-review` he gets
     it as a problem. T6's build plan passes to `claude-fable-5-1` (`rule:escalation-model`) before any slice. The
     direction, his question, does not depend on these details.
-- Next step (for a resume): PR 769 is open (docs, not merged); question 190 waits on him. On his answer: record it
-  here and in item 4, then T6 (plan to claude-fable-5-1 first) or T7, as he chose.
+- L11 (2026-11-05T01:05:34Z, the lead's transcript 0f71b2c6, line 66085, his tap on question 190, read with
+  `js-harness sessions --quote`): "Separar y aligerar juntos". The split is built together with the product's
+  diet (spec 7, T8, T9). The lead asked that the diet's bar be fixed tokens a turn, hook registrations and their
+  running cost, and skill bodies, measured before and after in his two projects, each cut undoable and moved, never
+  deleted; that PR 769 say which of F8's S4a to S7 this feature takes; and that the build plan still go to
+  `claude-fable-5-1` before any code. Taken from F8: S4a's hook-count row and D8, S5's skill bodies, skill lint and
+  protocols-load probe (section "The diet"); the roadmap says so at S4a and S5.
+- Next step (for a resume): PR 769 is open (docs, not merged). T6: write the build plan for the split's slices and
+  the diet's cuts and send it to `claude-fable-5-1` before any code; T8's baseline at the build's start; T7 stays a
+  feature of its own.

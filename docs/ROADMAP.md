@@ -624,7 +624,8 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **State:** the hook done (`odd/tasks/strip-attribution.md`): `js-harness commit-msg` and
   `.githooks/commit-msg` merged in #728, a scratch commit with both trailers landed without them (`951bcfb4`);
   `init` and `sync` ship it to projects, recorded so `uninstall` takes it out, in PR 2 of that document; the
-  50-commit count on `main`, the hook-count row and D8 to do.
+  50-commit count on `main` to do here; the hook-count row and D8 move to `odd/tasks/workshop-product-split.md`
+  (spec 7, his answer to question 190, "Separar y aligerar juntos"), so this cut does not do them.
 
 ### S4b Contradictions to zero
 - **Changes:** contract-first as a `check` refusal for a new feature document; the remaining pairs of
@@ -645,7 +646,9 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   control classified; a headless lens run with a planted user hook shows the hook did not fire; the
   incident set no worse.
 - **Cost:** about $13, the incident rerun [i].
-- **State:** to do.
+- **State:** to do. Skill bodies at most 3k, the skill lint and the protocols-load probe move to
+  `odd/tasks/workshop-product-split.md` (spec 7, question 190), with the incident rerun; the `MEMORY.md` budget, the
+  rule pass, the record rule and the lens flag parity stay here.
 
 ### S5c-b Directive coverage, the filling
 - **Changes:** every span declared; each seeded `owed` closed by a check or an eval case; about 15 to
