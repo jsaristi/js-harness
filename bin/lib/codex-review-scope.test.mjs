@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DOCUMENT, isDocument, leftOutOf, leftOutOfFiles, leftOutSaid, MARKED, patchOfRead, REVIEW_ATTRIBUTE, reviewScope, unsetPaths } from './codex-review-scope.mjs';
+import { DOCUMENT, isDocument, leftOutOf, leftOutOfFiles, leftOutSaid, rangeFiles, MARKED, patchOfRead, REVIEW_ATTRIBUTE, reviewScope, unsetPaths } from './codex-review-scope.mjs';
 
 // --- a document ---
 
@@ -327,6 +327,29 @@ test('a renamed file is left out only when both its names are, under the reason 
   // Both names of a rename are asked about; when git cannot say, the answer is `null`.
   assert.match(git.calls[1].opts.input, /^bin\/a\.mjs\0evals\/results\/a\.json\0/);
   assert.equal(leftOutOfFiles(files, { cwd: path.resolve('/repo'), source: SOURCE, spawn: () => ({ status: 128, stdout: '' }) }), null);
+});
+
+// A rename from what no review reads into code it reads showed that content as 0 changed lines (the verifier,
+// odd/tasks/rename-counted-by-changes.md, L7): such a range is read renames off, whole, as before.
+test('a range is read renames on, unless a rename brings a file a review leaves out into one it reads', () => {
+  const NUMSTAT = {
+    '--find-renames': '0\t0\t\x00notes.md\x00bin/tool.mjs\x001\t1\t\x00bin/a.mjs\x00workshop/a.mjs\x00',
+    '--no-renames': '0\t300\tnotes.md\x00300\t0\tbin/tool.mjs\x001\t0\tbin/a.mjs\x000\t1\tworkshop/a.mjs\x00',
+  };
+  const asked = [];
+  const numstatOf = (renames) => (asked.push(renames), NUMSTAT[renames]);
+  const leftOut = (paths) => new Map(paths.filter(isDocument).map((one) => [one, DOCUMENT]));
+  const off = rangeFiles(numstatOf, leftOut);
+  assert.deepEqual(asked, ['--find-renames', '--no-renames']);
+  assert.equal(off.renames, '--no-renames');
+  assert.deepEqual(reviewScope(off.files, off.why).read.map((one) => [one.path, one.changedLines]), [['bin/tool.mjs', 300], ['bin/a.mjs', 1], ['workshop/a.mjs', 1]]);
+  // Without that rename, the range is read renames on, and asked once.
+  asked.length = 0;
+  const on = rangeFiles(() => (asked.push('on'), '1\t1\t\x00bin/a.mjs\x00workshop/a.mjs\x002\t0\t\x00a.md\x00b.md\x00'), leftOut);
+  assert.deepEqual([asked.length, on.renames, [...on.why]], [1, '--find-renames', [['b.md', DOCUMENT]]]);
+  // When git cannot say, it is said which question failed.
+  assert.deepEqual(rangeFiles(() => null, leftOut), { failed: 'numstat' });
+  assert.deepEqual(rangeFiles(() => '', () => null), { failed: 'marks' });
 });
 
 test('what was left out is said with how many files and changed lines, and why', () => {

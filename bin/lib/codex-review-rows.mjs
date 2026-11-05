@@ -5,14 +5,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { numstatFiles, RENAMES, reviewParts } from './codex-review-parts.mjs';
+import { reviewParts } from './codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './codex-review-plan.mjs';
 import { beyondLines, defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, remoteHoldsNoBranch, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
 import { mergeTurn, turnsCheaper } from './codex-review-turns.mjs';
 import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './codex-reviews.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
 import { classifyRecheck, ESCALATION_SAID, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
-import { counted, leftOutOfFiles, reviewScope } from './codex-review-scope.mjs';
+import { counted, leftOutOf, rangeFiles, reviewScope } from './codex-review-scope.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './project-functions.mjs';
 // The Claude lens rows, beside Codex's, for `check` to import from one place (odd/tasks/f8-s1-reviews.md, T4).
 export { checkLensReviews } from './lens-review-rows.mjs';
@@ -301,13 +301,12 @@ function reviewSize(spawn, cwd, from, tip, merge = null) {
   // The output ends with the NUL that ends its last record, which is no whitespace: `gitOut` trims nothing of it.
   // `--no-relative`, as for the commits (`reviewCoverage`): every file of the range, named from the top.
   // A merge of the default branch is sized by what was written in it, as that command reads it (`mergeStart`).
-  const args = merge === null ? ['diff', '--numstat', '-z', RENAMES, '--no-relative', from, tip] : rangeDiff({ from, head: tip, merge }, ['--numstat', '-z', '--no-relative']);
-  const numstat = from === null ? null : gitOut(spawn, cwd, args);
-  if (numstat === null) return null;
+  // Renames off where one brings a file a review leaves out into one it reads, as that command reads it (`rangeFiles`).
+  const args = (renames) => (merge === null ? ['diff', '--numstat', '-z', renames, '--no-relative', from, tip] : rangeDiff({ from, head: tip, merge, renames }, ['--numstat', '-z', '--no-relative']));
+  if (from === null) return null;
   try {
-    const files = numstatFiles(numstat);
-    const why = leftOutOfFiles(files, { cwd, source: tip, spawn });
-    if (why === null) return null;
+    const { files, why, failed } = rangeFiles((renames) => gitOut(spawn, cwd, args(renames)), (names) => leftOutOf(names, { cwd, source: tip, spawn }));
+    if (failed) return null;
     const { read, leftOut } = reviewScope(files, why);
     return { parts: reviewParts(read).length, files: read.length, changedLines: read.reduce((sum, file) => sum + file.changedLines, 0), leftOut: leftOut.files };
   } catch {

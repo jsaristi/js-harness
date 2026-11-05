@@ -35,6 +35,8 @@ export const PART_MAX_FILES = ruleValue('review-part-files', 'files');
 // removed and added again (odd/tasks/rename-counted-by-changes.md). The option itself, and not `diff.renames`
 // of whoever runs the command, says it.
 export const RENAMES = '--find-renames';
+// The option a range is read with when a rename would bring what no review read into code (`rangeFiles`).
+export const NO_RENAMES = '--no-renames';
 
 // One record of `git diff --numstat -z --find-renames`: the additions, the deletions (`-` for both when the
 // file is binary) and the path, which may hold anything but a NUL; a rename has an empty path here, and its

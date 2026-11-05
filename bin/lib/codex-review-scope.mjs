@@ -30,6 +30,7 @@
 //
 // It is the project that decides, in a file that is committed like any other: `* -codex-review` leaves a
 // review nothing to read, and the plan of every run says how many files were left out and why.
+import { NO_RENAMES, numstatFiles, RENAMES } from './codex-review-parts.mjs';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
@@ -149,7 +150,7 @@ export function leftOutOf(paths, { cwd, source, spawn = spawnSync, where }) {
  * move of code a review reads to a path the project marks, or to a document, is still read
  * (odd/tasks/rename-counted-by-changes.md). `null` when git cannot say, as `leftOutOf`. */
 export function leftOutOfFiles(files, options) {
-  const said = leftOutOf(files.flatMap((file) => (file.from === undefined ? [file.path] : [file.from, file.path])), options);
+  const said = options.said ?? leftOutOf(files.flatMap((file) => (file.from === undefined ? [file.path] : [file.from, file.path])), options);
   if (said === null) return null;
   const why = new Map();
   for (const file of files) {
@@ -157,6 +158,25 @@ export function leftOutOfFiles(files, options) {
     if (reason !== undefined && (file.from === undefined || said.has(file.from))) why.set(file.path, reason);
   }
   return why;
+}
+
+/** The files of a range, what a review leaves out of them (`leftOutOfFiles`) and the option the range is read
+ * with: renames on (`RENAMES`), unless a rename's old name is left out and its new one read, which would bring
+ * content no review read into code as a rename of few changed lines; such a range is read renames off, whole,
+ * as before (odd/tasks/rename-counted-by-changes.md, L7). `numstatOf(option)` gives `git diff --numstat -z`
+ * with that option, `null` when git cannot say; `leftOut(paths)` what `leftOutOf` says of them. `{ failed }`,
+ * `numstat` or `marks`, when one of the two could not say. Throws as `numstatFiles` does. */
+export function rangeFiles(numstatOf, leftOut) {
+  for (const renames of [RENAMES, NO_RENAMES]) {
+    const numstat = numstatOf(renames);
+    if (numstat === null || numstat === undefined) return { failed: 'numstat' };
+    const files = numstatFiles(numstat);
+    const said = leftOut(files.flatMap((file) => (file.from === undefined ? [file.path] : [file.from, file.path])));
+    if (said === null) return { failed: 'marks' };
+    if (renames === RENAMES && files.some((file) => file.from !== undefined && said.has(file.from) && !said.has(file.path))) continue;
+    return { files, why: leftOutOfFiles(files, { said }), renames };
+  }
+  return { failed: 'numstat' };
 }
 
 /** The files of a range by what a review does with them: `files` (each `{ path, changedLines }`, as

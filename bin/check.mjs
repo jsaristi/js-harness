@@ -18,9 +18,9 @@ import { readRules, ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { rulesOfText } from './lib/rules-change-run.mjs';
 import { inForceLines, isTextInForce, scanLines } from './lib/rules-scan.mjs';
-import { numstatFiles, RENAMES } from './lib/codex-review-parts.mjs';
+import { RENAMES } from './lib/codex-review-parts.mjs';
 import { defaultBranch, gitOut } from './lib/codex-review-coverage.mjs';
-import { counted, leftOutOfFiles, reviewScope } from './lib/codex-review-scope.mjs';
+import { counted, leftOutOf, rangeFiles, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 import { GATE_WAIT_MS } from './lib/gate-lock.mjs';
 import { cancelTicket, logTicket } from './lib/gate-first.mjs';
@@ -631,14 +631,13 @@ export function checkCommitSize(cwd, spawn = spawnSync, env = process.env) {
   if (!numstat) return [];
   let changed;
   try {
-    const files = numstatFiles(numstat);
     // The marks are those of the commit being made, as its review will read them: the tree the index holds, so a
     // staged `.gitattributes` counts (Codex, 2026-10-16). Writing that tree is what the commit itself does.
     const tree = git(['write-tree'])?.trim();
     if (!tree) return [];
-    const why = leftOutOfFiles(files, { cwd, source: tree, spawn });
-    if (why === null) return [];
-    changed = reviewScope(files, why).read.reduce((sum, file) => sum + file.changedLines, 0);
+    const scope = rangeFiles((renames) => git(['diff', '--cached', '--numstat', '-z', renames, '--no-relative']), (paths) => leftOutOf(paths, { cwd, source: tree, spawn }));
+    if (scope.failed) return [];
+    changed = reviewScope(scope.files, scope.why).read.reduce((sum, file) => sum + file.changedLines, 0);
   } catch {
     return [];
   }

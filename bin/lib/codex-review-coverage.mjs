@@ -200,10 +200,10 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
   // it runs in and leave out every file outside that folder: run below the top, a commit of code elsewhere
   // would list no file, and count as one that needs no record.
   //
-  // `--no-renames`: the files a commit changes are those `js-harness codex-review` reads of it, and that
-  // command reads a range with renames off. With git's detection of them, which is on by default, a commit
-  // that moves a file lists the new path alone: moved to a path the project marks, the file that went,
-  // which that command reviews as removed, would be in no list, and the commit would need no record.
+  // `--no-renames`: a file a commit renames is listed under both its names, which `js-harness codex-review`
+  // reads it by (`leftOutOfFiles`). With git's detection of renames, which is on by default, a commit that
+  // moves a file lists the new path alone: moved to a path the project marks, the file that went, which
+  // that command reads, would be in no list, and the commit would need no record.
   //
   // `--root`: a commit with no parent lists the files it adds. It does by default, but not in a repository
   // whose configuration turns `log.showRoot` off, where such a commit would list none.
@@ -434,10 +434,11 @@ export function baseLeftOut(cwd, { from, tip, remote = 'origin', spawn = spawnSy
 /** The git arguments of the diff a review of `from..head` reads, with `shape` (options of the diff) and,
  * when given, `files` as pathspecs: `git diff <from> <head>`, or, for the review of a merge (`merge`, from
  * `mergeStart`), `git diff <automatic merge> <head>`, what was written in the merge. Renames are asked for in
- * both (`RENAMES`), as everywhere a range is counted, split or shown. */
-export function rangeDiff({ from, head, merge = null }, shape = [], files = null) {
+ * both (`RENAMES`), as everywhere a range is counted, split or shown, unless `renames` says `NO_RENAMES`, for a
+ * range read with them off (`rangeFiles`). */
+export function rangeDiff({ from, head, merge = null, renames = RENAMES }, shape = [], files = null) {
   const paths = files === null ? [] : ['--', ...files];
-  return ['diff', ...shape, RENAMES, merge === null ? from : merge.auto, head, ...paths];
+  return ['diff', ...shape, renames, merge === null ? from : merge.auto, head, ...paths];
 }
 
 /** The full id of the tree that merging `first` and `side` again gives, conflict markers included, as

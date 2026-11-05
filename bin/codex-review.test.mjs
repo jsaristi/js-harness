@@ -817,7 +817,7 @@ test('our own diff is computed from the resolved base to HEAD, with room for a l
   };
   await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, spawn });
   const diff = calls.find((call) => call.args[0] === 'diff');
-  assert.deepEqual(diff.args, ['diff', '--no-color', '--no-ext-diff', base, head]);
+  assert.deepEqual(diff.args, ['diff', '--no-color', '--no-ext-diff', '--find-renames', base, head]);
   assert.equal(fs.realpathSync(diff.opts.cwd), fs.realpathSync(root));
   assert.ok(diff.opts.maxBuffer > 1024 * 1024, `maxBuffer ${diff.opts.maxBuffer}`);
 });
@@ -2297,7 +2297,7 @@ test('--prompt own hands Codex this command\'s prompt on stdin: the committed ra
   assert.deepEqual(opts.stdio, ['pipe', 'pipe', 'inherit']);
   // The whole prompt, and then the end of the input, which is what Codex waits for.
   assert.deepEqual(child.received, { text: reviewPrompt({ from: base, head }), ended: true });
-  assert.ok(child.received.text.includes(`git diff ${base} ${head}`));
+  assert.ok(child.received.text.includes(`git diff --find-renames ${base} ${head}`));
   assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
 });
 
@@ -2354,7 +2354,7 @@ test('the run line says which prompt the review was asked with, and the version 
   await run(['--base', 'HEAD~1', '--again', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base)));
   await run(['--base', 'HEAD~1', '--again', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base), { status: 7 }));
   const runs = readCodexReviewRuns(root);
-  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v3');
+  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v4');
   assert.deepEqual(runs.map((line) => [line.outcome, line.session, line.prompt, line.promptVersion]), [
     ['reviewed', 'lean', 'codex', null],
     ['reviewed', 'lean', 'own', REVIEW_PROMPT_VERSION],
@@ -4505,6 +4505,33 @@ test('a renamed file and a binary one, in parts: the renamed file is one file of
   assert.equal(refused.code, 1);
   assert.match(refused.err, /showed 1 of 2 changed lines of part 1 of 2/);
   assert.equal(readCodexReviews(root).length, 1, 'no second record');
+});
+
+// A document no review read, renamed into code, would be shown as a rename by its changed lines alone (L7).
+test('a range that renames a document into code is read renames off: the code is added whole and shown so', async () => {
+  const root = tmp('js-harness-codex-review-');
+  git(root, 'init');
+  git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
+  git(root, 'config', 'user.name', 'js-harness test');
+  declareReviewOn(root);
+  fs.writeFileSync(path.join(root, 'notes.md'), Array.from({ length: 30 }, (_, i) => `line ${i}\n`).join(''), 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', 'one');
+  const base = git(root, 'rev-parse', 'HEAD');
+  fs.mkdirSync(path.join(root, 'bin'));
+  git(root, 'mv', 'notes.md', 'bin/notes.mjs');
+  fs.appendFileSync(path.join(root, 'bin', 'notes.mjs'), 'one more\n', 'utf8');
+  git(root, 'commit', '-am', 'two');
+  const head = git(root, 'rev-parse', 'HEAD');
+  const shown = git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-renames', base, head, '--', 'bin/notes.mjs');
+  const asked = `git --literal-pathspecs diff --no-renames ${base} ${head} -- bin/notes.mjs`;
+  const fake = fakeCodexInParts({ stdout: jsonl(thread, turn, cmd(asked, 0, shown), msg(FINDINGS), done) });
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.ok(fake.calls[0].child.received.text.includes(`\`${asked}\``), fake.calls[0].child.received.text);
+  assert.deepEqual(readCodexReviewRuns(root).map((line) => [line.part, line.coverage]), [
+    [{ index: 1, of: 1, files: 1, changedLines: 31 }, { seen: 31, total: 31 }],
+  ]);
 });
 
 test('the parts must show every changed line of the range between them: a split that would leave lines out is refused before anything is launched', async () => {

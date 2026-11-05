@@ -45,6 +45,8 @@ this change to his rule, through `rules change`, and neither a higher cap nor an
 - A rename is left out of a review only when both its names are, under the reason of its new name — because a move of
   code a review reads to a path the project marks would otherwise take the code out of every review (L6).
 - A range where git finds no rename is counted as today — because only a rename record changes anything.
+- A range that renames a file a review leaves out into one it reads is counted and reviewed renames off, whole —
+  because its content had no review, and as a rename it would be shown by its changed lines alone (L7).
 
 ## Ask me before
 Nothing planned: question 193 decided the change. A question goes to the lead with
@@ -64,7 +66,7 @@ Nothing planned: question 193 decided the change. A question goes to the lead wi
   `reviewSize`, `bin/lib/codex-review-rows.mjs:304`; the staged move of JH 142 in
   `D:/js-harness-worktrees/workshop-dispatch` on `f78479af`; his answer, the lead's transcript `0f71b2c6`, line 67310.
 - 3. The bar:
-  spec 1: `node --test --test-name-pattern "renamed" bin/check.test.mjs`: none, new behaviour; today a staged rename of a
+  spec 1: `node --test --test-name-pattern "rename" bin/check-commit-size.test.mjs`: none, new behaviour; today a staged rename of a
   672-line file with 11 lines changed each way is counted 1,344 changed lines, renames off, where git counts 22.
   spec 2: `node --test bin/lib/codex-review-parts.test.mjs bin/lib/codex-review-prompt.test.mjs`: none, new behaviour; today `numstatFiles` throws on a rename record and every part is shown renames off.
   spec 3: `node bin/js-harness.mjs rules check`: today passes with the old subject; the dry run of the change passes.
@@ -109,3 +111,20 @@ Nothing planned: question 193 decided the change. A question goes to the lead wi
   alone took code out of the review. The constraint is corrected: a rename is left out only when both its names are
   (`leftOutOfFiles`, `bin/lib/codex-review-scope.mjs`), under the reason of its new name; the test now expects the
   move read, by its 0 changed lines.
+- L7 2026-11-05, the reviews of `7b311d8..119b8e5`: the lenses (risk, reliability, readability) 0 findings; Codex one
+  P2, the whole-range patch and prompt followed `diff.renames` (fixed: both ask `--find-renames`); the verifier
+  refuted it. Its blocking finding: a rename whose old name a review leaves out (a document, a marked file) and whose
+  new name it reads brings content no review read into code, counted and shown as 0 changed lines. Decided: a range
+  that holds such a rename is counted and reviewed renames off, whole, as before this change; any other range
+  renames on. Also owed from it: the part and merge prompt versions bumped, the stale texts of
+  `codex-review-coverage.mjs:203` and `lens-candidate.mjs:22`, and the spec 1 command of the depth pass.
+- L8 2026-11-05, the fix of L7's findings. `rangeFiles` (`bin/lib/codex-review-scope.mjs`) reads a range renames on and,
+  when a rename's old name is left out and its new one read, again renames off; `checkCommitSize`, `reviewSize` and
+  `rangeGroups` read through it, and `planParts` and the part prompt take its `renames`. Under renames off the old
+  name is a left-out deletion, so such a range always goes through parts. The prompt versions: the whole range v4
+  (Codex's P2 changed its command), a part v6, a merge v5. Each new test seen red first: the commit-size one on
+  `119b8e5` ("1 changed line" where 301 was expected); the codex-review one on `119b8e5` (no part session started,
+  the range was reviewed whole). Known and kept: a rename is 2 files in a part's count (both names go on its command
+  line, L4) and 1 in `reviewSize`'s, which counts files.
+- Next step: commit L8 through the gate; review `119b8e5..` (Codex, the lenses, the verifier); push; the pull request
+  to main; then the move of JH 142 on top (its tree `11ba4ee1`, its patch in this session's scratchpad `move.patch`).
