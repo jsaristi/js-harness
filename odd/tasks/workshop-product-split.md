@@ -426,6 +426,78 @@ tool call); the SessionStart `doctor --hook` time. Each is one commit, undone by
 text moves to a file that still ships or to the workshop, never deleted. The cost: the incident rerun F8 priced for
 S5, about $13, once for the skill cuts; no other paid run.
 
+## The build plan (T6; to `claude-fable-5-1` before any code, L10)
+The split's shape above, with L10's findings applied, and the diet's cuts, in slices. Each slice is test first,
+one pull request, Codex, the lenses and an independent verifier (Task Size high-risk 3 and 5); merging it and
+applying it to his machine stay his. Every figure here was read on commit 91902a1f.
+
+Measuring, the same before and after every slice: a scratch home and project under the scratchpad, made by
+`install` and `init` from the branch's own `bin/` (`node bin/js-harness.mjs`, the one case the installed copy is
+not run, since the change is what is measured), then the three measures of "The diet": the texts `install` and
+`init` write counted with `estimateTokens`, the hook entries by event and owner, each hook's median of three timed
+runs, and the skill bodies. It becomes `scripts/diet-measure.mjs` with its test, beside `scripts/reply-hook-time.mjs`,
+which already times one hook the same way (`scripts/` never ships). His two projects are read again, read only,
+from their newest sessions after he upgrades them; no session is opened in them for this.
+
+- **Slice D0, the hook-count row (T8, from F8's S4a).** A product row of `check`, `hook entries`, in
+  `bin/lib/hook-count.mjs` with its test: entries of the home's and the project's Claude settings, by event and by
+  owner (the command's first word: `js-harness`, `codegraph`, any other). Its limit is today's count, 15 js-harness
+  entries and 1 codegraph (S4a wrote 14, which today's install already passes), declared as a value of a new rule,
+  `hook-entry-budget`, through `js-harness rules change` on a `rule/` branch in its own commit; each cut that removes
+  an entry lowers it in the same pull request. A new owner, or a count over the limit, fails the row. Undo: a revert.
+  `scripts/diet-measure.mjs` lands here too, and takes the before figures.
+- **Slice 1+2, the move and the seams (spec 3).** One slice, since moving before cutting breaks the imports:
+  - 16 files move to `workshop/bin/` and `workshop/lib/` with their 16 tests: the 7 commands; `bin/lib/audit.mjs`,
+    `throughput.mjs`, `host-watch.mjs`, `idea-watch.mjs`, `windows-daily.mjs`, `docs-records.mjs`,
+    `docs-cross.mjs`, `docs-plan.mjs` and `docs-entry.mjs`. `bin/lib/lines.mjs` stays (Codex 2 of L10).
+  - Product code they serve leaves them first: `bin/lib/share-check.mjs` (`lastShare`, `shareRefusal`,
+    `ownShares`, `SHARE_TOLERANCE`, `windowBefore`), `bin/lib/land-records.mjs` (`codexFacts`, `landFacts`,
+    `readLandRecord`, `readRecordLines`, `busySeconds`, `median`), `bin/lib/subagent-records.mjs` (`readRecords`,
+    `recordFolders`, for `check`'s sub-agent row), and `handListCount` beside `bin/lib/host-update.mjs`. The two
+    tests that cover both halves split the same way.
+  - `workshop/js-harness-workshop.mjs`, a dispatcher of the shape of `bin/js-harness.mjs`, run as
+    `npm run workshop -- <command>`. The product dispatcher drops the 7 from `COMMANDS`, `HELP` and `USAGE`.
+  - The 14 sites of table B are cut: the three heartbeat ticks and doctor's idea row become injected
+    dependencies whose product default is none; the workshop dispatcher runs `loop heartbeat` and `doctor` with
+    them. `checkSpec` keeps reading `COMMANDS` (Claude 1 of L10); a workshop command, `spec`, checks SPEC's
+    claims on the 7.
+  - `harness.json` gains `sensors`, which replaces the `package.json` ones (`bin/check.mjs:180-198`), so it
+    declares `tests` (`node --test`, which finds `workshop/` too), `docs` and `workshop spec`; `docs` is also a
+    `documentSensors` entry. A test asserts the gate still runs the suite (Claude 2 of L10).
+  - This repository's `.claude/settings.json`, new and committed, runs `npm run workshop -- doctor --hook` at
+    SessionStart, with a test that the idea row appears here (Claude 6 of L10).
+  - The generated texts and the product texts that name a moved command (`bin/lib/throughput.mjs:569`, `:587`,
+    `bin/lib/idea-watch.mjs:216`, `bin/lib/host-update.mjs:214`, `bin/lib/manifest.mjs:146`, the packed README
+    and `loop`'s usage) change here, and the conventions tests scan `workshop/` (Claude 5 and Codex 3 of L10).
+  - The diet measure is unchanged by this slice (0 hooks and 6 tokens move); what it proves is the import test
+    of `check` and `doctor --hook`. Size: 32 renames and about 600 changed lines, estimated, so it may go as two
+    chained pull requests (`js-harness-chained-prs`), the extractions first. Undo: a revert.
+- **Slice 3, the import check.** `bin/conventions-workshop.test.mjs` and the named files of
+  `scripts/package-contents.test.mjs`, as step 3 of the shape. Undo: delete the file.
+- **Slice 4, the texts.** As step 4 of the shape, with the whole shipped inventory (every string `install` and
+  `init` write, and every command's `--help`, Claude 3 of L10), the four `throughput-*` rules moved to a workshop
+  rule list through `rules change` (Claude 4), `.claude/skills/js-harness-workshop/SKILL.md` and
+  `docs/workshop.md`. Measured: about 690 tokens of skill bodies and 6 fixed tokens leave.
+- **Slice D1, the skill bodies (T9, from F8's S5).** The skill lint as a row of `check`, test first: each shipped
+  skill body at most 3,000 tokens. The orchestrator (8,559) and protocols (5,085) keep in their body what every
+  use needs and move the rest, word for word, to reference files in their skill folder that the body names.
+  `install` writes them and records them, so `uninstall` takes them out (`AGENTS.md`'s undo rule); a test proves
+  the round trip. The incident rerun, about $13, runs once, after this slice. Undo: a revert, then `sync`.
+- **Slice D2, D8.** The engram prompt hook turned off as `stack` can do it for any user: backed up and recorded,
+  turned back on by one command; on his machine it is applied only by him. The diet measure shows about 0.4k
+  tokens a prompt leaving (the diet's figure, measured again here).
+- **Slice D3 onward, the candidates, one each, only if the measure says the saving passes the cost:** the Rules
+  block (1,333) and the blocks `init` writes (419 and 312), with what leaves moved to the protocols skill;
+  `resume --pause` on every tool call (795 ms) narrowed to the calls that can cross the pause; the SessionStart
+  time of `doctor --hook` (5,954 ms in the scratch, the noisiest figure). A candidate whose measure falls short is
+  dropped with the figure written in `## Log`.
+- Order: D0, then 1+2, 3, 4, then D1, D2, D3; D0 and D1 do not touch the split's files and could run beside it in a
+  session of their own. Release: one minor version after slice 4, and one after the diet's slices; `upgrade`
+  carries them to his projects when he runs it.
+- What this plan does not settle, for the review: whether a `harness.json` `sensors` key in this repository is the
+  right home for the workshop's checks or a `package.json` script is; whether the hook-count limit should count
+  codegraph's entry, which `stack` installs; and whether skill reference files are worth their install record.
+
 ## Specs
 1. Classify each command, hook, skill, rule and text that `init` or `install` writes as product, workshop or both,
    with who calls it and whether it ships or is wired. His need (L3): "el arnes va a quedar divido y solo se
