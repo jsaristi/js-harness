@@ -145,12 +145,16 @@ export function leftOutOf(paths, { cwd, source, spawn = spawnSync, where }) {
   return leftOut;
 }
 
+/** Every name of the files of a range, a renamed file's old one before its new: the paths `leftOutOf` is asked of. */
+const namesOf = (files) => files.flatMap((file) => (file.from === undefined ? [file.path] : [file.from, file.path]));
+
 /** What `leftOutOf` says of the files of a range (each `{ path, from? }`, as `numstatFiles` gives them), by the
  * path of each: a renamed file is left out only when both its names are, under the reason of its new one, so a
  * move of code a review reads to a path the project marks, or to a document, is still read
- * (odd/tasks/rename-counted-by-changes.md). `null` when git cannot say, as `leftOutOf`. */
+ * (odd/tasks/rename-counted-by-changes.md). `null` when git cannot say, as `leftOutOf`. `options` are those of
+ * `leftOutOf`, or `{ said }`, what it already said of `namesOf(files)`, so git is not asked twice. */
 export function leftOutOfFiles(files, options) {
-  const said = options.said ?? leftOutOf(files.flatMap((file) => (file.from === undefined ? [file.path] : [file.from, file.path])), options);
+  const said = options.said ?? leftOutOf(namesOf(files), options);
   if (said === null) return null;
   const why = new Map();
   for (const file of files) {
@@ -171,7 +175,7 @@ export function rangeFiles(numstatOf, leftOut) {
     const numstat = numstatOf(renames);
     if (numstat === null || numstat === undefined) return { failed: 'numstat' };
     const files = numstatFiles(numstat);
-    const said = leftOut(files.flatMap((file) => (file.from === undefined ? [file.path] : [file.from, file.path])));
+    const said = leftOut(namesOf(files));
     if (said === null) return { failed: 'marks' };
     if (renames === RENAMES && files.some((file) => file.from !== undefined && said.has(file.from) && !said.has(file.path))) continue;
     return { files, why: leftOutOfFiles(files, { said }), renames };

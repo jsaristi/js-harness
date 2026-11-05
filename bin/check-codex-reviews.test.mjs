@@ -616,6 +616,23 @@ test('a commit that moves a file a review reads to a path the project marks is a
   );
 });
 
+test('a commit that renames a document into code sizes its review by the whole file it adds', () => {
+  // A document had no review, so its content renamed into code is read renames off, whole (`rangeFiles`, L7 of
+  // odd/tasks/rename-counted-by-changes.md).
+  const { root } = makeRepo();
+  const base = commit(root, 'notes.md', lines(20), 'docs: notes');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  feature(root);
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+  git(root, 'mv', 'notes.md', 'src/notes.js');
+  git(root, 'commit', '-m', 'refactor: the notes become code');
+  const moved = git(root, 'rev-parse', 'HEAD');
+  assert.equal(
+    checkCodexReviewDebt(root).detail,
+    `no Codex review record for 1 of 1 code commit since origin/main: the review of ${short(root, moved)}^..HEAD is 1 part today, 20 changed lines in 1 file`,
+  );
+});
+
 /** Commits `content` at each of `names` through the index alone, as `commitInIndex` does, and returns the
  * commit's full id. The names go to git on its standard input, each ended by a NUL, so one may hold what no
  * command line carries whole: a tab, a newline, a control character. */

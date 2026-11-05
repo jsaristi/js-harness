@@ -126,5 +126,13 @@ Nothing planned: question 193 decided the change. A question goes to the lead wi
   `119b8e5` ("1 changed line" where 301 was expected); the codex-review one on `119b8e5` (no part session started,
   the range was reviewed whole). Known and kept: a rename is 2 files in a part's count (both names go on its command
   line, L4) and 1 in `reviewSize`'s, which counts files.
-- Next step: commit L8 through the gate; review `119b8e5..` (Codex, the lenses, the verifier); push; the pull request
-  to main; then the move of JH 142 on top (its tree `11ba4ee1`, its patch in this session's scratchpad `move.patch`).
+- L9 2026-11-05, the reviews of `119b8e5..f67d773` (the commit of L8). Codex: a recheck, its P2 fixed, "the patch is
+  correct" (0.97). The lenses: reliability 0 findings; readability 1 suggestion, the names of a range's files built
+  twice (fixed: `namesOf`, and `leftOutOfFiles`'s `said` documented). The verifier: holds, nothing blocking; one test
+  gap, the fallback in `reviewSize` (fixed: a test in `check-codex-reviews.test.mjs`, red on `119b8e5` with "0
+  changed lines"). Kept, with its reason: under `--prompt codex` Codex writes its own diff, which follows
+  `diff.renames`, while the whole range's patch asks `--find-renames`. They differ only where `diff.renames` is
+  `false` or `copies`. git's default is renames on, and Codex's P2 asked for the fixed option. The recheck prompt's
+  version stays, as it versions only the text it adds.
+- Next step: commit L9 through the gate; Codex and the lenses over it; push; the pull request to main; then the
+  move of JH 142 on top (its tree `11ba4ee1`, its patch in this session's scratchpad `move.patch`).
