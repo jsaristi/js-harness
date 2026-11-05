@@ -22,7 +22,7 @@ const HOME_FILES = Object.freeze(['~/.js-harness/manifest.json', '~/.claude/sett
 
 const HARNESS_ROOT = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const FIELD_START = /^\*\*([A-Z][a-z]+):\*\*\s?(.*)$/;
-const TODAY_SHAPE = 'an item there is a file of the repository, `js-harness <command>`, an id of the manifest or a path under `~/`';
+const TODAY_SHAPE = 'an item there is a file of the repository, `js-harness <command>`, `js-harness-workshop <command>`, an id of the manifest or a path under `~/`';
 
 /** The capabilities of a specification: each `### ` heading under `## Capabilities`, with the text of
  * each `**Field:**` that follows it, up to the next field or heading. `errors` holds a field that
@@ -95,10 +95,11 @@ function proofFiles(command) {
   });
 }
 
-/** What one item of a today line is: a command, a manifest id, a home path or a file of the repository. */
+/** What one item of a today line is: a command of the product's dispatcher or of the workshop's, a manifest id, a
+ * home path or a file of the repository. */
 function readItem(item, entries) {
-  const command = /^js-harness ([a-z][a-z-]*)$/.exec(item);
-  if (command) return { kind: 'command', name: command[1] };
+  const command = /^js-harness(-workshop)? ([a-z][a-z-]*)$/.exec(item);
+  if (command) return { kind: command[1] ? 'workshop' : 'command', name: command[2] };
   if (item.startsWith('~/')) return { kind: 'home', name: item };
   if (entries.includes(item)) return { kind: 'entry', name: item };
   if (/\s/.test(item)) return { kind: 'unknown', name: item };
@@ -108,12 +109,14 @@ function readItem(item, entries) {
 /** The findings of a specification, and its capabilities. `exists(file)` says whether a path from the
  * top of the repository exists. `commands`, `entries` and `homeFiles`, given only for the harness's own
  * specification, are what must be claimed: a project's specification describes no dispatcher. `ids`
- * are the manifest's ids a today item may name without being a file, claimed or not. */
-export function specFindings(markdown, { exists, commands = null, entries = null, homeFiles = null, ids = [] }) {
+ * are the manifest's ids a today item may name without being a file, claimed or not. `workshopCommands`, given
+ * only by the workshop's own spec command, holds the claims on `js-harness-workshop <command>` to the workshop's
+ * dispatcher; without it they are recorded and not verified, since the product does not ship that dispatcher. */
+export function specFindings(markdown, { exists, commands = null, entries = null, homeFiles = null, ids = [], workshopCommands = null }) {
   const { capabilities, errors } = parseSpec(markdown);
   const findings = [...errors];
   if (capabilities.length === 0) return { capabilities, findings: [...findings, `${SPEC_PATH} holds no capability: each is a "### " heading under "## Capabilities"`] };
-  const claimed = { command: new Set(), entry: new Set(), home: new Set() };
+  const claimed = { command: new Set(), workshop: new Set(), entry: new Set(), home: new Set() };
   for (const { title, line, fields } of capabilities) {
     const where = `"${title}" (line ${line})`;
     for (const name of FIELDS) if (!Object.hasOwn(fields, name) || fields[name].trim() === '') findings.push(`${where} has no **${name}:** field`);
@@ -127,10 +130,12 @@ export function specFindings(markdown, { exists, commands = null, entries = null
       if (read.kind === 'unknown') findings.push(`${where} names "${item}" in **Today:**: ${TODAY_SHAPE}`);
       else if (read.kind === 'file' && !exists(read.name)) findings.push(`${where} names ${read.name} in **Today:**, which does not exist`);
       else if (read.kind === 'command' && commands && !commands.includes(read.name)) findings.push(`${where} claims \`js-harness ${read.name}\`, which the dispatcher does not have`);
+      else if (read.kind === 'workshop' && workshopCommands && !workshopCommands.includes(read.name)) findings.push(`${where} claims \`js-harness-workshop ${read.name}\`, which the workshop's dispatcher does not have`);
       else if (read.kind !== 'file') claimed[read.kind].add(read.name);
     }
   }
   for (const name of commands ?? []) if (!claimed.command.has(name)) findings.push(`the command \`js-harness ${name}\` is claimed by no capability`);
+  for (const name of workshopCommands ?? []) if (!claimed.workshop.has(name)) findings.push(`the command \`js-harness-workshop ${name}\` is claimed by no capability`);
   for (const id of entries ?? []) if (!claimed.entry.has(id)) findings.push(`the manifest entry \`${id}\` is claimed by no capability`);
   for (const file of homeFiles ?? []) if (!claimed.home.has(file)) findings.push(`the file \`${file}\`, written outside the repository, is claimed by no capability`);
   return { capabilities, findings };
