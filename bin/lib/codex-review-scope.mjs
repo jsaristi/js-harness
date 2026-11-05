@@ -30,6 +30,7 @@
 //
 // It is the project that decides, in a file that is committed like any other: `* -codex-review` leaves a
 // review nothing to read, and the plan of every run says how many files were left out and why.
+import { NO_RENAMES, numstatFiles, RENAMES } from './codex-review-parts.mjs';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
@@ -144,6 +145,44 @@ export function leftOutOf(paths, { cwd, source, spawn = spawnSync, where }) {
   return leftOut;
 }
 
+/** Every name of the files of a range, a renamed file's old one before its new: the paths `leftOutOf` is asked of. */
+const namesOf = (files) => files.flatMap((file) => (file.from === undefined ? [file.path] : [file.from, file.path]));
+
+/** What `leftOutOf` says of the files of a range (each `{ path, from? }`, as `numstatFiles` gives them), by the
+ * path of each: a renamed file is left out only when both its names are, under the reason of its new one, so a
+ * move of code a review reads to a path the project marks, or to a document, is still read
+ * (odd/tasks/rename-counted-by-changes.md). `null` when git cannot say, as `leftOutOf`. `options` are those of
+ * `leftOutOf`, or `{ said }`, what it already said of `namesOf(files)`, so git is not asked twice. */
+export function leftOutOfFiles(files, options) {
+  const said = options.said ?? leftOutOf(namesOf(files), options);
+  if (said === null) return null;
+  const why = new Map();
+  for (const file of files) {
+    const reason = said.get(file.path);
+    if (reason !== undefined && (file.from === undefined || said.has(file.from))) why.set(file.path, reason);
+  }
+  return why;
+}
+
+/** The files of a range, what a review leaves out of them (`leftOutOfFiles`) and the option the range is read
+ * with: renames on (`RENAMES`), unless a rename's old name is left out and its new one read, which would bring
+ * content no review read into code as a rename of few changed lines; such a range is read renames off, whole,
+ * as before (odd/tasks/rename-counted-by-changes.md, L7). `numstatOf(option)` gives `git diff --numstat -z`
+ * with that option, `null` when git cannot say; `leftOut(paths)` what `leftOutOf` says of them. `{ failed }`,
+ * `numstat` or `marks`, when one of the two could not say. Throws as `numstatFiles` does. */
+export function rangeFiles(numstatOf, leftOut) {
+  for (const renames of [RENAMES, NO_RENAMES]) {
+    const numstat = numstatOf(renames);
+    if (numstat === null || numstat === undefined) return { failed: 'numstat' };
+    const files = numstatFiles(numstat);
+    const said = leftOut(namesOf(files));
+    if (said === null) return { failed: 'marks' };
+    if (renames === RENAMES && files.some((file) => file.from !== undefined && said.has(file.from) && !said.has(file.path))) continue;
+    return { files, why: leftOutOfFiles(files, { said }), renames };
+  }
+  return { failed: 'numstat' };
+}
+
 /** The files of a range by what a review does with them: `files` (each `{ path, changedLines }`, as
  * `numstatFiles` gives them) and `why`, what `leftOutOf` said of their paths. `read` are the files a review
  * reads, as they were given and in that order; `left` the paths it leaves out; and `leftOut` the count of
@@ -186,8 +225,8 @@ export function leftOutSaid({ files, changedLines, documents, marked }) {
 }
 
 /** The patch of a range without the sections of the files a review leaves out: `patch` is what
- * `git diff --submodule=short --no-renames <from> <head>` printed, `paths` the files of the range in the
- * order `git diff --numstat -z --no-renames <from> <head>` gives them, and `why` what `leftOutOf` said of
+ * `git diff --submodule=short --find-renames <from> <head>` printed, `paths` the files of the range in the
+ * order `git diff --numstat -z --find-renames <from> <head>` gives them, and `why` what `leftOutOf` said of
  * them. The patch as it is when none of them is left out.
  *
  * `--submodule=short`, because the patch has to be one section a file: a submodule that moved is counted as
