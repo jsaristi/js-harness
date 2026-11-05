@@ -6,6 +6,7 @@
 import { recordedQuestions } from './channel.mjs';
 import { compareSteps, stepsOf } from './progress-pace.mjs';
 import { ruleValue } from './rules.mjs';
+import { busySeconds, median, secondsBetween } from './land-records.mjs';
 
 const DAY_MS = 24 * 3600 * 1000;
 
@@ -36,8 +37,6 @@ export function gateKind({ cwd, command }) {
   if (/update-copy/.test(said)) return 'copy';
   return 'run';
 }
-
-const secondsBetween = (from, to) => Math.round((Date.parse(to) - Date.parse(from)) / 100) / 10;
 
 /** The tests sensor of an end line, or the first sensor that says where it ran. */
 const testsOf = (end) => (Array.isArray(end?.sensors) ? end.sensors.find((sensor) => sensor?.name === 'tests') : undefined);
@@ -84,29 +83,6 @@ export function gateFacts(events, { from, to }) {
   // A log with no event at all covers nothing of the day: partial from its end, so any copy that holds it is fuller.
   if (oldest === null) return { gates, fallbacks, partialFrom: new Date(to).toISOString() };
   return { gates, fallbacks, partialFrom: Date.parse(oldest.at) > from ? oldest.at : null };
-}
-
-/** The seconds the union of `[from, to]` intervals (ms) covers: two gates at once count once. */
-export function busySeconds(intervals) {
-  const sorted = [...intervals].sort((a, b) => a[0] - b[0]);
-  let total = 0;
-  let open = null;
-  for (const [from, to] of sorted) {
-    if (open === null || from > open[1]) {
-      if (open) total += open[1] - open[0];
-      open = [from, to];
-    } else open[1] = Math.max(open[1], to);
-  }
-  if (open) total += open[1] - open[0];
-  return total / 1000;
-}
-
-/** The median of `values`, `null` for none. */
-export function median(values) {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 /** The `p`th percentile of `values` by the nearest rank, `null` for none. */
@@ -219,24 +195,6 @@ export function testTimeFacts(byId, ids) {
   return { gates, files: [...files.values()].sort((a, b) => a.test.localeCompare(b.test)) };
 }
 
-/** The lands started in `[from, to)` among the merge queue's records (`<git common dir>/js-harness/lands.jsonl`, B2):
- * `{ startedAt, seconds, exit, landed, considered, phases: [{ phase, seconds, ok }], said }`, `said` the last line the land
- * printed, which says why one failed, or `null`. */
-export function landFacts(records, { from, to }) {
-  return records
-    .filter((record) => Date.parse(record?.startedAt) >= from && Date.parse(record.startedAt) < to)
-    .map((record) => ({
-      startedAt: record.startedAt,
-      seconds: Number.isFinite(Date.parse(record.endedAt)) ? secondsBetween(record.startedAt, record.endedAt) : null,
-      exit: Number.isInteger(record.exit) ? record.exit : null,
-      landed: Array.isArray(record.landed) ? record.landed.length : 0,
-      considered: Array.isArray(record.considered) ? record.considered.length : 0,
-      phases: (Array.isArray(record.phases) ? record.phases : []).filter((phase) => typeof phase?.phase === 'string' && Number.isFinite(phase.seconds)).map(({ phase, seconds, ok }) => ({ phase, seconds, ok: ok ?? null })),
-      said: typeof record.said === 'string' ? record.said : null,
-    }))
-    .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
-}
-
 /** The questions of `[from, to)` (B4), from the channel's `record` (`readNotices`): `recorded`, the question notices
  * written in it, `{ number, at }`; `closed`, those whose closing notice was written in it, as the board settles one
  * (`recordedQuestions`): `{ number, by, via, recordedAt, at, shownAt, answeredAt }`, `by` an answer or a withdrawal, and
@@ -258,24 +216,6 @@ export function questionFacts(record, { from, to }) {
     })
     .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   return { recorded, closed };
-}
-
-const isObjectLike = (value) => typeof value === 'object' && value !== null;
-
-/** The Codex review runs started in `[from, to)` (`readCodexReviewRuns`): `{ startedAt, seconds, outcome, findings,
- * part, reason }`, `reason` the words a run that did not stand was logged with, or `null`. */
-export function codexFacts(runs, { from, to }) {
-  return runs
-    .filter((run) => Date.parse(run?.startedAt) >= from && Date.parse(run.startedAt) < to)
-    .map((run) => ({
-      startedAt: run.startedAt,
-      seconds: Number.isFinite(run.durationMs) ? Math.round(run.durationMs / 100) / 10 : null,
-      outcome: run.outcome ?? null,
-      findings: Number.isFinite(run.findings?.total) ? run.findings.total : null,
-      // A part of a range is an attempt of its own (codex-review-runs.mjs, `runPart`).
-      part: isObjectLike(run.part),
-      reason: typeof run.reason === 'string' ? run.reason : null,
-    }));
 }
 
 /** The tasks closed, reopened, added and removed by the commits of `bounds` (`parsePaceLog`'s), each file compared

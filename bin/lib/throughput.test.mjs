@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { busySeconds, channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, codexFacts, conflictFiles, gateKind, landFacts, questionFacts, testTimeFacts, median, outsideChance, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputDues, throughputRows, withReadyAt } from './throughput.mjs';
+import { landFacts } from './land-records.mjs';
+import { channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, conflictFiles, gateKind, questionFacts, testTimeFacts, outsideChance, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputDues, throughputRows, withReadyAt } from './throughput.mjs';
 
 const DAY = '2026-10-16';
 const { from, to } = dayBounds(DAY);
@@ -64,15 +65,7 @@ test('a day the log no longer covers from its start says from when it is covered
   assert.equal(gateFacts([], { from, to }).partialFrom, '2026-10-17T00:00:00.000Z');
 });
 
-test('busy time is the union of the runs, so two gates at once count once', () => {
-  assert.equal(busySeconds([[0, 100_000], [50_000, 150_000], [200_000, 260_000]]), 210);
-  assert.equal(busySeconds([]), 0);
-});
-
-test('the median and a percentile of a list, null for none', () => {
-  assert.equal(median([3, 1, 2]), 2);
-  assert.equal(median([1, 2, 3, 4]), 2.5);
-  assert.equal(median([]), null);
+test('a percentile of a list', () => {
   assert.equal(percentile([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 90), 9);
 });
 
@@ -97,32 +90,6 @@ test('a pull request is docs-only when every file its merge changed is Markdown,
   const merges = parseMerges('a1\t2026-10-16T10:00:00Z\tp1 h1\tMerge pull request #1 from x\na2\t2026-10-16T11:00:00Z\tp2 h2\tMerge pull request #2 from y\na3\t2026-10-16T12:00:00Z\tp3 h3\tMerge pull request #3 from z\n');
   const files = parseMergeFiles('\u0001a1\n\nodd/tasks/x.md\nREADME.MD\n\u0001a2\n\nbin/x.mjs\nodd/tasks/x.md\n');
   assert.deepEqual(prFacts(merges, new Map(), { from, to }, files).map((pr) => pr.docsOnly), [true, false, null]);
-});
-
-test('the Codex runs of a day, with their seconds and outcome', () => {
-  const runs = [
-    { startedAt: '2026-10-15T23:59:59Z', durationMs: 1000, outcome: 'reviewed' },
-    { startedAt: '2026-10-16T08:00:00Z', durationMs: 49_000, outcome: 'reviewed' },
-    { startedAt: '2026-10-16T09:00:00Z', outcome: 'failed' },
-  ];
-  runs[1].findings = { total: 2 };
-  runs[1].part = { index: 1, of: 2 };
-  assert.deepEqual(codexFacts(runs, { from, to }), [
-    { startedAt: '2026-10-16T08:00:00Z', seconds: 49, outcome: 'reviewed', findings: 2, part: true, reason: null },
-    { startedAt: '2026-10-16T09:00:00Z', seconds: null, outcome: 'failed', findings: null, part: false, reason: null },
-  ]);
-});
-
-// docs/sessions/2026-10-29-jh-79-visual-pages-the-harness-shows-its-moments-as-pages.md, "Left": the pages read
-// these facts, and a failure lost the words that say why it failed.
-test('a land keeps the last line it said, and a Codex run the reason it was logged with', () => {
-  const day = dayBounds('2026-10-29');
-  const land = (said) => ({ v: 1, startedAt: '2026-10-29T05:00:00Z', endedAt: '2026-10-29T05:05:00Z', considered: [1], landed: [], phases: [], exit: 1, ...said });
-  const lands = landFacts([land({ said: 'PR 644 was refused at push: its head is past the reviewed range' }), land({}), land({ said: 7 })], day);
-  assert.deepEqual(lands.map((one) => one.said), ['PR 644 was refused at push: its head is past the reviewed range', null, null]);
-  const run = (reason) => ({ startedAt: '2026-10-29T06:00:00Z', durationMs: 1000, outcome: 'failed', ...reason });
-  const runs = codexFacts([run({ reason: 'the session ran gpt-5.4 at low, not gpt-5.5 at high' }), run({}), run({ reason: { not: 'words' } })], day);
-  assert.deepEqual(runs.map((one) => one.reason), ['the session ran gpt-5.4 at low, not gpt-5.5 at high', null, null]);
 });
 
 // Harness review d6, 2026-10-18: open counted checkboxes alone, while closed and added count the rows of a task table

@@ -10,7 +10,7 @@ import path from 'node:path';
 import { TASK_KINDS } from './contract.mjs';
 import { ruleValue } from './rules.mjs';
 import { closesProblem } from './stretch-forecast.mjs';
-import { busySeconds, median } from './throughput.mjs';
+import { busySeconds, median } from './land-records.mjs';
 
 const HOUR_MS = 3_600_000;
 
