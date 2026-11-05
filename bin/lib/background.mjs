@@ -284,6 +284,27 @@ export function worktreeOf(entry, platform = process.platform) {
   return typeof entry.root === 'string' ? path.join(entry.root, '.claude', 'worktrees', entry.worktree) : null;
 }
 
+/** What the recorded session's worktree holds that claude rm would delete: `null` when it has no worktree, the folder is
+ * not there, or it holds only `.git`; otherwise `{ worktree, holds }`, `holds` naming a few of its entries, or why it
+ * could not be read, which counts as holding files, since "could not look" is never "none". On 2026-11-04 claude rm
+ * deleted every file of a worktree whose branch was pushed, all but `.git`, while it said it had refused
+ * (odd/tasks/stop-keeps-worktree.md). */
+export function worktreeHolding(entry, { readdir = fs.readdirSync, platform = process.platform } = {}) {
+  const worktree = worktreeOf(entry, platform);
+  if (worktree === null) return null;
+  let names;
+  try {
+    names = readdir(worktree);
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    return { worktree, holds: `it could not be read: ${err.code ?? err.message}` };
+  }
+  const files = names.filter((name) => name !== '.git').sort();
+  if (files.length === 0) return null;
+  const shown = files.slice(0, 3).join(', ');
+  return { worktree, holds: files.length > 3 ? `${shown} and ${files.length - 3} more` : shown };
+}
+
 /** The sessions `sessions start` recorded for the project at `root`, those not removed, by the folder each works in:
  * `{ items }`, each `{ id, folder }`, its session id and its worktree, or the folder it was started in when it has none;
  * `held`, how many sessions of the project it holds, with a session id or not; and `unknown`, null or why it may hold

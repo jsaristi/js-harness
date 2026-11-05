@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, strandedWords, undoSession, within, worktreeOf } from './lib/background.mjs';
+import { appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, strandedWords, undoSession, within, worktreeHolding, worktreeOf } from './lib/background.mjs';
 import { sessionEffortRefusal } from './lib/guard.mjs';
 import { sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { appendNotice, newNotice, nextSessionNumber, placeOf, readNotices } from './lib/channel.mjs';
@@ -23,7 +23,7 @@ export const START_USAGE = [
   '                                 [--advisor <model>] [--no-remote-control] [--cwd <path>] [--home <path>]',
   '       js-harness sessions start --resume <id> [--brief <file>] [--model <model>] [--effort <level>] [--advisor <model>]',
   '                                 [--no-remote-control] [--home <path>]',
-  '       js-harness sessions stop <id> [--home <path>]',
+  '       js-harness sessions stop <id> [--remove-worktree] [--home <path>]',
   '         start runs claude --bg in the folder (a worktree of its own with --worktree), titled as start_session titles a session,',
   '         with Remote Control on (claude.ai/code and the phone reach it) unless --no-remote-control; the session reads a copy',
   '         of the brief that ends by telling it to report through js-harness notify --to orchestrator. It prints the id and records',
@@ -41,6 +41,8 @@ export const START_USAGE = [
   '         again while claude says files of the worktree are busy (EBUSY); it kills nothing.',
   '         exit 1 for any other id, or when claude refuses (unpushed commits in its worktree), which keeps it recorded;',
   '         a worktree with uncommitted changes stays, and stop says where.',
+  '         While the session\'s worktree holds files (anything but .git), stop refuses and runs nothing unless --remove-worktree:',
+  '         claude rm deletes them (2026-11-04). It is not how a background session restarts: a message resumes it.',
   '         js-harness uninstall machine removes every recorded session that is not at work, and fails while one is.',
 ].join('\n');
 
@@ -387,15 +389,23 @@ export function nextNumberMain({ root, home, slug, readFile, readdir, stdout, st
   return next.unavailable ? 2 : 0;
 }
 
-/** `sessions stop <id>`: exit 0 once the session is removed (or claude had already lost it) and its removal recorded,
- * 1 when the record holds no such session or claude refused (it stays recorded), 2 for a usage error. */
+/** `sessions stop <id> [--remove-worktree]`: exit 0 once the session is removed (or claude had already lost it) and its
+ * removal recorded, 1 when the record holds no such session, its worktree holds files and `--remove-worktree` was not
+ * given (no claude runs: claude rm deletes them, odd/tasks/stop-keeps-worktree.md), or claude refused (it stays
+ * recorded), 2 for a usage error. */
 export function sessionsStopMain(argv, given = {}) {
   const deps = { ...defaults(), ...given };
   const { stdout, stderr, env, now } = deps;
   const [id, ...rest] = argv;
   let homeFlag;
-  if (rest.length === 2 && rest[0] === '--home' && rest[1] !== '') homeFlag = rest[1];
-  if (id === undefined || id.startsWith('--') || (rest.length > 0 && homeFlag === undefined)) {
+  let removeWorktree = false;
+  let usable = true;
+  for (let i = 0; i < rest.length && usable; i++) {
+    if (rest[i] === '--remove-worktree' && !removeWorktree) removeWorktree = true;
+    else if (rest[i] === '--home' && homeFlag === undefined && rest[i + 1] !== undefined && rest[i + 1] !== '') homeFlag = rest[++i];
+    else usable = false;
+  }
+  if (id === undefined || id.startsWith('--') || !usable) {
     stderr(`js-harness sessions stop takes one id, the one sessions start printed\n\n${START_USAGE}`);
     return 2;
   }
@@ -414,6 +424,15 @@ export function sessionsStopMain(argv, given = {}) {
   }
   if (record.resumedAs?.has(entry.id)) {
     stderr(`js-harness sessions stop: ${resumedNote(record.resumedAs, entry.id, (last) => `js-harness sessions stop ${last} removes both`)}, since they share a worktree and a brief; nothing was stopped`);
+    return 1;
+  }
+  const held = removeWorktree ? null : worktreeHolding(entry);
+  if (held !== null) {
+    stderr([
+      `js-harness sessions stop: ${entry.id} · ${entry.title} was not stopped: its worktree ${held.worktree} holds files (${held.holds}), and claude rm deletes them even when it says it refused (2026-11-04); nothing ran.`,
+      '  To resume a background session (after a restart, say), send it a message: SendMessage to its title, as ListAgents lists it, resumes it from its transcript in its worktree.',
+      `  Once its work has landed and nothing in the worktree is needed, js-harness sessions stop ${entry.id} --remove-worktree removes it with its worktree.`,
+    ].join('\n'));
     return 1;
   }
   const claude = deps.claude === undefined ? claudeRunner({ env }) : deps.claude;
