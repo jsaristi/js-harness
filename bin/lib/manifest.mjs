@@ -13,7 +13,7 @@ import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
 import { ruleValue } from './rules.mjs';
 import { LEASE_MINUTES, WAIT_MS } from './permit-times.mjs';
 import { INDEX_LINE_CHARS } from './memory-index-guard.mjs';
-import { SHARE_TOLERANCE } from './audit.mjs';
+import { SHARE_TOLERANCE } from './share-check.mjs';
 import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
 import { restoreSettings } from './user-settings.mjs';

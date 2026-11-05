@@ -211,7 +211,7 @@ async function hintOf(payload, { env, projectRoot, exists }) {
  * reply that says what the notice told it (odd/tasks/session-channel.md, T6b). */
 async function stopRefusalOf(payload, readTranscript, { env, homedir, projectRoot }) {
   if (payload?.stop_hook_active === true || typeof payload?.transcript_path !== 'string' || payload.transcript_path === '') return null;
-  const { lastShare, shareRefusal } = await import('./lib/audit.mjs');
+  const { lastShare, shareRefusal } = await import('./lib/share-check.mjs');
   const given = typeof payload.last_assistant_message === 'string' ? payload.last_assistant_message : null;
   // A reply that names no context share costs no read of the transcript; the window the share is of comes from it.
   if (given !== null && !(/context/i.test(given) && /\d\s?%/.test(given))) return null;
