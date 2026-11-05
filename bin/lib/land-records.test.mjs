@@ -46,13 +46,13 @@ test('the lands of a day, in order, with their seconds, exit and counts, and non
   const land = (startedAt, exit, phases) => ({ v: 1, startedAt, endedAt: new Date(Date.parse(startedAt) + 300_000).toISOString(), considered: [1, 2], landed: exit === 0 ? [1] : [], phases, exit });
   const records = [
     land('2026-10-16T07:00:00Z', 1, []),
-    land('2026-10-16T05:00:00Z', 0, [{ phase: 'suite', seconds: 270, ok: true }, { phase: 'bad' }]),
+    land('2026-10-16T05:00:00Z', 0, [{ phase: 'suite', seconds: 270, ok: true }, { phase: 'push', seconds: 4 }, { phase: 'bad' }]),
     land('2026-10-15T23:00:00Z', 0, []),
     { v: 1, startedAt: 'not a time' },
     null,
   ];
   assert.deepEqual(landFacts(records, { from, to }), [
-    { startedAt: '2026-10-16T05:00:00Z', seconds: 300, exit: 0, landed: 1, considered: 2, phases: [{ phase: 'suite', seconds: 270, ok: true }], said: null },
+    { startedAt: '2026-10-16T05:00:00Z', seconds: 300, exit: 0, landed: 1, considered: 2, phases: [{ phase: 'suite', seconds: 270, ok: true }, { phase: 'push', seconds: 4, ok: null }], said: null },
     { startedAt: '2026-10-16T07:00:00Z', seconds: 300, exit: 1, landed: 0, considered: 2, phases: [], said: null },
   ]);
 });

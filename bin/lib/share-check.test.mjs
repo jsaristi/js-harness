@@ -128,6 +128,7 @@ test('shareRefusal refuses a stated own share more than 2 points from the record
   assert.match(reason, /records 60% of a 500k window/);
   assert.match(reason, /get_usage/);
   assert.equal(shareRefusal('Contexto: 62 %.', { tokens: 300000, window: 500000 }), null, '2 points off is within the tolerance');
+  assert.match(shareRefusal('Contexto: 63 %.', { tokens: 300000, window: 500000 }) ?? '', /states your context at 63%/, '3 points off is past it');
   assert.equal(shareRefusal('Contexto: 58 %.', { tokens: 300000, window: 500000 }), null);
   assert.equal(shareRefusal('JH 9 está al 10 % de contexto.', { tokens: 300000, window: 500000 }), null, 'another session\'s share');
   assert.equal(shareRefusal('Nothing about it.', { tokens: 300000, window: 500000 }), null);

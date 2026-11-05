@@ -30,7 +30,8 @@ test('the record folders are the main checkout\'s and each worktree\'s that can 
   try {
     const folders = recordFolders({ cwd: made.tree, env: { CLAUDE_CONFIG_DIR: made.config }, homedir: () => assert.fail('no home is read'), run: made.run });
     assert.deepEqual(folders, [made.folder(made.main), made.folder(made.tree)]);
-    const failing = () => ({ status: 128, stdout: '' });
+    // git failing with output still in stdout: the folders of a failed listing are not read as worktrees.
+    const failing = (command, args) => (args[0] === 'worktree' ? { status: 128, stdout: made.run(command, args).stdout } : made.run(command, args));
     assert.deepEqual(recordFolders({ cwd: made.main, env: { CLAUDE_CONFIG_DIR: made.config }, homedir: () => '', run: failing }), [made.folder(made.main)], 'no git: the folder of cwd alone');
   } finally {
     made.cleanup();
@@ -54,8 +55,9 @@ test('the records read are the sessions\' usage in the window, their calls and e
     fs.writeFileSync(path.join(agents, 'agent-a2.jsonl'), jsonl([]));
     const read = await readRecords([folder], { since: 0, inWindow: (timestamp) => timestamp.startsWith('2026-10-14') });
     assert.equal(read.calls.has('t1'), true);
-    assert.deepEqual(read.records.map(({ session, agentId, meta }) => [session, agentId, meta.agentType ?? null]), [['s1', 'a1', 'Explore'], ['s1', 'a2', null]]);
-    assert.deepEqual(read.records[0].entries, [{ type: 'assistant', timestamp: '2026-10-14T14:02:00Z', requestId: undefined, effort: 'high', message: { id: 'm1', model: 'claude-haiku-5-5', usage: { input_tokens: 100, output_tokens: 1 } } }]);
+    assert.deepEqual([read.sessions.input, read.sessions.messages], [300, 1], 'the session\'s usage inside the window only, not the 9999 of the day before');
+    assert.deepEqual(read.records.map(({ session, agentId, meta }) => [session, agentId, meta.agentType ?? null]).sort((x, y) => x[1].localeCompare(y[1])), [['s1', 'a1', 'Explore'], ['s1', 'a2', null]]);
+    assert.deepEqual(read.records.find((one) => one.agentId === 'a1').entries, [{ type: 'assistant', timestamp: '2026-10-14T14:02:00Z', requestId: undefined, effort: 'high', message: { id: 'm1', model: 'claude-haiku-5-5', usage: { input_tokens: 100, output_tokens: 1 } } }]);
     assert.equal(JSON.stringify(read.records).includes(SECRET), false);
     const later = await readRecords([folder], { since: Date.now() + 3600_000, inWindow: () => true });
     assert.deepEqual(later.records, [], 'a file changed before `since` is not read');

@@ -8,7 +8,6 @@ import { DEFAULT_CONTEXT_WINDOW, percentOf } from './sessions.mjs';
  * app's own reading within 2 points in 110 of 127 matched cases (odd/tasks/honesty-audit.md, version 4). */
 export const SHARE_TOLERANCE = 2;
 
-
 // The share after a context word that is the writer's: "Contexto: 77%", "Mi contexto: 62 %", "contexto de esta
 // sesión está en 76%". The context word opens the clause (after list and bold marks), or follows "mi"/"my", or is
 // followed by "de esta sesión"/"of this session"; between it and the number stand only a colon, bold marks and a
@@ -181,7 +180,3 @@ export function shareRefusal(text, { tokens, window }) {
     + 'sent: correct it in one line with the share mcp__ccd_session_mgmt__get_usage reads now, and say no share you have '
     + 'not just read.';
 }
-
-/** `timestamp` as `HH:MM` in the local time `offsetMinutes` east of UTC, or null when it is no time. `offsetMinutes`
- * is a number, or a function giving the offset at a timestamp: a day before a clock change has another offset than
- * today (Codex, 2026-10-15). */

@@ -12,6 +12,9 @@ import { SHARE_TOLERANCE, isOwnReply, ownShares, recordedShare, windowRead } fro
 const MESSAGE_TOOLS = new Set(['SendMessage', 'mcp__ccd_session_mgmt__send_message']);
 const pad = (n) => String(n).padStart(2, '0');
 
+/** `timestamp` as `HH:MM` in the local time `offsetMinutes` east of UTC, or null when it is no time. `offsetMinutes`
+ * is a number, or a function giving the offset at a timestamp: a day before a clock change has another offset than
+ * today (Codex, 2026-10-15). */
 function localHour(timestamp, offsetMinutes) {
   const at = Date.parse(timestamp);
   if (Number.isNaN(at)) return null;
