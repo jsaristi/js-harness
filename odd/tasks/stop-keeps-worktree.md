@@ -75,9 +75,10 @@ Nothing planned: the brief chose the guard, the explicit option and the message.
    skill's restart section and its source in `bin/`."
 
 ## Tasks
-- [ ] T1 (kind: build) spec 1: the test first, then the guard and `--remove-worktree` · `bin/sessions-background.mjs`
-- [ ] T2 (kind: docs) spec 2: the skill's restart section and its sessions start line · `bin/lib/manifest.mjs`
-- [ ] T3 (kind: verify) Codex, the Claude lenses, an independent verifier, the pull request
+- [x] T1 (kind: build) spec 1: the test first, then the guard and `--remove-worktree` · `bin/sessions-background.mjs` ·
+  c053a141
+- [x] T2 (kind: docs) spec 2: the skill's restart section and its sessions start line · `bin/lib/manifest.mjs` · c053a141
+- [x] T3 (kind: verify) Codex, the Claude lenses, an independent verifier, the pull request · PR 771
 
 ## Log
 - L1 (2026-11-04, the brief from the lead session `local_8bd203e6`): "Make `sessions stop` refuse, exiting non-zero and
@@ -102,3 +103,17 @@ Nothing planned: the brief chose the guard, the explicit option and the message.
   none). `README.md` and `docs/SPEC.md` described stop's removal and now say it refuses; neither told the lead to
   restart with stop and start. The installed skill under `~/.claude/skills` is written by install from
   `bin/lib/manifest.mjs` and is not edited here.
+- L6 The first commit of the code was refused by the gate: the depth pass's verdict must be committed alone first
+  (c73c4aaf); the second by `bin/rules-coverage.test.mjs:53`, the coverage register stale after the skill's sentences
+  changed: `rules coverage --refresh` settled 1 line, and c053a141 passed the gate.
+- L7 Reviews of c053a141. Codex (c73c4aa..c053a14): correct, 0.9, no findings, 87,777 input tokens (planned 74,000 to
+  110,000). Claude lenses risk, reliability, readability (b0d55eb..c053a14): 0 findings each, about 89,000 input tokens.
+  Independent verifier (a fresh sub-agent given the request and the code, 106,364 tokens): PASS. It ran the stop tests
+  with the guard set to `null` in an archive copy: the new test fails, the other 7 pass. Its low notes, left open:
+  (1) `ENOENT` lets the guard through, so it holds only as far as `worktreeOf` derives the path claude used; the 82
+  record entries with a worktree all match it; (2) a session started without `--worktree` in a folder that is itself a
+  worktree is not checked; one sample (309cf665, 2026-10-30) shows claude rm left such a folder's files; (3) the start
+  output (`bin/sessions-background.mjs:256`, `:365`), the board title (`bin/lib/background.mjs:503`) and
+  `bin/install.mjs:674` still say "sessions stop <id> removes it" without the option; the refusal names the right
+  command. It agrees `uninstall machine` (L2) is the next follow-up, the same failure at a larger scale.
+- L8 Pull request 771 opened: https://github.com/jsaristi/js-harness/pull/771. The owner merges.
