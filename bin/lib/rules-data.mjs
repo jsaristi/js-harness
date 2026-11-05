@@ -568,7 +568,7 @@ export const RULES = [
   },
   {
     "id": "reviewed-commit-lines",
-    "subject": "about how many changed lines a commit that will be reviewed stays under",
+    "subject": "about how many changed lines a commit that will be reviewed stays under, a file it renames counted by the lines it changes",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-11",
