@@ -26,6 +26,7 @@
 // out (`./codex-review-scope.mjs`). `--base` reviews every file, so a range that leaves some out is asked
 // by its files too, also when they fit in one part: that one part is asked with the text of a part, which
 // then says nothing of parts. Which files were left out, and how many, is not in the prompt.
+import { RENAMES } from './codex-review-parts.mjs';
 import { parseContract } from './contract.mjs';
 import { NO_TEST_EXIT, NO_TEST_LINE } from './no-test-outside-turn.mjs';
 
@@ -108,9 +109,9 @@ function scope(from, head, part, leftOut, merge = null) {
   if (!isPart(part, merge ? Math.max(leftOut, 1) : leftOut)) {
     throw new Error(`Not a part of a range reviewed in parts (\`{ index, of, files }\`, with a file at least, and two parts or more unless the range leaves files out of the review): ${JSON.stringify(part)}.`);
   }
-  // `--no-renames`: with it the diff of some files is the diff of each of them, whatever the others are. A
-  // file that was renamed is then shown whole, as one removed and one added, also when its two names are in
-  // different parts, which a rename could not be shown across.
+  // `RENAMES`: a renamed file is shown as a rename, by the lines it changes, since its two names are always
+  // in one part (`reviewParts`); the diff of the part is then the part's share of the diff of the range, as
+  // the count of the range made it (odd/tasks/rename-counted-by-changes.md).
   //
   // `--literal-pathspecs`: what follows `--` is read by git as pathspecs, and a file name may be one that
   // means something else. `*.md`, `a?.txt` and `app/[id]/page.tsx` are patterns, which also match the files
@@ -129,7 +130,7 @@ function scope(from, head, part, leftOut, merge = null) {
   // and the merge: `git show --remerge-diff` writes a temporary object directory, and in Codex's read-only
   // sandbox it printed nothing and exited 0 (odd/tasks/merge-review.md, L12).
   if (merge) {
-    const command = `git --literal-pathspecs diff --no-renames ${merge} ${head} -- ${files}`;
+    const command = `git --literal-pathspecs diff ${RENAMES} ${merge} ${head} -- ${files}`;
     const which = part.of === 1 ? 'the files the command below names' : `part ${part.index} of ${part.of} of that review: the files the command below names`;
     return [
       `Review what was written in the merge commit ${head}, whose first parent is ${from}: the resolution of its conflicts and any edit made in it. This review covers ${which}.`,
@@ -138,7 +139,7 @@ function scope(from, head, part, leftOut, merge = null) {
       `What the merge took unchanged from either parent was reviewed on its own branch: ${context}`,
     ];
   }
-  const command = `git --literal-pathspecs diff --no-renames ${from} ${head} -- ${files}`;
+  const command = `git --literal-pathspecs diff ${RENAMES} ${from} ${head} -- ${files}`;
   // The one part of a range that leaves files out: the review is of its files, and there is no other part
   // to speak of.
   if (part.of === 1) {

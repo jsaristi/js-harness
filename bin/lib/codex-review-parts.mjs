@@ -30,36 +30,54 @@ export const PART_MAX_CHANGED_LINES = ruleValue('review-part-lines', 'changed li
 // to about 190 characters a path, the two commit ids included.
 export const PART_MAX_FILES = ruleValue('review-part-files', 'files');
 
-// One record of `git diff --numstat -z --no-renames`: the additions, the deletions (`-` for both when the
-// file is binary) and the path, which may hold anything but a NUL.
-const NUMSTAT_RECORD = /^(?:(\d+)\t(\d+)|-\t-)\t([\s\S]+)$/;
+// How every count, split and diff of a range asks for renames, so that they agree: a file a range renames is
+// one file under its new name, counted by the lines it changes, as git measures a rename, and not the file
+// removed and added again (odd/tasks/rename-counted-by-changes.md). The option itself, and not `diff.renames`
+// of whoever runs the command, says it.
+export const RENAMES = '--find-renames';
 
-/** The changed files of a range, from the output of `git diff --numstat -z --no-renames <from> <head>`:
- * each `{ path, changedLines, binary }`, in git's order. `changedLines` is the additions plus the deletions,
- * and 0 for a binary file, which git counts no lines of and which is still a changed file. With `-z` a
- * path is written as it is, with no quoting, so it is taken as it is.
+// One record of `git diff --numstat -z --find-renames`: the additions, the deletions (`-` for both when the
+// file is binary) and the path, which may hold anything but a NUL; a rename has an empty path here, and its
+// old name and its new one are the two records after it.
+const NUMSTAT_RECORD = /^(?:(\d+)\t(\d+)|-\t-)\t([\s\S]*)$/;
+
+/** The changed files of a range, from the output of `git diff --numstat -z --find-renames <from> <head>`:
+ * each `{ path, changedLines, binary }`, in git's order, with `from`, its old name, for a file the range
+ * renames. `changedLines` is the additions plus the deletions, and 0 for a binary file, which git counts no
+ * lines of and which is still a changed file. With `-z` a path is written as it is, with no quoting, so it
+ * is taken as it is.
  *
- * Throws on anything that is not such a record, a rename among them (`-z` writes one with an empty path
- * and two names after it, which is why the command is run with `--no-renames`): a path guessed wrong would
- * be a file no part reviews. */
+ * Throws on anything that is not such a record, a rename cut before its two names among them: a path
+ * guessed wrong would be a file no part reviews. */
 export function numstatFiles(numstat) {
-  if (typeof numstat !== 'string') throw new Error(`Expected the output of \`git diff --numstat -z --no-renames\`, got ${typeof numstat}.`);
+  if (typeof numstat !== 'string') throw new Error(`Expected the output of \`git diff --numstat -z ${RENAMES}\`, got ${typeof numstat}.`);
   if (numstat === '') return [];
   const records = numstat.split('\0');
   // Every record ends with a NUL, so the text after the last one is empty unless the output was cut.
   const cut = records.pop();
   if (cut !== '') throw new Error(`The \`git diff --numstat -z\` output does not end where a record ends: ${JSON.stringify(cut.slice(0, 80))}.`);
-  return records.map((record) => {
+  const files = [];
+  for (let at = 0; at < records.length; at += 1) {
+    const record = records[at];
     const match = NUMSTAT_RECORD.exec(record);
-    if (!match) throw new Error(`Not a record of \`git diff --numstat -z --no-renames\`: ${JSON.stringify(record.slice(0, 80))}.`);
-    const [, added, deleted, path] = match;
+    if (!match) throw new Error(`Not a record of \`git diff --numstat -z ${RENAMES}\`: ${JSON.stringify(record.slice(0, 80))}.`);
+    const [, added, deleted, named] = match;
     const binary = added === undefined;
-    return { path, changedLines: binary ? 0 : Number(added) + Number(deleted), binary };
-  });
+    const changedLines = binary ? 0 : Number(added) + Number(deleted);
+    if (named !== '') {
+      files.push({ path: named, changedLines, binary });
+      continue;
+    }
+    const [from, path] = [records[at + 1], records[at + 2]];
+    if (!from || !path) throw new Error(`Not a rename of \`git diff --numstat -z ${RENAMES}\`, which names its old file and its new one: ${JSON.stringify(record.slice(0, 80))}.`);
+    files.push({ path, from, changedLines, binary });
+    at += 2;
+  }
+  return files;
 }
 
 const isChangedFile = (file) =>
-  file !== null && typeof file === 'object' && typeof file.path === 'string' && file.path !== '' && Number.isInteger(file.changedLines) && file.changedLines >= 0;
+  file !== null && typeof file === 'object' && typeof file.path === 'string' && file.path !== '' && (file.from === undefined || (typeof file.from === 'string' && file.from !== '')) && Number.isInteger(file.changedLines) && file.changedLines >= 0;
 
 /** The parts a range is reviewed in: `files` (each `{ path, changedLines }`, as `numstatFiles` gives them)
  * grouped into `{ files, changedLines }`, the paths of a part and the changed lines they add up to.
@@ -71,6 +89,9 @@ const isChangedFile = (file) =>
  *    is ever in two parts.
  *  - A file that changes no line (a binary one) is in the part its place in the order gives it, and counts
  *    as a file of that part like any other.
+ *  - A renamed file (one with `from`) is placed by its new name and its two names are in one part, the old
+ *    before the new: a part that named one of them would show the file whole, added or removed. Each name
+ *    counts toward `maxFiles`, since each goes on the command line; a part of a rename alone holds both.
  *  - No part is empty: a range with no file has no part, and one at or under both bounds has one.
  *
  * Throws when either bound is not a positive integer or a file is not a path with a count. */
@@ -87,15 +108,16 @@ export function reviewParts(files, maxChangedLines = PART_MAX_CHANGED_LINES, max
   const ordered = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   const parts = [];
   let part = null;
-  for (const { path, changedLines } of ordered) {
+  for (const { path, from, changedLines } of ordered) {
+    const names = from === undefined ? [path] : [from, path];
     // A file that does not fit beside the ones before it starts a part. One larger than the bound fits
     // beside nothing, and nothing fits beside it, so it ends up alone without being asked for by name. A
     // part that already holds its count of files is full too, whatever room its lines leave.
-    if (part === null || part.changedLines + changedLines > maxChangedLines || part.files.length >= maxFiles) {
+    if (part === null || part.changedLines + changedLines > maxChangedLines || part.files.length + names.length > maxFiles) {
       part = { files: [], changedLines: 0 };
       parts.push(part);
     }
-    part.files.push(path);
+    part.files.push(...names);
     part.changedLines += changedLines;
   }
   return parts;

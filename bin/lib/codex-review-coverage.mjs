@@ -10,6 +10,7 @@
 // that the push then refuses, or pay again for one the push lets through.
 import { spawnSync } from 'node:child_process';
 import { isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews } from './codex-reviews.mjs';
+import { RENAMES } from './codex-review-parts.mjs';
 import { leftOutOf } from './codex-review-scope.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
 
@@ -432,11 +433,11 @@ export function baseLeftOut(cwd, { from, tip, remote = 'origin', spawn = spawnSy
 
 /** The git arguments of the diff a review of `from..head` reads, with `shape` (options of the diff) and,
  * when given, `files` as pathspecs: `git diff <from> <head>`, or, for the review of a merge (`merge`, from
- * `mergeStart`), `git diff <automatic merge> <head>`, what was written in the merge. Renames are off in both,
- * as everywhere a range is counted, split or shown. */
+ * `mergeStart`), `git diff <automatic merge> <head>`, what was written in the merge. Renames are asked for in
+ * both (`RENAMES`), as everywhere a range is counted, split or shown. */
 export function rangeDiff({ from, head, merge = null }, shape = [], files = null) {
   const paths = files === null ? [] : ['--', ...files];
-  return ['diff', ...shape, '--no-renames', merge === null ? from : merge.auto, head, ...paths];
+  return ['diff', ...shape, RENAMES, merge === null ? from : merge.auto, head, ...paths];
 }
 
 /** The full id of the tree that merging `first` and `side` again gives, conflict markers included, as

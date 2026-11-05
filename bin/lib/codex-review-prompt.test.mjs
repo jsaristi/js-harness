@@ -50,7 +50,7 @@ test('the prompt of a merge names the diff of the automatic merge and the merge 
     body(text),
     [
       `Review what was written in the merge commit ${HEAD}, whose first parent is ${FROM}: the resolution of its conflicts and any edit made in it. This review covers the files the command below names.`,
-      `Run \`git --literal-pathspecs diff --no-renames ${TREE} ${HEAD} -- bin/a.mjs 'odd name.txt'\` to inspect them: ${TREE} is the tree that merging its two parents again automatically gives, conflict markers included, so its output is what was written in the merge, and it is the whole change under review.`,
+      `Run \`git --literal-pathspecs diff --find-renames ${TREE} ${HEAD} -- bin/a.mjs 'odd name.txt'\` to inspect them: ${TREE} is the tree that merging its two parents again automatically gives, conflict markers included, so its output is what was written in the merge, and it is the whole change under review.`,
       'Report only what is wrong with the lines that diff adds or changes. Read any other file of the repository for context, and report nothing about code the diff leaves as it was.',
       'What the merge took unchanged from either parent was reviewed on its own branch: read them for context, and report nothing about them.',
       '',
@@ -198,7 +198,7 @@ test('reviewPrompt for a part says which part it is, and names its files in the 
   assert.ok(prompt.includes(`${FROM}..${HEAD}`), prompt);
   assert.match(prompt, /part 2 of 3/);
   // The files are in the command and nowhere else: the prompt is paid on every request of the review.
-  assert.ok(prompt.includes(`\`git --literal-pathspecs diff --no-renames ${FROM} ${HEAD} -- bin/a.mjs 'docs/my notes.md'\``), prompt);
+  assert.ok(prompt.includes(`\`git --literal-pathspecs diff --find-renames ${FROM} ${HEAD} -- bin/a.mjs 'docs/my notes.md'\``), prompt);
   assert.equal(prompt.split('my notes.md').length, 2, 'each file is named once');
   assert.equal(prompt, reviewPrompt({ from: FROM, head: HEAD, part: { ...PART, files: [...PART.files] } }), 'the same part gives the same text');
   assert.equal(prompt.endsWith('\n'), true);
@@ -214,7 +214,7 @@ test('reviewPrompt for a part names its files as themselves: git is told to read
   const files = ['*.md', 'a?.txt', 'a[1].txt', ':(exclude)a.txt', ':!a.txt', ':/top.txt'];
   const prompt = reviewPrompt({ from: FROM, head: HEAD, part: { index: 1, of: 2, files } });
   // The option goes before `diff`: it is git's, for every pathspec of the command, and no part of `diff`.
-  assert.ok(prompt.includes(`\`git --literal-pathspecs diff --no-renames ${FROM} ${HEAD} -- ${files.map((file) => `'${file}'`).join(' ')}\``), prompt);
+  assert.ok(prompt.includes(`\`git --literal-pathspecs diff --find-renames ${FROM} ${HEAD} -- ${files.map((file) => `'${file}'`).join(' ')}\``), prompt);
   // And a shell reads no pattern into them either: each is in single quotes.
   for (const file of files) assert.equal(quotedPath(file), `'${file}'`, file);
   // The whole range names no file, so its command is as it was.
@@ -303,7 +303,7 @@ test('a range of one part that leaves files out is asked by its files, as a part
   assert.equal(
     prompt,
     `Review the code changes in the committed range ${FROM}..${HEAD}. This review covers the files the command below names.\n` +
-      `Run \`git --literal-pathspecs diff --no-renames ${FROM} ${HEAD} -- bin/a.mjs 'src/my code.js'\` to inspect them: its output is the whole change under review.\n` +
+      `Run \`git --literal-pathspecs diff --find-renames ${FROM} ${HEAD} -- bin/a.mjs 'src/my code.js'\` to inspect them: its output is the whole change under review.\n` +
       'Report only what is wrong with the lines that diff adds or changes. Read any other file of the repository for context, and report nothing about code the diff leaves as it was.\n' +
       'The other files the range changes are left out of this review: read them for context, and report nothing about them.\n',
   );

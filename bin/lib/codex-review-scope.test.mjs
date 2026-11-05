@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DOCUMENT, isDocument, leftOutOf, leftOutSaid, MARKED, patchOfRead, REVIEW_ATTRIBUTE, reviewScope, unsetPaths } from './codex-review-scope.mjs';
+import { DOCUMENT, isDocument, leftOutOf, leftOutOfFiles, leftOutSaid, MARKED, patchOfRead, REVIEW_ATTRIBUTE, reviewScope, unsetPaths } from './codex-review-scope.mjs';
 
 // --- a document ---
 
@@ -307,6 +307,26 @@ test('the files of a range are split into what a review reads and what it leaves
   assert.deepEqual(all.left, []);
   assert.deepEqual(all.leftOut, { files: 0, changedLines: 0, documents: { files: 0, changedLines: 0 }, marked: { files: 0, changedLines: 0 } });
   assert.deepEqual(reviewScope([], why).leftOut.files, 0);
+});
+
+// Classed by its new name alone, a move of code a review reads to a path the project marks left the code unread
+// (odd/tasks/rename-counted-by-changes.md): a rename is left out only when both its names are.
+test('a renamed file is left out only when both its names are, under the reason of its new name', () => {
+  const files = [
+    { ...file('evals/results/a.json', 20), from: 'bin/a.mjs' },
+    { ...file('evals/results/b.json', 2), from: 'evals/results/x.json' },
+    { ...file('docs/b.md', 1), from: 'README.md' },
+    { ...file('notes.md', 4), from: 'bin/c.mjs' },
+    file('evals/results/x.json', 3),
+  ];
+  const marks = () => ({ status: 0, stdout: attrOutput(['evals/results/a.json', 'unset'], ['bin/a.mjs', 'unspecified'], ['evals/results/b.json', 'unset'], ['evals/results/x.json', 'unset'], ['bin/c.mjs', 'unspecified']) });
+  const git = fakeGit(marks);
+  const why = leftOutOfFiles(files, { cwd: path.resolve('/repo'), source: SOURCE, spawn: git.spawn });
+  assert.deepEqual([...why], [['evals/results/b.json', MARKED], ['docs/b.md', DOCUMENT], ['evals/results/x.json', MARKED]]);
+  assert.deepEqual(reviewScope(files, why).read.map((one) => one.path), ['evals/results/a.json', 'notes.md']);
+  // Both names of a rename are asked about; when git cannot say, the answer is `null`.
+  assert.match(git.calls[1].opts.input, /^bin\/a\.mjs\0evals\/results\/a\.json\0/);
+  assert.equal(leftOutOfFiles(files, { cwd: path.resolve('/repo'), source: SOURCE, spawn: () => ({ status: 128, stdout: '' }) }), null);
 });
 
 test('what was left out is said with how many files and changed lines, and why', () => {

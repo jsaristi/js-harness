@@ -42,8 +42,8 @@ this change to his rule, through `rules change`, and neither a higher cap nor an
   on and only one of the names would show the file whole, added or removed, and its count would not hold.
 - Renames are asked for with `--find-renames` wherever a range is counted, split or shown — because a diff without it
   follows `diff.renames` of whoever runs it, and the count, the parts and what Codex is shown must agree.
-- A rename is left out of a review, or read, by its new name — because the marks are read at the head, where the file
-  has its new name.
+- A rename is left out of a review only when both its names are, under the reason of its new name — because a move of
+  code a review reads to a path the project marks would otherwise take the code out of every review (L6).
 - A range where git finds no rename is counted as today — because only a rename record changes anything.
 
 ## Ask me before
@@ -98,3 +98,14 @@ Nothing planned: question 193 decided the change. A question goes to the lead wi
   session), so the source quotes what he typed for the number on 2026-10-11 ("Sí, quedan los tres números y el piso",
   `130317af`, line 2963), and his tapped answer to question 193 is where he accepted the reading, as the source of
   `depth-pass` does. The dry run passes: "form; source words".
+- L4 2026-11-05, the bound of files: each of a rename's two names counts toward `review-part-files`, since each goes
+  on the command line the bound protects, and a part of a rename alone holds both. The commits: the code and its
+  tests first, then the declaration by `rules change`, which refuses a tree with changes outside the rule's home.
+- L5 2026-11-05, the tests first, each seen red before its code: `check-commit-size.test.mjs` (2,401 changed lines
+  where 1 was expected), `codex-review-parts.test.mjs` (2 failing), `codex-review-prompt.test.mjs` (4 failing), the
+  rename test of `codex-review.test.mjs` ("showed 0 of 8 changed lines of part 2 of 4").
+- L6 2026-11-05, the first gate of the code refused it (GitHub run 42065401146): `check-codex-reviews.test.mjs`, "a
+  commit that moves a file a review reads to a path the project marks", found that a rename classed by its new name
+  alone took code out of the review. The constraint is corrected: a rename is left out only when both its names are
+  (`leftOutOfFiles`, `bin/lib/codex-review-scope.mjs`), under the reason of its new name; the test now expects the
+  move read, by its 0 changed lines.

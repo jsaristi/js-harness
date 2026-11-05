@@ -3522,14 +3522,14 @@ function runIds() {
   return () => idOf((made += 1));
 }
 
-/** What `git --literal-pathspecs diff --no-renames <base> <head> -- <files>` prints in `root`: the command the
+/** What `git --literal-pathspecs diff --find-renames <base> <head> -- <files>` prints in `root`: the command the
  * prompt of a part names, where each of `files` is that one path and no pattern. */
-const partDiff = (root, base, head, ...files) => git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-renames', base, head, '--', ...files);
+const partDiff = (root, base, head, ...files) => git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--find-renames', base, head, '--', ...files);
 
 /** The events of a session that ran the command of its part, got the whole diff of `files` back, and ended
  * with the review `rendered`; with `null`, it ended with no message at all. */
 const partSaid = (rendered, root, base, head, ...files) =>
-  jsonl(thread, turn, cmd(`git --literal-pathspecs diff --no-renames ${base} ${head} -- ${files.join(' ')}`, 0, partDiff(root, base, head, ...files)), ...(rendered === null ? [] : [msg(rendered)]), done);
+  jsonl(thread, turn, cmd(`git --literal-pathspecs diff --find-renames ${base} ${head} -- ${files.join(' ')}`, 0, partDiff(root, base, head, ...files)), ...(rendered === null ? [] : [msg(rendered)]), done);
 
 /** The events of a session that ran the command of its part and got the whole diff of `files` back. */
 const partShown = (root, base, head, ...files) => partSaid(FINDINGS, root, base, head, ...files);
@@ -3593,7 +3593,7 @@ test('a lean range over the bound is reviewed in parts: one session after anothe
     assert.deepEqual(call.opts.stdio, ['pipe', 'pipe', 'inherit']);
     assert.deepEqual(call.child.received, { text: reviewPrompt({ from: base, head, part: parts[at] }), ended: true });
   });
-  assert.ok(fake.calls[0].child.received.text.includes(`\`git --literal-pathspecs diff --no-renames ${base} ${head} -- a.txt b.txt\``));
+  assert.ok(fake.calls[0].child.received.text.includes(`\`git --literal-pathspecs diff --find-renames ${base} ${head} -- a.txt b.txt\``));
   // A home per part, named after its run, holding the login alone, and the only one there while it runs.
   assert.deepEqual(seen, [idOf(1), idOf(2)].map((id) => ({ home: path.join(mine.homes, id), entries: ['auth.json'], homes: [id] })));
   assert.deepEqual(listed(mine.homes), []);
@@ -3934,7 +3934,7 @@ test('out of a turn, a part whose incorrect was excused and that is kept for the
   const ids = runIds();
   const outOfTurn = { PATH: '/usr/bin' };
   // Part 1 ran `git diff` of its file and a `node --test` the preload refused, and blamed only the refusal.
-  const refusedPart = jsonl(thread, turn, cmd(`git --literal-pathspecs diff --no-renames ${base} ${head} -- a.txt`, 0, partDiff(root, base, head, 'a.txt')), REFUSED, msg(FINDINGS), done);
+  const refusedPart = jsonl(thread, turn, cmd(`git --literal-pathspecs diff --find-renames ${base} ${head} -- a.txt`, 0, partDiff(root, base, head, 'a.txt')), REFUSED, msg(FINDINGS), done);
   const failed = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], {
     ...fakeCodexInParts(
       { stdout: refusedPart, said: ONLY_THE_REFUSAL },
@@ -4386,7 +4386,7 @@ test('a file whose name git would read as a pattern is reviewed as that one file
   const names = ['a1.txt', 'a[1].txt', 'b.txt'];
   const { root, base, head } = makeRepoWith(Object.fromEntries(names.map((name) => [name, `${name} one\n`])), Object.fromEntries(names.map((name) => [name, `${name} two\n`])));
   // Read as a pattern, which is how git reads a pathspec unless told otherwise, it shows two files.
-  const asPattern = git(root, 'diff', '--no-renames', base, head, '--', 'a[1].txt');
+  const asPattern = git(root, 'diff', '--find-renames', base, head, '--', 'a[1].txt');
   assert.deepEqual([...new Set(patchKeys(asPattern).map((key) => key.split('\n')[0]))], ['a1.txt', 'a[1].txt'], 'this git reads the name as a pattern');
   // Three parts of one file, in the order of the names. Each session shows the diff of its own file alone.
   const fake = fakeCodexInParts(...names.map((name) => ({ stdout: partShown(root, base, head, name) })));
@@ -4397,7 +4397,7 @@ test('a file whose name git would read as a pattern is reviewed as that one file
   assert.equal(readCodexReviews(root).length, 1);
   // The command the part of that file was told to run, run for real: it shows that file and no other.
   const asked = fake.calls[1].child.received.text;
-  assert.ok(asked.includes(`\`git --literal-pathspecs diff --no-renames ${base} ${head} -- 'a[1].txt'\``), asked);
+  assert.ok(asked.includes(`\`git --literal-pathspecs diff --find-renames ${base} ${head} -- 'a[1].txt'\``), asked);
   assert.deepEqual(patchKeys(runCommandOf(root, asked)), ['a[1].txt\n-a[1].txt one', 'a[1].txt\n+a[1].txt two']);
   // And the lines of the file the pattern also matches are no evidence for this part: a session that showed
   // that other file alone did not show its own.
@@ -4466,11 +4466,14 @@ test('a range over the default bound of 400 changed lines is reviewed in parts w
   }
 });
 
-test('a renamed file and a binary one, in parts: the renamed file is shown whole under both its names, and a part of binary files alone needs one command that worked', async () => {
+// A move of reviewed files was shown to Codex whole, every unchanged line as new (odd/tasks/rename-counted-by-changes.md).
+test('a renamed file and a binary one, in parts: the renamed file is one file of one part under both its names, shown as a rename, and a part needs one command that worked', async () => {
   const root = tmp('js-harness-codex-review-');
   git(root, 'init');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
+  // Renames are asked for by the command, whatever the configuration of whoever runs it says.
+  git(root, 'config', 'diff.renames', 'false');
   declareReviewOn(root);
   fs.writeFileSync(path.join(root, 'old.txt'), 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\n', 'utf8');
   fs.writeFileSync(path.join(root, 'z.txt'), 'z1\n', 'utf8');
@@ -4484,27 +4487,23 @@ test('a renamed file and a binary one, in parts: the renamed file is shown whole
   fs.writeFileSync(path.join(root, 'blob.bin'), Buffer.from([0, 9, 9, 0, 255]));
   git(root, 'commit', '-am', 'two');
   const head = git(root, 'rev-parse', 'HEAD');
-  // As git shows the range whole, it is a rename with one line changed; a part cannot show a rename whose
-  // two names are in different parts, so every part is asked, and checked, with renames off.
-  assert.match(patchOf(root, base), /rename from old\.txt/);
-  const order = ['blob.bin', 'new.txt', 'old.txt', 'z.txt'];
-  const fake = fakeCodexInParts(...order.map((file) => ({ stdout: partShown(root, base, head, file) })));
-  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--part-lines', '4', '--cwd', root], { ...fake, randomUUID: runIds() });
+  // The rename is 2 changed lines, the binary file none: the first part holds both, its old name before its new.
+  const fake = fakeCodexInParts({ stdout: partShown(root, base, head, 'blob.bin', 'old.txt', 'new.txt') }, { stdout: partShown(root, base, head, 'z.txt') });
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--part-lines', '2', '--cwd', root], { ...fake, randomUUID: runIds() });
   assert.equal(result.code, 0, result.err);
+  assert.ok(fake.calls[0].child.received.text.includes(`\`git --literal-pathspecs diff --find-renames ${base} ${head} -- blob.bin old.txt new.txt\``), fake.calls[0].child.received.text);
   assert.deepEqual(readCodexReviewRuns(root).map((line) => [line.part, line.coverage]), [
-    [{ index: 1, of: 4, files: 1, changedLines: 0 }, { seen: 0, total: 0 }],
-    [{ index: 2, of: 4, files: 1, changedLines: 8 }, { seen: 8, total: 8 }],
-    [{ index: 3, of: 4, files: 1, changedLines: 8 }, { seen: 8, total: 8 }],
-    [{ index: 4, of: 4, files: 1, changedLines: 2 }, { seen: 2, total: 2 }],
+    [{ index: 1, of: 2, files: 3, changedLines: 2 }, { seen: 2, total: 2 }],
+    [{ index: 2, of: 2, files: 1, changedLines: 2 }, { seen: 2, total: 2 }],
   ]);
   assert.equal(readCodexReviews(root).length, 1);
-  // A session that showed the new name as git shows it in the whole range, a rename with one line changed, did
-  // not show every line of its part: the file is new there, and all of it is to be read.
-  const renamed = git(root, 'diff', '--no-color', base, head, '--', 'old.txt', 'new.txt');
-  const partial = fakeCodexInParts({ stdout: partShown(root, base, head, 'blob.bin') }, { stdout: reviewedWith(cmd('git diff', 0, renamed)) });
-  const refused = await run(['--base', 'HEAD~1', '--again', '--fresh', '--session', 'lean', '--part-lines', '4', '--cwd', root], { ...partial, randomUUID: runIds() });
+  // A session that showed the new name alone saw the file as added whole, and not the line the rename removed.
+  const alone = git(root, 'diff', '--no-color', '--find-renames', base, head, '--', 'new.txt');
+  assert.doesNotMatch(alone, /rename from/);
+  const partial = fakeCodexInParts({ stdout: reviewedWith(cmd('git diff', 0, alone)) });
+  const refused = await run(['--base', 'HEAD~1', '--again', '--fresh', '--session', 'lean', '--part-lines', '2', '--cwd', root], { ...partial, randomUUID: runIds() });
   assert.equal(refused.code, 1);
-  assert.match(refused.err, /showed 1 of 8 changed lines of part 2 of 4/);
+  assert.match(refused.err, /showed 1 of 2 changed lines of part 1 of 2/);
   assert.equal(readCodexReviews(root).length, 1, 'no second record');
 });
 
@@ -5034,12 +5033,13 @@ test('in parts, the files left out are in no part and in no prompt, and the part
   // left out, told apart by their place. A patch that is not one section a file refuses the run.
   const cut = (command, args, opts) => {
     const answer = fake.spawn(command, args, opts);
-    const whole = command === 'git' && args.includes('--no-renames') && !args.includes('--numstat') && !args.includes('--');
+    const whole = command === 'git' && args.includes('--find-renames') && !args.includes('--numstat') && !args.includes('--');
     return whole ? { ...answer, stdout: answer.stdout.slice(0, answer.stdout.lastIndexOf('diff --git ')) } : answer;
   };
   const none = fakeCodexInParts();
-  const refused = await run(['--base', 'HEAD~1', '--part-lines', '2', '--cwd', root], { ...none, spawn: cut });
-  assert.equal(refused.code, 1);
+  // `--again`: the range has its record now, and the run is to reach the check of its parts.
+  const refused = await run(['--base', 'HEAD~1', '--again', '--part-lines', '2', '--cwd', root], { ...none, spawn: cut });
+  assert.equal(refused.code, 1, refused.out);
   assert.match(refused.err, /^Could not check the parts against the range\. The patch of the range holds 3 sections for its 4 files, .*\nThe review was not started and nothing was recorded\.$/);
   assert.deepEqual([none.calls.length, none.probes.length, readCodexReviews(root).length], [0, 0, 1]);
 });
@@ -5587,7 +5587,7 @@ test('the diff of a merge review is a diff of the automatic merge and the merge,
   const [head, auto] = ['b'.repeat(40), 'd'.repeat(40)];
   const args = rangeDiff({ from: 'a'.repeat(40), head, merge: { side: 'c'.repeat(40), branch: 'origin/main', auto } }, ['--numstat'], ['m.txt']);
   // `log.showSignature` writes a signature in what `git show` and `git log` print, never in a `git diff`.
-  assert.deepEqual(args, ['diff', '--numstat', '--no-renames', auto, head, '--', 'm.txt']);
+  assert.deepEqual(args, ['diff', '--numstat', '--find-renames', auto, head, '--', 'm.txt']);
 });
 
 test('a merge of a branch the default branch does not hold is reviewed as before: from the merged branch, the whole branch', async () => {
@@ -5602,12 +5602,12 @@ test('a merge of a branch the default branch does not hold is reviewed as before
 test('a remerge diff git cannot run is named as the command that ran: the diff of the automatic merge against HEAD', async () => {
   const { root, main } = makeResolvedMergeRepo();
   const nothing = startsNothing(root);
-  // The remerge diff of a merge is the one run diff that has `--no-renames` and no submodule, numstat or path argument.
-  const remerge = (args) => args[0] === 'diff' && args.includes('--no-renames') && !args.some((a) => a.startsWith('--submodule') || a === '--numstat' || a === '--');
+  // The remerge diff of a merge is the one run diff that has `--find-renames` and no submodule, numstat or path argument.
+  const remerge = (args) => args[0] === 'diff' && args.includes('--find-renames') && !args.some((a) => a.startsWith('--submodule') || a === '--numstat' || a === '--');
   const spawn = (command, args, opts) => (command === 'git' && remerge(args) ? { status: 128, stdout: '', stderr: 'fatal' } : nothing.deps.spawn(command, args, opts));
   const result = await run(['--base', main, '--cwd', root, ...nothing.home], { ...nothing.deps, spawn });
   assert.equal(result.code, 1, result.err);
-  assert.match(result.err, /Could not run `git diff --no-renames [0-9a-f]{7} [0-9a-f]{7}` to know what the review must see, so it was not started and nothing was recorded\./);
+  assert.match(result.err, /Could not run `git diff --find-renames [0-9a-f]{7} [0-9a-f]{7}` to know what the review must see, so it was not started and nothing was recorded\./);
   nothing.untouched('a remerge diff git cannot run');
 });
 
@@ -5667,8 +5667,8 @@ test('the review of a resolved merge asks Codex for a diff of two objects that e
   // Codex's sandbox is read-only, and `git show --remerge-diff` prints nothing there (it writes a temporary
   // object directory): the command computes the automatic merge's tree itself and asks for a plain diff (L12).
   const auto = spawnSync('git', ['merge-tree', '--write-tree', mine, main], { cwd: root, encoding: 'utf8' }).stdout.split('\n')[0];
-  const command = `git --literal-pathspecs diff --no-renames ${auto} ${head} -- m.txt`;
-  const shown = git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-renames', auto, head, '--', 'm.txt');
+  const command = `git --literal-pathspecs diff --find-renames ${auto} ${head} -- m.txt`;
+  const shown = git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--find-renames', auto, head, '--', 'm.txt');
   // The same lines as the remerge-diff; only the label of a marker differs, a full id for an id and subject.
   const unlabeled = (diff) => patchKeys(diff).map((key) => key.replace(/^(.*\n-[<>]{7}) .*$/s, '$1')).sort();
   assert.deepEqual(unlabeled(shown), unlabeled(remergeOf(root, head, 'm.txt')), 'the same lines as the remerge-diff');
@@ -5758,8 +5758,8 @@ test('a merge of main below HEAD that has the Codex review off is not a turn of 
  * and the merge, as the merge's prompt tells it to, and answers `said`. */
 function mergeTurnSession({ root, mine, main, merge }, said) {
   const auto = spawnSync('git', ['merge-tree', '--write-tree', mine, main], { cwd: root, encoding: 'utf8' }).stdout.split('\n')[0];
-  const shown = git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-renames', auto, merge, '--', 'm.txt');
-  return { stdout: jsonl(thread, turn, cmd(`git --literal-pathspecs diff --no-renames ${auto} ${merge} -- m.txt`, 0, shown), msg(FINDINGS), done), ...(said ? { said } : {}) };
+  const shown = git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--find-renames', auto, merge, '--', 'm.txt');
+  return { stdout: jsonl(thread, turn, cmd(`git --literal-pathspecs diff --find-renames ${auto} ${merge} -- m.txt`, 0, shown), msg(FINDINGS), done), ...(said ? { said } : {}) };
 }
 
 /** The turn worktrees the common git dir of `root` holds now. */

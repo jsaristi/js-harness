@@ -18,9 +18,9 @@ import { readRules, ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { rulesOfText } from './lib/rules-change-run.mjs';
 import { inForceLines, isTextInForce, scanLines } from './lib/rules-scan.mjs';
-import { numstatFiles } from './lib/codex-review-parts.mjs';
+import { numstatFiles, RENAMES } from './lib/codex-review-parts.mjs';
 import { defaultBranch, gitOut } from './lib/codex-review-coverage.mjs';
-import { counted, leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
+import { counted, leftOutOfFiles, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 import { GATE_WAIT_MS } from './lib/gate-lock.mjs';
 import { cancelTicket, logTicket } from './lib/gate-first.mjs';
@@ -613,13 +613,13 @@ export function checkCitations(cwd, spawn = spawnSync) {
 }
 
 /** The row `commit-size` (docs/FAILURES.md, commit-too-large-to-review): the changed lines of the staged change that
- * a review reads, sized as `js-harness codex-review` sizes a range (documents and marked files left out), against
- * the rule `reviewed-commit-lines`. Over it the row fails, so the commit is split before it is made: a commit the
- * reviewer refused had already cost its gate, and remaking it cost two more. The rule is of this repository only,
- * so it is read where the staged rules file is the harness's list (`ruleHere`). No row where it is not in force,
- * when nothing a review reads is staged, while a merge is being made (its commits were made, and sized, on their
- * own branch), or when git cannot say. A merge git commits by itself runs `pre-merge-commit` before MERGE_HEAD is
- * written, so that hook says it in `MERGE_HOOK_ENV`. */
+ * a review reads, sized as `js-harness codex-review` sizes a range (documents and marked files left out, a renamed
+ * file by the lines it changes), against the rule `reviewed-commit-lines`. Over it the row fails, so the commit is
+ * split before it is made: a commit the reviewer refused had already cost its gate, and remaking it cost two more.
+ * The rule is of this repository only, so it is read where the staged rules file is the harness's list
+ * (`ruleHere`). No row where it is not in force, when nothing a review reads is staged, while a merge is being made
+ * (its commits were made, and sized, on their own branch), or when git cannot say. A merge git commits by itself
+ * runs `pre-merge-commit` before MERGE_HEAD is written, so that hook says it in `MERGE_HOOK_ENV`. */
 export function checkCommitSize(cwd, spawn = spawnSync, env = process.env) {
   if (env[MERGE_HOOK_ENV] === 'pre-merge-commit') return [];
   const git = hookGit(cwd, spawn);
@@ -627,7 +627,7 @@ export function checkCommitSize(cwd, spawn = spawnSync, env = process.env) {
   const rule = ruleHere('reviewed-commit-lines', 'changed lines', git(['show', ':bin/lib/rules-data.mjs']) ?? undefined);
   if (!Object.hasOwn(rule, 'value')) return [];
   const most = rule.value;
-  const numstat = git(['diff', '--cached', '--numstat', '-z', '--no-renames', '--no-relative']);
+  const numstat = git(['diff', '--cached', '--numstat', '-z', RENAMES, '--no-relative']);
   if (!numstat) return [];
   let changed;
   try {
@@ -636,7 +636,7 @@ export function checkCommitSize(cwd, spawn = spawnSync, env = process.env) {
     // staged `.gitattributes` counts (Codex, 2026-10-16). Writing that tree is what the commit itself does.
     const tree = git(['write-tree'])?.trim();
     if (!tree) return [];
-    const why = leftOutOf(files.map((file) => file.path), { cwd, source: tree, spawn });
+    const why = leftOutOfFiles(files, { cwd, source: tree, spawn });
     if (why === null) return [];
     changed = reviewScope(files, why).read.reduce((sum, file) => sum + file.changedLines, 0);
   } catch {

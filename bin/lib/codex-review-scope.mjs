@@ -144,6 +144,21 @@ export function leftOutOf(paths, { cwd, source, spawn = spawnSync, where }) {
   return leftOut;
 }
 
+/** What `leftOutOf` says of the files of a range (each `{ path, from? }`, as `numstatFiles` gives them), by the
+ * path of each: a renamed file is left out only when both its names are, under the reason of its new one, so a
+ * move of code a review reads to a path the project marks, or to a document, is still read
+ * (odd/tasks/rename-counted-by-changes.md). `null` when git cannot say, as `leftOutOf`. */
+export function leftOutOfFiles(files, options) {
+  const said = leftOutOf(files.flatMap((file) => (file.from === undefined ? [file.path] : [file.from, file.path])), options);
+  if (said === null) return null;
+  const why = new Map();
+  for (const file of files) {
+    const reason = said.get(file.path);
+    if (reason !== undefined && (file.from === undefined || said.has(file.from))) why.set(file.path, reason);
+  }
+  return why;
+}
+
 /** The files of a range by what a review does with them: `files` (each `{ path, changedLines }`, as
  * `numstatFiles` gives them) and `why`, what `leftOutOf` said of their paths. `read` are the files a review
  * reads, as they were given and in that order; `left` the paths it leaves out; and `leftOut` the count of
@@ -186,8 +201,8 @@ export function leftOutSaid({ files, changedLines, documents, marked }) {
 }
 
 /** The patch of a range without the sections of the files a review leaves out: `patch` is what
- * `git diff --submodule=short --no-renames <from> <head>` printed, `paths` the files of the range in the
- * order `git diff --numstat -z --no-renames <from> <head>` gives them, and `why` what `leftOutOf` said of
+ * `git diff --submodule=short --find-renames <from> <head>` printed, `paths` the files of the range in the
+ * order `git diff --numstat -z --find-renames <from> <head>` gives them, and `why` what `leftOutOf` said of
  * them. The patch as it is when none of them is left out.
  *
  * `--submodule=short`, because the patch has to be one section a file: a submodule that moved is counted as
