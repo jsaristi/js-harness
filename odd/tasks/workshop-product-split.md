@@ -734,7 +734,27 @@ The slices:
     timing of "The diet", so the command's own start through the package manager's shim costs about 300 ms on
     every entry, measured once on this machine and not yet split from noise. It is a D3 candidate, written here.
   - The table of "The diet" counted the listings as 318; the measure counts only each skill's `description`, 257.
-  - Not done yet: Codex's review, the lenses and the independent verifier of ea016393.
+- L14 (2026-11-05): the reviews of D0 (range b3bcbe17..1bcba9b9).
+  - The lenses (reliability, readability, resilience): 0 findings each.
+  - Codex, recorded on its second run: the first run was not kept, because this session committed in the worktree
+    while part 2 ran (my mistake: nothing is committed in a worktree while its review runs). It found 3, all taken:
+    - P1: the measure's hooks inherited `CLAUDE_ENV_FILE` and `JS_HARNESS_HOME`, so `backup --session-start`
+      could rewrite a real session's files and lose their undo. `scratchEnv` now takes out every `CLAUDE_`,
+      `JS_HARNESS_` and `CODEX_HOME` variable and points the homes into the scratch folder. Both were empty in
+      this shell when the measure ran, so no real file was touched.
+    - P2: `ownerOf` now reads the Windows spelling `.\workshop\...`.
+    - P2: the Stop input carries a closing reply, so `reply --hook` is timed on its checks, not its fast path.
+  - The independent verifier (opus): verified, 70 and 254 tests passing, and a real scratch install wrote exactly
+    the 15 entries `installEntries` returns. Its findings, all taken:
+    - `ownerOf` gave `C:` for an absolute script, a flag's value, and `run` or `exec` for package managers;
+      it now owns an absolute script by its own name, takes node's first script word, and skips the subcommands;
+    - `installEntries` counts only entries whose target is Claude's `settings.json`;
+    - SPEC's "These rows inform and never fail" now names the one exception;
+    - the warning says "in this home and project", and the readers' comment says what is not read.
+  - A correction to L13: the measure taken again after the fixes gave every entry about twice its first time
+    (`doctor --hook` 3,272 ms, the others 344-796 ms), while the merge queue's gate ran on this machine. So the
+    about 300 ms that L13 put on the shim's start compared two loads, and is not shown; the D3 candidate stays, to be
+    measured with the machine idle, both ways in turn.
 - Next step (for a resume): PR 769 is open (docs, not merged). Slice D0 (T8) is committed (ea016393, L13);
   its reviews come next (Codex, the lenses, a verifier), then its pull request, chained on PR 769. T7 stays a
   feature of its own.
