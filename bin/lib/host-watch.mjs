@@ -5,6 +5,7 @@
 // proposes: an entry a harness area touches stays undecided until the session reads it (his answer to question 129
 // covers no adoption without his yes). Pure: every function takes text and returns data or text; the command reads
 // and writes (bin/host-watch.mjs).
+import { handListCount } from './host-update.mjs';
 import { cellsOf, DELIMITER_CELL_PATTERN } from './progress.mjs';
 import { compareSemver } from './version.mjs';
 
@@ -193,18 +194,6 @@ export function draftReview({ versions, reviewed, desktop, code }) {
     '',
   ].join('\n');
 }
-
-/** The bullets of the section `## <title>` of `lines`, up to the next heading. */
-function bulletsOf(lines, title) {
-  const start = lines.findIndex((text) => text.trim().toLowerCase() === `## ${title.toLowerCase()}`);
-  if (start === -1) return [];
-  const end = lines.findIndex((text, i) => i > start && /^#{1,2}\s/.test(text));
-  return lines.slice(start + 1, end === -1 ? undefined : end).filter((text) => /^\s*[-*]\s+\S/.test(text));
-}
-
-/** How many entries the review file's `## To classify by hand` list still holds: the gate refuses one that holds any
- * (bin/lib/host-update.mjs, `reviewFileGaps`). */
-export const handListCount = (text) => bulletsOf(String(text).split(/\r?\n/), 'To classify by hand').length;
 
 const CELL = /^(?:checked: \S.*|unknown|unknown \(named\)|n\/a)$/;
 const plain = (cell) => cell.replace(/[`*_]/g, '').trim();

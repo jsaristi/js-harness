@@ -755,4 +755,25 @@ The slices:
     (`doctor --hook` 3,272 ms, the others 344-796 ms), while the merge queue's gate ran on this machine. So the
     about 300 ms that L13 put on the shim's start compared two loads, and is not shown; the D3 candidate stays, to be
     measured with the machine idle, both ways in turn.
-- Next step (for a resume): slice D0 is reviewed: Codex recheck of 1bcba9b9..9927f0d2 correct, 3 of 3 fixed; the lenses 0 findings; the verifier verified (L14). Branch feat/hook-entries-row (worktree D:/js-harness-worktrees/hook-entries-row), chained on PR 769. Next: push it, open its pull request with base docs/workshop-product-split (never merged here), notify the orchestrator; then slice 1+2 of the build plan. T7 stays a feature of its own.
+- L15 (2026-11-05): slice 1+2, its first part, the extractions, on `feat/workshop-move` (worktree
+  D:/js-harness-worktrees/workshop-move, chained on PR 772). The product code the workshop modules held leaves them,
+  and every product importer points at its new home; the workshop modules import it back:
+  - `bin/lib/share-check.mjs` from `bin/lib/audit.mjs`: the five names of the plan, and `isOwnReply`,
+    `recordedShare` and `windowRead`, which `auditEntries` also uses. `audit.mjs` keeps no re-export.
+  - `bin/lib/land-records.mjs` from `bin/lib/throughput.mjs` and `bin/throughput.mjs`: the six of the plan, and
+    `secondsBetween`, which `gateFacts` also uses.
+  - `bin/lib/subagent-records.mjs` from `bin/subagents.mjs`: `recordFolders`, `readRecords` and their three private
+    helpers; `check` and `audit` import it.
+  - `handListCount` and its `bulletsOf` into `bin/lib/host-update.mjs`; `host-watch.mjs` imports it.
+  - Tests split the same way. `subagent-records` had no direct test (only through `subagentsMain`), and the hand
+    list's only test sat in `host-watch.test.mjs`; both are now tested on the product side, written first. A first
+    draft of the hand-list test expected a `###` heading to end the list; the code ends it only at `#` or `##`, and
+    the moved code keeps that, so the test was corrected, not the code.
+  - Each test file was run alone (audit 8, share-check 7, land-records 6, throughput 36 and 36, stretch 32 and 33,
+    subagent-records 2, subagents 7, host-update 21, host-watch 24, measures 28): all pass. The suite runs at the
+    commit's gate.
+- Next step (for a resume): slice 1+2 on `feat/workshop-move`: the extractions are committed (L15). Next, the move
+  of the 16 files to `workshop/`, the workshop dispatcher, the cut of table B's sites, the spec-row claim form, the
+  `harness.json` sensors, the `.claude/settings.json` ticks hook and the load test, as "The build plan" says; then
+  the gate, Codex, the lenses and a verifier, and a pull request chained on PR 772 (never merged here). If the slice
+  passes about 400 changed lines, the extractions go as their own pull request first. T7 stays a feature of its own.

@@ -14,7 +14,7 @@ import { dayOf } from './lib/subagent-count.mjs';
 import { parseDayArgs, shiftDay, zone } from './lib/record-days.mjs';
 
 class AuditArgError extends Error {}
-import { recordFolders } from './subagents.mjs';
+import { recordFolders } from './lib/subagent-records.mjs';
 
 export const USAGE = 'Usage: js-harness audit [--day YYYY-MM-DD] [--days <n>] [--json] [--cwd <dir>]';
 
