@@ -3270,6 +3270,17 @@ test('the orchestrator skill says how the lead pauses everything before it tells
   assert.ok(text.indexOf('## The restart') < text.indexOf('## The recap'), 'it sits with the lead\'s other protocols');
 });
 
+// On 2026-11-04 the lead restarted a background session with sessions stop and start, and the stop's claude rm deleted
+// the files of its worktree (odd/tasks/stop-keeps-worktree.md): a message resumes one, and stop is only for removal.
+test('the orchestrator skill resumes a background session by message and never restarts one with stop and start', () => {
+  const text = components[1].content('0.1.0');
+  const restart = text.slice(text.indexOf('\n## The restart\n'), text.indexOf('\n## The recap\n'));
+  assert.ok(restart.includes('A background session is resumed the same way: `SendMessage` to its title resumes it from its transcript'), restart);
+  assert.ok(restart.includes('never `js-harness sessions stop` and `sessions start` to restart one'), restart);
+  assert.ok(text.includes('`js-harness sessions stop <id> --remove-worktree` removes it with its worktree once its work has landed'));
+  assert.doesNotMatch(text, /`js-harness sessions stop <id>` removes it once its work has landed/);
+});
+
 test('the orchestrator skill says what every recap carries and how a block waits while the user is away', () => {
   const text = components[1].content('0.1.0');
   assert.ok(text.includes('\n## The recap\n'));
