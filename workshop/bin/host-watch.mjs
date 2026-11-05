@@ -2,20 +2,20 @@
 // reviews each Claude Desktop update in depth instead of a check that nothing broke. `draft` cuts the update's span of
 // both changelogs and prints the review file with one row an entry; `check` holds a finished review file to its span,
 // read from the excerpts committed beside it; `tools` diffs the app's tool list against the one recorded for that
-// surface. The placing and the checks are bin/lib/host-watch.mjs; this file reads and writes. The versions default to
+// surface. The placing and the checks are workshop/lib/host-watch.mjs; this file reads and writes. The versions default to
 // the reviewed record of doctor's cache and the versions doctor reads now (bin/lib/host-update.mjs).
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { backgroundDir, readRecord } from './lib/background.mjs';
-import { readCache } from './lib/cache.mjs';
-import { channelDir, nextSessionNumber, readNotices } from './lib/channel.mjs';
-import { harnessHome } from './lib/home.mjs';
-import { hostUpdateRow, readHostVersions } from './lib/host-update.mjs';
-import { CODE_CHANGELOG, DESKTOP_CHANGELOG, checkReview, cutSpan, diffTools, draftReview, entriesBetween, hostTools, parseChangelog, parseToolList, renderBrief, renderToolList, surfaceRefusal, watchLine, watchOpened, watchTitle } from './lib/host-watch.mjs';
-import { mainCheckout, projectCode, projectSlug } from './lib/sessions.mjs';
-import { resolveProjectRoot } from './lib/stack.mjs';
+import { backgroundDir, readRecord } from '../../bin/lib/background.mjs';
+import { readCache } from '../../bin/lib/cache.mjs';
+import { channelDir, nextSessionNumber, readNotices } from '../../bin/lib/channel.mjs';
+import { harnessHome } from '../../bin/lib/home.mjs';
+import { hostUpdateRow, readHostVersions } from '../../bin/lib/host-update.mjs';
+import { CODE_CHANGELOG, DESKTOP_CHANGELOG, checkReview, cutSpan, diffTools, draftReview, entriesBetween, hostTools, parseChangelog, parseToolList, renderBrief, renderToolList, surfaceRefusal, watchLine, watchOpened, watchTitle } from '../lib/host-watch.mjs';
+import { mainCheckout, projectCode, projectSlug } from '../../bin/lib/sessions.mjs';
+import { resolveProjectRoot } from '../../bin/lib/stack.mjs';
 
 export const USAGE = [
   'Usage: js-harness host-watch draft --desktop <file> --code <file> [--from-desktop <v>] [--to-desktop <v>] [--from-code <v>] [--to-code <v>] [--sources <dir>] [--home <path>]',

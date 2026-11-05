@@ -695,7 +695,7 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   which `doctor --host-reviewed` requires, shows it on a Spanish page and sends one recorded
   question per adoption through the lead. Nothing installs. Plan: `odd/tasks/f8-s9-host-watch.md`;
   role: `docs/proposals/claude-app-native-sessions.md`, section 8.
-- **Probe and pass:** `node --test bin/lib/host-watch.test.mjs`: a fixture changelog with one entry
+- **Probe and pass:** `node --test workshop/lib/host-watch.test.mjs`: a fixture changelog with one entry
   per class gives one row per entry, an unmatched entry is listed for hand classification, the
   tool-list diff names what was added and removed; the first real review,
   `docs/host-updates/claude-desktop-4.4212.0.md`, passes `host-watch check` (every entry of its

@@ -4,8 +4,8 @@
 // (odd/tasks/gentle-ai-update-check.md) with a verdict to give per area, keeps the paths no area matches apart to be
 // classified by hand, and reads from the record the last release read. It only proposes: an adopt or an adapt is
 // the user's yes, asked through the lead. Pure: every function takes text and returns data or text; the command
-// fetches and reads (bin/idea-watch.mjs).
-import { compareSemver } from './version.mjs';
+// fetches and reads (workshop/bin/idea-watch.mjs).
+import { compareSemver } from '../../bin/lib/version.mjs';
 
 /** The repository read, fetched into a bare clone and never built or run. */
 export const UPSTREAM = 'https://github.com/Gentleman-Programming/gentle-ai.git';

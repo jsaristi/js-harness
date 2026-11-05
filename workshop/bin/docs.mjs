@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 // `docs`: what an auditor starting cold reads (odd/tasks/audit-pack.md). `docs plan` prints the reading plan, every
-// tracked file in a slice one context holds, the source beside its capability (bin/lib/docs-plan.mjs); `docs check`
-// runs the `docs` row of `check` alone. The row holds the index of `docs/README.md` to the folder (bin/lib/docs-entry.mjs)
+// tracked file in a slice one context holds, the source beside its capability (workshop/lib/docs-plan.mjs); `docs check`
+// runs the `docs` row of `check` alone. The row holds the index of `docs/README.md` to the folder (workshop/lib/docs-entry.mjs)
 // and the plan to the tracked files, so neither can fall behind. It reads the files git tracks and writes nothing;
 // the plan is computed each time, never stored. Zero dependencies.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { estimateTokens } from './lib/payload.mjs';
-import { SPEC_PATH, isHarnessRepository, parseSpec } from './lib/spec.mjs';
-import { SLICE_BUDGET, capabilityFiles, importsOf, planFindings, readingPlan } from './lib/docs-plan.mjs';
-import { ENTRY_PATH, indexFindings } from './lib/docs-entry.mjs';
-import { INFERRED_CHECK, INFERRED_LABEL, crossIndex, parseRules } from './lib/docs-cross.mjs';
-import { detectRecordNames, parseRecordSections, parseRecordTable, recordFindings, recordSources } from './lib/docs-records.mjs';
-import { parseRegister } from './lib/failures.mjs';
-import { gitTopLevel } from './lib/project.mjs';
-import { parseFeature } from './lib/progress.mjs';
+import { estimateTokens } from '../../bin/lib/payload.mjs';
+import { SPEC_PATH, isHarnessRepository, parseSpec } from '../../bin/lib/spec.mjs';
+import { SLICE_BUDGET, capabilityFiles, importsOf, planFindings, readingPlan } from '../lib/docs-plan.mjs';
+import { ENTRY_PATH, indexFindings } from '../lib/docs-entry.mjs';
+import { INFERRED_CHECK, INFERRED_LABEL, crossIndex, parseRules } from '../lib/docs-cross.mjs';
+import { detectRecordNames, parseRecordSections, parseRecordTable, recordFindings, recordSources } from '../lib/docs-records.mjs';
+import { parseRegister } from '../../bin/lib/failures.mjs';
+import { gitTopLevel } from '../../bin/lib/project.mjs';
+import { parseFeature } from '../../bin/lib/progress.mjs';
 
 export const USAGE = 'Usage: js-harness docs plan [--budget <n>] [--json] | docs index [--json] | docs check';
 
@@ -73,7 +73,7 @@ function readCorpus(root, { spawn, readFile }) {
 const RULES_PATH = 'docs/RULES.md';
 const FAILURES_PATH = 'docs/FAILURES.md';
 
-/** The cross index of the corpus (bin/lib/docs-cross.mjs), from the specification, the rendered rules and the failure
+/** The cross index of the corpus (workshop/lib/docs-cross.mjs), from the specification, the rendered rules and the failure
  * register, as `{ index }`; `{ problem }` where one of them is not tracked or the register does not read. */
 function readCross(corpus) {
   const tracked = new Set(corpus.listed);
@@ -96,7 +96,7 @@ function readCross(corpus) {
 const RECORDS_PATH = 'docs/RECORDS.md';
 
 /** The table of records of the specification held to the source and to the fields of docs/RECORDS.md
- * (bin/lib/docs-records.mjs): `{ rows, findings }`, the rows counted. A file missing reads as empty, so a row then
+ * (workshop/lib/docs-records.mjs): `{ rows, findings }`, the rows counted. A file missing reads as empty, so a row then
  * has no section and the part fails rather than switching off. */
 function readRecords(corpus) {
   const rows = parseRecordTable(corpus.texts.get(SPEC_PATH) ?? '');

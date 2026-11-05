@@ -799,10 +799,51 @@ The slices:
   `conventions-structure` (check.mjs's ceiling 2008) and `readme`, all fixed; the second on two tests of
   `bin/throughput.test.mjs`, "throughput snapshot --no-such-flag exits 2" and "throughput reviewed --no-such-flag
   exits 2", not yet read.
-- Next step (for a resume): in D:/js-harness-worktrees/workshop-dispatch, read why those two throughput tests fail
-  (likely they run `bin/js-harness.mjs throughput`, which left the product dispatcher; point them at the workshop
-  dispatcher), fix, commit the staged dispatcher commit through the gate. Then `git mv` the 16 files and their
-  tests to `workshop/bin/` and `workshop/lib/`, re-path their imports and the dispatcher's `../bin` loaders, move the
-  convention lists (finding 11), and add the load test (finding 15); then the gate, Codex, the lenses and a verifier
-  over 6c1bc8ef..HEAD, and a pull request with base `feat/workshop-move` (PR 773), never merged here. T7 stays a
+- L18 (2026-11-05): the move, on `feat/workshop-dispatch` after f78479af. The 16 files and their tests went to
+  `workshop/bin/` and `workshop/lib/` with `git mv`; their imports and the dispatcher's loaders were re-pathed (78
+  specifiers), two test fixtures that hold import text put back as they were, and the live texts that name a moved
+  path (SPEC, RECORDS, FAILURES, ROADMAP, comments of bin/) re-pathed; the dated records of `docs/host-updates/` and
+  `odd/tasks/` keep theirs. What reads the source by folder now reads `workshop/` beside `bin/`, each test first:
+  `rules check` (`codeFilesUnder`, so the four `throughput-*` reads stay held and RULES.md keeps their readers),
+  the docs plan's tiers, and the records table's source and writers. The conventions follow the files instead of
+  losing them: `ROOTS` of `conventions-structure` and `gentle-ai-absence` gain `workshop`, the absence entries
+  move by path, `conventions-errors` holds the workshop's seven command modules and `workshop/lib` (windows-daily
+  keeps its legacy entry there), and `conventions-arguments` probes the workshop's ten commands, which made
+  `spec` refuse in the convention's words. `scripts/audit-flags.mjs` is left to slice 4: the workshop's usage
+  and docs/workshop.md still name `js-harness <command>`, so a flag audit of its dispatcher reads nothing true
+  until slice 4 rewrites them. The load test (finding 15) is `bin/workshop-load.test.mjs`: `check --door`,
+  `doctor --hook` and `loop status` load nothing under `workshop/`; an import of the workshop added to
+  `bin/doctor.mjs` failed it, then was removed.
+- L19 (2026-11-05): the move's commit was refused by its gate's `commit-size` row before any sensor ran. The row
+  counts with renames off (`bin/check.mjs:629`, `--no-renames`, as `codex-review` sizes a range), so a moved file
+  is its deletion and its addition: the staged move is 7,749 added and 7,574 removed lines
+  (`git diff --cached --no-renames --shortstat`), and `workshop/bin/throughput.mjs` alone is 1,344, over the
+  1,200 of `rule:reviewed-commit-lines`, which is the owner's. No split of a whole-file move passes it. The
+  ways out: copy-then-delete commits, each under 1,200 (about 13 gates, about 3 hours of gate, a 15,000-line
+  review of code already reviewed in place); or count a rename that changes little by its changed lines, in
+  the row and in `codex-review` alike, which changes what the owner's rule measures. Put to the lead as a
+  waiting notice; `.gitattributes` gained `workshop/** text=auto eol=lf` meanwhile, as `bin/` has.
+- L20 (2026-11-05): the lead's answer to L19 was the owner's question 193, "Contar lo que cambia". That change is
+  PR 775, `rule/reviewed-commit-lines`, to main (`odd/tasks/rename-counted-by-changes.md`), with its reviews done.
+  The move needs its code in the tree it commits from, because the gate runs that tree's `check`. Merging the rule
+  branch into this one was refused by the gate's `contracts` row on GitHub (run 42091911770): "the commit that brings
+  the verdict holds more than documents". `rename-counted-by-changes.md` is not on main. Its trail on this branch is
+  the merge, which the gate's commit of the tree shows as a single-parent commit, and the code this branch had
+  before it. So the depth-pass judge (`bin/lib/depth-pass.mjs:104`) would hold that document on every check until it
+  is on main. The merge was aborted, uncommitted. Put to the lead: PR 775 merged to main first, then main merged into
+  the series and the move committed on it; or a change to the judge for a document whose pass was judged on its own
+  branch.
+- L21 (2026-11-05): the owner answered question 195 at 18:13 local, tapped: "775 primero (recomendado)" (the lead's
+  transcript `0f71b2c6`, line 68020). The lead lands PR 775 alone through the merge queue. No other merge, and no
+  change to the depth-pass judge.
+- L22 (2026-11-05): PR 775 landed, main `3f877c66`. Main merged up the series: into `docs/workshop-product-split`
+  (PR 769), clean; into `feat/hook-entries-row` (PR 772) as `167eef1c`, `docs/FAILURES.md` kept both sides in date
+  order; into `feat/workshop-move` (PR 773), clean; into this branch as `52d07039`, the ceiling of `bin/check.mjs`
+  down to its 2,007 lines. The move, reapplied from its patch on `52d07039` without a conflict, is 585 changed lines
+  with renames counted by what they change. The line the lead owed to `docs/FAILURES.md` (stretch-not-opened, his
+  absence 13:25 to 18:12) goes in with it.
+- Next step (for a resume): in D:/js-harness-worktrees/workshop-dispatch, the move's commit on `52d07039`. Then its
+  gate, the pushes of the series, Codex, the lenses and a verifier over
+  6c1bc8ef..HEAD, and a pull request with base `feat/workshop-move` (PR 773), never merged here. Then the next
+  pull request: `ticks --hook` with its stale-ticks row, `.claude/settings.json`, and the texts. T7 stays a
   feature of its own.

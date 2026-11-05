@@ -4,7 +4,7 @@ The fields of each record the harness writes. Where each one lives, who writes i
 "Where state lives" in `docs/SPEC.md`, the one map of records; this file holds only the fields, one section per row
 of that table, named as its row, with a subsection for each variant of a record that holds several (each file of a
 folder, each kind of line). `js-harness docs check` fails where a row has no section here or a section names no row,
-and where the table drifts from the source (`bin/lib/docs-records.mjs`).
+and where the table drifts from the source (`workshop/lib/docs-records.mjs`).
 
 The fields were written from each writer's code, which each section names by file and function: that function is
 where an auditor checks them, since no schema holds the fields and nothing checks them against the code.
@@ -239,11 +239,11 @@ Rendered by `renderList`; not to be edited.
   - an id of the machine manifest;
   - a path under `~/`.
 
-  In the harness's own repository, every command of the dispatcher, every manifest entry, and `~/.js-harness/manifest.json` and `~/.claude/settings.json` must be claimed by some capability's Today. `bin/lib/docs-plan.mjs` `capabilityFiles` and `bin/lib/docs-cross.mjs` also read Today, Proof and the `odd/tasks/` documents a capability cites.
+  In the harness's own repository, every command of the dispatcher, every manifest entry, and `~/.js-harness/manifest.json` and `~/.claude/settings.json` must be claimed by some capability's Today. `workshop/lib/docs-plan.mjs` `capabilityFiles` and `workshop/lib/docs-cross.mjs` also read Today, Proof and the `odd/tasks/` documents a capability cites.
 
 ### Where state lives
 
-The table under the `### Where state lives` heading, with the columns `Record`, `Where`, `Written by` and `Read by` (`bin/lib/docs-records.mjs` `parseRecordTable`).
+The table under the `### Where state lives` heading, with the columns `Record`, `Where`, `Written by` and `Read by` (`workshop/lib/docs-records.mjs` `parseRecordTable`).
 
 - `Record`: the record's name, matched by a section of `docs/RECORDS.md`.
 - `Where`: code spans, a folder followed by the patterns of its children, with placeholders written `<…>`.
@@ -256,27 +256,27 @@ The table under the `### Where state lives` heading, with the columns `Record`, 
 
 ### docs/README.md
 
-The index table under `## Index`, up to the next `## ` heading. Its columns are `Document`, `Status`, `Superseded by, or where its result lives` and `What it is`; `bin/lib/docs-entry.mjs` `parseIndex` reads the first three.
+The index table under `## Index`, up to the next `## ` heading. Its columns are `Document`, `Status`, `Superseded by, or where its result lives` and `What it is`; `workshop/lib/docs-entry.mjs` `parseIndex` reads the first three.
 
 - `Document`: a path in backticks. Every file and folder directly under `docs/` (a folder with its closing `/`) has exactly one row. A tracked file inside one of those folders may have its own row, which overrides its folder's.
 - `Status`: `live`, `frozen`, `historical` or `closed` (`STATUSES`).
 - `Superseded by, or where its result lives`: required unless the status is `live` or `frozen`.
 - `What it is`: free text, not parsed.
 
-`bin/lib/docs-plan.mjs` reads the file as the preamble of every reading slice after the first.
+`workshop/lib/docs-plan.mjs` reads the file as the preamble of every reading slice after the first.
 
 ### docs/RECORDS.md
 
-- `## <record>`: one section per row of the table in `docs/SPEC.md`, named exactly as its `Record` cell (`bin/lib/docs-records.mjs` `parseRecordSections`, `recordFindings`). A section that matches no row fails, as does a row with no section.
+- `## <record>`: one section per row of the table in `docs/SPEC.md`, named exactly as its `Record` cell (`workshop/lib/docs-records.mjs` `parseRecordSections`, `recordFindings`). A section that matches no row fails, as does a row with no section.
 - `### <variant>`: a file or kind of the record above it. The fields below it are not checked against code.
 
 ## Host updates
 
-`docs/host-updates/` holds the in-depth reviews of each Claude Desktop update and the evidence beside them. `bin/host-watch.mjs` `hostWatchMain` runs the subcommands that make them: `draft` prints a review file and writes its excerpts, `tools --record` writes a tool list, and `brief` prints the brief of the session that reviews an update.
+`docs/host-updates/` holds the in-depth reviews of each Claude Desktop update and the evidence beside them. `workshop/bin/host-watch.mjs` `hostWatchMain` runs the subcommands that make them: `draft` prints a review file and writes its excerpts, `tools --record` writes a tool list, and `brief` prints the brief of the session that reviews an update.
 
 ### claude-desktop-<desktop>.md
 
-The review file. `draft` prints it from `bin/lib/host-watch.mjs` `draftReview`, the session saves it under this name, and `check` holds it to its span (`checkReview`).
+The review file. `draft` prints it from `workshop/lib/host-watch.mjs` `draftReview`, the session saves it under this name, and `check` holds it to its span (`checkReview`).
 
 - `# Claude Desktop <version>`, then the line `Code tab CLI: <version>`.
 - The line `Desktop tool list: baseline|diff|owed`, with optional words after it.
@@ -319,7 +319,7 @@ The brief of the background session that reviews an update. `brief` prints it fr
 
 ## The idea watch's record
 
-`odd/tasks/gentle-ai-update-check.md`, under its `## Releases read` heading, holds what the idea watch read of each stable gentle-ai release (`odd/tasks/idea-watch.md`). A session writes it by hand from what `js-harness idea-watch draft` prints (`bin/lib/idea-watch.mjs` `draftRelease`); `lastRead` reads it for `idea-watch status` and `doctor`'s `idea-watch` row.
+`odd/tasks/gentle-ai-update-check.md`, under its `## Releases read` heading, holds what the idea watch read of each stable gentle-ai release (`odd/tasks/idea-watch.md`). A session writes it by hand from what `js-harness idea-watch draft` prints (`workshop/lib/idea-watch.mjs` `draftRelease`); `lastRead` reads it for `idea-watch status` and `doctor`'s `idea-watch` row.
 
 - A batched line `- v<version> (from v<version>, read <YYYY-MM-DD>): ignore; <n> paths, all in ignored areas, +<added> -<deleted>`, for a release whose paths all fall in ignored areas; the first line, `- v4.3.1 (read 2026-10-28): …`, is the baseline the full review read.
 - Any other release is a section `### v<version> (from v<version>, read <YYYY-MM-DD>)`: a table `| Area | What we look for | Paths | Lines | Verdict | Evidence |` with one row an area (the reader splits a row into one a change), the verdict `adopt`, `adapt`, `ignore`, or `?` until decided; `To classify by hand:` with one `- <path> (+a -d)` line a path no area matches, or `(none)`; `Paths by area:` with one `- <area>: <path> (+a -d)` line a changed path.
@@ -327,7 +327,7 @@ The brief of the background session that reviews an update. `brief` prints it fr
 
 ## The idea watch's clone
 
-`~/.js-harness/upstream/gentle-ai` is a bare clone of the gentle-ai repository, with no working tree: nothing in it is built or run, and only git reads it. `bin/idea-watch.mjs` `fetchClone` records it in the machine manifest's `clones` (`bin/lib/clones.mjs` `recordClone`) before it clones it, and fetches its tags when it is already there; `js-harness uninstall machine` removes it whole, with the `upstream` folder it leaves empty.
+`~/.js-harness/upstream/gentle-ai` is a bare clone of the gentle-ai repository, with no working tree: nothing in it is built or run, and only git reads it. `workshop/bin/idea-watch.mjs` `fetchClone` records it in the machine manifest's `clones` (`bin/lib/clones.mjs` `recordClone`) before it clones it, and fetches its tags when it is already there; `js-harness uninstall machine` removes it whole, with the `upstream` folder it leaves empty.
 
 ## Session summaries
 
@@ -717,7 +717,7 @@ The lines of a gate (`start`, `refused`, `stopped`, `same`, `ci-fallback`) also 
 Per kind:
 
 - `start`: `lock` (string: `own`, `parent` or `none`), `waitedSeconds` (number), `waitedFor` (array of `{ cwd, pid, command }` of the gates it waited for, each command cut), `load` (object from `bin/lib/machine-load.mjs`: `busy`, `processors`, `share`, `sampleMs`, or `notRead` with why; left out when no sample was taken).
-- `end`: `seconds` (number, the run's length to a tenth), `result` (string: `pass`, `fail` or `timeout` for `check`, `exit <code>` or `killed` for `js-harness gate`, `error`), `sensors` (array of objects, one per sensor, as `check` gives them; `bin/lib/throughput.mjs` `gateFacts` reads `name`, `failing`, `ranIn`, `shadow`, `skip`), and, where the gate has them, `code`, `files` and `tried` (each a tree key, 64 lowercase hex characters: the key the pass proves, the key of the files, the key it ran under). It carries no `cwd`, `command`, `pid` or `session`.
+- `end`: `seconds` (number, the run's length to a tenth), `result` (string: `pass`, `fail` or `timeout` for `check`, `exit <code>` or `killed` for `js-harness gate`, `error`), `sensors` (array of objects, one per sensor, as `check` gives them; `workshop/lib/throughput.mjs` `gateFacts` reads `name`, `failing`, `ranIn`, `shadow`, `skip`), and, where the gate has them, `code`, `files` and `tried` (each a tree key, 64 lowercase hex characters: the key the pass proves, the key of the files, the key it ran under). It carries no `cwd`, `command`, `pid` or `session`.
 - `refused`: `reason` (string, the lock's word, such as `held`, `timeout`, `ahead`, `launcher gone`), `waitedSeconds`, `waitedFor`.
 - `stopped`: `rows` (array of strings, the rows that had already failed).
 - `same`: `code` (tree key) and `by` (string, the gate that passed the same tree).
@@ -785,7 +785,7 @@ The machine's switch that runs a gate's sensors in WSL2 instead of on Windows; t
 
 ## Throughput snapshots
 
-The facts of one closed UTC day, kept once so a later throughput review reads what that day was rather than what a rotating gate log still holds, and the record of review outcomes; `bin/throughput.mjs` `throughputMain` writes both, the snapshot through `snapshot` and `keepDay`, the outcomes through `reviewed`, `shipped` and `appendOutcome`.
+The facts of one closed UTC day, kept once so a later throughput review reads what that day was rather than what a rotating gate log still holds, and the record of review outcomes; `workshop/bin/throughput.mjs` `throughputMain` writes both, the snapshot through `snapshot` and `keepDay`, the outcomes through `reviewed`, `shipped` and `appendOutcome`.
 
 ### `<day>.json`
 
@@ -797,7 +797,7 @@ Written whole beside its place and renamed in; a day is written again only by a 
 - `from`: array of strings, the copies of the gate log read (newer first), or `["the live gate log"]`.
 - `partialFrom`: ISO time or `null`, where the log read begins when it does not reach the day's start.
 - `partialUntil`: ISO time or `null`, where copies made before the day settled end.
-- `gates`: array, one per gate that started that day (`bin/lib/throughput.mjs` `gateFacts`): `id`, `kind` (`land`, `check`, `commit`, `copy` or `run`), `lock`, `session`, `startedAt`, `endedAt`, `seconds`, `waitedSeconds`, `result`, `ranIn` (`windows` or `wsl`, `null` without a tests sensor), `traced` (boolean), `failing` (array of test files), `land` (the merge-queue candidate's folder name or `null`), `load` (the machine's busy share at the start, or `null`).
+- `gates`: array, one per gate that started that day (`workshop/lib/throughput.mjs` `gateFacts`): `id`, `kind` (`land`, `check`, `commit`, `copy` or `run`), `lock`, `session`, `startedAt`, `endedAt`, `seconds`, `waitedSeconds`, `result`, `ranIn` (`windows` or `wsl`, `null` without a tests sensor), `traced` (boolean), `failing` (array of test files), `land` (the merge-queue candidate's folder name or `null`), `load` (the machine's busy share at the start, or `null`).
 - `fallbacks`: array of `{ id, at, seconds, reason }`, the day's `ci-fallback` events.
 - `testTimes`: `{ gates, files: [{ test, runs, seconds, max }] }` from `test-times.jsonl`, only when the live log was read.
 - `unavailable`: object, from what was not read (`gate log`, `times`) to why.

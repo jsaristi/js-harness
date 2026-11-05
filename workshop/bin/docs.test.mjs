@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { USAGE, checkDocs, docsMain } from './docs.mjs';
-import { INFERRED_CHECK, INFERRED_LABEL } from './lib/docs-cross.mjs';
+import { INFERRED_CHECK, INFERRED_LABEL } from '../lib/docs-cross.mjs';
 
 const SPEC = [
   '# The specification',

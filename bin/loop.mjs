@@ -339,7 +339,7 @@ const STALL_WINDOW_MS = 12 * 3600 * 1000;
 const STALL_GIT_TIMEOUT_MS = 10 * 1000;
 
 // How often the heartbeat reads the daily Windows run, in minutes: the run is daily, so an hour is soon enough, and a
-// heartbeat started again reads the time of the last ask from its file (bin/lib/windows-daily.mjs).
+// heartbeat started again reads the time of the last ask from its file (workshop/lib/windows-daily.mjs).
 const WINDOWS_MINUTES = 60;
 
 // How often the heartbeat reads the host's versions, in minutes: an update lands a few times a week, and the reading

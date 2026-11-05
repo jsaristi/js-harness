@@ -7,14 +7,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { auditEntries } from './lib/audit.mjs';
-import { linesOf } from './lib/lines.mjs';
-import { DEFAULT_CONTEXT_WINDOW } from './lib/sessions.mjs';
-import { dayOf } from './lib/subagent-count.mjs';
-import { parseDayArgs, shiftDay, zone } from './lib/record-days.mjs';
+import { auditEntries } from '../lib/audit.mjs';
+import { linesOf } from '../../bin/lib/lines.mjs';
+import { DEFAULT_CONTEXT_WINDOW } from '../../bin/lib/sessions.mjs';
+import { dayOf } from '../../bin/lib/subagent-count.mjs';
+import { parseDayArgs, shiftDay, zone } from '../../bin/lib/record-days.mjs';
 
 class AuditArgError extends Error {}
-import { recordFolders } from './lib/subagent-records.mjs';
+import { recordFolders } from '../../bin/lib/subagent-records.mjs';
 
 export const USAGE = 'Usage: js-harness audit [--day YYYY-MM-DD] [--days <n>] [--json] [--cwd <dir>]';
 

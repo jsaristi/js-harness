@@ -27,17 +27,17 @@ node workshop/js-harness-workshop.mjs <command> --help (or -h) prints that comma
 /** The heartbeat's three ticks, which the product's `loop` runs only when they are given. */
 export const TICKS = {
   // The heartbeat's reading of the daily Windows run: null when it is not due, else what it found.
-  windowsDaily: async (options) => (await import('../bin/lib/windows-daily.mjs')).windowsDailyTick(options),
+  windowsDaily: async (options) => (await import('./lib/windows-daily.mjs')).windowsDailyTick(options),
   // The heartbeat's throughput tick: keeps the settled days with no snapshot, and says which review is due.
-  throughputTick: async (options) => (await import('../bin/throughput.mjs')).throughputTick(options),
+  throughputTick: async (options) => (await import('./bin/throughput.mjs')).throughputTick(options),
   // The heartbeat's reading of the host: null when it is not due, else an update no host watch session holds.
-  hostWatch: async (options) => (await import('../bin/host-watch.mjs')).hostWatchTick(options),
+  hostWatch: async (options) => (await import('./bin/host-watch.mjs')).hostWatchTick(options),
 };
 
 /** The idea-watch row's reading, which the product's `doctor` shows only when it is given: the record's state, or
  * `null` where the project keeps none, with the command that drafts the next entry. */
 export async function ideas(project) {
-  const [{ ideaWatchHealth }, { ideaFix }] = await Promise.all([import('../bin/idea-watch.mjs'), import('../bin/lib/idea-watch.mjs')]);
+  const [{ ideaWatchHealth }, { ideaFix }] = await Promise.all([import('./bin/idea-watch.mjs'), import('./lib/idea-watch.mjs')]);
   const state = await ideaWatchHealth(project);
   return state === null ? null : { ...state, fix: ideaFix(state) };
 }
@@ -45,7 +45,7 @@ export async function ideas(project) {
 /** `spec`: the product's spec row, held to this dispatcher's commands. */
 async function specMain(argv, { cwd = process.cwd(), stdout = console.log, stderr = console.error } = {}) {
   if (argv.length > 0) {
-    stderr(`js-harness-workshop spec takes no argument: ${argv.join(' ')}`);
+    stderr(`js-harness-workshop spec: unknown argument: ${argv[0]} (spec takes no argument)`);
     return 2;
   }
   const { checkSpec } = await import('../bin/lib/spec.mjs');
@@ -59,13 +59,13 @@ async function specMain(argv, { cwd = process.cwd(), stdout = console.log, stder
 
 // Each loader imports its command's module when that command runs, as the product's dispatcher does.
 const COMMANDS = {
-  throughput: async () => (await import('../bin/throughput.mjs')).throughputMain,
-  docs: async () => (await import('../bin/docs.mjs')).docsMain,
-  'windows-daily': async () => (await import('../bin/windows-daily.mjs')).windowsDailyMain,
-  subagents: async () => (await import('../bin/subagents.mjs')).subagentsMain,
-  audit: async () => (await import('../bin/audit.mjs')).auditMain,
-  'host-watch': async () => (await import('../bin/host-watch.mjs')).hostWatchMain,
-  'idea-watch': async () => (await import('../bin/idea-watch.mjs')).ideaWatchMain,
+  throughput: async () => (await import('./bin/throughput.mjs')).throughputMain,
+  docs: async () => (await import('./bin/docs.mjs')).docsMain,
+  'windows-daily': async () => (await import('./bin/windows-daily.mjs')).windowsDailyMain,
+  subagents: async () => (await import('./bin/subagents.mjs')).subagentsMain,
+  audit: async () => (await import('./bin/audit.mjs')).auditMain,
+  'host-watch': async () => (await import('./bin/host-watch.mjs')).hostWatchMain,
+  'idea-watch': async () => (await import('./bin/idea-watch.mjs')).ideaWatchMain,
   loop: async () => {
     const { loopMain } = await import('../bin/loop.mjs');
     return (argv) => loopMain(argv, process.env, TICKS);
@@ -80,12 +80,12 @@ const COMMANDS = {
 // The usage each command prints on a usage error, which `<command> --help` prints too: [its module, the export].
 // A command left out answers --help itself (windows-daily, spec).
 const HELP = {
-  throughput: ['../bin/throughput.mjs', 'USAGE'],
-  docs: ['../bin/docs.mjs', 'USAGE'],
-  subagents: ['../bin/subagents.mjs', 'USAGE'],
-  audit: ['../bin/audit.mjs', 'USAGE'],
-  'host-watch': ['../bin/host-watch.mjs', 'USAGE'],
-  'idea-watch': ['../bin/idea-watch.mjs', 'USAGE'],
+  throughput: ['./bin/throughput.mjs', 'USAGE'],
+  docs: ['./bin/docs.mjs', 'USAGE'],
+  subagents: ['./bin/subagents.mjs', 'USAGE'],
+  audit: ['./bin/audit.mjs', 'USAGE'],
+  'host-watch': ['./bin/host-watch.mjs', 'USAGE'],
+  'idea-watch': ['./bin/idea-watch.mjs', 'USAGE'],
   loop: ['../bin/loop.mjs', 'USAGE'],
   doctor: ['../bin/doctor.mjs', 'USAGE'],
 };

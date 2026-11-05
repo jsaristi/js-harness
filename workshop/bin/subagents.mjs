@@ -5,9 +5,9 @@
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { countOf, dayOf, launchesOf } from './lib/subagent-count.mjs';
-import { readRecords, recordFolders } from './lib/subagent-records.mjs';
-import { parseDayArgs, shiftDay, zone } from './lib/record-days.mjs';
+import { countOf, dayOf, launchesOf } from '../../bin/lib/subagent-count.mjs';
+import { readRecords, recordFolders } from '../../bin/lib/subagent-records.mjs';
+import { parseDayArgs, shiftDay, zone } from '../../bin/lib/record-days.mjs';
 
 class SubagentsArgError extends Error {}
 

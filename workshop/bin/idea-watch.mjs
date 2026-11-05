@@ -3,16 +3,16 @@
 // fetches the upstream repository into a bare clone under ~/.js-harness, recorded in the machine manifest first so
 // `uninstall machine` removes it, and prints the record's entry for the next release, its changed paths placed by
 // area. Nothing is installed, built or run from the clone: it is bare, and only git reads it. The placing and the
-// record's reading are bin/lib/idea-watch.mjs; this file fetches, reads and prints.
+// record's reading are workshop/lib/idea-watch.mjs; this file fetches, reads and prints.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { harnessHome } from './lib/home.mjs';
-import { RECORD, UPSTREAM, draftRelease, parseNumstat, stableVersions, unreadLine, watchState } from './lib/idea-watch.mjs';
-import { recordClone } from './lib/clones.mjs';
-import { resolveProjectRoot } from './lib/stack.mjs';
-import { compareSemver } from './lib/version.mjs';
+import { harnessHome } from '../../bin/lib/home.mjs';
+import { RECORD, UPSTREAM, draftRelease, parseNumstat, stableVersions, unreadLine, watchState } from '../lib/idea-watch.mjs';
+import { recordClone } from '../../bin/lib/clones.mjs';
+import { resolveProjectRoot } from '../../bin/lib/stack.mjs';
+import { compareSemver } from '../../bin/lib/version.mjs';
 
 export const USAGE = [
   'Usage: js-harness idea-watch status [--project <dir>] [--home <path>]',

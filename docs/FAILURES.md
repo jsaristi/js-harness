@@ -653,7 +653,7 @@ read as an exit code or an outcome alone.
 - Class: unseen-state
 - Seen: 2026-10-29 — docs/sessions/2026-10-29-jh-79-visual-pages-the-harness-shows-its-moments-as-pages.md,
   "Left" — found closing visual pages; `stretch explain` was the only way to say why
-- Control: check — bin/lib/throughput.test.mjs — "a land keeps the last line it said, and a Codex run
+- Control: check — workshop/lib/throughput.test.mjs — "a land keeps the last line it said, and a Codex run
   the reason it was logged with" — since 2026-10-29
 
 ### fixture-refuses-late-check
@@ -847,7 +847,7 @@ A host review adopted a change for the Code tab without checking that the app ap
   listed in the changelog's 3P section, was decided adapt as a Code tab feature and became question 131, which he
   answered "Sí, ábrela"; JH 113 found that the installed app reads the key only in its third-party-inference class
   (`odd/tasks/status-line.md`, Design), so the feature could show nothing on his claude.ai install
-- Control: check — bin/lib/host-watch.test.mjs — "a 3P entry left to decide says its decision needs evidence that a
+- Control: check — workshop/lib/host-watch.test.mjs — "a 3P entry left to decide says its decision needs evidence that a
   claude.ai install reads it" — since 2026-10-31
 - Proof: `js-harness failures weeks`: no sighting of this entry after the week of 2026-10-26
 
@@ -1497,7 +1497,7 @@ this entry, so the lands it turned red have no cause.
   failed in 4 gates: the land candidate merge-queue-108380 at 01:36Z and 01:39Z, rules-row at 02:10Z, and
   rule-first-patterns at 03:49Z or jh26-commit-size at 18:20Z; the first three also failed four more tests of
   the same file
-- Control: check — bin/lib/throughput.test.mjs — "the table reads the gates, the pull requests and the
+- Control: check — workshop/lib/throughput.test.mjs — "the table reads the gates, the pull requests and the
   Codex runs of every day of the window together" — since 2026-10-17
 - Was: owed — odd/tasks/throughput-review.md — "Unit 4: section 7"; that task is checked off (49de368c),
   and the daily throughput table now names the failing tests of each day's gates
@@ -1805,6 +1805,9 @@ the reply before he leaves; so the return had no goals to check and no forecast 
   nothing to compare it with
 - Seen: 2026-11-05 — the lead's message to JH 142 (claimed; the lead's own) — he was away 11:05 to 13:25 local
   (UTC-05:00) with no stretch opened by the lead, the fifth time by the lead's count
+- Seen: 2026-11-05 — the lead's message to JH 142 (claimed; the lead's own) — he was away 13:25 to 18:12 local
+  (UTC-05:00) with no stretch opened by the lead; question 194 sat on his screen from 13:36 to 18:12 with no
+  push notice
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 
