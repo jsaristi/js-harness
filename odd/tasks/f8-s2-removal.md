@@ -282,6 +282,11 @@ lost, which he accepted once the project's documentation and its memory were on 
   Claude, Codex and Antigravity config, `~/.gentle-ai`, its binaries and each project's `.atl/`, each asked — S11.
   Done with the uninstall (L35, L36): the Claude, Codex and Antigravity config and skills, the binary, GGA. Left to
   ask: `~/.gentle-ai` and each project's `.atl/`
+- [ ] T15 (kind: build) follow-up, proposed to him through the lead, not authorized yet (L43): `sessions stop`
+  refuses while the session's worktree holds files unless told to remove it; test first, a stop on a session with a
+  live worktree exits non-zero and deletes nothing; the orchestrator's restart steps resume by message
+- [ ] T16 (kind: build) follow-up, proposed to him through the lead, not authorized yet (L46): a `claude -p` prompt that
+  starts with `/` runs under `MSYS_NO_PATHCONV=1`; the guard refuses one without it, test first
 
 ## Coverage of gentle-ai's functions (T12)
 Each function gentle-ai 4.3.1 provides on his machine (`~/.gentle-ai/state.json`: agents claude-code, codex,
@@ -701,3 +706,43 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   (3) `fixed load` at most 80,000 in five reopened sessions; (4) the smoke walk (~$5) and (5) the incident set
   (~$13, at least 10 of 20), each asked first as its own question, since a yes to 189 authorized no spend. Then
   `~/.gentle-ai` with its PATH entry (T14), the output style, T10, T11.
+- L43 2026-11-05 01:20Z (20:20 local): the earlier JH 137 session (`bf3a3340`) is gone with its worktree's files.
+  After the Claude Desktop restart (about 20:00 local) the lead ran `js-harness sessions stop bf3a3340` to start
+  this session again (the lead's note, 20:06 local, claimed); stop runs `claude rm`, which deleted the files of
+  `D:\js-harness\.claude\worktrees\f8-s2-nobackup` and its git registration (only a `.git` file is left; not
+  touched here, its deletion is his). Nothing committed was lost: `git rev-parse f8-s2-removal
+  origin/f8-s2-removal` gives `e4c1f48d` twice, the pause's commit. This session continues in its own worktree,
+  `D:\js-harness-worktrees\f8-s2-removal` (`git worktree add`, at `e4c1f48d`), with its own codegraph index
+  (`codegraph init`, 19,529 nodes). What stops it recurring, a follow-up proposed to him through the lead:
+  `sessions stop` refuses while the session's worktree holds files unless told to remove it, and a background
+  session is resumed by message, never by `sessions stop` (`docs/FAILURES.md`, `stop-removed-live-worktree`).
+- L44 2026-11-05 01:19Z (20:19 local): T9 check (1) passes. `s2-restore-entries.mjs --snapshot
+  ~/.gentle-ai/backups/20261104122417.084958800`, read only (no `--apply`; L21's script, read whole before the
+  run, copied from the earlier job folder): "permissions: equal", "mcp engram: equal", "mcp context7: equal", exit 0;
+  `claude mcp list`: codegraph, engram, context7 Connected. Sent to the lead (note, 20:19 local).
+- L45 2026-11-05 01:30Z (20:30 local): T9 checks (2) and (3), what can be read now. `D:\js-harness`: this session,
+  started after the restart in the main checkout, holds in its own context the project's `CLAUDE.md` and
+  `AGENTS.md` once each, context7's server instructions, one engram text (engram's server instructions; the engram
+  plugin's hook and skill listing are engram's own, no gentle-ai block), and the global file's 40 lines: graphify
+  and the Rules block with its groups CodeGraph, Delegation, Task Size and scratch, Remote operation
+  authorization. It is a CLI background session, not a desktop one, and the repo sets no output style (still his
+  question). `D:\plataforma-preproyecto` and `D:\abogadaclaudiajimenez`: no session opened there since the
+  restart (their newest transcripts are of 2026-10-27 and 2026-10-30), so no `/context` to read; on disk each has
+  `CLAUDE.md` importing `AGENTS.md`, `outputStyle` "js-harness" in `.claude/settings.local.json`, no project MCP
+  entry and no disabled server in `~/.claude.json`, and context7 and engram are user-level, so both would load;
+  checked only on disk. `fixed load` (`measureFixedLoad` from the branch's `bin/lib/fixed-load.mjs`): one session
+  of `D:\js-harness` started after the restart, this one, 55,671 at its first turn (the brief as first message),
+  under 80,000; four more restarted desktop sessions are needed for the five readings. Both wait for sessions he or
+  the lead opens: a `/context` in a new session of each project, and the check row read in five new ones.
+- L46 2026-11-05 01:25Z (20:25 local): a mistake of this session. To read `/context` without a desktop session it
+  ran `claude -p "/context"` twice from Git Bash, cost unsaid, the second after the first printed nothing instead
+  of reading why. Git Bash's path conversion turned the prompt into `C:/Program Files/Git/context`, so each run was
+  an unattended session in bypass mode: the first ($0.6 or so, estimated from its tokens) read this document, ran
+  T9 check (1) itself by extracting three files of the snapshot, `~/.claude.json` with context7's key among them,
+  to a `mktemp -d` folder it removed in the same command (a search of the temp folder finds nothing left), and
+  committed a Log line saying "his first message after the reopen" was that path; the second ($0.25) asked what
+  was wanted. Fixed: the commit, local and never pushed, was undone with `git reset --soft e4c1f48d` and its text
+  dropped; nothing else of the run stays (`git status` clean before this line). What stops it recurring:
+  `/context` is read only in a session he or the lead opens, never through `claude -p`; a `claude -p` prompt that
+  starts with `/` runs under `MSYS_NO_PATHCONV=1`; a guard check that refuses one without it is proposed through the
+  lead (`docs/FAILURES.md`, `headless-prompt-path-converted`).

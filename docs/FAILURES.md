@@ -785,6 +785,16 @@ where a command should have made it; each escape `template shown` names is one m
 - Control: check — bin/template.test.mjs — "gate --hook refuses a hand-made page by Artifact with the
   hooks contract" — since 2026-10-29
 
+### headless-prompt-path-converted
+A session ran `claude -p "/context"` from Git Bash to read a slash command's output; Git Bash's path conversion turned
+the prompt into `C:/Program Files/Git/context`, so the run was an unattended agent in bypass mode that acted on the
+feature it found: it extracted files holding a key to a temporary folder and committed a Log line naming his message.
+- Class: tool
+- Seen: 2026-11-05 — odd/tasks/f8-s2-removal.md, L46 — JH 137, two runs (about $0.85, estimated), the second started
+  after the first printed nothing; the first's commit, never pushed, undone with `git reset --soft`, its extracted
+  folder removed by its own command
+- Control: owed — odd/tasks/f8-s2-removal.md — "starts with `/` runs under `MSYS_NO_PATHCONV=1`"
+
 ### heavy-run-beside-gate
 A test run or a count started while a gate, or a batch that measures durations, was running.
 - Class: rule-not-acting
@@ -1683,6 +1693,15 @@ session believed he had rejected it and asked for his word.
 - Seen: 2026-10-13 — relief file, line 565 — JH 5 asked the lead to put to him whether it goes on;
   he had rejected nothing: the lead had stopped that turn, and the app listed the session as running
   at 13:08 and at 14:10, which it would not after a refusal at 07:00
+
+### stop-removed-live-worktree
+`js-harness sessions stop`, run to restart a background session, runs `claude rm`, which deleted the files of the
+session's worktree and its git registration while the work it held was meant to continue in a new session.
+- Class: tool
+- Seen: 2026-11-04 — odd/tasks/f8-s2-removal.md, L43 — at 20:06 local the lead stopped `bf3a3340` (JH 137) after the
+  Claude Desktop restart; `D:\js-harness\.claude\worktrees\f8-s2-nobackup` lost its files (a `.git` file is left);
+  nothing committed was lost, `git rev-parse f8-s2-removal origin/f8-s2-removal` gives `e4c1f48d` twice
+- Control: owed — odd/tasks/f8-s2-removal.md — "refuses while the session's worktree holds files unless told to remove it"
 
 ### stopped-work-shown-live
 A task stopped by hand, and a session that was archived, are printed by the board as live.
