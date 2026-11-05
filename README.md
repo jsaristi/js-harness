@@ -1443,8 +1443,9 @@ brief under `~/.js-harness/background/briefs/` that ends by telling it to report
 and the title and effort are held to the rules `session-title` and `session-effort` where they are
 declared. Each start is recorded in `~/.js-harness/background/sessions.jsonl`: `js-harness sessions
 stop <id>` removes a recorded session (`claude stop`, then `claude rm`; its transcript stays) and no
-other, and `js-harness uninstall machine` removes every recorded one that is not at work and fails
-while one is. The board's `Background sessions` block lists the project's background sessions from
+other; while its worktree holds files it refuses and runs nothing unless `--remove-worktree`, since
+`claude rm` deletes them, and a message, not a stop, resumes a background session. `js-harness
+uninstall machine` removes every recorded one that is not at work and fails while one is. The board's `Background sessions` block lists the project's background sessions from
 `claude agents --json --all`, what each waits for (a permission prompt included) and whether `start`
 recorded it; `--watch` returns when one starts waiting.
 
