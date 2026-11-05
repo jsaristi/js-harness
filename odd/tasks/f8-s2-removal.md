@@ -319,6 +319,34 @@ mapped to the decision the review took and its state. RE is `docs/proposals/gent
 | `opencode-gentle-logo` | not in RE | nothing on disk (`~/.config/opencode` absent) [c] |
 Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's own skills) [c].
 
+## Rule lines that leave with gentle-ai (T10 draft)
+Drafted 2026-11-05 (L49), not applied: each change goes through `js-harness rules change` on a `rule/` branch once
+he approves the wording, his words quoted with their date. Each line names what it replaces, as of `8f10bb50`.
+1. `CLAUDE.md:11-12`, "The task contract comes first in a feature document, as this project's order over
+   gentle-ai's;" becomes "The task contract comes first in a feature document;".
+2. `CLAUDE.md:73-77`, "A gentle-ai review's base is a hash ... never a branch name. Each code commit a review approved
+   is named on a gentle-ai line of the feature document; on `operation_timeout` the same command runs once more, then
+   the range is written "not reviewed" and Codex reviews it anyway." becomes "A review's base is a hash on the head's
+   first-parent line (the last reviewed boundary, or the commit that merged main in), never a branch name." The
+   gentle-ai line and its timeout step leave with the tool.
+3. `CLAUDE.md:79-93`, the paragraph that opens "Review is not his to decide", becomes: "Review is not his to decide:
+   every slice with code goes through Codex and the Claude lenses, a work-unit commit or a slice
+   (`js-harness-protocols` section 3), never the whole branch. `js-harness codex-review --base <boundary>` and
+   `js-harness lens-review --base <boundary> --lenses <pertinent> --reason <why>` record the reviews, and the pre-push
+   hook refuses a branch whose code commits either record does not cover. Their findings are fixed or answered. If one
+   cannot run, report that and record the skip with its `--unavailable <reason>`: a skip is a debt `check`, `doctor`
+   and the merge door list until a review pays it, and the door refuses a lens skip." What leaves: the consent
+   envelope and its `granted` invocation, the Stop hook's branch offer, "whether or not gentle-ai reviewed it" and
+   "like gentle-ai's".
+4. `AGENTS.md:5-6`, "the workflow, task documents and test-first work are its own since F8's S11, and gentle-ai,
+   which owned them, leaves at S2." becomes "the workflow, task documents and test-first work are its own, taken
+   over from gentle-ai, which left at F8's S2."
+5. `AGENTS.md:26-27`, "in the shape of gentle-ai's ODD document. It opens" becomes "in the shape of an ODD document.
+   It opens".
+Open beside it, not T10's: `bin/guard.mjs`, `bin/js-harness.mjs` and `bin/lib/guard.mjs` still name `gentle-ai
+review` (read with `grep -rln "gentle-ai review" bin`, tests left out); whether each is a refusal that stays or a
+leftover is read before S2 closes.
+
 ## Log
 - L1 2026-11-02T20:04:19Z, his words (the lead's transcript `0f71b2c6`, line 55309): "Sí, abre el S2". The brief
   (`~/.js-harness/background/briefs/2026-11-02T20-04-49-764Z-f23ac024.md`): that yes opens the step only; each
@@ -774,3 +802,9 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   six rules files and memory, outside spec 8's measure of this repo. The `check` row's median of its latest five is
   77,236, but that row still counts the lead's resumed session `0f71b2c6` (105,624, a first turn of 2026-10-27), so
   it is read here per session, not from the row.
+- L49 2026-11-05 18:33Z (13:33 local): question 194 sent to the lead (13:32 local): one smoke walk, its ceiling
+  about 5 USD (in S13 a walk cost about 0.02 USD of host plus a short Codex and lens review); a yes covers one walk,
+  not the incident set (~13 USD, asked after 194's answer) nor a rerun. While it waits, T10's wording drafted in
+  "Rule lines that leave with gentle-ai (T10 draft)" above, not applied: three of its lines are the review rules he
+  set, so its wording goes to him as its own question after the incident set's. Next: 194's answer; the incident set
+  question; T10's; T14's (`~/.gentle-ai` with its PATH entry and the eight agents); the output style; T11.
