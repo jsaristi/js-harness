@@ -269,20 +269,20 @@ lost, which he accepted once the project's documentation and its memory were on 
   before S2 closes: `CLAUDE.md:12` ("over gentle-ai's"), `:74-91` (its review steps), `AGENTS.md:6` and `:27`; his
   words quoted where a line is his
 - [ ] T11 (kind: docs) S2's roadmap line, the session summary, the closed notice — inline
-- [ ] T12 (kind: docs) before any removal: one table of every gentle-ai function on his machine (Claude, Codex,
+- [x] T12 (kind: docs) before any removal: one table of every gentle-ai function on his machine (Claude, Codex,
   Antigravity, its CLI, its folders and each project's leftovers), the twelve skills included, each mapped to what
   the review decided (the reverse-engineering matrix and 13.5, the diet) and whether that is built: done, owed with
   its step, or a gap; shown to him as a Spanish page; only a gap, or a function the review never covered, is asked
-  (L26) — S10, S11, S12
-- [ ] T13 (kind: build) the kept text of the diet's Appendix A.1 ships to every project in js-harness's block of
+  (L26) — S10, S11, S12; done `240cd132` (L28), its last gap closed by question 182 (L33)
+- [x] T13 (kind: build) the kept text of the diet's Appendix A.1 ships to every project in js-harness's block of
   `~/.claude/CLAUDE.md` (today G12's nine Rules lines, `bin/lib/rules-block.mjs`), test first, reviewed, landed and
   installed before gentle-ai's blocks leave that file; this repo's copy under "Kept from the global file" keeps one
-  home — S10
-- [ ] T14 (kind: verify) the removal from everywhere: every trace T12 lists that he does not keep, gentle-ai's
+  home — S10; built `ae79fad2`, `b0e90be1` (L29-L31), PR 763 in main `7aa2ab9c` (L34)
+- [x] T14 (kind: verify) the removal from everywhere: every trace T12 lists that he does not keep, gentle-ai's
   Claude, Codex and Antigravity config, `~/.gentle-ai`, its binaries and each project's `.atl/`, each asked — S11.
   Done with the uninstall (L35, L36): the Claude, Codex and Antigravity config and skills, the binary, GGA. Left to
   ask: `~/.gentle-ai` with its PATH entry and gentle-ai's eight native agents in `~/.claude/agents` (L47); each
-  project's `.atl/` done (L39)
+  project's `.atl/` done (L39); the rest done by question 201 (L58)
 - [ ] T15 (kind: build) follow-up, proposed to him through the lead, not authorized yet (L43): `sessions stop`
   refuses while the session's worktree holds files unless told to remove it; test first, a stop on a session with a
   live worktree exits non-zero and deletes nothing; the orchestrator's restart steps resume by message
@@ -874,3 +874,9 @@ leftover is read before S2 closes.
   the eight agents and `.gentle-ai-native-agent-ownership.json` deleted from `~/.claude/agents`, now empty. T14 is
   done. PR 778 (T10) is landed by the lead after 777 (question 203); main is not touched here. Next: the output-style
   question through the lead, then T11 (with `README.md:5` and `docs/SPEC.md:171`).
+- L59 2026-11-06 14:05Z (09:05 local): the host compacted this session at 08:58 local; it resumed from this document,
+  the lead told at 08:59. T11 begun: `README.md:5` and `docs/SPEC.md:171` no longer say gentle-ai leaves at S2
+  (`7de6b95f`, docs, the gate passed); S2's state line in `docs/ROADMAP.md` rewritten; T12, T13 and T14 marked done,
+  each with its commits and Log lines. The merge queue left PR 778 out at 09:00 as a draft; `gh pr view 778` read it
+  ready at 09:01 (head `c3b9767a`), the lead told. Waiting: PR 778 (T10) and question 204 (T6); the session summary
+  and the closed notice come after both.
