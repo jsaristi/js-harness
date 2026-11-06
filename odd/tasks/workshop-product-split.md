@@ -839,8 +839,9 @@ The slices:
 - L22 (2026-11-05): PR 775 landed, main `3f877c66`. Main merged up the series: into `docs/workshop-product-split`
   (PR 769), clean; into `feat/hook-entries-row` (PR 772) as `167eef1c`, `docs/FAILURES.md` kept both sides in date
   order; into `feat/workshop-move` (PR 773), clean; into this branch as `52d07039`, the ceiling of `bin/check.mjs`
-  down to its 2,007 lines. The move, reapplied from its patch on `52d07039` without a conflict, is 585 changed lines
-  with renames counted by what they change. The line the lead owed to `docs/FAILURES.md` (stretch-not-opened, his
+  down to its 2,007 lines. The move, reapplied from its patch on `52d07039` without a conflict, is 591 changed lines
+  with renames counted by what they change (585 before this document and `docs/FAILURES.md` joined it; corrected in
+  L25). The line the lead owed to `docs/FAILURES.md` (stretch-not-opened, his
   absence 13:25 to 18:12) goes in with it.
 - L23 (2026-11-05): the move is `fd1da6e5`; the series' three branches are pushed with main in. The reviews of the
   dispatcher, `6c1bc8e..f78479a`, apart from the move so main's code is not read again:
@@ -862,8 +863,22 @@ The slices:
   pull request of its own to main; his yes to question 193 covered `commit-size` and `codex-review` alone. It is question 199.
   This entry, written while Codex reviewed `52d0703..3ec2263`, voided that run: part 1 of 3, 128,424 input tokens,
   nothing recorded (`edit-during-review` in `docs/FAILURES.md`); the review runs again after this commit.
-- Next step (for a resume): the fix's commit, then Codex, the lenses and a verifier over the merge, the move
-  and the fix (`--base 6c1bc8ef`, which starts where the dispatcher's records end and judges the merge by what was
-  written in it), and a pull request with base `feat/workshop-move` (PR 773), never merged here. Then the next pull
-  request: `ticks --hook` with its stale-ticks row, `.claude/settings.json`, and the texts. T7 stays a feature of
-  its own.
+- L25 (2026-11-05): the owner answered question 199 at 19:15 local, tapped: "Lentes por lo que cambia
+  (recomendado)" (the lead's transcript `0f71b2c6`, line 68447). That change is its own pull request to main,
+  `fix/lens-renames` (`odd/tasks/lens-counts-renames.md`). The reviews of `52d0703..635a64b`, the move and the fix:
+  - Codex, run again after L24's commit: 3 parts, each correct (0.86, 0.90, 0.96), 355,297 input tokens.
+  - The independent verifier (opus): holds. Every one of 2,303 relative specifiers points where it did; `npm pack
+    --dry-run` ships nothing under `workshop/`, and the packed copy resolves every import and loads every `--help`;
+    the fix's two tests fail on `fd1da6e5` and pass on `3ec22630`; 13 runs of the moved and touched tests, 0 failing.
+    Two slips of the record, both fixed here or named: L22 said 585 changed lines where the move is 591; the message
+    of `fd1da6e5` names `rules` alone as reading `workshop/`, where the docs plan (`workshop/lib/docs-plan.mjs:19`)
+    and the records table (`workshop/lib/docs-records.mjs:93`, `:168`) do too, as L18 says. The commit is kept, since
+    rewriting it would void the reviews of the two after it. It also named product texts that still name workshop
+    commands (`bin/loop.mjs:56`, `bin/lib/protocols-skill.mjs:111`, `bin/lib/host-update.mjs:225`), from the
+    dispatcher's commit: the next pull request's texts.
+- gentle-ai: not run on this slice; Codex reviewed 52d07039, fd1da6e5 and 3ec22630; the lenses 3ec22630, and the move
+  `fd1da6e5` waits for them (L24).
+- Next step (for a resume): the lens change lands on main (`fix/lens-renames`); then main into the series, the
+  lenses over `52d0703..fd1da6e` to pay the skip, and the pull request with base `feat/workshop-move` (PR 773), never
+  merged here. Then the next pull request: `ticks --hook` with its stale-ticks row, `.claude/settings.json`, and the
+  texts (with the three product texts L25 names). T7 stays a feature of its own.
