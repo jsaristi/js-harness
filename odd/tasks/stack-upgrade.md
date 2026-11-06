@@ -138,19 +138,11 @@ Nothing planned beyond question 206 (what failed in the menu), already asked.
   stack.
 
 ## Next step
-Worktree `D:\js-harness\.claude\worktrees\stack-upgrade`, branch `feat/stack-upgrade`. T1-T5 and T7 are built and
-their tests pass (stack-upgrade 11, engram-release 10, stack-run 25, stack-upgrade command 12, update 4 new, tui and
-js-harness 143, the stack suites 204). Not yet run: `bin/install.test.mjs` whole (the new uninstall test is in it),
-`npm run check`, Codex and the lenses (base `af55e7ee`). Then T6 once question 206 is answered (no answer at 11:5x;
-measured meanwhile: the menu takes about 3.8 s to open here, 0.75 s for the release lookup and 3 s for the stack
-probes, and 3 s again after each command). Then push, PR, `notify --kind ready`.
-The gate refused the slice twice (CI runs 42254579713 and 42255467510, Linux). Fixed and tested: the Windows tar
-path is `path.win32.join`; `upgrade` with a malformed manifest skips the stack; `readUpgrade` no longer probes the
-prerequisites, since gh run in the clean-home test's scratch home wrote `.local/state/gh/device-id` there and its
-uninstall could not leave it empty (`bin/stack-upgrade.test.mjs` "never runs gh"). The third try was refused by the
-row commit-size (about 1230 changed lines, over 1200), so the slice is two commits: the plan, the binary's update
-and the undo (`bin/lib/*`, `bin/install.*`), then the command and its wiring with the docs. Their messages are in the
-scratchpad, `commit-a.txt` and `commit-b.txt`.
+Worktree `D:js-harness.claudeworktreesstack-upgrade`, branch `feat/stack-upgrade`. S1 is done and reviewed:
+commits bff62d9f, f5b05782, 54f8639f and 16e1cbae passed the gate; Codex and the lenses cover af55e7e..16e1cba (L7,
+L8, and the recheck: Codex 9 of 9 fixed, the lenses 0 findings). Next: push, the PR of S1 against main,
+`notify --kind ready`. S2 (a) rests on PR jsaristi/js-harness#596 (L5); S2 (b), (c) and S3 wait on question 207
+(L6): whether to build them chained on #596 now or wait for his walk of #596. Merges are his.
 
 ## Tasks
 - [x] T1 (kind: design) This document, the depth pass, question 206 — S1, S2
@@ -160,7 +152,7 @@ scratchpad, `commit-a.txt` and `commit-b.txt`.
 - [x] T5 (kind: build) `upgradeAll` and `updateAll` (the dispatcher and the menu use them), so `upgrade`, `update`
   and the menu reach the stack; `upgradeMain` and `updateMain` stay the harness's own — S1
 - [ ] T6 (kind: build) The menu's failure, reproduced in a test first — S2
-- [ ] T7 (kind: docs) GUIDE's menu table, the roadmap — S1, S2
+- [ ] T7 (kind: docs) GUIDE's menu table, the roadmap — S1, S2 (S1 part done: GUIDE and ROADMAP in f5b05782)
 - [ ] T8 (kind: verify) `npm run check`, Codex and the lenses, the report to the lead
 
 ## Log
