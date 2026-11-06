@@ -187,9 +187,10 @@ tool, and #596 runs every item as a child with stdin closed, so `upgrade` there 
   here; (b) one Update item running `upgrade` handed the terminal; (c) the `New:` line, `computeNewer`
 - [x] T7 (kind: docs) GUIDE's menu table, the roadmap — S1, S2 (S1 part done: GUIDE and ROADMAP in f5b05782; S2's
   GUIDE rows with T6)
-- [ ] T6b (kind: verify) `scripts/tui-walk.mjs` on a real console: its Update step goes through `runToResult`, which
-  waits for a result screen, while a handed-off Update ends on the main screen with "Update ended (exit N)". The
-  step is renamed only; teaching the walk a handed-off item is #596's script, with S3's slices
+- [ ] T6b (kind: verify) `scripts/tui-walk.mjs` on a real console. Its Update step waited for a result screen, while
+  a handed-off Update ends on the "Update ended (exit N)" prompt (Codex P2 on 857b438..b4422d8); the walk now takes
+  a `handoff` step that reads the output up to that prompt. Not run: it installs with the real npm, so it runs with
+  #596's one real-console walk
 - [ ] T8 (kind: verify) `npm run check`, Codex and the lenses, the report to the lead
 
 ## Log
