@@ -1811,6 +1811,9 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-11-05 — the lead's message to JH 142 (claimed; the lead's own) — he was away 13:25 to 18:12 local
   (UTC-05:00) with no stretch opened by the lead; question 194 sat on his screen from 13:36 to 18:12 with no
   push notice
+- Seen: 2026-11-06 — the lead's message to JH 142 (claimed; the lead's own) — he was away 00:36 to 08:41 local
+  (UTC-05:00) with no stretch opened by the lead; questions 201 and 202 waited overnight, and JH 137's background
+  job ended meanwhile
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 

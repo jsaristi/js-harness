@@ -878,7 +878,14 @@ The slices:
     dispatcher's commit: the next pull request's texts.
 - gentle-ai: not run on this slice; Codex reviewed 52d07039, fd1da6e5 and 3ec22630; the lenses 3ec22630, and the move
   `fd1da6e5` waits for them (L24).
-- Next step (for a resume): the lens change lands on main (`fix/lens-renames`); then main into the series, the
-  lenses over `52d0703..fd1da6e` to pay the skip, and the pull request with base `feat/workshop-move` (PR 773), never
-  merged here. Then the next pull request: `ticks --hook` with its stale-ticks row, `.claude/settings.json`, and the
+- L26 (2026-11-06): pull request 777 landed on main (9d8c405; its task document `odd/tasks/lens-counts-renames.md`),
+  so the lenses read a renamed file by the lines it changes; then 778, main at 8d1284a6. Main went up the series with
+  no conflict: `af54ba75` (769), `99ece5e7` (772), `3be3299a` (773), `49c83c92` (776), each through the gate; the
+  push check found every code commit covered by both reviews, a clean merge asking for none. The lenses over the
+  move, `52d0703..fd1da6e`, paid the skip of L24: risk 0 (41,976 input tokens), reliability 0 (131,146), readability
+  the two warnings of L23 again and nothing new (86,799): `--windows` was fixed in `3ec22630`, after this range, and
+  the workshop's texts are the next pull request's. 259,921 input tokens in all. The pull request is 776.
+- gentle-ai: not run on this slice; the lenses reviewed `fd1da6e5`.
+- Next step (for a resume): the lead asks the owner to merge the series 769, 772, 773, 776, never merged here. Then
+  the next pull request: `ticks --hook` with its stale-ticks row, `.claude/settings.json`, and the
   texts (with the three product texts L25 names). T7 stays a feature of its own.
