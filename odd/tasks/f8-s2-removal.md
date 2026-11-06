@@ -840,3 +840,8 @@ leftover is read before S2 closes.
   are all done: (1) L44, (2) L47, (3) L48, the smoke walk L51, the incident set here. Left of T9's line: nothing.
   Next, one question at a time through the lead: T10's wording, T14 (`~/.gentle-ai`, its PATH entry, the eight
   agents), the output style; then T11.
+- L54 2026-11-06 00:20Z (19:20 local): the gate refused L53's first commit: `bin/lib/gentle-ai-absence.test.mjs`
+  ("evals/results/f8-s2-incidents.json breaks the convention and is not on the legacy list"), read before any
+  retry. Fixed as every earlier result is: the file named with `RESULT` in its own commit, `78f1d226`, the test 3 of
+  3. Reviewed over `cb03bd4f..c6f1d6e`: Codex "the patch is correct" (0.99; 28,531 input tokens, 18 s); the
+  reliability lens, picked as the one pertinent to a test's list, complete with 0 findings (8,321 input tokens).
