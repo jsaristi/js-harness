@@ -845,3 +845,7 @@ leftover is read before S2 closes.
   retry. Fixed as every earlier result is: the file named with `RESULT` in its own commit, `78f1d226`, the test 3 of
   3. Reviewed over `cb03bd4f..c6f1d6e`: Codex "the patch is correct" (0.99; 28,531 input tokens, 18 s); the
   reliability lens, picked as the one pertinent to a test's list, complete with 0 findings (8,321 input tokens).
+- L55 2026-11-06 00:31Z (19:31 local): question 200 sent to the lead: apply T10's draft as written (five lines of
+  `CLAUDE.md` and `AGENTS.md`, each its own commit on a `rule/` branch, his answer quoted), or leave it until he
+  reads it. Before applying, which of those lines are declared rules (`js-harness rules`) is read: a line that is not
+  one changes as plain text in the same branch.
