@@ -141,15 +141,14 @@ Nothing planned beyond question 206 (what failed in the menu), already asked.
 Three worktrees under `D:\js-harness\.claude\worktrees\`:
 1. `stack-upgrade` (`feat/stack-upgrade`): S1 is PR jsaristi/js-harness#780, reviewed, `notify --kind ready` sent.
    Merging is his.
-2. `ci-gate-merge-parent` (`fix/ci-gate-merge-parent`, from origin/main): the lead's call (L10). Document committed
-   (9035cd30); the fix of `bin/lib/ci-gate.mjs` (MERGE_HEAD as parents of the CI snapshot) and its test were being
-   committed. Then: Codex and the lenses (risk, reliability) from base 9035cd30, one independent verifier (it
-   touches CI), push, PR, `notify --to orchestrator --kind ready --pr <n>`.
+2. `ci-gate-merge-parent` (`fix/ci-gate-merge-parent`, from origin/main): the lead's call (L10), done as PR
+   jsaristi/js-harness#781, reviewed and verified, `notify --kind ready` sent (L11). Merging is his.
 3. `tui-update-item` (`feat/tui-update-item`, local only, never pushed until (2) lands): S1 plus #596's ten commits
    replayed with their dates (`git rebase --committer-date-is-author-date`), and #596's tests brought to today's
    main: gentle-ai fixtures renamed to engram, the codex-daemon row, `installIndex` waits for the stack block, and
    the gentle-ai words in terminal.mjs, tui.mjs and two tests dropped (the convention test, CI run 42272367996).
-   That port is committed with this text. Then build S2 (b) and (c) below, tests first. Once (2) and #780 land:
+   That port is committed (857b438f); S2 (b) and (c) below are built on it, tests first, with their reviews from
+   base 857b438f. Open: T6b, the walk on a real console. Once (2) and #780 land:
    bring #596's branch up to main with a real merge, rebuild this branch on it, and open its PR against #596's
    branch, chained, a draft while #780 is open. #596's replayed commits need their reviews on this branch.
 
@@ -184,8 +183,13 @@ tool, and #596 runs every item as a child with stdin closed, so `upgrade` there 
 - [x] T4 (kind: build) `stack upgrade` (with `--list`), the records, and the undo of an update in `undoStack` — S1
 - [x] T5 (kind: build) `upgradeAll` and `updateAll` (the dispatcher and the menu use them), so `upgrade`, `update`
   and the menu reach the stack; `upgradeMain` and `updateMain` stay the harness's own — S1
-- [ ] T6 (kind: build) The menu's failure, reproduced in a test first — S2
-- [ ] T7 (kind: docs) GUIDE's menu table, the roadmap — S1, S2 (S1 part done: GUIDE and ROADMAP in f5b05782)
+- [x] T6 (kind: build) The menu's failure, reproduced in a test first — S2: (a) the redraw is PR #596's, replayed
+  here; (b) one Update item running `upgrade` handed the terminal; (c) the `New:` line, `computeNewer`
+- [x] T7 (kind: docs) GUIDE's menu table, the roadmap — S1, S2 (S1 part done: GUIDE and ROADMAP in f5b05782; S2's
+  GUIDE rows with T6)
+- [ ] T6b (kind: verify) `scripts/tui-walk.mjs` on a real console: its Update step goes through `runToResult`, which
+  waits for a result screen, while a handed-off Update ends on the main screen with "Update ended (exit N)". The
+  step is renamed only; teaching the walk a handed-off item is #596's script, with S3's slices
 - [ ] T8 (kind: verify) `npm run check`, Codex and the lenses, the report to the lead
 
 ## Log
@@ -225,3 +229,9 @@ tool, and #596 runs every item as a child with stdin closed, so `upgrade` there 
 - L10 (2026-11-06): a merge of main into #596's branch was refused on CI for 16 of main's documents, since the CI
   snapshot drops MERGE_HEAD (`bin/lib/ci-gate.mjs:116-118`). The lead chose a fix of its own
   (`odd/tasks/ci-gate-merge-parent.md`) over a force-push of #596; S2 stays local until it lands.
+- L11 (2026-11-06): the gate fix is PR jsaristi/js-harness#781 (Codex 0.92 and 0.99, the lenses 0 findings, the
+  independent verifier "the change holds"), `notify --kind ready` sent. S2 (b) and (c) built here, tests first
+  (`node --test bin/tui.test.mjs`: 109 of 109). Two decisions taken while building: the version line keeps its
+  "(update available: X)", which `scripts/e2e.mjs` and the walk read, and the `New:` line repeats the harness beside
+  the stack; the network lookup runs only when a tool Update updates is installed with no known latest, found
+  because rows such as context7 are `ok` with nothing installed, which sent three tests to the network.

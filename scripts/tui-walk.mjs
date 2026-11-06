@@ -202,7 +202,6 @@ async function main() {
     await step('Install', { section: M, label: 'Install', expect: new RegExp(`installed js-harness ${current.replace(/\./g, '\\.')}`) });
     await step('Status after install', { section: M, label: 'Status', expect: new RegExp(current.replace(/\./g, '\\.')) });
     await step('Doctor', { section: M, label: 'Doctor', expect: /\S/ });
-    await step('Update', { section: M, label: 'Update', expect: new RegExp(newer.replace(/\./g, '\\.')) });
     await step('Init', { section: P, label: 'Init', menu: /project\/Sync, project\/Status, project\/Remote status/ });
     await step('Project sync', { section: P, label: 'Sync', expect: /\S/ });
     await step('Project status', { section: P, label: 'Status', expect: /\S/ });
@@ -212,13 +211,13 @@ async function main() {
     await step('Remote status while started', { section: P, label: 'Remote status', expect: /^remote: running \(supervisor pid \d+/m });
     await step('Remote stop', { section: P, label: 'Remote stop', answer: KEY.yes, expect: /^remote: stopped for /m });
     await uninstallKind('Project uninstall', 'Project', { answer: KEY.yes, menu: /project\/Init/ });
-    await step('Upgrade', { section: M, label: 'Upgrade', expect: new RegExp(`upgraded to ${newer.replace(/\./g, '\\.')}`) });
+    await step('Update', { section: M, label: 'Update', expect: new RegExp(`upgraded to ${newer.replace(/\./g, '\\.')}`) });
     {
       // The menu keeps running the old code: its header says so instead of offering the update again (F1).
       const header = screenOf(out)[0];
       const want = `js-harness ${current}  (${newer} installed: quit and open js-harness again to use it)`;
-      results.push({ name: 'header after Upgrade', ok: header === want, faults: header === want ? [] : [`header is ${JSON.stringify(header)}`], said: header });
-      console.log(`${header === want ? 'PASS' : 'FAIL'}  header after Upgrade${header === want ? '' : `: ${header}`}`);
+      results.push({ name: 'header after Update', ok: header === want, faults: header === want ? [] : [`header is ${JSON.stringify(header)}`], said: header });
+      console.log(`${header === want ? 'PASS' : 'FAIL'}  header after Update${header === want ? '' : `: ${header}`}`);
     }
     await uninstallKind('Uninstall, answered no', 'Machine', { answer: KEY.no });
     await uninstallKind('Uninstall', 'Machine', { answer: KEY.yes, expect: /remov|uninstall/i });
