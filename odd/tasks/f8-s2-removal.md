@@ -849,3 +849,15 @@ leftover is read before S2 closes.
   `CLAUDE.md` and `AGENTS.md`, each its own commit on a `rule/` branch, his answer quoted), or leave it until he
   reads it. Before applying, which of those lines are declared rules (`js-harness rules`) is read: a line that is not
   one changes as plain text in the same branch.
+- L56 2026-11-06 00:55Z (19:55 local): question 200 answered, "Aplicar el borrador" (tapped; the lead's transcript
+  `0f71b2c6`, line 68570, 2026-11-06T00:35:33Z, checked with `js-harness sessions --quote`). Read before applying:
+  none of the five lines is a declared rule (`bin/lib/rules-data.mjs` declares three rules in `CLAUDE.md` and
+  `AGENTS.md`, all budgets), and `rules change` refuses an AGENTS.md phrase ("changes only by its approved draft
+  (letter G), which is not built"), so they change as text, one commit each, on `rule/t10-gentle-ai-lines` from main
+  `91a2deb5`, worktree `D:\js-harness-worktrees\rule-t10`: `a5c1c06d`, `485cf2a2`, `b1ff9ef7`, `d9bc9359`, `c3b9767a`.
+  The first commit's gate refused it once ("CLAUDE.md: 1 owed span edited in place since the register was written"),
+  so each commit also runs `rules coverage --refresh` (`bin/lib/rules-coverage-data.mjs`); every commit passed the
+  gate, `rules coverage --strict` exit 0. gentle-ai line: none, gentle-ai is gone. Codex over `91a2deb5..c3b9767a`
+  "the patch is correct" (0.98, 144,931 input tokens); the reliability lens 0 findings. PR 778 opened to main; the
+  lead asks him before it lands. Left beside it for T11: `README.md:5` and `docs/SPEC.md:171` say what items 4 and 3
+  said, outside his draft. Next: T14's question.
