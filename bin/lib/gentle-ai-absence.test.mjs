@@ -60,6 +60,7 @@ const NAMED = {
   'evals/results/f8-s1-incidents.json': RESULT,
   'evals/results/f8-s3-incidents.json': RESULT,
   'evals/results/f8-s10-incidents.json': RESULT,
+  'evals/results/f8-s2-incidents.json': RESULT,
   'evals/results/f8-s5c-a-incidents.json': RESULT,
   'evals/results/f8-s5c-a-incidents-2.json': RESULT,
   'evals/results/f8-s5c-a-rules-current.json': RESULT,
