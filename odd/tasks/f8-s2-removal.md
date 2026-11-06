@@ -891,3 +891,8 @@ leftover is read before S2 closes.
   js-harness.md` is there; the file's other keys unchanged (`diff` against a copy taken before: only the new line
   and the comma). It holds for new sessions of this project. T6 is done. Next: the session summary, the PR of this
   branch, the closed notice.
+- L61 2026-11-06 14:27Z (09:27 local), state at the lead's pause for a Claude Desktop update: nothing mid-way. The
+  session summary committed (`19bed86f`); main merged in at `39fd7562` (`docs/FAILURES.md`, two Seen lines, both
+  kept in date order); PR 779 opened and the lead told ready at 09:24. Left: PR 779 to land (the lead's), then the
+  closed notice with `docs/sessions/2026-11-06-jh-137-f8-s2-removals-without-the-backup.md`. The background
+  `js-harness wait --notice-to 137` ends with the restart.
