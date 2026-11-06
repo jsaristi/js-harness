@@ -51,9 +51,16 @@ Nothing: merging it is the owner's, through the lead.
    touches CI (a high-risk item) one independent verifier over it."
 
 ## Tasks
-- [ ] T1 (kind: build) The test of a merge being made, then `mergeHeads` in the snapshot — spec 1
+- [x] T1 (kind: build) The test of a merge being made, then `mergeHeads` in the snapshot — spec 1 (a1ed109e)
 - [ ] T2 (kind: verify) Codex, the lenses, one independent verifier, the PR, `notify --kind ready`
 
 ## Log
 - L1 (2026-11-06, the lead in JH 152): option 1 of two (a fix here; a rebase and force-push of #596 is out, since
   it rewrites his PR). Merging is his, through the lead.
+- L2 (2026-11-06): reviews of a1ed109e. Codex: the patch is correct (0.92). Lenses risk and reliability: 0 findings
+  over 9035cd30..a1ed109e. The independent verifier: "the change holds", over plain, octopus, conflict-resolved and
+  squash merges, GIT_DIR and linked worktrees (a worktree's MERGE_HEAD does not leak to another). Its low notes,
+  left as they are: the push now carries the merged heads' history, which a public repository already shows once
+  merged; git older than 2.31 lacks `--path-format` and falls back to one parent, as before; one rare case where CI
+  and the local `openedOn` can still differ. Its test gap, closed: the green-run test asserts the whole parent list
+  (`rev-list --parents`), so a stray extra parent fails it.

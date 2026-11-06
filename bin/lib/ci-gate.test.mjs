@@ -109,7 +109,7 @@ test('a green run passes the gate: the staged tree went to gate/<sha>, and the b
     assert.equal(result.url, RUN.url);
     const sha = pushed.split(':')[0];
     assert.equal(git(p.remote, 'show', `${sha}:a.txt`), 'staged', 'the commit being made, not the working tree');
-    assert.equal(git(p.remote, 'rev-parse', `${sha}^`), git(p.cwd, 'rev-parse', 'HEAD'), 'its parent is HEAD');
+    assert.deepEqual(git(p.remote, 'rev-list', '--parents', '-n', '1', sha).split(' ').slice(1), [git(p.cwd, 'rev-parse', 'HEAD')], 'its one parent is HEAD: no merge, no MERGE_HEAD');
     assert.deepEqual(gh.calls[0], ['run', 'list', '--repo', 'o/r', '--workflow', 'gate.yml', '--json', 'databaseId', '--limit', '1'], 'gh is asked before the push');
     assert.deepEqual(gh.calls[1], ['run', 'list', '--repo', 'o/r', '--commit', sha, '--workflow', 'gate.yml', '--json', 'databaseId,status,conclusion,url', '--limit', '1']);
     assert.ok(gh.calls.every((args) => args[2] === '--repo' && args[3] === 'o/r'), 'every gh call names the repository of the remote');
