@@ -340,9 +340,6 @@ export async function readUpgrade({ home, cwd, spawn = spawnSync, platform = pro
   return { rows, functions, latest };
 }
 
-/** Where an update goes, as a person reads it before saying yes. */
-const toWords = (update) => update.to ?? `the version engram v${update.engramTo} ships`;
-
 /** An update as the lines a person reads before saying yes: what it is, its command and its undo. */
 function upgradeLines(update, platform, head) {
   const exe = platform === 'win32' ? '.exe' : '';

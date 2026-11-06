@@ -180,3 +180,11 @@ scratchpad, `commit-a.txt` and `commit-b.txt`.
   `claude/tui-gentle-level-a6afd3`, open since 2026-10-30, mergeable and clean by `gh pr view 596`, 1957 lines
   added; its real-console walk is his. So S2 (a) is not built again here: it rests on #596. S2 (b) and (c) and S3
   build on #596's shell, and touch `bin/tui.mjs` as #596 does.
+- L6 (2026-11-06): S3's plan already exists: section 4.6 of the same proposal lists slices 2-6 (multi-select, Doctor
+  detail, read-only views, a palette that honours NO_COLOR, the install preview; about 1.35k code lines) and 4.7
+  says none starts before #596 merges. The question for him (through the lead): build S2 (b) and (c) as a PR chained
+  on #596's branch now, so one real-console walk covers both, then slices 2-6 one PR each in that order; or wait for
+  him to walk and merge #596 first.
+- L7 (2026-11-06): the Claude lenses over af55e7e..f5b0578 (risk, resilience, readability, reliability, sonnet):
+  0, 0, 1, 0 findings. Readability: `toWords` in `bin/stack.mjs` was never called and read a field no plan row
+  carries; removed. Codex's first run refused before it ran, since this document was not committed.
