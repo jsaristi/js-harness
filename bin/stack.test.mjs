@@ -333,7 +333,7 @@ test('stack engram-prompt off takes the prompt hook out of a scratch home, on pu
     const bad = await run(['engram-prompt', 'sideways', '--home', home], {});
     assert.equal(bad.code, 2);
     assert.match(bad.err, /stack engram-prompt needs off or on/);
-    const none = await run(['engram-prompt', 'off', '--home', fs.mkdtempSync(path.join(os.tmpdir(), 'stack-engram-prompt-'))], {});
+    const none = await run(['engram-prompt', 'off', '--home', fs.mkdtempSync(path.join(root, 'bare-'))], {});
     assert.equal(none.code, 1);
     assert.match(none.err, /no user-level install of engram@engram/);
     // A machine manifest that does not parse is one line and exit 1, not a stack trace (Codex P2 over dc0d6c5..b309c50).

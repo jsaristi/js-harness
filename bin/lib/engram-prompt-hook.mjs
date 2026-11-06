@@ -31,8 +31,9 @@ const samePath = (a, b) => (entry) => entry.path === a && entry.event === b;
 /** Takes the `PROMPT_EVENT` entry out of engram's hooks file under `home` and records the file's bytes before and after
  * as `{ path, event, original, written, at }`. Returns `{ status, path }`: `off`; `already` when the file holds no such
  * entry (nothing written or recorded); `skipped` with a `reason` when there is no engram plugin, the file cannot be read
- * as a JSON object or cannot be written, or its record cannot be kept, in which case the file is put back. */
-export function promptHookOff(home, { writeFile = fs.writeFileSync, record: recordIt = keepRecord, now = () => new Date() } = {}) {
+ * as a JSON object, its record cannot be kept (the file is not touched) or it cannot be written (the record is
+ * forgotten). */
+export function promptHookOff(home, { writeFile = fs.writeFileSync, record: recordIt = keepRecord, forget = forgetPluginHook, now = () => new Date() } = {}) {
   const file = engramHooksFile(home);
   if (file === null) return { status: 'skipped', path: null, reason: `no user-level install of ${ENGRAM_PLUGIN} in ${path.join(home, '.claude', 'plugins')}` };
   let raw;
@@ -49,17 +50,20 @@ export function promptHookOff(home, { writeFile = fs.writeFileSync, record: reco
   const { [PROMPT_EVENT]: removed, ...rest } = hooks;
   const style = { trailingNewline: raw.endsWith('\n'), useCRLF: raw.includes('\r\n'), indent: detectIndent(raw) };
   const written = serializeJson({ ...data, hooks: rest }, style);
-  try {
-    writeFile(file, written, 'utf8');
-  } catch (err) {
-    return { status: 'skipped', path: file, reason: `not writable (${err.code ?? err.message})` };
-  }
-  // A change nothing records could never be put back: when the record cannot be kept, the file goes back to its bytes.
+  // Recorded before written, as `install` does: a change nothing records could never be put back, while a record of a
+  // change that was not made is forgotten here, or dropped by `on` as changed when even that fails.
   try {
     recordIt(home, 'pluginHooks', { path: file, event: PROMPT_EVENT, original: raw, written, at: now().toISOString() }, samePath(file, PROMPT_EVENT));
   } catch (err) {
-    fs.writeFileSync(file, raw, 'utf8');
-    return { status: 'skipped', path: file, reason: `not recorded in the manifest (${err.code ?? err.message}), so the file was put back` };
+    return { status: 'skipped', path: file, reason: `not recorded in the manifest (${err.code ?? err.message}), so the file was not touched` };
+  }
+  try {
+    writeFile(file, written, 'utf8');
+  } catch (err) {
+    try {
+      forget(home, { path: file, event: PROMPT_EVENT });
+    } catch { /* the record names bytes the file does not hold, so `on` drops it as changed */ }
+    return { status: 'skipped', path: file, reason: `not writable (${err.code ?? err.message})` };
   }
   return { status: 'off', path: file, removed: Array.isArray(removed) ? removed.length : 1 };
 }
