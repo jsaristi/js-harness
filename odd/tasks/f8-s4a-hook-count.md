@@ -89,8 +89,8 @@ the question names that.
 
 ## Tasks
 - [x] T1 (kind: verify) spec 3: the 50-commit count on `main` — L2
-- [ ] T2 (kind: build) spec 1: the `hooks` row, tests first; `check.mjs` code moved out first
-- [ ] T3 (kind: verify) spec 1: Codex and the lenses over T2, PR 1, ready notice
+- [x] T2 (kind: build) spec 1: the `hooks` row, tests first; `check.mjs` code moved out first — L4
+- [x] T3 (kind: verify) spec 1: Codex and the lenses over T2, PR 1, ready notice — L5, L6
 - [ ] T4 (kind: build) spec 2: the command that turns the engram prompt hook off and on, backed up and recorded
 - [ ] T5 (kind: verify) spec 2: his yes through the lead; applied; the engram `UserPromptSubmit` ceiling lowered to 0
 - [ ] T6 (kind: docs) ROADMAP S4a State, SPEC, summary under `docs/sessions/`
@@ -111,3 +111,21 @@ the question names that.
   table is the count of this day. D8: the engram prompt hook also posts each prompt to engram (`POST /prompts`) and,
   after 15 minutes without a save, injects a save reminder; the question he answered said only that memory keeps
   working without it. Turning it off stops both; the question that applies it says so.
+- L4 (2026-11-06, T2, red then green): `bin/lib/hook-count.test.mjs` written first; against a stub module, 9 of 10
+  red (the tenth checks the table's shape). Then `bin/lib/hook-count.mjs`: the table `HOOK_CEILINGS` (L3's count),
+  `ownerOf` (js-harness or codegraph by the program the command starts, `plugin <id>` for a plugin's entry, the
+  command itself for any other), `countHooks` and `hookCountRow`; `readHooks` of `bin/lib/payload.mjs` reads every
+  event when asked (`claudeHookEntries`), its context reading unchanged. The gate's test (`main` with one Stop entry
+  too many, a scratch home) red with the row unwired, green wired. `checkPayload` moved from `bin/check.mjs` into
+  `bin/lib/payload.mjs`, re-exported, so `check.mjs` is 1,987 lines and its ceiling goes down to that. On this machine
+  the row reads "26 hook entries from 4 owners", every cell at its ceiling. `node --test` over hook-count, payload,
+  check, conventions (structure, arguments, errors), readme and spec: 348 of 348; `rules check` PASS.
+- L5 (2026-11-06, the reviews of `1d4f63db`): lenses reliability and readability over `8d1284a..1d4f63d`: 0 findings
+  each. Codex over `5fe15e5..266ca79`: incorrect (0.94), one P2, taken, tests first: a command whose program path is
+  quoted (`"C:\Program Files\codegraph\codegraph.exe" prompt-hook`) was split on whitespace, kept its quote, and read
+  as a new owner. `ownerOf` now reads a quoted first word whole and unquoted. Red: 1 of 10 (the owner test, with
+  three quoted cases), then `hook-count` and `check` tests 265 of 265. The D8 question went to the lead as question
+  208 (2026-11-06 13:44 local).
+- L6 (2026-11-06, the reviews of `43267a4f`): Codex over `266ca79..43267a4`: correct (0.98), the P2 of L5 fixed. Lens
+  reliability: 0 findings. No independent verifier: the change names no high-risk item (an optional `harness.json`
+  key, a row that reads files and writes none).
