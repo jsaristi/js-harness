@@ -81,7 +81,7 @@ Nothing planned: question 199 decided the change. A question goes to the lead wi
    nothing else."
 
 ## Tasks
-- [ ] T1 (kind: build) specs 1-2: the tests first, then the candidate through `rangeFiles` and the older hash kept ·
+- [x] T1 (kind: build) specs 1-2: the tests first, then the candidate through `rangeFiles` and the older hash kept ·
   `bin/lib/lens-candidate.mjs`, `bin/lib/codex-review-coverage.mjs`, `bin/lib/lens-prompts.mjs`
 - [ ] T2 (kind: verify) Codex, the lenses and an independent verifier over the branch; the pull request
 
@@ -89,4 +89,14 @@ Nothing planned: question 199 decided the change. A question goes to the lead wi
 - L1 2026-11-05, question 199 (the lead's transcript `0f71b2c6`, line 68447), tapped: "Lentes por lo que cambia
   (recomendado)".
 - L2 2026-11-05, the lead's brief to JH 142, as Spec 2 quotes it.
-- Next step (for a resume): T1, the tests first, in `D:/js-harness-worktrees/lens-renames`.
+- L3 2026-11-05, the tests first, each seen red before its code: `lens-candidate.test.mjs`, "a renamed file is one
+  entry by its new path" (the manifest held the old path removed and the new one added) and "the prompt tells every
+  lens how a renamed file is written"; `lens-review-rows.test.mjs`, "a record written while the lenses read renames
+  off still covers its range", red against the coverage of main with the new candidate (a scratch copy). Two tests
+  pin what must not move and passed before and after: a document renamed into code is read whole, and a range with
+  no rename gives the same block and hash. The move's Codex record, `52d0703..635a64b`, carries
+  `ff6470d5…`, the hash of its range read renames off, as computed again here. Under the new reading the move's
+  lens block, `52d0703..fd1da6e`, is 51 paths (32 renames) and 77,477 characters.
+- L4 2026-11-05, the suites that read the candidate's hash: `lens-review`, `codex-review-coverage`, `lens-reviews`,
+  `merge-queue-reviews`, `check-codex-reviews` and `lens-result`, 188 of 188 under `js-harness gate`.
+- Next step (for a resume): T2, the reviews of the code commit.
