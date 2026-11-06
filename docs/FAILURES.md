@@ -1805,6 +1805,9 @@ the reply before he leaves; so the return had no goals to check and no forecast 
   nothing to compare it with
 - Seen: 2026-11-05 — the lead's message to JH 142 (claimed; the lead's own) — he was away 11:05 to 13:25 local
   (UTC-05:00) with no stretch opened by the lead, the fifth time by the lead's count
+- Seen: 2026-11-06 — the lead's transcript 0f71b2c6, return at 2026-11-06T21:49:41Z (claimed; the lead's own, sent
+  to JH 153) — from 14:14 to 16:49 local (UTC-05:00) he left for the Claude Desktop restart and a reboot with no
+  stretch opened, so his return had no estimate to measure against
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 
