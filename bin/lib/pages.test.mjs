@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
-import { agoText, chain, escapeHtml, page, pill, shareText, table, tiles, timeline } from './pages.mjs';
+import { agoText, chain, escapeHtml, page, pill, shareColor, shareText, table, tiles, timeline } from './pages.mjs';
+
+// Its times are shown in local time (rule:local-time): the zone is pinned so no machine's own decides a result.
+process.env.TZ = 'America/Bogota';
 
 test('a page is one fragment that opens with its title, its tokens scoped to its wrapper, bad news first', () => {
-  const html = page({ title: 'Regreso <1>', heading: 'Lo que pasó', lead: 'De 12:11Z a 22:54Z', badNews: ['No se abrió un tramo'], sections: [{ title: 'Metas', html: '<p>x</p>', note: 'nota' }] });
+  const html = page({ title: 'Regreso <1>', heading: 'Lo que pasó', lead: 'De 07:11 a 17:54', badNews: ['No se abrió un tramo'], sections: [{ title: 'Metas', html: '<p>x</p>', note: 'nota' }] });
   assert.match(html, /^<title>Regreso &lt;1&gt;<\/title>/);
   assert.doesNotMatch(html, /:root\s*\{/, 'a fragment shown inside a host page leaves the host\'s :root alone');
   assert.match(html, /\.js-page\{/);
@@ -43,15 +46,34 @@ test('a tile shows its big value, a meter at its share and its caption; one with
   assert.equal(html.match(/class="meter"/g).length, 1);
 });
 
+test('a share\'s colour runs from the page\'s red at 0 through its amber at a half to its green at 1', () => {
+  assert.equal(shareColor(0), 'var(--bad)');
+  assert.equal(shareColor(0.5), 'var(--part)');
+  assert.equal(shareColor(1), 'var(--ok)');
+  assert.equal(shareColor(0.25), 'color-mix(in oklab,var(--part) 50%,var(--bad))');
+  assert.equal(shareColor(0.9), 'color-mix(in oklab,var(--ok) 80%,var(--part))');
+  assert.equal(shareColor(-1), 'var(--bad)');
+  assert.equal(shareColor(2), 'var(--ok)');
+});
+
+test('a tile with a share takes its colour on its meter and border; one with no share keeps the page\'s own', () => {
+  const html = tiles([{ value: '100 %', share: 1, caption: 'todo' }, { value: '0 %', share: 0, caption: 'nada' }, { value: '+5', caption: 'fuera del plan' }]);
+  const [full, empty, plain] = html.match(/<div class="tile[ "][^>]*>/g);
+  assert.equal(full, '<div class="tile shared" style="--share:var(--ok)">');
+  assert.equal(empty, '<div class="tile shared" style="--share:var(--bad)">');
+  assert.equal(plain, '<div class="tile">');
+  assert.match(page({ title: 't', heading: 'h', sections: [] }), /\.tile\.shared\{[^}]*var\(--share\)[\s\S]*\.shared \.meter span\{background:var\(--share\)\}/);
+});
+
 test('a cell may be a pill or a mono number, and a cell object\'s text is escaped too', () => {
   const html = table(['A', 'B'], [[{ text: '95/107', mono: true }, { pill: pill('hecho <x>', 'ok') }]]);
   assert.match(html, /<td class="num">95\/107<\/td>/);
   assert.match(html, /<span class="pill ok">hecho &lt;x&gt;<\/span>/);
 });
 
-test('the timeline lists each event at its UTC time with a dot of its kind, oldest first as given', () => {
+test('the timeline lists each event at its local time with a dot of its kind, oldest first as given', () => {
   const html = timeline([{ at: '2026-10-28T12:11:00Z', kind: 'mark', text: 'Te vas' }, { at: '2026-10-28T12:19:30Z', kind: 'bad', text: 'Falla <1>' }]);
-  assert.match(html, /12:11Z[\s\S]*dot mark[\s\S]*Te vas[\s\S]*12:19Z[\s\S]*dot bad[\s\S]*Falla &lt;1&gt;/);
+  assert.match(html, /07:11[\s\S]*dot mark[\s\S]*Te vas[\s\S]*07:19[\s\S]*dot bad[\s\S]*Falla &lt;1&gt;/);
 });
 
 test('the chain draws each step in order by its state, and outlines the ones that moved', () => {
@@ -59,10 +81,19 @@ test('the chain draws each step in order by its state, and outlines the ones tha
   assert.match(html, /step done">S0[\s\S]*step moving moved">S11[\s\S]*step todo">S13/);
 });
 
+test('a page says its zone once: with when it was made, or by a note at zoneAt where it has no generatedAt; never twice', () => {
+  const made = page({ title: 't', heading: 'h', generatedAt: Date.parse('2026-10-29T14:00:00Z'), zoneAt: Date.parse('2026-10-29T14:00:00Z') });
+  assert.equal(made.match(/UTC-05:00/g).length, 1);
+  const noted = page({ title: 't', heading: 'h', zoneAt: Date.parse('2026-10-29T14:00:00Z') });
+  assert.match(noted, /<header><h1>h<\/h1><p class="note">Las horas son hora local, UTC-05:00\.<\/p><\/header>/);
+  assert.doesNotMatch(noted, /<script>/);
+  assert.doesNotMatch(page({ title: 't', heading: 'h' }), /hora local/);
+});
+
 test('a page made at a time says when, and its "hace" is counted when it is looked at, so a later look stays true', () => {
   const at = '2026-10-29T14:00:00.000Z';
   const html = page({ title: 't', heading: 'h', lead: 'l', generatedAt: at, sections: [] });
-  assert.match(html, /<header>.*<p class="note">Generada el <time datetime="2026-10-29T14:00:00.000Z">2026-10-29 14:00Z<\/time><span data-ago="2026-10-29T14:00:00.000Z"><\/span><\/p><\/header>/);
+  assert.match(html, /<header>.*<p class="note">Generada el <time datetime="2026-10-29T14:00:00.000Z">2026-10-29 09:00<\/time> \(hora local, UTC-05:00\)<span data-ago="2026-10-29T14:00:00.000Z"><\/span><\/p><\/header>/);
   // The script runs where the page is shown: a look 2 h 15 min later reads that, whatever the clock said at render.
   const script = /<script>([\s\S]*?)<\/script>/.exec(html)[1];
   const shown = { dataset: { ago: at }, textContent: '' };

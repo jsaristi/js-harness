@@ -23,7 +23,7 @@ test('a line in a fence, in the history of a feature document, or in a home of t
   assert.deepEqual(inForceLines('odd/tasks/a.md', doc).map((line) => line.line), [1, 2]);
   const logged = '# A feature\n## Log\nL1 wait 45 minutes\n';
   assert.deepEqual(inForceLines('odd/tasks/b.md', logged).map((line) => line.line), [1]);
-  for (const home of ['bin/lib/rules-data.mjs', 'docs/rule-sources.json', 'docs/RULES.md', 'docs/FAILURES.md', 'docs/origin.md']) {
+  for (const home of ['bin/lib/rules-data.mjs', 'docs/rule-sources.json', 'docs/RULES.md', 'docs/FAILURES.md', 'docs/origin.md', 'bin/lib/rules-coverage-data.mjs']) {
     assert.deepEqual(inForceLines(home, 'wait 60 minutes\n'), [], home);
   }
   assert.equal(inForceLines('docs/ROADMAP.md', '## Progress\nwait 60 minutes\n').length, 2, 'only a feature document has a history');

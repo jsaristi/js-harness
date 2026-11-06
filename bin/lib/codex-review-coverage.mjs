@@ -10,6 +10,7 @@
 // that the push then refuses, or pay again for one the push lets through.
 import { spawnSync } from 'node:child_process';
 import { isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews } from './codex-reviews.mjs';
+import { NO_RENAMES, RENAMES } from './codex-review-parts.mjs';
 import { leftOutOf } from './codex-review-scope.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
 
@@ -156,6 +157,15 @@ function writtenInMerge(spawn, cwd, id) {
 export const COMMITS_UNREAD = 'commits';
 export const MARKS_UNREAD = 'marks';
 
+/** Whether the range of `rec` still hashes to its `subjectHash`: as the candidate reads it now, or, where that reading
+ * took renames, read renames off, the one way a record written before odd/tasks/lens-counts-renames.md was hashed.
+ * Either reading is fixed by the two commits alone, so either proves the patch did not change. */
+function stillHashes(cwd, rec, spawn) {
+  const now = lensCandidate(cwd, { base: rec.base, head: rec.head, spawn });
+  if (now.subjectHash === rec.subjectHash) return true;
+  return now.renames !== undefined && now.renames !== NO_RENAMES && lensCandidate(cwd, { base: rec.base, head: rec.head, renames: NO_RENAMES, spawn }).subjectHash === rec.subjectHash;
+}
+
 /** What the Codex review records say of the code commits of `from..tip`, as git reads that range in `cwd`:
  * `tip` a full commit id, `from` any revision. `{ unknown }` when it cannot be told, `COMMITS_UNREAD` or
  * `MARKS_UNREAD`. Otherwise the `codeCommits` of the range (newest first: every commit that changes a file
@@ -177,8 +187,15 @@ export const MARKS_UNREAD = 'marks';
  * `read` and `isValid` name the records: Codex's by default, the Claude lenses' for their push row
  * (`./lens-review-rows.mjs`). A record that carries a `subjectHash` covers only while the patch of its own range
  * still hashes to it (`./lens-candidate.mjs`): one that does not is counted `stale` and covers nothing
- * (odd/tasks/f8-s1-reviews.md, T4). */
-export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read = readCodexReviews, isValid = isValidCodexReview }) {
+ * (odd/tasks/f8-s1-reviews.md, T4). The patch is read renames on where the candidate reads it so, and renames off as
+ * well, since every record written before odd/tasks/lens-counts-renames.md was hashed by that reading
+ * (`stillHashes`).
+ *
+ * `beyondTip: false` is for the rows that refuse, the push's and the merge door's, and for the command whose record
+ * they ask for: a record whose head lies past the tip then covers nothing, and is given back in `beyond`, as
+ * `{ rec, covered }`, for a row to name. The door reads a pull request merged onto main, past which no head lies, so a
+ * cut inside a reviewed range passed the push and was refused there (docs/FAILURES.md, door-covers-past-tip). */
+export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read = readCodexReviews, isValid = isValidCodexReview, beyondTip = true }) {
   // Every commit of the range, merges included: a record whose head is one is worth expanding.
   const inRange = gitOut(spawn, cwd, ['rev-list', `${from}..${tip}`]);
   if (inRange === null) return { unknown: COMMITS_UNREAD };
@@ -194,10 +211,10 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
   // it runs in and leave out every file outside that folder: run below the top, a commit of code elsewhere
   // would list no file, and count as one that needs no record.
   //
-  // `--no-renames`: the files a commit changes are those `js-harness codex-review` reads of it, and that
-  // command reads a range with renames off. With git's detection of them, which is on by default, a commit
-  // that moves a file lists the new path alone: moved to a path the project marks, the file that went,
-  // which that command reviews as removed, would be in no list, and the commit would need no record.
+  // `--no-renames`: a file a commit renames is listed under both its names, which `js-harness codex-review`
+  // reads it by (`leftOutOfFiles`). With git's detection of renames, which is on by default, a commit that
+  // moves a file lists the new path alone: moved to a path the project marks, the file that went, which
+  // that command reads, would be in no list, and the commit would need no record.
   //
   // `--root`: a commit with no parent lists the files it adds. It does by default, but not in a repository
   // whose configuration turns `log.showRoot` off, where such a commit would list none.
@@ -254,21 +271,33 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
   const mayLiePast = valid.filter((rec) => outside(rec) && !onlyWhole(rec));
   const pastTip = headsPastTip(spawn, cwd, tip, [...new Set(mayLiePast.map((rec) => rec.head))]);
   const covers = [];
+  const beyond = [];
   let ignored = 0;
   let stale = 0;
   for (const rec of valid) {
     if (outside(rec) && (onlyWhole(rec) || !pastTip.has(rec.head))) continue;
-    if (rec.subjectHash !== undefined && lensCandidate(cwd, { base: rec.base, head: rec.head, spawn }).subjectHash !== rec.subjectHash) {
+    if (rec.subjectHash !== undefined && !stillHashes(cwd, rec, spawn)) {
       stale += 1;
       continue;
     }
     const covered = coveredBy(spawn, cwd, rec);
-    if (covered) covers.push({ rec, covered });
-    else ignored += 1;
+    if (!covered) ignored += 1;
+    else (beyondTip || !outside(rec) ? covers : beyond).push({ rec, covered });
   }
   const uncovered = codeCommits.filter((commit) => !covers.some(({ covered }) => covered.has(commit.id)));
-  return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored, stale };
+  return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored, stale, ...(beyondTip ? {} : { beyond }) };
 }
+
+/** The line of each `uncovered` commit that a record of `beyond` (`reviewCoverage` with `beyondTip: false`) covers
+ * from past `tip`, the commit checked: what the push of the whole reviewed range, or a record that ends at `tip`, would
+ * cover. Both review rows print it, so a cut says why its review does not count and where it would. The commands the
+ * rows print review up to HEAD, which a push below HEAD is not at, so the line says to check `tip` out first (JH 112's
+ * verifier, finding 1). */
+export const beyondLines = (uncovered, beyond = [], tip = '') => uncovered.flatMap((commit) => {
+  const head = beyond.find(({ covered }) => covered.has(commit.id))?.rec.head.slice(0, 7);
+  const at = tip.slice(0, 7);
+  return head ? [`${commit.shortId} lies in a range reviewed up to ${head}, past ${at}, the commit checked: push up to ${head}, or check out ${at} and make its record with the command below, which reviews up to HEAD`] : [];
+});
 
 // The outcomes of a record that is no review of Codex's, each with what a row calls it.
 export const NOT_A_REVIEW = { unavailable: 'unavailable', [NOTHING_TO_REVIEW]: 'nothing to review' };
@@ -415,11 +444,12 @@ export function baseLeftOut(cwd, { from, tip, remote = 'origin', spawn = spawnSy
 
 /** The git arguments of the diff a review of `from..head` reads, with `shape` (options of the diff) and,
  * when given, `files` as pathspecs: `git diff <from> <head>`, or, for the review of a merge (`merge`, from
- * `mergeStart`), `git diff <automatic merge> <head>`, what was written in the merge. Renames are off in both,
- * as everywhere a range is counted, split or shown. */
-export function rangeDiff({ from, head, merge = null }, shape = [], files = null) {
+ * `mergeStart`), `git diff <automatic merge> <head>`, what was written in the merge. Renames are asked for in
+ * both (`RENAMES`), as everywhere a range is counted, split or shown, unless `renames` says `NO_RENAMES`, for a
+ * range read with them off (`rangeFiles`). */
+export function rangeDiff({ from, head, merge = null, renames = RENAMES }, shape = [], files = null) {
   const paths = files === null ? [] : ['--', ...files];
-  return ['diff', ...shape, '--no-renames', merge === null ? from : merge.auto, head, ...paths];
+  return ['diff', ...shape, renames, merge === null ? from : merge.auto, head, ...paths];
 }
 
 /** The full id of the tree that merging `first` and `side` again gives, conflict markers included, as
@@ -472,8 +502,9 @@ export function mergeStart(cwd, { given, tip: head, spawn = spawnSync, where, re
     if (before.unknown !== undefined || before.uncovered.length > 0) return null;
   }
   // A merge a record already covers is no review to start: the range is then read as without this, and the
-  // records say it is covered, instead of a second paid review of the same merge (Codex, 2026-10-14).
-  const atMerge = reviewCoverage(cwd, { from: first, tip: head, spawn, where });
+  // records say it is covered, instead of a second paid review of the same merge (Codex, 2026-10-14). A record past
+  // the merge covers nothing the push takes (`beyondTip`), so it is no record of the merge here either.
+  const atMerge = reviewCoverage(cwd, { from: first, tip: head, spawn, where, beyondTip: false });
   if (atMerge.unknown !== undefined || atMerge.covers.some(({ covered }) => covered.has(head))) return null;
   // And only a merge the push check counts as code: one that took a side whole has a remerge-diff of the
   // markers it removed, and no line anybody wrote (verifier B1, 2026-10-14).

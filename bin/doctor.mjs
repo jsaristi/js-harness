@@ -21,7 +21,7 @@ import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestV
 import { GAP_STATES, gapList, gapDigest } from './lib/digest.mjs';
 import { harnessRulesRow } from './lib/rules-installed.mjs';
 import { unknownArgument } from './lib/args.mjs';
-import { hostNotice, hostUpdateRow, readHostVersions, readProjectRulesText } from './lib/host-update.mjs';
+import { hostNotice, hostReviewRefusal, hostUpdateRow, readHostVersions, readProjectRulesText } from './lib/host-update.mjs';
 import { owedSkipLines } from './lib/lens-review-rows.mjs';
 import { worktreesInMain } from './lib/worktrees.mjs';
 import { backupHealth } from './backup.mjs';
@@ -30,6 +30,7 @@ import { permissionsHealth } from './lib/permissions.mjs';
 import { importHealth } from './lib/claude-import.mjs';
 import { backgroundMeasure, cleanNotice, cleanRow } from './lib/clean.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { ideaFix } from './lib/idea-watch.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
@@ -209,8 +210,8 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   const rows = localRows.map((row) => {
     const latest = latestVersions[row.id];
     // A tool's fix can depend on the latest version and on another row (the engram plugin's names the engram binary's
-    // version).
-    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest, localRows, { home, platform });
+    // version, and whether it is engram's latest release).
+    const upToDateFix = tools.find((tool) => tool.id === row.id)?.upToDateFix?.(row.version, latest, localRows, { home, platform, latestVersions });
     const fix = upToDateFix ? { ...row.fix, upToDate: upToDateFix } : row.fix;
     return { ...row, upToDate: computeUpToDate(row, latest), fix };
   });
@@ -220,7 +221,9 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   // Reading the skips asks git for the branch's commits and their records: the interactive report only, as above.
   const withSkips = deps.reviewSkips && interactive ? [...withTrees, reviewSkipsRow(deps.reviewSkips, project)] : withTrees;
   // The templates' records are read by the interactive report only, as the skips are.
-  const withUnseen = deps.templates && interactive ? [...withSkips, templatesRow(deps.templates, project, home)] : withSkips;
+  const withTemplates = deps.templates && interactive ? [...withSkips, templatesRow(deps.templates, project, home)] : withSkips;
+  // The idea watch lists the upstream tags over the network: the interactive online report only.
+  const withUnseen = deps.ideas && interactive && !offline ? [...withTemplates, await ideasRow(deps.ideas, project)] : withTemplates;
   const withBackup = deps.backup ? [...withUnseen, backupRow(deps.backup, home, now)] : withUnseen;
   const withImport = deps.imports ? [...withBackup, importRow(deps.imports, project, home)] : withBackup;
   const withPermissions = deps.permissions ? [...withImport, permissionsRow(deps.permissions, home)] : withImport;
@@ -359,6 +362,22 @@ function templatesRow(templates, project, home) {
   return found.unchecked > 0 ? { ...row, project: 'unknown' } : row;
 }
 
+/** The idea-watch row (odd/tasks/idea-watch.md, S7): the stable upstream releases the project's record has not read,
+ * `stale` with how many, the last one read and the command that drafts the next one, `ok` with none. `n/a` where the
+ * project keeps no record (`null`), `unknown` when the tags or the record cannot be read. It has no version of its own:
+ * the version column shows only an installed tool's. */
+async function ideasRow(ideas, project) {
+  const row = { id: 'idea-watch', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'ok', upToDate: 'n/a', fix: {} };
+  let state;
+  try {
+    state = await ideas(project);
+  } catch {
+    return { ...row, project: 'unknown' };
+  }
+  if (state === null) return { ...row, project: 'n/a' };
+  return state.unread.length === 0 ? row : { ...row, project: 'stale', fix: { project: ideaFix(state) } };
+}
+
 /** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, templates, claude-import,
  * permissions, host-update, stack-update and clean rows. Their checks are given only here, so `doctorMain` alone keeps the rows its
  * callers give it. */
@@ -373,6 +392,7 @@ export function doctorCommand(argv) {
     backup: (home, now) => backupHealth(home, now),
     permissions: (home) => permissionsHealth(home),
     imports: (project, home) => importHealth(project, { home }),
+    ideas: async (project) => (await import('./idea-watch.mjs')).ideaWatchHealth(project),
     clean: { start: backgroundMeasure(process.env, argv) },
   });
 }
@@ -434,7 +454,7 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
  * neither flag is given. */
 function recordReviews(argv, { home, cwd, json }, deps) {
   const asked = [
-    ['host', '--host-reviewed', () => recordHostReview(home, deps)],
+    ['host', '--host-reviewed', () => recordHostReview({ home, cwd }, deps)],
     ['stack', '--stack-reviewed', () => recordStackReview({ home, cwd }, deps)],
   ].filter(([, flag]) => argv.includes(flag));
   if (asked.length === 0) return null;
@@ -449,11 +469,18 @@ function recordReviews(argv, { home, cwd, json }, deps) {
 
 /** `doctor --host-reviewed`: records the Claude Desktop and Code tab CLI versions read now as reviewed, the last step
  * of the review the host-update row lists, and returns `{ reviewed, line }`, the record written and the line that
- * says so. With no running version read it records nothing and returns `null`. */
-function recordHostReview(home, deps) {
+ * says so. With no running version read it records nothing and returns `null`. An update since the last review is
+ * recorded only once the project's review file holds its account (`hostReviewRefusal`, odd/tasks/f8-lead-rigor.md
+ * S2): otherwise it says what is missing and returns `null`. */
+function recordHostReview({ home, cwd }, deps) {
   const versions = deps.host ? deps.host(home) : { desktop: null };
   if (!versions.desktop) {
     console.error('js-harness doctor: could not read the running Claude Desktop version: nothing was recorded.');
+    return null;
+  }
+  const refusal = hostReviewRefusal({ project: resolveProjectRoot(cwd, deps.spawn ?? spawnSync), versions, reviewed: readCache(home).host?.reviewed ?? null });
+  if (refusal !== null) {
+    console.error(`js-harness doctor: ${refusal}. Nothing was recorded.`);
     return null;
   }
   const now = deps.now ?? (() => new Date());

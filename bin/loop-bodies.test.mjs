@@ -36,6 +36,8 @@ function world({ files = {}, channel = '', onSleep = () => {} } = {}) {
     windowsDaily: async () => null,
     // So is the throughput tick: no body here writes a snapshot.
     throughputTick: async () => null,
+    // And the host watch's reading: no body here reads the app's versions.
+    hostWatch: async () => null,
     readdir: (dir) => Object.keys(state.files).filter((file) => path.dirname(file) === dir).map((file) => path.basename(file)),
     mtime: (file) => {
       if (state.files[file] === undefined) throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
@@ -231,6 +233,23 @@ test('heartbeat: a reader that throws is said once and ends nothing', async () =
   };
   assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], {}, deps), 1);
   assert.equal(state.out.filter((line) => line.includes('gh vanished')).length, 1);
+});
+
+// odd/tasks/f8-s9-host-watch.md, S4: the heartbeat reads the host every hour, and names the session an update needs.
+test('heartbeat ends with the HOST line when an update has no host watch session, and says a reading that throws once', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  const asked = [];
+  deps.hostWatch = async (options) => {
+    asked.push(options);
+    if (asked.length === 1) throw new Error('the app folder vanished');
+    return asked.length < 3 ? { lines: ['host-watch: Claude Desktop 4.1.0 → 4.2.0 is held by "JH 7 · host watch 4.2.0"'], told: null } : { lines: [], told: 'HOST: Claude Desktop 4.2.0 → 4.3.0 since the last review, and no host watch session holds it: open "JH 8 · host watch 4.3.0"' };
+  };
+  assert.equal(await loopMain(['heartbeat', '--every', '120'], {}, deps), 0);
+  assert.match(state.out.at(-1), /^HOST: Claude Desktop 4.2.0 → 4.3.0 /);
+  assert.equal(state.out.filter((line) => line.includes('the app folder vanished')).length, 1);
+  assert.equal(state.out.filter((line) => line.includes('is held by')).length, 1);
+  assert.deepEqual([asked[0].home, asked[0].slug, asked[0].cwd, asked[0].everyMs], [HOME, projectSlug(CWD), CWD, 60 * 60000]);
+  assert.match(state.out[0], /every hour, the host's versions are read/);
 });
 
 const DUE_AT = T0 + 10 * 60000;

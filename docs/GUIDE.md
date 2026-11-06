@@ -6,10 +6,10 @@ they can be removed exactly. This guide takes you from nothing to a working proj
 full reference of every command; [the specification](SPEC.md) says what each piece is for and holds the map
 of how they connect ("The architecture").
 
-js-harness is in the middle of its reorganization, F8 ([the roadmap's F8 plan](ROADMAP.md#f8-plan)). Today
-gentle-ai is still part of the stack and brings engram; at F8's S11 js-harness installs engram, codegraph and
-context7 itself, and at S2 gentle-ai leaves the machine. Where this guide says "today", that is what
-changes; [the specification's "After F8"](SPEC.md#after-f8) says where each piece ends.
+js-harness is in the middle of its reorganization, F8 ([the roadmap's F8 plan](ROADMAP.md#f8-plan)). Since
+F8's S11 js-harness carries the workflow itself and sets up engram, codegraph and context7; gentle-ai may still
+be installed, and at S2 it leaves the machine. Where this guide says "today", that is what changes;
+[the specification's "After F8"](SPEC.md#after-f8) says where each piece ends.
 
 ## Quick path
 
@@ -50,7 +50,7 @@ Outside a git repository the menu shows only the machine items. Inside one, a **
 | Status | machine | The machine's installed version, its manifest and the latest release. |
 | Doctor | machine | Each tool of the stack: installed, configured, up to date, and the fix for each gap (`js-harness doctor`). |
 | Install the stack | machine, while a required tool is missing | Runs `js-harness stack install`: each install is shown with its undo and asked y/N. |
-| Install | machine | Writes the skills and session hooks for Claude Code and Codex under your home (`js-harness install`). |
+| Install | machine | Writes the skills and session hooks for Claude Code under your home, nothing for Codex, which only reviews (`js-harness install`). |
 | Update | machine | Says whether a newer release exists (`js-harness update`). |
 | Upgrade | machine | Installs the newer release and syncs the home; open the menu again afterwards to run the new code. |
 | Uninstall | machine | Opens a submenu of the kinds of uninstall, below. Each asks y/N and says what it removes and keeps. |
@@ -71,17 +71,17 @@ Back, or Escape, returns to the menu without running anything.
 
 Once per machine:
 
-1. **`js-harness install`** writes the skills and the session hooks for Claude Code and Codex under your home,
+1. **`js-harness install`** writes the skills and the session hooks for Claude Code under your home (nothing for Codex, which only reviews),
    and, for Claude Code, the `js-harness` output style (neutral Spanish with tú), the `permissions` object's
    allow entry and denies where they are missing, and a small block of your Rules lines in
    `~/.claude/CLAUDE.md`. Each is recorded in a manifest, so `uninstall` removes exactly them, and a file you
    edited after it was installed is left as yours.
-2. **`js-harness doctor`** lists each tool of the stack (today gentle-ai, engram, codegraph, Codex and the
-   optional ones) with what is missing and the command that fixes it. Where engram's Claude Code plugin is
+2. **`js-harness doctor`** lists each tool of the stack (engram and its plugin, codegraph, context7, Codex
+   and the optional ones) with what is missing and the command that fixes it. Where engram's Claude Code plugin is
    installed, it also says when the plugin is older than the one the engram binary's release ships.
 3. **`js-harness stack install`** runs the installs js-harness can undo exactly, in order, asking y/N for each
-   and recording it before it starts. What it never runs is printed as your own step: today gentle-ai's
-   installer (which brings engram), logins, and `git` and `gh`. `js-harness stack` alone lists the same,
+   and recording it before it starts. What it never runs is printed as your own step: engram's own
+   install and `engram setup claude-code`, logins, and `git` and `gh`. `js-harness stack` alone lists the same,
    read-only.
 
 Once per project, in its git repository:
@@ -160,4 +160,4 @@ leads other sessions; you rarely type those by hand. The README lists all of the
 
 | For you | For hooks and the orchestrator |
 |---|---|
-| check, gate, init, onboard, install, sync, uninstall, status, update, upgrade, doctor, stack, progress, contract, failures, rules, codex-review, lens-review, codex-meter, functions, remote, memory, backup, fetch, clean, summary | guard, reply, resume, permit (hooks); notify, wake, sessions, wait, loop, merge-queue, report, throughput, windows-daily, unseen, subagents, audit, quiet (the orchestrator and its sessions) |
+| check, gate, init, onboard, install, sync, migrate, uninstall, status, update, upgrade, doctor, stack, progress, contract, failures, rules, codex-review, lens-review, codex-meter, docs, functions, remote, memory, backup, fetch, clean, summary | guard, reply, resume, permit, commit-msg, status-line (hooks); notify, wake, sessions, wait, loop, merge-queue, report, throughput, windows-daily, unseen, subagents, audit, quiet, double-review, stretch, template, host-watch (the orchestrator and its sessions) |

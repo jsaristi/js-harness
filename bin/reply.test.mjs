@@ -1,10 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { replyMain } from './reply.mjs';
 import { openingsDir, recordPath } from './lib/channel.mjs';
 import { CURSOR_SCHEMA, liveCursorPath } from './lib/live-rows.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
+import { SUMMARY_MARKER } from './lib/stale-board.mjs';
+import { RECORD_SCHEMA, stretchFile } from './lib/stretch.mjs';
+import { SHOWN_SCHEMA, SUMMARY_SUBJECT, shownFile } from './lib/template-record.mjs';
 
 // `js-harness reply --hook`, the Stop hook of C1 (odd/tasks/rule-hierarchy.md, T2). The files it reads are
 // handed in, so no test touches a real project: `files` maps a path to its text, and a path it does not hold
@@ -13,7 +18,7 @@ const PROJECT = path.resolve('/work/project');
 const SPANISH = { states: { working: 'Sigo solo', decision: 'Necesito tu decisión', question: 'Te pregunto', cut: 'Corte', finished: 'Terminado' }, labels: { what: 'Qué es', where: 'Dónde', effect: 'Qué pasa' } };
 const ON = { [path.join(PROJECT, 'harness.json')]: JSON.stringify({ documents: ['docs/'], reply: SPANISH }) };
 
-async function hook(payload, { files = ON, argv = ['--hook'], raw } = {}) {
+async function hook(payload, { files = ON, argv = ['--hook'], raw, deps = {} } = {}) {
   const out = [];
   const err = [];
   const read = [];
@@ -26,6 +31,7 @@ async function hook(payload, { files = ON, argv = ['--hook'], raw } = {}) {
     },
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
+    ...deps,
   });
   return { code, out: out.join(''), err: err.join(''), read };
 }
@@ -68,6 +74,16 @@ test('a reply that ends with no state is turned back with the hooks contract\'s 
 test('a reply that closes with its state lets the session stop: the answer is an empty JSON object, which both hosts read as go on', async () => {
   const result = await hook(stopPayload('Hecho.\n\n**Sigo solo** — espero el gate.'));
   assert.deepEqual([result.code, result.out, result.err], [0, PASS, '']);
+});
+
+test('a reply that gives a UTC clock time in its prose is turned back with rule:local-time; one in a code span passes', async () => {
+  const utc = await hook(stopPayload('Volviste a las 05:46Z.\n\n**Sigo solo** — espero el gate.'));
+  const answer = JSON.parse(utc.out);
+  assert.equal(answer.decision, 'block');
+  assert.match(answer.reason, /"05:46Z" \(line 1\) is \d{2}:\d{2}/);
+  assert.match(answer.reason, /rule:local-time/);
+  const quoted = await hook(stopPayload('El aviso dice `2026-11-01T05:46:19Z`.\n\n**Sigo solo** — espero el gate.'));
+  assert.deepEqual([quoted.code, quoted.out], [0, PASS]);
 });
 
 test('a stop the hooks already turned back is let through without reading the project, so it cannot loop', async () => {
@@ -295,8 +311,207 @@ test('the lead ending its turn while the live board\'s rows wait is turned back 
   assert.deepEqual(noBoard.answer, {}, 'a project with no board is never told');
 });
 
+// The summary's warning (odd/tasks/board-summary-stale.md): told only where harness.json turns the template gate on.
+test('the lead whose board/summary content is older than the waiting notices is told so only where templates are on', async () => {
+  const shown = { [shownFile(HOME, SLUG)]: `${JSON.stringify({ schema: SHOWN_SCHEMA, at: '2026-10-17T01:00:00.000Z', session: 'lead', tool: 'ArtifactData', call: 'c1', template: null, subject: SUMMARY_SUBJECT, decision: 'shown', sha256: null, reason: 'fields: ["now","status"]' })}\n` };
+  const stop = (harness) => wakeHook({ payload: { session_id: 'lead' }, record: [handed('2026-10-17T01:30:00.000Z')], files: { ...BOARD_CURSOR, ...shown, [path.join(PROJECT, 'harness.json')]: JSON.stringify(harness) }, transcript: [started] });
+  const harness = JSON.parse(ON[path.join(PROJECT, 'harness.json')]);
+  const on = await stop({ ...harness, templates: true });
+  assert.ok(on.answer.reason.includes(SUMMARY_MARKER), on.answer.reason);
+  assert.equal(on.err, '');
+  const off = await stop(harness);
+  assert.match(off.answer.reason, STALE);
+  assert.equal(off.answer.reason.includes(SUMMARY_MARKER), false, 'templates off: the record no write refreshes is not read');
+  // A shown record that is there and cannot be read: the rows' warning still reaches the lead, the failure stderr.
+  const harnessOn = JSON.stringify({ ...harness, templates: true });
+  const locked = await wakeHook({ payload: { session_id: 'lead' }, record: [handed('2026-10-17T01:30:00.000Z')], files: { ...BOARD_CURSOR, [shownFile(HOME, SLUG)]: undefined, [path.join(PROJECT, 'harness.json')]: harnessOn }, transcript: [started] });
+  assert.match(locked.answer.reason, STALE);
+  assert.match(locked.err, /the template gate's shown record .*EACCES.*the summary check did not run/);
+});
+
+// The return check (odd/tasks/lead-duty-checks.md, spec 2): the lead's reply to his message after a long absence links
+// the status page; bin/lib/return-report.test.mjs holds its cases, this its place in the hook.
+const RETURNED = /he came back after/;
+const his = (at) => line({ type: 'user', timestamp: at, origin: { kind: 'human' }, message: { role: 'user', content: 'hola' } });
+
+test('the lead answering his return after a long absence without the status page is turned back with what to run', async () => {
+  const away = [his('2026-10-16T18:00:00.000Z'), his('2026-10-17T01:00:00.000Z')];
+  const lead = await wakeHook({ payload: { session_id: 'lead' }, record: [handed('2026-10-17T01:30:00.000Z')], transcript: away });
+  assert.equal(lead.answer.decision, 'block');
+  assert.match(lead.answer.reason, RETURNED);
+  assert.match(lead.answer.reason, /js-harness report --mark --html <file> --notes <file>/);
+  assert.equal(lead.err, '');
+  const soon = await wakeHook({ payload: { session_id: 'lead' }, record: [handed('2026-10-17T01:30:00.000Z')], transcript: [his('2026-10-17T00:30:00.000Z'), his('2026-10-17T01:00:00.000Z')] });
+  assert.deepEqual(soon.answer, {}, 'a short gap is no return');
+  const work = await wakeHook({ transcript: [titled('JH 26 · canal'), ...away], record: [] });
+  assert.deepEqual(work.answer, {}, 'a work session is never told');
+});
+
+// The return's stretch (odd/tasks/departure-stretch.md, spec 8): an absence no stretch covered, or its stretch still
+// open; bin/lib/return-report.test.mjs holds its cases, this its place in the hook.
+const NO_STRETCH = /no stretch covered his absence/;
+const STILL_OPEN = /the stretch of his absence is still open/;
+const STRETCHES = stretchFile(HOME, SLUG);
+const stretchOpened = (at) => JSON.stringify({ schema: RECORD_SCHEMA, event: 'open', id: at, at, plan: { hours: 4 } });
+
+test('the lead whose user came back after an absence with no stretch, or with it still open, is turned back', async () => {
+  const away = [his('2026-10-16T18:00:00.000Z'), his('2026-10-17T01:00:00.000Z')];
+  const none = await wakeHook({ payload: { session_id: 'lead' }, transcript: away });
+  assert.match(none.answer.reason, NO_STRETCH);
+  assert.match(none.answer.reason, RETURNED, 'beside the page\'s warning, in one block');
+  assert.equal(none.err, '');
+  const open = await wakeHook({ payload: { session_id: 'lead' }, transcript: away, files: { [STRETCHES]: `${stretchOpened('2026-10-16T18:01:00.000Z')}\n` } });
+  assert.match(open.answer.reason, STILL_OPEN);
+  assert.ok(open.answer.reason.includes('js-harness stretch close --html <file>'));
+  const work = await wakeHook({ transcript: [titled('JH 26 · canal'), ...away], record: [] });
+  assert.doesNotMatch(work.answer.reason ?? '', NO_STRETCH, 'a work session is never told');
+  const unreadable = await wakeHook({ payload: { session_id: 'lead' }, transcript: away, files: { [STRETCHES]: undefined } });
+  assert.doesNotMatch(unreadable.answer.reason, NO_STRETCH);
+  assert.match(unreadable.err, /the stretch record .*EACCES.*the return's stretch check did not run/);
+});
+
+/** A lead's stop in the folder `project`, where the wake, live-board and return checks each ask where the project is
+ * and read the record: the hook's answer, its standard error, how many times git was asked and each file read. */
+async function sharedStop(project) {
+  const slug = projectSlug(project);
+  const record = recordPath(HOME, slug);
+  const files = {
+    [path.join(project, 'harness.json')]: ON[path.join(PROJECT, 'harness.json')],
+    [liveCursorPath(HOME, slug)]: BOARD_CURSOR[liveCursorPath(HOME, SLUG)],
+    [TRANSCRIPT]: `${[his('2026-10-16T18:00:00.000Z'), his('2026-10-17T01:00:00.000Z')].join('\n')}\n`,
+    [record]: `${handed('2026-10-17T01:30:00.000Z')}\n`,
+  };
+  const reads = new Map();
+  let gits = 0;
+  const out = [];
+  const err = [];
+  await replyMain(['--hook'], {
+    readStdin: () => JSON.stringify(stopPayload(CLOSED, { cwd: project, session_id: 'lead', transcript_path: TRANSCRIPT, session_crons: [] })),
+    readFile: (file) => {
+      reads.set(file, (reads.get(file) ?? 0) + 1);
+      if (Object.hasOwn(files, file)) return files[file];
+      throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
+    },
+    readdir: (dir) => {
+      throw Object.assign(new Error(`ENOENT: ${dir}`), { code: 'ENOENT' });
+    },
+    run: (...args) => {
+      gits += 1;
+      return noGit(...args);
+    },
+    env: { JS_HARNESS_HOME: HOME },
+    homedir: () => path.resolve('/elsewhere'),
+    stdout: (text) => out.push(text),
+    stderr: (text) => err.push(text),
+  });
+  return { reason: JSON.parse(out.join('')).reason, err: err.join(''), gits, reads: (file) => reads.get(file) ?? 0, record };
+}
+
+test('the checks of one stop ask git once where the project is, and read each file once (odd/tasks/reply-hook-latency.md)', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reply-shared-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  // Git is asked even where a `.git` folder seems to say: one that git does not take (here an empty one) names another
+  // project than git would, and the project picks the record each check reads.
+  const project = path.join(dir, 'main');
+  fs.mkdirSync(path.join(project, '.git'), { recursive: true });
+  const stop = await sharedStop(project);
+  assert.match(stop.reason, STALE);
+  assert.match(stop.reason, RETURNED);
+  assert.equal(stop.err, '');
+  assert.equal(stop.gits, 1, 'one git answer for the three checks that ask where the project is');
+  assert.equal(stop.reads(stop.record), 1);
+  assert.equal(stop.reads(TRANSCRIPT), 1);
+});
+
 test('a work session holding handed work in a project whose board is stale gets the wake warning alone', async () => {
   const result = await wakeHook({ files: BOARD_CURSOR });
   assert.match(result.answer.reason, WARNING);
   assert.doesNotMatch(result.answer.reason, STALE);
+});
+
+// The command blocks of a reply (S1 of odd/tasks/f8-lead-rigor.md), on excerpts of the lead's transcript 0f71b2c6 of
+// 2026-10-30, trimmed to the fields the check reads.
+const SESSION_LOG = path.join(PROJECT, 'session.jsonl');
+const toolCall = (id, command) => JSON.stringify({ type: 'assistant', isSidechain: false, message: { content: [{ type: 'tool_use', id, name: 'Bash', input: { command } }] } });
+const toolResult = (id, error) => JSON.stringify({
+  type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, is_error: error, content: error ? 'Exit code 1' : 'ok' }] },
+  toolUseResult: error ? 'Error: Exit code 1' : { stdout: 'ok', stderr: '', interrupted: false },
+});
+// Lines 32882 to 32895, the lead's own runs of the deletion, which the guard refused; and a run that succeeded.
+const RUNS = [
+  toolCall('toolu_rm', 'cd /d/js-harness-worktrees && rm -rf -- ./* ./.[!.]*'), toolResult('toolu_rm', true),
+  toolCall('toolu_doc', 'js-harness doctor --offline'), toolResult('toolu_doc', false),
+].join('\n');
+// Line 32954: the reply that handed him the deletion.
+const RM_REPLY = 'Bórrala tú con este comando:\n\n```bash\nrm -rf /d/js-harness-worktrees\n```\n\nSigo solo. Me despierta el aviso de JH 102.';
+// Line 30024: the reply that handed him Codex, trimmed to its blocks and its close.
+const CODEX_REPLY = 'Para comprobarlo, ejecuta:\n\n```bash\npnpm config get minimumReleaseAgeExclude\n```\n\nPara arreglarlo:\n\n'
+  + '```bash\ncd D:\\js-harness; codex\n```\n\nTe pregunto: ¿me pegas lo que te mostró Codex al abrirlo en `D:\\`?';
+
+async function commandHook(message, { platform, parse = () => ({ errors: [] }), transcript = RUNS } = {}) {
+  const files = { ...ON, [SESSION_LOG]: transcript };
+  const parsed = [];
+  const result = await hook(stopPayload(message, { transcript_path: SESSION_LOG }), {
+    files,
+    deps: { platform, parse: (texts, options) => { parsed.push({ texts, options }); return parse(texts, options); } },
+  });
+  return { ...result, answer: JSON.parse(result.out), parsed, transcriptReads: result.read.filter((file) => file === SESSION_LOG).length };
+}
+
+test('today\'s mistakes: a reply handing him a block the session never ran with success is turned back, on win32 and on linux', async () => {
+  for (const platform of ['win32', 'linux']) {
+    const rm = await commandHook(RM_REPLY, { platform });
+    assert.equal(rm.answer.decision, 'block', platform);
+    assert.match(rm.answer.reason, /the block that starts "rm -rf \/d\/js-harness-worktrees"/, platform);
+    assert.match(rm.answer.reason, /tell him in plain words not to run/, platform);
+    assert.match(rm.answer.reason, platform === 'win32' ? /tagged bash, which is not his shell/ : /no run of this session that succeeded holds `rm -rf \/d\/js-harness-worktrees`/, platform);
+    const codex = await commandHook(CODEX_REPLY, { platform });
+    assert.equal(codex.answer.decision, 'block', platform);
+    assert.match(codex.answer.reason, /"pnpm config get minimumReleaseAgeExclude"/, platform);
+    assert.match(codex.answer.reason, /"cd D:\\js-harness; codex"/, platform);
+    assert.equal(codex.err, '', platform);
+  }
+});
+
+test('a block for his shell of a run that succeeded, and evidence of a run whatever its exit, let the session stop', async () => {
+  const handed = 'Corre:\n\n```powershell\njs-harness doctor --offline\n```\n\nSigo solo. Me despierta el aviso de JH 102.';
+  const win = await commandHook(handed, { platform: 'win32' });
+  assert.deepEqual(win.answer, {});
+  assert.deepEqual(win.parsed.map(({ texts }) => texts), [['js-harness doctor --offline']], 'on win32 the parser reads it too');
+  assert.ok(win.parsed[0].options.timeout > 0 && win.parsed[0].options.timeout <= 4000, 'the parser gets the time left of one deadline');
+  assert.ok(win.transcriptReads <= 1, 'the transcript is read once, the wake check included');
+  const linux = await commandHook(handed.replace('powershell', 'bash'), { platform: 'linux' });
+  assert.deepEqual([linux.answer, linux.parsed], [{}, []]);
+  const evidence = 'Lo que corrí, y falló:\n\n```bash ran\nrm -rf -- ./* ./.[!.]*\n```\n\nSigo solo. Me despierta el aviso de JH 102.';
+  for (const platform of ['win32', 'linux']) assert.deepEqual((await commandHook(evidence, { platform })).answer, {}, platform);
+});
+
+test('a reply with no command block never reads the transcript for it, and a parser that cannot run refuses the block', async () => {
+  const plain = await commandHook('Hecho.\n\n```js\nrm(1);\n```\n\nSigo solo. Me despierta el aviso de JH 102.', { platform: 'win32' });
+  assert.deepEqual([plain.answer, plain.parsed], [{}, []]);
+  const own = 'Esto es tuyo, con tu sesión:\n\n```powershell own\ncodex login\n```\n\nSigo solo. Me despierta el aviso de JH 102.';
+  const failed = await commandHook(own, { platform: 'win32', parse: () => ({ failed: 'no PowerShell answered in time' }) });
+  assert.match(failed.answer.reason, /its parser could not check it \(no PowerShell answered in time\)/);
+  const rejected = await commandHook(own.replace('codex login', 'rm -rf /d/x'), { platform: 'win32', parse: () => ({ errors: [['rm has no parameter -rf']] }) });
+  assert.match(rejected.answer.reason, /rm has no parameter -rf/);
+});
+
+test('the command check runs after the wake and board checks, so its deadline holds their time too', async () => {
+  const events = [];
+  const handed = 'Corre:\n\n```powershell\njs-harness doctor --offline\n```\n\nSigo solo. Me despierta el aviso de JH 102.';
+  const result = await hook(stopPayload(handed, { transcript_path: SESSION_LOG }), {
+    files: { ...ON, [SESSION_LOG]: RUNS },
+    deps: { platform: 'win32', now: () => { events.push('now'); return 0; }, parse: () => { events.push('parse'); return { errors: [['js-harness has no parameter -x']] }; } },
+  });
+  assert.ok(events.includes('parse'));
+  assert.equal(events.indexOf('now', events.indexOf('parse')), -1, `no check reads the clock after the parser: ${events.join(' ')}`);
+  const { decision, reason } = JSON.parse(result.out);
+  assert.equal(decision, 'block', 'its refusal still reaches the answer');
+  assert.match(reason, /^js-harness reply: this reply hands him command blocks .*js-harness has no parameter -x/s);
+});
+
+test('a close that is refused and a block that is refused go back in one block', async () => {
+  const both = await commandHook(RM_REPLY.replace('\n\nSigo solo. Me despierta el aviso de JH 102.', ''), { platform: 'win32' });
+  assert.match(both.answer.reason, /no state line/);
+  assert.match(both.answer.reason, /tagged bash/);
 });

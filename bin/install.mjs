@@ -10,10 +10,11 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { checkoutOf, copyPackageManager, dependentProjectOf, installedPackageRoot, npmCliOf, npmPrefixOf, pnpmGlobalDirOf, runPm, shownWord } from './lib/package-manager.mjs';
 import { MalformedManifestError, SESSION_MESSAGES, acceptSessionMessages, install, readManifest, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
+import { removeClones } from './lib/clones.mjs';
 import { hygieneDir, memoryLocation } from './lib/memory-hygiene.mjs';
 import { undoStack } from './lib/stack-run.mjs';
-import { claudeRunner, undoBackground } from './lib/background.mjs';
 import { codexHomeOf } from './lib/stack.mjs';
+import { claudeRunner, undoBackground } from './lib/background.mjs';
 import {
   uninstallProject,
   syncProject,
@@ -299,17 +300,48 @@ function logRulesBlock(held) {
   else if (held?.status === 'skipped') console.error(`skipped the Rules block in ${held.path}: ${held.reason}`);
 }
 
-/** The config.toml Codex keeps its hooks' trust in, for the Codex home of `home` as doctor reads it (`codexHomeOf`,
- * stack-install T8): install records it on each Codex entry, so `uninstall` takes the trust out of that file
- * (odd/tasks/codex-hook-trust.md). `deps.homedir` and `deps.platform` are the seams of a test. */
-function codexConfigOf(home, env, deps) {
-  return path.join(codexHomeOf({ home, env, homedir: deps.homedir ?? os.homedir(), platform: deps.platform ?? process.platform }), 'config.toml');
+/** Where an install older than the `trustConfigs` of its Codex entries (0.96.0 and before) left their trust, for
+ * `planTrustMoves`'s `earlier`: the config.toml of the Codex home of `home` as doctor reads it (`codexHomeOf`), which
+ * those installs' hooks.json, `<home>/.codex/hooks.json`, had theirs in. `deps.homedir` and `deps.platform` are a
+ * test's seams. */
+function earlierTrustOf(home, env, deps) {
+  const codexHome = codexHomeOf({ home, env, homedir: deps.homedir ?? os.homedir(), platform: deps.platform ?? process.platform });
+  return { hooksPath: path.join(home, '.codex', 'hooks.json'), config: path.join(codexHome, 'config.toml') };
+}
+
+/** Whether the host file of `record` still holds its entry at its pointer: `false` once the file is gone, `true` when
+ * it cannot be read or parsed, so nothing is said removed on a guess. */
+function holdsEntry({ path: file, pointer, entry }) {
+  try {
+    const list = pointer.reduce((node, key) => node?.[key], JSON.parse(fs.readFileSync(file, 'utf8')));
+    return Array.isArray(list) && list.some((held) => JSON.stringify(held) === JSON.stringify(entry));
+  } catch (err) {
+    return err.code !== 'ENOENT';
+  }
+}
+
+/** Says what a `sync` took out because nothing declares it any more, as `uninstall` says what it removes: each file
+ * `before` recorded that is no longer recorded and is gone, and per host file how many of its entries `before`
+ * recorded as the harness's that the file no longer holds (the Codex copies of an earlier version,
+ * odd/tasks/drop-codex-components.md). A file kept is said by `pruneKept`. */
+function logPruned(before, manifest) {
+  const same = (a, b) => a.path === b.path && JSON.stringify(a.pointer) === JSON.stringify(b.pointer) && JSON.stringify(a.entry) === JSON.stringify(b.entry);
+  for (const file of before?.files ?? []) {
+    if (!manifest.files.some((kept) => kept.path === file.path) && !fs.existsSync(file.path)) console.log(`removed ${file.path}: no longer shipped`);
+  }
+  const gone = new Map();
+  for (const entry of before?.entries ?? []) {
+    if (entry.skipped || entry.createdEntry === false || (manifest.entries ?? []).some((kept) => same(kept, entry)) || holdsEntry(entry)) continue;
+    gone.set(entry.path, (gone.get(entry.path) ?? 0) + 1);
+  }
+  for (const [file, count] of gone) console.log(`removed ${count} hook entr${count === 1 ? 'y' : 'ies'} from ${file}: no longer shipped`);
 }
 
 /** Says what taking hook entries out did to Codex's trust of them, and of the user's own hooks they moved
- * (odd/tasks/codex-hook-trust.md), for `uninstall` and for the entries a `sync` prunes. A config.toml that could not
- * be edited is a change to the user's Codex left half done that nothing records any more: it goes to stderr, and the
- * count of them is returned so the command fails. */
+ * (odd/tasks/codex-hook-trust.md), for `uninstall` and for the entries a `sync` prunes: those an earlier version wrote
+ * in Codex's hooks.json, each with the config.toml files that version recorded (odd/tasks/drop-codex-components.md).
+ * A config.toml that could not be edited is a change to the user's Codex left half done that nothing records any more:
+ * it goes to stderr, and the count of them is returned so the command fails. */
 function logTrust({ trustMoved = [], trustKept = [] }) {
   for (const { path: p, dropped, moved } of trustMoved) {
     if (dropped > 0) console.log(`removed ${dropped} trust record${dropped === 1 ? '' : 's'} of the harness's Codex hooks from ${p}`);
@@ -341,8 +373,10 @@ export async function installMain(argv, env = process.env, deps = {}) {
   // `sync`, not `install`: over an older manifest it also removes what is no longer shipped, which `install` alone
   // would drop from the records and leave behind (harness-review a2); with no manifest the two are the same.
   let manifest;
+  let before;
   try {
-    manifest = sync(home, version, { ...deps, codexConfig: codexConfigOf(home, env, deps) });
+    before = readManifest(home);
+    manifest = sync(home, version, { earlierTrust: earlierTrustOf(home, env, deps), ...deps });
   } catch (err) {
     // A machine manifest that does not parse: one line, and nothing was written (`sync` reads it before any step).
     if (!(err instanceof MalformedManifestError)) throw err;
@@ -350,6 +384,7 @@ export async function installMain(argv, env = process.env, deps = {}) {
     return 1;
   }
   console.log(`installed js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
+  logPruned(before, manifest);
   for (const kept of manifest.pruneKept ?? []) console.log(`kept ${kept.path}: ${kept.reason}; no longer shipped, and no longer recorded`);
   logFiles(manifest.files);
   logEntries(manifest.entries);
@@ -456,6 +491,26 @@ export function reportSyncProject(result) {
   return result.code || (result.actions.some((action) => action.kind === 'failed') ? 1 : 0);
 }
 
+/** Offers `rule:depth-pass` to a project whose `harness.json` has no `depthPassSince` key, from the day after `now`, so
+ * no document opened today turns red (odd/tasks/double-review-alignment.md, older text 9). `harness.json` is a committed
+ * file `sync` never writes, so the project takes the offer by committing the key; `null` declines it and ends the line. */
+function offerDepthPass(root, now) {
+  let declared;
+  try {
+    declared = Object.hasOwn(JSON.parse(fs.readFileSync(path.join(root, 'harness.json'), 'utf8')), 'depthPassSince');
+  } catch {
+    return;
+  }
+  if (declared) return;
+  const at = new Date(now);
+  const tomorrow = new Date(at.getFullYear(), at.getMonth(), at.getDate() + 1);
+  const day = [tomorrow.getFullYear(), tomorrow.getMonth() + 1, tomorrow.getDate()].map((n) => String(n).padStart(2, '0')).join('-');
+  console.log(
+    `rule:depth-pass holds no feature document here: harness.json declares no depthPassSince. To hold those opened from tomorrow on, ` +
+      `add "depthPassSince": "${day}" to harness.json and commit it; null holds none and ends this line`,
+  );
+}
+
 /** Scope by location, the same rule as `uninstallMain` (T4 design): inside a git repository that
  * `js-harness init` touched (`harness.json` or a project manifest present), move the project to its pin;
  * outside any git repository with no `--cwd`, or with `--global`, re-write the machine install exactly as
@@ -484,7 +539,11 @@ export async function syncMain(argv, env = process.env, deps = {}) {
       }
       throw err;
     }
-    if (!projectResult.notGitRepo && !projectResult.notInitialized) return reportSyncProject(projectResult);
+    if (!projectResult.notGitRepo && !projectResult.notInitialized) {
+      const code = reportSyncProject(projectResult);
+      if (code === 0) offerDepthPass(projectResult.root, deps.now ?? Date.now());
+      return code;
+    }
     if (parsed.cwdExplicit || projectResult.notInitialized) {
       console.error(
         `not an initialized project: ${parsed.cwd}; js-harness sync --global syncs the machine install`,
@@ -496,8 +555,10 @@ export async function syncMain(argv, env = process.env, deps = {}) {
 
   const home = parsed.home;
   let manifest;
+  let before;
   try {
-    manifest = sync(home, version, { ...deps, codexConfig: codexConfigOf(home, env, deps) });
+    before = readManifest(home);
+    manifest = sync(home, version, { earlierTrust: earlierTrustOf(home, env, deps), ...deps });
   } catch (err) {
     // A machine manifest that does not parse: one line, and nothing was written (`sync` reads it before any step).
     if (!(err instanceof MalformedManifestError)) throw err;
@@ -505,6 +566,7 @@ export async function syncMain(argv, env = process.env, deps = {}) {
     return 1;
   }
   console.log(`synced js-harness ${version} (${writtenCount(manifest)} files) into ${home}`);
+  logPruned(before, manifest);
   logFiles(manifest.files);
   logEntries(manifest.entries);
   logPermissions(manifest.permissionsHeld);
@@ -614,7 +676,7 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   for (const { entry, why, settle } of background.kept) console.error(`kept background session ${entry.id} · ${entry.title}: ${why}; ${settles[settle](entry.id)}`);
   if (background.removedDir) console.log(`removed ${background.removedDir}`);
   if (background.failed) console.error(background.failed);
-  const result = uninstall(home, { ...deps, full: full || everything, undoStack: undoTheStack, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
+  const result = uninstall(home, { earlierTrust: earlierTrustOf(home, env, deps), ...deps, full: full || everything, undoStack: undoTheStack, removeClones: (records) => removeClones(records, home, deps), schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
   for (const p of result.removed) console.log(`removed ${p}`);
   for (const project of result.memorySnapshotsRemoved ?? []) console.log(`removed ${project.path}: ${snapshotWords(project.stamps)}`);
   // An optional file that could not be read or removed is not one the user edited, and the manifest that
@@ -630,6 +692,12 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
     console.error(
       `could not ${verb} ${p} (${failed.code}): it is still there and no longer recorded, so nothing else will remove it; remove it by hand`,
     );
+  }
+  // A clone recorded outside ~/.js-harness is never removed, and its record is dropped; one that could not be removed
+  // stays recorded for a run again (bin/lib/manifest.mjs, `removeClones`).
+  for (const clone of result.clonesKept ?? []) {
+    if (clone.reason === 'outside') console.error(`left ${clone.path}: a clone is removed only inside ~/.js-harness, and this record named it elsewhere; it is no longer recorded, so remove it by hand if it is the harness's`);
+    else console.error(`could not remove the clone ${clone.path} (${clone.code ?? clone.reason}): it is still recorded; run js-harness uninstall machine again`);
   }
   for (const p of result.entriesRemoved) console.log(`removed hook entry from ${p}`);
   for (const p of result.entriesKept) console.log(`kept hook entry in ${p} (modified by you)`);
@@ -757,6 +825,7 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
     result.tasksKept.length === 0 &&
     (result.stackUndone ?? []).length === 0 &&
     (result.stackKept ?? []).length === 0 &&
+    (result.clonesKept ?? []).length === 0 &&
     result.gateKept.length === 0 &&
     result.channelKept.length === 0 &&
     result.remoteKept.length === 0 &&
@@ -770,7 +839,7 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
     console.log(`nothing installed under ${home}`);
   }
   // A file or folder left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  const code = notUndone.size > 0 || (result.settingsFailed ?? []).length > 0 || ['kept', 'failed'].includes(result.permissions?.status) || ['kept', 'failed'].includes(result.rulesBlock?.status) || (result.trustKept ?? []).length > 0 || stackNotUndone.length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 || background.kept.length > 0 || Boolean(background.failed) ? 1 : 0;
+  const code = notUndone.size > 0 || (result.clonesKept ?? []).length > 0 || (result.settingsFailed ?? []).length > 0 || ['kept', 'failed'].includes(result.permissions?.status) || ['kept', 'failed'].includes(result.rulesBlock?.status) || (result.trustKept ?? []).length > 0 || stackNotUndone.length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 || background.kept.length > 0 || Boolean(background.failed) ? 1 : 0;
   if (!everything) return code;
   // A live gate keeps its folder without failing the normal uninstall; the whole folder waits for it all the same.
   const dir = path.join(home, '.js-harness');

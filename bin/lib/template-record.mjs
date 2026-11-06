@@ -94,3 +94,40 @@ export function recordShown(file, { at, session, tool, template = null, subject 
   appendRecord(file, line, fileSystem);
   return line;
 }
+
+// A write of the board's summary (odd/tasks/board-summary-stale.md): a `shown` line of tool `ArtifactData`, subject
+// `board/summary` and no template, so `shownReport` counts it nowhere, the fields the write carried in its reason as
+// JSON. The reply hook's stale-board check reads the last one carrying the summary's content.
+
+/** The subject of a summary write's line: the document `sessions live --out` and the lead write. */
+export const SUMMARY_SUBJECT = 'board/summary';
+
+/** The fields of the summary that the lead writes from the record, by which a write counts as its content: the
+ * `checked` fields of `sessions live --out` do not. */
+export const SUMMARY_CONTENT = Object.freeze(['now', 'status']);
+
+const FIELDS = 'fields: ';
+const UNKNOWN = 'fields unknown: ';
+
+/** Records a write of the summary at `at`: `fields`, the top-level fields it carried, or `unreadable`, why they are
+ * not known. Returns the line. */
+export function recordSummary(file, { at, session, call, fields = [], unreadable = null }, fileSystem = fs) {
+  const reason = unreadable === null ? `${FIELDS}${JSON.stringify(fields)}` : `${UNKNOWN}${unreadable}`;
+  return recordShown(file, { at, session, tool: 'ArtifactData', call, subject: SUMMARY_SUBJECT, decision: 'shown', reason }, fileSystem);
+}
+
+/** Whether a line of the shown record is a write of the summary, as `recordSummary` writes it. */
+export const isSummaryWrite = (line) => line?.tool === 'ArtifactData' && line.subject === SUMMARY_SUBJECT
+  && line.template === null && line.decision === 'shown';
+
+/** Whether a summary write carried the summary's content (`SUMMARY_CONTENT`); fields not known are not. */
+export function summaryContent(line) {
+  if (!isSummaryWrite(line) || typeof line.reason !== 'string' || !line.reason.startsWith(FIELDS)) return false;
+  let fields;
+  try {
+    fields = JSON.parse(line.reason.slice(FIELDS.length));
+  } catch {
+    return false;
+  }
+  return Array.isArray(fields) && fields.some((field) => SUMMARY_CONTENT.includes(field));
+}

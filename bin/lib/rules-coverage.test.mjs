@@ -280,3 +280,17 @@ test('the register is written in one shape, and a register of another shape is r
     'skill: an entry is a hash of 12 hexadecimal characters, or { hash, context: <reason> }',
   ]);
 });
+
+test('a control that fits on one line is written on one, a longer one over several, and both read back', () => {
+  const long = { level: 'line', path: 'bin/lib/manifest.mjs', phrase: 'a phrase long enough that its control cannot fit on one line of the register' };
+  const given = { ...register(), controls: { short: { level: 'owed', since: BASELINE }, long } };
+  const text = writeCoverage(given);
+  assert.match(text, /^ {4}"short": \{"level":"owed","since":"\d{4}-\d{2}-\d{2}"\}$/m);
+  assert.match(text, /^ {4}"long": \{\n {6}"level": "line",$/m);
+  assert.deepEqual(JSON.parse(text.slice(text.indexOf('= {') + 2, text.lastIndexOf(';'))).controls, given.controls);
+  assert.match(writeCoverage({ ...register(), controls: {} }), /"controls": \{\},/);
+  // A planted break is code, and code holds $: written as it is, never read as a replacement pattern.
+  const dollars = { level: 'check', test: 'bin/a.test.mjs', break: { path: 'bin/a.mjs', find: "'$&' + '$$'", replace: "'$`' + '$''" } };
+  const read = writeCoverage({ ...register(), controls: { dollars } });
+  assert.deepEqual(JSON.parse(read.slice(read.indexOf('= {') + 2, read.lastIndexOf(';'))).controls, { dollars });
+});

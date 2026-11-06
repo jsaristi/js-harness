@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `96ea160b1ccc`. In force: 66 (40 of Sebastián, 26 of the project). Retired: 4.
+Hash `3cc356d8fc2f`. In force: 72 (45 of Sebastián, 27 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -40,21 +40,43 @@ The most input tokens a Codex review may cost for each changed line of its slice
 - Read by: `bin/lib/codex-review-allowance.mjs`.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
 
+### codex-weekly-floor
+The share of Codex's weekly limit left at or under which a Codex review starts nothing and the user decides on the reset: 2 percent of the weekly limit left.
+- Read by: `bin/codex-review.mjs`.
+- Since 2026-11-02. Row: reports. Source: his words of 2026-11-01, 2026-11-01, 2026-11-01, checked by the command on 2026-11-02.
+
 ### context-pause
 The share of its context window at which a session pauses, writes its state and judges whether what is left fits before the host compacts: 88 percent of the context window. The flag `--context-pause` overrides it for one run.
 - Read by: `bin/lib/sessions.mjs`.
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-12.
 
+### depth-pass
+Before large work is built, and whenever he asks, its feature document holds a depth pass in his order (method, raw material, a bar per spec, a refutation run before code with its verdict, his request rewritten last), committed before the first code commit; a refuting verdict reaches him before any code: "- Large work is work a fresh session could not finish from the request and \`git diff\` alone; it has a feature document under \`odd/tasks/\`."
+- Home: `bin/lib/protocols-skill.mjs`.
+- Since 2026-10-31. Row: reports. Source: his words of 2026-10-31, 2026-10-31, 2026-10-31, checked by the command on 2026-10-31.
+
 ### double-review
-A proposal that changes one of his decisions passes two read-only readers that did not write it: "- A proposal that changes one of the user's decisions, whether a design before it is built, a plan, an analysis with figures, a protocol or a change of the charter, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing."
+Everything that proposes something passes a blind Claude and Codex read, code passes its own pair, both judged against what was asked, at most three reviews: "- Everything that proposes something, whether a plan, a design before it is built, an analysis with figures, a protocol or a document put to the user, asked or reported, first passes a Claude reader and a Codex reader, blind, on one frozen copy (\`js-harness double-review read\`), each bringing the failures and improvements it finds against what was asked."
 - Home: `bin/lib/protocols-skill.mjs`.
 - Looked at again on 2026-11-16.
-- Since 2026-10-27. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-11, 2026-10-27, checked by the command on 2026-10-27.
+- Since 2026-11-01. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-31, 2026-10-31, 2026-11-01, 2026-11-01, 2026-11-01, checked by the command on 2026-11-01.
+
+### escalation-model
+The strongest model a change passes to when three reviews of it did not settle it: claude-fable-5-1.
+- Read by: `bin/lib/codex-review-recheck.mjs`.
+- Since 2026-11-02. Row: reports. Source: his words of 2026-11-01, 2026-11-01, checked by the command on 2026-11-02.
 
 ### fixed-load-budget
 The fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns: 100,000 tokens.
 - Read by: `bin/lib/fixed-load.mjs`.
 - Since 2026-10-24. Row: reports. Source: his words of 2026-10-15, checked by the command on 2026-10-24.
+
+### growth-limit
+His growth limit: while js-harness progress --pace says the last seven days are red, the plan's open steps grown, the lead opens no new work in this repository but what this rule's value names, and writes the rest in the roadmap's Later list with its source; his own word that something goes now opens it all the same: a fix or a step of F8.
+- Of this repository only: not in force in a project that installs the harness.
+- Looked at again on 2026-11-15.
+- Read by: `bin/progress.mjs`.
+- Since 2026-11-01. Row: reports. Source: his words of 2026-11-01, checked by the command on 2026-11-01.
 
 ### lead-charter
 What the lead does alone and tells him after, and what stays his, asked one at a time: "Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command."
@@ -65,6 +87,11 @@ What the lead does alone and tells him after, and what stays his, asked one at a
 The harness never works as a black box: work sessions write each event as a notice (a session starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends them to the live board, a page that updates by itself, and points every reply to it: "- Every event of your work reaches the user's live board as a notice: \`js-harness notify --to orchestrator\` with \`opened\` when you start, \`note\` when a step of your plan finishes, a pull request opens or merges, a decision is made or you report spend, and \`ready\` and \`closed\` as below."
 - Home: `bin/lib/manifest.mjs`.
 - Since 2026-10-27. Row: reports. Source: his words of 2026-10-27, 2026-10-27, 2026-10-27, 2026-10-27, checked by the command on 2026-10-27.
+
+### local-time
+A clock time he reads, in a reply, a page or a message, is in his local time, the offset read from the machine's clock and never a constant, with the zone said once; the records keep UTC, and a UTC time reaches him only inside a code block, a quoted output or a path: "- A clock time the user reads, in a reply, a page or a message, is given in their local time (\`rule:local-time\`): the offset read from the machine's clock at that instant, never a constant, and the zone said once."
+- Home: `bin/lib/protocols-skill.mjs`.
+- Since 2026-11-01. Row: reports. Source: his words of 2026-11-01, 2026-11-01, checked by the command on 2026-11-01.
 
 ### mistake-report
 A mistake is reported with what it was, its fix, what prevents it, how it enters the harness and how it is proven later: "What stops it from happening again: a check before a line, a line before a protocol."
@@ -133,10 +160,10 @@ The one model a Codex review runs on: gpt-6.1-sol.
 - Since 2026-10-08. Row: reports. Source: his words of 2026-10-06, 2026-10-08, checked by a session on 2026-10-11.
 
 ### reviewed-commit-lines
-About how many changed lines a commit that will be reviewed stays under: 1,200 changed lines.
+About how many changed lines a commit that will be reviewed stays under, a file it renames counted by the lines it changes: 1,200 changed lines.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/check.mjs`.
-- Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
+- Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by the command on 2026-11-05.
 
 ### rules-live-in-the-harness
 A rule he gives is cemented in the harness where something acts on it, never only in memory; an output he sees again and again, as a template of five parts: "- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`CLAUDE.md\` or \`AGENTS.md\`, a protocol."
@@ -192,7 +219,7 @@ The effort every sub-agent is launched with: high.
 The model of a sub-agent that explores, reviews or verifies: claude-opus-5-5.
 - Passed on a call as `opus`.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: `bin/lib/guard.mjs`.
+- Read by: `bin/double-review.mjs`, `bin/lib/guard.mjs`.
 - Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-11.
 
 ### subagent-writer-model
@@ -231,6 +258,12 @@ The most work sessions open at one time in a public repository: 12 sessions.
 The most estimated tokens AGENTS.md may hold, since every session pays it on every turn: 1,500 estimated tokens.
 - Read by: `bin/check.mjs`.
 - Since 2026-10-15. Row: reports. Source: design, `docs/ROADMAP.md`.
+
+### chained-steps
+The one way two steps share a command: the second runs only on the first's success, so the guard refuses a push, a commit, a pull request command, a land or a notice that follows the step before it by a semicolon, a line break, a double bar or an ampersand: &&.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: `bin/lib/chained-step-guard.mjs`.
+- Since 2026-10-31. Row: reports, against the failure `chained-step-not-conditional`. Source: design, `odd/tasks/guard-chained-steps.md`.
 
 ### ci-gate-bound
 How long a commit gate sent to GitHub waits for its run to end, from the push, before it cancels the run and runs the gate on this machine: 8 minutes.

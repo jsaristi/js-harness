@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { harnessHome, homeIsSet } from './home.mjs';
+import { harnessHome, homeIsSet, relativeHome } from './home.mjs';
 
 const cwd = path.resolve('work', 'project');
 const userHome = path.resolve('users', 'someone');
@@ -43,4 +43,11 @@ test('homeIsSet is true only for a non-empty JS_HARNESS_HOME', () => {
   assert.equal(homeIsSet({ JS_HARNESS_HOME: path.resolve('env') }), true);
   assert.equal(homeIsSet({ JS_HARNESS_HOME: '' }), false);
   assert.equal(homeIsSet({}), false);
+});
+
+test('relativeHome names a JS_HARNESS_HOME that is set and relative, and is null otherwise', () => {
+  assert.equal(relativeHome({ JS_HARNESS_HOME: 'relative-home' }), 'relative-home');
+  assert.equal(relativeHome({ JS_HARNESS_HOME: path.resolve('env') }), null);
+  assert.equal(relativeHome({ JS_HARNESS_HOME: '' }), null);
+  assert.equal(relativeHome({}), null);
 });

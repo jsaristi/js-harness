@@ -93,6 +93,7 @@ function runner(prs, gh = {}) {
     }
     if (command === 'gh' && args[0] === 'repo' && args[1] === 'view' && gh.view) return gh.view(args);
     if (command === 'gh' && args[0] === 'pr' && args[1] === 'edit' && gh.edit) return gh.edit(args);
+    if (command === 'gh' && args[0] === 'pr' && args[1] === 'view' && gh.view_pr) return gh.view_pr(args);
     return { status: 1, stdout: '', stderr: 'unexpected' };
   };
   return { run, calls };
@@ -1889,8 +1890,8 @@ test('a land keeps a landed worktree of the Orca app, under orca/workspaces', as
 
 // T4 (S5b): `--land --refresh-copy` refreshes the installed copy after a land that moved main, through `refreshCopy`
 // (bin/lib/refresh-copy.mjs), which is passed here as a stand-in so no package manager runs.
-async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', '--refresh-copy'], agents = () => [] } = {}) {
-  const { run } = landRunner(prs, [[workflowRun('completed', 'success')]]);
+async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', '--refresh-copy'], agents = () => [], env, gh } = {}) {
+  const { run } = landRunner(prs, [[workflowRun('completed', 'success')]], () => {}, gh);
   const out = [];
   const asked = [];
   let at = Date.now();
@@ -1909,9 +1910,52 @@ async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', 
       asked.push(opts);
       return refresh(opts);
     },
+    ...(env && { env }),
   });
   return { code, out, asked };
 }
+
+// odd/tasks/defect-trio.md, spec 3: claude agents called JH 130 busy while only its js-harness wait ran, and the land
+// waited 30 minutes on it. Its transcript, under CLAUDE_CONFIG_DIR, says it only waits; another session runs a test.
+test('--land --refresh-copy refreshes at once beside a busy session whose transcript only waits, and waits for one that runs', async () => {
+  const { root, heads } = makeQueueRepo();
+  const claudeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-claude-'));
+  const write = (id, ...entries) => {
+    fs.mkdirSync(path.join(claudeDir, 'projects', 'any'), { recursive: true });
+    fs.writeFileSync(path.join(claudeDir, 'projects', 'any', `${id}.jsonl`), entries.map((entry) => JSON.stringify(entry)).join('\n') + '\n');
+  };
+  const call = (id, input) => ({ type: 'assistant', timestamp: '2026-11-02T09:30:00.000Z', message: { role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id, name: 'Bash', input }] } });
+  const launched = (id) => ({ type: 'user', timestamp: '2026-11-02T09:30:00.000Z', toolUseResult: { stdout: '', stderr: '', backgroundTaskId: `b-${id}` }, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }] } });
+  write('aaaa1111-0000', call('t1', { command: 'js-harness wait --notice-to 130', run_in_background: true }), launched('t1'), { type: 'assistant', timestamp: '2026-11-02T09:31:00.000Z', message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'Esperando.' }] } });
+  write('bbbb2222-0000', call('t2', { command: 'node --test bin/x.test.mjs' }));
+  const busy = (sessionId, name) => ({ kind: 'background', cwd: root, sessionId, name, status: 'busy', state: 'working' });
+  const env = { JS_HARNESS_HOME: harnessHome(), CLAUDE_CONFIG_DIR: claudeDir };
+  const waits = await landRefreshing(root, [pr(1, 'feat/a', heads['feat/a'])], { env, agents: () => [busy('aaaa1111-0000', 'JH 130 · e3')] });
+  assert.equal(waits.code, 0, waits.out.join('\n'));
+  assert.equal(waits.asked.length, 1, 'the refresh ran');
+  assert.ok(waits.out.includes('refresh: JH 130 · e3 (busy) only waits (js-harness wait): the refresh does not wait for it'), waits.out.join('\n'));
+  const second = makeQueueRepo();
+  const runs = await landRefreshing(second.root, [pr(1, 'feat/a', second.heads['feat/a'])], { env, agents: () => [{ ...busy('bbbb2222-0000', 'JH 9 · tests'), cwd: second.root }] });
+  assert.equal(runs.code, 75, runs.out.join('\n'));
+  assert.equal(runs.asked.length, 0, 'nothing was refreshed under a session running a test');
+  fs.rmSync(claudeDir, { recursive: true, force: true });
+});
+
+// odd/tasks/refresh-open-apply.md, T2: on 2026-10-31 a refresh installed PR 729 and changed his ~/.codex while question
+// 140, which asked his yes for exactly that, was open. Here question 1 asks it for PR 1, which the land lands.
+test('--land --refresh-copy lands, then refreshes nothing, exit 77, while an open question asks to apply a pull request main now holds', async () => {
+  const { root, heads } = makeQueueRepo();
+  const home = harnessHome();
+  const from = { host: 'h', id: 'jh117-0000', source: 'claude-code', title: 'JH 117 · install' };
+  appendNotice(home, slugOf(root), newNotice({ at: '2026-10-31T05:00:00.000Z', from, to: 'orchestrator', kind: 'question', text: '¿Quito las skills de Codex?', id: 'q-1', options: [], waits: 'PR 1', applies: { pr: 1 } }));
+  const view_pr = (args) => ({ status: 0, stdout: JSON.stringify({ headRefOid: args[2] === '1' ? heads['feat/a'] : '0'.repeat(40), mergeCommit: null }), stderr: '' });
+  const { code, out, asked } = await landRefreshing(root, [pr(1, 'feat/a', heads['feat/a'])], { env: { JS_HARNESS_HOME: home }, gh: { view_pr } });
+  assert.equal(code, 77, out.join('\n'));
+  assert.ok(out.some((line) => line.startsWith('Landed: main ')), 'the land landed');
+  assert.ok(out.some((line) => /^refresh: question 1 is open and asks the user's yes to apply pull request 1, which [0-9a-f]{7} holds: nothing was refreshed, and the installed copy still names its previous main; the land itself landed, and main stands\./.test(line)), out.join('\n'));
+  assert.equal(asked.length, 0, 'the refresh was not asked for');
+  assert.equal(landsOf(root).at(-1).exit, 0, 'the land record keeps the land\'s own exit');
+});
 
 test('--refresh-copy is a mode of --land or a mode alone: with --dry-run or --prune it is a usage error, and the usage names both', async () => {
   const out = [];

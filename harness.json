@@ -1,5 +1,6 @@
 {
   "code": "JH",
+  "depthPassSince": "2026-11-01",
   "documents": [
     "docs/",
     "odd/tasks/"

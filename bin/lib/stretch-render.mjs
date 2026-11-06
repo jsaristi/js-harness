@@ -4,6 +4,7 @@
 // shows is the command's, never drawn by hand. Pure: the view's JSON in, the text out. Every text from the plan is
 // escaped, so a title is shown and never run. The return, once its moments are measured, is a page of the moments
 // (odd/tasks/visual-pages.md) built from the shared parts of `pages.mjs`.
+import { localMinute } from './local-time.mjs';
 import { escapeHtml, page, table, tiles } from './pages.mjs';
 import { mapNowSection, mapSection, planSections, sharesTiles, timelineSection } from './pages-sections.mjs';
 
@@ -166,8 +167,6 @@ export function renderView(view) {
 <p class="soft">No se mide (ningún registro lo guarda): ${view.unmeasured.map((key) => escapeHtml(UNMEASURED[key] ?? key)).join('; ')}.</p>${unavailable ? `<ul class="no">${unavailable}</ul>` : ''}</div>`;
 }
 
-const dateTimeZ = (iso) => `${new Date(iso).toISOString().slice(0, 16).replace('T', ' ')}Z`;
-
 const KINDS = { goal: 'Meta', item: 'Trabajo', failure: 'Falla' };
 
 /** One cell of the why section: each entry with its source, or "no registrado" when no record says it. */
@@ -202,7 +201,7 @@ export function renderReturn(view, { generatedAt = null } = {}) {
     ...(moments.head.reconstructed ? ['El tramo no guardó el commit de su apertura: el mapa de antes se reconstruyó por la hora.'] : []),
     ...Object.entries({ ...view.unavailable, ...moments.unavailable }).map(([name, why]) => `${READ_NAMES[name] ?? name} no se pudo leer: ${why}.`),
   ];
-  const outsideRows = moments.outside.sessions.map((one) => [one.title, { text: dateTimeZ(one.first), mono: true }, { text: dateTimeZ(one.last), mono: true }, { text: String(one.notices), mono: true }]);
+  const outsideRows = moments.outside.sessions.map((one) => [one.title, { text: localMinute(one.first), mono: true }, { text: localMinute(one.last), mono: true }, { text: String(one.notices), mono: true }]);
   const titles = new Map(view.items.map((item) => [item.id, item.title]));
   const sections = [
     ...(moments.forecast ? [{ title: closed ? 'Cuánto avanzó, contra el pronóstico' : 'Cuánto avanzaremos', html: forecastSection(moments.forecast, titles), note: FORECAST_NOTE }] : []),
@@ -217,8 +216,9 @@ export function renderReturn(view, { generatedAt = null } = {}) {
   return page({
     title: closed ? 'Regreso del tramo' : 'Tramo en curso',
     heading: closed ? 'Lo que pasó mientras no estabas' : `Tramo en curso: ${view.elapsedHours} de ${view.hours} h`,
-    lead: `Del ${dateTimeZ(view.openedAt)} al ${dateTimeZ(view.at)}. Todo sale de los registros: el tramo, los avisos, git y la hoja de ruta.`,
+    lead: `Del ${localMinute(view.openedAt)} al ${localMinute(view.at)}. Todo sale de los registros: el tramo, los avisos, git y la hoja de ruta.`,
     generatedAt,
+    zoneAt: view.at,
     badNews,
     sections,
   });

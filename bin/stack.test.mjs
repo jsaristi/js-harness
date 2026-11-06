@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { stackMain, readStack, resolveStackPm } from './stack.mjs';
+import { plainCount } from './lib/stack-backup-walk.mjs';
 
 const ON = { codeMap: { value: 'auto' }, codexReview: { value: 'on' }, languageServer: { value: 'on' } };
 
@@ -163,7 +164,7 @@ test('stack --help and stack install --help print the usage of both, with the --
   assert.equal(read, 0);
 });
 
-test('stack takes an empty JS_HARNESS_HOME as unset: the engram plugin is read from the user home, not the working directory', () => {
+test('stack takes an empty JS_HARNESS_HOME as unset: the engram plugin is read from the user home, not the working directory', async () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-stack-'));
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-home-user-'));
   try {
@@ -183,7 +184,123 @@ test('stack takes an empty JS_HARNESS_HOME as unset: the engram plugin is read f
     assert.equal(plugin.length, 1, run.stdout);
     assert.deepEqual(plugin[0].dimensions, ['claude'], run.stdout);
   } finally {
-    fs.rmSync(work, { recursive: true, force: true });
-    fs.rmSync(home, { recursive: true, force: true });
+    // On win32 a probe runs through cmd.exe, and its timeout kills only cmd.exe: the tool under it can live on with
+    // its working directory in `work`, which Windows will not remove until it exits (the daily Windows run, three
+    // times from 2026-10-28). The removal waits for it; the promise form, since Node 24's rmSync fails an EPERM at
+    // once whatever its maxRetries.
+    await fs.promises.rm(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    await fs.promises.rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  }
+});
+
+// F8 S2 (odd/tasks/f8-s2-removal.md, T3): `stack backup run|verify|restore`, dispatched to bin/lib/stack-backup.mjs with
+// every seam injected, so no process, registry, engram or real home is touched.
+function backupSeams(extra = {}) {
+  const reg = (args) => (args[0] === 'query' && args[1] === 'HKCU\\Environment'
+    ? { status: 0, stdout: '    Path    REG_SZ    C:\\tools\r\n', stderr: '' }
+    : { status: 1, stdout: '', stderr: 'not found' });
+  const engram = (cmd, args) => (args[0] === 'stats'
+    ? { status: 0, stdout: 'Sessions: 1\nObservations: 5\nPrompts: 1\n', stderr: '' }
+    : { status: 0, stdout: '[1] #6431 (discovery) marker\n', stderr: '' });
+  return { platform: 'win32', processes: () => [], reg, run: engram, independentCount: plainCount, interactive: false, ...extra };
+}
+
+function backupHome() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-stack-backup-'));
+  const home = path.join(root, 'home');
+  const put = (rel, text) => {
+    fs.mkdirSync(path.dirname(path.join(home, rel)), { recursive: true });
+    fs.writeFileSync(path.join(home, rel), text);
+  };
+  put('.claude/settings.json', '{\n  "permissions": { "deny": ["Read(./.env)"] }\n}\n');
+  put('.claude/agents/a.md', 'agent\n');
+  put('.claude.json', '{\n  "mcpServers": { "engram": {}, "codegraph": {}, "context7": {} }\n}\n');
+  put('.codex/config.toml', '[mcp_servers.engram]\n[mcp_servers.codegraph]\n[mcp_servers.context7]\n');
+  put('.engram/engram.db', 'store');
+  return { root, home };
+}
+
+test('stack backup --help prints the three forms and reads nothing; stack --help names them too', async () => {
+  for (const argv of [['backup', '--help'], ['backup', 'run', '--help'], ['backup', 'restore', '-h'], ['--help']]) {
+    const { code, out } = await run(argv, {});
+    assert.equal(code, 0, argv.join(' '));
+    assert.match(out, /^Usage: js-harness stack backup run \[--home <dir>\] \[--to <dir>\]/m, argv.join(' '));
+    assert.match(out, /stack backup verify --from <dir>/);
+    assert.match(out, /stack backup restore --from <dir>/);
+  }
+});
+
+test('stack backup refuses a usage error with exit 2 and its usage', async () => {
+  for (const argv of [
+    ['backup'],
+    ['backup', 'bogus'],
+    ['backup', 'run', '--bogus'],
+    ['backup', 'run', '--to'],
+    ['backup', 'verify'],
+    ['backup', 'verify', '--from', 'x', '--marker', 'm'],
+    // The drill always searches engram, so the token and the id are required, the id a number (Codex P2 and gentle-ai
+    // R3 on 84997f7..0b9f98a).
+    ['backup', 'verify', '--from', 'x'],
+    ['backup', 'verify', '--from', 'x', '--marker', 'm', '--expect', '64.31'],
+    ['backup', 'restore'],
+    ['backup', 'restore', '--from', 'x', '--only', 'nope'],
+  ]) {
+    const { code, err } = await run(argv, backupSeams());
+    assert.equal(code, 2, argv.join(' '));
+    assert.match(err, /Usage: js-harness stack backup/, argv.join(' '));
+  }
+  assert.match((await run(['backup', 'run', '--bogus'], backupSeams())).err, /^unknown argument: --bogus$/m);
+});
+
+test('stack backup run, verify and restore exit 0 in scratch homes, 1 on a failed check, and restore writes nothing without --yes', async () => {
+  const { root, home } = backupHome();
+  try {
+    const to = path.join(root, 'backup');
+    const ran = await run(['backup', 'run', '--home', home, '--to', to], backupSeams());
+    assert.equal(ran.code, 0, ran.err);
+    assert.ok(fs.existsSync(path.join(to, 'manifest.json')));
+    const verified = await run(['backup', 'verify', '--from', to, '--marker', 'm', '--expect', '6431'], backupSeams());
+    assert.equal(verified.code, 0, verified.out);
+    assert.match(verified.out, /^ok row 12/m);
+    assert.equal((await run(['backup', 'verify', '--from', to, '--marker', 'm', '--expect', '1'], backupSeams())).code, 1);
+
+    const target = path.join(root, 'target');
+    const planned = await run(['backup', 'restore', '--from', to, '--home', target], backupSeams());
+    assert.equal(planned.code, 1);
+    assert.match(planned.out, /nothing written/);
+    assert.ok(!fs.existsSync(target));
+    const restored = await run(['backup', 'restore', '--from', to, '--home', target, '--yes'], backupSeams());
+    assert.equal(restored.code, 0, restored.err);
+    assert.equal(fs.readFileSync(path.join(target, '.claude', 'agents', 'a.md'), 'utf8'), 'agent\n');
+    const only = await run(['backup', 'restore', '--from', to, '--home', target, '--only', 'permissions', '--only', 'mcp:context7', '--yes'], backupSeams());
+    assert.equal(only.code, 0, only.err);
+
+    const busy = await run(['backup', 'run', '--home', home, '--to', path.join(root, 'b2')], backupSeams({ processes: () => ['codex.exe'] }));
+    assert.equal(busy.code, 1);
+    assert.match(busy.out, /FAIL quiesce: codex\.exe runs/);
+    const missing = await run(['backup', 'verify', '--from', path.join(root, 'none'), '--marker', 'm', '--expect', '6431'], backupSeams());
+    assert.equal(missing.code, 1);
+    assert.match(missing.err, /holds no js-harness\.stack-backup\/v1 manifest/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('stack backup restore asks on a terminal and restores only on y', async () => {
+  const { root, home } = backupHome();
+  try {
+    const to = path.join(root, 'backup');
+    assert.equal((await run(['backup', 'run', '--home', home, '--to', to], backupSeams())).code, 0);
+    const target = path.join(root, 'target');
+    const asked = [];
+    const no = await run(['backup', 'restore', '--from', to, '--home', target], backupSeams({ interactive: true, ask: async (q) => { asked.push(q); return false; } }));
+    assert.equal(no.code, 1);
+    assert.ok(!fs.existsSync(target));
+    const yes = await run(['backup', 'restore', '--from', to, '--home', target], backupSeams({ interactive: true, ask: async () => true }));
+    assert.equal(yes.code, 0, yes.err);
+    assert.ok(fs.existsSync(path.join(target, '.claude', 'agents', 'a.md')));
+    assert.equal(asked.length, 1);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });

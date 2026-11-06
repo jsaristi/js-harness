@@ -2,7 +2,9 @@
 // order `stack install` runs them, each with its command and its exact undo; the person's own steps (a tool's
 // installer, logins, prerequisites) and the optional tools are named and never run. Read-only. See
 // odd/tasks/stack-install.md (D5, D8). `js-harness stack install` runs those installs, each shown, then asked, then
-// recorded before it starts so `uninstall machine` can undo it exactly (D4, D6, D7).
+// recorded before it starts so `uninstall machine` can undo it exactly (D4, D6, D7). `js-harness stack backup` takes
+// S2's full backup of the tool homes, drills its restore on a scratch home and restores it
+// (odd/tasks/f8-s2-removal.md, T3; the work is bin/lib/stack-backup.mjs).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,6 +18,7 @@ import { planStack, prefixBinOf, RUNNABLE } from './lib/stack-install.mjs';
 import { appliesOf, homeEnv, runWords, shownCommand, TIMEOUTS, withEnv } from './lib/stack-run.mjs';
 import { codexHomeOf, probeStack, probeVersionCommand, resolveProjectRoot, tools } from './lib/stack.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { restoreBackup, ROOT_IDS, runBackup, verifyBackup } from './lib/stack-backup.mjs';
 
 export { resolveStackPm };
 
@@ -25,6 +28,16 @@ const INSTALL_USAGE = 'Usage: js-harness stack install [--home <path>] [--cwd <p
 const INSTALL_KNOWN = { valued: ['--home', '--cwd', '--pm', '--prefix', '--tool'], bare: ['--yes'] };
 /** The tools `stack install` runs rows of: what `--tool` may name. */
 const RUNNABLE_TOOLS = [...new Set(RUNNABLE.map((row) => row.tool))];
+const BACKUP_USAGE = [
+  'Usage: js-harness stack backup run [--home <dir>] [--to <dir>]',
+  '       js-harness stack backup verify --from <dir> --marker <token> --expect <id>',
+  '       js-harness stack backup restore --from <dir> [--home <dir>] [--only <permissions|mcp:<name>|<root id>>]... [--yes]',
+].join('\n');
+const BACKUP_KNOWN = {
+  run: { valued: ['--home', '--to'], bare: [] },
+  verify: { valued: ['--from', '--marker', '--expect'], bare: [] },
+  restore: { valued: ['--from', '--home', '--only'], bare: ['--yes'] },
+};
 const HELP = [
   USAGE,
   '  Read-only: the tools the harness requires that are missing here, each with its command and its exact undo.',
@@ -32,6 +45,12 @@ const HELP = [
   '  Runs those installs in that order, each printed with its undo and asked y/N in a terminal; without one, only',
   '  the tools --tool names, under --yes. Each is recorded before it starts, so uninstall machine undoes it.',
   `  --tool: ${RUNNABLE_TOOLS.join(', ')}`,
+  BACKUP_USAGE,
+  '  run: with every Claude, Codex, engram, Orca and herdr process closed, copies the tool homes byte for byte into',
+  '  ~/js-harness-s2-backup/<UTC stamp> (or --to), each root counted twice, published only once complete.',
+  '  verify: restores it into a scratch home without its credentials and checks it; restore: puts it back, config',
+  '  as a snapshot, data never deleted; without --yes (or a y in a terminal) it prints the plan and writes nothing.',
+  `  --only: permissions, mcp:<name>, ${ROOT_IDS.join(', ')}`,
 ].join('\n');
 const PREREQUISITES = ['git', 'gh'];
 
@@ -102,13 +121,16 @@ function render(plan, platform) {
  * is, 2 on a usage error. `deps.read` (default `readStack`) is the seam that probes the machine. */
 export async function stackMain(argv, env = process.env, deps = {}) {
   const log = deps.log ?? ((line) => console.log(line));
-  // `stack --help` and `stack install --help` print both forms and read nothing (user-guide S4).
-  const asked = argv[0] === 'install' ? argv.slice(1) : argv;
+  // `stack --help`, `stack install --help` and `stack backup [<form>] --help` print every form and read nothing
+  // (user-guide S4).
+  const backupForm = argv[0] === 'backup' && Object.hasOwn(BACKUP_KNOWN, argv[1] ?? '') ? 2 : 1;
+  const asked = argv[0] === 'install' ? argv.slice(1) : argv[0] === 'backup' ? argv.slice(backupForm) : argv;
   if (asked.length === 1 && (asked[0] === '--help' || asked[0] === '-h')) {
     log(HELP);
     return 0;
   }
   if (argv[0] === 'install') return stackInstallMain(argv.slice(1), env, deps);
+  if (argv[0] === 'backup') return stackBackupMain(argv.slice(1), env, deps);
   const error = deps.error ?? ((line) => console.error(line));
   let args;
   try {
@@ -289,4 +311,70 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
   }
   const left = chosen(planNow()).filter((row) => first.some((was) => keyOf(was) === keyOf(row)));
   return left.length === 0 && unverified.length === 0 ? 0 : 1;
+}
+
+/** `argv` of one `stack backup` form read as `{ form, values(flag), has(flag) }`; a usage error throws. */
+function parseBackupArgs(argv) {
+  const [form, ...rest] = argv;
+  if (!Object.hasOwn(BACKUP_KNOWN, form ?? '')) throw new StackArgError(form === undefined ? 'stack backup needs run, verify or restore' : `unknown argument: ${form}`);
+  const unknown = unknownArgument(rest, BACKUP_KNOWN[form]);
+  if (unknown !== null) throw new StackArgError(`unknown argument: ${unknown}`);
+  const values = (flag) => rest.flatMap((token, i) => {
+    if (token !== flag) return [];
+    const value = rest[i + 1];
+    if (value === undefined || value.startsWith('--')) throw new StackArgError(`${flag} requires a value`);
+    return [value];
+  });
+  for (const flag of BACKUP_KNOWN[form].valued) values(flag);
+  if (form !== 'run' && values('--from').length === 0) throw new StackArgError(`stack backup ${form} needs --from <dir>`);
+  // The drill always searches the restored engram, so a verify names what it must find (Codex P2 on 84997f7..0b9f98a).
+  if (form === 'verify' && (values('--marker').length === 0 || values('--expect').length === 0)) {
+    throw new StackArgError('stack backup verify needs --marker <token> and --expect <id>: the token to search and the observation id it must find');
+  }
+  if (form === 'verify' && !/^\d+$/.test(values('--expect')[0])) throw new StackArgError('--expect takes an observation id, a number');
+  const wrong = values('--only').find((only) => only !== 'permissions' && !/^mcp:.+/.test(only) && !ROOT_IDS.includes(only));
+  if (wrong !== undefined) throw new StackArgError(`--only ${wrong}: permissions, mcp:<name> or one of ${ROOT_IDS.join(', ')}`);
+  return { form, values, has: (flag) => rest.includes(flag) };
+}
+
+/** `js-harness stack backup run|verify|restore` (odd/tasks/f8-s2-removal.md, T3): exit 0 on success, 1 on a failed
+ * check or a refusal, 2 on a usage error. A restore without `--yes` prints its plan, then asks y/N in a terminal and
+ * writes nothing without one. `deps` reaches bin/lib/stack-backup.mjs whole (`processes`, `reg`, `run`,
+ * `independentCount`, `realHome`, `platform`, `log`), with `ask`, `interactive`, `error` and `tmp` read here. */
+export async function stackBackupMain(argv, env = process.env, deps = {}) {
+  const log = deps.log ?? ((line) => console.log(line));
+  const error = deps.error ?? ((line) => console.error(line));
+  let args;
+  try {
+    args = parseBackupArgs(argv);
+  } catch (err) {
+    if (!(err instanceof StackArgError)) throw err;
+    error(`${err.message}\n\n${BACKUP_USAGE}`);
+    return 2;
+  }
+  const platform = deps.platform ?? process.platform;
+  const lib = { ...deps, platform, env, log };
+  const home = () => harnessHome({ given: args.values('--home')[0], env, homedir: os.homedir });
+  const from = args.values('--from')[0];
+  try {
+    if (args.form === 'run') return runBackup({ home: home(), env, platform, dest: args.values('--to')[0], deps: lib }).ok ? 0 : 1;
+    if (args.form === 'verify') {
+      const [marker] = args.values('--marker');
+      return verifyBackup({ from, deps: lib, marker, expectId: args.values('--expect')[0], tmp: deps.tmp }).ok ? 0 : 1;
+    }
+    const restore = (yes) => restoreBackup({ from, home: home(), only: args.values('--only'), deps: lib, yes });
+    if (args.has('--yes')) return restore(true).ok ? 0 : 1;
+    const plan = restore(false);
+    if (!plan.ok) return 1;
+    const interactive = deps.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    if (!interactive) return 1;
+    if (!(await (deps.ask ?? askOnTerminal)('Restore it? [y/N] '))) {
+      log('restore: declined, nothing written');
+      return 1;
+    }
+    return restore(true).ok ? 0 : 1;
+  } catch (err) {
+    error(`js-harness stack backup ${args.form}: ${err.message}`);
+    return 1;
+  }
 }

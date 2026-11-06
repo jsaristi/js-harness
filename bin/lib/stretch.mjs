@@ -2,14 +2,40 @@
 // stretch's hours, each estimate corrected by what the last stretches of its kind took, and each item measured from
 // the records: when its session ran, and what of that time failed. Pure: it reads no file and spawns nothing, so a
 // test hands it records and the command (bin/stretch.mjs) hands it what it read. What no record holds is not
-// measured here, and the command says so.
+// measured here, and the command says so. The record's own reading (its file, its events and the open stretch) lives
+// here too, so the reply hook tells an open stretch as `stretch status` does without loading the command
+// (odd/tasks/departure-stretch.md).
 
+import path from 'node:path';
 import { TASK_KINDS } from './contract.mjs';
 import { ruleValue } from './rules.mjs';
 import { closesProblem } from './stretch-forecast.mjs';
 import { busySeconds, median } from './throughput.mjs';
 
 const HOUR_MS = 3_600_000;
+
+export const RECORD_SCHEMA = 'js-harness.stretch/v1';
+
+/** The stretch record's file for the project `slug` under `home`: beside the throughput days. */
+export const stretchFile = (home, slug) => path.join(home, '.js-harness', 'throughput', slug, 'stretches.jsonl');
+
+/** The events of the record's `text`, oldest first. A line that is no event is left out. */
+export function eventsOf(text) {
+  return text.split(/\r?\n/).flatMap((line) => {
+    try {
+      const event = JSON.parse(line);
+      return event?.schema === RECORD_SCHEMA && typeof event.id === 'string' ? [event] : [];
+    } catch {
+      return [];
+    }
+  });
+}
+
+/** The `open` event of the open stretch of `events`: the last `open` with no `close` of its id after it; `null`. */
+export function openEvent(events) {
+  const open = events.findLast((event) => event.event === 'open');
+  return !open || events.some((event) => event.event === 'close' && event.id === open.id) ? null : open;
+}
 
 /** How many finished items of a kind correct its next estimate, the newest first, and how many it takes before any
  * correction is used: one item says more about that item than about the kind. */

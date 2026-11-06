@@ -8,6 +8,9 @@ import { RECORD_SCHEMA, reportStretch, stretchFile, stretchMain } from './stretc
 import { newNotice } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 
+// Its times are shown in local time (rule:local-time): the zone is pinned so no machine's own decides a result.
+process.env.TZ = 'America/Bogota';
+
 const H = 3_600_000;
 const T0 = Date.parse('2026-10-28T12:00:00Z');
 const at = (hours) => new Date(T0 + hours * H).toISOString();
@@ -109,6 +112,19 @@ test('open refuses while a stretch is open (exit 1), a plan it does not accept (
   const unknown = await stretch(other, ['status', '--fast']);
   assert.equal(unknown.code, 2);
   assert.match(unknown.err, /unknown argument: --fast/);
+});
+
+// JH 136: a goal with `$( )` ran in cmd.exe, which passed it to `test` as written, and a met goal read "not met".
+test('open on Windows refuses a goal whose $( ) cmd.exe cannot run, and says how to write it (exit 2)', async () => {
+  const shellGoal = { id: 'prs', text: 'tres PR', command: 'git fetch -q origin && test $(git rev-list --count --merges HEAD) -ge 3' };
+  const plan = { ...PLAN, goals: [shellGoal] };
+  const windows = scratch();
+  const refused = await stretch(windows, ['open', '--plan', planFile(windows, plan)], { deps: { platform: 'win32' } });
+  assert.equal(refused.code, 2);
+  assert.match(refused.err, /goal prs: .*\$\( \).*cmd\.exe.*node -e/);
+  assert.equal(fs.existsSync(stretchFile(windows.home, projectSlug(windows.project))) && events(windows).some((event) => event.event === 'open'), false);
+  const linux = scratch();
+  assert.equal((await stretch(linux, ['open', '--plan', planFile(linux, plan)], { deps: { platform: 'linux' } })).code, 0);
 });
 
 test('status measures each item from its session\'s records, runs no goal, and --goals runs and records them', async () => {
@@ -346,8 +362,8 @@ test('the return says when its page was made: show, a day later, writes that hou
   const back = path.join(place.home, 'out', 'vuelta.html');
   assert.equal((await stretch(place, ['show', '--html', back], { hours: 33, deps })).code, 0);
   const html = fs.readFileSync(back, 'utf8');
-  assert.match(html, /al 2026-10-28 21:00Z/, 'the stretch is measured to its close');
-  assert.match(html, /Generada el <time datetime="2026-10-29T21:00:00.000Z">2026-10-29 21:00Z<\/time><span data-ago="2026-10-29T21:00:00.000Z">/);
+  assert.match(html, /al 2026-10-28 16:00/, 'the stretch is measured to its close');
+  assert.match(html, /Generada el <time datetime="2026-10-29T21:00:00.000Z">2026-10-29 16:00<\/time> \(hora local, UTC-05:00\)<span data-ago="2026-10-29T21:00:00.000Z">/);
 });
 
 test('the departure shows what exists now: the map at the opening commit', async () => {

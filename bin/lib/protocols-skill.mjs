@@ -1,10 +1,10 @@
-// The third skill, `js-harness-protocols`: what to do in eight situations, loaded only when a session is in one of
-// them. One skill and not eight, because the description of every installed skill is read on every turn. The design
+// The third skill, `js-harness-protocols`: what to do in nine situations, loaded only when a session is in one of
+// them. One skill and not nine, because the description of every installed skill is read on every turn. The design
 // is in odd/tasks/rule-hierarchy.md ("Protocols", T7). Each section opens with the incident it came for and its
 // date, so that it can be withdrawn when the incident has not come back; a rule it relies on is named by its id
 // (`rule:<id>`), never restated, so `js-harness rules change` reaches it with nothing to carry by hand.
 
-/** The eight situations, in the order of the index and of the sections. */
+/** The nine situations, in the order of the index and of the sections. */
 export const PROTOCOLS = [
   'Asking the user for a decision',
   'Closing a reply',
@@ -14,12 +14,13 @@ export const PROTOCOLS = [
   'Handing off, to the user, to a session or to a sub-agent',
   'Reviewing throughput',
   'Writing a new command, module or document',
+  'Before building large work: the depth pass',
 ];
 
 export function protocolsSkillContent(version) {
   return `---
 name: js-harness-protocols
-description: Use before asking the user for a decision, closing a reply, running something that costs (a gate, a review, a push), changing a rule, reporting a mistake, handing work off, reviewing throughput or writing a new command, module or document (js-harness v${version}).
+description: Use before asking the user for a decision, closing a reply, running something that costs (a gate, a review, a push), changing a rule, reporting a mistake, handing work off, reviewing throughput, writing a new command, module or document or starting large work (js-harness v${version}).
 ---
 
 # Protocols
@@ -39,7 +40,7 @@ Incident (2026-10-09): a session stopped and waited 17 hours for the user's yes 
 - One decision a question, one question at a time, never while work runs. Where an orchestrator holds its role, the question goes through it (\`js-harness-orchestrator\`, "Questions to the user").
 - A question asked again says first that the earlier answer still holds, and what changed since.
 - A short answer that fits two readings is asked about, not guessed.
-- A proposal that changes one of the user's decisions, whether a design before it is built, a plan, an analysis with figures, a protocol or a change of the charter, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing. The writer searches the user's earlier words on the subject and names the search. Each reader gets the whole text, the user's words and the paths it cites; the findings go in the feature document, or the orchestrator's notes when there is none. The version the user gets says what each reader changed and what stays unguaranteed; where readers disagree the writer decides on evidence, and what is not settled is unguaranteed. A second round reads only the first round's blockers; what is still open after it goes to the user as unguaranteed, never a third round. Readers run on the reader model the rules give, or where none is declared on the session's own model; a host with no sub-agents asks another session. Code is not this: it has its reviews (section 3). Not for a question of fact (a figure or an outcome looked up, nothing proposed), nor for a step or a choice whose reviewed text the question names by path.
+- Everything that proposes something, whether a plan, a design before it is built, an analysis with figures, a protocol or a document put to the user, asked or reported, first passes a Claude reader and a Codex reader, blind, on one frozen copy (\`js-harness double-review read\`), each bringing the failures and improvements it finds against what was asked. Each read is announced with its cost and the phrase that skips it; only the user's typed "no quiero la revisión" skips it. The writer searches the user's earlier words on the subject and names the search, answers every finding, taken or rebutted on evidence (\`double-review take\`), and the version the user gets says what each reader changed and what stays unguaranteed. Code passes its own pair, Codex and the Claude lenses (section 3), judged against what was asked. In both, a review that finds nothing approves at once; a correction gets a confirming review; at most three reviews, and where the third still finds a real failure the user gets it as a problem and the work passes to the strongest model the rules name, \`rule:escalation-model\`. Not for a question of fact (a figure or an outcome looked up, nothing proposed), nor for a step or a choice whose reviewed text the question names by path.
 
 ## 2. ${PROTOCOLS[1]}
 
@@ -61,7 +62,7 @@ Incident (2026-10-10): a check and the step it should allow were joined by a sem
 - A review's verdict is read before the next command. Give a review, by its hash, a base on the head's first-parent line: the last reviewed boundary, the commit that merged the default branch in, or \`git merge-base <default branch> HEAD\` when it never was; never the name of a branch that moves, since a base the head is behind puts the newer work of that branch in the range, reversed. After the default branch is merged into a branch, the base of the range to review is that merge commit, even where an older boundary was reviewed.
 - A stacked pull request is merged after its base, or its base is changed before the one under it is merged.
 - Run the installed \`js-harness\`, not your branch's \`node bin/js-harness.mjs\`, except to test your own change: a branch's copy lacks what main gained since it was cut, and five ready notices were never sent because their branch's notify had no \`--pr\` (2026-10-17).
-- A review candidate is a work-unit commit or a slice, never the whole branch. Before the push, every slice of code goes through Codex where the project's \`codexReview\` switch is on (\`js-harness codex-review --base <boundary>\`) and through the Claude lenses where its \`lensReview\` switch is on (\`js-harness lens-review --base <boundary> --lenses <pertinent> --reason <why>\`): the push and the merge queue refuse a code commit the record of a review that is on does not cover. A review that cannot run is recorded with its \`--unavailable <reason>\`, a debt that \`check\` lists until a review pays it.
+- A review candidate is a work-unit commit or a slice, never the whole branch. Before the push, every slice of code goes through Codex where the project's \`codexReview\` switch is on (\`js-harness codex-review --base <boundary>\`) and through the Claude lenses where its \`lensReview\` switch is on (\`js-harness lens-review --base <boundary> --lenses <pertinent> --reason <why>\`), each given what was asked, \`--doc <feature document>\` for large work or \`--request "<the request as written>"\` for small work, since a review with neither judges the code alone: the push and the merge queue refuse a code commit the record of a review that is on does not cover. A review that cannot run is recorded with its \`--unavailable <reason>\`, a debt that \`check\` lists until a review pays it. At or under the floor of Codex's weekly limit, \`rule:codex-weekly-floor\`, \`codex-review\` starts nothing and the user decides on the reset, a reset credit spent only on the user's word; on the user's typed no the Codex skip is recorded, a second Claude review runs in Codex's place, and \`codex-meter\` and the merge door list the debt until a Codex review pays it.
 
 ## 4. ${PROTOCOLS[3]}
 
@@ -101,6 +102,7 @@ Incident (2026-10-10): a figure that was arithmetic and never measured, that thr
 - A sub-agent runs on the model and effort that the rules in force give its kind of work (\`rule:subagent-reader-model\`, \`rule:subagent-writer-model\`, \`rule:subagent-effort\`; \`js-harness rules <id>\` prints one); the guard refuses another model where those rules are in force.
 - A plan or a design handed on has passed its double review first (\`rule:double-review\`, section 1).
 - What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in their language as a visual, didactic page (\`rule:reports-spanish-visual\`): an Artifact with diagrams, bars and cards, never a raw markdown file; the repository's English document stays the source. At a stretch's departure and return, a feature's close, a phase's change and a status report, the page is the one a command makes from the records (\`js-harness stretch\`, \`js-harness report feature\`, \`js-harness report phase\`, \`js-harness report --html\`), never drawn by hand, shown or published as the command wrote it; the live board stays the continuous view, and a pull request appears inside its feature's page.
+- A clock time the user reads, in a reply, a page or a message, is given in their local time (\`rule:local-time\`): the offset read from the machine's clock at that instant, never a constant, and the zone said once. The records (git, the channel, the transcripts, the logs) keep UTC, since they are compared with each other; a UTC time reaches the user only inside a code block, a quoted output or a path, and a reply that gives one elsewhere is turned back.
 
 ## 7. ${PROTOCOLS[6]}
 
@@ -108,7 +110,7 @@ Incident (2026-10-16): JH 28 sat 239 minutes idle, 194 of them after its pull re
 
 The measure, the trigger and the re-measure are commands: the heartbeat's \`DUE:\` line names the review and what to run, and \`js-harness throughput\` prints the table. This section is the judgment no command makes.
 - Candidates: each with its baseline, target, cost, owner, risk item, and why quality is unchanged: no check, review or test is removed or weakened, and the land's proof never shrinks. Each figure is marked measured (with the row of the table it comes from), derived, or estimate.
-- Readers: only when a candidate list goes to the user, never on the daily review: it first passes the two readers of section 1 (\`rule:double-review\`), one rerunning the figures and attacking the reasoning, one looking for what is missing; the version the user gets lists what they changed.
+- Readers: only when a candidate list goes to the user, never on the daily review: it first passes the double review of section 1 (\`rule:double-review\`), the readers rerunning its figures; the version the user gets lists what they changed.
 - Stop rule: a candidate whose gain is less than its cost is dropped, and why is written down. Record each review with \`js-harness throughput reviewed --day <day> --found nothing|candidates\`, and what ships with \`js-harness throughput shipped <item>\`. After \`rule:throughput-quiet-runs\` reviews in a row that found nothing, the review comes every \`rule:throughput-quiet-days\` instead of daily; one that finds candidates makes it daily again.
 - The user's decisions: \`rule:owner-decisions\`, asked one at a time (section 1). The lead assigns everything else.
 - Five questions: it happened (the incident); twice in a day, at a cost of up to 64.4 session-hours of turns that ended in silence over two days; a check does the measuring, the trigger, the snapshots and the re-measure, so only this judgment is prose; no section held a recurring review, and sections 1 and 4 are named, not copied; its cost and what leaves follow.
@@ -126,5 +128,21 @@ Incident (2026-10-21): the user found the harness written one way in one part an
 - A new convention is a test with its legacy list, written once where it is enforced; never a conventions document, which restates the rules and is not read while code is written. What no test can judge (a pure core with the I/O at the command's edge, the voice of the text, how precise a name is) is the reviewer's, on each diff.
 - Five questions: it happened (the incident); the drift was found in three places at once; the checks do the holding, and this section only points at them before the first line is written; no section covered writing; it costs one section read when a new file is written, and no conventions document leaves because none was written.
 - Cost: this section, read only when a new command, module or document is written. Reviewed by 2026-11-21.
+
+## 9. ${PROTOCOLS[8]}
+
+Incident (2026-10-31): a pull request was built, reviewed twice and verified, then closed by the user's answer: its own feature document had read the six real cases that motivated it and found it caught none, in the same commit as its first code, and that answer reached neither the plan nor the user before the code.
+
+- Large work is work a fresh session could not finish from the request and \`git diff\` alone; it has a feature document under \`odd/tasks/\`. Before that document's first code commit, and whenever the user asks, it holds a \`## Depth pass\` after its contract, committed with documents alone. Asked for with no document, the pass is the reply itself. A small task and a short reply get none.
+- Deeper, not bigger: the pass grounds the work asked for and adds none. Its items come in this order, the analysis first and the rewrite last, and nothing is rewritten or built before they are written:
+- 1. Method: the discipline that masters the task, what its best practitioner would do, their standard, methods and tools, and the smallest change that meets it; the search of \`rule:reuse-first\` covers the design too.
+- 2. Raw material: the rawest they would start from (real data, the records, the code, primary sources), never the user's summary nor this document, each cited by \`path:line\`, a commit, a URL or a transcript line.
+- 3. The bar: what excellent and complete mean here, as each numbered spec with its proof and today's result measured where there is one (\`none, new behaviour\` where there is not), a line \`spec <n>:\` with its command in a code span, \`:\` and its result, or \`spec <n>: left out because <reason>\`.
+- 4. Refutation: the cheapest test that could show the request does not hold, run now, its command and its result as a count or a measure; then \`Verdict: supports\` or \`Verdict: refutes\`. A refuting verdict reaches the user as a question before any code, its first option being to change or drop the plan, and the pass records \`answered: question <n>\`.
+- 5. Request: the user's request rewritten whole, to ask for exactly what items 1 to 4 found, beside their words in the Log, never in place of them; it ends \`Adds: none\` or \`Adds: <what> (question <n>)\`.
+- At the close, the Log records the result against item 3 and item 4 ("predicted k of n, measured m of n"); the time against its estimate stays with \`js-harness stretch\`.
+- The pass reaches the user in the feature's report (\`rule:reports-spanish-visual\`); it is asked only when it refutes or adds. Its plan is reviewed as \`rule:double-review\` says.
+- Five questions: it happened once at the cost of a pull request with two reviews and a verifier; a test run before code alone would not have stopped it, since that test was run, the commit order does; the \`contracts\` row of \`check\` holds its form and its order, not its depth; no rule asked for cited material, a bar per spec or a verdict; what leaves: nothing.
+- Cost: one section per large feature, with a test run before code; read only when large work starts. Reviewed by 2026-11-30.
 `;
 }

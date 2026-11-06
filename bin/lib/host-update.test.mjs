@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { hostUpdateRow, readHostVersions } from './host-update.mjs';
+import { hostUpdateRow, readHostVersions, reviewFileGaps, reviewFileOf } from './host-update.mjs';
 import { RULES } from './rules-data.mjs';
 import { ruleHere, writeRules } from './rules.mjs';
 
@@ -122,13 +122,14 @@ test('an update since the reviewed versions is stale until reviewed: its fix nam
   assert.equal(row.upToDate, 'ok');
   assert.equal(row.change, 'Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299');
   assert.deepEqual(row.fix.claude, [
-    'Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299 since the last review; review the update:',
+    "Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299 since the last review; a host watch session reviews it and the steps below are that session's (js-harness host-watch brief prints its brief, and js-harness loop heartbeat names it to the lead): any other session tells the lead and records no review:",
     'read https://claude.com/docs/cowork/claude-desktop-changelog from 2.37337.1 to 2.42304.0',
     'read the Claude Code CHANGELOG (https://code.claude.com/docs/en/changelog) from 2.1.295 to 2.1.299',
     'check that the harness hooks in ~/.claude/settings.json still run',
     YES_STEP,
     'report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
-    'then record the review: js-harness doctor --host-reviewed',
+    'write that account to docs/host-updates/claude-desktop-2.42304.0.md in the project that keeps the host reviews: the line "Code tab CLI: 2.1.299", a table of Change, Decision (adopt, adapt or ignore) and Reason, one row a change the update brings, and a "## Sources" list of what was read, the changelogs above among it, each with its span "(<from> to <to>)"',
+    'then record the review: js-harness doctor --host-reviewed, which refuses while that file lacks any of it',
   ]);
 });
 
@@ -148,7 +149,7 @@ test('a Code tab CLI update alone names only the CLI and its changelog', () => {
   const { row } = hostUpdateRow({ ...current, desktop: '2.37337.1' }, reviewed, NOW);
   assert.equal(row.claude, 'stale');
   assert.equal(row.change, 'the Code tab CLI 2.1.295 → 2.1.299');
-  assert.equal(row.fix.claude[0], 'the Code tab CLI 2.1.295 → 2.1.299 since the last review; review the update:');
+  assert.equal(row.fix.claude[0], "the Code tab CLI 2.1.295 → 2.1.299 since the last review; a host watch session reviews it and the steps below are that session's (js-harness host-watch brief prints its brief, and js-harness loop heartbeat names it to the lead): any other session tells the lead and records no review:");
   assert.ok(!row.fix.claude.some((line) => line.includes('claude-desktop-changelog')));
   assert.ok(row.fix.claude.some((line) => line.startsWith('read the Claude Code CHANGELOG')));
 });
@@ -182,4 +183,78 @@ test('no app folder is n/a in every cell; an unreadable running version is unkno
     row: { id: 'host-update', version: null, installed: 'unknown', claude: 'unknown', codex: 'n/a', project: 'n/a', upToDate: 'unknown', fix: {} },
     record: null,
   });
+});
+
+// ── The review file (odd/tasks/f8-lead-rigor.md, S2) ───────────────────────────────────────────────
+
+const LAST_REVIEWED = { desktop: '2.37337.1', code: '2.1.295' };
+const READ_NOW = { found: true, desktop: '2.42304.0', staged: null, code: '2.1.299' };
+const REVIEW = [
+  '# Claude Desktop 2.42304.0',
+  '',
+  'Code tab CLI: 2.1.299',
+  '',
+  '| Change | Decision | Reason |',
+  '|---|---|---|',
+  '| Mods: panels beside the chat | adapt | the board could be a mod instead of an HTML page |',
+  '| Side sessions | `ignore` | the harness opens its sessions through `sessions start` |',
+  '',
+  '## Sources',
+  '- https://claude.com/docs/cowork/claude-desktop-changelog (2.37337.1 to 2.42304.0)',
+  '- https://code.claude.com/docs/en/changelog (2.1.295 to 2.1.299)',
+  '',
+].join('\n');
+
+test('the review file of a desktop version is docs/host-updates/claude-desktop-<version>.md', () => {
+  assert.equal(reviewFileOf('2.42304.0'), 'docs/host-updates/claude-desktop-2.42304.0.md');
+});
+
+test('a review file with the CLI read now, a decided table and the changelogs among its sources lacks nothing', () => {
+  assert.deepEqual(reviewFileGaps(REVIEW, READ_NOW, LAST_REVIEWED), []);
+});
+
+test('a review file lacks each part it does not hold, named one by one', () => {
+  assert.deepEqual(reviewFileGaps('# Claude Desktop 2.42304.0\n', READ_NOW, LAST_REVIEWED), [
+    'a line "Code tab CLI: 2.1.299"',
+    'a table with the columns Change, Decision and Reason',
+    'a "## Sources" section',
+  ]);
+});
+
+test('a row undecided or with no reason, a CLI of another version and a changelog not read are each refused', () => {
+  const text = REVIEW
+    .replace('Code tab CLI: 2.1.299', 'Code tab CLI: 2.1.298')
+    .replace('| adapt |', '| maybe |')
+    .replace('| `ignore` | the harness opens its sessions through `sessions start` |', '| ignore |  |')
+    .replace('- https://code.claude.com/docs/en/changelog (2.1.295 to 2.1.299)\n', '');
+  assert.deepEqual(reviewFileGaps(text, READ_NOW, LAST_REVIEWED), [
+    'the Code tab CLI read now, 2.1.299 (it names 2.1.298)',
+    'row 1: a Decision of adopt, adapt or ignore (it reads "maybe")',
+    'row 2: a Reason',
+    'https://code.claude.com/docs/en/changelog among the sources',
+  ]);
+});
+
+test('a table with a header and no row is refused, and only the changelog of what changed is asked for', () => {
+  const header = REVIEW.split('\n').filter((line) => !line.startsWith('| Mods') && !line.startsWith('| Side')).join('\n');
+  assert.deepEqual(reviewFileGaps(header, READ_NOW, LAST_REVIEWED), ['one row at least in the table']);
+  const desktopOnly = REVIEW.replace('- https://code.claude.com/docs/en/changelog (2.1.295 to 2.1.299)\n', '');
+  assert.deepEqual(reviewFileGaps(desktopOnly, READ_NOW, { desktop: '2.37337.1', code: '2.1.299' }), []);
+});
+
+// Codex's review of the gate (2026-10-30): a pipe the Change escapes is text, and a table needs its delimiter row.
+test('a pipe a cell escapes is part of its text, and a table with no delimiter row under its header is refused', () => {
+  const escaped = REVIEW.replace('| Mods: panels beside the chat |', '| Mods: a panel \\| a band beside the chat |');
+  assert.deepEqual(reviewFileGaps(escaped, READ_NOW, LAST_REVIEWED), []);
+  const noDelimiter = REVIEW.replace('|---|---|---|\n', '');
+  assert.deepEqual(reviewFileGaps(noDelimiter, READ_NOW, LAST_REVIEWED), ['a delimiter row (|---|---|---|) under the table\'s header']);
+});
+
+// The reliability lens on 98d4c7cb: `host-watch check` reads the spans the file writes, so a span that starts at the
+// version read ("X to X") skips every entry; only the gate knows the version last reviewed, and holds the span to it.
+test('a changelog named with a span other than the one from the version last reviewed to the one read now is refused', () => {
+  const late = REVIEW.replace('(2.1.295 to 2.1.299)', '(2.1.299 to 2.1.299)');
+  assert.deepEqual(reviewFileGaps(late, READ_NOW, LAST_REVIEWED), ['the span of https://code.claude.com/docs/en/changelog from the version last reviewed, "(2.1.295 to 2.1.299)"']);
+  const undated = REVIEW.replace('(2.37337.1 to 2.42304.0)', '(read 2026-10-30)');
+  assert.deepEqual(reviewFileGaps(undated, READ_NOW, LAST_REVIEWED), ['the span of https://claude.com/docs/cowork/claude-desktop-changelog from the version last reviewed, "(2.37337.1 to 2.42304.0)"']);
 });

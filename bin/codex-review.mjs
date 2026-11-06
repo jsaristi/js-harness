@@ -11,8 +11,8 @@
 // A correction is checked against its findings once (./lib/codex-review-recheck.mjs). A range that starts at
 // the head of a review that found something is a recheck: its prompt lists those findings and asks whether
 // each is fixed, anything new is a follow-up that does not block unless it could make a failing check pass
-// or exposes data, and its record names that head (`recheckOf`). A range that starts at the head of a
-// recheck that left a finding open is refused, with what to record instead. No flag skips it.
+// exposes data or is a regression the correction brought, and its record names that head (`recheckOf`). From the head of a recheck that
+// left findings open, a second recheck of them is the third and last review; past it the run is refused (rule:escalation-model). No flag skips it.
 //
 // A merge of the default branch at HEAD, after a branch whose other code commits all have a record, is
 // reviewed from its first parent by what was written in it (`mergeStart` in ./lib/codex-review-coverage.mjs):
@@ -171,20 +171,22 @@ import { allowanceLine, readProjectRules, reviewAllowance } from './lib/codex-re
 import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer } from './lib/codex-review-answer.mjs';
 import { baseLeftOut, MARKS_UNREAD, mergeStart, notReviews, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
-import { numstatFiles, PART_MAX_CHANGED_LINES, PART_MAX_FILES, reviewParts } from './lib/codex-review-parts.mjs';
-import { MAX_PARTS_WITHOUT_FLAG, methodRecord, methodRecordLine, needsFlagLine, partPlanned, partsBound, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
-import { IntentError, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt } from './lib/codex-review-prompt.mjs';
+import { PART_MAX_CHANGED_LINES, PART_MAX_FILES, RENAMES, reviewParts } from './lib/codex-review-parts.mjs';
+import { counted, MAX_PARTS_WITHOUT_FLAG, methodRecord, methodRecordLine, needsFlagLine, partPlanned, partsBound, planLines, reviewPlan, thousands } from './lib/codex-review-plan.mjs';
+import { NO_ASKED, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt } from './lib/codex-review-prompt.mjs';
+import { AskedError, askedIntent } from './lib/review-asked.mjs';
 import { EXCUSED_REFUSED_TESTS, excusedByRefusal, isRefusal, NO_TEST_EXIT, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, readCodexReviewRuns, runKept } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews, withSubjectHash } from './lib/codex-reviews.mjs';
 import { addTurnWorktree, mergeTurn, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, turnsCheaper } from './lib/codex-review-turns.mjs';
 import {
-  classifyRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, REVIEW_FROM_LOOK_BACK, runsLogged, secondRecheckRefused,
+  classifyRecheck, openAfterRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, REVIEW_FROM_LOOK_BACK, runsLogged, secondRecheckRefused,
 } from './lib/codex-review-recheck.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './lib/project-functions.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
-import { leftOutOf, leftOutSaid, patchOfRead, reviewScope } from './lib/codex-review-scope.mjs';
-import { launchCodex } from './lib/codex-launch.mjs';
+import { leftOutOf, leftOutSaid, patchOfRead, rangeFiles, reviewScope } from './lib/codex-review-scope.mjs';
+import { codexVersion, launchCodex } from './lib/codex-launch.mjs';
+import { launchWord, readRateLimits } from './lib/codex-meter.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { gitDirs, gitDirsAndCommits, isFullCommitId } from './lib/project.mjs';
 import { ruleValue } from './lib/rules.mjs';
@@ -200,6 +202,9 @@ import { harnessHome } from './lib/home.mjs';
 // change of the effort is written with its date; the figures above are of the day they were first set.
 export const REVIEW_MODEL = ruleValue('review-model');
 export const REVIEW_EFFORT = ruleValue('review-effort');
+// The percent of Codex's weekly limit that must be left for a review to start (`codex-weekly-floor`), read just before
+// the launch (odd/tasks/double-review-alignment.md, T2).
+export const CODEX_WEEKLY_FLOOR = ruleValue('codex-weekly-floor', 'percent of the weekly limit left');
 
 // `--home` is where the harness keeps its machine state (`<home>/.js-harness/`), as in the other
 // commands: `--home`, else `JS_HARNESS_HOME`, else the OS home. A review keeps one thing there, the Codex
@@ -217,7 +222,7 @@ export const REVIEW_EFFORT = ruleValue('review-effort');
 // reviews less than it was asked, or nothing, must not come as a surprise, and `--again` is the way round it.
 // `--session` is not in the usage: there is one session, so there is nothing to choose (see `SESSION`).
 export const USAGE =
-  'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
+  'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--request <text>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
   '[--unavailable <reason>] [--cwd <path>] [--home <path>]\n' +
   'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
   `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.\n` +
@@ -226,7 +231,7 @@ export const USAGE =
   '`--prompt codex` is the default in a turn of the gate lock; out of one, a run by hand, every review is asked with `own`, and the command says so when `codex` was given.\n' +
   'A run starts where the Codex review records end: commits a record covers are not reviewed again, and a range they cover whole starts nothing; --again takes the range as it was given. ' +
   'A merge of the default branch of origin at HEAD, after a branch whose other code commits all have a record, is reviewed from its first parent by what was written in it (its diff with the automatic merge of its two parents: the resolution of its conflicts and any edit made in it), not by what the merge brought in. So is a merge of a stacked base, a branch off that default branch each of whose own code commits has a record.\n' +
-  '`--doc <feature document>` judges the change against that document\'s Goal and Done when, and needs `--prompt own`.\n' +
+  '`--doc <feature document>` judges the change against that document\'s Goal, Done when and Specs, for large work; `--request <text>` against the request as written, for small work. Either asks the own prompt, in a turn too, and neither goes with `--prompt codex`; a review given neither says it judges the code alone.\n' +
   '`--part-lines <n>` is how many changed lines a part of a large range holds at most, in place of the default.\n' +
   '`--fresh` reviews every part of a range again, where a run otherwise keeps the parts that passed in an earlier run of it.\n' +
   '`--keep-home` leaves the Codex home of the run in place after it.\n' +
@@ -260,7 +265,7 @@ function requireValue(argv, i, flag) {
 }
 
 const KNOWN = {
-  valued: ['--base', '--unavailable', '--home', '--session', '--prompt', '--doc', '--part-lines', '--max-parts', '--cwd'],
+  valued: ['--base', '--unavailable', '--home', '--session', '--prompt', '--doc', '--request', '--part-lines', '--max-parts', '--cwd'],
   bare: ['--keep-home', '--plan', '--again', '--fresh'],
 };
 
@@ -297,6 +302,7 @@ function parseArgs(argv) {
   // A `--doc` beside another prompt is refused in `codexReviewMain`, once it is known whether out of a turn the
   // own prompt is forced (harness review b10).
   const doc = get('--doc');
+  const request = get('--request');
   /** The count `flag` was given, a positive integer, or `undefined` when the flag is not there; `what` says
    * what it counts, for the error of one that is anything else. */
   const count = (flag, what) => {
@@ -317,7 +323,7 @@ function parseArgs(argv) {
   const again = argv.includes('--again');
   // The parts that passed in earlier runs of the range are asked again, not taken from the run log.
   const fresh = argv.includes('--fresh');
-  return { base, unavailable, home, keepHome, prompt, doc, partLines, maxParts, plan, again, fresh, cwd: get('--cwd') ?? process.cwd() };
+  return { base, unavailable, home, keepHome, prompt, doc, request, partLines, maxParts, plan, again, fresh, cwd: get('--cwd') ?? process.cwd() };
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
@@ -362,7 +368,7 @@ const LEAN_WINDOWS_SANDBOX = 'unelevated';
 // after the run, and only a session that is not ephemeral writes there the rollout files the tokens are
 // read from. `effort` is `REVIEW_EFFORT` for everyone but the comparison of the configurations, whose cells
 // stay at the effort they were measured with.
-const leanFlags = (platform, effort) => [
+export const leanFlags = (platform, effort) => [
   // Leaves out every key of `$CODEX_HOME/config.toml`: the MCP servers, the plugins, the model
   // instructions file, and the user's model and effort. Auth still uses the home.
   '--ignore-user-config',
@@ -431,7 +437,7 @@ export function childEnv(env, platform) {
  * to the run's own `home`, and, for a review out of a turn of the gate lock (`outOfTurn`), `NODE_OPTIONS`
  * with the preload that refuses `node --test` after the ones `env` gave (`noTestNodeOptions`). On Windows
  * names are case-insensitive, so one spelled in another case is dropped instead of left beside it. */
-function leanEnv(env, home, platform, { outOfTurn = false } = {}) {
+export function leanEnv(env, home, platform, { outOfTurn = false } = {}) {
   const out = { ...env };
   let nodeOptions = out.NODE_OPTIONS;
   for (const key of Object.keys(out)) {
@@ -579,29 +585,6 @@ function commandLine(command, exitCode) {
   return `  exit ${exitCode ?? '?'}  ${truncate(command.replace(/\s+/g, ' ').trim(), 100)}`;
 }
 
-const PROBE_TIMEOUT_MS = 15000;
-
-// A version as `codex --version` prints it after the name: `0.160.0`, or `0.161.0-alpha.2`.
-const CLI_VERSION = /\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?/;
-
-/** The version `codex --version` answers with (`0.160.0`), through the launch path and environment
- * of the review, or `null` when it does not answer with one: a missing CLI is told apart here, so a
- * bad `-c`, a broken config or a failed login is never reported as one. */
-function codexVersion(spawn, platform, env) {
-  try {
-    const result = launchCodex(spawn, platform, ['--version'], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      encoding: 'utf8',
-      timeout: PROBE_TIMEOUT_MS,
-      env,
-    });
-    if (!result || result.error || result.status !== 0) return null;
-    return CLI_VERSION.exec(result.stdout ?? '')?.[0] ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /** Runs the review as an async child and resolves, like `spawnSync`, with `{ status, signal, stdout,
  * error }`. Unlike `spawnSync` it cannot be held by a grandchild that keeps the pipe open: on the
  * timer or an overflow past `maxBuffer` it kills the tree and resolves at once, without waiting for
@@ -731,8 +714,6 @@ function progressLine(line, log) {
   }
 }
 
-const thousands = (count) => String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-
 /** A count for a person: grouped by thousands, and `unknown` for one Codex did not report. */
 const spoken = (count) => (count === null ? 'unknown' : thousands(count));
 
@@ -837,9 +818,6 @@ function listed(names) {
   return `${names.slice(0, FILES_SHOWN).join(', ')}${more}`;
 }
 
-/** `count` things, with `noun` in the singular for one: `1 file`, `2 files`. */
-const counted = (count, noun) => `${thousands(count)} ${noun}${count === 1 ? '' : 's'}`;
-
 /** The sum of what `pick` gives for each of `attempts`, or `null` when one of them is `null`: a total with
  * a part that was not measured is not known, and is never the sum of the rest. */
 const totalOf = (attempts, pick) => attempts.reduce((total, attempt) => (total === null || pick(attempt) === null ? null : total + pick(attempt)), 0);
@@ -910,7 +888,7 @@ function totalsLine(attempts) {
  *
  * `{ error }`, a sentence, when git cannot say how large the range is or what the project marks: a file is
  * never left out, nor read, by guess. These are the two git commands a plan needs, so `--plan` runs this
- * and nothing else of a review. Renames are off, as in `planParts`.
+ * and nothing else of a review. Renames are asked for as `rangeFiles` says, `renames`, which `planParts` keeps.
  *
  * With `everyFile`, which only a caller of `codexReviewMain` can ask for, nothing is left out and git is
  * not asked what is marked: every file of the range is in a group, as it was before a review left any out.
@@ -918,17 +896,15 @@ function totalsLine(attempts) {
  * `where` is what the run knows of its repository (`codexReviewMain`), so that git is not asked once more
  * where the top is, nor about a file it has already answered for at `head`. */
 function rangeGroups(spawn, root, { from, head, maxChangedLines, everyFile, where, merge = null }) {
-  const numstat = gitOutput(spawn, root, rangeDiff({ from, head, merge }, ['--numstat', '-z']), { maxBuffer: REVIEW_MAX_BUFFER });
-  if (numstat === null) return { error: `Could not run \`git diff --numstat\` over ${from.slice(0, 7)}..${head.slice(0, 7)} to know how large the range is` };
+  const numstatOf = (renames) => gitOutput(spawn, root, rangeDiff({ from, head, merge, renames }, ['--numstat', '-z']), { maxBuffer: REVIEW_MAX_BUFFER });
   try {
-    const files = numstatFiles(numstat);
-    const paths = files.map((changed) => changed.path);
-    const why = everyFile ? new Map() : leftOutOf(paths, { cwd: root, source: head, spawn, where });
-    if (why === null) {
+    const { files, why, renames, failed } = rangeFiles(numstatOf, (names) => (everyFile ? new Map() : leftOutOf(names, { cwd: root, source: head, spawn, where })));
+    if (failed === 'numstat') return { error: `Could not run \`git diff --numstat\` over ${from.slice(0, 7)}..${head.slice(0, 7)} to know how large the range is` };
+    if (failed === 'marks') {
       return { error: `Could not ask git which files of the range the project leaves out of a review (\`git check-attr --source ${head.slice(0, 7)}\` failed; it needs git 2.40 or later)` };
     }
     const { read, leftOut } = reviewScope(files, why);
-    return { groups: reviewParts(read, maxChangedLines), leftOut, paths, why };
+    return { groups: reviewParts(read, maxChangedLines), leftOut, paths: files.map((changed) => changed.path), why, renames };
   } catch (err) {
     return { error: `Could not read which files the range changes (${err.message})` };
   }
@@ -995,10 +971,11 @@ function turnsLines(turns) {
  * one, and that one part, 1 of 1, is asked and held to its files as any other. The files left out are in no
  * part, so the proof below is made against the patch of the range without their sections.
  *
- * Everything here is with renames off (`--no-renames`), in the count, in the command of each prompt and in
- * what each part must have seen: only then is the diff of some files the diff of each of them, whatever
- * the other files are, so that the parts add up to the range. A renamed file is then two files, the old
- * name removed whole and the new one added whole, and every line of both is to be shown.
+ * Everything here reads renames as the range was read (`renames`, from `rangeFiles`), in the count, in the
+ * command of each prompt and in what each part must have seen, and a renamed file's two names are always in
+ * one part (`reviewParts`): the diff of the files of a part is then their share of the diff of the range, so
+ * that the parts add up to it. A renamed file is shown by the lines it changes, unless the range renames a
+ * file a review leaves out into one it reads, which is read renames off (odd/tasks/rename-counted-by-changes.md).
  *
  * And the files of a part are named to git literally (`--literal-pathspecs`), in the command of its prompt
  * and in what it must have seen: a file name is a pathspec, and one that holds `*`, `?` or `[…]`, or starts
@@ -1010,7 +987,7 @@ function turnsLines(turns) {
  * moved, and a session cannot be held to lines its git never prints. The check that the parts add up to the
  * range is made on patches with `SUBMODULE_AS_A_FILE`, where the patch of a range is one section a file
  * whatever is configured, which is what tells the sections of the files left out apart. */
-function planParts(spawn, root, { from, head, groups, intent, paths, why, merge = null, suiteRan = false }) {
+function planParts(spawn, root, { from, head, groups, intent, paths, why, merge = null, suiteRan = false, renames = RENAMES }) {
   const room = { maxBuffer: REVIEW_MAX_BUFFER };
   // A merge is asked by its files as well, also in one part: Codex's own review of a range reads a diff of two
   // commits, never a remerge-diff (`mergeStart`).
@@ -1022,7 +999,7 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why, merge 
     const which = `part ${part.index} of ${part.of}`;
     let prompt;
     try {
-      prompt = reviewPrompt({ from, head, intent, part, leftOut: why.size, merge: merge === null ? null : merge.auto, suiteRan });
+      prompt = reviewPrompt({ from, head, intent, part, leftOut: why.size, merge: merge === null ? null : merge.auto, suiteRan, renames });
     } catch (err) {
       const needs = part.of === 1 ? 'The range leaves files out of its review, so it is asked by the files it reads' : `The range needs ${part.of} parts`;
       return { error: `${needs}, and the prompt of ${which} cannot be written. ${err.message}` };
@@ -1031,7 +1008,7 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why, merge 
     // git, and one such as `app/[id]/page.tsx` or `*.md` is a pattern that takes in the files of other
     // parts. What a part must have seen is the diff of its own files and no more, or the part is held to
     // lines its prompt never asks for and its count of changed lines does not hold.
-    const ofPart = (shape) => git(spawn, root, ['--literal-pathspecs', ...rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff', ...shape], group.files)], room);
+    const ofPart = (shape) => git(spawn, root, ['--literal-pathspecs', ...rangeDiff({ from, head, merge, renames }, ['--no-color', '--no-ext-diff', ...shape], group.files)], room);
     const shown = ofPart([]);
     const proved = shown === null ? null : ofPart([SUBMODULE_AS_A_FILE]);
     if (proved === null) return { error: `Could not run \`git diff\` over the files of ${which} to know what its review must see` };
@@ -1042,8 +1019,8 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why, merge 
   // part show. A path a pathspec reads as something else, or one cut on its way here, would be a file in
   // no part. The files a review leaves out are in no part on purpose, so their sections are taken out of
   // the patch of the range first, by their place in it and never by a name (`patchOfRead`).
-  const whole = git(spawn, root, rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff', SUBMODULE_AS_A_FILE]), room);
-  if (whole === null) return { error: `Could not run \`git diff --no-renames ${from.slice(0, 7)} ${head.slice(0, 7)}\` to check the parts against the range` };
+  const whole = git(spawn, root, rangeDiff({ from, head, merge, renames }, ['--no-color', '--no-ext-diff', SUBMODULE_AS_A_FILE]), room);
+  if (whole === null) return { error: `Could not run \`git diff ${renames} ${from.slice(0, 7)} ${head.slice(0, 7)}\` to check the parts against the range` };
   let read;
   try {
     read = patchOfRead(whole, paths, why);
@@ -1096,7 +1073,7 @@ function leftByRecords(spawn, root, { from, head, given, where }) {
   let coverage;
   let start;
   try {
-    coverage = reviewCoverage(root, { from, tip: head, spawn, where });
+    coverage = reviewCoverage(root, { from, tip: head, spawn, where, beyondTip: false });
     if (coverage.unknown) return asGiven(coverage.unknown === MARKS_UNREAD ? 'git could not say which of their files a review leaves out' : 'git could not list them');
     ({ start } = reviewStart(coverage.uncovered, { cwd: root, from, tip: head, spawn }));
   } catch (err) {
@@ -1179,6 +1156,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   // A run of the turn at a merge below HEAD (`firstTurn`): the intent its parent already read, and that it must
   // be read as a merge at HEAD, or it would review what the merged branch brought in.
   const { turnIntent = null, mergeTurnOnly = false } = deps;
+  const readMeter = deps.readMeter ?? (() => readRateLimits({ platform }));
   const kill = deps.killTree ?? ((child, lifetime) => killTree(child, lifetime, { platform }));
   const write = deps.write ?? ((text) => process.stdout.write(text));
   let args;
@@ -1191,26 +1169,26 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   }
   // Out of a turn of the gate lock the review runs no test suite (odd/tasks/faster-check.md, part 2): Codex's
   // `node --test` is refused by a preload (`leanEnv`), and the review is asked with the own prompt, the one
-  // that says so (`SUITE_RAN`). A skip launches nothing, and is left as it was asked.
+  // that says so (`SUITE_RAN`). A skip launches nothing, and is left as it was asked. What was asked rides on the
+  // own prompt alone, so a --doc or a --request asks it in a turn too (spec 7: "the gate turn included").
   const outOfTurn = env.JS_HARNESS_GATE_HELD !== '1';
-  if (outOfTurn && args.unavailable === undefined && args.prompt !== 'own') {
-    if (argv.includes('--prompt')) log(OWN_OUT_OF_TURN);
+  const askedFlag = args.doc !== undefined ? '--doc' : args.request !== undefined ? '--request' : null;
+  if (args.prompt !== 'own' && ((outOfTurn && args.unavailable === undefined) || (askedFlag !== null && !argv.includes('--prompt')))) {
+    if (outOfTurn && argv.includes('--prompt')) log(OWN_OUT_OF_TURN);
     args = { ...args, prompt: 'own' };
   }
-  if (args.doc !== undefined && args.prompt !== 'own') {
-    error(`--doc needs --prompt own: only this command's own prompt carries the intent of a feature document\n\n${USAGE}`);
+  if (askedFlag !== null && args.prompt !== 'own') {
+    error(`${askedFlag} needs --prompt own: only this command's own prompt carries what was asked\n\n${USAGE}`);
     return 2;
   }
-  // The intent the own prompt carries, read before anything runs: a document that cannot be read, or that
-  // holds no Goal or no Done when, is a flag given wrong, and no review is started to find that out.
   let intent = turnIntent;
-  if (args.doc !== undefined) {
-    try {
-      intent = reviewIntent(fs.readFileSync(path.resolve(args.cwd, args.doc), 'utf8'));
-    } catch (err) {
-      error(`--doc ${args.doc}: ${err instanceof IntentError ? err.message : `cannot read it (${err.code ?? err.message})`}\n\n${USAGE}`);
-      return 2;
-    }
+  let saidNoAsked = false;
+  try {
+    intent = askedIntent(args) ?? intent;
+  } catch (err) {
+    if (!(err instanceof AskedError)) throw err;
+    error(`${err.message}\n\n${USAGE}`);
+    return 2;
   }
 
   const root = git(spawn, args.cwd, ['rev-parse', '--show-toplevel']);
@@ -1358,7 +1336,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       const behind = git(spawn, root, ['rev-list', '--first-parent', `--max-count=${REVIEW_FROM_LOOK_BACK + 1}`, from]);
       reviewFrom = (behind ?? '').split('\n').filter(Boolean).slice(1).find((commit) => recheckFor(commit).kind === 'review') ?? null;
     }
-    return secondRecheckRefused({ of: state.of, open: state.open, base: from, uncovered, reviewFrom });
+    return secondRecheckRefused({ ...state, base: from, uncovered, reviewFrom });
   };
 
   /** Where this run starts, once the Codex review records have been read against its range, `given..head`
@@ -1479,8 +1457,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       }
       log(methodRecordLine(methodRecord({ records, runs: readRunLog() })));
     }
-    if (state.kind === 'recheck') log(`A run of this range is a recheck of the ${counted(state.findings.length, 'finding')} of the review that ended at ${state.of.slice(0, 7)}.`);
-    if (state.kind === 'refused') log(`A run of this range is refused: ${secondRecheckRefused({ of: state.of, open: state.open, base: from }).split('\n')[0]}`);
+    if (state.kind === 'recheck') log(state.second ? `A run of this range is a second recheck, the last of three reviews, of the ${counted(state.findings.length, 'finding')} the recheck that ended at ${state.of.slice(0, 7)} left open.` : `A run of this range is a recheck of the ${counted(state.findings.length, 'finding')} of the review that ended at ${state.of.slice(0, 7)}.`);
+    if (state.kind === 'refused') log(`A run of this range is refused: ${secondRecheckRefused({ ...state, base: from }).split('\n')[0]}`);
     // After the plan's own lines, whose last is the estimate, and before the one that asks for a flag.
     const allowance = allowanceLine(reviewAllowance(plan, readProjectRules(root)));
     if (allowance !== null) log(allowance);
@@ -1653,14 +1631,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       error(secondRecheckSaid(from, state));
       return 1;
     }
-    if (state.kind === 'recheck') recheck = { of: state.of, findings: state.findings };
+    if (state.kind === 'recheck') recheck = { of: state.of, findings: state.findings, second: state.second === true };
     // The patch Codex has to have seen; the buffer holds a large diff, far above Node's 1 MiB default.
-    // With renames as git detects them, as Codex's own review diffs a range; a merge has no other diff than its own.
-    const patchArgs = merge === null ? ['diff', '--no-color', '--no-ext-diff', from, head] : rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff']);
+    // With renames asked for (`RENAMES`), as the range was counted and its prompt asks; a merge has its own diff.
+    const patchArgs = merge === null ? ['diff', '--no-color', '--no-ext-diff', RENAMES, from, head] : rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff']);
     const patch = git(spawn, root, patchArgs, { maxBuffer: REVIEW_MAX_BUFFER });
     if (patch === null) {
       // The command that ran: the remerge diff of a merge (`rangeDiff`), else the diff of the range.
-      const ran = merge === null ? `git diff ${from.slice(0, 7)} HEAD` : `git diff --no-renames ${merge.auto.slice(0, 7)} ${head.slice(0, 7)}`;
+      const ran = merge === null ? `git diff ${RENAMES} ${from.slice(0, 7)} HEAD` : `git diff ${RENAMES} ${merge.auto.slice(0, 7)} ${head.slice(0, 7)}`;
       error(`Could not run \`${ran}\` to know what the review must see, so it was not started and nothing was recorded.`);
       return 1;
     }
@@ -1718,7 +1696,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       return 1;
     }
     // `null` for a range that is one part and leaves no file out.
-    const made = planParts(spawn, root, { from, head, groups: split.groups, intent, paths: split.paths, why: split.why, merge, suiteRan: outOfTurn });
+    const made = planParts(spawn, root, { from, head, groups: split.groups, intent, paths: split.paths, why: split.why, merge, suiteRan: outOfTurn, renames: split.renames });
     if (made.error) return notSplit(made.error);
     ({ parts } = made);
     if (recheck !== null && parts !== null && parts.length > 1) {
@@ -1766,7 +1744,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         for (const finding of read.unmarked) log(findingLine(finding));
       }
       if (read.blocking.length > 0) {
-        log(`Blocking, a new finding that could make a failing check pass or exposes data: ${thousands(read.blocking.length)}.`);
+        log(`Blocking, a new finding that could make a failing check pass, exposes data or is a regression the correction brought: ${thousands(read.blocking.length)}.`);
         for (const finding of read.blocking) log(findingLine(finding));
       }
       if (read.followUps.length > 0) {
@@ -1774,9 +1752,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         for (const finding of read.followUps) log(findingLine(finding));
       }
       const open = notFixed + read.blocking.length + read.unmarked.length;
-      if (open > 0) {
-        log(`A range that starts at ${head.slice(0, 7)} is not rechecked again: fix what is open in this branch and record a follow-up task for it.`);
-      }
+      if (open > 0) log(openAfterRecheck({ head, second: recheck.second }));
     };
     /** One attempt: one Codex session, over the whole range or over one `part` of it (see `planParts`),
      * from the making of its lean home to its line in the run log. `expectedKeys` are the changed lines
@@ -1843,6 +1819,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         if (headNow !== head) return `HEAD moved from ${head.slice(0, 7)} to ${headNow.slice(0, 7)}`;
         return tree === '' ? null : 'tracked files differ from HEAD';
       };
+      // The weekly limit, read before each session: at or under its floor nothing more is started and the user decides
+      // on the reset, so a part that spent down to it stops the next; a reading that is not there says so and runs.
+      const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, base: args.base, part });
+      if (weekly.note !== null) log(weekly.note);
+      if (weekly.stop !== null) {
+        error(weekly.stop);
+        return { exit: 1 };
+      }
       // The session's own Codex home, named after the run: the id is made here, before the launch, and the
       // run line reuses it. Until the home exists nothing is launched, so a failure here writes no run line
       // and no record.
@@ -1891,6 +1875,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
           : part.of === 1 ? `${counted(part.files.length, 'file')} of ${range} (${counted(part.changedLines, 'changed line')})`
             : `part ${part.index} of ${part.of} of ${range} (${counted(part.files.length, 'file')}, ${counted(part.changedLines, 'changed line')})`;
         log(`Codex is reviewing ${what}${how}; this can take several minutes.`);
+        // Once, after the first launch's line (odd/tasks/double-review-alignment.md, spec 7: "a review with none says so").
+        if (intent === null && !saidNoAsked) log(NO_ASKED);
+        saidNoAsked = true;
         startedAt = now();
         launchedAt = readClock(monotonicNow);
         // stdin is ignored under the default prompt (Codex would wait to read it) and carries the prompt

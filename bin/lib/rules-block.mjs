@@ -24,8 +24,49 @@ export const RULES_LINES = [
   'Preserve human control: user decisions beat agent momentum.',
 ];
 
+/** The rest of the diet's Appendix A.1 (docs/proposals/harness-diet.md), word for word as the root `CLAUDE.md` keeps it
+ * under "Kept from the global file", so every project keeps these lines once the old stack's blocks leave his global file
+ * (F8 S2, T13: his answer to question 181). graphify's lines are left out, since graphify's own install writes them there, and so are the engram lines, since engram's protocol comes from engram alone (row 11, odd/tasks/f8-s11-complements.md). A
+ * test holds the groups equal to the root `CLAUDE.md`'s. */
+export const KEPT_GROUPS = [
+  {
+    title: "CodeGraph",
+    lines: [
+      "Create Git worktrees that may need CodeGraph under the user's home directory, preferably as a sibling such as `<repo-parent>/<repo-name>-worktrees/<worktree-name>`. Never place a CodeGraph-dependent worktree under `/tmp`, `/var/tmp`, or `/tmp/opencode`; generic temporary-work guidance does not override this rule.",
+      "Every worktree needs its own `.codegraph/` index. Never copy, symlink, or reuse another checkout's index because its root and checked-out bytes may differ.",
+      "Never run or recommend destructive or administrative lifecycle commands: `codegraph uninit`, `codegraph install`, `codegraph uninstall`, or `codegraph upgrade`. Reserve `codegraph index` for explicit index-corruption recovery, never routine use.",
+    ],
+  },
+  {
+    title: "Delegation",
+    lines: [
+      "Delegate through the runtime's subagent/delegation mechanism, when available, only when a Delegation Trigger's condition truly holds and names a reason: a map you need to decide or route, a writer reason (parallel units launched together, or the context backstop), or an independent verifier for a change that names a high-risk item.",
+      "understanding that needs more evidence or more than approximately 5 sequential lookups requires one read-only explorer",
+      "a small task's writes stay inline, even across files; delegate a writer only for a named reason: parallel units launched together (two or more independent units of behavior with disjoint edit surfaces, each needing several minutes of work: several files or roughly 100+ changed lines, because a subagent spends one to two minutes reading before it writes) or the context backstop.",
+      "only a change that names a Task Size high-risk item gets an independent verifier after the change's own checks, as rarely as possible",
+      "derive the allowed edit surface from the task being delegated — the files the planned change must touch, plus the directories where the task authorizes new files — and pass it in the delegated prompt under an `## Allowed edit surfaces` heading",
+      "When delegating to a generic exploration, writer, or verification worker, include the same `## Key Learnings` closing instruction in the delegated prompt: after the worker returns its normal result envelope or handoff, it closes its final response text with a `## Key Learnings` block of 1–5 numbered items, each a standalone factual sentence of at least 20 characters and at least 4 words, omitting the block when there is genuinely no reusable learning.",
+    ],
+  },
+  {
+    title: "Task Size and scratch",
+    lines: [
+      "**High risk**: a mistake would be hard to detect, hard to undo, or reaches beyond the change. It touches (1) data or irreversible effects: migrations, changing or deleting existing stored data, persisted format changes (not saving new records); (2) security: auth, permissions, credentials, secrets, guards, sandbox; (3) contracts others consume: changing or removing public API, CLI flags, config formats, published exports, or mirrored prompts or contracts others already consume (not adding a flag, command, or optional field; requested changes are not high risk by themselves; unrequested breaks in shared code are); (4) concurrency: locks, races, async ordering; (5) delivery or environment: installers, release, CI, deploy, dependencies; (6) no test would catch a regression in what changes.",
+      "Keep test scratch state (temporary directories, `HOME`, `TMPDIR`, tool caches) outside the worktree in a `mktemp -d` directory; when it must live inside the worktree, use a path git excludes and remove it before finishing, so no tool cache or scratch path remains in the change.",
+    ],
+  },
+  {
+    title: "Remote operation authorization",
+    lines: [
+      "Permission to develop locally does not authorize remote execution or file transfer. Before remote work, require explicit user authorization for the destination, operation, and credential/session to use. If any part is missing or ambiguous, ask and remain local; do not probe the destination to resolve the ambiguity.",
+      "Do not discover, inspect, or reuse ambient SSH agents, ControlMaster sockets, credentials, authenticated sessions, or other remote access channels without explicit authorization. Their availability is not permission to use them.",
+      "Explicitly authorized remote work is allowed within that scope. Preserve stricter user instructions and runtime restrictions; do not weaken them or change approval settings to proceed.",
+    ],
+  },
+];
+
 /** The block's lines: a heading and the nine lines as a list. */
-export const rulesBody = () => `## Rules\n${RULES_LINES.map((line) => `- ${line}`).join('\n')}\n`;
+export const rulesBody = () => `## Rules\n${RULES_LINES.map((line) => `- ${line}`).join('\n')}\n${KEPT_GROUPS.map(({ title, lines }) => `\n${title}:\n${lines.map((line) => `- ${line}`).join('\n')}\n`).join('')}`;
 
 const rulesFile = (home) => path.join(home, '.claude', 'CLAUDE.md');
 

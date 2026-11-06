@@ -3,6 +3,7 @@
 // roadmap's map, led by the migration's share and the last stretch (odd/tasks/report-stretch-share.md) — read from
 // what `bin/report.mjs` gives them and printed as plain lines. Nothing here runs git or reads a file.
 import { recordedQuestions } from './channel.mjs';
+import { localMinute, localZone } from './local-time.mjs';
 import { parseRoadmap } from './progress.mjs';
 import { planOf } from './report-pages.mjs';
 import { planShare } from './stretch-forecast.mjs';
@@ -37,11 +38,17 @@ export function parseMergeLog(stdout) {
 
 /** The cut a report starts from, `{ at, source, head }`: `since` (ISO) when given, else the latest of the recorded
  * `reports`, with the commit of the default branch it read as `head`, else `REPORT_WINDOW_HOURS` before `now`
- * (milliseconds). `head` is `null` but for a recorded report that names one. */
+ * (milliseconds). `head` is `null` but for a recorded report that names one. A recorded report's `proposals` come
+ * with it, each `{ step, estimate }` with a text step, `estimate` `null` when it gave none. */
 export function cutOf({ since, reports = [], now }) {
   if (since !== undefined) return { at: Date.parse(since), source: 'since', head: null };
   const latest = reports.filter((one) => Number.isFinite(Date.parse(one.at))).reduce((best, one) => (best === null || Date.parse(one.at) > Date.parse(best.at) ? one : best), null);
-  if (latest !== null) return { at: Date.parse(latest.at), source: 'last-report', head: typeof latest.head === 'string' && latest.head !== '' ? latest.head : null };
+  if (latest !== null) {
+    const text = (value) => (typeof value === 'string' && value !== '' ? value : null);
+    const cut = { at: Date.parse(latest.at), source: 'last-report', head: text(latest.head) };
+    if (Array.isArray(latest.proposals)) cut.proposals = latest.proposals.filter((one) => text(one?.step) !== null).map((one) => ({ step: one.step, estimate: text(one.estimate) }));
+    return cut;
+  }
   return { at: now - REPORT_WINDOW_HOURS * 3600_000, source: 'window', head: null };
 }
 
@@ -122,10 +129,8 @@ export function mapOf(markdown) {
   };
 }
 
-/** `ms` as `YYYY-MM-DD HH:MMZ`, in UTC. */
-export function stamp(ms) {
-  return `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')}Z`;
-}
+/** `ms` as `YYYY-MM-DD HH:MM`, in local time (rule:local-time); the page says its zone once. */
+export const stamp = localMinute;
 
 const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 /** A text that may hold line breaks (a question, his answer) as one line: its lines trimmed and joined by ` / `. */
@@ -191,7 +196,7 @@ function stretchLines(stretch) {
  * holds no roadmap. The migration is each plan's share of `map` now and in `before`, the map at the cut; `stretch`
  * left out prints no stretch line. */
 export function reportLines({ cut, branch, landed, sessions, questions, map, before = null, stretch }) {
-  const lines = [`Since ${stamp(cut.at)}, ${CUT_SAID[cut.source]}`, ''];
+  const lines = [`Since ${stamp(cut.at)}, local time ${localZone(cut.at)}, ${CUT_SAID[cut.source]}`, ''];
 
   if (landed.error) lines.push(`Landed on ${branch}: could not read: ${landed.error}`);
   else if (landed.length === 0) lines.push(`Landed on ${branch}: nothing since the cut`);

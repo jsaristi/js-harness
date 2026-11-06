@@ -16,11 +16,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { unknownArgument } from './lib/args.mjs';
 import { claudeRunner } from './lib/background.mjs';
+import { NO_ASKED } from './lib/codex-review-prompt.mjs';
+import { classifyRecheck } from './lib/codex-review-recheck.mjs';
+import { AskedError, askedIntent } from './lib/review-asked.mjs';
 import { NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
 import { LENS_NAMES, LENSES, lensPrompt } from './lib/lens-prompts.mjs';
 import { LENS_ANSWER_SCHEMA, lensResult } from './lib/lens-result.mjs';
-import { appendLensReview, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
+import { appendLensReview, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, readLensReviews, startLensRun } from './lib/lens-reviews.mjs';
 
 // The model the lens agents name (`model: sonnet`), as an alias, so the newest Sonnet answers.
 export const LENS_MODEL = 'sonnet';
@@ -40,13 +43,14 @@ const NOT_INHERITED = ['JS_HARNESS_EVAL_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN',
 const LENS_SETTINGS = { language: 'English' };
 
 export const USAGE =
-  'Usage: js-harness lens-review --base <rev> --lenses <lens,...> --reason "<what the range touched and how>" [--head <rev>] [--plan] [--cwd <path>]\n' +
+  'Usage: js-harness lens-review --base <rev> --lenses <lens,...> --reason "<what the range touched and how>" [--doc <feature document> | --request <text>] [--head <rev>] [--plan] [--cwd <path>]\n' +
   '       js-harness lens-review --base <rev> --unavailable <reason> [--head <rev>] [--cwd <path>]\n' +
   `Runs the Claude lenses picked over <base>..<head> (HEAD unless named), one fresh tool-less run on ${LENS_MODEL} each, and records the run beside Codex's reviews. ` +
   'Pick every lens pertinent to what the range touched and how, and only those; judge by consequence, not by file names or counts:\n' +
   LENS_NAMES.map((name) => `  ${name} when ${LENSES[name].when}\n`).join('') +
   'A result counts only when it echoes the range\'s subject hash and inspected every path; one incomplete lens makes the run incomplete (exit 1), recorded and covering nothing. ' +
   'Markdown files and the paths a .gitattributes marks `-codex-review` are left out, as Codex leaves them out. --plan prints the candidate and starts nothing. ' +
+  '--doc <feature document> (large work) or --request <text> (small work) gives every lens what was asked, as codex-review is given it; a run given neither says it judges the code alone. ' +
   '--unavailable <reason> records a skip: the push lets it through, and check, doctor and merge-queue list it until a review covers the range.';
 
 /** The environment a lens runs in: `env` without the eval token or any key, so the CLI's own login answers. */
@@ -144,9 +148,10 @@ function pickedLenses(value) {
   return names;
 }
 
-/** The command's options from `argv`: `{ base, head, cwd, skip, lenses, reason, plan }`; throws a usage error. */
+/** The command's options from `argv`: `{ base, head, cwd, skip, lenses, reason, plan, doc, request }`; throws a
+ * usage error. */
 function parseArgs(argv) {
-  const unknown = unknownArgument(argv, { valued: ['--base', '--head', '--lenses', '--reason', '--unavailable', '--cwd'], bare: ['--plan'] });
+  const unknown = unknownArgument(argv, { valued: ['--base', '--head', '--lenses', '--reason', '--unavailable', '--doc', '--request', '--cwd'], bare: ['--plan'] });
   if (unknown !== null) throw new LensReviewArgError(`unknown argument: ${unknown}`);
   const value = (flag) => {
     const at = argv.indexOf(flag);
@@ -164,7 +169,7 @@ function parseArgs(argv) {
   if (lenses === undefined) throw new LensReviewArgError('--lenses <lens,...> is required: pick the lenses pertinent to what the range touched');
   const reason = value('--reason');
   if (reason === undefined) throw new LensReviewArgError('--reason "<what the range touched and how>" is required');
-  return { ...options, lenses: pickedLenses(lenses), reason };
+  return { ...options, lenses: pickedLenses(lenses), reason, doc: value('--doc'), request: value('--request') };
 }
 
 export function lensReviewMain(argv = process.argv.slice(2), env = process.env, deps = {}) {
@@ -175,10 +180,13 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
     return 0;
   }
   let options;
+  let intent = null;
   try {
     options = parseArgs(argv);
+    // What was asked, read as codex-review reads it, before anything runs.
+    if (options.skip === undefined) intent = askedIntent(options);
   } catch (err) {
-    if (!(err instanceof LensReviewArgError)) throw err;
+    if (!(err instanceof LensReviewArgError) && !(err instanceof AskedError)) throw err;
     stderr(`${err.message}\n\n${USAGE}`);
     return 2;
   }
@@ -191,6 +199,10 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
     return 1;
   }
   const range = `${candidate.base.slice(0, 7)}..${candidate.head.slice(0, 7)}`;
+  // A range that starts where a reviewed lens record ended rechecks what each of its lenses found there (spec 7).
+  const earlier = readLensReviews(cwd).findLast((rec) => rec?.outcome === 'reviewed' && rec.head === candidate.base && Array.isArray(rec.results));
+  const priorOf = (lens) => earlier?.results.find((one) => one?.lens === lens)?.findings ?? [];
+  const rechecks = earlier !== undefined && (picked.names ?? []).some((lens) => priorOf(lens).length > 0);
   const record = {
     schema: LENS_REVIEW_SCHEMA,
     base: candidate.base,
@@ -218,7 +230,8 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
     stdout(`Nothing to review: ${reason}. Recorded in ${file}; no lens was started.`);
     return 0;
   }
-  const estimated = Math.ceil((candidate.block.length + lensPrompt(picked.names[0]).length) / 4);
+  if (intent === null) stdout(NO_ASKED);
+  const estimated = Math.ceil((candidate.block.length + lensPrompt(picked.names[0], intent).length) / 4);
   const said = `${range}: ${candidate.manifest.length} path${candidate.manifest.length === 1 ? '' : 's'} (${candidate.leftOut.length} left out), about ${estimated.toLocaleString('en-US')} estimated input tokens a lens, ${picked.names.length} lens${picked.names.length === 1 ? '' : 'es'} (${picked.names.join(', ')})`;
   if (estimated > LENS_INPUT_LIMIT) {
     stderr(`js-harness lens-review: ${said}, more than the ${LENS_INPUT_LIMIT.toLocaleString('en-US')} a lens is handed; review the range in smaller ranges, each with its own --base and --head.`);
@@ -235,10 +248,10 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
   for (const lens of picked.names) {
     stdout(`${lens}: running over ${range}...`);
     const keep = (text) => keepLensAnswer(cwd, { run: runId, lens, text });
-    results.push(lensOutcome(lens, run({ lens, prompt: lensPrompt(lens), block: candidate.block, env: lensEnv(env), cwd }), candidate, keep));
+    results.push(lensOutcome(lens, run({ lens, prompt: lensPrompt(lens, intent, priorOf(lens)), block: candidate.block, env: lensEnv(env), cwd }), candidate, keep));
   }
   const complete = results.every((result) => result.outcome === 'complete');
-  const file = write({ outcome: complete ? 'reviewed' : INCOMPLETE, lenses: picked.names, lensReason: reason, results });
+  const file = write({ outcome: complete ? 'reviewed' : INCOMPLETE, lenses: picked.names, lensReason: reason, results, ...(rechecks ? { recheckOf: earlier.run } : {}) });
   for (const result of results) {
     if (result.outcome !== 'complete') {
       stderr(`${result.lens}: incomplete, ${result.why}${result.answered === undefined ? '' : `; it answered: ${JSON.stringify(result.answered)}`}`);
@@ -248,6 +261,11 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
     }
     stdout(`${result.lens}: complete, ${result.findings.length} finding${result.findings.length === 1 ? '' : 's'}, ${result.inputTokens} input and ${result.outputTokens} output tokens`);
     for (const finding of result.findings) stdout(`  ${finding.severity} ${finding.location}: ${finding.claim}`);
+    const prior = priorOf(result.lens);
+    if (prior.length > 0) {
+      const { fixed, notFixed, blocking } = classifyRecheck({ findings: result.findings.map((one) => ({ title: one.claim })) }, prior.length).counts;
+      stdout(`${result.lens}: rechecked ${prior.length} earlier finding${prior.length === 1 ? '' : 's'} of ${earlier.run}: ${fixed} fixed, ${notFixed} not fixed, ${blocking} blocking`);
+    }
   }
   if (!complete) {
     stderr(`The lens run over ${range} is incomplete and covers nothing; recorded in ${file}. Read why above before running it again.`);

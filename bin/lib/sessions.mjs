@@ -1661,7 +1661,7 @@ const NO_CALLS = new Map();
 
 /** The calls of a question tool among `entries`, by the call's id: `{ tool, questions, sidechain, at }`, the
  * questions as the call's input has them, unread. */
-function questionCallsOf(entries) {
+export function questionCallsOf(entries) {
   const calls = new Map();
   for (const entry of entries) {
     if (entry.type !== 'assistant') continue;
@@ -2027,8 +2027,8 @@ function entryAt(text, line) {
 }
 
 /** What `quoteOf` gives for one parsed entry: the person's words, or `{ person: false, what }`. The stretch before
- * a compaction asks the same question of each entry (`compactionStretch`), so whose words an entry is has one rule. */
-function quoteEntry(entry, calls = NO_CALLS) {
+ * a compaction asks the same question of each entry (`compactionStretch`, bin/lib/person-times.mjs): one rule. */
+export function quoteEntry(entry, calls = NO_CALLS) {
   if (entry.type === 'user' && blocksOf(entry).some(isToolResult)) {
     const answer = answerOf(entry, calls);
     if (answer.what !== null) return { person: false, what: answer.what };

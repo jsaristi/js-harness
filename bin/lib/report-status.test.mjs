@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { notesOf, renderStatus } from './report-status.mjs';
 
+// Its times are shown in local time (rule:local-time): the zone is pinned so no machine's own decides a result.
+process.env.TZ = 'America/Bogota';
+
 const CUT = { at: Date.parse('2026-10-29T00:00:00Z'), source: 'last-report', head: 'c0' };
 const MAP = { done: 3, total: 5, phases: [{ title: 'F1 Skeleton', done: 2, total: 2, open: [] }, { title: 'F2 Board', done: 1, total: 3, open: ['y', 'z'] }] };
 const BEFORE = { done: 1, total: 5, phases: [{ title: 'F1 Skeleton', done: 1, total: 2, open: ['b'] }, { title: 'F2 Board', done: 0, total: 3, open: ['x', 'y', 'z'] }] };
@@ -19,6 +22,7 @@ test('the status report is the six sections as a page, the records\' facts and t
   const notes = notesOf(JSON.stringify({ badNews: ['#644 fue rechazado al empujar.'], decisions: [{ text: 'Aterrizar 644 dentro de 645', changed: 'una revisión menos' }], waits: [{ what: 'T5f', why: 'otra sesión' }], proposals: [{ step: 'Tramo C', why: 'faltan páginas' }] }));
   const html = renderStatus({ ...FACTS, notes });
   assert.match(html, /^<title>Cómo vamos<\/title>/);
+  assert.equal(html.match(/Las horas son hora local, UTC-05:00\./g)?.length, 1, 'its times are local and the zone is said once');
   assert.match(html, /Primero lo malo\.[\s\S]*#644 fue rechazado al empujar\./);
   const order = ['1. Lo que entró', '2. Las sesiones', '3. Tus decisiones y qué cambiaron', '4. El mapa', '5. Lo que espera', '6. Lo que propongo'].map((title) => html.indexOf(title));
   assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), `the six sections in order: ${order}`);
@@ -83,9 +87,44 @@ test('section 4 says when no stretch ran since the cut, when the stretch record 
   assert.match(partial, /real 7 h[\s\S]*No se pudo leer gate log \(EACCES\): las horas son parciales\./);
   const open = sectionFour(renderStatus({ ...FACTS, map: { ...MAP, plans: [] }, stretch: { ...STRETCH, state: 'open', goals: { checkedAt: null, met: 0, total: 1, list: [{ id: 'G1', text: 'PR 630 en main', met: null, said: null }] }, forecast: { unavailable: 'git show: bad' } }, notes: null }));
   assert.match(open, /La hoja de ruta no tiene una sección de plan/);
-  assert.match(open, /abierto[\s\S]*vuelve 2026-10-29 11:00Z/);
+  assert.match(open, /abierto[\s\S]*vuelve 2026-10-29 06:00/);
   assert.match(open, /PR 630 en main[\s\S]*sin revisar/);
   assert.match(open, /El pronóstico no se pudo leer: git show: bad/);
+});
+
+// odd/tasks/departure-stretch.md, spec 9: "el mapa de donde vamos", the plan's steps as a chain before and now.
+const STEPS = [{ name: 'F8 plan', steps: [
+  { id: 'S1', title: 'One', before: { reported: 'in progress', said: 'started' }, after: { reported: 'done', said: 'all of it' }, change: 'advanced', documents: [{ path: 'odd/tasks/one.md', before: { done: 1, total: 3 }, after: { done: 3, total: 3 } }] },
+  { id: 'S2', title: 'Two', before: { reported: 'to do', said: 'later' }, after: { reported: 'to do', said: 'later' }, change: 'same', documents: [] },
+] }];
+
+test('section 4 draws each plan step by step, before and now, after the migration\'s share and before the stretch', () => {
+  const html = renderStatus({ ...FACTS, map: { ...MAP, plans: [{ name: 'F8 plan', done: 1, total: 2 }] }, steps: STEPS, stretch: STRETCH, notes: null });
+  const four = sectionFour(html);
+  assert.match(four, /<h3>F8 plan, paso por paso<\/h3>[\s\S]*S1[\s\S]*all of it[\s\S]*odd\/tasks\/one\.md: 1\/3 → 3\/3[\s\S]*avanzó[\s\S]*S2[\s\S]*igual/);
+  assert.ok(four.indexOf('La migración') < four.indexOf('paso por paso') && four.indexOf('paso por paso') < four.indexOf('El último tramo'), 'the share, then the steps, then the stretch');
+  const unread = sectionFour(renderStatus({ ...FACTS, map: { ...MAP, plans: [] }, steps: { unavailable: 'git show: bad' }, notes: null }));
+  assert.match(unread, /Los pasos del plan no se pudieron leer: git show: bad/);
+  assert.doesNotMatch(sectionFour(renderStatus({ ...FACTS, notes: null })), /paso por paso|Los pasos del plan/);
+});
+
+// The same spec: "lo que estimabamos avanzar y lo que realmente avanzamos", each proposal's estimate, set beside what
+// landed by the next report.
+const sectionSix = (html) => html.slice(html.indexOf('6. Lo que propongo'));
+
+test('each proposal carries its estimate, and the next report sets the last one\'s beside what landed since', () => {
+  const notes = notesOf(JSON.stringify({ proposals: [{ step: 'Tramo D', why: 'falta el mapa', estimate: '2 h, PR 740 en main' }, { step: 'Tramo E', why: 'luego' }] }));
+  const cut = { ...CUT, proposals: [{ step: 'Tramo C', estimate: 'PR 645 en main en 3 h' }, { step: 'Tramo B', estimate: null }] };
+  const six = sectionSix(renderStatus({ ...FACTS, cut, notes }));
+  assert.match(six, /Tramo D[\s\S]*falta el mapa[\s\S]*2 h, PR 740 en main/);
+  assert.match(six, /Tramo E[\s\S]*sin estimación/);
+  assert.match(six, /Lo que propuse el 2026-10-28 19:00[\s\S]*Tramo C[\s\S]*PR 645 en main en 3 h[\s\S]*Tramo B[\s\S]*sin estimación/);
+  assert.match(six, /Desde entonces entró: PR 645\./);
+  assert.match(sectionSix(renderStatus({ ...FACTS, cut, landed: [], notes })), /Desde entonces no entró nada a la rama principal\./);
+  assert.match(sectionSix(renderStatus({ ...FACTS, cut, landed: { error: 'git log: fatal' }, notes })), /Lo que entró desde entonces no se pudo leer: git log: fatal/);
+  assert.match(sectionSix(renderStatus({ ...FACTS, cut, notes: null })), /Lo que propuse el[\s\S]*Tramo C[\s\S]*Ningún registro lo guarda/);
+  assert.doesNotMatch(sectionSix(renderStatus({ ...FACTS, notes })), /Lo que propuse el/);
+  assert.throws(() => notesOf(JSON.stringify({ proposals: [{ step: 'a', why: 'b', estimate: ' ' }] })), /proposals\[0\]\.estimate is a text that is not blank/);
 });
 
 test('a section the records could not give says why, and nothing that landed or wrote is said as such', () => {

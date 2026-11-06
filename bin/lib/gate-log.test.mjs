@@ -9,6 +9,7 @@ import {
   GATE_LOG_ENV,
   appendGateBusiest,
   appendGateEvent,
+  appendGateFailure,
   appendGateTestTimes,
   formatGates,
   gateLogDir,
@@ -18,7 +19,9 @@ import {
   isTreeKey,
   provenBy,
   readGateBusiest,
+  readGateFailures,
   readGateLog,
+  readGateProof,
   readGateTestTimes,
 } from './gate-log.mjs';
 
@@ -692,13 +695,55 @@ test('gateRecord with the writer of this module writes a real file, with an id o
 // --- the key of a tree: on the end of a gate that proved it, and in the line of a gate that ran no sensor ---
 
 const KEY = 'c'.repeat(64);
+// The key of the files a tree's gates ran on (`filesKey` of ./gate-tree.mjs).
+const FILES = 'f'.repeat(64);
 const same = (id, more = {}) => ({ v: 1, event: 'same', id, at: AT, cwd: 'C:\\work\\two', command: 'check', pid: 101, code: KEY, by: 'g1', ...more });
 
 test('provenBy: the proof of a tree is the last end that passed and holds its key, with the folder of its start where the log still has it', () => {
-  const events = [start('g1'), end('g1', { code: KEY }), start('g2', { cwd: 'C:\\work\\two' }), end('g2', { code: KEY, at: '2026-10-11T08:00:00.000Z' }), end('g3', { code: KEY, at: '2026-10-11T09:00:00.000Z' })];
-  assert.deepEqual(provenBy(events.slice(0, 4), KEY), { id: 'g2', at: '2026-10-11T08:00:00.000Z', cwd: 'C:\\work\\two' });
+  const events = [start('g1'), end('g1', { code: KEY, files: FILES }), start('g2', { cwd: 'C:\\work\\two' }), end('g2', { code: KEY, files: FILES, at: '2026-10-11T08:00:00.000Z' }), end('g3', { code: KEY, files: FILES, at: '2026-10-11T09:00:00.000Z' })];
+  assert.deepEqual(provenBy(events.slice(0, 4), KEY, FILES), { id: 'g2', at: '2026-10-11T08:00:00.000Z', cwd: 'C:\\work\\two' });
   // The start of the last one was rotated away: the proof stands, and names no folder.
-  assert.deepEqual(provenBy(events, KEY), { id: 'g3', at: '2026-10-11T09:00:00.000Z', cwd: null });
+  assert.deepEqual(provenBy(events, KEY, FILES), { id: 'g3', at: '2026-10-11T09:00:00.000Z', cwd: null });
+});
+
+// JH 109, 2026-10-30 (odd/tasks/gate-narrow-pass.md, L2): the tests of a commit failed on CI, a pass of the same files
+// in the WSL mirror, where the failing test skips itself, then proved the tree, and the next commit ran nothing.
+test('provenBy: a pass is no proof where a gate of the same files failed under another key than the pass, or failed after it', () => {
+  // The key of the same files on Windows, or in another WSL2 distribution or under another node (`treeKey`).
+  const OTHER = 'b'.repeat(64);
+  const onCi = (id, more = {}) => end(id, { result: 'fail', files: FILES, sensors: [{ name: 'tests', seconds: 200, pass: false, ranIn: 'ci' }], ...more });
+  const inWsl = (id, more = {}) => end(id, { code: KEY, files: FILES, tried: KEY, sensors: [{ name: 'tests', seconds: 150, pass: true, timedOut: false, ranIn: 'wsl', skip: { files: 312, skipped: 214 } }], ...more });
+  const here = (id, more = {}) => end(id, { files: FILES, tried: KEY, ...more });
+  const refused = [
+    // The incident: red on CI, which runs under no key, then green in the mirror.
+    [onCi('g1'), inWsl('g2')],
+    // Red in the mirror after green there: the pass is not the last word of its own key.
+    [inWsl('g1'), inWsl('g2', { result: 'fail', code: undefined })],
+    // Red on CI after green in the mirror.
+    [inWsl('g1'), onCi('g2')],
+    // A timeout and an error are failures too.
+    [onCi('g1', { result: 'timeout' }), inWsl('g2')],
+    [inWsl('g1'), here('g2', { result: 'error', sensors: [] })],
+    // Red on Windows, or in another distribution of WSL2 (Codex P2 on 41bfc83c: both said `ranIn: 'wsl'`), then
+    // green here: a pass under one key says nothing of another, whatever `ranIn` says.
+    [here('g1', { result: 'fail', tried: OTHER }), inWsl('g2')],
+    [inWsl('g1', { result: 'fail', code: undefined, tried: OTHER }), inWsl('g2')],
+    // A failure that says no key it ran under.
+    [here('g1', { result: 'fail', tried: undefined }), here('g2', { code: KEY })],
+  ];
+  for (const events of refused) assert.equal(provenBy(events, KEY, FILES), null, JSON.stringify(events));
+  const proven = [
+    // Red, then green under the same key: the pass ran where the failure did.
+    [here('g1', { result: 'fail', sensors: [{ name: 'tests', seconds: 3, pass: false }] }), here('g2', { code: KEY })],
+    [inWsl('g1', { result: 'fail', code: undefined }), inWsl('g2')],
+    [here('g1', { result: 'error', sensors: [] }), here('g2', { code: KEY })],
+    // A failure of other files, and one written with no files key (an older line), stand against nothing.
+    [onCi('g1', { files: 'e'.repeat(64) }), inWsl('g2')],
+    [onCi('g1', { files: undefined }), inWsl('g2')],
+    // The end of a `gate --` turn is no gate of these sensors.
+    [end('g1', { result: 'exit 1', files: FILES, sensors: undefined }), inWsl('g2')],
+  ];
+  for (const events of proven) assert.equal(provenBy(events, KEY, FILES)?.id, 'g2', JSON.stringify(events));
 });
 
 test('provenBy: nothing but a passed end with that very key is a proof', () => {
@@ -713,11 +758,17 @@ test('provenBy: nothing but a passed end with that very key is a proof', () => {
     [same('g2')],
     [start('g1', { code: KEY })],
     [stopped('g1', { code: KEY })],
+    // A pass whose end names no files (written before PR 721, when no failure named its files either), or other
+    // files: no failure before it could be told against it (JH 112, odd/tasks/gate-push-holes.md, L5).
+    [start('g1'), end('g1', { code: KEY })],
+    [start('g1'), end('g1', { code: KEY, files: 'e'.repeat(64) })],
   ];
-  for (const events of none) assert.equal(provenBy(events, KEY), null, JSON.stringify(events));
-  const proof = [start('g1'), end('g1', { code: KEY })];
-  for (const key of [undefined, null, '', 'c'.repeat(63), 'C'.repeat(64), 7]) assert.equal(provenBy(proof, key), null, String(key));
-  assert.equal(provenBy(undefined, KEY), null);
+  for (const events of none) assert.equal(provenBy(events, KEY, FILES), null, JSON.stringify(events));
+  const proof = [start('g1'), end('g1', { code: KEY, files: FILES })];
+  for (const key of [undefined, null, '', 'c'.repeat(63), 'C'.repeat(64), 7]) assert.equal(provenBy(proof, key, FILES), null, String(key));
+  // A gate that cannot say which files it guards has no proof either: every doubt runs the sensors.
+  for (const files of [undefined, null, '', 'f'.repeat(63), 7]) assert.equal(provenBy(proof, KEY, files), null, String(files));
+  assert.equal(provenBy(undefined, KEY, FILES), null);
   assert.equal(isTreeKey(KEY), true);
 });
 
@@ -728,12 +779,96 @@ test('gateRecord writes the key of the tree on the end of a gate that gives one,
     written.length = 0;
     const gate = record();
     gate.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
-    gate.end({ result: 'pass', sensors: [], code });
+    gate.end({ result: 'pass', sensors: [], code, files: code, tried: code });
     return written.at(-1);
   };
-  assert.equal(ended(KEY).code, KEY);
-  for (const code of [undefined, null, '', 'not a key', 12]) assert.equal('code' in ended(code), false, String(code));
+  assert.deepEqual([ended(KEY).code, ended(KEY).files, ended(KEY).tried], [KEY, KEY, KEY]);
+  for (const code of [undefined, null, '', 'not a key', 12]) assert.deepEqual(['code' in ended(code), 'files' in ended(code), 'tried' in ended(code)], [false, false, false], String(code));
 });
+
+// --- the failures a proof reads, kept beside the log past its rotation (JH 112, odd/tasks/gate-push-holes.md, L5) ---
+
+test('gateRecord writes the end of a gate whose sensors did not all pass and that names its files to the failures too, the same line, and no other end', () => {
+  const log = [];
+  const failed = [];
+  const said = [];
+  const ended = (end, appendFailure = (home, line) => { failed.push(line); return { ok: true }; }) => {
+    const gate = gateRecord({ home: 'h', cwd: 'C:\\work\\one', command: 'check', append: (home, event) => { log.push(event); return { ok: true }; }, appendFailure, now: () => Date.parse(AT), id: () => 'g1', onFailure: (why) => said.push(why) });
+    gate.start({ lock: 'own', waitedMs: 0, waitedFor: [] });
+    gate.end(end);
+  };
+  const sensors = [{ name: 'tests', seconds: 3, pass: false }];
+  ended({ result: 'fail', sensors, files: FILES, tried: KEY });
+  ended({ result: 'timeout', sensors, files: FILES });
+  assert.deepEqual(failed, [log[1], log[3]]);
+  // A pass, a failure that names no files, and the end of a `gate --` turn, which has no sensors: none of them.
+  ended({ result: 'pass', sensors: [], code: KEY, files: FILES, tried: KEY });
+  ended({ result: 'fail', sensors });
+  ended({ result: 'exit 1', files: FILES });
+  assert.equal(failed.length, 2);
+  // A failure that could not be kept there is said, as a line of the log that could not be written is.
+  ended({ result: 'fail', sensors, files: FILES }, () => ({ error: 'EACCES' }));
+  assert.deepEqual(said, ['could not be written (EACCES), so the failure the proof of a tree reads is not in it']);
+});
+
+test('appendGateFailure keeps failures in failed.jsonl beside the log, rotated as the log is, and readGateFailures reads them oldest first, each once', withHome(async (home) => {
+  const fail = (id, more = {}) => end(id, { result: 'fail', files: FILES, tried: KEY, ...more });
+  for (const id of ['a', 'b', 'c']) assert.deepEqual(appendGateFailure(home, fail(id), { maxBytes: 100 }), { ok: true });
+  assert.deepEqual(files(home), ['failed.1.jsonl', 'failed.jsonl']);
+  assert.deepEqual(readGateFailures(home), [fail('b'), fail('c')]);
+  // Torn, foreign and misshapen lines are left out, and so are a line kept twice, a pass and a line of no end.
+  fs.appendFileSync(path.join(gateLogDir(home), 'failed.jsonl'), `${['{"v":1,"id":"torn', 'not json', JSON.stringify(fail('d', { v: 2 })), JSON.stringify(fail('e', { seconds: 'slow' })), JSON.stringify(fail('b')), JSON.stringify(end('f', { code: KEY, files: FILES })), JSON.stringify(start('g'))].join('\n')}\n`);
+  assert.deepEqual(readGateFailures(home).map(({ id }) => id), ['b', 'c']);
+  // The log knows nothing of them, and a home with no file has none.
+  assert.deepEqual(readGateLog(home).events, []);
+  assert.deepEqual(readGateFailures(path.join(home, 'none')), []);
+  // A file that is there and cannot be read: no answer, which a proof takes as none.
+  const failing = (code) => ({ ...fs, readFileSync: () => { throw Object.assign(new Error(code), { code }); } });
+  assert.equal(readGateFailures(home, { fileSystem: failing('EACCES') }), null);
+  assert.deepEqual(readGateFailures(home, { fileSystem: failing('ENOENT') }), []);
+}));
+
+test('readGateProof reads the failures the log no longer holds before the log, so a failure rotated away still stands against a pass after it', withHome(async (home) => {
+  const before = '2026-10-11T07:00:00.000Z';
+  const onCi = end('g1', { at: before, result: 'fail', files: FILES, sensors: [{ name: 'tests', seconds: 200, pass: false, ranIn: 'ci' }] });
+  for (const event of [start('g1', { at: before }), onCi]) appendGateEvent(home, event);
+  appendGateFailure(home, onCi);
+  // The log's rotation, as it lands at last: the failure is no longer in either of its files.
+  for (const name of ['log.jsonl', 'log.1.jsonl']) fs.rmSync(path.join(gateLogDir(home), name), { force: true });
+  for (const event of [start('g2'), end('g2', { code: KEY, files: FILES, tried: KEY })]) appendGateEvent(home, event);
+  assert.equal(provenBy(readGateLog(home).events, KEY, FILES)?.id, 'g2', 'the log alone has forgotten the failure');
+  assert.deepEqual(readGateProof(home).map(({ event, id }) => `${event} ${id}`), ['end g1', 'start g2', 'end g2']);
+  assert.equal(provenBy(readGateProof(home), KEY, FILES), null);
+  // A failure the log still holds is read once, where the log has it: a pass after it under its own key proves.
+  fs.rmSync(gateLogDir(home), { recursive: true });
+  const here = end('g3', { result: 'fail', files: FILES, tried: KEY });
+  appendGateEvent(home, here);
+  appendGateFailure(home, here);
+  appendGateEvent(home, end('g4', { code: KEY, files: FILES, tried: KEY }));
+  assert.deepEqual(readGateProof(home), readGateLog(home).events);
+  assert.equal(provenBy(readGateProof(home), KEY, FILES)?.id, 'g4');
+  // Failures that cannot be read: no events, so no proof.
+  const failing = { ...fs, readFileSync: (file, ...rest) => (String(file).includes('failed') ? (() => { throw Object.assign(new Error('EACCES'), { code: 'EACCES' }); })() : fs.readFileSync(file, ...rest)) };
+  assert.equal(readGateProof(home, { fileSystem: failing }), null);
+}));
+
+// The verifier of bebf5238 and its reliability review: a failure the log lacks for another reason than its rotation, and
+// a log that cannot be read.
+test('readGateProof puts a failure the log lacks where its time puts it, and gives no events when a file of the log cannot be read', withHome(async (home) => {
+  const later = '2026-10-11T09:00:00.000Z';
+  for (const event of [start('g1'), end('g1', { code: KEY, files: FILES, tried: KEY })]) appendGateEvent(home, event);
+  // Its line in the log was refused (a busy file) or torn, while the failures took it: written after the pass, under its key.
+  appendGateFailure(home, end('g2', { at: later, result: 'fail', files: FILES, tried: KEY }));
+  assert.deepEqual(readGateProof(home).map(({ event, id }) => `${event} ${id}`), ['start g1', 'end g1', 'end g2']);
+  assert.equal(provenBy(readGateProof(home), KEY, FILES), null);
+  // A failure older than every line of the log still comes first, and one of the same instant as a line comes after it.
+  appendGateFailure(home, end('g0', { at: '2026-10-11T07:00:00.000Z', result: 'fail', files: FILES, tried: KEY }));
+  appendGateFailure(home, end('g3', { result: 'fail', files: FILES, tried: KEY }));
+  assert.deepEqual(readGateProof(home).map(({ id }) => id), ['g0', 'g1', 'g1', 'g3', 'g2']);
+  // A file of the log that is there and cannot be read may hold the pass a failure came after: no answer.
+  const busy = { ...fs, readFileSync: (file, ...rest) => (path.basename(String(file)) === 'log.jsonl' ? (() => { throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' }); })() : fs.readFileSync(file, ...rest)) };
+  assert.equal(readGateProof(home, { fileSystem: busy }), null);
+}));
 
 test('gateRecord writes a gate that ran no sensor as one line of the kind same, with the key and the gate that proved it, and nothing when either is missing', withHome(async (home) => {
   const gate = gateRecord({ home, cwd: 'C:\\work\\two', command: 'check', pid: 101, id: () => 'g2' });
@@ -880,7 +1015,7 @@ test('formatGates ends the line of a gate that has who spent the processor with 
 test('a ci-fallback line under a gate\'s id is read, and pairs, prints and proves nothing of its own', withHome(async (home) => {
   const code = 'a'.repeat(64);
   const fallback = { v: 1, event: 'ci-fallback', id: 'g1', at: AT, seconds: 185, reason: 'no run started' };
-  for (const event of [fallback, start('g1'), end('g1', { code })]) appendGateEvent(home, event);
+  for (const event of [fallback, start('g1'), end('g1', { code, files: FILES })]) appendGateEvent(home, event);
   const { events, skipped } = readGateLog(home);
   assert.equal(skipped, 0);
   assert.deepEqual(events.map((event) => event.event), ['ci-fallback', 'start', 'end']);
@@ -889,7 +1024,7 @@ test('a ci-fallback line under a gate\'s id is read, and pairs, prints and prove
   assert.equal(gates.length, 1);
   assert.deepEqual(Object.keys(gates[0]).sort(), ['end', 'start']);
   assert.equal(formatGates(gates).length, 1);
-  assert.equal(provenBy(events, code).id, 'g1');
+  assert.equal(provenBy(events, code, FILES).id, 'g1');
   // Alone, with its gate rotated away, it is no gate at all.
   assert.deepEqual(gatesOf([fallback]), []);
 }));

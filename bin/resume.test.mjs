@@ -1723,6 +1723,30 @@ test('an orchestrator is given every question no notice closed, each with what i
   ]);
 }));
 
+// odd/tasks/refresh-open-apply.md, T3: on 2026-10-31 JH 114 sent `waiting`, the lead was compacted minutes later, and its
+// resume named the open questions but not the session waiting on it, which sat 50 minutes.
+const waitingFrom = (machine, title, text, m) => appendNotice(machine.home, machine.slug, newNotice({ at: minute(m), from: { ...BY_OTHER, title }, to: 'orchestrator', kind: 'waiting', text }));
+
+test('an orchestrator is given each work session whose newest notice is waiting, with its text, before the questions', withMachine(async (machine) => {
+  waitingFrom(machine, 'JH 114 · strip attribution', 'PR 731 waits on the land; I restart it only when told', 6);
+  waitingFrom(machine, 'JH 115 · lead duties', 'the land', 1);
+  appendNotice(machine.home, machine.slug, newNotice({ at: minute(2), from: { ...BY_OTHER, title: 'JH 115 · lead duties' }, to: 'orchestrator', kind: 'note', text: 'went on' }));
+  askQuestion(machine, 'Which branch?');
+  transcriptWith(machine, [asked(1, 'the stretch')]);
+  const { lines } = await runHook(machine, hookInput(machine, { session_title: ORQ }));
+  const start = lines.findIndex((line) => line.startsWith('Work sessions whose newest notice'));
+  assert.deepEqual(lines.slice(start, start + 4), [
+    'Work sessions whose newest notice in the record is waiting (1), each waiting on this session:',
+    '  JH 114 "JH 114 · strip attribution"  waiting since 1h ago: PR 731 waits on the land; I restart it only when told',
+    'Answer each, or start what it waits for, before other work; the board shows each one: js-harness sessions',
+    'Questions with no answer in the record (1 of 1 recorded), with what this transcript holds of each:',
+  ]);
+  // A work session is not the one they wait on: it is not given them.
+  titled(machine);
+  const work = await runHook(machine, hookInput(machine));
+  assert.equal(work.lines.some((line) => line.startsWith('Work sessions whose newest notice')), false, work.lines.join('\n'));
+}));
+
 test('an orchestrator told that a question has no call here is sent to look on the board first, since another session may have had his answer', withMachine(async (machine) => {
   askQuestion(machine, 'Asked elsewhere?', { from: BY_OTHER });
   // His words at minute 1 (an hour and 59 minutes before the clock) are the last of this transcript; the question has no call in it.

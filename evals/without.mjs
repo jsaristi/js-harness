@@ -25,10 +25,11 @@ const HOSTS = {
   codex: { dir: '.codex', instructions: '.codex/AGENTS.md', hooksFile: '.codex/hooks.json', hookScripts: /\.(ps1|sh)$/ },
 };
 
-/** The skill folders js-harness installs under `dir` (`.claude` or `.codex`), by name. */
-const ownSkills = (dir) => new Set(fileComponents
+/** The skill folders js-harness installs, by name, under either host's `skills`: it installs them under `.claude`
+ * only, and a copy an earlier version left under `.codex` (D4 took those out) is still its own. */
+const ownSkills = () => new Set(fileComponents
   .map((component) => component.target('/').split(/[\\/]/).filter(Boolean))
-  .filter((parts) => parts[0] === dir && parts[1] === 'skills')
+  .filter((parts) => parts[1] === 'skills')
   .map((parts) => parts[2]));
 
 /** A hook entry js-harness installed: every command of it runs js-harness (its doctor, resume, pause, guard). */
@@ -224,9 +225,11 @@ function cutLines(root, rel, drop) {
 
 const within = (block, index) => block !== undefined && index >= block.from && index <= block.to;
 
-/** The texts js-harness writes into the home under `host`: the instructions file, its skills and its output style. */
+/** The texts js-harness writes into the home under `host`: the instructions file, its skills and its output style;
+ * its skills under either host's `skills`, as `ownSkills` says. */
 const ownTexts = (host) => [host.instructions, ...fileComponents
   .map((component) => component.target('/').split(/[\\/]/).filter(Boolean))
+  .map((parts) => (parts[1] === 'skills' ? [host.dir, ...parts.slice(1)] : parts))
   .filter((parts) => parts[0] === host.dir)
   .map((parts) => parts.join('/'))];
 
@@ -274,7 +277,7 @@ function rulePieces(root, id, host) {
  * home does not hold it. */
 function piecesOf(root, id, agent) {
   const host = HOSTS[agent];
-  const own = ownSkills(host.dir);
+  const own = ownSkills();
   if (id.startsWith('gentle-ai-')) {
     const name = id.slice('gentle-ai-'.length);
     return cutLines(root, host.instructions, (index, blocks) => within(blocks[name], index));

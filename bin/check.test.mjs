@@ -13,7 +13,7 @@ import { killTree } from './lib/process-tree.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gatesOf, readGateBusiest, readGateLog } from './lib/gate-log.mjs';
-import { treeKey } from './lib/gate-tree.mjs';
+import { filesKey, treeKey } from './lib/gate-tree.mjs';
 import { issueTicket, readTickets } from './lib/gate-first.mjs';
 import { LEFT_MARK, SYNCED_MARK, TIMED_OUT_MARK } from './lib/gate-wsl.mjs';
 
@@ -4873,7 +4873,7 @@ test('a gate that waited for the lock looks for its proof once more: the gate it
     const at = new Date().toISOString();
     const take = async () => {
       appendGateEvent(home, { v: 1, event: 'start', id: 'abcdef0123456789', at, cwd: 'C:\\work\\other', command: 'check', pid: 7, lock: 'own', waitedSeconds: 0, waitedFor: [] });
-      appendGateEvent(home, { v: 1, event: 'end', id: 'abcdef0123456789', at, seconds: 3, result: 'pass', sensors: [], code: key });
+      appendGateEvent(home, { v: 1, event: 'end', id: 'abcdef0123456789', at, seconds: 3, result: 'pass', sensors: [], code: key, files: filesKey(asGit) });
       return { release: () => {}, beat: () => {}, lost: () => false, waitedMs: 5000 };
     };
     const { code, output } = await gate({}, { takeGateLock: take });
@@ -4919,6 +4919,96 @@ test('through the real hook: a commit of one named path beside another staged fi
     assert.equal(ranSensor(), false, 'a sensor ran for a tree the gate before had passed');
     assert.match(sensorsRow(again.said)[0], NO_SENSOR_SAME_TREE);
     assert.equal(readGateLog(home).events.at(-1).event, 'same');
+  } finally {
+    remove();
+  }
+});
+
+// JH 109, 2026-10-30 (odd/tasks/gate-narrow-pass.md, L2): a commit's tests failed on CI, a check by hand of the same
+// tree then passed in the WSL mirror, where the failing test skips itself, and the next commit's gate took that pass
+// for the proof of its tree and ran nothing: two commits entered with a red test.
+test('a tree whose tests failed on CI is not proven by a narrower pass here: the next commit goes to CI again and is refused', async () => {
+  const { gate, sensorRuns, events, remove } = sameTreeRepo();
+  try {
+    let ciRuns = 0;
+    const red = { ran: true, pass: false, url: 'https://github.com/o/r/actions/runs/42', seconds: 200, output: '✖ failing tests:\n\ntest at bin/a.test.mjs:1:1\n✖ a test that needs .git (1ms)\n' };
+    const onCi = {
+      ciGateWanted: () => 'the project holds .github/workflows/gate.yml, so a commit\'s tests go to GitHub\'s machines first',
+      runCiGate: async () => {
+        ciRuns += 1;
+        return red;
+      },
+    };
+    const commit = await gate({}, onCi);
+    assert.equal(commit.code, 1, commit.output);
+    // By hand the suite runs here, where the test that failed on CI is skipped, and passes.
+    const byHand = await gate();
+    assert.equal(byHand.code, 0, byHand.output);
+    assert.equal(sensorRuns(), 1);
+    const next = await gate({}, onCi);
+    assert.equal(next.code, 1, `the commit entered on a pass narrower than the run that failed:\n${next.output}`);
+    assert.equal(ciRuns, 2, 'the commit did not go to CI again');
+    assert.equal(events().some((event) => event.event === 'same'), false);
+  } finally {
+    remove();
+  }
+});
+
+// JH 112 (odd/tasks/gate-push-holes.md, L4 and L5): the log is two rotating files, so a failure was forgotten once
+// rotation dropped it, and a pass after that proved the tree as if it had never failed.
+test('a tree whose tests failed on CI is not proven by a narrower pass here after the gate log rotated the failure away', async () => {
+  const { home, gate, sensorRuns, events, remove } = sameTreeRepo();
+  try {
+    let ciRuns = 0;
+    const onCi = {
+      ciGateWanted: () => 'the project holds .github/workflows/gate.yml, so a commit\'s tests go to GitHub\'s machines first',
+      runCiGate: async () => {
+        ciRuns += 1;
+        return { ran: true, pass: false, url: 'https://github.com/o/r/actions/runs/42', seconds: 200, output: '✖ failing tests:\n\ntest at bin/a.test.mjs:1:1\n✖ a test that needs .git (1ms)\n' };
+      },
+    };
+    assert.equal((await gate({}, onCi)).code, 1);
+    // Two rotations later neither file of the log holds a line of that gate.
+    for (const name of ['log.jsonl', 'log.1.jsonl']) fs.rmSync(path.join(gateLogDir(home), name), { force: true });
+    assert.equal((await gate()).code, 0);
+    assert.equal(sensorRuns(), 1);
+    const next = await gate({}, onCi);
+    assert.equal(next.code, 1, `the commit entered on a pass narrower than a run that failed and was rotated away:\n${next.output}`);
+    assert.equal(ciRuns, 2, 'the commit did not go to CI again');
+    assert.equal(events().some((event) => event.event === 'same'), false);
+  } finally {
+    remove();
+  }
+});
+
+// The reliability lens on 90260996: a gate whose sensor threw wrote the files key it had before, unchecked.
+test('a gate whose sensor throws writes no files key: it never asked whether its tree moved', async () => {
+  const { gate, sensor, events, remove } = sameTreeRepo();
+  try {
+    sensor.answer = () => {
+      throw new Error('made up by the test');
+    };
+    await gate().catch(() => {});
+    const ends = events().filter((event) => event.event === 'end');
+    assert.equal(ends.length, 1);
+    assert.equal(ends[0].result, 'error');
+    assert.deepEqual(['files' in ends[0], 'tried' in ends[0], 'code' in ends[0]], [false, false, false]);
+  } finally {
+    remove();
+  }
+});
+
+test('a tree whose sensors failed here and then passed here is proven by that pass: a run as wide as the failure', async () => {
+  const { gate, sensor, sensorRuns, events, remove } = sameTreeRepo();
+  try {
+    sensor.answer = () => ({ status: 1, signal: null, stdout: '', stderr: 'no' });
+    assert.equal((await gate()).code, 1);
+    sensor.answer = sensorRan;
+    assert.equal((await gate()).code, 0);
+    const third = await gate();
+    assert.equal(third.code, 0, third.output);
+    assert.equal(sensorRuns(), 2, 'a pass in the place the failure ran in did not prove its tree');
+    assert.equal(events().at(-1).event, 'same');
   } finally {
     remove();
   }
@@ -5237,6 +5327,52 @@ test('a pass in WSL2 proves a tree for WSL2 alone: the run on Windows of that sa
     const codes = events().filter((event) => event.event === 'end').map((end) => end.code);
     assert.equal(codes.length, 2);
     assert.notEqual(codes[0], codes[1], 'the two places proved one key');
+  } finally {
+    remove();
+  }
+});
+
+// Codex P2 on 41bfc83c (odd/tasks/gate-narrow-pass.md): both distributions said `ranIn: 'wsl'`, so a pass in one
+// answered a failure in the other; the failure's own key is what a pass must match.
+test('a tree whose sensors failed in one WSL2 distribution is not proven by a pass in another: the next gate there runs them', async () => {
+  const { repo, home, events, remove } = sameTreeRepo({ sameTree: 'skip', sensorsInWsl: true });
+  try {
+    fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+    const switchTo = (distro) => fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), JSON.stringify({ ...UBUNTU, distro }));
+    const spawn = spawnsInTurn(reachedMirror(1), reachedMirror(0), reachedMirror(0));
+    const gate = () => runCheck(['--cwd', repo, '--home', home], { JS_HARNESS_GATE_LOAD: 'off' }, wslDeps(spawn, { git: undefined, takeGateLock: undefined }));
+    switchTo('Ubuntu');
+    assert.equal((await gate()).code, 1);
+    switchTo('Debian');
+    const other = await gate();
+    assert.equal(other.code, 0, other.output);
+    const again = await gate();
+    assert.equal(again.code, 0, again.output);
+    assert.equal(spawn.calls.length, 3, 'a pass in Debian answered a failure in Ubuntu');
+    const [failed] = events().filter((event) => event.event === 'end');
+    assert.match(failed.tried, TREE_KEY);
+    assert.match(failed.files, TREE_KEY);
+  } finally {
+    remove();
+  }
+});
+
+// The independent verifier, on 1bddd479 (odd/tasks/gate-narrow-pass.md): a failure that came back to Windows was
+// written under the key of WSL2, so a pass in WSL2 answered it.
+test('a tree whose sensors failed after they came back to Windows is not proven by a pass in WSL2: the next gate runs them', async () => {
+  const { repo, home, events, remove } = sameTreeRepo({ sameTree: 'skip', sensorsInWsl: true });
+  try {
+    fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.js-harness', 'gate-wsl.json'), JSON.stringify(UBUNTU));
+    const spawn = spawnsInTurn({ status: 1, signal: null, stdout: 'no such distribution\n', stderr: '' }, { status: 1, signal: null, stdout: '', stderr: 'red on Windows' }, reachedMirror(0), reachedMirror(0));
+    const gate = () => runCheck(['--cwd', repo, '--home', home], { JS_HARNESS_GATE_LOAD: 'off' }, wslDeps(spawn, { git: undefined, takeGateLock: undefined }));
+    assert.equal((await gate()).code, 1);
+    const [failed] = events().filter((event) => event.event === 'end');
+    assert.equal(failed.tried, undefined, 'a failure on Windows was written under the key of WSL2');
+    assert.equal((await gate()).code, 0);
+    const again = await gate();
+    assert.equal(again.code, 0, again.output);
+    assert.equal(spawn.calls.length, 4, 'a pass in WSL2 answered a failure on Windows');
   } finally {
     remove();
   }

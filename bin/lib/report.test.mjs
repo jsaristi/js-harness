@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { newNotice } from './channel.mjs';
 import { cutOf, landedOf, mapOf, parseMergeLog, questionsOf, reportLines, sessionsOf } from './report.mjs';
 
+// Its times are shown in local time (rule:local-time): the zone is pinned so no machine's own decides a result.
+process.env.TZ = 'America/Bogota';
+
 // odd/tasks/status-report.md: the pure parts of `js-harness report`. Nothing here runs git or reads a file.
 
 const at = (iso) => Date.parse(iso);
@@ -17,6 +20,13 @@ test('the cut is --since when given, else the last recorded report, else 24 hour
   assert.deepEqual(cutOf({ since: '2026-10-18T00:00:00Z', reports, now: NOW }), { at: at('2026-10-18T00:00:00Z'), source: 'since', head: null });
   assert.deepEqual(cutOf({ reports, now: NOW }), { at: at('2026-10-20T07:30:00.000Z'), source: 'last-report', head: 'bbb' });
   assert.deepEqual(cutOf({ reports: [], now: NOW }), { at: at('2026-10-19T12:00:00Z'), source: 'window', head: null });
+});
+
+// odd/tasks/departure-stretch.md, spec 9: the last report's proposals come with its cut, for the next to compare.
+test('the cut of the last report carries the proposals it recorded, each a step with its estimate', () => {
+  const reports = [{ at: '2026-10-20T07:30:00.000Z', head: 'bbb', proposals: [{ step: 'Tramo C', estimate: '3 h' }, { step: 7 }, { step: 'Tramo B', estimate: '' }] }];
+  assert.deepEqual(cutOf({ reports, now: NOW }).proposals, [{ step: 'Tramo C', estimate: '3 h' }, { step: 'Tramo B', estimate: null }]);
+  assert.equal(Object.hasOwn(cutOf({ since: '2026-10-18T00:00:00Z', reports, now: NOW }), 'proposals'), false);
 });
 
 test('the last report is the latest by time, not the last line written', () => {
@@ -147,7 +157,7 @@ test('reportLines prints the migration now and at the cut, then the last stretch
   const lines = shareLines({ before: { map: { ...SHARE_MAP, plans: [{ name: 'F8 plan', done: 8, total: 14 }] } }, stretch: STRETCH });
   const text = lines.join('\n');
   assert.ok(lines.includes('Migration: F8 plan  9/14 steps  64%; at the cut 8/14  57%'), text);
-  assert.ok(lines.includes('Stretch s-1: closed at 2026-10-20 10:30Z, opened 2026-10-20 06:00Z; 4.5 of 5 h; goals 1 of 2 met, checked 2026-10-20 10:30Z'), text);
+  assert.ok(lines.includes('Stretch s-1: closed at 2026-10-20 05:30, opened 2026-10-20 01:00; 4.5 of 5 h; goals 1 of 2 met, checked 2026-10-20 05:30'), text);
   assert.ok(lines.includes('  goal G1 met (exit 0): PR 630 en main'), text);
   assert.ok(lines.includes('  goal G2 not met (exit 1): S13 hecha'), text);
   assert.ok(lines.includes('  estimated 6-9 h, real 7 h, lost 0.5 h'), text);
@@ -169,7 +179,7 @@ test('with no before, no plan, no stretch or a stretch that cannot be read, the 
   const noPlan = shareLines({ map: { ...SHARE_MAP, plans: [] }, before: null, stretch: null });
   assert.ok(noPlan.includes('Migration: the roadmap has no plan section'), noPlan.join('\n'));
   const open = shareLines({ before: null, stretch: { ...STRETCH, state: 'open', goals: { checkedAt: null, met: 0, total: 1, list: [{ id: 'G1', text: 'PR 630 en main', met: null, said: null }] }, forecast: { unavailable: 'git show: bad object' } } });
-  assert.ok(open.includes('Stretch s-1: open, back at 2026-10-20 11:00Z, opened 2026-10-20 06:00Z; 4.5 of 5 h; goals 0 of 1 met, not checked yet'), open.join('\n'));
+  assert.ok(open.includes('Stretch s-1: open, back at 2026-10-20 06:00, opened 2026-10-20 01:00; 4.5 of 5 h; goals 0 of 1 met, not checked yet'), open.join('\n'));
   assert.ok(open.includes('  goal G1 not checked: PR 630 en main'), open.join('\n'));
   assert.ok(open.includes('  forecast: the map could not be read (git show: bad object)'), open.join('\n'));
   // A report without the new facts (the callers before this change) prints as before.
@@ -191,20 +201,20 @@ test('reportLines prints the cut, then Landed, Sessions, Questions and Map, each
     map: { path: 'docs/ROADMAP.md', done: 2, total: 3, phases: [{ title: 'One', done: 1, total: 2, open: ['b'] }, { title: 'Two', done: 1, total: 1, open: [] }] },
   });
   assert.deepEqual(lines, [
-    'Since 2026-10-20 07:30Z, the last report',
+    'Since 2026-10-20 02:30, local time UTC-05:00, the last report',
     '',
     'Landed on origin/main: 1 pull request',
-    '  #478 fix/title  merged 2026-10-20 11:00Z',
+    '  #478 fix/title  merged 2026-10-20 06:00',
     '      - fix(notify): read the title',
     '',
     'Sessions: 1 wrote notices',
-    '  JH 35 · notify reads title  closed 2026-10-20 10:00Z  (2 notices)',
+    '  JH 35 · notify reads title  closed 2026-10-20 05:00  (2 notices)',
     '      delivered the fix',
     '',
     'Questions: 1 answered, 1 open',
-    '  answered #2 at 2026-10-20 09:00Z: Which?',
+    '  answered #2 at 2026-10-20 04:00: Which?',
     '      answer: B',
-    '  open #1 since 2026-10-10 00:00Z: Old?',
+    '  open #1 since 2026-10-09 19:00: Old?',
     '      waits: the slice',
     '',
     'Map: docs/ROADMAP.md on origin/main  2/3  67%',
@@ -223,7 +233,7 @@ test('a question or an answer written on several lines is printed on one, its li
     questions: { answered: [{ number: 2, notice: { text: 'Which\nprofiles?' }, answer: 'all of them\n\nand TUI  ', at: at('2026-10-20T09:00:00Z') }], open: [] },
     map: { absent: true },
   });
-  assert.ok(lines.includes('  answered #2 at 2026-10-20 09:00Z: Which / profiles?'), lines.join('\n'));
+  assert.ok(lines.includes('  answered #2 at 2026-10-20 04:00: Which / profiles?'), lines.join('\n'));
   assert.ok(lines.includes('      answer: all of them / and TUI'), lines.join('\n'));
 });
 
@@ -237,7 +247,7 @@ test('reportLines says the source of the cut, and a section with nothing or an e
     map: { absent: true },
   });
   assert.deepEqual(lines, [
-    'Since 2026-10-19 12:00Z, the last 24 hours: no report is recorded',
+    'Since 2026-10-19 07:00, local time UTC-05:00, the last 24 hours: no report is recorded',
     '',
     'Landed on main: could not read: git log: not a git repository',
     '',
@@ -247,5 +257,5 @@ test('reportLines says the source of the cut, and a section with nothing or an e
     '',
     'Map: no docs/ROADMAP.md on main',
   ]);
-  assert.equal(reportLines({ cut: { at: at('2026-10-19T12:00:00Z'), source: 'since' }, branch: 'main', landed: [], sessions: { error: 'the record: EACCES' }, questions: { error: 'the record: EACCES' }, map: { error: 'git show: bad' } })[0], 'Since 2026-10-19 12:00Z, as --since asked');
+  assert.equal(reportLines({ cut: { at: at('2026-10-19T12:00:00Z'), source: 'since' }, branch: 'main', landed: [], sessions: { error: 'the record: EACCES' }, questions: { error: 'the record: EACCES' }, map: { error: 'git show: bad' } })[0], 'Since 2026-10-19 07:00, local time UTC-05:00, as --since asked');
 });

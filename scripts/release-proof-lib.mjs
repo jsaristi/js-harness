@@ -2,7 +2,7 @@
 // pnpm, the steps it runs and what each one checks, the pin it moves, and the comparison of the throwaway home.
 // Nothing here starts a process or touches a file: the runner does both and hands the results in.
 import path from 'node:path';
-import { installPlan } from '../bin/lib/version.mjs';
+import { compareSemver, installPlan } from '../bin/lib/version.mjs';
 import { compareSnapshots, contentHash, hostHooksProblem } from './practice-lib.mjs';
 import { nextVersion } from './lib.mjs';
 
@@ -131,7 +131,8 @@ export function manifestProblem(text, expected) {
 }
 
 /** The host files a proof seeds before `install`, each with one unrelated SessionStart hook the install must keep: the
- * Claude file in four-space indentation and the Codex file with tabs, as `scripts/e2e.mjs` seeds them. */
+ * Claude file in four-space indentation and the Codex file with tabs, as `scripts/e2e.mjs` seeds them. The Codex file
+ * is the user's, which an install of this release leaves as seeded. */
 export function seededHostFiles() {
   const claudeCommand = 'echo unrelated-claude-hook';
   const codexCommand = 'echo unrelated-codex-hook';
@@ -145,11 +146,37 @@ export function seededHostFiles() {
   };
 }
 
+/** The newest release whose `install` grafted entries on Codex's `hooks.json` (odd/tasks/drop-codex-components.md). */
+export const LAST_CODEX_RELEASE = '0.97.0';
+
+/** The entries an install of `LAST_CODEX_RELEASE` grafted on Codex's `hooks.json`, in its order, as `HARNESS_HOOKS`
+ * (scripts/practice-lib.mjs) spells an entry. Frozen here, not derived from today's lists, because it is what a
+ * release already published wrote; the test holds it to bin/lib/earlier-codex.testkit.mjs, which declares the same. */
+export const EARLIER_CODEX_HOOKS = Object.freeze([
+  Object.freeze({ event: 'SessionStart', matcher: 'startup|resume', command: 'js-harness doctor --hook' }),
+  Object.freeze({ event: 'SessionStart', matcher: 'compact|clear|startup', command: 'js-harness resume --hook' }),
+  Object.freeze({ event: 'Stop', command: 'js-harness reply --hook || exit 0' }),
+  Object.freeze({ event: 'Stop', command: 'js-harness backup --hook || exit 0' }),
+  Object.freeze({ event: 'SessionStart', matcher: 'startup|resume|clear|compact', command: 'js-harness backup --session-start || exit 0' }),
+]);
+
+/** The entries a proof expects in Codex's `hooks.json` after the release `version` installed or synced the home:
+ * `EARLIER_CODEX_HOOKS` for a tag at `LAST_CODEX_RELEASE` or older, none for a newer one, whose `sync` takes an
+ * earlier install's out. `local` is a proof of this checkout (`--repo .`), which it tags with its own version whatever
+ * that reads, so it is held to today's install. The Claude file is held to today's entries whatever the release, as it
+ * always was, so a `--from` older than `LAST_CODEX_RELEASE` is proven only as far as its entries match today's. */
+export function codexHooksOf(version, local) {
+  return !local && compareSemver(version, LAST_CODEX_RELEASE) <= 0 ? EARLIER_CODEX_HOOKS : [];
+}
+
 /** What is wrong with the hook entries of the two host files after `install`, or `null`: each file must hold its seeded
- * entry and then the entries `install` writes for its host (`hostHooksProblem`). `texts` is `{ claude, codex }`. */
-export function hostFilesProblem(texts, seeded) {
+ * entry and then the entries `install` writes for its host (`hostHooksProblem`): today's for Claude Code, and
+ * `codexHooks` for Codex (`codexHooksOf`: none, unless the release is one that still wrote them). `texts` is
+ * `{ claude, codex }`. */
+export function hostFilesProblem(texts, seeded, codexHooks = []) {
+  const expected = { claude: undefined, codex: codexHooks };
   for (const host of ['claude', 'codex']) {
-    const problem = hostHooksProblem(texts[host], seeded[host].command, host);
+    const problem = hostHooksProblem(texts[host], seeded[host].command, host, expected[host]);
     if (problem !== null) return `${host} hook file: ${problem}`;
   }
   return null;

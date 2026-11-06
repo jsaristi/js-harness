@@ -7,16 +7,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import {
-  childEnv, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS, turnSaid, turnStopped,
+  childEnv, CODEX_WEEKLY_FLOOR, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS, turnSaid, turnStopped,
   reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
 import { NO_TEST_EXIT, NO_TEST_LINE, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
+import { ESCALATION_MODEL } from './lib/codex-review-recheck.mjs';
 import { checkCodexReviewDebt, checkCodexReviews } from './check.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
 import { mergeStart, rangeDiff } from './lib/codex-review-coverage.mjs';
 import { numstatFiles } from './lib/codex-review-parts.mjs';
 import { methodRecord, methodRecordLine, PLAN_METHOD, planLines, reviewPlan } from './lib/codex-review-plan.mjs';
-import { REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt, SUITE_RAN } from './lib/codex-review-prompt.mjs';
+import { NO_ASKED, requestIntent, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewPrompt, SUITE_RAN } from './lib/codex-review-prompt.mjs';
 import * as reviewRuns from './lib/codex-review-runs.mjs';
 import { runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
 import * as reviewRecords from './lib/codex-reviews.mjs';
@@ -384,6 +385,8 @@ async function run(argv, extra = {}, env = IN_TURN) {
     error: (line) => err.push(line),
     write: (text) => shown.push(text),
     platform: 'linux',
+    // A reading of Codex's weekly limit well above its floor, so no test starts `codex app-server`.
+    readMeter: async () => ({ ok: true, result: { rateLimits: { secondary: { usedPercent: 50 } } } }),
     ...extra,
   });
   return { code, out: out.join('\n'), err: err.join('\n'), shown: shown.join('') };
@@ -814,7 +817,7 @@ test('our own diff is computed from the resolved base to HEAD, with room for a l
   };
   await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, spawn });
   const diff = calls.find((call) => call.args[0] === 'diff');
-  assert.deepEqual(diff.args, ['diff', '--no-color', '--no-ext-diff', base, head]);
+  assert.deepEqual(diff.args, ['diff', '--no-color', '--no-ext-diff', '--find-renames', base, head]);
   assert.equal(fs.realpathSync(diff.opts.cwd), fs.realpathSync(root));
   assert.ok(diff.opts.maxBuffer > 1024 * 1024, `maxBuffer ${diff.opts.maxBuffer}`);
 });
@@ -915,6 +918,41 @@ test('the `codex --version` probe goes through the same launch path and environm
   assert.deepEqual(win.probes[0].args, []);
   assert.equal(win.probes[0].opts.shell, true);
   assert.deepEqual(win.probes[0].opts.env, { Path: 'C:\\Windows' });
+});
+
+test('at or under the floor of the weekly limit nothing is started or recorded, and the user is asked about the reset', async () => {
+  const { root, base } = makeRepo();
+  for (const usedPercent of [100 - CODEX_WEEKLY_FLOOR, 100]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, readMeter: async () => ({ ok: true, result: { rateLimits: { secondary: { usedPercent } } } }) });
+    assert.equal(result.code, 1, result.out);
+    assert.match(result.err, /at or under its floor of \d+(\.\d+)?% \(rule:codex-weekly-floor\)/);
+    assert.match(result.err, /whether to reset the weekly limit/);
+    assert.match(result.err, /--base HEAD~1 --unavailable "weekly limit at its floor/);
+    assert.equal(wrote(root), false);
+    assert.equal(fake.calls.length, 0, 'the review is not spawned');
+  }
+});
+
+test('an interrupted read of the weekly limit starts nothing and records nothing', async () => {
+  const { root, base } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, readMeter: async () => ({ ok: false, reason: 'interrupted' }) });
+  assert.equal(result.code, 1);
+  assert.match(result.err, /The read of Codex's weekly limit was interrupted, so the review was not started and nothing was recorded\./);
+  assert.equal(wrote(root), false);
+  assert.equal(fake.calls.length, 0, 'the review is not spawned');
+});
+
+test('a reading of the weekly limit that fails, or that holds none, says so and the review runs', async () => {
+  const { root, base } = makeRepo();
+  for (const readMeter of [async () => ({ ok: false, reason: 'missing' }), async () => ({ ok: true, result: {} })]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...fake, readMeter });
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /Codex's weekly limit could not be read before the launch: .+ The review runs without it\./);
+    assert.equal(fake.calls.length, 1, 'the review is spawned');
+  }
 });
 
 test('no probe is run for --unavailable, or when the tree is dirty', async () => {
@@ -1486,7 +1524,7 @@ test(`the usage names no session: its flags are those of a review, and its secon
   const result = await run(['--cwd', '.']);
   assert.equal(result.code, 2);
   const [, , usage, loads, ...more] = result.err.split('\n');
-  assert.equal(usage, 'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] [--unavailable <reason>] [--cwd <path>] [--home <path>]');
+  assert.equal(usage, 'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--request <text>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] [--unavailable <reason>] [--cwd <path>] [--home <path>]');
   assert.equal(
     loads,
     `Codex gets the diff, the repository to read and the project's AGENTS.md, and none of your Codex configuration; the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.`,
@@ -1498,7 +1536,8 @@ test(`the usage names no session: its flags are those of a review, and its secon
     'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
     PROMPT_DEFAULT_SAID,
     STARTS_WHERE_RECORDS_END,
-    '`--doc <feature document>` judges the change against that document\'s Goal and Done when, and needs `--prompt own`.',
+    '`--doc <feature document>` judges the change against that document\'s Goal, Done when and Specs, for large work; `--request <text>` against the request as written, for small work. ' +
+      'Either asks the own prompt, in a turn too, and neither goes with `--prompt codex`; a review given neither says it judges the code alone.',
     '`--part-lines <n>` is how many changed lines a part of a large range holds at most, in place of the default.',
     '`--fresh` reviews every part of a range again, where a run otherwise keeps the parts that passed in an earlier run of it.',
     '`--keep-home` leaves the Codex home of the run in place after it.',
@@ -2258,7 +2297,7 @@ test('--prompt own hands Codex this command\'s prompt on stdin: the committed ra
   assert.deepEqual(opts.stdio, ['pipe', 'pipe', 'inherit']);
   // The whole prompt, and then the end of the input, which is what Codex waits for.
   assert.deepEqual(child.received, { text: reviewPrompt({ from: base, head }), ended: true });
-  assert.ok(child.received.text.includes(`git diff ${base} ${head}`));
+  assert.ok(child.received.text.includes(`git diff --find-renames ${base} ${head}`));
   assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
 });
 
@@ -2315,7 +2354,7 @@ test('the run line says which prompt the review was asked with, and the version 
   await run(['--base', 'HEAD~1', '--again', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base)));
   await run(['--base', 'HEAD~1', '--again', ...OWN, '--cwd', root], fakeCodex(reviewed(root, base), { status: 7 }));
   const runs = readCodexReviewRuns(root);
-  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v2');
+  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v4');
   assert.deepEqual(runs.map((line) => [line.outcome, line.session, line.prompt, line.promptVersion]), [
     ['reviewed', 'lean', 'codex', null],
     ['reviewed', 'lean', 'own', REVIEW_PROMPT_VERSION],
@@ -2343,10 +2382,12 @@ test('--prompt and --doc: a prompt that is not one, and a document with no own p
     [['--session', 'lean', '--prompt', 'mine'], /--prompt must be `codex` or `own`/],
     [['--prompt', 'OWN'], /--prompt must be `codex` or `own`/],
     [['--session', 'lean', '--prompt'], /--prompt requires a value/],
-    [['--session', 'lean', '--doc', doc], /--doc needs --prompt own/],
     [['--session', 'lean', '--prompt', 'codex', '--doc', doc], /--doc needs --prompt own/],
-    [['--doc', doc], /--doc needs --prompt own/],
+    [['--prompt', 'codex', '--request', 'fix it'], /--request needs --prompt own/],
     [[...OWN, '--doc'], /--doc requires a value/],
+    [[...OWN, '--request'], /--request requires a value/],
+    [[...OWN, '--request', '  '], /--request: The request is empty/],
+    [[...OWN, '--doc', doc, '--request', 'fix it'], /--doc and --request do not go together/],
   ];
   for (const [flags, message] of cases) {
     const fake = fakeCodex(reviewed(root, base));
@@ -2372,6 +2413,39 @@ test('out of a turn, --doc with no --prompt or with --prompt codex goes into the
     assert.equal(result.code, 0, `${flags.join(' ')}: ${result.err}`);
     assert.equal(fake.calls[0].child.received.text, expected, flags.join(' '));
   }
+});
+
+// odd/tasks/double-review-alignment.md, spec 7: a code review is given what was asked every time, the gate turn
+// included, so in a turn a --doc or a --request with no --prompt asks the own prompt, the one that carries it.
+test('in a turn, --doc or --request with no --prompt goes into the own prompt; --request carries the request as written', async () => {
+  const { root, base, head } = makeRepo();
+  const request = 'Make `wait` say the session it woke for & keep 100% of it.';
+  const cases = [
+    [['--doc', featureDoc()], reviewPrompt({ from: base, head, intent: { goal: GOAL, doneWhen: DONE_WHEN } })],
+    [['--request', request], reviewPrompt({ from: base, head, intent: requestIntent(request) })],
+    [[...OWN, '--request', request], reviewPrompt({ from: base, head, intent: requestIntent(request) })],
+  ];
+  for (const [flags, expected] of cases) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', '--again', ...flags, '--cwd', root], fake);
+    assert.equal(result.code, 0, `${flags.join(' ')}: ${result.err}`);
+    assert.deepEqual(fake.calls[0].args, ownArgv(), flags.join(' '));
+    assert.equal(fake.calls[0].child.received.text, expected, flags.join(' '));
+    assert.equal(result.out.includes(NO_ASKED), false, result.out);
+  }
+});
+
+test('a review given neither --doc nor --request says it judges the code alone, in a turn and out of one', async () => {
+  const { root, base } = makeRepo();
+  for (const env of [IN_TURN, {}]) {
+    const result = await run(['--base', 'HEAD~1', '--again', '--cwd', root], fakeCodex(reviewed(root, base)), env);
+    assert.equal(result.code, 0, result.err);
+    assert.ok(result.out.split('\n').includes(NO_ASKED), result.out);
+  }
+  assert.match(NO_ASKED, /--doc <feature document>.*--request/);
+  // A skip launches no review, so there is nothing to judge.
+  const skip = await run(['--base', 'HEAD~1', '--again', '--unavailable', 'no Codex here', '--cwd', root], fakeCodex(reviewed(root, base)));
+  assert.equal(skip.out.includes(NO_ASKED), false, skip.out);
 });
 
 test('a --doc that cannot be read, or holds no Goal or no Done when, is a usage error that names what is missing', async () => {
@@ -3448,14 +3522,14 @@ function runIds() {
   return () => idOf((made += 1));
 }
 
-/** What `git --literal-pathspecs diff --no-renames <base> <head> -- <files>` prints in `root`: the command the
+/** What `git --literal-pathspecs diff --find-renames <base> <head> -- <files>` prints in `root`: the command the
  * prompt of a part names, where each of `files` is that one path and no pattern. */
-const partDiff = (root, base, head, ...files) => git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-renames', base, head, '--', ...files);
+const partDiff = (root, base, head, ...files) => git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--find-renames', base, head, '--', ...files);
 
 /** The events of a session that ran the command of its part, got the whole diff of `files` back, and ended
  * with the review `rendered`; with `null`, it ended with no message at all. */
 const partSaid = (rendered, root, base, head, ...files) =>
-  jsonl(thread, turn, cmd(`git --literal-pathspecs diff --no-renames ${base} ${head} -- ${files.join(' ')}`, 0, partDiff(root, base, head, ...files)), ...(rendered === null ? [] : [msg(rendered)]), done);
+  jsonl(thread, turn, cmd(`git --literal-pathspecs diff --find-renames ${base} ${head} -- ${files.join(' ')}`, 0, partDiff(root, base, head, ...files)), ...(rendered === null ? [] : [msg(rendered)]), done);
 
 /** The events of a session that ran the command of its part and got the whole diff of `files` back. */
 const partShown = (root, base, head, ...files) => partSaid(FINDINGS, root, base, head, ...files);
@@ -3489,6 +3563,19 @@ function fakeCodexInParts(...sessions) {
 const TWO_PARTS = ['--session', 'lean', '--part-lines', '6'];
 const THREE_PARTS = ['--session', 'lean', '--part-lines', '4'];
 
+test('the weekly limit is read before each part: a part that spent down to the floor stops the next, and nothing is recorded', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const mine = fakeHome();
+  const fake = fakeCodexInParts({ stdout: partShown(root, base, head, 'a.txt', 'b.txt') }, { stdout: partShown(root, base, head, 'c.txt') });
+  const used = [50, 100 - CODEX_WEEKLY_FLOOR];
+  const readMeter = async () => ({ ok: true, result: { rateLimits: { secondary: { usedPercent: used.shift() } } } });
+  const result = await run(['--base', 'HEAD~1', ...TWO_PARTS, '--cwd', root], { ...fake, homedir: mine.homedir, randomUUID: runIds(), readMeter });
+  assert.equal(result.code, 1, result.out);
+  assert.deepEqual(fake.order, ['start 1', 'end 1'], 'the second part is not launched');
+  assert.match(result.err, /so part 2 of 2 was not started, the parts before it kept for the next run, and nothing was recorded/);
+  assert.deepEqual(readCodexReviews(root), []);
+});
+
 test('a lean range over the bound is reviewed in parts: one session after another, each over its own files and in a home of its own, and one record for the whole range', async () => {
   const { root, base, head } = makeThreeFileRepo();
   const mine = fakeHome();
@@ -3506,7 +3593,7 @@ test('a lean range over the bound is reviewed in parts: one session after anothe
     assert.deepEqual(call.opts.stdio, ['pipe', 'pipe', 'inherit']);
     assert.deepEqual(call.child.received, { text: reviewPrompt({ from: base, head, part: parts[at] }), ended: true });
   });
-  assert.ok(fake.calls[0].child.received.text.includes(`\`git --literal-pathspecs diff --no-renames ${base} ${head} -- a.txt b.txt\``));
+  assert.ok(fake.calls[0].child.received.text.includes(`\`git --literal-pathspecs diff --find-renames ${base} ${head} -- a.txt b.txt\``));
   // A home per part, named after its run, holding the login alone, and the only one there while it runs.
   assert.deepEqual(seen, [idOf(1), idOf(2)].map((id) => ({ home: path.join(mine.homes, id), entries: ['auth.json'], homes: [id] })));
   assert.deepEqual(listed(mine.homes), []);
@@ -3847,7 +3934,7 @@ test('out of a turn, a part whose incorrect was excused and that is kept for the
   const ids = runIds();
   const outOfTurn = { PATH: '/usr/bin' };
   // Part 1 ran `git diff` of its file and a `node --test` the preload refused, and blamed only the refusal.
-  const refusedPart = jsonl(thread, turn, cmd(`git --literal-pathspecs diff --no-renames ${base} ${head} -- a.txt`, 0, partDiff(root, base, head, 'a.txt')), REFUSED, msg(FINDINGS), done);
+  const refusedPart = jsonl(thread, turn, cmd(`git --literal-pathspecs diff --find-renames ${base} ${head} -- a.txt`, 0, partDiff(root, base, head, 'a.txt')), REFUSED, msg(FINDINGS), done);
   const failed = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], {
     ...fakeCodexInParts(
       { stdout: refusedPart, said: ONLY_THE_REFUSAL },
@@ -4299,7 +4386,7 @@ test('a file whose name git would read as a pattern is reviewed as that one file
   const names = ['a1.txt', 'a[1].txt', 'b.txt'];
   const { root, base, head } = makeRepoWith(Object.fromEntries(names.map((name) => [name, `${name} one\n`])), Object.fromEntries(names.map((name) => [name, `${name} two\n`])));
   // Read as a pattern, which is how git reads a pathspec unless told otherwise, it shows two files.
-  const asPattern = git(root, 'diff', '--no-renames', base, head, '--', 'a[1].txt');
+  const asPattern = git(root, 'diff', '--find-renames', base, head, '--', 'a[1].txt');
   assert.deepEqual([...new Set(patchKeys(asPattern).map((key) => key.split('\n')[0]))], ['a1.txt', 'a[1].txt'], 'this git reads the name as a pattern');
   // Three parts of one file, in the order of the names. Each session shows the diff of its own file alone.
   const fake = fakeCodexInParts(...names.map((name) => ({ stdout: partShown(root, base, head, name) })));
@@ -4310,7 +4397,7 @@ test('a file whose name git would read as a pattern is reviewed as that one file
   assert.equal(readCodexReviews(root).length, 1);
   // The command the part of that file was told to run, run for real: it shows that file and no other.
   const asked = fake.calls[1].child.received.text;
-  assert.ok(asked.includes(`\`git --literal-pathspecs diff --no-renames ${base} ${head} -- 'a[1].txt'\``), asked);
+  assert.ok(asked.includes(`\`git --literal-pathspecs diff --find-renames ${base} ${head} -- 'a[1].txt'\``), asked);
   assert.deepEqual(patchKeys(runCommandOf(root, asked)), ['a[1].txt\n-a[1].txt one', 'a[1].txt\n+a[1].txt two']);
   // And the lines of the file the pattern also matches are no evidence for this part: a session that showed
   // that other file alone did not show its own.
@@ -4379,11 +4466,14 @@ test('a range over the default bound of 400 changed lines is reviewed in parts w
   }
 });
 
-test('a renamed file and a binary one, in parts: the renamed file is shown whole under both its names, and a part of binary files alone needs one command that worked', async () => {
+// A move of reviewed files was shown to Codex whole, every unchanged line as new (odd/tasks/rename-counted-by-changes.md).
+test('a renamed file and a binary one, in parts: the renamed file is one file of one part under both its names, shown as a rename, and a part needs one command that worked', async () => {
   const root = tmp('js-harness-codex-review-');
   git(root, 'init');
   git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
   git(root, 'config', 'user.name', 'js-harness test');
+  // Renames are asked for by the command, whatever the configuration of whoever runs it says.
+  git(root, 'config', 'diff.renames', 'false');
   declareReviewOn(root);
   fs.writeFileSync(path.join(root, 'old.txt'), 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\n', 'utf8');
   fs.writeFileSync(path.join(root, 'z.txt'), 'z1\n', 'utf8');
@@ -4397,28 +4487,51 @@ test('a renamed file and a binary one, in parts: the renamed file is shown whole
   fs.writeFileSync(path.join(root, 'blob.bin'), Buffer.from([0, 9, 9, 0, 255]));
   git(root, 'commit', '-am', 'two');
   const head = git(root, 'rev-parse', 'HEAD');
-  // As git shows the range whole, it is a rename with one line changed; a part cannot show a rename whose
-  // two names are in different parts, so every part is asked, and checked, with renames off.
-  assert.match(patchOf(root, base), /rename from old\.txt/);
-  const order = ['blob.bin', 'new.txt', 'old.txt', 'z.txt'];
-  const fake = fakeCodexInParts(...order.map((file) => ({ stdout: partShown(root, base, head, file) })));
-  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--part-lines', '4', '--cwd', root], { ...fake, randomUUID: runIds() });
+  // The rename is 2 changed lines, the binary file none: the first part holds both, its old name before its new.
+  const fake = fakeCodexInParts({ stdout: partShown(root, base, head, 'blob.bin', 'old.txt', 'new.txt') }, { stdout: partShown(root, base, head, 'z.txt') });
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--part-lines', '2', '--cwd', root], { ...fake, randomUUID: runIds() });
   assert.equal(result.code, 0, result.err);
+  assert.ok(fake.calls[0].child.received.text.includes(`\`git --literal-pathspecs diff --find-renames ${base} ${head} -- blob.bin old.txt new.txt\``), fake.calls[0].child.received.text);
   assert.deepEqual(readCodexReviewRuns(root).map((line) => [line.part, line.coverage]), [
-    [{ index: 1, of: 4, files: 1, changedLines: 0 }, { seen: 0, total: 0 }],
-    [{ index: 2, of: 4, files: 1, changedLines: 8 }, { seen: 8, total: 8 }],
-    [{ index: 3, of: 4, files: 1, changedLines: 8 }, { seen: 8, total: 8 }],
-    [{ index: 4, of: 4, files: 1, changedLines: 2 }, { seen: 2, total: 2 }],
+    [{ index: 1, of: 2, files: 3, changedLines: 2 }, { seen: 2, total: 2 }],
+    [{ index: 2, of: 2, files: 1, changedLines: 2 }, { seen: 2, total: 2 }],
   ]);
   assert.equal(readCodexReviews(root).length, 1);
-  // A session that showed the new name as git shows it in the whole range, a rename with one line changed, did
-  // not show every line of its part: the file is new there, and all of it is to be read.
-  const renamed = git(root, 'diff', '--no-color', base, head, '--', 'old.txt', 'new.txt');
-  const partial = fakeCodexInParts({ stdout: partShown(root, base, head, 'blob.bin') }, { stdout: reviewedWith(cmd('git diff', 0, renamed)) });
-  const refused = await run(['--base', 'HEAD~1', '--again', '--fresh', '--session', 'lean', '--part-lines', '4', '--cwd', root], { ...partial, randomUUID: runIds() });
+  // A session that showed the new name alone saw the file as added whole, and not the line the rename removed.
+  const alone = git(root, 'diff', '--no-color', '--find-renames', base, head, '--', 'new.txt');
+  assert.doesNotMatch(alone, /rename from/);
+  const partial = fakeCodexInParts({ stdout: reviewedWith(cmd('git diff', 0, alone)) });
+  const refused = await run(['--base', 'HEAD~1', '--again', '--fresh', '--session', 'lean', '--part-lines', '2', '--cwd', root], { ...partial, randomUUID: runIds() });
   assert.equal(refused.code, 1);
-  assert.match(refused.err, /showed 1 of 8 changed lines of part 2 of 4/);
+  assert.match(refused.err, /showed 1 of 2 changed lines of part 1 of 2/);
   assert.equal(readCodexReviews(root).length, 1, 'no second record');
+});
+
+// A document no review read, renamed into code, would be shown as a rename by its changed lines alone (L7).
+test('a range that renames a document into code is read renames off: the code is added whole and shown so', async () => {
+  const root = tmp('js-harness-codex-review-');
+  git(root, 'init');
+  git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
+  git(root, 'config', 'user.name', 'js-harness test');
+  declareReviewOn(root);
+  fs.writeFileSync(path.join(root, 'notes.md'), Array.from({ length: 30 }, (_, i) => `line ${i}\n`).join(''), 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', 'one');
+  const base = git(root, 'rev-parse', 'HEAD');
+  fs.mkdirSync(path.join(root, 'bin'));
+  git(root, 'mv', 'notes.md', 'bin/notes.mjs');
+  fs.appendFileSync(path.join(root, 'bin', 'notes.mjs'), 'one more\n', 'utf8');
+  git(root, 'commit', '-am', 'two');
+  const head = git(root, 'rev-parse', 'HEAD');
+  const shown = git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-renames', base, head, '--', 'bin/notes.mjs');
+  const asked = `git --literal-pathspecs diff --no-renames ${base} ${head} -- bin/notes.mjs`;
+  const fake = fakeCodexInParts({ stdout: jsonl(thread, turn, cmd(asked, 0, shown), msg(FINDINGS), done) });
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.ok(fake.calls[0].child.received.text.includes(`\`${asked}\``), fake.calls[0].child.received.text);
+  assert.deepEqual(readCodexReviewRuns(root).map((line) => [line.part, line.coverage]), [
+    [{ index: 1, of: 1, files: 1, changedLines: 31 }, { seen: 31, total: 31 }],
+  ]);
 });
 
 test('the parts must show every changed line of the range between them: a split that would leave lines out is refused before anything is launched', async () => {
@@ -4637,7 +4750,8 @@ test('a run prints its plan before its first session starts, and the estimate of
   const onScreen = [];
   const whole = await run(['--base', 'HEAD~1', '--again', '--cwd', root], { ...watching(fakeCodex(reviewed(root, base)), () => onScreen.push([...out])), log: (line) => out.push(line) });
   assert.equal(whole.code, 0, whole.err);
-  assert.equal(onScreen[0].length, 4, 'the header, the part and the estimate, and the session that is announced');
+  assert.equal(onScreen[0].length, 5, 'the header, the part and the estimate, the session that is announced, and that no request was given');
+  assert.equal(onScreen[0][4], NO_ASKED);
   assert.equal(onScreen[0][0], `Plan of the Codex review of ${base.slice(0, 7)}..${head.slice(0, 7)}: ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, 1 part, 8 changed lines in 3 files.`);
   assert.match(onScreen[0][1], /^ {2}part 1 of 1: 3 files, 8 changed lines, about [\d,]+ input tokens$/);
   assert.match(onScreen[0][3], /^Codex is reviewing /);
@@ -4946,12 +5060,13 @@ test('in parts, the files left out are in no part and in no prompt, and the part
   // left out, told apart by their place. A patch that is not one section a file refuses the run.
   const cut = (command, args, opts) => {
     const answer = fake.spawn(command, args, opts);
-    const whole = command === 'git' && args.includes('--no-renames') && !args.includes('--numstat') && !args.includes('--');
+    const whole = command === 'git' && args.includes('--find-renames') && !args.includes('--numstat') && !args.includes('--');
     return whole ? { ...answer, stdout: answer.stdout.slice(0, answer.stdout.lastIndexOf('diff --git ')) } : answer;
   };
   const none = fakeCodexInParts();
-  const refused = await run(['--base', 'HEAD~1', '--part-lines', '2', '--cwd', root], { ...none, spawn: cut });
-  assert.equal(refused.code, 1);
+  // `--again`: the range has its record now, and the run is to reach the check of its parts.
+  const refused = await run(['--base', 'HEAD~1', '--again', '--part-lines', '2', '--cwd', root], { ...none, spawn: cut });
+  assert.equal(refused.code, 1, refused.out);
   assert.match(refused.err, /^Could not check the parts against the range\. The patch of the range holds 3 sections for its 4 files, .*\nThe review was not started and nothing was recorded\.$/);
   assert.deepEqual([none.calls.length, none.probes.length, readCodexReviews(root).length], [0, 0, 1]);
 });
@@ -5499,7 +5614,7 @@ test('the diff of a merge review is a diff of the automatic merge and the merge,
   const [head, auto] = ['b'.repeat(40), 'd'.repeat(40)];
   const args = rangeDiff({ from: 'a'.repeat(40), head, merge: { side: 'c'.repeat(40), branch: 'origin/main', auto } }, ['--numstat'], ['m.txt']);
   // `log.showSignature` writes a signature in what `git show` and `git log` print, never in a `git diff`.
-  assert.deepEqual(args, ['diff', '--numstat', '--no-renames', auto, head, '--', 'm.txt']);
+  assert.deepEqual(args, ['diff', '--numstat', '--find-renames', auto, head, '--', 'm.txt']);
 });
 
 test('a merge of a branch the default branch does not hold is reviewed as before: from the merged branch, the whole branch', async () => {
@@ -5514,12 +5629,12 @@ test('a merge of a branch the default branch does not hold is reviewed as before
 test('a remerge diff git cannot run is named as the command that ran: the diff of the automatic merge against HEAD', async () => {
   const { root, main } = makeResolvedMergeRepo();
   const nothing = startsNothing(root);
-  // The remerge diff of a merge is the one run diff that has `--no-renames` and no submodule, numstat or path argument.
-  const remerge = (args) => args[0] === 'diff' && args.includes('--no-renames') && !args.some((a) => a.startsWith('--submodule') || a === '--numstat' || a === '--');
+  // The remerge diff of a merge is the one run diff that has `--find-renames` and no submodule, numstat or path argument.
+  const remerge = (args) => args[0] === 'diff' && args.includes('--find-renames') && !args.some((a) => a.startsWith('--submodule') || a === '--numstat' || a === '--');
   const spawn = (command, args, opts) => (command === 'git' && remerge(args) ? { status: 128, stdout: '', stderr: 'fatal' } : nothing.deps.spawn(command, args, opts));
   const result = await run(['--base', main, '--cwd', root, ...nothing.home], { ...nothing.deps, spawn });
   assert.equal(result.code, 1, result.err);
-  assert.match(result.err, /Could not run `git diff --no-renames [0-9a-f]{7} [0-9a-f]{7}` to know what the review must see, so it was not started and nothing was recorded\./);
+  assert.match(result.err, /Could not run `git diff --find-renames [0-9a-f]{7} [0-9a-f]{7}` to know what the review must see, so it was not started and nothing was recorded\./);
   nothing.untouched('a remerge diff git cannot run');
 });
 
@@ -5579,8 +5694,8 @@ test('the review of a resolved merge asks Codex for a diff of two objects that e
   // Codex's sandbox is read-only, and `git show --remerge-diff` prints nothing there (it writes a temporary
   // object directory): the command computes the automatic merge's tree itself and asks for a plain diff (L12).
   const auto = spawnSync('git', ['merge-tree', '--write-tree', mine, main], { cwd: root, encoding: 'utf8' }).stdout.split('\n')[0];
-  const command = `git --literal-pathspecs diff --no-renames ${auto} ${head} -- m.txt`;
-  const shown = git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-renames', auto, head, '--', 'm.txt');
+  const command = `git --literal-pathspecs diff --find-renames ${auto} ${head} -- m.txt`;
+  const shown = git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--find-renames', auto, head, '--', 'm.txt');
   // The same lines as the remerge-diff; only the label of a marker differs, a full id for an id and subject.
   const unlabeled = (diff) => patchKeys(diff).map((key) => key.replace(/^(.*\n-[<>]{7}) .*$/s, '$1')).sort();
   assert.deepEqual(unlabeled(shown), unlabeled(remergeOf(root, head, 'm.txt')), 'the same lines as the remerge-diff');
@@ -5670,8 +5785,8 @@ test('a merge of main below HEAD that has the Codex review off is not a turn of 
  * and the merge, as the merge's prompt tells it to, and answers `said`. */
 function mergeTurnSession({ root, mine, main, merge }, said) {
   const auto = spawnSync('git', ['merge-tree', '--write-tree', mine, main], { cwd: root, encoding: 'utf8' }).stdout.split('\n')[0];
-  const shown = git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--no-renames', auto, merge, '--', 'm.txt');
-  return { stdout: jsonl(thread, turn, cmd(`git --literal-pathspecs diff --no-renames ${auto} ${merge} -- m.txt`, 0, shown), msg(FINDINGS), done), ...(said ? { said } : {}) };
+  const shown = git(root, '--literal-pathspecs', 'diff', '--no-color', '--no-ext-diff', '--find-renames', auto, merge, '--', 'm.txt');
+  return { stdout: jsonl(thread, turn, cmd(`git --literal-pathspecs diff --find-renames ${auto} ${merge} -- m.txt`, 0, shown), msg(FINDINGS), done), ...(said ? { said } : {}) };
 }
 
 /** The turn worktrees the common git dir of `root` holds now. */
@@ -5890,6 +6005,18 @@ test('a range the records cover whole starts nothing and records nothing: the ru
   const result = await run(['--base', 'HEAD~1', ...nothing.home, '--cwd', single.root], nothing.deps);
   assert.deepEqual([result.code, result.out], [0, `Nothing to review: ${rangeOf(single.base, single.head)} holds 1 code commit, and a Codex review record already covers it. ${AGAIN_TAKES_IT}`]);
   nothing.untouched('one commit');
+});
+
+test('a range covered only by a record whose head lies past it is not covered: the run plans its review, as the push row asks for its record (door-covers-past-tip)', async () => {
+  const { root, base, two, three } = makeSlicedRepo();
+  appendCodexReview(root, reviewedRecord(base, three));
+  git(root, 'checkout', '--quiet', '--detach', two);
+  const nothing = startsNothing(root);
+  const result = await run(['--base', base, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, '']);
+  assert.doesNotMatch(result.out, /^Nothing to review/, result.out);
+  assert.deepEqual(result.out.split('\n').slice(0, 2), planned(root, base, two, [{ files: ['a.txt', 'b.txt'], changedLines: 4 }]).slice(0, 2));
+  nothing.untouched('a plan');
 });
 
 test('a range that holds commits and no code commit starts nothing and records nothing: the push check asks a record of code commits alone', async () => {
@@ -6429,7 +6556,7 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
   // The whole usage: the flags, then the line that says what a review loads and what it runs on, then the
   // one that says how its cost is seen first, then the one that says what it leaves out.
   assert.deepEqual(usage.err.split('\n').slice(2), [
-    'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
+    'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--request <text>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
       '[--unavailable <reason>] [--cwd <path>] [--home <path>]',
     'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
       `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.`,
@@ -6437,7 +6564,8 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
     'A review reads code: Markdown files and the paths a .gitattributes marks `-codex-review` are left out of it, and the plan says how many.',
     PROMPT_DEFAULT_SAID,
     STARTS_WHERE_RECORDS_END,
-    '`--doc <feature document>` judges the change against that document\'s Goal and Done when, and needs `--prompt own`.',
+    '`--doc <feature document>` judges the change against that document\'s Goal, Done when and Specs, for large work; `--request <text>` against the request as written, for small work. ' +
+      'Either asks the own prompt, in a turn too, and neither goes with `--prompt codex`; a review given neither says it judges the code alone.',
     '`--part-lines <n>` is how many changed lines a part of a large range holds at most, in place of the default.',
     '`--fresh` reviews every part of a range again, where a run otherwise keeps the parts that passed in an earlier run of it.',
     '`--keep-home` leaves the Codex home of the run in place after it.',
@@ -6889,11 +7017,12 @@ test('a range that starts at the head of a review that found something is a rech
   assert.deepEqual(lines.slice(at + 1, at + 4).map((one) => one.replace(`${top}/`, '')), ['  1. not fixed: f.txt:1 P1 [P1] Drops the last record', '  2. fixed: lib/deep.mjs:3-9 P3 Slow on large input', '  3. fixed: f.txt:2-4 No priority given']);
   assert.ok(lines.includes('A recheck is asked with this command\'s own prompt, which lists the findings it checks: the sentence Codex writes for `--base` cannot.'), result.out);
   assert.ok(lines.includes('Follow-ups, which do not block (record them as a task): 1.'), result.out);
+  assert.ok(lines.includes(`A range that starts at ${fixed.slice(0, 7)} is a second recheck of what is open, the last of three reviews: fix it in this branch, then run it.`), result.out);
   const record = readCodexReviews(root).at(-1);
   assert.deepEqual(record, { ...reviewedRecord(head, fixed), run: RECHECK_ID, recheckOf: head });
   const line = readCodexReviewRuns(root).at(-1);
   assert.deepEqual(line.recheck, { of: head, findings: 3, fixed: 2, notFixed: 1, followUps: 1, blocking: 0, unmarked: 0 });
-  assert.deepEqual([line.prompt, line.promptVersion], ['own', 'js-harness.codex-review-recheck-prompt/v1']);
+  assert.deepEqual([line.prompt, line.promptVersion], ['own', 'js-harness.codex-review-recheck-prompt/v2']);
 });
 
 test('a second recheck of the same findings is refused before anything runs, and nothing is recorded', async () => {
@@ -6914,20 +7043,24 @@ test('a second recheck of the same findings is refused before anything runs, and
   assert.equal(git(root, 'rev-parse', 'HEAD'), fixed);
 });
 
-test('a refused range that holds a code commit no record covers names a review that reads it, and offers no skip', async () => {
+test('a fourth review refused over a code commit no record covers names a review that reads it, and offers no skip', async () => {
   const { root, base, head, fixed } = await reviewedThenCorrected();
   const second = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });
   assert.equal(second.code, 0, second.err);
+  const refixed = commitOne(root, 'f.txt', 'four\n');
+  const third = await run(['--base', fixed, '--cwd', root], { ...fakeCodex(reviewed(root, fixed), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => THIRD_ID });
+  assert.equal(third.code, 0, third.err);
   const added = commitOne(root, 'g.txt', 'new code\n');
   const records = readCodexReviews(root).length;
-  const fake = fakeCodex(reviewed(root, fixed));
-  const third = await run(['--base', fixed, '--cwd', root], { ...fake, randomUUID: () => THIRD_ID });
-  assert.equal(third.code, 1, third.out);
-  assert.ok(third.err.startsWith(`A second recheck of the findings of the review that ended at ${head.slice(0, 7)} is not run: the first left 1 finding not fixed or blocking.`), third.err);
-  assert.ok(third.err.includes(`1 code commit no Codex review record covers (${added.slice(0, 7)})`), third.err);
-  // The reviewed head is the base of the recheck, refused as well; the commit before it starts a review.
-  assert.ok(third.err.includes(`\`codex-review --base ${base} --again\``), third.err);
-  assert.ok(!third.err.includes('--unavailable '), third.err);
+  const fake = fakeCodex(reviewed(root, refixed));
+  const fourth = await run(['--base', refixed, '--cwd', root], { ...fake, randomUUID: () => '00000000-0000-4000-8000-000000000005' });
+  assert.equal(fourth.code, 1, fourth.out);
+  assert.ok(fourth.err.startsWith(`Three reviews of this change did not settle it: the third, a second recheck that ended at ${refixed.slice(0, 7)}, left 1 finding not fixed or blocking.`), fourth.err);
+  assert.ok(fourth.err.includes(`pass the work to ${ESCALATION_MODEL}`), fourth.err);
+  assert.ok(fourth.err.includes(`1 code commit no Codex review record covers (${added.slice(0, 7)})`), fourth.err);
+  // Each head of the three reviews is refused as well; the commit before the first starts a review.
+  assert.ok(fourth.err.includes(`\`codex-review --base ${base} --again\``), fourth.err);
+  assert.ok(!fourth.err.includes('--unavailable '), fourth.err);
   assert.equal(fake.calls.length, 0, 'no Codex was launched');
   assert.equal(readCodexReviews(root).length, records);
   // The command it names runs, as a review, and its record covers the new commit.
@@ -6980,7 +7113,7 @@ test('a new finding that blocks is said apart from the follow-ups, and keeps the
   const { root, head } = await reviewedThenCorrected();
   const result = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root, { blocks: true })), randomUUID: () => RECHECK_ID });
   assert.equal(result.code, 0, result.err);
-  assert.ok(result.out.split('\n').includes('Blocking, a new finding that could make a failing check pass or exposes data: 1.'), result.out);
+  assert.ok(result.out.split('\n').includes('Blocking, a new finding that could make a failing check pass, exposes data or is a regression the correction brought: 1.'), result.out);
   assert.deepEqual(readCodexReviewRuns(root).at(-1).recheck, { of: head, findings: 3, fixed: 2, notFixed: 1, followUps: 1, blocking: 1, unmarked: 0 });
 });
 
@@ -7023,17 +7156,25 @@ test('a document committed between the reviewed head and the fix does not move w
   assert.equal(readCodexReviews(root).at(-1).head, fixed);
 });
 
-test('a document committed after a recheck that left a finding open does not open a new review: the range is refused', async () => {
+test('after a recheck that left a finding open, a document committed does not open a new review: the range is a second recheck of what is open', async () => {
   const { root, head, fixed } = await reviewedThenCorrected();
   const second = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });
   assert.equal(second.code, 0, second.err);
   commitOne(root, 'notes.md', 'what is still open\n');
   commitOne(root, 'f.txt', 'four');
-  const fake = fakeCodex(reviewed(root, fixed));
+  const plan = await run(['--base', fixed, '--plan', '--cwd', root], fakeCodex(''));
+  assert.ok(plan.out.split('\n').includes(`A run of this range is a second recheck, the last of three reviews, of the 1 finding the recheck that ended at ${fixed.slice(0, 7)} left open.`), plan.out);
+  const fake = fakeCodex(reviewed(root, fixed), {}, PROBE_OK, recheckAnswer(root));
   const third = await run(['--base', fixed, '--cwd', root], { ...fake, randomUUID: () => THIRD_ID });
-  assert.equal(third.code, 1, third.out);
-  assert.ok(third.err.startsWith(`A second recheck of the findings of the review that ended at ${head.slice(0, 7)} is not run`), third.err);
-  assert.equal(fake.calls.length, 0, 'no Codex was launched');
+  assert.equal(third.code, 0, third.err);
+  const asked = fake.calls[0].child.received.text;
+  assert.ok(asked.includes('## A recheck of earlier findings'), asked);
+  assert.ok(asked.includes('Drops the last record'), asked);
+  assert.ok(!asked.includes('Slow on large input'), 'a finding the first recheck found fixed is not asked again');
+  // It left the finding open: three reviews did not settle the change, so it is raised and passed on now.
+  assert.ok(third.out.includes(`Three reviews of this change did not settle it. Raise it to the user as a problem`), third.out);
+  assert.ok(third.out.includes(`pass the work to ${ESCALATION_MODEL}`), third.out);
+  assert.equal(readCodexReviews(root).at(-1).recheckOf, fixed);
 });
 
 test('--again from the head of a review whose findings were rechecked is a second recheck, and is refused', async () => {

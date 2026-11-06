@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CONTRACT_TEMPLATE, commandsIn, isContract, parseContract, validateContract, doneWhen, tasksOf, taskModes, modeLine } from './contract.mjs';
+import { CONTRACT_TEMPLATE, cmdShellGap, commandsIn,isContract, parseContract, validateContract, doneWhen, tasksOf, taskModes, modeLine } from './contract.mjs';
 import { taskId } from './sessions.mjs';
 
 /** A complete contract; each test breaks one thing in it. */
@@ -52,9 +52,11 @@ test('the template fails validation: it is all placeholders', () => {
   assert.ok(errors.some((e) => /^task T1 names the kind/.test(e)), errors.join('\n'));
 });
 
-test('the template is a contract with every section, in order, then a task line that names its kind', () => {
+// Rule 1 puts the depth pass after the contract (odd/tasks/double-review-alignment.md, older text 8).
+test('the template is a contract with every section, in order, then the depth pass and a task line that names its kind', () => {
   assert.equal(isContract(CONTRACT_TEMPLATE), true);
-  assert.deepEqual([...parseContract(CONTRACT_TEMPLATE).keys()], [...SECTIONS, 'Tasks']);
+  assert.deepEqual([...parseContract(CONTRACT_TEMPLATE).keys()], [...SECTIONS, 'Depth pass', 'Tasks']);
+  assert.match(parseContract(CONTRACT_TEMPLATE).get('Depth pass'), /- 1\. Method:[\s\S]*- 5\. Request:[\s\S]*Adds: none/);
   assert.match(parseContract(CONTRACT_TEMPLATE).get('Tasks'), /^- \[ \] T1 \(kind: design \| build \| verify \| docs\)/);
 });
 
@@ -108,6 +110,24 @@ test('a command that still holds a placeholder is rejected and quoted', () => {
 test('a redirect in a real command is not mistaken for a placeholder', () => {
   const md = withSection('Done when', '- `node x.mjs > out.txt` exits 0');
   assert.equal(validateContract(md).ok, true);
+});
+
+// JH 136: cmd.exe passed `$(git` to `test` as written, and a met goal read "not met (exit 2)".
+test('cmdShellGap names a $( ) cmd.exe would pass on as written, and not one handed to a program that has its own', () => {
+  for (const bad of ['test $(git rev-list --count HEAD) -ge 3', 'git fetch -q origin && test $(git rev-list --count HEAD) -ge 3', 'test "$(git rev-list --count HEAD)" -ge 3', 'bash -c "true" && echo $(date)', 'node -e "process.exit(+process.argv[1] >= 3 ? 0 : 1)" $(git rev-list --count HEAD)', 'node -e "process.exit(+process.argv[1] >= 3 ? 0 : 1)" "$(git rev-list --count HEAD)"', 'bash x.sh "$(date)"']) {
+    assert.match(cmdShellGap(bad) ?? '', /\$\( \).*cmd\.exe.*node -e/, bad);
+  }
+  for (const good of ['npm run check', 'git fetch -q && bash -c "test $(git rev-list --count HEAD) -ge 3"', 'powershell -c "$(Get-Date)"', 'pwsh -NoProfile -Command "$(Get-Date)"', '"C:\\Program Files\\Git\\usr\\bin\\sh.exe" -c "echo $(date)"', 'node -e "process.exit(0)" && node x.mjs']) {
+    assert.equal(cmdShellGap(good), null, good);
+  }
+});
+
+test('a done-when command with a $( ) cmd.exe cannot run is rejected on Windows alone', () => {
+  const md = withSection('Done when', '- `test $(git rev-list --count HEAD) -ge 3` exits 0');
+  const { ok, errors } = validateContract(md, { platform: 'win32' });
+  assert.equal(ok, false);
+  assert.ok(errors.some((e) => e.includes('test $(git rev-list --count HEAD) -ge 3') && /cmd\.exe/.test(e)), errors.join('\n'));
+  assert.equal(validateContract(md, { platform: 'linux' }).ok, true);
 });
 
 test('Effort must be exactly medium or high', () => {

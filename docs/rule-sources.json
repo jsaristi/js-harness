@@ -167,6 +167,10 @@
       "by": "command"
     }
   },
+  "chained-steps": {
+    "kind": "design",
+    "path": "odd/tasks/guard-chained-steps.md"
+  },
   "ci-gate-bound": {
     "kind": "design",
     "path": "odd/tasks/commit-gates-first.md"
@@ -226,6 +230,35 @@
       "by": "session"
     }
   },
+  "codex-weekly-floor": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Aunque siempre avisame para reiniciar el limite semana",
+        "date": "2026-11-01",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 49536
+      },
+      {
+        "quote": "me avisas cuando al uso semanal le quede el 2 al 1 porciento",
+        "date": "2026-11-01",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 49661
+      },
+      {
+        "quote": "Listo, entonces continua solo unas 2 horas",
+        "date": "2026-11-01",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 49690
+      }
+    ],
+    "reading": "Point 5 of the redesign of question 152 (odd/tasks/double-review-alignment.md, L18), as he changed it: no Codex reserve; he is always told before the weekly limit is reset, and told when 2 to 1 percent of the weekly use is left. A Codex review reads the weekly limit just before it launches, and at 2 percent left or less it starts nothing and he decides on the reset; his reset credit is never spent without his word. On his typed no, a second Claude review takes Codex's place and the Codex skip stays a debt until a Codex review pays it.",
+    "accepted": "He typed \"Listo, entonces continua solo unas 2 horas\" at line 49690 of 0f71b2c6, answering the lead's question at line 49684, which asked whether he approved the redesign of question 152 with point 5 changed to the notice at 2 to 1 percent left and his decision on the reset; point 5 of that redesign is this reading.",
+    "checked": {
+      "date": "2026-11-02",
+      "by": "command"
+    }
+  },
   "context-pause": {
     "kind": "words",
     "quotes": [
@@ -251,26 +284,96 @@
     "kind": "design",
     "path": "odd/tasks/rule-hierarchy.md"
   },
+  "depth-pass": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "la regla numero 1 sobre la que siempre se va a basar el modelo",
+        "date": "2026-10-31",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 42804
+      },
+      {
+        "quote": "Quiero una version mas profunda de esta tarea, no una mas grande",
+        "date": "2026-10-31",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 42859
+      },
+      {
+        "quote": "me gustaria que adoptaramos la idea mejorada",
+        "date": "2026-10-31",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 42878
+      }
+    ],
+    "reading": "Before large work is built, and whenever he asks, a depth pass in his order: the discipline's method, the rawest material cited, what excellent and complete mean as a bar per spec, the cheapest refutation run before code with a verdict, and his request rewritten last beside his words; a refuting verdict reaches him before any code, and the pass reaches him in the feature's report. Its text is section 9 of js-harness-protocols, named in one line at the head of every CLAUDE.md the harness writes (odd/tasks/depth-pass-rule.md, draft v3).",
+    "accepted": "His answer to question 143, tapped, 2026-10-31T12:35:41Z (the lead's transcript 0f71b2c6, line 43370): \"Sí, v3, trabajo grande y cuando la pida (Recomendada)\".",
+    "checked": {
+      "date": "2026-10-31",
+      "by": "command"
+    }
+  },
   "double-review": {
     "kind": "words",
     "quotes": [
       {
-        "quote": "Siempre me gustaria hacewr asi una doble revision con mejora quiero añadirlo al harness siempre obtenes mejores resultados, Sí, aprobado el protocolo revisado.",
-        "date": "2026-10-11",
-        "session": "130317af-a818-419c-a3de-3a21335db0a8",
-        "line": 470
+        "quote": "una de Claude y una de Codex para tener 2 perspectivas diferentes pero que sean dos revisiones ciegas independientes",
+        "date": "2026-10-31",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 43642
       },
       {
-        "quote": "si",
-        "date": "2026-10-27",
-        "session": "e41d1e8d-8264-45a4-b16c-f9279f7b6076",
-        "line": 7461
+        "quote": "siento que siempre todo se debe revisar doble",
+        "date": "2026-10-31",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 43701
+      },
+      {
+        "quote": "identificar problemas con aporte de mejoras",
+        "date": "2026-11-01",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 49332
+      },
+      {
+        "quote": "maximo hacer 3 revisiones y si no presentar un problema",
+        "date": "2026-11-01",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 49467
+      },
+      {
+        "quote": "Listo, entonces continua solo unas 2 horas",
+        "date": "2026-11-01",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 49690
       }
     ],
-    "reading": "\"A todo\" covers everything. Code keeps its two reviewers that did not write it (Codex at every push; gentle-ai when its assessment makes a review due). Text has none, so a design before it is built, and a plan, a design, an analysis with figures, a protocol or a change of the charter that reaches him, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing (odd/tasks/rule-hierarchy.md, \"The double review (T18)\"). His answer D5 of the diet (docs/proposals/harness-diet.md): the double review is narrowed to proposals that change one of his decisions, whether a design, a plan, an analysis with figures, a protocol or a change of the charter; a design or report that changes none of them reaches him without the two readers.",
-    "accepted": "He typed \"si\" at line 7461 of e41d1e8d, answering the lead's question at line 7454, which asked him to write that he narrows the double review to the proposals that change one of his decisions; that question is the reading he accepted.",
+    "reading": "His answers 145, 146, 150 and its addition, and 152 (odd/tasks/double-review-alignment.md, specs 1, 2, 7, 8 and 11, \"Redesign after question 150\") retire his answer D5 of 2026-10-27, which narrowed the double review to the proposals that change one of his decisions with two read-only readers, one attacking its claims and one looking for what is missing. Now everything that proposes something (a plan, a design before it is built, an analysis with figures, a protocol, a document) passes a Claude reader and a Codex reader, blind, on one frozen copy, each bringing failures and improvements against what was asked; only his typed \"no quiero la revisión\" skips it. Code passes its own pair, Codex and the Claude lenses, judged against what was asked; no extra read on small code (147 dropped). The writer answers every finding, taken or rebutted on evidence. A review that finds nothing approves at once; a correction gets a confirming review; at most three reviews, and where the third still finds a real failure he gets it as a problem and the work passes to a stronger model. Not for a question of fact, nor for a step whose reviewed text the question names by path.",
+    "accepted": "He typed \"Listo, entonces continua solo unas 2 horas\" at line 49690 of 0f71b2c6, answering the lead's question at line 49684, which asked whether he approved the redesign of question 152 with the notice at 2 to 1 percent in place of the 10% reserve and said that a written yes lets JH 126 record the rules and build points 2 to 5; points 1 to 4 of that redesign are this reading.",
     "checked": {
-      "date": "2026-10-27",
+      "date": "2026-11-01",
+      "by": "command"
+    }
+  },
+  "escalation-model": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "pasarlo a un modelo mas inteligente aprovechando que esta semana sale Fable 5.5",
+        "date": "2026-11-01",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 49467
+      },
+      {
+        "quote": "Listo, entonces continua solo unas 2 horas",
+        "date": "2026-11-01",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 49690
+      }
+    ],
+    "reading": "His addition to question 150 (spec 8 of odd/tasks/double-review-alignment.md, point 4 of its redesign): at most three reviews of one change, and where the third still finds a real failure, nothing more is reviewed, the problem is raised to him with what is happening, and the work passes to a more intelligent model. That model is one value: the strongest this machine knows today, claude-fable-5-1. His \"Fable 5.5\" is his word, not a model this machine knows yet; when it ships, it takes this value by a change of it.",
+    "accepted": "He typed \"Listo, entonces continua solo unas 2 horas\" at line 49690 of 0f71b2c6, answering the lead's question at line 49684, which asked whether he approved the redesign of question 152 and said that a written yes lets JH 126 record the rules and build points 2 to 5; point 4 of that redesign is this reading.",
+    "checked": {
+      "date": "2026-11-02",
       "by": "command"
     }
   },
@@ -306,6 +409,23 @@
   "gate-wait": {
     "kind": "design",
     "path": "odd/tasks/gate-lock.md"
+  },
+  "growth-limit": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Listo entonces continuemos y reactives todo para hacer le plan",
+        "date": "2026-11-01",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 48080
+      }
+    ],
+    "reading": "His answer names no limit: it confirms the lead's question in the entry before it (same session, line 48066, an assistant entry read by this session): \"¿adoptas el ajuste, es decir, seguir con F8 y poner el límite al crecimiento?\", whose message described the limit as \"Mientras la semana esté en rojo, no entraría trabajo nuevo, salvo arreglos y pasos de F8\", after the page he read (https://claude.ai/artifact/1EPj6FTbsB6C6n9aAT5iyJ, step 1: \"que el líder detenga lo nuevo mientras la semana esté en rojo. No frena arreglos de lo que ya funciona ni los pasos de F8\"). The value is the lead's exemption in English, \"arreglos y pasos de F8\". The week is red when the open steps grew over the last seven whole days: added and reopened more than closed and removed. The page said \"más agregados que cerrados\"; removals are counted because the double review found that a reworded roadmap step counts as one removed and one added (odd/tasks/replan-execute.md, L6), so without them a rewording would read as new work. That precision is this session's, and his to correct.",
+    "accepted": "A message he typed to the lead, answering that question after reading the page; the count's precision was not put to him.",
+    "checked": {
+      "date": "2026-11-01",
+      "by": "command"
+    }
   },
   "lead-charter": {
     "kind": "words",
@@ -404,6 +524,29 @@
     "accepted": "Messages he typed to the lead, sent as he wrote them, each confirmed with js-harness sessions --quote; the reading is the lead's brief to the session that built it.",
     "checked": {
       "date": "2026-10-27",
+      "by": "command"
+    }
+  },
+  "local-time": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "por que me das la hora en Z? osea por que termina en Z en vez de darme mi hora local",
+        "date": "2026-11-01",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 47140
+      },
+      {
+        "quote": "listo colocalo en el arnes de siempre dar la hora local",
+        "date": "2026-11-01",
+        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
+        "line": 47160
+      }
+    ],
+    "reading": "Every clock time the harness shows him is in his local time, read from the machine's clock, with its zone said once; the records stay in UTC because they are compared with each other; the reply Stop hook turns back a reply that gives him a UTC clock time outside a code block, a quoted output or a path, and the pages and hook messages he reads render local time (odd/tasks/local-time.md).",
+    "accepted": "His typed answer, 2026-11-01T05:56:03Z (the lead's transcript 0f71b2c6, line 47160), to the lead's reply at line 47154, which proposed that the reply hook turn back a time with Z: \"listo colocalo en el arnes de siempre dar la hora local\".",
+    "checked": {
+      "date": "2026-11-01",
       "by": "command"
     }
   },
@@ -831,11 +974,11 @@
         "line": 2963
       }
     ],
-    "reading": "His answer names no value: it confirms the orchestrator's question in the entry before it (same session, line 2958, an assistant entry read by this session), which asked: \"Commit que va a revisión: hasta unas 1.200 líneas\". The number was derived in `odd/tasks/gate-lock.md` (the rule taken from a commit of 2,250 lines that could not be reviewed).",
-    "accepted": "The answer is the block the orchestrator offered under that question, and he sent it as it was.",
+    "reading": "His answer of 2026-10-11 (the quote) names no value: it confirms the orchestrator's question in the entry before it (same session, line 2958, an assistant entry), which asked: \"Commit que va a revisión: hasta unas 1.200 líneas\"; the number was derived in `odd/tasks/gate-lock.md` (the rule taken from a commit of 2,250 lines that could not be reviewed), and it stays. What is counted changes: a file a commit renames counts by the lines it changes, as git measures a rename, instead of the whole file removed and added again, so a move of files a review has already read is sized by what it changes (odd/tasks/workshop-product-split.md, L19: the staged move was 15,333 changed lines renames off and 569 with them).",
+    "accepted": "His answer to question 193, tapped, 2026-11-05T15:48:42Z (the lead's transcript 0f71b2c6, line 67310): \"Contar lo que cambia\", under a question whose yes covered only this change to his rule, in its own commit through rules change, and neither a higher cap nor any other change.",
     "checked": {
-      "date": "2026-10-11",
-      "by": "session"
+      "date": "2026-11-05",
+      "by": "command"
     }
   },
   "rules-live-in-the-harness": {

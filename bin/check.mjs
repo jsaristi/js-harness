@@ -8,25 +8,26 @@ import { pathToFileURL } from 'node:url';
 import { estimateTokens, measurePayload } from './lib/payload.mjs';
 import { VERSION_TAG_REF } from './lib/version.mjs';
 import { fixedLoadRow } from './lib/fixed-load.mjs';
-import { discoverContracts, validateEntries } from './contract.mjs';
+import { depthPassFor, discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
 import { checkSpec } from './lib/spec.mjs';
+import { checkDocs } from './docs.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { readRules, ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { rulesOfText } from './lib/rules-change-run.mjs';
 import { inForceLines, isTextInForce, scanLines } from './lib/rules-scan.mjs';
-import { numstatFiles } from './lib/codex-review-parts.mjs';
+import { RENAMES } from './lib/codex-review-parts.mjs';
 import { defaultBranch, gitOut } from './lib/codex-review-coverage.mjs';
-import { counted, leftOutOf, reviewScope } from './lib/codex-review-scope.mjs';
+import { counted, leftOutOf, rangeFiles, reviewScope } from './lib/codex-review-scope.mjs';
 import { killSurvivors, killTree } from './lib/process-tree.mjs';
 import { GATE_WAIT_MS } from './lib/gate-lock.mjs';
 import { cancelTicket, logTicket } from './lib/gate-first.mjs';
 import { loadDetail, loadLines, loadSwitchedOff, readLoad } from './lib/machine-load.mjs';
 import { watchBusiest } from './lib/machine-busiest.mjs';
-import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog } from './lib/gate-log.mjs';
-import { treeKey } from './lib/gate-tree.mjs';
+import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog, readGateProof } from './lib/gate-log.mjs';
+import { filesKey, treeKey } from './lib/gate-tree.mjs';
 import { addedLines, checkedOff, checkedTasks, resolveCitations, resolveTicks, taskText } from './lib/citations.mjs';
 import { flakyTestsOf, selectTests, testFilesOf } from './lib/select-tests.mjs';
 import { checkLedger, failedTestFiles, failingTests, judgeRerun, ledgerEntries, localDay } from './lib/flaky.mjs';
@@ -39,7 +40,7 @@ import { CLAUDE_MD_BUDGET, checkClaudeBudget } from './lib/claude-md-budget.mjs'
 import { compareLaunches, subagentRowLines } from './lib/subagent-check.mjs';
 import { dayOf, launchesOf } from './lib/subagent-count.mjs';
 import { readRecords, recordFolders } from './subagents.mjs';
-import { CI_WORKFLOW, ciGateWanted, runCiGate } from './lib/ci-gate.mjs';
+import { testsOnCi } from './lib/ci-gate.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, claimOf, gateLogRows, gateRow, minutes, ownTicketRows, underGateLock } from './lib/gate-turn.mjs';
 import { checkCodexReviewDebt, checkCodexReviews, checkLensReviews } from './lib/codex-review-rows.mjs';
@@ -72,7 +73,7 @@ export function checkBudget(cwd) {
  * Static only: it never runs a done-when command, which may be `npm run check` itself. */
 export function checkContracts(cwd) {
   const name = 'contracts';
-  const results = validateEntries(discoverContracts(cwd));
+  const results = validateEntries(discoverContracts(cwd), { depthPass: depthPassFor(cwd) });
   if (results.length === 0) return { name, pass: true, detail: 'no contracts under odd/tasks' };
   const plural = (n) => `${n} contract${n === 1 ? '' : 's'}`;
   const failed = results.filter((result) => !result.ok);
@@ -612,13 +613,13 @@ export function checkCitations(cwd, spawn = spawnSync) {
 }
 
 /** The row `commit-size` (docs/FAILURES.md, commit-too-large-to-review): the changed lines of the staged change that
- * a review reads, sized as `js-harness codex-review` sizes a range (documents and marked files left out), against
- * the rule `reviewed-commit-lines`. Over it the row fails, so the commit is split before it is made: a commit the
- * reviewer refused had already cost its gate, and remaking it cost two more. The rule is of this repository only,
- * so it is read where the staged rules file is the harness's list (`ruleHere`). No row where it is not in force,
- * when nothing a review reads is staged, while a merge is being made (its commits were made, and sized, on their
- * own branch), or when git cannot say. A merge git commits by itself runs `pre-merge-commit` before MERGE_HEAD is
- * written, so that hook says it in `MERGE_HOOK_ENV`. */
+ * a review reads, sized as `js-harness codex-review` sizes a range (documents and marked files left out, a renamed
+ * file by the lines it changes), against the rule `reviewed-commit-lines`. Over it the row fails, so the commit is
+ * split before it is made: a commit the reviewer refused had already cost its gate, and remaking it cost two more.
+ * The rule is of this repository only, so it is read where the staged rules file is the harness's list
+ * (`ruleHere`). No row where it is not in force, when nothing a review reads is staged, while a merge is being made
+ * (its commits were made, and sized, on their own branch), or when git cannot say. A merge git commits by itself
+ * runs `pre-merge-commit` before MERGE_HEAD is written, so that hook says it in `MERGE_HOOK_ENV`. */
 export function checkCommitSize(cwd, spawn = spawnSync, env = process.env) {
   if (env[MERGE_HOOK_ENV] === 'pre-merge-commit') return [];
   const git = hookGit(cwd, spawn);
@@ -626,18 +627,17 @@ export function checkCommitSize(cwd, spawn = spawnSync, env = process.env) {
   const rule = ruleHere('reviewed-commit-lines', 'changed lines', git(['show', ':bin/lib/rules-data.mjs']) ?? undefined);
   if (!Object.hasOwn(rule, 'value')) return [];
   const most = rule.value;
-  const numstat = git(['diff', '--cached', '--numstat', '-z', '--no-renames', '--no-relative']);
+  const numstat = git(['diff', '--cached', '--numstat', '-z', RENAMES, '--no-relative']);
   if (!numstat) return [];
   let changed;
   try {
-    const files = numstatFiles(numstat);
     // The marks are those of the commit being made, as its review will read them: the tree the index holds, so a
     // staged `.gitattributes` counts (Codex, 2026-10-16). Writing that tree is what the commit itself does.
     const tree = git(['write-tree'])?.trim();
     if (!tree) return [];
-    const why = leftOutOf(files.map((file) => file.path), { cwd, source: tree, spawn });
-    if (why === null) return [];
-    changed = reviewScope(files, why).read.reduce((sum, file) => sum + file.changedLines, 0);
+    const scope = rangeFiles((renames) => git(['diff', '--cached', '--numstat', '-z', renames, '--no-relative']), (paths) => leftOutOf(paths, { cwd, source: tree, spawn }));
+    if (scope.failed) return [];
+    changed = reviewScope(scope.files, scope.why).read.reduce((sum, file) => sum + file.changedLines, 0);
   } catch {
     return [];
   }
@@ -1552,10 +1552,12 @@ export async function checkSensors(cwd, deps = {}, lock) {
   // twice and this gate keeps a record: the proof is a line of the gate log, so a gate that neither reads
   // nor writes that log has no key. `null` in every doubt, which is a gate that runs its sensors.
   const keyNow = () => (sameTree.skip && record ? treeKey(hookGit(cwd, deps.git), { sensors, place }) : null);
+  // The key of the index's files, wherever the sensors run (`filesKey`): what a failure stands against (`provenBy`).
+  const filesNow = () => (sameTree.skip && record ? filesKey(hookGit(cwd, deps.git)) : null);
   // The rows of a gate that runs no sensor because the gate log holds the proof of `key`, after its own
   // line is written; `null` when there is no key or no proof.
   const proven = (key) => {
-    const proof = key === null ? null : provenBy(readGateLog(lock.home).events, key);
+    const proof = key === null ? null : provenBy(readGateProof(lock.home), key, filesNow());
     if (proof === null) return null;
     record.same({ code: key, by: proof.id });
     return [sameTreeRow(sensors, proof), ...gateLogRows(record)];
@@ -1599,8 +1601,12 @@ export async function checkSensors(cwd, deps = {}, lock) {
     // The key this gate proves: the one it had before its sensors, when all of them passed and the tree
     // has that key still. A file that changed while they ran is a suite of no one tree, and proves none.
     // Asked before the end is written, which holds it, so its two git processes are in the seconds the
-    // log says the sensors took: a fraction of one.
+    // log says the sensors took: a fraction of one. `files`, and `tried` where the sensors ran where the key says
+    // (a failure on Windows is none under the key of WSL2), are written on a failure too, if the tree did not move.
     let code;
+    let tried;
+    let files;
+    const filesBefore = key !== null ? filesNow() : null;
     try {
       for (const sensor of sensors) {
         // The tests sensor in shadow or skip mode, where the project says so and its suite is `node --test`
@@ -1639,13 +1645,15 @@ export async function checkSensors(cwd, deps = {}, lock) {
       const quarantined = ran.some((row) => row.rerun);
       // A passing gate in skip mode writes the key too (odd/tasks/exact-tests.md, T4c): the files it skipped are
       // proven by their stored passing traces, which is the premise of the switch S6's count earned.
-      if (result === 'pass' && key !== null && ranWhereKeyed && !quarantined && keyNow() === key) code = key;
+      const still = key !== null && keyNow() === key;
+      if (result === 'pass' && ranWhereKeyed && !quarantined && still) code = key;
+      if (still) [files, tried] = [filesBefore, ranWhereKeyed ? key : undefined];
     } finally {
       // On every way out, a throw included: only a gate that was killed leaves a start alone in the log.
       // A sensor that failed keeps the names of its failing tests, where its output says them (`failingTests`).
       // A skip gate's tests row keeps `skip`, never `shadow`, so S6's count (`s6Count`) never reads it.
       const failing = ({ pass, output, rerun }) => (pass && !rerun ? [] : failingTests(output));
-      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code });
+      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code, files, tried });
       // Beside the log, under the gate's id: a list of every file on the end line would rotate the log far sooner.
       record?.testTimes(ran.flatMap((row) => row.times ?? []));
     }
@@ -1660,36 +1668,7 @@ export async function checkSensors(cwd, deps = {}, lock) {
     const inTurn = `the sensors ran in the turn of the process that started this gate, which holds the machine's gate lock (${GATE_HELD_ENV}=1), so this gate took none`;
     return [gateRow(inTurn), ...(await run({ lock: 'parent', waitedMs: 0, waitedFor: [] }))];
   }
-  return (await testsOnCi(cwd, lock, deps, record)) ?? underGateLock(cwd, lock, deps, run, record);
-}
-
-/** The rows of a gate whose tests ran on GitHub's machines, where every commit's gate goes first
- * (./lib/ci-gate.mjs), or null for a gate that runs here: the project has no gate workflow, the switch keeps it
- * here, or CI gave no answer, which it says on stderr. Such a gate leaves its own record in the gate log, its
- * tests marked as run on CI and the names of those that failed there, so the measures of the lines count both. A
- * gate CI gave no answer leaves a `ci-fallback` line under `local`'s id, the record of the gate that then runs
- * here, with what the wait cost. `deps.ciGateWanted` and `deps.runCiGate` stand in for the two halves. */
-async function testsOnCi(cwd, lock, deps, local = null) {
-  const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, env: lock.env ?? process.env });
-  if (!why) return null;
-  console.error(`check: ${why}; the push of the tree being committed starts their run`);
-  const startedAt = Date.now();
-  const ci = await (deps.runCiGate ?? runCiGate)({ cwd, remote: lock.remote ?? 'origin', env: lock.env ?? process.env });
-  if (!ci.ran) {
-    console.error(`check: no answer from GitHub's machines (${ci.why}), so the tests run here`);
-    local?.ciFallback({ seconds: Math.round((Date.now() - startedAt) / 1000), reason: ci.why });
-    return null;
-  }
-  const tests = { name: 'tests', pass: ci.pass, detail: `ran on GitHub's machines in ${ci.seconds}s (${CI_WORKFLOW}): ${ci.url}`, ...(ci.output && { output: ci.output }) };
-  let at = startedAt;
-  const record = lock.log !== false && lock.home !== undefined
-    ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', session: lock.session, now: () => at, ...deps.gateLog })
-    : null;
-  record?.start({ lock: 'ci', waitedMs: 0, waitedFor: [] });
-  at = Date.now();
-  const failing = ci.pass ? [] : failingTests(ci.output);
-  record?.end({ result: ci.pass ? 'pass' : 'fail', sensors: [{ name: 'tests', seconds: ci.seconds, pass: ci.pass, ranIn: 'ci', ...(failing.length > 0 && { failing }) }] });
-  return [gateRow(`the tests ran on CI: ${why}`), tests, ...gateLogRows(record)];
+  return (await testsOnCi(cwd, lock, deps, record, filesNow)) ?? underGateLock(cwd, lock, deps, run, record);
 }
 
 /** The `functions` row (odd/tasks/on-demand-functions.md): a switch of `harness.json` "functions" that cannot be
@@ -1928,17 +1907,15 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     return rows.every((row) => row.pass) ? 0 : 1;
   }
   // A push runs the Codex review row and the row `rules` of the lines it brings, as INFO. The budget, payload and sensor rows read the working tree,
-  // not the commit being pushed, and the pre-commit gate already ran them on every commit.
-  //
-  // The other list is the static rows: all a gate knows of the working tree before its sensors, each in a
-  // second or less. One of them that fails stops the gate before its sensors (below), whichever it is: the
+  // not the commit being pushed, and the pre-commit gate already ran them on every commit. The other list is the
+  // static rows: all a gate knows of the working tree before its sensors, each in a second or less. One of them that fails stops the gate before its sensors (below), whichever it is: the
   // rule names no row, so a row added to this list stops the gate by being in it. A row that states a rule
   // of the project (`rules`, `failures`) goes first in the list, before `budget`: it is the first thing a
   // reader of a stopped gate must see. A row that could not be computed stops the gate only if it is
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote }), checkLensReviews(cwd, head, { ...deps, remote }), ...checkPushRules(cwd, { rules: deps.rules, spawn: deps.git, head, remote }), ...checkTagRow(cwd, { ref, head, spawn: deps.git })]
-    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), ...checkClaudeBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
+    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), ...checkClaudeBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkDocs(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home)];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
   if (!push) rows.push(...checkLedger(cwd));

@@ -46,6 +46,12 @@ function launch(spawn, platform) {
   return launchCodex(spawn, platform, ['app-server'], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: platform !== 'win32' });
 }
 
+// The length of the weekly window, in minutes, as the server writes it in `windowDurationMins`.
+const WEEK_MINUTES = 10080;
+
+// How a skip made at the floor of the weekly limit starts its reason, so the meter can list it after its branch merged.
+export const FLOOR_SKIP = 'weekly limit at its floor';
+
 const finite = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 
 /** A window as `{ usedPercent, resetsAt }`, each `null` when the answer does not hold it. */
@@ -56,9 +62,11 @@ const windowOf = (value) => ({ usedPercent: finite(value?.usedPercent), resetsAt
  * account identifier among it, so no caller can print one by accident. */
 export function parseRateLimits(result) {
   const limits = result?.rateLimits;
+  // The weekly window is the one whose length says a week, wherever the answer puts it; `secondary` when none says.
+  const weekly = [limits?.primary, limits?.secondary].find((window) => window?.windowDurationMins === WEEK_MINUTES) ?? limits?.secondary;
   return {
-    fiveHour: windowOf(limits?.primary),
-    weekly: windowOf(limits?.secondary),
+    fiveHour: windowOf(weekly === limits?.primary ? limits?.secondary : limits?.primary),
+    weekly: windowOf(weekly),
     resetCredits: finite(result?.rateLimitResetCredits?.availableCount),
   };
 }
@@ -103,6 +111,69 @@ export function failureLine(outcome) {
     default:
       return `codex app-server could not be started: ${outcome.detail ?? 'unknown error'}.`;
   }
+}
+
+/** What the weekly limit says of a review about to launch, from an outcome of `readRateLimits` and `floor`, the percent
+ * of the weekly limit that must be left (rule:codex-weekly-floor): `{ stop: true, left }` at or under it, `{ stop:
+ * false, left }` above it, and `{ stop: false, unread }` with why when the read failed or its answer held no weekly
+ * limit, since a reading that is not there stops nothing (odd/tasks/double-review-alignment.md, T2). A read the person
+ * interrupted is `{ stop: true, interrupted: true }`: the Ctrl-C was meant for the command, not for the read alone. */
+export function weeklyFloor(outcome, floor) {
+  if (!outcome.ok && outcome.reason === 'interrupted') return { stop: true, interrupted: true };
+  if (!outcome.ok) return { stop: false, unread: failureLine(outcome) };
+  const used = parseRateLimits(outcome.result).weekly.usedPercent;
+  if (used === null) return { stop: false, unread: 'its answer held no weekly limit.' };
+  const left = Math.max(0, 100 - used);
+  return { stop: left <= floor, left };
+}
+
+/** Why a review was not started at the floor of the weekly limit, and what each answer of the user's runs: a reset
+ * credit is spent only on the user's word, and on a typed no a second Claude review takes Codex's place and the skip
+ * stays a Codex debt until a Codex review pays it. `part`, `{ index, of }`, names a later part of a review in parts,
+ * whose earlier parts are kept for the next run; `interrupted` is a read the person interrupted. `read` is the double
+ * review's read of a plan (bin/double-review.mjs), whose two readers start together, instead of a review of code. */
+export function floorStopped({ left, floor, base, part = null, interrupted = false, read = false }) {
+  const what = read ? 'neither reader was started'
+    : part === null || part.index === 1 ? 'the review was not started' : `part ${part.index} of ${part.of} was not started, the parts before it kept for the next run,`;
+  if (interrupted) return `The read of Codex's weekly limit was interrupted, so ${what} and nothing was recorded.`;
+  const onNo = read
+    ? "On the user's typed no, the read waits for the reset, or `js-harness double-review skip` records the user's words that skip it."
+    : `On the user's typed no, record the skip with \`js-harness codex-review --base ${base} --unavailable "${FLOOR_SKIP}: <the user's words>"\`, ` +
+      `and run a second Claude review in Codex's place, \`js-harness lens-review --base ${base} --lenses <the lenses not run yet> --reason "in Codex's place"\`. ` +
+      'The skip is a Codex debt that codex-meter lists on every branch, and the merge door shows, until a Codex review of its range pays it.';
+  return (
+    `Codex's weekly limit has ${Math.round(left * 10) / 10}% left, at or under its floor of ${floor}% (rule:codex-weekly-floor), so ${what} and nothing was recorded.\n` +
+    "Ask the user, through the lead where one leads, whether to reset the weekly limit: a reset credit is spent only on the user's word, and after a reset this runs again.\n" +
+    onNo
+  );
+}
+
+/** What a launch of `codex-review` does by the weekly limit, from an outcome of `readRateLimits`: `note`, the line
+ * that says a reading is not there and the review runs, or `null`; `stop`, why nothing is launched, or `null`. */
+export function launchWord(outcome, { floor, base, part = null, read = false }) {
+  const weekly = weeklyFloor(outcome, floor);
+  return {
+    note: weekly.unread === undefined ? null : `Codex's weekly limit could not be read before the launch: ${weekly.unread} The ${read ? 'read' : 'review'} runs without it.`,
+    stop: weekly.stop ? floorStopped({ ...weekly, floor, base, part, read }) : null,
+  };
+}
+
+/** The skips among `records` made at the floor of the weekly limit (their reason starts `FLOOR_SKIP`) that `owedOf(rec)`
+ * says no Codex review has paid, each as `lineOf(rec)` with the command that pays it: a review of its range from a
+ * worktree at its head, since a review reads up to HEAD and the branch may have merged. A record with no commit ids is
+ * left out, and one whose debt `owedOf` cannot tell (it throws) is listed, so neither hides the others. */
+export function floorDebtLines(records, owedOf, lineOf) {
+  const owed = (rec) => {
+    try {
+      return owedOf(rec);
+    } catch {
+      return true;
+    }
+  };
+  return records
+    .filter((rec) => rec.outcome === 'unavailable' && typeof rec.reason === 'string' && rec.reason.startsWith(FLOOR_SKIP))
+    .filter((rec) => typeof rec.base === 'string' && typeof rec.head === 'string' && owed(rec))
+    .map((rec) => `${lineOf(rec)}; a Codex review pays it: git worktree add --detach <folder> ${rec.head.slice(0, 7)} && js-harness codex-review --base ${rec.base.slice(0, 7)} --again --cwd <folder>`);
 }
 
 /** Starts `codex app-server`, asks it for the limits and resolves with the outcome, never rejects:

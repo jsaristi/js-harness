@@ -147,10 +147,13 @@ function packageName(dir) {
 
 const HARNESS_NAME = packageName(HARNESS_ROOT);
 
+/** Whether `dir` is the harness's own repository: its package bears the harness's name, so a checkout is known
+ * whichever copy of the harness looks at it (the installed one, a junction). */
+export const isHarnessRepository = (dir) => HARNESS_NAME !== null && packageName(dir) === HARNESS_NAME;
+
 /** The `spec` row, as a list: empty where the project keeps no `docs/SPEC.md`. `own` says whether `cwd`
  * is the harness's own repository, whose specification must claim the dispatcher's commands, the
- * manifest's entries and `HOME_FILES`; by default, whether its package bears the harness's name, so a
- * checkout is held to it whichever copy of the harness checks it (the installed one, a junction). */
+ * manifest's entries and `HOME_FILES`; by default, `isHarnessRepository`. */
 export function checkSpec(cwd, deps = {}) {
   const {
     readFile = (file) => fs.readFileSync(file, 'utf8'),
@@ -159,7 +162,7 @@ export function checkSpec(cwd, deps = {}) {
     entries = [...components, ...entryComponents].map((component) => component.id),
     homeFiles = HOME_FILES,
   } = deps;
-  const own = deps.own ?? (HARNESS_NAME !== null && packageName(cwd) === HARNESS_NAME);
+  const own = deps.own ?? isHarnessRepository(cwd);
   let markdown;
   try {
     markdown = readFile(path.join(cwd, SPEC_PATH));

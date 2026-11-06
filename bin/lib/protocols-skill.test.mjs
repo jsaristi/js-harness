@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { protocolsSkillContent, PROTOCOLS } from './protocols-skill.mjs';
 import { RULES } from './rules-data.mjs';
 import { claudeTemplate } from './project.mjs';
@@ -31,8 +32,8 @@ test('the protocols skill has a one-line description a host can read, with the v
   assert.match(frontmatter[1], /\(js-harness v0\.1\.0\)/);
 });
 
-test('the protocols skill opens with an index of its eight situations, in the order of its sections', () => {
-  assert.equal(PROTOCOLS.length, 8);
+test('the protocols skill opens with an index of its nine situations, in the order of its sections', () => {
+  assert.equal(PROTOCOLS.length, 9);
   const body = TEXT.split('\n---\n')[1];
   const index = body.split('\n').filter((line) => /^\d\. /.test(line)).slice(0, PROTOCOLS.length);
   assert.deepEqual(index, PROTOCOLS.map((title, i) => `${i + 1}. ${title}.`));
@@ -81,6 +82,8 @@ test('the protocol for changing a rule opens with the stale 73 percent, and its 
 test('protocol 3 sends every slice of code through Codex and the Claude lenses where their switches are on', () => {
   const protocol3 = sections(TEXT)[2].lines.join('\n');
   assert.match(protocol3, /every slice of code goes through Codex where the project's `codexReview` switch is on/);
+  // odd/tasks/double-review-alignment.md, spec 7: code's two reviews are given what was asked.
+  assert.match(protocol3, /each given what was asked, `--doc <feature document>` for large work or `--request "<the request as written>"` for small work/);
   assert.match(protocol3, /through the Claude lenses where its `lensReview` switch is on/);
 });
 
@@ -126,12 +129,14 @@ test('a session runs the installed js-harness, and its branch\'s copy only to te
 test('a proposal reaches the user only after two readers, and a handoff names the rule', () => {
   const squash = (text) => text.replace(/\s+/g, ' ');
   const [asking, , , , , handoff] = sections(TEXT).map((section) => squash(section.lines.join('\n')));
-  assert.match(asking, /A proposal that changes one of the user's decisions, whether a design before it is built, a plan, an analysis with figures, a protocol or a change of the charter, asked or reported, first passes two read-only readers that did not write it: one attacks its claims, one looks only for what is missing\./);
-  assert.match(asking, /A second round reads only the first round's blockers; what is still open after it goes to the user as unguaranteed, never a third round\./);
+  assert.match(asking, /Everything that proposes something, whether a plan, a design before it is built, an analysis with figures, a protocol or a document put to the user, asked or reported, first passes a Claude reader and a Codex reader, blind, on one frozen copy/);
+  assert.match(asking, /only the user's typed "no quiero la revisión" skips it\./);
+  assert.match(asking, /Code passes its own pair, Codex and the Claude lenses \(section 3\), judged against what was asked\./);
+  assert.match(asking, /In both, a review that finds nothing approves at once; a correction gets a confirming review; at most three reviews, and where the third still finds a real failure the user gets it as a problem and the work passes to the strongest model the rules name, `rule:escalation-model`\./);
   assert.match(asking, /Not for a question of fact \(a figure or an outcome looked up, nothing proposed\), nor for a step or a choice whose reviewed text the question names by path\./);
   assert.ok(handoff.includes('- A plan or a design handed on has passed its double review first (`rule:double-review`, section 1).'), handoff);
   assert.ok(handoff.includes('- What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in their language as a visual, didactic page (`rule:reports-spanish-visual`)'), handoff);
-  assert.ok(squash(claudeTemplate()).includes('one attacks its claims, one looks only for what is missing'));
+  assert.ok(squash(claudeTemplate()).includes('first passes the double review, a Claude reader and a Codex reader, blind'));
 });
 
 test('the protocols skill ships to every user of the harness, so it speaks of the user', () => {
@@ -156,4 +161,33 @@ test('section 8 points a session writing a new command, module or document at th
   assert.ok(bullets[0].startsWith('- Before adding a command, an option, a function, a protocol, a rule or a document, search for one that already does it'), bullets[0]);
   assert.ok(bullets[0].includes('amend that one instead of adding a second, and say in the commit what was searched.'), bullets[0]);
   assert.ok(text.includes('can an existing one be amended, the search of `rule:reuse-first`;'), 'section 4 points to the rule by its name');
+});
+
+// rule:depth-pass (odd/tasks/depth-pass-rule.md, draft v3, his yes to question 143): before large work is built, a
+// pass in five items in his order, the analysis first and his request rewritten last, ending in a verdict; a refuting
+// verdict reaches the user before any code. Every `CLAUDE.md` the harness writes names it in one line.
+test('section 9 holds the depth pass: large work defined, five items in order, a verdict, and the pass told to the user', () => {
+  const text = protocolsSkillContent('0.1.0');
+  assert.match(text, /^description: .*starting large work/m, 'the description loads the skill when large work starts');
+  const section = sections(text).find((found) => found.heading === '9. Before building large work: the depth pass');
+  assert.ok(section, 'section 9 exists');
+  const body = section.lines.join('\n').replace(/\s+/g, ' ');
+  assert.match(section.lines.find((line) => line.trim() !== ''), /^Incident \(2026-10-31\): .*caught none/);
+  assert.ok(body.includes('work a fresh session could not finish from the request and `git diff` alone'), 'large work is defined here, since a project has no resume test of its own');
+  assert.ok(body.includes('Deeper, not bigger'), body);
+  const items = ['1. Method: ', '2. Raw material: ', '3. The bar: ', '4. Refutation: ', '5. Request: '].map((item) => body.indexOf(`- ${item}`));
+  assert.ok(items.every((at) => at !== -1), 'all five items');
+  assert.deepEqual([...items].sort((a, b) => a - b), items, 'in his order, the rewritten request last');
+  for (const form of ['`spec <n>:` with its command in a code span','`Verdict: supports`', '`Verdict: refutes`', '`answered: question <n>`', '`Adds: none`']) assert.ok(body.includes(form), form);
+  assert.ok(body.includes('never the user\'s summary nor this document'), body);
+  assert.ok(body.includes('reaches the user as a question before any code'), body);
+  assert.ok(body.includes('The pass reaches the user in the feature\'s report (`rule:reports-spanish-visual`)'), body);
+  assert.ok(body.includes('`rule:reuse-first`'), body);
+  assert.ok(section.lines.some((line) => /^- Cost: .+ Reviewed by 2026-11-30\.$/.test(line)), body);
+});
+
+test('the CLAUDE.md init writes and the root one name the depth pass as Rule 1 in one line', () => {
+  const pointer = /^Rule 1: before large work is built, and whenever (?:he|the owner) asks, a depth pass \(`rule:depth-pass`,\n`js-harness-protocols` section 9\)\.$/m;
+  assert.match(claudeTemplate(), pointer);
+  assert.match(fs.readFileSync(new URL('../../CLAUDE.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n'), pointer);
 });

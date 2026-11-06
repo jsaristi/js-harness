@@ -68,6 +68,15 @@ export const RULES = [
     ]
   },
   {
+    "id": "chained-steps",
+    "subject": "the one way two steps share a command: the second runs only on the first's success, so the guard refuses a push, a commit, a pull request command, a land or a notice that follows the step before it by a semicolon, a line break, a double bar or an ampersand",
+    "owner": "project",
+    "scope": "repository",
+    "since": "2026-10-31",
+    "value": "&&",
+    "failure": "chained-step-not-conditional"
+  },
+  {
     "id": "ci-gate-bound",
     "subject": "how long a commit gate sent to GitHub waits for its run to end, from the push, before it cancels the run and runs the gate on this machine",
     "owner": "project",
@@ -131,6 +140,14 @@ export const RULES = [
     ]
   },
   {
+    "id": "codex-weekly-floor",
+    "subject": "the share of Codex's weekly limit left at or under which a Codex review starts nothing and the user decides on the reset",
+    "owner": "sebastian",
+    "since": "2026-11-02",
+    "value": 2,
+    "unit": "percent of the weekly limit left"
+  },
+  {
     "id": "context-pause",
     "subject": "the share of its context window at which a session pauses, writes its state and judges whether what is left fits before the host compacts",
     "owner": "sebastian",
@@ -167,17 +184,42 @@ export const RULES = [
     ]
   },
   {
-    "id": "double-review",
-    "subject": "a proposal that changes one of his decisions passes two read-only readers that did not write it",
+    "id": "depth-pass",
+    "subject": "before large work is built, and whenever he asks, its feature document holds a depth pass in his order (method, raw material, a bar per spec, a refutation run before code with its verdict, his request rewritten last), committed before the first code commit; a refuting verdict reaches him before any code",
     "owner": "sebastian",
-    "since": "2026-10-27",
+    "since": "2026-10-31",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
-      "first passes two read-only readers that did not write it",
-      "one attacks its claims, one looks only for what is missing"
+      "Large work is work a fresh session could not finish from the request",
+      "Deeper, not bigger: the pass grounds the work asked for and adds none",
+      "the analysis first and the rewrite last",
+      "as each numbered spec with its proof and today's result measured where there is one",
+      "the user's request rewritten whole, to ask for exactly what items 1 to 4 found",
+      "the Log records the result against item 3 and item 4",
+      "A refuting verdict reaches the user as a question before any code",
+      "never the user's summary nor this document",
+      "The pass reaches the user in the feature's report"
+    ]
+  },
+  {
+    "id": "double-review",
+    "subject": "everything that proposes something passes a blind Claude and Codex read, code passes its own pair, both judged against what was asked, at most three reviews",
+    "owner": "sebastian",
+    "since": "2026-11-01",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "first passes a Claude reader and a Codex reader, blind, on one frozen copy",
+      "In both, a review that finds nothing approves at once"
     ],
     "failure": "proposal-unreviewed",
     "review": "2026-11-16"
+  },
+  {
+    "id": "escalation-model",
+    "subject": "the strongest model a change passes to when three reviews of it did not settle it",
+    "owner": "sebastian",
+    "since": "2026-11-02",
+    "value": "claude-fable-5-1"
   },
   {
     "id": "fixed-load-budget",
@@ -239,6 +281,15 @@ export const RULES = [
     ]
   },
   {
+    "id": "growth-limit",
+    "subject": "his growth limit: while js-harness progress --pace says the last seven days are red, the plan's open steps grown, the lead opens no new work in this repository but what this rule's value names, and writes the rest in the roadmap's Later list with its source; his own word that something goes now opens it all the same",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-11-01",
+    "value": "a fix or a step of F8",
+    "review": "2026-11-15"
+  },
+  {
     "id": "lead-charter",
     "subject": "what the lead does alone and tells him after, and what stays his, asked one at a time",
     "owner": "sebastian",
@@ -258,6 +309,19 @@ export const RULES = [
     "phrases": [
       "Every event of your work reaches the user's live board as a notice",
       "point every reply of yours to the board's link"
+    ]
+  },
+  {
+    "id": "local-time",
+    "subject": "a clock time he reads, in a reply, a page or a message, is in his local time, the offset read from the machine's clock and never a constant, with the zone said once; the records keep UTC, and a UTC time reaches him only inside a code block, a quoted output or a path",
+    "owner": "sebastian",
+    "since": "2026-11-01",
+    "path": "bin/lib/protocols-skill.mjs",
+    "phrases": [
+      "A clock time the user reads, in a reply, a page or a message, is given in their local time",
+      "the offset read from the machine's clock at that instant, never a constant, and the zone said once",
+      "The records (git, the channel, the transcripts, the logs) keep UTC",
+      "a UTC time reaches the user only inside a code block, a quoted output or a path"
     ]
   },
   {
@@ -504,7 +568,7 @@ export const RULES = [
   },
   {
     "id": "reviewed-commit-lines",
-    "subject": "about how many changed lines a commit that will be reviewed stays under",
+    "subject": "about how many changed lines a commit that will be reviewed stays under, a file it renames counted by the lines it changes",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-11",

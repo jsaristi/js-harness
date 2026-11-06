@@ -11,9 +11,10 @@ import { MAX_PARTS_WITHOUT_FLAG } from './lib/codex-review-plan.mjs';
 import * as reviewRecords from './lib/codex-reviews.mjs';
 import { CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './lib/codex-review-runs.mjs';
-import { priorLine } from './lib/codex-review-recheck.mjs';
+import { ESCALATION_MODEL, priorLine } from './lib/codex-review-recheck.mjs';
 import { gitDirs } from './lib/project.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
+import { reviewCoverage } from './lib/codex-review-coverage.mjs';
 import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
@@ -248,8 +249,30 @@ test('a recheck that left a finding not fixed passes, with a warning that names 
   assert.match(lines, new RegExp(`warning: the Codex recheck that ended at ${short(root, fix)} left 1 finding open`));
   assert.ok(lines.includes(priorLine(left)), lines);
   assert.match(lines, /the user decides whether they are waived/);
+  // Its findings are open to a second recheck, the last of three reviews, which the warning names.
+  assert.ok(lines.includes('a second recheck, the last of three reviews, takes them up: js-harness codex-review --base ' + short(root, fix)), lines);
+  assert.match(lines, new RegExp('of the review that ended at ' + short(root, head)));
   // A skip records no correction: it is not offered.
   assert.ok(!lines.includes('--unavailable'), lines);
+});
+
+test('past three reviews the push passes with the warning, which says the change is not settled and names the model', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const fix = commit(root, 'b.js', 'two, half fixed', 'fix: read the right field, once');
+  const left = { ...finding, title: '[not fixed] 1 The guard reads the wrong field' };
+  const counts = { findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 };
+  run(root, { id: 'run-2', answer: { verdict: 'incorrect', findings: [left] }, recheck: { of: head, ...counts } });
+  record(root, head, fix, { run: 'run-2', recheckOf: head });
+  const again = commit(root, 'b.js', 'two, fixed again', 'fix: read the right field, twice');
+  run(root, { id: 'run-3', answer: { verdict: 'incorrect', findings: [left] }, recheck: { of: fix, ...counts } });
+  record(root, fix, again, { run: 'run-3', recheckOf: fix });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  const lines = row.lines.join('\n');
+  assert.match(lines, new RegExp(`warning: the Codex recheck that ended at ${short(root, again)} left 1 finding open`));
+  assert.ok(lines.includes(`three reviews did not settle this change: Raise it to the user as a problem`), lines);
+  assert.ok(lines.includes(ESCALATION_MODEL), lines);
+  assert.ok(!lines.includes('a second recheck, the last of three reviews'), lines);
 });
 
 test('a recheck whose counts were not kept passes with the warning too', () => {
@@ -570,8 +593,9 @@ test('both rows say from a folder below the top of the repository what they say 
 });
 
 test('a commit that moves a file a review reads to a path the project marks is a code commit: the file that went is one it changes', () => {
-  // `js-harness codex-review` reads a range with renames off, so the file that went is removed whole and is
-  // reviewed. With git's detection of renames the commit would list the new path alone, which is marked.
+  // A commit is a code commit by the names it changes, both of a rename's; and `js-harness codex-review` leaves a
+  // rename out only when both its names are, so the move is read, counted by the lines it changes: none here
+  // (odd/tasks/rename-counted-by-changes.md).
   const { root } = makeRepo();
   commit(root, 'src/app.js', lines(20), 'feat: code');
   const base = commit(root, '.gitattributes', 'evals/results/** -codex-review\n', 'chore: say what a review leaves out');
@@ -586,6 +610,23 @@ test('a commit that moves a file a review reads to a path the project marks is a
   assert.match(row.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
   assert.ok(row.lines[0].startsWith(short(root, moved)), row.lines.join('\n'));
   // The plain row counts the same commit, and sizes the review that command would make of it.
+  assert.equal(
+    checkCodexReviewDebt(root).detail,
+    `no Codex review record for 1 of 1 code commit since origin/main: the review of ${short(root, moved)}^..HEAD is 1 part today, 0 changed lines in 1 file`,
+  );
+});
+
+test('a commit that renames a document into code sizes its review by the whole file it adds', () => {
+  // A document had no review, so its content renamed into code is read renames off, whole (`rangeFiles`, L7 of
+  // odd/tasks/rename-counted-by-changes.md).
+  const { root } = makeRepo();
+  const base = commit(root, 'notes.md', lines(20), 'docs: notes');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  feature(root);
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+  git(root, 'mv', 'notes.md', 'src/notes.js');
+  git(root, 'commit', '-m', 'refactor: the notes become code');
+  const moved = git(root, 'rev-parse', 'HEAD');
   assert.equal(
     checkCodexReviewDebt(root).detail,
     `no Codex review record for 1 of 1 code commit since origin/main: the review of ${short(root, moved)}^..HEAD is 1 part today, 20 changed lines in 1 file`,
@@ -777,16 +818,25 @@ test('a record whose head is outside the checked range is not expanded at all', 
   assert.ok(!expanded.some((range) => range.startsWith('e'.repeat(40))), 'an unknown head is skipped');
 });
 
-test('a record whose head lies past the pushed tip still covers the commits of its range it contains', () => {
+test('a record whose head lies past the pushed tip covers nothing there, as merged onto main it covers nothing, and the row names that head', () => {
+  // Until 2026-10-30 it covered the commits of its range at the pushed tip; the merge door, which reads the pull request
+  // merged onto main, did not, and refused what the push had taken (docs/FAILURES.md, door-covers-past-tip).
   const { root, base } = makeRepo();
   feature(root);
   const first = commit(root, 'b.js', 'two', 'feat: two');
   const second = commit(root, 'c.js', 'three', 'feat: three');
-  assert.equal(checkCodexReviews(root, first).pass, false);
   record(root, base, second);
   const row = checkCodexReviews(root, first);
-  assert.equal(row.pass, true, `${row.detail}`);
-  assert.match(row.detail, /1 code commit since origin.main/);
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+  assert.deepEqual(row.lines.slice(0, 2), [
+    `${short(root, first)} feat: two`,
+    `${short(root, first)} lies in a range reviewed up to ${second.slice(0, 7)}, past ${first.slice(0, 7)}, the commit checked: push up to ${second.slice(0, 7)}, or check out ${first.slice(0, 7)} and make its record with the command below, which reviews up to HEAD`,
+  ]);
+  assert.equal(checkCodexReviews(root, second).pass, true, 'pushed up to its head');
+  // The plain row reads the same records and names the same head (a reliability review of 2b678054).
+  git(root, 'checkout', '--quiet', '--detach', first);
+  assert.ok(checkCodexReviewDebt(root).lines.includes(row.lines[1]), JSON.stringify(checkCodexReviewDebt(root)));
 });
 
 test('a record of nothing to review covers its commits only when what is pushed holds its head', () => {
@@ -836,16 +886,17 @@ test('a review that left out files the project marks covers its commits only whe
   assert.equal(checkCodexReviews(root, 'HEAD').pass, true);
 });
 
-test('a review that left out documents alone still covers an earlier tip: no commit can make a Markdown file code', () => {
+test('a review that left out documents alone still covers an earlier tip where a record past the tip counts: no commit can make a Markdown file code', () => {
+  // The push row counts no record past the tip (`beyondTip: false`); the reading that plans a review still does.
   const { root, base } = makeRepo();
   feature(root);
   const first = commit(root, 'b.js', 'two', 'feat: two');
   fs.writeFileSync(path.join(root, 'notes.md'), 'words', 'utf8');
   const second = commit(root, 'c.js', 'three', 'feat: three, with a note');
   record(root, base, second, { leftOut: leftOutOf(1, 0) });
-  const row = checkCodexReviews(root, first);
-  assert.equal(row.pass, true, row.detail);
-  assert.equal(row.detail, '1 code commit since origin/main, all covered by a Codex review record');
+  const coverage = reviewCoverage(root, { from: 'origin/main', tip: first });
+  assert.deepEqual([coverage.codeCommits.length, coverage.uncovered.length], [1, 0]);
+  assert.equal(checkCodexReviews(root, first).pass, false, 'the push row counts no record past the tip');
 });
 
 // A record from before it said how many of the files it left out were marked, and ones a hand has been at.
@@ -899,6 +950,14 @@ function countingSpawn() {
   return { spawn, started };
 }
 
+/** What the push row reads of `tip` (`reviewCoverage` with `beyondTip: false`), through `spawn`, having checked that
+ * the record whose head lies past `tip` was read and covers nothing there: what the cost tests below hold the git
+ * processes of. The row then fails, and its failure asks git more (where a review would start), which is not theirs. */
+const readPast = (root, tip, spawn) => {
+  const coverage = reviewCoverage(root, { from: 'origin/main', tip, spawn, beyondTip: false });
+  assert.deepEqual([coverage.uncovered.length, coverage.beyond?.length], [1, 1], JSON.stringify(coverage));
+};
+
 /** A branch of two code commits with a record whose head lies past `first`, the commit that is checked,
  * and `unrelated` more records of history the default branch already holds. */
 function repoWithUnrelatedRecords(unrelated) {
@@ -920,8 +979,7 @@ test('the records whose head is outside the range cost one git process together,
   const processes = (unrelated) => {
     const { root, first } = repoWithUnrelatedRecords(unrelated);
     const { spawn, started } = countingSpawn();
-    const row = checkCodexReviews(root, first, { spawn });
-    assert.equal(row.pass, true, row.detail);
+    readPast(root, first, spawn);
     assert.ok(!started.includes('merge-base'), started.join(' '));
     return started.length;
   };
@@ -933,8 +991,7 @@ test('a record whose head this repository no longer knows is passed over in that
   const { root, first } = repoWithUnrelatedRecords(1);
   record(root, git(root, 'rev-parse', 'origin/main'), 'c'.repeat(40));
   const push = countingSpawn();
-  const row = checkCodexReviews(root, first, { spawn: push.spawn });
-  assert.equal(row.pass, true, row.detail);
+  readPast(root, first, push.spawn);
   assert.ok(!push.started.includes('merge-base'), push.started.join(' '));
   const plain = countingSpawn();
   assert.match(checkCodexReviewDebt(root, { spawn: plain.spawn }).detail, /^2 code commits since origin\/main, all covered/);
@@ -949,8 +1006,7 @@ test('when git cannot say which heads lie past the tip all at once, each is aske
     if (args[0] === 'merge-base') asked.push(args[args.length - 1]);
     return spawnSync(cmd, args, opts);
   };
-  const row = checkCodexReviews(root, first, { spawn });
-  assert.equal(row.pass, true, row.detail);
+  readPast(root, first, spawn);
   assert.equal(asked.length, 2, 'one question for each distinct head outside the range');
 });
 
@@ -1703,6 +1759,27 @@ test('check --push --head checks the given commit and passes once it is covered'
   const { code, output } = await runCheck(['--push', '--head', head, '--cwd', root, '--home', home]);
   assert.equal(code, 0, output);
   assert.match(output, /PASS {2}codex-review/);
+});
+
+test('check --push refuses a cut inside a reviewed range on both rows, as the merge door refuses it, and names the head to push to', async () => {
+  // docs/FAILURES.md, door-covers-past-tip (2026-10-30, odd/tasks/f8-s12-migration.md L18): a chain reviewed as one
+  // range, Codex and lens, was cut inside it; each cut passed the pre-push hook and the door then refused it, since
+  // merged onto main nothing lies past the cut.
+  const { root, head: first, home } = projectWithUnreviewedCommit();
+  const cut = commit(root, 'harness.json', `${JSON.stringify({ functions: { codexReview: 'on', lensReview: 'on' } })}\n`, 'feat: both reviews on, the cut');
+  const past = commit(root, 'c.js', 'three', 'feat: three, past the cut');
+  record(root, git(root, 'rev-parse', `${first}^`), past);
+  const { code, output } = await runCheck(['--push', '--head', cut, '--cwd', root, '--home', home]);
+  assert.equal(code, 1, output);
+  assert.match(output, /FAIL {2}codex-review {2}2 of 2 code commits since origin\/main have no Codex review record/);
+  assert.match(output, /FAIL {2}lens-review {2}1 of 1 code commit since origin\/main have no complete Claude lens record/);
+  // JH 112's verifier, finding 1: pushed below HEAD, the commands the rows print review up to HEAD, past the cut, so the
+  // line says to check the cut out first.
+  const named = `${short(root, cut)} lies in a range reviewed up to ${short(root, past)}, past ${short(root, cut)}, the commit checked: push up to ${short(root, past)}, or check out ${short(root, cut)} and make its record with the command below, which reviews up to HEAD`;
+  assert.ok(output.split('\n').filter((line) => line.includes(named)).length === 2, output);
+  // Pushed up to the head of its records, the same commit is covered.
+  const whole = await runCheck(['--push', '--head', past, '--cwd', root, '--home', home]);
+  assert.equal(whole.code, 0, whole.output);
 });
 
 test('--head or --remote with no value exits 2 with usage and runs no row', async () => {

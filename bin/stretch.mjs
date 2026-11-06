@@ -14,6 +14,7 @@ import path from 'node:path';
 import { recordFileOf } from './lib/background.mjs';
 import { readNotices } from './lib/channel.mjs';
 import { codexReviewRunsPath } from './lib/codex-review-runs.mjs';
+import { cmdShellGap } from './lib/contract.mjs';
 import { readGateLog } from './lib/gate-log.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { appendPage, pagesFile } from './lib/pages-record.mjs';
@@ -22,7 +23,7 @@ import { gitRead, headBefore, momentAt, pullRequestsOf, readRef } from './lib/re
 import { compareMaps, comparePlans, planOf } from './lib/report-pages.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
-import { corrections, gateRuns, itemMeasure, laneOut, lostHoursOf, parsePlan, scaled, sessionTrail, stretchLost } from './lib/stretch.mjs';
+import { RECORD_SCHEMA, corrections, eventsOf, gateRuns, itemMeasure, laneOut, lostHoursOf, openEvent, parsePlan, scaled, sessionTrail, stretchFile, stretchLost } from './lib/stretch.mjs';
 import { forecastNow, forecastOf, resolveClose } from './lib/stretch-forecast.mjs';
 import { goalShares, outsidePlan, timelineOf, workShare } from './lib/stretch-moments.mjs';
 import { recordPageRendered } from './lib/pages-rendered.mjs';
@@ -35,7 +36,7 @@ import { readLandRecord, readRecordLines } from './throughput.mjs';
  * `readCodexReviewRuns` reads it as none, which would show its failures as no failure. */
 const readCodexRunRecord = (root, run, fileSystem) => readRecordLines(codexReviewRunsPath(root, { spawn: run }), fileSystem);
 
-export const RECORD_SCHEMA = 'js-harness.stretch/v1';
+export { RECORD_SCHEMA, stretchFile } from './lib/stretch.mjs';
 
 // Each goal runs this long at most: a goal is a cheap read, held to the limit a done-when command has.
 const GOAL_TIMEOUT_MINUTES = ruleValue('contract-run-timeout', 'minutes');
@@ -54,8 +55,9 @@ export const USAGE = [
   '    <home>/.js-harness/throughput/<project>/stretches.jsonl, one line an event, which uninstall keeps.',
   '  open: reads the plan, a JSON object { hours, slots, goals: [{ id, text, command }], items: [{ id, title, kind,',
   '    hours: [low, high], session?, waitsFor?, closes?: [{ in, step }] }], waits?: [text] }. A goal is met when its',
-  '    command exits 0. An item is one session\'s work: kind is design, build, verify or docs; hours the work left now;',
-  '    session its label (JH 71) once it has one; waitsFor what of the user it cannot start without, which keeps it out',
+  '    command exits 0; on Windows it runs in cmd.exe, so a goal with $( ) is refused. An item is one session\'s work:',
+  '    kind is design, build, verify or docs; hours the work left now; session its label (JH 71) once it has one;',
+  '    waitsFor what of the user it cannot start without, which keeps it out',
   '    of the lanes; closes the rows of the roadmap it closes, each a phase of its checklist and the start of one open',
   '    step\'s text, or a plan section (F8 plan) and a step id not done (S13). It prints the departure: each estimate as',
   '    written and as the last closed stretches correct it, the items in slots lanes, whether they fill the hours, and',
@@ -152,9 +154,6 @@ function parseArgs(argv) {
   return { verb, flags, positional };
 }
 
-/** The stretch record's file for the project `slug` under `home`: beside the throughput days. */
-export const stretchFile = (home, slug) => path.join(home, '.js-harness', 'throughput', slug, 'stretches.jsonl');
-
 /** The events of the record, oldest first; none when there is no file. A line that is no event is left out. */
 function readEvents(file, fileSystem) {
   let text;
@@ -164,14 +163,7 @@ function readEvents(file, fileSystem) {
     if (err.code === 'ENOENT') return [];
     throw err;
   }
-  return text.split(/\r?\n/).flatMap((line) => {
-    try {
-      const event = JSON.parse(line);
-      return event?.schema === RECORD_SCHEMA && typeof event.id === 'string' ? [event] : [];
-    } catch {
-      return [];
-    }
-  });
+  return eventsOf(text);
 }
 
 function appendEvent(file, fileSystem, event) {
@@ -189,9 +181,8 @@ function appendEvent(file, fileSystem, event) {
 
 /** The open stretch of `events`: the last `open` with no `close` after it, with its binds and goal checks; `null`. */
 function openStretch(events) {
-  const open = events.findLast((event) => event.event === 'open');
-  if (!open || events.some((event) => event.event === 'close' && event.id === open.id)) return null;
-  return stretchOf(events, open);
+  const open = openEvent(events);
+  return open === null ? null : stretchOf(events, open);
 }
 
 /** The stretch `open` opened, from its events: its binds, goal checks and, once closed, its `close` and `closedAt`. */
@@ -459,6 +450,11 @@ async function openCommand(ctx, flags, events) {
   }
   const read = parsePlan(value);
   if (read.error) throw new StretchArgError(`the plan is refused: ${read.error}`);
+  // A goal runs through `runSensor`'s shell, cmd.exe on Windows: one it cannot run is refused here, not read "not met".
+  for (const goal of ctx.platform === 'win32' ? read.plan.goals : []) {
+    const gap = cmdShellGap(goal.command);
+    if (gap) throw new StretchArgError(`the plan is refused: goal ${goal.id}: \`${goal.command}\` cannot run: ${gap}`);
+  }
   const at = new Date(ctx.now()).toISOString();
   // The default branch's commit at the opening, so the return compares the map with what existed then.
   const named = readRef(ctx.run, ctx.root);
@@ -781,6 +777,8 @@ export async function stretchMain(
     // `runSensor` of `check.mjs`, as `contract run` runs a done-when command: it stops the whole tree at the timeout.
     // Imported when a goal runs, since `check.mjs` is large.
     runGoal = async (command, options) => (await import('./check.mjs')).runSensor(command, options),
+    // Where the goals run, which says the shell they run in: `open` refuses what cmd.exe cannot run.
+    platform = process.platform,
     // The rendered record's module, as `recordPageRendered` loads it; the seam the tests stub.
     recordLoad,
   } = {},
@@ -801,7 +799,7 @@ export async function stretchMain(
   const home = harnessHome({ given: parsed.flags.home, env, cwd: defaultCwd, homedir });
   const root = mainCheckout(run, cwd);
   const slug = projectSlug(root);
-  const ctx = { cwd: defaultCwd, root, home, slug, file: stretchFile(home, slug), env, now, run, fileSystem, readCodexRuns, readLands, runGoal, recordLoad, out: stdout, err: stderr };
+  const ctx = { cwd: defaultCwd, root, home, slug, file: stretchFile(home, slug), env, now, run, fileSystem, readCodexRuns, readLands, runGoal, platform, recordLoad, out: stdout, err: stderr };
   let events;
   try {
     events = readEvents(ctx.file, fileSystem);

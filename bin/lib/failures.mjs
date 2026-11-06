@@ -290,6 +290,43 @@ export function sightings(entry) {
   return [...unique.values()].sort((a, b) => compare(a.date, b.date) || compare(a.evidence, b.evidence));
 }
 
+// The words by which a sighting's evidence says the mistake was the lead's own, as the register first wrote it
+// (its entry answer-line-wrong-entry): "(claimed; the lead's own)". "The lead's" alone names a source, not a maker.
+const LEAD_OWN = "the lead's own";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The Monday that opens the ISO week of the UTC day `ms`, as YYYY-MM-DD. */
+function mondayOf(ms) {
+  const day = new Date(ms);
+  return new Date(ms - ((day.getUTCDay() + 6) % 7) * DAY_MS).toISOString().slice(0, 10);
+}
+
+/** The sightings of a register read without a fault, one row a week from the week of the first sighting to the week
+ * of `now` (a Date the caller reads, so the same register always gives the same weeks), the oldest first:
+ * `{ week, sightings, lead, byClass }`, `week` its Monday, `lead` the sightings whose
+ * evidence says they were the lead's own, and `byClass` every declared class, in order, with its count. A week with
+ * none is a row of zeros, so a week the count fell to nothing is seen. No sighting is no week. */
+export function weeklyCounts({ classes, entries }, now) {
+  const dated = entries.flatMap((entry) => sightings(entry).map((sighting) => ({ ...sighting, class: entry.class })));
+  if (dated.length === 0) return [];
+  const dayOf = (date) => Date.parse(`${date}T00:00:00Z`);
+  const first = Math.min(...dated.map((sighting) => dayOf(sighting.date)));
+  const last = Math.max(now.getTime(), ...dated.map((sighting) => dayOf(sighting.date)));
+  const weeks = new Map();
+  for (let ms = dayOf(mondayOf(first)); ms <= last; ms += 7 * DAY_MS) {
+    const week = new Date(ms).toISOString().slice(0, 10);
+    weeks.set(week, { week, sightings: 0, lead: 0, byClass: Object.fromEntries(classes.map((name) => [name, 0])) });
+  }
+  for (const sighting of dated) {
+    const row = weeks.get(mondayOf(dayOf(sighting.date)));
+    row.sightings += 1;
+    if (sighting.evidence.includes(LEAD_OWN)) row.lead += 1;
+    row.byClass[sighting.class] += 1;
+  }
+  return [...weeks.values()];
+}
+
 /** The checkbox items of `markdown` that are not checked off, one string each: a wrapped item is one
  * item, ended by the next list item, with a checkbox or without one, a blank line, a heading or a
  * fence. Items inside a fence are none, a fence indented under an item included, and what a comment

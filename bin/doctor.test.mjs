@@ -149,13 +149,13 @@ test("doctorMain --json prints a parseable array with the six tool ids, then the
     const rows = JSON.parse(output);
     assert.deepEqual(
       rows.map((r) => r.id),
-      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'hook-commands', 'pnpm-lock', 'js-harness'],
+      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'codex', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-daemon', 'hook-commands', 'pnpm-lock', 'js-harness'],
     );
     for (const row of rows) {
       // Network is disabled and there is no cache, so every real lookup fails open to `unknown` —
       // except hosted context7 and the two checks, which have no version of their own to compare
       // and are `n/a` instead. The harness's own row could not read main's list either: `unknown`.
-      assert.equal(row.upToDate, ['context7', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-trust', 'hook-commands', 'pnpm-lock'].includes(row.id) ? 'n/a' : 'unknown');
+      assert.equal(row.upToDate, ['context7', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-daemon', 'hook-commands', 'pnpm-lock'].includes(row.id) ? 'n/a' : 'unknown');
     }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -222,9 +222,20 @@ test('doctorMain --offline shows the engram plugin as a mismatch when it is ahea
 
     assert.equal(code, 0);
     assert.match(output, /\nengram-plugin\s+0\.1\.12\s+ok\s+n\/a\s+n\/a\s+mismatch\n/);
+    // No cache: engram's latest release is unknown, so the fix says both cases (odd/tasks/codex-daemon-row.md, S2).
     assert.match(
       output,
-      / {2}engram-plugin \(upToDate\):\n {4}plugin 0\.1\.12 is ahead of 0\.1\.10, the plugin engram v3\.5\.1 ships, so the two serve different protocols; update the engram binary, then restart Claude Code:\n {4}install engram from /,
+      / {2}engram-plugin \(upToDate\):\n {4}plugin 0\.1\.12 is ahead of 0\.1\.10, the plugin engram v3\.5\.1 ships, so the two serve different protocols; if engram has a release newer than v3\.5\.1, update the engram binary, then restart Claude Code; if not, the plugin is ahead of engram's last release and nothing is to be done until the next one:\n {4}install engram from /,
+    );
+
+    // The binary cached as engram's latest release: the gap stays, and its fix says there is nothing to do yet (D5).
+    writeCache(home, { latest: { checkedAt: new Date().toISOString(), versions: { engram: '3.5.1', ...NULL_VERSIONS } }, notified: null });
+    const cached = await runDoctor(['--home', home, '--cwd', project, '--offline'], {}, { spawn, git, fetch: noopFetch });
+    assert.match(cached.output, /\nengram\s+3\.5\.1\s+ok\s+ok\s+n\/a\s+ok\n/);
+    assert.match(cached.output, /\nengram-plugin\s+0\.1\.12\s+ok\s+n\/a\s+n\/a\s+mismatch\n/);
+    assert.match(
+      cached.output,
+      / {2}engram-plugin \(upToDate\):\n {4}plugin 0\.1\.12 is ahead of 0\.1\.10, the plugin engram v3\.5\.1 ships, so the two serve different protocols; engram v3\.5\.1 is engram's latest release, so the plugin is ahead of engram's last release and nothing is to be done until the next one: then update the engram binary and restart Claude Code\n/,
     );
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -565,7 +576,7 @@ test('doctorMain shows the account check after the tools, ok when both accounts 
     const lines = output.split('\n').filter(Boolean);
     assert.equal(lines.at(-6), accountLine('ok'), output);
     assert.equal(lines.at(-5), remoteLine('n/a'), 'then the remote server check, with no launcher recorded under this home');
-    assert.match(lines.at(-4), /^codex-trust\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/, 'then the Codex trust check, with no manifest to read');
+    assert.match(lines.at(-4), /^codex-daemon\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/, 'then the Codex daemon check, with no managed daemon under this home');
     assert.equal(lines.at(-3), hookLine('n/a'), 'then the hook commands check, with no manifest to read');
     assert.match(lines.at(-2), /^pnpm-lock\s+n\/a\s+n\/a/, 'then the pnpm lock check, with no PNPM_HOME in the env given');
     assert.match(lines.at(-1), /^js-harness\s+[0-9a-f]{8}\s+n\/a\s+n\/a\s+n\/a\s+unknown$/, "then the harness's own rules, main unread");
@@ -2000,19 +2011,47 @@ test('a host update since the reviewed versions is stale, with the versions and 
     assert.match(table.output, /^host-update\s+2\.42304\.0\s+stale\s+n\/a\s+n\/a\s+ok$/m);
     const steps = [
       '  host-update (claude):',
-      '    Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299 since the last review; review the update:',
+      "    Claude Desktop 2.37337.1 → 2.42304.0 and its Code tab CLI 2.1.295 → 2.1.299 since the last review; a host watch session reviews it and the steps below are that session's (js-harness host-watch brief prints its brief, and js-harness loop heartbeat names it to the lead): any other session tells the lead and records no review:",
       '    read https://claude.com/docs/cowork/claude-desktop-changelog from 2.37337.1 to 2.42304.0',
       '    read the Claude Code CHANGELOG (https://code.claude.com/docs/en/changelog) from 2.1.295 to 2.1.299',
       '    check that the harness hooks in ~/.claude/settings.json still run',
       '    turn Remote Control back on in each work session without asking the user (rule remote-control-yes: a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first',
       '    report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
-      '    then record the review: js-harness doctor --host-reviewed',
+      '    write that account to docs/host-updates/claude-desktop-2.42304.0.md in the project that keeps the host reviews: the line "Code tab CLI: 2.1.299", a table of Change, Decision (adopt, adapt or ignore) and Reason, one row a change the update brings, and a "## Sources" list of what was read, the changelogs above among it, each with its span "(<from> to <to>)"',
+      '    then record the review: js-harness doctor --host-reviewed, which refuses while that file lacks any of it',
     ].join('\n');
     assert.ok(table.output.includes(`\n${steps}\n`), table.output);
     const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch, host });
     const row = JSON.parse(json.output).find((item) => item.id === 'host-update');
     assert.deepEqual(row.gaps, [{ dimension: 'claude', state: 'stale', fix: row.fix.claude }]);
     assert.equal(readCache(home).host.reviewed.desktop, '2.37337.1', 'a report records nothing while the update is unreviewed');
+
+    // The lead's mistake of 2026-10-30 (docs/FAILURES.md, host-review-without-research): the update recorded as
+    // reviewed with no account of what it brings. With no review file, or one that lacks a part, nothing is recorded.
+    const file = path.join(project, 'docs', 'host-updates', 'claude-desktop-2.42304.0.md');
+    const errors = [];
+    const original = console.error;
+    console.error = (line) => errors.push(line);
+    try {
+      const bare = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed'], {}, { spawn, fetch: noopFetch, host });
+      assert.deepEqual([bare.code, bare.output], [1, '']);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, '# Claude Desktop 2.42304.0\n\nCode tab CLI: 2.1.299\n\n| Change | Decision | Reason |\n|---|---|---|\n| Mods | maybe | a panel beside the chat |\n');
+      const partial = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed'], {}, { spawn, fetch: noopFetch, host });
+      assert.deepEqual([partial.code, partial.output], [1, '']);
+    } finally {
+      console.error = original;
+    }
+    assert.deepEqual(errors, [
+      `js-harness doctor: no review file docs/host-updates/claude-desktop-2.42304.0.md in ${project}: the review of Claude Desktop 2.42304.0 is recorded from the project that keeps the host reviews, once that file holds it (the host-update row's fix says what it holds). Nothing was recorded.`,
+      'js-harness doctor: docs/host-updates/claude-desktop-2.42304.0.md does not hold the review of Claude Desktop 2.42304.0 yet: it lacks row 1: a Decision of adopt, adapt or ignore (it reads "maybe"); a "## Sources" section. Nothing was recorded.',
+    ]);
+    assert.equal(readCache(home).host.reviewed.desktop, '2.37337.1', 'a refused review records nothing');
+    fs.writeFileSync(file, [
+      '# Claude Desktop 2.42304.0', '', 'Code tab CLI: 2.1.299', '',
+      '| Change | Decision | Reason |', '|---|---|---|', '| Mods | adapt | the board could be a panel beside the chat |', '',
+      '## Sources', '- https://claude.com/docs/cowork/claude-desktop-changelog (2.37337.1 to 2.42304.0)', '- https://code.claude.com/docs/en/changelog (2.1.295 to 2.1.299)', '',
+    ].join('\n'));
 
     const reviewed = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed'], {}, { spawn, fetch: noopFetch, host });
     assert.equal(reviewed.code, 0);
@@ -2497,6 +2536,36 @@ test('doctorMain lists the review skips that still owe a review, ok with none, u
     const hook = await run(() => { asked = true; return []; }, ['--hook']);
     assert.equal(hook.code, 0);
     assert.equal(asked, false, 'the hook read the review skips');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// The idea-watch row (odd/tasks/idea-watch.md, S7): the stable upstream releases the record has not read, read only by
+// the interactive online report, since it lists the tags over the network: never by the hook, never offline.
+test('doctorMain says how many upstream releases are not yet read, ok with none, n/a with no record, and never reads them in its hook or offline', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const run = (ideas, flags = []) => runDoctor([...flags, '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, ideas });
+
+    const owed = await run(() => ({ last: '4.3.1', unread: ['4.3.2', '4.4.0'] }));
+    // The version column shows a version only for an installed tool; the last read is in the fix line.
+    assert.match(owed.output, /^idea-watch\s+n\/a\s+n\/a\s+n\/a\s+stale\s+n\/a$/m);
+    assert.ok(owed.output.includes('  idea-watch (project):\n    2 releases not yet read (the last read is v4.3.1): v4.3.2, v4.4.0\n    js-harness idea-watch draft prints the next one\'s entry; paste it into the record and decide it\n'), owed.output);
+    assert.match((await run(() => ({ last: '4.3.1', unread: [] }))).output, /^idea-watch\s+n\/a\s+n\/a\s+n\/a\s+ok\s+n\/a$/m);
+    assert.match((await run(() => null)).output, /^idea-watch\s+n\/a\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.match((await run(() => { throw new Error('offline'); })).output, /^idea-watch\s+n\/a\s+n\/a\s+n\/a\s+unknown\s+n\/a$/m);
+
+    let asked = false;
+    const ask = () => { asked = true; return { last: '4.3.1', unread: ['4.3.2'] }; };
+    assert.equal((await run(ask, ['--hook'])).code, 0);
+    assert.doesNotMatch((await run(ask, ['--offline'])).output, /^idea-watch/m);
+    assert.equal(asked, false, 'the hook or the offline report listed the tags');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });

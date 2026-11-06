@@ -11,6 +11,7 @@ import { rulesBody } from './rules-block.mjs';
 import { FAILURES_TEMPLATE, agentsTemplate, claudeTemplate } from './project.mjs';
 import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { GATE_MESSAGES } from './template-gate.mjs';
+import { READER_PROMPT } from './double-review-prompt.mjs';
 
 /** The files of this repository that are sources, read where `rules coverage` runs. */
 export const REPOSITORY_FILES = ['AGENTS.md', 'CLAUDE.md'];
@@ -40,16 +41,18 @@ export const MESSAGE_SOURCES = [
  * here, never into `MESSAGE_SOURCES`. */
 export const CUT_MESSAGE_SOURCES = Object.freeze({
   'bin/template.mjs': 'template-gate',
+  'bin/lib/double-review-prompt.mjs': 'double-review-prompt',
 });
 
 // The folder name a project's AGENTS.md is titled with; its title is a heading, and no span.
 const PROJECT = 'project';
 
-/** A component's source id: its id without the host it is written for, since both hosts get the same text. */
+/** A component's source id: its id without the host it is written for. Only Claude Code's are written now (D4), and the
+ * ids an earlier version's Codex copies shared stay as the coverage data names them. */
 const shippedId = (component) => component.id.replace(/^(?:claude|codex)-/, '');
 
 /** The text sources at `version`: `{ id, from, text }` each, `from` saying where the text goes. Each file `install`
- * writes for both hosts is one source. `readFile(path)` gives a file of this repository, or `null` when it is not
+ * writes is one source. `readFile(path)` gives a file of this repository, or `null` when it is not
  * there, which leaves that source out. */
 export function textSources(version, readFile) {
   const sources = [];
@@ -68,6 +71,7 @@ export function textSources(version, readFile) {
     { id: 'init-failures', from: 'init', text: FAILURES_TEMPLATE },
     { id: 'lead-prompt', from: 'sessions', text: LEAD_OPENING_PROMPT },
     { id: 'template-gate', from: 'hook', text: GATE_MESSAGES },
+    { id: 'double-review-prompt', from: 'double-review', text: READER_PROMPT },
   );
   for (const file of REPOSITORY_FILES) {
     const text = readFile(file);

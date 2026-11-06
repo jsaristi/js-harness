@@ -18,11 +18,13 @@ and native `/goal` (autonomy loop). This repo builds only what those leave open.
 
 ## Principles
 
+**Regla 1: el pase de profundidad.** Before large work is built, and whenever he asks, its feature document holds a depth pass in his order, committed with documents alone before the first code (`rule:depth-pass`, `js-harness-protocols` section 9). It is Principle 7's practical form, and it heads the principles while the seven keep their numbers and words, by his answer to question 144 (2026-10-31, the lead's transcript `0f71b2c6`, line 43523): "Encabeza los principios y el 7 se queda (Recomendada)". His words, 2026-10-31 (line 42804): "la regla numero 1 sobre la que siempre se va a basar el modelo".
+
 1. **Few instructions, many sensors.** A check that runs costs zero tokens per turn and cannot be forgotten.
 2. **Every component must earn its place.** Each new model: remove one piece, measure, keep what still matters.
 3. **Do not rebuild the stack.** Workflow, task docs, TDD and review are gentle-ai's; memory is engram's; the code graph is codegraph's; the loop is `/goal`. Changing, by his words of 2026-10-26 (Decided, "Direction"): gentle-ai leaves, and js-harness carries the workflow, task docs, TDD and review itself; engram, codegraph and context7 stay, installed by js-harness.
 4. **Context, not commands.** What the project is, what good looks like, and the reason behind each real constraint.
-5. **Portable by default.** `AGENTS.md` holds what any host or reviewer needs: what the project is, what good work looks like, its constraints; Codex and Antigravity read it alone. Claude works from a root `CLAUDE.md` that imports `@AGENTS.md` and holds how sessions work with the owner, by his answer of 2026-10-26 (diet D3), since Codex is only a reviewer here. Built at F8's S3 (`odd/tasks/f8-s3-split.md`), and `init` ships the same split to a project that has neither file.
+5. **One host, one reviewer.** `AGENTS.md` holds what any host or reviewer needs: what the project is, what good work looks like, its constraints; Codex, the reviewer, reads it alone (Decided, "Host", 2026-10-30). Claude works from a root `CLAUDE.md` that imports `@AGENTS.md` and holds how sessions work with the owner, by his answer of 2026-10-26 (diet D3), since Codex is only a reviewer here. Built at F8's S3 (`odd/tasks/f8-s3-split.md`), and `init` ships the same split to a project that has neither file.
 6. **Measure the real payload.** The budget gate counts everything that loads each turn, not only `AGENTS.md`.
 7. **Work to the objective, not at will.** Judgment acts inside the plan: the double review checks that the work still serves the objective and what was planned, which is why a feature starts from a plan made as close to perfect as possible. His words, 2026-10-18: "siempre debes trabajar conforme al objetivo no como se te de la gana esa debe ser la filosofia principal del harnes osea para eso siempre hay una doble revision para revisar que vamos bien y no nos hemos salido del objetivo o de lo planeado por eso tambien cuando comencemos con el harnes debemos armar muy bien el plan casi a la perfeccion".
 
@@ -43,17 +45,18 @@ First request of a one-word prompt, estimated tokens:
 |------|----------|
 | Name, home | `js-harness`, `D:\js-harness`, `github.com/jsaristi/js-harness`, public since 2026-10-16. It had stayed private by his answer "Se queda privado" (the lead's transcript `65318fd5`, line 13033, 2026-10-13). On 2026-10-16, to get free parallel CI gates (`odd/tasks/first-version.md`, S7), a read-only audit of every branch and pull-request ref found no secret and no third party's data, only his own (his outlook address on web merges, his name, paths of his machine, quotes of his words); asked, he tapped "Sí, así como está (Recomendada)" (the lead's transcript `e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 11108, 2026-10-16T11:08Z, read with `js-harness sessions --quote`), and the lead made it public the same hour |
 | CI | GitHub Actions alone (2026-10-27). His words (the lead's transcript `0f71b2c6`, line 1971): "el repositorio es publico asi que no vamos a volver a utilizar circleci eso lo vamos a eliminar por completo vamos a hacer todos los test unicamente en github". CircleCI came in on 2026-10-14 to test the merge queue's candidates because the repository was private and a GitHub run spent minutes of an account with 2,000 a month and no card (`odd/tasks/merge-queue.md`, L3 and L5; `odd/tasks/drop-github-gate.md`, Why). That reason is gone since the repository went public (Name, home). What replaced it: `.github/workflows/gate.yml` runs for a push to a `queue/` branch as well as a `gate/` one, and `merge-queue --land` lands a candidate on that run's green; the commit gate and the daily Windows suite were already on GitHub (`odd/tasks/drop-circleci.md`) |
-| Hosts | Claude Code and Codex (CLI + desktop) now; Antigravity later, once its model is worth adopting |
+| Hosts | Claude Desktop's Code tab alone, with Codex as the reviewer (Decided, "Host", 2026-10-30). Until then: Claude Code and Codex (CLI + desktop), Antigravity later |
+| Host (2026-10-30) | **Claude Desktop only.** His words (the lead's transcript `0f71b2c6`, line 33574): "la idea es que este arnes funcione unicamente y exclusivamente para Claude Desktop y todas sus funcionalidades en conjunto con el revisor Codex, si anteriormente lo queria mas generalista o algo asi, poues acabo de decidirme completamente solo por Claude Desktop en su version Claude Code y es unicamente para esto y enfocado y especializado al maximo para que el entorno tanto de desarrollo como de investigacion sera el maximo y mejor posible." The harness is built for the desktop app's Code tab and uses its features; Codex stays the reviewer and reads `AGENTS.md`; Antigravity leaves the plan. What it removes and in what order is proposed in [claude-app-native-sessions.md](proposals/claude-app-native-sessions.md), sections 8 and 11, each step his to accept. Its D4, step 6, answered "Sí, sácalos (Recomendada)" (question 136, the lead's transcript `0f71b2c6`, line 39049, 2026-10-31): `install` writes no Codex skill or hook, and the next `install` or `sync` removes the copies earlier versions wrote; `codex-review` is unchanged ([drop-codex-components](../odd/tasks/drop-codex-components.md)) |
 | Stack | gentle-ai 4 (ODD, RDD review, test-first by default), engram 3 (the binary, and its Claude plugin since `gentle-ai sync` installs it: hooks and one skill, no second MCP server), codegraph, context7, `typescript-lsp` plugin; graphify for non-code corpora only. **Changing** (Decided, "Direction"): gentle-ai leaves at F8's S2, and js-harness installs engram, codegraph and context7 itself from S11 |
 | Direction (2026-10-26) | **Replace gentle-ai, do not exclude it.** His words (transcript `e41d1e8d-8264-45a4-b16c-f9279f7b6076` line 2272): "no Orca ni Herdr lovamos a volver a utilizar y gentle-ai tampoco la idea es copiar la forma de funcionar con sus complementos osea traernos codegraph, context7 y engram y nuestro arnes fusionado de gentle con js-harnes mas funcionalidades de nuestras caracteristicas con ajustado a nuestras necesidades etc etc". gentle-ai, Orca and herdr leave his machine; js-harness copies gentle-ai's way of working and installs codegraph, context7 and engram itself; gentle-ai's repository stays a source of ideas, never installed. Then, the same evening: every slice gets two reviews, always, Codex and Claude's lenses ("revision siempre, ya que siempre necesitamos una segunda opinion con un segundo modelo pero tambien una revision del mismo claude por que asi nos aseguramos criterio y solidez", line 2351); "recuerda que todo este mismo trabajo es como va a trabajar el arnes en los proyectos" (line 2382), so every project `init` sets up works the same way; and the persona's voice is neutral, not copied, with context7 always on in projects ("la 7 la voz hazlo en neutro osea que no copiemos eso y el context7 siempre va a encendido en los proyectos, de resto rodo me parece excelente y que esta bien y que lo coloquemos todo", line 2466); and the rule for all of it, "ok entonces copiamos e implementamos solo lo que nos sirve el resto no" (line 2646): a gentle-ai piece is copied only for a need of ours, stated beside it. How: [the diet's section 18](proposals/harness-diet.md#18-sixth-pass-replace-2026-10-26) and [the reverse-engineering document's "Direction"](proposals/gentle-ai-reverse-engineering.md#direction-replace-not-exclude-2026-10-26). |
-| Instruction source | A root `CLAUDE.md` on every Claude turn, which imports `@AGENTS.md` (Principle 5, diet D3, built at F8's S3); Codex reads `AGENTS.md` alone; the skills `install` writes for each host (`js-harness`, `js-harness-orchestrator`) load on demand |
+| Instruction source | A root `CLAUDE.md` on every Claude turn, which imports `@AGENTS.md` (Principle 5, diet D3, built at F8's S3); Codex reads `AGENTS.md` alone; the skills `install` writes for Claude Code (`js-harness`, `js-harness-orchestrator`, `js-harness-protocols`) load on demand, and nothing is written under `~/.codex` (the proposal's D4, below in "Host") |
 | Distribution | A zero-dependency npm package with a `js-harness` bin; semver, git tags, releases |
 | Release source | Built 2026-10-16 (`odd/tasks/first-version.md`, T4 and T4b): git tags in the repository (`<pm> i -g github:jsaristi/js-harness#vX.Y.Z`, latest from `git ls-remote --tags`), using the git credentials already on the machine. An npm publish was planned for once the repository is public; it is public since 2026-10-16 (Name, home), and that step still has no date. Tagging was first to start at 1.0.0, with the first complete and usable version (decided 2026-10-12: asked how to fix the installer's message that named a version that does not exist, he wrote "Corregir el mensaje por que todavia no tenemos produccion, cuando ya terminemos todo y tengamos una primera version completa y utilizable que no estemos tan experimental ahi si comenzamos a etiquetar versiones desde la 1.0.0", the lead's transcript `65318fd5-80e7-4bb8-92b5-06737140185b`, line 8986); Versioning, below, replaced that, and v0.9.0, v0.95.0, v0.96.0 and v0.97.0 are tagged (`git tag -l 'v*'`, 2026-10-23). No command asks a package registry about the name `js-harness`, which nobody holds there: `status --global`, `update` and `upgrade` read the newest `vX.Y.Z` tag with `git ls-remote` (`--repo` or `JS_HARNESS_REPO` names another repository, a test's local one), and until the first tag they say that no release is tagged yet; `--source`, a folder of tarballs, still wins when named (2026-10-13, `odd/tasks/install-update.md`, T5; tags 2026-10-16). A machine is installed from the default branch (`github:jsaristi/js-harness`). A project pins a version, never a source, so the switch changes no `harness.json` (decided 2026-09-26) |
 | Versioning | The first tag is v0.9.0, a rehearsal release, and the first definitive one is v1.0.0, which adds one new feature so that `upgrade` from 0.9.0 to 1.0.0 proves the update path before the version calls itself stable; patches after it are 1.0.1, 1.0.2. This replaces "tagging starts at 1.0.0" in Release source. Asked, between "0.9.0 → 1.0.0 (Recomendada)" and "1.0.0 → 1.1.0", he tapped the first (the lead's transcript `e152c9d8`, line 29367, 2026-10-18T01:51Z), after asking "o prefieres que la version inicial sea la 0.9.0?" (line 29353). Each tag still waits for his yes; the work is `odd/tasks/harness-review.md` |
 | License | MIT, in `LICENSE` and `package.json`. Chosen before the repository went public for free parallel CI gates (`odd/tasks/first-version.md`, S7): asked which license, among MIT, Apache-2.0, AGPL-3.0 or none, he tapped "MIT (Recomendada)" (the lead's transcript `e152c9d8-53bc-4366-8fa5-526b1576bcb6`, line 10941, 2026-10-16T10:55Z, read with `js-harness sessions --quote`) |
 | Commands | The list in force is the dispatcher's help (`bin/js-harness.mjs`), with a TUI over part of it (`bin/tui.mjs`) |
 | Task contract | The contract is the head of the ODD feature document, not a second file: a feature doc with `## Goal` is a contract, with the sections of [origin.md](origin.md#task-contract-template). Its done-when commands are list items that open with a code span and say `exits 0`. `js-harness contract check` validates it and the `check` row `contracts` does so statically, never running a command; `contract run` runs them and prints `met` or `not met`; `contract goal` prints the `/goal` condition, which is `contract run` on the absolute path, so the evaluator judges command output, not prose. Closed feature docs are not retrofitted (2026-09-29, `odd/tasks/task-contract.md`) |
-| Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`). A project may declare its documents in `harness.json` `documents` (folders ending in `/`, or single files; no patterns): a commit whose every staged path is one of them runs no sensor and says so in a row, while the budget and the contracts are still checked. So does a commit, a merge above all, whose index differs in documents alone from the trunk as origin names it, or from `MERGE_HEAD` where git wrote one: the trunk merged into a branch of documents, whose code is the trunk's (2026-10-14, `odd/tasks/merge-documents-skip.md`). Off unless declared, since in another project a document can be the product; this repository declares `docs/` and `odd/tasks/` (2026-10-11, `odd/tasks/gate-lock.md`). A project may also declare `documentSensors`, named commands of the same shape, for the checks that read its documents: a commit of documents alone runs those, each a row, for two minutes each at most and with no gate lock taken, and any other commit runs `sensors` as before; this repository declares its rules check and the two test files that read its documents (2026-10-12, `odd/tasks/gate-wait.md`). A project may declare `"sameTree": "skip"`: a gate whose tree, file for file, with the same sensors on the same Node, is the one a gate already ran every sensor on and passed, by a line of the gate log, runs no sensor and takes no lock, and says in its row which gate is the proof; off unless declared, since the key of a tree holds no file git ignores; this repository declares it (his decision of 2026-10-12, the lead's transcript, line 3913; built 2026-10-13, `odd/tasks/gate-wait.md`, T12) |
+| Sensors | `check`, and so every pre-commit it guards, runs a project's own sensors: named commands that must exit 0, from `harness.json` `sensors` (any language; an empty map is a named opt-out) or else `package.json`'s `test`, `lint` and `typecheck` scripts through `npm run`, each a row, under a throwaway home and npm cache. A `review` row shows gentle-ai's risk tier for the pending change and whether review is due; it is INFO and fail-open, never a gate, because RDD is Sebastián's switch. This repo declares no lint or typecheck: one would need a dev dependency (2026-09-30, `odd/tasks/sensors.md`). A project may declare its documents in `harness.json` `documents` (folders ending in `/`, or single files; no patterns): a commit whose every staged path is one of them runs no sensor and says so in a row, while the budget and the contracts are still checked. So does a commit, a merge above all, whose index differs in documents alone from the trunk as origin names it, or from `MERGE_HEAD` where git wrote one: the trunk merged into a branch of documents, whose code is the trunk's (2026-10-14, `odd/tasks/merge-documents-skip.md`). Off unless declared, since in another project a document can be the product; this repository declares `docs/` and `odd/tasks/` (2026-10-11, `odd/tasks/gate-lock.md`). A project may also declare `documentSensors`, named commands of the same shape, for the checks that read its documents: a commit of documents alone runs those, each a row, for two minutes each at most and with no gate lock taken, and any other commit runs `sensors` as before; this repository declares its rules check and the two test files that read its documents (2026-10-12, `odd/tasks/gate-wait.md`). A project may declare `"sameTree": "skip"`: a gate whose tree, file for file, with the same sensors on the same Node, is the one a gate already ran every sensor on and passed, by a line of the gate log, runs no sensor and takes no lock, and says in its row which gate is the proof; off unless declared, since the key of a tree holds no file git ignores; this repository declares it (his decision of 2026-10-12, the lead's transcript, line 3913; built 2026-10-13, `odd/tasks/gate-wait.md`, T12). A pass is no proof where a gate of the same files failed after it, or before it under another key than the pass (GitHub's machines, which have none; another WSL2 distribution or node; Windows against WSL2): every gate's end, CI's included, names the key of its files and the one it ran under, so a failure on CI is not answered by a narrower pass in the WSL mirror (2026-10-30, `odd/tasks/gate-narrow-pass.md`). Those failing ends are also kept in a file of their own beside the log, which keeps months where the log keeps days, so its rotation forgets none of them; a pass whose end names no files proves nothing (2026-10-31, `odd/tasks/gate-push-holes.md`) |
 | Reversibility | Every file written outside the repo is in a manifest (path + sha256); uninstall is exact |
 | Two levels | Installed once per machine (`npm i -g`), like gentle-ai; enabled per project with `js-harness init`, like `git init` |
 | Command scope | A command that exists at both levels acts by location, like npm: inside an initialized project (a git repo with `harness.json` or a project manifest) it acts on the project, anywhere else on the machine; `--global` forces the machine from anywhere. Inside a git repository that is not an initialized project, or with an explicit `--cwd` that is not one, the command refuses and names `--global`, so repeating it never reaches the machine by accident. `uninstall` first, `sync` next (decided 2026-09-28) |
@@ -62,18 +65,18 @@ First request of a one-word prompt, estimated tokens:
 | Per project | `init` writes a committed `harness.json` that pins the version, a base `AGENTS.md` only if none exists, and the `check` gate in pre-commit, and runs `codegraph init`; `sync` brings the project to its pinned version; raising the pin is an explicit commit, like a lockfile. When the running js-harness differs from the pin, a project `sync` writes nothing and names both ways out: the command that installs the pinned version, or the commit that raises the pin; it never changes the machine from inside a project (decided 2026-09-28) |
 | Stack visibility | js-harness sees the whole stack but changes only its own files: it reports each tool as installed, configured and up to date, and prints that tool's own command for any gap. One exception since 2026-10-19 (Sebastián: "tenemos que colocar el modulo de install 3rd plugins o complementos obligatorios", `odd/tasks/stack-install.md`, L1, L4, L5): `js-harness stack install` runs a mandatory tool's own install or registration command after the person's yes, records it in the machine manifest first, and `uninstall machine` runs its exact undo; gentle-ai and engram stay his step, through gentle-ai's own installer, whose uninstall is no exact undo |
 | Notifications | Only on session start or resume, only when something changed since the last notice, and only through channels that cost zero model tokens (see Stack doctor notes) |
-| Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent. Codex reviews the same slice after each code commit: `js-harness codex-review --base <boundary>` runs `codex exec review` and records the review only on evidence that Codex read the diff, every changed line of the branch's patch in the output of its successful commands (2026-09-29, `odd/tasks/codex-exec-review.md`), or records an explicit `--unavailable` skip, under the git common dir; the pre-push hook runs `check --push`, which refuses a branch with a code commit no record covers (2026-09-29). Not the plugin's per-turn stop gate. The review runs in one session, the lean one (2026-10-08, `odd/tasks/codex-review-lean.md`): it loads the diff, read access to the repository, the project's `AGENTS.md` and Codex's own review rubric, and leaves out the user's Codex configuration (global instructions, skills, plugins, MCP servers, hooks); a large range is reviewed in parts. `--session current`, which loaded the user's own configuration instead, was removed on 2026-10-08 because the model it ran on could not be verified (until that day it ran on whatever `~/.codex/config.toml` named); a machine where the lean session cannot run records an `--unavailable` skip. A review that fails is not that case: it is repeated, and one that fails because the weekly use of his Codex plan is spent is told to him at once and never recorded as a skip (Sebastián, 2026-10-11, recorded in the orchestrator's relief file; the command does not tell the two failures apart yet). Review model: `gpt-6.1-sol`, fixed by the command (Sebastián, 2026-10-08, `odd/tasks/codex-review-cost.md`), at the effort of `rule:review-effort`, so neither a `gentle-ai sync` nor `~/.codex/config.toml` changes them, and a review whose session ran on anything else, as its own rollout file says, does not stand. Since 2026-10-08 a review reads only code (not Markdown, not the paths a project marks `-codex-review` in `.gitattributes`), starts where the review records end and starts nothing over a range they cover whole (`--again` reviews it on purpose), prints its plan and an estimate before it spends (`--plan` prints them and starts nothing), and refuses more parts than `rule:review-parts-unflagged` without `--max-parts`; `check` says at every commit how much code waits for a review. Since 2026-10-14 a review runs out of the gate lock unless its caller holds a turn: Codex's `node --test` is refused by a preload in `NODE_OPTIONS`, the own prompt tells it the gate already ran the suite on the range, and an `incorrect` that rests on those refusals alone, with no finding of P0 to P2, owes no correction and is marked `excused` in its record (`odd/tasks/faster-check.md`, part 2) |
+| Review | gentle-ai RDD on every candidate; Sebastián pre-grants consent. Codex reviews the same slice after each code commit: `js-harness codex-review --base <boundary>` runs `codex exec review` and records the review only on evidence that Codex read the diff, every changed line of the branch's patch in the output of its successful commands (2026-09-29, `odd/tasks/codex-exec-review.md`), or records an explicit `--unavailable` skip, under the git common dir; the pre-push hook runs `check --push`, which refuses a branch with a code commit no record covers (2026-09-29). Not the plugin's per-turn stop gate. The review runs in one session, the lean one (2026-10-08, `odd/tasks/codex-review-lean.md`): it loads the diff, read access to the repository, the project's `AGENTS.md` and Codex's own review rubric, and leaves out the user's Codex configuration (global instructions, skills, plugins, MCP servers, hooks); a large range is reviewed in parts. `--session current`, which loaded the user's own configuration instead, was removed on 2026-10-08 because the model it ran on could not be verified (until that day it ran on whatever `~/.codex/config.toml` named); a machine where the lean session cannot run records an `--unavailable` skip. A review that fails is not that case: it is repeated, and at or under the floor of the weekly use of his Codex plan, `rule:codex-weekly-floor`, the command starts nothing and he decides on the reset; on his typed no a Codex skip is recorded, a second Claude review runs in Codex's place, and `codex-meter` and the merge door list the debt until a Codex review pays it (Sebastián, 2026-11-02, `odd/tasks/double-review-alignment.md`, T2; it replaces his "never recorded as a skip" of 2026-10-11). Review model: `gpt-6.1-sol`, fixed by the command (Sebastián, 2026-10-08, `odd/tasks/codex-review-cost.md`), at the effort of `rule:review-effort`, so neither a `gentle-ai sync` nor `~/.codex/config.toml` changes them, and a review whose session ran on anything else, as its own rollout file says, does not stand. Since 2026-10-08 a review reads only code (not Markdown, not the paths a project marks `-codex-review` in `.gitattributes`), starts where the review records end and starts nothing over a range they cover whole (`--again` reviews it on purpose), prints its plan and an estimate before it spends (`--plan` prints them and starts nothing), and refuses more parts than `rule:review-parts-unflagged` without `--max-parts`; `check` says at every commit how much code waits for a review. Since 2026-10-14 a review runs out of the gate lock unless its caller holds a turn: Codex's `node --test` is refused by a preload in `NODE_OPTIONS`, the own prompt tells it the gate already ran the suite on the range, and an `incorrect` that rests on those refusals alone, with no finding of P0 to P2, owes no correction and is marked `excused` in its record (`odd/tasks/faster-check.md`, part 2) |
 | Progress view | The plan and each feature doc hold their steps as checkboxes, so progress is computed by a command, not reinterpreted by a model. `js-harness progress` prints the whole checklist in the terminal (and so on Codex); `--json` gives the same data, which Claude Desktop and mobile render as an inline chat widget on request — no published page (decided 2026-09-27) |
 | Eval spend | No USD ceiling for F5 (Sebastián, 2026-09-30). Runs use the flat-rate subscription, so the limits are tokens, wall time and the plan's usage cap; the runner records the first two per trial and stops cleanly on the third (`odd/tasks/evals.md`) |
 | Eval verdict | Per task and effort, score is the floor and cost decides between equals: scores are equal when their gap is within max(0.02, pooled SD); unequal scores make the higher one win; equal scores with a cost gap above the pooled cost SD make the cheaper config win; anything else is `none`. Cost is Claude Code's `total_cost_usd`, the list cost of the whole session, subagents included. The predecessor's score-only rule is printed beside it (Sebastián, 2026-10-02; `odd/tasks/evals.md`, Constraints) |
 | Effort | Claude: designing the harness, planning and verifying run on Opus 5.5 at `high` effort at least, or on Fable 5.5 at `high` once it exists, and on no other model (Sebastián, 2026-10-10). In this repository's way of working a sub-agent that writes scoped code is launched on Haiku 5.5, by the model on its call (`rule:subagent-writer-model`; Sebastián, 2026-10-11, on "Subagent models result" below), one that explores, reviews or verifies on Opus 5.5 at least (`rule:subagent-reader-model`), and every one at `high` (`rule:subagent-effort`); what the harness turns on by default in a project is not decided. `medium` runs only as a trial, on the main thread of a closed-scope build, alternated by slice with `high` (`docs/model-effort.md`, C2). The cap is `maxEffortLevel: "high"` in user settings. Codex review (`gpt-6.1-sol`): the effort of `rule:review-effort`, fixed by the command, in the one session there is, the lean one (2026-10-08; `--session current` was removed that day because its model could not be verified; see Review) |
 | Autonomy | Native `/goal <condition>`, not a loop of our own |
 | Context | `autoCompactWindow: 350000` (his setting of 2026-10-15), which the context pause reads to know where the host compacts; a session holds one feature, and when it cuts is `AGENTS.md`'s ("Working with Sebastián"); the context pause, which decides between finishing a task and compacting inside it, is designed in `odd/tasks/session-channel.md`; state lives in files, not a handoff ritual |
-| First version's scope | New work that is not a defect (follow-ups, design ideas) keeps entering the first version, rather than waiting for after 1.0.0 so it can close in a day or two. Asked whether it should wait, between "Sí, después de 1.0 (Recomendada)" and "No, sigue entrando", he tapped "No, sigue entrando" (the lead's transcript `e152c9d8`, line 17535, 2026-10-17T01:22:06Z). Three days before, asked whether to freeze the scope at the 53 tasks of that day, he had tapped "Seguir sumando" (transcript `ffe99ebf`, line 5837) and written why: the added tasks are corrections that make the harness work as it must, which comes first, and the date slips if it must: "EL objetivo es cerrar y llegar a la version 1.0.0 pero la idea es que las tareas que agregamos es corregir para que el harnes funcione bien como debe y eso es lo principal y prioritario, si se atrasa pues toca ya que tiene que quedar funcionando como un reloj suizo." (line 5853, 2026-10-14T19:42:26Z) |
-| 1.0.0 and gentle-ai #4036 | 1.0.0 waits for the three tasks that wait for gentle-ai to publish its issue #4036, though nobody knows whether it will. Asked, between "No la espera (Recomendada)" and "Sí, la espera", he tapped "Sí, la espera" (the lead's transcript `e152c9d8`, line 17535, 2026-10-17T01:22:06Z) |
+| First version's scope | **Since 2026-11-01, his growth limit, `rule:growth-limit`.** Asked by the lead, after he read [the re-planning analysis](../odd/tasks/replan-analysis.md) (section E) and its page: "¿adoptas el ajuste, es decir, seguir con F8 y poner el límite al crecimiento?" (the lead's transcript `0f71b2c6`, line 48066), he typed "Listo entonces continuemos y reactives todo para hacer le plan" (line 48080, 2026-11-01T18:44:12Z, read with `js-harness sessions --quote`). What it holds and how the week is computed are the rule's, read with `js-harness rules growth-limit` and the last line of `js-harness progress --pace`. It replaces his "No, sigue entrando" of 2026-10-17 (transcript `e152c9d8`, line 17535), the answer that kept new work entering the first version, and his reason of 2026-10-14 for it ("tiene que quedar funcionando como un reloj suizo", transcript `ffe99ebf`, line 5853) ([replan-execute](../odd/tasks/replan-execute.md)) |
+| 1.0.0 and gentle-ai #4036 | **Since 2026-11-02, 1.0.0 no longer waits for gentle-ai #4036:** it comes after the real feature in plataforma-preproyecto ([the outside feature](#the-outside-feature-the-re-plan-of-2026-11-01)) and S8, and it is the version that feature ran on; it still goes through its full review ("1.0.0 review and record" below). Asked by the lead (question 153), "Recomiendo cambiarla: la 1.0.0 sale después de la funcionalidad real en plataforma-preproyecto y del S8, y es la versión con la que corrió esa funcionalidad. Un sí cambia solo esa línea de la hoja de ruta; no publica nada ni adelanta la 1.0.0, que sigue pasando por su revisión completa", he tapped "Sí, tras la función real" (the lead's transcript `0f71b2c6`, line 50690, 2026-11-02T09:04:33Z, read with `js-harness sessions --quote`). It replaces, kept as history: 1.0.0 waited for the three tasks that wait for gentle-ai to publish its issue #4036, though nobody knows whether it will; asked, between "No la espera (Recomendada)" and "Sí, la espera", he had tapped "Sí, la espera" (the lead's transcript `e152c9d8`, line 17535, 2026-10-17T01:22:06Z) |
 | 1.0.0 review and record | Before the 1.0.0 tag, the whole project is reviewed and documented so that it can later be rebuilt exactly by reverse engineering: "Quiero que cuando lleguemos a la version 1.0.0 hagamos una revision completa de todo el proyecto y de una ve documentamos para poder en un futuro hacer un ingenieria inversa exacta y precisa." (typed, the lead's transcript `e152c9d8`, line 21180, 2026-10-17T09:32Z). Its scope, readers and record are designed when 1.0.0's other tasks are done; the per-session summaries (`odd/tasks/session-close.md`, his order of the same day, line 21112) are part of what it reads |
-| Releases before 1.0.0 | Releases go on as 0.x minors (0.98.0, 0.99.0, 0.100.0, 0.101.0…) until everything is verified to be right; only then is 1.0.0 analyzed and tagged: "yo creo que vamos a seguir como el 0.100.0 o 0.101.0 etc hasta que no verifiquemos bien que todo esta bien para hacer el lanzamiento" (typed, 2026-10-24, the lead's transcript `908805db`). `compareSemver` orders them numerically: 0.100.0 is newer than 0.99.0 (`bin/lib/version.mjs:15`, checked by the lead on 2026-10-24). |
-| Throughput review protocol | A fixed procedure with a command measures where the time goes, keeps a dated snapshot a day, enters each improvement with its baseline, target and cost, and measures it again after it ships; two readers run only before a proposal reaches him, and two runs in a row that find nothing worth building make it weekly (the lead's `throughput-v3-plan.md`, version 2, in the side-session notes). Asked whether he approved it, he tapped "Sí, aprobalo (Recomendada)" (the lead's transcript `e152c9d8`, line 18165, 2026-10-17T02:14:08Z) |
+| Releases before 1.0.0 | Releases go on as 0.x minors (0.98.0, 0.99.0, 0.100.0, 0.101.0…) until everything is verified to be right; only then is 1.0.0 analyzed and tagged: "yo creo que vamos a seguir como el 0.100.0 o 0.101.0 etc hasta que no verifiquemos bien que todo esta bien para hacer el lanzamiento" (typed, 2026-10-24, the lead's transcript `908805db`). `compareSemver` orders them numerically: 0.100.0 is newer than 0.99.0 (`bin/lib/version.mjs:15`, checked by the lead on 2026-10-24). **Since 2026-11-02, "verified" also counts the real feature in plataforma-preproyecto working:** no 1.0.0 until the harness has built something of his and it works. Asked by the lead (question 154), "Recomiendo que también cuente la funcionalidad real en plataforma-preproyecto: no hay 1.0.0 hasta que el arnés haya construido algo tuyo y funcione. Un sí agrega esa condición a la línea de la hoja de ruta; no publica nada ni cambia las 0.x que siguen saliendo", he tapped "Sí, cuenta la función real" (the lead's transcript `0f71b2c6`, line 50775, 2026-11-02T09:10:25Z, read with `js-harness sessions --quote`). Before it, kept as history, "verified" looked only inside the harness: its tests, reviews and evals. The 0.x minors go on as before. |
+| Throughput review protocol | A fixed procedure with a command measures where the time goes, keeps a dated snapshot a day, enters each improvement with its baseline, target and cost, and measures it again after it ships; the double review (`rule:double-review`) runs only before a proposal reaches him, and two runs in a row that find nothing worth building make it weekly (the lead's `throughput-v3-plan.md`, version 2, in the side-session notes). Asked whether he approved it, he tapped "Sí, aprobalo (Recomendada)" (the lead's transcript `e152c9d8`, line 18165, 2026-10-17T02:14:08Z) |
 | Windows suite | The Windows suite, which no gate ran though `README.md` promised it, runs once a day (`.github/workflows/windows-daily.yml`, read by `js-harness windows-daily` and the lead's heartbeat; `odd/tasks/commit-gates-first.md`, T4), off the land's path, after the Windows sensor bound is settled (`odd/tasks/first-version.md`, T6f); running it on every batch would take 15 to 19 hours of the gate lock a day. Asked how often, he tapped "Una vez por día (Recomendada)" (the lead's transcript `e152c9d8`, line 18165, 2026-10-17T02:14:08Z). Merged via `jsaristi/js-harness#367`; its first run on `main` (run 39011662138, 2026-10-17) passed: 6,116 tests, 0 failed, 11 skipped, in 12 min 28 s |
 
 ## Phases
@@ -153,8 +156,9 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] 1. Research complete: the diet proposal through its seventh pass, and the gentle-ai reverse-engineering proposal (`docs/proposals/gentle-ai-reverse-engineering.md`: the replacement matrix, the TUI, the idea watch that S9 builds, how a project works with js-harness), merged to `main` (PR 593 and PR 594, landed 2026-10-26 as `2ffbd7e`), and the map's rows current
 - [ ] 2. His decisions from [the register in the diet's section 1](proposals/harness-diet.md#1-what-is-his-to-decide), split by kind. **Blocking**, asked one at a time before the step that needs them, each answer recorded with his words and the transcript line: D2 (spend), D5, D7 (one choice: accept the defaults or edit), D8 (all four answered 2026-10-26 with the recommended default, in the register), G12 (answered 2026-10-28, question 99: the Rules block), then G3 when PR #596 merges, G7 after S8. **By default**, taken by the lead with the stated default and recorded: G2, G8 and the style's name G10n (both taken 2026-10-27 for S10), G14 (S11), D4 (after S2). Answered: D3, G9, G10, G11; G13 decided by the lead (a skip is a debt); closed: G1, G4, G5, G6, D9
 - [x] 3. A small baseline before any cut (S0): thresholds frozen in a commit; the credentials guard in `evals/home.mjs`; the 3-task eval, `honest-unknown`, `/context`, the `fixed load` row and the 10-case incident set run twice with the desktop's flags, their spread recorded. The long-session eval is designed now and built in parallel; it is S8's confirmation, not a gate. Done 2026-10-27 (`odd/tasks/f8-s0-baseline.md`, `## Baseline`): three runs; incidents 13, 14 and 13 of 20, so L 13, s 1, worse below 10, S8 target 17; false premise 2 of 4, below its line; `honest-unknown` and the 3-task eval meet theirs; $59.64
-- [ ] 4. Migration, one reversible step at a time, each against the baseline with its own probe and pass line (the diet's section 10): S3 (the `CLAUDE.md`/`AGENTS.md` split, and an interim exclusion of gentle-ai's global file that banks ~30.7k at once); the directives pass, in its own PR right after S3 (his choice "Justo después de S3", transcript e41d1e8d): every directive of the plan, gentle-ai's kept ones and the js-harness protocols, written into `CLAUDE.md` and `AGENTS.md` so they are dogfooded, which takes S10's text part (the ODD sizing test and the feature document's order), the protocols in `CLAUDE.md` and `AGENTS.md` per D3, and not permissions, skills or S2; S1 (two reviews on every slice: Codex and the Claude lens runner, commit-range candidates, skips as a debt the merge path enforces); S10 (port: our style, the ODD sizing text once the directives pass has not taken it, two skills, the whole permissions object); S11 (js-harness installs engram, codegraph and context7, with presets; `bin/` and `evals/` stop depending on gentle-ai); S5c-a (directive coverage's mechanism, below); S13's rehearsal on a scratch project; S12 (the migration of an existing project, built and tested, then his listed projects); then S2: writers quiesced, a full backup, a restore drill that proves engram answers, the removal of gentle-ai, Orca and herdr, each asked first, the interim exclusion reverted, a smoke test, every session restarted; then S4a, S4b, S5, S5c-b (directive coverage's filling), S6, S7. S9, the idea watch, any time after S2. S3 built 2026-10-27 (`odd/tasks/f8-s3-split.md`): the split, `init` shipping it, the payload row reading the exclusion, the `CLAUDE.md` budget and the rewritten rule on where a rule lives (PR 602), the exclusion alone (PR 603); D7 put back on his answer (question 96); left: the `/context` check after a restart and the fixed load over five sessions. The directives pass opened 2026-10-27 (`odd/tasks/f8-directives.md`): S3's promise checked in a session started on `59df62f` (the worktree's `CLAUDE.md` and `AGENTS.md` load once each, the global file does not); protocols 4 and 8 written into `AGENTS.md`, the sizing test, the document's order and protocols 3, 5, 6 and 7 into `CLAUDE.md`, which measures 3108, so `claude-md-budget` went from 2500 to 3200 by his answer to question 97. S1 built 2026-10-27 (`odd/tasks/f8-s1-reviews.md`): `js-harness lens-review` runs the four Claude lenses over a commit range, each record pinned to its head and subject hash; `check --push` refuses a code commit either review leaves uncovered, `check`'s `review` row and `doctor` list the debt and the skips of both, and the merge door refuses a lens skip until a review pays it (PRs 607, 608, 613, 614); the probe 6 of 6 and the incident set 13 of 20, no worse. How gentle-ai works, read at v4.3.1 (the reverse-engineering document, section 13, 2026-10-28, accepted by him as relayed by the lead), adds small tasks to these steps and moves none (its 13.5): an S1 defect task for row 3 (review records written only by the commands, each lens record naming its run); rows 4, 12 and 15 into S10, row 12 now by the lead's call; rows 2 and 7 into S5; row 1 into S4b; row 9 into S7; rows 11 and 17 into S11; row 16 into S12; row 12's backup into S2; rows 13 and 14 into S8. S10 built 2026-10-28 (`odd/tasks/f8-s10-port.md`): `install` writes the `js-harness` output style, the two ported skills with their notices, the whole `permissions` object and the Rules block of G12 into his `~/.claude/CLAUDE.md`, each recorded and undone exactly by `uninstall`; `init` selects the style and writes the denies into a clone; `guard` refuses a file tool on a denied path (PRs 615, 617, 619); the probe in a scratch home and the five Spanish prompts 5 of 5; applied to his machine 2026-10-28 (question 102, "Aplicar ahora"), and the incident rerun on it, `f8-s10-incidents`: 13 of 20 (false premise 2 of 4), at the baseline's L of 13 and above its worse line of 10, so no worse; cases 01, 02 and 05 still fail every trial, and 10 passed 1 of 2, $10.61. S10 is done. S11 built 2026-10-28 (`odd/tasks/f8-s11-complements.md`): `stack` installs and registers engram, the engram plugin, codegraph and context7 with their own commands and undo, context7 required; `init --preset complete|lean|custom` (G14); `doctor` flags a project with context7 off and an engram plugin ahead of its binary (row 11); the gentle-ai rows, the merge door's gentle-ai line and the review starts leave; `bin/lib/gentle-ai-absence.test.mjs` holds the named list (PRs 627, 628, 629 and 632, merged 2026-10-28 and 29); the probe in a scratch home passes and `doctor` exits 0 here with gentle-ai still installed. Question 104 answered: where the Codex review is off, the merge door asks for the Claude lens record. Applied to his machine 2026-10-29 (question 106, "Aplicarlo al entrar 632"): `stack install` found nothing missing and wrote nothing, and `doctor` exits 0 before and after. S11 is done. Directive coverage (the same document, section 14, 2026-10-28, approved by him as relayed by the lead: "Listo, añadámosla") is an F8 step in two parts: S5c-a lists every source the harness ships or sends to an agent, cuts each into spans tied to a rule, gives every obligation a control (a check or hook with a planted break that turns it red, an eval case whose arm without the rule scores lower in a recorded paid run, or a dated `owed`, seeded as the baseline), adds `rules coverage` and the `rules check` refusal of a new gap, and ships them through `init` and S12; S5c-b declares every span and closes the seeded `owed` list. Pass line: `rules coverage --strict` and `--prove` exit 0, `owed` at most 10% at S8, every eval case names its rules, a planted directive without a control fails `rules check` on S13's scratch project, the incident set no worse. Its eval spend, about $95 to $130 over the envelope [i], goes to him when S5c-a starts
+- [ ] 4. Migration, one reversible step at a time, each against the baseline with its own probe and pass line (the diet's section 10): S3 (the `CLAUDE.md`/`AGENTS.md` split, and an interim exclusion of gentle-ai's global file that banks ~30.7k at once); the directives pass, in its own PR right after S3 (his choice "Justo después de S3", transcript e41d1e8d): every directive of the plan, gentle-ai's kept ones and the js-harness protocols, written into `CLAUDE.md` and `AGENTS.md` so they are dogfooded, which takes S10's text part (the ODD sizing test and the feature document's order), the protocols in `CLAUDE.md` and `AGENTS.md` per D3, and not permissions, skills or S2; S1 (two reviews on every slice: Codex and the Claude lens runner, commit-range candidates, skips as a debt the merge path enforces); S10 (port: our style, the ODD sizing text once the directives pass has not taken it, two skills, the whole permissions object); S11 (js-harness installs engram, codegraph and context7, with presets; `bin/` and `evals/` stop depending on gentle-ai); S5c-a (directive coverage's mechanism, below); S13's rehearsal on a scratch project; S12 (the migration of an existing project, built and tested, then his listed projects); then S2: writers quiesced, a full backup, a restore drill that proves engram answers, the removal of gentle-ai, Orca and herdr, each asked first, the interim exclusion reverted, a smoke test, every session restarted; then S4a, S4b, S5, S6, S7; S5c-b (directive coverage's filling) after S8, only if S8's result shows it is needed (question 155, below). S9 is the host watch since question 129 (2026-10-30): each Claude Desktop update gets a session of its own and a review file (`odd/tasks/f8-s9-host-watch.md`); the gentle-ai idea watch it replaced leaves with gentle-ai at S2, and since 2026-11-03 comes back after S2 as a watch of gentle-ai's repository, its own feature (his words under S9). S3 built 2026-10-27 (`odd/tasks/f8-s3-split.md`): the split, `init` shipping it, the payload row reading the exclusion, the `CLAUDE.md` budget and the rewritten rule on where a rule lives (PR 602), the exclusion alone (PR 603); D7 put back on his answer (question 96); left: the `/context` check after a restart and the fixed load over five sessions. The directives pass opened 2026-10-27 (`odd/tasks/f8-directives.md`): S3's promise checked in a session started on `59df62f` (the worktree's `CLAUDE.md` and `AGENTS.md` load once each, the global file does not); protocols 4 and 8 written into `AGENTS.md`, the sizing test, the document's order and protocols 3, 5, 6 and 7 into `CLAUDE.md`, which measures 3108, so `claude-md-budget` went from 2500 to 3200 by his answer to question 97. S1 built 2026-10-27 (`odd/tasks/f8-s1-reviews.md`): `js-harness lens-review` runs the four Claude lenses over a commit range, each record pinned to its head and subject hash; `check --push` refuses a code commit either review leaves uncovered, `check`'s `review` row and `doctor` list the debt and the skips of both, and the merge door refuses a lens skip until a review pays it (PRs 607, 608, 613, 614); the probe 6 of 6 and the incident set 13 of 20, no worse. How gentle-ai works, read at v4.3.1 (the reverse-engineering document, section 13, 2026-10-28, accepted by him as relayed by the lead), adds small tasks to these steps and moves none (its 13.5): an S1 defect task for row 3 (review records written only by the commands, each lens record naming its run); rows 4, 12 and 15 into S10, row 12 now by the lead's call; rows 2 and 7 into S5; row 1 into S4b; row 9 into S7; rows 11 and 17 into S11; row 16 into S12; row 12's backup into S2; rows 13 and 14 into S8. S10 built 2026-10-28 (`odd/tasks/f8-s10-port.md`): `install` writes the `js-harness` output style, the two ported skills with their notices, the whole `permissions` object and the Rules block of G12 into his `~/.claude/CLAUDE.md`, each recorded and undone exactly by `uninstall`; `init` selects the style and writes the denies into a clone; `guard` refuses a file tool on a denied path (PRs 615, 617, 619); the probe in a scratch home and the five Spanish prompts 5 of 5; applied to his machine 2026-10-28 (question 102, "Aplicar ahora"), and the incident rerun on it, `f8-s10-incidents`: 13 of 20 (false premise 2 of 4), at the baseline's L of 13 and above its worse line of 10, so no worse; cases 01, 02 and 05 still fail every trial, and 10 passed 1 of 2, $10.61. S10 is done. S11 built 2026-10-28 (`odd/tasks/f8-s11-complements.md`): `stack` installs and registers engram, the engram plugin, codegraph and context7 with their own commands and undo, context7 required; `init --preset complete|lean|custom` (G14); `doctor` flags a project with context7 off and an engram plugin ahead of its binary (row 11); the gentle-ai rows, the merge door's gentle-ai line and the review starts leave; `bin/lib/gentle-ai-absence.test.mjs` holds the named list (PRs 627, 628, 629 and 632, merged 2026-10-28 and 29); the probe in a scratch home passes and `doctor` exits 0 here with gentle-ai still installed. Question 104 answered: where the Codex review is off, the merge door asks for the Claude lens record. Applied to his machine 2026-10-29 (question 106, "Aplicarlo al entrar 632"): `stack install` found nothing missing and wrote nothing, and `doctor` exits 0 before and after. S11 is done. Directive coverage (the same document, section 14, 2026-10-28, approved by him as relayed by the lead: "Listo, añadámosla") is an F8 step in two parts: S5c-a lists every source the harness ships or sends to an agent, cuts each into spans tied to a rule, gives every obligation a control (a check or hook with a planted break that turns it red, an eval case whose arm without the rule scores lower in a recorded paid run, or a dated `owed`, seeded as the baseline), adds `rules coverage` and the `rules check` refusal of a new gap, and ships them through `init` and S12; S5c-b declares every span and closes the seeded `owed` list. Pass line: `rules coverage --strict` and `--prove` exit 0, `owed` at most 10% at S8, every eval case names its rules, a planted directive without a control fails `rules check` on S13's scratch project, the incident set no worse. Its eval spend, about $95 to $130 over the envelope [i], goes to him when S5c-a starts. **Since 2026-11-02, S5c-b comes after S8 and runs only if S8's result shows it is needed**, so `owed` at most 10% is no longer S8's pass line: S8 reports the `owed` share. Asked by the lead (question 155), "Recomiendo dejar S5c-b para después del S8 y hacerlo solo si el resultado del S8 muestra que hace falta: ahorra ese gasto y un paso antes de la funcionalidad real. Un sí mueve S5c-b después del S8 en la hoja de ruta; S5c-a no cambia y no se gasta nada ahora", he tapped "Sí, S5c-b tras el S8" (the lead's transcript `0f71b2c6`, line 50843, 2026-11-02T09:13:57Z, read with `js-harness sessions --quote`). Kept as history: until then S5c-b ran beside S5, before S8, and S8 held `owed` at most 10%
 - [ ] 5. Final certification (S8): the S0 and S8 measures of section 7, a Claude audit and a Codex audit three runs each, graded side by side with the baseline and their spread; S8's incident score at least `max(17, min(20, L + 3))` of 20, the target frozen before S2 (diet section 7); the closing count of each failure class
+- [ ] 6. Rule 1, the depth pass (JH 124, `odd/tasks/depth-pass-rule.md`; his yes to question 143, 2026-10-31): section 9 of `js-harness-protocols`, one line at the head of the root `CLAUDE.md` and of the block `init` writes, and its control, the `contracts` row held to the pass's form and commit order where `harness.json` declares `depthPassSince` (here from 2026-11-01), with a planted break; then the alignment below. Proof: `node --test bin/lib/depth-pass.test.mjs` and `js-harness rules depth-pass`; the eval of PR 737's brief, with and without the rule, owed and reviewed by 2026-11-30
 
 ### Project init
 - [x] A git-spec global install works through the pnpm shim
@@ -297,8 +301,10 @@ fijo"); a figure marked [i] is an estimate.
 **The order and its dependencies.**
 
 ```
-S0 ─► S3 ─► directives ─► S1 ─► S10 ─► S11 ─► S5c-a ─► S13 ─► S12 ─► S2 ─► S4a, S4b, S5 + S5c-b, S6, S7 ─► S8
-                          └─ S1 records fix (after S10) ┘                 └─► S9 (any time after S2)
+S0 ─► S3 ─► directives ─► S1 ─► S10 ─► S11 ─► S5c-a ─► S13 ─► S12 ─► S2 ─► S4a, S4b, S5, S6, S7 ─► S8 ─► S5c-b if S8 shows it is needed
+                          └─ S1 records fix (after S10) ┘                 └─ S2, then the gentle-ai repository watch (2026-11-03)
+the outside feature (plataforma-preproyecto): beside S2 or right after it, before S8; 1.0.0 after it and S8
+S9 the host watch (question 129): any time, at each desktop release
 beside: the long-session eval (for S8); the TUI's rest (G3, after PR 596)
 ```
 
@@ -312,6 +318,7 @@ beside: the long-session eval (for S8); the TUI's rest (G3, after PR 596)
 - S2 last of the migration: removal is machine-wide and needs every replacement, a backup and a
   restore drill first.
 - S4a to S7 are cuts measured one at a time against the cleaned machine; S8 certifies the end.
+- S5c-b after S8, and only if S8's result shows it is needed (question 155, 2026-11-02).
 
 **Spent so far** (each from its run's record): S0 $59.64, S3 $16.95, S1 $11.35, S10 $10.61, in all
 $98.55 (`odd/tasks/f8-s0-baseline.md`, `## Baseline`; diet section 7.1; `odd/tasks/f8-s1-reviews.md`,
@@ -432,8 +439,41 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   command and undo; `grep -rl gentle-ai bin evals` lists only the idea watch, the named fixtures and
   the tests that assert its absence; `check` and `doctor` green with gentle-ai still installed.
 - **Cost:** no eval (its own probes).
-- **His decisions:** G14, the presets' names, by default (the lead takes the stated default).
+- **His decisions:** G14, the presets' names, by default (the lead takes the stated default). **The presets live
+  only in `init`** (complete, lean, custom), which sets up each project; `install` sets up the machine once and takes
+  none. This changes the reverse-engineering review's decision (RE:248) that both offered them; nothing is built.
+  Asked as question 182 ("Recomiendo dejarlos solo en `init` y anotar en el plan que la decisión cambió"), he
+  tapped "Solo en init" (the lead's transcript `0f71b2c6`, line 63496, 2026-11-04T11:06:55Z, read with `js-harness
+  sessions --quote`).
 - **State:** done (PRs 627, 628, 629, 632, merged 2026-10-28 and 29; `odd/tasks/f8-s11-complements.md`).
+
+### The Codex daemon row (JH 103, beside S11's doctor rows)
+- **Changes:** a `codex-daemon` check row of `doctor`, read-only on the Codex home: `ok` when the
+  managed daemon's `current` resolves to a release with its executable, `missing` when it resolves
+  to none or is gone while Codex will not reinstall one (the state of 2026-10-21), `n/a` with no
+  managed daemon; its fix names the repair of `odd/tasks/codex-trust-table.md`, `## Daemon`. With
+  it, the engram plugin's ahead-of-binary fix says when the binary is engram's latest release and
+  nothing is to be done until the next one.
+- **Files:** `bin/lib/codex-daemon.mjs`, `bin/lib/stack.mjs`, `bin/doctor.mjs` and their tests.
+- **Probe and pass:** the row `ok` on this machine's layout (`doctor` run read-only) and `missing`
+  on a fixture of 2026-10-21's state; `npm run check` green.
+- **Cost:** no eval.
+- **His decisions:** the row enters the plan by his answer to question 123 (lead transcript
+  0f71b2c6, line 32757): "Sí, agrégala".
+- **State:** built, PR 704 (`feat/codex-daemon-row`, `odd/tasks/codex-daemon-row.md`).
+
+### The desktop plan, steps 2 to 5 (JH 107, beside the Host row)
+- **Changes:** steps 2 to 5 of [the desktop proposal's plan](proposals/claude-app-native-sessions.md#12-plan-in-order):
+  cleanups with their counts, one hour of processes and memory, the auto-archive probe, the skill-text trim. What each
+  found is in that section, "What each step found".
+- **Files:** `odd/tasks/f8-desktop-plan.md`, `docs/audits/2026-10-30-process-hour.md`, the proposal.
+- **Probe and pass:** each step's proof of section 12; `npm run check` green.
+- **Cost:** no eval; one hour of `wmic` samples.
+- **His decisions:** the plan's order and these four steps by his answer to question 128 (lead transcript
+  0f71b2c6, line 34672): "Sí, arranca el plan (Recomendada)"; stopping the orphaned status-line processes by his
+  answer "Elimina todo lo de ccstatusline, completamente y a profundidad" (channel, 2026-10-30T18:47:25Z).
+- **State:** PRs 708 (step 2), 709 (step 5) merged; 711 (the probe's scratch PR) merged; 712 (step 3) and this
+  record ready. No skill line was removed: rows 3 and 4 wait for R1.
 
 ### S5c-a Directive coverage, the mechanism
 - **Changes:** every source the harness ships or sends to an agent is listed by a test; each source
@@ -556,7 +596,20 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   most 80,000 over five sessions.
 - **Cost:** about $13 for the incident set, and a scratch walk of about $5 [i].
 - **His decisions:** each removal, asked at that moment; D4, the `fixed load` budget, right after.
-- **State:** to do.
+  **Since 2026-11-03, S2 goes without the backup and its drill.** Four tries that day copied nothing
+  (the app never fully closed, then the machine slept). His words (the lead's transcript `0f71b2c6`,
+  line 60749, 2026-11-03T21:53:02Z): "hagamoslo entonves sin la copia de seguridad, despues de que
+  yo tenga toda la documentacion del proyecto y ademas la forma de que un modelo inteligente pueda
+  auditarlo como fue lo que hicimos no importa si se nos borra informacion."; then question 179,
+  "Sí, sin copia" (line 60802, 21:55:33Z). The `permissions` object and the engram and context7
+  entries come back from gentle-ai's own pre-uninstall snapshot; what no snapshot holds is not
+  restorable. `stack backup` stays built, unused; `~/.engram` is checked by function, not by hash.
+  Kept as history: until then a full backup and its restore drill came first
+  (`odd/tasks/f8-s2-removal.md`, L20). S2 no longer ends the gentle-ai idea watch: by his words of
+  2026-11-03 (line 61838, quoted under S9) a watch of gentle-ai's repository comes back as a feature
+  of its own after S2.
+- **State:** in progress (`odd/tasks/f8-s2-removal.md`): `stack backup` built (PR 761); the backup
+  dropped by question 179; the removals asked one at a time.
 
 ### S4a The attribution hook and the hook count
 - **Changes:** a `commit-msg` hook that strips attribution lines (`.githooks/` has none today:
@@ -566,8 +619,12 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   turns the row red; 0 attribution lines in the next 50 commits on `main`; the row fails above 14
   entries or on a new owner. D8, the engram prompt hook turned off, is applied here.
 - **Cost:** no eval.
-- **His decisions:** D8 (answered: "Apagarlo").
-- **State:** to do.
+- **His decisions:** D8 (answered: "Apagarlo"); question 132, the hook takes the lines out and never stops the commit
+  (answered: "Quitarlas solo").
+- **State:** the hook done (`odd/tasks/strip-attribution.md`): `js-harness commit-msg` and
+  `.githooks/commit-msg` merged in #728, a scratch commit with both trailers landed without them (`951bcfb4`);
+  `init` and `sync` ship it to projects, recorded so `uninstall` takes it out, in PR 2 of that document; the
+  50-commit count on `main`, the hook-count row and D8 to do.
 
 ### S4b Contradictions to zero
 - **Changes:** contract-first as a `check` refusal for a new feature document; the remaining pairs of
@@ -591,12 +648,15 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **State:** to do.
 
 ### S5c-b Directive coverage, the filling
-- **Changes:** beside S5's rule pass: every span declared; each seeded `owed` closed by a check or an
-  eval case; about 15 to 25 new cases for behaviour no check can hold, each proven on both arms.
-- **Probe and pass:** `rules coverage --strict` with `owed` at most 10% at S8; every case names its
-  rules and has a current proof record.
+- **Changes:** every span declared; each seeded `owed` closed by a check or an eval case; about 15 to
+  25 new cases for behaviour no check can hold, each proven on both arms.
+- **Probe and pass:** `rules coverage --strict` with `owed` at most 10%; every case names its rules and
+  has a current proof record.
 - **Cost** [i]: about $34 to $65 to prove the new cases, inside S5c's $95 to $130.
-- **State:** to do.
+- **Order:** after S8, and only if S8's result shows it is needed (question 155, his tap "Sí, S5c-b tras
+  el S8", 2026-11-02, the lead's transcript `0f71b2c6`, line 50843). Until then it ran beside S5's rule
+  pass, before S8. What in S8's result shows it is needed is not written yet; it is read when S8 closes.
+- **State:** to do, deferred.
 
 ### S6 The read surface
 - **Changes:** the roadmap's Next and Decided at most 10k; a `## State` head in feature documents;
@@ -615,14 +675,100 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **Cost:** no eval beyond those runs [i].
 - **State:** to do.
 
-### S9 The idea watch (any time after S2)
-- **Changes:** `bin/lib/gentle-ai-update.mjs` becomes the idea watch of the reverse-engineering
-  document's section 5: each gentle-ai release read by area and classified adopt, adapt or ignore;
-  nothing installs.
-- **Probe and pass:** a fixture diff with one path per area and one unmatched: each path in its area,
-  the unmatched one listed for hand classification, an `ignore`-only release one batched line.
-- **Cost:** none.
-- **State:** to do.
+### S9 The host watch
+- **His words:** line 33399 (2026-10-30), a session "que nos investigue las actualizaciones nuevas
+  de todo a profundidad [...] a sabiendas que este arnes es solo y unicamente para claude desktop";
+  line 33574, "que este arnes funcione unicamente y exclusivamente para Claude Desktop y todas sus
+  funcionalidades en conjunto con el revisor Codex"; question 129 (line 34781, "Sí, súmala
+  (Recomendada)"): "el paso S9, que hoy vigila solo gentle-ai, pasa a vigilar Claude. [...] No
+  cubre adoptar nada sin tu sí." (transcript `0f71b2c6`, read with `sessions --quote`).
+- **Changes:** each Claude Desktop update doctor sees opens a session of its own, `JH <n> · host
+  watch <version>`, named by the lead's heartbeat (a `HOST:` line) and the `host-update` row's
+  fix, and briefed by `js-harness host-watch brief`. It reads the Desktop and Claude Code changelogs over the update's span and diffs the
+  app's tool list against the last recorded one (`docs/host-updates/tools-<surface>.txt`); `host-watch
+  draft` gives one row per entry, classed by the harness area it touches, and lists what it cannot
+  place for hand classification. It writes `docs/host-updates/claude-desktop-<version>.md` (adopt,
+  adapt or ignore, the proposal's map row, the evidence, Windows and phone checked or unknown),
+  which `doctor --host-reviewed` requires, shows it on a Spanish page and sends one recorded
+  question per adoption through the lead. Nothing installs. Plan: `odd/tasks/f8-s9-host-watch.md`;
+  role: `docs/proposals/claude-app-native-sessions.md`, section 8.
+- **Probe and pass:** `node --test bin/lib/host-watch.test.mjs`: a fixture changelog with one entry
+  per class gives one row per entry, an unmatched entry is listed for hand classification, the
+  tool-list diff names what was added and removed; the first real review,
+  `docs/host-updates/claude-desktop-4.4212.0.md`, passes `host-watch check` (every entry of its
+  span has a decided row) and the gate of `--host-reviewed`.
+- **State (2026-10-30):** the first real review is written (Desktop 4.29.0 → 4.4212.0, CLI 2.1.308 →
+  2.1.309): 113 rows, first one adapt (`sessionStatusLine`, question 131) and 112 ignore; JH 113 (2026-10-31,
+  `odd/tasks/status-line.md`) found the key read only on third-party inference and turned the row to ignore, and
+  `host-watch` now drafts a 3P entry outside and asks evidence before adopting one; it passes `host-watch
+  check` and a test runs the gate of `--host-reviewed` over it. Both tool lists are recorded as
+  baselines (the Code tab's 169 host tools, a background session's 68).
+- **Was:** the idea watch of gentle-ai releases (`bin/lib/gentle-ai-update.mjs`, the
+  reverse-engineering document's section 5), planned for any time after S2. It leaves with gentle-ai
+  at S2, by question 129; this entry keeps its history. **Since 2026-11-03 it comes back, outside
+  S2.** His words (the lead's transcript `0f71b2c6`, line 61838, 2026-11-04T01:54:51Z, 20:54 local on
+  2026-11-03): "igual quiero que como no vamos a tener instalado gentle-ai y cada cierto tiempo se
+  actualiza, la idea es poder ver lo archivos del repositorio y como nosotros somos una especie de
+  copia ver que de lo que añade o quita nos sirve para optimizar". So a watch of gentle-ai's
+  repository, read with gentle-ai uninstalled, classes what each release adds or removes as adopt,
+  adapt or ignore; it is a feature of its own after S2. `bin/lib/gentle-ai-update.mjs` is not
+  there to keep: `8b724f3d` removed it with the `gentle-ai-sync` row, so the watch is built again.
+- **Cost:** one session per desktop release (five from 2026-10-15 to 2026-10-29).
+- **State:** in progress (JH 109).
+
+### Alignment to the depth pass (after rule 1, step 6)
+His words of 2026-10-31 (the lead's transcript `0f71b2c6`, line 43297): "entiendo que tenemos que alinear todo el
+arnes para que no vaya a quedar contradicciones o algo antiguo". Opened by the lead once rule 1 lands; nothing here is
+built in rule 1's pull request.
+- **First, the double review** (his typed answers to questions 145 and 146, which replace the option of two readers
+  on every large plan). Question 145 (line 43642): "Y si mejor no hacemos dos lectores A y B sino que hacemos una de
+  Claude y una de Codex para tener 2 perspectivas diferentes pero que sean dos revisiones ciegas independientes?"
+  Question 146 (line 43701): "Me gustaria en todo, pero que me dieras la opcion de cuando si y cuando no, siento que
+  siempre todo se debe revisar doble pero de la forma de nos de criterio y con la filosofia nueva que tenemos ya que
+  todo es importante a menos que yo como usuario te diga que no quiero la revision, esa seria la unica opcion de que
+  no se hiciera." Question 147 (line 44098, tapped) approved the corrected design, which two blind readers, one of
+  Claude and one of Codex, shaped: "Sí, pero también en el código chico". So: code keeps today's pair
+  (`codex-review` and `lens-review` on every slice), and a small code change also gets the blind Claude and Codex
+  read; plans, designs and documents that propose something get one Claude reader and one Codex reader, blind, on the
+  same frozen material, their findings kept outside the repository until both return; each read is announced with
+  its cost and a phrase that skips it, and only his words skip it, recorded with them; never run on his short
+  replies or taps; each finding is recorded, to measure what each reader adds, judged on 2026-11-16. It goes through
+  `js-harness rules change double-review`, retiring his D5 (2026-10-27) by name and keeping its rules on
+  disagreement and rounds; its scope, stated two ways today (`bin/lib/protocols-skill.mjs:43` against
+  `bin/lib/project.mjs:412`), becomes one text. Codex reviews code and not Markdown today (the Review row above), so
+  a command of its own, `js-harness double-review`, reads a plan (`odd/tasks/double-review-alignment.md`, L7); each
+  run spends his Codex weekly limit, read on the meter first.
+  Questions 150 and 152 (2026-11-01, lines 49332 to 49690, typed) changed this design: no extra read on small code,
+  since code's pair is already a Claude and a Codex review, judged against what was asked; every finding answered,
+  taken or rebutted; a clean review approves at once, at most three reviews, then the problem goes to him and the
+  work to a stronger model; and in place of the 10% reserve below, Codex reviews to 2% left, then he is told and
+  decides the reset, and only on his no a second Claude reviews (`odd/tasks/double-review-alignment.md`, "Redesign
+  after question 150", L18).
+  When the limit runs low, question 148 (line 44186, tapped): "Claude reemplaza y Codex paga después
+  (Recomendada)". Below 10% of the weekly limit (`js-harness codex-meter`), a new Codex read goes to a second Claude
+  reader in a fresh context, marked "sin Codex"; code left without a Codex review is a debt Codex reviews after the
+  reset, and the merge door lists it. His one reset credit is not spent without his word.
+- **The older texts:** the feature document's order in `CLAUDE.md` gains `## Depth pass` after the contract (the
+  block `init` writes holds no such order, `bin/lib/project.mjs:395`); the contract template gains its skeleton; `sync` offers `depthPassSince` to a project.
+- **Done** (2026-11-02, `odd/tasks/double-review-alignment.md`, T1 to T10): `rule:double-review` (his D5 retired by
+  name), `rule:escalation-model` and `rule:codex-weekly-floor`, which replaced the 10% reserve; `js-harness
+  double-review` reads a plan; code's two reviews are given what was asked, every finding answered, a recheck for both,
+  at most three reviews; the older texts aligned; pull requests 745, 746, 748, 749, 753, 754 and 755.
+- **The eval** of PR 737's brief, with and without the rule, owed by 2026-11-30: planned in the feature document,
+  not run; it runs on his word.
+
+### The outside feature (the re-plan of 2026-11-01)
+- **Changes:** none in this repository: one small feature of one of his projects, built there with the
+  harness in one session, on a branch, with both reviews, up to a pull request. What the harness helped
+  or got in the way of is written in that session's notes and becomes defects here, which the growth
+  limit lets in as fixes (re-planning analysis, C2 and E2 step 2).
+- **Probe and pass:** the pull request in his project with both reviews recorded, and the notes.
+- **Cost** [i]: one session.
+- **His decisions:** the project, plataforma-preproyecto (question 151, his answer of
+  2026-11-01T19:12:54Z, the lead's transcript `0f71b2c6`, line 48234); the feature, asked next; the merge.
+- **State:** waits for his choice of the feature; beside S2 or right after it, before S8. The project
+  has no code, roadmap, `main` or remote yet: its onboarding (`odd/tasks/onboarding.md` there, branch
+  `onboarding`) stopped at L14 on his answer, so its pre-plan and roadmap come first (JH 129's L10).
 
 ### S8 Certification (step 5)
 - **Changes:** nothing; it measures. Section 7's S0 and S8 measures; a Claude audit and a Codex audit,
@@ -631,9 +777,12 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   no combined score (row 14); directive coverage's full run.
 - **Probe and pass:** the incident set at least 17 of 20 (`max(17, min(20, L + 3))`, frozen); 17
   measures pass and 4 deferred are reported as not built; the long-session eval at least 90% of its
-  moments; `rules coverage --strict` with `owed` at most 10%.
+  moments; `rules coverage --strict` exits 0, and the `owed` share is reported, no longer held to 10%
+  (S5c-b moved after S8, question 155, 2026-11-02); its result says whether S5c-b runs.
 - **Cost** [i]: about $25 for the measures, at most $50 for the long-session eval, about $45 to $52
   for directive coverage's run.
+- **1.0.0:** comes after S8 and the outside feature, and is the version that feature ran on (Decided,
+  "1.0.0 and gentle-ai #4036", question 153).
 - **His decisions:** G7, the recurring certification spend, after S8.
 - **State:** to do.
 
@@ -672,6 +821,38 @@ Designed on 2026-10-10: rules that do not act are to be given a check, in a rank
 Designed on 2026-10-10 and built in [odd/tasks/session-channel.md](../odd/tasks/session-channel.md). The order he asked for on 2026-10-09 (items 1 to 5, each a feature of its own) moved there as `## Session channel`.
 
 ## Next
+
+**The re-plan of 2026-11-01: F8 adjusted, not restarted.** Asked whether we had been doing it wrong
+(his words, the lead's transcript `0f71b2c6`, line 47737), JH 128 measured the project and
+compared keeping F8, adjusting it and starting again ([replan-analysis](../odd/tasks/replan-analysis.md)):
+F8's direction works where it is measured, while the plan grows faster than it closes (488 steps
+closed and 539 added in 14 days) and the harness has built nothing outside itself. He adopted the
+adjustment: "Listo entonces continuemos y reactives todo para hacer le plan" (line 48080,
+2026-11-01, typed, answering "¿adoptas el ajuste, es decir, seguir con F8 y poner el límite al
+crecimiento?"). What it changes, carried out by [replan-execute](../odd/tasks/replan-execute.md):
+- **F8 stays the spine**, its steps in their order below.
+- **His growth limit**, `rule:growth-limit`, holds first. The last line of `js-harness progress
+  --pace` says whether the week is red and what may still open.
+- **An outside outcome**: one real feature in one of his projects, built with the harness, before
+  S8, as an F8 step ([F8 plan](#the-outside-feature-the-re-plan-of-2026-11-01)). Which project
+  and which feature are his: he chose plataforma-preproyecto (question 151); the feature is asked next.
+
+His yes covers the adjustment where it changes none of his recorded decisions. The analysis's E3
+lists the ones it would change, each kept as decided until he answered it. The lead asked them one
+at a time on 2026-11-02 (questions 153 to 156, the lead's transcript `0f71b2c6`), and he answered
+all four with the recommended option, tapped:
+- 1.0.0 after the real feature and S8 instead of waiting for gentle-ai #4036, "Sí, tras la función
+  real" (line 50690; Decided, "1.0.0 and gentle-ai #4036").
+- The real feature as part of "verified", "Sí, cuenta la función real" (line 50775; Decided,
+  "Releases before 1.0.0").
+- S5c-b after S8, only if S8's result shows it is needed, "Sí, S5c-b tras el S8" (line 50843; F8
+  step 4 and [S5c-b](#s5c-b-directive-coverage-the-filling)).
+- Reversible questions decided by the recommended option and listed to him once a day, where he
+  can change any; irreversible ones, spend, publishing and his roadmap decisions still asked one at
+  a time, "Sí, lista diaria" (line 50902). It changes `rule:questions-one-place`, a rule of his, and
+  `rules change` takes only words he typed (`bin/lib/rules-change.mjs:233`), so it waits for his
+  typed words or for the last item.
+- A tapped answer counting as his (question 150, JH 126's): still open.
 
 **First: reorganize the harness (F8), in order, by his word of 2026-10-26.** Told that sessions
 lose judgment and break rules, he asked for one order over everything in flight: "necesito que
@@ -729,7 +910,9 @@ does not serve a step waits, unless it breaks shipped behaviour.
      a smoke test; every session restarts and the lead checks each.
    - Then S4a, S4b, S5 (with the rule-by-rule pass), S6 and S7. S9, the idea watch, any time after
      S2: each gentle-ai release read by area and classified adopt-into-ours, adapt or ignore;
-     nothing installs.
+     nothing installs. (Since question 129, 2026-10-30, S9 is the host watch instead: each Claude
+     Desktop release; the idea watch leaves with gentle-ai at S2. Since 2026-11-03, by his words
+     quoted under S9, a watch of gentle-ai's repository comes back as its own feature after S2.)
 6. **Final certification (step 5).** The baseline and release measures, then a Claude audit and a
    Codex audit, three runs each, side by side, and the closing count of each failure class. One
    rerun rule (diet section 7.2): certification runs again on each new model and Claude Code or
@@ -802,11 +985,14 @@ door, not a gate moved off this machine). This is version 2. Baselines are of 20
 | 9 | Windows Defender's real-time protection off on this machine (his change); gates measured against the day's check median of about 150 s | `MsMpEng` 552 CPU-seconds in gate-start samples | the lead measures |
 | 10 | Finished sessions archived, since each open one keeps a `claude` process and its MCP servers | `claude` 5.9 GB, `node` 2.1 GB, 4.5 of 19.7 GB free | the lead, with his yes per session |
 
-Each item that needs a design passes two readers that did not write it before it is built, and
+Each item that needs a design passes the double review, Claude and Codex blind (`rule:double-review`), before it
+is built, and
 its version says what they changed; each build is test first, through the gate, gentle-ai and
 Codex.
 
-**Later (found after the freeze; not in the first version).**
+**Later.** What waits: since 2026-11-01, what `rule:growth-limit` holds back while the week is red, one
+line each with its day and its source; before it, what was found after the freeze of 2026-10-16 and kept out
+of the first version.
 
 - [ ] Stalled-session detection: the board, the lead's watch and its heartbeat name a work session that holds
   handed work and has made no commit, notice or gate for an hour. On 2026-10-16 three sessions sat five to six
@@ -857,7 +1043,10 @@ con ese documento". Its design is in "Rule hierarchy" above. Meanwhile each feat
 close, sends the lead one note per capability it built in the document's five parts, which the
 lead keeps for whoever writes it. That is the lead's reading of his answer to how the sessions
 leave those notes (line 14050, tapped "Que me lo manden a mí", among a section in each document,
-the one recommended, and a file for each capability).
+the one recommended, and a file for each capability). Done otherwise since: `docs/SPEC.md` was written on
+2026-10-16 (`794b7feb`), before the code was still, with the `spec` row of `check` that holds it to the code
+at every commit, so it is kept alive rather than written last (its capability "The specification stays
+alive").
 
 **Defects in shipped behaviour that had no task, read in the code on 2026-10-13** (`main` at
 `f98f478`). They came as claims of the lead's readers and of the session-channel session;

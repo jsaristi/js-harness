@@ -268,6 +268,21 @@ test('refreshCopy looks once more under the gate lock and refreshes nothing, exi
   assert.equal(quiet.code, 0, quiet.err);
 });
 
+// odd/tasks/refresh-open-apply.md, T2: he may be asked while the lock is waited for, so his open questions are looked at
+// under it too, first, and one that asks to apply what main holds installs nothing and stops no wait.
+test('refreshCopy refuses under the gate lock, exit 77, before it looks at the sessions, while an open question asks to apply what main holds', async () => {
+  const m = machine({ prev: PREV });
+  const released = [];
+  const takeGateLock = async () => ({ release: () => released.push(true), lost: () => false, waitedMs: 0 });
+  const looks = [];
+  const line = 'refresh: question 140 is open and asks the user\'s yes to apply pull request 729, which 0123456 holds: nothing was refreshed';
+  const run = await refresh(m, { takeGateLock, unanswered: () => line, stillQuiet: () => (looks.push(true), { quiet: true }) });
+  assert.equal(run.code, 77, run.out);
+  assert.equal(run.err, line);
+  assert.deepEqual([m.calls, looks, released], [[], [], [true]], 'no package manager ran, no wait was stopped, and the lock was released');
+  assert.equal((await refresh(machine({ prev: PREV }), { unanswered: () => null })).code, 0);
+});
+
 test('pruneStalePnpm removes unused install folders and old bin backups as prune-pnpm.sh does, keeps used and young ones, and names a shim whose target is missing', () => {
   const top = tempDir('js-harness-prune-');
   const home = path.join(top, 'pnpm');

@@ -6,11 +6,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { holdsPhrase, parseRegister, summarize } from './lib/failures.mjs';
+import { holdsPhrase, parseRegister, summarize, weeklyCounts } from './lib/failures.mjs';
 import { gitTopLevel } from './lib/project.mjs';
 
 const REGISTER = 'docs/FAILURES.md';
-export const USAGE = 'Usage: js-harness failures | failures <id> | failures check [--settled]';
+export const USAGE = 'Usage: js-harness failures | failures <id> | failures check [--settled] | failures weeks';
 
 // The end of the row's detail at every gate: how a session learns the register exists, at no token
 // per turn.
@@ -111,7 +111,7 @@ function formatRow(row) {
 }
 
 /** Walks argv token by token, so a flag or a second word it does not know is a usage error and never
- * a silently ignored one. `check` is the one subcommand; any other word is the id of an entry. */
+ * a silently ignored one. `check` and `weeks` are the subcommands; any other word is the id of an entry. */
 function parseArgs(argv) {
   const words = [];
   let settled = false;
@@ -122,8 +122,9 @@ function parseArgs(argv) {
   }
   if (words.length > 1) throw new FailuresArgError(`unknown argument: ${words[1]}`);
   const check = words[0] === 'check';
+  const weeks = words[0] === 'weeks';
   if (settled && !check) throw new FailuresArgError('--settled goes with check');
-  return { check, settled, id: check ? undefined : words[0] };
+  return { check, weeks, settled, id: check || weeks ? undefined : words[0] };
 }
 
 /** The lines of `js-harness failures`: the totals, the entries and sightings of each class in the
@@ -153,14 +154,30 @@ function renderCounts(counts) {
   ];
 }
 
+/** The lines of `failures weeks`: one a week, the oldest first, with its sightings, the lead's own among them and
+ * each class, and the line that says what the count is. */
+function renderWeeks(weeks) {
+  const width = (texts) => texts.reduce((max, text) => Math.max(max, text.length), 0);
+  const seen = weeks.map((week) => count(week.sightings, 'sighting'));
+  const lead = weeks.map((week) => `${week.lead} the lead's own`);
+  return [
+    `${REGISTER}  sightings by week, Monday first`,
+    '',
+    ...weeks.map((week, i) => `  week of ${week.week}  ${seen[i].padEnd(width(seen))}  ${lead[i].padEnd(width(lead))}  ${Object.entries(week.byClass).map(([name, n]) => `${name} ${n}`).join(', ')}`),
+    '',
+    'It counts what was recorded, not every mistake made; a sighting is the lead\'s own only where its evidence says "the lead\'s own", so that column is a floor.',
+  ];
+}
+
 /** `js-harness failures` prints the totals and one line per entry; `failures <id>` prints one entry
  * whole, with its state; `failures check` runs the gate's row alone and, with `--settled`, also
- * refuses while an entry is not settled, which is how a contract's "Done when" carries the register.
+ * refuses while an entry is not settled, which is how a contract's "Done when" carries the register;
+ * `failures weeks` prints the sightings by week (`weeklyCounts`), so he sees whether the mistakes go down.
  * Exit 0; 1 when the register is refused, an id is not in it or `--settled` finds an entry that is
  * not settled; 2, with usage on stderr and no file read, for an argument it does not know. With no
  * `docs/FAILURES.md` nothing is recorded, so nothing is refused: it says so and exits 0. The register is
  * read at the top of the git repository `cwd` is in, so a subfolder finds it; outside one, in `cwd`. */
-export async function failuresMain(argv, { cwd = process.cwd(), stdout = console.log, stderr = console.error, readFile = readText, spawn = spawnSync } = {}) {
+export async function failuresMain(argv, { cwd = process.cwd(), stdout = console.log, stderr = console.error, readFile = readText, spawn = spawnSync, now = () => new Date() } = {}) {
   let parsed;
   try {
     parsed = parseArgs(argv);
@@ -186,6 +203,11 @@ export async function failuresMain(argv, { cwd = process.cwd(), stdout = console
     if (!parsed.settled || counts.unsettled === 0) return 0;
     stdout(`not settled: ${counts.unsettled} of ${count(counts.entries, 'failure')}`);
     return 1;
+  }
+
+  if (parsed.weeks) {
+    for (const line of renderWeeks(weeklyCounts(register, now()))) stdout(line);
+    return 0;
   }
 
   if (parsed.id === undefined) {

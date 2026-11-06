@@ -28,7 +28,9 @@ reasons are in `odd/tasks/rule-hierarchy.md`, "The failures register".
 In the evidence, "relief file" is the orchestrator's relief file,
 `.js-harness/relief/D--js-harness.md` under his home and not in the repository, and "(claimed)"
 marks what a record only reports from a session's message. One `- Seen:` line is one occurrence;
-other places that record the same occurrence are named in its note.
+other places that record the same occurrence are named in its note. "The lead's own" in the evidence
+marks a mistake the lead made itself, which `js-harness failures weeks` counts as the lead's; "the
+lead's" alone names where a sighting was read, not who made it.
 
 ### answer-line-wrong-entry
 The line of his answer was found by a text search and taken from the wrong entry, then written to
@@ -125,6 +127,18 @@ one runs.
   a sub-agent that runs tests wait for the gate to end" — replaced on 2026-10-23:
   it was seen again on 2026-10-15, after it; guard --hook now refuses the read while another gate holds the lock
 
+### board-summary-stale
+The live board's summary kept the lead's words of days before, while the page read as current: the lead sent only
+the `checked` stamp `sessions live` prints, which refreshes the page's freshness and none of the summary's fields.
+- Class: unseen-state
+- Seen: 2026-10-31 — the lead's brief JH 115 (claimed; the lead's own) — `board/summary` kept its `now`, `status`,
+  `route` and `yours` from 2026-10-29 13:58Z for two days, its "lo que me toca" listing questions of which every one
+  of the 133 recorded was closed; found when he asked whether they were open. The page's freshness reads the newest
+  row and the stamp alone (`docs/live-board.html:512-518`, `bin/sessions-live.mjs:218-220`)
+  (odd/tasks/lead-duty-checks.md, row 1 of the list)
+- Control: check — bin/lib/stale-board.test.mjs — "the lead whose summary was last written with now or status
+  before notices that waited longer than one check is told so" — since 2026-10-31
+
 ### brief-waived-review-lines
 A lead's brief for code work waived the feature document, whose gentle-ai lines the merge door asks
 for every code commit while gentle-ai reviews (until F8's S2).
@@ -181,7 +195,11 @@ check said or before its answer was read.
   script and the gate's commit were joined by `;` in one command. The script threw on the feature
   document, and the commit ran with the roadmap change alone and a message saying the document closed.
   Commit `1f28794` wrote the document. The next tries were joined by `&&` and stopped where they failed
-- Control: protocol — bin/lib/protocols-skill.mjs — "Two steps share one command only when the second is conditional on the first" — since 2026-10-16
+- Control: check — bin/lib/chained-step-guard.test.mjs — "a push, a commit, a pull request, a land or a notice after a ;, a
+  line break, || or & is refused, naming the step and the joiner" — since 2026-10-31
+- Was: protocol — bin/lib/protocols-skill.mjs — "Two steps share one command only when the second is conditional on
+  the first" — replaced on 2026-10-31: the guard refuses the step where the rule `chained-steps` is declared
+  (odd/tasks/guard-chained-steps.md), and the protocol line stays as the rule's prose
 
 ### check-survivor-test-fails
 A gate failed on one test of `bin/check.test.mjs`, "checkSensor kills a background process the command
@@ -282,11 +300,20 @@ of it and recorded nothing.
 ### command-handed-untested
 A command he was handed to run on his machine had not been run first, and it broke what it wrote.
 - Class: wrong-information
-- Seen: 2026-10-30 — relief file, line 1963 — the lead gave him `pnpm config set minimumReleaseAgeExclude "a,b"
-  --global` untested; pnpm 12 wrote a string, his `config.yaml` no longer parsed and every pnpm and npm command
-  failed; the lead rewrote it as a YAML list and read it back with `pnpm config get`
-- Control: owed — odd/tasks/instruction-homes.md — "a command handed to him that writes his configuration is run
-  first against a scratch configuration"
+- Seen: 2026-10-30 — relief file, line 1963 (the lead's own) — the lead gave him `pnpm config set
+  minimumReleaseAgeExclude "a,b" --global` untested; pnpm 12 wrote a string, his `config.yaml` no longer parsed and
+  every pnpm and npm command failed; the lead rewrote it as a YAML list and read it back with `pnpm config get`
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 32954 (the lead's own) — the lead handed him a `bash` block,
+  `rm -rf /d/js-harness-worktrees`, after its own runs of it were refused by the guard (lines 32882 to 32895); his
+  shell is PowerShell, where `rm` is `Remove-Item`, and he got "Remove-Item: No se encuentra un parámetro que
+  coincida con el nombre de parámetro "rf"" (line 32965); the fix then was a PowerShell command run first
+- Control: check — bin/reply.test.mjs — "a reply handing him a block the session never ran with success is turned
+  back" — since 2026-10-30
+- Proof: `js-harness failures weeks`: no sighting of this entry from the week the reply check lands; its replay over
+  the lead's transcript 0f71b2c6 refused all 9 of the replies that handed him a command block (odd/tasks/f8-lead-rigor.md, L11)
+- Was: owed — odd/tasks/instruction-homes.md — "a command handed to him that writes his configuration is run
+  first against a scratch configuration"; replaced on 2026-10-30 by the reply check's refusal of a command block not
+  tagged for his shell, not run with success first or rejected by his shell's parser (odd/tasks/f8-lead-rigor.md, T4)
 
 ### command-run-for-help
 A session ran a command it did not know, to read its help, and the command acted.
@@ -311,8 +338,23 @@ forbids: the host's reminder asks for them, and its own text says the user's ins
 - Seen: 2026-10-29 — JH 88, its first commit of feat/lead-manual-steps — the message carried
   `Co-Authored-By` and `Claude-Session`; the commit was stopped while its pre-commit gate waited for
   the gate lock, so none was made, and it was made again without them
-- Control: protocol — bin/lib/rules-block.mjs — "or AI attribution to commits. Use conventional
-  commits only" — since 2026-10-29
+- Seen: 2026-10-30 — JH 107, commit 09489509 of worktree-f8-desktop-plan — the message carried
+  `Co-Authored-By` and `Claude-Session`, and it was pushed before the session saw it; it stays, since
+  the branch is never force-pushed, and the next commits carry neither
+- Seen: 2026-10-30 — JH 109, every commit of f8-s9-host-watch from 6de916b7 to the fix of R3-001 on
+  f8-s9-review, 20 in all, those of PRs 717 and 718 merged — the session's summary of its own rules,
+  carried over two compactions, listed the attribution lines as this project's rule; it saw the
+  breach only on reading JH 107's summary; nothing is rewritten (main is never rewritten, the branch
+  never force-pushed), and the next commits carry neither. Third sighting: the protocol line did not
+  stop it, so a `commit-msg` check is the next step (`bin/`), proposed to the lead
+- Seen: 2026-10-31 — JH 116, its first commit of worktree-reply-hook-latency, branched before the
+  `commit-msg` hook landed — the message carried `Co-Authored-By`; amended before any push (f91cbcc1),
+  and the next commits carry neither
+- Control: check — bin/commit-msg.test.mjs — "commit-msg hook makes the commit without the host's lines" — since
+  2026-10-31
+- Was: protocol — bin/lib/rules-block.mjs — "or AI attribution to commits. Use conventional
+  commits only" — replaced on 2026-10-31: the `commit-msg` hook takes the lines out of every commit message, his
+  answer to question 132 (odd/tasks/strip-attribution.md); the protocol line stays
 
 ### commit-too-large-to-review
 A commit passed the gate and was too large for the reviewer, so it went unreviewed or was remade at
@@ -333,6 +375,16 @@ the cost of more gates.
   reviewed commit holds fails the gate" — since 2026-10-16
 - Proof: the row `codex-review` (debt) prints the size of a range (`checkCodexReviewDebt`,
   `bin/check.mjs`), and the row `commit-size` that of each commit before it is made
+
+### compaction-dropped-waiting
+A work session told the lead it was waiting on it, the host compacted the lead, and the resume after the compaction
+listed the open questions and the background tasks but not the sessions waiting on the lead, so the wait went unseen.
+- Class: unseen-state
+- Seen: 2026-10-31 — the channel's record, JH 114's `waiting` of 03:06:05Z (the lead's own; the compaction and the 50
+  minutes are claimed, the lead's brief to JH 121) — "the commit of the L11 fix (staged, tests 27/27) was killed by
+  Claude Code for low memory"; it sat about 50 minutes before the lead saw it
+- Control: check — bin/resume.test.mjs — "an orchestrator is given each work session whose newest notice is
+  waiting" — since 2026-10-31
 
 ### context-cut-by-percentage
 Sessions were told to cut, or proposed a cut, near 70 percent of their context because of a mark of
@@ -403,6 +455,8 @@ machine for nothing.
 - Seen: 2026-10-27 — odd/tasks/f8-s1-reviews.md, L9 — JH 62 ran a failed commit again to read its failing
   test, a second CI run of about 165 s, when the first run's output, cut by `tail`, already pointed at the
   failure; the name of the failing test is on the gate's `✖ failing tests:` lines, read from the first run
+- Seen: 2026-10-30 — odd/tasks/f8-lead-rigor.md, L13 (JH 106) — in small: eight test files run twice through
+  `js-harness gate`, about four minutes, because a `grep | head` of the first run kept help lines and cut its summary
 
 ### doctor-lock-mtime-ms
 A test of `bin/doctor.test.mjs`, "doctorMain shows the pnpm-lock row stale for a global bin lock left over
@@ -459,9 +513,13 @@ printed only git's "failed to push some refs".
   its PR then ended at 4b85503f, its parent, so the push of the candidate b5236e3 refused 4b85503f
   for both records (reproduced on the records as they stood at 10:25Z: covered at the tip 4b85503f,
   uncovered at b5236e3)
-- Control: check — bin/merge-queue.test.mjs — "a record whose head lies past the pull request covers
-  it at its head and not merged: the door refuses it before a candidate, as the push does" — since
-  2026-10-29
+- Control: check — bin/check-codex-reviews.test.mjs — "check --push refuses a cut inside a reviewed range on both
+  rows, as the merge door refuses it, and names the head to push to" — since 2026-10-30
+- Was: check — bin/merge-queue.test.mjs — "a record whose head lies past the pull request covers it at its head and
+  not merged: the door refuses it before a candidate, as the push does" — replaced on 2026-10-30: it held the door
+  alone, and the pre-push hook still counted a record past the pushed commit (`reviewCoverage`); since JH 112
+  (odd/tasks/gate-push-holes.md, L3) the push row, the plain rows and `codex-review` count none (`beyondTip: false`),
+  so the cut is refused at the push as at the door; the door's test stands
 
 ### door-reads-pr-alone
 The merge queue's door read each pull request merged onto main alone, while the push of main reads
@@ -493,6 +551,21 @@ not the committed range, wrote no record and had to be run again.
 - Seen: 2026-10-30 — `odd/tasks/f8-s12-migration.md` L11 (JH 93) — that document and `docs/ROADMAP.md` edited
   during the Codex review of `24c47ca..09ae012`, after the lenses had finished; 226,291 input tokens spent on part 3
   of 3, nothing recorded, that part run again (parts 1 and 2 kept)
+- Seen: 2026-10-31 — `odd/tasks/reply-hook-latency.md` L8 (JH 116) — that document edited, after the lenses had
+  finished, during the Codex review of `f91cbcc..8dd55c8`; 128,821 input tokens spent on part 3 of 3, nothing
+  recorded, that part run again (parts 1 and 2 kept)
+- Seen: 2026-10-31 — `odd/tasks/double-review-alignment.md` L11 (JH 126) — that document edited, with the lenses
+  running beside it, during the Codex review of `d22f33e..bcd2dd4`; 28,500 input tokens spent on part 1 of 4,
+  nothing recorded, run again
+- Seen: 2026-11-01 — `odd/tasks/local-time.md` L9 (JH 127) — that document edited, with the lenses running beside
+  it, during the Codex review of `9a80707..a1b23d9`; 189,665 input tokens spent on part 1 of 2, which passed and was
+  not kept, nothing recorded, the review run again
+- Seen: 2026-11-02 — `odd/tasks/f8-s2-removal.md` L9 (JH 134) — that document edited, to write state at 85% of
+  the window, during the Codex review of `84997f7..628bace`; 160,754 input tokens spent on part 1 of 6, not kept,
+  nothing recorded, the review run again after the commit
+- Seen: 2026-11-03 — `odd/tasks/idea-watch.md` L5 (JH 138) — that document edited, with the lenses running beside
+  it, during the Codex review of `155a118..009dd2e`; 168,141 input tokens spent on part 1 of 4, not kept, nothing
+  recorded, the review run again after the commit
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 
@@ -594,6 +667,12 @@ a weaker control was chosen to keep them green.
 - Control: check — bin/rules.test.mjs — "the fixture owes the check of a rule declared after the
   baseline" — since 2026-10-29
 
+### flags-guessed
+A session ran a harness command with flags it guessed, instead of reading the command's usage first.
+- Class: wrong-information
+- Seen: 2026-10-30 — the lead's note to JH 106 at 17:20Z (claimed; the lead's own) — the lead guessed the flags of
+  `js-harness notify` twice before reading its usage
+
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
 was not made. Since 2026-10-11 a gate on a loaded machine names what loads it under its load row
@@ -633,6 +712,21 @@ run by hand on Windows, out of a turn, sees both.
 - Control: check — evals/review/compare.test.mjs — "a cell out of a turn of the gate lock is refused before
   anything is made, with the command that runs it" — since 2026-10-15
 
+### gate-narrow-pass-stood
+A commit entered on the proof of a pass narrower than the run that had failed on its tree: its tests failed on
+GitHub's machines, a check by hand of the same tree then passed in the WSL mirror, where the failing test skips itself
+(no `.git` there), and the next commit's gate took that pass as `same` and ran nothing. The proof read only the last
+pass with the tree's key, and a gate on CI wrote no key. main was never exposed: the merge queue runs the whole gate on
+GitHub Actions.
+- Class: tool
+- Seen: 2026-10-30 — the gate log, lines 307-311 (`~/.js-harness/gate-log/log.jsonl`) — CI fail 789d081d, WSL pass
+  efdfe8aa with 214 of 312 tests skipped, `same` by it; commit 98d4c7cb entered with
+  `bin/lib/gentle-ai-absence.test.mjs` red (odd/tasks/f8-s9-host-watch.md, L8)
+- Seen: 2026-10-30 — the gate log, lines 312-316 — CI fail 08d76a43, WSL pass ecc088b0, `same` by it; commit 60bddd22
+  entered the same way; fixed in f3274d4c
+- Control: check — bin/check.test.mjs — "a tree whose tests failed on CI is not proven by a narrower pass here: the
+  next commit goes to CI again and is refused" — since 2026-10-30
+
 ### gate-ran-unseen
 "No gate runs" was said while a gate of a session that cannot notify was running.
 - Class: unseen-state
@@ -653,6 +747,17 @@ configuration to bare.
   odd/tasks/remote-control.md:312-323
 - Control: check — bin/js-harness.test.mjs — "run from the pre-commit hook of a linked worktree,
   this file leaves the repository being committed as it was" — since 2026-10-04
+
+### goal-written-for-another-shell
+A goal written for sh ran in cmd.exe, the shell goals and done-when commands run in on Windows, which
+passed its `$( )` on as written, so a goal that was met read "not met".
+- Class: tool
+- Seen: 2026-11-02 — the stretch closed at 12:50, plan `stretch-plan-1102b.json` in the scratchpad of
+  the lead's transcript 0f71b2c6 (brief JH 136) — goal `prs`, `git fetch -q origin && test $(git rev-list
+  --count --merges 47d96a3..origin/main) -ge 3`, read "not met (exit 2)" with 13 merges since 47d96a3;
+  run again through `runSensor` (JH 136): exit 2, "test: extra argument 'rev-list'"
+- Control: check — bin/stretch.test.mjs — "open on Windows refuses a goal whose $( ) cmd.exe cannot
+  run, and says how to write it (exit 2)" — since 2026-11-02
 
 ### guard-off-when-copy-behind
 The guard let sessions open with a title that carried no project code and number, because the
@@ -735,6 +840,30 @@ has no owner, and the board keeps showing rows and work that nobody holds.
 - Control: check — bin/lib/sessions.test.mjs — "rosterOf: the transcripts of one title are one row,
   which says what the latest of them records" — since 2026-10-11
 
+### host-review-scope-unread
+A host review adopted a change for the Code tab without checking that the app applies it where the harness runs.
+- Class: wrong-information
+- Seen: 2026-10-31 — `docs/host-updates/claude-desktop-4.4212.0.md`, row desktop 4.4212.0 #24 — `sessionStatusLine`,
+  listed in the changelog's 3P section, was decided adapt as a Code tab feature and became question 131, which he
+  answered "Sí, ábrela"; JH 113 found that the installed app reads the key only in its third-party-inference class
+  (`odd/tasks/status-line.md`, Design), so the feature could show nothing on his claude.ai install
+- Control: check — bin/lib/host-watch.test.mjs — "a 3P entry left to decide says its decision needs evidence that a
+  claude.ai install reads it" — since 2026-10-31
+- Proof: `js-harness failures weeks`: no sighting of this entry after the week of 2026-10-26
+
+### host-review-without-research
+A host update was recorded as reviewed after a check that nothing the harness uses broke, with no study of what the
+update brings and what the harness should adopt, adapt or ignore from it.
+- Class: rule-not-acting
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 29697 (the lead's own) — `doctor --host-reviewed
+  --stack-reviewed` recorded his Claude Desktop update at 13:12Z, though the row's fix list asks for a full account
+  of the update; he said at line 33399 that he got no clear account of how it could improve the harness; the fix
+  then: JH 105 researches the update (the lead's relief note, line 33432)
+- Control: check — bin/doctor.test.mjs — "a refused review records nothing" — since 2026-10-30
+- Proof: `js-harness failures weeks`: no sighting of this entry after the week of 2026-10-26
+- Was: owed — odd/tasks/f8-lead-rigor.md — "S2 — the host review file and the `--host-reviewed` gate" — replaced on
+  2026-10-30 by the check, which T3 of that document built
+
 ### hours-guessed
 Hours written in the relief file were not read from a clock.
 - Class: wrong-information
@@ -813,6 +942,14 @@ A defect already reported was written down for later instead of fixed, and a pai
 dearest part finding it again.
 - Class: delivery
 - Seen: 2026-10-08 — odd/tasks/codex-review-cost.md:234-239 — "the parent's error, to not repeat"
+
+### land-took-pending-pr
+`merge-queue --land` took a pull request that was open as ready while a step only he could do, a walk through
+the console, was still pending.
+- Class: delivery
+- Seen: 2026-10-30 — the lead's note to JH 106 at 17:20Z (claimed; the lead's own) — the land took PR 596; the lead
+  stopped it before any push (main unchanged at 04e3d29d) and turned 596 to a draft, which GitHub records at
+  17:18:12Z; its timeline has no ready-for-review event, so it was opened ready
 
 ### language-server-load
 A TypeScript language server per session works whenever tests write files, takes up to a whole
@@ -1074,6 +1211,24 @@ ended runs nothing (`bin/gate.test.mjs`, "gate whose launcher ends while it wait
 - Control: check — bin/loop.test.mjs — "stop --take-over kills the loop and every descendant by pid
   and creation time, looks again and removes the record" — since 2026-10-15
 
+### project-migrate-maintenance-flake
+A merge queue run failed on one test of `bin/lib/project-migrate.test.mjs`, "a CLAUDE.md deleted and not
+committed is refused", which compares every file of its scratch project, `.git` included, before and after a
+refused migrate: the first tree held `.git/objects/maintenance.lock` and the second did not (the assertion's diff
+marks it `-`, expected only; the brief read it the other way). The fixture's commits started
+`git maintenance run --auto --detach`, which held its lock while the first tree was read and let it go before the
+second; the same test passed alone. The file's own global git config did not turn automatic maintenance off,
+as `bin/check.test.mjs` and the shared `repoTemplate` do (rules-row-template-copy-enoent); it now sets
+`maintenance.auto` false and `gc.auto` 0 for every repository the file makes. No other test file that snapshots a
+tree with `.git` in it commits in that repository: `bin/update.test.mjs` snapshots projects it never commits in,
+and `bin/lib/project.test.mjs` skips `.git` (searched: test files that walk a tree with `withFileTypes` or copy it
+with `cpSync` and set `GIT_CONFIG_GLOBAL` without maintenance off).
+- Class: machine
+- Seen: 2026-10-30 — GitHub Actions run 41116514048, the merge queue's candidate 579e918 of pull request 714 —
+  `deepStrictEqual` at `bin/lib/project-migrate.test.mjs:398`; the only failing test of the run
+- Control: check — bin/lib/project-migrate.test.mjs — "a commit in a project these tests make starts no git
+  maintenance" — since 2026-10-30
+
 ### proposal-unreviewed
 A plan, a design or a protocol reached him to decide before any reader that did not write it had
 read it, and he found its holes, or was asked to approve a version its next round replaced.
@@ -1153,11 +1308,25 @@ stood.
   lines 155 and 171 said
 - Seen: 2026-10-11 — odd/tasks/gate-log.md:315-333 — at `51a24db` T3 to T8 are checked off while
   `bin/lib/gate-log.mjs` and `scripts/count-git.mjs` are in no commit of `main`
+- Seen: 2026-11-04 — the channel, JH 137's notes to the lead at 02:01:18Z and 02:01:47Z (this session's own) — the
+  first named commit `18c3a5a0`, written before `git log` printed the real one, `d3b35511`; corrected 29 seconds later,
+  before the lead built on it. The check that stops it: a hash goes into a notice only from an output already read
 - Control: check — bin/check-citations.test.mjs — "a task the change checks off names a commit
   reachable from HEAD, unless it rides with staged work" — since 2026-10-17
 - Was: owed — odd/tasks/commands-and-doctor.md — "a task the change checks off in a feature
   document names a commit, and that commit is reachable from HEAD" — replaced on 2026-10-17: T6 built
   the check in the row citations (odd/tasks/commands-and-doctor.md, L10)
+
+### refresh-applied-unanswered
+`merge-queue --refresh-copy` installed on his machine a change that an open question still asked his yes to apply.
+- Class: rule-not-acting
+- Seen: 2026-10-31 — the channel's record, question 140 (recorded 04:37Z by JH 117, withdrawn 06:47Z "already
+  applied"), and the lead's account in its transcript 0f71b2c6 just before line 40996 (the lead's own) — at 05:59Z the
+  refresh installed main b0c658c with PR 729, whose install pruned the js-harness Codex skills and hooks from his
+  `~/.codex` and moved hook trust in `~/.codex/config.toml`; he then answered question 141 "Dejarlo así" (line 40996,
+  read with `sessions --quote`)
+- Control: check — bin/merge-queue.test.mjs — "lands, then refreshes nothing, exit 77, while an open question asks to
+  apply a pull request main now holds" — since 2026-10-31
 
 ### refresh-wait-false-way-out
 `merge-queue --land --refresh-copy`, when sessions were still at work after its wait, said that the
@@ -1170,6 +1339,17 @@ before it lands while main's `bin/` differs from it, so it refreshes nothing.
   as behind main (the land record, 05:44Z, 11:04Z and 13:37Z), none of them after a refresh
 - Control: check — bin/merge-queue.test.mjs — "a land run from that copy is refused while main" —
   since 2026-10-29
+
+### refresh-waits-on-waiting-session
+`merge-queue --land --refresh-copy` waited for every session `claude agents` called busy, and claude calls a background
+session busy while a `js-harness wait` of its runs: the land waited its 30 minutes for sessions that only waited,
+exited 75, and the lead refreshed the copy by hand.
+- Class: unseen-state
+- Seen: 2026-11-02 — odd/tasks/defect-trio.md, the depth pass's item 2 — `claude agents --json --all` at 10:05Z listed
+  JH 130 `status: busy, state: working` while its transcript's turn had ended at 09:31:10Z and its only open work was
+  the background `js-harness wait --notice-to 130` started at 09:30:29Z
+- Control: check — bin/merge-queue.test.mjs — "--land --refresh-copy refreshes at once beside a busy session whose
+  transcript only waits, and waits for one that runs" — since 2026-11-02
 
 ### refusal-in-system-words
 A path helper let a system error through, so a run was refused in the system's words and not in
@@ -1204,6 +1384,24 @@ computes the merge ref later.
 - Seen: 2026-10-14 — relief file, line 765 — at 14:34; in place since 14:39, outside the repository:
   the lead's script reopens only once `refs/pull/<n>/merge^1` equals `main` (line 767)
 
+### reply-budget-wall-flake
+The two 90th-percentile tests of `bin/reply-budget.test.mjs` timed the reply hook by the wall clock, which the
+machine's load moves: under load they went red with the hook's own work unchanged, and the merge queue left pull
+requests out of lands for it. The first fix held the hook's main-thread CPU time, which load did not move on Windows
+but did in WSL2, where the gate runs; they now hold that CPU against reference runs of the same kind of work between
+the hook's runs, read in milliseconds of the machine that set the 2500 ms, and the processes it starts
+(odd/tasks/defect-trio.md, L3, L4 and L11).
+- Class: machine
+- Seen: 2026-10-31 — odd/tasks/refresh-open-apply.md:138 — PR 736 left out of the land at 08:48Z, red in WSL on the
+  two time-budget tests, Windows Defender at 142 CPU s in the load log
+- Seen: 2026-10-31 — odd/tasks/advisor-trial.md:271 — PR 740 left out of a land at 15:53Z, red only on the two
+  stop-budget timing tests while another session ran its reviews
+- Seen: 2026-11-02 — the gate log's failed.jsonl, run cbfb161f at 12:16Z — PR 750's candidate on main 5e8872b, red in
+  WSL2 on the lead's stop with the main-thread CPU measure; the same test in WSL2 alone took 976 ms at the 90th
+  percentile, and 2101 ms in the whole suite
+- Control: check — bin/reply-budget.test.mjs — "stop, every check doing its whole work, stays within the budget at the
+  90th percentile" — since 2026-11-02
+
 ### resume-names-wrong-maker
 The resume hook said the host had compacted a session by itself when he had typed the command.
 - Class: wrong-information
@@ -1211,6 +1409,17 @@ The resume hook said the host had compacted a session by itself when he had type
   the hook's text opened with "The host compacted this session by itself"; the hook says so
   whenever the boundary is not in the transcript yet (`bin/resume.mjs:651`), which it takes for
   the host's way alone
+
+### return-without-report
+He came back after a long absence and the lead's replies did not show him the status page
+`rule:reports-spanish-visual` asks for, until he asked: the duty was written only in the skill, which reaches the lead
+cut after a compaction, and no hook asked for it.
+- Class: rule-not-acting
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, lines 37758, 37935 and 38011 (the lead's own) — "ya llegue" at
+  01:33:48Z after 6.7 hours away; the lead's reply at 01:43:11Z listed its next steps with no page; his words at
+  01:44:33Z: "en ningun momento me mostraste que tanto avanzamos"; the page came at 01:47:49Z (line 38120)
+- Control: check — bin/lib/return-report.test.mjs — "a planted return without the page is turned back once, with
+  what to run" — since 2026-10-31
 
 ### review-tool-timeout
 The bound status of a gentle-ai review failed with `operation_timeout`, the candidate was left
@@ -1332,6 +1541,26 @@ report could print a password from a command line.
 - Control: check — bin/lib/machine-busiest.test.mjs — "scriptOf says nothing of an argument that is
   not the whole path of a file that exists, however it is spelled" — since 2026-10-11
 
+### session-env-file-cut
+Every Bash call of a long-lived session failed before it ran: the codex plugin's SessionStart hook
+appends three `export` lines to the session's env file on every start, resume and compaction, and
+Claude Code puts that file into each Bash command line, which was cut at 8,191 characters inside
+an open quote.
+- Class: tool
+- Seen: 2026-11-03 — the lead's transcript 0f71b2c6, lines 59324, 59668, 60114 and 60312 — `echo hi`
+  failed with `-c: line 83: unexpected EOF while looking for matching` a quote, from 11:17Z on; the
+  lead moved to the terminal tool, whose permission prompt held it 7 hours. JH 140 read the cause:
+  `~/.claude/session-env/0f71b2c6-cbce-43ca-a031-276a4b2c381f/sessionstart-hook-6.sh` held 105 lines
+  (35 starts, 10,150 bytes), the command line was 10,420 characters, and cutting it at 8,191
+  reproduced the same message, line 83 and all. Claude Code reads the file once at a start, not on
+  each call (a probe line added to JH 140's own file did not reach its next call). Fix: the file
+  was cut to its last three lines, the only distinct ones; backup in
+  `~/.claude/session-env-backups/jh140/0f71b2c6-cbce-43ca-a031-276a4b2c381f/sessionstart-hook-6.sh`
+  (sha256 556524bf…b42228f); undo: `cp -p ~/.claude/session-env-backups/jh140/0f71b2c6-cbce-43ca-a031-276a4b2c381f/sessionstart-hook-6.sh ~/.claude/session-env/0f71b2c6-cbce-43ca-a031-276a4b2c381f/`.
+  It returns after about 27 more starts of one session, since the hook,
+  `plugins/cache/openai-codex/codex/1.0.6/scripts/session-lifecycle-hook.mjs:39`, appends with no
+  check
+
 ### session-never-woken
 Sessions told to start after an event armed no wait for it, so nothing woke them when it came.
 - Class: unseen-state
@@ -1341,6 +1570,12 @@ Sessions told to start after an event armed no wait for it, so nothing woke them
 - Seen: 2026-10-16 — throughput-v3-measure.md (the lead's notes, the window 10-15T00Z to 10-17T00Z) — 31
   turn ends followed by more than 30 minutes of silence with no background task, 64.4 session-hours
   in two days (an upper bound: some had nothing to do)
+- Seen: 2026-11-02 — PP 1's transcript 7eb85479 (plataforma-preproyecto), lines 349 to 378, and that project's
+  channel record, the lead's note at 10:22:54Z (the end of the idle time claimed; the lead's own, in JH 134's brief)
+  — PP 1 recorded its waiting at 10:05:53Z and ended its turn at 10:06:25Z on a Decision line with nothing in the
+  background; the lead's note carrying his answer, "Solo la página", reached its channel 16 minutes later and woke
+  nothing, so it sat idle about 7 h, 05:26 to 12:35 local. The heartbeat that would have flagged it watches only
+  js-harness sessions, and the reply hook let the turn end, since a Decision line holds no handed work
 - Control: check — bin/reply.test.mjs — "a work session that ends its turn holding handed work with
   nothing in the background is turned back once, with what to arm" — since 2026-10-16
 - Was: protocol — bin/lib/manifest.mjs — "every session that waits has a declared wait running
@@ -1428,6 +1663,42 @@ nothing warned the lead that a report marked without notes leaves sections 3, 5 
 - Control: check — bin/lib/report-status.test.mjs — "the numbers head the page before section 1: the
   migration now and at the cut, the map, the stretch goals each sí or no" — since 2026-10-30
 
+### stop-before-process-exits
+`js-harness sessions stop` ran `claude rm` right after `claude stop`, which returns before the job's process ends:
+claude refused to remove the session because its lock on the worktree named that process, still running, and the
+lead removed the worktree by hand after the pull request landed. Each line below is the lead's transcript 0f71b2c6,
+the first refusal for each pid. Since 2026-11-02 stop waits up to a minute for the pid claude names and tries again
+while claude says files are busy (EBUSY), and kills nothing.
+- Class: machine
+- Seen: 2026-10-27 — the lead's transcript 0f71b2c6, line 1151 — pid 51836, JH 60
+- Seen: 2026-10-27 — the lead's transcript 0f71b2c6, line 2170 — pid 50492, JH 63
+- Seen: 2026-10-28 — the lead's transcript 0f71b2c6, line 10054 — pid 25956, JH 71
+- Seen: 2026-10-28 — the lead's transcript 0f71b2c6, line 11527 — pid 6176
+- Seen: 2026-10-29 — the lead's transcript 0f71b2c6, line 12782 — pid 10640, JH 78
+- Seen: 2026-10-29 — the lead's transcript 0f71b2c6, line 21013 — pid 32144
+- Seen: 2026-10-29 — the lead's transcript 0f71b2c6, line 22342 — pid 29524, JH 85
+- Seen: 2026-10-29 — the lead's transcript 0f71b2c6, line 23163 — pid 41176, JH 84, then EBUSY
+- Seen: 2026-10-29 — the lead's transcript 0f71b2c6, line 24025 — pid 25408, JH 89
+- Seen: 2026-10-29 — the lead's transcript 0f71b2c6, line 24506 — pid 45604, JH 88
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 25712 — pid 41020, JH 91
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 27085 — pid 37900, JH 93
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 30681 — pid 41360, JH 97
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 35968 — pid 43460, JH 106
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, line 37160 — pid 31724, JH 109
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 38521 — pid 7688
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 40058 — pid 47040
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 40293 — pid 58608, JH 113
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 40481 — pid 48324, JH 116, gone 11 s after the refusal,
+  then EBUSY once
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 41160 — pid 50500, JH 120
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 41382 — pid 59972
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 45254 — pid 60796
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, line 46297 — pid 2292, JH 123, 124 and 125
+- Seen: 2026-11-01 — the lead's transcript 0f71b2c6, line 47529 — pid 63648, JH 127
+- Seen: 2026-11-02 — the lead's transcript 0f71b2c6, line 51984 — pid 904
+- Control: check — bin/sessions-background.test.mjs — "lock names after the stop, then removes the session" — since
+  2026-11-02
+
 ### stop-read-as-refusal
 The app words a turn stopped by another session as his refusal of a tool call, so the stopped
 session believed he had rejected it and asked for his word.
@@ -1479,8 +1750,59 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-10-29 — the lead's note to JH 89 at 16:33Z (claimed; the lead's own) — he was away about
   an hour with no stretch open; the stretch record holds none between the close at 08:11:36Z and the
   open at 16:07:51Z (`stretches.jsonl` under the throughput folder, read by JH 89)
-- Control: protocol — bin/lib/manifest.mjs — "exits 1 when none is open) and show its departure in that reply" — since
-  2026-10-29
+- Seen: 2026-10-30 — the lead's transcript 0f71b2c6, his "Listo entonces desde ya te dejo solo" at 18:54:39Z (the
+  lead's own, found by JH 123's replay) — no stretch opened until his return at 2026-10-31T01:33:48Z; the record's
+  last close before it is at 13:13:20Z
+- Seen: 2026-10-31 — the lead's transcript 0f71b2c6, lines 39243 and 41022 (the lead's own) — he left twice, "voy a
+  dejarte entre 1 a 2 horas solo" at 03:23:57Z and "voy a ausentarme una horas mas aproximadamente entre 4 a 8 horas"
+  at 07:41:17Z, and the lead opened no stretch; at "ya regrese" (11:09:21Z, line 42109) `stretch status` said "no
+  stretch is open" and the status report "ningún tramo desde el corte", so he got no estimate against actual and no
+  route map: "el como vamos le faltan varias cosas como el mapa de donde vamos". The lead saw both departures and
+  started `quiet --wait` each time (relief file, 03:25Z and 07:43Z); it skipped `stretch open` for its hand-written
+  plan. Fixed by two checks that read none of his words (JH 123): `js-harness quiet --wait`, the wait every
+  departure starts, refuses with exit 4 while no stretch is open unless `--no-stretch <reason>` (`bin/quiet.mjs`); and
+  the reply hook turns the lead back once a return after an absence no stretch covered, asking for this class's
+  sighting, or whose stretch is still open, naming `stretch close` (`bin/lib/return-report.mjs`,
+  `returnStretchWarning`). It enters at the first wait and the first return after the pull request lands and the
+  installed copy is refreshed; its proof is `node --test bin/quiet.test.mjs bin/lib/return-report.test.mjs`, and no
+  later sighting of this class without the turn-back's time beside it
+- Seen: 2026-11-01 — the lead's transcript 0f71b2c6, lines 46673 and 46938 (the lead's own, sent to JH 126 at 05:46Z
+  and checked there) — he was quiet from 2026-10-31T20:04:00Z to "dime que hemos avanzado" at 05:44:19Z, 9.7 h,
+  without saying he was leaving; the stretch record's last close is at 19:27:50Z and none opened after it. The
+  reply hook's turn-back asked for this sighting at his return, the check of the line above acting; the absence
+  itself was unannounced, which no departure check sees
+- Seen: 2026-11-01 — the lead's transcript 0f71b2c6, lines 47160 and 47608 (the lead's own, sent to JH 126 at 18:04Z
+  and checked there) — after "listo colocalo en el arnes de siempre dar la hora local" at 05:56:03Z he was away until
+  18:03:39Z, 12.1 h, the machine off ("deje el computador apagado bastante tiempo"), without saying he was leaving;
+  no stretch opened between the close at 2026-10-31T19:27:50Z and the open at 18:13:57Z, after his return
+- Seen: 2026-11-02 — the lead's note to JH 130 at 09:18Z (claimed; the lead's own) — from 2026-11-01 21:35 to
+  2026-11-02 04:01 local (UTC-05:00) he turned the machine off for the night with every session paused on purpose,
+  and no stretch covered it; the reply hook flagged it at his return. The stretch record's last close is at
+  2026-11-02T01:53:56Z and none opened after it (`stretches.jsonl` under the throughput folder, read by JH 130)
+- Seen: 2026-11-02 — the lead's transcript 0f71b2c6, lines 55168 and 55186 (the lead's own, read by JH 134) — his
+  question 165 was asked at 18:00:21Z (12:59 local) and answered at 20:01:59Z (15:01 local); it waited two hours
+  and no stretch covered it: the stretch record's last close is at 17:50:20Z and none opened after it
+  (`stretches.jsonl` under the throughput folder)
+- Seen: 2026-11-03 — relief file, lines 2250-2251 (claimed; the lead's own) — from 06:17 to 09:59 local (UTC-05:00)
+  he was away while the lead's backup script waited for the app to close, and the machine slept at 06:21; no stretch
+  covered it and no work session was opened. The stretch record's last close is at 2026-11-03T09:23:07Z and none
+  opened after it (`stretches.jsonl` under the throughput folder, read by JH 137)
+- Seen: 2026-11-03 — relief file, lines 2251-2252 (claimed; the lead's own) — from 10:43 to 15:24 local he was away
+  while the fourth backup try waited an hour for the app to close and then gave up; no stretch covered it and no work
+  session was opened. The same record, read by JH 137, holds no open after 2026-11-03T09:23:07Z
+- Seen: 2026-11-03 — the lead's note to JH 137 at 01:38Z on 2026-11-04 (claimed; the lead's own) — from 16:55 to 20:25
+  local he was away after his answer to question 179, with no stretch opened; the reply hook flagged it at his return.
+  The stretch record, read by JH 137 at 20:40 local, still holds no open after 2026-11-03T09:23:07Z
+- Seen: 2026-11-04 — the lead's message to JH 137 during Orca's removal, 11:44-11:47 local (claimed; the lead's own) — he was away 09:01 to 11:43
+  local with no stretch opened; question 186 waited the whole time on the lead's question tool, so the return had no
+  goals or forecast (the lead's miss)
+- Seen: 2026-11-05 — the lead's transcript 0f71b2c6, line 67448 (the lead's own, sent to JH 142) — he was away 07:38
+  to 10:46 local (UTC-05:00) with no stretch opened by the lead, the fourth time by the lead's count; the return had
+  nothing to compare it with
+- Seen: 2026-11-05 — the lead's message to JH 142 (claimed; the lead's own) — he was away 11:05 to 13:25 local
+  (UTC-05:00) with no stretch opened by the lead, the fifth time by the lead's count
+- Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
+  once, naming the failure to record" — since 2026-10-31
 
 ### taskstop-leaves-work-alive
 Stopping a background task of the host ends its shell and not what that shell started, so the work
@@ -1580,6 +1902,23 @@ was not so.
 - Seen: 2026-10-30 — odd/tasks/f8-s13-rehearsal.md, run 8 — JH 90 told the lead that `lens-review --plan` leaves out
   the lens prompt, unread; `bin/lens-review.mjs:221` counts it, and the session corrected the notice within a minute,
   before the lead answered or anything was built on it
+- Seen: 2026-10-30 — the channel, the lead's note to JH 106 at 19:08Z (the lead's own) — at 18:50Z the lead told him
+  that stopping ccstatusline freed about 4 GB, read from its WorkingSet64; JH 107 measured 404 MB private and about
+  260 MB of free memory gained; the claim came from the wrong measure, with no read of free memory before and after
+  by the same probe
+- Seen: 2026-11-03 — relief file, line 2249, and odd/tasks/f8-s2-removal.md, L19 (the lead's own, relaying JH 134's
+  plan) — he was told that quitting the Claude app closes every session, so the backup could start; nobody had checked
+  it, and it was not so: a background session under the claude daemon (JH 134) and an `engram serve` started from a
+  shell kept running, and the backup script gave up at 06:06 local. Fixed then in the script, not in the harness: it
+  logged what still ran every 2 minutes and stopped `engram.exe` once nothing else ran; the backup was later dropped by
+  his answer to question 179 (odd/tasks/f8-s2-removal.md, L20). What stops it recurring is the line on `told-him-unverified`
+  already in force: a claim about what he will see is checked first, here by listing the processes after a quit
+- Seen: 2026-11-04 — odd/tasks/f8-s2-removal.md, L34 (JH 137's own) — question 183 named `gentle-ai uninstall --all
+  -y` as step 1 and said a yes did not authorize gentle-ai's skills and hooks in Codex and Antigravity; `--all` runs
+  every supported agent with every component (gentle-ai 4.3.1, `internal/components/uninstall/service.go:387-395`), so
+  it deletes those skills (`:1044-1087`) and the skill-registry hook in `~/.codex/hooks.json` (`:477-496`). Read
+  after his yes and before the run; nothing ran, and question 184 asks him the scope. What stops it recurring: the
+  scope of a command named in a question is read in its source or help before the question is sent
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting
@@ -1594,6 +1933,9 @@ ran.
   five code pull requests for a merge of `main` (line 759); his order to fix it, the lead's
   transcript ffe99ebf, line 5141. The fix owed is JH 5's `js-harness wait` and its rule: while he is
   not there, a turn never ends waiting; it arms a wait and works on (line 760)
+- Seen: 2026-11-01 — odd/tasks/double-review-alignment.md, L19 — JH 126 ended its turn at 18:58 local near the
+  end of its window, waiting for a compaction that comes only on a new turn, with no wait armed; nothing ran for
+  about two hours until the lead woke it at 20:53 (the lead's notice, claimed)
 - Control: protocol — bin/lib/manifest.mjs — "Never end a turn waiting for a message or an event,
   whether the user is present or not" — since 2026-10-15
 
@@ -1603,7 +1945,10 @@ Two blocks were given in one reply, he sent them out of order, and it cost a ses
 - Seen: 2026-10-07 — AGENTS.md:81-82 — "two, sent out of order, once cost a session"; 2026-10-07 is
   the day of that record (the sentence, commit `9c9b00d`), and the incident itself is not later than
   it and is in no record read
-- Control: line — AGENTS.md — "two blocks out of order cost a session" — since 2026-10-23
+- Control: line — CLAUDE.md — "two blocks out of order cost a session" — since 2026-10-27
+- Was: line — AGENTS.md — "two blocks out of order cost a session" — replaced on 2026-10-27: the line moved, word
+  for word, to CLAUDE.md when the instructions were split (`b94f525f`), so the control read as lost (the cleanup
+  inventory of 2026-10-30, F4)
 - Was: line — AGENTS.md — "two blocks sent out of order cost a session" — replaced on 2026-10-23:
   the line was reworded and no longer held that phrase, so the control read as lost (launch audit,
   C-d-8)
@@ -1714,6 +2059,22 @@ context until it has to be relieved.
   stale once T4 was checked off; replaced on 2026-10-15 by the tests T4 left, merged in pull
   request 65 (2026-10-11): bin/sessions.test.mjs:2095 holds the watch quiet for a notice to
   another role and for its own, and :2080 wakes it for a notice to the orchestrator
+
+### windows-probe-holds-test-folder
+On Windows a stack probe goes through cmd.exe, and its 5 s timeout kills cmd.exe alone: the tool under it lives on
+with its working directory in the test's folder, which Windows refuses to remove while it runs. The test that ran
+`stack` in that folder failed in its cleanup, with its assertion met, and `fs.rmSync`'s `maxRetries` did not help:
+Node 24's rmSync fails an EPERM at once (a busy folder, retried: 0 ms with rmSync, 3,048 ms with `fs.promises.rm`).
+- Class: machine
+- Seen: 2026-10-28 — windows-daily run 40702921457 — `EPERM, Permission denied` removing `jh-home-stack-0sFeX4`,
+  the cleanup of the test (line 186 before the fix), in 5,581 ms
+- Seen: 2026-10-30 — windows-daily run 41071093780 — the same removal, `jh-home-stack-N7Bx4a`, in 5,511 ms
+- Seen: 2026-11-02 — windows-daily run 41489272123 — the same removal, `jh-home-stack-uz7ytQ`, in 5,627 ms;
+  reproduced here with a `codegraph.cmd` that waits 8 s first on the PATH
+- Control: check — bin/stack.test.mjs — "stack takes an empty JS_HARNESS_HOME as unset: the engram plugin is read
+  from the user home, not the working directory" — since 2026-11-02
+- Proof: the windows-daily runs after the merge name no failing test of bin/stack.test.mjs (`js-harness
+  windows-daily`)
 
 ### written-question-buried
 A question he had to answer in writing was put at the end of long reports, so it did not read as a question and

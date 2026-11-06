@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TrustFormError, moveTrust, snakeEvent, trustedPlaces } from './codex-trust.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { TrustFormError, moveTrust, planTrustMoves, snakeEvent, trustedPlaces } from './codex-trust.mjs';
 
 const HOOKS = 'C:\\Users\\me\\.codex\\hooks.json';
 
@@ -174,5 +177,27 @@ test('quoted spellings of hooks.state are the same tables: a trust key is read a
     '"hooks".state."a:stop:0:0".trusted_hash = "x"\n',
   ]) {
     assert.throws(() => trustedPlaces(refused, HOOKS, 'win32'), TrustFormError, refused);
+  }
+});
+
+test('planTrustMoves gives a record that recorded no trustConfigs the config of `earlier`, only for the hooks.json it names', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-trust-plan-'));
+  try {
+    const ours = { hooks: [{ type: 'command', command: 'js-harness doctor' }] };
+    const mine = { hooks: [{ type: 'command', command: 'mine' }] };
+    const [codexHooks, other] = [path.join(dir, '.codex', 'hooks.json'), path.join(dir, 'other', 'hooks.json')];
+    for (const file of [codexHooks, other]) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, JSON.stringify({ hooks: { Stop: [ours, mine] } }), 'utf8');
+    }
+    const record = (file) => ({ path: file, pointer: ['hooks', 'Stop'], entry: ours });
+    const config = path.join(dir, '.codex', 'config.toml');
+    const plans = planTrustMoves([record(codexHooks), record(other)], { hooksPath: codexHooks, config });
+    assert.deepEqual(plans, [{ hooksPath: codexHooks, config, moves: { stop: [-1, 0] } }]);
+    assert.deepEqual(planTrustMoves([record(codexHooks)]), [], 'with no earlier config, a record with none has no plan');
+    const recorded = path.join(dir, 'recorded.toml');
+    assert.deepEqual(planTrustMoves([{ ...record(codexHooks), trustConfigs: [recorded] }], { hooksPath: codexHooks, config }).map((plan) => plan.config), [recorded], 'what a record holds wins');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });

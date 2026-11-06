@@ -14,38 +14,35 @@ export const COVERAGE = {
         "replace": "('agents-budget', 'estimated tokens') + 1"
       }
     },
-    "announce-finished": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "announce-finished": {"level":"owed","since":"2026-10-28"},
     "away-autonomy": {
       "level": "line",
       "path": "bin/lib/manifest.mjs",
       "phrase": "the share of the planned that was met, the map by phase before and after, the timeline"
     },
-    "background-task-declared": {
-      "level": "owed",
-      "since": "2026-10-28"
+    "background-task-declared": {"level":"owed","since":"2026-10-28"},
+    "chained-steps": {
+      "level": "check",
+      "test": "bin/lib/chained-step-guard.test.mjs",
+      "break": {
+        "path": "bin/lib/chained-step-guard.mjs",
+        "find": "if (step !== null && before && Object.hasOwn(JOINERS, joiner)) return { step, joiner };",
+        "replace": "if (step !== null && before && Object.hasOwn(JOINERS, joiner) && step === '') return { step, joiner };"
+      }
     },
-    "ci-gate-bound": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "claude-md-budget": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "codex-review-floor": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "codex-review-margin": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "codex-review-rate": {
-      "level": "owed",
-      "since": "2026-10-28"
+    "ci-gate-bound": {"level":"owed","since":"2026-10-28"},
+    "claude-md-budget": {"level":"owed","since":"2026-10-28"},
+    "codex-review-floor": {"level":"owed","since":"2026-10-28"},
+    "codex-review-margin": {"level":"owed","since":"2026-10-28"},
+    "codex-review-rate": {"level":"owed","since":"2026-10-28"},
+    "codex-weekly-floor": {
+      "level": "check",
+      "test": "bin/codex-review-switch.test.mjs",
+      "break": {
+        "path": "bin/codex-review.mjs",
+        "find": "('codex-weekly-floor'",
+        "replace": "('review-model'"
+      }
     },
     "context-pause": {
       "level": "check",
@@ -65,18 +62,31 @@ export const COVERAGE = {
         "replace": "('contract-run-timeout', 'minutes') + 1"
       }
     },
-    "control-phrase-min": {
-      "level": "owed",
-      "since": "2026-10-28"
+    "control-phrase-min": {"level":"owed","since":"2026-10-28"},
+    "depth-pass": {
+      "level": "check",
+      "test": "bin/lib/depth-pass.test.mjs",
+      "break": {
+        "path": "bin/lib/depth-pass.mjs",
+        "find": "if (at >= 0 && branch[at].code.length > 0) {",
+        "replace": "if (at >= 0 && branch[at].code.length < 0) {"
+      }
     },
     "double-review": {
-      "level": "owed",
-      "since": "2026-10-28"
+      "level": "line",
+      "path": "bin/lib/protocols-skill.mjs",
+      "phrase": "it first passes the double review of section 1"
     },
-    "fixed-load-budget": {
-      "level": "owed",
-      "since": "2026-10-28"
+    "escalation-model": {
+      "level": "check",
+      "test": "bin/lib/codex-review-recheck.test.mjs",
+      "break": {
+        "path": "bin/lib/codex-review-recheck.mjs",
+        "find": "('escalation-model')",
+        "replace": "('review-model')"
+      }
     },
+    "fixed-load-budget": {"level":"owed","since":"2026-10-28"},
     "gate-log-command": {
       "level": "check",
       "test": "bin/lib/rules-bindings.test.mjs",
@@ -113,104 +123,65 @@ export const COVERAGE = {
         "replace": "('gate-wait', 'minutes') + 1"
       }
     },
-    "lead-charter": {
-      "level": "owed",
-      "since": "2026-10-28"
+    "growth-limit": [
+      {
+        "of": "the week is red when its open steps grew",
+        "level": "check",
+        "test": "bin/lib/progress-pace.test.mjs",
+        "break": {
+          "path": "bin/lib/progress-pace.mjs",
+          "find": "red: grew > 0 };",
+          "replace": "red: grew < 0 };"
+        }
+      },
+      {
+        "of": "the lead opens no new work but what it names while the week is red",
+        "level": "protocol",
+        "path": "bin/lib/manifest.mjs",
+        "phrase": "while it says red, open only what it names, and write anything else in the roadmap's Later list"
+      }
+    ],
+    "lead-charter": {"level":"owed","since":"2026-10-28"},
+    "live-board": {"level":"owed","since":"2026-10-28"},
+    "local-time": {
+      "level": "check",
+      "test": "bin/lib/reply-time.test.mjs",
+      "break": {
+        "path": "bin/lib/reply-time.mjs",
+        "find": "if (times.length === 0) return null;",
+        "replace": "if (times.length >= 0) return null;"
+      }
     },
-    "live-board": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "memory-feedback-home": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "memory-index-bytes": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "memory-pass-days": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "mistake-report": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "memory-feedback-home": {"level":"owed","since":"2026-10-28"},
+    "memory-index-bytes": {"level":"owed","since":"2026-10-28"},
+    "memory-pass-days": {"level":"owed","since":"2026-10-28"},
+    "mistake-report": {"level":"owed","since":"2026-10-28"},
     "owner-decisions": {
       "level": "protocol",
       "path": "bin/lib/protocols-skill.mjs",
       "phrase": "Decide everything else, say what it costs, and go on."
     },
-    "person-present": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "question-context": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "questions-one-place": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "recap-effort-line": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "remote-control-yes": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "reply-five-states": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "report-table": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "person-present": {"level":"owed","since":"2026-10-28"},
+    "question-context": {"level":"owed","since":"2026-10-28"},
+    "questions-one-place": {"level":"owed","since":"2026-10-28"},
+    "recap-effort-line": {"level":"owed","since":"2026-10-28"},
+    "remote-control-yes": {"level":"owed","since":"2026-10-28"},
+    "reply-five-states": {"level":"owed","since":"2026-10-28"},
+    "report-table": {"level":"owed","since":"2026-10-28"},
     "reports-spanish-visual": {
       "level": "protocol",
       "path": "bin/lib/protocols-skill.mjs",
       "phrase": "the page is the one a command makes from the records"
     },
-    "restart-announce": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "reuse-first": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "review-effort": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "review-model": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "review-part-files": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "review-part-lines": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "review-parts-unflagged": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "review-timeout": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "reviewed-commit-lines": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "restart-announce": {"level":"owed","since":"2026-10-28"},
+    "reuse-first": {"level":"owed","since":"2026-10-28"},
+    "review-effort": {"level":"owed","since":"2026-10-28"},
+    "review-model": {"level":"owed","since":"2026-10-28"},
+    "review-part-files": {"level":"owed","since":"2026-10-28"},
+    "review-part-lines": {"level":"owed","since":"2026-10-28"},
+    "review-parts-unflagged": {"level":"owed","since":"2026-10-28"},
+    "review-timeout": {"level":"owed","since":"2026-10-28"},
+    "reviewed-commit-lines": {"level":"owed","since":"2026-10-28"},
     "rules-live-in-the-harness": {
       "level": "protocol",
       "path": "bin/lib/protocols-skill.mjs",
@@ -234,71 +205,26 @@ export const COVERAGE = {
         "replace": "('sensor-timeout', 'minutes') + 1"
       }
     },
-    "session-effort": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "session-housekeeping": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "session-model": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "session-prompts": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "session-stall": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "session-title": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "sessions-open-in-sidebar": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "session-effort": {"level":"owed","since":"2026-10-28"},
+    "session-housekeeping": {"level":"owed","since":"2026-10-28"},
+    "session-model": {"level":"owed","since":"2026-10-28"},
+    "session-prompts": {"level":"owed","since":"2026-10-28"},
+    "session-stall": {"level":"owed","since":"2026-10-28"},
+    "session-title": {"level":"owed","since":"2026-10-28"},
+    "sessions-open-in-sidebar": {"level":"owed","since":"2026-10-28"},
     "status-report": {
       "level": "protocol",
       "path": "bin/lib/manifest.mjs",
       "phrase": "6. What you propose next, each step with its why: the criterion that puts it there, never a step alone."
     },
-    "subagent-effort": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "subagent-reader-model": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "subagent-writer-model": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "terminal-note": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "throughput-backfill-days": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "throughput-compare-days": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "throughput-quiet-days": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "throughput-quiet-runs": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
+    "subagent-effort": {"level":"owed","since":"2026-10-28"},
+    "subagent-reader-model": {"level":"owed","since":"2026-10-28"},
+    "subagent-writer-model": {"level":"owed","since":"2026-10-28"},
+    "terminal-note": {"level":"owed","since":"2026-10-28"},
+    "throughput-backfill-days": {"level":"owed","since":"2026-10-28"},
+    "throughput-compare-days": {"level":"owed","since":"2026-10-28"},
+    "throughput-quiet-days": {"level":"owed","since":"2026-10-28"},
+    "throughput-quiet-runs": {"level":"owed","since":"2026-10-28"},
     "wait-every": {
       "level": "check",
       "test": "bin/lib/rules-bindings.test.mjs",
@@ -317,18 +243,9 @@ export const COVERAGE = {
         "replace": "('wait-for', 'minutes') + 1"
       }
     },
-    "wording-is-the-need": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "work-sessions-private-wsl": {
-      "level": "owed",
-      "since": "2026-10-28"
-    },
-    "work-sessions-public": {
-      "level": "owed",
-      "since": "2026-10-28"
-    }
+    "wording-is-the-need": {"level":"owed","since":"2026-10-28"},
+    "work-sessions-private-wsl": {"level":"owed","since":"2026-10-28"},
+    "work-sessions-public": {"level":"owed","since":"2026-10-28"}
   },
   "cases": [
     "commit-no-attribution",
@@ -372,19 +289,19 @@ export const COVERAGE = {
   "sources": {
     "AGENTS.md": [
       "27573a5376c5",
-      "86bece311a08",
+      "fdb1fa35787a",
       "72cfa4b165b8",
       "9196518ae175",
       "50b5e4b16003",
       "c242496d2fdf",
       "43829f7fdbeb",
       "6dda46f3b0ab",
-      "271d54db43f4",
+      "286323613b19",
       "ac4beca21fcf",
       "3f53892edf3a",
       "15deae446b90",
-      "969d0d3cd041",
-      "7a23c73e1a81",
+      "afcba91c48e8",
+      "7511e5c1165d",
       "d75b519fbecf",
       "c1509f8bb5f1",
       "d462d72c06fd",
@@ -409,12 +326,12 @@ export const COVERAGE = {
       "fe7e690a3983",
       "aa1b7112232f",
       "21dbcc0820f6",
-      "9915a59fe8b3",
+      "8390e0cec0e8",
       "7b70374575b5",
       "7774030582f5",
       "7e910ca794b1",
       "fbb4d5c957e3",
-      "21d376a28bac",
+      "87be64196dc8",
       "49cf30e33785",
       "e4c63656c08a",
       "14f96c7a3917",
@@ -438,51 +355,11 @@ export const COVERAGE = {
       "41998bbce130",
       "f0277286c9d3",
       "ede6be4adfa7",
-      "1659df298fd0",
-      "df9cb97f3213",
-      "c7b6b98cb5d9",
-      "fb64251879a9",
-      "8e52b2779a0c",
-      "c229836fd437",
-      "d5219ae27553",
-      "79cc5349ca6b",
-      "cfc60ba8255a",
-      "14e804ceab59",
-      "f2fa66aaec3a",
-      "4dd2781f9b9e",
-      "7b42cfa7b8c7",
-      "ae0f2f8d1bfe",
-      "f095d3cdb496",
-      "cbad6960963f",
-      "6def6f4b10a8",
-      "4fd80d5f1c10",
-      "7723d961faa4",
-      "68bb3f4a73b9",
-      "89125600420e",
-      "b96d0e96bbaf",
-      "343907503107",
-      "f923e203e2a9",
-      "c5234f083ca3",
-      "cfb5f66463fd",
-      "f869211f889d",
-      "3e4bda69d381",
-      "4b9e34587d07",
-      "a58aa912b0bc",
-      "da6cae91730f",
-      "0784be7e489d",
-      "0be913f77e8f",
-      "4e83c1615fee",
-      "4ad4e1adfef6",
-      "0b330bf89f52",
-      "26d30c169b1b",
-      "8276b74f5c7b",
-      "efa139491a3a",
-      "5dfa69e26c08",
-      "8c03d86bf7d7",
-      "757feab56c1e",
-      "48c963a90af3",
-      "3145bf74bbd6",
-      "36fbb54edd35"
+      "3c50332ca8d4",
+      "03a1a6eee8c1",
+      "eebb24089400",
+      "76a29a20de94",
+      "31fbf6069818"
     ],
     "chained-prs-skill": [
       "e5434abb4e01",
@@ -516,6 +393,36 @@ export const COVERAGE = {
       "d46a74a7cb70",
       "c21bc63d564e",
       "342a4048fed1"
+    ],
+    "double-review-prompt": [
+      {
+        "hash": "2bd610bf6d58",
+        "context": "the double review's prompt: a fact of the read, which the command makes true by starting both readers at once on one copy and recording both after both return (bin/double-review.test.mjs)"
+      },
+      {
+        "hash": "53d232dddb82",
+        "context": "the double review's prompt: the reader's read-only tools and Codex's read-only sandbox hold it on the run itself (bin/double-review.test.mjs), so no prose rule carries it"
+      },
+      {
+        "hash": "8d6884151a0e",
+        "context": "the double review's prompt: a heading or the slot of the material, no obligation"
+      },
+      {
+        "hash": "fcd7f3e5defc",
+        "context": "the double review's prompt: the command counts no answer without every copy's read token (bin/double-review.test.mjs), so no prose rule carries it"
+      },
+      {
+        "hash": "4d4353ddfd31",
+        "context": "the double review's prompt: what a one-shot reader is asked to look for in the material, an instruction of that read and no rule of the harness"
+      },
+      {
+        "hash": "4df4c366d640",
+        "context": "the double review's prompt: what a one-shot reader is asked to look for in the material, an instruction of that read and no rule of the harness"
+      },
+      {
+        "hash": "c5e91a9afad3",
+        "context": "the double review's prompt: the CLI holds the answer to its schema (ANSWER_SCHEMA, bin/double-review.mjs), and its language is an instruction of that read, which the Claude reader's settings also set"
+      }
     ],
     "init-agents": [
       "76433bc095fa",
@@ -551,7 +458,7 @@ export const COVERAGE = {
       "f90ecec2f93e",
       "45777c183381",
       "a58d21586dd4",
-      "ad3655173cc6",
+      "07812c405c9e",
       "289a68a5c975",
       "7c9dcab419cd",
       "064241ea6747",
@@ -562,7 +469,7 @@ export const COVERAGE = {
       "3aa8b271c3e4",
       "45777c183381",
       "a58d21586dd4",
-      "ad3655173cc6",
+      "07812c405c9e",
       "289a68a5c975"
     ],
     "init-failures": [
@@ -620,7 +527,6 @@ export const COVERAGE = {
       "d040f5b3e611",
       "61d4053f44ed",
       "c2766d62b95e",
-      "b859f8a8ed87",
       "e007182d082f",
       "46a073ebf76c",
       "764a9864c861",
@@ -643,7 +549,7 @@ export const COVERAGE = {
       "8a91ad938108",
       "f985a2610939",
       "14975a5b7093",
-      "3e0c52a6e75b",
+      "778414bb8e97",
       "baf21361fd95",
       "98dc75d60cad",
       "179ef2c76753",
@@ -704,7 +610,7 @@ export const COVERAGE = {
     ],
     "protocols-skill": [
       "dbb0ff001b03",
-      "a4c6035260a5",
+      "7e1ff1ae6f1c",
       "97be50cbf1ac",
       "d9debb17aa57",
       "954fc8e56820",
@@ -715,6 +621,10 @@ export const COVERAGE = {
       "d4c4f6039f1e",
       "2433a1420941",
       "14d717b10cea",
+      {
+        "hash": "9e28e4998af5",
+        "context": "the skill's index names section 9, whose items hold rule:depth-pass; a title, no obligation"
+      },
       "336cc5e6331a",
       "62cc104f711c",
       "1e51727a49bb",
@@ -737,7 +647,6 @@ export const COVERAGE = {
       "e2d2678259be",
       "33bc068e8075",
       "97a9ae8d5e03",
-      "5ad933feb9ca",
       "94142d07402a",
       "57923c87d60b",
       "c9c0030dd3ea",
@@ -774,7 +683,23 @@ export const COVERAGE = {
       "6ff9f06d1317",
       "e97f8322032a",
       "4e69bec6b964",
-      "bfbc2b380256"
+      "bfbc2b380256",
+      {
+        "hash": "7ec75310272e",
+        "context": "the heading of section 9, whose items hold rule:depth-pass; a title, no obligation"
+      },
+      {
+        "hash": "9cc13a77a365",
+        "context": "the incident rule:depth-pass answers (PR 737, odd/tasks/depth-pass-rule.md); a record, no obligation"
+      },
+      {
+        "hash": "bfb455e6f62d",
+        "context": "the five questions rule:depth-pass answered before it was added; a record, no obligation"
+      },
+      {
+        "hash": "84aadfb1196b",
+        "context": "the cost of section 9 and the day it is reviewed; a record, no obligation"
+      }
     ],
     "rules-block": [
       "b66542635d2a",
@@ -786,7 +711,25 @@ export const COVERAGE = {
       "4fd80d5f1c10",
       "7723d961faa4",
       "68bb3f4a73b9",
-      "89125600420e"
+      "89125600420e",
+      "b96d0e96bbaf",
+      "343907503107",
+      "f923e203e2a9",
+      "c5234f083ca3",
+      "4b9e34587d07",
+      "a58aa912b0bc",
+      "da6cae91730f",
+      "0784be7e489d",
+      "0be913f77e8f",
+      "4e83c1615fee",
+      "4ad4e1adfef6",
+      "0b330bf89f52",
+      "26d30c169b1b",
+      "8276b74f5c7b",
+      "efa139491a3a",
+      "5dfa69e26c08",
+      "8c03d86bf7d7",
+      "757feab56c1e"
     ],
     "skill": [
       "753c849de149",
@@ -809,9 +752,9 @@ export const COVERAGE = {
       "a440cb5134de",
       "71c551731cd8",
       "3380c3e633c3",
-      "1a548f2c2562",
+      "496fa9cd84d8",
       "bb7c472cb9cf",
-      "6bc724aa04f9",
+      "38a703685b7a",
       "4eee354ceae4",
       "d72b1f4d5102",
       "cb1a1546bc71",

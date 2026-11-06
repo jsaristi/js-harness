@@ -20,6 +20,8 @@ const RULES_DATA = fileURLToPath(new URL('./lib/rules-data.mjs', import.meta.url
 const FAKE = String.raw`
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { spawn } from 'node:child_process';
 const file = process.env.FAKE_CLAUDE_STATE;
 const state = JSON.parse(fs.readFileSync(file, 'utf8'));
 const argv = process.argv.slice(2);
@@ -68,12 +70,28 @@ if (argv[0] === 'stop') {
   delete agent.pid;
   agent.status = 'idle';
   agent.state = 'stopped';
+  // claude stop returns while the job's process still ends, and its lock on the worktree names that process. It ends
+  // once rm has refused for it (the release file), not after a set time a slow machine could outlast (Codex P2 on
+  // be294ca..7f918a9); lockMs only bounds a run that never gets there.
+  if (state.lockMs) {
+    const ends = 'const fs = require("fs"); const until = Date.now() + ' + state.lockMs + '; const look = setInterval(() => { if (fs.existsSync(' + JSON.stringify(file + '.release') + ') || Date.now() > until) clearInterval(look); }, 50);';
+    const job = spawn(process.execPath, ['-e', ends], { cwd: os.tmpdir(), detached: true, stdio: 'ignore', windowsHide: true });
+    job.unref();
+    state.lockPid = job.pid;
+  }
   save();
   out('stopped ' + argv[1]);
   process.exit(0);
 }
 if (argv[0] === 'rm') {
   if (state.refuseRm) { out(state.refuseRm); save(); process.exit(1); }
+  const running = (pid) => { try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; } };
+  if (state.lockPid && running(state.lockPid)) {
+    out('kept ' + argv[1] + ' — its worktree is still at “' + (agent?.worktree ?? process.cwd()) + '”\n  A Claude Code lock on the worktree names a process that is still running (pid ' + state.lockPid + ').');
+    fs.writeFileSync(file + '.release', '');
+    save();
+    process.exit(1);
+  }
   if (!agent) lost(argv[1]);
   state.agents = state.agents.filter((item) => item !== agent);
   // claude rm keeps a worktree that holds uncommitted changes (odd/tasks/background-sessions.md, L10).
@@ -152,13 +170,13 @@ function withWorld(body, options) {
 }
 
 test('sessions start starts claude --bg with the title, a pointer to the brief and Remote Control, and records it', withWorld((world) => {
-  const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing', '--model', 'haiku', '--effort', 'high']);
+  const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing', '--model', 'haiku', '--effort', 'high', '--advisor', 'fable']);
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /^started 0db8bc5e · Build the thing$/m);
   assert.match(result.stdout, /js-harness sessions stop 0db8bc5e/);
   const [call] = actions(world);
   const briefs = path.join(world.home, '.js-harness', 'background', 'briefs');
-  assert.deepEqual(call.slice(0, -1), ['--bg', '--add-dir', briefs, '-n', 'Build the thing', '-w', 'thing', '--model', 'haiku', '--effort', 'high', '--remote-control', 'Build the thing']);
+  assert.deepEqual(call.slice(0, -1), ['--bg', '--add-dir', briefs, '-n', 'Build the thing', '-w', 'thing', '--model', 'haiku', '--effort', 'high', '--advisor', 'fable', '--remote-control', 'Build the thing']);
   const prompt = call.at(-1);
   assert.doesNotMatch(prompt, /\n/);
   const [record] = recordLines(world);
@@ -167,6 +185,7 @@ test('sessions start starts claude --bg with the title, a pointer to the brief a
   assert.equal(record.title, 'Build the thing');
   assert.equal(record.worktree, 'thing');
   assert.equal(record.remoteControl, true);
+  assert.equal(record.advisor, 'fable');
   assert.equal(path.dirname(record.brief), briefs);
   assert.ok(prompt.includes(record.brief), prompt);
   const copy = fs.readFileSync(record.brief, 'utf8');
@@ -425,6 +444,16 @@ test('sessions stop stops and removes a recorded session, drops its brief and re
   assert.equal(actions(world).length, 3);
 }));
 
+test('sessions stop waits for the job\'s process claude\'s lock names after the stop, then removes the session', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
+  patchState(world, { lockMs: 60_000 });
+  const result = js(world, ['sessions', 'stop', '0db8bc5e']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /removed 0db8bc5e · Build the thing/);
+  assert.deepEqual(actions(world).slice(1), [['stop', '0db8bc5e'], ['rm', '0db8bc5e'], ['rm', '0db8bc5e']]);
+  assert.equal(recordLines(world).at(-1).event, 'removed');
+}));
+
 test('sessions stop refuses a session it did not start and runs nothing', withWorld((world) => {
   patchState(world, { agents: [{ id: 'f462dfd5', kind: 'background', name: 'his', status: 'idle' }] });
   const result = js(world, ['sessions', 'stop', 'f462dfd5']);
@@ -478,6 +507,47 @@ test('sessions stop says so when claude keeps the session\'s worktree', withWorl
   patchState(world, { nextId: 'a1b2c3d4' });
   assert.equal(js(world, ['sessions', 'start', '--title', 'Plain', '--brief', world.brief]).code, 0);
   assert.doesNotMatch(js(world, ['sessions', 'stop', 'a1b2c3d4']).stdout, /worktree/);
+}));
+
+// On 2026-11-04 (20:06 local) the lead ran sessions stop only to restart a background session after a restart of
+// Claude Desktop, and its claude rm deleted every file of the session's worktree but .git (odd/tasks/stop-keeps-worktree.md).
+test('sessions stop refuses a session whose worktree holds files, runs no claude and leaves every file', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const worktree = path.join(world.project, '.claude', 'worktrees', 'thing');
+  fs.writeFileSync(path.join(worktree, '.git'), 'gitdir: elsewhere\n');
+  fs.mkdirSync(path.join(worktree, 'src'));
+  fs.writeFileSync(path.join(worktree, 'src', 'work.js'), 'uncommitted\n');
+  const { brief } = recordLines(world)[0];
+  const acted = actions(world).length;
+  const result = js(world, ['sessions', 'stop', '0db8bc5e']);
+  assert.equal(result.code, 1, result.stdout);
+  assert.equal(actions(world).length, acted, 'no claude stop, no claude rm');
+  assert.equal(fs.readFileSync(path.join(worktree, 'src', 'work.js'), 'utf8'), 'uncommitted\n');
+  assert.ok(fs.existsSync(path.join(worktree, '.git')));
+  assert.ok(fs.existsSync(brief), 'the brief stays');
+  assert.deepEqual(recordLines(world).map((line) => line.event), ['started']);
+  assert.ok(result.stderr.includes(worktree), result.stderr);
+  assert.match(result.stderr, /SendMessage/);
+  assert.match(result.stderr, /js-harness sessions stop 0db8bc5e --remove-worktree/);
+  // The removal, when it is wanted, is said in so many words.
+  const removed = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(removed.code, 0, removed.stderr);
+  assert.deepEqual(actions(world).slice(acted), [['stop', '0db8bc5e'], ['rm', '0db8bc5e']]);
+  assert.equal(fs.existsSync(worktree), false);
+}));
+
+test('sessions stop runs on a worktree that holds only .git, and takes --remove-worktree with --home in any order', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  fs.writeFileSync(path.join(world.project, '.claude', 'worktrees', 'thing', '.git'), 'gitdir: elsewhere\n');
+  const bare = js(world, ['sessions', 'stop', '0db8bc5e']);
+  assert.equal(bare.code, 0, bare.stderr);
+  patchState(world, { nextId: 'c779ed44' });
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Other', '--brief', world.brief, '--worktree', 'other']).code, 0);
+  fs.writeFileSync(path.join(world.project, '.claude', 'worktrees', 'other', 'work.js'), 'x\n');
+  const both = js(world, ['sessions', 'stop', 'c779ed44', '--home', world.home, '--remove-worktree']);
+  assert.equal(both.code, 0, both.stderr);
+  const twice = js(world, ['sessions', 'stop', 'c779ed44', '--remove-worktree', '--remove-worktree']);
+  assert.equal(twice.code, 2);
 }));
 
 // claude agents lists a session it just started in the folder it was started from: the record and stop name the
@@ -536,8 +606,8 @@ const endJob = (world, id) => {
 };
 
 // The review of slice C of JH 72 (7d8db831..73fc8cf7): resume paths that no test held.
-test('sessions start --resume resumes a job claude no longer lists, with --model and --no-remote-control, and refuses a claude that refuses or a folder that is gone', withWorld((world) => {
-  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+test('sessions start --resume resumes a job claude no longer lists, with --model and --no-remote-control and the recorded --advisor, and refuses a claude that refuses or a folder that is gone', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing', '--advisor', 'fable']).code, 0);
   const [first] = recordLines(world);
   // After a restart claude agents may not list the stopped job at all.
   patchState(world, { agents: [], nextId: 'c779ed44', refuseStart: 'resume refused: made up' });
@@ -549,9 +619,9 @@ test('sessions start --resume resumes a job claude no longer lists, with --model
   const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--model', 'haiku', '--no-remote-control']);
   assert.equal(resumed.code, 0, resumed.stderr);
   const call = actions(world).at(-1);
-  assert.deepEqual([call[call.indexOf('--model') + 1], call.includes('--remote-control')], ['haiku', false]);
+  assert.deepEqual([call[call.indexOf('--model') + 1], call.includes('--remote-control'), call[call.indexOf('--advisor') + 1]], ['haiku', false, 'fable']);
   const entry = recordLines(world).at(-1);
-  assert.deepEqual([entry.id, entry.model, entry.remoteControl], ['c779ed44', 'haiku', false]);
+  assert.deepEqual([entry.id, entry.model, entry.remoteControl, entry.advisor], ['c779ed44', 'haiku', false, 'fable']);
   // A folder that is gone is not resumed into.
   endJob(world, 'c779ed44');
   fs.rmSync(path.join(first.root, '.claude', 'worktrees', 'thing'), { recursive: true, force: true });

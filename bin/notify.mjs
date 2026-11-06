@@ -51,6 +51,8 @@ export const USAGE = [
   '  A question takes no text on the command line. Its fields are one JSON object on standard input, with the',
   '    keys text, options and waits, for example:',
   '    {"text":"Which branch?","options":[{"label":"main","description":"the default branch"}],"waits":"T3"}',
+  '    A question that asks the user to let what a pull request changes be applied also takes "applies":{"pr":<n>}:',
+  '    while it is open, merge-queue --refresh-copy refuses to install a main that holds that pull request.',
   '    The record numbers it, and the number is printed: the user is asked with its text headed by',
   '    "Pregunta <n>: ". An answer or a withdrawal names its question with --question <n>. A verified answer',
   '    is one read at its line of the transcript, and its copy is kept with it, with the time of his line and,',

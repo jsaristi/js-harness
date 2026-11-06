@@ -88,6 +88,41 @@ test('a staged change at the bound passes, and its Markdown documents are not co
   });
 });
 
+// A move of reviewed files was over the bound by its unchanged lines alone (odd/tasks/rename-counted-by-changes.md):
+// a renamed file counts by the lines it changes, as git measures a rename, whatever `diff.renames` says.
+test('a staged rename is counted by the lines it changes, not as the file removed and added again', () => {
+  inRepo((root) => {
+    fs.writeFileSync(path.join(root, 'bin', 'big.mjs'), linesOf(REVIEWED_COMMIT_LINES));
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'big');
+    git(root, 'config', 'diff.renames', 'false');
+    fs.mkdirSync(path.join(root, 'workshop'));
+    git(root, 'mv', 'bin/big.mjs', 'workshop/big.mjs');
+    fs.appendFileSync(path.join(root, 'workshop', 'big.mjs'), 'one more\n');
+    git(root, 'add', '.');
+    assert.deepEqual(checkCommitSize(root), [{
+      name: 'commit-size',
+      pass: true,
+      detail: `the staged change has 1 changed line a review reads, within the ${grouped(REVIEWED_COMMIT_LINES)} changed lines of rule reviewed-commit-lines`,
+    }]);
+  });
+});
+
+// A document no review read, renamed into code, brings all its lines into what a review reads (L7): such a
+// change is counted renames off, the file added whole.
+test('a staged rename of a document into code is counted whole, as the file it adds', () => {
+  inRepo((root) => {
+    fs.writeFileSync(path.join(root, 'notes.md'), linesOf(300));
+    git(root, 'add', '.');
+    git(root, 'commit', '-q', '-m', 'notes');
+    git(root, 'mv', 'notes.md', 'bin/notes.mjs');
+    fs.appendFileSync(path.join(root, 'bin', 'notes.mjs'), 'one more\n');
+    git(root, 'add', '.');
+    const [row] = checkCommitSize(root);
+    assert.match(row.detail, /^the staged change has 301 changed lines a review reads,/);
+  });
+});
+
 test('the files a review leaves out are those the staged attributes mark, not those of the commit before', () => {
   inRepo((root) => {
     // The staged change removes the exclusion of a file and makes it too large: the review will read it.

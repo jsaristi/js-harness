@@ -6,7 +6,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  RENDERED_SCHEMA, SHOWN_SCHEMA, appendRecord, normalText, readRecord, recordRendered, recordShown, renderedFile, shownFile,
+  RENDERED_SCHEMA, SHOWN_SCHEMA, SUMMARY_SUBJECT, appendRecord, isSummaryWrite, normalText, readRecord, recordRendered,
+  recordShown, recordSummary, renderedFile, shownFile, summaryContent,
 } from './template-record.mjs';
 
 const sha = (text) => crypto.createHash('sha256').update(text).digest('hex');
@@ -81,6 +82,23 @@ test('a line left without its newline is ended before the next, and a line that 
 
 test('recordShown refuses a decision it does not know', () => {
   assert.throws(() => recordShown('/x', { decision: 'maybe' }), /decision/);
+});
+
+// The board summary's writes (odd/tasks/board-summary-stale.md, S2): a shown line of board/summary, its fields in it.
+test('recordSummary writes a shown line of board/summary with the fields it carried, which summaryContent reads', () => {
+  scratch((dir) => {
+    const file = path.join(dir, 's.jsonl');
+    const content = recordSummary(file, { at: '2026-10-31T01:00:00.000Z', session: 'lead-1', call: 'c1', fields: ['now', 'status', 'yours'] });
+    const checked = recordSummary(file, { at: '2026-10-31T02:00:00.000Z', session: 'lead-1', call: 'c2', fields: ['checked', 'until', 'questions'] });
+    const unknown = recordSummary(file, { at: '2026-10-31T03:00:00.000Z', session: 'lead-1', call: 'c3', unreadable: 'cannot read b.json (ENOENT)' });
+    assert.deepEqual(readRecord(file, SHOWN_SCHEMA), [content, checked, unknown]);
+    assert.deepEqual([content.tool, content.subject, content.template, content.decision], ['ArtifactData', SUMMARY_SUBJECT, null, 'shown']);
+    assert.deepEqual([content, checked, unknown].map(isSummaryWrite), [true, true, true]);
+    assert.deepEqual([content, checked, unknown].map(summaryContent), [true, false, false]);
+    assert.equal(summaryContent(recordSummary(file, { at: '2026-10-31T04:00:00.000Z', session: 's', call: 'c4', fields: ['status'] })), true);
+    assert.equal(isSummaryWrite({ schema: SHOWN_SCHEMA, tool: 'Artifact', subject: SUMMARY_SUBJECT, template: null, decision: 'shown' }), false);
+    assert.equal(summaryContent({ ...content, reason: 'fields: now' }), false, 'a reason recordSummary did not write is no content');
+  });
 });
 
 test('readRecord gives none when there is no file, and keeps only lines of its schema', () => {

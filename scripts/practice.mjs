@@ -97,8 +97,8 @@ function hostSeeds(home) {
   ];
 }
 
-/** What `install` writes of its own under `home`: the manifest and the four `SKILL.md`, taken from the list
- * the pure part keeps for the real home, so the two never name different files. */
+/** What `install` writes of its own under `home`: the manifest and the three `SKILL.md` of Claude Code's skills, taken
+ * from the list the pure part keeps for the real home, so the two never name different files. */
 function installedFiles(home) {
   const files = realHomeFiles(home, undefined);
   return {
@@ -430,14 +430,21 @@ const STEPS = {
     for (const time of ['first', 'second']) expectOk(harness(ctx, 'install', '--home', home), `the ${time} js-harness install`);
     const { manifest, skills } = installedFiles(home);
     for (const file of [manifest, ...skills]) assertThat(fs.existsSync(file), `js-harness install left no ${file}`);
-    // Each host file: the seeded entry, then each entry the harness gives that host once, by its event, matcher and command.
+    // Codex only reviews, so install writes none of its skills (odd/tasks/drop-codex-components.md).
+    const codexSkills = path.join(home, '.codex', 'skills');
+    assertThat(!fs.existsSync(codexSkills), `js-harness install wrote ${codexSkills}, which it no longer writes`);
+    // Each host file: the seeded entry, then each entry the harness gives that host once, by its event, matcher and command;
+    // the Codex file gets none, so it is held byte for byte to what setup seeded.
     const ours = [];
     for (const seed of hostSeeds(home)) {
-      const problem = hostHooksProblem(readIfThere(seed.path)?.toString('utf8'), seed.command, seed.host);
+      const text = readIfThere(seed.path)?.toString('utf8');
+      const problem = hostHooksProblem(text, seed.command, seed.host);
       assertThat(problem === null, `${seed.path} after two installs: ${problem}`);
-      ours.push(`${seed.host} ${hooksOfHost(seed.host).map(hookLabel).join(' and ')}`);
+      const hooks = hooksOfHost(seed.host);
+      if (hooks.length === 0) assertThat(text === seed.content, `${seed.path} after two installs is not the file setup seeded, which install must leave alone:\n${text}`);
+      ours.push(`${seed.host} ${hooks.length === 0 ? 'nothing, the file as seeded' : hooks.map(hookLabel).join(' and ')}`);
     }
-    return `the manifest and ${skills.length} skills are in ${home}; each host file holds its seeded entry and then, once each, ${ours.join('; ')}`;
+    return `the manifest and ${skills.length} skills are in ${home}, and no Codex skill; each host file holds its seeded entry and then, once each, ${ours.join('; ')}`;
   },
 
   'project-adopt': (ctx) => {

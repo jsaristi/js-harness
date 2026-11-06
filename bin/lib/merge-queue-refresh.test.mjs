@@ -27,6 +27,17 @@ test('atWorkIn names the project\'s sessions that are busy, waiting on a prompt 
   assert.equal(atWorkIn(agents, { roots, self: null }).length, 4);
 });
 
+// JH 131 (odd/tasks/defect-trio.md, spec 3): claude agents calls a background session busy while a js-harness wait of
+// its runs, so the land waited 30 minutes on sessions that only waited, and exited 75.
+test('atWorkIn leaves out a busy session that only waits, as its transcript says, and keeps every other', () => {
+  const agents = [agent({ name: 'waits', status: 'busy', state: 'working', sessionId: 'w-1' }), agent({ name: 'runs', status: 'busy', sessionId: 'r-1' })];
+  const asked = [];
+  const onlyWaits = (one) => { asked.push(one.name); return one.sessionId === 'w-1'; };
+  assert.deepEqual(atWorkIn(agents, { roots, self: null, onlyWaits }).map((one) => one.name), ['runs']);
+  assert.deepEqual(asked, ['waits', 'runs'], 'only sessions at work are read');
+  assert.deepEqual(lookOnce({ list: () => agents.slice(0, 1), roots, onlyWaits }), { quiet: true });
+});
+
 /** A clock that `sleep` moves, and what the wait printed. */
 function clock() {
   let at = 0;
@@ -68,6 +79,28 @@ test('waitForQuiet gives up after its minutes with the sessions still at work, a
   // Not known is never "none": a listing that fails refreshes nothing.
   const blind = await waitForQuiet({ list: () => { throw new Error('claude is not on PATH'); }, roots, self: null, ...clock() });
   assert.deepEqual(blind, { quiet: false, why: 'claude agents could not say which sessions are at work (claude is not on PATH)' });
+});
+
+test('waitForQuiet does not wait for a session that only waits, and says so once', async () => {
+  const time = clock();
+  const listings = [[agent({ status: 'busy', sessionId: 'w-1', name: 'JH 130 · e3' })], [agent({ status: 'busy', sessionId: 'w-1', name: 'JH 130 · e3' })]];
+  const quiet = await waitForQuiet({ list: () => listings.shift(), roots, self: null, onlyWaits: () => true, ...time });
+  assert.deepEqual(quiet, { quiet: true });
+  assert.equal(time.at(), 0, 'it did not wait');
+  assert.deepEqual(time.said, ['refresh: JH 130 · e3 (busy) only waits (js-harness wait): the refresh does not wait for it']);
+});
+
+test('refreshAfterLand refreshes at once beside a session that only waits, and still waits for one that runs', async () => {
+  const run = (command, args) => (args[0] === 'rev-parse' ? { status: 0, stdout: `${path.join(ROOT, '.git')}\n`, stderr: '' } : { status: 1, stdout: '', stderr: '' });
+  const log = { landedBranches: new Set(['feat/a']), record: { candidate: 'a'.repeat(40) } };
+  const waiting = agent({ status: 'busy', cwd: ROOT, sessionId: 'w-1' });
+  const looks = [];
+  const refresh = async ({ stillQuiet }) => { looks.push(stillQuiet()); return 0; };
+  const time = clock();
+  const exit = await refreshAfterLand({ code: 0, log, versionOf: () => '1.0.0', home: '/h', cwd: ROOT, env: {}, run, list: () => [waiting], onlyWaits: (one) => one.sessionId === 'w-1', ...time, refresh, stderr: () => {} });
+  assert.deepEqual([exit, time.at(), looks], [0, 0, [{ quiet: true }]], 'the look under the lock reads it the same way');
+  const busy = await refreshAfterLand({ code: 0, log, versionOf: () => '1.0.0', home: '/h', cwd: ROOT, env: {}, run, list: () => [waiting, agent({ status: 'busy', cwd: ROOT, sessionId: 'r-1' })], onlyWaits: (one) => one.sessionId === 'w-1', ...clock(), refresh, stderr: () => {} });
+  assert.equal(busy, 75);
 });
 
 // The review of slice B of JH 72 (e30ae69d..7d8db831): no test held a worktree outside the main checkout, where a sibling
@@ -117,6 +150,30 @@ test('refreshAfterLand, after its wait in vain, names merge-queue --refresh-copy
   assert.match(errors.join('\n'), /run js-harness merge-queue --refresh-copy from a checkout at origin\/main once only waits run from the copy/);
 });
 
+// odd/tasks/refresh-open-apply.md, T2: on 2026-10-31 a refresh installed PR 729 while question 140 asked his yes for it.
+const ASKED = 'refresh: question 140 is open and asks the user\'s yes to apply pull request 729, which aaaaaaa holds: nothing was refreshed';
+
+test('refreshAfterLand refuses, exit 77, before it waits for the sessions, while an open question asks to apply what main holds', async () => {
+  const run = (command, args) => (args[0] === 'rev-parse' ? { status: 0, stdout: `${path.join(ROOT, '.git')}\n`, stderr: '' } : { status: 1, stdout: '', stderr: '' });
+  const log = { landedBranches: new Set(['feat/a']), record: { candidate: 'a'.repeat(40) } };
+  const errors = [];
+  const shas = [];
+  let listed = 0;
+  let refreshed = 0;
+  const exit = await refreshAfterLand({ code: 0, log, versionOf: () => '1.0.0', home: '/h', cwd: ROOT, env: {}, run, list: () => { listed += 1; return []; }, ...clock(), refresh: async () => { refreshed += 1; return 0; }, stderr: (line) => errors.push(line), unanswered: (sha) => (shas.push(sha), ASKED) });
+  assert.deepEqual([exit, listed, refreshed, shas], [77, 0, 0, ['a'.repeat(40)]]);
+  assert.deepEqual(errors, [ASKED]);
+});
+
+test('refreshAfterLand hands the refresh the same look for under its lock, for main\'s sha', async () => {
+  const run = (command, args) => (args[0] === 'rev-parse' ? { status: 0, stdout: `${path.join(ROOT, '.git')}\n`, stderr: '' } : { status: 1, stdout: '', stderr: '' });
+  const log = { landedBranches: new Set(['feat/a']), record: { candidate: 'a'.repeat(40) } };
+  const shas = [];
+  let under = null;
+  const exit = await refreshAfterLand({ code: 0, log, versionOf: () => '1.0.0', home: '/h', cwd: ROOT, env: {}, run, list: () => [], ...clock(), refresh: async (opts) => { under = opts.unanswered(); return under === null ? 0 : 77; }, stderr: () => {}, unanswered: (sha) => (shas.push(sha), shas.length > 1 ? ASKED : null) });
+  assert.deepEqual([exit, under, shas], [77, ASKED, ['a'.repeat(40), 'a'.repeat(40)]], 'asked first before the wait, then again under the lock');
+});
+
 // S4, S5 of odd/tasks/lead-manual-steps.md: `merge-queue --refresh-copy` run alone. Every effect is a stand-in: the
 // look at the copy's processes, the stop, the listing of sessions, the refresh and the channel.
 const MAIN = '0123456789abcdef0123456789abcdef01234567';
@@ -130,7 +187,7 @@ const SESSIONS = [
 ];
 const BLOCKER = { pid: 220, createdAt: T0, verb: 'codex-review', commandLine: 'node codex-review' };
 
-function refreshingNow({ copySha = 'f'.repeat(40), main = { sha: MAIN }, looks = [{ waits: WAITS, blockers: [], snapshot: SNAP }], running = [], code = 0, sessions = SESSIONS, stopFails = false } = {}) {
+function refreshingNow({ copySha = 'f'.repeat(40), main = { sha: MAIN }, looks = [{ waits: WAITS, blockers: [], snapshot: SNAP }], running = [], code = 0, sessions = SESSIONS, stopFails = false, unanswered } = {}) {
   const said = [];
   const told = [];
   const stopped = [];
@@ -156,6 +213,12 @@ function refreshingNow({ copySha = 'f'.repeat(40), main = { sha: MAIN }, looks =
     },
     refresh: async (opts) => {
       asked.push({ ...opts, stopsBefore: stopped.length });
+      // As refreshCopy does under its lock: his open question first, then the look that stops the waits.
+      const refusal = opts.unanswered();
+      if (refusal !== null) {
+        said.push(refusal);
+        return 77;
+      }
       const quiet = opts.stillQuiet();
       if (quiet.quiet) return code;
       said.push(`why: ${quiet.why}`);
@@ -169,6 +232,7 @@ function refreshingNow({ copySha = 'f'.repeat(40), main = { sha: MAIN }, looks =
     sleep: async (ms) => sleeps.push(ms),
     stdout: (line) => said.push(line),
     stderr: (line) => said.push(line),
+    ...(unanswered && { unanswered }),
   };
   return refreshNow(deps).then((exit) => ({ exit, said: said.join('\n'), told, stopped, asked, sleeps, looked, order }));
 }
@@ -178,6 +242,29 @@ test('refreshNow refreshes nothing when the copy already names main, and says so
   assert.equal(run.exit, 0);
   assert.match(run.said, /the installed copy already names 0123456, origin's main: nothing to refresh/);
   assert.deepEqual([run.looked, run.asked.length], [0, 0]);
+});
+
+test('refreshNow refuses, exit 77, before any look or stop, while an open question asks to apply what main holds', async () => {
+  const shas = [];
+  const run = await refreshingNow({ unanswered: (sha) => (shas.push(sha), ASKED) });
+  assert.equal(run.exit, 77);
+  assert.equal(run.said, ASKED);
+  assert.deepEqual([run.looked, run.stopped.length, run.asked.length, shas], [0, 0, 0, [MAIN]]);
+});
+
+test('refreshNow refuses, exit 77, when the look at the questions throws: a look that cannot tell is no "none open"', async () => {
+  const run = await refreshingNow({ unanswered: () => { throw new Error('EMFILE'); } });
+  assert.equal(run.exit, 77);
+  assert.match(run.said, /^refresh: whether an open question asks to apply what 0123456 holds could not be told \(EMFILE\): nothing was refreshed$/);
+  assert.deepEqual([run.looked, run.asked.length], [0, 0]);
+});
+
+test('refreshNow asks again under the lock, and a question recorded meanwhile stops no wait', async () => {
+  const shas = [];
+  const run = await refreshingNow({ unanswered: (sha) => (shas.push(sha), shas.length > 1 ? ASKED : null) });
+  assert.equal(run.exit, 77, run.said);
+  assert.deepEqual([run.stopped.length, shas], [0, [MAIN, MAIN]]);
+  assert.deepEqual(run.told, [], 'no session is told to run a wait again that was never stopped');
 });
 
 test('refreshNow refuses, with exit 1, when main cannot be read', async () => {

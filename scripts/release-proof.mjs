@@ -12,6 +12,7 @@ import { uninstalledHostProblem } from './practice-lib.mjs';
 import {
   ReleaseProofArgError,
   USAGE,
+  codexHooksOf,
   copyCandidatesOf,
   homeDifferences,
   hostFilesProblem,
@@ -118,7 +119,9 @@ async function main() {
   /** Runs the copy `bin` of js-harness with `args`, through this node. */
   const js = (bin, args) => run(process.execPath, [bin, ...args], { maxBuffer: MAX_BUFFER });
 
-  /** The checks of a release once installed: its version, `status --global`, its manifest and both hosts' hooks. */
+  /** The checks of a release once installed: its version, `status --global`, its manifest and both hosts' hooks. The
+   * Codex file is held to what that release writes there (`codexHooksOf`): a `--from` of 0.97.0 or older still grafted
+   * its own entries on it, while this release's `install`, and its `sync` after `upgrade`, leave only the seeded one. */
   function checkInstalled(version) {
     const bin = copyOf(version);
     const versionFault = versionProblem(assertRun(js(bin, ['--version']), 'js-harness --version'), version);
@@ -130,7 +133,7 @@ async function main() {
     const hooksFault = hostFilesProblem({
       claude: fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'),
       codex: fs.readFileSync(path.join(home, '.codex', 'hooks.json'), 'utf8'),
-    }, seeded);
+    }, seeded, codexHooksOf(version, local));
     assertThat(hooksFault === null, hooksFault);
   }
 

@@ -1,6 +1,7 @@
 // The template gate's decisions (odd/tasks/templates.md, "The gates on the path to him"): what a host tool call is
 // about to show the user, and whether a template command made it. This module holds the `page` surface (an `Artifact`
-// publish of a page, an `mcp__visualize__show_widget`) and the `ask` surface (a call of the question tool);
+// publish of a page, an `mcp__visualize__show_widget`) and the `ask` surface (a call of the question tool), and reads
+// which `ArtifactData` call writes the board's summary, which `--shown` records (odd/tasks/board-summary-stale.md);
 // `bin/template.mjs` reads the files and the records and writes the decision. Pure: it is handed the page's text, the
 // rendered lines, the registry, the open moments and the channel's questions.
 import path from 'node:path';
@@ -43,6 +44,25 @@ export function pageTarget(tool, input) {
   const root = typeof input.root === 'string' && input.root !== '' ? input.root : null;
   for (const file of sources.filter(isPage)) files.push(root !== null && !path.isAbsolute(file) ? path.join(root, file) : file);
   return files.length > 0 ? { files } : null;
+}
+
+const WRITES = ['set', 'update', 'str_replace', 'delete'];
+const isSummary = (write) => write?.collection === 'board' && write.doc_id === 'summary';
+
+/** What a call of `tool` with `input` writes to the board's summary (collection `board`, document `summary`): the source
+ * of each write, `{ data }` (its object), `{ file }` (a local JSON file), `{ field }` (a `str_replace`'s) or `{}` (a
+ * delete), a `batch`'s entries in order; `null` when the call writes no summary (a read, another document). */
+export function summaryWrites(tool, input) {
+  if (tool !== 'ArtifactData' || input === null || typeof input !== 'object') return null;
+  const writes = input.action === 'batch' ? (Array.isArray(input.writes) ? input.writes.map((entry) => ({ ...entry, action: entry?.op })) : [])
+    : [input];
+  const sources = writes.filter((write) => isSummary(write) && WRITES.includes(write.action)).map((write) => {
+    if (write.action === 'str_replace') return { field: write.field };
+    if (write.action === 'delete') return {};
+    if (write.data !== null && typeof write.data === 'object') return { data: write.data };
+    return typeof write.file_path === 'string' ? { file: write.file_path } : {};
+  });
+  return sources.length > 0 ? sources : null;
 }
 
 const fresh = (line, now) => now - Date.parse(line.at) <= RENDERED_FRESH_HOURS * 3600 * 1000;

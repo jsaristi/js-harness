@@ -26,13 +26,16 @@
 // out (`./codex-review-scope.mjs`). `--base` reviews every file, so a range that leaves some out is asked
 // by its files too, also when they fit in one part: that one part is asked with the text of a part, which
 // then says nothing of parts. Which files were left out, and how many, is not in the prompt.
+import { RENAMES } from './codex-review-parts.mjs';
 import { parseContract } from './contract.mjs';
 import { NO_TEST_EXIT, NO_TEST_LINE } from './no-test-outside-turn.mjs';
 
 // The version of the text `reviewPrompt` writes, kept in the run line of every review that used it, so that
 // two reviews are only compared knowing whether they were asked the same thing. Any change to the wording
-// below is a new version. `v2` is `v1` ending with `CONVENTIONS`.
-export const REVIEW_PROMPT_VERSION = 'js-harness.codex-review-prompt/v2';
+// below is a new version. `v2` is `v1` ending with `CONVENTIONS`. `v3` is `v2` with what was asked (`askedText`):
+// a feature document's specs beside its goal and criteria, or a request as written, and a finding a real failure.
+// `v4` is `v3` asking for renames (`--find-renames`) in its command.
+export const REVIEW_PROMPT_VERSION = 'js-harness.codex-review-prompt/v4';
 
 // The version of the text `reviewPrompt` writes for one part of a range, kept in the run line of that part.
 // It is a version of its own because it is another text: a change to the wording of a part leaves the
@@ -40,13 +43,16 @@ export const REVIEW_PROMPT_VERSION = 'js-harness.codex-review-prompt/v2';
 // names of the part read literally by the command it names (`git --literal-pathspecs diff`, see `scope`).
 // `v3` is `v2` where the range leaves no file out of the review, to the character; where it does, the last
 // line says so, and a range of one part is asked with this text as well. `v4` is `v3` ending with `CONVENTIONS`.
-export const REVIEW_PART_PROMPT_VERSION = 'js-harness.codex-review-part-prompt/v4';
+// `v5` is `v4` with what was asked, as the whole range's `v3`.
+// `v6` is `v5` asking for renames (`--find-renames`) in its command, unless the range is read with them off.
+export const REVIEW_PART_PROMPT_VERSION = 'js-harness.codex-review-part-prompt/v6';
 
 // The version of the text `reviewPrompt` writes for a part of the review of a merge (`merge`): another text,
 // which names what was written in the merge, the diff of the automatic merge's tree and the merge, instead
 // of a diff of two commits. `v1` named `git show --remerge-diff`, which shows nothing in a read-only sandbox.
-// `v3` is `v2` ending with `CONVENTIONS`.
-export const REVIEW_MERGE_PROMPT_VERSION = 'js-harness.codex-review-merge-prompt/v3';
+// `v3` is `v2` ending with `CONVENTIONS`. `v4` is `v3` with what was asked, as the whole range's `v3`.
+// `v5` is `v4` asking for renames, as the part's `v6`.
+export const REVIEW_MERGE_PROMPT_VERSION = 'js-harness.codex-review-merge-prompt/v5';
 
 // How much of each section of the intent goes into the prompt: a feature document is written by hand and
 // has no bound of its own, and the prompt is paid on every request of the review.
@@ -86,7 +92,7 @@ const isPart = (part, leftOut) =>
 
 /** The lines that say what to review: the whole range, or the `part` of it, in a range that leaves `leftOut`
  * files out of the review. */
-function scope(from, head, part, leftOut, merge = null) {
+function scope(from, head, part, leftOut, merge = null, renames = RENAMES) {
   if (merge !== null && (typeof merge !== 'string' || !COMMIT_ID.test(merge))) {
     throw new Error(`The review of a merge names the tree of its automatic merge by full object id, got ${JSON.stringify(merge)}.`);
   }
@@ -99,16 +105,17 @@ function scope(from, head, part, leftOut, merge = null) {
     if (leftOut > 0) throw new Error('A range that leaves files out of the review is asked by its files, as a part is: the prompt of a whole range names none.');
     return [
       `Review the code changes in the committed range ${from}..${head}.`,
-      `Run \`git diff ${from} ${head}\` to inspect them: its output is the whole change under review.`,
+      `Run \`git diff ${RENAMES} ${from} ${head}\` to inspect them: its output is the whole change under review.`,
       findings,
     ];
   }
   if (!isPart(part, merge ? Math.max(leftOut, 1) : leftOut)) {
     throw new Error(`Not a part of a range reviewed in parts (\`{ index, of, files }\`, with a file at least, and two parts or more unless the range leaves files out of the review): ${JSON.stringify(part)}.`);
   }
-  // `--no-renames`: with it the diff of some files is the diff of each of them, whatever the others are. A
-  // file that was renamed is then shown whole, as one removed and one added, also when its two names are in
-  // different parts, which a rename could not be shown across.
+  // `RENAMES`: a renamed file is shown as a rename, by the lines it changes, since its two names are always
+  // in one part (`reviewParts`); the diff of the part is then the part's share of the diff of the range, as
+  // the count of the range made it (odd/tasks/rename-counted-by-changes.md). `renames` is `NO_RENAMES` for a
+  // range read with them off, one that renames a file a review leaves out into one it reads (`rangeFiles`).
   //
   // `--literal-pathspecs`: what follows `--` is read by git as pathspecs, and a file name may be one that
   // means something else. `*.md`, `a?.txt` and `app/[id]/page.tsx` are patterns, which also match the files
@@ -127,7 +134,7 @@ function scope(from, head, part, leftOut, merge = null) {
   // and the merge: `git show --remerge-diff` writes a temporary object directory, and in Codex's read-only
   // sandbox it printed nothing and exited 0 (odd/tasks/merge-review.md, L12).
   if (merge) {
-    const command = `git --literal-pathspecs diff --no-renames ${merge} ${head} -- ${files}`;
+    const command = `git --literal-pathspecs diff ${renames} ${merge} ${head} -- ${files}`;
     const which = part.of === 1 ? 'the files the command below names' : `part ${part.index} of ${part.of} of that review: the files the command below names`;
     return [
       `Review what was written in the merge commit ${head}, whose first parent is ${from}: the resolution of its conflicts and any edit made in it. This review covers ${which}.`,
@@ -136,7 +143,7 @@ function scope(from, head, part, leftOut, merge = null) {
       `What the merge took unchanged from either parent was reviewed on its own branch: ${context}`,
     ];
   }
-  const command = `git --literal-pathspecs diff --no-renames ${from} ${head} -- ${files}`;
+  const command = `git --literal-pathspecs diff ${renames} ${from} ${head} -- ${files}`;
   // The one part of a range that leaves files out: the review is of its files, and there is no other part
   // to speak of.
   if (part.of === 1) {
@@ -178,8 +185,8 @@ function scope(from, head, part, leftOut, merge = null) {
  *
  * `suiteRan`, for a review out of a turn of the gate lock, ends the text with `SUITE_RAN`: there the gate has
  * already run the suite on the range, and a `node --test` Codex starts is refused. */
-export function reviewPrompt({ from, head, intent = null, part = null, leftOut = 0, merge = null, suiteRan = false }) {
-  const text = `${promptText({ from, head, intent, part, leftOut, merge })}\n${CONVENTIONS}\n`;
+export function reviewPrompt({ from, head, intent = null, part = null, leftOut = 0, merge = null, suiteRan = false, renames = RENAMES }) {
+  const text = `${promptText({ from, head, intent, part, leftOut, merge, renames })}\n${CONVENTIONS}\n`;
   return suiteRan ? `${text}\n${SUITE_RAN}\n` : text;
 }
 
@@ -203,18 +210,44 @@ export const SUITE_RAN = [
   `Here a \`node --test\` is refused at once, with exit ${NO_TEST_EXIT} and the line \`${NO_TEST_LINE}\`: that refusal is expected and is not a finding, nor a reason to call the patch incorrect. Read the tests instead of running them.`,
 ].join('\n');
 
-function promptText({ from, head, intent, part, leftOut, merge }) {
+function promptText({ from, head, intent, part, leftOut, merge, renames }) {
   for (const id of [from, head]) {
     if (typeof id !== 'string' || !COMMIT_ID.test(id)) throw new Error(`The review prompt names its range by full commit id, got ${JSON.stringify(id)}.`);
   }
-  const range = scope(from, head, part, leftOut, merge);
+  const range = scope(from, head, part, leftOut, merge, renames);
   if (intent === null) return `${range.join('\n')}\n`;
-  const purpose = [
-    '## What the change is for',
-    'The goal and the completion criteria below come from the feature document this change belongs to. Judge the change against them: where it works against what they ask, or does something they rule out, that is a finding.',
+  return `${range.join('\n')}\n\n${askedText(intent)}\n`;
+}
+
+/** What `codex-review` and `lens-review` say of a review given neither a feature document nor a request: it still
+ * runs, and whoever reads its verdict knows it did not judge what was asked (spec 7: "a review with none says so"). */
+export const NO_ASKED = 'No request was given, so this review judges the code alone and not what was asked: pass --doc <feature document> for large work, or --request "<the request as written>" for small work.';
+
+// What both kinds of what was asked add (odd/tasks/double-review-alignment.md, spec 7: models criticize "incluso
+// cuando está todo bien", and a review is to find what really fails).
+const REAL_FAILURE = 'Report a real failure: something that breaks, or that works against what was asked; a preference that breaks nothing is not a finding.';
+
+/** The section that says what was asked of the change, for `intent` as `reviewIntent` or `requestIntent` gives
+ * it: a feature document's goal, completion criteria and specs, or a request as written. No trailing newline.
+ * The Claude lenses are given the same section (`./lens-prompts.mjs`), so code's two reviews judge one thing. */
+export function askedText(intent) {
+  if (typeof intent.request === 'string') {
+    return [
+      '## What was asked',
+      'The request below is what was asked of this change, as it was written. Judge the change against it: where the change does not do what it asks, or works against it, that is a finding.',
+      REAL_FAILURE,
+      '',
+      '### The request',
+      intent.request,
+    ].join('\n');
+  }
+  const asked = [
+    '## What was asked',
+    'The goal, the completion criteria and any specs below come from the feature document this change belongs to. Judge the change against them: where it works against what they ask, or does something they rule out, that is a finding.',
     // A reviewed range is a work unit or a slice, never the whole feature, and the criteria are the whole
     // feature's: without this line every slice but the last would be reported as incomplete.
     'The change may be one step towards them, so a criterion it has not reached yet is not a finding by itself.',
+    REAL_FAILURE,
     '',
     '### Goal',
     intent.goal,
@@ -222,7 +255,8 @@ function promptText({ from, head, intent, part, leftOut, merge }) {
     '### Done when',
     intent.doneWhen,
   ];
-  return `${range.join('\n')}\n\n${purpose.join('\n')}\n`;
+  if (typeof intent.specs === 'string') asked.push('', '### Specs', intent.specs);
+  return asked.join('\n');
 }
 
 /** A feature document that holds no intent to carry: `heading` is the section that is missing or empty. */
@@ -253,6 +287,7 @@ function bounded(text, maxChars) {
 /** The intent of the feature document `markdown`, as `{ goal, doneWhen }`: the bodies of its `## Goal` and
  * `## Done when` sections (the task contract's, found as `parseContract` finds them, so a heading inside a
  * fenced example is not one), trimmed, each bounded to `maxChars` characters with a note where it was cut.
+ * A document with a `## Specs` section that holds text adds it as `specs`, bounded the same way.
  * Throws an `IntentError` that names the heading when a section is missing or empty. */
 export function reviewIntent(markdown, { maxChars = INTENT_MAX_CHARS } = {}) {
   const sections = parseContract(markdown);
@@ -262,5 +297,14 @@ export function reviewIntent(markdown, { maxChars = INTENT_MAX_CHARS } = {}) {
     if (text === '') throw new IntentError(`The \`## ${heading}\` section of the feature document is empty, so it holds no intent for the review to carry.`, heading);
     return bounded(text, maxChars);
   };
-  return { goal: body('Goal'), doneWhen: body('Done when') };
+  const specs = sections.get('Specs') ?? '';
+  return { goal: body('Goal'), doneWhen: body('Done when'), ...(specs === '' ? {} : { specs: bounded(specs, maxChars) }) };
+}
+
+/** The intent of a small change, which has no feature document: the request as it was written, trimmed and
+ * bounded to `maxChars` characters, as `{ request }`. Throws an `IntentError` when it is empty. */
+export function requestIntent(text, { maxChars = INTENT_MAX_CHARS } = {}) {
+  const request = typeof text === 'string' ? text.trim() : '';
+  if (request === '') throw new IntentError('The request is empty, so it holds no intent for the review to carry.', null);
+  return { request: bounded(request, maxChars) };
 }

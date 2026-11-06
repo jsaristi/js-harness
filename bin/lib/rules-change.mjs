@@ -223,8 +223,9 @@ function localDay(at) {
   return `${day.getFullYear()}-${two(day.getMonth() + 1)}-${two(day.getDate())}`;
 }
 
-/** One quotation of his, as the sources file stores it, read from line `line` of the transcript of `session`. */
-function quotationOf({ session, line, excerpt }, transcriptOf) {
+/** One quotation of his, as the sources file stores it, read from line `line` of the transcript of `session`. The
+ * double review's skip takes his words through it too (bin/double-review.mjs). */
+export function quotationOf({ session, line, excerpt }, transcriptOf) {
   const text = transcriptOf(session);
   if (text === null) throw new RuleChangeError(`no transcript "${session}" in the project's sessions folder`);
   const quote = quoteOf(text, line);

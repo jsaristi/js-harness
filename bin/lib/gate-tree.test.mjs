@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { RUNTIME, TREE_KEY_FORMAT, treeKey } from './gate-tree.mjs';
+import { RUNTIME, TREE_KEY_FORMAT, filesKey, treeKey } from './gate-tree.mjs';
 
 // The key of the tree a gate guards. Git is a stand-in here but for one test, of what only real git can say
 // (mixed line ends); what it answers under the index a hook is handed is tested through the gate in
@@ -137,4 +137,58 @@ test('treeKey: another object at a path, another path, a document, another way a
   for (const other of others) assert.match(other, /^[0-9a-f]{64}$/);
   assert.equal(new Set([key, ...others]).size, others.length + 1);
   assert.equal(Number.isInteger(TREE_KEY_FORMAT), true);
+});
+
+// The files of the index, with no word of where or by what they ran (odd/tasks/gate-narrow-pass.md): what ties a
+// failure on CI to a pass here of the same files.
+const staged = (path, { mode = '100644', id = 'a'.repeat(40), stage = 0 } = {}) => `${mode} ${id} ${stage}\t${path}`;
+const FILES = [staged('a.js'), staged('docs/guide.md', { id: 'b'.repeat(40) })];
+
+test('filesKey: the files of the index are one key of 64 lowercase hex characters from one git process, asked of the index alone', () => {
+  const git = gitOf({ listing: FILES });
+  const key = filesKey(git);
+  assert.match(key, /^[0-9a-f]{64}$/);
+  assert.equal(filesKey(gitOf({ listing: FILES })), key);
+  assert.deepEqual(git.asked, [['ls-files', '-s', '-z']]);
+  // Not a tree key of the same listing: the two are never taken for each other.
+  assert.notEqual(key, treeKey(gitOf(), { sensors: SENSORS }));
+  for (const listing of [[staged('a.js', { id: 'c'.repeat(40) }), FILES[1]], [staged('b.js'), FILES[1]], [staged('a.js', { mode: '100755' }), FILES[1]], [...FILES, staged('c.js')]]) {
+    const other = filesKey(gitOf({ listing }));
+    assert.match(other, /^[0-9a-f]{64}$/);
+    assert.notEqual(other, key, JSON.stringify(listing));
+  }
+});
+
+test('filesKey: no key where git does not answer, the index holds nothing, a path is not merged, or a line is not an entry', () => {
+  assert.equal(filesKey(gitOf({ listing: null })), null);
+  assert.equal(filesKey(gitOf({ listing: [] })), null);
+  for (const stage of [1, 2, 3]) assert.equal(filesKey(gitOf({ listing: [FILES[0], staged('b.js', { stage })] })), null, String(stage));
+  assert.equal(filesKey(gitOf({ listing: [FILES[0], 'not an entry'] })), null);
+  assert.equal(filesKey(null), null);
+  assert.equal(filesKey(), null);
+});
+
+test('filesKey with real git: two repositories of the same files are one key, a staged change is another, and the folder alone changes nothing', () => {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
+  const repos = [0, 1].map(() => fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tree-files-')));
+  const gitIn = (repo) => (args) => {
+    const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: repo, encoding: 'utf8', env });
+    return result.status === 0 ? result.stdout : null;
+  };
+  try {
+    for (const repo of repos) {
+      gitIn(repo)(['init', '-q']);
+      fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n');
+      gitIn(repo)(['add', '.']);
+    }
+    const [one, two] = repos.map((repo) => filesKey(gitIn(repo)));
+    assert.match(one, /^[0-9a-f]{64}$/);
+    assert.equal(two, one);
+    fs.writeFileSync(path.join(repos[0], 'a.txt'), 'edited and not staged\n');
+    assert.equal(filesKey(gitIn(repos[0])), one);
+    gitIn(repos[0])(['add', 'a.txt']);
+    assert.notEqual(filesKey(gitIn(repos[0])), one);
+  } finally {
+    for (const repo of repos) fs.rmSync(repo, { recursive: true, force: true });
+  }
 });

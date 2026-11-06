@@ -55,7 +55,7 @@ export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  the rules declare it), a start_session titled otherwise than <code> <n> · <purpose>, naming the next free\n'
   + '  number (where the rules declare session-title), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
   + '  with backticks inside double quotes, a command for the user\'s terminal that does not end with a note saying what it\n'
-  + '  does (where the rules declare terminal-note), a recursive rm or an rmdir of a folder at the top of a drive, a shell write to a review\'s record, a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files or a js-harness sessions read of the board (--watch too) while another gate holds the lock, and\n'
+  + '  does (where the rules declare terminal-note), a recursive rm or an rmdir of a folder at the top of a drive, a shell write to a review\'s record, a git push, git commit, gh pr, merge-queue or notify that follows the step before it by ;, a line break, || or & (where the rules declare chained-steps), a gentle-ai review whose --base-ref is off its head\'s first-parent line, a node --test of several files or a js-harness sessions read of the board (--watch too) while another gate holds the lock, and\n'
   + '  a Read, Write, Edit, MultiEdit, NotebookEdit or Grep of a place of secrets the denies of the Claude settings name, or of Claude Code\'s login file,\n'
   + '  a Write, Edit, MultiEdit or NotebookEdit of a review\'s record (lens-reviews.jsonl and its kin in the git common dir),\n'
   + '  a Write or Edit that puts a line over 150 characters in a memory index (MEMORY.md), that leaves a feedback note\n'
@@ -159,6 +159,10 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   if (driveRoot !== null) return driveRoot;
   const record = reviewRecordWriteRefusal(input.command);
   if (record !== null) return record;
+  // Only a command with a chained step reads the project's rules file (lib/chained-step-guard.mjs).
+  const { chainedStep, chainedStepRefusal } = await import('./lib/chained-step-guard.mjs');
+  const chained = chainedStep(input.command) === null ? null : chainedStepRefusal(input.command, rulesTextOf(rootOf(), readFile));
+  if (chained !== null) return chained;
   const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
   const base = reviewBaseRefusal(input.command, { cwd, ...(baseContains && { contains: baseContains }) });
   if (base !== null) return base;

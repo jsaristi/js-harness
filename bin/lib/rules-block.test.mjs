@@ -3,11 +3,12 @@
 // G12). The text around the block is his or the global file's and is never changed. Every test runs in a scratch home.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { install, readManifest, uninstall } from './manifest.mjs';
-import { RULES_LINES, rulesBody } from './rules-block.mjs';
+import { KEPT_GROUPS, RULES_LINES, rulesBody } from './rules-block.mjs';
 import { markedBlock } from './project-template.mjs';
 import { renameOver } from './atomic-write.mjs';
 
@@ -29,13 +30,42 @@ function machine() {
 
 const count = (text, part) => text.split(part).length - 1;
 
-test('the lines are the nine of his answer D7, word for word as the root CLAUDE.md keeps them', () => {
-  const claude = fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'CLAUDE.md'), 'utf8').replace(/\r\n/g, '\n');
-  const section = claude.slice(claude.indexOf('## Kept from the global file'), claude.indexOf('\nCodeGraph:'));
-  const kept = section.split('\n').filter((line) => line.startsWith('- ')).map((line) => line.slice(2));
+// The diet's Appendix A.1 (docs/proposals/harness-diet.md), frozen: each line it keeps, quoted whole as "> <line>".
+// Until F8 S2's T9 the root CLAUDE.md held a copy of these lines and the tests read it; once the global block loads
+// in this repo too, that copy left, so the lines are held to A.1 where it quotes them, and the rest by a hash.
+const appendixQuotes = () => {
+  const diet = fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'docs', 'proposals', 'harness-diet.md'), 'utf8').replace(/\r\n/g, '\n');
+  const appendix = diet.slice(diet.indexOf('### A.1 The kept text'), diet.indexOf('## Appendix B'));
+  return appendix.split('\n').filter((line) => line.startsWith('> ')).map((line) => line.slice(2));
+};
+const sha256 = (value) => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+
+test('the lines are the nine of his answer D7: the five A.1 quotes there, and all nine as frozen at F8 S2', () => {
+  const quoted = appendixQuotes();
   assert.equal(RULES_LINES.length, 9);
-  assert.deepEqual(RULES_LINES, kept);
+  assert.deepEqual(RULES_LINES.filter((line) => quoted.includes(line)), RULES_LINES.slice(4));
+  // D7's four lines have no whole-line source left to read; a change to any of the nine changes this hash, on purpose.
+  assert.equal(sha256(RULES_LINES), 'de629b60d88cad04a742e4cdfb1d4d2cd9208d3399608a8cf9a58a1c200fb3fb');
   assert.ok(rulesBody().startsWith('## Rules\n'));
+});
+
+// F8 S2, T13 (odd/tasks/f8-s2-removal.md, S10): every project keeps the rest of the diet's Appendix A.1 once the old stack's
+// blocks leave his global file; graphify's own install writes its lines there, and engram's protocol comes from engram
+// alone (row 11), so neither is repeated.
+test('the kept groups are Appendix A.1\'s lines, word for word and in its order, and the block renders each after the nine', () => {
+  const quoted = appendixQuotes();
+  const lines = KEPT_GROUPS.flatMap((group) => group.lines);
+  assert.equal(lines.length, 14);
+  assert.deepEqual(lines.map((line) => quoted.indexOf(line)).filter((at) => at === -1), [], 'every kept line is quoted whole in A.1');
+  const order = lines.map((line) => quoted.indexOf(line));
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), 'the lines keep A.1\'s order');
+  assert.deepEqual(KEPT_GROUPS.map((group) => group.title), ['CodeGraph', 'Delegation', 'Task Size and scratch', 'Remote operation authorization']);
+  // The titles and the grouping as the root CLAUDE.md had them until T9 of F8 S2, frozen: a change is on purpose.
+  assert.equal(sha256(KEPT_GROUPS), 'c24fea8df749d6446f376b1fc44cbf5ce439398a601fe72ca04c121bea21e579');
+  const body = rulesBody();
+  for (const { title, lines } of KEPT_GROUPS) assert.ok(body.includes(`\n${title}:\n${lines.map((line) => `- ${line}`).join('\n')}\n`), title);
+  assert.ok(body.indexOf(`- ${RULES_LINES[8]}`) < body.indexOf('\nCodeGraph:'));
+  assert.ok(!body.includes('graphify'));
 });
 
 test('in an empty home install writes the file with the block alone, and uninstall takes the file away', () => {

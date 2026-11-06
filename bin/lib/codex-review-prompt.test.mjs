@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INTENT_MAX_CHARS, IntentError, quotedPath, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, reviewIntent, reviewPrompt, SUITE_RAN, CONVENTIONS } from './codex-review-prompt.mjs';
+import { INTENT_MAX_CHARS, IntentError, quotedPath, REVIEW_MERGE_PROMPT_VERSION, REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION, requestIntent, reviewIntent, reviewPrompt, SUITE_RAN, CONVENTIONS } from './codex-review-prompt.mjs';
 import { NO_TEST_LINE } from './no-test-outside-turn.mjs';
 
 const FROM = 'a'.repeat(40);
@@ -18,9 +18,10 @@ function body(text) {
 // --- the prompt ---
 
 test('the prompt is versioned', () => {
-  // `v2` of the whole range and `v3` of a merge: the text ends with CONVENTIONS.
-  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v2');
-  assert.equal(REVIEW_MERGE_PROMPT_VERSION, 'js-harness.codex-review-merge-prompt/v3');
+  // `v2` of the whole range and `v3` of a merge: the text ends with CONVENTIONS. `v3` and `v4`: what was asked, a
+  // feature document's specs or a request as written, judged for real failures.
+  assert.equal(REVIEW_PROMPT_VERSION, 'js-harness.codex-review-prompt/v4');
+  assert.equal(REVIEW_MERGE_PROMPT_VERSION, 'js-harness.codex-review-merge-prompt/v5');
 });
 
 // odd/tasks/conventions.md, S6: what no test can judge is asked of the reviewer on each diff, in words that hold for
@@ -49,7 +50,7 @@ test('the prompt of a merge names the diff of the automatic merge and the merge 
     body(text),
     [
       `Review what was written in the merge commit ${HEAD}, whose first parent is ${FROM}: the resolution of its conflicts and any edit made in it. This review covers the files the command below names.`,
-      `Run \`git --literal-pathspecs diff --no-renames ${TREE} ${HEAD} -- bin/a.mjs 'odd name.txt'\` to inspect them: ${TREE} is the tree that merging its two parents again automatically gives, conflict markers included, so its output is what was written in the merge, and it is the whole change under review.`,
+      `Run \`git --literal-pathspecs diff --find-renames ${TREE} ${HEAD} -- bin/a.mjs 'odd name.txt'\` to inspect them: ${TREE} is the tree that merging its two parents again automatically gives, conflict markers included, so its output is what was written in the merge, and it is the whole change under review.`,
       'Report only what is wrong with the lines that diff adds or changes. Read any other file of the repository for context, and report nothing about code the diff leaves as it was.',
       'What the merge took unchanged from either parent was reviewed on its own branch: read them for context, and report nothing about them.',
       '',
@@ -63,7 +64,7 @@ test('the prompt of a merge names the diff of the automatic merge and the merge 
 test('reviewPrompt names the committed range and the command that shows it', () => {
   const prompt = reviewPrompt({ from: FROM, head: HEAD });
   assert.ok(prompt.includes(`${FROM}..${HEAD}`), prompt);
-  assert.ok(prompt.includes(`\`git diff ${FROM} ${HEAD}\``), prompt);
+  assert.ok(prompt.includes(`\`git diff --find-renames ${FROM} ${HEAD}\``), prompt);
   assert.match(prompt, /committed range/);
   assert.equal(prompt, reviewPrompt({ from: FROM, head: HEAD }), 'the same range gives the same text');
   assert.equal(prompt.endsWith('\n'), true);
@@ -110,13 +111,49 @@ test('reviewPrompt with an intent adds the goal and the done-when under a headin
   const prompt = reviewPrompt({ from: FROM, head: HEAD, intent });
   assert.ok(body(prompt).startsWith(body(reviewPrompt({ from: FROM, head: HEAD }))), 'the intent comes after the range, which stays as it was');
   const added = body(prompt).slice(body(reviewPrompt({ from: FROM, head: HEAD })).length);
-  assert.match(added, /^\n## What the change is for\n/);
+  assert.match(added, /^\n## What was asked\n/);
   assert.match(added, /judge the change against/i);
   // A reviewed range is a slice of its feature, so a criterion a later slice meets is not a defect of this one.
   assert.match(added, /one step .* not a finding/i);
   assert.ok(added.includes('### Goal\nThe command measures every attempt.\n'), added);
   assert.ok(added.includes('### Done when\n- `npm run check` exits 0\n- The roadmap records the result\n'), added);
   assert.ok(added.indexOf('### Goal') < added.indexOf('### Done when'));
+});
+
+// odd/tasks/double-review-alignment.md, spec 7: a code review is given what was asked, the feature document's specs
+// and contract for large work, the request as written for small work, and judges for a real failure.
+test('reviewPrompt with a feature document carries its specs after the done-when, when the document has them', () => {
+  const intent = { goal: 'The command measures every attempt.', doneWhen: '- `npm run check` exits 0', specs: '1. "Measure every attempt" (L1)' };
+  const added = body(reviewPrompt({ from: FROM, head: HEAD, intent })).slice(body(reviewPrompt({ from: FROM, head: HEAD })).length);
+  assert.ok(added.includes('### Specs\n1. "Measure every attempt" (L1)\n'), added);
+  assert.ok(added.indexOf('### Done when') < added.indexOf('### Specs'));
+  assert.doesNotMatch(body(reviewPrompt({ from: FROM, head: HEAD, intent: { goal: intent.goal, doneWhen: intent.doneWhen } })), /### Specs/);
+});
+
+test('reviewPrompt with a request carries it as written, under what was asked, to judge the change against', () => {
+  const intent = requestIntent('Make `wait` print the session it woke for. Sebastián: "que diga cuál"');
+  const prompt = reviewPrompt({ from: FROM, head: HEAD, intent });
+  assert.ok(body(prompt).startsWith(body(reviewPrompt({ from: FROM, head: HEAD }))), 'the request comes after the range');
+  const added = body(prompt).slice(body(reviewPrompt({ from: FROM, head: HEAD })).length);
+  assert.match(added, /^\n## What was asked\n/);
+  assert.match(added, /judge the change against/i);
+  assert.ok(added.includes(`### The request\n${intent.request}\n`), added);
+  assert.doesNotMatch(added, /### Goal|### Done when|feature document/);
+});
+
+test('whatever was asked, the prompt asks for real failures and says a preference that breaks nothing is no finding', () => {
+  for (const intent of [{ goal: 'g', doneWhen: '- d' }, requestIntent('r')]) {
+    const prompt = reviewPrompt({ from: FROM, head: HEAD, intent });
+    assert.match(prompt, /a real failure/i);
+    assert.match(prompt, /a preference that breaks nothing is not a finding/i);
+  }
+});
+
+test('requestIntent takes the request trimmed and bounded, and refuses an empty one', () => {
+  assert.deepEqual(requestIntent('  fix the wait\n'), { request: 'fix the wait' });
+  for (const empty of ['', '   ', '\n\t', undefined, null]) assert.throws(() => requestIntent(empty), (err) => err instanceof IntentError && /empty/.test(err.message), JSON.stringify(empty));
+  const { request } = requestIntent('word '.repeat(600));
+  assert.match(request, /\n\[Cut here: this section is 2,999 characters long, and only its first 2,000 are given\.\]$/);
 });
 
 test('reviewPrompt carries the intent as written: quotes, percent signs, ampersands and other alphabets', () => {
@@ -142,15 +179,15 @@ const PART = { index: 2, of: 3, files: ['bin/a.mjs', 'docs/my notes.md'] };
 test('the prompt of a part has a version of its own, and the prompt of a whole range keeps its text before the conventions', () => {
   // `v2`: the command of a part reads its file names literally (`--literal-pathspecs`), which `v1` did not.
   // `v3`: it says so when the range leaves files out of the review, and a range of one part that does is
-  // asked with it. `v4`: it ends with CONVENTIONS.
-  assert.equal(REVIEW_PART_PROMPT_VERSION, 'js-harness.codex-review-part-prompt/v4');
+  // asked with it. `v4`: it ends with CONVENTIONS. `v5`: what was asked, as the whole range's `v3`.
+  assert.equal(REVIEW_PART_PROMPT_VERSION, 'js-harness.codex-review-part-prompt/v6');
   assert.notEqual(REVIEW_PART_PROMPT_VERSION, REVIEW_PROMPT_VERSION);
   // The text a whole range was asked with in the runs recorded under `v1`, to the character, which `v2` ends with
   // CONVENTIONS.
   assert.equal(
     body(reviewPrompt({ from: FROM, head: HEAD })),
     `Review the code changes in the committed range ${FROM}..${HEAD}.\n` +
-      `Run \`git diff ${FROM} ${HEAD}\` to inspect them: its output is the whole change under review.\n` +
+      `Run \`git diff --find-renames ${FROM} ${HEAD}\` to inspect them: its output is the whole change under review.\n` +
       'Report only what is wrong with the lines that diff adds or changes. Read any other file of the repository for context, and report nothing about code the diff leaves as it was.\n',
   );
   assert.equal(reviewPrompt({ from: FROM, head: HEAD, part: null }), reviewPrompt({ from: FROM, head: HEAD }));
@@ -161,8 +198,11 @@ test('reviewPrompt for a part says which part it is, and names its files in the 
   assert.ok(prompt.includes(`${FROM}..${HEAD}`), prompt);
   assert.match(prompt, /part 2 of 3/);
   // The files are in the command and nowhere else: the prompt is paid on every request of the review.
-  assert.ok(prompt.includes(`\`git --literal-pathspecs diff --no-renames ${FROM} ${HEAD} -- bin/a.mjs 'docs/my notes.md'\``), prompt);
+  assert.ok(prompt.includes(`\`git --literal-pathspecs diff --find-renames ${FROM} ${HEAD} -- bin/a.mjs 'docs/my notes.md'\``), prompt);
   assert.equal(prompt.split('my notes.md').length, 2, 'each file is named once');
+  // A range read renames off (`rangeFiles`) is shown so as well.
+  const off = reviewPrompt({ from: FROM, head: HEAD, part: PART, renames: '--no-renames' });
+  assert.ok(off.includes(`\`git --literal-pathspecs diff --no-renames ${FROM} ${HEAD} -- bin/a.mjs 'docs/my notes.md'\``), off);
   assert.equal(prompt, reviewPrompt({ from: FROM, head: HEAD, part: { ...PART, files: [...PART.files] } }), 'the same part gives the same text');
   assert.equal(prompt.endsWith('\n'), true);
   assert.equal(prompt.includes('\r'), false);
@@ -177,7 +217,7 @@ test('reviewPrompt for a part names its files as themselves: git is told to read
   const files = ['*.md', 'a?.txt', 'a[1].txt', ':(exclude)a.txt', ':!a.txt', ':/top.txt'];
   const prompt = reviewPrompt({ from: FROM, head: HEAD, part: { index: 1, of: 2, files } });
   // The option goes before `diff`: it is git's, for every pathspec of the command, and no part of `diff`.
-  assert.ok(prompt.includes(`\`git --literal-pathspecs diff --no-renames ${FROM} ${HEAD} -- ${files.map((file) => `'${file}'`).join(' ')}\``), prompt);
+  assert.ok(prompt.includes(`\`git --literal-pathspecs diff --find-renames ${FROM} ${HEAD} -- ${files.map((file) => `'${file}'`).join(' ')}\``), prompt);
   // And a shell reads no pattern into them either: each is in single quotes.
   for (const file of files) assert.equal(quotedPath(file), `'${file}'`, file);
   // The whole range names no file, so its command is as it was.
@@ -266,7 +306,7 @@ test('a range of one part that leaves files out is asked by its files, as a part
   assert.equal(
     prompt,
     `Review the code changes in the committed range ${FROM}..${HEAD}. This review covers the files the command below names.\n` +
-      `Run \`git --literal-pathspecs diff --no-renames ${FROM} ${HEAD} -- bin/a.mjs 'src/my code.js'\` to inspect them: its output is the whole change under review.\n` +
+      `Run \`git --literal-pathspecs diff --find-renames ${FROM} ${HEAD} -- bin/a.mjs 'src/my code.js'\` to inspect them: its output is the whole change under review.\n` +
       'Report only what is wrong with the lines that diff adds or changes. Read any other file of the repository for context, and report nothing about code the diff leaves as it was.\n' +
       'The other files the range changes are left out of this review: read them for context, and report nothing about them.\n',
   );
@@ -312,6 +352,13 @@ test('reviewIntent reads the Goal and the Done when of a feature document, trimm
     doneWhen: '- `npm run check` exits 0\n- The roadmap records the result',
   });
   assert.deepEqual(reviewIntent(DOC.replaceAll('\n', '\r\n')), reviewIntent(DOC), 'a document checked out with CRLF reads the same');
+});
+
+test('reviewIntent adds the Specs of a feature document that has them, bounded as the other sections are', () => {
+  const withSpecs = `${DOC}\n## Specs\n1. "Measure every attempt" (L1)\n`;
+  assert.deepEqual(reviewIntent(withSpecs), { ...reviewIntent(DOC), specs: '1. "Measure every attempt" (L1)' });
+  assert.equal('specs' in reviewIntent(`${DOC}\n## Specs\n\n`), false, 'an empty Specs section adds nothing');
+  assert.match(reviewIntent(`${DOC}\n## Specs\n${'word '.repeat(600)}`).specs, /\[Cut here: /);
 });
 
 test('reviewIntent takes the real headings, not the ones inside a fenced example', () => {

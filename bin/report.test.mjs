@@ -9,6 +9,9 @@ import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { reportMain, USAGE } from './report.mjs';
 import { stretchMain } from './stretch.mjs';
 
+// Its times are shown in local time (rule:local-time): the zone is pinned so no machine's own decides a result.
+process.env.TZ = 'America/Bogota';
+
 // odd/tasks/status-report.md, S2-S5: `js-harness report` against a repository and a harness home of its own in
 // the temp folder. The repository has two merged pull requests, one before the cut and one after; the home's
 // record holds the notices. Nothing here reads the real home or this repository.
@@ -79,14 +82,14 @@ test('with no report recorded, it reports the last 24 hours: the pull request me
   const { code, out, err } = await report([], project);
   assert.equal(err, '');
   assert.equal(code, 0);
-  assert.match(out, /^Since 2026-10-19 12:00Z, the last 24 hours: no report is recorded$/m);
+  assert.match(out, /^Since 2026-10-19 07:00, local time UTC-05:00, the last 24 hours: no report is recorded$/m);
   assert.match(out, /^Landed on main: 1 pull request$/m);
-  assert.match(out, /^ {2}#478 fix\/title {2}merged 2026-10-20 10:00Z$/m);
+  assert.match(out, /^ {2}#478 fix\/title {2}merged 2026-10-20 05:00$/m);
   assert.match(out, /^ {6}- fix\(notify\): read the title$/m);
   assert.doesNotMatch(out, /#470/);
   assert.doesNotMatch(out, /Merge branch 'main'|a commit straight on main/, 'a pull request lists its own commits, not the merges that brought main in');
-  assert.match(out, /^ {2}JH 35 · notify reads title {2}question 2026-10-20 11:05Z {2}\(2 notices\)$/m);
-  assert.match(out, /^ {2}open #1 since 2026-10-20 11:05Z: Ship it today\?$/m);
+  assert.match(out, /^ {2}JH 35 · notify reads title {2}question 2026-10-20 06:05 {2}\(2 notices\)$/m);
+  assert.match(out, /^ {2}open #1 since 2026-10-20 06:05: Ship it today\?$/m);
   assert.match(out, /^Map: docs\/ROADMAP.md on main {2}2\/3 {2}67%$/m);
   assert.match(out, /^ {6}- b still open$/m);
 }));
@@ -96,14 +99,14 @@ test('reading writes nothing; --mark records the report, and the next report sta
   assert.deepEqual(readNotices(project.home, project.slug).reports, []);
   const marked = await report(['--mark'], project, { CLAUDE_CODE_SESSION_ID: 'cccccccc-3333-4333-8333-333333333333' });
   assert.equal(marked.code, 0);
-  assert.match(marked.out, /^Recorded this report at 2026-10-20 12:00Z$/m);
+  assert.match(marked.out, /^Recorded this report at 2026-10-20 07:00, local time UTC-05:00$/m);
   const { reports, notices, skipped } = readNotices(project.home, project.slug);
   const head = git(project.repo, ['rev-parse', 'main']).trim();
   assert.deepEqual(reports.map((one) => [one.at, one.by, one.head]), [['2026-10-20T12:00:00.000Z', 'cccccccc-3333-4333-8333-333333333333', head]]);
   assert.deepEqual(notices, []);
   assert.equal(skipped, 0);
   const next = await report([], project);
-  assert.match(next.out, /^Since 2026-10-20 12:00Z, the last report$/m);
+  assert.match(next.out, /^Since 2026-10-20 07:00, local time UTC-05:00, the last report$/m);
   assert.match(next.out, /^Landed on main: nothing since the cut$/m);
 }));
 
@@ -115,7 +118,7 @@ test('after a report, what landed is what the default branch gained since the co
   const next = await report([], project, {}, Date.parse('2026-10-20T13:00:00Z'));
   assert.equal(next.code, 0, next.err);
   assert.match(next.out, /^Landed on main: 1 pull request$/m);
-  assert.match(next.out, /^ {2}#480 fix\/late {2}merged 2026-10-20 11:00Z$/m);
+  assert.match(next.out, /^ {2}#480 fix\/late {2}merged 2026-10-20 06:00$/m);
   assert.doesNotMatch(next.out, /#478/);
 }));
 
@@ -143,6 +146,15 @@ test('a default branch with no roadmap says so, and that is no error', withProje
   const { code, out } = await report([], project);
   assert.equal(code, 0);
   assert.match(out, /^Map: no docs\/ROADMAP.md on main$/m);
+  // The reliability and resilience readers of 23c028a5 (CRITICAL): the page's plan steps read no roadmap that is not
+  // there, so --mark --html records the report, as --mark alone does.
+  const html = path.join(project.home, 'status.html');
+  const recordLoad = async () => ({ renderedFile: () => path.join(project.home, 'rendered.jsonl'), recordRendered: () => ({ sha256: 'e'.repeat(64), bytes: 1 }) });
+  const err = [];
+  const marked = await reportMain(['--mark', '--html', html, '--cwd', project.repo, '--home', project.home], { stdout: () => {}, stderr: (line) => err.push(line), now: () => NOW, env: {}, recordLoad });
+  assert.equal(marked, 0, err.join('\n'));
+  assert.equal(readNotices(project.home, project.slug).reports.length, 1);
+  assert.match(fs.readFileSync(html, 'utf8'), /La rama main no tiene docs\/ROADMAP\.md/);
 }));
 
 // Review findings R3-mark-after-failed-section and R3-untested-mark-failure.
@@ -171,7 +183,7 @@ test('a report line that cannot be written exits 1 and says why', withProject(as
 test('--since sets the cut, and takes in what the default window leaves out', withProject(async (project) => {
   const { code, out } = await report(['--since', '2026-10-17T00:00:00Z'], project);
   assert.equal(code, 0);
-  assert.match(out, /^Since 2026-10-17 00:00Z, as --since asked$/m);
+  assert.match(out, /^Since 2026-10-16 19:00, local time UTC-05:00, as --since asked$/m);
   assert.match(out, /^Landed on main: 2 pull requests$/m);
   assert.match(out, /#470 feat\/old/);
 }));
@@ -237,6 +249,35 @@ test('a relative --notes and --html both resolve under --cwd, wherever the comma
   assert.match(fs.readFileSync(path.join(project.repo, 'out', 'status.html'), 'utf8'), /Tramo C[\s\S]*faltan páginas/);
 }));
 
+// odd/tasks/departure-stretch.md, spec 9: a marked report's proposals and estimates are the next page's to compare.
+test('--mark records the proposals and their estimates, and the next page sets them beside what landed since', withProject(async (project) => {
+  fs.mkdirSync(project.home, { recursive: true });
+  const notes = path.join(project.home, 'notes.json');
+  fs.writeFileSync(notes, JSON.stringify({ proposals: [{ step: 'Tramo D', why: 'falta el mapa', estimate: '2 h, PR 740 en main' }] }));
+  const recordLoad = async () => ({ renderedFile: () => path.join(project.home, 'rendered.jsonl'), recordRendered: () => ({ sha256: 'e'.repeat(64), bytes: 1 }) });
+  const run = (argv, at) => reportMain([...argv, '--cwd', project.repo, '--home', project.home], { stdout: () => {}, stderr: () => {}, now: () => at, env: {}, recordLoad });
+  assert.equal(await run(['--mark', '--html', path.join(project.home, 'one.html'), '--notes', notes], NOW), 0);
+  assert.deepEqual(readNotices(project.home, project.slug).reports.at(-1).proposals, [{ step: 'Tramo D', estimate: '2 h, PR 740 en main' }]);
+  const next = path.join(project.home, 'two.html');
+  assert.equal(await run(['--html', next], NOW + 3_600_000), 0);
+  assert.match(fs.readFileSync(next, 'utf8').split('6. Lo que propongo')[1], /Lo que propuse el[\s\S]*Tramo D[\s\S]*2 h, PR 740 en main[\s\S]*Desde entonces no entró nada/);
+}));
+
+// Codex review of 6bee9e5..8be755d, P2: plan steps that cannot be read are a section that could not be read, so
+// --mark --html records nothing and the next report's cut does not pass facts this page never showed.
+test('--mark --html with plan steps git cannot read says so and records nothing', withProject(async (project) => {
+  fs.mkdirSync(project.home, { recursive: true });
+  const html = path.join(project.home, 'status.html');
+  const recordLoad = async () => ({ renderedFile: () => path.join(project.home, 'rendered.jsonl'), recordRendered: () => ({ sha256: 'e'.repeat(64), bytes: 1 }) });
+  const failing = (cmd, args, options) => (args.includes('odd/tasks/') ? { status: 128, stdout: '', stderr: 'fatal: no tree' } : run(cmd, args, options));
+  const err = [];
+  const code = await reportMain(['--mark', '--html', html, '--cwd', project.repo, '--home', project.home], { stdout: () => {}, stderr: (line) => err.push(line), now: () => NOW, env: {}, recordLoad, run: failing });
+  assert.equal(code, 1);
+  assert.match(fs.readFileSync(html, 'utf8'), /Los pasos del plan no se pudieron leer: .*no tree/);
+  assert.match(err.join('\n'), /not recorded: a section could not be read/);
+  assert.deepEqual(readNotices(project.home, project.slug).reports, []);
+}));
+
 test('--notes that do not parse are refused before anything is written, and --notes needs --html', withProject(async (project) => {
   const notes = path.join(project.home, 'notes.json');
   fs.mkdirSync(project.home, { recursive: true });
@@ -284,11 +325,13 @@ test("the status page and the printed report carry the F8 share and the last str
   assert.equal(code, 0, err.join('\n'));
   const printed = out.join('\n');
   assert.match(printed, /^Migration: F8 plan {2}2\/2 steps {2}100%; at the cut 1\/2 {2}50%$/m);
-  assert.match(printed, /^Stretch \S+: closed at 2026-10-20 14:00Z, opened 2026-10-20 12:30Z; 1\.5 of 2 h; goals 1 of 2 met, checked 2026-10-20 14:00Z$/m);
+  assert.match(printed, /^Stretch \S+: closed at 2026-10-20 09:00, opened 2026-10-20 07:30; 1\.5 of 2 h; goals 1 of 2 met, checked 2026-10-20 09:00$/m);
   assert.match(printed, /^ {2}goal G2 not met \(exit 1\): S12 empezada$/m);
   assert.match(printed, /^ {2}forecast F8 plan: 50% at the opening, ~100% at the return \(100% to 100%\); now 100%$/m);
   const four = fs.readFileSync(html, 'utf8').split('4. El mapa')[1].split('5. Lo que espera')[0];
   assert.match(four, /La migración[\s\S]*F8 plan[\s\S]*1 de 2 pasos · 50 %[\s\S]*2 de 2 pasos · 100 %/);
+  // odd/tasks/departure-stretch.md, spec 9: the steps at the cut and now, read from git at both commits.
+  assert.match(four, /F8 plan, paso por paso[\s\S]*S0[\s\S]*igual[\s\S]*S13[\s\S]*avanzó[\s\S]*El último tramo/);
   assert.match(four, /El último tramo[\s\S]*PR 630 en main[\s\S]*sí[\s\S]*exit 0[\s\S]*S12 empezada[\s\S]*no[\s\S]*exit 1/);
   assert.match(four, /F8 plan[\s\S]*1 de 2 · 50 %[\s\S]*~100 %[\s\S]*2 de 2 · 100 %/);
 }));
