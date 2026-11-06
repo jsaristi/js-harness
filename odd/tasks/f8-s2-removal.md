@@ -861,3 +861,9 @@ leftover is read before S2 closes.
   "the patch is correct" (0.98, 144,931 input tokens); the reliability lens 0 findings. PR 778 opened to main; the
   lead asks him before it lands. Left beside it for T11: `README.md:5` and `docs/SPEC.md:171` say what items 4 and 3
   said, outside his draft. Next: T14's question.
+- L57 2026-11-06 01:12Z (20:12 local): question 201 sent to the lead, T14's last removals: `~/.gentle-ai` (2.2 MB:
+  `backups/` with the uninstall snapshots, `cache`, `locks`, `review-stop-hook`, `state.json`, `telemetry.json`, an
+  empty `bin`), its PATH entry `C:\Users\Oficina\.gentle-ai\bin` (read with `reg query HKCU\Environment`), and the
+  eight agents with `.gentle-ai-native-agent-ownership.json` in `~/.claude/agents` (104 KB); options: all three, all
+  but `backups/`, or not yet. Read first: `evals/home.mjs:254-256` copies `~/.gentle-ai/state.json` only when it
+  exists, so a later eval does not break without it. (L56's time: its line was written at 20:11 local, not 19:55.)
