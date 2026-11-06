@@ -181,3 +181,35 @@ test('the swap back without its backup changes nothing', () => {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('a binary that cannot be set aside leaves no staged copy beside it (Codex P2)', async () => {
+  const m = machine();
+  try {
+    const result = await updateEngramBinary(UPDATE, { ...m.deps, locate: () => path.join(m.bin, 'gone.exe') });
+    assert.equal(result.ok, false);
+    assert.deepEqual(fs.readdirSync(m.bin), ['engram.exe'], 'the staged engram-3.6.2.exe.new is removed');
+  } finally {
+    fs.rmSync(m.root, { recursive: true, force: true });
+  }
+});
+
+test('the binary is found, extracted and asked under the environment of the probe that planned it (Codex P2)', async () => {
+  const m = machine();
+  const env = { PATH: 'C:\prefix\bin' };
+  const seen = [];
+  const spawn = (file, args, options = {}) => {
+    seen.push([file, options.env]);
+    if (file === 'where.exe') return { status: 0, stdout: `${m.exe}\r\n`, stderr: '' };
+    return m.spawn(file, args, options);
+  };
+  try {
+    const { locate, ...deps } = m.deps;
+    const result = await updateEngramBinary(UPDATE, { ...deps, spawn, env });
+    assert.equal(result.ok, true, result.why);
+    // The paths are Windows' on every runner: path.win32 cuts them on Linux too.
+    assert.deepEqual(seen.map(([file]) => path.win32.basename(file)), ['where.exe', 'tar.exe', 'engram.exe']);
+    assert.ok(seen.every(([, given]) => given === env), 'every command runs with the probe\'s environment');
+  } finally {
+    fs.rmSync(m.root, { recursive: true, force: true });
+  }
+});

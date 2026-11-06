@@ -18,6 +18,8 @@ function newWorld(versions = {}, latest = {}) {
     versions: { engram: '3.6.2', 'engram-plugin': '0.1.19', codegraph: '1.6.2', context7: 'hosted', codex: '0.167.0', ...versions },
     latest: { engram: '3.6.2', 'engram-plugin': '0.1.19', codegraph: '1.6.2', codex: '0.167.0', ...latest },
     fail: new Set(),
+    hang: new Set(),
+    engramDeps: [],
     lines: [],
     seen: [],
     engramCalls: [],
@@ -52,6 +54,7 @@ function seams(world, home, { answers = [], interactive = true, engram } = {}) {
         world.lines.push({ line, env: options.env, stdio: options.stdio });
         world.seen.push((readManifest(home)?.stack ?? []).map((r) => `${r.tool}.${r.dimension}:${r.applies}`));
         if (world.fail.has(line)) return { status: 1, stderr: 'it broke' };
+        if (world.hang.has(line)) return { status: null, signal: 'SIGTERM', stdout: '' };
         const pinned = /^pnpm add -g (@[\w-]+\/)?([\w-]+)@(.+)$/.exec(line);
         if (pinned) world.versions[pinned[2] === 'codegraph' ? 'codegraph' : 'codex'] = pinned[3];
         if (line === 'claude plugin update engram@engram') {
@@ -60,8 +63,9 @@ function seams(world, home, { answers = [], interactive = true, engram } = {}) {
         }
         return { status: 0, stdout: '' };
       },
-      updateEngram: async (update) => {
+      updateEngram: async (update, given) => {
         world.engramCalls.push(update);
+        world.engramDeps.push(given);
         world.seen.push((readManifest(home)?.stack ?? []).map((r) => `${r.tool}.${r.dimension}:${r.applies}`));
         return engram ?? { ok: true, record: { path: 'C:\\e\\engram.exe', backup: `C:\\e\\engram-${update.from}.exe.bak`, sha256: 'abc' } };
       },
@@ -216,4 +220,49 @@ test('the upgrade read probes the stack and never runs gh', () => withHome(async
   await readUpgrade({ home, cwd: home, spawn, fetch, homedir: home, env: {} });
   assert.ok(ran.length > 0, 'the read probes the stack through the spawn it is given');
   assert.deepEqual(ran.filter((line) => /^gh\b/.test(line)), []);
+}));
+
+// --- Codex's review of the slice (2026-11-06) ---
+
+test('latest versions that could not be read are never called the latest (Codex P2)', () => withHome(async (home) => {
+  const s = seams(newWorld({}, { codex: null }), home);
+  assert.equal(await run([], home, s.deps), 0);
+  assert.ok(!s.out.includes('js-harness stack upgrade: every tool is at its latest version.'), s.out.join('\n'));
+  assert.ok(s.out.includes('js-harness stack upgrade: nothing to update among the tools whose latest version is known; 1 could not be checked.'), s.out.join('\n'));
+}));
+
+test('a plugin update that exits 0 without reaching its known version failed, and its record is forgotten (Codex P2)', () => withHome(async (home) => {
+  const world = newWorld({}, { 'engram-plugin': '0.1.22' });
+  const s = seams(world, home, { answers: ['y'] });
+  assert.equal(await run([], home, s.deps), 1);
+  assert.match(s.err.join('\n'), /engram-plugin 0\.1\.22 failed: it exited 0 and answers 0\.1\.21/);
+  assert.equal(readManifest(home)?.stack?.length ?? 0, 0);
+}));
+
+test('an update that times out keeps its record unread, since what it started may still install (Codex P2)', () => withHome(async (home) => {
+  const world = newWorld({ codegraph: '1.6.0' }, { codegraph: '1.7.0' });
+  world.hang.add('pnpm add -g @colbymchenry/codegraph@1.7.0');
+  const s = seams(world, home, { answers: ['y'] });
+  assert.equal(await run([], home, s.deps), 1);
+  const [record] = readManifest(home).stack;
+  assert.deepEqual([record.tool, record.to, record.applies], ['codegraph', '1.7.0', null]);
+  assert.match(s.err.join('\n'), /codegraph 1\.7\.0: timed out .*may still be running; it stays recorded, so uninstall machine judges it/);
+}));
+
+test('the engram binary is updated under the environment its probe used, and a prefix is kept in each record (Codex P2)', () => withHome(async (home) => {
+  const prefix = path.join(home, 'prefix');
+  const world = newWorld({ engram: '3.6.1', codegraph: '1.6.0' }, { engram: '3.6.2', codegraph: '1.7.0' });
+  const s = seams(world, home, { answers: ['y', 'n', 'y'] });
+  await run(['--prefix', prefix], home, s.deps);
+  assert.ok(world.engramDeps[0].env?.PATH?.includes(prefix), 'the binary is located on the PATH the probe used');
+  const byTool = Object.fromEntries(readManifest(home).stack.map((r) => [r.tool, r]));
+  assert.equal(byTool.engram.prefix, prefix);
+  assert.equal(byTool.codegraph.prefix, prefix);
+}));
+
+test('a package whose earlier upgrade is recorded under another prefix is held and said (Codex P2)', () => withHome(async (home) => {
+  recordStackRow(home, { tool: 'codegraph', dimension: 'upToDate', kind: 'package', bin: 'codegraph', from: '1.5.0', to: '1.6.0', prefix: 'P:/a', undo: ['x'], applies: '1.6.0', env: {}, at: 'then' });
+  const s = seams(newWorld({ codegraph: '1.6.0' }, { codegraph: '1.7.0' }), home);
+  assert.equal(await run([], home, s.deps), 1);
+  assert.ok(s.out.some((line) => /^ {2}codegraph: an earlier upgrade of it is recorded under the prefix P:\/a/.test(line)), s.out.join('\n'));
 }));

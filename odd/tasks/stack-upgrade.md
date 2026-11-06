@@ -188,3 +188,10 @@ scratchpad, `commit-a.txt` and `commit-b.txt`.
 - L7 (2026-11-06): the Claude lenses over af55e7e..f5b0578 (risk, resilience, readability, reliability, sonnet):
   0, 0, 1, 0 findings. Readability: `toWords` in `bin/stack.mjs` was never called and read a field no plan row
   carries; removed. Codex's first run refused before it ran, since this document was not committed.
+- L8 (2026-11-06): Codex over af55e7e..54f8639 (4 parts, 318 s, 774k input tokens): 9 findings, all P2, all
+  accepted and fixed, each with its test first: a staged binary left when the old one cannot be set aside; an
+  update cut off before its result was recorded read as gone; an earlier undo reused across prefixes (the record now
+  keeps its prefix, and another prefix holds the tool); unread latest versions called the latest; the binary located
+  on the process PATH instead of the probe's; a plugin with a known target not checked against it; a timed-out update
+  whose record was given back; `--pm` and `--prefix` not handed to the stack step; Update skipping the stack in
+  silence on a malformed manifest.

@@ -241,6 +241,12 @@ test('undoStack keeps the record of an engram swap back that cannot run, for a s
   assert.deepEqual(result.failedRecords, [record]);
 }));
 
+test('undoStack names the way back of an engram update cut off before its result was recorded, never calling it gone (Codex P2)', () => withHome((home) => {
+  const record = { tool: 'engram', dimension: 'upToDate', kind: 'binary', bin: 'engram', from: '3.6.1', to: '3.6.2', applies: null, env: {} };
+  const result = undoStack([record], { home, spawn: () => assert.fail('ran a command'), platform: 'win32', env: {}, log: () => {} });
+  assert.deepEqual(result.kept, [{ tool: 'engram', dimension: 'upToDate', reason: 'unread', undo: 'the update to 3.6.2 was cut off before its result was recorded: if an engram-3.6.1 .bak sits beside engram, it is the version before; put it back in engram\'s place' }]);
+}));
+
 test('undoStack names the way back of a plugin update, which no command takes, and drops its record', () => withHome((home) => {
   const record = { tool: 'engram-plugin', dimension: 'upToDate', kind: 'plugin', from: '0.1.14', to: '0.1.19', undo: null, applies: '0.1.19', env: {} };
   const result = undoStack([record], { home, spawn: () => assert.fail('ran a command'), platform: 'win32', env: {}, log: () => {} });

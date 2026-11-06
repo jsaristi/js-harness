@@ -28,16 +28,18 @@ function pinned(pm, spec, version, platform, prefix) {
   return { words: [...pm.words, ...args], env: prefix && pm.kind !== 'pnpm' ? { ...env, PATH: prefixBinOf(pm.kind, prefix, platform) } : env };
 }
 
-/** The plan, as `{ updates, current, unknown }`:
+/** The plan, as `{ updates, current, unknown, held }`:
  *  - `updates`, in the order they run: the engram binary (`kind: 'binary'`, its release asset), the engram plugin
  *    (`kind: 'plugin'`: `run` is a list of commands, `undo` `null` since Claude Code installs no earlier version),
  *    then codegraph and codex (`kind: 'package'`: `run` and `undo` words, `env`). Each has `from` and `to`; the
  *    plugin's `to` is `null` when it follows a binary not yet updated, since its latest is what that release ships.
  *  - `current`: `{ tool, version }` of each installed tool at its latest, context7 as `hosted`.
  *  - `unknown`: `{ tool, why }` of each installed tool whose latest version is not known.
+ *  - `held`: `{ tool, why }` of each package behind whose earlier upgrade is recorded under another prefix.
  * `rows` are `probeStack`'s (a tool its switch hides is absent), `latest` doctor's `{ id: version }`, `records` the
- * manifest's `stack` records: a second update of a tool keeps the first `from` and its undo. A tool that is not
- * installed is `stack install`'s, never an update. */
+ * manifest's `stack` records: a second update of a tool keeps the first `from` and its undo, under the same prefix
+ * only, since the undo's command and its environment must name one installation (Codex, 2026-11-06). A tool that is
+ * not installed is `stack install`'s, never an update. */
 export function planUpgrade({ rows, latest, functions, pm, prefix = null, platform = process.platform, arch = process.arch, records = [] }) {
   const byId = new Map(rows.map((r) => [r.id, r]));
   const installed = (id) => {
@@ -47,6 +49,7 @@ export function planUpgrade({ rows, latest, functions, pm, prefix = null, platfo
   const updates = [];
   const current = [];
   const unknown = [];
+  const held = [];
   const behind = (id) => {
     const version = installed(id);
     if (version === null) return null;
@@ -87,6 +90,11 @@ export function planUpgrade({ rows, latest, functions, pm, prefix = null, platfo
     const due = behind(runnable.tool);
     if (!due) continue;
     const earlier = records.find((r) => r.tool === runnable.tool && r.dimension === 'upToDate');
+    if (earlier && (earlier.prefix ?? null) !== (prefix ?? null)) {
+      const where = (p) => (p === null ? 'the default global folder' : `the prefix ${p}`);
+      held.push({ tool: runnable.tool, why: `an earlier upgrade of it is recorded under ${where(earlier.prefix ?? null)}, not ${(prefix ?? null) === null ? 'the default global folder' : prefix}: js-harness uninstall machine undoes that one first` });
+      continue;
+    }
     const from = earlier?.from ?? due.from;
     const run = pinned(pm, runnable.spec, due.to, platform, prefix);
     const undo = earlier?.undo ?? pinned(pm, runnable.spec, from, platform, prefix).words;
@@ -94,5 +102,5 @@ export function planUpgrade({ rows, latest, functions, pm, prefix = null, platfo
   }
 
   if (byId.get('context7')?.installed === 'ok') current.push({ tool: 'context7', version: 'hosted' });
-  return { updates, current, unknown };
+  return { updates, current, unknown, held };
 }

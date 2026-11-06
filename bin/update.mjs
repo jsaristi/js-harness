@@ -587,24 +587,32 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
   return 0;
 }
 
-/** Whether the machine manifest under `home` can be read: one that does not parse was named by the harness step, and
- * the stack step, which records in it, is not run. */
-function manifestReadable(home) {
+/** Why the machine manifest under `home` cannot be read, or `null` when it can: the stack step, which records in it,
+ * is not run then. */
+function manifestRefusal(home) {
   try {
     installedVersion(home);
-    return true;
+    return null;
   } catch (err) {
-    if (err instanceof MalformedManifestError) return false;
+    if (err instanceof MalformedManifestError) return err.message;
     throw err;
   }
+}
+
+/** What the stack step is given of `argv`: the home, and the package manager and prefix when the person named them,
+ * so the stack is updated where the harness is (Codex, 2026-11-06). */
+function stackArgs(argv, env) {
+  const { home, pm, prefix } = parseArgs(argv, env);
+  return { home, ...(pm && { pm }), ...(prefix && { prefix }) };
 }
 
 /** The stack step of `upgrade` and `update` (odd/tasks/stack-upgrade.md, S1): `js-harness stack upgrade` for `home`,
  * with the menu's `ask` when there is one, or its `--list` when `list`. Loaded only when it runs. */
 async function stackStepOf(env) {
-  return async ({ home, ask, list }) => {
+  return async ({ home, ask, list, pm, prefix }) => {
     const { stackUpgradeMain } = await import('./stack.mjs');
-    return stackUpgradeMain(['--home', home, ...(list ? ['--list'] : [])], env, ask ? { ask, interactive: true } : {});
+    const argv = ['--home', home, ...(pm ? ['--pm', pm] : []), ...(prefix ? ['--prefix', prefix] : []), ...(list ? ['--list'] : [])];
+    return stackUpgradeMain(argv, env, ask ? { ask, interactive: true } : {});
   };
 }
 
@@ -615,9 +623,10 @@ async function stackStepOf(env) {
  * seam of the stack step, `options.ask` the menu's question (the TUI is the terminal that consents). */
 export async function upgradeAll(argv, env = process.env, spawn = spawnSync, platform = process.platform, options = {}) {
   const code = await upgradeMain(argv, env, spawn, platform, options);
-  if (code === 2 || !manifestReadable(parseArgs(argv, env).home)) return code;
+  // A manifest that does not parse was named by the harness's own upgrade.
+  if (code === 2 || manifestRefusal(parseArgs(argv, env).home) !== null) return code;
   const stack = options.stack ?? (await stackStepOf(env));
-  const stackCode = await stack({ home: parseArgs(argv, env).home, ask: options.ask, list: false });
+  const stackCode = await stack({ ...stackArgs(argv, env), ask: options.ask, list: false });
   return code !== 0 ? code : stackCode;
 }
 
@@ -625,8 +634,14 @@ export async function upgradeAll(argv, env = process.env, spawn = spawnSync, pla
  * its latest release, read and never run. The exit is the harness's, or the stack read's when that fails. */
 export async function updateAll(argv, env = process.env, spawn = spawnSync, platform = process.platform, options = {}) {
   const code = await updateMain(argv, env, spawn);
-  if (code === 2 || !manifestReadable(parseArgs(argv, env).home)) return code;
+  if (code === 2) return code;
+  // The harness's check reads no manifest, so nothing has named it yet: a stack it cannot read is said, not skipped.
+  const refused = manifestRefusal(parseArgs(argv, env).home);
+  if (refused !== null) {
+    console.error(`js-harness update: the stack was not read: ${refused}`);
+    return 1;
+  }
   const stack = options.stack ?? (await stackStepOf(env));
-  const stackCode = await stack({ home: parseArgs(argv, env).home, ask: undefined, list: true });
+  const stackCode = await stack({ ...stackArgs(argv, env), ask: undefined, list: true });
   return code !== 0 ? code : stackCode;
 }

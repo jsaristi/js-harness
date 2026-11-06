@@ -1510,3 +1510,33 @@ test('update says what of the stack is behind after the harness line, and runs n
     fs.rmSync(source, { recursive: true, force: true });
   }
 });
+
+test('upgrade hands its --pm and --prefix to the stack step, so the stack updates where the person said (Codex P2)', async () => {
+  const home = makeTmpDir('js-harness-upgrade-all-pm-');
+  const prefix = makeTmpDir('js-harness-upgrade-all-prefix-');
+  const source = makeSource(currentVersion());
+  try {
+    const step = stackStep(0);
+    await runCommand(upgradeAll, ['--source', source, '--home', home, '--pm', 'pnpm', '--prefix', prefix], {}, noProcess, undefined, { stack: step.stack });
+    assert.deepEqual(step.calls, [{ home, ask: undefined, list: false, pm: 'pnpm', prefix }]);
+  } finally {
+    for (const dir of [home, prefix, source]) fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('update with a machine manifest that does not parse says so and exits 1, instead of skipping the stack in silence (Codex P2)', async () => {
+  const home = makeTmpDir('js-harness-update-all-malformed-');
+  const source = makeSource('99.0.0');
+  try {
+    fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.js-harness', 'manifest.json'), '{ not json', 'utf8');
+    const step = stackStep(0);
+    const { code, err } = await runCommand(updateAll, ['--source', source, '--home', home], {}, noProcess, undefined, { stack: step.stack });
+    assert.equal(code, 1);
+    assert.match(err, /manifest/);
+    assert.deepEqual(step.calls, []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});

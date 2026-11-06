@@ -23,9 +23,9 @@ function realSpawn(file, args, options) {
   return spawnSync(file, args, options);
 }
 
-/** The engram the shell runs first, by its absolute path, or `null`. */
-export function locateEngram({ spawn = realSpawn, platform = process.platform } = {}) {
-  const found = platform === 'win32' ? spawn('where.exe', ['engram'], { encoding: 'utf8', windowsHide: true }) : spawn('which', ['engram'], { encoding: 'utf8' });
+/** The engram the shell runs first under `env` (the PATH the plan's probe used), by its absolute path, or `null`. */
+export function locateEngram({ spawn = realSpawn, platform = process.platform, env = process.env } = {}) {
+  const found = platform === 'win32' ? spawn('where.exe', ['engram'], { encoding: 'utf8', windowsHide: true, env }) : spawn('which', ['engram'], { encoding: 'utf8', env });
   if (found.status !== 0) return null;
   const first = String(found.stdout ?? '').split(/\r?\n/).map((line) => line.trim()).find(Boolean);
   return first && path.isAbsolute(first) ? first : null;
@@ -76,14 +76,16 @@ async function download(fetchImpl, url, as) {
 
 /** Updates the engram binary for the plan's row `update` (`{ from, to, asset, release }`), as
  * `{ ok: true, record: { path, backup, sha256 } }` or `{ ok: false, why }`, with nothing replaced when it fails.
- * `deps`: `fetch`, `spawn`, `locate` (the binary's path), `platform`, `tmp` (where the download folder goes),
- * `systemRoot` (Windows' folder, whose System32 holds its tar), `say` (one line per step). */
+ * `deps`: `fetch`, `spawn`, `env` (the environment of the probe that planned it, so the engram updated is the one
+ * shown), `locate` (the binary's path), `platform`, `tmp` (where the download folder goes), `systemRoot` (Windows'
+ * folder, whose System32 holds its tar), `say` (one line per step). */
 export async function updateEngramBinary(update, deps = {}) {
   const platform = deps.platform ?? process.platform;
   const spawn = deps.spawn ?? realSpawn;
   const fetchImpl = deps.fetch ?? fetch;
   const say = deps.say ?? (() => {});
-  const target = (deps.locate ?? (() => locateEngram({ spawn, platform })))();
+  const env = deps.env ?? process.env;
+  const target = (deps.locate ?? (() => locateEngram({ spawn, platform, env })))();
   if (!target) return { ok: false, why: 'there is no engram on the PATH to update: stack install names how to install it' };
   const exe = platform === 'win32' ? '.exe' : '';
   const work = fs.mkdtempSync(path.join(deps.tmp ?? os.tmpdir(), 'js-harness-engram-'));
@@ -100,7 +102,7 @@ export async function updateEngramBinary(update, deps = {}) {
     const into = path.join(work, 'out');
     fs.mkdirSync(into);
     const tar = platform === 'win32' ? path.win32.join(deps.systemRoot ?? process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
-    const extracted = spawn(tar, ['-xf', archivePath, '-C', into], { encoding: 'utf8', windowsHide: true });
+    const extracted = spawn(tar, ['-xf', archivePath, '-C', into], { encoding: 'utf8', windowsHide: true, env });
     if (extracted.status !== 0) return { ok: false, why: `tar could not extract ${update.asset} (${extracted.error?.code ?? `exit ${extracted.status}`}): nothing was replaced` };
     const fresh = findBinary(into, `engram${exe}`);
     if (!fresh) return { ok: false, why: `${update.asset} holds no engram${exe}: nothing was replaced` };
@@ -112,7 +114,12 @@ export async function updateEngramBinary(update, deps = {}) {
     if (platform !== 'win32') fs.chmodSync(staged, 0o755);
     const sum = fileSha256(staged);
     const backup = freeName(dir, `engram-${update.from}`, `${exe}.bak`);
-    fs.renameSync(target, backup);
+    try {
+      fs.renameSync(target, backup);
+    } catch (err) {
+      fs.rmSync(staged, { force: true });
+      return { ok: false, why: `${target} could not be set aside (${err.code ?? err.message}): nothing was replaced` };
+    }
     try {
       fs.renameSync(staged, target);
     } catch (err) {
@@ -120,7 +127,7 @@ export async function updateEngramBinary(update, deps = {}) {
       fs.rmSync(staged, { force: true });
       return { ok: false, why: `the new engram could not be moved in (${err.code ?? err.message}): the old one is back` };
     }
-    const asked = spawn(target, ['version'], { encoding: 'utf8', timeout: VERSION_MS, windowsHide: true });
+    const asked = spawn(target, ['version'], { encoding: 'utf8', timeout: VERSION_MS, windowsHide: true, env });
     const answer = String(asked.stdout ?? '').trim().split(/\r?\n/)[0] ?? '';
     if (asked.status !== 0 || !new RegExp(`\\b${update.to.replaceAll('.', '\\.')}\\b`).test(answer)) {
       fs.rmSync(target, { force: true });

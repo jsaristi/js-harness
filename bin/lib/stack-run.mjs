@@ -115,6 +115,9 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 /** The undo of `record` as a person runs it by hand: its words, and the environment it was given (a prefix's home, a
  * scratch home), a `PATH` as what goes first on it, since without them it reaches the default install. */
 function shownUndo(record, platform) {
+  if (record.kind === 'binary' && !record.path) {
+    return `the update to ${record.to} was cut off before its result was recorded: if an engram-${record.from} .bak sits beside engram, it is the version before; put it back in engram's place`;
+  }
   if (record.kind === 'binary') return `put the engram-${record.from} .bak beside ${record.path} back in its place`;
   const vars = Object.entries(record.env ?? {}).map(([name, value]) => (name === 'PATH' ? `${value} first on the PATH` : `${name}=${value}`));
   const command = shownCommand(record.undo, platform);
@@ -153,6 +156,11 @@ export function undoStack(records, { home, spawn = realSpawn, platform = process
     // A plugin update has no undo to run: Claude Code installs no earlier version of a plugin (stack-upgrade, S1).
     if (record.kind === 'plugin') {
       kept.push({ ...key, reason: 'named', undo: `Claude Code installs no earlier version of a plugin: engram@engram stays as it is; ${record.from} was the version before the upgrade` });
+      continue;
+    }
+    // An engram update cut off before its result was recorded has no path to read: its way back is named (Codex P2).
+    if (record.kind === 'binary' && !record.path) {
+      kept.push({ ...key, reason: 'unread', undo: shownUndo(record, platform) });
       continue;
     }
     const childEnv = withEnv(env, record.env, platform);

@@ -392,10 +392,14 @@ export async function stackUpgradeMain(argv, env = process.env, deps = {}) {
   const updates = plan.updates.filter((u) => args.tools.length === 0 || args.tools.includes(u.tool));
 
   for (const { tool, version } of plan.current) log(`  ${tool}: ${version === 'hosted' ? 'hosted, always the newest' : `${version}, the latest`}`);
-  for (const { tool, why } of plan.unknown) log(`  ${tool}: ${why}`);
+  for (const { tool, why } of [...plan.unknown, ...plan.held]) log(`  ${tool}: ${why}`);
   if (updates.length === 0) {
-    log(plan.updates.length === 0 ? 'js-harness stack upgrade: every tool is at its latest version.' : 'js-harness stack upgrade: nothing --tool names is behind.');
-    return 0;
+    // A latest version that could not be read is never called the latest (Codex, 2026-11-06).
+    const said = plan.updates.length > 0 ? 'nothing --tool names is behind.'
+      : plan.unknown.length > 0 ? `nothing to update among the tools whose latest version is known; ${plan.unknown.length} could not be checked.`
+        : plan.held.length > 0 ? 'nothing else to update.' : 'every tool is at its latest version.';
+    log(`js-harness stack upgrade: ${said}`);
+    return plan.held.length > 0 ? 1 : 0;
   }
   const head = (u) => `${u.tool} ${u.from} → ${u.to ?? `the version engram v${engramTo} ships`}`;
   if (args.list || (!interactive && !args.yes)) {
@@ -409,7 +413,7 @@ export async function stackUpgradeMain(argv, env = process.env, deps = {}) {
     return 1;
   }
 
-  const left = [];
+  const left = plan.held.map(({ tool }) => tool);
   // The plugin's latest is what the binary's new release ships: while the binary is planned and not updated, it waits.
   let binaryDone = engramTo === undefined;
   for (const update of updates) {
@@ -427,12 +431,13 @@ export async function stackUpgradeMain(argv, env = process.env, deps = {}) {
     }
     const earlier = records.find((r) => r.tool === tool && r.dimension === 'upToDate');
     const giveBack = () => (earlier ? recordStackRow(args.home, earlier) : forgetStackRow(args.home, update));
-    const record = { ...update, applies: null, env: { ...scratch, ...(update.env ?? {}) }, at: now() };
+    // The prefix is kept so a later upgrade reuses this undo only for the same installation (planUpgrade).
+    const record = { ...update, prefix: args.prefix ?? null, applies: null, env: { ...scratch, ...(update.env ?? {}) }, at: now() };
     if (kind === 'binary') {
       // The first version before and its backup stay the undo's, so a second update still goes back to the first.
       const first = { from: earlier?.from ?? update.from };
       recordStackRow(args.home, { ...record, ...first });
-      const result = await (deps.updateEngram ?? updateEngramBinary)(update, { fetch: deps.fetch, spawn: deps.spawn, platform, say: log });
+      const result = await (deps.updateEngram ?? updateEngramBinary)(update, { fetch: deps.fetch, spawn: deps.spawn, env: childBase, platform, say: log });
       if (!result.ok) {
         giveBack();
         error(`engram ${update.to} failed: ${result.why}`);
@@ -453,8 +458,15 @@ export async function stackUpgradeMain(argv, env = process.env, deps = {}) {
       result = runWords(words, { spawn: deps.spawn, env: childEnv, timeout: TIMEOUTS[kind], interactive: shared, platform });
       if (!result.ok) break;
     }
+    if (result.timedOut) {
+      // The shell is killed, not always what it started, which may still install: the record stays, as in install.
+      error(`${tool} ${update.to ?? 'update'}: ${result.why}, and what it started may still be running; it stays recorded, so uninstall machine judges it`);
+      left.push(tool);
+      continue;
+    }
     const applies = kind === 'plugin' ? pluginInstalledVersion(args.home, 'engram@engram').version : appliesOf(record, { home: args.home, spawn: deps.spawn, platform, env: childEnv }).value;
-    const reached = kind === 'plugin' ? result.ok && applies !== null : applies === update.to;
+    // A plugin that follows the binary has no known target; one with a known target has to reach it.
+    const reached = kind === 'plugin' ? result.ok && applies !== null && (update.to === null || applies === update.to) : applies === update.to;
     if (!reached) {
       giveBack();
       error(`${tool} ${update.to ?? 'update'} failed: ${result.why ?? `it exited 0 and answers ${applies ?? 'nothing'}`}`);

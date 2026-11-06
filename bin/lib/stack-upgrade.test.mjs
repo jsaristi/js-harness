@@ -105,3 +105,13 @@ test('engram on a platform with no release is not known, never guessed', () => {
   assert.deepEqual(p.updates.map((u) => u.tool), []);
   assert.match(p.unknown.find((u) => u.tool === 'engram').why, /no release for freebsd/);
 });
+
+test('an earlier update recorded under another prefix lends no undo: the tool is held until uninstall undoes that one (Codex P2)', () => {
+  const earlier = { tool: 'codegraph', dimension: 'upToDate', kind: 'package', from: '1.5.0', to: '1.6.0', prefix: 'C:\a', undo: ['pnpm', 'add', '-g', '@colbymchenry/codegraph@1.5.0'] };
+  const p = plan({ codegraph: '1.6.0' }, { codegraph: '1.7.0' }, { prefix: 'C:\b', records: [earlier] });
+  assert.deepEqual(p.updates, []);
+  assert.deepEqual(p.held, [{ tool: 'codegraph', why: 'an earlier upgrade of it is recorded under the prefix C:\a, not C:\b: js-harness uninstall machine undoes that one first' }]);
+  const same = plan({ codegraph: '1.6.0' }, { codegraph: '1.7.0' }, { prefix: 'C:\a', records: [earlier] });
+  assert.equal(same.updates[0].from, '1.5.0', 'under the same prefix the first version before stays the undo');
+  assert.deepEqual(same.held, []);
+});
