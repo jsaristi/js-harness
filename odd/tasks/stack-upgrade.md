@@ -138,11 +138,43 @@ Nothing planned beyond question 206 (what failed in the menu), already asked.
   stack.
 
 ## Next step
-Worktree `D:js-harness.claudeworktreesstack-upgrade`, branch `feat/stack-upgrade`. S1 is done and reviewed:
-commits bff62d9f, f5b05782, 54f8639f and 16e1cbae passed the gate; Codex and the lenses cover af55e7e..16e1cba (L7,
-L8, and the recheck: Codex 9 of 9 fixed, the lenses 0 findings). Next: push, the PR of S1 against main,
-`notify --kind ready`. S2 (a) rests on PR jsaristi/js-harness#596 (L5); S2 (b), (c) and S3 wait on question 207
-(L6): whether to build them chained on #596 now or wait for his walk of #596. Merges are his.
+Three worktrees under `D:\js-harness\.claude\worktrees\`:
+1. `stack-upgrade` (`feat/stack-upgrade`): S1 is PR jsaristi/js-harness#780, reviewed, `notify --kind ready` sent.
+   Merging is his.
+2. `ci-gate-merge-parent` (`fix/ci-gate-merge-parent`, from origin/main): the lead's call (L10), done as PR
+   jsaristi/js-harness#781, reviewed and verified, `notify --kind ready` sent (L11). Merging is his.
+3. `tui-update-item` (`feat/tui-update-item`, local only, never pushed until (2) lands): S1 plus #596's ten commits
+   replayed with their dates (`git rebase --committer-date-is-author-date`), and #596's tests brought to today's
+   main: gentle-ai fixtures renamed to engram, the codex-daemon row, `installIndex` waits for the stack block, and
+   the gentle-ai words in terminal.mjs, tui.mjs and two tests dropped (the convention test, CI run 42272367996).
+   That port is committed (857b438f); S2 (b) and (c) below are built on it, tests first, with their reviews from
+   base 857b438f. Open: T6b, the walk on a real console. Once (2) and #780 land:
+   bring #596's branch up to main with a real merge, rebuild this branch on it, and open its PR against #596's
+   branch, chained, a draft while #780 is open. #596's replayed commits need their reviews on this branch.
+
+### S2 (b) and (c), on PR #596's menu
+
+Depth pass. Refutation first: does the menu already say what is new and update everything in one item? On #596's
+branch, `MENU_ITEMS` holds both `update` and `upgrade` (`bin/tui.mjs:29`), each run as a child with its output piped
+(`childCommands`); the header says only the harness's newer release (`loadUpdate`, `latestRelease`); the stack block
+is read offline (`computeStackView`, `buildReport` with `offline: true`), so it never names a newer engram, plugin,
+codegraph or codex. The verdict supports the request. Two facts change the plan: S1's upgrade asks y/N for each
+tool, and #596 runs every item as a child with stdin closed, so `upgrade` there would print its plan and exit 1
+("runs nothing without a terminal"); and Update (`update`) only reads, which the header already does.
+
+- **One item, Update.** The menu keeps one item, Update, which runs `js-harness upgrade` handed the terminal
+  (`handoff`, as Install the stack is): the harness first, then each tool of the stack shown with its undo and asked
+  y/N there, exactly as on the command line. The CLI's `update` and `upgrade` stay as they are: only the menu's two
+  rows become one.
+- **What is new, at the top.** After the first draw a loader reads the latest versions of the stack's tools
+  (doctor's `resolveLatestVersions`: its 6-hour cache, else the network, never before the first draw) over the rows
+  the stack block already probed, and plans them with `planUpgrade`. The top of the menu then says each newer
+  version, the harness's beside the stack's, one line naming Update: for example
+  `New: js-harness 0.98.0, engram 3.7.0, codegraph 1.7.0. Update installs them.` A lookup that fails says nothing
+  new rather than something false. The line is clipped to the window like the rest of the frame.
+- **Chain.** The branch starts from #596's (brought up to main) and merges S1 (`feat/stack-upgrade`), since the
+  notices plan with S1's `planUpgrade`. Its pull request targets #596's branch and stays a draft while #780 is open;
+  once #780 merges, main is merged in and the diff is this unit alone. One real-console walk covers #596 and this.
 
 ## Tasks
 - [x] T1 (kind: design) This document, the depth pass, question 206 — S1, S2
@@ -151,8 +183,13 @@ L8, and the recheck: Codex 9 of 9 fixed, the lenses 0 findings). Next: push, the
 - [x] T4 (kind: build) `stack upgrade` (with `--list`), the records, and the undo of an update in `undoStack` — S1
 - [x] T5 (kind: build) `upgradeAll` and `updateAll` (the dispatcher and the menu use them), so `upgrade`, `update`
   and the menu reach the stack; `upgradeMain` and `updateMain` stay the harness's own — S1
-- [ ] T6 (kind: build) The menu's failure, reproduced in a test first — S2
-- [ ] T7 (kind: docs) GUIDE's menu table, the roadmap — S1, S2 (S1 part done: GUIDE and ROADMAP in f5b05782)
+- [x] T6 (kind: build) The menu's failure, reproduced in a test first — S2: (a) the redraw is PR #596's, replayed
+  here; (b) one Update item running `upgrade` handed the terminal; (c) the `New:` line, `computeNewer`
+- [x] T7 (kind: docs) GUIDE's menu table, the roadmap — S1, S2 (S1 part done: GUIDE and ROADMAP in f5b05782; S2's
+  GUIDE rows with T6)
+- [ ] T6b (kind: verify) `scripts/tui-walk.mjs` on a real console: its Update step goes through `runToResult`, which
+  waits for a result screen, while a handed-off Update ends on the main screen with "Update ended (exit N)". The
+  step is renamed only; teaching the walk a handed-off item is #596's script, with S3's slices
 - [ ] T8 (kind: verify) `npm run check`, Codex and the lenses, the report to the lead
 
 ## Log
@@ -187,3 +224,14 @@ L8, and the recheck: Codex 9 of 9 fixed, the lenses 0 findings). Next: push, the
   on the process PATH instead of the probe's; a plugin with a known target not checked against it; a timed-out update
   whose record was given back; `--pm` and `--prefix` not handed to the stack step; Update skipping the stack in
   silence on a malformed manifest.
+- L9 (2026-11-06, relayed by the lead): question 207 answered, "Construir encima de #596 ya (recomendado)" (transcript
+  0f71b2c6 line 70176).
+- L10 (2026-11-06): a merge of main into #596's branch was refused on CI for 16 of main's documents, since the CI
+  snapshot drops MERGE_HEAD (`bin/lib/ci-gate.mjs:116-118`). The lead chose a fix of its own
+  (`odd/tasks/ci-gate-merge-parent.md`) over a force-push of #596; S2 stays local until it lands.
+- L11 (2026-11-06): the gate fix is PR jsaristi/js-harness#781 (Codex 0.92 and 0.99, the lenses 0 findings, the
+  independent verifier "the change holds"), `notify --kind ready` sent. S2 (b) and (c) built here, tests first
+  (`node --test bin/tui.test.mjs`: 109 of 109). Two decisions taken while building: the version line keeps its
+  "(update available: X)", which `scripts/e2e.mjs` and the walk read, and the `New:` line repeats the harness beside
+  the stack; the network lookup runs only when a tool Update updates is installed with no known latest, found
+  because rows such as context7 are `ok` with nothing installed, which sent three tests to the network.

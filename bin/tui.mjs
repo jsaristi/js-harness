@@ -11,22 +11,23 @@ import { cleanLine, createKeyReader, createTerminalGuard, layoutFrame, paint, sc
 import { handOff, runChild } from './lib/run-child.mjs';
 import { currentVersion, installMain, syncMain, uninstallMain } from './install.mjs';
 import { initMain } from './init.mjs';
-import { statusMain, updateAll, upgradeAll, resolveLatest } from './update.mjs';
+import { statusMain, upgradeAll, resolveLatest } from './update.mjs';
 import { isNewer } from './lib/version.mjs';
 import { projectLocation } from './lib/project.mjs';
 import { installedVersion as manifestVersion } from './lib/manifest.mjs';
-import { doctorMain, buildReport } from './doctor.mjs';
+import { doctorMain, buildReport, resolveLatestVersions } from './doctor.mjs';
 import { GAP_STATES } from './lib/digest.mjs';
 import { remoteMain } from './remote.mjs';
 import { resolveStackPm, stackInstallMain } from './stack.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './lib/project-functions.mjs';
 import { planStack } from './lib/stack-install.mjs';
+import { planUpgrade } from './lib/stack-upgrade.mjs';
 import { resolveProjectRoot } from './lib/stack.mjs';
 import { harnessHome } from './lib/home.mjs';
 
 /** The machine-level menu items, in order: the whole menu outside a git repository, and the section
  * below `project` inside one. */
-export const MENU_ITEMS = ['status', 'doctor', 'install', 'update', 'upgrade', 'uninstall', 'quit'];
+export const MENU_ITEMS = ['status', 'doctor', 'install', 'update', 'uninstall', 'quit'];
 /** The kinds of uninstall in the submenu Uninstall opens (odd/tasks/uninstall-kinds.md, S2), each run by the kind of
  * `js-harness uninstall` of the same name; `uninstall-project` is there only inside a project init touched. */
 const MACHINE_UNINSTALL_ITEMS = ['uninstall-machine', 'uninstall-snapshots', 'uninstall-everything'];
@@ -40,7 +41,6 @@ const MENU_LABELS = {
   'stack-install': 'Install the stack',
   install: 'Install',
   update: 'Update',
-  upgrade: 'Upgrade',
   uninstall: 'Uninstall',
   'uninstall-project': 'Project',
   'uninstall-machine': 'Machine',
@@ -182,15 +182,42 @@ export async function computeStackState(options) {
 /** `computeStackState`'s block with `stackGap` beside it: whether a tool the harness requires is missing, as
  * `js-harness stack` plans it (`planStack` over the same rows, with the project's switches), which shows Install the
  * stack in the menu. A probe that fails gives `'unknown'` and no gap. */
-export async function computeStackView({ home, cwd, spawn, platform, fetch: fetchImpl, now, env }) {
+export async function computeStackView(options) {
   try {
-    const rows = await buildReport({ home, cwd, offline: true, env }, { spawn, platform, fetch: fetchImpl, now });
-    const project = resolveProjectRoot(cwd, spawn ?? spawnSync);
-    const { resolved: functions } = functionsOf(harnessOfTree(project), workingTree(gitIn(project, spawn ?? spawnSync)));
-    const plan = planStack({ rows, functions, pm: resolveStackPm(undefined, env ?? process.env), platform });
-    return { stack: rows.map(summarizeStackRow), stackGap: plan.mandatory.length > 0 };
+    const { stack, stackGap } = await probeStackView(options);
+    return { stack, stackGap };
   } catch {
     return { stack: 'unknown', stackGap: false };
+  }
+}
+
+/** `computeStackView`'s probe, which throws, with what it read beside the block: the doctor rows, the project's
+ * switches and the package manager, which `computeNewer` plans over without probing again. */
+async function probeStackView({ home, cwd, spawn, platform, fetch: fetchImpl, now, env }) {
+  const rows = await buildReport({ home, cwd, offline: true, env }, { spawn, platform, fetch: fetchImpl, now });
+  const project = resolveProjectRoot(cwd, spawn ?? spawnSync);
+  const { resolved: functions } = functionsOf(harnessOfTree(project), workingTree(gitIn(project, spawn ?? spawnSync)));
+  const pm = resolveStackPm(undefined, env ?? process.env);
+  const plan = planStack({ rows, functions, pm, platform });
+  return { stack: rows.map(summarizeStackRow), stackGap: plan.mandatory.length > 0, rows, functions, pm, platform };
+}
+
+/** What of the stack is newer than what is installed (odd/tasks/stack-upgrade.md, S2 c), as `{ newer: [{ tool, to }] }`
+ * in the order Update would run it: `planUpgrade` over the probed rows and each tool's latest version as doctor
+ * resolves it (its 6-hour cache, else the network; the cache alone when `offline`). Every probed row is looked up,
+ * as doctor does, so its cache stays whole; with no tool installed that Update updates, nothing is looked up. A lookup that fails says
+ * nothing new rather than something false. `to` is `null` for the engram plugin while it follows an engram binary
+ * not yet updated. `resolveLatest` is the test seam of the lookup. */
+export async function computeNewer({ rows, functions, pm, platform = process.platform, arch = process.arch, home, offline = false, fetch: fetchImpl, now, resolveLatest }) {
+  try {
+    // With no latest version known, each installed tool that Update would update is `unknown`: none, no lookup.
+    if (planUpgrade({ rows, latest: {}, functions, pm, platform, arch }).unknown.length === 0) return { newer: [] };
+    const lookup = resolveLatest ?? ((asked) => resolveLatestVersions(asked, { home, offline, fetch: fetchImpl, now }));
+    const latest = await lookup(rows);
+    const { updates } = planUpgrade({ rows, latest, functions, pm, platform, arch });
+    return { newer: updates.map(({ tool, to }) => ({ tool, to })) };
+  } catch {
+    return { newer: [] };
   }
 }
 
@@ -341,6 +368,12 @@ function headerLines(state) {
   else if (state.updateAvailable) updateNote = `  (update available: ${state.updateAvailable})`;
   else if (state.checkingUpdate) updateNote = '  (checking for updates...)';
   const lines = [`js-harness ${state.installedVersion}${updateNote}${state.refreshing ? REFRESHING : ''}`];
+  // Everything newer on one line at the top, the harness beside the stack, naming the item that installs it (S2 c).
+  const newer = [
+    ...(!reopen && state.updateAvailable ? [`js-harness ${state.updateAvailable}`] : []),
+    ...(state.newer ?? []).map(({ tool, to }) => (to ? `${tool} ${to}` : tool)),
+  ];
+  if (newer.length) lines.push(`New: ${newer.join(', ')}. Choose Update to install ${newer.length === 1 ? 'it' : 'them'}.`);
   if (Array.isArray(state.stack)) {
     for (const row of state.stack) {
       lines.push(`  ${row.id.padEnd(16)}${String(row.version).padEnd(10)}${row.state}`);
@@ -530,7 +563,7 @@ export function runTui({
       if (readStackView) {
         await attempt('refreshing the stack', async () => {
           const view = await readStackView();
-          found.data = { stack: view.stack, stackGap: view.stackGap };
+          found.data = { stack: view.stack, stackGap: view.stackGap, ...('newer' in view && { newer: view.newer }) };
         });
       } else if (readStack) {
         await attempt('refreshing the stack', async () => { found.data = { stack: await readStack() }; });
@@ -699,8 +732,8 @@ export function commandArgv(command, { home, cwd = process.cwd(), root, source, 
     doctor: () => ['doctor', '--home', home, '--cwd', cwd],
     'stack-install': () => ['stack', 'install', '--home', home, '--cwd', cwd],
     install: () => ['install', '--home', home],
-    update: () => ['update', '--home', home, ...fromSource],
-    upgrade: () => ['upgrade', '--home', home, ...fromSource],
+    // The one Update item runs `upgrade`: the harness, then each tool of the stack asked y/N (S2 b).
+    update: () => ['upgrade', '--home', home, ...fromSource],
     sync: () => ['sync', '--global', '--home', home],
     'uninstall-machine': () => ['uninstall', 'machine', '--home', home],
     'uninstall-snapshots': () => ['uninstall', 'snapshots', '--home', home],
@@ -712,31 +745,34 @@ export function commandArgv(command, { home, cwd = process.cwd(), root, source, 
 
 /** The menu's commands as children of `node bin/js-harness.mjs`, the way the menu runs them (S4): output piped
  * to the run screen, stdin closed, the tree stopped on cancel. Install the stack asks y/N before each install it
- * runs, so it is handed the terminal and asks there exactly as on the command line (`handoff`). */
+ * runs, and Update before each tool it updates, so each is handed the terminal and asks there exactly as on the
+ * command line (`handoff`). */
 export function childCommands({ home, cwd = process.cwd(), env = process.env, source, runChild: run = runChild, handOff: hand = handOff } = {}) {
   const childEnv = env === process.env ? env : { ...process.env, ...env };
   const commands = {};
   for (const command of COMMAND_IDS) {
     commands[command] = async (location, { output, signal } = {}) => run(process.execPath, [CLI, ...commandArgv(command, { home, cwd, source, location })], { env: childEnv, cwd, onOutput: output, signal });
   }
-  commands['stack-install'] = Object.assign(
-    async (location, { signal } = {}) => hand(process.execPath, [CLI, ...commandArgv('stack-install', { home, cwd, source, location })], { env: childEnv, cwd, signal }),
-    { handoff: true },
-  );
+  for (const command of ['stack-install', 'update']) {
+    commands[command] = Object.assign(
+      async (location, { signal } = {}) => hand(process.execPath, [CLI, ...commandArgv(command, { home, cwd, source, location })], { env: childEnv, cwd, signal }),
+      { handoff: true },
+    );
+  }
   return commands;
 }
 
 const COMMAND_IDS = [
   'project-init', 'project-sync', 'project-status', 'uninstall-project',
   'project-remote-status', 'project-remote-start', 'project-remote-stop',
-  'status', 'doctor', 'stack-install', 'install', 'update', 'upgrade', 'sync',
+  'status', 'doctor', 'stack-install', 'install', 'update', 'sync',
   'uninstall-machine', 'uninstall-snapshots', 'uninstall-everything',
 ];
 
 /** The same commands run in this process, each bound to `home`, with the arguments `commandArgv` gives the
  * child: the seam the tests use to hand a command a fake `spawn`, `fetch` or `now`. `stack` is the seam of the
- * stack step of Update and Upgrade (odd/tasks/stack-upgrade.md, S1); Upgrade hands it the menu's `ask`, so each
- * tool it updates is asked in the menu. */
+ * stack step of `upgrade` (odd/tasks/stack-upgrade.md, S1), which Update runs (S2 b) and hands the menu's `ask`,
+ * so each tool it updates is asked in the menu. */
 export function buildCommands({
   home,
   cwd = process.cwd(),
@@ -746,6 +782,7 @@ export function buildCommands({
   fetch: fetchImpl = fetch,
   now,
   remoteMain: remote = remoteMain,
+  upgradeAll: upgrade = upgradeAll,
   source,
   stack,
 } = {}) {
@@ -763,9 +800,8 @@ export function buildCommands({
     doctor: () => doctorMain(args('doctor'), env, { spawn, fetch: fetchImpl, now }),
     'stack-install': (location, io = {}) => stackInstallMain(args('stack-install', location, 2), env, { ask: io.ask, interactive: true }),
     install: () => installMain(args('install')),
-    // Update says what of the stack is behind too, and Upgrade updates it, each asked through the menu's `ask` (stack-upgrade S1).
-    update: () => updateAll(args('update'), env, spawn, process.platform, { stack }),
-    upgrade: (location, io = {}) => upgradeAll(args('upgrade'), env, spawn, process.platform, { ask: io.ask, stack }),
+    // Update upgrades js-harness, then the stack, each tool asked through the menu's `ask` (stack-upgrade S1, S2 b).
+    update: (location, io = {}) => upgrade(args('update'), env, spawn, process.platform, { ask: io.ask, stack }),
     sync: () => syncMain(args('sync')),
     'uninstall-machine': () => uninstallMain(args('uninstall-machine')),
     'uninstall-snapshots': () => uninstallMain(args('uninstall-snapshots')),
@@ -832,7 +868,37 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
 
   // Real `git`, whatever `spawn` is: `spawn` stands in for the package manager in tests.
   const location = projectLocation(cwd);
-  const readStackView = () => computeStackView({ home, cwd, spawn, fetch: fetchImpl, now });
+  const probe = () => probeStackView({ home, cwd, spawn, fetch: fetchImpl, now });
+  const blockOf = ({ stack, stackGap }) => ({ stack, stackGap });
+  const NO_STACK = { stack: 'unknown', stackGap: false };
+  // The first probe serves the stack block and the lookup of what is newer, so opening the menu probes once.
+  let first = null;
+  const firstProbe = () => (first ??= probe());
+  // After a command: the stack probed again and what is newer planned from doctor's cache, never the network,
+  // so an Update that installed a tool takes it off the top line.
+  const readStackView = async () => {
+    try {
+      const view = await probe();
+      return { ...blockOf(view), ...(await computeNewer({ ...view, home, offline: true, fetch: fetchImpl, now })) };
+    } catch {
+      return { ...NO_STACK, newer: [] };
+    }
+  };
+  const loadStack = async () => {
+    try {
+      return blockOf(await firstProbe());
+    } catch {
+      return NO_STACK;
+    }
+  };
+  // The latest versions over the network (doctor's cache while fresh), after the first draw (S2 c).
+  const loadNewer = async () => {
+    try {
+      return await computeNewer({ ...(await firstProbe()), home, fetch: fetchImpl, now });
+    } catch {
+      return { newer: [] };
+    }
+  };
   const commands = inProcess ? buildCommands({ home, cwd, env, spawn, fetch: fetchImpl, now, source }) : childCommands({ home, cwd, env, source });
 
   return runTui({
@@ -846,7 +912,7 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
     // The same offline probes as at start, never the network: `computeStackView` always calls
     // `buildReport` with `offline: true`, which reads the cache instead of calling `fetch`.
     readStackView,
-    loaders: [() => readStackView(), loadUpdate],
+    loaders: [loadStack, loadUpdate, loadNewer],
     commands,
     ...rest,
   });
