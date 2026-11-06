@@ -16,7 +16,7 @@ test('screenOf reads the last frame painted, its escapes removed', () => {
 
 test('menuOf reads the sections and the one selected item of the last frame, never its keys line', () => {
   const first = paint(['js-harness 0.97.0', '', 'machine', '> Status', '  Install', '', KEYS]);
-  const last = paint(['js-harness 0.97.0', '  gentle-ai       4.2.0     ok', '', 'project', '  Init', 'machine', '  Status', '> Install', '', KEYS]);
+  const last = paint(['js-harness 0.97.0', '  engram          4.2.0     ok', '', 'project', '  Init', 'machine', '  Status', '> Install', '', KEYS]);
   assert.deepEqual(menuOf(first + last), {
     items: [
       { section: 'project', label: 'Init' },
