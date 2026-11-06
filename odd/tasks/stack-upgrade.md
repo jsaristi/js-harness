@@ -236,3 +236,7 @@ tool, and #596 runs every item as a child with stdin closed, so `upgrade` there 
   "(update available: X)", which `scripts/e2e.mjs` and the walk read, and the `New:` line repeats the harness beside
   the stack; the network lookup runs only when a tool Update updates is installed with no known latest, found
   because rows such as context7 are `ok` with nothing installed, which sent three tests to the network.
+- L12 (2026-11-06): reviews of S2. 857b438..b4422d8: Codex P2, the walk's Update step would stall at the hand-off
+  prompt, fixed in 0beaf43d; the lenses reliability and risk, 0 findings. b4422d8..0beaf43: Codex correct (0.97),
+  reliability 0 findings. Still owed on this branch before its PR: the reviews of #596's six replayed commits and
+  of the port 857b438f (`check` names them).
