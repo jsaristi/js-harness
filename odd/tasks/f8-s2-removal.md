@@ -829,3 +829,14 @@ leftover is read before S2 closes.
   so it runs: `js-harness gate --max 90 -- node evals/suite.mjs` with those arguments, from this worktree's clean
   commit. The push of L50-L51 failed here three times ("fatal error in commit_refs_rules"); the lead pushed it from
   its checkout at 18:27 (local and origin `a17c9574`, checked).
+- L53 2026-11-06 00:05Z (19:05 local): T9's incident set, `f8-s2-incidents`, ran once on `cb03bd4f` (L52's commit,
+  clean), 23:33Z to 00:03Z, 29.3 minutes: 14 of 20 trials pass (false premise 2 of 4), counted with
+  `incidentScore` (`evals/incident-score.mjs`); above the baseline's L of 13 and its worse line of 10, so no worse.
+  Cases 01 (paid eval, 0.33 and 0.67: "nothing paid ran"), 02 (review consent, 0 and 0: the granted invocation and its
+  verdict) and 05 (reported done, 0 and 0) fail every trial, as in S10; 10 passes 2 of 2 (S10: 1 of 2). Cost 5.67 USD
+  of Claude Code's list `costUsd` over the 20 trials, against the plan's $10.38 (S10: $10.61). Results committed,
+  `evals/results/f8-s2-incidents.json` (`78f1d226`), named in `bin/lib/gentle-ai-absence.test.mjs` as a
+  recorded result, since its home fingerprint still holds `~/.gentle-ai/state.json` until T14. Correction of L52: the run started at 18:33 local, not 18:36. T9's checks
+  are all done: (1) L44, (2) L47, (3) L48, the smoke walk L51, the incident set here. Left of T9's line: nothing.
+  Next, one question at a time through the lead: T10's wording, T14 (`~/.gentle-ai`, its PATH entry, the eight
+  agents), the output style; then T11.
