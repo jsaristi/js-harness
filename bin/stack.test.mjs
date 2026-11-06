@@ -306,7 +306,9 @@ test('stack backup restore asks on a terminal and restores only on y', async () 
 });
 
 test('stack engram-prompt off takes the prompt hook out of a scratch home, on puts it back, and a bad form is a usage error', async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'stack-engram-prompt-'));
+  // A home whose name a shell would read: a quote, a space and a variable (Codex's P2 over 6503545..f87e2d6).
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stack-engram-prompt-'));
+  const home = path.join(root, "it's $USER");
   const installPath = path.join(home, '.claude', 'plugins', 'cache', 'engram', 'engram', '0.1.19');
   const file = path.join(installPath, 'hooks', 'hooks.json');
   const text = `${JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'prompt.sh' }] }], SessionEnd: [{ hooks: [{ type: 'command', command: 'end.sh' }] }] } }, null, 2)}\n`;
@@ -317,8 +319,9 @@ test('stack engram-prompt off takes the prompt hook out of a scratch home, on pu
     const off = await run(['engram-prompt', 'off', '--home', home], {});
     assert.equal(off.code, 0, off.err);
     assert.match(off.out, /took the UserPromptSubmit hook out of .*hooks\.json; restart Claude Code/);
-    // The undo line names the home it was given, so it puts back the file it took out (Codex P2 over dc0d6c5..b309c50).
-    assert.ok(off.out.includes(`undo: js-harness stack engram-prompt on --home ${/\s/.test(home) ? JSON.stringify(home) : home}`), off.out);
+    // The undo line names the home it was given, quoted so a shell reads it as written: in single quotes, which bash
+    // and PowerShell both leave literal, with its own quote closed and escaped (Codex P2 over dc0d6c5..b309c50).
+    assert.ok(off.out.includes(`undo: js-harness stack engram-prompt on --home '${home.replace("it's", "it'\\''s")}'`), off.out);
     assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.UserPromptSubmit, undefined);
     const again = await run(['engram-prompt', 'off', '--home', home], {});
     assert.equal(again.code, 0);
@@ -340,6 +343,6 @@ test('stack engram-prompt off takes the prompt hook out of a scratch home, on pu
     assert.equal(broken.code, 1);
     assert.match(broken.err, /js-harness stack engram-prompt on: the machine manifest .* is not valid JSON; nothing was changed/);
   } finally {
-    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });

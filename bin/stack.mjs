@@ -18,7 +18,7 @@ import { unknownArgument } from './lib/args.mjs';
 import { forgetStackRow, MalformedManifestError, readManifest, recordStackRow } from './lib/manifest.mjs';
 import { updateEngramBinary } from './lib/engram-release.mjs';
 import { planUpgrade } from './lib/stack-upgrade.mjs';
-import { resolveStackPm } from './lib/package-manager.mjs';
+import { quoteForShell, resolveStackPm } from './lib/package-manager.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './lib/project-functions.mjs';
 import { planStack, prefixBinOf, RUNNABLE } from './lib/stack-install.mjs';
 import { appliesOf, homeEnv, runWords, shownCommand, TIMEOUTS, withEnv } from './lib/stack-run.mjs';
@@ -594,8 +594,10 @@ function engramPromptForm(form, home, given, said, log, error) {
     if (result.status === 'already') log(`${said} already off: ${result.path} holds no UserPromptSubmit hook`);
     else {
       log(`${said} took the UserPromptSubmit hook out of ${result.path}; restart Claude Code for it to take effect`);
-      const homeArgument = given === undefined ? '' : ` --home ${/\s/.test(given) ? JSON.stringify(given) : given}`;
-      log(`  undo: js-harness stack engram-prompt on${homeArgument}`);
+      // The resolved home, as a shell reads it: a plain word as it is, any other in single quotes, which bash and
+      // PowerShell both leave literal (`$`, spaces); a quote of its own is closed and escaped, POSIX's way.
+      const word = /^[\w@+=:,./\\-]+$/.test(home) ? home : quoteForShell(home, 'posix');
+      log(`  undo: js-harness stack engram-prompt on${given === undefined ? '' : ` --home ${word}`}`);
     }
     return 0;
   }
