@@ -121,6 +121,33 @@ test('a green run passes the gate: the staged tree went to gate/<sha>, and the b
   }
 });
 
+test('the gate of a merge being made sends CI both its parents, HEAD and MERGE_HEAD, as the merge commit will have', async () => {
+  // Without MERGE_HEAD the merged branch's commits look like this branch's own on CI, and checks that read the
+  // branch's history (rule depth-pass) judge them as new: odd/tasks/stack-upgrade.md, L10.
+  const p = project();
+  try {
+    git(p.cwd, 'reset', '-q', '--hard');
+    git(p.cwd, 'checkout', '-q', '-b', 'side');
+    fs.writeFileSync(path.join(p.cwd, 'b.txt'), 'side\n');
+    git(p.cwd, 'add', 'b.txt');
+    git(p.cwd, 'commit', '-q', '-m', 'side');
+    const side = git(p.cwd, 'rev-parse', 'HEAD');
+    git(p.cwd, 'checkout', '-q', '-');
+    git(p.cwd, 'merge', '-q', '--no-ff', '--no-commit', 'side');
+    const head = git(p.cwd, 'rev-parse', 'HEAD');
+    const gh = fakeGh({ runs: [[], [RUN]], views: [{ ...RUN, status: 'completed', conclusion: 'success' }] });
+    let pushed;
+    const spy = (args) => { pushed ??= args.find((arg) => arg.includes(':refs/heads/gate/')); };
+    const result = await runCiGate(options(p, gh, clock(), { onGit: spy }));
+    assert.equal(result.pass, true, result.why);
+    const sha = pushed.split(':')[0];
+    assert.deepEqual(git(p.remote, 'rev-list', '--parents', '-n', '1', sha).split(' ').slice(1), [head, side]);
+    assert.equal(git(p.remote, 'show', `${sha}:b.txt`), 'side', 'the merged tree');
+  } finally {
+    p.done();
+  }
+});
+
 test('a red run fails the gate with the end of its failed log', async () => {
   const p = project();
   try {
