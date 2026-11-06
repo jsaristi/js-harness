@@ -261,10 +261,10 @@ lost, which he accepted once the project's documentation and its memory were on 
   after four tries copied nothing (L20)
 - [x] T8 (kind: verify) the removals, each tool asked through the lead and run after its yes, in the order of item 5;
   each operation and its check into `## Log` — S1, S3, S8. gentle-ai done (L34-L36), Orca done (L37), herdr done (L38)
-- [ ] T9 (kind: build) the exclusion reverted in `.claude/settings.json` and its sentence in `CLAUDE.md`; every session
+- [x] T9 (kind: build) the exclusion reverted in `.claude/settings.json` and its sentence in `CLAUDE.md`; every session
   restarted with the lead; the entries checked against gentle-ai's snapshot (L20); the smoke walk; the session checks; the incident set and
   `fixed load`; the root `CLAUDE.md`'s copy of the kept lines goes, and the T13 test in `bin/lib/rules-block.test.mjs`
-  freezes the expected groups inline in the same commit (L31) — S1, S2
+  freezes the expected groups inline in the same commit (L31) — S1, S2; built `85d17a02` (L41), checks L44, L47, L48, L51, L53
 - [ ] T10 (kind: docs) the rule lines that name gentle-ai, through `js-harness rules change` on a `rule/` branch,
   before S2 closes: `CLAUDE.md:12` ("over gentle-ai's"), `:74-91` (its review steps), `AGENTS.md:6` and `:27`; his
   words quoted where a line is his
