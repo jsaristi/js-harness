@@ -142,15 +142,6 @@ the question names that.
   the command over the engram cell, red 1 of 11, then 11 of 11. `node --test` over hook-count, engram-prompt-hook,
   stack, manifest, install, stack-run, remote, conventions (structure, arguments, errors), readme and js-harness:
   583 of 583.
-
-## Next step
-State (2026-11-06, JH 153, worktree `D:\js-harness\.claude\worktrees\probe-auto-archive-3b36c3`): slice 1 is PR #782
-(branch `claude/f8-s4a-hooks-5da26e`, reviewed, ready notice sent). Slice 2 (T4, L7) is committed on branch
-`claude/f8-s4a-d8`, cut from slice 1's head, reviewed (L8). Next: fix L8's three P2 test-first, then Codex and a lens over the fix (it writes his `~/.claude`
-and changes `uninstall`) over slice 2 from `dc0d6c55`; an independent verifier (high risk: installer and host files);
-push; PR 2 based on `claude/f8-s4a-hooks-5da26e`; `notify --kind ready --pr <n>`. After both merge (T5): a question
-through the lead to run `js-harness stack engram-prompt off` on his machine, then the engram `UserPromptSubmit` cell
-leaves `HOOK_CEILINGS`, then T6 (ROADMAP S4a State, summary, `notify --kind closed`).
 - L8 (2026-11-06, the reviews of `b309c50f`): lenses reliability and risk over `dc0d6c5..b309c50`: 0 findings each.
   Codex over the same range, 2 parts: incorrect (0.96), three P2, all to take, tests first, after the pause for the
   Desktop update (4.23118.0): (1) `restorePluginHooks` treats any read error as `gone` and `promptHookOn` then forgets
@@ -158,3 +149,13 @@ leaves `HOOK_CEILINGS`, then T6 (ROADMAP S4a State, summary, `notify --kind clos
   `failed`; (2) `stack engram-prompt off --home <dir>` prints `undo: js-harness stack engram-prompt on` without that
   `--home`; (3) a manifest that does not parse or cannot be written throws out of `stackEngramPromptMain`; catch it at
   the command and exit 1 with the reason.
+
+## Next step
+State (2026-11-06, JH 153, worktree `D:\js-harness\.claude\worktrees\probe-auto-archive-3b36c3`): slice 1 is PR #782
+(branch `claude/f8-s4a-hooks-5da26e`, reviewed, ready notice sent). Slice 2 (T4, L7) is committed on branch
+`claude/f8-s4a-d8`, cut from slice 1's head, reviewed (L8), not pushed. D8 is answered "Apagarlo igual" (L7). Paused
+for the Desktop update; on resume: fix L8's three P2 test-first; Codex and a lens (reliability, risk) over the fix
+from `fda3e0ae`; an independent verifier (high risk: it writes his `~/.claude` and changes `uninstall`); push; PR 2
+based on `claude/f8-s4a-hooks-5da26e`; `notify --kind ready --pr <n>`. After both merge (T5): a question through the
+lead to run `js-harness stack engram-prompt off` on his machine, then the engram `UserPromptSubmit` cell leaves
+`HOOK_CEILINGS`, then T6 (ROADMAP S4a State, summary, `notify --kind closed`).
