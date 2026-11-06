@@ -103,5 +103,21 @@ Nothing planned: question 199 decided the change. A question goes to the lead wi
   P2, 240,647 input tokens: `numstatCounts` cut a path at its first tab, so a path that starts with one read empty, as
   a rename's does, and shifted every count after it. Fixed: the path is all that follows the two counts; a test of
   the parser, red first (a file named so cannot be made on Windows).
-- Next step (for a resume): the fix's commit, its Codex review, the verifier's verdict on `318fbae`, then the push
-  and the pull request to main.
+- L6 2026-11-05, the reviews of the fix `318fbae..24468cf`: Codex correct (0.99, 34,400 input tokens), the P2 fixed;
+  the lenses (reliability, readability) 0 findings. The independent verifier of `318fbae` (opus, read-only, 126,721
+  tokens): the change holds on this repository's history. 83 ranges with no rename gave the same block and hash as
+  `91a2deb`, and in all 86 the reading renames off reproduced the old candidate. `reviewCoverage`, old and new, agreed over
+  `91a2deb~40..91a2deb` (115 code commits) and over the move. Its four findings:
+  1. a path that starts with a tab threw: the same as Codex's P2, already fixed in `24468cf`.
+  2. which renames git finds follows `diff.renameLimit`, so the hash moved with the configuration, against the file's
+     own claim: fixed in `574ad63`, the diffs pin `-l1000`, git's default. The test was red first: two renamed files with
+     new basenames, since git pairs a moved file by its basename before the limit applies.
+  3. the fallback to the hash of the reading renames off accepts a record whose lens never saw an edit inside a rename
+     whose new name is left out. Not fixed: `91a2deb` accepted the same record, so it is an old gap and no regression,
+     and his yes covered only this change. It stays open, for the lead.
+  4. `markedLeftOut` counts a rename left out by both names by its new name's reason only. Not fixed: for a lens record
+     it changes only the hint line past the tip (`lensCoverage`, `beyondTip: false`), and `reviewScope` has done the
+     same since pull request 775. It stays open, with 3.
+  Then the reviews of `24468cf..574ad63`: Codex correct (0.96, 54,153 input tokens); the lenses
+  (reliability, readability) 0 findings.
+- Next step (for a resume): the push of `fix/lens-renames`, the pull request to main, named here; the lead lands it alone.
