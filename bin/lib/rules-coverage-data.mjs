@@ -356,12 +356,9 @@ export const COVERAGE = {
       "f0277286c9d3",
       "ede6be4adfa7",
       "3c50332ca8d4",
-      "c7b6b98cb5d9",
-      "fb64251879a9",
-      "8e52b2779a0c",
-      "c229836fd437",
-      "d5219ae27553",
-      "79cc5349ca6b",
+      "03a1a6eee8c1",
+      "eebb24089400",
+      "76a29a20de94",
       "31fbf6069818"
     ],
     "chained-prs-skill": [

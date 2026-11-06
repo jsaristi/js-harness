@@ -75,17 +75,10 @@ the branch's `node bin/js-harness.mjs`, except to test the change itself. A revi
 is a hash on the head's first-parent line (the last reviewed boundary, or the commit that merged
 main in), never a branch name.
 
-Review is not his to decide: the consent he granted for every candidate here is his standing
-selection, so when `gentle-ai review start` returns its consent envelope, run the `granted`
-invocation without asking. Consent stays his and the review always runs; only the question is
-skipped, because his answer is always yes and the question only stalls the work. If the envelope
-has no `granted` choice or does not parse, ask him instead. A candidate is a work-unit commit or a
-slice (`js-harness-protocols` section 3), never the whole branch: when the Stop hook offers the
-branch, run its read-only status and start nothing, because with consent pre-granted nothing would
-stop a review that size. Every slice with code goes through Codex and the Claude lenses, whether
-or not gentle-ai reviewed it: `js-harness codex-review --base <boundary>` and `js-harness
-lens-review --base <boundary> --lenses <pertinent> --reason <why>` record the reviews, and the
-pre-push hook refuses a branch whose code commits either record does not cover. Treat their
-findings like gentle-ai's. If one cannot run, report that and record the skip with its
-`--unavailable <reason>`: a skip is a debt `check`, `doctor` and the merge door list until a
-review pays it, and the door refuses a lens skip.
+Review is not his to decide: every slice with code goes through Codex and the Claude lenses, a
+work-unit commit or a slice (`js-harness-protocols` section 3), never the whole branch.
+`js-harness codex-review --base <boundary>` and `js-harness lens-review --base <boundary> --lenses
+<pertinent> --reason <why>` record the reviews, and the pre-push hook refuses a branch whose code
+commits either record does not cover. Their findings are fixed or answered. If one cannot run,
+report that and record the skip with its `--unavailable <reason>`: a skip is a debt `check`,
+`doctor` and the merge door list until a review pays it, and the door refuses a lens skip.
