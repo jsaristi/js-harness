@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { appliesOf, codexMcpSection, homeEnv, realSpawn, refusedWord, runWords, undoStack, withEnv } from './stack-run.mjs';
+import { fileSha256 } from './engram-release.mjs';
 
 function withHome(fn) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-home-'));
@@ -203,4 +204,62 @@ test('undoStack keeps the Codex CLI while the undo of a registration in Codex is
   assert.deepEqual(result.kept.map((k) => [k.tool, k.dimension, k.reason]), [['codegraph', 'codex', 'unread'], ['codex', 'installed', 'needed']]);
   assert.equal(result.kept[1].why, 'the undo of a registration in Codex left to you needs it');
   assert.deepEqual(result.failedRecords, [PACKAGE]);
+}));
+
+// --- the undo of an update (odd/tasks/stack-upgrade.md, S1) ---
+
+test('undoStack puts the engram binary of before back while the file is still the one the update wrote', () => withHome((home) => {
+  const exe = path.join(home, 'engram.exe');
+  const backup = path.join(home, 'engram-3.6.1.exe.bak');
+  fs.writeFileSync(exe, 'new');
+  fs.writeFileSync(backup, 'old');
+  const record = { tool: 'engram', dimension: 'upToDate', kind: 'binary', from: '3.6.1', to: '3.6.2', path: exe, backup, applies: fileSha256(exe), env: {} };
+  const lines = [];
+  const result = undoStack([record], { home, spawn: () => assert.fail('ran a command'), platform: 'win32', env: {}, log: (line) => lines.push(line) });
+  assert.deepEqual(result.undone, [{ tool: 'engram', dimension: 'upToDate' }]);
+  assert.equal(fs.readFileSync(exe, 'utf8'), 'old');
+  assert.equal(fs.readFileSync(path.join(home, 'engram-3.6.2.exe.bak'), 'utf8'), 'new');
+  assert.match(lines[0], /^undo engram upToDate: put .*engram-3\.6\.1\.exe\.bak back as .*engram\.exe$/);
+}));
+
+test('undoStack keeps an engram binary replaced since the update as his, and drops its record', () => withHome((home) => {
+  const exe = path.join(home, 'engram.exe');
+  fs.writeFileSync(exe, 'his own 3.7.0');
+  const record = { tool: 'engram', dimension: 'upToDate', kind: 'binary', from: '3.6.1', to: '3.6.2', path: exe, backup: path.join(home, 'b.bak'), applies: 'f'.repeat(64), env: {} };
+  const result = undoStack([record], { home, spawn: () => assert.fail('ran a command'), platform: 'win32', env: {}, log: () => {} });
+  assert.deepEqual(result.kept, [{ tool: 'engram', dimension: 'upToDate', reason: 'changed' }]);
+  assert.equal(fs.readFileSync(exe, 'utf8'), 'his own 3.7.0');
+}));
+
+test('undoStack keeps the record of an engram swap back that cannot run, for a second run', () => withHome((home) => {
+  const exe = path.join(home, 'engram.exe');
+  fs.writeFileSync(exe, 'new');
+  const record = { tool: 'engram', dimension: 'upToDate', kind: 'binary', from: '3.6.1', to: '3.6.2', path: exe, backup: path.join(home, 'missing.bak'), applies: fileSha256(exe), env: {} };
+  const result = undoStack([record], { home, spawn: () => assert.fail('ran a command'), platform: 'win32', env: {}, log: () => {} });
+  assert.equal(result.kept[0].reason, 'failed');
+  assert.match(result.kept[0].why, /no backup/);
+  assert.deepEqual(result.failedRecords, [record]);
+}));
+
+test('undoStack names the way back of a plugin update, which no command takes, and drops its record', () => withHome((home) => {
+  const record = { tool: 'engram-plugin', dimension: 'upToDate', kind: 'plugin', from: '0.1.14', to: '0.1.19', undo: null, applies: '0.1.19', env: {} };
+  const result = undoStack([record], { home, spawn: () => assert.fail('ran a command'), platform: 'win32', env: {}, log: () => {} });
+  assert.deepEqual(result.undone, []);
+  assert.deepEqual(result.kept, [{ tool: 'engram-plugin', dimension: 'upToDate', reason: 'named', undo: 'Claude Code installs no earlier version of a plugin: engram@engram stays as it is; 0.1.14 was the version before the upgrade' }]);
+  assert.deepEqual(result.failedRecords, []);
+}));
+
+test('undoStack takes a package update back to the version before by its recorded install', () => withHome((home) => {
+  const record = { tool: 'codegraph', dimension: 'upToDate', kind: 'package', bin: 'codegraph', from: '1.6.0', to: '1.7.0', run: ['pnpm', 'add', '-g', '@colbymchenry/codegraph@1.7.0'], undo: ['pnpm', 'add', '-g', '@colbymchenry/codegraph@1.6.0'], applies: '1.7.0', env: {} };
+  const { spawn, calls } = fakeSpawn((file) => (file === 'codegraph' ? { status: 0, stdout: '1.7.0' } : { status: 0, stdout: '' }));
+  const result = undoStack([record], { home, spawn, platform: 'linux', env: {}, log: () => {} });
+  assert.deepEqual(result.undone, [{ tool: 'codegraph', dimension: 'upToDate' }]);
+  assert.deepEqual(calls.filter((call) => call.file === 'pnpm').map((call) => call.args), [['add', '-g', '@colbymchenry/codegraph@1.6.0']]);
+}));
+
+test('the undo named for a never-read engram update says which backup to put back', () => withHome((home) => {
+  const record = { tool: 'engram', dimension: 'upToDate', kind: 'binary', from: '3.6.1', to: '3.6.2', path: path.join(home, 'engram.exe'), applies: null, env: {} };
+  fs.writeFileSync(record.path, 'x');
+  const result = undoStack([record], { home, spawn: () => assert.fail('ran a command'), platform: 'win32', env: {}, log: () => {} });
+  assert.deepEqual(result.kept, [{ tool: 'engram', dimension: 'upToDate', reason: 'unread', undo: `put the engram-3.6.1 .bak beside ${record.path} back in its place` }]);
 }));

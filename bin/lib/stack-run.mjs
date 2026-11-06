@@ -7,9 +7,10 @@ import { spawnSync } from 'node:child_process';
 import { underTest } from './manifest.mjs';
 import { cmdWord, shownWord } from './package-manager.mjs';
 import { claudeJsonMcpServer, probeVersionCommand } from './stack.mjs';
+import { fileSha256, swapBackEngram } from './engram-release.mjs';
 
 /** How long a command may run when nobody watches it (D6): a package install downloads, a registration writes one entry. */
-export const TIMEOUTS = { package: 120_000, registration: 30_000 };
+export const TIMEOUTS = { package: 120_000, registration: 30_000, plugin: 120_000 };
 
 /** The spawn of the real commands: refused in a test process, before anything runs, as `runSchtasks` is. */
 export function realSpawn(file, args, options) {
@@ -90,6 +91,11 @@ export function codexMcpSection(home, name, codexHome = path.join(home, '.codex'
 /** What the undo of `row` applies to now (D7), as `{ present, value }`: for a package, whether its binary answers and
  * the version it gives; for a registration, the entry in Claude's `~/.claude.json` or the table in Codex's config. */
 export function appliesOf(row, { home, spawn, platform, env }) {
+  // An engram binary an upgrade put in (odd/tasks/stack-upgrade.md): the file's sha256, which only that update wrote.
+  if (row.kind === 'binary') {
+    const value = fileSha256(row.path);
+    return { present: fs.existsSync(row.path), value, readable: value !== null || !fs.existsSync(row.path) };
+  }
   if (row.kind === 'package') {
     const { state, version } = probeVersionCommand(row.bin, ['--version'], { spawn, platform, env });
     if (state === 'missing') return { present: false, value: null, readable: true };
@@ -109,6 +115,7 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 /** The undo of `record` as a person runs it by hand: its words, and the environment it was given (a prefix's home, a
  * scratch home), a `PATH` as what goes first on it, since without them it reaches the default install. */
 function shownUndo(record, platform) {
+  if (record.kind === 'binary') return `put the engram-${record.from} .bak beside ${record.path} back in its place`;
   const vars = Object.entries(record.env ?? {}).map(([name, value]) => (name === 'PATH' ? `${value} first on the PATH` : `${name}=${value}`));
   const command = shownCommand(record.undo, platform);
   if (vars.length === 0) return command;
@@ -123,7 +130,9 @@ function shownUndo(record, platform) {
  * the Codex CLI while an undo of a registration in Codex failed (`needed`), since that undo needs it. A record whose
  * command never got as far as reading back (`applies` is `null`) cannot tell what it left from a later install of his
  * own, so its undo is named, never run, and its record dropped (`unread`; T7, a review R1-001); one in Codex keeps
- * the Codex CLI too (`needed`), so that undo can still run. `failedRecords`
+ * the Codex CLI too (`needed`), so that undo can still run. The records of `stack upgrade` are undone the same way:
+ * a package's undo installs the version before; the engram binary's puts its backup back while the file is the one the
+ * update wrote; a plugin's has no command, so its way back is named and its record dropped (`named`). `failedRecords`
  * keeps the order they were installed in. */
 export function undoStack(records, { home, spawn = realSpawn, platform = process.platform, env = process.env, log = () => {} }) {
   const undone = [];
@@ -139,6 +148,11 @@ export function undoStack(records, { home, spawn = realSpawn, platform = process
     const key = { tool: record.tool, dimension: record.dimension };
     if (record.kind === 'package' && record.tool === 'codex' && (inCodex(failed) || inCodex(leftUnread))) {
       keep(record, { ...key, reason: 'needed', why: inCodex(failed) ? 'its undo of a registration in Codex failed, and needs it' : 'the undo of a registration in Codex left to you needs it' });
+      continue;
+    }
+    // A plugin update has no undo to run: Claude Code installs no earlier version of a plugin (stack-upgrade, S1).
+    if (record.kind === 'plugin') {
+      kept.push({ ...key, reason: 'named', undo: `Claude Code installs no earlier version of a plugin: engram@engram stays as it is; ${record.from} was the version before the upgrade` });
       continue;
     }
     const childEnv = withEnv(env, record.env, platform);
@@ -158,6 +172,13 @@ export function undoStack(records, { home, spawn = realSpawn, platform = process
     }
     if (!same(now.value, record.applies)) {
       kept.push({ ...key, reason: 'changed' });
+      continue;
+    }
+    if (record.kind === 'binary') {
+      log(`undo ${record.tool} ${record.dimension}: put ${record.backup} back as ${record.path}`);
+      const back = swapBackEngram(record);
+      if (back.ok) undone.push(key);
+      else keep(record, { ...key, reason: 'failed', why: back.why });
       continue;
     }
     log(`undo ${record.tool} ${record.dimension}: ${shownCommand(record.undo, platform)}`);

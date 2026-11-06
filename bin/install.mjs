@@ -721,12 +721,14 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   // never read, so possibly his, with its undo named for him (T7); or its undo failed, could not be judged or waits on
   // another, which keeps its record for a run again and goes to stderr.
   for (const { tool, dimension } of result.stackUndone ?? []) console.log(`undid ${tool} ${dimension}`);
-  const stackNotUndone = (result.stackKept ?? []).filter((row) => !['gone', 'changed', 'unread'].includes(row.reason));
+  const stackNotUndone = (result.stackKept ?? []).filter((row) => !['gone', 'changed', 'unread', 'named'].includes(row.reason));
   for (const row of result.stackKept ?? []) {
     const name = `${row.tool} ${row.dimension}`;
     if (row.reason === 'gone') console.log(`${name} is already gone: its record is dropped`);
     else if (row.reason === 'changed') console.log(`kept ${name} (changed since stack install ran it): it is yours now and no longer recorded`);
     else if (row.reason === 'unread') console.log(`kept ${name} (stack install never read what it left, so it may be yours): no longer recorded; if it is the harness's, its undo is: ${row.undo}`);
+    // A plugin `stack upgrade` updated: no command installs the version before (odd/tasks/stack-upgrade.md, S1).
+    else if (row.reason === 'named') console.log(`kept ${name}: ${row.undo}; no longer recorded`);
     else console.error(`could not undo ${name} (${row.why ?? row.reason}): it is still recorded; run js-harness uninstall machine again`);
   }
   for (const name of result.tasksRemoved) console.log(`removed scheduled task ${name}`);
