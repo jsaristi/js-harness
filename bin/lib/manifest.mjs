@@ -3,7 +3,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawnSync as spawnChildSync } from 'node:child_process';
 import { cachePath } from './cache.mjs';
 import { gateDir, readGateHolder, readGateWaiters } from './gate-lock.mjs';
 import { gateLogDir } from './gate-log.mjs';
@@ -17,6 +16,7 @@ import { SHARE_TOLERANCE } from './share-check.mjs';
 import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
 import { restoreSettings } from './user-settings.mjs';
+import { restorePluginHooks } from './engram-prompt-hook.mjs';
 import { holdPermissions, releasePermissions, removeMadeFile } from './permissions.mjs';
 import { holdRulesBlock, releaseRulesBlock } from './rules-block.mjs';
 import { writeComponent } from './component-write.mjs';
@@ -30,6 +30,7 @@ import { hygieneDir, purgeMarker } from './memory-hygiene.mjs';
 import { readLock } from './memory-pass.mjs';
 import { moveTrustRecords, planTrustMoves, withConfig } from './codex-trust.mjs';
 import { deepEqual } from './json-equal.mjs';
+import { removeScheduledTask, runSchtasks, sameTaskName } from './scheduled-tasks.mjs';
 
 /** Minutes as the hours a skill states, to one decimal place at most: rule wait-for's 480 reads "8". */
 export const statedHours = (minutes) => String(Math.round(minutes / 6) / 10);
@@ -786,7 +787,7 @@ export function forgetOptionalFile(home, file, deps = {}) {
 }
 
 /** The arrays of the manifest that hold what js-harness did only when asked, apart from what `install` writes. */
-const ON_REQUEST = ['optional', 'tasks', 'settings', 'stack', 'clones'];
+const ON_REQUEST = ['optional', 'tasks', 'settings', 'stack', 'clones', 'pluginHooks'];
 
 /** Puts `record` in the array `key` of the manifest, in place of the one `matches` finds, creating the manifest
  * (with a `null` version: nothing is installed) when there is none. Returns the record. */
@@ -830,15 +831,9 @@ function forgetRecord(home, key, matches, listDir) {
 export const NEW_SETTINGS_STYLE = Object.freeze({ trailingNewline: false, useCRLF: false, indent: 2 });
 
 export { SESSION_MESSAGES, acceptSessionMessages, userSettingsPath } from './user-settings.mjs';
+export { lookAtScheduledTask, removeScheduledTask, runSchtasks, sameTaskAction, sameTaskName, scheduledTaskAction, underTest, windowsSystem32 } from './scheduled-tasks.mjs';
 
 // ---- scheduled tasks --------------------------------------------------------------------------------------------------
-
-/** Windows does not tell two task names apart by the case of their letters. */
-export const sameTaskName = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
-
-/** Whether two tasks run the same thing: the program and its arguments, to the letter. `null` (a task that does
- * not run one command) is the same as nothing. */
-export const sameTaskAction = (a, b) => Boolean(a && b) && a.command === b.command && a.arguments === b.arguments;
 
 /** Scheduled tasks: a task js-harness registers with Windows only when asked (the watchdog of `remote start
  * --at-login`), kept in the manifest's `tasks` array as `{ name, command, arguments }`, apart from `optional`: a
@@ -861,6 +856,9 @@ export function recordScheduledTask(home, task) {
 export function forgetScheduledTask(home, name, deps = {}) {
   return forgetRecord(home, 'tasks', (entry) => sameTaskName(entry.name, name), deps.listDir);
 }
+
+/** Forgets the record of a plugin's hooks file D8 changed (./engram-prompt-hook.mjs), touching no file. */
+export const forgetPluginHook = (home, record, deps = {}) => forgetRecord(home, 'pluginHooks', (entry) => entry.path === record.path && entry.event === record.event, deps.listDir);
 
 const sameStackRow = (a, b) => a.tool === b.tool && a.dimension === b.dimension;
 
@@ -895,109 +893,6 @@ function putRecordBack(home, key, matches, record) {
 /** `putRecordBack` for the optional file at `file`, and for the scheduled task `name`. */
 export const putOptionalRecordBack = (home, file, record) => putRecordBack(home, 'optional', (entry) => entry.path === file, record);
 export const putTaskRecordBack = (home, name, record) => putRecordBack(home, 'tasks', (entry) => sameTaskName(entry.name, name), record);
-
-/** `<SystemRoot>\System32`, from the `SystemRoot` (or `windir`) of `env` and nothing else, or `null` when `env`
- * does not give an absolute one: where Windows keeps `schtasks.exe` and `conhost.exe`. */
-export function windowsSystem32(env) {
-  const names = Object.keys(env);
-  const key = names.find((name) => /^systemroot$/i.test(name)) ?? names.find((name) => /^windir$/i.test(name));
-  const root = key === undefined ? '' : String(env[key]).trim();
-  return path.win32.isAbsolute(root) ? path.win32.join(root, 'System32') : null;
-}
-
-/** Whether this process is a test: a file run by `node --test` (which sets `NODE_TEST_CONTEXT` for it), or a
- * test file run directly. */
-export const underTest = () => process.env.NODE_TEST_CONTEXT !== undefined || /\.test\.[cm]?js$/.test(process.argv[1] ?? '');
-
-/** What `schtasks.exe` printed, as text: UTF-16 when it starts with that mark or reads as it, else one character
- * a byte. Only ASCII is ever compared, and that is the same either way. */
-function printed(stdout) {
-  if (!Buffer.isBuffer(stdout)) return String(stdout ?? '');
-  if (stdout.length >= 2 && stdout[0] === 0xff && stdout[1] === 0xfe) return stdout.subarray(2).toString('utf16le');
-  return stdout.length >= 2 && stdout[1] === 0 ? stdout.toString('utf16le') : stdout.toString('latin1');
-}
-
-/** Runs `schtasks.exe` with `args` and returns `{ status, stdout }`: the seam everything that registers, reads
- * or deletes a scheduled task goes through. The program is the one in the `System32` of the `SystemRoot` of `env`
- * (the environment the command was given), run with no shell; it is never looked for on `PATH`. Throws when `env`
- * names no such folder, and when the program could not run. Its messages come in the system's language, so
- * callers read the exit code and the XML and CSV it prints, never its words.
- *
- * It registers and deletes tasks on the machine it runs on, so a test never runs the real one: with no
- * `spawnSync` injected this refuses in a test process, and that comes first, before the environment is looked
- * at, so the refusal is the same on every host. */
-export function runSchtasks(args, { env = process.env, spawnSync: sync } = {}) {
-  if (sync === undefined && underTest()) throw new Error('the real schtasks.exe is never run from a test: this one has to hand in a fake');
-  const system32 = windowsSystem32(env);
-  if (!system32) throw new Error('SystemRoot is not set to an absolute folder in the environment, so schtasks.exe cannot be found: it is never looked for on PATH');
-  // Half a minute at most: the command that waits holds its project's lock meanwhile. The list of every task, the
-  // longest answer, took about a second and 23 KB on a machine with 217 of them (2026-10-06), far under the 1 MB
-  // of output `spawnSync` takes by default, so that limit is left as it is.
-  const result = (sync ?? spawnChildSync)(path.win32.join(system32, 'schtasks.exe'), args, { windowsHide: true, timeout: 30000 });
-  if (result.error) throw new Error(`schtasks.exe could not run: ${result.error.message}`);
-  return { status: result.status, stdout: printed(result.stdout) };
-}
-
-const XML_NAMED = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
-const xmlValue = (text) => text.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (whole, name) => {
-  if (name[0] !== '#') return XML_NAMED[name] ?? whole;
-  return String.fromCodePoint(/^#x/i.test(name) ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10));
-});
-
-/** What the task of the definition `xml` (what `schtasks /Query /TN <name> /XML` prints) runs: `{ command,
- * arguments }`, the two as they were registered, or `null` when it does not run exactly one command (no action,
- * several, or one of another kind): such a task is not one js-harness registered. */
-export function scheduledTaskAction(xml) {
-  const actions = /<Actions\b[^>]*>(.*?)<\/Actions>/s.exec(String(xml))?.[1];
-  if (actions === undefined) return null;
-  const commands = actions.match(/<Exec\b[^>]*>.*?<\/Exec>/gs) ?? [];
-  if (commands.length !== 1 || actions.replace(commands[0], '').trim() !== '') return null;
-  const value = (tag) => new RegExp(`<${tag}>(.*?)</${tag}>`, 's').exec(commands[0])?.[1];
-  const command = value('Command');
-  return command === undefined ? null : { command: xmlValue(command), arguments: xmlValue(value('Arguments') ?? '') };
-}
-
-/** Whether a task named `name` is registered (at the root of the task folders, where js-harness puts its own),
- * and what it runs: `{ found: 'absent' }`, `{ found: 'present', action }` (see `scheduledTaskAction`), or
- * `{ found: 'unknown', why }`. It only looks.
- *
- * `absent` has to be proven, because it is what lets a caller forget a record or register a task: the list of
- * every task ran (exit 0) and no row of it has that name. Asking for the task by name would not do: `schtasks`
- * fails the same way for a task that is not there and for a look that went wrong, and says which only in the
- * system's language. So the name is read from the list, where it is a literal, and only a task that is listed is
- * then asked for. Whatever else happens (the list failed, the task is listed and cannot be read, `schtasks`
- * could not run) is `unknown`. */
-export function lookAtScheduledTask(name, schtasks) {
-  try {
-    const list = schtasks(['/Query', '/FO', 'CSV']);
-    if (list.status !== 0) return { found: 'unknown', why: `the scheduled tasks could not be listed (schtasks /Query /FO CSV exited ${list.status})` };
-    const listed = String(list.stdout).split(/\r?\n/).some((row) => sameTaskName(/^"((?:[^"]|"")*)"/.exec(row)?.[1] ?? '', `\\${name}`));
-    if (!listed) return { found: 'absent' };
-    const read = schtasks(['/Query', '/TN', name, '/XML']);
-    if (read.status !== 0) return { found: 'unknown', why: `the task ${name} is listed and could not be read (schtasks /Query /TN ${name} /XML exited ${read.status})` };
-    return { found: 'present', action: scheduledTaskAction(read.stdout) };
-  } catch (err) {
-    return { found: 'unknown', why: err.message };
-  }
-}
-
-/** Deletes the task of the record `task` while it still runs the recorded command. Returns `{ status }`:
- * `removed`; `absent` when no such task is registered (its record is all there was); or `kept`, with `reason`:
- * `edited` (it runs something else now, so it is the user's), `unknown` (it could not be looked at, and nothing
- * is deleted on a guess) or `unremovable` (the delete failed), the last two with `why`. `look` is what
- * `lookAtScheduledTask` answered, when the caller already asked. */
-export function removeScheduledTask(task, schtasks, look = lookAtScheduledTask(task.name, schtasks)) {
-  if (look.found === 'unknown') return { status: 'kept', reason: 'unknown', why: look.why };
-  if (look.found === 'absent') return { status: 'absent' };
-  if (!sameTaskAction(look.action, task)) return { status: 'kept', reason: 'edited' };
-  try {
-    const deleted = schtasks(['/Delete', '/TN', task.name, '/F']);
-    if (deleted.status !== 0) return { status: 'kept', reason: 'unremovable', why: `schtasks /Delete /TN ${task.name} /F exited ${deleted.status}` };
-  } catch (err) {
-    return { status: 'kept', reason: 'unremovable', why: err.message };
-  }
-  return { status: 'removed' };
-}
 
 /** Removes `dir` and any now-empty parent up to (but not including) `home`. Best effort: a folder that
  * cannot be listed is not known to be empty, and it is left, as is one that cannot be removed; the walk
@@ -1291,6 +1186,8 @@ function uninstallInstalled(home, deps) {
   // A setting written on request goes back to what the user had (`acceptSessionMessages`), before the hook entries
   // are taken out: a settings file install made is then removed with its last entry, as without the setting.
   const settings = restoreSettings(manifest, home, listDir, { writeFile: deps.writeFile, removeFile });
+  // A plugin's hook D8 took out goes back, byte for byte, while its file is as D8 left it.
+  const pluginHooks = restorePluginHooks(manifest.pluginHooks, { writeFile: deps.writeFile });
   const permissions = manifest.permissions && releasePermissions(manifest.permissions, home, listDir, { writeFile: deps.writeFile, removeFile });
   const rulesBlock = manifest.rulesBlock && releaseRulesBlock(manifest.rulesBlock, home, { writeFile: deps.writeFile, removeFile });
 
@@ -1342,12 +1239,13 @@ function uninstallInstalled(home, deps) {
   if (guarded) for (const task of tasksKept) if (task.reason === 'edited') task.recorded = true;
   // A setting that could not be written back keeps its record, with the value it had, so a run again restores it
   // (Codex on 05fa584..cdcce6c).
-  if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || stack.failedRecords.length > 0 || clones.failedRecords.length > 0 || permissions?.status === 'failed' || rulesBlock?.status === 'failed') {
+  if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || pluginHooks.failedRecords.length > 0 || stack.failedRecords.length > 0 || clones.failedRecords.length > 0 || permissions?.status === 'failed' || rulesBlock?.status === 'failed') {
     // A file install made for its hook entries is the setting's to remove now, as it would have been in this run.
     const madeFile = (record) => ({ ...record, createdFile: Boolean(record.createdFile || (manifest.entries ?? []).some((entry) => entry.path === record.path && entry.createdFile)) });
     writeManifest(home, {
       version: null, files: [], entries: [], tasks: stillRecorded,
       ...(settings.failedRecords.length > 0 && { settings: settings.failedRecords.map(madeFile) }),
+      ...(pluginHooks.failedRecords.length > 0 && { pluginHooks: pluginHooks.failedRecords }),
       ...(stack.failedRecords.length > 0 && { stack: stack.failedRecords }), ...(clones.failedRecords.length > 0 && { clones: clones.failedRecords }), ...(permissions?.status === 'failed' && { permissions: madeFile(manifest.permissions) }),
       ...(rulesBlock?.status === 'failed' && { rulesBlock: manifest.rulesBlock }),
     });
@@ -1362,7 +1260,7 @@ function uninstallInstalled(home, deps) {
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept, settingsFailed: settings.failed } : {};
   // `stackUndone` and `stackKept` likewise, only when the manifest records a row `stack install` ran.
   const stackResult = stackRecords.length > 0 ? { stackUndone: stack.undone, stackKept: stack.kept } : {};
-  return { removed, kept, keptOptional, ...(manifest.clones && { clonesKept: clones.kept }), ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...(trust.trustMoved.length > 0 && { trustMoved: trust.trustMoved }), ...(trust.trustKept.length > 0 && { trustKept: trust.trustKept }), ...settingsResult, ...stackResult, ...(permissions && { permissions }), ...(rulesBlock && { rulesBlock }), tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
+  return { removed, kept, keptOptional, ...(manifest.clones && { clonesKept: clones.kept }), ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...(trust.trustMoved.length > 0 && { trustMoved: trust.trustMoved }), ...(trust.trustKept.length > 0 && { trustKept: trust.trustKept }), ...settingsResult, ...(manifest.pluginHooks && { pluginHooks: { restored: pluginHooks.restored, kept: pluginHooks.kept } }), ...stackResult, ...(permissions && { permissions }), ...(rulesBlock && { rulesBlock }), tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever

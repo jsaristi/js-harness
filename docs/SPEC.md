@@ -287,6 +287,15 @@ check or an eval case ("After F8", directive coverage).
 **Discarded:** Refusing the commit until the session takes the lines out: his answer was "Quitarlas solo". Rewriting the commits already on main: main is never rewritten.
 **Today:** `bin/commit-msg.mjs`, `.githooks/commit-msg`, `bin/lib/project-hooks.mjs`, `js-harness commit-msg`
 
+### The engram prompt hook off
+
+**Problem:** engram's plugin hook on each prompt prints a false "CRITICAL FIRST ACTION" at a session's first message, saves each prompt to engram and reminds the session to save; its script has no switch of its own. He answered D8 "Apagarlo" and, told the prompts would no longer be saved, question 208 "Apagarlo igual" (`odd/tasks/f8-s4a-hook-count.md`).
+**Requirement:** `stack engram-prompt off` takes the `UserPromptSubmit` entry out of the hooks file of engram's user-level install, keeps the rest of the file with its layout, and records the file's whole text before and after in the machine manifest; a record that cannot be kept puts the file back. `on` and `uninstall` write the earlier text back while the file still holds what `off` wrote, leave a file changed since as it is, and keep the record of a write that failed. The `hooks` row names `off` when the entry comes back.
+**Reason:** Every write outside the repository must be undoable exactly, and a plugin update silently undoes this one.
+**Proof:** `node --test bin/lib/engram-prompt-hook.test.mjs bin/stack.test.mjs bin/lib/hook-count.test.mjs`
+**Discarded:** `PI_CODING_AGENT`, the script's only early exit: it silences every engram hook. Editing the script: an update writes it again just the same, and the entry would still start a process at every prompt.
+**Today:** `bin/lib/engram-prompt-hook.mjs`, `bin/stack.mjs`, `bin/lib/manifest.mjs`, `js-harness stack`
+
 ### The instruction budget
 
 **Problem:** No incident; the founding bet (`docs/origin.md`) and F1, which asked for `AGENTS.md` at about 1.5k tokens and a check that fails over it (`odd/tasks/f1-skeleton.md`). It landed at 691 tokens and stood at 1,478 of 1,500 on 2026-10-15 (`odd/tasks/drop-github-gate.md`).

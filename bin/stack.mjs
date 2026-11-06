@@ -7,6 +7,8 @@
 // (odd/tasks/f8-s2-removal.md, T3; the work is bin/lib/stack-backup.mjs). `js-harness stack upgrade` brings the tools of the
 // stack up to their latest release, each shown with its undo, asked and recorded the same way
 // (odd/tasks/stack-upgrade.md, S1; the plan is bin/lib/stack-upgrade.mjs, the engram binary bin/lib/engram-release.mjs).
+// `js-harness stack engram-prompt off|on` is D8: the engram plugin's prompt hook taken out and put back, recorded
+// (odd/tasks/f8-s4a-hook-count.md; bin/lib/engram-prompt-hook.mjs).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -23,6 +25,7 @@ import { appliesOf, homeEnv, runWords, shownCommand, TIMEOUTS, withEnv } from '.
 import { codexHomeOf, pluginInstalledVersion, probeStack, probeVersionCommand, resolveProjectRoot, tools } from './lib/stack.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { restoreBackup, ROOT_IDS, runBackup, verifyBackup } from './lib/stack-backup.mjs';
+import { promptHookOff, promptHookOn } from './lib/engram-prompt-hook.mjs';
 
 export { resolveStackPm };
 
@@ -64,8 +67,12 @@ const HELP = [
   '  verify: restores it into a scratch home without its credentials and checks it; restore: puts it back, config',
   '  as a snapshot, data never deleted; without --yes (or a y in a terminal) it prints the plan and writes nothing.',
   `  --only: permissions, mcp:<name>, ${ROOT_IDS.join(', ')}`,
+  'Usage: js-harness stack engram-prompt off|on [--home <dir>]',
+  '  off: takes the UserPromptSubmit hook out of the engram plugin\'s hooks file, recorded so on and uninstall put it',
+  '  back byte for byte (D8); on: puts it back where the file is still as off left it. Restart Claude Code after either.',
 ].join('\n');
 const PREREQUISITES = ['git', 'gh'];
+const ENGRAM_PROMPT_USAGE = 'Usage: js-harness stack engram-prompt off|on [--home <dir>]';
 
 class StackArgError extends Error {}
 
@@ -146,6 +153,7 @@ export async function stackMain(argv, env = process.env, deps = {}) {
   if (argv[0] === 'install') return stackInstallMain(argv.slice(1), env, deps);
   if (argv[0] === 'upgrade') return stackUpgradeMain(argv.slice(1), env, deps);
   if (argv[0] === 'backup') return stackBackupMain(argv.slice(1), env, deps);
+  if (argv[0] === 'engram-prompt') return stackEngramPromptMain(argv.slice(1), env, deps);
   const error = deps.error ?? ((line) => console.error(line));
   let args;
   try {
@@ -543,4 +551,44 @@ export async function stackBackupMain(argv, env = process.env, deps = {}) {
     error(`js-harness stack backup ${args.form}: ${err.message}`);
     return 1;
   }
+}
+
+/** `js-harness stack engram-prompt off|on [--home <dir>]` (D8): exit 0 when the hook is off (or already was) or put
+ * back, 1 when it could not be done, 2 on a usage error. */
+function stackEngramPromptMain(argv, env, deps) {
+  const log = deps.log ?? ((line) => console.log(line));
+  const error = deps.error ?? ((line) => console.error(line));
+  const [form, ...rest] = argv;
+  const unknown = unknownArgument(rest, { valued: ['--home'], bare: [] });
+  const at = rest.indexOf('--home');
+  const given = at === -1 ? undefined : rest[at + 1];
+  const wrong = form !== 'off' && form !== 'on' ? 'stack engram-prompt needs off or on'
+    : unknown !== null ? `unknown argument: ${unknown}`
+      : at !== -1 && (given === undefined || given.startsWith('--')) ? '--home requires a value' : null;
+  if (wrong !== null) {
+    error(`${wrong}\n\n${ENGRAM_PROMPT_USAGE}`);
+    return 2;
+  }
+  const home = harnessHome({ given, env, homedir: os.homedir });
+  const said = `js-harness stack engram-prompt ${form}:`;
+  if (form === 'off') {
+    const result = promptHookOff(home);
+    if (result.status === 'skipped') {
+      error(`${said} nothing done: ${result.reason}${result.path ? ` (${result.path})` : ''}`);
+      return 1;
+    }
+    if (result.status === 'already') log(`${said} already off: ${result.path} holds no UserPromptSubmit hook`);
+    else {
+      log(`${said} took the UserPromptSubmit hook out of ${result.path}; restart Claude Code for it to take effect`);
+      log('  undo: js-harness stack engram-prompt on');
+    }
+    return 0;
+  }
+  const result = promptHookOn(home);
+  for (const file of result.restored) log(`${said} put back the hooks file ${file}; restart Claude Code for it to take effect`);
+  const why = (kept) => (kept.reason === 'changed' ? 'it changed since off (a plugin update or an edit), so it is yours'
+    : kept.reason === 'gone' ? 'it is gone' : `the write failed (${kept.code}); run on again`);
+  for (const kept of result.kept) (kept.reason === 'failed' ? error : log)(`${said} left ${kept.path} as it is: ${why(kept)}`);
+  if (result.restored.length + result.kept.length === 0) log(`${said} nothing recorded, so nothing to put back`);
+  return result.failedRecords.length === 0 ? 0 : 1;
 }

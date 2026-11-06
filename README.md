@@ -702,6 +702,14 @@ Your steps (never run):
     undo: codex logout
 ```
 
+`js-harness stack engram-prompt off|on [--home <dir>]` is D8: `off` takes the `UserPromptSubmit`
+hook out of the engram plugin's `hooks/hooks.json`, the one that prints "CRITICAL FIRST ACTION",
+saves each prompt to engram and reminds a session to save. It records the file's bytes before and
+after in the machine manifest. `on`, and `uninstall`, put the bytes back while the file is as `off`
+left it. A file changed since then, by a plugin update or by hand, is left as it is. A plugin update
+brings the hook back; the `hooks` row of `check` then fails and names `off`. Restart Claude Code
+after either. It exits 0 when the hook is off or put back, and 1 when nothing could be done.
+
 ### js-harness progress
 
 Shows the roadmap's phases and the features, counted from the checkboxes of `docs/ROADMAP.md`

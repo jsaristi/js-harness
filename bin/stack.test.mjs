@@ -304,3 +304,35 @@ test('stack backup restore asks on a terminal and restores only on y', async () 
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('stack engram-prompt off takes the prompt hook out of a scratch home, on puts it back, and a bad form is a usage error', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'stack-engram-prompt-'));
+  const installPath = path.join(home, '.claude', 'plugins', 'cache', 'engram', 'engram', '0.1.19');
+  const file = path.join(installPath, 'hooks', 'hooks.json');
+  const text = `${JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'prompt.sh' }] }], SessionEnd: [{ hooks: [{ type: 'command', command: 'end.sh' }] }] } }, null, 2)}\n`;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, text);
+  fs.writeFileSync(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ plugins: { 'engram@engram': [{ scope: 'user', installPath }] } }));
+  try {
+    const off = await run(['engram-prompt', 'off', '--home', home], {});
+    assert.equal(off.code, 0, off.err);
+    assert.match(off.out, /took the UserPromptSubmit hook out of .*hooks\.json; restart Claude Code/);
+    assert.match(off.out, /undo: js-harness stack engram-prompt on/);
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.UserPromptSubmit, undefined);
+    const again = await run(['engram-prompt', 'off', '--home', home], {});
+    assert.equal(again.code, 0);
+    assert.match(again.out, /already off/);
+    const on = await run(['engram-prompt', 'on', '--home', home], {});
+    assert.equal(on.code, 0, on.err);
+    assert.match(on.out, /put back/);
+    assert.equal(fs.readFileSync(file, 'utf8'), text);
+    const bad = await run(['engram-prompt', 'sideways', '--home', home], {});
+    assert.equal(bad.code, 2);
+    assert.match(bad.err, /stack engram-prompt needs off or on/);
+    const none = await run(['engram-prompt', 'off', '--home', fs.mkdtempSync(path.join(os.tmpdir(), 'stack-engram-prompt-'))], {});
+    assert.equal(none.code, 1);
+    assert.match(none.err, /no user-level install of engram@engram/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
