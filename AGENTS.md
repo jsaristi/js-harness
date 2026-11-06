@@ -2,8 +2,8 @@
 
 js-harness is a small package that sets up Claude Desktop's Code tab, with Codex as its reviewer, on
 top of a stack it does not rebuild: engram owns memory; codegraph owns code structure; `/goal` owns
-the autonomy loop; the workflow, task documents and test-first work are its own since F8's S11, and
-gentle-ai, which owned them, leaves at S2. What this repo adds is the thin layer those leave open —
+the autonomy loop; the workflow, task documents and test-first work are its own, taken over from
+gentle-ai, which left at F8's S2. What this repo adds is the thin layer those leave open —
 a few lines of context and the checks that make them true.
 
 The design bet is that a stronger model needs a smaller harness. This file is what a reviewer such
