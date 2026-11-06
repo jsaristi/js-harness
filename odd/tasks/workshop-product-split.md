@@ -852,6 +852,16 @@ The slices:
     (seen red first). The workshop's help still names `js-harness <command>`: kept, as L18 leaves the workshop's
     texts to the next pull request, before any release (finding 19).
 - gentle-ai: not run on this slice; Codex and the lenses reviewed 4187754d and f78479af.
+- L24 (2026-11-05): the fix is `3ec22630`; its lenses (readability, reliability) 0 findings. Codex over the merge
+  alone, `f78479a..52d0703`, read only what was written in it: correct (0.99), 47,071 input tokens. The lenses
+  cannot read the move: they read a range renames off (`bin/lib/lens-candidate.mjs`, the follow-up that
+  `odd/tasks/rename-counted-by-changes.md` left out of scope), so `52d0703..3ec2263` is about 243,000 input tokens a
+  lens, over the 150,000 a lens is handed, and no smaller range splits a whole-file move. The skip is recorded for
+  `52d0703..fd1da6e` with that reason; the merge door refuses the series until a lens review covers it. Put to the
+  lead as a question for the owner: the lenses count a rename by what it changes, as Codex does since PR 775, in a
+  pull request of its own to main; his yes to question 193 covered `commit-size` and `codex-review` alone. It is question 199.
+  This entry, written while Codex reviewed `52d0703..3ec2263`, voided that run: part 1 of 3, 128,424 input tokens,
+  nothing recorded (`edit-during-review` in `docs/FAILURES.md`); the review runs again after this commit.
 - Next step (for a resume): the fix's commit, then Codex, the lenses and a verifier over the merge, the move
   and the fix (`--base 6c1bc8ef`, which starts where the dispatcher's records end and judges the merge by what was
   written in it), and a pull request with base `feat/workshop-move` (PR 773), never merged here. Then the next pull
