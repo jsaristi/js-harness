@@ -1,6 +1,6 @@
 # surface: background
-# Claude Desktop 4.4212.0, Code tab CLI 2.1.309
-# recorded: 2026-10-30
+# Claude Desktop 4.16336.0, Code tab CLI 2.1.317
+# recorded: 2026-11-05
 # provenance: transcribed by the model from its tool definitions and its deferred-tool list; a removal is confirmed with ToolSearch select:<name> before a review claims it
 Agent
 Artifact
@@ -44,7 +44,6 @@ TaskList
 TaskStop
 TaskUpdate
 ToolSearch
-WebFetch
 WebSearch
 Workflow
 Write

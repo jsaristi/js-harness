@@ -509,6 +509,47 @@ test('sessions stop says so when claude keeps the session\'s worktree', withWorl
   assert.doesNotMatch(js(world, ['sessions', 'stop', 'a1b2c3d4']).stdout, /worktree/);
 }));
 
+// On 2026-11-04 (20:06 local) the lead ran sessions stop only to restart a background session after a restart of
+// Claude Desktop, and its claude rm deleted every file of the session's worktree but .git (odd/tasks/stop-keeps-worktree.md).
+test('sessions stop refuses a session whose worktree holds files, runs no claude and leaves every file', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const worktree = path.join(world.project, '.claude', 'worktrees', 'thing');
+  fs.writeFileSync(path.join(worktree, '.git'), 'gitdir: elsewhere\n');
+  fs.mkdirSync(path.join(worktree, 'src'));
+  fs.writeFileSync(path.join(worktree, 'src', 'work.js'), 'uncommitted\n');
+  const { brief } = recordLines(world)[0];
+  const acted = actions(world).length;
+  const result = js(world, ['sessions', 'stop', '0db8bc5e']);
+  assert.equal(result.code, 1, result.stdout);
+  assert.equal(actions(world).length, acted, 'no claude stop, no claude rm');
+  assert.equal(fs.readFileSync(path.join(worktree, 'src', 'work.js'), 'utf8'), 'uncommitted\n');
+  assert.ok(fs.existsSync(path.join(worktree, '.git')));
+  assert.ok(fs.existsSync(brief), 'the brief stays');
+  assert.deepEqual(recordLines(world).map((line) => line.event), ['started']);
+  assert.ok(result.stderr.includes(worktree), result.stderr);
+  assert.match(result.stderr, /SendMessage/);
+  assert.match(result.stderr, /js-harness sessions stop 0db8bc5e --remove-worktree/);
+  // The removal, when it is wanted, is said in so many words.
+  const removed = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(removed.code, 0, removed.stderr);
+  assert.deepEqual(actions(world).slice(acted), [['stop', '0db8bc5e'], ['rm', '0db8bc5e']]);
+  assert.equal(fs.existsSync(worktree), false);
+}));
+
+test('sessions stop runs on a worktree that holds only .git, and takes --remove-worktree with --home in any order', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  fs.writeFileSync(path.join(world.project, '.claude', 'worktrees', 'thing', '.git'), 'gitdir: elsewhere\n');
+  const bare = js(world, ['sessions', 'stop', '0db8bc5e']);
+  assert.equal(bare.code, 0, bare.stderr);
+  patchState(world, { nextId: 'c779ed44' });
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Other', '--brief', world.brief, '--worktree', 'other']).code, 0);
+  fs.writeFileSync(path.join(world.project, '.claude', 'worktrees', 'other', 'work.js'), 'x\n');
+  const both = js(world, ['sessions', 'stop', 'c779ed44', '--home', world.home, '--remove-worktree']);
+  assert.equal(both.code, 0, both.stderr);
+  const twice = js(world, ['sessions', 'stop', 'c779ed44', '--remove-worktree', '--remove-worktree']);
+  assert.equal(twice.code, 2);
+}));
+
 // claude agents lists a session it just started in the folder it was started from: the record and stop name the
 // worktree all the same, and so does stop for a record written before, which holds the main checkout (2026-10-28).
 test('sessions start records the worktree claude makes, and stop names it for a record that holds the main checkout', withWorld((world) => {

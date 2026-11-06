@@ -30,6 +30,7 @@ import { permissionsHealth } from './lib/permissions.mjs';
 import { importHealth } from './lib/claude-import.mjs';
 import { backgroundMeasure, cleanNotice, cleanRow } from './lib/clean.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { ideaFix } from './lib/idea-watch.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
@@ -220,7 +221,9 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   // Reading the skips asks git for the branch's commits and their records: the interactive report only, as above.
   const withSkips = deps.reviewSkips && interactive ? [...withTrees, reviewSkipsRow(deps.reviewSkips, project)] : withTrees;
   // The templates' records are read by the interactive report only, as the skips are.
-  const withUnseen = deps.templates && interactive ? [...withSkips, templatesRow(deps.templates, project, home)] : withSkips;
+  const withTemplates = deps.templates && interactive ? [...withSkips, templatesRow(deps.templates, project, home)] : withSkips;
+  // The idea watch lists the upstream tags over the network: the interactive online report only.
+  const withUnseen = deps.ideas && interactive && !offline ? [...withTemplates, await ideasRow(deps.ideas, project)] : withTemplates;
   const withBackup = deps.backup ? [...withUnseen, backupRow(deps.backup, home, now)] : withUnseen;
   const withImport = deps.imports ? [...withBackup, importRow(deps.imports, project, home)] : withBackup;
   const withPermissions = deps.permissions ? [...withImport, permissionsRow(deps.permissions, home)] : withImport;
@@ -359,6 +362,22 @@ function templatesRow(templates, project, home) {
   return found.unchecked > 0 ? { ...row, project: 'unknown' } : row;
 }
 
+/** The idea-watch row (odd/tasks/idea-watch.md, S7): the stable upstream releases the project's record has not read,
+ * `stale` with how many, the last one read and the command that drafts the next one, `ok` with none. `n/a` where the
+ * project keeps no record (`null`), `unknown` when the tags or the record cannot be read. It has no version of its own:
+ * the version column shows only an installed tool's. */
+async function ideasRow(ideas, project) {
+  const row = { id: 'idea-watch', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'ok', upToDate: 'n/a', fix: {} };
+  let state;
+  try {
+    state = await ideas(project);
+  } catch {
+    return { ...row, project: 'unknown' };
+  }
+  if (state === null) return { ...row, project: 'n/a' };
+  return state.unread.length === 0 ? row : { ...row, project: 'stale', fix: { project: ideaFix(state) } };
+}
+
 /** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, templates, claude-import,
  * permissions, host-update, stack-update and clean rows. Their checks are given only here, so `doctorMain` alone keeps the rows its
  * callers give it. */
@@ -373,6 +392,7 @@ export function doctorCommand(argv) {
     backup: (home, now) => backupHealth(home, now),
     permissions: (home) => permissionsHealth(home),
     imports: (project, home) => importHealth(project, { home }),
+    ideas: async (project) => (await import('./idea-watch.mjs')).ideaWatchHealth(project),
     clean: { start: backgroundMeasure(process.env, argv) },
   });
 }

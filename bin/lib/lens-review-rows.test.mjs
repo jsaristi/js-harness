@@ -74,6 +74,29 @@ test('a record whose range no longer hashes to its subject hash covers nothing, 
   assert.match(said.detail, /1 record whose range no longer hashes as reviewed/);
 });
 
+test('a record written while the lenses read renames off still covers its range, by that reading\'s hash', () => {
+  // Before odd/tasks/lens-counts-renames.md every record's hash was of its range read renames off; a range that renames
+  // a file now hashes otherwise, and those records, Codex's among them, still prove its patch did not change.
+  const lines = Array.from({ length: 50 }, (_, at) => `export const line${at} = ${at};\n`).join('');
+  let added;
+  let moved;
+  withoutAutoMaintenance(() => {
+    added = commit('b.mjs', lines, 'feat: b');
+    fs.rmSync(path.join(dir, 'b.mjs'));
+    fs.mkdirSync(path.join(dir, 'lib'));
+    moved = commit(path.join('lib', 'b.mjs'), lines.replace('line7 = 7', 'line7 = 70'), 'refactor: b moves');
+  });
+  const before = lensCandidate(dir, { base: added, head: moved, renames: '--no-renames' }).subjectHash;
+  assert.notEqual(before, lensCandidate(dir, { base: added, head: moved }).subjectHash, 'the range reads otherwise with renames');
+  record(base, added);
+  record(added, moved, { subjectHash: before });
+  assert.equal(row().pass, true, row().detail);
+  // A hash that neither reading gives still covers nothing.
+  record(added, moved, { subjectHash: 'f'.repeat(64) });
+  assert.match(row().detail, /1 record whose range no longer hashes as reviewed/);
+  assert.equal(row().pass, true, row().detail);
+});
+
 // Row 3 of docs/proposals/gentle-ai-reverse-engineering.md, section 13.3: provenance is what refuses a well-shaped forged
 // record, one a session appended by hand, since it names no run line `lens-review` wrote first.
 test('a well-shaped record that names no run line lens-review wrote is refused by the push, and said', () => {

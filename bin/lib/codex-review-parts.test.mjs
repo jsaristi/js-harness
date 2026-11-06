@@ -116,7 +116,18 @@ test('reviewParts refuses a bound that is not a positive integer, and a file tha
   }
 });
 
-// --- the changed files of a range, from `git diff --numstat -z --no-renames` ---
+test('a renamed file is one file of one part, its old name before its new one, and placed by its new name', () => {
+  const renamed = { path: 'b/moved.mjs', from: 'z/was.mjs', changedLines: 300 };
+  assert.deepEqual(reviewParts([file('a.mjs', 200), renamed, file('c.mjs', 200)], 500), [
+    { files: ['a.mjs', 'z/was.mjs', 'b/moved.mjs'], changedLines: 500 },
+    { files: ['c.mjs'], changedLines: 200 },
+  ]);
+  // Its two names are two of the bound of files, since each goes on the command line; a bound of one still keeps both.
+  assert.deepEqual(paths(reviewParts([renamed, file('c.mjs', 1)], 500, 2)), [['z/was.mjs', 'b/moved.mjs'], ['c.mjs']]);
+  assert.deepEqual(paths(reviewParts([file('a.mjs', 1), renamed], 500, 1)), [['a.mjs'], ['z/was.mjs', 'b/moved.mjs']]);
+});
+
+// --- the changed files of a range, from `git diff --numstat -z --find-renames` ---
 
 test('numstatFiles reads each record: the path, and its additions plus its deletions', () => {
   assert.deepEqual(numstatFiles('3\t2\tbin/a.mjs\x0010\t0\tdocs/new.md\x000\t7\tgone.txt\x00'), [
@@ -139,9 +150,20 @@ test('numstatFiles keeps a path as git wrote it: spaces, tabs, quotes, a newline
   assert.deepEqual(numstatFiles(odd.map((path) => `1\t0\t${path}\x00`).join('')).map((entry) => entry.path), odd);
 });
 
+// A move of reviewed files counted every unchanged line twice (odd/tasks/rename-counted-by-changes.md).
+test('numstatFiles reads a rename as one file under its new name, its old name beside it, counted by the lines it changes', () => {
+  // `-z` writes a rename with an empty path, then the old name and the new one.
+  assert.deepEqual(numstatFiles('1\t1\t\x00bin/old.mjs\x00workshop/new.mjs\x00-\t-\t\x00a.png\x00b.png\x000\t0\t\x00x y\x00z\x00'), [
+    { path: 'workshop/new.mjs', from: 'bin/old.mjs', changedLines: 2, binary: false },
+    { path: 'b.png', from: 'a.png', changedLines: 0, binary: true },
+    { path: 'z', from: 'x y', changedLines: 0, binary: false },
+  ]);
+});
+
 test('numstatFiles refuses what is not such a record, instead of guessing a path', () => {
-  // A rename as `-z` writes it without `--no-renames`: an empty path, then the two names.
-  assert.throws(() => numstatFiles('1\t0\t\x00old.txt\x00new.txt\x00'), /numstat/);
+  // A rename cut before its second name, or with an empty one.
+  assert.throws(() => numstatFiles('1\t0\t\x00old.txt\x00'), /numstat/);
+  assert.throws(() => numstatFiles('1\t0\t\x00old.txt\x00\x00'), /numstat/);
   assert.throws(() => numstatFiles('1\t0\ta.txt\n2\t0\tb.txt\n'), /numstat/, 'the output without -z, cut at no NUL');
   assert.throws(() => numstatFiles('x\t0\ta.txt\x00'), /numstat/);
   assert.throws(() => numstatFiles('1\t-\ta.txt\x00'), /numstat/);

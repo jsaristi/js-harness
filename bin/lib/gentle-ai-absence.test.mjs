@@ -25,6 +25,9 @@ const LICENCE = 'the licence of what was adapted from gentle-ai requires its not
 const GUARD = 'guards a machine where gentle-ai is still installed, until S2 removes it';
 const JH69 = 'the guard\'s refusal of a gentle-ai review base, which stays while gentle-ai reviews here and leaves with it at S2 (the lead, 2026-10-28)';
 const OWNED = 'a file JH 69 owns (the S1 records fix), which S11\'s brief leaves out of its edits';
+// The diet's pass line names the idea watch as the one module left that reads gentle-ai (its S11 row), and his words of
+// 2026-11-03 bring it back (odd/tasks/idea-watch.md, S1): it reads the repository's source and never installs or runs it.
+const IDEAS = 'the idea watch reads gentle-ai\'s repository for ideas and never installs or runs it';
 
 const NAMED = {
   'bin/lib/gentle-ai-absence.test.mjs': 'this list',
@@ -99,6 +102,10 @@ const NAMED = {
   'bin/lib/lens-reviews.test.mjs': OWNED,
   'bin/lib/rules-coverage.mjs': `${GUARD}: directive coverage reads the markers of gentle-ai's blocks in a text`,
   'bin/lib/rules-coverage.test.mjs': `${GUARD}: directive coverage reads the markers of gentle-ai's blocks in a text`,
+  'bin/idea-watch.mjs': IDEAS,
+  'bin/idea-watch.test.mjs': IDEAS,
+  'bin/lib/idea-watch.mjs': IDEAS,
+  'bin/lib/idea-watch.test.mjs': IDEAS,
   'scripts/rehearsal-lib.mjs': `${ABSENCE}: S13's walk proves gentle-ai takes no part`,
   'scripts/rehearsal-lib.test.mjs': `${ABSENCE}: S13's walk proves gentle-ai takes no part`,
 };

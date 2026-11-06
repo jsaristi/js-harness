@@ -152,7 +152,7 @@ What you run:
 What you may do:
 - What you do alone and what stays the user's is the charter the user approved, at the head of your relief file: read it there, act inside it, and ask before anything it does not name; while the user is away it waits instead, as \`rule:away-autonomy\` says. Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command.
 - You never implement, never commit, never write in a worktree and never answer a question for the user: you ask it, and carry their answer. Reading code, running tests and discussing a design are what fill a context, and yours has to last. One exception, in the harness's own repository, approved by the user with the protocol for changing a rule: you may run \`js-harness rules change\` from a checkout of a \`rule/\` branch and commit what it writes.
-- You never write another session's prompts: each session owns its work and holds its context. The one exception is the opening prompt of a new work session, which carries pointers and not content: what to read first, the decisions already taken, how the machine is shared. Store it with \`js-harness notify --opening "<title>"\` (its text on standard input): it prints the session's first message as a block of its own, which the user copies as it is. When the host gives you a tool to start sessions, open the new session yourself with that message, on your own judgment and within the room the gate leaves. \`start_session\` opens it as a row in the user's sidebar, but only on a turn the user typed: on a turn a notice, a background task or a compaction started it leaves a card the user must tap, so there start it with \`js-harness sessions start --title "<title>" --brief <file> --effort <level>\` instead, which runs it in the background with Remote Control on (claude.ai/code and the user's phone reach it) and tells it to report through \`js-harness notify\`; the board lists it with what it waits for, and \`js-harness sessions stop <id>\` removes it once its work has landed. Every work session is titled \`<code> <n> · <purpose>\`, \`<code>\` being the project's own identifier in harness.json \`"code"\`, the title you give \`notify --opening\` and \`start_session\` alike, with \`<code> <n>\` from \`js-harness sessions --next-number\`: the number is the session's address, so a free title or a number another session holds sends notices to nobody or to the wrong one. A new lead is titled \`<code> ORQ · <purpose>\`.
+- You never write another session's prompts: each session owns its work and holds its context. The one exception is the opening prompt of a new work session, which carries pointers and not content: what to read first, the decisions already taken, how the machine is shared. Store it with \`js-harness notify --opening "<title>"\` (its text on standard input): it prints the session's first message as a block of its own, which the user copies as it is. When the host gives you a tool to start sessions, open the new session yourself with that message, on your own judgment and within the room the gate leaves. \`start_session\` opens it as a row in the user's sidebar, but only on a turn the user typed: on a turn a notice, a background task or a compaction started it leaves a card the user must tap, so there start it with \`js-harness sessions start --title "<title>" --brief <file> --effort <level>\` instead, which runs it in the background with Remote Control on (claude.ai/code and the user's phone reach it) and tells it to report through \`js-harness notify\`; the board lists it with what it waits for, and \`js-harness sessions stop <id> --remove-worktree\` removes it with its worktree once its work has landed: without the option stop refuses while the worktree holds files, and it never restarts a session, which a message does. Every work session is titled \`<code> <n> · <purpose>\`, \`<code>\` being the project's own identifier in harness.json \`"code"\`, the title you give \`notify --opening\` and \`start_session\` alike, with \`<code> <n>\` from \`js-harness sessions --next-number\`: the number is the session's address, so a free title or a number another session holds sends notices to nobody or to the wrong one. A new lead is titled \`<code> ORQ · <purpose>\`.
 - Ready pull requests are landed with \`js-harness merge-queue --land\`: it builds the candidate the default branch would be, tests it on this machine and on the project's CI, and pushes it when both are green; \`--dry-run\` first shows what it would land and what it leaves out, and why. After a land that moved main, \`js-harness merge-queue --land --refresh-copy\` also brings the installed copy the hooks run up to that main and prints its undo; a land that moved nothing refreshes nothing. Where the queue cannot run, a pull request is merged by hand by the rules that follow.
 - A pull request that changes code is merged on a green run of the project's CI whose checkout says it tested \`Merge <head> into <base>\`, with that base the default branch as origin has it now. A run on an older base is stale: close and reopen the pull request, which runs it again on the merge of today. The merge's message names the run, the base it tested and the head.
 - A pull request that changes only documentation (the docs folder and the feature documents; never the agents' instructions or the harness's configuration) is merged without waiting for that run, when \`git merge-tree\` of the default branch and the head is clean.
@@ -197,7 +197,7 @@ When the user must restart or update (a Claude Desktop update \`js-harness docto
 - Ask each working session on this machine, by \`SendMessage\` to its title, to pause: it commits what is ready, pushes only when its check already passes, writes its state to its feature document and starts nothing new. What is already running reaches its end (a writer, a review, a land, a gate), and nothing is cut halfway: a unit that cannot finish is stopped only at a commit, with its state written. Each session sends the lead one "paused" note that names anything left mid-way. A session held on a card is brought to the user first; cloud sessions keep working.
 - Keep your watch until the board shows no other session \`working\` (yours always reads so) and no gate running. Then write the paused sessions and the resume steps to your relief file, stop your loops and waits, check that no js-harness node process is left, and run \`js-harness permit lease --off\`.
 - Then tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!! Then say what to do, in order (each update, the restart, any cleanup), what not to touch, and the line to send this session when they are back.
-- When the user is back: after a boot, \`js-harness wake --notify\` first. Take the lease back, start your loops again (\`js-harness loop status\`), and resume each paused session by message, from the steps you wrote to your relief file before the announcement and with the next step from that session's own written state, saying so when its worktree shows work cut mid-pause, then turn its Remote Control back on. Run \`js-harness doctor\` and carry out its fixes, the host-update review included.
+- When the user is back: after a boot, \`js-harness wake --notify\` first. Take the lease back, start your loops again (\`js-harness loop status\`), and resume each paused session by message, from the steps you wrote to your relief file before the announcement and with the next step from that session's own written state, saying so when its worktree shows work cut mid-pause, then turn its Remote Control back on. A background session is resumed the same way: \`SendMessage\` to its title resumes it from its transcript; never \`js-harness sessions stop\` and \`sessions start\` to restart one, since the stop's \`claude rm\` deletes the files of its worktree (2026-11-04). Run \`js-harness doctor\` and carry out its fixes, the host-update review included.
 
 ## The recap
 
@@ -786,7 +786,7 @@ export function forgetOptionalFile(home, file, deps = {}) {
 }
 
 /** The arrays of the manifest that hold what js-harness did only when asked, apart from what `install` writes. */
-const ON_REQUEST = ['optional', 'tasks', 'settings', 'stack'];
+const ON_REQUEST = ['optional', 'tasks', 'settings', 'stack', 'clones'];
 
 /** Puts `record` in the array `key` of the manifest, in place of the one `matches` finds, creating the manifest
  * (with a `null` version: nothing is installed) when there is none. Returns the record. */
@@ -1319,21 +1319,21 @@ function uninstallInstalled(home, deps) {
     }
   }
 
-  // What `stack install` ran is undone by `deps.undoStack`, which `uninstall machine` hands in: the probes that judge a
-  // record live in bin/lib/stack.mjs, which imports this file. It returns `{ undone, kept, failedRecords }`, and only
-  // the failed records stay, for a second run. Without it nothing is run and every record stays as it is.
+  // What `stack install` ran is undone by `deps.undoStack`, and each recorded clone removed by `deps.removeClones`, which
+  // `uninstall machine` hands in from bin/lib/stack.mjs and bin/lib/clones.mjs, both importing this file. Each returns
+  // `kept` and `failedRecords`, and only the failed records stay, for a second run. Without it every record stays.
   const stackRecords = manifest.stack ?? [];
   const stack = stackRecords.length === 0
     ? { undone: [], kept: [], failedRecords: [] }
     : deps.undoStack?.(stackRecords) ?? { undone: [], kept: stackRecords.map(({ tool, dimension }) => ({ tool, dimension, reason: 'not-judged' })), failedRecords: stackRecords };
-
+  const clones = (manifest.clones ?? []).length === 0 ? { removed: [], kept: [], failedRecords: [] } : deps.removeClones?.(manifest.clones) ?? { removed: [], kept: manifest.clones.map((clone) => ({ path: clone.path, reason: 'not-judged' })), failedRecords: manifest.clones };
   fs.rmSync(cachePath(home), { force: true });
   const gate = removeGateFolder(home, removeFile, statFile);
   const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
   const tickets = removeTicketFolder(home, removeFile, statFile);
   const channel = removeChannelFolder(home, removeFile, statFile);
   const remote = removeRemoteFolder(home, { removeFile, statFile, listDir, identify, tasksKept });
-  removed.push(...gate.removed, ...log.removed, ...tickets.removed, ...channel.removed, ...remote.removed);
+  removed.push(...clones.removed, ...gate.removed, ...log.removed, ...tickets.removed, ...channel.removed, ...remote.removed);
   // An edited task is the user's and loses its record, unless the remote folder is still there: the marker of a
   // stop in it is what keeps that task from starting the server, and an uninstall run again must still know the
   // task to leave the marker under it. It then stays recorded, and its entry says so (`recorded`).
@@ -1342,13 +1342,13 @@ function uninstallInstalled(home, deps) {
   if (guarded) for (const task of tasksKept) if (task.reason === 'edited') task.recorded = true;
   // A setting that could not be written back keeps its record, with the value it had, so a run again restores it
   // (Codex on 05fa584..cdcce6c).
-  if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || stack.failedRecords.length > 0 || permissions?.status === 'failed' || rulesBlock?.status === 'failed') {
+  if (stillRecorded.length > 0 || settings.failedRecords.length > 0 || stack.failedRecords.length > 0 || clones.failedRecords.length > 0 || permissions?.status === 'failed' || rulesBlock?.status === 'failed') {
     // A file install made for its hook entries is the setting's to remove now, as it would have been in this run.
     const madeFile = (record) => ({ ...record, createdFile: Boolean(record.createdFile || (manifest.entries ?? []).some((entry) => entry.path === record.path && entry.createdFile)) });
     writeManifest(home, {
       version: null, files: [], entries: [], tasks: stillRecorded,
       ...(settings.failedRecords.length > 0 && { settings: settings.failedRecords.map(madeFile) }),
-      ...(stack.failedRecords.length > 0 && { stack: stack.failedRecords }), ...(permissions?.status === 'failed' && { permissions: madeFile(manifest.permissions) }),
+      ...(stack.failedRecords.length > 0 && { stack: stack.failedRecords }), ...(clones.failedRecords.length > 0 && { clones: clones.failedRecords }), ...(permissions?.status === 'failed' && { permissions: madeFile(manifest.permissions) }),
       ...(rulesBlock?.status === 'failed' && { rulesBlock: manifest.rulesBlock }),
     });
   } else {
@@ -1362,7 +1362,7 @@ function uninstallInstalled(home, deps) {
   const settingsResult = manifest.settings ? { settingsRestored: settings.restored, settingsKept: settings.kept, settingsFailed: settings.failed } : {};
   // `stackUndone` and `stackKept` likewise, only when the manifest records a row `stack install` ran.
   const stackResult = stackRecords.length > 0 ? { stackUndone: stack.undone, stackKept: stack.kept } : {};
-  return { removed, kept, keptOptional, ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...(trust.trustMoved.length > 0 && { trustMoved: trust.trustMoved }), ...(trust.trustKept.length > 0 && { trustKept: trust.trustKept }), ...settingsResult, ...stackResult, ...(permissions && { permissions }), ...(rulesBlock && { rulesBlock }), tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
+  return { removed, kept, keptOptional, ...(manifest.clones && { clonesKept: clones.kept }), ...(keptFailed.length > 0 && { keptFailed }), entriesRemoved, entriesKept, ...(trust.trustMoved.length > 0 && { trustMoved: trust.trustMoved }), ...(trust.trustKept.length > 0 && { trustKept: trust.trustKept }), ...settingsResult, ...stackResult, ...(permissions && { permissions }), ...(rulesBlock && { rulesBlock }), tasksRemoved, tasksKept, gateKept: [...log.gateKept, ...tickets.kept], channelKept: channel.kept, remoteKept: remote.kept };
 }
 
 /** Removes the folder of the machine's gate lock under `home` (`gateDir` of `gate-lock.mjs`) with whatever

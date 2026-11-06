@@ -10,6 +10,7 @@
 // that the push then refuses, or pay again for one the push lets through.
 import { spawnSync } from 'node:child_process';
 import { isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews } from './codex-reviews.mjs';
+import { NO_RENAMES, RENAMES } from './codex-review-parts.mjs';
 import { leftOutOf } from './codex-review-scope.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
 
@@ -156,6 +157,15 @@ function writtenInMerge(spawn, cwd, id) {
 export const COMMITS_UNREAD = 'commits';
 export const MARKS_UNREAD = 'marks';
 
+/** Whether the range of `rec` still hashes to its `subjectHash`: as the candidate reads it now, or, where that reading
+ * took renames, read renames off, the one way a record written before odd/tasks/lens-counts-renames.md was hashed.
+ * Either reading is fixed by the two commits alone, so either proves the patch did not change. */
+function stillHashes(cwd, rec, spawn) {
+  const now = lensCandidate(cwd, { base: rec.base, head: rec.head, spawn });
+  if (now.subjectHash === rec.subjectHash) return true;
+  return now.renames !== undefined && now.renames !== NO_RENAMES && lensCandidate(cwd, { base: rec.base, head: rec.head, renames: NO_RENAMES, spawn }).subjectHash === rec.subjectHash;
+}
+
 /** What the Codex review records say of the code commits of `from..tip`, as git reads that range in `cwd`:
  * `tip` a full commit id, `from` any revision. `{ unknown }` when it cannot be told, `COMMITS_UNREAD` or
  * `MARKS_UNREAD`. Otherwise the `codeCommits` of the range (newest first: every commit that changes a file
@@ -177,7 +187,9 @@ export const MARKS_UNREAD = 'marks';
  * `read` and `isValid` name the records: Codex's by default, the Claude lenses' for their push row
  * (`./lens-review-rows.mjs`). A record that carries a `subjectHash` covers only while the patch of its own range
  * still hashes to it (`./lens-candidate.mjs`): one that does not is counted `stale` and covers nothing
- * (odd/tasks/f8-s1-reviews.md, T4).
+ * (odd/tasks/f8-s1-reviews.md, T4). The patch is read renames on where the candidate reads it so, and renames off as
+ * well, since every record written before odd/tasks/lens-counts-renames.md was hashed by that reading
+ * (`stillHashes`).
  *
  * `beyondTip: false` is for the rows that refuse, the push's and the merge door's, and for the command whose record
  * they ask for: a record whose head lies past the tip then covers nothing, and is given back in `beyond`, as
@@ -199,10 +211,10 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
   // it runs in and leave out every file outside that folder: run below the top, a commit of code elsewhere
   // would list no file, and count as one that needs no record.
   //
-  // `--no-renames`: the files a commit changes are those `js-harness codex-review` reads of it, and that
-  // command reads a range with renames off. With git's detection of them, which is on by default, a commit
-  // that moves a file lists the new path alone: moved to a path the project marks, the file that went,
-  // which that command reviews as removed, would be in no list, and the commit would need no record.
+  // `--no-renames`: a file a commit renames is listed under both its names, which `js-harness codex-review`
+  // reads it by (`leftOutOfFiles`). With git's detection of renames, which is on by default, a commit that
+  // moves a file lists the new path alone: moved to a path the project marks, the file that went, which
+  // that command reads, would be in no list, and the commit would need no record.
   //
   // `--root`: a commit with no parent lists the files it adds. It does by default, but not in a repository
   // whose configuration turns `log.showRoot` off, where such a commit would list none.
@@ -264,7 +276,7 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
   let stale = 0;
   for (const rec of valid) {
     if (outside(rec) && (onlyWhole(rec) || !pastTip.has(rec.head))) continue;
-    if (rec.subjectHash !== undefined && lensCandidate(cwd, { base: rec.base, head: rec.head, spawn }).subjectHash !== rec.subjectHash) {
+    if (rec.subjectHash !== undefined && !stillHashes(cwd, rec, spawn)) {
       stale += 1;
       continue;
     }
@@ -432,11 +444,12 @@ export function baseLeftOut(cwd, { from, tip, remote = 'origin', spawn = spawnSy
 
 /** The git arguments of the diff a review of `from..head` reads, with `shape` (options of the diff) and,
  * when given, `files` as pathspecs: `git diff <from> <head>`, or, for the review of a merge (`merge`, from
- * `mergeStart`), `git diff <automatic merge> <head>`, what was written in the merge. Renames are off in both,
- * as everywhere a range is counted, split or shown. */
-export function rangeDiff({ from, head, merge = null }, shape = [], files = null) {
+ * `mergeStart`), `git diff <automatic merge> <head>`, what was written in the merge. Renames are asked for in
+ * both (`RENAMES`), as everywhere a range is counted, split or shown, unless `renames` says `NO_RENAMES`, for a
+ * range read with them off (`rangeFiles`). */
+export function rangeDiff({ from, head, merge = null, renames = RENAMES }, shape = [], files = null) {
   const paths = files === null ? [] : ['--', ...files];
-  return ['diff', ...shape, '--no-renames', merge === null ? from : merge.auto, head, ...paths];
+  return ['diff', ...shape, renames, merge === null ? from : merge.auto, head, ...paths];
 }
 
 /** The full id of the tree that merging `first` and `side` again gives, conflict markers included, as

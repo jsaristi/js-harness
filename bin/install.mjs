@@ -10,6 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { checkoutOf, copyPackageManager, dependentProjectOf, installedPackageRoot, npmCliOf, npmPrefixOf, pnpmGlobalDirOf, runPm, shownWord } from './lib/package-manager.mjs';
 import { MalformedManifestError, SESSION_MESSAGES, acceptSessionMessages, install, readManifest, runSchtasks, sync, uninstall } from './lib/manifest.mjs';
+import { removeClones } from './lib/clones.mjs';
 import { hygieneDir, memoryLocation } from './lib/memory-hygiene.mjs';
 import { undoStack } from './lib/stack-run.mjs';
 import { codexHomeOf } from './lib/stack.mjs';
@@ -675,7 +676,7 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   for (const { entry, why, settle } of background.kept) console.error(`kept background session ${entry.id} · ${entry.title}: ${why}; ${settles[settle](entry.id)}`);
   if (background.removedDir) console.log(`removed ${background.removedDir}`);
   if (background.failed) console.error(background.failed);
-  const result = uninstall(home, { earlierTrust: earlierTrustOf(home, env, deps), ...deps, full: full || everything, undoStack: undoTheStack, schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
+  const result = uninstall(home, { earlierTrust: earlierTrustOf(home, env, deps), ...deps, full: full || everything, undoStack: undoTheStack, removeClones: (records) => removeClones(records, home, deps), schtasks: deps.schtasks ?? ((args) => runSchtasks(args, { env, spawnSync: deps.spawnSync })) });
   for (const p of result.removed) console.log(`removed ${p}`);
   for (const project of result.memorySnapshotsRemoved ?? []) console.log(`removed ${project.path}: ${snapshotWords(project.stamps)}`);
   // An optional file that could not be read or removed is not one the user edited, and the manifest that
@@ -691,6 +692,12 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
     console.error(
       `could not ${verb} ${p} (${failed.code}): it is still there and no longer recorded, so nothing else will remove it; remove it by hand`,
     );
+  }
+  // A clone recorded outside ~/.js-harness is never removed, and its record is dropped; one that could not be removed
+  // stays recorded for a run again (bin/lib/manifest.mjs, `removeClones`).
+  for (const clone of result.clonesKept ?? []) {
+    if (clone.reason === 'outside') console.error(`left ${clone.path}: a clone is removed only inside ~/.js-harness, and this record named it elsewhere; it is no longer recorded, so remove it by hand if it is the harness's`);
+    else console.error(`could not remove the clone ${clone.path} (${clone.code ?? clone.reason}): it is still recorded; run js-harness uninstall machine again`);
   }
   for (const p of result.entriesRemoved) console.log(`removed hook entry from ${p}`);
   for (const p of result.entriesKept) console.log(`kept hook entry in ${p} (modified by you)`);
@@ -818,6 +825,7 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
     result.tasksKept.length === 0 &&
     (result.stackUndone ?? []).length === 0 &&
     (result.stackKept ?? []).length === 0 &&
+    (result.clonesKept ?? []).length === 0 &&
     result.gateKept.length === 0 &&
     result.channelKept.length === 0 &&
     result.remoteKept.length === 0 &&
@@ -831,7 +839,7 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
     console.log(`nothing installed under ${home}`);
   }
   // A file or folder left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  const code = notUndone.size > 0 || (result.settingsFailed ?? []).length > 0 || ['kept', 'failed'].includes(result.permissions?.status) || ['kept', 'failed'].includes(result.rulesBlock?.status) || (result.trustKept ?? []).length > 0 || stackNotUndone.length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 || background.kept.length > 0 || Boolean(background.failed) ? 1 : 0;
+  const code = notUndone.size > 0 || (result.clonesKept ?? []).length > 0 || (result.settingsFailed ?? []).length > 0 || ['kept', 'failed'].includes(result.permissions?.status) || ['kept', 'failed'].includes(result.rulesBlock?.status) || (result.trustKept ?? []).length > 0 || stackNotUndone.length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 || background.kept.length > 0 || Boolean(background.failed) ? 1 : 0;
   if (!everything) return code;
   // A live gate keeps its folder without failing the normal uninstall; the whole folder waits for it all the same.
   const dir = path.join(home, '.js-harness');

@@ -563,6 +563,9 @@ not the committed range, wrote no record and had to be run again.
 - Seen: 2026-11-02 — `odd/tasks/f8-s2-removal.md` L9 (JH 134) — that document edited, to write state at 85% of
   the window, during the Codex review of `84997f7..628bace`; 160,754 input tokens spent on part 1 of 6, not kept,
   nothing recorded, the review run again after the commit
+- Seen: 2026-11-03 — `odd/tasks/idea-watch.md` L5 (JH 138) — that document edited, with the lenses running beside
+  it, during the Codex review of `155a118..009dd2e`; 168,141 input tokens spent on part 1 of 4, not kept, nothing
+  recorded, the review run again after the commit
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 
@@ -1548,6 +1551,26 @@ report could print a password from a command line.
 - Control: check — bin/lib/machine-busiest.test.mjs — "scriptOf says nothing of an argument that is
   not the whole path of a file that exists, however it is spelled" — since 2026-10-11
 
+### session-env-file-cut
+Every Bash call of a long-lived session failed before it ran: the codex plugin's SessionStart hook
+appends three `export` lines to the session's env file on every start, resume and compaction, and
+Claude Code puts that file into each Bash command line, which was cut at 8,191 characters inside
+an open quote.
+- Class: tool
+- Seen: 2026-11-03 — the lead's transcript 0f71b2c6, lines 59324, 59668, 60114 and 60312 — `echo hi`
+  failed with `-c: line 83: unexpected EOF while looking for matching` a quote, from 11:17Z on; the
+  lead moved to the terminal tool, whose permission prompt held it 7 hours. JH 140 read the cause:
+  `~/.claude/session-env/0f71b2c6-cbce-43ca-a031-276a4b2c381f/sessionstart-hook-6.sh` held 105 lines
+  (35 starts, 10,150 bytes), the command line was 10,420 characters, and cutting it at 8,191
+  reproduced the same message, line 83 and all. Claude Code reads the file once at a start, not on
+  each call (a probe line added to JH 140's own file did not reach its next call). Fix: the file
+  was cut to its last three lines, the only distinct ones; backup in
+  `~/.claude/session-env-backups/jh140/0f71b2c6-cbce-43ca-a031-276a4b2c381f/sessionstart-hook-6.sh`
+  (sha256 556524bf…b42228f); undo: `cp -p ~/.claude/session-env-backups/jh140/0f71b2c6-cbce-43ca-a031-276a4b2c381f/sessionstart-hook-6.sh ~/.claude/session-env/0f71b2c6-cbce-43ca-a031-276a4b2c381f/`.
+  It returns after about 27 more starts of one session, since the hook,
+  `plugins/cache/openai-codex/codex/1.0.6/scripts/session-lifecycle-hook.mjs:39`, appends with no
+  check
+
 ### session-never-woken
 Sessions told to start after an event armed no wait for it, so nothing woke them when it came.
 - Class: unseen-state
@@ -1796,6 +1819,11 @@ the reply before he leaves; so the return had no goals to check and no forecast 
   19:58 local (UTC-05:00) with no stretch open; the lead passed `quiet --wait --no-stretch` with a reason instead of
   opening one, so his return had no estimate to measure against. The stretch record's last close is at
   2026-11-04T10:11:17Z and none opened after it (`stretches.jsonl` under the throughput folder, read by JH 137)
+- Seen: 2026-11-05 — the lead's transcript 0f71b2c6, line 67448 (the lead's own, sent to JH 142) — he was away 07:38
+  to 10:46 local (UTC-05:00) with no stretch opened by the lead, the fourth time by the lead's count; the return had
+  nothing to compare it with
+- Seen: 2026-11-05 — the lead's message to JH 142 (claimed; the lead's own) — he was away 11:05 to 13:25 local
+  (UTC-05:00) with no stretch opened by the lead, the fifth time by the lead's count
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 

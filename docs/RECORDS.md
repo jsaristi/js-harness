@@ -317,6 +317,18 @@ The brief of the background session that reviews an update. `brief` prints it fr
 
 `hostWatchTick` also writes `~/.js-harness/channel/host-watch/<project>/asked`, which holds one ISO time: the last time the heartbeat read the host.
 
+## The idea watch's record
+
+`odd/tasks/gentle-ai-update-check.md`, under its `## Releases read` heading, holds what the idea watch read of each stable gentle-ai release (`odd/tasks/idea-watch.md`). A session writes it by hand from what `js-harness idea-watch draft` prints (`bin/lib/idea-watch.mjs` `draftRelease`); `lastRead` reads it for `idea-watch status` and `doctor`'s `idea-watch` row.
+
+- A batched line `- v<version> (from v<version>, read <YYYY-MM-DD>): ignore; <n> paths, all in ignored areas, +<added> -<deleted>`, for a release whose paths all fall in ignored areas; the first line, `- v4.3.1 (read 2026-10-28): …`, is the baseline the full review read.
+- Any other release is a section `### v<version> (from v<version>, read <YYYY-MM-DD>)`: a table `| Area | What we look for | Paths | Lines | Verdict | Evidence |` with one row an area (the reader splits a row into one a change), the verdict `adopt`, `adapt`, `ignore`, or `?` until decided; `To classify by hand:` with one `- <path> (+a -d)` line a path no area matches, or `(none)`; `Paths by area:` with one `- <area>: <path> (+a -d)` line a changed path.
+- A section counts as read only when every row of its table has a verdict that starts with `adopt`, `adapt` or `ignore` (any case) and a non-empty evidence cell, and its hand list, read up to `Paths by area:` across blank lines, holds no path.
+
+## The idea watch's clone
+
+`~/.js-harness/upstream/gentle-ai` is a bare clone of the gentle-ai repository, with no working tree: nothing in it is built or run, and only git reads it. `bin/idea-watch.mjs` `fetchClone` records it in the machine manifest's `clones` (`bin/lib/clones.mjs` `recordClone`) before it clones it, and fetches its tags when it is already there; `js-harness uninstall machine` removes it whole, with the `upstream` folder it leaves empty.
+
 ## Session summaries
 
 `docs/sessions/<date>-<slug>.md` is the committed summary a work session leaves when it finishes. The lead reads it before archiving the session; it is kept to reconstruct later how the work went. `bin/summary.mjs` `summaryMain` prints the template (`bin/lib/summary.mjs` `summaryTemplate`) or only the file's path (`summaryPath`), and the session fills, commits and pushes it. `<date>` is the UTC day `YYYY-MM-DD` and `<slug>` the title's slug (`bin/lib/channel.mjs` `titleSlug`).
@@ -333,7 +345,7 @@ The brief of the background session that reviews an update. `brief` prints it fr
 
 ## The machine manifest
 
-The record of everything js-harness wrote on the machine outside a repository, so `uninstall` can undo exactly that and `status` and `doctor` can compare it with the disk. `bin/lib/manifest.mjs` `install` builds its core (`version`, `files`, `entries`, `permissions`, `rulesBlock`) and carries forward the arrays the commands that act on request keep through `keepRecord` (`recordOptionalFile`, `recordScheduledTask`, `recordStackRow`, and `acceptSessionMessages` in `bin/lib/user-settings.mjs`). It is one JSON object, written whole by `writeManifestAtomic`.
+The record of everything js-harness wrote on the machine outside a repository, so `uninstall` can undo exactly that and `status` and `doctor` can compare it with the disk. `bin/lib/manifest.mjs` `install` builds its core (`version`, `files`, `entries`, `permissions`, `rulesBlock`) and carries forward the arrays the commands that act on request keep through `keepRecord` (`recordOptionalFile`, `recordScheduledTask`, `recordStackRow`, `recordClone` of `bin/lib/clones.mjs`, and `acceptSessionMessages` in `bin/lib/user-settings.mjs`). It is one JSON object, written whole by `writeManifestAtomic`.
 
 - `version`: string, the js-harness version installed; `null` in a manifest created only to hold records kept on request, which reads as not installed.
 - `files`: array of `{ path, sha256, skipped, edited?, reason? }`, one per whole file written (the skills under `~/.claude/skills/`, the output style), built by `writeComponent` in `bin/lib/component-write.mjs`: `path` absolute, `sha256` hex of the bytes written, `skipped` boolean (`true` when this run did not write it and carried the earlier record forward), `edited` `true` when the user changed the file since, `reason` why it was skipped.
@@ -344,6 +356,7 @@ The record of everything js-harness wrote on the machine outside a repository, s
 - `tasks`: array of `{ name, command, arguments }`, a Windows scheduled task registered on request, from `recordScheduledTask`.
 - `settings`: array of `{ path, key, value, had, previous, createdFile }`, a user setting written on request (`crossSessionInbound: "accept"`), from `acceptSessionMessages`: `had` whether the key was there before, `previous` its earlier value or `null`.
 - `stack`: array of `{ tool, dimension, run, undo, applies, env, at }`, one row `stack install` ran, from `recordStackRow`: `run` and `undo` the words of the command and its undo, `applies` what the undo still applies to (`null` before it ran), `env` the variables given.
+- `clones`: array of `{ path, url }`, a git repository fetched on request (the idea watch's bare clone), from `bin/lib/clones.mjs` `recordClone`: `path` the absolute folder, `url` the repository fetched. `uninstall` removes a recorded clone only inside `~/.js-harness`, both as written and as it resolves through links.
 
 ## The host's files the harness edits
 
@@ -922,6 +935,18 @@ Copies taken before `merge-queue --land --refresh-copy` installs main over the i
 
 - `settings-<stamp>.json`: a byte copy of the Claude settings (`<home>/.claude/settings.json`); the newest 5 are kept.
 - `package.json.<stamp>`: a byte copy of pnpm's global `package.json` that the js-harness shim names, which `pnpm add -g` rewrites; the newest 5 are kept.
+
+## Session env trims
+
+What `backup --session-start` leaves when it rewrites a session's SessionStart env file that the codex plugin grew past
+2,048 bytes to the last occurrence of each line (`odd/tasks/session-env-trim.md`); `bin/lib/session-env.mjs`
+`trimSessionEnv` writes both, the backup before the rewrite and the record after it. Nothing prunes them yet.
+
+- `<session>/sessionstart-hook-<n>.<stamp>.sh`: a byte copy of the file before the rewrite; `<stamp>` is the UTC time
+  with `:` and `.` as `-`, and a `.<k>` before `.sh` when that name is taken.
+- `trims.jsonl`, one line a rewrite: `at` (ISO time), `file` (the env file rewritten), `backup` (its copy), `bytesBefore`
+  and `bytesAfter` (numbers), `sha256Before` (string, of the text copied), `undo` (string, the `cp -p` that puts the copy
+  back).
 
 ## The doctor's cache and reviews
 

@@ -105,3 +105,116 @@ test('a range whose every path is left out has an empty manifest, and a name tha
   assert.deepEqual(docs.leftOut, ['README.md']);
   assert.match(lensCandidate(dir, { base: 'no-such-ref', head: 'HEAD' }).error, /no-such-ref.*commit/);
 });
+
+/** A repository of its own, with `steps` run in it: each `{ files, message }` writes its files (a `null` text removes
+ * one) and commits them. Returns the folder and the commit of each step. */
+function repoOf(steps) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lens-candidate-renames-'));
+  const run = (...args) => {
+    const ran = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+    assert.equal(ran.status, 0, `git ${args.join(' ')}: ${ran.stderr}`);
+    return ran.stdout.trim();
+  };
+  const commits = [];
+  withoutAutoMaintenance(() => {
+    run('init', '-q', '--initial-branch=main');
+    run('config', 'user.email', 't@example.com');
+    run('config', 'user.name', 'T');
+    run('config', 'core.autocrlf', 'false');
+    for (const { files, message } of steps) {
+      for (const [file, text] of Object.entries(files)) {
+        const at = path.join(root, file);
+        if (text === null) fs.rmSync(at);
+        else {
+          fs.mkdirSync(path.dirname(at), { recursive: true });
+          fs.writeFileSync(at, text);
+        }
+      }
+      run('add', '-A');
+      run('commit', '-q', '-m', message);
+      commits.push(run('rev-parse', 'HEAD'));
+    }
+  });
+  return { root, commits };
+}
+
+const LINES = Array.from({ length: 200 }, (_, at) => `export const line${at} = ${at};\n`).join('');
+
+test('a renamed file is one entry by its new path, naming its old one, with only the lines it changes', () => {
+  const { root, commits: [from, to] } = repoOf([
+    { files: { 'bin/old.mjs': LINES }, message: 'first' },
+    { files: { 'bin/old.mjs': null, 'lib/new.mjs': LINES.replace('line7 = 7', 'line7 = 70') }, message: 'move' },
+  ]);
+  try {
+    const candidate = lensCandidate(root, { base: from, head: to });
+    assert.equal(candidate.error, undefined);
+    assert.deepEqual(candidate.manifest, [{ index: 0, path: 'lib/new.mjs', from: 'bin/old.mjs', status: 'R', added: 1, deleted: 1 }]);
+    assert.equal(candidate.patches.length, 1);
+    assert.match(candidate.patches[0], /^diff --git a\/bin\/old\.mjs b\/lib\/new\.mjs\n[\s\S]*rename from bin\/old\.mjs\nrename to lib\/new\.mjs\n/);
+    assert.equal(candidate.patches[0].split('\n').filter((line) => /^[+-][^+-]/.test(line)).length, 2, 'the patch holds the changed lines, not the whole file');
+    assert.ok(candidate.block.includes('0\tR\t+1 -1\t"lib/new.mjs"\t"bin/old.mjs"'));
+    assert.ok(candidate.block.includes('path 0 "lib/new.mjs"'));
+    // Read renames off, as before this change, the same range is the whole file removed and added.
+    const before = lensCandidate(root, { base: from, head: to, renames: '--no-renames' });
+    assert.deepEqual(before.manifest.map(({ path: name, status, added, deleted }) => [name, status, added, deleted]), [['bin/old.mjs', 'D', 0, 200], ['lib/new.mjs', 'A', 200, 0]]);
+    assert.notEqual(before.subjectHash, candidate.subjectHash);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the renames a lens reads do not move with the git configuration: the rename limit is fixed', () => {
+  // The verifier of 318fbae: `diff.renameLimit` decides which renames git looks for, so it moved the subject hash.
+  const { root, commits: [from, to] } = repoOf([
+    { files: { 'bin/one.mjs': LINES, 'bin/two.mjs': LINES.replaceAll('line', 'row') }, message: 'first' },
+    {
+      files: {
+        'bin/one.mjs': null, 'lib/uno.mjs': LINES.replace('line7 = 7', 'line7 = 70'),
+        'bin/two.mjs': null, 'lib/dos.mjs': LINES.replaceAll('line', 'row').replace('row7 = 7', 'row7 = 70'),
+      },
+      message: 'move',
+    },
+  ]);
+  try {
+    const first = lensCandidate(root, { base: from, head: to });
+    assert.deepEqual(first.manifest.map((entry) => entry.status), ['R', 'R']);
+    spawnSync('git', ['config', 'diff.renameLimit', '1'], { cwd: root });
+    assert.equal(lensCandidate(root, { base: from, head: to }).subjectHash, first.subjectHash);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a range that renames a document into code is read renames off: the code is read whole, the document left out', () => {
+  const { root, commits: [from, to] } = repoOf([
+    { files: { 'notes/plan.md': LINES } , message: 'first' },
+    { files: { 'notes/plan.md': null, 'bin/plan.mjs': LINES.replace('line7 = 7', 'line7 = 70') }, message: 'the document becomes code' },
+  ]);
+  try {
+    const candidate = lensCandidate(root, { base: from, head: to });
+    assert.deepEqual(candidate.manifest, [{ index: 0, path: 'bin/plan.mjs', status: 'A', added: 200, deleted: 0 }]);
+    assert.deepEqual(candidate.leftOut, ['notes/plan.md']);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a range with no rename hands a lens what it was handed before: the same block and the same subject hash', () => {
+  const now = lensCandidate(dir, { base, head: 'HEAD' });
+  const before = lensCandidate(dir, { base, head: 'HEAD', renames: '--no-renames' });
+  assert.equal(now.error, undefined);
+  assert.equal(now.block, before.block);
+  assert.equal(now.subjectHash, before.subjectHash);
+});
+
+test('the prompt tells every lens how a renamed file is written in the manifest it is handed', async () => {
+  const { lensPrompt, LENS_NAMES } = await import('./lens-prompts.mjs');
+  for (const name of LENS_NAMES) assert.match(lensPrompt(name), /a renamed file's line then holds its old path as a JSON string/, name);
+});
+
+test('the counts of each file are read whole: a path that starts with a tab is a path, not a rename', async () => {
+  // Codex's review of 61aacc5..318fbae, P2: a path cut at its first tab read empty, as a rename's does.
+  const { numstatCounts } = await import('./lens-candidate.mjs');
+  const numstat = ['1\t2\t\tlead.mjs', '3\t4\tplain.mjs', '5\t6\t', 'old.mjs', 'new.mjs', '-\t-\tpicture.png', ''].join('\0');
+  assert.deepEqual(numstatCounts(numstat), [[1, 2], [3, 4], [5, 6], [0, 0]]);
+});
