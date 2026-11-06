@@ -22,8 +22,10 @@ export const CONTEXT_START = 'JS_HARNESS_LENS_CONTEXT';
 export const CONTEXT_END = 'JS_HARNESS_LENS_CONTEXT_END';
 
 // What every diff of the range is run with, after the option of its renames (`rangeFiles`): whole paths from the top,
-// and the patch's own shape fixed rather than left to the configuration.
-const DIFF = ['--no-relative', '--no-ext-diff', '--no-textconv', '--no-color', '--submodule=short'];
+// and the patch's own shape fixed rather than left to the configuration. `-l1000` is git's own default of
+// `diff.renameLimit`, which decides how many files git compares to find a rename, so it fixes which renames a range
+// holds (the verifier of 318fbae); a reading renames off ignores it.
+const DIFF = ['--no-relative', '--no-ext-diff', '--no-textconv', '--no-color', '--submodule=short', '-l1000'];
 // `--full-index`: the `index` line of a section names its blobs in full, since an abbreviation's length follows
 // `core.abbrev` and the size of the repository, and would move the hash (the reliability lens, 2026-10-27);
 // `--inter-hunk-context=0`, since `diff.interHunkContext` joins nearby hunks into one (Codex, the same day).

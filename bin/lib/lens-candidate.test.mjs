@@ -163,6 +163,28 @@ test('a renamed file is one entry by its new path, naming its old one, with only
   }
 });
 
+test('the renames a lens reads do not move with the git configuration: the rename limit is fixed', () => {
+  // The verifier of 318fbae: `diff.renameLimit` decides which renames git looks for, so it moved the subject hash.
+  const { root, commits: [from, to] } = repoOf([
+    { files: { 'bin/one.mjs': LINES, 'bin/two.mjs': LINES.replaceAll('line', 'row') }, message: 'first' },
+    {
+      files: {
+        'bin/one.mjs': null, 'lib/uno.mjs': LINES.replace('line7 = 7', 'line7 = 70'),
+        'bin/two.mjs': null, 'lib/dos.mjs': LINES.replaceAll('line', 'row').replace('row7 = 7', 'row7 = 70'),
+      },
+      message: 'move',
+    },
+  ]);
+  try {
+    const first = lensCandidate(root, { base: from, head: to });
+    assert.deepEqual(first.manifest.map((entry) => entry.status), ['R', 'R']);
+    spawnSync('git', ['config', 'diff.renameLimit', '1'], { cwd: root });
+    assert.equal(lensCandidate(root, { base: from, head: to }).subjectHash, first.subjectHash);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('a range that renames a document into code is read renames off: the code is read whole, the document left out', () => {
   const { root, commits: [from, to] } = repoOf([
     { files: { 'notes/plan.md': LINES } , message: 'first' },
