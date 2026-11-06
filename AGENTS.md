@@ -24,7 +24,7 @@ means the commit is not ready yet.
 The plan is `docs/ROADMAP.md`: what is decided, done, next and still open; `docs/origin.md`,
 frozen, keeps the reasoning it came from; `docs/SPEC.md` is the map, and `docs/README.md` the entry
 for a reader starting cold. Feature work is tracked in `odd/tasks/<feature>.md`, in
-the shape of gentle-ai's ODD document. It opens with the task contract (`js-harness contract template`), so its
+the shape of an ODD document. It opens with the task contract (`js-harness contract template`), so its
 end is a set of commands that exit 0, not an opinion; `check` validates every contract.
 
 A rule lives where something acts on it: a check a command runs before a line here or in
