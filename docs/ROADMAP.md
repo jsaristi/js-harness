@@ -625,9 +625,13 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   (answered: "Quitarlas solo").
 - **State:** the hook done (`odd/tasks/strip-attribution.md`): `js-harness commit-msg` and
   `.githooks/commit-msg` merged in #728, a scratch commit with both trailers landed without them (`951bcfb4`);
-  `init` and `sync` ship it to projects, recorded so `uninstall` takes it out, in PR 2 of that document; the
-  50-commit count on `main` to do here; the hook-count row and D8 move to `odd/tasks/workshop-product-split.md`
-  (spec 7, his answer to question 190, "Separar y aligerar juntos"), so this cut does not do them.
+  `init` and `sync` ship it to projects, recorded so `uninstall` takes it out, in PR 2 of that document. The
+  50-commit count done: 0 attribution lines in the 341 commits on `main` since `75c3583f` (JH 153,
+  `odd/tasks/f8-s4a-hook-count.md`, L2). The hook count: `odd/tasks/workshop-product-split.md` (D0, #772) built the
+  `hook entries` row with the install limit; his yes to question 211 folds S4a's ceilings into it, a table by owner
+  and event counted on 2026-11-06 that fails on a new owner or a cell over its ceiling where `harness.json` says
+  `"hookCount": true` (L3). D8 answered "Apagarlo igual": `js-harness stack engram-prompt off|on`, recorded so
+  `uninstall` puts it back (PR 2 of that document).
 
 ### S4b Contradictions to zero
 - **Changes:** contract-first as a `check` refusal for a new feature document; the remaining pairs of
