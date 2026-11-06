@@ -5,7 +5,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { currentVersion, installMain, syncMain, uninstallMain } from './install.mjs';
 import { initMain } from './init.mjs';
-import { statusMain, updateMain, upgradeMain, resolveLatest } from './update.mjs';
+import { statusMain, updateAll, upgradeAll, resolveLatest } from './update.mjs';
 import { isNewer } from './lib/version.mjs';
 import { projectLocation } from './lib/project.mjs';
 import { installedVersion as manifestVersion } from './lib/manifest.mjs';
@@ -437,7 +437,8 @@ export function runTui({
  * location's `root` (the repository's top-level) with `--cwd`, so a repository that appears, or a project
  * that moves, while the TUI is open never leaves a menu item without a command or bound to a stale root.
  * `root` serves direct callers and tests that call a project command with no location; the TUI always
- * passes one, so there the location is authoritative. */
+ * passes one, so there the location is authoritative. `stack` is the seam of the stack step of Update and Upgrade
+ * (odd/tasks/stack-upgrade.md, S1); Upgrade hands it the menu's `ask`, so each tool it updates is asked in the menu. */
 export function buildCommands({
   home,
   cwd = process.cwd(),
@@ -448,6 +449,7 @@ export function buildCommands({
   now,
   remoteMain: remote = remoteMain,
   source,
+  stack,
 } = {}) {
   // The folder of tarballs the menu was opened with, passed on, so that its header and its three version
   // commands read the same release source.
@@ -471,8 +473,9 @@ export function buildCommands({
     // Each install it runs is shown, then asked through the menu's `ask`: the TUI is the terminal that consents (D5).
     'stack-install': (location, io = {}) => stackInstallMain(['--home', home, '--cwd', cwd], env, { ask: io.ask, interactive: true }),
     install: () => installMain(['--home', home]),
-    update: () => updateMain(['--home', home, ...fromSource], env, spawn),
-    upgrade: () => upgradeMain(['--home', home, ...fromSource], env, spawn),
+    // Update says what of the stack is behind too, and Upgrade updates it, each asked through the menu's `ask` (stack-upgrade S1).
+    update: () => updateAll(['--home', home, ...fromSource], env, spawn, process.platform, { stack }),
+    upgrade: (location, io = {}) => upgradeAll(['--home', home, ...fromSource], env, spawn, process.platform, { ask: io.ask, stack }),
     sync: () => syncMain(['--global', '--home', home]),
     'uninstall-machine': () => uninstallMain(['machine', '--home', home]),
     'uninstall-snapshots': () => uninstallMain(['snapshots', '--home', home]),

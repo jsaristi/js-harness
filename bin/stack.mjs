@@ -4,19 +4,23 @@
 // odd/tasks/stack-install.md (D5, D8). `js-harness stack install` runs those installs, each shown, then asked, then
 // recorded before it starts so `uninstall machine` can undo it exactly (D4, D6, D7). `js-harness stack backup` takes
 // S2's full backup of the tool homes, drills its restore on a scratch home and restores it
-// (odd/tasks/f8-s2-removal.md, T3; the work is bin/lib/stack-backup.mjs).
+// (odd/tasks/f8-s2-removal.md, T3; the work is bin/lib/stack-backup.mjs). `js-harness stack upgrade` brings the tools of the
+// stack up to their latest release, each shown with its undo, asked and recorded the same way
+// (odd/tasks/stack-upgrade.md, S1; the plan is bin/lib/stack-upgrade.mjs, the engram binary bin/lib/engram-release.mjs).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import readline from 'node:readline';
 import { unknownArgument } from './lib/args.mjs';
-import { forgetStackRow, recordStackRow } from './lib/manifest.mjs';
+import { forgetStackRow, readManifest, recordStackRow } from './lib/manifest.mjs';
+import { updateEngramBinary } from './lib/engram-release.mjs';
+import { planUpgrade } from './lib/stack-upgrade.mjs';
 import { resolveStackPm } from './lib/package-manager.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './lib/project-functions.mjs';
 import { planStack, prefixBinOf, RUNNABLE } from './lib/stack-install.mjs';
 import { appliesOf, homeEnv, runWords, shownCommand, TIMEOUTS, withEnv } from './lib/stack-run.mjs';
-import { codexHomeOf, probeStack, probeVersionCommand, resolveProjectRoot, tools } from './lib/stack.mjs';
+import { codexHomeOf, pluginInstalledVersion, probeStack, probeVersionCommand, resolveProjectRoot, tools } from './lib/stack.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { restoreBackup, ROOT_IDS, runBackup, verifyBackup } from './lib/stack-backup.mjs';
 
@@ -28,6 +32,10 @@ const INSTALL_USAGE = 'Usage: js-harness stack install [--home <path>] [--cwd <p
 const INSTALL_KNOWN = { valued: ['--home', '--cwd', '--pm', '--prefix', '--tool'], bare: ['--yes'] };
 /** The tools `stack install` runs rows of: what `--tool` may name. */
 const RUNNABLE_TOOLS = [...new Set(RUNNABLE.map((row) => row.tool))];
+const UPGRADE_USAGE = 'Usage: js-harness stack upgrade [--home <path>] [--cwd <path>] [--pm <command>] [--prefix <dir>] [--tool <id>]... [--yes] [--list]';
+const UPGRADE_KNOWN = { valued: INSTALL_KNOWN.valued, bare: ['--yes', '--list'] };
+/** The tools `stack upgrade` updates, in the order it updates them: what its `--tool` may name. */
+const UPGRADE_TOOLS = ['engram', 'engram-plugin', 'codegraph', 'codex'];
 const BACKUP_USAGE = [
   'Usage: js-harness stack backup run [--home <dir>] [--to <dir>]',
   '       js-harness stack backup verify --from <dir> --marker <token> --expect <id>',
@@ -45,6 +53,11 @@ const HELP = [
   '  Runs those installs in that order, each printed with its undo and asked y/N in a terminal; without one, only',
   '  the tools --tool names, under --yes. Each is recorded before it starts, so uninstall machine undoes it.',
   `  --tool: ${RUNNABLE_TOOLS.join(', ')}`,
+  UPGRADE_USAGE,
+  '  Brings each tool of the stack behind its latest release up to it, each printed with its undo and asked y/N in a',
+  '  terminal; without one, only the tools --tool names, under --yes. Recorded before it starts, so uninstall machine',
+  '  takes the engram binary and the packages back to the versions before, and names the way back of the plugin.',
+  `  --tool: ${UPGRADE_TOOLS.join(', ')}; --list prints what is behind and runs nothing (js-harness update shows it).`,
   BACKUP_USAGE,
   '  run: with every Claude, Codex, engram, Orca and herdr process closed, copies the tool homes byte for byte into',
   '  ~/js-harness-s2-backup/<UTC stamp> (or --to), each root counted twice, published only once complete.',
@@ -76,13 +89,14 @@ function parseArgs(argv, env) {
 
 /** What the plan reads: the tool rows `probeStack` probes (its checks left out), the project's switches as `doctor`
  * resolves them, and the prerequisites' states. `homedir` is the real home, whose Codex home is the `CODEX_HOME` the
- * user set (T8). */
-export function readStack({ home, cwd, spawn = spawnSync, platform = process.platform, env = process.env, homedir }) {
+ * user set (T8). `prerequisites: false` leaves them out: `stack upgrade` updates none, and gh, run in a scratch home,
+ * writes its device-id there. */
+export function readStack({ home, cwd, spawn = spawnSync, platform = process.platform, env = process.env, homedir, prerequisites: probe = true }) {
   const project = resolveProjectRoot(cwd, spawn);
   const { resolved: functions } = functionsOf(harnessOfTree(project), workingTree(gitIn(project, spawn)));
   const ids = new Set(tools.map((tool) => tool.id));
   const rows = probeStack({ home, project, spawn, platform, interactive: false, functions, env, homedir }).filter((r) => ids.has(r.id));
-  const prerequisites = PREREQUISITES.map((id) => ({ id, state: probeVersionCommand(id, ['--version'], { spawn, platform }).state }));
+  const prerequisites = !probe ? [] : PREREQUISITES.map((id) => ({ id, state: probeVersionCommand(id, ['--version'], { spawn, platform }).state }));
   return { rows, functions, prerequisites };
 }
 
@@ -124,12 +138,13 @@ export async function stackMain(argv, env = process.env, deps = {}) {
   // `stack --help`, `stack install --help` and `stack backup [<form>] --help` print every form and read nothing
   // (user-guide S4).
   const backupForm = argv[0] === 'backup' && Object.hasOwn(BACKUP_KNOWN, argv[1] ?? '') ? 2 : 1;
-  const asked = argv[0] === 'install' ? argv.slice(1) : argv[0] === 'backup' ? argv.slice(backupForm) : argv;
+  const asked = argv[0] === 'install' || argv[0] === 'upgrade' ? argv.slice(1) : argv[0] === 'backup' ? argv.slice(backupForm) : argv;
   if (asked.length === 1 && (asked[0] === '--help' || asked[0] === '-h')) {
     log(HELP);
     return 0;
   }
   if (argv[0] === 'install') return stackInstallMain(argv.slice(1), env, deps);
+  if (argv[0] === 'upgrade') return stackUpgradeMain(argv.slice(1), env, deps);
   if (argv[0] === 'backup') return stackBackupMain(argv.slice(1), env, deps);
   const error = deps.error ?? ((line) => console.error(line));
   let args;
@@ -149,8 +164,8 @@ export async function stackMain(argv, env = process.env, deps = {}) {
   return plan.mandatory.length + plan.manual.length === 0 ? 0 : 1;
 }
 
-function parseInstallArgs(argv, env) {
-  const unknown = unknownArgument(argv, INSTALL_KNOWN);
+function parseInstallArgs(argv, env, { known = INSTALL_KNOWN, allowed = RUNNABLE_TOOLS, verb = 'install runs' } = {}) {
+  const unknown = unknownArgument(argv, known);
   if (unknown !== null) throw new StackArgError(`unknown argument: ${unknown}`);
   const values = (flag) => argv.flatMap((token, i) => {
     if (token !== flag) return [];
@@ -159,8 +174,9 @@ function parseInstallArgs(argv, env) {
     return [value];
   });
   const tools = values('--tool');
-  const wrong = tools.find((tool) => !RUNNABLE_TOOLS.includes(tool));
-  if (wrong !== undefined) throw new StackArgError(`--tool ${wrong}: stack install runs only ${RUNNABLE_TOOLS.join(' and ')}`);
+  const wrong = tools.find((tool) => !allowed.includes(tool));
+  const listed = allowed.length > 2 ? `${allowed.slice(0, -1).join(', ')} and ${allowed.at(-1)}` : allowed.join(' and ');
+  if (wrong !== undefined) throw new StackArgError(`--tool ${wrong}: stack ${verb} only ${listed}`);
   const yes = argv.includes('--yes');
   if (yes && tools.length === 0) throw new StackArgError('--yes runs only the tools --tool names: name each one the person said yes to');
   return {
@@ -170,6 +186,7 @@ function parseInstallArgs(argv, env) {
     prefix: values('--prefix')[0] ?? null,
     tools,
     yes,
+    list: argv.includes('--list'),
   };
 }
 
@@ -311,6 +328,146 @@ export async function stackInstallMain(argv, env = process.env, deps = {}) {
   }
   const left = chosen(planNow()).filter((row) => first.some((was) => keyOf(was) === keyOf(row)));
   return left.length === 0 && unverified.length === 0 ? 0 : 1;
+}
+
+/** What `stack upgrade` reads: the tool rows `probeStack` probes, the project's switches, and each tool's latest version
+ * as doctor resolves it (its cache while fresh, else the network; the plugin's from the engram marketplace clone). */
+export async function readUpgrade({ home, cwd, spawn = spawnSync, platform = process.platform, env = process.env, homedir, fetch: fetchImpl = fetch, now }) {
+  const { rows, functions } = readStack({ home, cwd, spawn, platform, env, homedir, prerequisites: false });
+  // Loaded here only: doctor's module carries the whole report, which no other form of `stack` needs.
+  const { resolveLatestVersions } = await import('./doctor.mjs');
+  const latest = await resolveLatestVersions(rows, { home, offline: false, fetch: fetchImpl, now });
+  return { rows, functions, latest };
+}
+
+/** Where an update goes, as a person reads it before saying yes. */
+const toWords = (update) => update.to ?? `the version engram v${update.engramTo} ships`;
+
+/** An update as the lines a person reads before saying yes: what it is, its command and its undo. */
+function upgradeLines(update, platform, head) {
+  const exe = platform === 'win32' ? '.exe' : '';
+  if (update.kind === 'binary') {
+    return [
+      head,
+      `     run:  download ${update.asset} from ${update.release}, check its sha256 against the release's checksums.txt, keep the engram binary as engram-${update.from}${exe}.bak and put the new one in its place`,
+      `     undo: put engram-${update.from}${exe}.bak back in its place`,
+    ];
+  }
+  if (update.kind === 'plugin') {
+    return [head, ...update.run.map((words) => `     run:  ${shownCommand(words, platform)}`), '     undo: none: Claude Code installs no earlier version of a plugin; uninstall machine names the version before'];
+  }
+  return [head, `     run:  ${shownCommand(update.run, platform)}`, `     undo: ${shownCommand(update.undo, platform)}`];
+}
+
+/** `js-harness stack upgrade` (odd/tasks/stack-upgrade.md, S1): each tool of the stack behind its latest release, in the
+ * order of `planUpgrade`, is printed with its undo, then asked in a terminal (`Update it? [y/N]`), or run under
+ * `--yes` when `--tool` names it. Without a terminal and without `--yes` nothing runs. Its record is written
+ * before it starts; a failure puts back the record that was there before (an earlier update of the same tool), or
+ * none; a success records what its undo applies to, read back. The engram plugin follows the binary: when the binary
+ * was not updated, its update is skipped. Exit 0 when every update it set out to run is done, 1 when one is not
+ * (declined, failed, or nothing could run without a terminal), 2 on a usage error. `deps`: `readUpgrade`, `spawn`,
+ * `updateEngram` (the binary's update, bin/lib/engram-release.mjs), `ask`, `interactive`, `realHome`, `now`,
+ * `log`, `error`, `platform`, `arch`, `fetch`. */
+export async function stackUpgradeMain(argv, env = process.env, deps = {}) {
+  const log = deps.log ?? ((line) => console.log(line));
+  const error = deps.error ?? ((line) => console.error(line));
+  let args;
+  try {
+    args = parseInstallArgs(argv, env, { known: UPGRADE_KNOWN, allowed: UPGRADE_TOOLS, verb: 'upgrade updates' });
+  } catch (err) {
+    if (!(err instanceof StackArgError)) throw err;
+    error(`${err.message}\n\n${UPGRADE_USAGE}`);
+    return 2;
+  }
+  const platform = deps.platform ?? process.platform;
+  const interactive = deps.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  const ask = deps.ask ?? askOnTerminal;
+  const now = deps.now ?? (() => new Date().toISOString());
+  const pm = resolveStackPm(args.pm, env);
+  const realHome = deps.realHome ?? os.homedir();
+  const scratch = { ...homeEnv(args.home, realHome, platform), ...(args.prefix && { PATH: prefixBinOf(pm.kind, args.prefix, platform) }) };
+  const childBase = withEnv(env, scratch, platform);
+  const read = deps.readUpgrade ?? readUpgrade;
+  const { rows, functions, latest } = await read({ home: args.home, cwd: args.cwd, spawn: deps.spawn, platform, env: childBase, homedir: realHome, fetch: deps.fetch });
+  const records = readManifest(args.home)?.stack ?? [];
+  const plan = planUpgrade({ rows, latest, functions, pm, prefix: args.prefix, platform, arch: deps.arch ?? process.arch, records });
+  const engramTo = plan.updates.find((u) => u.tool === 'engram')?.to;
+  const updates = plan.updates.filter((u) => args.tools.length === 0 || args.tools.includes(u.tool));
+
+  for (const { tool, version } of plan.current) log(`  ${tool}: ${version === 'hosted' ? 'hosted, always the newest' : `${version}, the latest`}`);
+  for (const { tool, why } of plan.unknown) log(`  ${tool}: ${why}`);
+  if (updates.length === 0) {
+    log(plan.updates.length === 0 ? 'js-harness stack upgrade: every tool is at its latest version.' : 'js-harness stack upgrade: nothing --tool names is behind.');
+    return 0;
+  }
+  const head = (u) => `${u.tool} ${u.from} → ${u.to ?? `the version engram v${engramTo} ships`}`;
+  if (args.list || (!interactive && !args.yes)) {
+    updates.forEach((u, i) => upgradeLines(u, platform, `  ${i + 1}. ${head(u)}`).forEach((line) => log(line)));
+    // `--list` is the read `update` asks for: nothing is run, so nothing failed.
+    if (args.list) {
+      log('js-harness upgrade updates them, each shown with its undo and asked y/N.');
+      return 0;
+    }
+    error('js-harness stack upgrade runs nothing without a terminal: pass --yes with --tool <id> for each tool the person said yes to.');
+    return 1;
+  }
+
+  const left = [];
+  // The plugin's latest is what the binary's new release ships: while the binary is planned and not updated, it waits.
+  let binaryDone = engramTo === undefined;
+  for (const update of updates) {
+    const { tool, kind } = update;
+    if (tool === 'engram-plugin' && !binaryDone) {
+      log('engram-plugin: skipped, since the engram binary was not updated');
+      left.push(tool);
+      continue;
+    }
+    for (const line of upgradeLines(update, platform, head(update))) log(line);
+    if (!args.yes && !(await ask('Update it? [y/N] '))) {
+      log(`${tool}: skipped`);
+      left.push(tool);
+      continue;
+    }
+    const earlier = records.find((r) => r.tool === tool && r.dimension === 'upToDate');
+    const giveBack = () => (earlier ? recordStackRow(args.home, earlier) : forgetStackRow(args.home, update));
+    const record = { ...update, applies: null, env: { ...scratch, ...(update.env ?? {}) }, at: now() };
+    if (kind === 'binary') {
+      // The first version before and its backup stay the undo's, so a second update still goes back to the first.
+      const first = { from: earlier?.from ?? update.from };
+      recordStackRow(args.home, { ...record, ...first });
+      const result = await (deps.updateEngram ?? updateEngramBinary)(update, { fetch: deps.fetch, spawn: deps.spawn, platform, say: log });
+      if (!result.ok) {
+        giveBack();
+        error(`engram ${update.to} failed: ${result.why}`);
+        left.push(tool);
+        continue;
+      }
+      recordStackRow(args.home, { ...record, ...first, path: result.record.path, backup: earlier?.backup ?? result.record.backup, applies: result.record.sha256 });
+      binaryDone = true;
+      log(`engram ${update.to}: done; restart Claude Code and Codex so their engram server runs it`);
+      continue;
+    }
+    recordStackRow(args.home, record);
+    const childEnv = withEnv(childBase, update.env ?? {}, platform);
+    // In a terminal of its own the command shares it; under the menu's `ask` or `--yes` its output is captured.
+    const shared = !args.yes && deps.ask === undefined;
+    let result = { ok: true, why: null };
+    for (const words of kind === 'plugin' ? update.run : [update.run]) {
+      result = runWords(words, { spawn: deps.spawn, env: childEnv, timeout: TIMEOUTS[kind], interactive: shared, platform });
+      if (!result.ok) break;
+    }
+    const applies = kind === 'plugin' ? pluginInstalledVersion(args.home, 'engram@engram').version : appliesOf(record, { home: args.home, spawn: deps.spawn, platform, env: childEnv }).value;
+    const reached = kind === 'plugin' ? result.ok && applies !== null : applies === update.to;
+    if (!reached) {
+      giveBack();
+      error(`${tool} ${update.to ?? 'update'} failed: ${result.why ?? `it exited 0 and answers ${applies ?? 'nothing'}`}`);
+      left.push(tool);
+      continue;
+    }
+    recordStackRow(args.home, { ...record, ...(kind === 'plugin' && { to: applies }), applies });
+    log(`${tool} ${applies}: done${kind === 'plugin' ? '; restart Claude Code to load it' : ''}`);
+  }
+  return left.length === 0 ? 0 : 1;
 }
 
 /** `argv` of one `stack backup` form read as `{ form, values(flag), has(flag) }`; a usage error throws. */

@@ -103,7 +103,15 @@ Nothing planned beyond question 206 (what failed in the menu), already asked.
     (`@openai/codex`, installed by the same package rows as codegraph) is one of them; context7 is hosted, so it
     is read and said, never updated.
 - **S2** (his words, 2026-11-06): "funciona muy mal la tui". What failed is asked first (question 206); then
-  reproduced and fixed, test first.
+  reproduced and fixed, test first. His answer to question 206 (2026-11-06, transcript 0f71b2c6 line 69675):
+  "se Redibuja mal, hay update y upgrade funciona igual, deberia cuando uno abra la TUI mostrar mensajes arriba de
+  nueva actualizacion tanto de js-harness como de los plugins". Read as three: (a) the menu redraws badly; (b) Update
+  and Upgrade do the same thing, so one of them is not earning its row; (c) on opening, the menu says at its top which
+  new versions there are, of js-harness and of the stack.
+- **S3** (his words, same answer): "osea quisiera que vieras la de gentle-ai que es espectacular como maneja todo,
+  osea esa si es una verdadera TUI y eso era lo que al final queria." The lead's notes: gentle-ai left this machine
+  at F8 S2 T14, so its TUI is read from its public source, read-only, for ideas; its doctrine is not copied. S3 is
+  wider than a fix: its depth pass comes first, and the plan goes to him as a question before it is built.
 
 ## Design
 
@@ -129,12 +137,28 @@ Nothing planned beyond question 206 (what failed in the menu), already asked.
   nothing. `update` adds one line per outdated tool. The menu passes its `ask` to Upgrade, as it does to Install the
   stack.
 
+## Next step
+Worktree `D:\js-harness\.claude\worktrees\stack-upgrade`, branch `feat/stack-upgrade`. T1-T5 and T7 are built and
+their tests pass (stack-upgrade 11, engram-release 10, stack-run 25, stack-upgrade command 12, update 4 new, tui and
+js-harness 143, the stack suites 204). Not yet run: `bin/install.test.mjs` whole (the new uninstall test is in it),
+`npm run check`, Codex and the lenses (base `af55e7ee`). Then T6 once question 206 is answered (no answer at 11:5x;
+measured meanwhile: the menu takes about 3.8 s to open here, 0.75 s for the release lookup and 3 s for the stack
+probes, and 3 s again after each command). Then push, PR, `notify --kind ready`.
+The gate refused the slice twice (CI runs 42254579713 and 42255467510, Linux). Fixed and tested: the Windows tar
+path is `path.win32.join`; `upgrade` with a malformed manifest skips the stack; `readUpgrade` no longer probes the
+prerequisites, since gh run in the clean-home test's scratch home wrote `.local/state/gh/device-id` there and its
+uninstall could not leave it empty (`bin/stack-upgrade.test.mjs` "never runs gh"). The third try was refused by the
+row commit-size (about 1230 changed lines, over 1200), so the slice is two commits: the plan, the binary's update
+and the undo (`bin/lib/*`, `bin/install.*`), then the command and its wiring with the docs. Their messages are in the
+scratchpad, `commit-a.txt` and `commit-b.txt`.
+
 ## Tasks
-- [ ] T1 (kind: design) This document, the depth pass, question 206 — S1, S2
-- [ ] T2 (kind: build) `planUpgrade` and its test — S1
-- [ ] T3 (kind: build) `engram-release.mjs`: download, checksum, swap, verify, and its test — S1
-- [ ] T4 (kind: build) `stack upgrade`, the records, and the undo of an update in `undoStack` — S1
-- [ ] T5 (kind: build) `upgrade`, `update` and the menu reach the stack — S1
+- [x] T1 (kind: design) This document, the depth pass, question 206 — S1, S2
+- [x] T2 (kind: build) `planUpgrade` and its test — S1
+- [x] T3 (kind: build) `engram-release.mjs`: download, checksum, swap, verify, and its test — S1
+- [x] T4 (kind: build) `stack upgrade` (with `--list`), the records, and the undo of an update in `undoStack` — S1
+- [x] T5 (kind: build) `upgradeAll` and `updateAll` (the dispatcher and the menu use them), so `upgrade`, `update`
+  and the menu reach the stack; `upgradeMain` and `updateMain` stay the harness's own — S1
 - [ ] T6 (kind: build) The menu's failure, reproduced in a test first — S2
 - [ ] T7 (kind: docs) GUIDE's menu table, the roadmap — S1, S2
 - [ ] T8 (kind: verify) `npm run check`, Codex and the lenses, the report to the lead
@@ -145,3 +169,14 @@ Nothing planned beyond question 206 (what failed in the menu), already asked.
   para el mismo arnes pero no para los plugins instalados"
 - L2 (2026-11-06 11:20 local): question 206 recorded for the lead: what he saw fail in the menu, with four options
   (keys, drawing, hangs, says nothing). S2 waits on it; S1 goes on.
+- L3 (2026-11-06 11:55 local): the second gate refusal was this change's: `upgrade` now reads the stack, and that
+  read probed `gh --version` in the scratch home. Main's gate passed the same test at 09:20 local.
+- L4 (2026-11-06, relayed by the lead): question 206 answered; his words are in S2 and S3. S1 keeps its course.
+- L5 (2026-11-06): searched before building S2 and S3. `docs/proposals/gentle-ai-reverse-engineering.md` section 4
+  already studied gentle-ai's TUI (v4.2.0, Bubble Tea, 48 screens), named six causes ours does not behave like it
+  (cause 1: no alternate screen, lines that wrap are not counted, so the menu duplicates or shifts; that is his "se
+  redibuja mal") and chose to port its design to zero-dependency Node in six slices. Slice 1 (alternate screen,
+  full-frame redraw and resize, a key parser, commands run as a child on a run screen) is PR jsaristi/js-harness#596,
+  `claude/tui-gentle-level-a6afd3`, open since 2026-10-30, mergeable and clean by `gh pr view 596`, 1957 lines
+  added; its real-console walk is his. So S2 (a) is not built again here: it rests on #596. S2 (b) and (c) and S3
+  build on #596's shell, and touch `bin/tui.mjs` as #596 does.

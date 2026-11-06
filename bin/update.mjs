@@ -586,3 +586,47 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
   console.log(`upgraded to ${latest.version}`);
   return 0;
 }
+
+/** Whether the machine manifest under `home` can be read: one that does not parse was named by the harness step, and
+ * the stack step, which records in it, is not run. */
+function manifestReadable(home) {
+  try {
+    installedVersion(home);
+    return true;
+  } catch (err) {
+    if (err instanceof MalformedManifestError) return false;
+    throw err;
+  }
+}
+
+/** The stack step of `upgrade` and `update` (odd/tasks/stack-upgrade.md, S1): `js-harness stack upgrade` for `home`,
+ * with the menu's `ask` when there is one, or its `--list` when `list`. Loaded only when it runs. */
+async function stackStepOf(env) {
+  return async ({ home, ask, list }) => {
+    const { stackUpgradeMain } = await import('./stack.mjs');
+    return stackUpgradeMain(['--home', home, ...(list ? ['--list'] : [])], env, ask ? { ask, interactive: true } : {});
+  };
+}
+
+/** `js-harness upgrade`: the harness's own upgrade (`upgradeMain`), then the tools of the stack behind their latest
+ * release, each asked y/N, even when the harness is already the newest or its release could not be read: the stack
+ * does not wait on the harness. A usage error reaches no stack. The exit is the harness's when it is not 0, else
+ * the stack's (1 when an update was declined, failed, or could not run without a terminal). `options.stack` is the
+ * seam of the stack step, `options.ask` the menu's question (the TUI is the terminal that consents). */
+export async function upgradeAll(argv, env = process.env, spawn = spawnSync, platform = process.platform, options = {}) {
+  const code = await upgradeMain(argv, env, spawn, platform, options);
+  if (code === 2 || !manifestReadable(parseArgs(argv, env).home)) return code;
+  const stack = options.stack ?? (await stackStepOf(env));
+  const stackCode = await stack({ home: parseArgs(argv, env).home, ask: options.ask, list: false });
+  return code !== 0 ? code : stackCode;
+}
+
+/** `js-harness update`: whether a newer release of the harness exists (`updateMain`), then what of the stack is behind
+ * its latest release, read and never run. The exit is the harness's, or the stack read's when that fails. */
+export async function updateAll(argv, env = process.env, spawn = spawnSync, platform = process.platform, options = {}) {
+  const code = await updateMain(argv, env, spawn);
+  if (code === 2 || !manifestReadable(parseArgs(argv, env).home)) return code;
+  const stack = options.stack ?? (await stackStepOf(env));
+  const stackCode = await stack({ home: parseArgs(argv, env).home, ask: undefined, list: true });
+  return code !== 0 ? code : stackCode;
+}

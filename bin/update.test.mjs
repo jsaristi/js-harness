@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { install, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { staleManifestMessage } from './lib/project.mjs';
 import { currentVersion } from './install.mjs';
-import { resolveLatest, statusMain, updateMain, upgradeMain } from './update.mjs';
+import { resolveLatest, statusMain, updateAll, updateMain, upgradeAll, upgradeMain } from './update.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 
 // The release these tests upgrade to: one major past the running version, so a version bump of package.json
@@ -1437,5 +1437,76 @@ test('status --global takes an empty JS_HARNESS_HOME as unset: it reads the mani
   } finally {
     fs.rmSync(work, { recursive: true, force: true });
     fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- upgrade and update reach the stack (odd/tasks/stack-upgrade.md, S1) ---
+
+/** A stand-in for the stack step: records what it was given and answers `code`. */
+function stackStep(code = 0) {
+  const calls = [];
+  const stack = async (given) => {
+    calls.push(given);
+    return code;
+  };
+  return { stack, calls };
+}
+
+test('upgrade brings the stack up to date after the harness, even when the harness is already the newest', async () => {
+  const home = makeTmpDir('js-harness-upgrade-all-');
+  const source = makeSource(currentVersion());
+  try {
+    const step = stackStep(0);
+    const ask = async () => true;
+    const { code, out } = await runCommand(upgradeAll, ['--source', source, '--home', home], {}, noProcess, undefined, { stack: step.stack, ask });
+    assert.equal(code, 0);
+    assert.match(out, new RegExp(`up to date: ${escaped(currentVersion())}`));
+    assert.deepEqual(step.calls, [{ home, ask, list: false }]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});
+
+test('upgrade exits with the stack\'s code when the harness is fine, and the harness\'s when it is not', async () => {
+  const home = makeTmpDir('js-harness-upgrade-all-codes-');
+  const source = makeSource(currentVersion());
+  try {
+    const behind = stackStep(1);
+    assert.equal((await runCommand(upgradeAll, ['--source', source, '--home', home], {}, noProcess, undefined, { stack: behind.stack })).code, 1);
+    // No release to read: the harness says so and exits 1, and the stack is still brought up to date.
+    const step = stackStep(0);
+    const { code, err } = await runCommand(upgradeAll, ['--home', home, '--pm', 'node cli.js'], {}, squattedRegistry().spawn, undefined, { stack: step.stack });
+    assert.equal(code, 1);
+    assert.match(err, /nothing was installed/);
+    assert.equal(step.calls.length, 1);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});
+
+test('upgrade with a usage error reaches no stack', async () => {
+  const step = stackStep(0);
+  const { code } = await runCommand(upgradeAll, ['--bogus'], {}, noProcess, undefined, { stack: step.stack });
+  assert.equal(code, 2);
+  assert.deepEqual(step.calls, []);
+});
+
+test('update says what of the stack is behind after the harness line, and runs nothing', async () => {
+  const home = makeTmpDir('js-harness-update-all-');
+  const source = makeSource('99.0.0');
+  try {
+    const step = stackStep(0);
+    const { code, out } = await runCommand(updateAll, ['--source', source, '--home', home], {}, noProcess, undefined, { stack: step.stack });
+    assert.equal(code, 0);
+    assert.match(out, /update available: 99\.0\.0/);
+    assert.deepEqual(step.calls, [{ home, ask: undefined, list: true }]);
+    const usage = stackStep(0);
+    assert.equal((await runCommand(updateAll, ['--bogus'], {}, noProcess, undefined, { stack: usage.stack })).code, 2);
+    assert.deepEqual(usage.calls, []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
   }
 });
