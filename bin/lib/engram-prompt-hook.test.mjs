@@ -115,6 +115,23 @@ test('restorePluginHooks keeps the record of a write that failed, for a second r
   assert.deepEqual(result.kept, [{ path: file, reason: 'failed', code: 'EBUSY' }]);
 });
 
+test('on keeps the record when the hooks file cannot be read, and only a missing file is gone (Codex P2 over dc0d6c5..b309c50)', () => {
+  const { dir, file } = home();
+  promptHookOff(dir);
+  const denied = (target, ...rest) => {
+    if (target === file) throw Object.assign(new Error('denied'), { code: 'EACCES' });
+    return fs.readFileSync(target, ...rest);
+  };
+  const result = promptHookOn(dir, { readFile: denied });
+  assert.deepEqual(result.restored, []);
+  assert.deepEqual(result.kept, [{ path: file, reason: 'failed', code: 'EACCES' }]);
+  assert.equal(readManifest(dir).pluginHooks.length, 1, 'the only undo record stays');
+  fs.rmSync(file);
+  const gone = promptHookOn(dir);
+  assert.deepEqual(gone.kept, [{ path: file, reason: 'gone' }]);
+  assert.equal(readManifest(dir), null);
+});
+
 test('uninstall puts the prompt hook back and leaves no manifest', () => {
   const { dir, file } = home();
   promptHookOff(dir);

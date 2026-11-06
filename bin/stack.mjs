@@ -15,7 +15,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import readline from 'node:readline';
 import { unknownArgument } from './lib/args.mjs';
-import { forgetStackRow, readManifest, recordStackRow } from './lib/manifest.mjs';
+import { forgetStackRow, MalformedManifestError, readManifest, recordStackRow } from './lib/manifest.mjs';
 import { updateEngramBinary } from './lib/engram-release.mjs';
 import { planUpgrade } from './lib/stack-upgrade.mjs';
 import { resolveStackPm } from './lib/package-manager.mjs';
@@ -571,6 +571,20 @@ function stackEngramPromptMain(argv, env, deps) {
   }
   const home = harnessHome({ given, env, homedir: os.homedir });
   const said = `js-harness stack engram-prompt ${form}:`;
+  try {
+    return engramPromptForm(form, home, given, said, log, error);
+  } catch (err) {
+    // The machine manifest is read before any file is touched, so one that does not parse changed nothing; a write of it
+    // that fails after a file was put back leaves that record, and `on` again forgets it.
+    if (err instanceof MalformedManifestError) error(`${said} ${err.refusal}`);
+    else if (typeof err?.code === 'string') error(`${said} stopped: the machine manifest could not be written (${err.code}); run it again to finish`);
+    else throw err;
+    return 1;
+  }
+}
+
+/** The work of `stack engram-prompt off|on` once its arguments are read, as an exit code. */
+function engramPromptForm(form, home, given, said, log, error) {
   if (form === 'off') {
     const result = promptHookOff(home);
     if (result.status === 'skipped') {
@@ -580,7 +594,8 @@ function stackEngramPromptMain(argv, env, deps) {
     if (result.status === 'already') log(`${said} already off: ${result.path} holds no UserPromptSubmit hook`);
     else {
       log(`${said} took the UserPromptSubmit hook out of ${result.path}; restart Claude Code for it to take effect`);
-      log('  undo: js-harness stack engram-prompt on');
+      const homeArgument = given === undefined ? '' : ` --home ${/\s/.test(given) ? JSON.stringify(given) : given}`;
+      log(`  undo: js-harness stack engram-prompt on${homeArgument}`);
     }
     return 0;
   }

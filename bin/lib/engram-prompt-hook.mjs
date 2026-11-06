@@ -65,19 +65,23 @@ export function promptHookOff(home, { writeFile = fs.writeFileSync, record: reco
 }
 
 /** Puts back each recorded hooks file, as `{ restored, kept, failedRecords }`: a file still holding the bytes this
- * wrote gets its original bytes again; one that is gone or changed since (a plugin update, an edit) is left as it is and
- * named in `kept` with its `reason`; a write that fails is named with `failed` and its record returned in
- * `failedRecords`, so a second run can finish it. */
-export function restorePluginHooks(records, { writeFile = fs.writeFileSync } = {}) {
+ * wrote gets its original bytes again; one that is gone (ENOENT) or changed since (a plugin update, an edit) is left as
+ * it is and named in `kept` with its `reason`; a read or write that fails any other way is named with `failed` and its
+ * record returned in `failedRecords`, so a second run can finish it: that record is the only way back. */
+export function restorePluginHooks(records, { writeFile = fs.writeFileSync, readFile = fs.readFileSync } = {}) {
   const restored = [];
   const kept = [];
   const failedRecords = [];
   for (const record of records ?? []) {
     let now;
     try {
-      now = fs.readFileSync(record.path, 'utf8');
-    } catch {
-      kept.push({ path: record.path, reason: 'gone' });
+      now = readFile(record.path, 'utf8');
+    } catch (err) {
+      if (err.code === 'ENOENT') kept.push({ path: record.path, reason: 'gone' });
+      else {
+        kept.push({ path: record.path, reason: 'failed', code: err.code ?? 'unknown error' });
+        failedRecords.push(record);
+      }
       continue;
     }
     if (now !== record.written) {

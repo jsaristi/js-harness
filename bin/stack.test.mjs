@@ -317,7 +317,8 @@ test('stack engram-prompt off takes the prompt hook out of a scratch home, on pu
     const off = await run(['engram-prompt', 'off', '--home', home], {});
     assert.equal(off.code, 0, off.err);
     assert.match(off.out, /took the UserPromptSubmit hook out of .*hooks\.json; restart Claude Code/);
-    assert.match(off.out, /undo: js-harness stack engram-prompt on/);
+    // The undo line names the home it was given, so it puts back the file it took out (Codex P2 over dc0d6c5..b309c50).
+    assert.ok(off.out.includes(`undo: js-harness stack engram-prompt on --home ${/\s/.test(home) ? JSON.stringify(home) : home}`), off.out);
     assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.UserPromptSubmit, undefined);
     const again = await run(['engram-prompt', 'off', '--home', home], {});
     assert.equal(again.code, 0);
@@ -332,6 +333,12 @@ test('stack engram-prompt off takes the prompt hook out of a scratch home, on pu
     const none = await run(['engram-prompt', 'off', '--home', fs.mkdtempSync(path.join(os.tmpdir(), 'stack-engram-prompt-'))], {});
     assert.equal(none.code, 1);
     assert.match(none.err, /no user-level install of engram@engram/);
+    // A machine manifest that does not parse is one line and exit 1, not a stack trace (Codex P2 over dc0d6c5..b309c50).
+    fs.mkdirSync(path.join(home, '.js-harness'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.js-harness', 'manifest.json'), '{ not json');
+    const broken = await run(['engram-prompt', 'on', '--home', home], {});
+    assert.equal(broken.code, 1);
+    assert.match(broken.err, /js-harness stack engram-prompt on: the machine manifest .* is not valid JSON; nothing was changed/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
