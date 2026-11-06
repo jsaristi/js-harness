@@ -10,7 +10,7 @@
 // that the push then refuses, or pay again for one the push lets through.
 import { spawnSync } from 'node:child_process';
 import { isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews } from './codex-reviews.mjs';
-import { RENAMES } from './codex-review-parts.mjs';
+import { NO_RENAMES, RENAMES } from './codex-review-parts.mjs';
 import { leftOutOf } from './codex-review-scope.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
 
@@ -157,6 +157,15 @@ function writtenInMerge(spawn, cwd, id) {
 export const COMMITS_UNREAD = 'commits';
 export const MARKS_UNREAD = 'marks';
 
+/** Whether the range of `rec` still hashes to its `subjectHash`: as the candidate reads it now, or, where that reading
+ * took renames, read renames off, the one way a record written before odd/tasks/lens-counts-renames.md was hashed.
+ * Either reading is fixed by the two commits alone, so either proves the patch did not change. */
+function stillHashes(cwd, rec, spawn) {
+  const now = lensCandidate(cwd, { base: rec.base, head: rec.head, spawn });
+  if (now.subjectHash === rec.subjectHash) return true;
+  return now.renames !== undefined && now.renames !== NO_RENAMES && lensCandidate(cwd, { base: rec.base, head: rec.head, renames: NO_RENAMES, spawn }).subjectHash === rec.subjectHash;
+}
+
 /** What the Codex review records say of the code commits of `from..tip`, as git reads that range in `cwd`:
  * `tip` a full commit id, `from` any revision. `{ unknown }` when it cannot be told, `COMMITS_UNREAD` or
  * `MARKS_UNREAD`. Otherwise the `codeCommits` of the range (newest first: every commit that changes a file
@@ -178,7 +187,9 @@ export const MARKS_UNREAD = 'marks';
  * `read` and `isValid` name the records: Codex's by default, the Claude lenses' for their push row
  * (`./lens-review-rows.mjs`). A record that carries a `subjectHash` covers only while the patch of its own range
  * still hashes to it (`./lens-candidate.mjs`): one that does not is counted `stale` and covers nothing
- * (odd/tasks/f8-s1-reviews.md, T4).
+ * (odd/tasks/f8-s1-reviews.md, T4). The patch is read renames on where the candidate reads it so, and renames off as
+ * well, since every record written before odd/tasks/lens-counts-renames.md was hashed by that reading
+ * (`stillHashes`).
  *
  * `beyondTip: false` is for the rows that refuse, the push's and the merge door's, and for the command whose record
  * they ask for: a record whose head lies past the tip then covers nothing, and is given back in `beyond`, as
@@ -265,7 +276,7 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
   let stale = 0;
   for (const rec of valid) {
     if (outside(rec) && (onlyWhole(rec) || !pastTip.has(rec.head))) continue;
-    if (rec.subjectHash !== undefined && lensCandidate(cwd, { base: rec.base, head: rec.head, spawn }).subjectHash !== rec.subjectHash) {
+    if (rec.subjectHash !== undefined && !stillHashes(cwd, rec, spawn)) {
       stale += 1;
       continue;
     }
