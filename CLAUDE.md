@@ -8,8 +8,8 @@ Rule 1: before large work is built, and whenever he asks, a depth pass (`rule:de
 A session holds one feature, because the conversation is lost on a new session or a compaction and
 only files survive. It starts at the roadmap; to resume a feature it reads that feature's document,
 mirrored in engram. The two are the handoff, and nothing else is: a new session's opening prompt
-only points to them. The task contract comes first in a feature document, as this project's order
-over gentle-ai's; `js-harness contract goal <doc>` prints the `/goal` condition that runs it.
+only points to them. The task contract comes first in a feature document;
+`js-harness contract goal <doc>` prints the `/goal` condition that runs it.
 Every decision made in the conversation is written to the roadmap or the feature document and
 committed on the feature branch in the same session; that record is part of the work and needs no
 separate request. Near `rule:context-pause` of its window a session writes its state to the feature
