@@ -2,8 +2,8 @@
 
 js-harness is a small package that sets up Claude Desktop's Code tab, with Codex as its reviewer, on
 top of a stack it does not rebuild: engram owns memory; codegraph owns code structure; `/goal` owns
-the autonomy loop; the workflow, task documents and test-first work are its own since F8's S11, and
-gentle-ai, which owned them, leaves at S2. What this repo adds is the thin layer those leave open —
+the autonomy loop; the workflow, task documents and test-first work are its own, taken over from
+gentle-ai, which left at F8's S2. What this repo adds is the thin layer those leave open —
 a few lines of context and the checks that make them true.
 
 The design bet is that a stronger model needs a smaller harness. This file is what a reviewer such
@@ -24,7 +24,7 @@ means the commit is not ready yet.
 The plan is `docs/ROADMAP.md`: what is decided, done, next and still open; `docs/origin.md`,
 frozen, keeps the reasoning it came from; `docs/SPEC.md` is the map, and `docs/README.md` the entry
 for a reader starting cold. Feature work is tracked in `odd/tasks/<feature>.md`, in
-the shape of gentle-ai's ODD document. It opens with the task contract (`js-harness contract template`), so its
+the shape of an ODD document. It opens with the task contract (`js-harness contract template`), so its
 end is a set of commands that exit 0, not an opinion; `check` validates every contract.
 
 A rule lives where something acts on it: a check a command runs before a line here or in

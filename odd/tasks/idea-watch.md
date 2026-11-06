@@ -195,3 +195,17 @@ The 54 paths of v4.2.0 → v4.3.1 that section 5's table leaves unmatched, read 
 - L7. 2026-11-03, the fix reviewed: Codex over `847a608..426bbfe` (79,692 input tokens), correct at 0.96, the five
   findings fixed; the Claude lenses risk and reliability, 0 findings. Every code commit of the branch is covered by
   both records. No gentle-ai review: the Stop hook offered the whole branch, whose status was read and nothing started.
+- L8. 2026-11-04, the land of 11:18Z left PR 764 out: "FAIL contracts 1 of 163". The contract is this document:
+  "code was committed before the pass's verdict", naming `bin/lib/rules-block.mjs`, `bin/lib/pages.mjs` and others
+  of PRs 763, 765 and 766. Reproduced with a candidate merge commit (main's side first) over the trunk the land
+  started from, 70790d9: `depthPassFor` (`bin/contract.mjs:462`) reads the branch as `trunk..HEAD`, so a PR merged
+  earlier in the same land counts as this branch's code, and topological order puts it before the verdict. A
+  defect of the control, not of this document; its fix (count only the verdict commit's own ancestors) is a separate
+  task, the lead's to route. Here: origin/main merged in (55aa21f4); the same simulation over main 7aa2ab9 with 764
+  first passes 163/163. It can recur if another PR lands before 764 in one land.
+- L9. 2026-11-04, state at the restart of question 189 ("Reiniciar ahora"): PR 764 merged as f72efec, from head
+  cfa1b713. Main is now b0d55eb and holds this document up to L7. The local merge 55aa21f4 was no longer needed:
+  `npm run check` on it was killed for low memory and not re-run, and it was never pushed. After the restart (about
+  20:00 local) L8 and L9 went to main on a branch of their own, `idea-watch-notes`, cut from b0d55eb. Left for the
+  lead: the control's fix (L8) as its own task, and his decision on the first real idea-watch clone in his home,
+  which is not yet asked and not run.

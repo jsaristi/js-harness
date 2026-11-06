@@ -8,8 +8,8 @@ Rule 1: before large work is built, and whenever he asks, a depth pass (`rule:de
 A session holds one feature, because the conversation is lost on a new session or a compaction and
 only files survive. It starts at the roadmap; to resume a feature it reads that feature's document,
 mirrored in engram. The two are the handoff, and nothing else is: a new session's opening prompt
-only points to them. The task contract comes first in a feature document, as this project's order
-over gentle-ai's; `js-harness contract goal <doc>` prints the `/goal` condition that runs it.
+only points to them. The task contract comes first in a feature document;
+`js-harness contract goal <doc>` prints the `/goal` condition that runs it.
 Every decision made in the conversation is written to the roadmap or the feature document and
 committed on the feature branch in the same session; that record is part of the work and needs no
 separate request. Near `rule:context-pause` of its window a session writes its state to the feature
@@ -71,23 +71,14 @@ cost is dropped with the reason written, and the review is recorded with
 Before a gate, an eval batch, a review or a push, say how many runs and what each costs. One try:
 when it fails, read why before anything runs again, never in a loop. Read the proof before the
 command it allows; two steps share a command only with `&&`. Run the installed `js-harness`, not
-the branch's `node bin/js-harness.mjs`, except to test the change itself. A gentle-ai review's
-base is a hash on the head's first-parent line (the last reviewed boundary, or the commit that
-merged main in), never a branch name. Each code commit a review approved is named on a gentle-ai
-line of the feature document; on `operation_timeout` the same command runs once more, then the
-range is written "not reviewed" and Codex reviews it anyway.
+the branch's `node bin/js-harness.mjs`, except to test the change itself. A review's base
+is a hash on the head's first-parent line (the last reviewed boundary, or the commit that merged
+main in), never a branch name.
 
-Review is not his to decide: the consent he granted for every candidate here is his standing
-selection, so when `gentle-ai review start` returns its consent envelope, run the `granted`
-invocation without asking. Consent stays his and the review always runs; only the question is
-skipped, because his answer is always yes and the question only stalls the work. If the envelope
-has no `granted` choice or does not parse, ask him instead. A candidate is a work-unit commit or a
-slice (`js-harness-protocols` section 3), never the whole branch: when the Stop hook offers the
-branch, run its read-only status and start nothing, because with consent pre-granted nothing would
-stop a review that size. Every slice with code goes through Codex and the Claude lenses, whether
-or not gentle-ai reviewed it: `js-harness codex-review --base <boundary>` and `js-harness
-lens-review --base <boundary> --lenses <pertinent> --reason <why>` record the reviews, and the
-pre-push hook refuses a branch whose code commits either record does not cover. Treat their
-findings like gentle-ai's. If one cannot run, report that and record the skip with its
-`--unavailable <reason>`: a skip is a debt `check`, `doctor` and the merge door list until a
-review pays it, and the door refuses a lens skip.
+Review is not his to decide: every slice with code goes through Codex and the Claude lenses, a
+work-unit commit or a slice (`js-harness-protocols` section 3), never the whole branch.
+`js-harness codex-review --base <boundary>` and `js-harness lens-review --base <boundary> --lenses
+<pertinent> --reason <why>` record the reviews, and the pre-push hook refuses a branch whose code
+commits either record does not cover. Their findings are fixed or answered. If one cannot run,
+report that and record the skip with its `--unavailable <reason>`: a skip is a debt `check`,
+`doctor` and the merge door list until a review pays it, and the door refuses a lens skip.
