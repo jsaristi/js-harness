@@ -58,3 +58,13 @@ test('this repository\'s gate runs the suite, the docs row and the workshop\'s s
   assert.equal(declared.sensors['workshop spec'], 'node workshop/js-harness-workshop.mjs spec');
   assert.equal(declared.documentSensors.docs, declared.sensors.docs);
 });
+
+test('this repository\'s gate runs the workshop\'s document checks on a commit of documents alone too', () => {
+  // A commit that changes only documents runs harness.json's "documentSensors" in place of its "sensors", so a check of
+  // the workshop that reads documents (docs/SPEC.md's workshop claims, the docs plan) has to be in both, or an edit of
+  // the very text it checks passes the gate unread (the Codex review of 6c1bc8e..f78479a, P2).
+  const { sensors, documentSensors } = JSON.parse(fs.readFileSync(path.join(ROOT, 'harness.json'), 'utf8'));
+  const workshop = Object.entries(sensors).filter(([, command]) => command.startsWith('node workshop/js-harness-workshop.mjs '));
+  assert.ok(workshop.length > 0, 'the gate runs a check of the workshop');
+  for (const [name, command] of workshop) assert.equal(documentSensors[name], command, `${name} runs on a commit of documents alone`);
+});

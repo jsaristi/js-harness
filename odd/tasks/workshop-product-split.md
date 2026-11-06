@@ -842,8 +842,18 @@ The slices:
   down to its 2,007 lines. The move, reapplied from its patch on `52d07039` without a conflict, is 585 changed lines
   with renames counted by what they change. The line the lead owed to `docs/FAILURES.md` (stretch-not-opened, his
   absence 13:25 to 18:12) goes in with it.
-- Next step (for a resume): in D:/js-harness-worktrees/workshop-dispatch, the move's commit on `52d07039`. Then its
-  gate, the pushes of the series, Codex, the lenses and a verifier over
-  6c1bc8ef..HEAD, and a pull request with base `feat/workshop-move` (PR 773), never merged here. Then the next
-  pull request: `ticks --hook` with its stale-ticks row, `.claude/settings.json`, and the texts. T7 stays a
-  feature of its own.
+- L23 (2026-11-05): the move is `fd1da6e5`; the series' three branches are pushed with main in. The reviews of the
+  dispatcher, `6c1bc8e..f78479a`, apart from the move so main's code is not read again:
+  - Codex, 197,763 input tokens: one P2. A commit of documents alone runs `documentSensors`, which lacked the
+    workshop's `spec`, so an edit of `docs/SPEC.md` passed unchecked. Fixed: `harness.json` gains it, and a test in
+    `workshop/js-harness-workshop.test.mjs` holds every workshop sensor in both lists (seen red first).
+  - The lenses (risk 0, reliability 0, readability 2). The product's `loop heartbeat --windows` was taken and
+    dropped in silence; fixed: it says once that it reads nothing there, by a test in `bin/loop-bodies.test.mjs`
+    (seen red first). The workshop's help still names `js-harness <command>`: kept, as L18 leaves the workshop's
+    texts to the next pull request, before any release (finding 19).
+- gentle-ai: not run on this slice; Codex and the lenses reviewed 4187754d and f78479af.
+- Next step (for a resume): the fix's commit, then Codex, the lenses and a verifier over the merge, the move
+  and the fix (`--base 6c1bc8ef`, which starts where the dispatcher's records end and judges the merge by what was
+  written in it), and a pull request with base `feat/workshop-move` (PR 773), never merged here. Then the next pull
+  request: `ticks --hook` with its stale-ticks row, `.claude/settings.json`, and the texts. T7 stays a feature of
+  its own.

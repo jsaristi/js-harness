@@ -374,6 +374,9 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   // The daily Windows run (odd/tasks/commit-gates-first.md, S5): read every `--windows` minutes, 0 for never.
   const windows = parsed.flags.windows === undefined ? WINDOWS_MINUTES : /^\d+$/.test(parsed.flags.windows) ? Number(parsed.flags.windows) : null;
   if (windows === null) throw new LoopArgError(`--windows takes a whole number of minutes, 0 for never: ${parsed.flags.windows}`);
+  // The usage is the workshop's loop's too, so the option is taken; given to the product, which has no Windows tick, it
+  // is said to read nothing rather than dropped in silence.
+  if (parsed.flags.windows !== undefined && windows !== 0 && !ctx.windowsDaily) ctx.out("--windows reads nothing here: the daily Windows run is read by the workshop's loop (node workshop/js-harness-workshop.mjs loop heartbeat), not the product's");
   // A git that hangs on a lock costs one read, never the loop: its `--max` and the other sessions' alerts.
   const boundedRun = (command, args, options) => ctx.run(command, args, { timeout: STALL_GIT_TIMEOUT_MS, ...options });
   // What could not be read is said once each, so a missing STALLED line is never read as "nobody is stalled".
