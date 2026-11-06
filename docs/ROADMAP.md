@@ -121,6 +121,8 @@ A feature that is not a phase has no row here: its steps are the checkboxes of i
 - [x] `npm run check` and `npm run e2e` pass
 - [x] The TUI opens with no arguments in a terminal
 - [x] Reviewed and merged (`jsaristi/js-harness#1`)
+- [ ] `upgrade` and the menu's Update and Upgrade reach the stack: the engram binary and plugin, codegraph, Codex (`odd/tasks/stack-upgrade.md`, S1)
+- [ ] The menu's failure reported on 2026-11-06, reproduced and fixed (`odd/tasks/stack-upgrade.md`, S2; question 206)
 
 ### Stack doctor
 - [x] `doctor` reports the five tools as installed, configured and up to date, with fix commands

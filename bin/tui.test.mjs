@@ -19,7 +19,7 @@ import {
   computeStackState,
   buildCommands,
 } from './tui.mjs';
-import { installMain } from './install.mjs';
+import { currentVersion, installMain } from './install.mjs';
 import { manifestPath, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { GAP_STATES } from './lib/digest.mjs';
 import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './lib/remote.mjs';
@@ -430,7 +430,7 @@ test('tuiMain shows the update a named source folder holds, and its commands rea
     assert.equal(code, 0);
     assert.ok(stdout.chunks[0].includes('update available: 99.0.0'));
 
-    const { result, lines } = await silently(() => buildCommands({ home: nonGitDir, source, env: {}, spawn }).update());
+    const { result, lines } = await silently(() => buildCommands({ home: nonGitDir, source, env: {}, spawn, stack: async () => 0 }).update());
     assert.equal(result, 0);
     assert.match(lines.join('\n'), /update available: 99\.0\.0/);
   } finally {
@@ -1663,4 +1663,26 @@ test('runTui hands a command an ask whose key goes to it, never to the menu, the
   assert.ok(!stdout.chunks.at(-1).includes('Install the stack'), 'the item is gone once nothing is missing');
   stdin.emit('data', 'q');
   assert.equal(await done, 0);
+});
+
+// odd/tasks/stack-upgrade.md, S1: Update and Upgrade reach the stack, and Upgrade asks through the menu.
+test('buildCommands Upgrade hands the stack step the menu\'s ask, and Update reads the stack without one', async () => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-stack-'));
+  try {
+    fs.writeFileSync(path.join(source, `js-harness-${currentVersion()}.tgz`), '');
+    const calls = [];
+    const stack = async (given) => {
+      calls.push(given);
+      return 0;
+    };
+    const ask = async () => true;
+    const commands = buildCommands({ home: nonGitDir, source, env: {}, spawn: () => ({ status: 0, stdout: '', stderr: '' }), stack });
+    const upgraded = await silently(() => commands.upgrade({ kind: 'notGit' }, { ask }));
+    assert.equal(upgraded.result, 0);
+    const updated = await silently(() => commands.update());
+    assert.equal(updated.result, 0);
+    assert.deepEqual(calls, [{ home: nonGitDir, ask, list: false }, { home: nonGitDir, ask: undefined, list: true }]);
+  } finally {
+    fs.rmSync(source, { recursive: true, force: true });
+  }
 });
