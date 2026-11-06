@@ -99,4 +99,9 @@ Nothing planned: question 199 decided the change. A question goes to the lead wi
   lens block, `52d0703..fd1da6e`, is 51 paths (32 renames) and 77,477 characters.
 - L4 2026-11-05, the suites that read the candidate's hash: `lens-review`, `codex-review-coverage`, `lens-reviews`,
   `merge-queue-reviews`, `check-codex-reviews` and `lens-result`, 188 of 188 under `js-harness gate`.
-- Next step (for a resume): T2, the reviews of the code commit.
+- L5 2026-11-05, the reviews of `61aacc5..318fbae`: the lenses (risk, reliability, readability) 0 findings. Codex one
+  P2, 240,647 input tokens: `numstatCounts` cut a path at its first tab, so a path that starts with one read empty, as
+  a rename's does, and shifted every count after it. Fixed: the path is all that follows the two counts; a test of
+  the parser, red first (a file named so cannot be made on Windows).
+- Next step (for a resume): the fix's commit, its Codex review, the verifier's verdict on `318fbae`, then the push
+  and the pull request to main.

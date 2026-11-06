@@ -131,13 +131,14 @@ function renamesOff(numstatOf, leftOut) {
 }
 
 /** The added and deleted counts of each file of `git diff --numstat -z`, in its order, `[0, 0]` for a binary one
- * (`numstatFiles` keeps only their sum): a rename's record is followed by its two names, which are no record. */
-function numstatCounts(numstat) {
+ * (`numstatFiles` keeps only their sum): a rename's record is followed by its two names, which are no record. The
+ * path is all that follows the two counts, tabs and all, so only an empty one is a rename's. Exported for its test. */
+export function numstatCounts(numstat) {
   const records = numstat.split('\0');
   records.pop();
   const counts = [];
   for (let at = 0; at < records.length; at += 1) {
-    const [added, deleted, named] = records[at].split('\t');
+    const [, added, deleted, named] = /^(-|\d+)\t(-|\d+)\t([\s\S]*)$/.exec(records[at]) ?? [];
     counts.push(added === '-' ? [0, 0] : [Number(added), Number(deleted)]);
     if (named === '') at += 2;
   }

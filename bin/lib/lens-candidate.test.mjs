@@ -189,3 +189,10 @@ test('the prompt tells every lens how a renamed file is written in the manifest 
   const { lensPrompt, LENS_NAMES } = await import('./lens-prompts.mjs');
   for (const name of LENS_NAMES) assert.match(lensPrompt(name), /a renamed file's line then holds its old path as a JSON string/, name);
 });
+
+test('the counts of each file are read whole: a path that starts with a tab is a path, not a rename', async () => {
+  // Codex's review of 61aacc5..318fbae, P2: a path cut at its first tab read empty, as a rename's does.
+  const { numstatCounts } = await import('./lens-candidate.mjs');
+  const numstat = ['1\t2\t\tlead.mjs', '3\t4\tplain.mjs', '5\t6\t', 'old.mjs', 'new.mjs', '-\t-\tpicture.png', ''].join('\0');
+  assert.deepEqual(numstatCounts(numstat), [[1, 2], [3, 4], [5, 6], [0, 0]]);
+});
