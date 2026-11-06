@@ -83,7 +83,7 @@ Nothing planned: question 199 decided the change. A question goes to the lead wi
 ## Tasks
 - [x] T1 (kind: build) specs 1-2: the tests first, then the candidate through `rangeFiles` and the older hash kept ·
   `bin/lib/lens-candidate.mjs`, `bin/lib/codex-review-coverage.mjs`, `bin/lib/lens-prompts.mjs`
-- [ ] T2 (kind: verify) Codex, the lenses and an independent verifier over the branch; the pull request
+- [x] T2 (kind: verify) Codex, the lenses and an independent verifier over the branch; the pull request, 777
 
 ## Log
 - L1 2026-11-05, question 199 (the lead's transcript `0f71b2c6`, line 68447), tapped: "Lentes por lo que cambia
@@ -120,4 +120,7 @@ Nothing planned: question 199 decided the change. A question goes to the lead wi
      same since pull request 775. It stays open, with 3.
   Then the reviews of `24468cf..574ad63`: Codex correct (0.96, 54,153 input tokens); the lenses
   (reliability, readability) 0 findings.
-- Next step (for a resume): the push of `fix/lens-renames`, the pull request to main, named here; the lead lands it alone.
+- L7 2026-11-05, pull request 777 opened to main (https://github.com/jsaristi/js-harness/pull/777); the lead lands it
+  alone, as with 775.
+- Next step (for a resume): none here; once 777 is on main, JH 142 merges main up its series and the lenses pay the
+  move's skip (`odd/tasks/workshop-product-split.md`).
