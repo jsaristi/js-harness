@@ -240,3 +240,11 @@ tool, and #596 runs every item as a child with stdin closed, so `upgrade` there 
   prompt, fixed in 0beaf43d; the lenses reliability and risk, 0 findings. b4422d8..0beaf43: Codex correct (0.97),
   reliability 0 findings. Still owed on this branch before its PR: the reviews of #596's six replayed commits and
   of the port 857b438f (`check` names them).
+- L13 (2026-11-06): PR 781 landed (main ec5338a). Main merged into #596's branch for real, with the port's two test
+  files, pushed as 6caa9833 (its gate green here and on CI). S2's rebuild on it, in the worktree `tui-update`
+  (branch `feat/tui-update`), first merged S1, and CI refused that commit on rule depth-pass
+  (run 42304779832): with both parents now sent, the branch's commits from the trunk hold #596's code commits
+  before S1's document, so its depth pass reads as committed after code, and every later commit would fail the
+  same way. The merge was aborted. Once #780 is on main, S1's commits and document are the trunk's: then
+  `feat/tui-update` takes main and S2's three commits, and #596's branch takes main again so the chained diff is
+  S2 alone.
