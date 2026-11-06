@@ -149,13 +149,30 @@ the question names that.
   `failed`; (2) `stack engram-prompt off --home <dir>` prints `undo: js-harness stack engram-prompt on` without that
   `--home`; (3) a manifest that does not parse or cannot be written throws out of `stackEngramPromptMain`; catch it at
   the command and exit 1 with the reason.
+- L9 (2026-11-06, after the restart, 21:43Z): L8's three P2, tests first (`f87e2d69`, red 2 of 30 then the manifest
+  one, then 30 of 30); Codex's recheck over `6503545..f87e2d6`: 1 and 3 fixed, 2 not (the home quoted with
+  `JSON.stringify`, which no shell reads as written). `6e347957` quoted it the POSIX way; Codex's third review over
+  `f87e2d6..7693ac2` (0.99): still a P2, an apostrophe in the home is not read by PowerShell, which doubles it. By
+  rule:escalation-model nothing more is reviewed of it and it passes to claude-fable-5-1; the guard refused a Fable
+  sub-agent (rule:subagent-writer-model haiku, rule:subagent-reader-model opus), so the hand-off went to the lead as a
+  question (shared notes, `jh153-d8-escalation.md`). That review wrote no record: I edited `docs/FAILURES.md` while
+  it ran. The independent verifier over `dc0d6c55..f87e2d69` (opus, read-only): P1, the `uninstall` command read no
+  `pluginHooks` result, so a hooks file it could not put back was silent with exit 0 and `--everything` then removed
+  `~/.js-harness` with the only record; fixed in `a3c771de` (red: exit 0 where 1). P2, `off` wrote before it recorded,
+  so a failed record and a failed put-back left the hook out unrecorded; fixed in `7693ac2a` (red: the record kept
+  after the write). Its P3s: the scratch homes left behind, fixed there; a half-finished `on` run again says
+  "changed" for a file it already put back, and non-UTF-8 bytes would not round-trip exactly, both left (nothing is
+  lost; engram's file is plain JSON). Lenses reliability and risk over `6503545..932bbd6`: 0 findings each.
+  `node --test` over engram-prompt-hook, stack, install, manifest, hook-count, conventions and readme: 398 of 398.
+  The lead asked for 772 against this PR: neither row covers the other, both create `bin/lib/hook-count.mjs`; the
+  answer (fold 782 into 772's module after the series) is in the shared notes, `jh153-772-vs-782.md`.
 
 ## Next step
 State (2026-11-06, JH 153, worktree `D:\js-harness\.claude\worktrees\probe-auto-archive-3b36c3`): slice 1 is PR #782
 (branch `claude/f8-s4a-hooks-5da26e`, reviewed, ready notice sent). Slice 2 (T4, L7) is committed on branch
-`claude/f8-s4a-d8`, cut from slice 1's head, reviewed (L8), not pushed. D8 is answered "Apagarlo igual" (L7). Paused
-for the Desktop update; on resume: fix L8's three P2 test-first; Codex and a lens (reliability, risk) over the fix
-from `fda3e0ae`; an independent verifier (high risk: it writes his `~/.claude` and changes `uninstall`); push; PR 2
-based on `claude/f8-s4a-hooks-5da26e`; `notify --kind ready --pr <n>`. After both merge (T5): a question through the
+`claude/f8-s4a-d8`, cut from slice 1's head, not pushed. D8 is answered "Apagarlo igual" (L7). L8's and the
+verifier's findings are fixed (L9) except the undo line's quoting for PowerShell, which waits on the lead's answer to
+how it passes to claude-fable-5-1; the lead also holds the 772 question, which may move this branch onto that series.
+Then: Codex's record for the fixes, push, PR 2, `notify --kind ready --pr <n>`. After both merge (T5): a question through the
 lead to run `js-harness stack engram-prompt off` on his machine, then the engram `UserPromptSubmit` cell leaves
 `HOOK_CEILINGS`, then T6 (ROADMAP S4a State, summary, `notify --kind closed`).
