@@ -867,3 +867,10 @@ leftover is read before S2 closes.
   eight agents with `.gentle-ai-native-agent-ownership.json` in `~/.claude/agents` (104 KB); options: all three, all
   but `backups/`, or not yet. Read first: `evals/home.mjs:254-256` copies `~/.gentle-ai/state.json` only when it
   exists, so a later eval does not break without it. (L56's time: its line was written at 20:11 local, not 19:55.)
+- L58 2026-11-06 14:00Z (09:00 local): question 201 answered, "Borrar los tres" (tapped; the lead's transcript
+  `0f71b2c6`, line 68771, 2026-11-06T13:51:56Z, checked with `js-harness sessions --quote`). Done: the PATH entry
+  `C:\Users\Oficina\.gentle-ai\bin` removed from `HKCU\Environment` (17 entries to 16, the other 16 unchanged in
+  order, REG_EXPAND_SZ kept, read back with `reg query`: 0 "gentle"); `~/.gentle-ai` deleted (`ls`: no such file);
+  the eight agents and `.gentle-ai-native-agent-ownership.json` deleted from `~/.claude/agents`, now empty. T14 is
+  done. PR 778 (T10) is landed by the lead after 777 (question 203); main is not touched here. Next: the output-style
+  question through the lead, then T11 (with `README.md:5` and `docs/SPEC.md:171`).
