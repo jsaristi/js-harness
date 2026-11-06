@@ -254,8 +254,9 @@ lost, which he accepted once the project's documentation and its memory were on 
   a fixture home whose engram grew, compared whole before and after the run — S2; inline;
   `d4b3c62c`, `427aa8a9` (L8, L11)
 - [x] T5 (kind: verify) Codex and the lenses on T2-T4, the independent verifier (high risk), PR — inline; PR 761 (L11-L17)
-- [ ] T6 (kind: verify) before the sitting, read only: each project's effective output style; the lead's yes to the
-  plan of the sitting; the corrections of L6 to the lead — S3
+- [x] T6 (kind: verify) before the sitting, read only: each project's effective output style; the lead's yes to the
+  plan of the sitting; the corrections of L6 to the lead — S3; plan and corrections sent (L17), the sitting dropped
+  (L20), this repo's style set by question 204 (L60)
 - [x] T7 (kind: verify) the sitting, with the lead: his yes to close every session; he runs `stack backup run` and
   `verify` from a plain terminal; the results into `## Log` — S1, S4-S7; dropped by his answer to question 179
   after four tries copied nothing (L20)
@@ -265,10 +266,11 @@ lost, which he accepted once the project's documentation and its memory were on 
   restarted with the lead; the entries checked against gentle-ai's snapshot (L20); the smoke walk; the session checks; the incident set and
   `fixed load`; the root `CLAUDE.md`'s copy of the kept lines goes, and the T13 test in `bin/lib/rules-block.test.mjs`
   freezes the expected groups inline in the same commit (L31) — S1, S2; built `85d17a02` (L41), checks L44, L47, L48, L51, L53
-- [ ] T10 (kind: docs) the rule lines that name gentle-ai, through `js-harness rules change` on a `rule/` branch,
+- [x] T10 (kind: docs) the rule lines that name gentle-ai, through `js-harness rules change` on a `rule/` branch,
   before S2 closes: `CLAUDE.md:12` ("over gentle-ai's"), `:74-91` (its review steps), `AGENTS.md:6` and `:27`; his
-  words quoted where a line is his
-- [ ] T11 (kind: docs) S2's roadmap line, the session summary, the closed notice — inline
+  words quoted where a line is his; PR 778 by question 200 (L56), landed in main `8d1284a6` (L60)
+- [x] T11 (kind: docs) S2's roadmap line, the session summary, the closed notice — inline; `7de6b95f`, `7ab0efc9`,
+  `docs/sessions/2026-11-06-jh-137-f8-s2-removals-without-the-backup.md` (L59, L60)
 - [x] T12 (kind: docs) before any removal: one table of every gentle-ai function on his machine (Claude, Codex,
   Antigravity, its CLI, its folders and each project's leftovers), the twelve skills included, each mapped to what
   the review decided (the reverse-engineering matrix and 13.5, the diet) and whether that is built: done, owed with
@@ -880,3 +882,12 @@ leftover is read before S2 closes.
   each with its commits and Log lines. The merge queue left PR 778 out at 09:00 as a draft; `gh pr view 778` read it
   ready at 09:01 (head `c3b9767a`), the lead told. Waiting: PR 778 (T10) and question 204 (T6); the session summary
   and the closed notice come after both.
+- L60 2026-11-06 14:25Z (09:25 local): the lead's message: PR 778 landed, main `8d1284a6` (`gh pr view 778`: MERGED,
+  merge commit `8d1284a6`; `git log origin/main`: "Merge pull request #778 from rule/t10-gentle-ai-lines"), so T10
+  is done. Question 204 answered, "Usar js-harness" (tapped; the lead's transcript `0f71b2c6`, line 68947,
+  2026-11-06T14:16:18Z, 09:16 local, read with `js-harness sessions --quote`). Done, nothing else:
+  `"outputStyle": "js-harness"` added as the last key of `D:/js-harness/.claude/settings.local.json` (ignored by
+  git through `~/.config/git/ignore:1`; the key was absent; undo: remove that one key); `~/.claude/output-styles/
+  js-harness.md` is there; the file's other keys unchanged (`diff` against a copy taken before: only the new line
+  and the comma). It holds for new sessions of this project. T6 is done. Next: the session summary, the PR of this
+  branch, the closed notice.
