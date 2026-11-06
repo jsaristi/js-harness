@@ -71,11 +71,9 @@ cost is dropped with the reason written, and the review is recorded with
 Before a gate, an eval batch, a review or a push, say how many runs and what each costs. One try:
 when it fails, read why before anything runs again, never in a loop. Read the proof before the
 command it allows; two steps share a command only with `&&`. Run the installed `js-harness`, not
-the branch's `node bin/js-harness.mjs`, except to test the change itself. A gentle-ai review's
-base is a hash on the head's first-parent line (the last reviewed boundary, or the commit that
-merged main in), never a branch name. Each code commit a review approved is named on a gentle-ai
-line of the feature document; on `operation_timeout` the same command runs once more, then the
-range is written "not reviewed" and Codex reviews it anyway.
+the branch's `node bin/js-harness.mjs`, except to test the change itself. A review's base
+is a hash on the head's first-parent line (the last reviewed boundary, or the commit that merged
+main in), never a branch name.
 
 Review is not his to decide: the consent he granted for every candidate here is his standing
 selection, so when `gentle-ai review start` returns its consent envelope, run the `granted`
