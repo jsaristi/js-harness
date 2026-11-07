@@ -305,24 +305,58 @@ test('stack backup restore asks on a terminal and restores only on y', async () 
   }
 });
 
-test('stack engram-prompt off takes the prompt hook out of a scratch home, on puts it back, and a bad form is a usage error', async () => {
-  // A home whose name a shell would read: a quote, a space and a variable (Codex's P2 over 6503545..f87e2d6).
+test('stack engram-prompt off takes the prompt hook out of a scratch home, on puts it back, and a bad form is a usage error', async (t) => {
+  // A home whose name a shell would read: a quote, a space, a variable, a backtick and a percent sign (Codex's P2 over
+  // 6503545..f87e2d6, then at 0.99 over f87e2d6..30725d2: the undo line must survive the shell it is pasted into).
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stack-engram-prompt-'));
-  const home = path.join(root, "it's $USER");
-  const installPath = path.join(home, '.claude', 'plugins', 'cache', 'engram', 'engram', '0.1.19');
-  const file = path.join(installPath, 'hooks', 'hooks.json');
+  const home = path.join(root, "it's $USER `100%");
   const text = `${JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'prompt.sh' }] }], SessionEnd: [{ hooks: [{ type: 'command', command: 'end.sh' }] }] } }, null, 2)}\n`;
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, text);
-  fs.writeFileSync(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ plugins: { 'engram@engram': [{ scope: 'user', installPath }] } }));
+  /** Seeds `home` with a user-level engram install whose hooks file is `text`, and returns that file's path. */
+  const seed = (home) => {
+    const installPath = path.join(home, '.claude', 'plugins', 'cache', 'engram', 'engram', '0.1.19');
+    const file = path.join(installPath, 'hooks', 'hooks.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, text);
+    fs.writeFileSync(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ plugins: { 'engram@engram': [{ scope: 'user', installPath }] } }));
+    return file;
+  };
+  const file = seed(home);
+  // The home the user's shell hands `js-harness` when the printed undo line is pasted into it as it is: PowerShell on
+  // win32, the primary shell there, else sh, each with a `js-harness` of its own that writes back its last argument.
+  // Compared to the home, not to the printed text: only the shell says what it read. `null` when the shell is missing.
+  const shellBin = path.join(root, 'shell-bin');
+  fs.mkdirSync(shellBin);
+  fs.writeFileSync(path.join(shellBin, 'js-harness'), '#!/bin/sh\nshift $(($# - 1))\nprintf \'%s\\n\' "$1"\n', { mode: 0o755 });
+  const pastedHome = (undoLine) => {
+    const typed = undoLine.replace(/^\s*undo: /, '');
+    const [shell, args, env] = process.platform === 'win32'
+      ? ['powershell', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(`function js-harness { Write-Output $args[-1] }\n${typed}`, 'utf16le').toString('base64')], process.env]
+      : ['sh', ['-c', typed], { ...process.env, PATH: `${shellBin}${path.delimiter}${process.env.PATH ?? ''}` }];
+    const ran = spawnSync(shell, args, { encoding: 'utf8', env });
+    if (ran.error?.code === 'ENOENT') return null;
+    assert.equal(ran.status, 0, `${shell} read ${JSON.stringify(typed)} and said: ${ran.stderr}`);
+    return ran.stdout.replace(/\r?\n$/, '');
+  };
+  /** The undo line `out` printed, which the shell of this machine must give back as `home`; a missing shell is said. */
+  const assertUndoPastes = (out, home) => {
+    const undoLine = out.split('\n').find((line) => /^\s*undo: js-harness stack engram-prompt on --home /.test(line));
+    assert.ok(undoLine !== undefined, out);
+    const read = pastedHome(undoLine);
+    if (read === null) t.diagnostic(`the undo line was not pasted into a shell: ${process.platform === 'win32' ? 'powershell' : 'sh'} is not on this machine`);
+    else assert.equal(read, home, `the shell read ${JSON.stringify(undoLine)} as ${JSON.stringify(read)}`);
+  };
   try {
     const off = await run(['engram-prompt', 'off', '--home', home], {});
     assert.equal(off.code, 0, off.err);
     assert.match(off.out, /took the UserPromptSubmit hook out of .*hooks\.json; restart Claude Code/);
-    // The undo line names the home it was given, quoted so a shell reads it as written: in single quotes, which bash
-    // and PowerShell both leave literal, with its own quote closed and escaped (Codex P2 over dc0d6c5..b309c50).
-    assert.ok(off.out.includes(`undo: js-harness stack engram-prompt on --home '${home.replace("it's", "it'\\''s")}'`), off.out);
+    assertUndoPastes(off.out, home);
     assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.UserPromptSubmit, undefined);
+    // A home with a quote and a space but nothing a shell expands takes the other form on win32 (double quotes).
+    const plainer = path.join(root, "it's here");
+    seed(plainer);
+    const offPlainer = await run(['engram-prompt', 'off', '--home', plainer], {});
+    assert.equal(offPlainer.code, 0, offPlainer.err);
+    assertUndoPastes(offPlainer.out, plainer);
     const again = await run(['engram-prompt', 'off', '--home', home], {});
     assert.equal(again.code, 0);
     assert.match(again.out, /already off/);

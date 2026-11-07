@@ -18,7 +18,7 @@ import { unknownArgument } from './lib/args.mjs';
 import { forgetStackRow, MalformedManifestError, readManifest, recordStackRow } from './lib/manifest.mjs';
 import { updateEngramBinary } from './lib/engram-release.mjs';
 import { planUpgrade } from './lib/stack-upgrade.mjs';
-import { quoteForShell, resolveStackPm } from './lib/package-manager.mjs';
+import { resolveStackPm } from './lib/package-manager.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './lib/project-functions.mjs';
 import { planStack, prefixBinOf, RUNNABLE } from './lib/stack-install.mjs';
 import { appliesOf, homeEnv, runWords, shownCommand, TIMEOUTS, withEnv } from './lib/stack-run.mjs';
@@ -26,6 +26,7 @@ import { codexHomeOf, pluginInstalledVersion, probeStack, probeVersionCommand, r
 import { harnessHome } from './lib/home.mjs';
 import { restoreBackup, ROOT_IDS, runBackup, verifyBackup } from './lib/stack-backup.mjs';
 import { promptHookOff, promptHookOn } from './lib/engram-prompt-hook.mjs';
+import { shellWord } from './install.mjs';
 
 export { resolveStackPm };
 
@@ -594,9 +595,12 @@ function engramPromptForm(form, home, given, said, log, error) {
     if (result.status === 'already') log(`${said} already off: ${result.path} holds no UserPromptSubmit hook`);
     else {
       log(`${said} took the UserPromptSubmit hook out of ${result.path}; restart Claude Code for it to take effect`);
-      // The resolved home, as a shell reads it: a plain word as it is, any other in single quotes, which bash and
-      // PowerShell both leave literal (`$`, spaces); a quote of its own is closed and escaped, POSIX's way.
-      const word = /^[\w@+=:,./\\-]+$/.test(home) ? home : quoteForShell(home, 'posix');
+      // The resolved home as the shell the line is pasted into reads it back: a plain word as it is, any other as
+      // `shellWord` writes it for this platform, PowerShell on win32 (a single quote doubled, `''`) and sh elsewhere
+      // (`'\''`): the one form that serves both failed three reviews (JSON, then POSIX quotes, Codex at 0.99 over
+      // f87e2d6..30725d2). On win32 a home holding `$` or a backtick lands in single quotes, which cmd.exe does not
+      // read: that shell gets the double-quoted form `cmdExeWord` gives, which this line does not print.
+      const word = /^[\w@+=:,./\\-]+$/.test(home) ? home : shellWord(home);
       log(`  undo: js-harness stack engram-prompt on${given === undefined ? '' : ` --home ${word}`}`);
     }
     return 0;
