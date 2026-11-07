@@ -11,7 +11,7 @@ import { cleanLine, createKeyReader, createTerminalGuard, layoutFrame, paint, sc
 import { handOff, runChild } from './lib/run-child.mjs';
 import { currentVersion, installMain, syncMain, uninstallMain } from './install.mjs';
 import { initMain } from './init.mjs';
-import { statusMain, updateMain, upgradeMain, resolveLatest } from './update.mjs';
+import { statusMain, updateAll, upgradeAll, resolveLatest } from './update.mjs';
 import { isNewer } from './lib/version.mjs';
 import { projectLocation } from './lib/project.mjs';
 import { installedVersion as manifestVersion } from './lib/manifest.mjs';
@@ -734,7 +734,9 @@ const COMMAND_IDS = [
 ];
 
 /** The same commands run in this process, each bound to `home`, with the arguments `commandArgv` gives the
- * child: the seam the tests use to hand a command a fake `spawn`, `fetch` or `now`. */
+ * child: the seam the tests use to hand a command a fake `spawn`, `fetch` or `now`. `stack` is the seam of the
+ * stack step of Update and Upgrade (odd/tasks/stack-upgrade.md, S1); Upgrade hands it the menu's `ask`, so each
+ * tool it updates is asked in the menu. */
 export function buildCommands({
   home,
   cwd = process.cwd(),
@@ -745,6 +747,7 @@ export function buildCommands({
   now,
   remoteMain: remote = remoteMain,
   source,
+  stack,
 } = {}) {
   // The arguments after the command's own words: what its main takes.
   const args = (command, location, words = 1) => commandArgv(command, { home, cwd, root, source, location }).slice(words);
@@ -760,8 +763,9 @@ export function buildCommands({
     doctor: () => doctorMain(args('doctor'), env, { spawn, fetch: fetchImpl, now }),
     'stack-install': (location, io = {}) => stackInstallMain(args('stack-install', location, 2), env, { ask: io.ask, interactive: true }),
     install: () => installMain(args('install')),
-    update: () => updateMain(args('update'), env, spawn),
-    upgrade: () => upgradeMain(args('upgrade'), env, spawn),
+    // Update says what of the stack is behind too, and Upgrade updates it, each asked through the menu's `ask` (stack-upgrade S1).
+    update: () => updateAll(args('update'), env, spawn, process.platform, { stack }),
+    upgrade: (location, io = {}) => upgradeAll(args('upgrade'), env, spawn, process.platform, { ask: io.ask, stack }),
     sync: () => syncMain(args('sync')),
     'uninstall-machine': () => uninstallMain(args('uninstall-machine')),
     'uninstall-snapshots': () => uninstallMain(args('uninstall-snapshots')),

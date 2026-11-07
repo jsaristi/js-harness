@@ -155,7 +155,7 @@ function context7InstalledVersion(deps) {
 /** A Claude Code plugin has no CLI to ask: its version comes from the plugin marketplace's own
  * record of what it installed (`installed_plugins.json`), since that is the only place the version
  * is written down. Used by typescript-lsp, with its `<name>@<marketplace>` id. */
-function pluginInstalledVersion(home, pluginId) {
+export function pluginInstalledVersion(home, pluginId) {
   const { found, data } = readJsonFile(path.join(home, '.claude', 'plugins', 'installed_plugins.json'));
   if (!found) return { state: 'missing', version: null };
   if (data === undefined) return { state: 'unknown', version: null };
