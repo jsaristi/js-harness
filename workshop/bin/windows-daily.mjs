@@ -1,14 +1,14 @@
 // `js-harness windows-daily`: the newest run of the daily Windows suite (.github/workflows/windows-daily.yml), read
 // by hand. It prints what the run says and, for a red run not told before, writes the notice to the orchestrator
-// that the lead's heartbeat would write (bin/lib/windows-daily.mjs says what is told and when). Exit 0, 1 when the
+// that the lead's heartbeat would write (workshop/lib/windows-daily.mjs says what is told and when). Exit 0, 1 when the
 // notice could not be written, 2 for a usage error.
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { unknownArgument } from './lib/args.mjs';
-import { mainCheckout, projectSlug } from './lib/sessions.mjs';
-import { windowsDaily } from './lib/windows-daily.mjs';
-import { harnessHome } from './lib/home.mjs';
+import { unknownArgument } from '../../bin/lib/args.mjs';
+import { mainCheckout, projectSlug } from '../../bin/lib/sessions.mjs';
+import { windowsDaily } from '../lib/windows-daily.mjs';
+import { harnessHome } from '../../bin/lib/home.mjs';
 
 const USAGE = [
   'Usage: js-harness windows-daily [--cwd <path>] [--home <path>]',

@@ -113,7 +113,8 @@ const relative = (root, file) => path.relative(root, file).split(path.sep).join(
 /** Orders `{ path }` items by their path, with plain comparison so that no locale changes the order. */
 const byPath = (a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
 
-/** Every `*.mjs` under `bin/` except the tests, with its text, sorted by path. */
+/** Every `*.mjs` under `bin/` and `workshop/` except the tests, with its text, sorted by path: the workshop's code
+ * reads rules as the product's does (odd/tasks/workshop-product-split.md), and a project without one has none. */
 function codeFilesUnder(root) {
   const found = [];
   const visit = (absolute) => {
@@ -123,7 +124,7 @@ function codeFilesUnder(root) {
       else if (entry.isFile() && entry.name.endsWith('.mjs') && !entry.name.endsWith('.test.mjs')) found.push(file);
     }
   };
-  visit(path.join(root, 'bin'));
+  for (const folder of ['bin', 'workshop']) visit(path.join(root, folder));
   return found
     .map((file) => ({ path: relative(root, file), text: fs.readFileSync(file, 'utf8') }))
     .sort(byPath);

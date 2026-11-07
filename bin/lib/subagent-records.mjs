@@ -1,6 +1,6 @@
 // The Claude Code records of a project's sessions and their sub-agents: the folders that hold them, the main
 // checkout's and each worktree's, and what a count needs of their entries, never the text of a message. `check`'s
-// sub-agent row (bin/check.mjs) and the workshop's `subagents` and `audit` read them. Moved out of bin/subagents.mjs,
+// sub-agent row (bin/check.mjs) and the workshop's `subagents` and `audit` read them. Moved out of workshop/bin/subagents.mjs,
 // which is the workshop's (odd/tasks/workshop-product-split.md, slice 1+2), so product code imports no workshop
 // module. Zero deps.
 import fs from 'node:fs';

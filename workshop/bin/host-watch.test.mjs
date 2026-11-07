@@ -4,9 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { hostWatchMain, hostWatchTick } from './host-watch.mjs';
-import { sessionEffortRefusal } from './lib/guard.mjs';
-import { sessionTitleRefusal } from './lib/session-title-guard.mjs';
-import { appendReading, newReading } from './lib/channel.mjs';
+import { sessionEffortRefusal } from '../../bin/lib/guard.mjs';
+import { sessionTitleRefusal } from '../../bin/lib/session-title-guard.mjs';
+import { appendReading, newReading } from '../../bin/lib/channel.mjs';
 
 // `js-harness host-watch` (odd/tasks/f8-s9-host-watch.md) through its main: `draft` over changelog files, `check` over
 // a review file and the excerpts beside it, `tools` against the list recorded in a project. Everything lives in a
@@ -211,7 +211,7 @@ test('tools refuses a recorded list it cannot read, and never takes it for a fir
 });
 
 // The trigger (T4, spec S4): the heartbeat's hourly reading, and the brief it hands.
-const RULES = fs.readFileSync(path.join(import.meta.dirname, 'lib', 'rules-data.mjs'), 'utf8');
+const RULES = fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'bin', 'lib', 'rules-data.mjs'), 'utf8');
 
 function tickOf(w, deps = {}) {
   return hostWatchTick({

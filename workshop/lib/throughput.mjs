@@ -1,12 +1,12 @@
 // The throughput review's measure (odd/tasks/throughput-review.md): the facts of a UTC day read from the records the
 // harness keeps, and the fixed table a window of days prints. Pure: it reads no file and spawns nothing, so a test
-// hands it records and the command (bin/throughput.mjs) hands it what it read. The facts and not the figures are
+// hands it records and the command (workshop/bin/throughput.mjs) hands it what it read. The facts and not the figures are
 // what a day keeps, so a median over several days is the median of their facts, never of their daily medians.
 
-import { recordedQuestions } from './channel.mjs';
-import { compareSteps, stepsOf } from './progress-pace.mjs';
-import { ruleValue } from './rules.mjs';
-import { busySeconds, median, secondsBetween } from './land-records.mjs';
+import { recordedQuestions } from '../../bin/lib/channel.mjs';
+import { compareSteps, stepsOf } from '../../bin/lib/progress-pace.mjs';
+import { ruleValue } from '../../bin/lib/rules.mjs';
+import { busySeconds, median, secondsBetween } from '../../bin/lib/land-records.mjs';
 
 const DAY_MS = 24 * 3600 * 1000;
 

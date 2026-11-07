@@ -21,6 +21,8 @@ import { ratchet } from './lib/ratchet.testkit.mjs';
 
 const REPO = path.resolve(import.meta.dirname, '..');
 const DISPATCHER = path.join(REPO, 'bin', 'js-harness.mjs');
+// The workshop's dispatcher, held to the same refusal (odd/tasks/workshop-product-split.md).
+const WORKSHOP = path.join(REPO, 'workshop', 'js-harness-workshop.mjs');
 const UNKNOWN = '--no-such-flag';
 // The refusal: the line may open with the command's name and close with a hint after a space, `;` or `(`, as
 // `notify` says where a text that begins with `--` goes.
@@ -45,6 +47,11 @@ const BEFORE = {
   reply: ['--hook'],
   contract: ['check'],
   remote: ['status'],
+};
+
+// What the workshop's commands take before the probe, as BEFORE does for the product's.
+const WORKSHOP_BEFORE = {
+  loop: ['status'],
   throughput: ['status'],
 };
 
@@ -53,9 +60,9 @@ const LEGACY = {
   guard: 'prints only the usage',
 };
 
-/** The commands `js-harness --help` lists, in its order: the first word of each line under "Commands:". */
-function dispatched() {
-  const help = spawnSync(process.execPath, [DISPATCHER, '--help'], { encoding: 'utf8' });
+/** The commands `<dispatcher> --help` lists, in its order: the first word of each line under "Commands:". */
+function dispatched(dispatcher = DISPATCHER) {
+  const help = spawnSync(process.execPath, [dispatcher, '--help'], { encoding: 'utf8' });
   assert.equal(help.status, 0, help.stderr);
   const lines = help.stdout.split('\n');
   const names = [];
@@ -67,13 +74,12 @@ function dispatched() {
   return names;
 }
 
-function probe(command) {
-  const before = BEFORE[command] ?? [];
+function probe(command, before = BEFORE[command] ?? []) {
   const split = before.indexOf('--');
   return split === -1 ? [command, ...before, UNKNOWN] : [command, ...before.slice(0, split), UNKNOWN, ...before.slice(split)];
 }
 
-function run(args) {
+function run(args, dispatcher = DISPATCHER) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-conventions-'));
   const home = path.join(root, 'home');
   const cwd = path.join(root, 'cwd');
@@ -85,7 +91,7 @@ function run(args) {
   }
   env.GIT_CEILING_DIRECTORIES = root;
   try {
-    return spawnSync(process.execPath, [DISPATCHER, ...args], { cwd, env, encoding: 'utf8', input: '', timeout: 60000 });
+    return spawnSync(process.execPath, [dispatcher, ...args], { cwd, env, encoding: 'utf8', input: '', timeout: 60000 });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -107,6 +113,22 @@ test('every command refuses an unknown flag with exit 2 and "unknown argument: <
   }
   const problems = ratchet({ checked: commands, broken, legacy: LEGACY });
   assert.deepEqual(problems, [], `${problems.join('\n')}\n\nwhat each command that breaks it printed:\n${printed.join('\n')}`);
+});
+
+test('every workshop command refuses an unknown flag with exit 2 and "unknown argument: <token>"', () => {
+  const commands = dispatched(WORKSHOP);
+  assert.equal(commands.length, 10, `the workshop's --help lists ${commands.length} commands, not 10`);
+  const printed = [];
+  for (const command of commands) {
+    const args = probe(command, WORKSHOP_BEFORE[command] ?? []);
+    const result = run(args, WORKSHOP);
+    const lines = result.stderr.split(/\r?\n/);
+    if (result.status !== 2 || !lines.some((line) => REFUSAL.test(line))) {
+      const ended = result.error ? `no exit (${result.error.code ?? result.error.message})` : `exit ${result.status}`;
+      printed.push(`${args.join(' ')}: ${ended}, ${JSON.stringify(lines[0])}`);
+    }
+  }
+  assert.deepEqual(printed, []);
 });
 
 test('a probe puts the unknown flag after the subcommand and before what a command hands on after --', () => {

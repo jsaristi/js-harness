@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { USAGE, checkDocs, docsMain } from './docs.mjs';
-import { INFERRED_CHECK, INFERRED_LABEL } from './lib/docs-cross.mjs';
+import { INFERRED_CHECK, INFERRED_LABEL } from '../lib/docs-cross.mjs';
 
 const SPEC = [
   '# The specification',
@@ -277,6 +277,16 @@ test('the docs row passes where the index has every entry of docs/ and the plan 
     assert.equal(row.name, 'docs');
     assert.equal(row.pass, true);
     assert.match(row.detail, /^4 entries of docs\/ indexed; 10 tracked files in 4 slices of at most 400,000 estimated tokens/);
+  });
+});
+
+test('with no .git, as in the gate\'s WSL mirror, the row reads the files on disk that git would not ignore', async () => {
+  // The merge queue of 2026-11-06 left PR 776 out: the mirror is synced without .git, so git listed nothing there.
+  await withRepo({ ...CROSS, '.gitignore': '*.log\n', 'evals/run.log': 'x'.repeat(1_700_000) }, (dir) => {
+    const [tracked] = checkDocs(dir, { own: true });
+    assert.equal(tracked.pass, true, (tracked.lines ?? []).join('\n'));
+    fs.rmSync(path.join(dir, '.git'), { recursive: true, force: true });
+    assert.deepEqual(checkDocs(dir, { own: true }), [tracked]);
   });
 });
 

@@ -30,7 +30,6 @@ import { permissionsHealth } from './lib/permissions.mjs';
 import { importHealth } from './lib/claude-import.mjs';
 import { backgroundMeasure, cleanNotice, cleanRow } from './lib/clean.mjs';
 import { harnessHome } from './lib/home.mjs';
-import { ideaFix } from './lib/idea-watch.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
@@ -365,7 +364,8 @@ function templatesRow(templates, project, home) {
 /** The idea-watch row (odd/tasks/idea-watch.md, S7): the stable upstream releases the project's record has not read,
  * `stale` with how many, the last one read and the command that drafts the next one, `ok` with none. `n/a` where the
  * project keeps no record (`null`), `unknown` when the tags or the record cannot be read. It has no version of its own:
- * the version column shows only an installed tool's. */
+ * the version column shows only an installed tool's. The record is the harness's own, so its reading, `ideas`, is
+ * the workshop's (`ideas` in workshop/js-harness-workshop.mjs), and the state it gives carries its `fix`. */
 async function ideasRow(ideas, project) {
   const row = { id: 'idea-watch', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'ok', upToDate: 'n/a', fix: {} };
   let state;
@@ -375,14 +375,15 @@ async function ideasRow(ideas, project) {
     return { ...row, project: 'unknown' };
   }
   if (state === null) return { ...row, project: 'n/a' };
-  return state.unread.length === 0 ? row : { ...row, project: 'stale', fix: { project: ideaFix(state) } };
+  return state.unread.length === 0 ? row : { ...row, project: 'stale', fix: { project: state.fix } };
 }
 
 /** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, templates, claude-import,
  * permissions, host-update, stack-update and clean rows. Their checks are given only here, so `doctorMain` alone keeps the rows its
- * callers give it. */
-export function doctorCommand(argv) {
+ * callers give it. `extra` adds rows' checks the product does not give: the workshop gives the idea-watch row. */
+export function doctorCommand(argv, extra = {}) {
   return doctorMain(argv, process.env, {
+    ...extra,
     unseen: async (cwd) => (await import('./unseen.mjs')).unseenToClear(cwd),
     host: (home) => readHostVersions({ home }),
     stackUpdate: true,
@@ -392,7 +393,6 @@ export function doctorCommand(argv) {
     backup: (home, now) => backupHealth(home, now),
     permissions: (home) => permissionsHealth(home),
     imports: (project, home) => importHealth(project, { home }),
-    ideas: async (project) => (await import('./idea-watch.mjs')).ideaWatchHealth(project),
     clean: { start: backgroundMeasure(process.env, argv) },
   });
 }

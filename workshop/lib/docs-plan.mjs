@@ -16,14 +16,17 @@ const TIERS = ['core', 'tests', 'feature documents', 'the rest'];
  * the rules, the failures, then the guides. The other files of the root and of `docs/` follow them by name. */
 const ORIENTATION = ['docs/README.md', 'docs/SPEC.md', 'AGENTS.md', 'CLAUDE.md', 'docs/ROADMAP.md', 'docs/RULES.md', 'docs/FAILURES.md', 'docs/GUIDE.md', 'README.md'];
 
+// The folders of source: the product's and the workshop's, read alike (odd/tasks/workshop-product-split.md).
+const SOURCE = ['bin', 'workshop'];
+const isSource = (file) => SOURCE.includes(file.split('/')[0]);
 const isTest = (file) => /\.test\.[cm]?js$/.test(file) || /\.testkit\.mjs$/.test(file);
 
 /** The tier of the tracked file `file`: `core` (the root's files, the files directly under `docs/` and the source of
- * `bin/`), `tests` (the tests and test kits of `bin/`), `feature documents` (`odd/` and the folders of `docs/`) or
+ * `bin/` and `workshop/`), `tests` (their tests and test kits), `feature documents` (`odd/` and the folders of `docs/`) or
  * `the rest` (`evals/`, `scripts/`, `templates/`, configuration and CI). */
 export function tierOf(file) {
   const parts = file.split('/');
-  if (parts[0] === 'bin') return isTest(file) ? 'tests' : 'core';
+  if (isSource(file)) return isTest(file) ? 'tests' : 'core';
   if (parts.length === 1 || (parts[0] === 'docs' && parts.length === 2)) return 'core';
   if (parts[0] === 'odd' || parts[0] === 'docs') return 'feature documents';
   return 'the rest';
@@ -74,7 +77,7 @@ function coreGroups(byPath, files, capabilities, imports, placed) {
     placed.add(one);
     return byPath.get(one);
   });
-  const docs = files.filter((one) => !one.path.startsWith('bin/') && tierOf(one.path) === 'core').map((one) => one.path);
+  const docs = files.filter((one) => !isSource(one.path) && tierOf(one.path) === 'core').map((one) => one.path);
   const orientation = take([...ORIENTATION, ...docs.filter((one) => !ORIENTATION.includes(one)).sort()]);
   const owned = capabilities.map((capability) => ({ capability, paths: take(capability.today).map((one) => one.path) }));
   // A module no Today line claims goes with the first capability whose files import it, followed through imports.
@@ -87,7 +90,7 @@ function coreGroups(byPath, files, capabilities, imports, placed) {
       grew = true;
     }
   }
-  const rest = take(files.map((one) => one.path).filter((one) => one.startsWith('bin/')));
+  const rest = take(files.map((one) => one.path).filter(isSource));
   return [
     group('orientation', orientation),
     ...owned.map(({ capability, paths }) => group(capability.title, paths.map((one) => byPath.get(one)))),

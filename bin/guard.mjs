@@ -35,7 +35,7 @@
 //     rule `memory-feedback-home` is declared (bin/lib/memory-feedback-guard.mjs, imported only for a memory note;
 //     odd/tasks/memory-feedback-home.md). `guard --memory <folder>` runs the same check over a whole folder.
 // `js-harness guard --stop` is the `Stop` hook (odd/tasks/honesty-audit.md, T16): a reply that states the session's own
-// context share more than 2 points from the share its transcript records (bin/lib/audit.mjs, `shareRefusal`). A reply
+// context share more than 2 points from the share its transcript records (workshop/lib/audit.mjs, `shareRefusal`). A reply
 // is not a tool call and is already shown when the hook runs, so it cannot be refused before it is sent: the hook
 // turns the stop back with the hooks contract's `decision: "block"` and its reason, and the session corrects the share
 // in its next words. It never turns back a stop it already turned back (`stop_hook_active`), so it cannot loop; it
