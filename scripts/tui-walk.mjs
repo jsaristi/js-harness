@@ -10,19 +10,31 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { REPO_ROOT, resolveNpmCli, npm, run, mkTmp, copyRepoToStaging, nextVersion, bumpVersion } from './lib.mjs';
+import { REFRESHING } from '../bin/tui.mjs';
 
 const KEY = { down: 'j', up: 'k', enter: '\r', yes: 'y', no: 'n', quit: 'q', escape: '\u001b' };
 const STEP_MS = 10 * 60_000; // an upgrade with the real npm can take minutes
 
-/** The last menu drawn in `text`: its lines from the version header on. */
+/** The rows of the last frame painted in `text`: the TUI repaints the whole screen from its top-left each time
+ * (`paint`, bin/lib/terminal.mjs), so the last cursor-home starts it. */
 export function screenOf(text) {
-  // A draw below a command's output starts on a new line; a draw in place (a key that only moved or opened a
-  // submenu) starts with the sequence that erases the last draw, so the header follows it on the same line.
-  const erase = '\u001b[0J';
-  const fresh = text.lastIndexOf('\njs-harness ') + 1;
-  const inPlace = text.lastIndexOf(`${erase}js-harness `);
-  const at = inPlace >= 0 && inPlace + erase.length > fresh ? inPlace + erase.length : fresh;
-  return text.slice(at).split('\n');
+  const at = Math.max(0, text.lastIndexOf('\u001b[H'));
+  return text.slice(at).replace(/\u001b\[[0-9;?]*[A-Za-z]/g, '').replace(/\r\n/g, '\n').split('\n');
+}
+
+// The title a result screen opens with, the third row: an exit code, a signal, a cancel, or a command that could not run.
+const RESULT_TITLE = / \(exit \d+\)$| \(stopped by \w+\)$|: cancelled; |^\S+ failed: /;
+
+/** The title of the result screen `text` ends on, or null while a command still runs or a menu is drawn. */
+export function resultOf(text) {
+  const title = screenOf(text)[2] ?? '';
+  return RESULT_TITLE.test(title) ? title : null;
+}
+
+/** Whether the last frame in `text` is done reading what a command changed: until then its version line says so
+ * (`REFRESHING`, bin/tui.mjs), and the header and the menu may still be the ones from before the command. */
+export function settledOf(text) {
+  return !(screenOf(text)[0] ?? '').includes(REFRESHING);
 }
 
 /** The index of each item of the last menu drawn in `text`, with its section, and the one selected. */
@@ -83,7 +95,7 @@ async function main() {
     JS_HARNESS_PM: npmWrapper,
   };
   const tuiUrl = pathToFileURL(path.join(REPO_ROOT, 'bin', 'tui.mjs')).href;
-  const child = spawn(process.execPath, ['--input-type=module', '-e', `import(${JSON.stringify(tuiUrl)}).then((m) => m.tuiMain([], process.env)).then((code) => process.exit(code ?? 0))`], {
+  const child = spawn(process.execPath, ['--input-type=module', '-e', `import(${JSON.stringify(tuiUrl)}).then((m) => m.tuiMain([], process.env, undefined, { stdout: Object.assign(process.stdout, { columns: 200, rows: 2000 }) })).then((code) => process.exit(code ?? 0))`], {
     cwd: dirs.repo,
     env,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -117,13 +129,36 @@ async function main() {
   }
 
   const results = [];
+  /** Presses `key`, which starts a command, and waits for its result screen, done reading what the command changed
+   * (so the menu Enter goes back to is the new one): the rows of that last frame. */
+  async function runToResult(key) {
+    const start = out.length;
+    child.stdin.write(key);
+    const until = Date.now() + STEP_MS;
+    while (!resultOf(out.slice(start)) || !settledOf(out.slice(start))) {
+      if (Date.now() > until) throw new Error(`no result screen ${STEP_MS / 1000} s after the key ${JSON.stringify(key)}`);
+      if (child.exitCode !== null) break;
+      await sleep(50);
+    }
+    return screenOf(out);
+  }
+
   async function step(name, { section, label, answer, expect, menu }) {
     const from = out.length;
     await select(section, label);
-    const start = out.length;
-    await press(KEY.enter);
-    if (answer) await press(answer);
-    const said = out.slice(start);
+    // A prompt is a menu draw; the run is not: it ends on a result screen, whose last frame holds the whole log (the
+    // window is 2000 rows tall), and Enter goes back to the menu.
+    if (answer) await press(KEY.enter);
+    const key = answer ?? KEY.enter;
+    let said;
+    if (key === KEY.no) {
+      const start = out.length;
+      await press(key);
+      said = out.slice(start);
+    } else {
+      said = (await runToResult(key)).join('\n');
+      await press(KEY.enter);
+    }
     const faults = [];
     for (const pattern of [].concat(expect ?? [])) if (!pattern.test(said)) faults.push(`does not print ${pattern}`);
     if (/^\S+ failed: /m.test(said)) faults.push('the menu reported the command failed');
@@ -149,6 +184,11 @@ async function main() {
     const until = Date.now() + 60_000;
     while (draws() === 0) {
       if (Date.now() > until || child.exitCode !== null) throw new Error(`the menu never opened:\n${out}`);
+      await sleep(50);
+    }
+    // The update check fills the header after the first draw (odd/tasks/tui-gentle-level.md, S5).
+    while (screenOf(out)[0].includes('checking for updates')) {
+      if (Date.now() > until || child.exitCode !== null) throw new Error(`the update check never ended:\n${screenOf(out)[0]}`);
       await sleep(50);
     }
     const header = screenOf(out)[0];
@@ -189,16 +229,15 @@ async function main() {
     fs.writeFileSync(path.join(kept, 'walk.md'), 'a note the normal uninstall keeps\n');
     await uninstallKind('Uninstall everything, answered no', 'Everything', { answer: KEY.no });
     {
-      // Its yes removes the folder and, since this menu runs from a checkout, keeps the program; then the menu ends
-      // by itself, with nothing left to offer.
-      const start = out.length;
+      // Its yes removes the folder and, since this menu runs from a checkout, keeps the program; its result says the
+      // menu is gone too, and Enter closes it, with nothing left to offer.
       await select(M, 'Uninstall');
       await press(KEY.enter);
       await select('uninstall', 'Everything');
       await press(KEY.enter);
-      child.stdin.write(KEY.yes);
+      const said = (await runToResult(KEY.yes)).join('\n');
+      child.stdin.write(KEY.enter);
       const exit = await Promise.race([exited, sleep(60_000).then(() => 'still running')]);
-      const said = out.slice(start);
       const faults = [];
       if (exit !== 0) faults.push(`exit ${exit}`);
       if (fs.existsSync(path.join(dirs.home, '.js-harness'))) faults.push('the .js-harness folder is still there');
