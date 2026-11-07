@@ -254,34 +254,42 @@ lost, which he accepted once the project's documentation and its memory were on 
   a fixture home whose engram grew, compared whole before and after the run — S2; inline;
   `d4b3c62c`, `427aa8a9` (L8, L11)
 - [x] T5 (kind: verify) Codex and the lenses on T2-T4, the independent verifier (high risk), PR — inline; PR 761 (L11-L17)
-- [ ] T6 (kind: verify) before the sitting, read only: each project's effective output style; the lead's yes to the
-  plan of the sitting; the corrections of L6 to the lead — S3
+- [x] T6 (kind: verify) before the sitting, read only: each project's effective output style; the lead's yes to the
+  plan of the sitting; the corrections of L6 to the lead — S3; plan and corrections sent (L17), the sitting dropped
+  (L20), this repo's style set by question 204 (L60)
 - [x] T7 (kind: verify) the sitting, with the lead: his yes to close every session; he runs `stack backup run` and
   `verify` from a plain terminal; the results into `## Log` — S1, S4-S7; dropped by his answer to question 179
   after four tries copied nothing (L20)
 - [x] T8 (kind: verify) the removals, each tool asked through the lead and run after its yes, in the order of item 5;
   each operation and its check into `## Log` — S1, S3, S8. gentle-ai done (L34-L36), Orca done (L37), herdr done (L38)
-- [ ] T9 (kind: build) the exclusion reverted in `.claude/settings.json` and its sentence in `CLAUDE.md`; every session
+- [x] T9 (kind: build) the exclusion reverted in `.claude/settings.json` and its sentence in `CLAUDE.md`; every session
   restarted with the lead; the entries checked against gentle-ai's snapshot (L20); the smoke walk; the session checks; the incident set and
   `fixed load`; the root `CLAUDE.md`'s copy of the kept lines goes, and the T13 test in `bin/lib/rules-block.test.mjs`
-  freezes the expected groups inline in the same commit (L31) — S1, S2
-- [ ] T10 (kind: docs) the rule lines that name gentle-ai, through `js-harness rules change` on a `rule/` branch,
+  freezes the expected groups inline in the same commit (L31) — S1, S2; built `85d17a02` (L41), checks L44, L47, L48, L51, L53
+- [x] T10 (kind: docs) the rule lines that name gentle-ai, through `js-harness rules change` on a `rule/` branch,
   before S2 closes: `CLAUDE.md:12` ("over gentle-ai's"), `:74-91` (its review steps), `AGENTS.md:6` and `:27`; his
-  words quoted where a line is his
-- [ ] T11 (kind: docs) S2's roadmap line, the session summary, the closed notice — inline
-- [ ] T12 (kind: docs) before any removal: one table of every gentle-ai function on his machine (Claude, Codex,
+  words quoted where a line is his; PR 778 by question 200 (L56), landed in main `8d1284a6` (L60)
+- [x] T11 (kind: docs) S2's roadmap line, the session summary, the closed notice — inline; `7de6b95f`, `7ab0efc9`,
+  `docs/sessions/2026-11-06-jh-137-f8-s2-removals-without-the-backup.md` (L59, L60)
+- [x] T12 (kind: docs) before any removal: one table of every gentle-ai function on his machine (Claude, Codex,
   Antigravity, its CLI, its folders and each project's leftovers), the twelve skills included, each mapped to what
   the review decided (the reverse-engineering matrix and 13.5, the diet) and whether that is built: done, owed with
   its step, or a gap; shown to him as a Spanish page; only a gap, or a function the review never covered, is asked
-  (L26) — S10, S11, S12
-- [ ] T13 (kind: build) the kept text of the diet's Appendix A.1 ships to every project in js-harness's block of
+  (L26) — S10, S11, S12; done `240cd132` (L28), its last gap closed by question 182 (L33)
+- [x] T13 (kind: build) the kept text of the diet's Appendix A.1 ships to every project in js-harness's block of
   `~/.claude/CLAUDE.md` (today G12's nine Rules lines, `bin/lib/rules-block.mjs`), test first, reviewed, landed and
   installed before gentle-ai's blocks leave that file; this repo's copy under "Kept from the global file" keeps one
-  home — S10
-- [ ] T14 (kind: verify) the removal from everywhere: every trace T12 lists that he does not keep, gentle-ai's
+  home — S10; built `ae79fad2`, `b0e90be1` (L29-L31), PR 763 in main `7aa2ab9c` (L34)
+- [x] T14 (kind: verify) the removal from everywhere: every trace T12 lists that he does not keep, gentle-ai's
   Claude, Codex and Antigravity config, `~/.gentle-ai`, its binaries and each project's `.atl/`, each asked — S11.
   Done with the uninstall (L35, L36): the Claude, Codex and Antigravity config and skills, the binary, GGA. Left to
-  ask: `~/.gentle-ai` and each project's `.atl/`
+  ask: `~/.gentle-ai` with its PATH entry and gentle-ai's eight native agents in `~/.claude/agents` (L47); each
+  project's `.atl/` done (L39); the rest done by question 201 (L58)
+- [ ] T15 (kind: build) follow-up, proposed to him through the lead, not authorized yet (L43): `sessions stop`
+  refuses while the session's worktree holds files unless told to remove it; test first, a stop on a session with a
+  live worktree exits non-zero and deletes nothing; the orchestrator's restart steps resume by message
+- [ ] T16 (kind: build) follow-up, proposed to him through the lead, not authorized yet (L46): a `claude -p` prompt that
+  starts with `/` runs under `MSYS_NO_PATHCONV=1`; the guard refuses one without it, test first
 
 ## Coverage of gentle-ai's functions (T12)
 Each function gentle-ai 4.3.1 provides on his machine (`~/.gentle-ai/state.json`: agents claude-code, codex,
@@ -312,6 +320,34 @@ mapped to the decision the review took and its state. RE is `docs/proposals/gent
 | Model routing, evals, multi-host | keep ours (RE:252-254) | done; rows 9, 13, 14 owed to S7 and S8 |
 | `opencode-gentle-logo` | not in RE | nothing on disk (`~/.config/opencode` absent) [c] |
 Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's own skills) [c].
+
+## Rule lines that leave with gentle-ai (T10 draft)
+Drafted 2026-11-05 (L49), not applied: each change goes through `js-harness rules change` on a `rule/` branch once
+he approves the wording, his words quoted with their date. Each line names what it replaces, as of `8f10bb50`.
+1. `CLAUDE.md:11-12`, "The task contract comes first in a feature document, as this project's order over
+   gentle-ai's;" becomes "The task contract comes first in a feature document;".
+2. `CLAUDE.md:73-77`, "A gentle-ai review's base is a hash ... never a branch name. Each code commit a review approved
+   is named on a gentle-ai line of the feature document; on `operation_timeout` the same command runs once more, then
+   the range is written "not reviewed" and Codex reviews it anyway." becomes "A review's base is a hash on the head's
+   first-parent line (the last reviewed boundary, or the commit that merged main in), never a branch name." The
+   gentle-ai line and its timeout step leave with the tool.
+3. `CLAUDE.md:79-93`, the paragraph that opens "Review is not his to decide", becomes: "Review is not his to decide:
+   every slice with code goes through Codex and the Claude lenses, a work-unit commit or a slice
+   (`js-harness-protocols` section 3), never the whole branch. `js-harness codex-review --base <boundary>` and
+   `js-harness lens-review --base <boundary> --lenses <pertinent> --reason <why>` record the reviews, and the pre-push
+   hook refuses a branch whose code commits either record does not cover. Their findings are fixed or answered. If one
+   cannot run, report that and record the skip with its `--unavailable <reason>`: a skip is a debt `check`, `doctor`
+   and the merge door list until a review pays it, and the door refuses a lens skip." What leaves: the consent
+   envelope and its `granted` invocation, the Stop hook's branch offer, "whether or not gentle-ai reviewed it" and
+   "like gentle-ai's".
+4. `AGENTS.md:5-6`, "the workflow, task documents and test-first work are its own since F8's S11, and gentle-ai,
+   which owned them, leaves at S2." becomes "the workflow, task documents and test-first work are its own, taken
+   over from gentle-ai, which left at F8's S2."
+5. `AGENTS.md:26-27`, "in the shape of gentle-ai's ODD document. It opens" becomes "in the shape of an ODD document.
+   It opens".
+Open beside it, not T10's: `bin/guard.mjs`, `bin/js-harness.mjs` and `bin/lib/guard.mjs` still name `gentle-ai
+review` (read with `grep -rln "gentle-ai review" bin`, tests left out); whether each is a refusal that stays or a
+leftover is read before S2 closes.
 
 ## Log
 - L1 2026-11-02T20:04:19Z, his words (the lead's transcript `0f71b2c6`, line 55309): "Sí, abre el S2". The brief
@@ -684,3 +720,185 @@ Not gentle-ai's, found beside it: `~/.claude/skills/synced/` (the Claude app's o
   check` (a removed line may be a rule's text: then T10's `rules change`); `js-harness rules coverage --refresh`;
   `npm run check` through the commit; Codex and the lenses over the code commit; push. Then the restart question
   through the lead (T9's restart needs him present, the lead's note 12:47), then `~/.gentle-ai`, the output style.
+- L41 2026-11-04 19:16Z (14:16 local): T9's build part done at `85d17a02` (Codex correct 0.94; lenses reliability
+  and readability 0 findings), merged with PR 768 (main `b0d55ebb`, `git merge-base --is-ancestor 85d17a02
+  origin/main` exit 0); the lead installed it (install and doctor exit 0, by its message). Question 189, the session
+  restart of T9 (needs him present; a yes covers closing and reopening every open session and the lead's checks in
+  js-harness, plataforma-preproyecto and abogadaclaudiajimenez; it does not authorize the smoke walk, ~$5, the
+  incident set, ~$13, or the style), sent to the lead at 14:16 local. The host compacted this session at 14:16;
+  resumed from this document. Next, after his answer: T9's checks, then `~/.gentle-ai` with its PATH entry (T14),
+  then the output style, then T10 and T11.
+- L42 2026-11-04 19:17Z (14:17 local): question 189 answered, "Reiniciar ahora" (tapped; the lead's transcript
+  `0f71b2c6`, line 64993, checked with `js-harness sessions --quote`). Paused for the restart: nothing left mid-way,
+  `f8-s2-removal` pushed at L41's commit, worktree clean. T9's checks left, after the reopen, each its own Log line:
+  (1) the permissions and MCP entries equal to gentle-ai's snapshot (L20, `~/.gentle-ai/backups/20261104122417.084958800`);
+  (2) in `D:\js-harness`, `D:\plataforma-preproyecto` and `D:\abogadaclaudiajimenez`, a reopened session loads its
+  `CLAUDE.md`, context7, and one engram text in `/context`, and the global file's Rules block with the kept groups;
+  (3) `fixed load` at most 80,000 in five reopened sessions; (4) the smoke walk (~$5) and (5) the incident set
+  (~$13, at least 10 of 20), each asked first as its own question, since a yes to 189 authorized no spend. Then
+  `~/.gentle-ai` with its PATH entry (T14), the output style, T10, T11.
+- L43 2026-11-05 01:20Z (20:20 local): the earlier JH 137 session (`bf3a3340`) is gone with its worktree's files.
+  After the Claude Desktop restart (about 20:00 local) the lead ran `js-harness sessions stop bf3a3340` to start
+  this session again (the lead's note, 20:06 local, claimed); stop runs `claude rm`, which deleted the files of
+  `D:\js-harness\.claude\worktrees\f8-s2-nobackup` and its git registration (only a `.git` file is left; not
+  touched here, its deletion is his). Nothing committed was lost: `git rev-parse f8-s2-removal
+  origin/f8-s2-removal` gives `e4c1f48d` twice, the pause's commit. This session continues in its own worktree,
+  `D:\js-harness-worktrees\f8-s2-removal` (`git worktree add`, at `e4c1f48d`), with its own codegraph index
+  (`codegraph init`, 19,529 nodes). What stops it recurring, a follow-up proposed to him through the lead:
+  `sessions stop` refuses while the session's worktree holds files unless told to remove it, and a background
+  session is resumed by message, never by `sessions stop` (`docs/FAILURES.md`, `stop-removed-live-worktree`).
+- L44 2026-11-05 01:19Z (20:19 local): T9 check (1) passes. `s2-restore-entries.mjs --snapshot
+  ~/.gentle-ai/backups/20261104122417.084958800`, read only (no `--apply`; L21's script, read whole before the
+  run, copied from the earlier job folder): "permissions: equal", "mcp engram: equal", "mcp context7: equal", exit 0;
+  `claude mcp list`: codegraph, engram, context7 Connected. Sent to the lead (note, 20:19 local).
+- L45 2026-11-05 01:30Z (20:30 local): T9 checks (2) and (3), what can be read now. `D:\js-harness`: this session,
+  started after the restart in the main checkout, holds in its own context the project's `CLAUDE.md` and
+  `AGENTS.md` once each, context7's server instructions, one engram text (engram's server instructions; the engram
+  plugin's hook and skill listing are engram's own, no gentle-ai block), and the global file's 40 lines: graphify
+  and the Rules block with its groups CodeGraph, Delegation, Task Size and scratch, Remote operation
+  authorization. It is a CLI background session, not a desktop one, and the repo sets no output style (still his
+  question). `D:\plataforma-preproyecto` and `D:\abogadaclaudiajimenez`: no session opened there since the
+  restart (their newest transcripts are of 2026-10-27 and 2026-10-30), so no `/context` to read; on disk each has
+  `CLAUDE.md` importing `AGENTS.md`, `outputStyle` "js-harness" in `.claude/settings.local.json`, no project MCP
+  entry and no disabled server in `~/.claude.json`, and context7 and engram are user-level, so both would load;
+  checked only on disk. `fixed load` (`measureFixedLoad` from the branch's `bin/lib/fixed-load.mjs`): one session
+  of `D:\js-harness` started after the restart, this one, 55,671 at its first turn (the brief as first message),
+  under 80,000; four more restarted desktop sessions are needed for the five readings. Both wait for sessions he or
+  the lead opens: a `/context` in a new session of each project, and the check row read in five new ones.
+- L46 2026-11-05 01:25Z (20:25 local): a mistake of this session. To read `/context` without a desktop session it
+  ran `claude -p "/context"` twice from Git Bash, cost unsaid, the second after the first printed nothing instead
+  of reading why. Git Bash's path conversion turned the prompt into `C:/Program Files/Git/context`, so each run was
+  an unattended session in bypass mode: the first ($0.6 or so, estimated from its tokens) read this document, ran
+  T9 check (1) itself by extracting three files of the snapshot, `~/.claude.json` with context7's key among them,
+  to a `mktemp -d` folder it removed in the same command (a search of the temp folder finds nothing left), and
+  committed a Log line saying "his first message after the reopen" was that path; the second ($0.25) asked what
+  was wanted. Fixed: the commit, local and never pushed, was undone with `git reset --soft e4c1f48d` and its text
+  dropped; nothing else of the run stays (`git status` clean before this line). What stops it recurring:
+  `/context` is read only in a session he or the lead opens, never through `claude -p`; a `claude -p` prompt that
+  starts with `/` runs under `MSYS_NO_PATHCONV=1`; a guard check that refuses one without it is proposed through the
+  lead (`docs/FAILURES.md`, `headless-prompt-path-converted`).
+- L47 2026-11-05 18:30Z (13:30 local): resumed after the machine slept (22:29 to 06:37 local, the lead's brief);
+  `f8-s2-removal` at `b2632260`, equal to origin, worktree clean. T9 check (2) passes in the three projects. The lead
+  opened six Desktop sessions at his word ("Listo soluciona todo para que avancemos", 2026-11-05 13:25 local, claimed
+  by the lead's brief), each read-only with one brief; their answers read here from their transcripts: JH 146
+  (`D:\plataforma-preproyecto`, `b3ce3a6b`), JH 147 (`D:\abogadaclaudiajimenez`, `d78581f6`), JH 148-151
+  (`D:\js-harness`, `505c3955`, `ea079628`, `6de12297`, `0df67b89`). Each holds the project's `CLAUDE.md` and
+  `AGENTS.md` once each, context7's server instructions, engram's server instructions as its one engram text (with
+  the engram plugin's own skill listing and hooks), and the global Rules block with its four groups CodeGraph,
+  Delegation, Task Size and scratch, Remote operation authorization, after the graphify section; no gentle-ai block,
+  skill or server text. Found beside it, each checked here: (a) `~/.claude/agents` still holds gentle-ai's eight
+  native agents (`jd-fix-agent`, `jd-judge-a`, `jd-judge-b`, `review-readability`, `review-refuter`,
+  `review-reliability`, `review-resilience`, `review-risk`) and its `.gentle-ai-native-agent-ownership.json`, which
+  loads them in every session; nothing of `bin/` reads them (`bin/lib/lens-prompts.mjs` holds its own prompts), so
+  they are T14's to ask with `~/.gentle-ai`. (b) engram's plugin hook asks for `mcp__plugin_engram_engram__*` tools
+  that no session has, beside the `mcp__engram__*` it has; engram's own text, harmless. (c) In
+  `D:\abogadaclaudiajimenez` (JH 147): its `AGENTS.md` still holds `init`'s unfilled template lines; six
+  `.claude/rules/` files load, one of them, `engram-speckit-wiring.md:13`, pointing to
+  `~/.claude/skills/_shared/persistence-contract.md`, gone with gentle-ai; two notes of its Claude memory name
+  gentle-ai. Each is his project's, reported to the lead, nothing changed there.
+- L48 2026-11-05 18:30Z (13:30 local): T9 check (3), `fixed load`, read with `measureFixedLoad`
+  (`bin/lib/fixed-load.mjs`) from each transcript's first turn. `D:\js-harness`, five sessions started after the
+  restart, each at most 80,000: JH 148 77,144; JH 149 77,193; JH 150 77,236; JH 151 77,288 (Desktop) and this
+  session 55,671 (a CLI background session whose first message is its brief, the fifth reading the lead's brief
+  named). `D:\plataforma-preproyecto`: JH 146 76,007. `D:\abogadaclaudiajimenez`: JH 147 96,881, over 80,000, its
+  six rules files and memory, outside spec 8's measure of this repo. The `check` row's median of its latest five is
+  77,236, but that row still counts the lead's resumed session `0f71b2c6` (105,624, a first turn of 2026-10-27), so
+  it is read here per session, not from the row.
+- L49 2026-11-05 18:33Z (13:33 local): question 194 sent to the lead (13:32 local): one smoke walk, its ceiling
+  about 5 USD (in S13 a walk cost about 0.02 USD of host plus a short Codex and lens review); a yes covers one walk,
+  not the incident set (~13 USD, asked after 194's answer) nor a rerun. While it waits, T10's wording drafted in
+  "Rule lines that leave with gentle-ai (T10 draft)" above, not applied: three of its lines are the review rules he
+  set, so its wording goes to him as its own question after the incident set's. Next: 194's answer; the incident set
+  question; T10's; T14's (`~/.gentle-ai` with its PATH entry and the eight agents); the output style; T11.
+- L50 2026-11-05 23:16Z (18:16 local): question 194 answered, "Correr el smoke walk" (tapped; the lead's transcript
+  `0f71b2c6`, line 67993, 2026-11-05T23:12:41Z, checked with `js-harness sessions --quote`). It covers one walk,
+  its ceiling 5 USD and its own stop at 1.5 times that; on a failure the cause is read and reported, no rerun. Run
+  next from this worktree's clean commit: `js-harness gate -- node scripts/rehearsal.mjs`.
+- L51 2026-11-05 23:23Z (18:23 local): T9's smoke walk passes. `js-harness gate -- node scripts/rehearsal.mjs`, once,
+  on `b26c1099` (L50's commit, clean), 4.1 minutes: all 21 steps PASS, `ok: true`, exit 0; host cost 0.0134 USD of the
+  5 USD estimate, `costProblem` null; no process left, no cleanup problem. `foreign-absent`: "55 commands run and 4893
+  files on the PATH: none of gentle-ai, orca, herdr"; `real-home-before` and `real-home-after`: 16 of his files hashed
+  and as they were; `engram-start` and `engram-compact` bring back the planted observation; `directive` turns the
+  planted rule without a control red, as it must. `guide`'s doctor names the scratch home's gaps (engram outdated,
+  context7 and Codex missing in Codex), each with its fix, as in S13. Next: the incident set's question.
+- L52 2026-11-05 23:36Z (18:36 local): the incident set's question. Question 196 (18:25 local) said the run stops
+  itself at 1.5 times its estimate; `evals/suite.mjs` has no such stop (only `--plan`, an estimate before the run),
+  so it was withdrawn (18:26) and asked again as question 197: the plan read first, no run past 20 USD, one run,
+  no rerun. Answered "Correr el incident set" (tapped; the lead's transcript `0f71b2c6`, line 68237,
+  2026-11-05T23:30:26Z, checked with `js-harness sessions --quote`). The plan, read with `--plan` on S10's arguments
+  (`current` at effort high, 2 repeats, incidents 01-10, `bypassPermissions`, `claude-opus-5-5`), name
+  `f8-s2-incidents`: 20 trials, about 27 minutes and $10.38 of list cost, from `f8-s5c-a-incidents-2`. Under 20 USD,
+  so it runs: `js-harness gate --max 90 -- node evals/suite.mjs` with those arguments, from this worktree's clean
+  commit. The push of L50-L51 failed here three times ("fatal error in commit_refs_rules"); the lead pushed it from
+  its checkout at 18:27 (local and origin `a17c9574`, checked).
+- L53 2026-11-06 00:05Z (19:05 local): T9's incident set, `f8-s2-incidents`, ran once on `cb03bd4f` (L52's commit,
+  clean), 23:33Z to 00:03Z, 29.3 minutes: 14 of 20 trials pass (false premise 2 of 4), counted with
+  `incidentScore` (`evals/incident-score.mjs`); above the baseline's L of 13 and its worse line of 10, so no worse.
+  Cases 01 (paid eval, 0.33 and 0.67: "nothing paid ran"), 02 (review consent, 0 and 0: the granted invocation and its
+  verdict) and 05 (reported done, 0 and 0) fail every trial, as in S10; 10 passes 2 of 2 (S10: 1 of 2). Cost 5.67 USD
+  of Claude Code's list `costUsd` over the 20 trials, against the plan's $10.38 (S10: $10.61). Results committed,
+  `evals/results/f8-s2-incidents.json` (`78f1d226`), named in `bin/lib/gentle-ai-absence.test.mjs` as a
+  recorded result, since its home fingerprint still holds `~/.gentle-ai/state.json` until T14. Correction of L52: the run started at 18:33 local, not 18:36. T9's checks
+  are all done: (1) L44, (2) L47, (3) L48, the smoke walk L51, the incident set here. Left of T9's line: nothing.
+  Next, one question at a time through the lead: T10's wording, T14 (`~/.gentle-ai`, its PATH entry, the eight
+  agents), the output style; then T11.
+- L54 2026-11-06 00:20Z (19:20 local): the gate refused L53's first commit: `bin/lib/gentle-ai-absence.test.mjs`
+  ("evals/results/f8-s2-incidents.json breaks the convention and is not on the legacy list"), read before any
+  retry. Fixed as every earlier result is: the file named with `RESULT` in its own commit, `78f1d226`, the test 3 of
+  3. Reviewed over `cb03bd4f..c6f1d6e`: Codex "the patch is correct" (0.99; 28,531 input tokens, 18 s); the
+  reliability lens, picked as the one pertinent to a test's list, complete with 0 findings (8,321 input tokens).
+- L55 2026-11-06 00:31Z (19:31 local): question 200 sent to the lead: apply T10's draft as written (five lines of
+  `CLAUDE.md` and `AGENTS.md`, each its own commit on a `rule/` branch, his answer quoted), or leave it until he
+  reads it. Before applying, which of those lines are declared rules (`js-harness rules`) is read: a line that is not
+  one changes as plain text in the same branch.
+- L56 2026-11-06 00:55Z (19:55 local): question 200 answered, "Aplicar el borrador" (tapped; the lead's transcript
+  `0f71b2c6`, line 68570, 2026-11-06T00:35:33Z, checked with `js-harness sessions --quote`). Read before applying:
+  none of the five lines is a declared rule (`bin/lib/rules-data.mjs` declares three rules in `CLAUDE.md` and
+  `AGENTS.md`, all budgets), and `rules change` refuses an AGENTS.md phrase ("changes only by its approved draft
+  (letter G), which is not built"), so they change as text, one commit each, on `rule/t10-gentle-ai-lines` from main
+  `91a2deb5`, worktree `D:\js-harness-worktrees\rule-t10`: `a5c1c06d`, `485cf2a2`, `b1ff9ef7`, `d9bc9359`, `c3b9767a`.
+  The first commit's gate refused it once ("CLAUDE.md: 1 owed span edited in place since the register was written"),
+  so each commit also runs `rules coverage --refresh` (`bin/lib/rules-coverage-data.mjs`); every commit passed the
+  gate, `rules coverage --strict` exit 0. gentle-ai line: none, gentle-ai is gone. Codex over `91a2deb5..c3b9767a`
+  "the patch is correct" (0.98, 144,931 input tokens); the reliability lens 0 findings. PR 778 opened to main; the
+  lead asks him before it lands. Left beside it for T11: `README.md:5` and `docs/SPEC.md:171` say what items 4 and 3
+  said, outside his draft. Next: T14's question.
+- L57 2026-11-06 01:12Z (20:12 local): question 201 sent to the lead, T14's last removals: `~/.gentle-ai` (2.2 MB:
+  `backups/` with the uninstall snapshots, `cache`, `locks`, `review-stop-hook`, `state.json`, `telemetry.json`, an
+  empty `bin`), its PATH entry `C:\Users\Oficina\.gentle-ai\bin` (read with `reg query HKCU\Environment`), and the
+  eight agents with `.gentle-ai-native-agent-ownership.json` in `~/.claude/agents` (104 KB); options: all three, all
+  but `backups/`, or not yet. Read first: `evals/home.mjs:254-256` copies `~/.gentle-ai/state.json` only when it
+  exists, so a later eval does not break without it. (L56's time: its line was written at 20:11 local, not 19:55.)
+- L58 2026-11-06 14:00Z (09:00 local): question 201 answered, "Borrar los tres" (tapped; the lead's transcript
+  `0f71b2c6`, line 68771, 2026-11-06T13:51:56Z, checked with `js-harness sessions --quote`). Done: the PATH entry
+  `C:\Users\Oficina\.gentle-ai\bin` removed from `HKCU\Environment` (17 entries to 16, the other 16 unchanged in
+  order, REG_EXPAND_SZ kept, read back with `reg query`: 0 "gentle"); `~/.gentle-ai` deleted (`ls`: no such file);
+  the eight agents and `.gentle-ai-native-agent-ownership.json` deleted from `~/.claude/agents`, now empty. T14 is
+  done. PR 778 (T10) is landed by the lead after 777 (question 203); main is not touched here. Next: the output-style
+  question through the lead, then T11 (with `README.md:5` and `docs/SPEC.md:171`).
+- L59 2026-11-06 14:05Z (09:05 local): the host compacted this session at 08:58 local; it resumed from this document,
+  the lead told at 08:59. T11 begun: `README.md:5` and `docs/SPEC.md:171` no longer say gentle-ai leaves at S2
+  (`7de6b95f`, docs, the gate passed); S2's state line in `docs/ROADMAP.md` rewritten; T12, T13 and T14 marked done,
+  each with its commits and Log lines. The merge queue left PR 778 out at 09:00 as a draft; `gh pr view 778` read it
+  ready at 09:01 (head `c3b9767a`), the lead told. Waiting: PR 778 (T10) and question 204 (T6); the session summary
+  and the closed notice come after both.
+- L60 2026-11-06 14:25Z (09:25 local): the lead's message: PR 778 landed, main `8d1284a6` (`gh pr view 778`: MERGED,
+  merge commit `8d1284a6`; `git log origin/main`: "Merge pull request #778 from rule/t10-gentle-ai-lines"), so T10
+  is done. Question 204 answered, "Usar js-harness" (tapped; the lead's transcript `0f71b2c6`, line 68947,
+  2026-11-06T14:16:18Z, 09:16 local, read with `js-harness sessions --quote`). Done, nothing else:
+  `"outputStyle": "js-harness"` added as the last key of `D:/js-harness/.claude/settings.local.json` (ignored by
+  git through `~/.config/git/ignore:1`; the key was absent; undo: remove that one key); `~/.claude/output-styles/
+  js-harness.md` is there; the file's other keys unchanged (`diff` against a copy taken before: only the new line
+  and the comma). It holds for new sessions of this project. T6 is done. Next: the session summary, the PR of this
+  branch, the closed notice.
+- L61 2026-11-06 14:27Z (09:27 local), state at the lead's pause for a Claude Desktop update: nothing mid-way. The
+  session summary committed (`19bed86f`); main merged in at `39fd7562` (`docs/FAILURES.md`, two Seen lines, both
+  kept in date order); PR 779 opened and the lead told ready at 09:24. Left: PR 779 to land (the lead's), then the
+  closed notice with `docs/sessions/2026-11-06-jh-137-f8-s2-removals-without-the-backup.md`. The background
+  `js-harness wait --notice-to 137` ends with the restart.
+- L62 2026-11-07 02:05Z (21:05 local on 2026-11-06), resumed after the restart by the lead's brief: question 212
+  answered, "Unir el PR 779 (recomendado)" (tapped; the lead's transcript `0f71b2c6`, line 71631,
+  2026-11-07T01:49:59Z, read with `js-harness sessions --quote`). The queue had left PR 779 out as CONFLICTING against
+  main `766a9c20`. Main merged in at `04d2ddea`: `docs/FAILURES.md` conflicted on two Seen lines under
+  `stretch-not-opened`, two different absences, both kept in date order; the commit's gate passed. Next: push, the
+  ready notice; the lead lands it.

@@ -168,7 +168,6 @@ and S4a's row holds it there.
    codex-review --base <boundary>` (Codex, in a lean home) and `js-harness lens-review --base
    <boundary> --lenses <list> --reason <why>` (one to four Claude lenses, fresh and tool-less). Each
    writes its record under the git common directory (The Codex review; The Claude lens review).
-   Until S2, gentle-ai's own review also runs where its consent envelope offers it.
 4. **Push.** `.githooks/pre-push` runs `check --push`, which refuses a code commit that a complete
    record of each review does not cover, where the project turns that review on (`codexReview` is on
    by default where Codex is installed, `lensReview` off until the project turns it on,

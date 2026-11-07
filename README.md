@@ -2,8 +2,8 @@
 
 js-harness sets up Claude Code, with Codex as its reviewer, for AI-assisted development in a project, on top of a
 stack it does not rebuild: engram owns memory, codegraph owns code structure. js-harness carries the
-workflow, the task documents and test-first work itself since F8's S11 (gentle-ai, which owned them,
-leaves the machine at S2), and adds the thin layer those leave open: a short
+workflow, the task documents and test-first work itself since F8's S11 (taken over from gentle-ai,
+which left the machine at S2), and adds the thin layer those leave open: a short
 `AGENTS.md`, a pre-commit gate that runs the project's checks, the two reviews every slice gets
 (Codex's, `codex-review`, and the Claude lenses', `lens-review`), task contracts whose end is a set
 of commands that exit 0, and a record of everything it writes, so that it can be removed exactly.

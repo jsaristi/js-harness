@@ -610,8 +610,15 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   (`odd/tasks/f8-s2-removal.md`, L20). S2 no longer ends the gentle-ai idea watch: by his words of
   2026-11-03 (line 61838, quoted under S9) a watch of gentle-ai's repository comes back as a feature
   of its own after S2.
-- **State:** in progress (`odd/tasks/f8-s2-removal.md`): `stack backup` built (PR 761); the backup
-  dropped by question 179; the removals asked one at a time.
+- **State:** done 2026-11-06 (`odd/tasks/f8-s2-removal.md`). `stack backup` built
+  (PR 761) and unused, the backup dropped by question 179. Done, each asked: gentle-ai uninstalled with
+  `--all` (question 184), Orca, herdr, each project's `.atl/`, then `~/.gentle-ai`, its PATH entry and
+  its eight native agents (question 201); the permissions and the engram and context7 entries back from
+  gentle-ai's snapshot; the exclusion reverted (`85d17a02`); every session restarted. Checked: six
+  reopened sessions load no gentle-ai text; `fixed load` 77,144 to 77,288 over this repo's four Desktop
+  sessions, at most 80,000; the smoke walk 21 of 21 ($0.01); the incident set 14 of 20, false premise
+  2 of 4, no worse than S10's 13 ($5.67, `evals/results/f8-s2-incidents.json`). The rule lines
+  that named gentle-ai left in PR 778 (T10); this repo's style is `js-harness` by question 204 (T6).
 
 ### S4a The attribution hook and the hook count
 - **Changes:** a `commit-msg` hook that strips attribution lines (`.githooks/` has none today:
