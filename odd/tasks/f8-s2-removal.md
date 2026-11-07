@@ -896,3 +896,9 @@ leftover is read before S2 closes.
   kept in date order); PR 779 opened and the lead told ready at 09:24. Left: PR 779 to land (the lead's), then the
   closed notice with `docs/sessions/2026-11-06-jh-137-f8-s2-removals-without-the-backup.md`. The background
   `js-harness wait --notice-to 137` ends with the restart.
+- L62 2026-11-07 02:05Z (21:05 local on 2026-11-06), resumed after the restart by the lead's brief: question 212
+  answered, "Unir el PR 779 (recomendado)" (tapped; the lead's transcript `0f71b2c6`, line 71631,
+  2026-11-07T01:49:59Z, read with `js-harness sessions --quote`). The queue had left PR 779 out as CONFLICTING against
+  main `766a9c20`. Main merged in at `04d2ddea`: `docs/FAILURES.md` conflicted on two Seen lines under
+  `stretch-not-opened`, two different absences, both kept in date order; the commit's gate passed. Next: push, the
+  ready notice; the lead lands it.
