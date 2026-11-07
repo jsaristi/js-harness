@@ -181,6 +181,10 @@ the project's settings and the enabled plugins, by owner and event: each is one 
 matching event of every session. In a project it informs, and warns on an owner that neither
 js-harness, its stack nor an enabled plugin installs. In the harness's own repository it fails when
 `install` would write more entries than its limit, so a change that adds one is seen at its commit.
+A project whose `harness.json` says `"hookCount": true` is held to more: each owner × event cell has a
+ceiling (js-harness's is what `install` writes, the others' the table in `bin/lib/hook-count.mjs`),
+and a cell over it or an owner the table does not name fails the row. It is off unless set, since the
+hooks are the machine's.
 `node scripts/diet-measure.mjs` measures a fresh home and project made by the checkout's own `install`
 and `init`: the tokens of every turn, the skill bodies and each hook entry's time.
 

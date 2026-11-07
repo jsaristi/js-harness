@@ -123,3 +123,52 @@ test('a missing or malformed settings file counts nothing and never throws', () 
     assert.match(row.detail, /0 entries/);
   });
 });
+
+// The machine's entries on 2026-11-06 beyond js-harness's own (odd/tasks/f8-s4a-hook-count.md, L3): codegraph's prompt
+// hook and the hooks of the two plugins the stack installs.
+const STACK_ENTRIES = [
+  { event: 'UserPromptSubmit', command: 'codegraph.cmd prompt-hook' },
+  ...['PreToolUse', 'SessionStart', 'SessionStart', 'SessionStart', 'UserPromptSubmit', 'SubagentStop', 'SessionEnd'].map((event) => ({ event, command: '"${CLAUDE_PLUGIN_ROOT}/scripts/x.sh"', plugin: 'engram@engram' })),
+  ...['SessionStart', 'SessionEnd', 'Stop'].map((event) => ({ event, command: 'node "${CLAUDE_PLUGIN_ROOT}/scripts/x.mjs"', plugin: 'codex@openai-codex' })),
+];
+const counted = { declared: { hookCount: true } };
+
+test('with "hookCount": true the row holds the machine to its ceilings and is green at the count of 2026-11-06', () => {
+  const row = hookEntriesRow('.', '.', { ...counted, own: false, live: [...installEntries(), ...STACK_ENTRIES] });
+  assert.equal(row.pass, true, row.lines.join('\n'));
+  assert.equal(row.info, false, 'a project that turns the count on is held to it');
+  assert.match(row.detail, /26 entries/);
+  assert.ok(row.lines.some((line) => line === 'engram@engram: PreToolUse 1/1, SessionStart 3/3, UserPromptSubmit 1/1, SubagentStop 1/1, SessionEnd 1/1'), row.lines.join('\n'));
+});
+
+test('with "hookCount": true one extra Stop entry of js-harness turns the row red: its ceiling is what install writes', () => {
+  const live = [...installEntries(), ...STACK_ENTRIES, { event: 'Stop', command: 'js-harness extra --hook || exit 0' }];
+  const row = hookEntriesRow('.', '.', { ...counted, own: false, live });
+  assert.equal(row.pass, false);
+  assert.equal(row.info, false);
+  assert.ok(row.lines.some((line) => line === 'js-harness Stop: 4 entries, over its ceiling of 3'), row.lines.join('\n'));
+  assert.ok(row.lines.some((line) => /raise its ceiling in HOOK_CEILINGS \(bin\/lib\/hook-count\.mjs\)/.test(line)), row.lines.join('\n'));
+});
+
+test('with "hookCount": true a new owner and a plugin cell over its ceiling turn the row red, each named once', () => {
+  const live = [...installEntries(), ...STACK_ENTRIES, { event: 'PreToolUse', command: 'orca-hook.cmd || echo {}' }, { event: 'UserPromptSubmit', command: 'x', plugin: 'engram@engram' }];
+  const row = hookEntriesRow('.', '.', { ...counted, own: false, live });
+  assert.equal(row.pass, false);
+  assert.ok(row.lines.some((line) => line === 'orca-hook: a new owner, not in the table: PreToolUse 1'), row.lines.join('\n'));
+  assert.ok(row.lines.some((line) => line === 'engram@engram UserPromptSubmit: 2 entries, over its ceiling of 1'), row.lines.join('\n'));
+  assert.equal(row.lines.filter((line) => line.includes('orca-hook')).length, 1, 'the failure names the owner; no warning repeats it');
+  assert.match(row.detail, /2 over the table/);
+});
+
+test('"hookCount" set to anything but true fails the row, and the harness repository keeps its install limit with it', () => {
+  const wrong = hookEntriesRow('.', '.', { declared: { hookCount: 'yes' }, own: false, live: [] });
+  assert.equal(wrong.pass, false);
+  assert.ok(wrong.lines.some((line) => line === 'harness.json "hookCount" must be true; it is "yes"'), wrong.lines.join('\n'));
+  const own = hookEntriesRow('.', '.', { ...counted, own: true, live: [...installEntries(), ...STACK_ENTRIES], installed: [...installEntries(), { event: 'Stop', command: 'js-harness x' }] });
+  assert.equal(own.pass, false);
+  assert.ok(own.lines.some((line) => /install writes 16 entries.*limit 15/.test(line)), own.lines.join('\n'));
+});
+
+test('the owner of a command whose program is a single-quoted path with a space is that program', () => {
+  assert.equal(ownerOf({ command: "'/opt/my tools/guard-hook.sh' --hook" }), 'guard-hook');
+});

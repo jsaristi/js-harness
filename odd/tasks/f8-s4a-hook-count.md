@@ -1,0 +1,145 @@
+# JH 153 · F8 S4a: the hook count and the engram prompt hook
+
+Locator: `odd/tasks/f8-s4a-hook-count.md` · Branch: `claude/f8-s4a-hooks-5da26e` · Delivery: one pull request to
+main per slice · Test runner: `node --test`
+
+## Goal
+`check` holds the Claude hook entries of the machine to a ceiling by event and owner, the engram plugin's prompt hook
+is off on his machine with a way back, and S4a's attribution count on `main` is recorded, so S4a closes.
+
+## Why
+Every hook entry is a process start on Windows at each firing, and gentle-ai, Orca and herdr had grown the hooks to 32
+before S2 took them out (`docs/proposals/gentle-ai-reverse-engineering.md`, "Every hook, by event and owner"). Nothing
+stops them growing back. The engram prompt hook prints a false "CRITICAL FIRST ACTION" and about 0.4k tokens at a
+session's first message; he answered D8 "Apagarlo". The attribution hook is merged (`odd/tasks/strip-attribution.md`);
+its pass line is a count on `main`.
+
+## Done when
+- `node bin/js-harness.mjs contract check odd/tasks/f8-s4a-hook-count.md` exits 0
+- `node --test bin/lib/hook-count.test.mjs` exits 0
+- `node --test bin/check.test.mjs bin/lib/payload.test.mjs` exits 0
+- `node bin/js-harness.mjs rules check` exits 0
+- `npm run check` exits 0
+- one extra `Stop` entry planted in a scratch home turns the `hook entries` row red, quoted in `## Log`
+- the pull requests are opened, named in `## Log`, with Codex and the Claude lenses recorded over their code
+
+## In scope / Out of scope
+- In: `bin/lib/hook-count.mjs` and its test, the module #772 made (L11); `bin/check.mjs` (the row reads the switch);
+  the switch in `harness.json`;
+  README, `docs/SPEC.md`, `docs/ROADMAP.md` S4a; the command that turns the engram prompt hook off and on, recorded.
+- Out, each with its reason:
+  - rewriting commits already on main: his answer to question 132.
+  - `bin/upgrade*`, `bin/tui*`: JH 152's files.
+  - his `~/.claude` and the engram plugin's files: written only by the command, and only after his yes through the
+    lead.
+
+## Constraints
+- The row is switched on by the project (`harness.json`), not on every project `init` sets up — because the hooks
+  are the machine's, and another machine's owners would turn every project's gate red.
+- A home with no settings (CI, a test's scratch home) never fails the row: it holds no entry, so no cell is over its
+  ceiling — because the gate's sensors run on CI.
+- `bin/check.mjs` stays under its ceiling (`bin/conventions-structure.test.mjs`): the row adds no line to it.
+- Anything written outside this repository is backed up and recorded so it is undone exactly — because `AGENTS.md`
+  says so.
+
+## Ask me before
+Applying D8 to his machine is his yes, asked through the lead (`js-harness notify --to orchestrator --kind question`).
+His answer of 2026-10-26 was given to a question that did not say the hook also saves his prompts to engram (L3), so
+the question names that.
+
+## Depth pass
+- 1. Method: a budget check, the discipline of a performance budget held by CI (a ceiling that fails the build, not a
+  dashboard), to the standard of this repo's own ceilings (`bin/conventions-structure.test.mjs`: a table in code that
+  only goes down). The smallest change: one static row that counts what the host would run and compares it with a
+  table in code. Searched first (`rule:reuse-first`): `claudeHooks` and `pluginHooks` in `bin/lib/payload.mjs` already
+  read the settings layers and the enabled plugins' `hooks.json`, for the context events only; `hooksRow` of
+  `scripts/s2-verify.mjs:144` classifies owners for S2's one-off verification; `js-harness rules` names no hook rule.
+- 2. Raw material: `~/.claude/settings.json` read 2026-11-06 (16 entries: js-harness 15, codegraph 1); the engram
+  plugin `0.1.19` `hooks/hooks.json` (7 entries) and `scripts/user-prompt-submit.sh` (no switch: its only early exit is
+  `PI_CODING_AGENT`, which silences every engram hook); the Codex plugin `1.0.6` `hooks/hooks.json` (3 entries);
+  his D8 answer (`js-harness sessions --quote e41d1e8d 3740`); the diet's D8 row (`docs/proposals/harness-diet.md:99`).
+- 3. The bar:
+  spec 1: `node --test bin/lib/hook-count.test.mjs`: none, new behaviour; today nothing fails on an extra hook.
+  spec 2: `node --test bin/lib/hook-count.test.mjs`: none, new behaviour; today the engram `UserPromptSubmit` entry is
+  on and nothing would notice it coming back.
+  spec 3: `git rev-list 75c3583f..origin/main`: 341 commits, 0 attribution lines (L2).
+- 4. Refutation: does the roadmap's ceiling still describe the machine? Counted 2026-11-06: 16 settings entries, not
+  14 (the template gate added two js-harness entries after the count, `docs/audits/2026-10-30-cleanup-inventory.md`
+  F6), and 10 more from plugins the 14 never counted. The ceiling is restated from this count (L3), so the request
+  holds in its intent, not its number.
+  Verdict: supports
+- 5. Request: a `hooks` row that counts every hook entry Claude Code runs here, settings layers and enabled plugins, by
+  event and owner, against a table in code set to the count of 2026-11-06, red on a new owner or a cell above its
+  ceiling; D8 as a recorded command applied after his yes, its cell then lowered to 0. The plugins' entries in the
+  count, and the prompt-saving loss named in the D8 question, are within the request: the first is its intent (L3),
+  the second is said in the question that applies D8.
+  Adds: none
+
+## Specs
+1. ROADMAP S4a (`docs/ROADMAP.md`, "S4a The attribution hook and the hook count"): "a `check` row counting hook entries
+   by event and owner"; "one extra `Stop` entry turns the row red; 0 attribution lines in the next 50 commits on
+   `main`; the row fails above 14 entries or on a new owner. D8, the engram prompt hook turned off, is applied here."
+2. D8, his answer of 2026-10-26 (transcript `e41d1e8d`, line 3740): "Apagarlo (Recommended)"; the register's default:
+   "off, backed up and recorded so it can be turned back on; applied at S4a with the hook-count row"
+   (`docs/proposals/harness-diet.md:99`).
+3. The opening of JH 153 (2026-11-06): "the 50-commit count of attribution lines on `main`"; "Anything that writes
+   outside this repo (his `~/.claude` or a host config) is recorded so it can be undone, and applying it to his machine
+   is his yes, asked through the lead."
+
+## Tasks
+- [x] T1 (kind: verify) spec 3: the 50-commit count on `main` — L2
+- [x] T2 (kind: build) spec 1: the `hooks` row, tests first; `check.mjs` code moved out first — L4; folded into
+  #772's `hook entries` row after the series merged, his answer to question 211 — L11
+- [x] T3 (kind: verify) spec 1: Codex and the lenses over T2, PR 1, ready notice — L5, L6
+- [ ] T4 (kind: build) spec 2: the command that turns the engram prompt hook off and on, backed up and recorded
+- [ ] T5 (kind: verify) spec 2: his yes through the lead; applied; the engram `UserPromptSubmit` ceiling lowered to 0
+- [ ] T6 (kind: docs) ROADMAP S4a State, SPEC, summary under `docs/sessions/`
+
+## Log
+- L1 (2026-11-06, the request as written): "You are the session \"JH 153 · F8 S4a: the attribution hook and the hook
+  count\". Read your opening with js-harness sessions --opening 'JH 153 · F8 S4a: the attribution hook and the hook
+  count' and follow it." The opening says what is left: the 50-commit count, the hook-count row, D8.
+- L2 (2026-11-06, T1): `strip-attribution`'s two pull requests are merged (#728 as `75c3583f`, #731 as `bd45a5b2`).
+  Every commit on `origin/main` since `75c3583f` (`git rev-list 75c3583f..origin/main`: 341, 47 on the first-parent
+  line) read with `git log -1 --format=%B` and matched against `^(Co-Authored-By:.*(claude|anthropic)|Claude-Session:)`
+  (any case): 0 lines. The 50 commits before `75c3583f` held 20 such lines in 10 commits. S4a's pass line, 0 in the
+  next 50, holds.
+- L3 (2026-11-06, what the roadmap and the machine disagree on): the roadmap's ceiling is 14 (js-harness 13, codegraph
+  1); `~/.claude/settings.json` holds 16 (js-harness 15, codegraph 1), and the two enabled plugins add 10 (engram 7:
+  `PreToolUse` 1, `SessionStart` 3, `UserPromptSubmit` 1, `SubagentStop` 1, `SessionEnd` 1; Codex 3: `SessionStart`,
+  `SessionEnd`, `Stop`). The row counts both, since a plugin's entry starts a process as a setting's does, and its
+  table is the count of this day. D8: the engram prompt hook also posts each prompt to engram (`POST /prompts`) and,
+  after 15 minutes without a save, injects a save reminder; the question he answered said only that memory keeps
+  working without it. Turning it off stops both; the question that applies it says so.
+- L4 (2026-11-06, T2, red then green): `bin/lib/hook-count.test.mjs` written first; against a stub module, 9 of 10
+  red (the tenth checks the table's shape). Then `bin/lib/hook-count.mjs`: the table `HOOK_CEILINGS` (L3's count),
+  `ownerOf` (js-harness or codegraph by the program the command starts, `plugin <id>` for a plugin's entry, the
+  command itself for any other), `countHooks` and `hookCountRow`; `readHooks` of `bin/lib/payload.mjs` reads every
+  event when asked (`claudeHookEntries`), its context reading unchanged. The gate's test (`main` with one Stop entry
+  too many, a scratch home) red with the row unwired, green wired. `checkPayload` moved from `bin/check.mjs` into
+  `bin/lib/payload.mjs`, re-exported, so `check.mjs` is 1,987 lines and its ceiling goes down to that. On this machine
+  the row reads "26 hook entries from 4 owners", every cell at its ceiling. `node --test` over hook-count, payload,
+  check, conventions (structure, arguments, errors), readme and spec: 348 of 348; `rules check` PASS.
+- L5 (2026-11-06, the reviews of `1d4f63db`): lenses reliability and readability over `8d1284a..1d4f63d`: 0 findings
+  each. Codex over `5fe15e5..266ca79`: incorrect (0.94), one P2, taken, tests first: a command whose program path is
+  quoted (`"C:\Program Files\codegraph\codegraph.exe" prompt-hook`) was split on whitespace, kept its quote, and read
+  as a new owner. `ownerOf` now reads a quoted first word whole and unquoted. Red: 1 of 10 (the owner test, with
+  three quoted cases), then `hook-count` and `check` tests 265 of 265. The D8 question went to the lead as question
+  208 (2026-11-06 13:44 local).
+- L6 (2026-11-06, the reviews of `43267a4f`): Codex over `266ca79..43267a4`: correct (0.98), the P2 of L5 fixed. Lens
+  reliability: 0 findings. No independent verifier: the change names no high-risk item (an optional `harness.json`
+  key, a row that reads files and writes none).
+- L11 (2026-11-07, after #772 merged; L7 to L10 are D8's, on its branch): his answer to question 211, "Unir la serie
+  (recomendado)", read with the channel's verified copy: the series 769, 772, 773 merged (`cd53b72a`), then this pull
+  request rebuilt on it, one module and both checks. The branch rebased onto `main` without `1d4f63db` and `43267a4f`
+  (their documents kept); the ROADMAP's S4a State reconciled with `main`'s, which had moved the row to the workshop
+  document. The ceilings go into #772's `bin/lib/hook-count.mjs`: its row name `hook entries`, its install limit
+  and its runner-aware `ownerOf` (a plugin is its id, `engram@engram`) stay; `"hookCount": true` adds a cell per
+  owner and event, which fails over its ceiling, and fails on an owner `HOOK_CEILINGS` does not name. js-harness is not
+  in the table: its ceiling for an event is what `install` writes (`installEntries`), so the value has one home.
+  `ownerOf` now reads a single-quoted program path whole too, L5's case in the other quote. Not taken from `1d4f63db`:
+  entries with no command (#772 leaves prompt and agent hooks out, said in `liveEntries`), the INFO row with no Claude
+  settings (none is red: no entry, no cell over), and the move of `checkPayload`. Red first: 5 of 13 in
+  `hook-count.test.mjs`; then 13 of 13, and the gate's test of one extra `Stop` entry green. On this machine:
+  "PASS hook entries 26 entries in this home and project: js-harness 15, codegraph 1, codex@openai-codex 3,
+  engram@engram 7", every cell at its ceiling.
