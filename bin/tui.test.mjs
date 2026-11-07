@@ -21,6 +21,7 @@ import {
   childCommands,
   commandArgv,
   computeNewer,
+  stackReads,
   startRun,
   appendRunOutput,
   finishRun,
@@ -1280,6 +1281,73 @@ test('computeNewer plans the probed rows against their latest versions; a lookup
   assert.deepEqual(looked, [['engram', 'engram-plugin', 'codegraph', 'codex']], 'every probed row is looked up, as doctor does, so its cache stays whole');
   assert.deepEqual(await computeNewer({ rows: [rows[3]], functions, resolveLatest: async () => { throw new Error('looked up'); } }), { newer: [] }, 'nothing installed, nothing looked up');
   assert.deepEqual(await computeNewer({ rows, functions, resolveLatest: async () => { throw new Error('offline'); } }), { newer: [] });
+});
+
+// Codex P2 on 1954ed4..bcaa83c: a menu closed while the lookup waits on a slow network kept the shell until each
+// request's own five-second timeout ran out.
+test('computeNewer stops its lookups when its signal aborts, without waiting for their timeouts', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-newer-'));
+  try {
+    const controller = new AbortController();
+    const seen = [];
+    const fetchImpl = (url, options = {}) => {
+      seen.push(url);
+      return new Promise((_, reject) => options.signal.addEventListener('abort', () => reject(new Error('aborted'))));
+    };
+    const rows = [{ id: 'codegraph', installed: 'ok', version: '1.7.0' }];
+    const looking = computeNewer({ rows, functions: { codegraph: true }, pm: 'npm', platform: 'win32', arch: 'x64', home, fetch: fetchImpl, signal: controller.signal });
+    await until(() => seen.length > 0, 'the lookup started');
+    controller.abort();
+    const raced = await Promise.race([looking, new Promise((resolve) => setTimeout(() => resolve('still waiting'), 1000))]);
+    assert.deepEqual(raced, { newer: [] }, 'the abort ends the lookup, which says nothing new');
+    const fetched = seen.length;
+    assert.deepEqual(await computeNewer({ rows, functions: { codegraph: true }, pm: 'npm', home, fetch: fetchImpl, signal: controller.signal }), { newer: [] });
+    assert.equal(seen.length, fetched, 'an aborted signal starts no lookup');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Codex P2 on 1954ed4..bcaa83c: a command that refreshed the stack while the first lookup ran was undone by it, since
+// the lookup planned the rows probed before the command and wrote them over the refresh.
+test('stackReads: a read begun before a command\'s refresh never writes the rows that refresh replaced', async () => {
+  const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
+  const before = { stack: [{ id: 'engram', version: '1.0.0' }], stackGap: false, rows: 'before' };
+  const after = { stack: [{ id: 'engram', version: '1.2.0' }], stackGap: false, rows: 'after' };
+  const probes = [before, after];
+  const firstProbe = deferred();
+  const online = deferred();
+  const asked = [];
+  let probed = 0;
+  const reads = stackReads({
+    probe: () => (probed++ === 0 ? firstProbe.promise : Promise.resolve(probes[1])),
+    newer: (view, { offline, signal }) => {
+      asked.push({ rows: view.rows, offline, signal: signal !== undefined });
+      if (!offline) return online.promise;
+      return Promise.resolve({ newer: view.rows === 'before' ? [{ tool: 'engram', to: '1.2.0' }] : [] });
+    },
+  });
+  const signal = new AbortController().signal;
+  const stack = reads.loadStack();
+  const newer = reads.loadNewer({ signal });
+  // An Update ran and its refresh read the stack again before the first probe and the lookup came back.
+  assert.deepEqual(await reads.readStackView(), { stack: after.stack, stackGap: false, newer: [] });
+  firstProbe.resolve(before);
+  assert.equal(await stack, null, 'the first stack block is older than the refresh: nothing to apply');
+  online.resolve({ newer: [{ tool: 'engram', to: '1.2.0' }] });
+  assert.deepEqual(await newer, { newer: [] }, 'what is newer is planned again from the refreshed rows');
+  assert.deepEqual(asked, [
+    { rows: 'after', offline: true, signal: false },
+    { rows: 'before', offline: false, signal: true },
+    { rows: 'after', offline: true, signal: false },
+  ]);
+
+  // With no command in between, what the first reads found is applied as it is.
+  let calls = 0;
+  const quiet = stackReads({ probe: async () => { calls++; return before; }, newer: async (view) => ({ newer: [{ tool: 'engram', to: '1.2.0' }] }) });
+  assert.deepEqual(await quiet.loadStack(), { stack: before.stack, stackGap: false });
+  assert.deepEqual(await quiet.loadNewer(), { newer: [{ tool: 'engram', to: '1.2.0' }] });
+  assert.equal(calls, 1, 'opening the menu probes once');
 });
 
 test('buildMenu offers Init, then the machine section, in a repository that is not initialized', () => {

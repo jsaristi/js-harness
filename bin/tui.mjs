@@ -207,18 +207,82 @@ async function probeStackView({ home, cwd, spawn, platform, fetch: fetchImpl, no
  * resolves it (its 6-hour cache, else the network; the cache alone when `offline`). Every probed row is looked up,
  * as doctor does, so its cache stays whole; with no tool installed that Update updates, nothing is looked up. A lookup that fails says
  * nothing new rather than something false. `to` is `null` for the engram plugin while it follows an engram binary
- * not yet updated. `resolveLatest` is the test seam of the lookup. */
-export async function computeNewer({ rows, functions, pm, platform = process.platform, arch = process.arch, home, offline = false, fetch: fetchImpl, now, resolveLatest }) {
+ * not yet updated. `resolveLatest` is the test seam of the lookup. `signal` stops the requests of the lookup when it
+ * aborts (the menu closed), beside each request's own timeout, and an aborted one starts none. */
+export async function computeNewer({ rows, functions, pm, platform = process.platform, arch = process.arch, home, offline = false, fetch: fetchImpl, now, resolveLatest, signal }) {
   try {
+    if (signal?.aborted) return { newer: [] };
     // With no latest version known, each installed tool that Update would update is `unknown`: none, no lookup.
     if (planUpgrade({ rows, latest: {}, functions, pm, platform, arch }).unknown.length === 0) return { newer: [] };
-    const lookup = resolveLatest ?? ((asked) => resolveLatestVersions(asked, { home, offline, fetch: fetchImpl, now }));
+    const base = fetchImpl ?? fetch;
+    const fetchWith = signal
+      ? (url, options = {}) => base(url, { ...options, signal: options.signal ? AbortSignal.any([options.signal, signal]) : signal })
+      : fetchImpl;
+    const lookup = resolveLatest ?? ((asked) => resolveLatestVersions(asked, { home, offline, fetch: fetchWith, now }));
     const latest = await lookup(rows);
     const { updates } = planUpgrade({ rows, latest, functions, pm, platform, arch });
     return { newer: updates.map(({ tool, to }) => ({ tool, to })) };
   } catch {
     return { newer: [] };
   }
+}
+
+const NO_STACK = { stack: 'unknown', stackGap: false };
+const blockOf = ({ stack, stackGap }) => ({ stack, stackGap });
+
+/** The menu's three reads of the stack. `loadStack` and `loadNewer` run once after the first draw and share one
+ * probe; `readStackView` runs after each command, offline. `probe()` resolves to `probeStackView`'s view, and
+ * `newer(view, { offline, signal })` to `computeNewer`'s `{ newer }`. A first read that finishes after a command's
+ * refresh began never writes the rows that refresh replaced (Codex P2): the stack block gives nothing, and what is
+ * newer is planned again from the refreshed rows, offline, out of the cache the lookup has just filled; while that
+ * refresh still probes, it gives nothing and the refresh plans it. A part of `null` is one `runTui` skips. */
+export function stackReads({ probe, newer }) {
+  let first = null;
+  const firstProbe = () => (first ??= probe());
+  // Counts the refreshes begun; `last` is the view the latest one probed, `lastAt` its count.
+  let refreshes = 0;
+  let last = null;
+  let lastAt = -1;
+  const readStackView = async () => {
+    const at = ++refreshes;
+    try {
+      const view = await probe();
+      if (at === refreshes) {
+        last = view;
+        lastAt = at;
+      }
+      return { ...blockOf(view), ...(await newer(view, { offline: true })) };
+    } catch {
+      return { ...NO_STACK, newer: [] };
+    }
+  };
+  const loadStack = async () => {
+    const at = refreshes;
+    let part;
+    try {
+      part = blockOf(await firstProbe());
+    } catch {
+      part = NO_STACK;
+    }
+    return at === refreshes ? part : null;
+  };
+  const loadNewer = async ({ signal } = {}) => {
+    const at = refreshes;
+    let found;
+    try {
+      found = await newer(await firstProbe(), { offline: false, signal });
+    } catch {
+      found = { newer: [] };
+    }
+    if (at === refreshes) return found;
+    if (lastAt !== refreshes) return null;
+    try {
+      return await newer(last, { offline: true });
+    } catch {
+      return null;
+    }
+  };
+  return { readStackView, loadStack, loadNewer };
 }
 
 /** Builds the initial menu state from the version info the caller already resolved. `stack` is the
@@ -868,37 +932,13 @@ export async function tuiMain(argv, env = process.env, spawn = spawnSync, io = {
 
   // Real `git`, whatever `spawn` is: `spawn` stands in for the package manager in tests.
   const location = projectLocation(cwd);
-  const probe = () => probeStackView({ home, cwd, spawn, fetch: fetchImpl, now });
-  const blockOf = ({ stack, stackGap }) => ({ stack, stackGap });
-  const NO_STACK = { stack: 'unknown', stackGap: false };
-  // The first probe serves the stack block and the lookup of what is newer, so opening the menu probes once.
-  let first = null;
-  const firstProbe = () => (first ??= probe());
-  // After a command: the stack probed again and what is newer planned from doctor's cache, never the network,
-  // so an Update that installed a tool takes it off the top line.
-  const readStackView = async () => {
-    try {
-      const view = await probe();
-      return { ...blockOf(view), ...(await computeNewer({ ...view, home, offline: true, fetch: fetchImpl, now })) };
-    } catch {
-      return { ...NO_STACK, newer: [] };
-    }
-  };
-  const loadStack = async () => {
-    try {
-      return blockOf(await firstProbe());
-    } catch {
-      return NO_STACK;
-    }
-  };
-  // The latest versions over the network (doctor's cache while fresh), after the first draw (S2 c).
-  const loadNewer = async () => {
-    try {
-      return await computeNewer({ ...(await firstProbe()), home, fetch: fetchImpl, now });
-    } catch {
-      return { newer: [] };
-    }
-  };
+  // The first probe serves the stack block and the lookup of what is newer, so opening the menu probes once. The
+  // lookup goes to the network (doctor's cache while fresh) after the first draw (S2 c); after a command the stack is
+  // probed again and what is newer planned from that cache, never the network, so an Update takes a tool off the top line.
+  const { readStackView, loadStack, loadNewer } = stackReads({
+    probe: () => probeStackView({ home, cwd, spawn, fetch: fetchImpl, now }),
+    newer: (view, { offline, signal }) => computeNewer({ ...view, home, offline, fetch: fetchImpl, now, signal }),
+  });
   const commands = inProcess ? buildCommands({ home, cwd, env, spawn, fetch: fetchImpl, now, source }) : childCommands({ home, cwd, env, source });
 
   return runTui({
