@@ -39,7 +39,7 @@ import { readProjectRules as readRulesData } from './lib/codex-review-allowance.
 import { CLAUDE_MD_BUDGET, checkClaudeBudget } from './lib/claude-md-budget.mjs';
 import { compareLaunches, subagentRowLines } from './lib/subagent-check.mjs';
 import { dayOf, launchesOf } from './lib/subagent-count.mjs';
-import { readRecords, recordFolders } from './subagents.mjs';
+import { readRecords, recordFolders } from './lib/subagent-records.mjs';
 import { testsOnCi } from './lib/ci-gate.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, claimOf, gateLogRows, gateRow, minutes, ownTicketRows, underGateLock } from './lib/gate-turn.mjs';

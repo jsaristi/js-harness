@@ -6,7 +6,7 @@
 // module holds the reader of the document's commits and the lines `sessions --measures` prints. It spawns
 // nothing itself and reads no file: git is reached through the `run` it is given, so a test hands it a fake.
 
-import { windowBefore } from './audit.mjs';
+import { windowBefore } from './share-check.mjs';
 import { percentOf, peakContextBefore, shareOf } from './sessions.mjs';
 
 /** The folder and the file name of `document`, split at its last slash of either kind. A transcript of a

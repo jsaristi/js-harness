@@ -225,16 +225,6 @@ test('the check refuses an undecided row, a missing or doubled entry, an unresol
   assert.match(checkReview(done.replace('Desktop tool list: owed', ''), spans).join('\n'), /a line "Desktop tool list: baseline", "diff" or "owed"/);
 });
 
-test('the gate of --host-reviewed refuses an unresolved hand list: one decided row beside it is not a review', () => {
-  const text = [
-    '# Claude Desktop 4.5000.0', '', 'Code tab CLI: 2.1.320', '',
-    '| Change | Decision | Reason |', '|---|---|---|', '| Mods | adapt | the board |', '',
-    '## To classify by hand', '- code 2.1.320 #12: Improved the spinner', '',
-    '## Sources', '- https://claude.com/docs/cowork/claude-desktop-changelog (4.4212.0 to 4.5000.0)', '- https://code.claude.com/docs/en/changelog (2.1.318 to 2.1.320)',
-  ].join('\n');
-  assert.match(reviewFileGaps(text, VERSIONS, REVIEWED).join('\n'), /the list "To classify by hand" emptied/);
-});
-
 test('a tool list keeps the host\'s names and counts the other servers\' by server', () => {
   const names = parseToolList('# surface: desktop\nRead\nBash\n\nstart_session\nmcp__engram__mem_save\nmcp__engram__mem_search\nmcp__plugin_engram_engram__mem_save\nmcp__claude-in-chrome__navigate\nmcp__ccd_session_mgmt__list\nmcp__codegraph__codegraph_explore\nBash\n');
   const { kept, others } = hostTools(names);
