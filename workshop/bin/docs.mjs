@@ -5,6 +5,7 @@
 // and the plan to the tracked files, so neither can fall behind. It reads the files git tracks and writes nothing;
 // the plan is computed each time, never stored. Zero dependencies.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { estimateTokens } from '../../bin/lib/payload.mjs';
@@ -28,9 +29,30 @@ const figure = (n) => n.toLocaleString('en-US');
 const count = (n, noun, plural = `${noun}s`) => `${n} ${n === 1 ? noun : plural}`;
 
 /** The files git tracks under `root`, from its index, so a file staged for the commit counts and an untracked one
- * does not; `null` when git cannot list them. */
+ * does not; `null` when git cannot list them. A tree with no `.git`, as the gate's WSL mirror is synced
+ * (bin/lib/gate-wsl.mjs), has no index: there the files are those on disk git would not ignore (`filesGitKeeps`). */
 function trackedFiles(root, spawn) {
-  const listed = spawn('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  if (!fs.existsSync(path.join(root, '.git'))) return filesGitKeeps(root, spawn);
+  return listedBy(spawn('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }));
+}
+
+/** The files on disk under `root` that its `.gitignore` files do not ignore, listed by git from a scratch repository
+ * outside the tree, so nothing is written into it and an ignored log or eval run is not read as a source; `null` when
+ * git cannot list them. */
+function filesGitKeeps(root, spawn) {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-docs-'));
+  try {
+    const made = spawn('git', ['init', '-q', scratch], { encoding: 'utf8' });
+    if (!made || made.error || made.status !== 0) return null;
+    const args = [`--git-dir=${path.join(scratch, '.git')}`, `--work-tree=${root}`, 'ls-files', '--others', '--exclude-standard', '-z'];
+    return listedBy(spawn('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }));
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+/** The paths of a `git ls-files -z` that ran, or `null` when it did not. */
+function listedBy(listed) {
   if (!listed || listed.error || listed.status !== 0) return null;
   return listed.stdout.split('\0').filter((file) => file !== '');
 }

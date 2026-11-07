@@ -280,6 +280,16 @@ test('the docs row passes where the index has every entry of docs/ and the plan 
   });
 });
 
+test('with no .git, as in the gate\'s WSL mirror, the row reads the files on disk that git would not ignore', async () => {
+  // The merge queue of 2026-11-06 left PR 776 out: the mirror is synced without .git, so git listed nothing there.
+  await withRepo({ ...CROSS, '.gitignore': '*.log\n', 'evals/run.log': 'x'.repeat(1_700_000) }, (dir) => {
+    const [tracked] = checkDocs(dir, { own: true });
+    assert.equal(tracked.pass, true, (tracked.lines ?? []).join('\n'));
+    fs.rmSync(path.join(dir, '.git'), { recursive: true, force: true });
+    assert.deepEqual(checkDocs(dir, { own: true }), [tracked]);
+  });
+});
+
 test('the docs row fails on an entry of docs/ that has no row, naming it', async () => {
   await withRepo({ ...CROSS, 'docs/todo.md': '# Todo\n' }, (dir) => {
     const [row] = checkDocs(dir, { own: true });
