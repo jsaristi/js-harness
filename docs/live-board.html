@@ -2,21 +2,23 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <style>
-/* Layout: a live status board read top to bottom on a phone: who works now, what is yours, what happened, the route. */
+/* Layout: a live status board read top to bottom on a phone: what is yours, how it goes, who works now, what happened,
+   the route. One color language everywhere (odd/tasks/board-colors.md): --late red is urgent or a warning, --wait amber
+   is in progress, --run blue is waiting or information, --ok green is done; each pair passes 4.5:1 on its soft tone. */
 :root{
   --bg:#f4f6f9; --surface:#fff; --ink:#18202d; --muted:#5a6578; --line:#dde3ec;
-  --run:#2c56c9; --run-soft:#e3eafb; --ok:#2a7f52; --ok-soft:#dcf1e5;
-  --you:#8a4fc4; --you-soft:#f0e6fa; --wait:#c7741c; --wait-soft:#fcecd9; --late:#b3261e; --late-soft:#fbe1df; --quiet:#5a6578; --quiet-soft:#e6e9ef;
+  --run:#2c56c9; --run-soft:#e3eafb; --ok:#23704a; --ok-soft:#dcf1e5;
+  --wait:#9a5a0c; --wait-soft:#fcecd9; --late:#b3261e; --late-soft:#fbe1df; --quiet:#5a6578; --quiet-soft:#e6e9ef;
   --display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif; --body:"Source Sans 3","Segoe UI",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#10141c; --surface:#171d28; --ink:#e7ecf4; --muted:#9aa6b8; --line:#2a3342;
   --run:#7ea0ff; --run-soft:#1d2a4a; --ok:#5fd394; --ok-soft:#163222;
-  --you:#c99bff; --you-soft:#2c1f40; --wait:#f0a356; --wait-soft:#3a2a17; --late:#ff8a80; --late-soft:#3d1a18; --quiet:#a7b1c2; --quiet-soft:#262e3b; color-scheme:dark}}
+  --wait:#f0a356; --wait-soft:#3a2a17; --late:#ff8a80; --late-soft:#3d1a18; --quiet:#a7b1c2; --quiet-soft:#262e3b; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#10141c; --surface:#171d28; --ink:#e7ecf4; --muted:#9aa6b8; --line:#2a3342;
   --run:#7ea0ff; --run-soft:#1d2a4a; --ok:#5fd394; --ok-soft:#163222;
-  --you:#c99bff; --you-soft:#2c1f40; --wait:#f0a356; --wait-soft:#3a2a17; --late:#ff8a80; --late-soft:#3d1a18; --quiet:#a7b1c2; --quiet-soft:#262e3b; color-scheme:dark}
+  --wait:#f0a356; --wait-soft:#3a2a17; --late:#ff8a80; --late-soft:#3d1a18; --quiet:#a7b1c2; --quiet-soft:#262e3b; color-scheme:dark}
 *{box-sizing:border-box}
 /* The flex layouts below would override the hidden attribute the script sets on empty sections. */
 [hidden]{display:none !important}
@@ -35,28 +37,33 @@ a{color:var(--run)}
 .live{display:inline-flex;align-items:center;gap:8px;font:700 12px/1 var(--mono);color:var(--muted)}
 .live::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--muted)}
 .live.on{color:var(--ok)} .live.on::before{background:var(--ok);animation:pulse 1.6s ease-in-out infinite}
-.live.off,.live.stale{color:var(--wait)} .live.off::before,.live.stale::before{background:var(--wait)}
+.live.off,.live.stale{color:var(--late)} .live.off::before,.live.stale::before{background:var(--late)}
+.legend{display:flex;flex-wrap:wrap;gap:6px;margin:0;max-width:none}
+.chip{display:inline-flex;align-items:center;gap:6px;font:600 13.5px/1.2 var(--body);padding:5px 10px;border-radius:999px}
+.chip::before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor;flex:none}
+.c-red{background:var(--late-soft);color:var(--late)} .c-amber{background:var(--wait-soft);color:var(--wait)}
+.c-blue{background:var(--run-soft);color:var(--run)} .c-green{background:var(--ok-soft);color:var(--ok)}
 details.orig summary{font-size:13px} details.orig p{font-size:13.5px;color:var(--muted);margin-top:4px}
 .pill{display:inline-flex;align-items:center;gap:6px;font:700 11.5px/1 var(--mono);letter-spacing:.05em;text-transform:uppercase;padding:6px 9px;border-radius:999px;white-space:nowrap}
-.s-working{background:var(--run-soft);color:var(--run)} .s-ready,.s-closed{background:var(--ok-soft);color:var(--ok)}
-.s-asking{background:var(--you-soft);color:var(--you)} .s-waiting,.s-relieved{background:var(--wait-soft);color:var(--wait)}
-.s-quiet{background:var(--quiet-soft);color:var(--quiet)} .s-late{background:var(--late-soft);color:var(--late)}
-.card.quiet{border:2px dashed var(--quiet)}
-.tag{display:inline-block;font:700 11px/1.4 var(--mono);color:var(--wait);background:var(--wait-soft);border-radius:6px;padding:1px 6px;margin-left:4px}
+.s-working{background:var(--wait-soft);color:var(--wait)} .s-ready,.s-closed{background:var(--ok-soft);color:var(--ok)}
+.s-asking{background:var(--run-soft);color:var(--run)} .s-waiting,.s-relieved{background:var(--run-soft);color:var(--run)}
+.s-quiet{background:var(--late-soft);color:var(--late)} .s-late{background:var(--late-soft);color:var(--late)}
+.card.quiet{border:2px dashed var(--late)} .card.late{border:2px solid var(--late)}
+.tag{display:inline-block;font:700 11px/1.4 var(--mono);color:var(--run);background:var(--run-soft);border-radius:6px;padding:1px 6px;margin-left:4px}
 .s-working::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.3}}
 @media (prefers-reduced-motion:reduce){.s-working::before,.live.on::before{animation:none}}
 .who{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:15px 17px;display:flex;flex-direction:column;gap:8px;min-width:0}
-.card.now{border:2px solid var(--run)} .card.ask{border:2px solid var(--you)}
+.card.now{border:2px solid var(--wait)} .card.ask{border:2px solid var(--run)}
 .head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
 .foot{font-size:14px;color:var(--muted)}
 .tl{display:flex;flex-direction:column;border-left:3px solid var(--line);margin-left:6px}
 .ev{position:relative;padding:0 0 16px 18px;display:flex;flex-direction:column;gap:3px;min-width:0}
-.ev::before{content:"";position:absolute;left:-8px;top:6px;width:13px;height:13px;border-radius:50%;background:var(--surface);border:3px solid var(--run)}
+.ev::before{content:"";position:absolute;left:-8px;top:6px;width:13px;height:13px;border-radius:50%;background:var(--surface);border:3px solid var(--muted)}
+.ev.k-opened::before,.ev.k-note::before{border-color:var(--wait)}
 .ev.k-closed::before,.ev.k-ready::before{border-color:var(--ok)}
-.ev.k-question::before,.ev.k-answer::before{border-color:var(--you)}
-.ev.k-waiting::before,.ev.k-relieved::before{border-color:var(--wait)}
+.ev.k-question::before,.ev.k-answer::before,.ev.k-waiting::before,.ev.k-relieved::before,.ev.k-withdrawn::before{border-color:var(--run)}
 .ev .t{font:700 12px var(--mono);color:var(--muted)}
 .ev b{font-size:15.5px;overflow-wrap:anywhere}
 .ev span.x{font-size:15px;color:var(--muted);overflow-wrap:anywhere}
@@ -64,15 +71,25 @@ details.orig summary{font-size:13px} details.orig p{font-size:13.5px;color:var(-
 .st{border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;font-size:14px;border:1px solid var(--line);background:var(--surface)}
 .st b{font-size:15px} .st .k{font:700 12px var(--mono)}
 .st.done{background:var(--ok-soft);border-color:var(--ok)} .st.done .k{color:var(--ok)}
-.st.now{background:var(--run-soft);border:2px solid var(--run)} .st.now .k{color:var(--run)}
+.st.now{background:var(--wait-soft);border:2px solid var(--wait)} .st.now .k{color:var(--wait)}
 .st.next .k{color:var(--muted)}
 .bar{height:12px;border-radius:999px;background:var(--line);overflow:hidden}
 .bar div{height:100%;background:var(--ok);border-radius:999px}
-.yours{background:var(--you-soft);border:1px solid var(--you);border-radius:12px;padding:15px 17px;display:flex;flex-direction:column;gap:8px}
-.yours h3{color:var(--you)}
+.yours{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:15px 17px;display:flex;flex-direction:column;gap:10px}
+.yours .eyebrow{color:var(--ink)}
+ul.yl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:15.5px}
+.yi{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;border-radius:10px;border-left:5px solid;padding:9px 12px;min-width:0;overflow-wrap:anywhere}
+.yi .lv{font:700 11.5px/1 var(--mono);letter-spacing:.05em;text-transform:uppercase;padding:5px 8px;border-radius:999px;color:var(--surface);white-space:nowrap}
+.y-urgente{background:var(--late-soft);border-color:var(--late)} .y-urgente .lv{background:var(--late)}
+.y-prioritario{background:var(--wait-soft);border-color:var(--wait)} .y-prioritario .lv{background:var(--wait)}
+.y-opciones{background:var(--run-soft);border-color:var(--run)} .y-opciones .lv{background:var(--run)}
+.y-plain{background:var(--run-soft);border-color:var(--run)}
 ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:15.5px}
 .empty{color:var(--muted);font-size:15px}
+ul.recent{list-style:none;padding-left:0}
 .recent li{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.recent .ago{font-family:var(--mono);font-size:14px;color:var(--muted)}
+.recent li::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ok);margin-right:8px;vertical-align:middle}
+.recent li.empty::before{content:none}
 .status{display:flex;flex-direction:column;gap:8px}
 .stat{display:flex;gap:12px;align-items:flex-start;border-radius:12px;padding:12px 15px;border:1px solid var(--line);background:var(--surface);min-width:0}
 .stat svg{flex:none;width:22px;height:22px;margin-top:2px}
@@ -90,24 +107,29 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
   <span class="eyebrow">js-harness · tablero de sesiones</span>
   <h1>Tablero de js-harness</h1>
   <p>Qué hace cada sesión, qué cambió y qué te toca. No hay que recargarla: cada aviso aparece solo en cuanto el orquestador (la sesión que coordina a las demás) lo envía. Abajo, en “Cómo leer este tablero”, está explicada cada parte.</p>
+  <p class="legend" id="legend" aria-label="Qué significa cada color">
+    <span class="chip c-red">Rojo: urgente o alerta</span>
+    <span class="chip c-amber">Ámbar: en curso o pronto</span>
+    <span class="chip c-blue">Azul: espera o información</span>
+    <span class="chip c-green">Verde: hecho</span>
+  </p>
   <span id="live" class="live">conectando…</span>
   <p id="lead" class="small" hidden></p>
 </header>
 
+<section class="yours" id="yours" hidden>
+  <span class="eyebrow">Lo que te toca</span>
+  <ul class="yl" id="yours-list"></ul>
+</section>
+
 <section class="stack" id="status-box" hidden>
   <span class="eyebrow">Cómo va</span>
   <div class="status" id="status"></div>
-  <p class="small muted">Verde: hecho · Ámbar: en curso · Azul: esperando</p>
 </section>
 
 <section class="stack" id="recent-box">
   <span class="eyebrow">Lo último que se hizo</span>
   <ul class="plain recent" id="recent"><li class="empty">Nada terminado todavía en el tablero.</li></ul>
-</section>
-
-<section class="yours" id="yours" hidden>
-  <span class="eyebrow">Lo que te toca</span>
-  <ul class="plain" id="yours-list"></ul>
 </section>
 
 <section class="stack">
@@ -161,9 +183,10 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
   <div class="card">
     <h3>Las partes</h3>
     <ul class="plain">
+      <li><b>Los colores</b>: significan lo mismo en todo el tablero, como dice la leyenda de arriba. Rojo es urgente o una alerta (algo tuyo urgente, una sesión atrasada o quieta, un tablero atrasado); ámbar es lo que está en curso o pide atención pronto; azul es una espera o una información (algo que espera por ti o por otra sesión, unas opciones); verde es lo hecho. Cada color va siempre con su palabra.</li>
+      <li><b>Lo que te toca</b>: va primero, justo debajo de la leyenda, y es lo único que espera por ti. Si no aparece, no tienes nada pendiente. Lo que el orquestador te deja lleva su nivel: <b>Urgente</b> en rojo, <b>Prioritario</b> en ámbar y <b>Opciones</b> en azul, en ese orden; él te lo dice una vez en el chat y aquí queda. Al final van todas las preguntas que nadie ha respondido ni retirado, aunque sean viejas, cada una con su número: escribe «hazme la pregunta 56» y el orquestador te la hace. Salen del registro cada vez que el orquestador revisa, así que una que respondes desaparece en la revisión siguiente.</li>
       <li><b>Cómo va</b>: el resumen que deja el orquestador cada vez que despierta, una tarjeta por cosa: verde lo hecho, ámbar lo que está en curso y azul lo que espera.</li>
       <li><b>Lo último que se hizo</b>: las tres últimas cosas terminadas (una sesión que terminó o un PR listo), con hace cuánto, para ubicarte de un vistazo.</li>
-      <li><b>Lo que te toca</b>: lo único que espera por ti. Si está vacío, no tienes nada pendiente. Al final van todas las preguntas que nadie ha respondido ni retirado, aunque sean viejas, cada una con su número: escribe «hazme la pregunta 56» y el orquestador te la hace. Salen del registro cada vez que el orquestador revisa, así que una que respondes desaparece en la revisión siguiente.</li>
       <li><b>Quién trabaja y en qué</b>: arriba, lo que corría en la máquina cuando el orquestador revisó (un gate, una revisión de Codex o de lentes, un lote de evals), con la hora en que lo vio. Debajo, una tarjeta por sesión, con su último aviso, cuánto lleva en su tarea y su estimado. Arriba van las que te preguntan algo, luego las atrasadas y las quietas, y después las que esperan y las que trabajan. Los avisos del propio js-harness, como un reinicio del equipo o la cola que une los PR, no tienen tarjeta: salen solo en la línea de tiempo.</li>
       <li><b>Línea de tiempo</b>: los últimos 40 avisos, el más nuevo primero. Sirve para ver qué pasó mientras no mirabas.</li>
       <li><b>Dónde vamos</b>: los pasos del plan y el avance del roadmap. Lo actualiza el orquestador.</li>
@@ -178,7 +201,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
       <li>Cada vez que el orquestador mira el registro deja anotada la hora, aunque no haya ningún aviso nuevo que subir. Así el tablero distingue un rato tranquilo (nadie avisó nada, pero él revisó) de un tablero que nadie atiende.</li>
       <li>Por eso, si arriba dice <b>“Atrasado”</b>, lo que falló es quien sube los avisos, no la página ni las sesiones.</li>
       <li>Esta página no hay que recargarla: en cuanto el aviso llega, se ve aquí en pocos segundos. Si la conexión falla, la página vuelve a mirar cada 30 segundos.</li>
-      <li>La línea de arriba dice qué tan al día está el tablero: <b>“Al día: último aviso hace 3 min”</b> en verde si el aviso más nuevo tiene menos de 15 minutos; <b>“Al día, sin avisos nuevos: el orquestador revisó a las 10:40”</b>, también en verde, si no hubo avisos pero él revisó el registro en los últimos 45 minutos (sin novedades, despierta al menos cada media hora); <b>“Al día, en reposo”</b>, en verde, cuando no hay trabajo en curso y él espera el próximo aviso, hasta 8 horas; <b>“Atrasado: nadie actualiza este tablero desde hace 1 h”</b> en naranja si no pasó nada de eso. Si se pierde la conexión, lo dice aparte y basta con recargar.</li>
+      <li>La línea de arriba dice qué tan al día está el tablero: <b>“Al día: último aviso hace 3 min”</b> en verde si el aviso más nuevo tiene menos de 15 minutos; <b>“Al día, sin avisos nuevos: el orquestador revisó a las 10:40”</b>, también en verde, si no hubo avisos pero él revisó el registro en los últimos 45 minutos (sin novedades, despierta al menos cada media hora); <b>“Al día, en reposo”</b>, en verde, cuando no hay trabajo en curso y él espera el próximo aviso, hasta 8 horas; <b>“Atrasado: nadie actualiza este tablero desde hace 1 h”</b> en rojo si no pasó nada de eso. Si se pierde la conexión, lo dice aparte y basta con recargar.</li>
       <li>Cada aviso trae su texto en español. El original en inglés, tal como lo escribió la sesión, está en “ver original”, por si lo necesitas.</li>
     </ul>
   </div>
@@ -209,7 +232,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
   <div class="card">
     <h3>Ejemplo: una tarjeta leída en voz alta</h3>
     <p class="small"><i>“JH 57 · línea base de F8 — trabajando — Terminé los 10 casos de prueba y empiezo la corrida de calibración — 27 oct, 00:23 · hace 12 min · estimado 30 min”</i></p>
-    <p class="small">Los puntos de la línea de tiempo usan los mismos colores: azul es avance, verde es entrega, morado es algo contigo y naranja es una espera.</p>
+    <p class="small">Los puntos de la línea de tiempo usan los mismos colores: ámbar es un comienzo o un avance, verde es una entrega y azul es una pregunta, una respuesta o una espera.</p>
     <p class="small">Se lee así: “La sesión JH 57, que mide la línea base de F8, está trabajando. Hace 12 minutos avisó que terminó los 10 casos y empezó la calibración, que cree que le tomará media hora. Todo va a tiempo.”</p>
   </div>
 </section>
@@ -305,7 +328,7 @@ function taskTimeText(rows, session, summary, now) {
 
 function card(latest, count) {
   const state = stateOf(latest);
-  const box = el('div', `card${state === 'working' ? ' now' : state === 'asking' ? ' ask' : state === 'quiet' ? ' quiet' : ''}`);
+  const box = el('div', `card${{ working: ' now', asking: ' ask', quiet: ' quiet', late: ' late' }[state] ?? ''}`);
   const head = el('div', 'head');
   head.append(el('h3', '', label(latest)), el('span', `pill s-${state}`, STATE[state]));
   box.append(head, el('p', 'small', words(latest)), ...original(latest));
@@ -451,13 +474,28 @@ function renderStretch(stretch) {
 // His words of 2026-10-29: the old questions he has not answered go on the board, so he can ask for them. They come
 // from the record (`board/summary.questions`, `sessions live --out`), never written by hand; a session asking one now
 // says it once, in the record's words with the line to ask for it.
-/** What is his: the lead's `yours` list, the sessions asking now, then every open question with the line to ask it. */
+// His words of 2026-11-07 (odd/tasks/board-colors.md): the lead says a thing once in chat and the board holds it, at
+// the top, tagged by level. The lead opens an item of `yours` with its level and a separator ("URGENTE · ..."); an item
+// with none shows as before, after the tagged ones.
+const YOURS_LEVELS = { urgente: 'Urgente', prioritario: 'Prioritario', opciones: 'Opciones' };
+/** An item of `yours` split into its level (a key of YOURS_LEVELS, or null), the tag it shows and its text. */
+function yoursLevel(item) {
+  const match = /^(urgente|prioritario|opciones)\s*[·:\-–]\s*(\S[\s\S]*)$/i.exec(item);
+  if (match === null) return { level: null, label: null, text: item };
+  const level = match[1].toLowerCase();
+  return { level, label: YOURS_LEVELS[level], text: match[2] };
+}
+
+/** What is his: the lead's `yours` list by level, the sessions asking now, then every open question with the line to ask it. */
 function yoursItems(summary, asking) {
   const questions = (Array.isArray(summary?.questions) ? summary.questions : []).filter((one) => Number.isSafeInteger(one?.number) && typeof one?.text === 'string' && typeof one?.ask === 'string');
   // By the row's id, its time and sender: two sessions may ask in one millisecond.
   const listed = new Set(questions.map((one) => one.row));
+  const levels = Object.keys(YOURS_LEVELS);
+  const rank = (item) => { const { level } = yoursLevel(item); return level === null ? levels.length : levels.indexOf(level); };
   return [
-    ...(Array.isArray(summary?.yours) ? summary.yours.filter((item) => typeof item === 'string') : []),
+    // A stable sort: each level keeps the lead's order.
+    ...(Array.isArray(summary?.yours) ? summary.yours.filter((item) => typeof item === 'string') : []).sort((a, b) => rank(a) - rank(b)),
     ...asking.filter((one) => !listed.has(one.latest.id)).map((one) => `${label(one.latest)} te pregunta: ${words(one.latest)}`),
     ...questions.map((one) => `Pregunta ${one.number}${one.from ? ` · ${one.from}` : ''} · ${ago(one.at)}: ${one.text} Para que te la haga, escribe «${one.ask}».`),
   ];
@@ -474,7 +512,13 @@ function renderSummary(asking) {
   lead.textContent = summary?.now ?? '';
   const items = yoursItems(summary, asking);
   $('yours').hidden = items.length === 0;
-  $('yours-list').replaceChildren(...items.map((item) => el('li', '', item)));
+  $('yours-list').replaceChildren(...items.map((item) => {
+    const { level, label: tag, text } = yoursLevel(item);
+    const li = el('li', `yi y-${level ?? 'plain'}`);
+    if (tag) li.append(el('span', 'lv', tag));
+    li.append(el('span', '', text));
+    return li;
+  }));
   const route = Array.isArray(summary?.route) ? summary.route : [];
   $('route-box').hidden = !routeShown(summary);
   $('route').replaceChildren(...route.map((step) => {
