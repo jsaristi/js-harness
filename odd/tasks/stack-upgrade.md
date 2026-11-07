@@ -138,19 +138,12 @@ Nothing planned beyond question 206 (what failed in the menu), already asked.
   stack.
 
 ## Next step
-Three worktrees under `D:\js-harness\.claude\worktrees\`:
-1. `stack-upgrade` (`feat/stack-upgrade`): S1 is PR jsaristi/js-harness#780, reviewed, `notify --kind ready` sent.
-   Merging is his.
-2. `ci-gate-merge-parent` (`fix/ci-gate-merge-parent`, from origin/main): the lead's call (L10), done as PR
-   jsaristi/js-harness#781, reviewed and verified, `notify --kind ready` sent (L11). Merging is his.
-3. `tui-update-item` (`feat/tui-update-item`, local only, never pushed until (2) lands): S1 plus #596's ten commits
-   replayed with their dates (`git rebase --committer-date-is-author-date`), and #596's tests brought to today's
-   main: gentle-ai fixtures renamed to engram, the codex-daemon row, `installIndex` waits for the stack block, and
-   the gentle-ai words in terminal.mjs, tui.mjs and two tests dropped (the convention test, CI run 42272367996).
-   That port is committed (857b438f); S2 (b) and (c) below are built on it, tests first, with their reviews from
-   base 857b438f. Open: T6b, the walk on a real console. Once (2) and #780 land:
-   bring #596's branch up to main with a real merge, rebuild this branch on it, and open its PR against #596's
-   branch, chained, a draft while #780 is open. #596's replayed commits need their reviews on this branch.
+S1 (PR jsaristi/js-harness#780) and the gate fix (PR jsaristi/js-harness#781) are on main (f480418). S2 lives in
+the worktree `D:\js-harness\.claude\worktrees\tui-update`, branch `feat/tui-update`: PR #596's branch brought up to
+main (1954ed46, pushed, reviewed) plus S2's commits, its pull request against #596's branch, chained (L14). Open:
+T6b, the walk on a real console, with #596's; T8, the reviews of S2 on this branch and the report to the lead.
+Then S3's slices 2-6, only once #596 merges and G3 is his. The worktree `tui-update-item` holds the first build,
+replayed and superseded: nothing there is needed.
 
 ### S2 (b) and (c), on PR #596's menu
 
@@ -236,3 +229,22 @@ tool, and #596 runs every item as a child with stdin closed, so `upgrade` there 
   "(update available: X)", which `scripts/e2e.mjs` and the walk read, and the `New:` line repeats the harness beside
   the stack; the network lookup runs only when a tool Update updates is installed with no known latest, found
   because rows such as context7 are `ok` with nothing installed, which sent three tests to the network.
+- L12 (2026-11-06): reviews of S2. 857b438..b4422d8: Codex P2, the walk's Update step would stall at the hand-off
+  prompt, fixed in 0beaf43d; the lenses reliability and risk, 0 findings. b4422d8..0beaf43: Codex correct (0.97),
+  reliability 0 findings. Still owed on this branch before its PR: the reviews of #596's six replayed commits and
+  of the port 857b438f (`check` names them).
+- L13 (2026-11-06): PR 781 landed (main ec5338a). Main merged into #596's branch for real, with the port's two test
+  files, pushed as 6caa9833 (its gate green here and on CI). S2's rebuild on it, in the worktree `tui-update`
+  (branch `feat/tui-update`), first merged S1, and CI refused that commit on rule depth-pass
+  (run 42304779832): with both parents now sent, the branch's commits from the trunk hold #596's code commits
+  before S1's document, so its depth pass reads as committed after code, and every later commit would fail the
+  same way. The merge was aborted. Once #780 is on main, S1's commits and document are the trunk's: then
+  `feat/tui-update` takes main and S2's three commits, and #596's branch takes main again so the chained diff is
+  S2 alone.
+- L14 (2026-11-06): PR 780 landed (his yes, question 210; main f480418). Main merged into #596's branch again as
+  1954ed46: S1 had rewired `buildCommands`' Update and Upgrade, which #596 had rewritten on `commandArgv`, so the
+  resolution keeps #596's shape with S1's `updateAll` and `upgradeAll` (Codex correct 0.98, the lenses reliability
+  and readability 0 findings), pushed. `feat/tui-update` fast-forwarded to it and took S2 by cherry-pick: b4422d8e
+  as a9ac286a, where Update now calls `upgradeAll` with the menu's `ask` and S1's `stack` seam, and S1's menu test
+  asks it through Update, since there is no Upgrade item (`node --test bin/tui.test.mjs`: 110 of 110); 0beaf43d as
+  e4d6dc4a. The port 857b438f is not carried: #596's merges already hold its test changes.
