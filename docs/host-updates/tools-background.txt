@@ -1,6 +1,6 @@
 # surface: background
-# Claude Desktop 4.16336.0, Code tab CLI 2.1.317
-# recorded: 2026-11-05
+# Claude Desktop 4.23118.0, Code tab CLI 2.1.317
+# recorded: 2026-11-06
 # provenance: transcribed by the model from its tool definitions and its deferred-tool list; a removal is confirmed with ToolSearch select:<name> before a review claims it
 Agent
 Artifact
@@ -62,8 +62,6 @@ mcp__claude-in-chrome__read_network_requests
 mcp__claude-in-chrome__read_page
 mcp__claude-in-chrome__resize_window
 mcp__claude-in-chrome__select_browser
-mcp__claude-in-chrome__shortcuts_execute
-mcp__claude-in-chrome__shortcuts_list
 mcp__claude-in-chrome__switch_browser
 mcp__claude-in-chrome__tabs_close_mcp
 mcp__claude-in-chrome__tabs_context_mcp
