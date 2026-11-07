@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { SNAPSHOT_SCHEMA, throughputMain, throughputTick } from './throughput.mjs';
-import { newNotice } from './lib/channel.mjs';
+import { newNotice } from '../../bin/lib/channel.mjs';
 
 const NOW = Date.parse('2026-10-17T03:00:00Z');
 const ROOT = path.resolve('/project/js-harness');

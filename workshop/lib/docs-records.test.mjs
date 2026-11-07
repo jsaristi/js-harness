@@ -69,6 +69,11 @@ test('parseRecordTable reads each row with the paths of its family, its writers 
   assert.equal(rows[0].line, 5);
 });
 
+test("parseRecordTable reads a writer of the workshop as one of the product's", () => {
+  const [row] = parseRecordTable(table([['Snapshots', '`<day>.json`', '`workshop/bin/throughput.mjs` `throughputMain`', '`throughput`']]));
+  assert.deepEqual(row.writers, [{ file: 'workshop/bin/throughput.mjs', fn: 'throughputMain' }]);
+});
+
 test('the fixture holds: every detected name is in a family, every path is in the source, every writer holds its function, every row has a section', () => {
   assert.deepEqual(findings(), []);
 });
@@ -145,18 +150,25 @@ test('parseRecordSections reads the second-level headings, and the third-level o
   assert.deepEqual(parseRecordSections('# Records\n\n## The channel\n\n### A note\n\n### A ready notice\n\n## Lands\n'), ['The channel', 'Lands']);
 });
 
+test("the source read is the product's and the workshop's code, not their tests nor anything else", () => {
+  const files = ['bin/a.mjs', 'bin/a.test.mjs', 'workshop/lib/b.mjs', 'workshop/lib/b.test.mjs', 'scripts/c.mjs'];
+  assert.deepEqual([...recordSources(files, (file) => file).keys()], ['bin/a.mjs', 'workshop/lib/b.mjs']);
+});
+
 // The repository's own records: SPEC's table and docs/RECORDS.md held to the source as `docs check` holds them.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-/** The files under `bin` of the tree at `root`: what git tracks there, or, with no `.git` as in the gate's WSL mirror
- * (synced without it), every file on disk, so the table is held on Linux too and not against an empty listing. */
+/** The files under `bin` and `workshop` of the tree at `root`: what git tracks there, or, with no `.git` as in the
+ * gate's WSL mirror (synced without it), every file on disk, so the table is held on Linux too and not against an
+ * empty listing. */
 function sourceFiles(root) {
   if (!fs.existsSync(path.join(root, '.git'))) {
-    return fs.readdirSync(path.join(root, 'bin'), { recursive: true, withFileTypes: true })
+    return ['bin', 'workshop'].filter((folder) => fs.existsSync(path.join(root, folder)))
+      .flatMap((folder) => fs.readdirSync(path.join(root, folder), { recursive: true, withFileTypes: true }))
       .filter((entry) => entry.isFile())
       .map((entry) => path.relative(root, path.join(entry.parentPath, entry.name)).split(path.sep).join('/'));
   }
-  const listed = spawnSync('git', ['ls-files', 'bin'], { cwd: root, encoding: 'utf8' }).stdout.split('\n').filter(Boolean);
+  const listed = spawnSync('git', ['ls-files', 'bin', 'workshop'], { cwd: root, encoding: 'utf8' }).stdout.split('\n').filter(Boolean);
   return listed.filter((file) => fs.existsSync(path.join(root, file)));
 }
 

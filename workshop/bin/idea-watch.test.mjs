@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { ideaWatchMain } from './idea-watch.mjs';
-import { RECORD, UPSTREAM } from './lib/idea-watch.mjs';
-import { readManifest } from './lib/manifest.mjs';
+import { RECORD, UPSTREAM } from '../lib/idea-watch.mjs';
+import { readManifest } from '../../bin/lib/manifest.mjs';
 
 // `js-harness idea-watch` (odd/tasks/idea-watch.md) through its main, in a temp home and project. git is handed in:
 // no test fetches anything, and each records the calls it was given, in order, with what the manifest said then.

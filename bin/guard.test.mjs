@@ -466,7 +466,7 @@ test('without --hook it prints its usage and exits 2', async () => {
 });
 
 // Codex on a68a340..c3ffdfa: Claude Code keeps its folder where CLAUDE_CONFIG_DIR says, which need not be named .claude
-// (bin/subagents.mjs and bin/sessions.mjs read it too); the memory index there is held to the same limit.
+// (workshop/bin/subagents.mjs and bin/sessions.mjs read it too); the memory index there is held to the same limit.
 test('a memory index under CLAUDE_CONFIG_DIR is held to the limit, whatever that folder is named', async () => {
   const custom = 'D:\\claude-config\\projects\\D--proj\\memory\\MEMORY.md';
   const write = { tool_name: 'Write', tool_input: { file_path: custom, content: `${longLine}

@@ -12,6 +12,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const dispatcher = path.join(path.dirname(fileURLToPath(import.meta.url)), 'js-harness.mjs');
+// throughput left the product for the workshop's dispatcher (odd/tasks/workshop-product-split.md, slice 1+2).
+const workshop = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'workshop', 'js-harness-workshop.mjs');
 const UNKNOWN = '--no-such-flag';
 
 // The argv before the unknown flag: enough for each command to reach its own parsing, and never
@@ -58,7 +60,7 @@ function sandbox() {
     if (key.startsWith('GIT_') || key === 'JS_HARNESS_SOURCE' || key === 'JS_HARNESS_PREFIX' || key === 'CLAUDE_CODE_SESSION_ID') delete env[key];
   }
   env.GIT_CEILING_DIRECTORIES = root;
-  const run = (args) => spawnSync(process.execPath, [dispatcher, ...args], { cwd, env, encoding: 'utf8', input: '', timeout: 60000 });
+  const run = (args) => spawnSync(process.execPath, [args[0] === 'throughput' ? workshop : dispatcher, ...args], { cwd, env, encoding: 'utf8', input: '', timeout: 60000 });
   const written = () => [home, cwd].flatMap((dir) => fs.readdirSync(dir).map((name) => path.join(path.basename(dir), name)));
   return { run, written, done: () => fs.rmSync(root, { recursive: true, force: true }) };
 }

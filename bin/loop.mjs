@@ -339,7 +339,7 @@ const STALL_WINDOW_MS = 12 * 3600 * 1000;
 const STALL_GIT_TIMEOUT_MS = 10 * 1000;
 
 // How often the heartbeat reads the daily Windows run, in minutes: the run is daily, so an hour is soon enough, and a
-// heartbeat started again reads the time of the last ask from its file (bin/lib/windows-daily.mjs).
+// heartbeat started again reads the time of the last ask from its file (workshop/lib/windows-daily.mjs).
 const WINDOWS_MINUTES = 60;
 
 // How often the heartbeat reads the host's versions, in minutes: an update lands a few times a week, and the reading
@@ -374,6 +374,9 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   // The daily Windows run (odd/tasks/commit-gates-first.md, S5): read every `--windows` minutes, 0 for never.
   const windows = parsed.flags.windows === undefined ? WINDOWS_MINUTES : /^\d+$/.test(parsed.flags.windows) ? Number(parsed.flags.windows) : null;
   if (windows === null) throw new LoopArgError(`--windows takes a whole number of minutes, 0 for never: ${parsed.flags.windows}`);
+  // The usage is the workshop's loop's too, so the option is taken; given to the product, which has no Windows tick, it
+  // is said to read nothing rather than dropped in silence.
+  if (parsed.flags.windows !== undefined && windows !== 0 && !ctx.windowsDaily) ctx.out("--windows reads nothing here: the daily Windows run is read by the workshop's loop (node workshop/js-harness-workshop.mjs loop heartbeat), not the product's");
   // A git that hangs on a lock costs one read, never the loop: its `--max` and the other sessions' alerts.
   const boundedRun = (command, args, options) => ctx.run(command, args, { timeout: STALL_GIT_TIMEOUT_MS, ...options });
   // What could not be read is said once each, so a missing STALLED line is never read as "nobody is stalled".
@@ -393,7 +396,7 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   // What the Windows reader found is said once each, as `unread` is; a red run told now ends the loop.
   const windowsSaid = new Set();
   const windowsTold = async () => {
-    if (windows === 0) return null;
+    if (windows === 0 || !ctx.windowsDaily) return null;
     let result;
     try {
       result = await ctx.windowsDaily({ home, slug, cwd: ctx.cwd, everyMs: windows * 60000, now: ctx.now });
@@ -410,6 +413,7 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   // The host watch: an update no session reviews ends the loop with the line that opens one. Said once each, as above.
   const hostSaid = new Set();
   const hostTold = async () => {
+    if (!ctx.hostWatch) return null;
     let result;
     try {
       result = await ctx.hostWatch({ home, slug, cwd: ctx.cwd, everyMs: HOST_MINUTES * 60000, now: ctx.now });
@@ -429,6 +433,7 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   const skipDays = new Set();
   const throughputSaid = new Set();
   const duesAt = async (now) => {
+    if (!ctx.throughputTick) return [];
     let result;
     try {
       result = await ctx.throughputTick({ home, cwd: ctx.cwd, slug, now, run: boundedRun, skip: skipDays });
@@ -470,7 +475,7 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     }
     return last;
   };
-  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}; every hour, the host's versions are read, and an update no host watch session holds ends it; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it`);
+  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 || !ctx.windowsDaily ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}${ctx.hostWatch ? '; every hour, the host\'s versions are read, and an update no host watch session holds ends it' : ''}${ctx.throughputTick ? '; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it' : ''}`);
   for (const item of stalledAt(started)) {
     told.set(identity(item), crossing(item));
     ctx.out(`already stalled: ${item.title ?? `work session ${item.number}`}, quiet ${spanOf(item.quietMs)}`);
@@ -582,12 +587,12 @@ export async function loopMain(
     readdir = (dir) => fs.readdirSync(dir),
     mtime = (file) => fs.statSync(file).mtimeMs,
     readFile = (file) => fs.readFileSync(file, 'utf8'),
-    // The heartbeat's reading of the daily Windows run: null when it is not due, else what it found.
-    windowsDaily = async (options) => (await import('./lib/windows-daily.mjs')).windowsDailyTick(options),
-    // The heartbeat's throughput tick: keeps the settled days with no snapshot, and says which review is due.
-    throughputTick = async (options) => (await import('./throughput.mjs')).throughputTick(options),
-    // The heartbeat's reading of the host: null when it is not due, else an update no host watch session holds.
-    hostWatch = async (options) => (await import('./host-watch.mjs')).hostWatchTick(options),
+    // The heartbeat's three ticks: the daily Windows run, the throughput snapshots and reviews due, and the host
+    // watch. They serve only the harness's own repository, so they are the workshop's (TICKS in
+    // workshop/js-harness-workshop.mjs, which runs this loop with them) and the product runs none of them.
+    windowsDaily = null,
+    throughputTick = null,
+    hostWatch = null,
   } = {},
 ) {
   let parsed;

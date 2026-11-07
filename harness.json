@@ -5,9 +5,16 @@
     "docs/",
     "odd/tasks/"
   ],
+  "sensors": {
+    "tests": "node --test",
+    "docs": "node workshop/js-harness-workshop.mjs docs check",
+    "workshop spec": "node workshop/js-harness-workshop.mjs spec"
+  },
   "documentSensors": {
     "rules": "node bin/js-harness.mjs rules check",
-    "document tests": "node --test bin/rules.test.mjs bin/sessions.test.mjs"
+    "document tests": "node --test bin/rules.test.mjs bin/sessions.test.mjs",
+    "docs": "node workshop/js-harness-workshop.mjs docs check",
+    "workshop spec": "node workshop/js-harness-workshop.mjs spec"
   },
   "sameTree": "skip",
   "sensorsInWsl": true,

@@ -1,6 +1,6 @@
 // The count of a day's sub-agents (odd/tasks/effort-by-task.md, S3): each launch joined to the Agent call
 // that started it, its role, the model and effort it asked for and ran at, and its tokens. Pure: the records
-// are read by bin/subagents.mjs and handed in parsed. Of a description only its first word is ever kept,
+// are read by workshop/bin/subagents.mjs and handed in parsed. Of a description only its first word is ever kept,
 // since the records hold the person's own messages.
 
 /** Built-in subagent types that are read-only explorers. */

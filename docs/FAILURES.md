@@ -566,6 +566,9 @@ not the committed range, wrote no record and had to be run again.
 - Seen: 2026-11-03 — `odd/tasks/idea-watch.md` L5 (JH 138) — that document edited, with the lenses running beside
   it, during the Codex review of `155a118..009dd2e`; 168,141 input tokens spent on part 1 of 4, not kept, nothing
   recorded, the review run again after the commit
+- Seen: 2026-11-05 — `odd/tasks/workshop-product-split.md` L24 (JH 142) — that document edited, after the
+  lenses had finished, during the Codex review of `52d0703..3ec2263`; 128,424 input tokens spent on part 1 of 3,
+  not kept, nothing recorded, the review run again after the commit
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 
@@ -653,7 +656,7 @@ read as an exit code or an outcome alone.
 - Class: unseen-state
 - Seen: 2026-10-29 — docs/sessions/2026-10-29-jh-79-visual-pages-the-harness-shows-its-moments-as-pages.md,
   "Left" — found closing visual pages; `stretch explain` was the only way to say why
-- Control: check — bin/lib/throughput.test.mjs — "a land keeps the last line it said, and a Codex run
+- Control: check — workshop/lib/throughput.test.mjs — "a land keeps the last line it said, and a Codex run
   the reason it was logged with" — since 2026-10-29
 
 ### fixture-refuses-late-check
@@ -847,7 +850,7 @@ A host review adopted a change for the Code tab without checking that the app ap
   listed in the changelog's 3P section, was decided adapt as a Code tab feature and became question 131, which he
   answered "Sí, ábrela"; JH 113 found that the installed app reads the key only in its third-party-inference class
   (`odd/tasks/status-line.md`, Design), so the feature could show nothing on his claude.ai install
-- Control: check — bin/lib/host-watch.test.mjs — "a 3P entry left to decide says its decision needs evidence that a
+- Control: check — workshop/lib/host-watch.test.mjs — "a 3P entry left to decide says its decision needs evidence that a
   claude.ai install reads it" — since 2026-10-31
 - Proof: `js-harness failures weeks`: no sighting of this entry after the week of 2026-10-26
 
@@ -1497,7 +1500,7 @@ this entry, so the lands it turned red have no cause.
   failed in 4 gates: the land candidate merge-queue-108380 at 01:36Z and 01:39Z, rules-row at 02:10Z, and
   rule-first-patterns at 03:49Z or jh26-commit-size at 18:20Z; the first three also failed four more tests of
   the same file
-- Control: check — bin/lib/throughput.test.mjs — "the table reads the gates, the pull requests and the
+- Control: check — workshop/lib/throughput.test.mjs — "the table reads the gates, the pull requests and the
   Codex runs of every day of the window together" — since 2026-10-17
 - Was: owed — odd/tasks/throughput-review.md — "Unit 4: section 7"; that task is checked off (49de368c),
   and the daily throughput table now names the failing tests of each day's gates
@@ -1805,6 +1808,12 @@ the reply before he leaves; so the return had no goals to check and no forecast 
   nothing to compare it with
 - Seen: 2026-11-05 — the lead's message to JH 142 (claimed; the lead's own) — he was away 11:05 to 13:25 local
   (UTC-05:00) with no stretch opened by the lead, the fifth time by the lead's count
+- Seen: 2026-11-05 — the lead's message to JH 142 (claimed; the lead's own) — he was away 13:25 to 18:12 local
+  (UTC-05:00) with no stretch opened by the lead; question 194 sat on his screen from 13:36 to 18:12 with no
+  push notice
+- Seen: 2026-11-06 — the lead's message to JH 142 (claimed; the lead's own) — he was away 00:36 to 08:41 local
+  (UTC-05:00) with no stretch opened by the lead; questions 201 and 202 waited overnight, and JH 137's background
+  job ended meanwhile
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 

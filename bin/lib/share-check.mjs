@@ -1,6 +1,6 @@
 // The share of its context a session states of itself, read against the usage its own reply records: what the
 // Stop hook `guard --stop` and two product modules check (bin/guard.mjs, bin/lib/manifest.mjs, bin/lib/measures.mjs).
-// Moved out of bin/lib/audit.mjs, whose `js-harness audit` is the workshop's (odd/tasks/workshop-product-split.md,
+// Moved out of workshop/lib/audit.mjs, whose `js-harness audit` is the workshop's (odd/tasks/workshop-product-split.md,
 // slice 1+2), so product code imports no workshop module. Pure: entries are handed in. Zero deps.
 import { DEFAULT_CONTEXT_WINDOW, percentOf } from './sessions.mjs';
 
