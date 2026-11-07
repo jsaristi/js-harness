@@ -3,6 +3,8 @@
 # The package's bin/ runs under node and sh by its shebang, so a CRLF checkout would name `node\r` and `pnpm pack` refuses it.
 # `text=auto`, as for the evals below: a binary file would keep its bytes.
 bin/** text=auto eol=lf
+# The workshop runs under node from this checkout as bin/ does (odd/tasks/workshop-product-split.md).
+workshop/** text=auto eol=lf
 # Eval task fixtures must be the same bytes on every machine, and this one checks out CRLF (core.autocrlf=true).
 # `text=auto`, not `text`: a binary fixture file keeps its bytes, and only what Git detects as text is converted.
 evals/tasks/** text=auto eol=lf

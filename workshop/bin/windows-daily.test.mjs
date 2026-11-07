@@ -1,4 +1,4 @@
-// `js-harness windows-daily`, the hand run of the daily Windows suite's reader (bin/lib/windows-daily.mjs): its
+// `js-harness windows-daily`, the hand run of the daily Windows suite's reader (workshop/lib/windows-daily.mjs): its
 // arguments, what it prints and its exit code.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

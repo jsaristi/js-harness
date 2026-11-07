@@ -566,6 +566,9 @@ not the committed range, wrote no record and had to be run again.
 - Seen: 2026-11-03 — `odd/tasks/idea-watch.md` L5 (JH 138) — that document edited, with the lenses running beside
   it, during the Codex review of `155a118..009dd2e`; 168,141 input tokens spent on part 1 of 4, not kept, nothing
   recorded, the review run again after the commit
+- Seen: 2026-11-05 — `odd/tasks/workshop-product-split.md` L24 (JH 142) — that document edited, after the
+  lenses had finished, during the Codex review of `52d0703..3ec2263`; 128,424 input tokens spent on part 1 of 3,
+  not kept, nothing recorded, the review run again after the commit
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 
@@ -653,7 +656,7 @@ read as an exit code or an outcome alone.
 - Class: unseen-state
 - Seen: 2026-10-29 — docs/sessions/2026-10-29-jh-79-visual-pages-the-harness-shows-its-moments-as-pages.md,
   "Left" — found closing visual pages; `stretch explain` was the only way to say why
-- Control: check — bin/lib/throughput.test.mjs — "a land keeps the last line it said, and a Codex run
+- Control: check — workshop/lib/throughput.test.mjs — "a land keeps the last line it said, and a Codex run
   the reason it was logged with" — since 2026-10-29
 
 ### fixture-refuses-late-check
@@ -788,6 +791,16 @@ where a command should have made it; each escape `template shown` names is one m
 - Control: check — bin/template.test.mjs — "gate --hook refuses a hand-made page by Artifact with the
   hooks contract" — since 2026-10-29
 
+### headless-prompt-path-converted
+A session ran `claude -p "/context"` from Git Bash to read a slash command's output; Git Bash's path conversion turned
+the prompt into `C:/Program Files/Git/context`, so the run was an unattended agent in bypass mode that acted on the
+feature it found: it extracted files holding a key to a temporary folder and committed a Log line naming his message.
+- Class: tool
+- Seen: 2026-11-05 — odd/tasks/f8-s2-removal.md, L46 — JH 137, two runs (about $0.85, estimated), the second started
+  after the first printed nothing; the first's commit, never pushed, undone with `git reset --soft`, its extracted
+  folder removed by its own command
+- Control: owed — odd/tasks/f8-s2-removal.md — "starts with `/` runs under `MSYS_NO_PATHCONV=1`"
+
 ### heavy-run-beside-gate
 A test run or a count started while a gate, or a batch that measures durations, was running.
 - Class: rule-not-acting
@@ -847,7 +860,7 @@ A host review adopted a change for the Code tab without checking that the app ap
   listed in the changelog's 3P section, was decided adapt as a Code tab feature and became question 131, which he
   answered "Sí, ábrela"; JH 113 found that the installed app reads the key only in its third-party-inference class
   (`odd/tasks/status-line.md`, Design), so the feature could show nothing on his claude.ai install
-- Control: check — bin/lib/host-watch.test.mjs — "a 3P entry left to decide says its decision needs evidence that a
+- Control: check — workshop/lib/host-watch.test.mjs — "a 3P entry left to decide says its decision needs evidence that a
   claude.ai install reads it" — since 2026-10-31
 - Proof: `js-harness failures weeks`: no sighting of this entry after the week of 2026-10-26
 
@@ -1497,7 +1510,7 @@ this entry, so the lands it turned red have no cause.
   failed in 4 gates: the land candidate merge-queue-108380 at 01:36Z and 01:39Z, rules-row at 02:10Z, and
   rule-first-patterns at 03:49Z or jh26-commit-size at 18:20Z; the first three also failed four more tests of
   the same file
-- Control: check — bin/lib/throughput.test.mjs — "the table reads the gates, the pull requests and the
+- Control: check — workshop/lib/throughput.test.mjs — "the table reads the gates, the pull requests and the
   Codex runs of every day of the window together" — since 2026-10-17
 - Was: owed — odd/tasks/throughput-review.md — "Unit 4: section 7"; that task is checked off (49de368c),
   and the daily throughput table now names the failing tests of each day's gates
@@ -1707,6 +1720,15 @@ session believed he had rejected it and asked for his word.
   he had rejected nothing: the lead had stopped that turn, and the app listed the session as running
   at 13:08 and at 14:10, which it would not after a refusal at 07:00
 
+### stop-removed-live-worktree
+`js-harness sessions stop`, run to restart a background session, runs `claude rm`, which deleted the files of the
+session's worktree and its git registration while the work it held was meant to continue in a new session.
+- Class: tool
+- Seen: 2026-11-04 — odd/tasks/f8-s2-removal.md, L43 — at 20:06 local the lead stopped `bf3a3340` (JH 137) after the
+  Claude Desktop restart; `D:\js-harness\.claude\worktrees\f8-s2-nobackup` lost its files (a `.git` file is left);
+  nothing committed was lost, `git rev-parse f8-s2-removal origin/f8-s2-removal` gives `e4c1f48d` twice
+- Control: owed — odd/tasks/f8-s2-removal.md — "refuses while the session's worktree holds files unless told to remove it"
+
 ### stopped-work-shown-live
 A task stopped by hand, and a session that was archived, are printed by the board as live.
 - Class: unseen-state
@@ -1796,6 +1818,10 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-11-04 — the lead's message to JH 137 during Orca's removal, 11:44-11:47 local (claimed; the lead's own) — he was away 09:01 to 11:43
   local with no stretch opened; question 186 waited the whole time on the lead's question tool, so the return had no
   goals or forecast (the lead's miss)
+- Seen: 2026-11-04 — the lead's message to JH 137 at 20:37 local (claimed; the lead's own) — he was away from 16:31 to
+  19:58 local (UTC-05:00) with no stretch open; the lead passed `quiet --wait --no-stretch` with a reason instead of
+  opening one, so his return had no estimate to measure against. The stretch record's last close is at
+  2026-11-04T10:11:17Z and none opened after it (`stretches.jsonl` under the throughput folder, read by JH 137)
 - Seen: 2026-11-04 — the lead's message to JH 142 on 2026-11-05 (claimed; the lead's own, asked of it by the reply
   hook) — he was away from 20:05 on 2026-11-04 to 06:38 on 2026-11-05 local (UTC-05:00) with no stretch open, and the PC slept from 22:29 to 06:37;
   the lead opened none, so his return had no estimate to measure against. The third time since 2026-11-04, after
@@ -1805,6 +1831,12 @@ the reply before he leaves; so the return had no goals to check and no forecast 
   nothing to compare it with
 - Seen: 2026-11-05 — the lead's message to JH 142 (claimed; the lead's own) — he was away 11:05 to 13:25 local
   (UTC-05:00) with no stretch opened by the lead, the fifth time by the lead's count
+- Seen: 2026-11-05 — the lead's message to JH 142 (claimed; the lead's own) — he was away 13:25 to 18:12 local
+  (UTC-05:00) with no stretch opened by the lead; question 194 sat on his screen from 13:36 to 18:12 with no
+  push notice
+- Seen: 2026-11-06 — the lead's message to JH 142 (claimed; the lead's own) — he was away 00:36 to 08:41 local
+  (UTC-05:00) with no stretch opened by the lead; questions 201 and 202 waited overnight, and JH 137's background
+  job ended meanwhile
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 

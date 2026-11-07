@@ -90,7 +90,7 @@ export function parseRecordTable(markdown) {
     const [record, where = '', writtenBy = ''] = cells(line);
     const writers = [];
     for (const span of ticked(writtenBy)) {
-      if (/^bin\/.+\.[cm]js$/.test(span)) writers.push({ file: span, fns: [] });
+      if (/^(bin|workshop)\/.+\.[cm]js$/.test(span)) writers.push({ file: span, fns: [] });
       else if (writers.length > 0 && /^[A-Za-z_$][\w$]*$/.test(span)) writers.at(-1).fns.push(span);
     }
     rows.push({
@@ -166,6 +166,6 @@ export function recordFindings({ rows, sections, detected, sources, notRecords =
   return lines;
 }
 
-/** The source the detector reads, as a map of file to text: the commands and modules under `bin/`, the CommonJS ones
- * among them (a preload such as the tracer), not their tests nor the kits of tests. */
-export const recordSources = (files, read) => new Map(files.filter((file) => /^bin\/.*\.[cm]js$/.test(file) && !/\.test\.[cm]js$|\.testkit\.[cm]js$/.test(file)).map((file) => [file, read(file)]));
+/** The source the detector reads, as a map of file to text: the commands and modules under `bin/` and `workshop/`,
+ * the CommonJS ones among them (a preload such as the tracer), not their tests nor the kits of tests. */
+export const recordSources = (files, read) => new Map(files.filter((file) => /^(bin|workshop)\/.*\.[cm]js$/.test(file) && !/\.test\.[cm]js$|\.testkit\.[cm]js$/.test(file)).map((file) => [file, read(file)]));

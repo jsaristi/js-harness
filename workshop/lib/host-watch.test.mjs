@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { AREAS, checkReview, classify, cutSpan, diffTools, draftReview, entriesBetween, hostTools, parseChangelog, parseToolList, renderBrief, renderToolList, surfaceRefusal, watchLine, watchOpened, watchTitle } from './host-watch.mjs';
-import { hostReviewRefusal, reviewFileGaps } from './host-update.mjs';
+import { hostReviewRefusal, reviewFileGaps } from '../../bin/lib/host-update.mjs';
 
 // The desktop changelog as it is served in markdown (https://claude.com/docs/cowork/claude-desktop-changelog.md):
 // a bold version heading, a date, the bundled CLI, bold sections and `* ` bullets. One entry a class, and one no

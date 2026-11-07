@@ -1,6 +1,6 @@
 // The records of the merge queue's lands and of the Codex review runs, read as a day's facts, and the two figures
 // taken over them: what `js-harness stretch` (bin/stretch.mjs, bin/lib/stretch.mjs) reports of a stretch and the
-// workshop's `throughput` of a day. Moved out of bin/lib/throughput.mjs and bin/throughput.mjs, which are the
+// workshop's `throughput` of a day. Moved out of workshop/lib/throughput.mjs and workshop/bin/throughput.mjs, which are the
 // workshop's (odd/tasks/workshop-product-split.md, slice 1+2), so product code imports no workshop module. Pure
 // apart from `readRecordLines`, which reads the file it is handed through the file system it is handed. Zero deps.
 import { jsonLinesPath } from './codex-reviews.mjs';

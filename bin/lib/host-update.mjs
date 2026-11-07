@@ -101,7 +101,7 @@ function bulletsOf(lines, title) {
 }
 
 /** How many entries the review file's `## To classify by hand` list still holds: the gate refuses one that holds any
- * (`reviewFileGaps`); the workshop's `checkReview` (bin/lib/host-watch.mjs) counts it too. */
+ * (`reviewFileGaps`); the workshop's `checkReview` (workshop/lib/host-watch.mjs) counts it too. */
 export const handListCount = (text) => bulletsOf(String(text).split(/\r?\n/), 'To classify by hand').length;
 
 /** What the review file `text` lacks for an update from `reviewed` to `versions`, one reason each; none when it holds

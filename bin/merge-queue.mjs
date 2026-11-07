@@ -548,7 +548,7 @@ async function landCandidate({ run, gitIn, place, main, defaultBranch, door, mer
   const branch = `queue/${new Date().toISOString().replace(/[-:]/g, '').replace(/\..*$/, '')}-${candidate.slice(0, 7)}`;
   if (!gitIn(place, 'push', '--quiet', '--no-verify', 'origin', `${candidate}:refs/heads/${branch}`).ok) return fail(`could not push ${branch}.`);
   // A record before 2026-10-27 names this phase and its top-level field `circleci`. The throughput command counts each
-  // phase by its name, old and new (bin/lib/throughput.test.mjs), and nothing reads the field.
+  // phase by its name, old and new (workshop/lib/throughput.test.mjs), and nothing reads the field.
   const ciEnded = log.phase('actions');
   let ci = { state: 'pending' };
   let [asked, dropped] = [false, false];

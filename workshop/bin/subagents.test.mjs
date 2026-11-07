@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { subagentsMain } from './subagents.mjs';
-import { projectSlug } from './lib/sessions.mjs';
+import { projectSlug } from '../../bin/lib/sessions.mjs';
 
 const BOGOTA = -300;
 const NOW = Date.parse('2026-10-14T20:00:00Z'); // 15:00 in Bogotá
