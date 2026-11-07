@@ -248,3 +248,10 @@ tool, and #596 runs every item as a child with stdin closed, so `upgrade` there 
   as a9ac286a, where Update now calls `upgradeAll` with the menu's `ask` and S1's `stack` seam, and S1's menu test
   asks it through Update, since there is no Upgrade item (`node --test bin/tui.test.mjs`: 110 of 110); 0beaf43d as
   e4d6dc4a. The port 857b438f is not carried: #596's merges already hold its test changes.
+- L15 (2026-11-06): reviews of S2 on `feat/tui-update`. 1954ed4..bcaa83c: the lenses reliability, readability and
+  risk 0 findings; Codex two P2, both on the reads after the first draw: a first lookup that finished after a
+  command's refresh wrote back the rows probed before it, and closing the menu left its requests running until their
+  timeouts. Fixed with their tests first in 3db9fb22 (`stackReads` counts refreshes; `computeNewer` takes the
+  menu's signal); bcaa83c..3db9fb2: Codex correct (0.93), both fixed, the lenses reliability and resilience 0
+  findings. `node --test bin/tui.test.mjs`: 112 of 112. Not covered: the engram plugin's local git read
+  (`readLocalLatestVersions`) still runs to its own timeout after the menu closes.
