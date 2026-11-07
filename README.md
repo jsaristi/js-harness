@@ -707,7 +707,7 @@ hook out of the engram plugin's `hooks/hooks.json`, the one that prints "CRITICA
 saves each prompt to engram and reminds a session to save. It records the file's bytes before and
 after in the machine manifest. `on`, and `uninstall`, put the bytes back while the file is as `off`
 left it. A file changed since then, by a plugin update or by hand, is left as it is. A plugin update
-brings the hook back; the `hooks` row of `check` then fails and names `off`. Restart Claude Code
+brings the hook back; the `hook entries` row of `check` then fails and names `off`. Restart Claude Code
 after either. It exits 0 when the hook is off or put back, and 1 when nothing could be done.
 
 ### js-harness progress

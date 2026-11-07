@@ -3,7 +3,8 @@
 // he answered "Apagarlo igual" to question 208. The script has no switch of its own, so the entry is taken out of the
 // plugin's `hooks/hooks.json`, and the file's exact bytes before and after are recorded in the machine manifest
 // (`pluginHooks`), so `promptHookOn` and `uninstall` put back exactly what was there. A plugin update writes a new
-// file with the entry in it; the `hooks` row of `check` then fails and names the command that takes it out again.
+// file with the entry in it; where `"hookCount": true`, the `hook entries` row of `check` then fails and names the
+// command that takes it out again.
 // It imports the engine (./manifest.mjs) and the engine imports `restorePluginHooks`, functions only, as
 // ./user-settings.mjs does.
 import fs from 'node:fs';

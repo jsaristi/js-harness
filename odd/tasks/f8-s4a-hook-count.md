@@ -20,12 +20,12 @@ its pass line is a count on `main`.
 - `node --test bin/check.test.mjs bin/lib/payload.test.mjs` exits 0
 - `node bin/js-harness.mjs rules check` exits 0
 - `npm run check` exits 0
-- one extra `Stop` entry planted in a scratch home turns the `hooks` row red, quoted in `## Log`
+- one extra `Stop` entry planted in a scratch home turns the `hook entries` row red, quoted in `## Log`
 - the pull requests are opened, named in `## Log`, with Codex and the Claude lenses recorded over their code
 
 ## In scope / Out of scope
-- In: a new `bin/lib/hook-count.mjs` and its test; `bin/lib/payload.mjs` (its hook reader reads every event for the
-  count); `bin/check.mjs` (the row, and code moved out to stay under its ceiling); the switch in `harness.json`;
+- In: `bin/lib/hook-count.mjs` and its test, the module #772 made (L11); `bin/check.mjs` (the row reads the switch);
+  the switch in `harness.json`;
   README, `docs/SPEC.md`, `docs/ROADMAP.md` S4a; the command that turns the engram prompt hook off and on, recorded.
 - Out, each with its reason:
   - rewriting commits already on main: his answer to question 132.
@@ -36,10 +36,9 @@ its pass line is a count on `main`.
 ## Constraints
 - The row is switched on by the project (`harness.json`), not on every project `init` sets up — because the hooks
   are the machine's, and another machine's owners would turn every project's gate red.
-- A home with no settings (CI, a test's scratch home) is an INFO row, never a failure — because the gate's sensors run
-  on CI.
-- `bin/check.mjs` is at its ceiling (2,008 lines, `bin/conventions-structure.test.mjs`): code moves out before any is
-  added.
+- A home with no settings (CI, a test's scratch home) never fails the row: it holds no entry, so no cell is over its
+  ceiling — because the gate's sensors run on CI.
+- `bin/check.mjs` stays under its ceiling (`bin/conventions-structure.test.mjs`): the row adds no line to it.
 - Anything written outside this repository is backed up and recorded so it is undone exactly — because `AGENTS.md`
   says so.
 
@@ -89,7 +88,8 @@ the question names that.
 
 ## Tasks
 - [x] T1 (kind: verify) spec 3: the 50-commit count on `main` — L2
-- [x] T2 (kind: build) spec 1: the `hooks` row, tests first; `check.mjs` code moved out first — L4
+- [x] T2 (kind: build) spec 1: the `hooks` row, tests first; `check.mjs` code moved out first — L4; folded into
+  #772's `hook entries` row after the series merged, his answer to question 211 — L11
 - [x] T3 (kind: verify) spec 1: Codex and the lenses over T2, PR 1, ready notice — L5, L6
 - [x] T4 (kind: build) spec 2: the command that turns the engram prompt hook off and on, backed up and recorded — L7
 - [ ] T5 (kind: verify) spec 2: his yes through the lead; applied; the engram `UserPromptSubmit` ceiling lowered to 0
@@ -176,12 +176,29 @@ the question names that.
   (red: sh read `/tmp/a\b` as `/tmp/ab`; green 21 of 21). Codex over `57fcab9..c3b939f`: correct, 0.98; lenses: 0,
   both earlier findings fixed. The 772 question stays with him through the lead; nothing done on it.
 
+- L11 (2026-11-07, after #772 merged): his answer to question 211, "Unir la serie (recomendado)", read with the
+  channel's verified copy: the series 769, 772, 773 merged (`cd53b72a`), then #782 rebuilt on it, one module and both
+  checks. Its branch rebased onto `main` without `1d4f63db` and `43267a4f` (their documents kept); the ROADMAP's S4a
+  State reconciled with `main`'s, which had moved the row to the workshop document. The ceilings go into #772's
+  `bin/lib/hook-count.mjs` (`8be4ac0e`): its row name `hook entries`, its install limit and its runner-aware
+  `ownerOf` (a plugin is its id, `engram@engram`) stay; `"hookCount": true` adds a cell per owner and event, which
+  fails over its ceiling, and fails on an owner `HOOK_CEILINGS` does not name. js-harness is not in the table: its
+  ceiling for an event is what `install` writes (`installEntries`), so the value has one home. `ownerOf` now reads a
+  single-quoted program path whole too, L5's case in the other quote. Not taken from `1d4f63db`: entries with no
+  command (#772 leaves prompt and agent hooks out, said in `liveEntries`), the INFO row with no Claude settings (none
+  is red: no entry, no cell over), and the move of `checkPayload`. Red first: 5 of 13 in `hook-count.test.mjs`; then
+  13 of 13, and 355 of 355 over hook-count, check, payload, conventions, readme and spec. On this machine: "PASS hook
+  entries 26 entries in this home and project: js-harness 15, codegraph 1, codex@openai-codex 3, engram@engram 7",
+  every cell at its ceiling. Codex over `bb55096..8be4ac0`: correct (0.9); lenses reliability, readability and risk:
+  0 each. #782 force-pushed with a lease on its old tip and its ready notice sent. This branch then rebased onto it
+  (`git rebase --onto`, from `dc0d6c55`): D8's cell fix now keys `engram@engram UserPromptSubmit`, its test in the
+  module's new shape; `manifest.mjs`'s ceiling stays D8's 1,650 and `check.mjs`'s `main`'s 2,008; the imports of
+  `stack.mjs` joined with `stack upgrade`'s.
+
 ## Next step
-State (2026-11-06, JH 153, worktree `D:\js-harness\.claude\worktrees\probe-auto-archive-3b36c3`): slice 1 is PR #782
-(branch `claude/f8-s4a-hooks-5da26e`, reviewed, ready notice sent). Slice 2 (T4, L7) is committed on branch
-`claude/f8-s4a-d8`, cut from slice 1's head, not pushed. D8 is answered "Apagarlo igual" (L7). L8's and the
-verifier's findings are fixed (L9), the undo line's quoting too (L10), every code commit reviewed. Next: push, PR 2
-on `claude/f8-s4a-hooks-5da26e`, `notify --kind ready --pr <n>`. The lead holds the 772 question, which may move
-this branch and #782 onto that series. After both merge (T5): a question through the
-lead to run `js-harness stack engram-prompt off` on his machine, then the engram `UserPromptSubmit` cell leaves
-`HOOK_CEILINGS`, then T6 (ROADMAP S4a State, summary, `notify --kind closed`).
+State (2026-11-07, JH 153, worktree `D:js-harness.claudeworktreesprobe-auto-archive-3b36c3`): slice 1 is PR #782
+(branch `claude/f8-s4a-hooks-5da26e`), rebuilt on `main` after #772 (L11), reviewed, ready notice sent. Slice 2 is
+PR #784 (branch `claude/f8-s4a-d8`), rebased onto the new #782; D8 is answered "Apagarlo igual" (L7), its findings
+fixed (L9, L10). Next: the reviews of the rebase's code changes, push, the lead told. After both merge (T5): a
+question through the lead to run `js-harness stack engram-prompt off` on his machine, then the engram
+`UserPromptSubmit` cell leaves `HOOK_CEILINGS`, then T6 (ROADMAP S4a State, summary, `notify --kind closed`).
