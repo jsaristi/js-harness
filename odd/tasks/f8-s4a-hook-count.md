@@ -203,10 +203,18 @@ the question names that.
   a failing rename leaving the file as it was, no `.tmp` behind; then 418 of 418. Codex over `38c14c0..2e0e78a`:
   correct (0.96), the P2 fixed; lenses reliability and risk: 0 each.
 
+- L13 (2026-11-07, the merges): #776 and #779 landed after #782's rebuild, so the queue refused #782 as conflicting.
+  At the lead's word, `main` was merged into #782 (`c6d8711f`). The one conflict was `check.mjs`'s row list: main's
+  list, with `declared` passed to the hook entries row. 360 of 360; Codex on the merge correct (0.96), lens reliability
+  0. The new #782 was then merged into D8 (`206689fa`). Its conflicts were the size ceilings (manifest 1,650, check
+  2,007) and FAILURES' Seen lines, kept in date order. 690 of 690; Codex correct (0.99), lens reliability 0. His yes to
+  question 213 (782) and question 214 (784 after it) came through the lead, who landed #782 as `b099fa05` and #784 as
+  `5dc274c3`, green here and on Actions (the lead's word, both heads checked in `main` with
+  `git merge-base --is-ancestor`). Nothing is applied to his `~/.claude`: T5 waits for his return.
+
 ## Next step
-State (2026-11-07, JH 153, worktree `D:js-harness.claudeworktreesprobe-auto-archive-3b36c3`): slice 1 is PR #782
-(branch `claude/f8-s4a-hooks-5da26e`), rebuilt on `main` after #772 (L11), reviewed, ready notice sent. Slice 2 is
-PR #784 (branch `claude/f8-s4a-d8`), rebased onto the new #782; D8 is answered "Apagarlo igual" (L7), its findings
-fixed (L9, L10, L12), every code commit reviewed. Next: force-push #784, the lead told. After both merge (T5): a
-question through the lead to run `js-harness stack engram-prompt off` on his machine, then the engram
-`UserPromptSubmit` cell leaves `HOOK_CEILINGS`, then T6 (ROADMAP S4a State, summary, `notify --kind closed`).
+State (2026-11-07, JH 153): T1 to T4 are done, and #782 and #784 are on `main` (L13). Next, T5, when he is back: a
+question through the lead (`notify --kind question`) to run `js-harness stack engram-prompt off` on his machine. It
+names what the hook also does, which is save his prompts to engram (L3). After it is applied, the engram
+`UserPromptSubmit` cell leaves `HOOK_CEILINGS`, test first. Then T6: ROADMAP S4a State, a summary under
+`docs/sessions/`, `notify --kind closed`.
