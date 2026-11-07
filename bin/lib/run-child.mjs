@@ -71,14 +71,22 @@ export function handOff(command, args, { env = process.env, cwd, signal, spawn =
     const piped = !stdin.isTTY;
     const child = spawn(command, args, { env, cwd, stdio: piped ? ['pipe', 'inherit', 'inherit'] : 'inherit' });
     const passOn = (chunk) => child.stdin?.write(chunk);
+    // The end of the menu's input is the child's too, as it was on the inherited stdin (Codex P2).
+    const passEnd = () => child.stdin?.end();
     if (piped && child.stdin) {
       child.stdin.on('error', () => {}); // a child that exits before reading closes its end: nothing to pass on
-      stdin.on('data', passOn);
-      stdin.resume();
+      if (stdin.readableEnded) {
+        passEnd();
+      } else {
+        stdin.on('data', passOn);
+        stdin.on('end', passEnd);
+        stdin.resume();
+      }
     }
     const stopPassing = () => {
       if (!piped) return;
       stdin.removeListener('data', passOn);
+      stdin.removeListener('end', passEnd);
       stdin.pause();
       child.stdin?.end();
     };

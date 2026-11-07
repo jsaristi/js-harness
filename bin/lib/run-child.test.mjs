@@ -130,3 +130,22 @@ test('handOff gives a child its own stdin when the menu\'s is no terminal, and p
   assert.equal(stdin.listenerCount('data'), 0, 'nothing is passed on once it ended');
   assert.equal(stdin.isPaused(), true, 'the menu\'s stdin is left paused, as the menu paused it before the hand-off');
 });
+
+// Codex P2 on d57849e..b786072: the relay passed the keys on but not the end of the menu's input, so a command that
+// reads its stdin to the end waited for good.
+test('handOff passes the end of the menu\'s input on to the child, before the hand-off or during it', async () => {
+  const { PassThrough } = await import('node:stream');
+  const spawn = (command, args, opts) => realSpawn(command, args, { ...opts, stdio: [opts.stdio[0], 'ignore', 'ignore'] });
+  // The child counts what it read once its stdin ends: its exit code.
+  const toTheEnd = ['-e', "let n = 0; process.stdin.on('data', (d) => { n += d.length; }); process.stdin.on('end', () => process.exit(n));"];
+  const during = new PassThrough();
+  const ending = handOff(node, toTheEnd, { spawn, stdin: during });
+  during.end('ab');
+  assert.deepEqual(await ending, { code: 2 }, 'the end came while it ran');
+  const before = new PassThrough();
+  before.end();
+  before.resume();
+  await new Promise((resolve) => before.on('end', resolve));
+  assert.deepEqual(await handOff(node, toTheEnd, { spawn, stdin: before }), { code: 0 }, 'the input had already ended');
+  assert.equal(during.listenerCount('end'), 0, 'nothing listens once it ended');
+});
