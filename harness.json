@@ -12,6 +12,7 @@
   "sameTree": "skip",
   "sensorsInWsl": true,
   "exactTests": "skip",
+  "hookCount": true,
   "functions": {
     "pushUnasked": "on",
     "lensReview": "on"

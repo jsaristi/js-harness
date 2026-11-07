@@ -5816,3 +5816,22 @@ test('check --push gives no row rules where the remote has no default branch to 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('main fails the hook entries row where harness.json says "hookCount": true and the machine has one Stop entry too many', async () => {
+  const dir = makeTmpDir();
+  const home = makeTmpDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat(400));
+    fs.writeFileSync(path.join(dir, 'harness.json'), JSON.stringify({ hookCount: true }));
+    const stop = Array.from({ length: 4 }, (_, i) => ({ type: 'command', command: `js-harness stop-${i} --hook || exit 0` }));
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'settings.json'), JSON.stringify({ hooks: { Stop: [{ hooks: stop }] } }));
+    const { code, output } = await runCheck(['--cwd', dir, '--home', home], { JS_HARNESS_CHECK_INNER: '1' });
+    assert.equal(code, 1);
+    assert.match(output, /FAIL\s+hook entries\s+4 entries in this home and project: js-harness 4; 1 over the table/);
+    assert.match(output, /js-harness Stop: 4 entries, over its ceiling of 3/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
