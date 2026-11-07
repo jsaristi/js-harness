@@ -232,6 +232,8 @@ test('--html writes the status page with the map since the last mark and the not
   assert.match(page, /One[\s\S]*1\/2[\s\S]*2\/2 · 100 %[\s\S]*cerrada/);
   assert.match(page, /Cerrar One[\s\S]*nada queda[\s\S]*del orquestador/);
   assert.match(page, /6\. Lo que propongo/);
+  assert.match(page, /<header>.*Generada el <time datetime="2026-10-20T14:00:00.000Z">2026-10-20 09:00<\/time> \(hora local, UTC-05:00\)<span data-ago="2026-10-20T14:00:00.000Z"><\/span>/, 'the page says when it was made, as the live board does');
+  assert.match(page, /<script>/, 'and how long ago, counted where it is shown');
   const head = git(project.repo, ['rev-parse', 'main']).trim();
   assert.deepEqual(calls, [{ template: 'status-report', subject: 'status', path: html, at: '2026-10-20T14:00:00.000Z', head }]);
   assert.match(out.join('\n'), /in the rendered record/);

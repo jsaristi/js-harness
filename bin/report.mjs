@@ -190,7 +190,7 @@ export async function reportMain(argv, options = {}) {
     const file = path.resolve(cwd, parsed.html);
     try {
       fileSystem.mkdirSync(path.dirname(file), { recursive: true });
-      fileSystem.writeFileSync(file, renderStatus({ cut, branch: name, landed, sessions, questions, map, before, steps, stretch, notes }), 'utf8');
+      fileSystem.writeFileSync(file, renderStatus({ cut, branch: name, landed, sessions, questions, map, before, steps, stretch, notes }, { generatedAt: at }), 'utf8');
     } catch (err) {
       stderr(`js-harness report: the page ${file} could not be written: ${err.code ?? err.message}`);
       return 1;

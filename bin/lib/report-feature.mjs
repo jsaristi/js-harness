@@ -217,13 +217,14 @@ function mapHtml(view) {
   return mapSection(view.map);
 }
 
-/** The page of a feature's close, in Spanish. */
-export function renderFeature(view) {
-  // The zone is said once, at the first time the page shows: a merge, else a failed gate.
+/** The page of a feature's close, in Spanish; `generatedAt`, when the page is made, says so with how long ago. */
+export function renderFeature(view, { generatedAt = null } = {}) {
+  // The zone is said once: by when the page was made, else at the first time it shows, a merge or a failed gate.
   const shown = [...(view.prs.unknown ? [] : view.prs.map((pr) => pr.at)), ...(view.failures.runs ?? []).map((one) => Date.parse(one.startedAt))];
   return page({
     title: `Cierre de ${view.title}`,
     heading: `Cierre de ${view.title}`,
+    generatedAt,
     zoneAt: shown[0] ?? null,
     lead: `Lo que prometió ${view.path} y lo que entregó, sus pull requests, el tiempo, las revisiones, el gasto, los fallos y el mapa, de git y de los registros.`,
     sections: [
