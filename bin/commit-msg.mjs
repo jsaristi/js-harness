@@ -7,10 +7,11 @@
 // Exit 2: a usage error. It imports node's own modules and `lib/atomic-write.mjs` alone, so this repository's hook
 // runs this file directly.
 import { spawnSync } from 'node:child_process';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { renameOver } from './lib/atomic-write.mjs';
+import { replaceFile } from './lib/atomic-write.mjs';
+
+export { replaceFile };
 
 const USAGE = [
   'Usage: js-harness commit-msg <file>',
@@ -93,31 +94,6 @@ export function stripAttribution(text, { comments = ['#'] } = {}) {
   const lines = pieces.map((piece) => piece.replace(/\r?\n$/, ''));
   const gone = new Set(trailerLines(lines, comments).filter((i) => hostLine(lines[i])));
   return { text: pieces.filter((_, i) => !gone.has(i)).join(''), removed: lines.filter((_, i) => gone.has(i)) };
-}
-
-/** Writes `buffer` over `file` whole or not at all: a fresh temporary sibling, then one rename over it (`renameOver`,
- * whose seams `deps` carries), so a write that fails halfway leaves the message git reads as it was. */
-export function replaceFile(file, buffer, deps = {}) {
-  const tmp = `${file}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
-  const fd = fs.openSync(tmp, 'wx');
-  let open = true;
-  try {
-    fs.writeFileSync(fd, buffer);
-    fs.closeSync(fd);
-    open = false;
-    renameOver(tmp, file, deps);
-  } catch (error) {
-    // Closed once only: a number closed again could by then name a file something else opened.
-    if (open) {
-      try {
-        fs.closeSync(fd);
-      } catch {
-        // The write's own error is the one to throw.
-      }
-    }
-    fs.rmSync(tmp, { force: true });
-    throw error;
-  }
 }
 
 function parse(argv) {

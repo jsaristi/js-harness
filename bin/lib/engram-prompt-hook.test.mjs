@@ -161,3 +161,31 @@ test('uninstall puts the prompt hook back and leaves no manifest', () => {
   assert.equal(fs.readFileSync(file, 'utf8'), HOOKS);
   assert.equal(readManifest(dir), null);
 });
+
+// Codex P2 over 8be4ac0..38c14c0: a write that truncated the hooks file and then threw (ENOSPC, EIO) lost the original
+// with its record. Both writes are whole or not at all: a failed rename leaves the file as it was, and no `.tmp` behind.
+const failedRename = () => { throw Object.assign(new Error('i/o'), { code: 'EIO' }); };
+const siblings = (file) => fs.readdirSync(path.dirname(file)).filter((name) => name.endsWith('.tmp'));
+
+test('off writes the hooks file whole or not at all, so a failed write leaves it and forgets nothing it needs', () => {
+  const { dir, file } = home();
+  const result = promptHookOff(dir, { rename: failedRename });
+  assert.equal(result.status, 'skipped');
+  assert.match(result.reason, /not writable \(EIO\)/);
+  assert.equal(fs.readFileSync(file, 'utf8'), HOOKS);
+  assert.deepEqual(siblings(file), []);
+  assert.equal(readManifest(dir), null, 'the file holds its original bytes, so no record is needed');
+});
+
+test('on writes the original back whole or not at all, so a failed write keeps the file as off left it and its record', () => {
+  const { dir, file } = home();
+  promptHookOff(dir);
+  const off = fs.readFileSync(file, 'utf8');
+  const failed = promptHookOn(dir, { rename: failedRename });
+  assert.deepEqual(failed.kept, [{ path: file, reason: 'failed', code: 'EIO' }]);
+  assert.equal(fs.readFileSync(file, 'utf8'), off);
+  assert.deepEqual(siblings(file), []);
+  assert.equal(readManifest(dir).pluginHooks.length, 1);
+  assert.deepEqual(promptHookOn(dir).restored, [file]);
+  assert.equal(fs.readFileSync(file, 'utf8'), HOOKS);
+});

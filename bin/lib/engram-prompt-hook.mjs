@@ -9,6 +9,7 @@
 // ./user-settings.mjs does.
 import fs from 'node:fs';
 import path from 'node:path';
+import { replaceFile } from './atomic-write.mjs';
 import { detectIndent, forgetPluginHook, keepRecord, readManifest, serializeJson } from './manifest.mjs';
 
 /** The plugin, as Claude Code's `installed_plugins.json` names it, and the event whose entry is taken out. */
@@ -29,12 +30,16 @@ export function engramHooksFile(home) {
 
 const samePath = (a, b) => (entry) => entry.path === a && entry.event === b;
 
+/** The default write of a hooks file: whole or not at all (`replaceFile`), so one that fails halfway (ENOSPC, EIO) leaves
+ * the bytes there before, which a record names. `rename` is its seam, for the tests. */
+const wholeOrNothing = (rename) => (file, text) => replaceFile(file, text, rename ? { rename } : {});
+
 /** Takes the `PROMPT_EVENT` entry out of engram's hooks file under `home` and records the file's bytes before and after
  * as `{ path, event, original, written, at }`. Returns `{ status, path }`: `off`; `already` when the file holds no such
  * entry (nothing written or recorded); `skipped` with a `reason` when there is no engram plugin, the file cannot be read
  * as a JSON object, its record cannot be kept (the file is not touched) or it cannot be written (the record is
  * forgotten). */
-export function promptHookOff(home, { writeFile = fs.writeFileSync, record: recordIt = keepRecord, forget = forgetPluginHook, now = () => new Date() } = {}) {
+export function promptHookOff(home, { rename, writeFile = wholeOrNothing(rename), record: recordIt = keepRecord, forget = forgetPluginHook, now = () => new Date() } = {}) {
   const file = engramHooksFile(home);
   if (file === null) return { status: 'skipped', path: null, reason: `no user-level install of ${ENGRAM_PLUGIN} in ${path.join(home, '.claude', 'plugins')}` };
   let raw;
@@ -63,7 +68,7 @@ export function promptHookOff(home, { writeFile = fs.writeFileSync, record: reco
   } catch (err) {
     try {
       forget(home, { path: file, event: PROMPT_EVENT });
-    } catch { /* the record names bytes the file does not hold, so `on` drops it as changed */ }
+    } catch { /* the file holds its original bytes, which the record names, so `on` drops it as changed */ }
     return { status: 'skipped', path: file, reason: `not writable (${err.code ?? err.message})` };
   }
   return { status: 'off', path: file, removed: Array.isArray(removed) ? removed.length : 1 };
@@ -73,7 +78,7 @@ export function promptHookOff(home, { writeFile = fs.writeFileSync, record: reco
  * wrote gets its original bytes again; one that is gone (ENOENT) or changed since (a plugin update, an edit) is left as
  * it is and named in `kept` with its `reason`; a read or write that fails any other way is named with `failed` and its
  * record returned in `failedRecords`, so a second run can finish it: that record is the only way back. */
-export function restorePluginHooks(records, { writeFile = fs.writeFileSync, readFile = fs.readFileSync } = {}) {
+export function restorePluginHooks(records, { rename, writeFile = wholeOrNothing(rename), readFile = fs.readFileSync } = {}) {
   const restored = [];
   const kept = [];
   const failedRecords = [];
