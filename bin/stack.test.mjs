@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { stackMain, readStack, resolveStackPm } from './stack.mjs';
+import { stackMain, readStack, resolveStackPm, undoHomeWord } from './stack.mjs';
 import { plainCount } from './lib/stack-backup-walk.mjs';
 
 const ON = { codeMap: { value: 'auto' }, codexReview: { value: 'on' }, languageServer: { value: 'on' } };
@@ -303,6 +303,18 @@ test('stack backup restore asks on a terminal and restores only on y', async () 
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('undoHomeWord gives sh back a home with a backslash, which sh would read as an escape if it stayed bare', (t) => {
+  // The lens finding over 30725d2..57fcab9: a POSIX home such as /tmp/a\b passed the plain-word shortcut unquoted.
+  for (const home of ['/tmp/a\\b', '/tmp/plain-home', "/tmp/it's $HOME"]) {
+    const ran = spawnSync('sh', ['-c', `printf '%s\\n' ${undoHomeWord(home, 'linux')}`], { encoding: 'utf8' });
+    if (ran.error?.code === 'ENOENT') return t.skip('sh is not on this machine');
+    assert.equal(ran.status, 0, ran.stderr);
+    assert.equal(ran.stdout.replace(/\r?\n$/, ''), home);
+  }
+  assert.equal(undoHomeWord('/tmp/plain-home', 'linux'), '/tmp/plain-home');
+  assert.equal(undoHomeWord('C:\\Users\\me', 'win32'), 'C:\\Users\\me');
 });
 
 test('stack engram-prompt off takes the prompt hook out of a scratch home, on puts it back, and a bad form is a usage error', async (t) => {

@@ -584,6 +584,15 @@ function stackEngramPromptMain(argv, env, deps) {
   }
 }
 
+/** `home` as the shell an undo line is pasted into reads it back: a plain word as it is, any other as `shellWord`
+ * writes it for `platform`, PowerShell on win32 and sh elsewhere. A backslash is plain only on win32, where it
+ * separates the path; sh reads it as an escape. Limit: on win32 a home holding `$` or a backtick comes out in single
+ * quotes, which cmd.exe does not read; cmd.exe needs the form `cmdExeWord` gives. */
+export function undoHomeWord(home, platform = process.platform) {
+  const plain = platform === 'win32' ? /^[\w@+=:,./\\-]+$/ : /^[\w@+=:,./-]+$/;
+  return plain.test(home) ? home : shellWord(home, platform);
+}
+
 /** The work of `stack engram-prompt off|on` once its arguments are read, as an exit code. */
 function engramPromptForm(form, home, given, said, log, error) {
   if (form === 'off') {
@@ -595,13 +604,7 @@ function engramPromptForm(form, home, given, said, log, error) {
     if (result.status === 'already') log(`${said} already off: ${result.path} holds no UserPromptSubmit hook`);
     else {
       log(`${said} took the UserPromptSubmit hook out of ${result.path}; restart Claude Code for it to take effect`);
-      // The resolved home as the shell the line is pasted into reads it back: a plain word as it is, any other as
-      // `shellWord` writes it for this platform, PowerShell on win32 (a single quote doubled, `''`) and sh elsewhere
-      // (`'\''`): the one form that serves both failed three reviews (JSON, then POSIX quotes, Codex at 0.99 over
-      // f87e2d6..30725d2). On win32 a home holding `$` or a backtick lands in single quotes, which cmd.exe does not
-      // read: that shell gets the double-quoted form `cmdExeWord` gives, which this line does not print.
-      const word = /^[\w@+=:,./\\-]+$/.test(home) ? home : shellWord(home);
-      log(`  undo: js-harness stack engram-prompt on${given === undefined ? '' : ` --home ${word}`}`);
+      log(`  undo: js-harness stack engram-prompt on${given === undefined ? '' : ` --home ${undoHomeWord(home)}`}`);
     }
     return 0;
   }
