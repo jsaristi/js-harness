@@ -51,8 +51,7 @@ Outside a git repository the menu shows only the machine items. Inside one, a **
 | Doctor | machine | Each tool of the stack: installed, configured, up to date, and the fix for each gap (`js-harness doctor`). |
 | Install the stack | machine, while a required tool is missing | Runs `js-harness stack install`: each install is shown with its undo and asked y/N. |
 | Install | machine | Writes the skills and session hooks for Claude Code under your home, nothing for Codex, which only reviews (`js-harness install`). |
-| Update | machine | Says whether a newer release exists, and which tools of the stack are behind their latest release (`js-harness update`). Runs nothing. |
-| Upgrade | machine | Installs the newer release and syncs the home, then updates each tool of the stack behind its latest release, each shown with its undo and asked y/N (`js-harness upgrade`); open the menu again afterwards to run the new code. |
+| Update | machine | Installs the newer release and syncs the home, then updates each tool of the stack behind its latest release, each shown with its undo and asked y/N on the terminal itself (`js-harness upgrade`); open the menu again afterwards to run the new code. What is newer is named at the top of the menu, on a `New:` line, once it is read after the menu opens. |
 | Uninstall | machine | Opens a submenu of the kinds of uninstall, below. Each asks y/N and says what it removes and keeps. |
 | Quit | machine | Leaves the menu. |
 
@@ -84,7 +83,7 @@ Once per machine:
    install and `engram setup claude-code`, logins, and `git` and `gh`. `js-harness stack` alone lists the same,
    read-only.
 
-To keep the stack current, **`js-harness upgrade`** (or the menu's Upgrade) runs `js-harness stack upgrade` after the
+To keep the stack current, **`js-harness upgrade`** (or the menu's Update) runs `js-harness stack upgrade` after the
 harness: the engram binary from its GitHub release (its sha256 checked against the release's `checksums.txt`, the old
 one kept beside it as `engram-<version>.exe.bak`), then its Claude Code plugin, then codegraph and the Codex CLI by your
 package manager, each asked y/N and recorded first. `uninstall machine` puts the engram binary and the packages back to

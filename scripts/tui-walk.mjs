@@ -143,15 +143,35 @@ async function main() {
     return screenOf(out);
   }
 
-  async function step(name, { section, label, answer, expect, menu }) {
+  /** Presses Enter on an item handed the terminal (`handoff`, odd/tasks/stack-upgrade.md, S2): the command writes to
+   * the walk's own pipe and the menu draws nothing until its "<item> ended (exit N)" prompt, so its output is what
+   * came before that prompt, never a result screen, which holds only the hand-off notice. */
+  async function handedOff() {
+    const start = out.length;
+    child.stdin.write(KEY.enter);
+    const until = Date.now() + STEP_MS;
+    while (!/ ended \(exit [^)]*\)\. Press Enter to go back to the menu\./.test(out.slice(start))) {
+      if (Date.now() > until) throw new Error(`no "ended" prompt ${STEP_MS / 1000} s after the item was handed the terminal`);
+      if (child.exitCode !== null) break;
+      await sleep(50);
+    }
+    return out.slice(start);
+  }
+
+  async function step(name, { section, label, answer, expect, menu, handoff = false }) {
     const from = out.length;
     await select(section, label);
     // A prompt is a menu draw; the run is not: it ends on a result screen, whose last frame holds the whole log (the
-    // window is 2000 rows tall), and Enter goes back to the menu.
+    // window is 2000 rows tall), and Enter goes back to the menu. An item handed the terminal ends on its prompt
+    // instead, whose Enter brings the result screen.
     if (answer) await press(KEY.enter);
     const key = answer ?? KEY.enter;
     let said;
-    if (key === KEY.no) {
+    if (handoff) {
+      said = await handedOff();
+      await runToResult(KEY.enter);
+      await press(KEY.enter);
+    } else if (key === KEY.no) {
       const start = out.length;
       await press(key);
       said = out.slice(start);
@@ -202,7 +222,6 @@ async function main() {
     await step('Install', { section: M, label: 'Install', expect: new RegExp(`installed js-harness ${current.replace(/\./g, '\\.')}`) });
     await step('Status after install', { section: M, label: 'Status', expect: new RegExp(current.replace(/\./g, '\\.')) });
     await step('Doctor', { section: M, label: 'Doctor', expect: /\S/ });
-    await step('Update', { section: M, label: 'Update', expect: new RegExp(newer.replace(/\./g, '\\.')) });
     await step('Init', { section: P, label: 'Init', menu: /project\/Sync, project\/Status, project\/Remote status/ });
     await step('Project sync', { section: P, label: 'Sync', expect: /\S/ });
     await step('Project status', { section: P, label: 'Status', expect: /\S/ });
@@ -212,13 +231,14 @@ async function main() {
     await step('Remote status while started', { section: P, label: 'Remote status', expect: /^remote: running \(supervisor pid \d+/m });
     await step('Remote stop', { section: P, label: 'Remote stop', answer: KEY.yes, expect: /^remote: stopped for /m });
     await uninstallKind('Project uninstall', 'Project', { answer: KEY.yes, menu: /project\/Init/ });
-    await step('Upgrade', { section: M, label: 'Upgrade', expect: new RegExp(`upgraded to ${newer.replace(/\./g, '\\.')}`) });
+    // Update runs `upgrade` handed the terminal; without one the stack's tools are listed, never run (S2 b).
+    await step('Update', { section: M, label: 'Update', handoff: true, expect: new RegExp(`upgraded to ${newer.replace(/\./g, '\\.')}`) });
     {
       // The menu keeps running the old code: its header says so instead of offering the update again (F1).
       const header = screenOf(out)[0];
       const want = `js-harness ${current}  (${newer} installed: quit and open js-harness again to use it)`;
-      results.push({ name: 'header after Upgrade', ok: header === want, faults: header === want ? [] : [`header is ${JSON.stringify(header)}`], said: header });
-      console.log(`${header === want ? 'PASS' : 'FAIL'}  header after Upgrade${header === want ? '' : `: ${header}`}`);
+      results.push({ name: 'header after Update', ok: header === want, faults: header === want ? [] : [`header is ${JSON.stringify(header)}`], said: header });
+      console.log(`${header === want ? 'PASS' : 'FAIL'}  header after Update${header === want ? '' : `: ${header}`}`);
     }
     await uninstallKind('Uninstall, answered no', 'Machine', { answer: KEY.no });
     await uninstallKind('Uninstall', 'Machine', { answer: KEY.yes, expect: /remov|uninstall/i });

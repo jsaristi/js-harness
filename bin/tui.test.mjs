@@ -20,6 +20,8 @@ import {
   buildCommands,
   childCommands,
   commandArgv,
+  computeNewer,
+  stackReads,
   startRun,
   appendRunOutput,
   finishRun,
@@ -170,6 +172,27 @@ test('runTui reads the update again after a command: an Upgrade that installed t
   await backToMenu(stdin, stdout);
   assert.match(screen(stdout), /^js-harness 1\.0\.0 {2}\(1\.1\.0 installed: quit and open js-harness again to use it\)$/m);
   assert.doesNotMatch(screen(stdout), /update available/);
+  stdin.emit('data', 'q');
+  assert.equal(await done, 0);
+});
+
+test('runTui says what is newer once a loader reads it, and reads it again after a command, so an Update clears it', async () => {
+  const stdin = makeFakeStdin();
+  const stdout = makeFakeStdout();
+  let updated = false;
+  const done = runTui({
+    installedVersion: '1.0.0',
+    updateAvailable: null,
+    readStackView: async () => ({ stack: [], stackGap: false, newer: updated ? [] : [{ tool: 'engram', to: '1.2.0' }] }),
+    loaders: [async () => ({ newer: [{ tool: 'engram', to: '1.2.0' }] })],
+    commands: { ...noCommands, status: async () => { updated = true; } },
+    stdin,
+    stdout,
+  });
+  await until(() => screen(stdout).includes('New: engram 1.2.0'), 'the newer engram at the top');
+  stdin.emit('data', '\r');
+  await backToMenu(stdin, stdout);
+  assert.doesNotMatch(screen(stdout), /New:/);
   stdin.emit('data', 'q');
   assert.equal(await done, 0);
 });
@@ -480,7 +503,8 @@ test('tuiMain shows the update a named source folder holds, and its commands rea
 
     assert.equal(code, 0);
 
-    const { result, lines } = await silently(() => buildCommands({ home: nonGitDir, source, env: {}, spawn, stack: async () => 0 }).update());
+    // Update now installs (S2 b): Status is the command that only reads the release.
+    const { result, lines } = await silently(() => buildCommands({ home: nonGitDir, source, env: {}, spawn }).status());
     assert.equal(result, 0);
     assert.match(lines.join('\n'), /update available: 99\.0\.0/);
   } finally {
@@ -663,7 +687,7 @@ test('runTui reads every key of a chunk, and an Esc alone leaves the submenu onc
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.match(screen(stdout), /^> Uninstall$/m, 'then it is Back');
   stdin.emit('data', '\u001b[A');
-  assert.match(screen(stdout), /^> Upgrade$/m, 'an arrow is never an Esc');
+  assert.match(screen(stdout), /^> Update$/m, 'an arrow is never an Esc');
   stdin.emit('data', 'q');
   await done;
 });
@@ -1195,8 +1219,135 @@ test('buildMenu is exactly today\'s machine menu outside a git repository', () =
   }
   assert.deepEqual(
     buildMenu(NOT_GIT).map((entry) => entry.label),
-    ['Status', 'Doctor', 'Install', 'Update', 'Upgrade', 'Uninstall', 'Quit'],
+    ['Status', 'Doctor', 'Install', 'Update', 'Uninstall', 'Quit'],
   );
+});
+
+// odd/tasks/stack-upgrade.md, S2 (b): the menu had Update and Upgrade, which he saw work the same; one item runs
+// `js-harness upgrade`, the harness and then the stack, each tool asked y/N on the terminal itself.
+test('the menu has one Update item, and it runs upgrade handed the terminal', async () => {
+  assert.equal(MENU_ITEMS.includes('upgrade'), false);
+  assert.deepEqual(commandArgv('update', { home: '/h', source: '/s' }), ['upgrade', '--home', '/h', '--source', '/s']);
+  const runs = [];
+  const commands = childCommands({
+    home: '/h', cwd: '/c', env: process.env,
+    runChild: async (command, args) => { runs.push({ command, args, piped: true }); return { code: 0, cancelled: false }; },
+    handOff: async (command, args) => { runs.push({ command, args, handoff: true }); return { code: 0 }; },
+  });
+  assert.equal(commands.update.handoff, true);
+  assert.equal(commands.upgrade, undefined, 'no item runs upgrade apart');
+  await commands.update();
+  assert.deepEqual(runs, [{ command: process.execPath, args: [path.join(import.meta.dirname, 'js-harness.mjs'), 'upgrade', '--home', '/h'], handoff: true }]);
+});
+
+test('Update in this process runs upgradeAll, the harness and then the stack with the menu\'s ask', async () => {
+  const asked = [];
+  const stackCalls = [];
+  const commands = buildCommands({
+    home: nonGitDir, env: {}, spawn: () => ({ status: 0, stdout: '', stderr: '' }),
+    upgradeAll: async (argv, env, spawn, platform, options) => { stackCalls.push({ argv, ask: options.ask }); return 0; },
+  });
+  const ask = async (question) => { asked.push(question); return false; };
+  assert.equal(await commands.update(undefined, { ask }), 0);
+  assert.deepEqual(stackCalls, [{ argv: ['--home', nonGitDir], ask }]);
+});
+
+// S2 (c): what is newer, said at the top of the menu once it is read.
+test('render says at the top what is newer, the harness beside the stack, and names Update', () => {
+  const state = { ...initialState({ installedVersion: '0.1.0', updateAvailable: '0.2.0' }), newer: [{ tool: 'engram', to: '1.2.0' }, { tool: 'engram-plugin', to: null }, { tool: 'codegraph', to: '1.7.0' }] };
+  assert.equal(render(state)[1], 'New: js-harness 0.2.0, engram 1.2.0, engram-plugin, codegraph 1.7.0. Choose Update to install them.');
+  const stackOnly = { ...initialState({ installedVersion: '0.1.0', updateAvailable: null }), newer: [{ tool: 'codex', to: '0.9.0' }] };
+  assert.equal(render(stackOnly)[1], 'New: codex 0.9.0. Choose Update to install it.');
+  const harnessOnly = initialState({ installedVersion: '0.1.0', updateAvailable: '0.2.0' });
+  assert.equal(render(harnessOnly)[1], 'New: js-harness 0.2.0. Choose Update to install it.');
+  // A copy already installed waits for the menu to reopen, so the harness is not new; nothing new says nothing.
+  const reopen = { ...initialState({ installedVersion: '1.0.0', updateAvailable: null, installedCopy: '1.1.0' }), newer: [] };
+  assert.ok(!render(reopen).join('\n').includes('New:'));
+  assert.ok(!render(initialState({ installedVersion: '0.1.0', updateAvailable: null })).join('\n').includes('New:'));
+});
+
+test('computeNewer plans the probed rows against their latest versions; a lookup that fails says nothing new', async () => {
+  const rows = [
+    { id: 'engram', installed: 'ok', version: '1.0.0' },
+    { id: 'engram-plugin', installed: 'ok', version: '1.0.0' },
+    { id: 'codegraph', installed: 'ok', version: '1.7.0' },
+    { id: 'codex', installed: 'missing', version: null },
+  ];
+  const looked = [];
+  const latest = async (asked) => { looked.push(asked.map((row) => row.id)); return { engram: '1.2.0', 'engram-plugin': '1.2.0', codegraph: '1.7.0' }; };
+  const functions = { codegraph: true, codex: true, engram: true };
+  const { newer } = await computeNewer({ rows, functions, pm: 'npm', platform: 'win32', arch: 'x64', resolveLatest: latest });
+  assert.deepEqual(newer, [{ tool: 'engram', to: '1.2.0' }, { tool: 'engram-plugin', to: null }]);
+  assert.deepEqual(looked, [['engram', 'engram-plugin', 'codegraph', 'codex']], 'every probed row is looked up, as doctor does, so its cache stays whole');
+  assert.deepEqual(await computeNewer({ rows: [rows[3]], functions, resolveLatest: async () => { throw new Error('looked up'); } }), { newer: [] }, 'nothing installed, nothing looked up');
+  assert.deepEqual(await computeNewer({ rows, functions, resolveLatest: async () => { throw new Error('offline'); } }), { newer: [] });
+});
+
+// Codex P2 on 1954ed4..bcaa83c: a menu closed while the lookup waits on a slow network kept the shell until each
+// request's own five-second timeout ran out.
+test('computeNewer stops its lookups when its signal aborts, without waiting for their timeouts', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-newer-'));
+  try {
+    const controller = new AbortController();
+    const seen = [];
+    const fetchImpl = (url, options = {}) => {
+      seen.push(url);
+      return new Promise((_, reject) => options.signal.addEventListener('abort', () => reject(new Error('aborted'))));
+    };
+    const rows = [{ id: 'codegraph', installed: 'ok', version: '1.7.0' }];
+    const looking = computeNewer({ rows, functions: { codegraph: true }, pm: 'npm', platform: 'win32', arch: 'x64', home, fetch: fetchImpl, signal: controller.signal });
+    await until(() => seen.length > 0, 'the lookup started');
+    controller.abort();
+    const raced = await Promise.race([looking, new Promise((resolve) => setTimeout(() => resolve('still waiting'), 1000))]);
+    assert.deepEqual(raced, { newer: [] }, 'the abort ends the lookup, which says nothing new');
+    const fetched = seen.length;
+    assert.deepEqual(await computeNewer({ rows, functions: { codegraph: true }, pm: 'npm', home, fetch: fetchImpl, signal: controller.signal }), { newer: [] });
+    assert.equal(seen.length, fetched, 'an aborted signal starts no lookup');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Codex P2 on 1954ed4..bcaa83c: a command that refreshed the stack while the first lookup ran was undone by it, since
+// the lookup planned the rows probed before the command and wrote them over the refresh.
+test('stackReads: a read begun before a command\'s refresh never writes the rows that refresh replaced', async () => {
+  const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
+  const before = { stack: [{ id: 'engram', version: '1.0.0' }], stackGap: false, rows: 'before' };
+  const after = { stack: [{ id: 'engram', version: '1.2.0' }], stackGap: false, rows: 'after' };
+  const probes = [before, after];
+  const firstProbe = deferred();
+  const online = deferred();
+  const asked = [];
+  let probed = 0;
+  const reads = stackReads({
+    probe: () => (probed++ === 0 ? firstProbe.promise : Promise.resolve(probes[1])),
+    newer: (view, { offline, signal }) => {
+      asked.push({ rows: view.rows, offline, signal: signal !== undefined });
+      if (!offline) return online.promise;
+      return Promise.resolve({ newer: view.rows === 'before' ? [{ tool: 'engram', to: '1.2.0' }] : [] });
+    },
+  });
+  const signal = new AbortController().signal;
+  const stack = reads.loadStack();
+  const newer = reads.loadNewer({ signal });
+  // An Update ran and its refresh read the stack again before the first probe and the lookup came back.
+  assert.deepEqual(await reads.readStackView(), { stack: after.stack, stackGap: false, newer: [] });
+  firstProbe.resolve(before);
+  assert.equal(await stack, null, 'the first stack block is older than the refresh: nothing to apply');
+  online.resolve({ newer: [{ tool: 'engram', to: '1.2.0' }] });
+  assert.deepEqual(await newer, { newer: [] }, 'what is newer is planned again from the refreshed rows');
+  assert.deepEqual(asked, [
+    { rows: 'after', offline: true, signal: false },
+    { rows: 'before', offline: false, signal: true },
+    { rows: 'after', offline: true, signal: false },
+  ]);
+
+  // With no command in between, what the first reads found is applied as it is.
+  let calls = 0;
+  const quiet = stackReads({ probe: async () => { calls++; return before; }, newer: async (view) => ({ newer: [{ tool: 'engram', to: '1.2.0' }] }) });
+  assert.deepEqual(await quiet.loadStack(), { stack: before.stack, stackGap: false });
+  assert.deepEqual(await quiet.loadNewer(), { newer: [{ tool: 'engram', to: '1.2.0' }] });
+  assert.equal(calls, 1, 'opening the menu probes once');
 });
 
 test('buildMenu offers Init, then the machine section, in a repository that is not initialized', () => {
@@ -1992,15 +2143,15 @@ test('childCommands runs every item as a child js-harness command line, and hand
 test('every menu item runs a command the real js-harness has', () => {
   const cli = path.join(import.meta.dirname, 'js-harness.mjs');
   const location = { kind: 'initialized', root: nonGitDir };
-  for (const id of ['project-init', 'project-sync', 'project-status', 'uninstall-project', 'status', 'doctor', 'stack-install', 'install', 'update', 'upgrade', 'sync', 'uninstall-machine', 'uninstall-snapshots', 'uninstall-everything']) {
+  for (const id of ['project-init', 'project-sync', 'project-status', 'uninstall-project', 'status', 'doctor', 'stack-install', 'install', 'update', 'sync', 'uninstall-machine', 'uninstall-snapshots', 'uninstall-everything']) {
     const [command] = commandArgv(id, { home: nonGitDir, cwd: nonGitDir, location });
     const result = spawnSync(process.execPath, [cli, command, '--help'], { encoding: 'utf8', env: { ...process.env, JS_HARNESS_HOME: nonGitDir } });
     assert.equal(result.status, 0, `${id}: ${command} --help exited ${result.status}: ${result.stderr}`);
   }
 });
 
-// odd/tasks/stack-upgrade.md, S1: Update and Upgrade reach the stack, and Upgrade asks through the menu.
-test('buildCommands Upgrade hands the stack step the menu\'s ask, and Update reads the stack without one', async () => {
+// odd/tasks/stack-upgrade.md, S1 and S2 b: Update upgrades, so it reaches the stack and asks through the menu.
+test('buildCommands Update hands the stack step the menu\'s ask', async () => {
   const source = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-stack-'));
   try {
     fs.writeFileSync(path.join(source, `js-harness-${currentVersion()}.tgz`), '');
@@ -2011,11 +2162,9 @@ test('buildCommands Upgrade hands the stack step the menu\'s ask, and Update rea
     };
     const ask = async () => true;
     const commands = buildCommands({ home: nonGitDir, source, env: {}, spawn: () => ({ status: 0, stdout: '', stderr: '' }), stack });
-    const upgraded = await silently(() => commands.upgrade({ kind: 'notGit' }, { ask }));
-    assert.equal(upgraded.result, 0);
-    const updated = await silently(() => commands.update());
+    const updated = await silently(() => commands.update({ kind: 'notGit' }, { ask }));
     assert.equal(updated.result, 0);
-    assert.deepEqual(calls, [{ home: nonGitDir, ask, list: false }, { home: nonGitDir, ask: undefined, list: true }]);
+    assert.deepEqual(calls, [{ home: nonGitDir, ask, list: false }]);
   } finally {
     fs.rmSync(source, { recursive: true, force: true });
   }
