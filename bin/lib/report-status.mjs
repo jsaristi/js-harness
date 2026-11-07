@@ -212,11 +212,13 @@ function proposedHtml(cut, landed) {
 /** The page of a status report from the facts `report` reads (`cut`, `branch`, `landed`, `sessions`, `questions`,
  * `map`), the map before (`{ map }`, `{ unavailable }` or `null`), each plan step by step (`comparePlans`, or
  * `{ unavailable }`; left out, none is shown), the last stretch since the cut (`reportStretch`: the view, `null` or
- * `{ unavailable }`; left out, none is shown) and the lead's notes (`notesOf`, or `null`). */
-export function renderStatus({ cut, branch, landed, sessions, questions, map, before, steps, stretch, notes }) {
+ * `{ unavailable }`; left out, none is shown) and the lead's notes (`notesOf`, or `null`); `generatedAt`, when the page is
+ * made, says so with how long ago, as the live board does. */
+export function renderStatus({ cut, branch, landed, sessions, questions, map, before, steps, stretch, notes }, { generatedAt = null } = {}) {
   return page({
     title: 'Cómo vamos',
     heading: 'Cómo vamos desde el último reporte',
+    generatedAt,
     zoneAt: cut.at,
     lead: `Desde ${stamp(cut.at)}. Lo que entró, las sesiones, el mapa y las preguntas salen de git y del registro; tus decisiones, lo que espera y lo que propongo, de las notas del orquestador.`,
     badNews: notes?.badNews ?? [],

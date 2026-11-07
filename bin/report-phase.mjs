@@ -86,7 +86,7 @@ export async function reportPhaseMain(argv, { cwd: defaultCwd = process.cwd(), s
     const file = path.resolve(cwd, parsed.html);
     try {
       fileSystem.mkdirSync(path.dirname(file), { recursive: true });
-      fileSystem.writeFileSync(file, renderPhase(view), 'utf8');
+      fileSystem.writeFileSync(file, renderPhase(view, { generatedAt: at }), 'utf8');
     } catch (err) {
       stderr(`js-harness report phase: the page ${file} could not be written: ${err.code ?? err.message}`);
       return 1;

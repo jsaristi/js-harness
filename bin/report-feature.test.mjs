@@ -68,6 +68,7 @@ test('report feature writes the close of a feature from its document, git and th
   assert.equal(result.code, 0, result.err);
   const page = fs.readFileSync(html, 'utf8');
   assert.match(page, /^<title>Cierre de feature-x<\/title>/);
+  assert.match(page, /Generada el <time datetime="2026-10-29T04:00:00.000Z">.*<span data-ago="2026-10-29T04:00:00.000Z">/, 'the page says when it was made');
   assert.match(page, /1\. The page\./);
   assert.match(page, /PR 7 · feat\/x/);
   assert.match(page, /2\.5 h reales[\s\S]*sin estimado registrado/);

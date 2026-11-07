@@ -58,6 +58,7 @@ test('report phase with no before writes the whole map now, says it has no befor
   const page = fs.readFileSync(html, 'utf8');
   assert.match(page, /^<title>Cambio de fase<\/title>/);
   assert.match(page, /Esta vez no hay un antes/);
+  assert.match(page, /Generada el <time datetime="2026-10-29T04:00:00.000Z">.*<span data-ago="2026-10-29T04:00:00.000Z">/, 'the page says when it was made');
   assert.match(page, /F1 Skeleton[\s\S]*2\/2 · 100 %/);
   const last = readPages(pagesFile(place.home, place.slug)).at(-1);
   assert.equal(last.kind, 'phase');

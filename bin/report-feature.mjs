@@ -207,7 +207,7 @@ export async function reportFeatureMain(argv, { cwd: defaultCwd = process.cwd(),
     const file = path.resolve(cwd, parsed.html);
     try {
       fileSystem.mkdirSync(path.dirname(file), { recursive: true });
-      fileSystem.writeFileSync(file, renderFeature(view), 'utf8');
+      fileSystem.writeFileSync(file, renderFeature(view, { generatedAt: at }), 'utf8');
     } catch (err) {
       return fail(`the page ${file} could not be written: ${err.code ?? err.message}`);
     }

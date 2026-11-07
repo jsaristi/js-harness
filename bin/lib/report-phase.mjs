@@ -39,8 +39,8 @@ export function phaseNumbers(view) {
   };
 }
 
-/** The phase's change as a page, in Spanish. */
-export function renderPhase(view) {
+/** The phase's change as a page, in Spanish; `generatedAt`, when the page is made, says so with how long ago. */
+export function renderPhase(view, { generatedAt = null } = {}) {
   const why = view.head.before === null ? 'ninguna página de fase quedó guardada y no se dio --since' : `git no pudo leer ${view.unavailable.before}`;
   const badNews = view.unavailable.before ? [`Esta vez no hay un antes con qué comparar: ${why}. El mapa de ahora se muestra entero y nada se marca como cambiado.`] : [];
   const closed = view.unavailable.before
@@ -55,6 +55,7 @@ export function renderPhase(view) {
   const before = view.head.before === null ? 'sin antes' : `antes ${view.head.before.slice(0, 8)}`;
   return page({
     title: 'Cambio de fase',
+    generatedAt,
     heading: 'El mapa entero, fase por fase',
     lead: `La rama principal en ${view.head.now.slice(0, 8)}, ${before}. Leído de la hoja de ruta y de git, no escrito a mano.`,
     badNews,
