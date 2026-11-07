@@ -166,13 +166,22 @@ the question names that.
   `node --test` over engram-prompt-hook, stack, install, manifest, hook-count, conventions and readme: 398 of 398.
   The lead asked for 772 against this PR: neither row covers the other, both create `bin/lib/hook-count.mjs`; the
   answer (fold 782 into 772's module after the series) is in the shared notes, `jh153-772-vs-782.md`.
+- L10 (2026-11-07, 00:20Z on): by rule `escalation-model` the lead started JH 155 on claude-fable-5-1 for the undo
+  line (brief `jh153-d8-fable-brief.md` in the shared notes). It committed `57fcab96`: the line uses `shellWord`
+  (PowerShell `''` on win32, sh `'\''` elsewhere) and the test pastes it into the real shell (red 19/1, green 157).
+  Checked here: 168 of 168 over stack, package-manager, install, engram-prompt-hook and conventions. Codex, a fresh
+  review from `932bbd6` as the tool asked after three rounds: correct, 0.93. Lenses reliability and readability over
+  `30725d2..57fcab9`: a readability WARNING (a backslash stayed bare on POSIX, where sh reads it as an escape) and a
+  SUGGESTION (review history in the comment); both fixed in `c3b939fa`, the word now an exported `undoHomeWord`
+  (red: sh read `/tmp/a\b` as `/tmp/ab`; green 21 of 21). Codex over `57fcab9..c3b939f`: correct, 0.98; lenses: 0,
+  both earlier findings fixed. The 772 question stays with him through the lead; nothing done on it.
 
 ## Next step
 State (2026-11-06, JH 153, worktree `D:\js-harness\.claude\worktrees\probe-auto-archive-3b36c3`): slice 1 is PR #782
 (branch `claude/f8-s4a-hooks-5da26e`, reviewed, ready notice sent). Slice 2 (T4, L7) is committed on branch
 `claude/f8-s4a-d8`, cut from slice 1's head, not pushed. D8 is answered "Apagarlo igual" (L7). L8's and the
-verifier's findings are fixed (L9) except the undo line's quoting for PowerShell, which waits on the lead's answer to
-how it passes to claude-fable-5-1; the lead also holds the 772 question, which may move this branch onto that series.
-Then: Codex's record for the fixes, push, PR 2, `notify --kind ready --pr <n>`. After both merge (T5): a question through the
+verifier's findings are fixed (L9), the undo line's quoting too (L10), every code commit reviewed. Next: push, PR 2
+on `claude/f8-s4a-hooks-5da26e`, `notify --kind ready --pr <n>`. The lead holds the 772 question, which may move
+this branch and #782 onto that series. After both merge (T5): a question through the
 lead to run `js-harness stack engram-prompt off` on his machine, then the engram `UserPromptSubmit` cell leaves
 `HOOK_CEILINGS`, then T6 (ROADMAP S4a State, summary, `notify --kind closed`).
