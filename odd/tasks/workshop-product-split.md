@@ -886,6 +886,15 @@ The slices:
   the two warnings of L23 again and nothing new (86,799): `--windows` was fixed in `3ec22630`, after this range, and
   the workshop's texts are the next pull request's. 259,921 input tokens in all. The pull request is 776.
 - gentle-ai: not run on this slice; the lenses reviewed `fd1da6e5`.
-- Next step (for a resume): the lead asks the owner to merge the series 769, 772, 773, 776, never merged here. Then
+- L27 (2026-11-06): the owner said "Unir la serie" (question 211). The queue landed 769, 772 and 773 (main
+  cd53b72) and left 776 out: `docs`, now a harness.json sensor, exited 1 in WSL2, where the sensors run in a mirror
+  synced without `.git` (`bin/lib/gate-wsl.mjs:112`), so `git ls-files` listed nothing. The commits' own gates had
+  sent their sensors to GitHub's Linux, which has `.git` (`"lock":"ci"` in the gate log), so the queue was the first
+  to run it in the mirror. Fixed in `4ef46b4a`, test first (red with the queue's message): with no `.git` the check
+  lists the files on disk git would not ignore, through a scratch repository outside the tree, as
+  `workshop/lib/docs-records.test.mjs` already reads the mirror. In a WSL2 mirror of the branch it passes on 1,491
+  files, the count `git ls-files` gives on Windows; `workshop spec` exits 0 there too. Codex correct (0.9, 64,919
+  input tokens); the lenses (reliability, readability) 0 findings.
+- Next step (for a resume): 776 lands alone, his yes to the series covering it; never merged here. Then
   the next pull request: `ticks --hook` with its stale-ticks row, `.claude/settings.json`, and the
   texts (with the three product texts L25 names). T7 stays a feature of its own.
