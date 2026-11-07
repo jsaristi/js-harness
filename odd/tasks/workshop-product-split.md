@@ -788,8 +788,113 @@ The slices:
   - Fix ea6293c9: the comment is back above `localHour`; each mutation now fails a test, checked in a scratch copy;
     the order is sorted. Its review (f177b4c8..ea6293c9): Codex correct (0.99), the lenses 0 findings.
 - gentle-ai: not run on this slice; Codex and the lenses reviewed 27e0a501, 81088583, f177b4c8 and ea6293c9.
-- Next step (for a resume): the extractions are reviewed (L16) and go as a pull request from `feat/workshop-move`
-  with base `feat/hook-entries-row` (PR 772), never merged here. Then the move, on a new branch chained on it: the 16
-  files to `workshop/`, the workshop dispatcher, the cut of table B's sites 1 and 3 to 7 and the text 15, the
-  spec-row claim form, the `harness.json` sensors, the `.claude/settings.json` ticks hook and the load test, as "The
-  build plan" says; then the gate, Codex, the lenses and a verifier. T7 stays a feature of its own.
+- L17 (2026-11-05): the extractions are PR 773 (`feat/workshop-move`, base `feat/hook-entries-row`, chained on 772).
+  The rest of slice 1+2 goes as two more chained pull requests, safe since no release comes before slice 4
+  (finding 19): this one, the dispatcher, the cuts, the move and the sensors; the next, `ticks --hook` with its
+  stale-ticks row and the texts. On `feat/workshop-dispatch` (worktree D:/js-harness-worktrees/workshop-dispatch):
+  4187754d the `js-harness-workshop <name>` claim form, committed. The dispatcher commit is staged, not committed:
+  `workshop/js-harness-workshop.mjs` and its test, the seven out of `bin/js-harness.mjs`, loop's ticks and doctor's
+  idea row with no product default, check's docs row as a `harness.json` sensor, SPEC's claims, the seven README
+  sections moved to `docs/workshop.md`. Its gate ran twice: the first failed on `conventions-errors`,
+  `conventions-structure` (check.mjs's ceiling 2008) and `readme`, all fixed; the second on two tests of
+  `bin/throughput.test.mjs`, "throughput snapshot --no-such-flag exits 2" and "throughput reviewed --no-such-flag
+  exits 2", not yet read.
+- L18 (2026-11-05): the move, on `feat/workshop-dispatch` after f78479af. The 16 files and their tests went to
+  `workshop/bin/` and `workshop/lib/` with `git mv`; their imports and the dispatcher's loaders were re-pathed (78
+  specifiers), two test fixtures that hold import text put back as they were, and the live texts that name a moved
+  path (SPEC, RECORDS, FAILURES, ROADMAP, comments of bin/) re-pathed; the dated records of `docs/host-updates/` and
+  `odd/tasks/` keep theirs. What reads the source by folder now reads `workshop/` beside `bin/`, each test first:
+  `rules check` (`codeFilesUnder`, so the four `throughput-*` reads stay held and RULES.md keeps their readers),
+  the docs plan's tiers, and the records table's source and writers. The conventions follow the files instead of
+  losing them: `ROOTS` of `conventions-structure` and `gentle-ai-absence` gain `workshop`, the absence entries
+  move by path, `conventions-errors` holds the workshop's seven command modules and `workshop/lib` (windows-daily
+  keeps its legacy entry there), and `conventions-arguments` probes the workshop's ten commands, which made
+  `spec` refuse in the convention's words. `scripts/audit-flags.mjs` is left to slice 4: the workshop's usage
+  and docs/workshop.md still name `js-harness <command>`, so a flag audit of its dispatcher reads nothing true
+  until slice 4 rewrites them. The load test (finding 15) is `bin/workshop-load.test.mjs`: `check --door`,
+  `doctor --hook` and `loop status` load nothing under `workshop/`; an import of the workshop added to
+  `bin/doctor.mjs` failed it, then was removed.
+- L19 (2026-11-05): the move's commit was refused by its gate's `commit-size` row before any sensor ran. The row
+  counts with renames off (`bin/check.mjs:629`, `--no-renames`, as `codex-review` sizes a range), so a moved file
+  is its deletion and its addition: the staged move is 7,749 added and 7,574 removed lines
+  (`git diff --cached --no-renames --shortstat`), and `workshop/bin/throughput.mjs` alone is 1,344, over the
+  1,200 of `rule:reviewed-commit-lines`, which is the owner's. No split of a whole-file move passes it. The
+  ways out: copy-then-delete commits, each under 1,200 (about 13 gates, about 3 hours of gate, a 15,000-line
+  review of code already reviewed in place); or count a rename that changes little by its changed lines, in
+  the row and in `codex-review` alike, which changes what the owner's rule measures. Put to the lead as a
+  waiting notice; `.gitattributes` gained `workshop/** text=auto eol=lf` meanwhile, as `bin/` has.
+- L20 (2026-11-05): the lead's answer to L19 was the owner's question 193, "Contar lo que cambia". That change is
+  PR 775, `rule/reviewed-commit-lines`, to main (`odd/tasks/rename-counted-by-changes.md`), with its reviews done.
+  The move needs its code in the tree it commits from, because the gate runs that tree's `check`. Merging the rule
+  branch into this one was refused by the gate's `contracts` row on GitHub (run 42091911770): "the commit that brings
+  the verdict holds more than documents". `rename-counted-by-changes.md` is not on main. Its trail on this branch is
+  the merge, which the gate's commit of the tree shows as a single-parent commit, and the code this branch had
+  before it. So the depth-pass judge (`bin/lib/depth-pass.mjs:104`) would hold that document on every check until it
+  is on main. The merge was aborted, uncommitted. Put to the lead: PR 775 merged to main first, then main merged into
+  the series and the move committed on it; or a change to the judge for a document whose pass was judged on its own
+  branch.
+- L21 (2026-11-05): the owner answered question 195 at 18:13 local, tapped: "775 primero (recomendado)" (the lead's
+  transcript `0f71b2c6`, line 68020). The lead lands PR 775 alone through the merge queue. No other merge, and no
+  change to the depth-pass judge.
+- L22 (2026-11-05): PR 775 landed, main `3f877c66`. Main merged up the series: into `docs/workshop-product-split`
+  (PR 769), clean; into `feat/hook-entries-row` (PR 772) as `167eef1c`, `docs/FAILURES.md` kept both sides in date
+  order; into `feat/workshop-move` (PR 773), clean; into this branch as `52d07039`, the ceiling of `bin/check.mjs`
+  down to its 2,007 lines. The move, reapplied from its patch on `52d07039` without a conflict, is 591 changed lines
+  with renames counted by what they change (585 before this document and `docs/FAILURES.md` joined it; corrected in
+  L25). The line the lead owed to `docs/FAILURES.md` (stretch-not-opened, his
+  absence 13:25 to 18:12) goes in with it.
+- L23 (2026-11-05): the move is `fd1da6e5`; the series' three branches are pushed with main in. The reviews of the
+  dispatcher, `6c1bc8e..f78479a`, apart from the move so main's code is not read again:
+  - Codex, 197,763 input tokens: one P2. A commit of documents alone runs `documentSensors`, which lacked the
+    workshop's `spec`, so an edit of `docs/SPEC.md` passed unchecked. Fixed: `harness.json` gains it, and a test in
+    `workshop/js-harness-workshop.test.mjs` holds every workshop sensor in both lists (seen red first).
+  - The lenses (risk 0, reliability 0, readability 2). The product's `loop heartbeat --windows` was taken and
+    dropped in silence; fixed: it says once that it reads nothing there, by a test in `bin/loop-bodies.test.mjs`
+    (seen red first). The workshop's help still names `js-harness <command>`: kept, as L18 leaves the workshop's
+    texts to the next pull request, before any release (finding 19).
+- gentle-ai: not run on this slice; Codex and the lenses reviewed 4187754d and f78479af.
+- L24 (2026-11-05): the fix is `3ec22630`; its lenses (readability, reliability) 0 findings. Codex over the merge
+  alone, `f78479a..52d0703`, read only what was written in it: correct (0.99), 47,071 input tokens. The lenses
+  cannot read the move: they read a range renames off (`bin/lib/lens-candidate.mjs`, the follow-up that
+  `odd/tasks/rename-counted-by-changes.md` left out of scope), so `52d0703..3ec2263` is about 243,000 input tokens a
+  lens, over the 150,000 a lens is handed, and no smaller range splits a whole-file move. The skip is recorded for
+  `52d0703..fd1da6e` with that reason; the merge door refuses the series until a lens review covers it. Put to the
+  lead as a question for the owner: the lenses count a rename by what it changes, as Codex does since PR 775, in a
+  pull request of its own to main; his yes to question 193 covered `commit-size` and `codex-review` alone. It is question 199.
+  This entry, written while Codex reviewed `52d0703..3ec2263`, voided that run: part 1 of 3, 128,424 input tokens,
+  nothing recorded (`edit-during-review` in `docs/FAILURES.md`); the review runs again after this commit.
+- L25 (2026-11-05): the owner answered question 199 at 19:15 local, tapped: "Lentes por lo que cambia
+  (recomendado)" (the lead's transcript `0f71b2c6`, line 68447). That change is its own pull request to main,
+  `fix/lens-renames` (`odd/tasks/lens-counts-renames.md`). The reviews of `52d0703..635a64b`, the move and the fix:
+  - Codex, run again after L24's commit: 3 parts, each correct (0.86, 0.90, 0.96), 355,297 input tokens.
+  - The independent verifier (opus): holds. Every one of 2,303 relative specifiers points where it did; `npm pack
+    --dry-run` ships nothing under `workshop/`, and the packed copy resolves every import and loads every `--help`;
+    the fix's two tests fail on `fd1da6e5` and pass on `3ec22630`; 13 runs of the moved and touched tests, 0 failing.
+    Two slips of the record, both fixed here or named: L22 said 585 changed lines where the move is 591; the message
+    of `fd1da6e5` names `rules` alone as reading `workshop/`, where the docs plan (`workshop/lib/docs-plan.mjs:19`)
+    and the records table (`workshop/lib/docs-records.mjs:93`, `:168`) do too, as L18 says. The commit is kept, since
+    rewriting it would void the reviews of the two after it. It also named product texts that still name workshop
+    commands (`bin/loop.mjs:56`, `bin/lib/protocols-skill.mjs:111`, `bin/lib/host-update.mjs:225`), from the
+    dispatcher's commit: the next pull request's texts.
+- gentle-ai: not run on this slice; Codex reviewed 52d07039, fd1da6e5 and 3ec22630; the lenses 3ec22630, and the move
+  `fd1da6e5` waits for them (L24).
+- L26 (2026-11-06): pull request 777 landed on main (9d8c405; its task document `odd/tasks/lens-counts-renames.md`),
+  so the lenses read a renamed file by the lines it changes; then 778, main at 8d1284a6. Main went up the series with
+  no conflict: `af54ba75` (769), `99ece5e7` (772), `3be3299a` (773), `49c83c92` (776), each through the gate; the
+  push check found every code commit covered by both reviews, a clean merge asking for none. The lenses over the
+  move, `52d0703..fd1da6e`, paid the skip of L24: risk 0 (41,976 input tokens), reliability 0 (131,146), readability
+  the two warnings of L23 again and nothing new (86,799): `--windows` was fixed in `3ec22630`, after this range, and
+  the workshop's texts are the next pull request's. 259,921 input tokens in all. The pull request is 776.
+- gentle-ai: not run on this slice; the lenses reviewed `fd1da6e5`.
+- L27 (2026-11-06): the owner said "Unir la serie" (question 211). The queue landed 769, 772 and 773 (main
+  cd53b72) and left 776 out: `docs`, now a harness.json sensor, exited 1 in WSL2, where the sensors run in a mirror
+  synced without `.git` (`bin/lib/gate-wsl.mjs:112`), so `git ls-files` listed nothing. The commits' own gates had
+  sent their sensors to GitHub's Linux, which has `.git` (`"lock":"ci"` in the gate log), so the queue was the first
+  to run it in the mirror. Fixed in `4ef46b4a`, test first (red with the queue's message): with no `.git` the check
+  lists the files on disk git would not ignore, through a scratch repository outside the tree, as
+  `workshop/lib/docs-records.test.mjs` already reads the mirror. In a WSL2 mirror of the branch it passes on 1,491
+  files, the count `git ls-files` gives on Windows; `workshop spec` exits 0 there too. Codex correct (0.9, 64,919
+  input tokens); the lenses (reliability, readability) 0 findings.
+- Next step (for a resume): 776 lands alone, his yes to the series covering it; never merged here. Then
+  the next pull request: `ticks --hook` with its stale-ticks row, `.claude/settings.json`, and the
+  texts (with the three product texts L25 names). T7 stays a feature of its own.

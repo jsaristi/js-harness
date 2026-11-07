@@ -4,10 +4,10 @@
 // entry, checks that file against the span, and diffs the app's tool list against the last one recorded. It only
 // proposes: an entry a harness area touches stays undecided until the session reads it (his answer to question 129
 // covers no adoption without his yes). Pure: every function takes text and returns data or text; the command reads
-// and writes (bin/host-watch.mjs).
-import { handListCount } from './host-update.mjs';
-import { cellsOf, DELIMITER_CELL_PATTERN } from './progress.mjs';
-import { compareSemver } from './version.mjs';
+// and writes (workshop/bin/host-watch.mjs).
+import { handListCount } from '../../bin/lib/host-update.mjs';
+import { cellsOf, DELIMITER_CELL_PATTERN } from '../../bin/lib/progress.mjs';
+import { compareSemver } from '../../bin/lib/version.mjs';
 
 const VERSION = /^\d+\.\d+\.\d+$/;
 export const DESKTOP_CHANGELOG = 'https://claude.com/docs/cowork/claude-desktop-changelog';

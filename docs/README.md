@@ -69,6 +69,7 @@ nothing there.
 | `docs/FLAKY.md` | live | | the quarantine ledger of flaky test files |
 | `docs/GUIDE.md` | live | | the user's guide: what the harness does for the owner and how to use it |
 | `docs/future-model.md` | live | | the protocol for a new model: measure, change one component at a time |
+| `docs/workshop.md` | live | | the workshop's commands, which keep the harness itself and never ship: `node workshop/js-harness-workshop.mjs` |
 | `docs/todo.md` | live | | the inbox of what is not a task yet |
 | `docs/live-board.html` | live | | the source of the live board's published page, whose rows `js-harness sessions live` gives |
 | `docs/origin.md` | frozen | | the reasoning the plan came from |

@@ -4,11 +4,11 @@
 // once. `js-harness windows-daily` runs it by hand and the lead's `loop heartbeat` runs it every hour.
 import fs from 'node:fs';
 import path from 'node:path';
-import { notifyMain } from '../notify.mjs';
-import { NOTICE_TEXT_MAX, channelDir } from './channel.mjs';
-import { GH_LOG_PREFIX, githubRepository, spawner } from './ci-gate.mjs';
-import { LEDGER, failedTestFiles, failingTests, ledgerEntries, localDay } from './flaky.mjs';
-import { testFilesOf } from './select-tests.mjs';
+import { notifyMain } from '../../bin/notify.mjs';
+import { NOTICE_TEXT_MAX, channelDir } from '../../bin/lib/channel.mjs';
+import { GH_LOG_PREFIX, githubRepository, spawner } from '../../bin/lib/ci-gate.mjs';
+import { LEDGER, failedTestFiles, failingTests, ledgerEntries, localDay } from '../../bin/lib/flaky.mjs';
+import { testFilesOf } from '../../bin/lib/select-tests.mjs';
 
 export const DAILY_WORKFLOW = 'windows-daily.yml';
 

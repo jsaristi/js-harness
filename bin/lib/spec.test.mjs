@@ -121,7 +121,7 @@ test('a file the today line names that does not exist is a finding; a path:line 
 
 test('a today item that is no file, command, entry or home path is a finding', () => {
   const { findings } = specFindings(spec(capability('The reply check', { Today: '`the reply hook`' })), plain);
-  assert.deepEqual(findings, ['"The reply check" (line 7) names "the reply hook" in **Today:**: an item there is a file of the repository, `js-harness <command>`, an id of the manifest or a path under `~/`']);
+  assert.deepEqual(findings, ['"The reply check" (line 7) names "the reply hook" in **Today:**: an item there is a file of the repository, `js-harness <command>`, `js-harness-workshop <command>`, an id of the manifest or a path under `~/`']);
 });
 
 test('in the harness, a command of the dispatcher no capability claims is a finding, and so is a claimed one it lacks', () => {
@@ -129,6 +129,26 @@ test('in the harness, a command of the dispatcher no capability claims is a find
   assert.deepEqual(unclaimed.findings, ['the command `js-harness reply` is claimed by no capability']);
   const unknown = specFindings(spec(capability('The reply check', { Today: `${claimsAll}, \`js-harness replies\`` })), own);
   assert.deepEqual(unknown.findings, ['"The reply check" (line 7) claims `js-harness replies`, which the dispatcher does not have']);
+});
+
+// odd/tasks/workshop-product-split.md, slice 1+2: the workshop's commands left the product dispatcher, so a claim
+// on one names the workshop's dispatcher. The product row records it and does not verify it; the workshop's own
+// spec command does, against its dispatcher.
+test('in the harness, a claim on a workshop command passes the product row, and the same name as a product command fails it', () => {
+  const workshop = specFindings(spec(capability('The reply check', { Today: `${claimsAll}, \`js-harness-workshop audit\`` })), own);
+  assert.deepEqual(workshop.findings, []);
+  const product = specFindings(spec(capability('The reply check', { Today: `${claimsAll}, \`js-harness audit\`` })), own);
+  assert.deepEqual(product.findings, ['"The reply check" (line 7) claims `js-harness audit`, which the dispatcher does not have']);
+  assert.deepEqual(specFindings(spec(capability('The reply check', { Today: '`js-harness-workshop Audit`' })), plain).findings, ['"The reply check" (line 7) names "js-harness-workshop Audit" in **Today:**: an item there is a file of the repository, `js-harness <command>`, `js-harness-workshop <command>`, an id of the manifest or a path under `~/`']);
+});
+
+test('held to the workshop\'s dispatcher, a workshop command no capability claims is a finding, and so is a claimed one it lacks', () => {
+  const held = { ...own, workshopCommands: ['audit', 'docs'] };
+  const { findings } = specFindings(spec(capability('The reply check', { Today: `${claimsAll}, \`js-harness-workshop audit\`, \`js-harness-workshop audits\`` })), held);
+  assert.deepEqual(findings, [
+    '"The reply check" (line 7) claims `js-harness-workshop audits`, which the workshop\'s dispatcher does not have',
+    'the command `js-harness-workshop docs` is claimed by no capability',
+  ]);
 });
 
 test('in the harness, an entry the manifest installs that no capability claims is a finding', () => {

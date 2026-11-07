@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { landFacts } from './land-records.mjs';
+import { landFacts } from '../../bin/lib/land-records.mjs';
 import { channelIdle, compareWindows, dailyValues, dayBounds, daysBetween, gateFacts, conflictFiles, gateKind, questionFacts, testTimeFacts, outsideChance, parseCommitTimes, parseMergeFiles, parseMerges, percentile, prFacts, taskChanges, taskCounts, throughputDues, throughputRows, withReadyAt } from './throughput.mjs';
 
 const DAY = '2026-10-16';

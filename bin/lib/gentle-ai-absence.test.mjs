@@ -16,7 +16,7 @@ import path from 'node:path';
 import { ratchet } from './ratchet.testkit.mjs';
 
 const REPO = path.join(import.meta.dirname, '..', '..');
-const ROOTS = ['bin', 'evals', 'scripts'];
+const ROOTS = ['bin', 'evals', 'scripts', 'workshop'];
 const NAMES = /gentle-ai/i;
 
 const ABSENCE = 'a test that asserts gentle-ai is absent';
@@ -37,7 +37,7 @@ const NAMED = {
   'bin/merge-queue.test.mjs': ABSENCE,
   'bin/resume.test.mjs': ABSENCE,
   'bin/stack.test.mjs': ABSENCE,
-  'bin/throughput.test.mjs': ABSENCE,
+  'workshop/bin/throughput.test.mjs': ABSENCE,
   'bin/lib/cache.test.mjs': ABSENCE,
   'bin/lib/latest.test.mjs': ABSENCE,
   'bin/lib/lens-result.test.mjs': ABSENCE,
@@ -46,7 +46,7 @@ const NAMED = {
   'bin/lib/protocols-skill.test.mjs': ABSENCE,
   'bin/lib/stack-install.test.mjs': ABSENCE,
   'bin/lib/stack.test.mjs': ABSENCE,
-  'bin/lib/throughput.test.mjs': ABSENCE,
+  'workshop/lib/throughput.test.mjs': ABSENCE,
   // S12's migration names, read-only, what gentle-ai left in a project, so it can be removed by hand (F8 S12, S2).
   'bin/lib/project-migrate.mjs': 'the migration names what gentle-ai left in a project',
   'bin/lib/project-migrate.test.mjs': 'the migration names what gentle-ai left in a project',
@@ -63,6 +63,7 @@ const NAMED = {
   'evals/results/f8-s1-incidents.json': RESULT,
   'evals/results/f8-s3-incidents.json': RESULT,
   'evals/results/f8-s10-incidents.json': RESULT,
+  'evals/results/f8-s2-incidents.json': RESULT,
   'evals/results/f8-s5c-a-incidents.json': RESULT,
   'evals/results/f8-s5c-a-incidents-2.json': RESULT,
   'evals/results/f8-s5c-a-rules-current.json': RESULT,
@@ -101,10 +102,10 @@ const NAMED = {
   'bin/lib/lens-reviews.test.mjs': OWNED,
   'bin/lib/rules-coverage.mjs': `${GUARD}: directive coverage reads the markers of gentle-ai's blocks in a text`,
   'bin/lib/rules-coverage.test.mjs': `${GUARD}: directive coverage reads the markers of gentle-ai's blocks in a text`,
-  'bin/idea-watch.mjs': IDEAS,
-  'bin/idea-watch.test.mjs': IDEAS,
-  'bin/lib/idea-watch.mjs': IDEAS,
-  'bin/lib/idea-watch.test.mjs': IDEAS,
+  'workshop/bin/idea-watch.mjs': IDEAS,
+  'workshop/bin/idea-watch.test.mjs': IDEAS,
+  'workshop/lib/idea-watch.mjs': IDEAS,
+  'workshop/lib/idea-watch.test.mjs': IDEAS,
   'scripts/rehearsal-lib.mjs': `${ABSENCE}: S13's walk proves gentle-ai takes no part`,
   'scripts/rehearsal-lib.test.mjs': `${ABSENCE}: S13's walk proves gentle-ai takes no part`,
 };

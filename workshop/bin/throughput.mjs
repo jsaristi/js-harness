@@ -9,15 +9,15 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readGateHolder } from './lib/gate-lock.mjs';
-import { readGateLog, readGateTestTimes } from './lib/gate-log.mjs';
-import { paceLogArgs, parsePaceLog } from './lib/progress-pace.mjs';
-import { ruleValue } from './lib/rules.mjs';
-import { readNotices, recordPath } from './lib/channel.mjs';
-import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
-import { codexFacts, landFacts, readLandRecord } from './lib/land-records.mjs';
-import { gitDirs } from './lib/project.mjs';
-import { mainCheckout, projectSlug } from './lib/sessions.mjs';
+import { readGateHolder } from '../../bin/lib/gate-lock.mjs';
+import { readGateLog, readGateTestTimes } from '../../bin/lib/gate-log.mjs';
+import { paceLogArgs, parsePaceLog } from '../../bin/lib/progress-pace.mjs';
+import { ruleValue } from '../../bin/lib/rules.mjs';
+import { readNotices, recordPath } from '../../bin/lib/channel.mjs';
+import { readCodexReviewRuns } from '../../bin/lib/codex-review-runs.mjs';
+import { codexFacts, landFacts, readLandRecord } from '../../bin/lib/land-records.mjs';
+import { gitDirs } from '../../bin/lib/project.mjs';
+import { mainCheckout, projectSlug } from '../../bin/lib/sessions.mjs';
 import {
   addDays,
   channelIdle,
@@ -40,8 +40,8 @@ import {
   throughputDues,
   throughputRows,
   utcDay,
-} from './lib/throughput.mjs';
-import { harnessHome } from './lib/home.mjs';
+} from '../lib/throughput.mjs';
+import { harnessHome } from '../../bin/lib/home.mjs';
 
 export const SNAPSHOT_SCHEMA = 'js-harness.throughput-day/v1';
 

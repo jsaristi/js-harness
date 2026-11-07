@@ -12,10 +12,10 @@
 // adding to it. A ceiling goes down with the module: lower it to the new size, and drop it once the module is at or
 // under 1,000 lines.
 //
-// The source is every `.mjs` and `.cjs` module under `bin`, `scripts` and `evals`, at any depth, but the tests and
-// the code an eval or a test hands to the program it checks (`NOT_OURS`), which is another project's. Comment lines
-// are left out where code is read. LEGACY lists the core modules that still import a command, each with why; it
-// only shrinks (bin/lib/ratchet.testkit.mjs).
+// The source is every `.mjs` and `.cjs` module under `bin`, `scripts`, `evals` and `workshop`, at any depth, but the
+// tests and the code an eval or a test hands to the program it checks (`NOT_OURS`), which is another project's.
+// Comment lines are left out where code is read. LEGACY lists the core modules that still import a command, each
+// with why; it only shrinks (bin/lib/ratchet.testkit.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -26,7 +26,7 @@ import { HARNESS_LIST } from './lib/rules-reach.mjs';
 import { importsOf, sourceModules, withoutComments } from './lib/source.testkit.mjs';
 
 const REPO = path.join(import.meta.dirname, '..');
-const ROOTS = ['bin', 'scripts', 'evals'];
+const ROOTS = ['bin', 'scripts', 'evals', 'workshop'];
 const NOT_OURS = /^(?:scripts\/fixtures|evals\/fixtures|evals\/tasks|evals\/review\/seeded)\//;
 const SIZE_LIMIT = 1000;
 
@@ -63,7 +63,6 @@ const FROZEN = {
 const LEGACY = {
   'refresh-copy.mjs -> update.mjs': "refreshes the installed copy with the upgrade's own install steps (`installCopy`, `pnpmBinDir`, `pnpmRunning`)",
   'spec.mjs -> js-harness.mjs': "holds docs/SPEC.md to every command, read from the dispatcher's `COMMANDS` table",
-  'windows-daily.mjs -> notify.mjs': "tells the lead a red daily run through notify's own main (`notifyMain`)",
 };
 
 // Today's size of each module over SIZE_LIMIT lines, measured on 2026-10-24: a ceiling that only goes down.
@@ -71,7 +70,7 @@ const CEILINGS = {
   'bin/lib/sessions.mjs': 3424,
   'bin/codex-review.mjs': 2271,
   'bin/lib/manifest.mjs': 1650,
-  'bin/check.mjs': 2008,
+  'bin/check.mjs': 2007,
   'bin/lib/project.mjs': 1978,
   'evals/isolation-probe.mjs': 1681,
   'bin/lib/profiles-data.mjs': 1598,

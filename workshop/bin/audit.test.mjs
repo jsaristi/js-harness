@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { auditMain } from './audit.mjs';
-import { projectSlug } from './lib/sessions.mjs';
+import { projectSlug } from '../../bin/lib/sessions.mjs';
 
 // A project folder and a Claude Code records folder for it, under a temporary home; git answers nothing, so the
 // project is the folder itself and it has no worktree.

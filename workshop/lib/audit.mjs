@@ -4,9 +4,9 @@
 // - the share of its context a session states of itself, against the usage its own reply records.
 // Each was the one kind of the recorded honesty failures that an oracle in the transcript reaches; the general
 // audit stayed "not worth it" (version 3 found 2 or 3 of 14). Pure: entries are handed in. Zero deps.
-import { stampedHour } from './guard.mjs';
-import { DEFAULT_CONTEXT_WINDOW } from './sessions.mjs';
-import { SHARE_TOLERANCE, isOwnReply, ownShares, recordedShare, windowRead } from './share-check.mjs';
+import { stampedHour } from '../../bin/lib/guard.mjs';
+import { DEFAULT_CONTEXT_WINDOW } from '../../bin/lib/sessions.mjs';
+import { SHARE_TOLERANCE, isOwnReply, ownShares, recordedShare, windowRead } from '../../bin/lib/share-check.mjs';
 
 /** The tools a session sends a message to another one with. */
 const MESSAGE_TOOLS = new Set(['SendMessage', 'mcp__ccd_session_mgmt__send_message']);

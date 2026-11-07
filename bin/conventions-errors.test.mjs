@@ -38,7 +38,6 @@ const LEGACY = {
   'resume.mjs': 'prints the refusal from its main and returns 2',
   'summary.mjs': 'its parse returns the usage line',
   'wake.mjs': 'throws a plain Error',
-  'windows-daily.mjs': 'prints the refusal from its main and returns 2',
 };
 
 const code = (file) => withoutComments(fs.readFileSync(file, 'utf8'));
@@ -72,6 +71,36 @@ test('no module under bin/lib declares an ArgError: a usage error belongs to the
 
 test('the .cjs files under bin/lib are read by the exit convention too', () => {
   assert.ok(libModules().includes('no-test-outside-turn.cjs'), 'libModules lists the .cjs files: a preload that exits is checked');
+});
+
+// The workshop is held to the same split (odd/tasks/workshop-product-split.md): its commands are the modules its
+// dispatcher's COMMANDS table loads from `./bin/`, its core every module under `workshop/lib`.
+const WORKSHOP = path.join(BIN, '..', 'workshop');
+const WORKSHOP_LEGACY = {
+  'windows-daily.mjs': 'prints the refusal from its main and returns 2',
+};
+
+/** The workshop's command modules: each `./bin/<name>.mjs` its dispatcher's COMMANDS table imports. */
+function workshopCommands() {
+  const source = fs.readFileSync(path.join(WORKSHOP, 'js-harness-workshop.mjs'), 'utf8');
+  const table = /\nconst COMMANDS = \{\r?\n([\s\S]*?)\r?\n\};/.exec(source);
+  assert.ok(table, 'workshop/js-harness-workshop.mjs has a `const COMMANDS = { ... };` table');
+  return [...new Set([...table[1].matchAll(/import\('\.\/bin\/([a-z-]+\.mjs)'\)/g)].map((match) => match[1]))];
+}
+
+test('every workshop command module declares its own ArgError, but the legacy ones', () => {
+  const modules = workshopCommands();
+  assert.equal(modules.length, 7, `the workshop's COMMANDS table loads ${modules.length} command modules, not 7`);
+  const broken = modules.filter((name) => !ARG_ERROR_CLASS.test(code(path.join(WORKSHOP, 'bin', name))));
+  const problems = ratchet({ checked: modules, broken, legacy: WORKSHOP_LEGACY });
+  assert.deepEqual(problems, [], `${problems.join('\n')}\n\na command throws its own \`class <Name>ArgError extends Error {}\` for a usage error`);
+});
+
+test('no module under workshop/lib declares an ArgError or calls process.exit', () => {
+  const modules = sourceModules(path.join(WORKSHOP, 'lib'));
+  assert.ok(modules.length >= 9, `only ${modules.length} modules were read under workshop/lib`);
+  const breaking = modules.filter((name) => /\bclass\s+\w*ArgError\b|\bprocess\.exit\s*\(/.test(code(path.join(WORKSHOP, 'lib', name))));
+  assert.deepEqual(breaking, [], 'move the class to the command and return the result; the command decides the exit');
 });
 
 test('no module under bin/lib calls process.exit: it returns, and the command decides the exit', () => {

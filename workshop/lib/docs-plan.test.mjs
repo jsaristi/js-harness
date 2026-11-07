@@ -21,6 +21,9 @@ test('each tracked file falls in one of four tiers: core, tests, feature documen
   assert.equal(tierOf('bin/lib/spec.mjs'), 'core');
   assert.equal(tierOf('bin/lib/spec.test.mjs'), 'tests');
   assert.equal(tierOf('bin/lib/ratchet.testkit.mjs'), 'tests');
+  assert.equal(tierOf('workshop/js-harness-workshop.mjs'), 'core');
+  assert.equal(tierOf('workshop/lib/docs-plan.mjs'), 'core');
+  assert.equal(tierOf('workshop/bin/docs.test.mjs'), 'tests');
   assert.equal(tierOf('odd/tasks/audit-pack.md'), 'feature documents');
   assert.equal(tierOf('docs/sessions/2026-10-17-x.md'), 'feature documents');
   assert.equal(tierOf('docs/proposals/harness-diet.md'), 'feature documents');
