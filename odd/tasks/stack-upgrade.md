@@ -255,3 +255,12 @@ tool, and #596 runs every item as a child with stdin closed, so `upgrade` there 
   menu's signal); bcaa83c..3db9fb2: Codex correct (0.93), both fixed, the lenses reliability and resilience 0
   findings. `node --test bin/tui.test.mjs`: 112 of 112. Not covered: the engram plugin's local git read
   (`readLocalLatestVersions`) still runs to its own timeout after the menu closes.
+- L16 (2026-11-07): T6b part A, `node scripts/tui-walk.mjs` run by the lead at 08:09 on his console: 13 steps
+  passed, the `New:` line among them, then Update hung 600 s with no output. Cause, reproduced with the real
+  `runTui` under a Node-made pipe: the walk drives the menu through pipes, and the child handed the menu's stdin pipe
+  stopped for good on Windows as it opened its stdin (the dispatcher reads `process.stdin`), while the menu's own
+  read of that pipe was still pending; the stuck `upgrade` showed 0.1 s of CPU and no inspector could attach. A real
+  console is not a pipe. Fix, test first: `handOff` gives the child a pipe of its own when the menu's stdin is no
+  terminal and passes its keys on (b786072c); Codex P2, the end of the input was not passed on, fixed (577d977e).
+  Reviews: d57849e..b786072 lenses 0, Codex P2; b786072..577d977 Codex correct (0.98), lens 0. The walk rerun here
+  on b786072c: 20 of 20 steps passed, exit 0. Part B, his look at the menu by hand, is still his.
