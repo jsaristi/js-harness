@@ -195,10 +195,18 @@ the question names that.
   module's new shape; `manifest.mjs`'s ceiling stays D8's 1,650 and `check.mjs`'s `main`'s 2,008; the imports of
   `stack.mjs` joined with `stack upgrade`'s.
 
+- L12 (2026-11-07, the reviews of the rebased slice 2): 722 of 722 over the touched modules' tests after the rebase.
+  Lenses reliability, risk and readability over `8be4ac0..38c14c0`: 0 each. Codex, 3 parts: one P2 at 0.96, taken,
+  tests first: `off` wrote the hooks file with `fs.writeFileSync`, so a write that truncated it and threw lost the
+  original with its record; `on`'s write back had the same shape. Both now write through `replaceFile` (a temporary
+  sibling, then one rename), moved from `commit-msg.mjs` into `bin/lib/atomic-write.mjs` (`2e0e78a8`). Red: 2 of 13,
+  a failing rename leaving the file as it was, no `.tmp` behind; then 418 of 418. Codex over `38c14c0..2e0e78a`:
+  correct (0.96), the P2 fixed; lenses reliability and risk: 0 each.
+
 ## Next step
 State (2026-11-07, JH 153, worktree `D:js-harness.claudeworktreesprobe-auto-archive-3b36c3`): slice 1 is PR #782
 (branch `claude/f8-s4a-hooks-5da26e`), rebuilt on `main` after #772 (L11), reviewed, ready notice sent. Slice 2 is
 PR #784 (branch `claude/f8-s4a-d8`), rebased onto the new #782; D8 is answered "Apagarlo igual" (L7), its findings
-fixed (L9, L10). Next: the reviews of the rebase's code changes, push, the lead told. After both merge (T5): a
+fixed (L9, L10, L12), every code commit reviewed. Next: force-push #784, the lead told. After both merge (T5): a
 question through the lead to run `js-harness stack engram-prompt off` on his machine, then the engram
 `UserPromptSubmit` cell leaves `HOOK_CEILINGS`, then T6 (ROADMAP S4a State, summary, `notify --kind closed`).
