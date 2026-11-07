@@ -91,6 +91,19 @@ export function githubRepository(url) {
   return match ? `${match[1]}/${match[2]}` : null;
 }
 
+/** The commits `MERGE_HEAD` names while a merge is being made, one a line (an octopus merge names several), or none. */
+function mergeHeads(git) {
+  const at = git('rev-parse', '--path-format=absolute', '--git-path', 'MERGE_HEAD');
+  if (at.status !== 0) return [];
+  let text;
+  try {
+    text = fs.readFileSync(at.stdout.trim(), 'utf8');
+  } catch {
+    return [];
+  }
+  return text.split(/\r?\n/).map((line) => line.trim()).filter((line) => /^[0-9a-f]{40,64}$/.test(line));
+}
+
 /** Runs the gate of the commit being made on GitHub's machines and says how it ended: `{ ran: true, pass, url,
  * seconds, output }`, `output` the end of a red run's failed log, or `{ ran: false, why }`. `gh`, `now`, `sleep`
  * and `onGit` (told the arguments of each git call) are injectable. */
@@ -114,7 +127,9 @@ export async function runCiGate({ cwd, remote = 'origin', env = process.env, gh,
   const tree = git('write-tree');
   if (tree.status !== 0) return { ran: false, why: `git write-tree failed: ${firstLine(tree.stderr)}` };
   const head = git('rev-parse', '--verify', '--quiet', 'HEAD');
-  const parent = head.status === 0 ? ['-p', head.stdout.trim()] : [];
+  // A merge being made has the heads it merges as parents too, as its commit will: without them the merged
+  // branch's commits look like this branch's own to the checks that read its history (rule depth-pass).
+  const parent = head.status === 0 ? ['-p', head.stdout.trim(), ...mergeHeads(git).flatMap((sha) => ['-p', sha])] : [];
   const made = git('commit-tree', tree.stdout.trim(), ...parent, '-m', 'gate: the tree of a commit being made');
   if (made.status !== 0) return { ran: false, why: `git commit-tree failed: ${firstLine(made.stderr)}` };
   const sha = made.stdout.trim();

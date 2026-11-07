@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { hostUpdateRow, readHostVersions, reviewFileGaps, reviewFileOf } from './host-update.mjs';
+import { handListCount, hostUpdateRow, readHostVersions, reviewFileGaps, reviewFileOf } from './host-update.mjs';
 import { RULES } from './rules-data.mjs';
 import { ruleHere, writeRules } from './rules.mjs';
 
@@ -219,6 +219,19 @@ test('a review file lacks each part it does not hold, named one by one', () => {
     'a table with the columns Change, Decision and Reason',
     'a "## Sources" section',
   ]);
+});
+
+test('the hand list counts the bullets of its own section only, up to the next heading of level one or two', () => {
+  assert.equal(handListCount(REVIEW), 0, 'no hand list');
+  const text = REVIEW.replace('## Sources', '## To classify by hand\n- code 2.1.299 #12: Improved the spinner\n* desktop 2.42304.0: a fix\n-\n### Under it\n- still in the list\n\n## Notes\n- not in the list\n\n## Sources');
+  assert.equal(handListCount(text), 3, 'an empty bullet is none, and a level-three heading stays inside the list');
+  assert.equal(handListCount('## TO CLASSIFY BY HAND\n- one'), 1, 'its heading in any case');
+});
+
+// Codex, 2026-10-30: one decided row beside an unresolved list passed.
+test('the gate of --host-reviewed refuses an unresolved hand list: one decided row beside it is not a review', () => {
+  const text = REVIEW.replace('## Sources', '## To classify by hand\n- code 2.1.299 #12: Improved the spinner\n\n## Sources');
+  assert.deepEqual(reviewFileGaps(text, READ_NOW, LAST_REVIEWED), ['the list "To classify by hand" emptied (it holds 1): each entry decided in its row']);
 });
 
 test('a row undecided or with no reason, a CLI of another version and a changelog not read are each refused', () => {

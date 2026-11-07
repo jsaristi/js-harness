@@ -1,5 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -2365,6 +2366,27 @@ test('uninstall machine drops the record of a tool already gone, and names one t
     assert.ok(outLines.includes('kept codegraph claude (changed since stack install ran it): it is yours now and no longer recorded'), outLines.join('\n'));
     assert.ok(outLines.includes('codex installed is already gone: its record is dropped'), outLines.join('\n'));
     assert.equal(readManifest(home), null);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('uninstall machine puts back the engram binary an upgrade replaced and names the plugin way back, exiting 0 (stack-upgrade S1)', async () => {
+  const home = makeTmpHome();
+  try {
+    const exe = path.join(home, 'engram.exe');
+    const backup = path.join(home, 'engram-3.6.1.exe.bak');
+    fs.writeFileSync(exe, 'new');
+    fs.writeFileSync(backup, 'old');
+    const sum = crypto.createHash('sha256').update('new').digest('hex');
+    recordStackRow(home, { tool: 'engram', dimension: 'upToDate', kind: 'binary', from: '3.6.1', to: '3.6.2', path: exe, backup, applies: sum, env: {}, at: 'then' });
+    recordStackRow(home, { tool: 'engram-plugin', dimension: 'upToDate', kind: 'plugin', from: '0.1.14', to: null, run: [['claude', 'plugin', 'update', 'engram@engram']], undo: null, applies: '0.1.19', env: {}, at: 'then' });
+    const { code, outLines } = await captureConsole(() => uninstallMain(['machine', '--home', home], {}, { stackSpawn: () => assert.fail('ran a command') }));
+    const said = outLines.join('\n');
+    assert.equal(code, 0, said);
+    assert.ok(outLines.includes('undid engram upToDate'), said);
+    assert.ok(outLines.includes('kept engram-plugin upToDate: Claude Code installs no earlier version of a plugin: engram@engram stays as it is; 0.1.14 was the version before the upgrade; no longer recorded'), said);
+    assert.equal(fs.readFileSync(exe, 'utf8'), 'old');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

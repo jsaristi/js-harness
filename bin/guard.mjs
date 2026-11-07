@@ -35,7 +35,7 @@
 //     rule `memory-feedback-home` is declared (bin/lib/memory-feedback-guard.mjs, imported only for a memory note;
 //     odd/tasks/memory-feedback-home.md). `guard --memory <folder>` runs the same check over a whole folder.
 // `js-harness guard --stop` is the `Stop` hook (odd/tasks/honesty-audit.md, T16): a reply that states the session's own
-// context share more than 2 points from the share its transcript records (bin/lib/audit.mjs, `shareRefusal`). A reply
+// context share more than 2 points from the share its transcript records (workshop/lib/audit.mjs, `shareRefusal`). A reply
 // is not a tool call and is already shown when the hook runs, so it cannot be refused before it is sent: the hook
 // turns the stop back with the hooks contract's `decision: "block"` and its reason, and the session corrects the share
 // in its next words. It never turns back a stop it already turned back (`stop_hook_active`), so it cannot loop; it
@@ -211,7 +211,7 @@ async function hintOf(payload, { env, projectRoot, exists }) {
  * reply that says what the notice told it (odd/tasks/session-channel.md, T6b). */
 async function stopRefusalOf(payload, readTranscript, { env, homedir, projectRoot }) {
   if (payload?.stop_hook_active === true || typeof payload?.transcript_path !== 'string' || payload.transcript_path === '') return null;
-  const { lastShare, shareRefusal } = await import('./lib/audit.mjs');
+  const { lastShare, shareRefusal } = await import('./lib/share-check.mjs');
   const given = typeof payload.last_assistant_message === 'string' ? payload.last_assistant_message : null;
   // A reply that names no context share costs no read of the transcript; the window the share is of comes from it.
   if (given !== null && !(/context/i.test(given) && /\d\s?%/.test(given))) return null;

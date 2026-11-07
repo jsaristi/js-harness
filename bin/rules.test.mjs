@@ -199,6 +199,18 @@ test('a code file that reads an undeclared rule fails check, and render refuses'
   });
 });
 
+test('a code file of the workshop is read as bin/ is, so its reads are held too', async () => {
+  await inProject(BASE(), async (dir) => {
+    assert.equal((await run(['render'], dir)).code, 0);
+    write(dir, { 'workshop/lib/x.mjs': READS_UNDECLARED });
+    assert.deepEqual(await run(['check'], dir), {
+      code: 1,
+      out: ['FAIL  rules  1 finding', '      workshop/lib/x.mjs: reads rule "no-such-rule", which is declared nowhere'],
+      err: [],
+    });
+  });
+});
+
 test('a test file that reads an undeclared rule is not read', async () => {
   await inProject(BASE(), async (dir) => {
     await run(['render'], dir);

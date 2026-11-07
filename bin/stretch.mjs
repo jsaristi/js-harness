@@ -29,8 +29,7 @@ import { goalShares, outsidePlan, timelineOf, workShare } from './lib/stretch-mo
 import { recordPageRendered } from './lib/pages-rendered.mjs';
 import { renderDeparture, renderReturn } from './lib/stretch-render.mjs';
 import { failuresOf, problemsOf } from './lib/stretch-why.mjs';
-import { codexFacts, landFacts } from './lib/throughput.mjs';
-import { readLandRecord, readRecordLines } from './throughput.mjs';
+import { codexFacts, landFacts, readLandRecord, readRecordLines } from './lib/land-records.mjs';
 
 /** The Codex review runs of the repository at `root`, read so that a record there and unreadable throws:
  * `readCodexReviewRuns` reads it as none, which would show its failures as no failure. */

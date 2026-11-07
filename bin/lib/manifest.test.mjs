@@ -4419,7 +4419,7 @@ test('writeManifestAtomic renames again while Windows holds the manifest, and le
 test('the skills state the permit, memory-index, share and wait-for values from the code that enforces them', async () => {
   const { WAIT_MS, LEASE_MINUTES } = await import('../permit.mjs');
   const { INDEX_LINE_CHARS } = await import('./memory-index-guard.mjs');
-  const { SHARE_TOLERANCE } = await import('./audit.mjs');
+  const { SHARE_TOLERANCE } = await import('./share-check.mjs');
   const { ruleValue } = await import('./rules.mjs');
   const { statedHours } = await import('./manifest.mjs');
   for (const value of [WAIT_MS, LEASE_MINUTES, INDEX_LINE_CHARS, SHARE_TOLERANCE]) assert.equal(typeof value, 'number');

@@ -6,7 +6,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { windowsFolder } from './app-record.mjs';
-import { handListCount } from './host-watch.mjs';
 import { cellsOf, DELIMITER_CELL_PATTERN } from './progress.mjs';
 import { ruleHere } from './rules.mjs';
 import { compareSemver } from './version.mjs';
@@ -92,6 +91,18 @@ const DECISIONS = ['adopt', 'adapt', 'ignore'];
 
 /** A cell's text with the markdown around it taken off: backticks and emphasis. */
 const plain = (cell) => cell.replace(/[`*_]/g, '').trim();
+
+/** The bullets of the section `## <title>` of `lines`, up to the next heading. */
+function bulletsOf(lines, title) {
+  const start = lines.findIndex((text) => text.trim().toLowerCase() === `## ${title.toLowerCase()}`);
+  if (start === -1) return [];
+  const end = lines.findIndex((text, i) => i > start && /^#{1,2}\s/.test(text));
+  return lines.slice(start + 1, end === -1 ? undefined : end).filter((text) => /^\s*[-*]\s+\S/.test(text));
+}
+
+/** How many entries the review file's `## To classify by hand` list still holds: the gate refuses one that holds any
+ * (`reviewFileGaps`); the workshop's `checkReview` (workshop/lib/host-watch.mjs) counts it too. */
+export const handListCount = (text) => bulletsOf(String(text).split(/\r?\n/), 'To classify by hand').length;
 
 /** What the review file `text` lacks for an update from `reviewed` to `versions`, one reason each; none when it holds
  * the review: the CLI version read now (when one is read), a table of `Change`, `Decision` and `Reason` whose every

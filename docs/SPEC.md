@@ -185,7 +185,7 @@ and S4a's row holds it there.
 Each fact has one home. Committed documents are canonical; engram and `MEMORY.md` mirror or point
 to them (diet section 10, "The rule pass"). The table names each record's writers by file and function and its
 family by folder and child names; the fields of each are in `docs/RECORDS.md`, a section per row. The `docs` row of
-`check` holds both to the source (`bin/lib/docs-records.mjs`).
+`check` holds both to the source (`workshop/lib/docs-records.mjs`).
 
 | Record | Where | Written by | Read by |
 |---|---|---|---|
@@ -201,9 +201,9 @@ family by folder and child names; the fields of each are in `docs/RECORDS.md`, a
 | Flaky tests | `docs/FLAKY.md` | sessions, by hand | `check` |
 | This specification | `docs/SPEC.md` | sessions, by hand | `check`'s `spec` and `docs` rows |
 | The audit entry | `docs/README.md`, `docs/RECORDS.md` | sessions, by hand | `docs`, `check`'s `docs` row |
-| Host updates | `docs/host-updates/`: the review `claude-desktop-<version>.md` the session saves from `draft`, the sources `sources/claude-desktop-<desktop>.<key>.md`; the brief `~/.js-harness/background/host-watch-<version>.md` the heartbeat writes | `bin/host-watch.mjs` `hostWatchMain` `hostWatchTick` | `host-watch`, sessions |
+| Host updates | `docs/host-updates/`: the review `claude-desktop-<version>.md` the session saves from `draft`, the sources `sources/claude-desktop-<desktop>.<key>.md`; the brief `~/.js-harness/background/host-watch-<version>.md` the heartbeat writes | `workshop/bin/host-watch.mjs` `hostWatchMain` `hostWatchTick` | `host-watch`, sessions |
 | The idea watch's record | `odd/tasks/gentle-ai-update-check.md`, its `## Releases read` | the session, from `idea-watch draft`, by hand | `idea-watch status`, `doctor` |
-| The idea watch's clone | `~/.js-harness/upstream/gentle-ai`, a bare clone recorded in the machine manifest | `bin/idea-watch.mjs` `fetchClone` | `idea-watch draft`; `uninstall machine` removes it |
+| The idea watch's clone | `~/.js-harness/upstream/gentle-ai`, a bare clone recorded in the machine manifest | `workshop/bin/idea-watch.mjs` `fetchClone` | `idea-watch draft`; `uninstall machine` removes it |
 | Session summaries | `docs/sessions/<date>-<slug>.md` | `bin/lib/summary.mjs` `summaryPath` `summaryTemplate`, then the session | the lead, the 1.0.0 review |
 | The machine manifest | `~/.js-harness/manifest.json` | `bin/lib/manifest.mjs` `install` | `uninstall`, `status`, `doctor` |
 | The host's files the harness edits | `~/.claude/settings.json`, `~/.claude/CLAUDE.md`, `~/.claude/output-styles/<style>.md`; in `~/.codex/hooks.json` only the entries versions up to 0.97.0 wrote, which `sync` and `uninstall` remove | `bin/lib/manifest.mjs` `install`; `bin/lib/rules-block.mjs` `holdRulesBlock`; `bin/lib/user-settings.mjs` `acceptSessionMessages` | the hosts; `uninstall` by the machine manifest |
@@ -222,7 +222,7 @@ family by folder and child names; the fields of each are in `docs/RECORDS.md`, a
 | Loops | `~/.js-harness/loops/<project>/<name>.json` | `bin/lib/loops.mjs` `writeRecord` | `loop status`, the heartbeat |
 | Gates | `~/.js-harness/gate-log/`; the lock under `~/.js-harness/gate/`: `lock/holder-<token>.json`, `wait-<token>/`; the gate-first tickets in `gate-first/<id>.json` | `bin/lib/gate-log.mjs` `appendGateEvent`; `bin/lib/gate-lock.mjs` `takeGateLock`; `bin/lib/gate-first.mjs` `issueTicket` | `gate`, `throughput`, `quiet` |
 | The WSL gate | `~/.js-harness/gate-wsl.json` | the person who sets the WSL gate up, by hand | `gate`, `check` |
-| Throughput snapshots | `~/.js-harness/throughput/<project>/<day>.json`, `outcomes.jsonl` | `bin/throughput.mjs` `throughputMain` | `throughput` |
+| Throughput snapshots | `~/.js-harness/throughput/<project>/<day>.json`, `outcomes.jsonl` | `workshop/bin/throughput.mjs` `throughputMain` | `throughput` |
 | Pages shown | `~/.js-harness/throughput/<project>/pages.jsonl` | `bin/lib/pages-record.mjs` `appendPage` | `throughput`, `report` |
 | Stretches | `~/.js-harness/throughput/<project>/stretches.jsonl` | `bin/stretch.mjs` `stretchMain` | `stretch`, `report feature` |
 | Templates | `~/.js-harness/throughput/<project>/templates-rendered.jsonl`, `templates-shown.jsonl` | `bin/lib/template-record.mjs` `recordRendered` `recordShown` | `template`, `throughput` |
@@ -307,11 +307,11 @@ check or an eval case ("After F8", directive coverage).
 ### The payload and the fixed load
 
 **Problem:** The budget row read only `AGENTS.md` (691 tokens) while the global `CLAUDE.md` alone was about 17.6k; a one-word prompt cost about 107.8k tokens in Claude Code (`docs/ROADMAP.md`, F2). A desktop session started at 109,514 tokens before anyone typed; the owner's words: "solo inicar la sesion gasta 100 mil" (`odd/tasks/fixed-load.md`). gentle-ai v4 grew the payload instead of shrinking it.
-**Requirement:** Every gate reports, per host, each source loaded on every turn with its path and estimated tokens, a host total and the hook commands that can inject context; and the first-turn input tokens of the project's five newest sessions, read from the host's own transcripts, with their median against a budget and a warning over it. These rows inform and never fail; they spawn nothing. A cut to what is loaded is moved, never deleted, measured before and after, proven by an eval and undoable.
+**Requirement:** Every gate reports, per host, each source loaded on every turn with its path and estimated tokens, a host total and the hook commands that can inject context; and the first-turn input tokens of the project's five newest sessions, read from the host's own transcripts, with their median against a budget and a warning over it. These rows inform and never fail, and they spawn nothing. The hook entries of every event, from the home's and the project's settings and the enabled plugins, are counted by owner and event in a row that informs too, with one exception: in the harness's own repository it fails when `install` would write more than its limit. A cut to what is loaded is moved, never deleted, measured before and after, proven by an eval and undoable.
 **Reason:** A gate that sees a few per cent of the payload cannot steer it, and a measure that stays on shows a regression on the next commit instead of in a compaction.
-**Proof:** `node --test bin/lib/payload.test.mjs`, `node --test bin/lib/fixed-load.test.mjs`
+**Proof:** `node --test bin/lib/payload.test.mjs`, `node --test bin/lib/fixed-load.test.mjs`, `node --test bin/lib/hook-count.test.mjs`, `node --test scripts/diet-measure.test.mjs`
 **Discarded:** Running the hosts' hooks from the gate to measure their output: some write files, and the gate stays read-only. An estimate from files alone: it misses tools, servers and the system prompt (63.5k measured against about 110k). Editing files outside the repository: a hand edit of gentle-ai's block is overwritten by its next sync.
-**Today:** `bin/lib/payload.mjs`, `bin/lib/fixed-load.mjs`, `bin/check.mjs`
+**Today:** `bin/lib/payload.mjs`, `bin/lib/fixed-load.mjs`, `bin/lib/hook-count.mjs`, `scripts/diet-measure.mjs`, `bin/check.mjs`
 
 ### Whether a change is due a review
 
@@ -372,9 +372,9 @@ check or an eval case ("After F8", directive coverage).
 **Problem:** The gates run on Linux (CI) and in WSL2 (the merge queue's run), so no gate ran the Windows code paths; the README promised a Windows run after each landed batch, and none of 84 land suites ran on Windows (`odd/tasks/commit-gates-first.md`, S5). One after each batch would hold the gate lock 15 to 19 hours a day.
 **Requirement:** The whole suite runs once a day on GitHub's Windows machines, on a schedule and by hand only, never for a push or a pull request, so it holds up no gate and no land; its token reads, it names no secret and its actions are pinned, held by a test. A red run (failure, timed out or cancelled) not told before is told to the orchestrator once, with its failing test names and how many failed, unless every file it failed in is quarantined; a red run whose names cannot be read is told all the same, and so is a schedule with no run in 26 hours. The lead's heartbeat reads it every hour and ends on a red one.
 **Reason:** A regression that only Windows shows is found within a day instead of never, at no cost on a public repository and without the gate lock. He chose the cadence: "Una vez por día (Recomendada)".
-**Proof:** `node --test bin/lib/windows-daily.test.mjs`, `node --test bin/windows-daily.test.mjs`, `node --test bin/loop-bodies.test.mjs`, `node --test scripts/github-workflows.test.mjs`
+**Proof:** `node --test workshop/lib/windows-daily.test.mjs`, `node --test workshop/bin/windows-daily.test.mjs`, `node --test bin/loop-bodies.test.mjs`, `node --test scripts/github-workflows.test.mjs`
 **Discarded:** A Windows run after each landed batch: 15 to 19 lock-hours a day. Telling only through the channel: the heartbeat runs in the lead's session, and the lead's channel watch passes over its own notices, so the heartbeat's end line wakes the lead. Silence on a red run whose files cannot be found: it would read as all of them quarantined.
-**Today:** `.github/workflows/windows-daily.yml`, `bin/lib/windows-daily.mjs`, `bin/windows-daily.mjs`, `bin/loop.mjs`, `js-harness windows-daily`
+**Today:** `.github/workflows/windows-daily.yml`, `workshop/lib/windows-daily.mjs`, `workshop/bin/windows-daily.mjs`, `bin/loop.mjs`, `js-harness-workshop windows-daily`, `js-harness-workshop loop`
 
 ### The gate log
 
@@ -462,9 +462,9 @@ check or an eval case ("After F8", directive coverage).
 **Problem:** The 2026-10-17 measure of where a task's wall-clock goes took hand-written scripts in the lead's notes, and its gate figures could not be taken again a few days later: the gate log rotates in about 2.3 days, so a before/after comparison had nothing to read (`odd/tasks/throughput-review.md`).
 **Requirement:** A read-only command prints a fixed table of a window of UTC days in which every figure names its source, and a fact no record holds yet says which recorder it waits for, never a zero. A settled day's gates are kept in a dated snapshot under the home, which the table reads in place of the rotated log; append-only records are read live.
 **Reason:** A measure taken again the same way is what tells a change that helped from noise, and it cannot depend on someone keeping scripts.
-**Proof:** `node --test bin/throughput.test.mjs`, `node --test bin/lib/throughput.test.mjs`
+**Proof:** `node --test workshop/bin/throughput.test.mjs`, `node --test workshop/lib/throughput.test.mjs`
 **Discarded:** Snapshotting main's history and the Codex runs, which are append-only: a snapshot would freeze what a stale fetch had not seen. GitHub's `mergedAt`, which needs the network on every read.
-**Today:** `bin/throughput.mjs`, `bin/lib/throughput.mjs`, `js-harness throughput` (with snapshot, status, reviewed and shipped)
+**Today:** `workshop/bin/throughput.mjs`, `workshop/lib/throughput.mjs`, `js-harness-workshop throughput` (with snapshot, status, reviewed and shipped)
 
 ### The stretch
 
@@ -606,9 +606,9 @@ check or an eval case ("After F8", directive coverage).
 **Problem:** Sub-agents were said to take about 59 per cent of a day's tokens, a figure in no file; the first count found 19 per cent of input (`odd/tasks/effort-by-task.md`). Sessions stamped wrong hours in 33 of 153 messages and stated 93 of 267 of their own context shares wrong over three days (`odd/tasks/honesty-audit.md`).
 **Requirement:** One command counts a day's sub-agents by role, model and effort asked and run, with their tokens and share of the day, across the main checkout and every worktree. Another counts, per session, the claims a transcript itself can check (a message's stated hour against its own time; a stated context share against the one its reply records) and prints each wrong one by transcript and line. Neither keeps or prints the text of any message.
 **Reason:** What to launch and measure comes from a count, not a guess; and each audited claim has its answer in the transcript, so no reader has to judge it.
-**Proof:** `node --test bin/subagents.test.mjs`, `node --test bin/lib/subagent-count.test.mjs`, `node --test bin/audit.test.mjs`, `node --test bin/lib/audit.test.mjs`
+**Proof:** `node --test workshop/bin/subagents.test.mjs`, `node --test bin/lib/subagent-count.test.mjs`, `node --test workshop/bin/audit.test.mjs`, `node --test workshop/lib/audit.test.mjs`
 **Discarded:** A general honesty audit: a transcript reader reaches 2 or 3 of the 14 recorded cases. Keyword rules for hours and shares: precision of about 8 and 33 per cent.
-**Today:** `bin/subagents.mjs`, `bin/lib/subagent-count.mjs`, `bin/audit.mjs`, `bin/lib/audit.mjs`, `js-harness subagents`, `js-harness audit`
+**Today:** `workshop/bin/subagents.mjs`, `bin/lib/subagent-count.mjs`, `workshop/bin/audit.mjs`, `workshop/lib/audit.mjs`, `js-harness-workshop subagents`, `js-harness-workshop audit`
 
 ### The guard
 
@@ -741,18 +741,18 @@ check or an eval case ("After F8", directive coverage).
 **Problem:** A Claude Desktop update was recorded as reviewed after a check that nothing broke, with no account of what it brought (`docs/FAILURES.md`, host-review-without-research); he asked for a session that researches each release in depth and says how the harness should use it (F8's S9, question 129).
 **Requirement:** `js-harness host-watch draft` cuts the update's span of the desktop and CLI changelogs, from the reviewed record to the versions doctor reads (or a frozen span), and prints the review file with one row an entry: each entry placed in every harness area it touches, an entry outside the Code tab decided `ignore`, every other `?`; a version with no entry is a row; a changelog older than the version reviewed is refused; `--sources` writes the span's excerpts. `host-watch check` holds a review file to the span read from its excerpts: one decided row an entry by its id, Windows and Phone `checked: <how>`, `unknown` or `n/a`, the hand list empty, the desktop tool list's status said. `host-watch tools` diffs the app's tool list, as a session transcribes it, with the one recorded for its surface (desktop, the only one given `start_session`, or background), a first capture a baseline. The gate of `doctor --host-reviewed` refuses a review whose hand list still holds entries.
 **Reason:** The changelogs are long and most entries do not touch the harness; placing them keeps the session's reading on what does, and a check by entry id keeps one decided row from passing for a whole release.
-**Proof:** `node --test bin/host-watch.test.mjs bin/lib/host-watch.test.mjs`
+**Proof:** `node --test workshop/bin/host-watch.test.mjs workshop/lib/host-watch.test.mjs`
 **Discarded:** Deciding `adopt` or `adapt` by pattern: a decision is a reading, and his yes in question 129 covers no adoption. Dropping Cowork entries unread: they default to `ignore` only when no harness area matches, and stay visible rows.
-**Today:** `bin/host-watch.mjs`, `bin/lib/host-watch.mjs`, `bin/lib/host-update.mjs`, `js-harness host-watch`
+**Today:** `workshop/bin/host-watch.mjs`, `workshop/lib/host-watch.mjs`, `bin/lib/host-update.mjs`, `js-harness-workshop host-watch`
 
 ### Each gentle-ai release is read for ideas
 
 **Problem:** gentle-ai leaves the machine, and it keeps releasing; he asked to read what each release adds or removes and keep what serves the harness, without copying it (`odd/tasks/idea-watch.md`, S1 to S3).
 **Requirement:** `js-harness idea-watch status` lists the stable tags upstream (`git ls-remote`) and prints how many are above the last release `odd/tasks/gentle-ai-update-check.md` holds as read, and which; `doctor`'s `idea-watch` row says the same, in the interactive online report only. `idea-watch draft` fetches a bare clone under `~/.js-harness/upstream`, recorded in the machine manifest's `clones` before it is fetched, and prints the record's entry for the next release: each path its diff changed placed in the first area of `AREAS` that matches, one row an area with its verdict `?` (an ignored area decided `ignore`), the paths no area matches under "To classify by hand"; a release whose paths all fall in ignored areas is one line. A drafted section counts as read only once no verdict is `?` and the hand list is empty. `uninstall machine` removes a recorded clone only inside `~/.js-harness`.
 **Reason:** A release changes hundreds of paths, most of them other hosts, tests and the shell installer; placing them by area keeps the reading on what the harness took over, and a path no area matches is never dropped.
-**Proof:** `node --test bin/lib/idea-watch.test.mjs bin/idea-watch.test.mjs`
+**Proof:** `node --test workshop/lib/idea-watch.test.mjs workshop/bin/idea-watch.test.mjs`
 **Discarded:** Watching the installed version (the install watch S11 removed): gentle-ai is not installed. A working-tree clone: a bare one has nothing to build or run. Deciding a verdict by pattern: a decision is a reading, and an adopt or an adapt is his yes.
-**Today:** `bin/idea-watch.mjs`, `bin/lib/idea-watch.mjs`, `bin/lib/clones.mjs`, `js-harness idea-watch`
+**Today:** `workshop/bin/idea-watch.mjs`, `workshop/lib/idea-watch.mjs`, `bin/lib/clones.mjs`, `js-harness-workshop idea-watch`, `js-harness-workshop doctor`
 
 ### The machine says when nothing runs
 
@@ -942,16 +942,16 @@ The administrator install is `bin/lib/status-line-install.ps1`, run by hand in a
 **Reason:** A document kept alive by remembering goes stale; one held by the gate cannot lose a piece silently.
 **Proof:** `node --test bin/lib/spec.test.mjs`
 **Discarded:** A description of the pieces as they stand in place of the requirements: it reads as today's architecture, and a rebuild would copy it; the map under "The architecture" is kept apart from the entries and says it is today's. Principles alone: nothing can be rebuilt from a philosophy.
-**Today:** `docs/SPEC.md`, `bin/lib/spec.mjs`, `bin/check.mjs`
+**Today:** `docs/SPEC.md`, `bin/lib/spec.mjs`, `bin/check.mjs`, `js-harness-workshop spec`, `workshop/js-harness-workshop.mjs`
 
 ### A model starting cold can audit the whole harness
 
 **Problem:** The owner wants the strongest model to audit the whole project in depth, saying what is right, wrong, improvable, redundant, blocking or unnecessary (`odd/tasks/audit-pack.md`, L1); the tracked files hold about 5.8M estimated tokens, no context holds them, and nothing told a cold reader which document is in force and which is history.
 **Requirement:** `docs/README.md` is the entry: what the project is, an index under `## Index` giving every file and folder of `docs/` one of four statuses (live, frozen, historical, closed) and, when it is no longer live, what supersedes it, and the reading method. `js-harness docs plan` prints every tracked file in exactly one slice of at most 400,000 estimated tokens, in four tiers (core, tests, feature documents, the rest), the source beside its capability here and each feature document with its state from its task boxes, every slice after the first opening with the entry. `js-harness docs index` joins each capability to the documents, rules and failure entries its text cites, keeps apart, marked unverified, the ones inferred through a file it shares with them, and lists what no capability reaches. In the harness's own repository, the `docs` row of `check` fails where the entry is missing, an entry of `docs/` has no row, a tracked file cannot be read, one file alone outgrows a slice, an explicit link of the cross index does not resolve, or the table of records under "Where state lives" drifts from the source: a name the source joins into a path that no row holds, a row no source names, a writer that no longer holds its function, or a row with no section of fields in `docs/RECORDS.md`.
 **Reason:** A plan computed from the tracked files each time cannot fall behind them, and an index held by the gate cannot miss a document added after it.
-**Proof:** `node --test bin/docs.test.mjs bin/lib/docs-plan.test.mjs bin/lib/docs-entry.test.mjs bin/lib/docs-cross.test.mjs bin/lib/docs-records.test.mjs`
+**Proof:** `node --test workshop/bin/docs.test.mjs workshop/lib/docs-plan.test.mjs workshop/lib/docs-entry.test.mjs workshop/lib/docs-cross.test.mjs workshop/lib/docs-records.test.mjs`
 **Discarded:** A stored inventory of every file with its class (`odd/tasks/launch-audit/inventory.tsv`): it rotted within a week. A status written in each feature document: the task boxes already say whether it is open. One slice the size of the window: it leaves the auditor no room to reason and write.
-**Today:** `js-harness docs`, `docs/README.md`, `bin/docs.mjs`, `bin/lib/docs-plan.mjs`, `bin/lib/docs-entry.mjs`, `bin/lib/docs-cross.mjs`, `bin/lib/docs-records.mjs`, `docs/RECORDS.md`, `bin/check.mjs`
+**Today:** `js-harness-workshop docs`, `docs/README.md`, `workshop/bin/docs.mjs`, `workshop/lib/docs-plan.mjs`, `workshop/lib/docs-entry.mjs`, `workshop/lib/docs-cross.mjs`, `workshop/lib/docs-records.mjs`, `docs/RECORDS.md`, `bin/check.mjs`
 
 ### An output the owner sees again is a template of five parts
 

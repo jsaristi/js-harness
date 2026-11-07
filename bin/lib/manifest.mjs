@@ -13,7 +13,7 @@ import { locate, lookUpProcesses, readState, remoteDir } from './remote.mjs';
 import { ruleValue } from './rules.mjs';
 import { LEASE_MINUTES, WAIT_MS } from './permit-times.mjs';
 import { INDEX_LINE_CHARS } from './memory-index-guard.mjs';
-import { SHARE_TOLERANCE } from './audit.mjs';
+import { SHARE_TOLERANCE } from './share-check.mjs';
 import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { protocolsSkillContent } from './protocols-skill.mjs';
 import { restoreSettings } from './user-settings.mjs';
@@ -1216,7 +1216,7 @@ export function uninstall(home, deps = {}) {
   return { ...result, removed: [...memory.removed, ...result.removed], ...memoryResult(memory), ...throughputResult(home, deps.statFile ?? fs.statSync, deps.listDir ?? fs.readdirSync) };
 }
 
-/** The snapshots of the throughput review under `home` (bin/throughput.mjs), never removed: they are the only copy of
+/** The snapshots of the throughput review under `home` (workshop/bin/throughput.mjs), never removed: they are the only copy of
  * the gates of days the gate log has rotated away. The review starts the pause hook kept beside them until F8 S11
  * (`review-starts.jsonl`, B6) are the only copy of those starts, and stay too. Named, with how many days and how many
  * projects' starts they hold (`null` where the folder could not be listed), so the person knows what stays; `{}`
