@@ -717,5 +717,42 @@ The slices:
   - 18: codegraph counted by owner.
   - 19: no release between 1+2 and 4.
   The revised plan is not re-read; slice D0 comes first and its own reviews read what it builds.
-- Next step (for a resume): PR 769 is open (docs, not merged). Slice D0 (T8), test first: the `hook entries` row
-  and `scripts/diet-measure.mjs`, on a branch of its own from origin/main. T7 stays a feature of its own.
+- L13 (2026-11-05): slice D0 built, commit ea016393 on `feat/hook-entries-row` (chained on this branch), its gate
+  green on GitHub's machines. One change from the plan, decided here: the `hook entries` row fails only in the
+  harness's own repository, when `install` would write more than `HOOK_ENTRY_LIMIT` (15). In every other project it
+  informs and warns on an unknown owner, and never stops a commit. The reason: the home's settings are shared by
+  every project of the machine, so a hook another tool put there (his home held orca's in October, his
+  plataforma-preproyecto transcript of 2026-10-21) is no fault of the project being committed, and a red static row
+  stops the gate before its sensors (`bin/check.mjs:1911-1916`). S4a's probe holds where it is meant to: one more
+  entry in what `install` writes turns the row red here (`bin/lib/hook-count.test.mjs`).
+  - Read on his real home, read only: 26 entries, js-harness 15, codegraph 1, codex@openai-codex 3, engram@engram 7
+    (engram's UserPromptSubmit 1 among them, D8).
+  - `node scripts/diet-measure.mjs`, the before figures on this branch: 2,563 fixed tokens a turn (Rules block
+    1,333, output style 242, `CLAUDE.md` 419, `AGENTS.md` 312, five skill listings 257); skill bodies 17,843;
+    15 entries. Timed with the checkout's dispatcher run directly, each entry takes about 180-290 ms, and
+    `doctor --hook` 2,640 ms. The same entries through the installed `js-harness` command took 290-800 ms in the
+    timing of "The diet", so the command's own start through the package manager's shim costs about 300 ms on
+    every entry, measured once on this machine and not yet split from noise. It is a D3 candidate, written here.
+  - The table of "The diet" counted the listings as 318; the measure counts only each skill's `description`, 257.
+- L14 (2026-11-05): the reviews of D0 (range b3bcbe17..1bcba9b9).
+  - The lenses (reliability, readability, resilience): 0 findings each.
+  - Codex, recorded on its second run: the first run was not kept, because this session committed in the worktree
+    while part 2 ran (my mistake: nothing is committed in a worktree while its review runs). It found 3, all taken:
+    - P1: the measure's hooks inherited `CLAUDE_ENV_FILE` and `JS_HARNESS_HOME`, so `backup --session-start`
+      could rewrite a real session's files and lose their undo. `scratchEnv` now takes out every `CLAUDE_`,
+      `JS_HARNESS_` and `CODEX_HOME` variable and points the homes into the scratch folder. Both were empty in
+      this shell when the measure ran, so no real file was touched.
+    - P2: `ownerOf` now reads the Windows spelling `.\workshop\...`.
+    - P2: the Stop input carries a closing reply, so `reply --hook` is timed on its checks, not its fast path.
+  - The independent verifier (opus): verified, 70 and 254 tests passing, and a real scratch install wrote exactly
+    the 15 entries `installEntries` returns. Its findings, all taken:
+    - `ownerOf` gave `C:` for an absolute script, a flag's value, and `run` or `exec` for package managers;
+      it now owns an absolute script by its own name, takes node's first script word, and skips the subcommands;
+    - `installEntries` counts only entries whose target is Claude's `settings.json`;
+    - SPEC's "These rows inform and never fail" now names the one exception;
+    - the warning says "in this home and project", and the readers' comment says what is not read.
+  - A correction to L13: the measure taken again after the fixes gave every entry about twice its first time
+    (`doctor --hook` 3,272 ms, the others 344-796 ms), while the merge queue's gate ran on this machine. So the
+    about 300 ms that L13 put on the shim's start compared two loads, and is not shown; the D3 candidate stays, to be
+    measured with the machine idle, both ways in turn.
+- Next step (for a resume): slice D0 is reviewed: Codex recheck of 1bcba9b9..9927f0d2 correct, 3 of 3 fixed; the lenses 0 findings; the verifier verified (L14). Branch feat/hook-entries-row (worktree D:/js-harness-worktrees/hook-entries-row), chained on PR 769. Next: push it, open its pull request with base docs/workshop-product-split (never merged here), notify the orchestrator; then slice 1+2 of the build plan. T7 stays a feature of its own.

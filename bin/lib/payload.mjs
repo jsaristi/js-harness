@@ -147,15 +147,16 @@ function modelInstructionsFile(home) {
 // own WebFetch notice rides on it (bin/lib/manifest.mjs, webFailureHookEntry). `Stop` and `SubagentStop` add nothing.
 const CONTEXT_HOOK_EVENTS = ['UserPromptSubmit', 'SessionStart', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'SubagentStart'];
 
-/** Context-injecting hook commands from a Claude/Codex hooks config: only the events of `CONTEXT_HOOK_EVENTS` are
- * read, in that order and then in configured order within each. Missing or malformed JSON yields no hooks, never a throw. */
-function readHooks(configPath, plugin) {
+/** Context-injecting hook commands from a Claude/Codex hooks config: only the events of `events` are read, by
+ * default `CONTEXT_HOOK_EVENTS`, in that order and then in configured order within each; `null` reads every
+ * event the config holds, in its own order. Missing or malformed JSON yields no hooks, never a throw. */
+function readHooks(configPath, plugin, events = CONTEXT_HOOK_EVENTS) {
   const config = readJson(configPath);
   const hooksConfig = config && typeof config === 'object' ? config.hooks : null;
   if (!hooksConfig || typeof hooksConfig !== 'object') return [];
 
   const hooks = [];
-  for (const event of CONTEXT_HOOK_EVENTS) {
+  for (const event of events ?? Object.keys(hooksConfig)) {
     const matchers = hooksConfig[event];
     if (!Array.isArray(matchers)) continue;
     for (const matcher of matchers) {
@@ -189,11 +190,11 @@ function enabledPluginIds(settingsPaths) {
 /** The context hooks of every enabled plugin, each tagged with its plugin id: the plugin's
  * `hooks/hooks.json` under the `installPath` recorded in `installed_plugins.json` (the same shape
  * as a settings file). A plugin with no install record, no hooks file or malformed JSON adds nothing. */
-function pluginHooks(home, cwd, settingsPaths) {
+function pluginHooks(home, cwd, settingsPaths, events) {
   const installed = readJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json'))?.plugins;
   return enabledPluginIds(settingsPaths).flatMap((id) => {
     const record = applicableInstallRecord(installed && typeof installed === 'object' ? installed[id] : null, cwd);
-    return record ? readHooks(path.join(record.installPath, 'hooks', 'hooks.json'), id) : [];
+    return record ? readHooks(path.join(record.installPath, 'hooks', 'hooks.json'), id, events) : [];
   });
 }
 
@@ -218,15 +219,21 @@ function applicableInstallRecord(records, cwd) {
 /** Claude's context-injecting hook commands, concatenated the same way Claude Code itself merges
  * settings layers: user (`<home>/.claude/settings.json`), then project (`<cwd>/.claude/settings.json`),
  * then project-local (`<cwd>/.claude/settings.local.json`), followed by the hooks of the enabled
- * plugins. A missing or malformed file contributes nothing, never throws. */
-function claudeHooks(home, cwd) {
+ * plugins. `events` is `readHooks`'s. A missing or malformed file contributes nothing, never throws. */
+function claudeHooks(home, cwd, events = CONTEXT_HOOK_EVENTS) {
   const settingsPaths = [
     path.join(home, '.claude', 'settings.json'),
     path.join(cwd, '.claude', 'settings.json'),
     path.join(cwd, '.claude', 'settings.local.json'),
   ];
-  const settingsHooks = settingsPaths.flatMap((settingsPath) => readHooks(settingsPath));
-  return [...settingsHooks, ...pluginHooks(home, cwd, settingsPaths)];
+  const settingsHooks = settingsPaths.flatMap((settingsPath) => readHooks(settingsPath, undefined, events));
+  return [...settingsHooks, ...pluginHooks(home, cwd, settingsPaths, events)];
+}
+
+/** Every hook entry Claude Code runs for the project at `cwd`, of every event, from the same layers and plugins as
+ * `claudeHooks`: `{ event, command, plugin? }` each. The `hook entries` row counts them (./hook-count.mjs). */
+export function claudeHookEntries(home, cwd) {
+  return claudeHooks(home, cwd, null);
 }
 
 /** The regular expression of a `claudeMdExcludes` glob, matched against a forward-slashed absolute

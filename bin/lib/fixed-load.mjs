@@ -7,6 +7,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ruleValue } from './rules.mjs';
 
+// The diet's other row, the hook entries' count, is its own module; `check` takes both rows from here.
+export { hookEntriesRow } from './hook-count.mjs';
+
 /** His "100 mil" (2026-10-15, odd/tasks/fixed-load.md S6), declared as rule:fixed-load-budget. */
 export const FIXED_LOAD_BUDGET = ruleValue('fixed-load-budget', 'tokens');
 

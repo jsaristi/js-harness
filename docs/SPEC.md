@@ -308,11 +308,11 @@ check or an eval case ("After F8", directive coverage).
 ### The payload and the fixed load
 
 **Problem:** The budget row read only `AGENTS.md` (691 tokens) while the global `CLAUDE.md` alone was about 17.6k; a one-word prompt cost about 107.8k tokens in Claude Code (`docs/ROADMAP.md`, F2). A desktop session started at 109,514 tokens before anyone typed; the owner's words: "solo inicar la sesion gasta 100 mil" (`odd/tasks/fixed-load.md`). gentle-ai v4 grew the payload instead of shrinking it.
-**Requirement:** Every gate reports, per host, each source loaded on every turn with its path and estimated tokens, a host total and the hook commands that can inject context; and the first-turn input tokens of the project's five newest sessions, read from the host's own transcripts, with their median against a budget and a warning over it. These rows inform and never fail; they spawn nothing. A cut to what is loaded is moved, never deleted, measured before and after, proven by an eval and undoable.
+**Requirement:** Every gate reports, per host, each source loaded on every turn with its path and estimated tokens, a host total and the hook commands that can inject context; and the first-turn input tokens of the project's five newest sessions, read from the host's own transcripts, with their median against a budget and a warning over it. These rows inform and never fail, and they spawn nothing. The hook entries of every event, from the home's and the project's settings and the enabled plugins, are counted by owner and event in a row that informs too, with one exception: in the harness's own repository it fails when `install` would write more than its limit. A cut to what is loaded is moved, never deleted, measured before and after, proven by an eval and undoable.
 **Reason:** A gate that sees a few per cent of the payload cannot steer it, and a measure that stays on shows a regression on the next commit instead of in a compaction.
-**Proof:** `node --test bin/lib/payload.test.mjs`, `node --test bin/lib/fixed-load.test.mjs`
+**Proof:** `node --test bin/lib/payload.test.mjs`, `node --test bin/lib/fixed-load.test.mjs`, `node --test bin/lib/hook-count.test.mjs`, `node --test scripts/diet-measure.test.mjs`
 **Discarded:** Running the hosts' hooks from the gate to measure their output: some write files, and the gate stays read-only. An estimate from files alone: it misses tools, servers and the system prompt (63.5k measured against about 110k). Editing files outside the repository: a hand edit of gentle-ai's block is overwritten by its next sync.
-**Today:** `bin/lib/payload.mjs`, `bin/lib/fixed-load.mjs`, `bin/check.mjs`
+**Today:** `bin/lib/payload.mjs`, `bin/lib/fixed-load.mjs`, `bin/lib/hook-count.mjs`, `scripts/diet-measure.mjs`, `bin/check.mjs`
 
 ### Whether a change is due a review
 
