@@ -356,6 +356,7 @@ The record of everything js-harness wrote on the machine outside a repository, s
 - `tasks`: array of `{ name, command, arguments }`, a Windows scheduled task registered on request, from `recordScheduledTask`.
 - `settings`: array of `{ path, key, value, had, previous, createdFile }`, a user setting written on request (`crossSessionInbound: "accept"`), from `acceptSessionMessages`: `had` whether the key was there before, `previous` its earlier value or `null`.
 - `stack`: array of `{ tool, dimension, run, undo, applies, env, at }`, one row `stack install` ran, from `recordStackRow`: `run` and `undo` the words of the command and its undo, `applies` what the undo still applies to (`null` before it ran), `env` the variables given.
+- `pluginHooks`: array of `{ path, event, original, written, at }`, a plugin's hooks file D8 changed on request (`js-harness stack engram-prompt off`), from `bin/lib/engram-prompt-hook.mjs` `promptHookOff`: `event` the entry taken out (`UserPromptSubmit`), `original` and `written` the file's whole text before and after. `stack engram-prompt on` and `uninstall` write `original` back while the file still reads `written`.
 - `clones`: array of `{ path, url }`, a git repository fetched on request (the idea watch's bare clone), from `bin/lib/clones.mjs` `recordClone`: `path` the absolute folder, `url` the repository fetched. `uninstall` removes a recorded clone only inside `~/.js-harness`, both as written and as it resolves through links.
 
 ## The host's files the harness edits
@@ -376,6 +377,10 @@ The keys and blocks js-harness puts into Claude Code's own files, each recorded 
 ### `~/.claude/output-styles/js-harness.md`
 
 - The whole file, the text of `outputStyleContent` (`bin/lib/output-style.mjs`); recorded in the manifest's `files`.
+
+### `~/.claude/plugins/cache/engram/engram/<version>/hooks/hooks.json`
+
+- `hooks.UserPromptSubmit`: taken out, only with `js-harness stack engram-prompt off` (D8); the rest of the file is written back with its own layout. Recorded in the manifest's `pluginHooks`.
 
 ### `~/.codex/hooks.json`
 

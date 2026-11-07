@@ -26,6 +26,10 @@ export const HOOK_CEILINGS = Object.freeze({
   'codex@openai-codex': Object.freeze({ SessionStart: 1, SessionEnd: 1, Stop: 1 }),
 });
 
+/** The command that takes a cell's extra entry out, where js-harness has one: `owner event -> command`. D8's hook comes
+ * back with each engram plugin update. */
+const CELL_FIXES = Object.freeze({ 'engram@engram UserPromptSubmit': 'js-harness stack engram-prompt off' });
+
 // The owners of a hook the harness installs or sets up: its own entries and codegraph's prompt hook, which
 // `stack` installs. An enabled plugin is known too, by its id. Any other owner is warned of, never failed, unless
 // the project turns the count on.
@@ -119,7 +123,7 @@ export function hookEntriesRow(cwd, home, deps = {}) {
     }
     lines.push(`${owner}: ${events.map(([event, count]) => `${event} ${count}${ceilings ? `/${ceilings[event] ?? 0}` : ''}`).join(', ')}`);
     for (const [event, count] of ceilings ? events : []) {
-      if (count > (ceilings[event] ?? 0)) problems.push(`${owner} ${event}: ${count} ${plural(count)}, over its ceiling of ${ceilings[event] ?? 0}`);
+      if (count > (ceilings[event] ?? 0)) problems.push(`${owner} ${event}: ${count} ${plural(count)}, over its ceiling of ${ceilings[event] ?? 0}${CELL_FIXES[`${owner} ${event}`] ? `; ${CELL_FIXES[`${owner} ${event}`]} takes it out` : ''}`);
     }
     const known = KNOWN_OWNERS.includes(owner) || live.some((entry) => entry.plugin === owner);
     if (!known && !held) lines.push(`warning: ${n} ${plural(n)} owned by "${owner}", which neither js-harness, its stack nor an enabled plugin installs`);

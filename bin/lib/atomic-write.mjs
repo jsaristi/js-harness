@@ -1,6 +1,7 @@
 // The atomic write of a JSON record: a fresh temporary sibling, then one rename over the target, so a reader never
 // sees half a record and a failure leaves the one there before. The machine manifest (./manifest.mjs) and a
 // project's (./project.mjs) are written through it; it moved out of manifest.mjs, over its size ceiling, as is.
+// `replaceFile` does the same for a file's text as it is.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 
@@ -112,3 +113,30 @@ const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),
  * `deps.rename`, `deps.pause` and `deps.platform` are its seams. The Rules block writes his CLAUDE.md through it
  * (./rules-block.mjs; a review of T7 of odd/tasks/f8-s10-port.md). */
 export const renameOver = (from, to, deps = {}) => renameHeld(from, to, deps.rename ?? fs.renameSync, deps.pause ?? sleepSync, deps.platform ?? process.platform);
+
+/** Writes `buffer` (or a string, as UTF-8) over `file` whole or not at all: a fresh temporary sibling, then one rename
+ * over it (`renameOver`, whose seams `deps` carries), so a write that fails halfway leaves the bytes there before. The
+ * commit message git reads (../commit-msg.mjs) and engram's hooks file (./engram-prompt-hook.mjs) are written through
+ * it; it moved here from commit-msg.mjs for the second. */
+export function replaceFile(file, buffer, deps = {}) {
+  const tmp = `${file}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  const fd = fs.openSync(tmp, 'wx');
+  let open = true;
+  try {
+    fs.writeFileSync(fd, buffer);
+    fs.closeSync(fd);
+    open = false;
+    renameOver(tmp, file, deps);
+  } catch (error) {
+    // Closed once only: a number closed again could by then name a file something else opened.
+    if (open) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        // The write's own error is the one to throw.
+      }
+    }
+    fs.rmSync(tmp, { force: true });
+    throw error;
+  }
+}

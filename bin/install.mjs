@@ -813,6 +813,15 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
     }
   }
   const memoryNotUndone = memoryKept.filter((folder) => !folder.stamps);
+  // The engram prompt hook `stack engram-prompt off` took out (D8): put back, left as it is when it changed or went,
+  // or still out; that one keeps its record and fails the uninstall, so --everything never removes the way back.
+  const pluginHooks = result.pluginHooks ?? { restored: [], kept: [] };
+  for (const file of pluginHooks.restored) console.log(`put back ${file}: the engram prompt hook is on again`);
+  for (const kept of pluginHooks.kept) {
+    if (kept.reason === 'failed') console.error(`could not put back ${kept.path} (${kept.code}): the engram prompt hook is still out and still recorded; run js-harness uninstall --global again, or js-harness stack engram-prompt on`);
+    else console.log(`left ${kept.path} as it is: ${kept.reason === 'gone' ? 'it is gone' : 'it changed since the hook was taken out (a plugin update or an edit)'}, so its record is dropped`);
+  }
+  const pluginHooksFailed = pluginHooks.kept.filter((kept) => kept.reason === 'failed');
   if (result.throughputKept && !everything) {
     const { path: folder, days, reviewStarts } = result.throughputKept;
     const starts = reviewStarts === null ? ', and any review starts an earlier js-harness recorded there' : reviewStarts > 0 ? `, and the review starts an earlier js-harness recorded for ${reviewStarts} project${reviewStarts === 1 ? '' : 's'}, the only record of when those reviews began` : '';
@@ -836,12 +845,14 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
     background.kept.length === 0 &&
     !background.removedDir &&
     !background.failed &&
-    !result.throughputKept
+    !result.throughputKept &&
+    pluginHooks.restored.length === 0 &&
+    pluginHooks.kept.length === 0
   ) {
     console.log(`nothing installed under ${home}`);
   }
   // A file or folder left behind that nothing records, or a task that may still fire, is not a finished uninstall, as in the project scope.
-  const code = notUndone.size > 0 || (result.clonesKept ?? []).length > 0 || (result.settingsFailed ?? []).length > 0 || ['kept', 'failed'].includes(result.permissions?.status) || ['kept', 'failed'].includes(result.rulesBlock?.status) || (result.trustKept ?? []).length > 0 || stackNotUndone.length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 || background.kept.length > 0 || Boolean(background.failed) ? 1 : 0;
+  const code = notUndone.size > 0 || (result.clonesKept ?? []).length > 0 || (result.settingsFailed ?? []).length > 0 || ['kept', 'failed'].includes(result.permissions?.status) || ['kept', 'failed'].includes(result.rulesBlock?.status) || (result.trustKept ?? []).length > 0 || stackNotUndone.length > 0 || tasksNotUndone.length > 0 || gateNotUndone.length > 0 || result.channelKept.length > 0 || result.remoteKept.length > 0 || memoryNotUndone.length > 0 || background.kept.length > 0 || Boolean(background.failed) || pluginHooksFailed.length > 0 ? 1 : 0;
   if (!everything) return code;
   // A live gate keeps its folder without failing the normal uninstall; the whole folder waits for it all the same.
   const dir = path.join(home, '.js-harness');

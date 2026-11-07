@@ -13,6 +13,7 @@ import { gateDir, gateLockDir, takeGateLock } from './lib/gate-lock.mjs';
 import { gateLogDir, gateRecord } from './lib/gate-log.mjs';
 import { appendNotice, channelDir, newNotice, recordPath } from './lib/channel.mjs';
 import { initProject } from './lib/project.mjs';
+import { promptHookOff } from './lib/engram-prompt-hook.mjs';
 import { renderBlock } from './lib/project-template.mjs';
 import { remoteDir, remoteFiles } from './lib/remote.mjs';
 import { shownWord } from './lib/package-manager.mjs';
@@ -827,6 +828,37 @@ test('uninstallMain says a setting it could not write back, with the error code 
     const again = await captureConsole(() => uninstallMain(['--global', '--home', home]));
     assert.deepEqual([again.code, again.errLines], [0, []]);
     assert.equal(fs.existsSync(settings) ? JSON.parse(fs.readFileSync(settings, 'utf8')).crossSessionInbound : 'gone', 'gone', 'install made the file, so it goes with the setting');
+    assert.equal(fs.existsSync(manifestPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Found by the independent verifier of D8 (odd/tasks/f8-s4a-hook-count.md, L9): the command read no `pluginHooks`
+// result, so a hooks file it could not put back was silent, exit 0, and --everything then removed its only record.
+test('uninstallMain says the engram hooks file it put back, and one it could not, which keeps its record and fails even --everything', async () => {
+  const home = makeTmpHome();
+  try {
+    const installPath = path.join(home, '.claude', 'plugins', 'cache', 'engram', 'engram', '0.1.19');
+    const file = path.join(installPath, 'hooks', 'hooks.json');
+    const text = `${JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'prompt.sh' }] }], SessionEnd: [] } }, null, 2)}\n`;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, text);
+    fs.writeFileSync(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ plugins: { 'engram@engram': [{ scope: 'user', installPath }] } }));
+    assert.equal(promptHookOff(home).status, 'off');
+    const writeFile = (target, ...rest) => {
+      if (target === file) throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+      return fs.writeFileSync(target, ...rest);
+    };
+    const failed = await captureConsole(() => uninstallMain(['--global', '--everything', '--home', home], {}, { writeFile }));
+    assert.equal(failed.code, 1, 'a hook left out is not a clean uninstall');
+    assert.ok(failed.errLines.includes(`could not put back ${file} (EPERM): the engram prompt hook is still out and still recorded; run js-harness uninstall --global again, or js-harness stack engram-prompt on`), failed.errLines.join('\n'));
+    assert.equal(readManifest(home).pluginHooks.length, 1, 'the only undo record is kept');
+
+    const again = await captureConsole(() => uninstallMain(['--global', '--home', home]));
+    assert.deepEqual([again.code, again.errLines], [0, []]);
+    assert.ok(again.outLines.includes(`put back ${file}: the engram prompt hook is on again`), again.outLines.join('\n'));
+    assert.equal(fs.readFileSync(file, 'utf8'), text);
     assert.equal(fs.existsSync(manifestPath(home)), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

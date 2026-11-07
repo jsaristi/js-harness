@@ -155,7 +155,7 @@ test('with "hookCount": true a new owner and a plugin cell over its ceiling turn
   const row = hookEntriesRow('.', '.', { ...counted, own: false, live });
   assert.equal(row.pass, false);
   assert.ok(row.lines.some((line) => line === 'orca-hook: a new owner, not in the table: PreToolUse 1'), row.lines.join('\n'));
-  assert.ok(row.lines.some((line) => line === 'engram@engram UserPromptSubmit: 2 entries, over its ceiling of 1'), row.lines.join('\n'));
+  assert.ok(row.lines.some((line) => line.startsWith('engram@engram UserPromptSubmit: 2 entries, over its ceiling of 1')), row.lines.join('\n'));
   assert.equal(row.lines.filter((line) => line.includes('orca-hook')).length, 1, 'the failure names the owner; no warning repeats it');
   assert.match(row.detail, /2 over the table/);
 });
@@ -171,4 +171,11 @@ test('"hookCount" set to anything but true fails the row, and the harness reposi
 
 test('the owner of a command whose program is a single-quoted path with a space is that program', () => {
   assert.equal(ownerOf({ command: "'/opt/my tools/guard-hook.sh' --hook" }), 'guard-hook');
+});
+
+test('the engram prompt hook over its ceiling names the command that takes it out (D8)', () => {
+  const live = [...installEntries(), ...STACK_ENTRIES, { event: 'UserPromptSubmit', command: 'x', plugin: 'engram@engram' }];
+  const row = hookEntriesRow('.', '.', { ...counted, own: false, live });
+  assert.equal(row.pass, false);
+  assert.ok(row.lines.some((line) => line === 'engram@engram UserPromptSubmit: 2 entries, over its ceiling of 1; js-harness stack engram-prompt off takes it out'), row.lines.join('\n'));
 });

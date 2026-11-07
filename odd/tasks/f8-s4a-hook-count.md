@@ -91,7 +91,7 @@ the question names that.
 - [x] T2 (kind: build) spec 1: the `hooks` row, tests first; `check.mjs` code moved out first — L4; folded into
   #772's `hook entries` row after the series merged, his answer to question 211 — L11
 - [x] T3 (kind: verify) spec 1: Codex and the lenses over T2, PR 1, ready notice — L5, L6
-- [ ] T4 (kind: build) spec 2: the command that turns the engram prompt hook off and on, backed up and recorded
+- [x] T4 (kind: build) spec 2: the command that turns the engram prompt hook off and on, backed up and recorded — L7
 - [ ] T5 (kind: verify) spec 2: his yes through the lead; applied; the engram `UserPromptSubmit` ceiling lowered to 0
 - [ ] T6 (kind: docs) ROADMAP S4a State, SPEC, summary under `docs/sessions/`
 
@@ -129,17 +129,84 @@ the question names that.
 - L6 (2026-11-06, the reviews of `43267a4f`): Codex over `266ca79..43267a4`: correct (0.98), the P2 of L5 fixed. Lens
   reliability: 0 findings. No independent verifier: the change names no high-risk item (an optional `harness.json`
   key, a row that reads files and writes none).
-- L11 (2026-11-07, after #772 merged; L7 to L10 are D8's, on its branch): his answer to question 211, "Unir la serie
-  (recomendado)", read with the channel's verified copy: the series 769, 772, 773 merged (`cd53b72a`), then this pull
-  request rebuilt on it, one module and both checks. The branch rebased onto `main` without `1d4f63db` and `43267a4f`
-  (their documents kept); the ROADMAP's S4a State reconciled with `main`'s, which had moved the row to the workshop
-  document. The ceilings go into #772's `bin/lib/hook-count.mjs`: its row name `hook entries`, its install limit
-  and its runner-aware `ownerOf` (a plugin is its id, `engram@engram`) stay; `"hookCount": true` adds a cell per
-  owner and event, which fails over its ceiling, and fails on an owner `HOOK_CEILINGS` does not name. js-harness is not
-  in the table: its ceiling for an event is what `install` writes (`installEntries`), so the value has one home.
-  `ownerOf` now reads a single-quoted program path whole too, L5's case in the other quote. Not taken from `1d4f63db`:
-  entries with no command (#772 leaves prompt and agent hooks out, said in `liveEntries`), the INFO row with no Claude
-  settings (none is red: no entry, no cell over), and the move of `checkPayload`. Red first: 5 of 13 in
-  `hook-count.test.mjs`; then 13 of 13, and the gate's test of one extra `Stop` entry green. On this machine:
-  "PASS hook entries 26 entries in this home and project: js-harness 15, codegraph 1, codex@openai-codex 3,
-  engram@engram 7", every cell at its ceiling.
+- L7 (2026-11-06, his answer and T4): question 208 answered "Apagarlo igual (Recomendado)" (the lead's transcript
+  `0f71b2c6`, line 70355, 2026-11-06T19:08:10Z, read with `js-harness sessions --quote`); the lead's word: build it
+  test-first with its reviews, apply it once it is reviewed and merged. Searched first: the manifest's `settings`
+  record (`restoreSettings`) compares a value by identity, so it cannot hold a file's object; `stack install`'s
+  records undo a package or a registration by a command. So a record of its own, `pluginHooks`, with the file's whole
+  text before and after (`docs/RECORDS.md`), carried by `install` and `sync` like every on-request record
+  (`ON_REQUEST`) and put back by `uninstall`. `bin/lib/manifest.mjs` sat at its ceiling (1,752): the Windows
+  scheduled-task helpers moved whole to `bin/lib/scheduled-tasks.mjs`, re-exported, so it is 1,650 and its ceiling
+  goes down to that. Red then green: `bin/lib/engram-prompt-hook.test.mjs` against a stub, 0 of 9, then 9 of 9;
+  `stack engram-prompt` in `bin/stack.test.mjs`, red (exit 2, unknown argument), then green; the `hooks` row naming
+  the command over the engram cell, red 1 of 11, then 11 of 11. `node --test` over hook-count, engram-prompt-hook,
+  stack, manifest, install, stack-run, remote, conventions (structure, arguments, errors), readme and js-harness:
+  583 of 583.
+- L8 (2026-11-06, the reviews of `b309c50f`): lenses reliability and risk over `dc0d6c5..b309c50`: 0 findings each.
+  Codex over the same range, 2 parts: incorrect (0.96), three P2, all to take, tests first, after the pause for the
+  Desktop update (4.23118.0): (1) `restorePluginHooks` treats any read error as `gone` and `promptHookOn` then forgets
+  the only undo record while the hook stays off; only ENOENT is gone, any other read error keeps the record as
+  `failed`; (2) `stack engram-prompt off --home <dir>` prints `undo: js-harness stack engram-prompt on` without that
+  `--home`; (3) a manifest that does not parse or cannot be written throws out of `stackEngramPromptMain`; catch it at
+  the command and exit 1 with the reason.
+- L9 (2026-11-06, after the restart, 21:43Z): L8's three P2, tests first (`f87e2d69`, red 2 of 30 then the manifest
+  one, then 30 of 30); Codex's recheck over `6503545..f87e2d6`: 1 and 3 fixed, 2 not (the home quoted with
+  `JSON.stringify`, which no shell reads as written). `6e347957` quoted it the POSIX way; Codex's third review over
+  `f87e2d6..7693ac2` (0.99): still a P2, an apostrophe in the home is not read by PowerShell, which doubles it. By
+  rule:escalation-model nothing more is reviewed of it and it passes to claude-fable-5-1; the guard refused a Fable
+  sub-agent (rule:subagent-writer-model haiku, rule:subagent-reader-model opus), so the hand-off went to the lead as a
+  question (shared notes, `jh153-d8-escalation.md`). That review wrote no record: I edited `docs/FAILURES.md` while
+  it ran. The independent verifier over `dc0d6c55..f87e2d69` (opus, read-only): P1, the `uninstall` command read no
+  `pluginHooks` result, so a hooks file it could not put back was silent with exit 0 and `--everything` then removed
+  `~/.js-harness` with the only record; fixed in `a3c771de` (red: exit 0 where 1). P2, `off` wrote before it recorded,
+  so a failed record and a failed put-back left the hook out unrecorded; fixed in `7693ac2a` (red: the record kept
+  after the write). Its P3s: the scratch homes left behind, fixed there; a half-finished `on` run again says
+  "changed" for a file it already put back, and non-UTF-8 bytes would not round-trip exactly, both left (nothing is
+  lost; engram's file is plain JSON). Lenses reliability and risk over `6503545..932bbd6`: 0 findings each.
+  `node --test` over engram-prompt-hook, stack, install, manifest, hook-count, conventions and readme: 398 of 398.
+  The lead asked for 772 against this PR: neither row covers the other, both create `bin/lib/hook-count.mjs`; the
+  answer (fold 782 into 772's module after the series) is in the shared notes, `jh153-772-vs-782.md`.
+- L10 (2026-11-07, 00:20Z on): by rule `escalation-model` the lead started JH 155 on claude-fable-5-1 for the undo
+  line (brief `jh153-d8-fable-brief.md` in the shared notes). It committed `57fcab96`: the line uses `shellWord`
+  (PowerShell `''` on win32, sh `'\''` elsewhere) and the test pastes it into the real shell (red 19/1, green 157).
+  Checked here: 168 of 168 over stack, package-manager, install, engram-prompt-hook and conventions. Codex, a fresh
+  review from `932bbd6` as the tool asked after three rounds: correct, 0.93. Lenses reliability and readability over
+  `30725d2..57fcab9`: a readability WARNING (a backslash stayed bare on POSIX, where sh reads it as an escape) and a
+  SUGGESTION (review history in the comment); both fixed in `c3b939fa`, the word now an exported `undoHomeWord`
+  (red: sh read `/tmp/a\b` as `/tmp/ab`; green 21 of 21). Codex over `57fcab9..c3b939f`: correct, 0.98; lenses: 0,
+  both earlier findings fixed. The 772 question stays with him through the lead; nothing done on it.
+
+- L11 (2026-11-07, after #772 merged): his answer to question 211, "Unir la serie (recomendado)", read with the
+  channel's verified copy: the series 769, 772, 773 merged (`cd53b72a`), then #782 rebuilt on it, one module and both
+  checks. Its branch rebased onto `main` without `1d4f63db` and `43267a4f` (their documents kept); the ROADMAP's S4a
+  State reconciled with `main`'s, which had moved the row to the workshop document. The ceilings go into #772's
+  `bin/lib/hook-count.mjs` (`8be4ac0e`): its row name `hook entries`, its install limit and its runner-aware
+  `ownerOf` (a plugin is its id, `engram@engram`) stay; `"hookCount": true` adds a cell per owner and event, which
+  fails over its ceiling, and fails on an owner `HOOK_CEILINGS` does not name. js-harness is not in the table: its
+  ceiling for an event is what `install` writes (`installEntries`), so the value has one home. `ownerOf` now reads a
+  single-quoted program path whole too, L5's case in the other quote. Not taken from `1d4f63db`: entries with no
+  command (#772 leaves prompt and agent hooks out, said in `liveEntries`), the INFO row with no Claude settings (none
+  is red: no entry, no cell over), and the move of `checkPayload`. Red first: 5 of 13 in `hook-count.test.mjs`; then
+  13 of 13, and 355 of 355 over hook-count, check, payload, conventions, readme and spec. On this machine: "PASS hook
+  entries 26 entries in this home and project: js-harness 15, codegraph 1, codex@openai-codex 3, engram@engram 7",
+  every cell at its ceiling. Codex over `bb55096..8be4ac0`: correct (0.9); lenses reliability, readability and risk:
+  0 each. #782 force-pushed with a lease on its old tip and its ready notice sent. This branch then rebased onto it
+  (`git rebase --onto`, from `dc0d6c55`): D8's cell fix now keys `engram@engram UserPromptSubmit`, its test in the
+  module's new shape; `manifest.mjs`'s ceiling stays D8's 1,650 and `check.mjs`'s `main`'s 2,008; the imports of
+  `stack.mjs` joined with `stack upgrade`'s.
+
+- L12 (2026-11-07, the reviews of the rebased slice 2): 722 of 722 over the touched modules' tests after the rebase.
+  Lenses reliability, risk and readability over `8be4ac0..38c14c0`: 0 each. Codex, 3 parts: one P2 at 0.96, taken,
+  tests first: `off` wrote the hooks file with `fs.writeFileSync`, so a write that truncated it and threw lost the
+  original with its record; `on`'s write back had the same shape. Both now write through `replaceFile` (a temporary
+  sibling, then one rename), moved from `commit-msg.mjs` into `bin/lib/atomic-write.mjs` (`2e0e78a8`). Red: 2 of 13,
+  a failing rename leaving the file as it was, no `.tmp` behind; then 418 of 418. Codex over `38c14c0..2e0e78a`:
+  correct (0.96), the P2 fixed; lenses reliability and risk: 0 each.
+
+## Next step
+State (2026-11-07, JH 153, worktree `D:js-harness.claudeworktreesprobe-auto-archive-3b36c3`): slice 1 is PR #782
+(branch `claude/f8-s4a-hooks-5da26e`), rebuilt on `main` after #772 (L11), reviewed, ready notice sent. Slice 2 is
+PR #784 (branch `claude/f8-s4a-d8`), rebased onto the new #782; D8 is answered "Apagarlo igual" (L7), its findings
+fixed (L9, L10, L12), every code commit reviewed. Next: force-push #784, the lead told. After both merge (T5): a
+question through the lead to run `js-harness stack engram-prompt off` on his machine, then the engram
+`UserPromptSubmit` cell leaves `HOOK_CEILINGS`, then T6 (ROADMAP S4a State, summary, `notify --kind closed`).
