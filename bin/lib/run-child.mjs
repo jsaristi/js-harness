@@ -59,13 +59,29 @@ export function runChild(command, args, { env = process.env, cwd, onOutput = () 
 
 /** Runs `command args` on the terminal itself (stdin, stdout and stderr inherited); resolves to `{ code }`, plus
  * `error` when it could not start. The caller gives the terminal up first and takes it back after. Aborting
- * `signal` (the menu ending on a termination or a hangup) stops the child and its tree. */
-export function handOff(command, args, { env = process.env, cwd, signal, spawn = nodeSpawn, platform = process.platform, kill = (child, lifetime) => defaultKill(child, lifetime, platform) } = {}) {
+ * `signal` (the menu ending on a termination or a hangup) stops the child and its tree. When the menu's `stdin` is
+ * no terminal (a pipe, as the walk drives it), the child gets a pipe of its own and the menu passes its keys on
+ * until the child ends: a child given the menu's pipe hung for good on Windows as it opened its stdin, while the
+ * menu's own read of that pipe was still pending (T6b, odd/tasks/stack-upgrade.md). */
+export function handOff(command, args, { env = process.env, cwd, signal, spawn = nodeSpawn, platform = process.platform, kill = (child, lifetime) => defaultKill(child, lifetime, platform), stdin = process.stdin } = {}) {
   if (signal?.aborted) return Promise.resolve({ code: null, cancelled: true });
   return new Promise((resolve) => {
     let cancelled = false;
     const lifetime = { startedAt: Date.now() };
-    const child = spawn(command, args, { env, cwd, stdio: 'inherit' });
+    const piped = !stdin.isTTY;
+    const child = spawn(command, args, { env, cwd, stdio: piped ? ['pipe', 'inherit', 'inherit'] : 'inherit' });
+    const passOn = (chunk) => child.stdin?.write(chunk);
+    if (piped && child.stdin) {
+      child.stdin.on('error', () => {}); // a child that exits before reading closes its end: nothing to pass on
+      stdin.on('data', passOn);
+      stdin.resume();
+    }
+    const stopPassing = () => {
+      if (!piped) return;
+      stdin.removeListener('data', passOn);
+      stdin.pause();
+      child.stdin?.end();
+    };
     const onAbort = () => {
       cancelled = true;
       setImmediate(() => stopTree(child, lifetime, kill));
@@ -73,6 +89,7 @@ export function handOff(command, args, { env = process.env, cwd, signal, spawn =
     signal?.addEventListener('abort', onAbort, { once: true });
     const settle = (result) => {
       signal?.removeEventListener('abort', onAbort);
+      stopPassing();
       resolve(result);
     };
     child.on('exit', () => { lifetime.exitedAt = Date.now(); });

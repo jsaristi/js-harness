@@ -108,7 +108,25 @@ test('handOff gives the child the terminal itself and resolves to its exit code'
     // The real spawn with no terminal of its own, so the test's output stays clean.
     return realSpawn(command, args, { stdio: 'ignore' });
   };
-  const result = await handOff(node, ['-e', 'process.exitCode = 4'], { spawn: fakeSpawn });
+  const result = await handOff(node, ['-e', 'process.exitCode = 4'], { spawn: fakeSpawn, stdin: { isTTY: true } });
   assert.equal(options.stdio, 'inherit');
   assert.deepEqual(result, { code: 4 });
+});
+
+// The walk on a real console (odd/tasks/stack-upgrade.md, T6b): the menu read from a pipe, and the Update it handed
+// that pipe hung for good on Windows as it opened its stdin, while the menu's own read of it was still pending.
+test('handOff gives a child its own stdin when the menu\'s is no terminal, and passes the keys on until it ends', async () => {
+  const { PassThrough } = await import('node:stream');
+  const stdin = new PassThrough();
+  let options;
+  const spawn = (command, args, opts) => {
+    options = opts;
+    return realSpawn(command, args, { ...opts, stdio: [opts.stdio[0], 'ignore', 'ignore'] });
+  };
+  const ending = handOff(node, ['-e', "process.stdin.once('data', (d) => process.exit(String(d).trim().length))"], { spawn, stdin });
+  stdin.write('abc\n');
+  assert.deepEqual(await ending, { code: 3 }, 'the key reached the child');
+  assert.deepEqual(options.stdio, ['pipe', 'inherit', 'inherit']);
+  assert.equal(stdin.listenerCount('data'), 0, 'nothing is passed on once it ended');
+  assert.equal(stdin.isPaused(), true, 'the menu\'s stdin is left paused, as the menu paused it before the hand-off');
 });
