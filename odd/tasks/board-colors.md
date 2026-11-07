@@ -61,9 +61,9 @@ section.
    transcript 0f71b2c6, 2026-11-07, through the lead's message to this session).
 
 ## Tasks
-- [ ] T1 (build) S1: `yours` right under the header, items tagged `URGENTE · `, `PRIORITARIO · ` or `OPCIONES · `
-  shown with a colored tag and ordered by level; the lead's skill line says how to tag.
-- [ ] T2 (build) S2: one color meaning across the status box, the recent list, the session cards, the timeline by kind,
+- [x] T1 (build) S1: `yours` right under the header, items tagged `URGENTE · `, `PRIORITARIO · ` or `OPCIONES · `
+  shown with a colored tag and ordered by level; the lead's skill line says how to tag: `a382627`.
+- [x] T2 (build) S2, `a382627`: one color meaning across the status box, the recent list, the session cards, the timeline by kind,
   the route and the yours items, with a legend at the top; light and dark, phone width.
 
 ## Log
@@ -76,3 +76,6 @@ section.
 - L3 The lead's message (2026-11-07), spec 2, added to the same PR, with the binding: red = his URGENTE, a late or
   quiet session, a stale board; amber = PRIORITARIO, running work; blue = waiting on him or on a session, OPCIONES;
   green = done or passing.
+- L4 Reviews of e2d1c873..a382627: Codex, the patch is correct (0.91), no finding; the readability and reliability
+  lenses, 0 findings each. Not checked: the page drawn in a browser at phone width (no live db here); the contrast is
+  measured from the tokens, not from a screenshot.
