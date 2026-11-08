@@ -92,8 +92,9 @@ the question names that.
   #772's `hook entries` row after the series merged, his answer to question 211 — L11
 - [x] T3 (kind: verify) spec 1: Codex and the lenses over T2, PR 1, ready notice — L5, L6
 - [x] T4 (kind: build) spec 2: the command that turns the engram prompt hook off and on, backed up and recorded — L7
-- [ ] T5 (kind: verify) spec 2: his yes through the lead; applied; the engram `UserPromptSubmit` ceiling lowered to 0
-- [ ] T6 (kind: docs) ROADMAP S4a State, SPEC, summary under `docs/sessions/`
+- [x] T5 (kind: verify) spec 2: his yes through the lead; applied; the engram `UserPromptSubmit` ceiling lowered to 0
+  — L14
+- [x] T6 (kind: docs) ROADMAP S4a State, SPEC, summary under `docs/sessions/` — L14
 
 ## Log
 - L1 (2026-11-06, the request as written): "You are the session \"JH 153 · F8 S4a: the attribution hook and the hook
@@ -211,10 +212,27 @@ the question names that.
   question 213 (782) and question 214 (784 after it) came through the lead, who landed #782 as `b099fa05` and #784 as
   `5dc274c3`, green here and on Actions (the lead's word, both heads checked in `main` with
   `git merge-base --is-ancestor`). Nothing is applied to his `~/.claude`: T5 waits for his return.
+- L14 (2026-11-08, D8 applied): his yes to question 221, "Aplicar D8 (recomendado)" (the lead's transcript `0f71b2c6`,
+  17:40 local, relayed by the lead). The lead ran `js-harness stack engram-prompt off`; its undo is
+  `js-harness stack engram-prompt on`, and it takes effect at his next Claude restart. Checked here: the plugin's
+  `hooks.json` (`~/.claude/plugins/cache/engram/engram/0.1.19/hooks/hooks.json`, written 17:40) holds
+  `PreToolUse`, `SessionStart`, `SubagentStop` and `SessionEnd`, no `UserPromptSubmit`, and the machine manifest
+  (`~/.js-harness/manifest.json`) records it. The engram `UserPromptSubmit` cell left `HOOK_CEILINGS`, test first: the
+  D8 test, now the hook coming back with an engram plugin update, failed at a ceiling of 1 and passes at 0, naming
+  `off`. The lead asked for a docs PR; T5's own line holds the ceiling, so the PR carries that one-line code change
+  with its reviews. T6: ROADMAP S4a State, SPEC, `docs/sessions/2026-11-08-jh-153-f8-s4a-the-attribution-hook-and-the-hook-count.md`.
+- L15 (2026-11-08, engram 0.1.22): the lead updated engram to 3.7.0 and its plugin to 0.1.22 (his yes to question
+  222) and ran D8 again; from then every commit on this machine was refused by the `hook entries` row (found by JH
+  158). Checked here: `~/.claude/plugins/installed_plugins.json` points `engram@engram` at
+  `cache/engram/engram/0.1.22`, whose `hooks/hooks.json` holds `PreToolUse` 1, `SessionStart` 3, `PostToolUse` 1
+  (matcher `^SubagentHandback$`, `scripts/subagent-stop.sh`), `SubagentStop` 1 and `SessionEnd` 1, no
+  `UserPromptSubmit`. His answer to question 225, "Aceptar el hook (recomendado)" (the lead's transcript `0f71b2c6`,
+  line 74904, 17:49 local, relayed by the lead): engram's `PostToolUse` ceiling is 1, said with its reason in the
+  table's comment, and its `UserPromptSubmit` cell stays out (L14). `CELL_FIXES` keeps D8's command: a ceiling of 0
+  already names it. Red first: the green test at the machine's count and the over-ceiling test, 2 of 14; then 14 of
+  14.
 
 ## Next step
-State (2026-11-07, JH 153): T1 to T4 are done, and #782 and #784 are on `main` (L13). Next, T5, when he is back: a
-question through the lead (`notify --kind question`) to run `js-harness stack engram-prompt off` on his machine. It
-names what the hook also does, which is save his prompts to engram (L3). After it is applied, the engram
-`UserPromptSubmit` cell leaves `HOOK_CEILINGS`, test first. Then T6: ROADMAP S4a State, a summary under
-`docs/sessions/`, `notify --kind closed`.
+State (2026-11-08, JH 153): T1 to T6 are done (L14), with engram 0.1.22's `PostToolUse` hook accepted (L15); S4a
+closes with this pull request. Nothing is left in this
+document. Undoing D8 is `js-harness stack engram-prompt on`.
