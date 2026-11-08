@@ -637,8 +637,10 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   `odd/tasks/f8-s4a-hook-count.md`, L2). The hook count: `odd/tasks/workshop-product-split.md` (D0, #772) built the
   `hook entries` row with the install limit; his yes to question 211 folds S4a's ceilings into it, a table by owner
   and event counted on 2026-11-06 that fails on a new owner or a cell over its ceiling where `harness.json` says
-  `"hookCount": true` (L3). D8 answered "Apagarlo igual": `js-harness stack engram-prompt off|on`, recorded so
-  `uninstall` puts it back (PR 2 of that document).
+  `"hookCount": true` (L3), merged in #782. D8 answered "Apagarlo igual": `js-harness stack engram-prompt off|on`,
+  recorded so `uninstall` puts it back, merged in #784; applied to his machine on 2026-11-08 after his yes to question
+  221 ("Aplicar D8 (recomendado)"), so the engram `UserPromptSubmit` cell left the table (L14); engram's plugin 0.1.22
+  added a `PostToolUse` entry, accepted by his answer to question 225 as a ceiling of 1 (L15). **S4a is done.**
 
 ### S4b Contradictions to zero
 - **Changes:** contract-first as a `check` refusal for a new feature document; the remaining pairs of

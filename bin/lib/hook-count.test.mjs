@@ -124,21 +124,22 @@ test('a missing or malformed settings file counts nothing and never throws', () 
   });
 });
 
-// The machine's entries on 2026-11-06 beyond js-harness's own (odd/tasks/f8-s4a-hook-count.md, L3): codegraph's prompt
-// hook and the hooks of the two plugins the stack installs.
+// The machine's entries beyond js-harness's own, counted on 2026-11-06 (odd/tasks/f8-s4a-hook-count.md, L3), less the
+// engram prompt hook D8 took out and plus the `PostToolUse` hook engram's plugin 0.1.22 added, both on 2026-11-08
+// (L14, L15): codegraph's prompt hook and the hooks of the two plugins the stack installs.
 const STACK_ENTRIES = [
   { event: 'UserPromptSubmit', command: 'codegraph.cmd prompt-hook' },
-  ...['PreToolUse', 'SessionStart', 'SessionStart', 'SessionStart', 'UserPromptSubmit', 'SubagentStop', 'SessionEnd'].map((event) => ({ event, command: '"${CLAUDE_PLUGIN_ROOT}/scripts/x.sh"', plugin: 'engram@engram' })),
+  ...['PreToolUse', 'SessionStart', 'SessionStart', 'SessionStart', 'PostToolUse', 'SubagentStop', 'SessionEnd'].map((event) => ({ event, command: '"${CLAUDE_PLUGIN_ROOT}/scripts/x.sh"', plugin: 'engram@engram' })),
   ...['SessionStart', 'SessionEnd', 'Stop'].map((event) => ({ event, command: 'node "${CLAUDE_PLUGIN_ROOT}/scripts/x.mjs"', plugin: 'codex@openai-codex' })),
 ];
 const counted = { declared: { hookCount: true } };
 
-test('with "hookCount": true the row holds the machine to its ceilings and is green at the count of 2026-11-06', () => {
+test('with "hookCount": true the row holds the machine to its ceilings and is green at the count after D8', () => {
   const row = hookEntriesRow('.', '.', { ...counted, own: false, live: [...installEntries(), ...STACK_ENTRIES] });
   assert.equal(row.pass, true, row.lines.join('\n'));
   assert.equal(row.info, false, 'a project that turns the count on is held to it');
   assert.match(row.detail, /26 entries/);
-  assert.ok(row.lines.some((line) => line === 'engram@engram: PreToolUse 1/1, SessionStart 3/3, UserPromptSubmit 1/1, SubagentStop 1/1, SessionEnd 1/1'), row.lines.join('\n'));
+  assert.ok(row.lines.some((line) => line === 'engram@engram: PreToolUse 1/1, SessionStart 3/3, PostToolUse 1/1, SubagentStop 1/1, SessionEnd 1/1'), row.lines.join('\n'));
 });
 
 test('with "hookCount": true one extra Stop entry of js-harness turns the row red: its ceiling is what install writes', () => {
@@ -151,11 +152,11 @@ test('with "hookCount": true one extra Stop entry of js-harness turns the row re
 });
 
 test('with "hookCount": true a new owner and a plugin cell over its ceiling turn the row red, each named once', () => {
-  const live = [...installEntries(), ...STACK_ENTRIES, { event: 'PreToolUse', command: 'orca-hook.cmd || echo {}' }, { event: 'UserPromptSubmit', command: 'x', plugin: 'engram@engram' }];
+  const live = [...installEntries(), ...STACK_ENTRIES, { event: 'PreToolUse', command: 'orca-hook.cmd || echo {}' }, { event: 'SessionStart', command: 'x', plugin: 'engram@engram' }];
   const row = hookEntriesRow('.', '.', { ...counted, own: false, live });
   assert.equal(row.pass, false);
   assert.ok(row.lines.some((line) => line === 'orca-hook: a new owner, not in the table: PreToolUse 1'), row.lines.join('\n'));
-  assert.ok(row.lines.some((line) => line.startsWith('engram@engram UserPromptSubmit: 2 entries, over its ceiling of 1')), row.lines.join('\n'));
+  assert.ok(row.lines.some((line) => line === 'engram@engram SessionStart: 4 entries, over its ceiling of 3'), row.lines.join('\n'));
   assert.equal(row.lines.filter((line) => line.includes('orca-hook')).length, 1, 'the failure names the owner; no warning repeats it');
   assert.match(row.detail, /2 over the table/);
 });
@@ -173,9 +174,9 @@ test('the owner of a command whose program is a single-quoted path with a space 
   assert.equal(ownerOf({ command: "'/opt/my tools/guard-hook.sh' --hook" }), 'guard-hook');
 });
 
-test('the engram prompt hook over its ceiling names the command that takes it out (D8)', () => {
+test('the engram prompt hook back, as an engram plugin update brings it, is over its ceiling of 0 and names the command that takes it out (D8)', () => {
   const live = [...installEntries(), ...STACK_ENTRIES, { event: 'UserPromptSubmit', command: 'x', plugin: 'engram@engram' }];
   const row = hookEntriesRow('.', '.', { ...counted, own: false, live });
   assert.equal(row.pass, false);
-  assert.ok(row.lines.some((line) => line === 'engram@engram UserPromptSubmit: 2 entries, over its ceiling of 1; js-harness stack engram-prompt off takes it out'), row.lines.join('\n'));
+  assert.ok(row.lines.some((line) => line === 'engram@engram UserPromptSubmit: 1 entry, over its ceiling of 0; js-harness stack engram-prompt off takes it out'), row.lines.join('\n'));
 });
