@@ -234,7 +234,7 @@ test('the board page opens with the three newest rows that say something was don
   const kinds = page.match(/^const DONE_KINDS = .*;\r?$/m)?.[0];
   const source = page.match(/function lastDone\([\s\S]*?\r?\n}\r?\n/)?.[0];
   assert.ok(kinds && source, 'the page defines DONE_KINDS and lastDone');
-  assert.ok(page.indexOf('id="recent"') < page.indexOf('id="yours"'), 'the block comes first, under the header');
+  assert.ok(page.indexOf('id="yours"') < page.indexOf('id="recent"'), 'only what is his comes before it');
   const lastDone = new Function(`${kinds}\n${source}; return lastDone;`)();
   const row = (time, kind, session) => ({ time, kind, session });
   const rows = [
@@ -313,7 +313,7 @@ test('the board page keeps the status items it can draw and shows them before wh
   const states = page.match(/^const STATUS = .*;\r?$/m)?.[0];
   const source = page.match(/function statusItems\([\s\S]*?\r?\n}\r?\n/)?.[0];
   assert.ok(states && source, 'the page defines STATUS and statusItems');
-  assert.ok(page.indexOf('id="status"') < page.indexOf('id="yours"'), 'the cards come before "Lo que te toca"');
+  assert.ok(page.indexOf('id="yours"') < page.indexOf('id="status"'), '"Lo que te toca" comes before the cards');
   const statusItems = new Function(`${states}\n${source}; return statusItems;`)();
   assert.deepEqual(statusItems(undefined), []);
   assert.deepEqual(statusItems([
@@ -352,10 +352,12 @@ test('the board page counts the lead\'s check of the record apart from the newes
 // His words, 0f71b2c6 line 21816: the old questions he has not answered are on the board, each with the line he sends.
 test('the board lists what is his, then every open question with the line to ask for it, a session asking it said once', () => {
   const page = fs.readFileSync(new URL('../docs/live-board.html', import.meta.url), 'utf8');
+  const levels = page.match(/^const YOURS_LEVELS = .*;\r?$/m)?.[0];
+  const level = page.match(/function yoursLevel\([\s\S]*?\r?\n}\r?\n/)?.[0];
   const source = page.match(/function yoursItems\([\s\S]*?\r?\n}\r?\n/)?.[0];
-  assert.ok(source, 'the page defines yoursItems');
+  assert.ok(levels && level && source, 'the page defines YOURS_LEVELS, yoursLevel and yoursItems');
   assert.match(page, /const items = yoursItems\(summary, asking\);/, 'renderSummary lists them');
-  const yoursItems = new Function('label', 'words', 'ago', `${source}; return yoursItems;`)((row) => row.session, (row) => row.text, () => 'hace 6 días');
+  const yoursItems = new Function('label', 'words', 'ago', `${levels}\n${level}\n${source}; return yoursItems;`)((row) => row.session, (row) => row.text, () => 'hace 6 días');
   const questions = [
     { number: 56, from: 'JH ORQ', at: '2026-10-23T20:41:00.000Z', row: '2026-10-23T20:41:00.000Z-11111111', text: '¿Arrancamos con el audit?', ask: 'hazme la pregunta 56' },
     { number: 97, from: 'JH 60', at: '2026-10-27T13:59:00.000Z', row: '2026-10-27T13:59:00.000Z-60606060', text: '¿Cuál de los tres?', ask: 'hazme la pregunta 97' },
@@ -375,4 +377,60 @@ test('the board lists what is his, then every open question with the line to ask
   ]);
   assert.deepEqual(yoursItems(null, []), [], 'a summary from before has nothing of his');
   assert.deepEqual(yoursItems({ questions: [{ number: 'x' }, null] }, []), [], 'a question it cannot read is left out');
+});
+
+// odd/tasks/board-colors.md, spec 1: the lead opens an item of `yours` with its level; the board puts what is his right
+// under the header, each tagged item first, colored and in the order urgent, priority, options.
+test('the board puts what is his first, each item the lead tags urgent, priority or options in that order', () => {
+  const page = fs.readFileSync(new URL('../docs/live-board.html', import.meta.url), 'utf8');
+  const levels = page.match(/^const YOURS_LEVELS = .*;\r?$/m)?.[0];
+  const level = page.match(/function yoursLevel\([\s\S]*?\r?\n}\r?\n/)?.[0];
+  const source = page.match(/function yoursItems\([\s\S]*?\r?\n}\r?\n/)?.[0];
+  assert.ok(levels && level && source, 'the page defines YOURS_LEVELS, yoursLevel and yoursItems');
+  const header = page.indexOf('</header>');
+  const yours = page.indexOf('id="yours"');
+  for (const id of ['status-box', 'recent-box', 'who']) assert.ok(header < yours && yours < page.indexOf(`id="${id}"`), `right under the header, before ${id}`);
+  const yoursLevel = new Function(`${levels}\n${level}; return yoursLevel;`)();
+  assert.deepEqual(yoursLevel('URGENTE · Aprobar el gasto'), { level: 'urgente', label: 'Urgente', text: 'Aprobar el gasto' });
+  assert.deepEqual(yoursLevel('prioritario: revisar el PR 790'), { level: 'prioritario', label: 'Prioritario', text: 'revisar el PR 790' });
+  assert.deepEqual(yoursLevel('OPCIONES - A o B'), { level: 'opciones', label: 'Opciones', text: 'A o B' });
+  assert.deepEqual(yoursLevel('Urgentemente nada'), { level: null, label: null, text: 'Urgentemente nada' }, 'a word that only starts the same is no level');
+  assert.deepEqual(yoursLevel('URGENTE · '), { level: null, label: null, text: 'URGENTE · ' }, 'a tag with nothing after it is said as written');
+  const yoursItems = new Function('label', 'words', 'ago', `${levels}\n${level}\n${source}; return yoursItems;`)((row) => row.session, (row) => row.text, () => 'hace 1 h');
+  const asking = [{ latest: { id: 'r1', session: 'JH 9', time: '2026-11-07T08:00:00.000Z', text: '¿Sigo?' } }];
+  assert.deepEqual(yoursItems({ yours: ['Leer el informe', 'OPCIONES · A o B', 'PRIORITARIO · El PR 790', 'URGENTE · Aprobar el gasto', 'URGENTE · Cerrar la sesión'] }, asking), [
+    'URGENTE · Aprobar el gasto',
+    'URGENTE · Cerrar la sesión',
+    'PRIORITARIO · El PR 790',
+    'OPCIONES · A o B',
+    'Leer el informe',
+    'JH 9 te pregunta: ¿Sigo?',
+  ], 'by level, each level in the order written, then the plain items and the questions as before');
+});
+
+// odd/tasks/board-colors.md, spec 2: one color meaning across the board, said in a legend at the top: red urgent or
+// warning, amber in progress, blue waiting or information, green done.
+test('the board binds each state to one color, the same in every section, and says so at the top', () => {
+  const page = fs.readFileSync(new URL('../docs/live-board.html', import.meta.url), 'utf8');
+  const css = page.slice(0, page.indexOf('</style>'));
+  const head = page.slice(0, page.indexOf('</header>'));
+  assert.ok(head.includes('id="legend"'), 'the legend sits in the header');
+  for (const word of ['Rojo', 'Ámbar', 'Azul', 'Verde']) assert.ok(head.slice(head.indexOf('id="legend"')).includes(word), `the legend names ${word}`);
+  const token = { red: '--late', amber: '--wait', blue: '--run', green: '--ok' };
+  const bound = {
+    red: ['.y-urgente', '.s-late', '.s-quiet', '.live.stale', '.live.off', '.c-red'],
+    amber: ['.y-prioritario', '.s-working', '.stat.working', '.ev.k-opened::before', '.ev.k-note::before', '.st.now', '.c-amber'],
+    blue: ['.y-opciones', '.y-plain', '.s-asking', '.s-waiting', '.s-relieved', '.stat.waiting', '.ev.k-question::before', '.ev.k-waiting::before', '.c-blue'],
+    green: ['.s-ready', '.s-closed', '.stat.done', '.ev.k-closed::before', '.ev.k-ready::before', '.st.done', '.recent li::before', '.live.on', '.c-green'],
+  };
+  for (const [color, selectors] of Object.entries(bound)) {
+    for (const selector of selectors) {
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rule = css.match(new RegExp(`(?:^|[},\\s])${escaped}(?=[\\s,{])[^{]*\\{([^}]*)\\}`))?.[1];
+      assert.ok(rule, `${selector} has a rule`);
+      assert.match(rule, new RegExp(`var\\(${token[color]}(-soft)?\\)`), `${selector} is ${color}`);
+      for (const [other, name] of Object.entries(token)) if (other !== color) assert.doesNotMatch(rule, new RegExp(`var\\(${name}(-soft)?\\)`), `${selector} uses no ${other}`);
+    }
+  }
+  assert.doesNotMatch(page, /var\(--you/, 'no fifth color: what was purple is blue');
 });
