@@ -1843,6 +1843,11 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-11-06 — the lead's message to JH 153 on 2026-11-07 (claimed; the lead's own) — he was away from 21:49 on
   2026-11-06 to 07:25 on 2026-11-07 local (UTC-05:00) with no stretch opened, so his return had no forecast to measure
   against
+- Seen: 2026-11-07 — the lead's message to JH 153 on 2026-11-08, from his words at his return (claimed; the lead's
+  own) — an announced suspension: he said at 11:25 on 2026-11-07 local (UTC-05:00) that he was suspending the PC to
+  move to another place, and it stayed suspended until 17:16 on 2026-11-08, about 29.8 h, so no work could run and
+  nothing was lost. The miss is only in the record: it has no way to mark a planned shutdown, so the return check reads
+  it as an absence no stretch covered. A declared suspension should satisfy the check (a follow-up)
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 
