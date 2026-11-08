@@ -95,6 +95,9 @@ the question names that.
 - [x] T5 (kind: verify) spec 2: his yes through the lead; applied; the engram `UserPromptSubmit` ceiling lowered to 0
   — L14
 - [x] T6 (kind: docs) ROADMAP S4a State, SPEC, summary under `docs/sessions/` — L14
+- [ ] T7 (kind: build) a follow-up outside S4a, the lead's to schedule: stack upgrade of the engram plugin runs the hook
+  count after the update and names the cells that moved, before anyone commits (`docs/FAILURES.md`,
+  `stack-update-moved-hooks`) — L15
 
 ## Log
 - L1 (2026-11-06, the request as written): "You are the session \"JH 153 · F8 S4a: the attribution hook and the hook
@@ -234,5 +237,6 @@ the question names that.
 
 ## Next step
 State (2026-11-08, JH 153): T1 to T6 are done (L14), with engram 0.1.22's `PostToolUse` hook accepted (L15); S4a
-closes with this pull request. Nothing is left in this
-document. Undoing D8 is `js-harness stack engram-prompt on`.
+closes with this pull request. T7 is a follow-up outside S4a that the lead holds, the owed control of
+`stack-update-moved-hooks` in `docs/FAILURES.md`; nothing of S4a is left. Undoing D8 is
+`js-harness stack engram-prompt on`.

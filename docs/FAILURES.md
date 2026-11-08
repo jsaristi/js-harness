@@ -1642,6 +1642,17 @@ written.
   names (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at 6a9f605); on the safe side:
   nothing is written outside
 
+### stack-update-moved-hooks
+A tool of the stack was updated on purpose without the hook count read after it, so a hook entry the update added was
+first seen when the `hook entries` row refused every commit on the machine.
+- Class: unseen-state
+- Seen: 2026-11-08 — the lead's message to JH 153 (claimed; the lead's own) — at 17:42 local (UTC-05:00) the lead
+  updated the engram plugin to 0.1.22 (his yes to question 222) without running `check`'s hook row first; the plugin
+  added a `PostToolUse` entry, the row refused every commit, and JH 158 found it at 17:46. Fixed by the ceilings pull
+  request of odd/tasks/f8-s4a-hook-count.md (L15), on his answer to question 225
+- Control: owed — odd/tasks/f8-s4a-hook-count.md — "stack upgrade of the engram plugin runs the hook count after the
+  update and names the cells that moved"
+
 ### stacked-pr-base-order
 A stacked pull request had its base changed after the one under it was merged; GitHub reported a
 conflict git did not reproduce and the merge was refused.
