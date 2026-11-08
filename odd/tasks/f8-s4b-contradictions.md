@@ -148,6 +148,19 @@ lead's brief says.
    is refused, not rerun".
 5. The same: "the incident set no worse"; Cost: "about $13, the incident rerun".
 
+## Next step
+State at 2026-11-08 ~18:40 local: `09158b1c` (this document) committed. Uncommitted and green locally: T2 and T3
+(`bin/contract.mjs`, `bin/check.mjs`, `bin/lib/depth-pass.mjs` and its test, `bin/lib/contradictions.test.mjs`), and
+T5 plus the convention test (`bin/lib/next-step.mjs` and test, `--at` in `bin/lens-review.mjs` and
+`bin/codex-review.mjs` with their tests, the helpers moved to `bin/lib/codex-review-answer.mjs`, the ceiling in
+`bin/conventions-structure.test.mjs`, `bin/conventions-next-step.test.mjs`). The first commit of T2+T3 failed CI in
+`bin/lib/gentle-ai-absence.test.mjs` because the pairs test named the old stack; fixed, not yet recommitted. Next:
+commit T2+T3 (slice 1), then T5 and the convention test (slice 2a); Codex and the lenses over each; push, PR 1,
+`notify --kind ready --pr <n>`. Then T6 and T7, the conversions, as two writers in parallel with disjoint edit
+surfaces (review surfaces; plain `check` rows), the legacy list emptied after both; then the `rule/` branch for pair 9
+(`js-harness rules change questions-one-place`, his words in L7) and the pair-9 row updated; then the $13 incident
+rerun asked through the lead.
+
 ## Tasks
 - [x] T1 (kind: docs) this document and its depth pass, committed alone; the plan's double read — L1 to L5
 - [x] T2 (kind: build) spec 1: the contract-first refusal, tests first — L6

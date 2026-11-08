@@ -9,7 +9,7 @@
 // `origin/master`) does not: once a feature is on the trunk its order was judged, and a squash, a refuted plan left
 // there or another feature's later code says nothing new. Pure: the command reads the history (`depthPassFor`,
 // ../contract.mjs) and hands this module what it read.
-import { parseContract } from './contract.mjs';
+import { isContract, parseContract } from './contract.mjs';
 import { tokenize } from './progress.mjs';
 import { citationsIn } from './citations.mjs';
 
@@ -104,6 +104,9 @@ export function depthPassOrder({ branch, staged, verdict, answered }) {
 export function depthPassJudge({ since, today, opened, branch, staged, onTrunk, trail, version }) {
   return (file, markdown) => {
     if ((opened.get(file)?.day ?? today) < since) return [];
+    // Contract first (odd/tasks/f8-s4b-contradictions.md, spec 1): the pass sits after the contract, so a document
+    // opened since the day with no contract is refused as one, not skipped.
+    if (!isContract(markdown)) return [`not a contract: a feature document opened since ${since} opens with its task contract, "## Goal" first; js-harness contract template prints it`];
     const errors = depthPassText(markdown, file);
     if (errors.includes(NO_PASS) || branch === null) return errors;
     // A verdict already on the trunk was judged on the branch that brought it.

@@ -99,11 +99,12 @@ function gitTopLevel(cwd, spawn) {
 
 /** Every `odd/tasks/*.md` under `root` that is a contract, sorted by name, as `{ label, markdown }`
  * (label: the repo-relative path). A file that cannot be read comes back as `{ label, error }` so a
- * gate reports it instead of skipping it; an absent `odd/tasks/` is simply no contracts. Shared with
- * the `contracts` row of `bin/check.mjs`. */
+ * gate reports it instead of skipping it; an absent `odd/tasks/` is simply no contracts. With `documents`, a file
+ * that is no contract comes too, as `{ label, markdown, notContract: true }`, for the depth-pass control to judge
+ * (contract first, odd/tasks/f8-s4b-contradictions.md, spec 1). Shared with the `contracts` row of `bin/check.mjs`. */
 export function discoverContracts(
   root,
-  { readFile = (p) => fs.readFileSync(p, 'utf8'), readdir = (p) => fs.readdirSync(p), stat = (p) => fs.statSync(p) } = {},
+  { readFile = (p) => fs.readFileSync(p, 'utf8'), readdir = (p) => fs.readdirSync(p), stat = (p) => fs.statSync(p), documents = false } = {},
 ) {
   const dir = path.join(root, 'odd', 'tasks');
   let names;
@@ -120,6 +121,7 @@ export function discoverContracts(
       if (!stat(absolute).isFile()) continue; // e.g. a directory named `x.md`
       const markdown = readFile(absolute);
       if (isContract(markdown)) found.push({ label, markdown });
+      else if (documents) found.push({ label, markdown, notContract: true });
     } catch (err) {
       // Fail closed on purpose: a file we cannot read is not known to be a non-contract, and a gate
       // must not hide it.
@@ -131,14 +133,20 @@ export function discoverContracts(
 
 /** One `{ label, ok, errors }` per entry from `discoverContracts` or from explicit files. Given `depthPass`, the
  * control `depthPassFor` builds, each entry is also held to `rule:depth-pass` at its project path, `file` or else
- * its label; `run` and `goal` give none, since the pass is a gate's question and not a run's. */
+ * its label; `run` and `goal` give none, since the pass is a gate's question and not a run's. A discovered entry that is
+ * no contract (`notContract`) comes back only when the control refuses it, so a document opened before the day stays
+ * out of the results as it always was. */
 export function validateEntries(entries, { depthPass = null } = {}) {
-  return entries.map(({ label, file = label, markdown, error }) => {
-    if (error) return { label, ok: false, errors: [`cannot read: ${error}`] };
-    if (!isContract(markdown)) return { label, ok: false, errors: ['not a contract: no "## Goal" heading'] };
+  return entries.flatMap(({ label, file = label, markdown, error, notContract = false }) => {
+    if (error) return [{ label, ok: false, errors: [`cannot read: ${error}`] }];
+    if (notContract) {
+      const errors = depthPass && file !== null ? depthPass(file, markdown) : [];
+      return errors.length ? [{ label, ok: false, errors }] : [];
+    }
+    if (!isContract(markdown)) return [{ label, ok: false, errors: ['not a contract: no "## Goal" heading'] }];
     const { errors } = validateContract(markdown);
     if (depthPass && file !== null) errors.push(...depthPass(file, markdown));
-    return { label, ok: errors.length === 0, errors };
+    return [{ label, ok: errors.length === 0, errors }];
   });
 }
 
@@ -167,12 +175,12 @@ function checkCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn }) {
   }
   const cwd = path.resolve(parsed.cwd ?? defaultCwd);
   const root = projectRoot(cwd, spawn);
-  const entries = parsed.files.length ? explicitEntries(parsed.files, cwd, root) : discoverContracts(root);
-  if (entries.length === 0) {
+  const entries = parsed.files.length ? explicitEntries(parsed.files, cwd, root) : discoverContracts(root, { documents: true });
+  const results = validateEntries(entries, { depthPass: depthPassFor(root) });
+  if (results.length === 0) {
     stdout('no contracts under odd/tasks');
     return 0;
   }
-  const results = validateEntries(entries, { depthPass: depthPassFor(root) });
   for (const { label, ok, errors } of results) {
     stdout(`${ok ? 'PASS' : 'FAIL'}  ${label}`);
     for (const reason of errors) stdout(`      ${reason}`);

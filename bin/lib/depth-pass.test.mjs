@@ -331,3 +331,45 @@ test('the contracts row of check carries the control', (t) => {
   assert.equal(row.pass, false);
   assert.deepEqual(row.lines, [FILE, '  no "## Depth pass": large work holds one before its first code commit (js-harness-protocols section 9)']);
 });
+
+// Contract first (odd/tasks/f8-s4b-contradictions.md, spec 1): a feature document opened since the day opens with its
+// task contract, so one with no `## Goal` is refused, by the contracts row and by `contract check`, instead of being
+// skipped as no contract.
+const NOT_A_CONTRACT = `# Feature\n\n${SPECS}\n## Tasks\n- [ ] T1 a task\n\n## Log\n- L1 the request\n`;
+const NOT_A_CONTRACT_FAULT = 'not a contract: a feature document opened since 2026-11-01 opens with its task contract, "## Goal" first; js-harness contract template prints it';
+
+test('a document with no "## Goal" opened since the day is refused by the contracts row, committed or not', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  write(root, FILE, NOT_A_CONTRACT);
+  const untracked = checkContracts(root);
+  assert.equal(untracked.pass, false);
+  assert.deepEqual(untracked.lines, [FILE, `  ${NOT_A_CONTRACT_FAULT}`]);
+  commit(root, 'docs: open', FILE);
+  assert.deepEqual(checkContracts(root).lines, [FILE, `  ${NOT_A_CONTRACT_FAULT}`]);
+});
+
+test('contract check with no file named refuses a document with no "## Goal" opened since the day', async (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  write(root, FILE, NOT_A_CONTRACT);
+  const out = [];
+  const code = await contractMain(['check', '--cwd', root], {}, { stdout: (line) => out.push(line), stderr: () => {} });
+  assert.equal(code, 1);
+  assert.deepEqual(out, [`FAIL  ${FILE}`, `      ${NOT_A_CONTRACT_FAULT}`]);
+});
+
+test('a document with no "## Goal" opened before the day, or in a project with no depthPassSince, is left as it was', (t) => {
+  const none = repo(null);
+  const later = repo('2026-11-03');
+  t.after(() => [none, later].forEach((root) => fs.rmSync(root, { recursive: true, force: true })));
+  for (const root of [none, later]) {
+    write(root, FILE, NOT_A_CONTRACT);
+    commit(root, 'docs: open', FILE);
+    write(root, 'odd/tasks/other.md', `${CONTRACT}\n${PASS}\n${SPECS}`);
+    commit(root, 'docs: other', 'odd/tasks/other.md');
+    const row = checkContracts(root);
+    assert.equal(row.pass, true, JSON.stringify(row));
+    assert.equal(row.detail, '1 contract checked', 'a document left as it was is not counted as a contract');
+  }
+});
