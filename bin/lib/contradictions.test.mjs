@@ -125,7 +125,12 @@ const PAIRS = [
     pair: 10,
     sides: '"never for size" and the model guide\'s advice against self-verification, against the double review',
     closed: 'his decision: rule:double-review, from his words',
-    present: [['docs/RULES.md', '### double-review'], ['docs/RULES.md', 'Source: his words of 2026-10-31, 2026-10-31, 2026-11-01']],
+    present: [
+      ['docs/RULES.md', '### double-review'],
+      ['docs/RULES.md', 'Source: his words of 2026-10-31, 2026-10-31, 2026-11-01'],
+      ['docs/RULES.md', 'Everything that proposes something passes a blind Claude and Codex read, code passes its own pair'],
+      ['protocols-skill', 'first passes a Claude reader and a Codex reader, blind, on one frozen copy'],
+    ],
   },
 ];
 

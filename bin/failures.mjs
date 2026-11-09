@@ -8,6 +8,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { holdsPhrase, parseRegister, summarize, weeklyCounts } from './lib/failures.mjs';
 import { gitTopLevel } from './lib/project.mjs';
+import { formatRow } from './lib/next-step.mjs';
 
 const REGISTER = 'docs/FAILURES.md';
 export const USAGE = 'Usage: js-harness failures | failures <id> | failures check [--settled] | failures weeks';
@@ -102,12 +103,6 @@ function numbers(counts) {
 export function checkFailures(cwd, { readFile = readText } = {}) {
   const read = readRegister(cwd, readFile);
   return read ? [read.row] : [];
-}
-
-/** The row as the gate prints it (`formatRow` of `bin/check.mjs`), for `failures check`. */
-function formatRow(row) {
-  const lines = (row.lines ?? []).map((line) => `\n      ${line}`).join('');
-  return `${row.pass ? 'PASS' : 'FAIL'}  ${row.name}  ${row.detail}${lines}`;
 }
 
 /** Walks argv token by token, so a flag or a second word it does not know is a usage error and never

@@ -1524,7 +1524,7 @@ test(`the usage names no session: its flags are those of a review, and its secon
   const result = await run(['--cwd', '.']);
   assert.equal(result.code, 2);
   const [, , usage, loads, ...more] = result.err.split('\n');
-  assert.equal(usage, 'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--request <text>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] [--unavailable <reason>] [--cwd <path>] [--home <path>]');
+  assert.equal(usage, 'Usage: js-harness codex-review --base <rev> [--at <commit>] [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--request <text>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] [--unavailable <reason>] [--cwd <path>] [--home <path>]');
   assert.equal(
     loads,
     `Codex gets the diff, the repository to read and the project's AGENTS.md, and none of your Codex configuration; the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.`,
@@ -1542,6 +1542,7 @@ test(`the usage names no session: its flags are those of a review, and its secon
     '`--fresh` reviews every part of a range again, where a run otherwise keeps the parts that passed in an earlier run of it.',
     '`--keep-home` leaves the Codex home of the run in place after it.',
     'A merge below HEAD, after code commits that each have a record, is cut in two turns where two cost less than one review: the merge, then the commits after it.',
+    '`--at <commit>` names the head a printed command was computed at (check --push and the merge door print it): the run is refused, not started, when HEAD is another commit.',
   ]);
   assert.ok(loads.includes(`on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`), loads);
   // Nothing in it names a session to choose, nor says that a review can run on a model of the user's choosing.
@@ -5380,7 +5381,7 @@ test('--max-parts takes a positive integer, and --plan does not stand beside --u
     const result = await run(['--base', 'HEAD~1', ...flags, ...nothing.home, '--cwd', root], nothing.deps);
     assert.equal(result.code, 2, which);
     assert.match(result.err, message, which);
-    assert.match(result.err, /\n\nUsage: js-harness codex-review --base <rev> \[--plan\] .*\[--part-lines <n>\] \[--max-parts <n>\]/, which);
+    assert.match(result.err, /\n\nUsage: js-harness codex-review --base <rev> \[--at <commit>\] \[--plan\] .*\[--part-lines <n>\] \[--max-parts <n>\]/, which);
     assert.equal(result.out, '', which);
     nothing.untouched(which);
   }
@@ -6440,6 +6441,21 @@ test('the ends of the range and the git folder are asked for one by one when the
   }
 });
 
+// A printed command is bound to the head it was computed at (odd/tasks/f8-s4b-contradictions.md, spec 4).
+test('--at plans at the head it names and is refused, with nothing started or recorded, once HEAD moved', async () => {
+  const { root, base, head } = makeRepo();
+  const codex = fakeCodex('');
+  const same = await run(['--base', base, '--at', head.slice(0, 12), '--plan', '--cwd', root], codex);
+  assert.equal(same.code, 0, same.err);
+  git(root, 'commit', '-q', '--allow-empty', '-m', 'three');
+  const moved = await run(['--base', base, '--at', head.slice(0, 12), '--cwd', root], codex);
+  assert.equal(codex.calls.length, 0, 'no Codex started');
+  assert.equal(moved.code, 1, moved.out);
+  assert.match(moved.err, new RegExp(`^this command was computed at ${head.slice(0, 7)}, and HEAD is ${git(root, 'rev-parse', '--short=7', 'HEAD')} now`));
+  assert.match(moved.err.split('\n').at(-1), /^next: run again what printed this command/);
+  assert.equal(wrote(root), false);
+});
+
 test('a base that names no commit is refused as it was: asked for with the head and the git folder, then alone, and nothing is asked after', async () => {
   const { root } = makeRepo();
   const { deps, asked } = countingGit(fakeCodex(''));
@@ -6556,7 +6572,7 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
   // The whole usage: the flags, then the line that says what a review loads and what it runs on, then the
   // one that says how its cost is seen first, then the one that says what it leaves out.
   assert.deepEqual(usage.err.split('\n').slice(2), [
-    'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--request <text>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
+    'Usage: js-harness codex-review --base <rev> [--at <commit>] [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--request <text>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
       '[--unavailable <reason>] [--cwd <path>] [--home <path>]',
     'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
       `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.`,
@@ -6570,6 +6586,7 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
     '`--fresh` reviews every part of a range again, where a run otherwise keeps the parts that passed in an earlier run of it.',
     '`--keep-home` leaves the Codex home of the run in place after it.',
     'A merge below HEAD, after code commits that each have a record, is cut in two turns where two cost less than one review: the merge, then the commits after it.',
+    '`--at <commit>` names the head a printed command was computed at (check --push and the merge door print it): the run is refused, not started, when HEAD is another commit.',
   ]);
   const seams = ['--effort', 'low', '--extra-codex-config', 'a=b', '--codex-config', 'a=b', '--measured-current', '--measured', '--on-result', 'x', '--every-file'];
   // Since T1 of odd/tasks/commands-and-doctor.md a flag named after a seam is refused before anything starts,
