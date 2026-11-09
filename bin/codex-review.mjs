@@ -679,9 +679,9 @@ export const REVIEW_TIMEOUT_MS = ruleValue('review-timeout', 'minutes') * 60 * 1
 // machine where Codex cannot run (`NO_CODEX`, `skipIsTheWayOut`). The command does not tell a spent usage
 // limit from another failure, so every failed review is sent to the rerun. The rerun needs no turn of the gate
 // lock (odd/tasks/faster-check.md, part 2): out of one the review runs no test suite, which the gate already ran.
-const waysOn = (requested, at) =>
+const waysOn = (rerun) =>
   'A review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.\n' +
-  nextLine(commandStep(reviewCommand('codex-review', { base: requested, at })));
+  nextLine(rerun);
 
 /** What a review asked for with `--prompt codex` out of a turn of the gate lock says: it is asked with the own
  * prompt, the one that can tell Codex the suite already ran. */
@@ -2036,7 +2036,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         const said = evidence.errors.map((message) => `\n  Codex said: ${message}`).join('');
         const left = result.killFailure ? `\n  The process tree could not be killed (${result.killFailure}): Codex may still be running.` : '';
         logRun(result.error?.code === 'ETIMEDOUT' ? 'timed-out' : result.error?.code === 'EINTR' ? 'interrupted' : 'failed', reason);
-        error(`The Codex review did not complete (${reason}); no record was written.${said}${left}\n${waysOn(requested, head)}`);
+        error(`The Codex review did not complete (${reason}); no record was written.${said}${left}\n${waysOn(reviewNext())}`);
         return { exit: typeof result.status === 'number' && result.status !== 0 ? result.status : 1 };
       }
       // A review runs on one model at one effort. A turn that completed on anything else is no review of
@@ -2044,7 +2044,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // a turn that completed: a failed attempt, with what ran and what was asked in its line and its error.
       if (another !== null) {
         logRun('failed', another);
-        error(`Codex's turn completed, but ${another}; a review that ran on anything else does not stand, so nothing of what it answered is shown and no record was written.\n${waysOn(requested, head)}`);
+        error(`Codex's turn completed, but ${another}; a review that ran on anything else does not stand, so nothing of what it answered is shown and no record was written.\n${waysOn(reviewNext())}`);
         return { exit: 1 };
       }
       // A lean review answers in a structure this command reads. A turn that completed and left no such
@@ -2053,7 +2053,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       if (answered && !answered.ok) {
         const why = answerFailure(answered);
         logRun('failed', why);
-        error(`Codex's turn completed, but ${why}; no record was written.\n${waysOn(requested, head)}`);
+        error(`Codex's turn completed, but ${why}; no record was written.\n${waysOn(reviewNext())}`);
         return { exit: 1 };
       }
       // The session answered and its file does not say on which model. Asked after the answer, because a
@@ -2062,7 +2062,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       if (!named) {
         const why = MODEL_NOT_NAMED(wanted.model);
         logRun('failed', why);
-        error(`Codex's turn completed, but ${why}; a review that cannot say which model it ran on does not stand, so nothing of what it answered is shown and no record was written.\n${waysOn(requested, head)}`);
+        error(`Codex's turn completed, but ${why}; a review that cannot say which model it ran on does not stand, so nothing of what it answered is shown and no record was written.\n${waysOn(reviewNext())}`);
         return { exit: 1 };
       }
       if (!evidence.inspected) {
@@ -2079,7 +2079,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         const missing = evidence.missing.slice(0, 3).map((line) => `\n  missing: ${truncate(line, 100)}`).join('');
         const ran = evidence.commands.length ? '' : '\nCodex ran no commands.';
         logRun('not-inspected', why);
-        error(`Codex's turn completed, but ${why}; nothing was recorded.${unread}${missing}${ran}\n${waysOn(requested, head)}`);
+        error(`Codex's turn completed, but ${why}; nothing was recorded.${unread}${missing}${ran}\n${waysOn(reviewNext())}`);
         return { exit: 1 };
       }
       // After the session of a part, and before its line can keep what it answered: a part that passed while
@@ -2089,7 +2089,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       if (after !== null) {
         const why = `${after} after part ${part.index} of ${part.of} passed, so what its session read is not the committed range alone`;
         logRun('failed', why);
-        error(`${why[0].toUpperCase()}${why.slice(1)}; it is not kept and no record was written. Nothing is edited or committed in a worktree while its review runs; run the review again.\n${waysOn(requested, head)}`);
+        error(`${why[0].toUpperCase()}${why.slice(1)}; it is not kept and no record was written. Nothing is edited or committed in a worktree while its review runs; run the review again.\n${waysOn(reviewNext())}`);
         return { exit: 1 };
       }
       // The run line goes first, so that the record can name it. If the record then cannot be written
@@ -2205,7 +2205,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     if (headNow !== null && headNow !== head) {
       error(
         `HEAD moved from ${head.slice(0, 7)} to ${headNow.slice(0, 7)} while Codex was reviewing, so what it read is not the range ${base.slice(0, 7)}..${head.slice(0, 7)} alone and no record was written. ` +
-          `Nothing is committed in a worktree while its review runs; run the review again.\n${nextLine(reviewNext())}`,
+          `Nothing is committed in a worktree while its review runs; the command bound to the new head is what this prints.\n${nextLine(commandStep('js-harness check --push'))}`,
       );
       return 1;
     }

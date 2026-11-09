@@ -1149,6 +1149,8 @@ test('a commit made while Codex reviews leaves no record: the range it names is 
   assert.equal(result.code, 1, result.err);
   assert.match(result.err, /^HEAD moved from [0-9a-f]{7} to [0-9a-f]{7} while Codex was reviewing/m);
   assert.ok(result.err.includes(`from ${head.slice(0, 7)} to ${moved.slice(0, 7)} while`), result.err);
+  // The command it ran is bound to the head that moved away: the step is to ask for the command at the new head.
+  assert.equal(result.err.trimEnd().split('\n').at(-1), 'next: js-harness check --push', result.err);
   assert.equal(wrote(root), false);
 });
 
@@ -2759,7 +2761,7 @@ test('a lean review whose answer cannot be read as data is a failed attempt: log
       assert.equal(logged.reason, reason);
       assert.ok(result.err.includes(`Codex's turn completed, but ${reason}; no record was written.`), result.err);
       assert.match(result.err, /A review that failed is run again, not skipped/);
-      assert.match(result.err.split('\n').at(-1), /^next: js-harness codex-review --base [0-9a-f]{12} --at [0-9a-f]{12}$/);
+      assert.match(result.err.split('\n').at(-1), /^next: js-harness codex-review --base [0-9a-f]{12} --at [0-9a-f]{12}( --\S.*)?$/);
       assert.deepEqual([logged.findings, logged.verdict, logged.answerSource], [null, null, null], reason);
       assert.equal(runFindings(logged), null);
       // The session did show the whole patch: that alone is still not a review.
@@ -3044,7 +3046,7 @@ test('a run line says which model and effort its session really ran with, read f
 // What a refusal over the model or the effort ends with, after the two it names.
 const RAN_ON_ANOTHER = '; a review that ran on anything else does not stand, so nothing of what it answered is shown and no record was written.\nA review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.';
 // The last line of such a refusal: the command that runs the review again, bound to its base and head as hashes.
-const RERUN_LAST = /\nnext: js-harness codex-review --base [0-9a-f]{12} --at [0-9a-f]{12}$/;
+const RERUN_LAST = /\nnext: js-harness codex-review --base [0-9a-f]{12} --at [0-9a-f]{12}( --\S.*)?$/;
 
 /** A lean review of `root` that showed the whole patch, rendered `FINDINGS` and answered with three
  * findings, in a session whose own rollout file says it ran with `ran` (a `turnContext`, or none). */

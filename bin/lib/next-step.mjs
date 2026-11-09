@@ -50,6 +50,15 @@ export function reviewCommand(tool, { base, at, lenses = null, flags = [] }) {
   return [`js-harness ${tool} --base ${shown(base)} --at ${shown(at)}${lensPart}`, ...flags].join(' ');
 }
 
+/** `value` as a printed command writes it so both POSIX shells and PowerShell read it as given: bare when it is one
+ * plain word; in double quotes when nothing in it expands there (`$`, a backtick, `!`) or ends them; in single quotes,
+ * literal in both, when it holds no single quote; else a placeholder, since no one quoting is literal in both. */
+function quoted(value) {
+  if (/^[\w./:@^=+,-]+$/.test(value)) return value;
+  if (!/[$`"!]/.test(value)) return `"${value}"`;
+  return value.includes("'") ? '"<the value given before>"' : `'${value}'`;
+}
+
 /** The flags of `argv` that a rerun of the refused command repeats, so the command printed is the one refused: every
  * flag but the `dropped` ones, which the caller binds or gives again; `valued` names the flags that take a value, and
  * a value a shell would split, or would read as more than a word, is quoted. */
@@ -60,7 +69,7 @@ export function rerunFlags(argv, { valued, dropped }) {
     const value = valued.includes(flag) ? argv[++at] : undefined;
     if (dropped.includes(flag)) continue;
     if (value === undefined) flags.push(flag);
-    else flags.push(`${flag} ${/^[\w./:@^=+,-]+$/.test(value) ? value : `"${value.replace(/"/g, '\\"')}"`}`);
+    else flags.push(`${flag} ${quoted(value)}`);
   }
   return flags;
 }

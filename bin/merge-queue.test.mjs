@@ -930,7 +930,12 @@ test('a pull request that turns the Codex review on is read onto the candidate s
   assert.deepEqual(pushed.lines?.[0], `${code.slice(0, 7)} feat/g code`);
   const { code: exit, out } = await dryRunEvidence(root, [pr(1, 'feat/g', head), pr(2, 'feat/h', on)]);
   assert.equal(exit, 0, out.join('\n'));
-  assert.ok(out.some((line) => /^PR 2 is left out: 1 of 2 code commits since origin\/main have no Codex review record/.test(line)), out.join('\n'));
+  const left = out.findIndex((line) => /^PR 2 is left out: 1 of 2 code commits since origin\/main have no Codex review record/.test(line));
+  assert.ok(left >= 0, out.join('\n'));
+  // A command bound to feat/h's head cannot cover feat/g's commit: the step is the earlier pull request first.
+  const next = out.slice(left + 1).find((line) => line.startsWith('  next: '));
+  assert.match(next ?? '', new RegExp(`^ {2}next: review or land first the earlier pull request that holds [0-9a-f, ]*${code.slice(0, 7)}`), out.join('\n'));
+  assert.doesNotMatch(next ?? '', /--at /, out.join('\n'));
   assert.ok(out.includes(`Candidate: main ${main.slice(0, 7)} with 1 pull request merged in order: PR 1 (feat/g).`), out.join('\n'));
 });
 

@@ -889,7 +889,7 @@ async function queueRun(args, { run = spawnSync, covered = null, suite = null, e
     }
     const coverage = isCovered(pr.headRefOid, onto);
     const files = onto !== main && coverage?.conflicted?.length ? coverage.conflicted : null;
-    if (files) leaveOut(log, stdout, pr, 'conflict', `it conflicts with the candidate so far in ${files.join(', ')}.`, { files });
+    if (files) leaveOut(log, stdout, pr, 'conflict', `it conflicts with the candidate so far in ${files.join(', ')}.`, { files, next: coverage?.next });
     else if (!coverage?.pass) leaveOut(log, stdout, pr, 'review', `${String(coverage?.detail ?? 'its Codex review records could not be read').replace(/\.$/, '')}.`, { next: coverage?.next });
     if (files || !coverage?.pass) continue;
     for (const line of coverage.lines?.length ? [`PR ${pr.number}, commit by commit:`, ...coverage.lines.map((said) => `  ${said}`)] : []) stdout(line);

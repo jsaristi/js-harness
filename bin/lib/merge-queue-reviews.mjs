@@ -26,8 +26,12 @@ function worktreeAt(cwd, head) {
  * (`review`, its tool and base) is bound to the pull request's own head, `head`, not to the synthetic merge the door judged,
  * and printed to run in the worktree that has that head checked out (`--cwd`); where none does, the step is to check the
  * branch out first. Every other refusal keeps the step its row gave it. */
-function bindToHead(cwd, head, refusal) {
+function bindToHead(cwd, head, refusal, tip) {
   if (!refusal.review) return refusal;
+  // Commits of the refused range that are not the pull request's own belong to an earlier one in the candidate: a
+  // command bound to this head cannot cover them, so the step is that earlier pull request first.
+  const others = gitOut(spawnSync, cwd, ['rev-list', '--no-merges', `${refusal.review.base}..${tip}`, `^${head}`])?.split('\n').filter(Boolean) ?? [];
+  if (others.length) return { ...refusal, next: firstStep(`review or land first the earlier pull request that holds ${others.map((id) => id.slice(0, 7)).join(', ')}, which this one's range does not reach`) };
   const tree = worktreeAt(cwd, head);
   const next = tree === null
     ? firstStep(`check out the pull request's branch at ${head.slice(0, 7)} in a worktree`)
@@ -94,7 +98,7 @@ export function reviewEvidence(cwd, main, head, onto = main) {
   const { tip } = merged;
   const codex = checkCodexReviews(cwd, tip);
   const refused = codex.pass ? lensDoor(cwd, tip) : codex;
-  if (refused) return bindToHead(cwd, head, refused);
+  if (refused) return bindToHead(cwd, head, refused, tip);
   const off = codexReviewOffAt(cwd, tip);
   const coverage = off ? null : reviewCoverage(cwd, { from: main, tip });
   // The commits the lines name are the pull request's: the merges made here hold nothing anybody wrote, and are never pushed.

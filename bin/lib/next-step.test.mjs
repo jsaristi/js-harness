@@ -50,6 +50,11 @@ test('a rerun repeats the flags of the command refused, but the ones it binds or
   assert.deepEqual(rerunFlags(argv, { valued, dropped: ['--base', '--at'] }), ['--again', '--unavailable "no quota today"', '--max-parts 6', '--cwd "D:\\a b"']);
   assert.deepEqual(rerunFlags(argv, { valued, dropped: ['--base', '--at', '--max-parts'] }), ['--again', '--unavailable "no quota today"', '--cwd "D:\\a b"']);
   assert.deepEqual(rerunFlags(['--base', 'x', '--at', 'y'], { valued, dropped: ['--base', '--at'] }), []);
+  // A value a shell would expand inside double quotes goes in single quotes, which both POSIX shells and PowerShell
+  // read literally; one that holds a single quote too cannot be written literally for both, so it is named, not run.
+  assert.deepEqual(rerunFlags(['--unavailable', 'cost $budget'], { valued, dropped: [] }), ["--unavailable 'cost $budget'"]);
+  assert.deepEqual(rerunFlags(['--unavailable', 'say "no"'], { valued, dropped: [] }), ["--unavailable 'say \"no\"'"]);
+  assert.deepEqual(rerunFlags(['--unavailable', "it's $x"], { valued, dropped: [] }), ['--unavailable "<the value given before>"']);
 });
 
 test('check prints a failing row\'s next step as its last line, and none on a row that passes or informs', () => {
