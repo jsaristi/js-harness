@@ -18,6 +18,7 @@ import path from 'node:path';
 import { failingTests } from './flaky.mjs';
 import { gateRecord } from './gate-log.mjs';
 import { gateLogRows, gateRow } from './gate-turn.mjs';
+import { firstStep } from './next-step.mjs';
 import { ruleValue } from './rules.mjs';
 
 /** Set to `0`, the gate never goes to CI. */
@@ -210,7 +211,7 @@ export async function testsOnCi(cwd, lock, deps, local = null, filesNow = () => 
     local?.ciFallback({ seconds: Math.round((Date.now() - startedAt) / 1000), reason: ci.why });
     return null;
   }
-  const tests = { name: 'tests', pass: ci.pass, detail: `ran on GitHub's machines in ${ci.seconds}s (${CI_WORKFLOW}): ${ci.url}`, ...(ci.output && { output: ci.output }) };
+  const tests = { name: 'tests', pass: ci.pass, detail: `ran on GitHub's machines in ${ci.seconds}s (${CI_WORKFLOW}): ${ci.url}`, ...(ci.output && { output: ci.output }), ...(!ci.pass && { next: firstStep("fix the tests that failed on GitHub's machines, which the log below names") }) };
   let at = startedAt;
   const record = lock.log !== false && lock.home !== undefined
     ? gateRecord({ home: lock.home, cwd: path.resolve(cwd), command: 'check', session: lock.session, now: () => at, ...deps.gateLog })

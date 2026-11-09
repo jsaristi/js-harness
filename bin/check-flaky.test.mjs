@@ -4,6 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { checkSensors } from './check.mjs';
+import { firstStep } from './lib/next-step.mjs';
+
+const QUARANTINE_STEP = 'to quarantine each file above, give it an entry in docs/FLAKY.md: "### <file>" with "- Owner:", "- Expires: YYYY-MM-DD" and "- Failure: <id in docs/FAILURES.md>", and commit it (an expired entry is renewed in place)';
 
 // The rerun of odd/tasks/flaky-ledger.md (Design 2): after a red tests sensor, the test files its spec summary
 // names are run once more, alone, through the same sensor route.
@@ -42,6 +45,7 @@ test('a red suite that names its failed test files runs those files once more, a
     const tests = rows.find((row) => row.name === 'tests');
     assert.equal(tests.detail, 'npm run test exited 1');
     assert.equal(tests.pass, false, 'a file that passes on rerun with no entry in the ledger still blocks');
+    assert.deepEqual(tests.next, firstStep(QUARANTINE_STEP), 'the step of a file that passed alone is to quarantine it');
   } finally {
     one.done();
   }
@@ -67,6 +71,7 @@ test('a red suite whose failed file passes alone and is quarantined does not blo
     const tests = rows.find((row) => row.name === 'tests');
     assert.equal(tests.pass, true);
     assert.equal(tests.detail, 'npm run test exited 1; its failed test file passed alone on rerun and is quarantined in docs/FLAKY.md (the rerun row)');
+    assert.equal(tests.next, undefined, 'a row that passes names no step');
     const rerun = rows.find((row) => row.name === 'rerun');
     assert.equal(rerun.info, true);
     assert.deepEqual(rerun.lines, ['bin/a.test.mjs  quarantined until 2026-11-15 (eval-interrupt-process-alive)']);
@@ -84,9 +89,11 @@ test('a quarantined file that fails again on rerun, or whose entry expired, bloc
     assert.equal(tests.pass, false);
     assert.equal(tests.detail, 'npm run test exited 1');
     assert.match(again.rows.find((row) => row.name === 'rerun').detail, /failed again/);
+    assert.deepEqual(again.rows.find((row) => row.name === 'tests').next, firstStep('fix the failing tests the output names'));
     const expired = await one.gate([RED, GREEN], { today: '2026-11-16' });
     assert.equal(expired.rows.find((row) => row.name === 'tests').pass, false);
-    assert.match(expired.rows.find((row) => row.name === 'rerun').lines[0], /^bin\/a\.test\.mjs {2}its entry expired 2026-11-15: /);
+    assert.match(expired.rows.find((row) => row.name === 'rerun').lines[0], /^bin\/a\.test\.mjs {2}its entry expired 2026-11-15$/);
+    assert.deepEqual(expired.rows.find((row) => row.name === 'tests').next, firstStep(QUARANTINE_STEP));
   } finally {
     one.done();
   }

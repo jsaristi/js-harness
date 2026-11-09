@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { checkCommitSize } from './check.mjs';
+import { firstStep } from './lib/next-step.mjs';
 import { ruleHere } from './lib/rules.mjs';
 
 // The harness's own rules file, which a repository holds for the rule, of this repository only, to be in force.
@@ -70,7 +71,8 @@ test('a staged change over the changed lines a reviewed commit holds fails the g
     assert.deepEqual(checkCommitSize(root), [{
       name: 'commit-size',
       pass: false,
-      detail: `the staged change has ${grouped(over)} changed lines a review reads, over the ${grouped(REVIEWED_COMMIT_LINES)} changed lines of rule reviewed-commit-lines: split it into commits under that, each with its own gate, before the reviewer refuses it`,
+      detail: `the staged change has ${grouped(over)} changed lines a review reads, over the ${grouped(REVIEWED_COMMIT_LINES)} changed lines of rule reviewed-commit-lines`,
+      next: firstStep(`split the staged change into commits of ${REVIEWED_COMMIT_LINES} changed lines or fewer, each made with its own gate, before the reviewer refuses it`),
     }]);
   });
 });

@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { checkOwnRules, main } from './check.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
+import { firstStep } from './lib/next-step.mjs';
 
 let configDir;
 before(() => {
@@ -65,6 +66,7 @@ function inRepo(run) {
 
 const WAIT = { id: 'gate-wait', subject: 'the wait for a turn of the gate lock', owner: 'project', since: '2026-10-11', value: 60, unit: 'minutes', patterns: ['wait.{0,40}{amount}'] };
 const CURE = 'write `rule:gate-wait` instead of the value, or change the rule with `js-harness rules change gate-wait`';
+const REFUSED_NEXT = 'write rule:<id> in place of each restated value the lines above name, or change that rule with js-harness rules change <id> on a rule/ branch';
 const RESTATED = 'The gate may wait 60 minutes.';
 
 test('a restated value of a rule with no row is an INFO line, with its place and its cure', () => inRepo((root) => {
@@ -86,7 +88,8 @@ test('a restated value of a rule that refuses fails the row', () => inRepo((root
     name: 'rules',
     pass: false,
     detail: '1 restated value in the lines this change adds, 1 of a rule that refuses it',
-    lines: [`docs/ROADMAP.md:2 restates rule "gate-wait", which refuses it since 2026-10-16: ${RESTATED} (${CURE})`],
+    lines: [`docs/ROADMAP.md:2 restates rule "gate-wait", which refuses it since 2026-10-16: ${RESTATED}`],
+    next: firstStep(REFUSED_NEXT),
   }]);
 }));
 

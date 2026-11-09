@@ -11,7 +11,7 @@ import { fixedLoadRow, hookEntriesRow } from './lib/fixed-load.mjs';
 import { depthPassFor, discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
 import { checkSpec } from './lib/spec.mjs';
-import { formatRow } from './lib/next-step.mjs';
+import { commandStep, firstStep, formatRow, noStep } from './lib/next-step.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { readRules, ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
@@ -30,7 +30,7 @@ import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog, readGateProof } 
 import { filesKey, treeKey } from './lib/gate-tree.mjs';
 import { addedLines, checkedOff, checkedTasks, resolveCitations, resolveTicks, taskText } from './lib/citations.mjs';
 import { flakyTestsOf, selectTests, testFilesOf } from './lib/select-tests.mjs';
-import { checkLedger, failedTestFiles, failingTests, judgeRerun, ledgerEntries, localDay } from './lib/flaky.mjs';
+import { FIX_TESTS, checkLedger, failedTestFiles, failingTests, judgeRerun, ledgerEntries, localDay, rerunNext } from './lib/flaky.mjs';
 import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
 import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, word as bashWord, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
 import { functionsOf, harnessOfTree } from './lib/project-functions.mjs';
@@ -45,6 +45,7 @@ import { harnessHome } from './lib/home.mjs';
 import { GATE_WAIT_SAID_MS, GATE_WAIT_USAGE, claimOf, gateLogRows, gateRow, minutes, ownTicketRows, underGateLock } from './lib/gate-turn.mjs';
 import { checkCodexReviewDebt, checkCodexReviews, checkLensReviews } from './lib/codex-review-rows.mjs';
 import { checkReviewDebt } from './lib/lens-review-rows.mjs';
+import { documentsRow, mirrorRows, rowTime, sameTreeRow, treeRows } from './lib/sensor-rows.mjs';
 
 export { CLAUDE_MD_BUDGET, checkClaudeBudget, estimateTokens };
 export { failingTests } from './lib/flaky.mjs';
@@ -59,14 +60,14 @@ export const TOKEN_BUDGET = ruleValue('agents-budget', 'estimated tokens');
 export function checkBudget(cwd) {
   const agentsPath = path.join(cwd, 'AGENTS.md');
   if (!fs.existsSync(agentsPath)) {
-    return { name: 'budget', pass: false, detail: 'AGENTS.md not found' };
+    return { name: 'budget', pass: false, detail: 'AGENTS.md not found', next: firstStep(`write AGENTS.md at the top of the repository, within ${TOKEN_BUDGET} estimated tokens`) };
   }
   // A Windows checkout (core.autocrlf) holds CRLF; the budget is the text's, not the platform's.
   const text = fs.readFileSync(agentsPath, 'utf8').replace(/\r\n/g, '\n');
   const tokens = estimateTokens(text);
   const pass = tokens <= TOKEN_BUDGET;
   const detail = `${tokens} estimated tokens (budget ${TOKEN_BUDGET})`;
-  return { name: 'budget', pass, detail };
+  return { name: 'budget', pass, detail, ...(!pass && { next: firstStep(`cut AGENTS.md from ${tokens} to ${TOKEN_BUDGET} estimated tokens or fewer`) }) };
 }
 
 /** The `contracts` row: every contract under `odd/tasks/` must pass `js-harness contract check`.
@@ -81,7 +82,7 @@ export function checkContracts(cwd) {
     return { name, pass: true, detail: `${plural(results.length)} checked`, lines: results.map((result) => result.label) };
   }
   const lines = failed.flatMap(({ label, errors }) => [label, ...errors.map((reason) => `  ${reason}`)]);
-  return { name, pass: false, detail: `${failed.length} of ${plural(results.length)} fail`, lines };
+  return { name, pass: false, detail: `${failed.length} of ${plural(results.length)} fail`, lines, next: firstStep('fix the contracts named above in odd/tasks/') };
 }
 
 /** Shortens `filePath` to start with `~` when it lies under `home`, so rows stay readable. */
@@ -198,6 +199,9 @@ export function discoverSensors(cwd) {
   return { sensors, source: 'package.json' };
 }
 
+/** The step of a declaration that cannot be taken (`harness.json`, or the `package.json` a sensor is read from). */
+const FIX_DECLARATION = firstStep('correct the file or the value the row names');
+
 /** The row of a project's own rules (odd/tasks/project-rules.md, "How it is checked"): it acts only when the project
  * keeps a list, docs/rules.json, and never in the harness's own repository, whose row is `checkListRow` (T16d of
  * odd/tasks/rule-hierarchy.md). The project's row fails on any finding of `js-harness rules check`: a phrase gone from its
@@ -210,7 +214,7 @@ export function checkOwnRules(cwd, { rules = RULES, spawn = spawnSync, env = pro
   try {
     read = readProjectRules(cwd, { sensors: found.error ? null : found.sensors.map((sensor) => sensor.name) });
   } catch (err) {
-    return [{ name: 'rules', pass: false, detail: `${PROJECT_RULES_PATH} cannot be read: ${err.message}` }];
+    return [{ name: 'rules', pass: false, detail: `${PROJECT_RULES_PATH} cannot be read: ${err.message}`, next: firstStep(`make ${PROJECT_RULES_PATH} readable`) }];
   }
   if (!read.present) return [];
   const notes = read.notes.map((note) => `note: ${note}`);
@@ -220,7 +224,7 @@ export function checkOwnRules(cwd, { rules = RULES, spawn = spawnSync, env = pro
     return [{ name: 'rules', pass: true, detail, ...(notes.length > 0 && { lines: notes }) }];
   }
   const count = read.findings.length;
-  return [{ name: 'rules', pass: false, detail: `${count} ${count === 1 ? 'finding' : 'findings'} in ${PROJECT_RULES_PATH}`, lines: [...read.findings, ...notes] }];
+  return [{ name: 'rules', pass: false, detail: `${count} ${count === 1 ? 'finding' : 'findings'} in ${PROJECT_RULES_PATH}`, lines: [...read.findings, ...notes], next: firstStep(`fix the findings named above in ${PROJECT_RULES_PATH}`) }];
 }
 
 /** What a finding of the row `rules` says of its rule's stored `row`. */
@@ -282,8 +286,9 @@ function checkListRow(cwd, rules, spawn, side = STAGED, env = process.env) {
   const refusing = findings.filter((finding) => byId.get(finding.id).row?.refuses !== undefined).length;
   const counted = `${findings.length} restated ${findings.length === 1 ? 'value' : 'values'} in the lines this change adds`;
   const detail = `${counted}, ${refusing === 0 ? 'none' : refusing} of a rule that ${refusing > 1 ? 'refuses them' : 'refuses it'}`;
-  const found = findings.map((finding) => `${finding.path}:${finding.line} restates rule "${finding.id}", ${rowState(byId.get(finding.id))}: ${shortLine(finding.text)} (write \`rule:${finding.id}\` instead of the value, or change the rule with \`js-harness rules change ${finding.id}\`)`);
-  return [refusing === 0 ? { name: 'rules', pass: true, info: true, detail, lines: found } : { name: 'rules', pass: false, detail, lines: found }];
+  // The cure of each line is printed where the row informs; a refusing row names it once, as its next step.
+  const found = findings.map((finding) => `${finding.path}:${finding.line} restates rule "${finding.id}", ${rowState(byId.get(finding.id))}: ${shortLine(finding.text)}${refusing === 0 ? ` (write \`rule:${finding.id}\` instead of the value, or change the rule with \`js-harness rules change ${finding.id}\`)` : ''}`);
+  return [refusing === 0 ? { name: 'rules', pass: true, info: true, detail, lines: found } : { name: 'rules', pass: false, detail, lines: found, next: firstStep('write rule:<id> in place of each restated value the lines above name, or change that rule with js-harness rules change <id> on a rule/ branch') }];
 }
 
 /** The two sides of the commit's row: what it stages (`git diff --cached`), and a file's text as the index holds it. */
@@ -295,9 +300,9 @@ const STAGED = {
 };
 
 /** The row `rules` of the merge door, when git does not answer: the door cannot read what the pull request brings. */
-const UNANSWERED = { name: 'rules', pass: false, detail: 'git did not answer, so the door cannot read the lines this pull request brings' };
+const UNANSWERED = { name: 'rules', pass: false, detail: 'the door cannot read the lines this pull request brings', next: noStep('git did not answer') };
 const RULES_DATA_FILE = 'bin/lib/rules-data.mjs';
-const DOOR_BRANCH = 'this pull request changes bin/lib/rules-data.mjs and is not from a rule/ branch: a rule changes only by js-harness rules change';
+const DOOR_BRANCH = 'this pull request changes bin/lib/rules-data.mjs and is not from a rule/ branch';
 
 /** The two sides of the merge door's row: the lines `base`..HEAD brings, and a file's text as HEAD holds it. */
 const doorSide = (base) => ({
@@ -326,7 +331,7 @@ function checkTagRow(cwd, { ref, head = 'HEAD', spawn = spawnSync } = {}) {
   const version = tagged[1];
   const tag = `v${version}`;
   const commit = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${head}^{commit}`]);
-  if (!commit) return [{ name: 'tag', pass: false, detail: `tag ${tag} is refused: ${head} does not name a commit` }];
+  if (!commit) return [{ name: 'tag', pass: false, detail: `tag ${tag} is refused: ${head} does not name a commit`, next: noStep(`git did not resolve ${head} to a commit here`) }];
   const short = commit.slice(0, 7);
   let says = null;
   try {
@@ -336,7 +341,7 @@ function checkTagRow(cwd, { ref, head = 'HEAD', spawn = spawnSync } = {}) {
   }
   if (says === version) return [{ name: 'tag', pass: true, detail: `tag ${tag} names version ${version}, the version package.json holds at ${short}` }];
   const what = says === null ? 'has no version' : `says version ${says}`;
-  return [{ name: 'tag', pass: false, detail: `tag ${tag} is refused: package.json at ${short} ${what}, not ${version} (the tag without its v)` }];
+  return [{ name: 'tag', pass: false, detail: `tag ${tag} is refused: package.json at ${short} ${what}, not ${version} (the tag without its v)`, next: firstStep(`move tag ${tag} to a commit whose package.json says version ${version}, or commit that version and tag the new commit`) }];
 }
 
 /** The row `rules` of `check --push` (odd/tasks/rule-hierarchy.md, "The merge door (T16e)", item 8): the lines `head`
@@ -364,10 +369,10 @@ function candidateList(git) {
   try {
     list = rulesOfText(text);
   } catch (err) {
-    return { row: { name: 'rules', pass: false, detail: `${RULES_DATA_FILE} of this pull request does not parse: ${err.message}` } };
+    return { row: { name: 'rules', pass: false, detail: `${RULES_DATA_FILE} of this pull request does not parse: ${err.message}`, next: firstStep(`commit a fix to ${RULES_DATA_FILE} on this branch, so that it parses`) } };
   }
   const faults = readRules(list, { declared: list });
-  if (faults.length > 0) return { row: { name: 'rules', pass: false, detail: `${RULES_DATA_FILE} of this pull request does not validate`, lines: faults } };
+  if (faults.length > 0) return { row: { name: 'rules', pass: false, detail: `${RULES_DATA_FILE} of this pull request does not validate`, lines: faults, next: firstStep(`commit a fix to ${RULES_DATA_FILE} on this branch for each fault named above`) } };
   return { list };
 }
 
@@ -397,7 +402,7 @@ export function checkDoor(cwd, { rules = RULES, spawn = spawnSync, base = null, 
   if (branch !== null) {
     const changed = git(['-c', 'core.quotePath=false', 'diff', '--name-only', '--no-renames', base, 'HEAD']);
     if (changed === null) return [UNANSWERED];
-    if (!branch.startsWith('rule/') && changed.split(/\r?\n/).includes(RULES_DATA_FILE)) rows.push({ name: 'rules', pass: false, detail: DOOR_BRANCH });
+    if (!branch.startsWith('rule/') && changed.split(/\r?\n/).includes(RULES_DATA_FILE)) rows.push({ name: 'rules', pass: false, detail: DOOR_BRANCH, next: firstStep('take that change out of this pull request, and make it with js-harness rules change <id> on a rule/ branch') });
   }
   const candidate = candidateList(git);
   if (candidate.row) return [...rows, candidate.row];
@@ -645,7 +650,7 @@ export function checkCommitSize(cwd, spawn = spawnSync, env = process.env) {
   const said = `the staged change has ${counted(changed, 'changed line')} a review reads`;
   const bound = `the ${counted(most, 'changed line')} of rule reviewed-commit-lines`;
   if (changed <= most) return [{ name: 'commit-size', pass: true, detail: `${said}, within ${bound}` }];
-  return [{ name: 'commit-size', pass: false, detail: `${said}, over ${bound}: split it into commits under that, each with its own gate, before the reviewer refuses it` }];
+  return [{ name: 'commit-size', pass: false, detail: `${said}, over ${bound}`, next: firstStep(`split the staged change into commits of ${most} changed lines or fewer, each made with its own gate, before the reviewer refuses it`) }];
 }
 
 /** Git as this gate may ask it about the commit it guards: `(args) => stdout`, `null` for a git that did
@@ -809,58 +814,6 @@ export function checkExactCount(cwd, home) {
   return [{ name: 'exact tests', pass: true, info: true, detail: `S6: ${run} of ${S6_GATES} gates in a row would have skipped a test file and saw none of those fail${since}; the skip is switched on at ${S6_GATES}` }];
 }
 
-/** `iso` as a row says it: the local day and time, to the minute. */
-function rowTime(iso) {
-  const at = new Date(iso);
-  const two = (number) => String(number).padStart(2, '0');
-  return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())} ${two(at.getHours())}:${two(at.getMinutes())}`;
-}
-
-/** The one row of a gate that ran no sensor because another gate ran them on the same tree and all
- * passed: which `sensors` did not run, and the gate that is the proof (`provenBy`), by the id of its
- * lines in the gate log, when it ended and, where the log still says it, in which folder. */
-function sameTreeRow(sensors, proof) {
-  const where = proof.cwd ? ` in ${proof.cwd}` : '';
-  return {
-    name: 'sensors',
-    pass: true,
-    info: true,
-    detail: `no sensor ran (${sensors.map((sensor) => sensor.name).join(', ')}): this tree is the one gate ${proof.id.slice(0, 8)} passed on ${rowTime(proof.at)}${where}, file for file (harness.json "sameTree")`,
-  };
-}
-
-// How many paths a row that lists paths of the repository names (the staged documents of a gate that ran
-// no sensor, the untracked paths that appeared while the sensors ran); the rest are counted.
-const PATHS_NAMED = 10;
-
-/** `paths` as the lines under a row: the first `PATHS_NAMED` of them, and how many more there are. A name
- * with a control character in it is shown as JSON: it comes from the repository, and a line break in it
- * would read as another row of the report. */
-function namedPaths(paths) {
-  const named = paths.slice(0, PATHS_NAMED).map((file) => (/\p{Cc}/u.test(file) ? JSON.stringify(file) : file));
-  const more = paths.length - named.length;
-  return [...named, ...(more > 0 ? [`and ${more} more`] : [])];
-}
-
-/** The first row of a gate that ran none of the project's `sensors` because the commit holds documents
- * alone: which did not run, and for which staged `paths` (`namedPaths`). With `quick`, the sensors of
- * documents that ran in their place (`discoverDocumentSensors`), it names those as well, and says that
- * no gate lock was taken for them; their own rows follow this one. */
-function documentsRow(sensors, { paths, side }, quick = []) {
-  const staged = side
-    ? (paths.length === 1 ? `the one path this commit changes against ${side} is a document` : `all ${paths.length} paths this commit changes against ${side} are documents`)
-    : (paths.length === 1 ? 'the one staged path is a document' : `all ${paths.length} staged paths are documents`);
-  const declared = `${staged} declared in harness.json "documents"`;
-  const names = (list) => list.map((sensor) => sensor.name).join(', ');
-  let detail = `no sensor ran (${names(sensors)}): ${declared}`;
-  if (quick.length > 0) {
-    detail = sensors.length > 0
-      ? `the sensors did not run (${names(sensors)}): ${declared}; its "documentSensors" ran in their place (${names(quick)}), with no gate lock taken`
-      : `${declared}: its "documentSensors" ran (${names(quick)}), with no gate lock taken`;
-  }
-  return { name: 'sensors', pass: true, info: true, detail, lines: namedPaths(paths) };
-}
-
 /** One row per sensor of documents, run one after another as the sensors are (`checkSensor`), each for
  * `DOCUMENT_SENSOR_TIMEOUT_MS` at most, or for the shorter time a caller gives every sensor. One whose time
  * ran out says where a longer check belongs. `held` is whether the gate was started in a turn at the
@@ -913,33 +866,6 @@ function untrackedPaths(cwd, spawn = spawnSync) {
     else if (/^(?:[RC].|.[RC]) /.test(entry)) at += 1;
   }
   return paths;
-}
-
-/** The row named `tree` of a gate whose sensors left something in the working tree: the untracked paths
- * that are in `after` and were not in `before` (`untrackedPaths`, asked before the first sensor and after
- * the last). No row when none appeared, or when git did not say either time: a tree that could not be
- * looked at is not one that is clean, and is not said to be.
- *
- * It informs and fails nothing. A test that writes into the folder it runs in leaves a file the next
- * commit finds untracked, with nothing to say where it came from: a gate once left
- * `Microsoft/Windows/PowerShell/ModuleAnalysisCache` in its tree. A gate that prints no such row is the
- * proof that its sensors left nothing. */
-function treeRows(before, after) {
-  if (!before || !after) return [];
-  const appeared = [...after].filter((file) => !before.has(file));
-  if (appeared.length === 0) return [];
-  const [paths, them] = appeared.length === 1 ? ['1 untracked path', 'it'] : [`${appeared.length} untracked paths`, 'them'];
-  return [{ name: 'tree', pass: true, info: true, detail: `${paths} appeared in the working tree while the sensors ran (a test may have written ${them})`, lines: namedPaths(appeared) }];
-}
-
-/** The row that names what the sensors left in their WSL2 mirror (`leftPaths` of `./lib/gate-wsl.mjs`),
- * as `treeRows` names what appeared in the Windows tree: the suite writes into the mirror, so a test that
- * litters the tree is seen there. None when nothing was left or nothing ran there. */
-function mirrorRows(ran) {
-  const left = ran.flatMap((row) => row.left ?? []);
-  if (left.length === 0) return [];
-  const [paths, them] = left.length === 1 ? ['1 path', 'it'] : [`${left.length} paths`, 'them'];
-  return [{ name: 'tree', pass: true, info: true, detail: `${paths} appeared in the WSL2 mirror while the sensors ran (a test may have written ${them})`, lines: namedPaths(left) }];
 }
 
 // Once the shell has exited, the pipes should close at once; a grandchild that kept them open (a
@@ -1225,7 +1151,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   if (shadowed) {
     const { files, wouldSkip, failedOfSkipped } = shadowed;
     detail += `; shadow: ${wouldSkip.length} of ${files} test files would have been skipped`;
-    if (failedOfSkipped.length > 0) detail += `, and ${failedOfSkipped.length} of them did not pass: ${failedOfSkipped.join(', ')}`;
+    if (failedOfSkipped.length > 0) detail += `, and ${failedOfSkipped.length} of them did not pass (${failedOfSkipped.join(', ')})`;
   }
   // Skip mode's count: of the test files, how many did not run. A suite of the mirror that fell back ran whole.
   const whole = plan && (plan.whole ?? (fellBack && plan.files ? 'it ran on Windows, where selection asked the traces of WSL2' : null));
@@ -1235,7 +1161,16 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   else if (plan) detail += `; exact tests: skipped ${skip.skipped} of ${skip.files} test files`;
   // A run of none in WSL2 is proven by the traces of the mirror, the place its tree key names (`checkSensors`).
   const provenIn = ranIn || (plan?.none && inWsl);
-  return { name, pass, detail, ...(shadowed && { shadow: shadowed }), ...(skip && { skip }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(provenIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }), ...(times.length > 0 && { times }) };
+  return { name, pass, detail, ...(shadowed && { shadow: shadowed }), ...(skip && { skip }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(provenIn && { ranIn: 'wsl' }), ...(left.length > 0 && { left }), ...(times.length > 0 && { times }), ...(!pass && { next: sensorStep(command, { timedOut, result }) }) };
+}
+
+/** The step that clears a sensor that did not pass, as the way it ended says: a bound that ran out, a command that could not
+ * run, one that was killed, or one that exited (its output says what failed). */
+function sensorStep(command, { timedOut, result }) {
+  if (timedOut) return firstStep(`find what keeps ${command} from ending within its bound, and make it end`);
+  if (result.error) return firstStep(`find why ${command} could not run, and make it run`);
+  if (result.signal) return firstStep(`find what killed ${command}, and make it end on its own`);
+  return firstStep(`fix what ${command} reports in the output`);
 }
 
 /** The seconds of each test file a traced suite ran, from the tracer's results (`trace-reads.cjs`): `[{ test,
@@ -1384,7 +1319,7 @@ function stoppedRow(rows, held) {
   const lock = held
     ? `the machine's gate lock was left to the process that started this gate, which holds it (${GATE_HELD_ENV}=1)`
     : "the machine's gate lock was not taken";
-  return { ...gateRow(`no sensor ran: this gate stopped before its sensors, since ${failed}, so no test ran and nothing here says that the tests pass; ${lock}`, false), stopped: true };
+  return { ...gateRow(`no sensor ran: this gate stopped before its sensors, since ${failed}, so no test ran and nothing here says that the tests pass; ${lock}`, false), stopped: true, next: firstStep(`fix ${rows.length === 1 ? 'the row' : 'the rows'} ${rows.join(', ')} first`) };
 }
 
 /** What the sensors of a gate came to, for its log: `timeout` when the time of one ran out, which is what
@@ -1497,21 +1432,21 @@ export function watchRun(record, watch = watchBusiest) {
  * before any sensor runs. The sensors of documents never move: they are checks of seconds. */
 export async function checkSensors(cwd, deps = {}, lock) {
   const { sensors, source, error } = discoverSensors(cwd);
-  if (error) return [{ name: 'sensors', pass: false, detail: error }];
+  if (error) return [{ name: 'sensors', pass: false, detail: error, next: FIX_DECLARATION }];
   // Read before anything runs or is skipped: a declaration that cannot be taken fails the gate even
   // where there is no sensor for it to skip.
   const declared = discoverDocuments(cwd);
-  if (declared.error) return [{ name: 'sensors', pass: false, detail: declared.error }];
+  if (declared.error) return [{ name: 'sensors', pass: false, detail: declared.error, next: FIX_DECLARATION }];
   const sameTree = discoverSameTree(cwd);
-  if (sameTree.error) return [{ name: 'sensors', pass: false, detail: sameTree.error }];
+  if (sameTree.error) return [{ name: 'sensors', pass: false, detail: sameTree.error, next: FIX_DECLARATION }];
   const inWsl = discoverSensorsInWsl(cwd);
-  if (inWsl.error) return [{ name: 'sensors', pass: false, detail: inWsl.error }];
+  if (inWsl.error) return [{ name: 'sensors', pass: false, detail: inWsl.error, next: FIX_DECLARATION }];
   const exact = discoverExactTests(cwd);
-  if (exact.error) return [{ name: 'sensors', pass: false, detail: exact.error }];
+  if (exact.error) return [{ name: 'sensors', pass: false, detail: exact.error, next: FIX_DECLARATION }];
   const concurrency = discoverTestConcurrency();
-  if (concurrency.error) return [{ name: 'sensors', pass: false, detail: concurrency.error }];
+  if (concurrency.error) return [{ name: 'sensors', pass: false, detail: concurrency.error, next: FIX_DECLARATION }];
   const quick = discoverDocumentSensors(cwd, declared.documents);
-  if (quick.error) return [{ name: 'sensors', pass: false, detail: quick.error }];
+  if (quick.error) return [{ name: 'sensors', pass: false, detail: quick.error, next: FIX_DECLARATION }];
   // Git is asked only by a project that declares documents, and has a sensor their commit would not run
   // or one it would: without them nothing here changed.
   const staged = declared.documents.length > 0 && sensors.length + quick.sensors.length > 0
@@ -1531,7 +1466,7 @@ export async function checkSensors(cwd, deps = {}, lock) {
   // The machine says how (its switch file), the project whether (`sensorsInWsl`): a project whose suite
   // cannot run on Linux is never moved by a file another project's machine holds.
   const wsl = inWsl.value ? lock?.wsl ?? null : null;
-  if (wsl?.error) return [{ name: 'wsl', pass: false, detail: wsl.error }];
+  if (wsl?.error) return [{ name: 'wsl', pass: false, detail: wsl.error, next: FIX_DECLARATION }];
   // Where the sensors run is part of the key of the tree: a pass in WSL2 proves nothing for a run on
   // Windows, which is there to catch what WSL2 cannot.
   const place = wsl?.distro && (deps.platform ?? process.platform) === 'win32' ? `wsl ${wsl.distro} ${wsl.node}` : undefined;
@@ -1626,12 +1561,14 @@ export async function checkSensors(cwd, deps = {}, lock) {
           const files = failedTestFiles(row.output, testFilesOf(cwd));
           if (files.length > 0) {
             const again = await checkSensor(cwd, { name: 'tests', command: `node --test ${files.join(' ')}` }, { ...deps, gateHeld, wsl, traces: null });
-            row.rerun = { files, pass: again.pass, detail: again.detail };
+            row.rerun = { files, pass: again.pass, detail: again.detail, next: rerunNext(again.pass) };
             // Design 3: the row passes only when the rerun did and every file it ran has a current entry.
             const judged = judgeRerun(row.rerun, ledgerEntries(cwd), deps.today ?? localDay());
             row.rerun.row = judged.row;
-            if (judged.pass) {
+            if (!judged.pass) row.next = judged.next;
+            else {
               row.pass = true;
+              delete row.next;
               row.detail += `; its failed test ${files.length === 1 ? 'file' : 'files'} passed alone on rerun and ${files.length === 1 ? 'is' : 'are'} quarantined in docs/FLAKY.md (the rerun row)`;
             }
           }
@@ -1684,7 +1621,7 @@ export function checkFunctions(cwd) {
   if (harness.error) return [];
   const { errors } = functionsOf(harness, { paths: [] });
   if (errors.length === 0) return [];
-  return [{ name: 'functions', pass: false, detail: errors.join('; '), lines: ['until it is fixed every switch is read as on; js-harness functions shows each'] }];
+  return [{ name: 'functions', pass: false, detail: errors.join('; '), lines: ['until it is fixed every switch is read as on'], next: firstStep('fix the switches named above in harness.json "functions"') }];
 }
 
 /** The `functions` information row: one line for each way this clone is not what its switches ask, or no row.

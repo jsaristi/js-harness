@@ -11,6 +11,7 @@ import path from 'node:path';
 import { entryComponents } from './manifest.mjs';
 import { claudeHookEntries } from './payload.mjs';
 import { isHarnessRepository } from './spec.mjs';
+import { commandStep, firstStep } from './next-step.mjs';
 
 /** The entries `install` writes today (15, measured in a scratch home on 2026-11-04). A cut that removes one lowers
  * this in its own pull request; a change that adds one raises it there, where its review sees why. */
@@ -117,6 +118,8 @@ export function hookEntriesRow(cwd, home, deps = {}) {
   const lines = [];
   // Where the count holds, a cell over its ceiling and an owner the table does not name fail the row, one line each.
   const problems = [];
+  // The command that takes out a cell's entry, for each cell over its ceiling where js-harness has one.
+  const cellFixes = [];
   for (const [owner, n] of byOwner) {
     const events = [...countBy(live.filter((entry) => ownerOf(entry) === owner), (entry) => entry.event)];
     const ceilings = held ? ceilingsOf(owner, installed) : undefined;
@@ -126,7 +129,9 @@ export function hookEntriesRow(cwd, home, deps = {}) {
     }
     lines.push(`${owner}: ${events.map(([event, count]) => `${event} ${count}${ceilings ? `/${ceilings[event] ?? 0}` : ''}`).join(', ')}`);
     for (const [event, count] of ceilings ? events : []) {
-      if (count > (ceilings[event] ?? 0)) problems.push(`${owner} ${event}: ${count} ${plural(count)}, over its ceiling of ${ceilings[event] ?? 0}${CELL_FIXES[`${owner} ${event}`] ? `; ${CELL_FIXES[`${owner} ${event}`]} takes it out` : ''}`);
+      if (count <= (ceilings[event] ?? 0)) continue;
+      problems.push(`${owner} ${event}: ${count} ${plural(count)}, over its ceiling of ${ceilings[event] ?? 0}`);
+      if (CELL_FIXES[`${owner} ${event}`]) cellFixes.push(CELL_FIXES[`${owner} ${event}`]);
     }
     const known = KNOWN_OWNERS.includes(owner) || live.some((entry) => entry.plugin === owner);
     if (!known && !held) lines.push(`warning: ${n} ${plural(n)} owned by "${owner}", which neither js-harness, its stack nor an enabled plugin installs`);
@@ -137,12 +142,13 @@ export function hookEntriesRow(cwd, home, deps = {}) {
   }
 
   if (counting && !held) {
-    return { name: 'hook entries', pass: false, info: false, detail, lines: [`harness.json "hookCount" must be true; it is ${JSON.stringify(deps.declared.hookCount)}`, ...lines] };
+    return { name: 'hook entries', pass: false, info: false, detail, lines: [`harness.json "hookCount" is ${JSON.stringify(deps.declared.hookCount)}, not true`, ...lines], next: firstStep('set "hookCount" in harness.json to true, or take the key out') };
   }
   if (!own && !held) return { name: 'hook entries', pass: true, info: true, detail, lines };
   const over = own && installed.length > HOOK_ENTRY_LIMIT;
-  if (own) lines.unshift(`install writes ${installed.length} ${plural(installed.length)} (limit ${HOOK_ENTRY_LIMIT})${over ? ': one more process on every matching event of every session; lower the count, or raise HOOK_ENTRY_LIMIT in bin/lib/hook-count.mjs with why' : ''}`);
-  if (problems.length === 0) return { name: 'hook entries', pass: !over, info: false, detail, lines };
-  const fix = 'take the entry out, or raise its ceiling in HOOK_CEILINGS (bin/lib/hook-count.mjs) in a commit that says why; the ceilings of js-harness are what install writes, which js-harness sync writes again';
-  return { name: 'hook entries', pass: false, info: false, detail: `${detail}; ${problems.length} over the table`, lines: [...problems, ...lines, fix] };
+  if (own) lines.unshift(`install writes ${installed.length} ${plural(installed.length)} (limit ${HOOK_ENTRY_LIMIT})${over ? ': one more process on every matching event of every session' : ''}`);
+  if (problems.length === 0) return { name: 'hook entries', pass: !over, info: false, detail, lines, ...(over && { next: firstStep('take an entry out of what install writes, or raise HOOK_ENTRY_LIMIT in bin/lib/hook-count.mjs in a commit that says why') }) };
+  const fix = 'take the entries over their ceilings out, or raise a ceiling in HOOK_CEILINGS (bin/lib/hook-count.mjs) in a commit that says why; the ceilings of js-harness are what install writes, which js-harness sync writes again';
+  const step = problems.length === 1 && cellFixes.length === 1 ? commandStep(cellFixes[0]) : firstStep(`${fix}${cellFixes.map((command) => `; ${command} takes one out`).join('')}`);
+  return { name: 'hook entries', pass: false, info: false, detail: `${detail}; ${problems.length} over the table`, lines: [...problems, ...lines], next: step };
 }

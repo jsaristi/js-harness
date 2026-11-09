@@ -16,6 +16,10 @@ import { appendGateEvent, gateLogDir, gatesOf, readGateBusiest, readGateLog } fr
 import { filesKey, treeKey } from './lib/gate-tree.mjs';
 import { issueTicket, readTickets } from './lib/gate-first.mjs';
 import { LEFT_MARK, SYNCED_MARK, TIMED_OUT_MARK } from './lib/gate-wsl.mjs';
+import { commandStep, firstStep, nextLine, noStep } from './lib/next-step.mjs';
+
+/** The line a failing row prints as its next step, as `formatRow` prints it: six spaces, then the line. */
+const printedNext = (step) => `      ${nextLine(step)}`;
 
 function makeTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-check-'));
@@ -38,6 +42,7 @@ test('checkClaudeBudget passes at exactly its limit, fails one token over, and c
     assert.deepEqual(checkClaudeBudget(dir), [{ name: 'claude-md budget', pass: true, detail: `${CLAUDE_MD_BUDGET} estimated tokens (budget ${CLAUDE_MD_BUDGET})` }]);
     fs.writeFileSync(file, 'a'.repeat((CLAUDE_MD_BUDGET + 1) * 4));
     assert.equal(checkClaudeBudget(dir)[0].pass, false);
+    assert.deepEqual(checkClaudeBudget(dir)[0].next, firstStep(`cut CLAUDE.md from ${CLAUDE_MD_BUDGET + 1} to ${CLAUDE_MD_BUDGET} estimated tokens or fewer`));
     fs.writeFileSync(file, `${'a'.repeat(79)}
 `.repeat(Math.floor((CLAUDE_MD_BUDGET * 4) / 80)));
     assert.equal(checkClaudeBudget(dir)[0].pass, true);
@@ -72,6 +77,7 @@ test('checkBudget fails over the token limit', () => {
     fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'a'.repeat((TOKEN_BUDGET + 1) * 4)); // one token over it
     const row = checkBudget(dir);
     assert.equal(row.pass, false);
+    assert.deepEqual(row.next, firstStep(`cut AGENTS.md from ${TOKEN_BUDGET + 1} to ${TOKEN_BUDGET} estimated tokens or fewer`));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -97,6 +103,7 @@ test('checkBudget fails with a clear message when AGENTS.md is missing', () => {
     const row = checkBudget(dir);
     assert.equal(row.pass, false);
     assert.match(row.detail, /AGENTS\.md/);
+    assert.deepEqual(row.next, firstStep(`write AGENTS.md at the top of the repository, within ${TOKEN_BUDGET} estimated tokens`));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -313,6 +320,7 @@ test("checkSensor fails with the exit status and keeps the command's output", as
     assert.equal(row.name, 'tests');
     assert.equal(row.pass, false);
     assert.equal(row.detail, `${command} exited 3`);
+    assert.deepEqual(row.next, firstStep(`fix what ${command} reports in the output`));
     assert.match(row.output, /boom-out/);
     assert.match(row.output, /boom-err/);
   } finally {
@@ -325,6 +333,7 @@ test('checkSensor fails with the spawn error when the command cannot run', async
   const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'whatever' }, { spawn });
   assert.equal(row.pass, false);
   assert.match(row.detail, /spawn ENOENT/);
+  assert.deepEqual(row.next, firstStep('find why whatever could not run, and make it run'));
 });
 
 test('checkSensor keeps what the command printed before a spawn error such as ENOBUFS', async () => {
@@ -539,6 +548,7 @@ test('checkSensor stops a command that never exits, with its whole process tree,
     assert.ok(Date.now() - started < 60000, `took ${Date.now() - started} ms`);
     assert.equal(row.pass, false);
     assert.equal(row.detail, `${command} timed out after 3 s`);
+    assert.deepEqual(row.next, firstStep(`find what keeps ${command} from ending within its bound, and make it end`));
     const pid = Number(fs.readFileSync(pidFile, 'utf8'));
     assert.ok(await goneWithin(pid), `grandchild ${pid} is still running`);
     fs.rmSync(dir, { recursive: true, force: true });
@@ -762,6 +772,7 @@ test('checkSensor names the signal when the command is killed by one', async () 
   const row = await checkSensor(os.tmpdir(), { name: 'tests', command: 'slow' }, { spawn });
   assert.equal(row.pass, false);
   assert.equal(row.detail, 'slow was killed by SIGTERM');
+  assert.deepEqual(row.next, firstStep('find what killed slow, and make it end on its own'));
   assert.match(row.output, /out/);
 });
 
@@ -1208,6 +1219,7 @@ test('checkContracts fails naming each failing contract and its reasons', () => 
     assert.ok(row.lines.some((line) => /has no command/.test(line)), row.lines.join('\n'));
     assert.ok(row.lines.some((line) => /Effort/.test(line)), row.lines.join('\n'));
     assert.ok(!row.lines.some((line) => line.includes('good.md')));
+    assert.deepEqual(row.next, firstStep('fix the contracts named above in odd/tasks/'));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1273,6 +1285,7 @@ test('main runs the rules row first, when a project keeps its own rules, and a r
     assert.equal(refused.code, 1);
     assert.match(refused.output, /^FAIL {2}rules {2}1 finding in docs\/rules\.json$/m);
     assert.match(refused.output, /^ {6}rule "no-direct-deploy": AGENTS\.md no longer holds the phrase "Never deploy by hand"$/m);
+    assert.ok(refused.output.split('\n').includes(printedNext(firstStep('fix the findings named above in docs/rules.json'))), refused.output);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1402,10 +1415,12 @@ test('check --door refuses a candidate rules-data.mjs that does not parse, and o
     const parsing = await runCheck(['--door', '--base', unparsed.base, '--cwd', unparsed.dir], {}, { rules: doorList() });
     assert.equal(parsing.code, 1, parsing.output);
     assert.match(parsing.output, /^FAIL {2}rules {2}bin\/lib\/rules-data\.mjs of this pull request does not parse: /m);
+    assert.ok(parsing.output.split('\n').includes(printedNext(firstStep('commit a fix to bin/lib/rules-data.mjs on this branch, so that it parses'))), parsing.output);
     const validating = await runCheck(['--door', '--base', unvalid.base, '--cwd', unvalid.dir], {}, { rules: doorList() });
     assert.equal(validating.code, 1, validating.output);
     assert.match(validating.output, /^FAIL {2}rules {2}bin\/lib\/rules-data\.mjs of this pull request does not validate$/m);
     assert.match(validating.output, /^ {6}the shortest phrase cannot be read: /m);
+    assert.ok(validating.output.split('\n').includes(printedNext(firstStep('commit a fix to bin/lib/rules-data.mjs on this branch for each fault named above'))), validating.output);
   } finally {
     fs.rmSync(unparsed.dir, { recursive: true, force: true });
     fs.rmSync(unvalid.dir, { recursive: true, force: true });
@@ -1427,7 +1442,7 @@ test('check --door passes a merge that brings no line, which is not a git that d
 test('check --door judges by the running list alone when the candidate has no list, and the list a pull request changes outside a rule/ branch is refused only with --branch', async () => {
   const noList = doorRepo({ base: null, change: restateRoadmap });
   const edited = doorRepo({ change: (dir) => putFile(dir, 'bin/lib/rules-data.mjs', `${doorListText(doorList())}// touched\n`) });
-  const refusedBranch = 'this pull request changes bin/lib/rules-data.mjs and is not from a rule/ branch: a rule changes only by js-harness rules change';
+  const refusedBranch = 'this pull request changes bin/lib/rules-data.mjs and is not from a rule/ branch';
   try {
     const alone = await runCheck(['--door', '--base', noList.base, '--cwd', noList.dir], {}, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }) });
     assert.equal(alone.code, 1, alone.output);
@@ -1437,7 +1452,8 @@ test('check --door judges by the running list alone when the candidate has no li
     assert.doesNotMatch(plain.output, new RegExp(refusedBranch));
     const feature = await runCheck(['--door', '--base', edited.base, '--branch', 'feat/x', '--cwd', edited.dir], {}, { rules: doorList() });
     assert.equal(feature.code, 1, feature.output);
-    assert.match(feature.output, /^FAIL {2}rules {2}this pull request changes bin\/lib\/rules-data\.mjs and is not from a rule\/ branch: a rule changes only by js-harness rules change$/m);
+    assert.match(feature.output, /^FAIL {2}rules {2}this pull request changes bin\/lib\/rules-data\.mjs and is not from a rule\/ branch$/m);
+    assert.ok(feature.output.split('\n').includes(printedNext(firstStep('take that change out of this pull request, and make it with js-harness rules change <id> on a rule/ branch'))), feature.output);
     const rule = await runCheck(['--door', '--base', edited.base, '--branch', 'rule/x', '--cwd', edited.dir], {}, { rules: doorList() });
     assert.equal(rule.code, 0, rule.output);
     assert.doesNotMatch(rule.output, new RegExp(refusedBranch));
@@ -1453,7 +1469,8 @@ test('check --door fails the rules row when git does not answer, instead of givi
     const silent = () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' });
     const { code, output } = await runCheck(['--door', '--base', 'HEAD~1', '--cwd', dir], {}, { rules: doorList({ ...DOOR_WAIT, row: DOOR_REFUSES }), git: silent });
     assert.equal(code, 1, output);
-    assert.match(output, /^FAIL {2}rules {2}git did not answer, so the door cannot read the lines this pull request brings$/m);
+    assert.match(output, /^FAIL {2}rules {2}the door cannot read the lines this pull request brings$/m);
+    assert.ok(output.split('\n').includes(printedNext(noStep('git did not answer'))), output);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1500,7 +1517,8 @@ test('main runs the flaky row with the static rows when the project keeps docs/F
     fs.writeFileSync(path.join(dir, 'docs', 'FLAKY.md'), '### bin/a.test.mjs\n- Owner: JH 10\n');
     const refused = await runCheck(['--cwd', dir], env);
     assert.equal(refused.code, 1);
-    assert.match(refused.output, /^FAIL {2}flaky {2}docs\/FLAKY\.md is not read: 2 faults to repair in that file$/m);
+    assert.match(refused.output, /^FAIL {2}flaky {2}docs\/FLAKY\.md is not read: 2 faults$/m);
+    assert.match(refused.output, /^ {6}next: repair the faults named above in docs\/FLAKY\.md; then run again what printed this, for the command at the new head$/m);
     assert.match(refused.output, /^ {6}bin\/a\.test\.mjs: no "- Expires:" line$/m);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -2357,6 +2375,7 @@ test('checkSensors turns a documents value it does not take into one FAIL row na
       const rows = await checkSensors(dir, { spawn, git });
       assert.deepEqual(rows.map((row) => [row.name, row.pass, row.info]), [['sensors', false, undefined]], JSON.stringify(sensors));
       assert.match(rows[0].detail, /^harness\.json "documents" must be .*; "docs\/\*" is a pattern, and none is taken$/);
+      assert.deepEqual(rows[0].next, firstStep('correct the file or the value the row names'));
       assert.deepEqual([spawn.ran, git.asked], [0, []]);
     }
   } finally {
@@ -2656,7 +2675,7 @@ test('a declaration of sensors of documents that cannot be taken fails the gate 
     for (const [harness, said] of faulty) {
       writeJson(dir, 'harness.json', { sensors: { tests: 'run-tests' }, ...harness });
       const spawn = countedSensors();
-      assert.deepEqual(await checkSensors(dir, { spawn, git: stagedGit(['src/app.js']) }), [{ name: 'sensors', pass: false, detail: said }], JSON.stringify(harness));
+      assert.deepEqual(await checkSensors(dir, { spawn, git: stagedGit(['src/app.js']) }), [{ name: 'sensors', pass: false, detail: said, next: firstStep('correct the file or the value the row names') }], JSON.stringify(harness));
       assert.equal(spawn.ran, 0);
       assert.deepEqual(discoverDocumentSensors(dir, harness.documents ?? []), { sensors: [], error: said });
     }
@@ -3798,6 +3817,7 @@ test('a gate whose static row fails stops before its sensors: it asks for no loc
   assert.equal(errOutput, '');
   assert.equal(rowsOf(output)[0], BUDGET_FAILS);
   assert.deepEqual(gateRows(output), [stoppedRow(['budget'])]);
+  assert.ok(output.split('\n').includes(printedNext(firstStep('fix the row budget first'))), output);
   // No `load`, no sensor, no `review` and no `codex-review`: the row of the stop is the last one.
   assert.deepEqual(namesOf(output), [...STATIC_ROWS, 'gate']);
   assert.doesNotMatch(output, /^PASS {2}(tests|lint) /m);
@@ -5411,6 +5431,7 @@ test('a sensorsInWsl that is not true or false fails the gate in one row named s
   assert.equal(code, 1);
   assert.equal(spawn.calls.length, 0);
   assert.match(output, /^FAIL {2}sensors {2}harness\.json "sensorsInWsl" must be true or false/m);
+  assert.ok(output.split('\n').includes(printedNext(firstStep('correct the file or the value the row names'))), output);
 }));
 
 // Codex, 2026-10-14, on 3f59bb2..adae7c8: a time that ran out inside the distribution was an ordinary
@@ -5718,6 +5739,7 @@ test('check --push refuses a v* tag whose package.json at the tagged commit is a
     const { code, output } = await runCheck(['--push', '--remote', 'up', '--head', head, '--ref', 'refs/tags/v1.0.0', '--cwd', dir], { JS_HARNESS_HOME: dir });
     assert.equal(code, 1, output);
     assert.match(output, /^FAIL {2}tag {2}tag v1\.0\.0 is refused: package\.json at [0-9a-f]{7} says version 0\.9\.0, not 1\.0\.0 \(the tag without its v\)/m);
+    assert.match(output, /^ {6}next: move tag v1\.0\.0 to a commit whose package\.json says version 1\.0\.0, or commit that version and tag the new commit; then run again what printed this/m);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
