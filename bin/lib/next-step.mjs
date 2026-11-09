@@ -51,9 +51,11 @@ export function reviewCommand(tool, { base, at, lenses = null, flags = [] }) {
 }
 
 /** Why a review command given `--at <at>` is refused, or `null` when it may start: `atCommit` is the commit `at` names
- * (`null` when it names none) and `head` the commit `HEAD` is now. */
+ * (`null` when it names none) and `head` the commit `HEAD` is now (`null` on an unborn branch, or when git did not
+ * answer). */
 export function atRefusal({ at, atCommit, head }) {
   if (!atCommit) return `--at ${at} does not name a commit here.\n${nextLine(firstStep('run again what printed this command, from this repository'))}`;
+  if (!head) return `HEAD names no commit here, so it cannot be ${atCommit.slice(0, 7)}, which --at ${at} names.\n${nextLine(firstStep(`check out the branch whose head is ${atCommit.slice(0, 7)}`))}`;
   if (atCommit === head) return null;
   return `this command was computed at ${atCommit.slice(0, 7)}, and HEAD is ${head.slice(0, 7)} now: the range it names is no longer the branch's, so it is refused, not rerun.\n`
     + `${PREFIX}run again what printed this command (js-harness check --push, or the merge door), for the command bound to this head`;

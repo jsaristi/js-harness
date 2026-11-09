@@ -39,6 +39,9 @@ test('--at is refused once HEAD is another commit, and passes at the same one', 
   assert.match(refused, /computed at bbbbbbb, and HEAD is aaaaaaa now/);
   assert.match(refused.split('\n').at(-1), /^next: run again what printed this command/);
   assert.match(atRefusal({ at: 'nope', atCommit: null, head: HEAD }), /--at nope does not name a commit/);
+  const unborn = atRefusal({ at: HEAD.slice(0, 12), atCommit: HEAD, head: null });
+  assert.match(unborn, /HEAD names no commit here/);
+  assert.match(unborn.split('\n').at(-1), /^next: /);
 });
 
 test('check prints a failing row\'s next step as its last line, and none on a row that passes or informs', () => {

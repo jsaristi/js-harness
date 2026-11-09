@@ -280,3 +280,8 @@ rerun asked through the lead.
   `bin/failures.mjs` drops its copy, so `check.mjs` went down to 2,001. The `<rev>` detector skips `Usage:` lines,
   since they document syntax. T6 and T7 measured: 42 rows, 34 exits and 7 unbound commands. Two writers with
   disjoint surfaces, briefs in `$CLAUDE_JOB_DIR/tmp/brief-{common,a,b}.md`.
+- L10 (2026-11-08, reviews of `09158b1..8435e5d`): the lenses, reliability and readability, over each slice, 0
+  findings. Codex in 2 parts, 368,157 input tokens: part 1 correct; part 2 two P2 findings, both taken. `atRefusal`
+  threw on a HEAD that names no commit; its test was red with that TypeError and is now green: it refuses with a
+  check-out step. Pair 10's row held only the entry's heading and date; it now holds the decision itself, in the
+  register and in the shipped protocol.
