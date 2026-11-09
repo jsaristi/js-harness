@@ -668,6 +668,10 @@ export const COVERAGE = {
       "7697b095235a",
       "f45c187cfe94",
       "82a916147e37",
+      {
+        "hash": "1e53ea62a313",
+        "context": "the writer hand-off (F8 S7, odd/tasks/f8-s7-topology.md): its wording is held by bin/lib/protocols-skill.test.mjs, and the writer type's own prompt, which carries the S# return to the writer, by bin/lib/writer-agent.test.mjs"
+      },
       "1726d5761902",
       "d9efb11b9cf1",
       "f968034fb0b8",
