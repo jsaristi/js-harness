@@ -1,0 +1,146 @@
+# JH 160 · F8 S5: skills, memory and rules (the part that stays in F8)
+
+Locator: `odd/tasks/f8-s5-rules.md` · Branches: `rule/f8-s5-memory-record` (PR 1), then `f8-s5-2-rule-pass` and
+`f8-s5-3-lens-probe`, chained · Delivery: one pull request a slice · Test runner: `node --test`
+
+## Goal
+The memory index is held to 0.5k by a hook, every live rule and every control of the failure register is classified
+as a check or hook, prose that stays, or retired, with the three totals printed by a command, the record rule is
+declared where rules live, and a headless lens run with a planted user hook shows the hook did not fire.
+
+## Why
+The diet found decisions in five stores and most rules held by their text alone (`docs/proposals/harness-diet.md`,
+section 10, "The rule pass (S5)"; its finding 10). Today the index's budget is 4000 bytes and only makes a hygiene pass
+due; 49 of 72 live rules are `owed` in the coverage register; nothing names which record wins; and the lens run's
+isolation flags were never compared with gentle-ai's (the reverse-engineering document, 13.3 row 2).
+
+## Done when
+- `node bin/js-harness.mjs contract check odd/tasks/f8-s5-rules.md` exits 0
+- `node --test bin/lib/memory-index-guard.test.mjs bin/guard.test.mjs` exits 0
+- `node --test bin/lib/rules-coverage.test.mjs bin/lib/rules-bindings.test.mjs bin/lib/failures.test.mjs` exits 0
+- `node --test evals/lens-hook-probe.test.mjs` exits 0
+- `node bin/js-harness.mjs rules check` exits 0
+- `node bin/js-harness.mjs rules coverage` exits 0
+- `npm run check` exits 0
+- `node evals/lens-hook-probe.mjs` run once on this machine prints the planted hook fired in the plain arm and not in
+  the lens arm, quoted in `## Log`
+- the pull requests are opened, named in `## Log`, with Codex and the Claude lenses recorded over their code
+
+## In scope / Out of scope
+- In: `bin/lib/memory-index-guard.mjs`, `bin/guard.mjs` and their tests; the rules `memory-index-bytes` and the new
+  record rule, by `rules change` on a `rule/` branch; the line of the record rule in `bin/lib/manifest.mjs`; the
+  coverage register `bin/lib/rules-coverage-data.mjs`, `bin/lib/rules-coverage.mjs`, `bin/rules.mjs` and their tests;
+  `bin/lib/failures.mjs`, `bin/failures.mjs` and their tests; `bin/lib/rules-bindings.test.mjs`; a new
+  `evals/lens-hook-probe.mjs` and its test; `docs/FAILURES.md` controls that are lost; `docs/ROADMAP.md` S5, SPEC,
+  README.
+- Out, each with its reason:
+  - skill bodies at most 3k, the skill lint, the protocols-load probe and the incident rerun: moved to
+    `odd/tasks/workshop-product-split.md` (spec 7, question 190), per the S5 State line.
+  - `rule:questions-one-place`, `bin/check.mjs`, the contracts and the review surfaces: JH 158's (PRs 795 and 796),
+    by the brief. Its control in the register is classified after those land, or through the lead.
+  - any change to a rule of his (owner `sebastian`), its retirement included: only with his typed words, asked through
+    the lead.
+  - his `~/.claude`, `~/.codex` and credentials: the probe runs in a scratch `CLAUDE_CONFIG_DIR` against a loopback
+    API.
+
+## Constraints
+- The guard runs on every Write and Edit of every session, so the index's byte check adds no import to the path of a
+  file that is no memory index — because `bin/lib/memory-index-guard.mjs` says so in its header.
+- A write that shrinks an index already over the budget passes — because blocking every edit until a pass would stop
+  the pass itself (the line check's reason, `memoryIndexRefusal`).
+- The probe spends nothing: a loopback API, a dummy key, no login token in its environment — because a probe is not an
+  eval, and the incident rerun is his spend.
+- A classification that would change a rule of his goes to the lead as a question — because `AGENTS.md` and the brief
+  say a rule of the owner's changes only with his words.
+
+## Ask me before
+The incident-set rerun (about $13), after everything else is built, through the lead with its cost; any retirement or
+change of a rule whose owner is `sebastian`.
+
+## Depth pass
+- 1. Method: the discipline is policy-as-code (OpenAI's "promote rules from docs into linters", cited in the diet's
+  finding 4; Claude Code's own advice that what must always happen goes into a hook), to the standard this repo already
+  set: a rule's control is named in a register a command checks, a check is proved by a planted break
+  (`rules coverage --prove`), and a register only shrinks its debt. The smallest change that meets it: no new register.
+  The coverage register (`bin/lib/rules-coverage-data.mjs`, S5c-a) already gives each live rule a control level, and
+  the failure register (`docs/FAILURES.md`) already gives each entry a control level; the pass is a decision per `owed`
+  entry, written into those registers, plus one function that maps level to the diet's three classes and prints the
+  totals. The budget is the existing rule `memory-index-bytes` read by the existing guard (`memoryIndexRefusal`), which
+  holds lines today and not bytes. The probe reuses the isolation probe's loopback API (`startFakeApi`,
+  `evals/isolation-probe.mjs:225`) and the lens's own arguments (`claudeArgs`, `bin/lens-review.mjs:66`). Searched
+  first (`rule:reuse-first`): `js-harness rules`, `rules coverage`, `failures`, codegraph over `memory-index-bytes`,
+  `INDEX_BYTES`, `memoryIndexRefusal`, `claudeArgs`, `startFakeApi`.
+- 2. Raw material: the register on 2026-11-08, `js-harness rules coverage`: "rules: 72 live, by the level of each
+  obligation: check 17, owed 49, line 2, protocol 5" (76 declared, 4 retired: `js-harness rules`); the failure register,
+  `grep -c "^- Control:" docs/FAILURES.md`: 114 controls in 140 entries (check 99, protocol 7, measured 2, line 1,
+  owed 5), and `js-harness failures`: 2 entries "control lost"; `js-harness memory status --history`: the index
+  783 B today, 2590 to 3920 B at every verified pass from 2026-10-15 to 2026-10-30 10:41Z, under the 4000 budget;
+  `bin/lib/memory-hygiene.mjs:159` makes a pass due over the budget and `bin/lib/memory-index-guard.mjs:62` refuses
+  only a long line; the diet's measure, "`MEMORY.md` ~0.7k (chars/4)" (`docs/proposals/harness-diet.md:280`) and its
+  pass line "`MEMORY.md` ≤ 0.5k" (`:798`); the rule pass and the record rule as written (`:921-931`); the lens flags,
+  `bin/lens-review.mjs:67` (`-p --safe-mode --tools "" ... --no-session-persistence`); `claude --help` (2.1.x):
+  "`--safe-mode` Start with all customizations (CLAUDE.md, skills, installed plugins, hooks, MCP servers, ...)
+  disabled"; 13.3 row 2 (`docs/proposals/gentle-ai-reverse-engineering.md:949`).
+- 3. The bar:
+  spec 1: `node --test bin/lib/memory-index-guard.test.mjs`: none, new behaviour; today a Write that takes the index
+  past any size passes the guard, and the budget is 4000 bytes, about 1k at chars/4.
+  spec 2: `node bin/js-harness.mjs rules coverage`: today 49 of 72 live rules are owed and no command prints the three
+  classes; the failure register has 5 owed controls and 2 lost.
+  spec 3: `node bin/js-harness.mjs rules documents-canonical`: none, new behaviour; no rule names which record wins.
+  spec 4: `node --test evals/lens-hook-probe.test.mjs`: none, new behaviour; the flags were never compared.
+  spec 5: left out because it is his go-ahead for specs 1 to 4, with no behaviour of its own to measure.
+- 4. Refutation: two cheap tests, run before any code. (a) Would a 0.5k budget refuse the index as it is? `js-harness
+  memory status --history`: 783 B today, so a 2000-byte budget (0.5k at chars/4) holds it; every pass before
+  2026-10-30 15:02Z ended over 2000, so the budget would have bitten then and is not idle. (b) Does a user hook fire
+  under the lens's flags? A scratch `CLAUDE_CONFIG_DIR` with `SessionStart`, `UserPromptSubmit`, `Stop` and
+  `SessionEnd` hooks that each write a marker, a loopback API that answers 400, a dummy key, `claude -p` with the
+  lens's `--tools "" --settings ... --no-session-persistence` (scratch script, `$CLAUDE_JOB_DIR/tmp/lensprobe.mjs`):
+  plain arm 4 requests, fired `SessionEnd, SessionStart, UserPromptSubmit`; `--safe-mode` arm 4 requests, fired
+  nothing. A first try with a closed port timed out at 120 s and left one `claude.exe` that wrote a `SessionEnd` into
+  the next arm's folder; it was stopped (pid 11344) and the arms now write to separate folders.
+  Verdict: supports
+- 5. Request: lower `memory-index-bytes` to 2000 bytes (0.5k at the diet's chars/4) and make the guard refuse a Write
+  or Edit that leaves a memory index over it and larger than before; close every `owed` control of a live rule in the
+  coverage register as a check (a binding test and a planted break where code reads the value) or as prose that stays
+  (a protocol or a line where its phrases are), retire nothing of his without his words, map the failure register's
+  levels to the same three classes, and print the totals from `rules coverage` and `failures`, with a finding for any
+  live rule left owed; declare the record rule as a rule of the project whose text sits in the `js-harness` skill's
+  memory section; and keep the lens probe as `evals/lens-hook-probe.mjs`, two arms with a planted user hook and a
+  planted user `CLAUDE.md` marker, run once here at no spend.
+  Adds: none
+
+## Specs
+1. ROADMAP S5 (`docs/ROADMAP.md`, "S5 Skills, memory and rules"): "`MEMORY.md` at most 0.5k"; the brief: "the
+   `MEMORY.md` budget held by a check".
+2. ROADMAP S5: "the rule pass: each rule and each register control classified as a check or hook, prose that stays,
+   or retired, counted from the register on the day it runs"; the diet: "It closes on a count: 65 of 65 rules and every
+   control classified, the three totals reported. A rule a check now enforces loses its prose."
+3. ROADMAP S5: "the record rule (committed documents are canonical; engram mirrors)"; the diet: "Engram and
+   `MEMORY.md` mirror them or point to them, and never hold a decision the repo does not."
+4. ROADMAP S5: "the lens flag parity probe (row 2)"; "a headless lens run with a planted user hook shows the hook did
+   not fire".
+5. His words, the lead's transcript `0f71b2c6`, 2026-11-08 about 17:40 local: "Listo continuemos con todo lo
+   siguiente".
+
+## Tasks
+- [ ] T1 (kind: docs) this document and its depth pass, committed alone — PR 1
+- [ ] T2 (kind: build) spec 1: the guard refuses a write that grows the index over `memory-index-bytes`, tests first —
+  PR 1
+- [ ] T3 (kind: build) specs 1 and 3: `rules change memory-index-bytes` to 2000 and the new record rule with its line in
+  the skill's memory section, on `rule/f8-s5-memory-record` — PR 1
+- [ ] T4 (kind: build) spec 2: every owed control of a live rule closed as a check or prose, the class totals and the
+  finding in `rules coverage`, tests first — PR 2
+- [ ] T5 (kind: build) spec 2: the failure register's controls in the same three classes, printed by `failures`; the
+  two lost controls repaired or reclassified — PR 2
+- [ ] T6 (kind: build) spec 4: `evals/lens-hook-probe.mjs` and its test, run once here — PR 3
+- [ ] T7 (kind: verify) Codex and the pertinent lenses over each slice; ready notices with each PR number
+- [ ] T8 (kind: docs) ROADMAP S5 State, SPEC, a summary under `docs/sessions/`; the incident rerun asked through the lead
+
+## Log
+- L1 (2026-11-08, the request as written): "Listo continuemos con todo lo siguiente" (his words, quoted by the
+  brief `2026-11-09T03-56-27-719Z-f29e9dc5.md`). The brief: "Yours: the `MEMORY.md` budget (at most 0.5k), the rule
+  pass (each rule and each register control classified as a check or hook, prose that stays, or retired, counted from
+  the register on the day you run it), the record rule (committed documents are canonical; engram mirrors), and the
+  lens flag parity probe (13.3 row 2 of the reverse-engineering document)."
+- L2 (2026-11-08, the depth pass): item 4's two refutations run before any code; both support. Read of 0.5k: tokens at
+  the diet's chars/4, so 2000 bytes, since the rule is in bytes and the index is ASCII but for a few accents.
