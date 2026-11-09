@@ -24,7 +24,7 @@ async function rules(argv, root = PACKAGE) {
 
 // What `rules check` reads of the package, and the much less that `rules coverage` reads: the register, the version,
 // the cases and the repository's own sources (the shipped texts are rendered by the code that runs).
-const CHECKED = ['bin', 'docs', 'evals/tasks', 'odd/tasks', 'package.json', 'AGENTS.md', 'CLAUDE.md', 'README.md'];
+const CHECKED = ['bin', 'workshop', 'docs', 'evals/tasks', 'odd/tasks', 'package.json', 'AGENTS.md', 'CLAUDE.md', 'README.md'];
 // The list marks the harness's own checkout, which `rules` tells from a project by it; the files the register's checks
 // name are there, since a check whose test or break is gone is refused, and so are those a line, a protocol or a
 // measurement is written in, since one whose path is gone is refused too.
@@ -97,6 +97,13 @@ test('a directive planted with no control makes rules check exit 1 and names it;
     assert.ok(report.out.includes('FAIL  coverage  1 finding'), report.all);
     assert.equal((await rules(['coverage', '--strict'], root)).code, 1);
   }, CHECKED);
+});
+
+// F8 S5, spec 2 (odd/tasks/f8-s5-rules.md): the report counts the rules by class.
+test('the report counts each class of the rules\' obligations, and the retired rules', async () => {
+  const plain = await rules(['coverage']);
+  const classes = plain.out.find((line) => line.startsWith('  classes: '));
+  assert.match(classes ?? '', /^ {2}classes: check \d+, prose \d+, retired \d+(, measured \d+)?(, owed \d+)? \(each obligation of a live rule; the retired rules counted\)$/, plain.all);
 });
 
 test('a directive that names its rule is tied and passes; one listed as context passes with its reason printed', async () => {

@@ -438,6 +438,9 @@ function coverageLines(report) {
   const byLevel = {};
   for (const rule of report.rules) for (const level of rule.levels.length === 0 ? ['none'] : rule.levels) byLevel[level] = (byLevel[level] ?? 0) + 1;
   lines.push(`  rules: ${report.rules.length} live, by the level of each obligation: ${Object.entries(byLevel).map(([level, n]) => `${level} ${n}`).join(', ')}`);
+  const { check, prose, retired, measured, owed: owedRules } = report.classes;
+  const apart = [...(measured > 0 ? [`measured ${measured}`] : []), ...(owedRules > 0 ? [`owed ${owedRules}`] : [])];
+  lines.push(`  classes: check ${check}, prose ${prose}, retired ${retired}${apart.map((item) => `, ${item}`).join('')} (each obligation of a live rule; the retired rules counted)`);
   const naming = report.cases.filter((item) => item.rules.length > 0).length;
   lines.push(`  cases: ${report.cases.length}: ${naming} name their rules, ${report.cases.filter((item) => item.owed).length} owed`);
   const cap = OWED_CAP_FROM === null ? 'not yet held (S8 sets the day)' : `held since ${OWED_CAP_FROM}`;
