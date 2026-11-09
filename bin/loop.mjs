@@ -63,7 +63,7 @@ export const USAGE = [
   '    holds, naming the session to open and the command that opens it (js-harness host-watch brief prints its brief);',
   '    with a CUT line (exit 0) when, run from a session (CLAUDE_CODE_SESSION_ID), a compaction brings that session\'s',
   `    compactions to ${LEAD_CUT_COMPACTIONS} or more: the lead's cut, one already due at the start ending it once and then`,
-  '    named on an "already due:" line by each relaunch, the count told kept beside the loop records;',
+  '    named on an "already due:" line by each relaunch, the count told kept in a cuts folder under the loop records;',
   '    with the DUE line of a throughput review (exit 0) when it falls due and again an hour, three and',
   '    seven after, one already due at the start being named on an "already due:" line; or after --max hours (10,',
   '    exit 1). Every line that ends it is followed by the DUE lines still open. Each tick also keeps, as',
@@ -512,9 +512,10 @@ async function heartbeat(ctx, parsed, { home, slug }) {
       return false;
     }
   }) ?? path.join(folders[0], `${session}.jsonl`);
-  // The count a CUT line last told for this session, kept beside the loop records: a cut due when a heartbeat starts
-  // wakes the lead once, and a relaunch after it is not woken again until another compaction.
-  const markFile = session === null ? null : path.join(loopsFolder(home, slug), `cut-${session}.json`);
+  // The count a CUT line last told for this session, kept in a folder of its own under the loop records (loop status
+  // reads every .json entry of that folder as a loop): a cut due when a heartbeat starts wakes the lead once, and a
+  // relaunch after it is not woken again until another compaction.
+  const markFile = session === null ? null : path.join(loopsFolder(home, slug), 'cuts', `${session}.json`);
   const toldCut = () => {
     try {
       const told = JSON.parse(ctx.readFile(markFile)).told;
@@ -596,7 +597,9 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     const fresh = stalledAt(now).filter((item) => crossing(item) > (told.get(identity(item)) ?? -1));
     if (fresh.length > 0) return ending(fresh.map(stalledLine), dues, 0);
     const counted = compactionsNow();
-    if (counted !== null && counted > (compactions ?? 0) && counted >= LEAD_CUT_COMPACTIONS) return ending([tellCut(counted)], dues, 0);
+    // Against the mark as well: a transcript unread at the start leaves `compactions` null, and a count already told
+    // before is not told again when it becomes readable.
+    if (counted !== null && counted > (compactions ?? 0) && counted >= LEAD_CUT_COMPACTIONS && counted > toldCut()) return ending([tellCut(counted)], dues, 0);
     if (counted !== null) compactions = counted;
     const windowsLine = await windowsTold();
     if (windowsLine !== null) return ending([windowsLine], dues, 0);
@@ -696,7 +699,7 @@ export async function loopMain(
     readFile = (file) => fs.readFileSync(file, 'utf8'),
     // The lead's cut: the whole lines of a transcript from a byte on (F8 S7).
     readTail = readTailOf,
-    // The mark of the last cut told for a session, beside the loop records (F8 S7).
+    // The mark of the last cut told for a session, in the cuts folder under the loop records (F8 S7).
     writeFile = (file, text) => {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, text);

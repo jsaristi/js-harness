@@ -5,6 +5,7 @@ import { loopMain } from './loop.mjs';
 import { gateLogDir } from './lib/gate-log.mjs';
 import { NOTICE_SCHEMA, recordPath } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
+import { loopsFolder, readRecords } from './lib/loops.mjs';
 
 // The bodies a loop runs. Every seam is fake: the clock, the sleep, the files' times and the channel's text.
 const T0 = Date.parse('2026-10-15T05:00:00.000Z');
@@ -338,10 +339,11 @@ test('heartbeat says once each what the throughput tick said or could not do, an
 
 // F8 S7 (odd/tasks/f8-s7-topology.md, spec 1): the lead is cut after its second compaction. The heartbeat reads the
 // transcript of the session that runs it, from where it last read, and ends with a CUT line when a compaction brings
-// the count to two or more. A cut already due at its start ends it once, with a mark beside the loop records, and a
+// the count to two or more. A cut already due at its start ends it once, with a mark in a folder under the loop records, and a
 // relaunch after that names it and waits for another compaction, so a lead that restarts its loops never spins.
 const TRANSCRIPT = path.join(HOME, '.claude', 'projects', projectSlug(CWD), `${OWNER}.jsonl`);
 const boundary = (sidechain = false) => `${JSON.stringify({ type: 'system', subtype: 'compact_boundary', isSidechain: sidechain, compactMetadata: { trigger: 'auto', preTokens: 467000, postTokens: 9000 } })}\n`;
+const CUT_MARK = path.join(loopsFolder(HOME, projectSlug(CWD)), 'cuts', `${OWNER}.json`);
 const turn = `${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'compact_boundary is a word here' }] } })}\n`;
 
 /** A fake of the transcript's tail reader over `state.transcript`: whole lines only, from the byte `start`. */
@@ -398,6 +400,33 @@ test('heartbeat: a cut already due at its start ends it once; a relaunch names i
   assert.deepEqual(state.out.filter((line) => line.startsWith('already due: the lead')), ["already due: the lead's cut, 3 compactions in this session, told before"]);
   assert.match(state.out.at(-1), /^CUT: this session has been compacted 4 times since it started: /);
   assert.ok(state.clock >= T0 + 30 * 60000, 'the relaunch was not woken by the cut it was already told');
+  // The mark is not a loop record: loop status reads every .json entry of the loops folder as one.
+  const marks = Object.keys(state.marks);
+  assert.deepEqual(marks, [CUT_MARK]);
+  const loops = loopsFolder(HOME, projectSlug(CWD));
+  const entries = marks.filter((mark) => path.dirname(mark) === loops).map((mark) => path.basename(mark));
+  assert.deepEqual(readRecords(loops, { readdir: () => entries, readFile: (mark) => state.marks[mark] }), [], 'loop status lists no cut mark');
+});
+
+test('heartbeat: a transcript unreadable at its start and readable later does not tell again a cut already told', async () => {
+  let readable = false;
+  const { state, deps } = world({
+    files: { [GATE_LOG]: T0 },
+    onSleep: (s) => {
+      busy(s);
+      readable = s.clock >= T0 + 10 * 60000;
+    },
+  });
+  state.marks = { [CUT_MARK]: `${JSON.stringify({ told: 3 })}\n` };
+  state.transcript = boundary() + boundary() + boundary() + turn;
+  const tail = tailOf(state);
+  deps.readTail = (file, start) => {
+    if (!readable) throw Object.assign(new Error('EBUSY: the transcript is held'), { code: 'EBUSY' });
+    return tail(file, start);
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], { CLAUDE_CODE_SESSION_ID: OWNER }, deps), 1);
+  assert.equal(state.out.filter((line) => line.startsWith('CUT:')).length, 0, 'the cut told at 3 is not told again');
+  assert.ok(state.tails > 3);
 });
 
 test('heartbeat finds the transcript of a session opened in a worktree under that worktree\'s folder', async () => {

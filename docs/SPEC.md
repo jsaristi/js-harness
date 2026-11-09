@@ -219,7 +219,7 @@ family by folder and child names; the fields of each are in `docs/RECORDS.md`, a
 | The live board's cursor | `~/.js-harness/channel/live/<project>.json`; `board-checked.json` in the folder that `sessions live` is given with `--out` | `bin/sessions-live.mjs` `sessionsLiveMain`; `bin/lib/live-rows.mjs` `liveCursorPath` | `sessions live` |
 | The permit relay | `~/.js-harness/channel/permits/<project>/`: `lease.json`, `log.jsonl`, `requests/<id>.json`, `verdicts/<id>.json` | `bin/permit.mjs` `permitMain` | `permit`, the lead |
 | Background sessions | `~/.js-harness/background/`: `sessions.jsonl`, `briefs/`, `stranded/<id>.json` | `bin/lib/background.mjs` `appendRecord` `strandEntry`; `bin/sessions-background.mjs` `sessionsStartMain` | `sessions`, `sessions stop`, `uninstall` |
-| Loops | `~/.js-harness/loops/<project>/<name>.json`; the lead's cut marks `cut-<session>.json` | `bin/lib/loops.mjs` `writeRecord`; `bin/loop.mjs` `heartbeat` | `loop status`, the heartbeat |
+| Loops | `~/.js-harness/loops/<project>/<name>.json`; the lead's cut marks `cuts/<session>.json` | `bin/lib/loops.mjs` `writeRecord`; `bin/loop.mjs` `heartbeat` | `loop status`, the heartbeat |
 | Gates | `~/.js-harness/gate-log/`; the lock under `~/.js-harness/gate/`: `lock/holder-<token>.json`, `wait-<token>/`; the gate-first tickets in `gate-first/<id>.json` | `bin/lib/gate-log.mjs` `appendGateEvent`; `bin/lib/gate-lock.mjs` `takeGateLock`; `bin/lib/gate-first.mjs` `issueTicket` | `gate`, `throughput`, `quiet` |
 | The WSL gate | `~/.js-harness/gate-wsl.json` | the person who sets the WSL gate up, by hand | `gate`, `check` |
 | Throughput snapshots | `~/.js-harness/throughput/<project>/<day>.json`, `outcomes.jsonl` | `workshop/bin/throughput.mjs` `throughputMain` | `throughput` |

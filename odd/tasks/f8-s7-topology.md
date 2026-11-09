@@ -188,6 +188,14 @@ what it covered leaves the lead to guess what was done (the reverse-engineering 
   `S#`. Each sub-agent's `meta.json` says `"agentType":"js-harness-writer"`, model `claude-haiku-5-5`. The CLI's
   `total_cost_usd` was $0.0096 to $0.0125 a slice, notional inside his plan. Not checked by the runner: whether each
   slice's own check passed; the returns state it, and nothing builds on those scratch files.
+- L11 The reviews of `71b50d3..78aec0e` (2026-11-09). Codex, 1 finding, taken: the cut mark `cut-<session>.json` sat
+  in the loops folder, whose every `.json` entry `readRecords` (bin/lib/loops.mjs) lists as a loop, so `loop status`
+  would show it as unreadable; it moves to `cuts/<session>.json`, and a test reads the folder through `readRecords`.
+  Lenses (reliability, readability, resilience): reliability 2, readability 1, resilience 0. Taken: reliability 2,
+  a transcript unread at the start and readable later re-told a cut the mark held; the tick now compares with the
+  mark too, with a test. Answered, not taken: reliability 1 and readability 1 (the agent file is absent from the
+  range): it is in `b48111f8` (`create mode 100644 .claude/agents/js-harness-writer.md`); the lenses leave Markdown
+  out of the range, so they did not see it.
 
 ## Next step
 - State (2026-11-09 ~02:40Z): four commits on `feat/f8-s7-topology` over 71b50d33 (20e53d66 this document,
