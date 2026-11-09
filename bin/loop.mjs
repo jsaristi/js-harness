@@ -29,6 +29,11 @@ import { readStalled } from './lib/stall.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 
+// The lead's cut (F8 S7, odd/tasks/f8-s7-topology.md, spec 1): the lead is cut at a phase's close or after this many
+// compactions of its session, the diet's starting line (docs/proposals/harness-diet.md, section 6), which S8 measures.
+// A phase's close is the lead's own step (`js-harness report phase`); the compactions are what the heartbeat counts.
+export const LEAD_CUT_COMPACTIONS = 2;
+
 export const USAGE = [
   'Usage: js-harness loop run <name> --purpose "<text>" --until "<end condition>" [--owner <session id>] [--restart [--take-over]] -- <command> [args]',
   '       js-harness loop status [--json]',
@@ -56,6 +61,9 @@ export const USAGE = [
   '    read every --windows minutes (60; 0 for never; js-harness windows-daily reads it by hand), is red and was not',
   '    told before; with a HOST line (exit 0) when the host, read every hour, has an update no host watch session',
   '    holds, naming the session to open and the command that opens it (js-harness host-watch brief prints its brief);',
+  '    with a CUT line (exit 0) when, run from a session (CLAUDE_CODE_SESSION_ID), a compaction brings that session\'s',
+  `    compactions to ${LEAD_CUT_COMPACTIONS} or more: the lead's cut, one already due at the start ending it once and then`,
+  '    named on an "already due:" line by each relaunch, the count told kept in a cuts folder under the loop records;',
   '    with the DUE line of a throughput review (exit 0) when it falls due and again an hour, three and',
   '    seven after, one already due at the start being named on an "already due:" line; or after --max hours (10,',
   '    exit 1). Every line that ends it is followed by the DUE lines still open. Each tick also keeps, as',
@@ -346,6 +354,47 @@ const WINDOWS_MINUTES = 60;
 // says it again each hour until a host watch session opens for it (odd/tasks/f8-s9-host-watch.md, S4).
 const HOST_MINUTES = 60;
 
+/** The compactions of the session's own thread in `text`, whole transcript lines: a sub-agent's (a side chain) is not
+ * the session's. Only a line that names a compaction is parsed, so a long transcript is read at the speed of a scan. */
+export function compactionsIn(text) {
+  let count = 0;
+  for (const line of text.split('\n')) {
+    if (!line.includes('"compact_boundary"')) continue;
+    let entry;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (entry?.type === 'system' && entry.subtype === 'compact_boundary' && entry.isSidechain !== true) count += 1;
+  }
+  return count;
+}
+
+/** The whole lines of `file` from the byte `start` to its last line break, as `{ text, end }` with `end` the byte after
+ * them, so a line the host is still writing waits for the next read and a character is never cut in two. A file
+ * shorter than `start` was written again: it is read from its start, with `restarted`. */
+function readTailOf(file, start) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const size = fs.fstatSync(fd).size;
+    const from = size < start ? 0 : start;
+    if (size === from) return { text: '', end: from, restarted: from !== start };
+    const buffer = Buffer.alloc(size - from);
+    fs.readSync(fd, buffer, 0, buffer.length, from);
+    const last = buffer.lastIndexOf(10);
+    if (last < 0) return { text: '', end: from, restarted: from !== start };
+    return { text: buffer.subarray(0, last + 1).toString('utf8'), end: from + last + 1, restarted: from !== start };
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** The heartbeat's line when the lead's cut falls due: how many compactions, and what the skill says to do. */
+const cutLine = (count) => `CUT: this session has been compacted ${count} times since it started: the lead is cut now `
+  + '(js-harness-orchestrator, "Compaction, and the cut"): write your state to the relief file, then start the new lead '
+  + "in the reply to the user's next message";
+
 /** How long `ms` is, in hours and minutes: `1h 30m`, `45m`. */
 const spanOf = (ms) => {
   const minutes = Math.floor(ms / 60000);
@@ -449,6 +498,56 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   };
   const dueCrossing = (due, now) => Math.floor(Math.log2(Math.max(0, now - Date.parse(due.at)) / 3600000 + 1));
   const dueTold = new Map();
+  // The lead's cut: the transcript of the session that runs the heartbeat, read on from where the last tick stopped.
+  // Outside a session there is none to read. The host keeps a session opened in a worktree under that worktree's
+  // folder, so the folder of the working directory is tried before the main checkout's (bin/lib/sessions.mjs,
+  // `projectSlug`). What could not be read is said once, as `unread` is.
+  const session = ctx.env.CLAUDE_CODE_SESSION_ID || null;
+  const folders = [...new Set([projectSlug(path.resolve(ctx.cwd)), slug])].map((name) => path.join(ctx.claudeDir, 'projects', name));
+  const transcript = session === null ? null : folders.map((folder) => path.join(folder, `${session}.jsonl`)).find((file) => {
+    try {
+      ctx.mtime(file);
+      return true;
+    } catch {
+      return false;
+    }
+  }) ?? path.join(folders[0], `${session}.jsonl`);
+  // The count a CUT line last told for this session, kept in a folder of its own under the loop records (loop status
+  // reads every .json entry of that folder as a loop): a cut due when a heartbeat starts wakes the lead once, and a
+  // relaunch after it is not woken again until another compaction.
+  const markFile = session === null ? null : path.join(loopsFolder(home, slug), 'cuts', `${session}.json`);
+  const toldCut = () => {
+    try {
+      const told = JSON.parse(ctx.readFile(markFile)).told;
+      return Number.isInteger(told) ? told : 0;
+    } catch {
+      return 0;
+    }
+  };
+  const tellCut = (count) => {
+    try {
+      ctx.writeFile(markFile, `${JSON.stringify({ told: count })}\n`);
+    } catch (err) {
+      ctx.out(`the lead's cut could not keep its mark ${markFile}: ${err.code ?? err.message}`);
+    }
+    return cutLine(count);
+  };
+  const cut = { offset: 0, count: 0, unread: false };
+  const compactionsNow = () => {
+    if (transcript === null) return null;
+    let tail;
+    try {
+      tail = ctx.readTail(transcript, cut.offset);
+    } catch (err) {
+      if (!cut.unread) ctx.out(`the lead's cut could not read ${transcript}: ${err.code ?? err.message}`);
+      cut.unread = true;
+      return null;
+    }
+    if (tail.restarted) cut.count = 0;
+    cut.count += compactionsIn(tail.text);
+    cut.offset = tail.end;
+    return cut.count;
+  };
   // Every line that ends the loop is followed by the reviews still due, so whatever wakes the lead names them.
   const ending = (lines, dues, code) => {
     for (const line of [...lines, ...dues.map((due) => due.line)]) ctx.out(line);
@@ -475,14 +574,20 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     }
     return last;
   };
-  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 || !ctx.windowsDaily ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}${ctx.hostWatch ? '; every hour, the host\'s versions are read, and an update no host watch session holds ends it' : ''}${ctx.throughputTick ? '; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it' : ''}`);
+  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 || !ctx.windowsDaily ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}${ctx.hostWatch ? '; every hour, the host\'s versions are read, and an update no host watch session holds ends it' : ''}${ctx.throughputTick ? '; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it' : ''}${transcript === null ? '' : `; each tick reads this session's compactions, and a compaction that brings them to ${LEAD_CUT_COMPACTIONS} or more ends it: the lead's cut after ${LEAD_CUT_COMPACTIONS} compactions`}`);
+  let compactions = compactionsNow();
   for (const item of stalledAt(started)) {
     told.set(identity(item), crossing(item));
     ctx.out(`already stalled: ${item.title ?? `work session ${item.number}`}, quiet ${spanOf(item.quietMs)}`);
   }
-  for (const due of await duesAt(started)) {
+  const startDues = await duesAt(started);
+  for (const due of startDues) {
     dueTold.set(due.id, dueCrossing(due, started));
     ctx.out(`already due: ${due.line.replace(/^DUE: /, '').split(':')[0]}, since ${hourOf(Date.parse(due.at))}`);
+  }
+  if (compactions !== null && compactions >= LEAD_CUT_COMPACTIONS) {
+    if (compactions > toldCut()) return ending([tellCut(compactions)], startDues, 0);
+    ctx.out(`already due: the lead's cut, ${compactions} compactions in this session, told before`);
   }
   for (;;) {
     const last = lastWrite();
@@ -491,6 +596,11 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     if (now - last >= quiet * 60000) return ending([`STALL: no gate-log or channel write since ${hourOf(last)}`], dues, 0);
     const fresh = stalledAt(now).filter((item) => crossing(item) > (told.get(identity(item)) ?? -1));
     if (fresh.length > 0) return ending(fresh.map(stalledLine), dues, 0);
+    const counted = compactionsNow();
+    // Against the mark as well: a transcript unread at the start leaves `compactions` null, and a count already told
+    // before is not told again when it becomes readable.
+    if (counted !== null && counted > (compactions ?? 0) && counted >= LEAD_CUT_COMPACTIONS && counted > toldCut()) return ending([tellCut(counted)], dues, 0);
+    if (counted !== null) compactions = counted;
     const windowsLine = await windowsTold();
     if (windowsLine !== null) return ending([windowsLine], dues, 0);
     const hostLine = await hostTold();
@@ -587,6 +697,13 @@ export async function loopMain(
     readdir = (dir) => fs.readdirSync(dir),
     mtime = (file) => fs.statSync(file).mtimeMs,
     readFile = (file) => fs.readFileSync(file, 'utf8'),
+    // The lead's cut: the whole lines of a transcript from a byte on (F8 S7).
+    readTail = readTailOf,
+    // The mark of the last cut told for a session, in the cuts folder under the loop records (F8 S7).
+    writeFile = (file, text) => {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, text);
+    },
     // The heartbeat's three ticks: the daily Windows run, the throughput snapshots and reviews due, and the host
     // watch. They serve only the harness's own repository, so they are the workshop's (TICKS in
     // workshop/js-harness-workshop.mjs, which runs this loop with them) and the product runs none of them.
@@ -606,7 +723,9 @@ export async function loopMain(
   const cwd = path.resolve(defaultCwd, parsed.flags.cwd ?? '.');
   const home = harnessHome({ given: parsed.flags.home, env, cwd: defaultCwd, homedir });
   const slug = projectSlug(mainCheckout(run, cwd));
-  const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile, run, windowsDaily, throughputTick, hostWatch };
+  // Where Claude Code keeps its session records, as `check`'s sub-agent row reads them (bin/lib/subagent-records.mjs).
+  const claudeDir = env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude');
+  const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile, readTail, writeFile, claudeDir, run, windowsDaily, throughputTick, hostWatch };
   if (parsed.verb === 'status') return status(ctx, parsed, loopsFolder(home, slug));
   if (parsed.verb === 'heartbeat' || parsed.verb === 'channel-watch') {
     try {

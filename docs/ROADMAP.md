@@ -691,7 +691,13 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **Probe and pass:** the first turn of five Haiku sub-agents at most 30k; at most one unrequested
   file in five Sonnet writer slices, each naming its `S#`.
 - **Cost:** no eval beyond those runs [i].
-- **State:** to do.
+- **State (2026-11-08):** in progress (JH 159, `odd/tasks/f8-s7-topology.md`). Writers launch as the project agent
+  type `.claude/agents/js-harness-writer.md` (the model of `rule:subagent-writer-model`, `omitClaudeMd`, six tools),
+  whose first turn measured 6,881 to 6,998 tokens in five headless runs, against 21,468 for a headless
+  `general-purpose` Haiku launch (already under 30k there; 35,683 and 49,602 in app sessions, where the type is owed); the protocols skill asks a writer's brief for its `S#` and its return for `Covered: S<n>`; the heartbeat ends
+  with a `CUT:` line after the lead's second compaction, and the orchestrator skill cuts the lead then and at a phase's
+  close. The plan's Sonnet writers met his Haiku rule; asked (question 227), he tapped "Seguir con Haiku (Recomendada)"
+  (the lead's transcript `0f71b2c6`, line 75063, 2026-11-08), so the five writer slices run on the Haiku writer type.
 
 ### S9 The host watch
 - **His words:** line 33399 (2026-10-30), a session "que nos investigue las actualizaciones nuevas

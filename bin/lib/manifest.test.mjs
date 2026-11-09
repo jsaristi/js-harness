@@ -3181,7 +3181,7 @@ test('the orchestrator skill describes the lead and its charter, not a watchman'
   assert.doesNotMatch(text, /What you write is your relief file and notices/);
 });
 
-test('the orchestrator skill names the context pause and keeps the fixed prompt for a relief the user asks for', () => {
+test('the orchestrator skill names the context pause and keeps the fixed prompt for the lead\'s cut', () => {
   const text = components[1].content('0.1.0');
   // Sweep A1 2, A1 3, A2 3, CD 3, CD 4: no limit is news, and the lead is compacted, not replaced for a share.
   assert.doesNotMatch(text, /past the limit/);
@@ -3189,8 +3189,12 @@ test('the orchestrator skill names the context pause and keeps the fixed prompt 
   assert.doesNotMatch(text, /Relief, not compaction/);
   assert.doesNotMatch(text, /\d+ ?%|\d+ percent/, 'the pause is named by its rule, never by a number');
   assert.ok(text.includes('\n6. a session reached the context pause and its state is not written;\n'));
-  assert.ok(text.includes('A compaction needs no one; a relief needs the user.'));
-  assert.ok(text.includes('Give this opening prompt only when the user asks for a new lead'));
+  // F8 S7 (odd/tasks/f8-s7-topology.md, spec 1): the lead is cut at a phase's close or after its second compaction,
+  // no longer only on request; the heartbeat's CUT line says when the compactions make it due.
+  assert.doesNotMatch(text, /a relief only on request|only when the user asks for a new lead/);
+  assert.ok(text.includes('Compaction, and the cut.'));
+  assert.ok(text.includes('at a phase\'s close (the turn you show its phase page), after your session\'s second compaction, which the heartbeat ends on with a `CUT:` line, and whenever the user asks for one'));
+  assert.ok(text.includes('in the reply to the user\'s next message, start the new lead with the host\'s session-start tool'));
 });
 
 // The rotation of 2026-10-15 (the lead's relief file, 04:26 to 04:57): a fork could not be detached, killed the old
