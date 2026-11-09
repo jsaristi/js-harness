@@ -314,7 +314,7 @@ Where a rule he states lives: a feedback note of the project's Claude Code memor
 
 ### memory-index-bytes
 The bytes the memory index may hold before a memory hygiene pass is due: 4,000 bytes.
-- Read by: `bin/lib/memory-hygiene.mjs`.
+- Read by: `bin/guard.mjs`, `bin/lib/memory-hygiene.mjs`.
 - Since 2026-10-17. Row: reports. Source: design, `odd/tasks/memory-hygiene.md`.
 
 ### memory-pass-days

@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { guardMain } from './guard.mjs';
 import { RULES } from './lib/rules-data.mjs';
-import { writeRules } from './lib/rules.mjs';
+import { ruleValue, writeRules } from './lib/rules.mjs';
 import { testRunWarning } from './lib/test-run-warning.mjs';
 import { wrappedCommitHint } from './lib/wrapped-commit.mjs';
 
@@ -457,6 +457,41 @@ test('a line that was already long on disk does not block a call that leaves it 
   assert.deepEqual(await hook({ tool_name: 'Edit', tool_input: { file_path: INDEX, old_string: 'short', new_string: 'brief' } }, { index: already }), quiet);
   assert.deepEqual(await hook({ tool_name: 'Write', tool_input: { file_path: INDEX, content: `${already}- [C](c.md) — c\n` } }, { index: already }), quiet);
   assert.deepEqual(await hook({ tool_name: 'Edit', tool_input: { file_path: INDEX, old_string: 'short', new_string: '$& and $1' } }, { index: 'short\n' }), quiet, 'no replacement patterns');
+});
+
+// F8 S5, spec 1 (odd/tasks/f8-s5-rules.md): the index is held to rule:memory-index-bytes when it is written, not only
+// made due for a pass after it grew (every verified pass from 2026-10-15 to 2026-10-30 ended between 2590 and 3920 B).
+// A call that leaves it smaller than it was passes, so the pass that shortens an index over the budget is never blocked.
+const indexBytes = ruleValue('memory-index-bytes', 'bytes');
+const lines = (bytes) => {
+  let text = '';
+  for (let i = 0; text.length < bytes; i += 1) text += `- [N${i}](n${i}.md) - ${'y'.repeat(20)}\n`;
+  return text.slice(0, bytes);
+};
+
+test('a Write or an Edit that leaves the memory index over rule:memory-index-bytes and larger than before is denied', async () => {
+  const over = `${lines(indexBytes + 40)}\n`;
+  assert.ok(Buffer.byteLength(over) > indexBytes);
+  const written = await hook({ tool_name: 'Write', tool_input: { file_path: INDEX, content: over } });
+  assert.equal(denied(written).permissionDecision, 'deny');
+  assert.match(denied(written).permissionDecisionReason, new RegExp(`^js-harness guard: the memory index would be ${Buffer.byteLength(over)} bytes, over the ${indexBytes} of the rule memory-index-bytes`));
+  assert.match(denied(written).permissionDecisionReason, /move what a line holds into its note/);
+  const near = `${lines(indexBytes - 80)}\n`;
+  assert.ok(Buffer.byteLength(near) <= indexBytes);
+  const edited = await hook({ tool_name: 'Edit', tool_input: { file_path: INDEX, old_string: '- [N0]', new_string: `- [M](m.md) — ${'z'.repeat(100)}\n- [N0]` } }, { index: near });
+  assert.equal(denied(edited).permissionDecision, 'deny', 'an Edit is judged by the file it leaves');
+});
+
+test('an index at or under rule:memory-index-bytes passes, and so does a call that shrinks one already over it', async () => {
+  const quiet = { code: 0, out: '', err: '' };
+  const at = lines(indexBytes);
+  assert.equal(Buffer.byteLength(at), indexBytes);
+  assert.deepEqual(await hook({ tool_name: 'Write', tool_input: { file_path: INDEX, content: at } }), quiet, 'at the budget');
+  const already = `${lines(indexBytes + 400)}\n`;
+  const grown = await hook({ tool_name: 'Edit', tool_input: { file_path: INDEX, old_string: '- [N0](n0.md)', new_string: '- [N0](n0.md) x' } }, { index: already });
+  assert.equal(denied(grown).permissionDecision, 'deny', 'an Edit that grows an index already over it');
+  assert.deepEqual(await hook({ tool_name: 'Edit', tool_input: { file_path: INDEX, old_string: `- [N0](n0.md) - ${'y'.repeat(20)}\n`, new_string: '' } }, { index: already }), quiet, 'a shrinking Edit');
+  assert.deepEqual(await hook({ tool_name: 'Write', tool_input: { file_path: INDEX.replace('MEMORY.md', 'n0.md'), content: already } }), quiet, 'a note is not the index');
 });
 
 test('without --hook it prints its usage and exits 2', async () => {

@@ -1672,7 +1672,8 @@ the like), or of Claude Code's login file `.credentials.json`, and a `Grep` of s
 folder that holds it (`bin/lib/deny-paths.mjs`); and a `Write` or `Edit` that puts a line
 over 150 characters, the host's own limit, in a project's memory index
 (`~/.claude/projects/<project>/memory/MEMORY.md`, or under `CLAUDE_CONFIG_DIR` when that is set),
-which every session reads on every turn; a `Write` or `Edit` that leaves a note of a project's memory folder whose
+which every session reads on every turn, or that leaves that index over the bytes of the rule `memory-index-bytes`
+and larger than it was (a call that shrinks an index already over it passes); a `Write` or `Edit` that leaves a note of a project's memory folder whose
 type is `feedback`, a rule he stated, naming no home of that rule in the repository, where the rule
 `memory-feedback-home` is declared (this repository only): the note names `` `rule:<id>` `` of a live declared rule,
 or quotes, on a line that names AGENTS.md, a phrase of at least twelve characters that AGENTS.md holds

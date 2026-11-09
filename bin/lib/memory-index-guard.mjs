@@ -59,9 +59,11 @@ export function resultOf(toolName, toolInput, before) {
 }
 
 /** Why the `Write` or `Edit` of `toolInput` is refused, or null: the first line of the file it leaves that is longer
- * than the limit and was not already in the file, numbered in that file. `readIndex(path)` reads the file on disk; a
- * line already long there is the hygiene pass's to shorten, not a reason to block every other edit until then. */
-export function memoryIndexRefusal(toolName, toolInput, readIndex, configDir) {
+ * than the limit and was not already in the file, numbered in that file; else, when `maxBytes` is given (the rule
+ * `memory-index-bytes`, which the caller reads so this file imports nothing), a file it leaves over that many bytes and
+ * larger than it was. `readIndex(path)` reads the file on disk; a line already long there, or an index already over
+ * the budget that the call shrinks, is the hygiene pass's to fix, not a reason to block every other edit until then. */
+export function memoryIndexRefusal(toolName, toolInput, readIndex, configDir, { maxBytes } = {}) {
   if (!isMemoryIndex(toolInput?.file_path, configDir)) return null;
   let before = null;
   try {
@@ -74,9 +76,17 @@ export function memoryIndexRefusal(toolName, toolInput, readIndex, configDir) {
   const existing = new Set(typeof before === 'string' ? before.split(/\r?\n/) : []);
   const lines = text.split(/\r?\n/);
   const at = lines.findIndex((line) => [...line].length > INDEX_LINE_CHARS && !existing.has(line));
-  if (at === -1) return null;
-  const length = [...lines[at]].length;
-  return `js-harness guard: line ${at + 1} of the memory index is ${length} characters, over the host's ${INDEX_LINE_CHARS} `
-    + '(the index is read on every turn of every session). Keep the line a short hook and put the detail in the note it '
-    + 'links to (the js-harness skill, "Memory hygiene").';
+  if (at !== -1) {
+    const length = [...lines[at]].length;
+    return `js-harness guard: line ${at + 1} of the memory index is ${length} characters, over the host's ${INDEX_LINE_CHARS} `
+      + '(the index is read on every turn of every session). Keep the line a short hook and put the detail in the note it '
+      + 'links to (the js-harness skill, "Memory hygiene").';
+  }
+  if (typeof maxBytes !== 'number') return null;
+  const bytes = Buffer.byteLength(text);
+  const was = typeof before === 'string' ? Buffer.byteLength(before) : 0;
+  if (bytes <= maxBytes || bytes <= was) return null;
+  return `js-harness guard: the memory index would be ${bytes} bytes, over the ${maxBytes} of the rule memory-index-bytes `
+    + '(the index is read on every turn of every session). Shorten a hook or move what a line holds into its note (the '
+    + 'js-harness skill, "Memory hygiene"); a call that leaves the index smaller passes.';
 }

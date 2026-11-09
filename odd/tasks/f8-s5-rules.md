@@ -144,3 +144,9 @@ change of a rule whose owner is `sebastian`.
   lens flag parity probe (13.3 row 2 of the reverse-engineering document)."
 - L2 (2026-11-08, the depth pass): item 4's two refutations run before any code; both support. Read of 0.5k: tokens at
   the diet's chars/4, so 2000 bytes, since the rule is in bytes and the index is ASCII but for a few accents.
+- L3 (2026-11-08, T2, red then green): two tests in `bin/guard.test.mjs` written first, reading the budget from
+  `rule:memory-index-bytes` so neither states its value; against the old guard both red, no deny (`Unexpected end of
+  JSON input` on the empty answer). Then `memoryIndexRefusal` takes `{ maxBytes }` and refuses an index left over it
+  and larger than it was; `bin/guard.mjs` reads the rule only for a memory index (a lazy import), so every other Write
+  and Edit loads what it loaded. `node --test` over guard, manifest, rules-coverage and conventions: 294 of 294; the
+  skill's guard line names the new refusal, and `rules coverage --refresh` settled the one owed span it edited.
