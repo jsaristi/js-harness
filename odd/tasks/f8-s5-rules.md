@@ -167,3 +167,13 @@ change of a rule whose owner is `sebastian`.
   (0.92), 111,092 input tokens; lenses risk and reliability: 0 findings each. Codex over `5c25f15..4f3ba97` (the two
   rule changes): correct (0.92), 74,565 input tokens; lenses risk and readability: 0 findings each. No independent
   verifier: the slice names no high-risk item (it adds a refusal, loud when wrong, and weakens no guard).
+- L6 (2026-11-09, T6, red then green): `evals/lens-hook-probe.test.mjs` written first, red (`ERR_MODULE_NOT_FOUND`);
+  then `evals/lens-hook-probe.mjs`: the lens arm runs `claudeArgs` as `bin/lens-review.mjs` builds them, the plain arm
+  the same without `--safe-mode` alone; each in a scratch `CLAUDE_CONFIG_DIR` with a user hook on `SessionStart`,
+  `UserPromptSubmit`, `Stop` and `SessionEnd` and a user `CLAUDE.md` holding a nonce; the API a loopback server in a
+  child process (the CLI is started synchronously, as `claudeRunner` starts it for a lens) that logs each request and
+  answers 400; a dummy key and `lensEnv`, so no login token. 5 of 5. The real run, `node evals/lens-hook-probe.mjs`,
+  exit 0: "plain exit 1 7 requests fired: SessionEnd, SessionStart, UserPromptSubmit user CLAUDE.md sent: yes";
+  "lens exit 1 7 requests fired: none user CLAUDE.md sent: no"; "PASS a planted user hook fires without --safe-mode
+  and not under the lens's flags". So `--safe-mode` drops the user's hooks and `CLAUDE.md` as gentle-ai's
+  `--setting-sources ""` aims to; `Stop` fires in neither arm, since a 400 ends the run before a reply. Spend: none.

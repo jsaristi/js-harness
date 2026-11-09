@@ -1069,6 +1069,10 @@ run on the `sonnet` alias with no tools and none of your customizations, on your
 never on the eval token or an API key, and it reads only the range as a block: its two commits, its
 subject hash, the paths a review reads and each path's patch. Markdown files and the paths a
 `.gitattributes` marks `-codex-review` are left out, as Codex leaves them out.
+That a lens carries none of your customizations is shown, not assumed: `node evals/lens-hook-probe.mjs` runs the
+lens's own arguments in a scratch config that plants a user hook on every event and a user `CLAUDE.md`, against a
+loopback API that answers 400 (no spend), and passes when the hook fires without `--safe-mode` and neither the hook
+nor the `CLAUDE.md` reaches the run with the lens's flags.
 A result counts only when it echoes the hash and inspected every path; otherwise the run is recorded
 as incomplete, exits 1 and covers nothing, and the start of an answer it could not read is kept and
 printed, so why it failed is read before it runs again; what that lens's CLI printed is kept whole in
