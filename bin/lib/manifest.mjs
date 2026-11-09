@@ -216,10 +216,10 @@ The relief file. \`js-harness sessions\` prints its path and its last lines unde
 - Append one dated line per event as it happens: a decision of the user, a request and where it went, a question still open, what a session is for. Your first line says that an orchestrator started and gives your session id, the one the board marks \`(this session)\`.
 - Never rewrite or summarize it, and never leave a line for later: this session can die without warning, and what is not in the file dies with it.
 
-Compaction, and a relief only on request. You hold nothing the files do not. A compaction needs no one; a relief needs the user.
+Compaction, and the cut. You hold nothing the files do not. A compaction needs no one; the cut renews the lead from the files before its summaries drift.
 - A watch never reports the session that runs it, so read your own row on every board. At the context pause, write your state to the relief file and go on: the host compacts you, and you resume from the file.
 - The user never compacts a session by hand, present or away: at its context pause a work session writes its state to its feature document and keeps working, and the host compacts it by itself. A work session that stops instead gets its next prompt from you, by \`SendMessage\` to its title; never hand the user a compaction command or a resume prompt to send.
-- Give this opening prompt only when the user asks for a new lead, always the same:
+- The cut: a new lead takes over at a phase's close (the turn you show its phase page), after your session's second compaction, which the heartbeat ends on with a \`CUT:\` line, and whenever the user asks for one. Write your state and the paused work to the relief file first; then, in the reply to the user's next message, start the new lead with the host's session-start tool, as the rotation below says, and say in that reply that the lead moves there. Where the host has no such tool, give the user the prompt in one code block to send. The opening prompt, always the same:
 
 \`\`\`
 ${LEAD_OPENING_PROMPT}

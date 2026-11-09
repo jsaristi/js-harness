@@ -66,6 +66,17 @@ test('a mistake is reported in its five parts, and a handoff always fills what w
   assert.ok(handoff.lines.join('\n').includes('"Not checked" and "failed" are always filled, with "nothing" when that is true'));
 });
 
+// F8 S7 (odd/tasks/f8-s7-topology.md, spec 3; the reverse-engineering document, 13.3 row 9): a writer's brief names the
+// S# it covers and its return says which it covered; a project's own writer agent type is what a writer launches as.
+test('a handoff to a writer names its S# and the return says which it covered, launched as the project\'s writer type', () => {
+  const [, , , , , handoff] = sections(TEXT);
+  const text = handoff.lines.join('\n');
+  assert.ok(text.includes('names the `S#` of the feature document it covers'), text);
+  assert.ok(text.includes('its return opens with the `S#` it covered (`Covered: S<n>`'), text);
+  assert.ok(text.includes('an agent type for writers under `.claude/agents/`, the writer is launched as that type, with no model on the call'), text);
+  assert.ok(text.includes('where this session cannot see the type (it started before the type existed, or its branch lacks it), the writer is a general-purpose one on the model the writer rule gives'), text);
+});
+
 // Letter H of the protocol for changing a rule (odd/tasks/rule-hierarchy.md, "One home for every rule (T16)", T16g):
 // its home is this section, which opens with the incident of a stale 73 percent, carries its cost and a review date,
 // and ends a change at one command that exits 0.
