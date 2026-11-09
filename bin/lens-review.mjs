@@ -14,7 +14,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { unknownArgument } from './lib/args.mjs';
+import { atRefusal } from './lib/next-step.mjs';
 import { claudeRunner } from './lib/background.mjs';
 import { NO_ASKED } from './lib/codex-review-prompt.mjs';
 import { classifyRecheck } from './lib/codex-review-recheck.mjs';
@@ -43,15 +45,16 @@ const NOT_INHERITED = ['JS_HARNESS_EVAL_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN',
 const LENS_SETTINGS = { language: 'English' };
 
 export const USAGE =
-  'Usage: js-harness lens-review --base <rev> --lenses <lens,...> --reason "<what the range touched and how>" [--doc <feature document> | --request <text>] [--head <rev>] [--plan] [--cwd <path>]\n' +
-  '       js-harness lens-review --base <rev> --unavailable <reason> [--head <rev>] [--cwd <path>]\n' +
+  'Usage: js-harness lens-review --base <rev> --lenses <lens,...> --reason "<what the range touched and how>" [--doc <feature document> | --request <text>] [--head <rev>] [--at <commit>] [--plan] [--cwd <path>]\n' +
+  '       js-harness lens-review --base <rev> --unavailable <reason> [--head <rev>] [--at <commit>] [--cwd <path>]\n' +
   `Runs the Claude lenses picked over <base>..<head> (HEAD unless named), one fresh tool-less run on ${LENS_MODEL} each, and records the run beside Codex's reviews. ` +
   'Pick every lens pertinent to what the range touched and how, and only those; judge by consequence, not by file names or counts:\n' +
   LENS_NAMES.map((name) => `  ${name} when ${LENSES[name].when}\n`).join('') +
   'A result counts only when it echoes the range\'s subject hash and inspected every path; one incomplete lens makes the run incomplete (exit 1), recorded and covering nothing. ' +
   'Markdown files and the paths a .gitattributes marks `-codex-review` are left out, as Codex leaves them out. --plan prints the candidate and starts nothing. ' +
   '--doc <feature document> (large work) or --request <text> (small work) gives every lens what was asked, as codex-review is given it; a run given neither says it judges the code alone. ' +
-  '--unavailable <reason> records a skip: the push lets it through, and check, doctor and merge-queue list it until a review covers the range.';
+  '--unavailable <reason> records a skip: the push lets it through, and check, doctor and merge-queue list it until a review covers the range. ' +
+  '--at <commit> names the head a printed command was computed at (check --push and the merge door print it): the run is refused, not started, when HEAD is another commit.';
 
 /** The environment a lens runs in: `env` without the eval token or any key, so the CLI's own login answers. */
 export function lensEnv(env) {
@@ -151,7 +154,7 @@ function pickedLenses(value) {
 /** The command's options from `argv`: `{ base, head, cwd, skip, lenses, reason, plan, doc, request }`; throws a
  * usage error. */
 function parseArgs(argv) {
-  const unknown = unknownArgument(argv, { valued: ['--base', '--head', '--lenses', '--reason', '--unavailable', '--doc', '--request', '--cwd'], bare: ['--plan'] });
+  const unknown = unknownArgument(argv, { valued: ['--base', '--head', '--at', '--lenses', '--reason', '--unavailable', '--doc', '--request', '--cwd'], bare: ['--plan'] });
   if (unknown !== null) throw new LensReviewArgError(`unknown argument: ${unknown}`);
   const value = (flag) => {
     const at = argv.indexOf(flag);
@@ -162,7 +165,7 @@ function parseArgs(argv) {
   };
   const base = value('--base');
   if (!base) throw new LensReviewArgError('--base <rev> is required');
-  const options = { base, head: value('--head') ?? 'HEAD', cwd: path.resolve(value('--cwd') ?? process.cwd()), skip: value('--unavailable'), plan: argv.includes('--plan') };
+  const options = { base, head: value('--head') ?? 'HEAD', at: value('--at'), cwd: path.resolve(value('--cwd') ?? process.cwd()), skip: value('--unavailable'), plan: argv.includes('--plan') };
   if (options.skip !== undefined && options.plan) throw new LensReviewArgError('--plan records nothing, so it does not go with --unavailable');
   if (options.skip !== undefined) return options;
   const lenses = value('--lenses');
@@ -192,6 +195,17 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
   }
   const { base, head, cwd, skip, reason } = options;
   const picked = { names: options.lenses };
+  if (options.at !== undefined) {
+    const commit = (rev) => {
+      const ran = (deps.spawn ?? spawnSync)('git', ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`], { cwd, encoding: 'utf8' });
+      return ran.status === 0 ? ran.stdout.trim() : null;
+    };
+    const refused = atRefusal({ at: options.at, atCommit: commit(options.at), head: commit('HEAD') });
+    if (refused) {
+      stderr(`js-harness lens-review: ${refused}`);
+      return 1;
+    }
+  }
 
   const candidate = lensCandidate(cwd, { base, head });
   if (candidate.error) {

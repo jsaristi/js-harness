@@ -149,6 +149,9 @@ lead's brief says.
 5. The same: "the incident set no worse"; Cost: "about $13, the incident rerun".
 
 ## Next step
+Update ~19:15 local: slice 1 is `690bf159`, the flake fix `a6dd79ae`, and slice 2a (T5, the convention test, formatRow)
+is being committed. Next: T6 and T7 by two writers (L9). Then Codex over `09158b1c..HEAD` and the lenses per slice
+(`--head 690bf159` for slice 1), PR 1, and the ready notice.
 State at 2026-11-08 ~18:40 local: `09158b1c` (this document) committed. Uncommitted and green locally: T2 and T3
 (`bin/contract.mjs`, `bin/check.mjs`, `bin/lib/depth-pass.mjs` and its test, `bin/lib/contradictions.test.mjs`), and
 T5 plus the convention test (`bin/lib/next-step.mjs` and test, `--at` in `bin/lens-review.mjs` and
@@ -269,3 +272,11 @@ rerun asked through the lead.
   (`findingLine`, `verdictLine`, `byPlace`) moved whole to `bin/lib/codex-review-answer.mjs`, so it is 2,259 and its
   ceiling goes down to that. `bin/conventions-next-step.test.mjs` written with its detectors tested and a legacy list
   of 12 files.
+- L9 (2026-11-08, after the host compacted this session at 18:49): slice 2a's gate failed twice on CI. First on
+  two more usage assertions in `bin/codex-review.test.mjs` (lines 5384 and 6575), fixed. Then on
+  `scripts/migration.test.mjs`, ENOENT copying a fixture's `.git`: project-migrate-maintenance-flake in a file the
+  earlier search missed. Fixed apart as `a6dd79ae`, its `GIT_TRACE` assertion red before and green after, with a
+  `- Seen:` line. `formatRow` now prints a failing row's `next` last; it moved to `bin/lib/next-step.mjs`, and
+  `bin/failures.mjs` drops its copy, so `check.mjs` went down to 2,001. The `<rev>` detector skips `Usage:` lines,
+  since they document syntax. T6 and T7 measured: 42 rows, 34 exits and 7 unbound commands. Two writers with
+  disjoint surfaces, briefs in `$CLAUDE_JOB_DIR/tmp/brief-{common,a,b}.md`.

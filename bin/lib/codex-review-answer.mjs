@@ -253,3 +253,23 @@ export function rolloutAnswer(home) {
   const checked = validateAnswer(parsed.value);
   return checked.ok ? checked : { ok: false, reason: 'off-schema', errors: checked.errors };
 }
+
+/** A text on one line: a title or an explanation the model wrapped must not break the line it is printed in. */
+const oneLine = (text) => text.replace(/\s+/g, ' ').trim();
+
+/** One finding of a review's answer (`normalizeAnswer`) as a line: `file:start-end severity title`, with
+ * `file:start` for a single line and `-` for a finding the model gave no priority. The body of the finding
+ * is not repeated here: it is in the review as Codex rendered it, which is passed through above. */
+export function findingLine({ file, start, end, severity, title }) {
+  return `${file}:${start === end ? start : `${start}-${end}`} ${severity ?? '-'} ${oneLine(title)}`;
+}
+
+/** The verdict of a review's answer as a line, with its explanation. */
+export function verdictLine({ verdict, explanation, confidence }) {
+  const sure = confidence === null ? '' : ` (confidence ${confidence})`;
+  return `Codex's verdict: the patch is ${verdict}${sure}. ${oneLine(explanation)}`.trimEnd();
+}
+
+/** Findings in the order a person reads a change in: by file, then by the line each starts at, then by the
+ * one it ends at. The order of the code units, with no locale, so the same on every machine. */
+export const byPlace = (a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.start - b.start || a.end - b.end);
