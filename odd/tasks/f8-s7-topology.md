@@ -119,7 +119,7 @@ what it covered leaves the lead to guess what was done (the reverse-engineering 
 - [x] T3 (build) S3: the hand-off line in the protocols skill, with its test.
 - [x] T4 (build) S1: the heartbeat's `CUT:` line and the orchestrator skill's relief rule, with their tests.
 - [x] T5 (verify) S2: five headless writer first turns, at most 30k each, recorded here (L5).
-- [ ] T6 (verify) S3: five writer slices, at most one unrequested file in all, each naming its `S#`, recorded here.
+- [x] T6 (verify) S3 (L10): five writer slices, at most one unrequested file in all, each naming its `S#`, recorded here.
   The named reason for delegating them is the plan's probe itself. Each runs in a scratch clone of this branch outside
   the repo, reset between slices, delegated once by a headless main thread to the writer type with a brief of its `S#`,
   its task, its `## Allowed edit surfaces` and its check: S1 a new `clamp` module and its test; S2 one
@@ -180,12 +180,17 @@ what it covered leaves the lead to guess what was done (the reverse-engineering 
 - L9 Why the protocols skill and not the orchestrator skill, as 13.3 row 9 wrote: every session that delegates loads
   the protocols skill's hand-off section, a work session as well as the lead, while the orchestrator skill reaches
   only the lead; a writer is delegated by whoever builds.
+- L10 T6 (2026-11-09, the lead's one rerun after the host killed the first for low memory): the scratch clone at
+  `8e34981d`, `node <job tmp>/slices.mjs <job tmp>/clone`, exit 0. Per slice: unrequested files, the return's head,
+  the sub-agent's first turn (input + cache write + cache read) and the session: S1 0, `Covered: S1`, 6,772,
+  `7be3dc32`; S2 0, `Covered: S2`, 6,761, `ae6f5490`; S3 0, `Covered: S3`, 6,720, `2091f3b6`; S4 0, `Covered: S4`,
+  6,805, `85cf68bb`; S5 0, `Covered: S5`, 6,726, `89409387`. In all: 0 unrequested files, 5 of 5 returns naming their
+  `S#`. Each sub-agent's `meta.json` says `"agentType":"js-harness-writer"`, model `claude-haiku-5-5`. The CLI's
+  `total_cost_usd` was $0.0096 to $0.0125 a slice, notional inside his plan. Not checked by the runner: whether each
+  slice's own check passed; the returns state it, and nothing builds on those scratch files.
 
 ## Next step
-- State (2026-11-09 ~01:00Z): branch `feat/f8-s7-topology` fast-forwarded to origin/main 71b50d33 (PR 791 landed);
-  everything built is uncommitted and green per file. The first commit (this document alone) was refused by the gate:
-  `rules` 1 finding, `document tests` (bin/rules.test.mjs, bin/sessions.test.mjs) and `docs` 2 findings in the index
-  of docs/README.md. Next: read those findings (`git commit` output), fix, commit in four units (this doc; writer type
-  + test + protocols line; heartbeat CUT + skill cut + tests; ROADMAP + SPEC), then rerun T6 once
-  (`node <job tmp>/slices.mjs <job tmp>/clone`, the lead's yes of 20:55 local; the clone needs the four commits'
-  files copied in and committed there), then codex-review and lens-review per slice, push, PR, `notify --kind ready`.
+- State (2026-11-09 ~02:40Z): four commits on `feat/f8-s7-topology` over 71b50d33 (20e53d66 this document,
+  b48111f8 the writer type and hand-off, 74644066 the heartbeat CUT and the skill cut, 8e34981d the roadmap); T6 done
+  (L10). Next: codex-review --base 71b50d33 --doc this document (one part, 326 lines) and lens-review over the same
+  range (reliability, readability, resilience); answer the findings; `npm run check`; push; PR; `notify --kind ready`.
