@@ -141,6 +141,9 @@ function renderCounts(counts) {
       (group) => `  ${group.class.padEnd(classWidth)}  ${count(group.entries, 'failure').padEnd(failuresWidth)}  ${count(group.sightings, 'sighting')}`,
     ),
     '',
+    'By control',
+    `  check ${counts.byControl.check}, prose ${counts.byControl.prose}, measured ${counts.byControl.measured}, owed ${counts.byControl.owed}; ${counts.byControl.none} with no control`,
+    '',
     'By failure, the most seen first',
     ...counts.rows.map(
       (row) =>

@@ -393,6 +393,20 @@ export function isSettled(state) {
   return SETTLED.has(state);
 }
 
+/** The controls of `entries` in the classes the rules are counted in (F8 S5, odd/tasks/f8-s5-rules.md, spec 2): a
+ * `check`, `prose` that stays (a line or a protocol), `measured` (none built, a measurement found it not worth it),
+ * `owed`, and `none` for an entry with no control. */
+function controlClasses(entries) {
+  const out = { check: 0, prose: 0, measured: 0, owed: 0, none: 0 };
+  for (const { control } of entries) {
+    if (!control) out.none += 1;
+    else if (control.level === 'check') out.check += 1;
+    else if (control.level === MEASURED || control.level === 'owed') out[control.level] += 1;
+    else out.prose += 1;
+  }
+  return out;
+}
+
 /** The counts of a register read without a fault, with `holds` as `entryState` takes it:
  * `entries`, `sightings`, `repeated` (the entries seen more than once, whatever their control),
  * `unsettled`, `was` (the `Was` lines: the controls that had to be replaced), `byClass` in the order
@@ -417,6 +431,7 @@ export function summarize({ classes, entries }, holds) {
       return { class: name, entries: inClass.length, sightings: total(inClass) };
     }),
     byState: Object.fromEntries(STATES.map((state) => [state, rows.filter((row) => row.state === state).length])),
+    byControl: controlClasses(entries),
     rows,
   };
 }
