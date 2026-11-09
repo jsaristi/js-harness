@@ -216,6 +216,10 @@ change of a rule whose owner is `sebastian`.
   13th sighting of `edit-during-review`, whose `Seen` line this commit adds. The review runs again after the commit,
   with nothing edited until it ends. What would stop it: a guard that refuses an edit of a tracked file in a worktree
   while that worktree's Codex review runs; proposed to the lead, not built here (the guard is not this session's).
+- L14 (2026-11-09): Codex over `a2d55b1..766a4f1`: correct (0.89 and 0.94), 228,202 input tokens; lenses on the fix
+  `2717f7c..766a4f1`: risk 0, reliability 1 open (the two rules of question 235). PR 799 opened, base
+  `f8-s5-2-lens-probe`. T8 begun: ROADMAP S5 State and SPEC (the lens review's flag parity and the failure register's
+  control classes into Capabilities; what is left of the rule pass in the table of what has no code yet).
 
 ## Next step
 Branch `f8-s5-3-rule-pass`, stacked on PR 798. 1) Read the reviews of `a2d55b18..2717f7ca` (Codex and the lenses
