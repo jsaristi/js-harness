@@ -191,7 +191,7 @@ test('the budgets are the rules memory-index-bytes and memory-pass-days, read fr
     const journal = [{ kind: 'verify', at: new Date(at).toISOString(), notes: ['a.md'] }];
     fs.utimesSync(path.join(folder, 'a.md'), new Date(at + DAY), new Date(at + DAY));
     fs.utimesSync(path.join(folder, 'MEMORY.md'), new Date(at - DAY), new Date(at - DAY));
-    assert.deepEqual(ids(hygieneState({ memory: readMemory(folder), journal, now: NOW }).reasons), [], 'the declared rules: 4000 B, 7 days');
+    assert.deepEqual(ids(hygieneState({ memory: readMemory(folder), journal, now: NOW }).reasons), [], 'the declared rules');
     assert.deepEqual(ids(hygieneState({ memory: readMemory(folder), journal, now: NOW, rules: tight }).reasons), ['index-bytes', 'cadence']);
     const without = RULES.filter((rule) => rule.id !== 'memory-pass-days');
     assert.throws(() => hygieneState({ memory: readMemory(folder), journal, now: NOW, rules: without }), /memory-pass-days/);

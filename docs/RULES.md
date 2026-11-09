@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `3cc356d8fc2f`. In force: 72 (45 of Sebastián, 27 of the project). Retired: 4.
+Hash `df4ed54263ed`. In force: 72 (45 of Sebastián, 27 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -313,9 +313,10 @@ Where a rule he states lives: a feedback note of the project's Claude Code memor
 - Since 2026-10-22. Row: reports. Source: design, `odd/tasks/memory-feedback-home.md`.
 
 ### memory-index-bytes
-The bytes the memory index may hold before a memory hygiene pass is due: 4,000 bytes.
+The bytes the memory index may hold: the guard refuses a write that grows it past them, and a memory hygiene pass is due over them: 2,000 bytes.
+- Was: 4,000 bytes until 2026-11-08.
 - Read by: `bin/guard.mjs`, `bin/lib/memory-hygiene.mjs`.
-- Since 2026-10-17. Row: reports. Source: design, `odd/tasks/memory-hygiene.md`.
+- Since 2026-11-08. Row: reports. Source: design, `odd/tasks/f8-s5-rules.md`.
 
 ### memory-pass-days
 The days after a verified memory hygiene pass when the next is due, if a note was written since: 7 days.

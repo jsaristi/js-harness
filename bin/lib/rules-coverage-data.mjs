@@ -153,7 +153,15 @@ export const COVERAGE = {
       }
     },
     "memory-feedback-home": {"level":"owed","since":"2026-10-28"},
-    "memory-index-bytes": {"level":"owed","since":"2026-10-28"},
+    "memory-index-bytes": {
+      "level": "check",
+      "test": "bin/guard.test.mjs",
+      "break": {
+        "path": "bin/guard.mjs",
+        "find": "('memory-index-bytes', 'bytes')",
+        "replace": "('memory-index-bytes', 'bytes') * 1000"
+      }
+    },
     "memory-pass-days": {"level":"owed","since":"2026-10-28"},
     "mistake-report": {"level":"owed","since":"2026-10-28"},
     "owner-decisions": {

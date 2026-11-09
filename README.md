@@ -1402,10 +1402,10 @@ too. Neither removes a project under a pass. The steps of a pass are in the inst
 
 ```console
 $ js-harness memory status
-memory  ~/.claude/projects/D--js-harness/memory  index 10917 B (budget 4000)  41 lines  42 notes
+memory  ~/.claude/projects/D--js-harness/memory  index 10917 B (budget 2000)  41 lines  42 notes
 memory hygiene: due
   no-pass  no verified pass recorded yet
-  index-bytes  the index is 10917 B, over 4000
+  index-bytes  the index is 10917 B, over 2000
   line-chars  36 lines over 150 characters: 3, 4, 5, 7, ...
   orphan  questions-through-the-question-tool.md
 ```
