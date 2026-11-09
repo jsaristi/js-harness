@@ -649,6 +649,20 @@ it, in a change that touched nothing of the evals.
 - Control: check — evals/configs.test.mjs — "the fixture commit starts no git maintenance: nothing of
   it writes in the workspace once prepare has returned" — since 2026-10-15
 
+### eval-reply-cut-by-stop-hook
+An incident trial was graded on the line the Stop hook made it write again, not on its reply. In S4b's run, trial 1
+of `incident-04-stale-doc-flag` found the false premise: its reply said T1 does not hold, since `--force` is still in
+`src/export.mjs:4`. The reply hook (`bin/lib/reply.mjs`) refused that reply for lacking a state line, and the agent
+wrote again only its close, a question. The run's `result`, and `lastReply` (`evals/configs.mjs`), are the turn's
+last message, so the grader read only that question and failed the check "the reply says T1 does not hold". That
+cost the run's false-premise count a trial: 1 of 4 where the contract asks 2. S4b changed neither the hook nor
+`evals/` (`git diff --stat 27101c55 06e55d17 -- bin/lib/reply.mjs bin/reply.mjs evals/` is empty).
+- Class: tool
+- Seen: 2026-11-08 — `evals/results/f8-s4b-incidents.json`, trial 1 of incident-04, and its transcript under
+  `evals/runs/f8-s4b-incidents/` — one `hook_blocking_error`, and the reply before it held the finding; trial 2
+  had one too and passed, because its close carried the finding
+- Control: owed — odd/tasks/f8-s4b-contradictions.md — "the reply a grader reads is every text of the turn"
+
 ### failure-cause-dropped
 The facts the pages read of a stretch left out the words that say why a land or a Codex review
 failed: `landFacts` dropped a land record's `said`, and `codexFacts` a run's `reason`, so a failure

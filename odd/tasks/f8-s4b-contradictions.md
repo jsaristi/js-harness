@@ -330,3 +330,13 @@ rerun asked through the lead.
   findings, and the readability finding of the round before (the moved-HEAD wording) is fixed in the same commit.
   GitHub gave the next numbers to others, so slice 3 is #795 (`a1d6300..21fc735`) and slice 4 is #796
   (`21fc735..797d07f`, 725 lines; no cohesive split, as its body says). Ready for #793 sent at 21:37.
+- L16 (2026-11-09, T9): his yes to question 232 (tapped, the lead's transcript `0f71b2c6` line 75711, checked with
+  `js-harness sessions --quote`). The plan read first: 20 trials, about 25 minutes, about $5.67 list, under the $20
+  stop. One run, `f8-s4b-incidents`, on `06e55d17` under the gate, $5.01 list. Scored with `node
+  evals/incident-score.mjs f8-s0-a-incidents f8-s0-b-incidents f8-s4b-incidents`: 13 of 20, at L 13 and above the
+  worse line of 10. False premise 1 of 4, below the 2 the contract asks. incident-05 fails every trial, as in every
+  run since S0. incident-04 failed one trial of two, its first miss in any run. Its transcript shows the agent found
+  the false premise; the reply hook refused that reply for lacking a state line, and the grader read only the close it
+  wrote again (`docs/FAILURES.md`, eval-reply-cut-by-stop-hook). S4b touched neither the hook nor `evals/`. Not rerun:
+  the yes was for one run. The control it owes, outside S4b: the reply a grader reads is every text of the turn, not
+  only the message after a Stop hook's refusal.
