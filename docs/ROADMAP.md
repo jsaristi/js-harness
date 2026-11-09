@@ -649,7 +649,13 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **Probe and pass:** a new document without `## Goal` is refused; 10 of 10 pairs closed or his
   decision; a printed command refuses once the head moved; the incident set no worse.
 - **Cost:** about $13, the incident rerun [i].
-- **State:** to do.
+- **State:** built 2026-11-08 (`odd/tasks/f8-s4b-contradictions.md`). A new feature document without its
+  contract is refused by `check` (PR 792, merged). The ten pairs are held by `bin/lib/contradictions.test.mjs`,
+  each by its own evidence: a check, a sentence, or his decision. Pair 9 is his answer A to question 229; the
+  rule text waits for his typed words, since `rules change` refuses a tapped answer. Every refusal of the five
+  surfaces ends with its next step from `bin/lib/next-step.mjs`. A printed review command carries `--at` and is
+  refused once `HEAD` moved. `bin/conventions-next-step.test.mjs` holds this with a legacy list at 0 (PRs 793
+  onward). The incident rerun waits for question 232.
 
 ### S5 Skills, memory and rules
 - **Changes:** skill bodies at most 3k and the skill lint (13.3 row 7); `MEMORY.md` at most 0.5k;

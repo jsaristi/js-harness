@@ -114,7 +114,10 @@ const PAIRS = [
   {
     pair: 9,
     sides: 'three ways to ask, against one place for every question',
-    closed: 'open: question 229 asks him which wins; wrap_up and the plain-text STOP are gone',
+    // Answered A on 2026-11-08 (question 229, transcript 0f71b2c6 line 75080). The answer was tapped, and `rules
+    // change` takes only words he typed, so the precedence enters rule:questions-one-place once he types it; until
+    // then both sides hold as they stand, and this row says which wins.
+    closed: 'his decision: question 229, A: a decision with options goes through the question tool, an open question with none is written; wrap_up and the plain-text STOP are gone',
     absent: [/wrap_up/],
     present: [
       ['orchestrator-skill', 'Only where the host has no question tool is a question written out'],

@@ -149,9 +149,10 @@ lead's brief says.
 5. The same: "the incident set no worse"; Cost: "about $13, the incident rerun".
 
 ## Next step
-Update ~20:40 local: PRs 792 and 793 are open (L11). T7 is committed, T6 is being committed. Next: Codex and the lenses
-over T7 and over T6, then PRs 794 (T7) and 795 (T6), stacked. Then the `rule/` branch for pair 9, the incident rerun
-asked through the lead, and T10.
+Update ~21:50 local (L14): the 5 P2 fixes and their tests written; commit them, Codex over `48c49a2..HEAD`, the
+lenses; then the pair-9 row and T10 docs in a commit of their own. Then PRs 794 (T7, `a1d6300..21fc735`, on 793's
+branch) and 795 (the rest, on 794's), ready notices once each targets main. Waiting on the lead: his typed line for
+pair 9's rule change, and question 232 (the incident rerun). A `js-harness wait --notice-to 158` runs.
 State at 2026-11-08 ~18:40 local: `09158b1c` (this document) committed. Uncommitted and green locally: T2 and T3
 (`bin/contract.mjs`, `bin/check.mjs`, `bin/lib/depth-pass.mjs` and its test, `bin/lib/contradictions.test.mjs`), and
 T5 plus the convention test (`bin/lib/next-step.mjs` and test, `--at` in `bin/lens-review.mjs` and
@@ -312,3 +313,14 @@ rerun asked through the lead.
   write it named a command that runs a review. `rerunFlags` in `bin/lib/next-step.mjs` now repeats them, except
   the ones the rerun binds or gives again. Its unit test was red (no export) and is now green, and a codex-review
   test holds the skip's rerun. Both halves: 333 of 335, 2 skipped, 0 failed.
+- L14 (2026-11-09, after the host compacted this session at 21:35 local): Codex over T6 (`21fc735..48c49a2`) gave 5
+  P2s, each fixed with its test: the "ways on" refusals print `reviewNext()` with the refused flags; `rerunFlags` quotes
+  a value so both POSIX shells and PowerShell read it as given; the merge door's conflict branch keeps its `next`;
+  `bindToHead` names the earlier pull request when the refused range holds commits outside this one's head (the
+  feat/g + feat/h scenario of `bin/merge-queue.test.mjs`); the moved-HEAD refusal prints the exact
+  `js-harness check --push`, not a step that said "run again" twice. PR 792 landed and 793 targets main; ready
+  sent at 21:37. Pair 9: his answer to question 229 was tapped (`js-harness sessions --quote 0f71b2c6 75080`), and
+  `rules change` refuses a tapped answer (`bin/lib/rules-change.mjs`, `quotationOf`). So the row now reads "his
+  decision: question 229, A", and the rule text waits for a line he types, asked of the lead at 21:43. The incident
+  rerun was asked as question 232 at 21:45, one run, about $13 at list price. T10 drafted: SPEC's "A refusal's next
+  step" and the contract-first sentence, the ROADMAP's S4b State; README names no capability, so nothing changes there.
