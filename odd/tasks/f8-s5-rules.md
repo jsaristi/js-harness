@@ -162,3 +162,8 @@ change of a rule whose owner is `sebastian`.
   `rule:memory-feedback-home` (the guard refuses a feedback note with no home in the repository) and `memory verify`
   (refuses a quotation of his in no home of the repository). `rules check`: 77 rules; `rules coverage`: 73 live,
   check 18, owed 48, line 2, protocol 6.
+- L5 (2026-11-09, T7 for PR 1): Codex has no `--head`, so the guard's slice, which sits before the merge of `main`,
+  was reviewed from a scratch worktree detached at `f7994df6` (removed after). Codex over `3c494c2..f7994df`: correct
+  (0.92), 111,092 input tokens; lenses risk and reliability: 0 findings each. Codex over `5c25f15..4f3ba97` (the two
+  rule changes): correct (0.92), 74,565 input tokens; lenses risk and readability: 0 findings each. No independent
+  verifier: the slice names no high-risk item (it adds a refusal, loud when wrong, and weakens no guard).
