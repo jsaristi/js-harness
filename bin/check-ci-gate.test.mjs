@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { checkSensors } from './check.mjs';
 import { readGateLog } from './lib/gate-log.mjs';
+import { firstStep } from './lib/next-step.mjs';
 
 function project() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-ci-gate-'));
@@ -82,6 +83,7 @@ test('a red run on CI fails the gate with the end of its log', async () => {
   const tests = rows.find((row) => row.name === 'tests');
   assert.equal(tests.pass, false);
   assert.equal(tests.output, 'not ok 3 - a test');
+  assert.deepEqual(tests.next, firstStep("fix the tests that failed on GitHub's machines, which the log below names"));
 });
 
 test('a gate with no answer from CI runs here under the lock, and says why', async () => {

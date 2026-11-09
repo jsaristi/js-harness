@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { checkFunctions, checkFunctionsPending } from './check.mjs';
+import { firstStep } from './lib/next-step.mjs';
 import { applyProjectFunctions } from './lib/project.mjs';
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 
@@ -54,7 +55,8 @@ test('a switch that cannot be read fails the gate, with its reason', (t) => {
       name: 'functions',
       pass: false,
       detail: 'harness.json "functions"."codexReview" must be one of "auto", "on", "off"; it is "no"',
-      lines: ['until it is fixed every switch is read as on; js-harness functions shows each'],
+      lines: ['until it is fixed every switch is read as on'],
+      next: firstStep('fix the switches named above in harness.json "functions"'),
     },
   ]);
 });

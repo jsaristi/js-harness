@@ -3,7 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { checkLedger, failedTestFiles, judgeRerun, ledgerRow, localDay, parseLedger } from './flaky.mjs';
+import { checkLedger, failedTestFiles, judgeRerun, ledgerRow, localDay, parseLedger, rerunNext } from './flaky.mjs';
+import { firstStep } from './next-step.mjs';
+
+const QUARANTINE = 'to quarantine each file above, give it an entry in docs/FLAKY.md: "### <file>" with "- Owner:", "- Expires: YYYY-MM-DD" and "- Failure: <id in docs/FAILURES.md>", and commit it (an expired entry is renewed in place)';
+const FIX = 'fix the failing tests the output names';
 
 const FILES = ['bin/a.test.mjs', 'bin/b.test.mjs', 'evals/suite.test.mjs'];
 
@@ -95,7 +99,7 @@ test('an entry is current through the day it expires', () => {
 test('a malformed ledger, a file that is no test of the repository and a failure not in docs/FAILURES.md fail the row', () => {
   const [row] = ledgerRow(ledger(entry('bin/gone.test.mjs'), entry('bin/a.test.mjs', { failure: 'never-recorded' }), '### evals/suite.test.mjs'), { ...KNOWN, today: '2026-10-15' });
   assert.equal(row.pass, false);
-  assert.equal(row.detail, 'docs/FLAKY.md is not read: 5 faults to repair in that file');
+  assert.equal(row.detail, 'docs/FLAKY.md is not read: 5 faults');
   assert.deepEqual(row.lines, [
     'evals/suite.test.mjs: no "- Owner:" line',
     'evals/suite.test.mjs: no "- Expires:" line',
@@ -103,6 +107,7 @@ test('a malformed ledger, a file that is no test of the repository and a failure
     'bin/gone.test.mjs: no test file of the repository has that path',
     'bin/a.test.mjs: no entry "never-recorded" in docs/FAILURES.md',
   ]);
+  assert.deepEqual(row.next, firstStep('repair the faults named above in docs/FLAKY.md'));
 });
 
 test('a rerun that passed, of files that all have a current entry, does not block', () => {
@@ -117,22 +122,28 @@ test('a rerun that passed, of files that all have a current entry, does not bloc
 
 test('a rerun that passed with a file not in the ledger, or expired, blocks and names the entry to add', () => {
   const read = parseLedger(ledger(entry('evals/suite.test.mjs', { expires: '2026-10-01' })));
-  const judged = judgeRerun({ files: ['evals/suite.test.mjs', 'bin/a.test.mjs'], pass: true, detail: 'exited 0' }, read.entries, '2026-10-15');
+  const judged = judgeRerun({ files: ['evals/suite.test.mjs', 'bin/a.test.mjs'], pass: true, detail: 'exited 0', next: rerunNext(true) }, read.entries, '2026-10-15');
   assert.equal(judged.pass, false);
   assert.equal(judged.row.detail, 'the 2 failed test files ran once more, alone, and passed; 2 of them have no current entry in docs/FLAKY.md, so the tests block');
-  const add = 'to quarantine it, add to docs/FLAKY.md "### <file>" with "- Owner:", "- Expires: YYYY-MM-DD" and "- Failure: <id in docs/FAILURES.md>", and commit it';
   assert.deepEqual(judged.row.lines, [
-    `evals/suite.test.mjs  its entry expired 2026-10-01: ${add}`,
-    `bin/a.test.mjs  not in docs/FLAKY.md: ${add}`,
+    'evals/suite.test.mjs  its entry expired 2026-10-01',
+    'bin/a.test.mjs  not in docs/FLAKY.md',
   ]);
+  assert.deepEqual(judged.next, firstStep(QUARANTINE));
 });
 
-test('a rerun that failed blocks, whatever the ledger says', () => {
+test('a rerun that failed blocks, whatever the ledger says, and names the failing tests to fix', () => {
   const read = parseLedger(ledger(entry('evals/suite.test.mjs')));
-  const judged = judgeRerun({ files: ['evals/suite.test.mjs'], pass: false, detail: 'npm run test exited 1' }, read.entries, '2026-10-15');
+  const judged = judgeRerun({ files: ['evals/suite.test.mjs'], pass: false, detail: 'npm run test exited 1', next: rerunNext(false) }, read.entries, '2026-10-15');
   assert.equal(judged.pass, false);
   assert.equal(judged.row.detail, 'the 1 failed test file ran once more, alone, and failed again (npm run test exited 1): the tests block');
   assert.deepEqual(judged.row.lines, ['evals/suite.test.mjs']);
+  assert.deepEqual(judged.next, firstStep(FIX));
+});
+
+test('a rerun that passed and is covered by its ledger names no step, since it does not block', () => {
+  const read = parseLedger(ledger(entry('evals/suite.test.mjs')));
+  assert.equal(judgeRerun({ files: ['evals/suite.test.mjs'], pass: true, detail: 'exited 0', next: rerunNext(true) }, read.entries, '2026-10-15').next, undefined);
 });
 
 test('the day is the local calendar day', () => {
@@ -189,4 +200,14 @@ test('a whole register still names an id it lacks, so the gate fails the ledger 
   assert.equal(rows.length, 1);
   assert.equal(rows[0].pass, false);
   assert.deepEqual(rows[0].lines, ['bin/a.test.mjs: no entry "never-recorded" in docs/FAILURES.md']);
+});
+
+test('a ledger that cannot be read fails the row, with the step to make it readable', () => {
+  const unreadable = () => {
+    throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+  };
+  assert.deepEqual(checkLedger('.', { readFile: unreadable, today: '2026-10-15' }), [{
+    name: 'flaky', pass: false, detail: 'cannot read docs/FLAKY.md: EACCES',
+    next: firstStep('make docs/FLAKY.md readable'),
+  }]);
 });

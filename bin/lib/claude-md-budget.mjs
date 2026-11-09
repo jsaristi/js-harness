@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { estimateTokens } from './payload.mjs';
 import { ruleValue } from './rules.mjs';
+import { firstStep } from './next-step.mjs';
 
 // The budget the root CLAUDE.md is held to: the declared rule `claude-md-budget` (bin/lib/rules-data.mjs).
 export const CLAUDE_MD_BUDGET = ruleValue('claude-md-budget', 'estimated tokens');
@@ -15,5 +16,6 @@ export function checkClaudeBudget(cwd) {
   const file = path.join(cwd, 'CLAUDE.md');
   if (!fs.existsSync(file)) return [];
   const tokens = estimateTokens(fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n'));
-  return [{ name: 'claude-md budget', pass: tokens <= CLAUDE_MD_BUDGET, detail: `${tokens} estimated tokens (budget ${CLAUDE_MD_BUDGET})` }];
+  const pass = tokens <= CLAUDE_MD_BUDGET;
+  return [{ name: 'claude-md budget', pass, detail: `${tokens} estimated tokens (budget ${CLAUDE_MD_BUDGET})`, ...(!pass && { next: firstStep(`cut CLAUDE.md from ${tokens} to ${CLAUDE_MD_BUDGET} estimated tokens or fewer`) }) }];
 }

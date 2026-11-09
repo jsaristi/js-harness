@@ -59,7 +59,7 @@ test('in shadow the whole suite runs, and the row counts what selection would ha
     }
     assert.equal(third.pass, false);
     assert.deepEqual(third.shadow.failedOfSkipped, ['b.test.mjs']);
-    assert.match(third.detail, /shadow: 2 of 2 test files would have been skipped, and 1 of them did not pass: b\.test\.mjs/);
+    assert.match(third.detail, /shadow: 2 of 2 test files would have been skipped, and 1 of them did not pass \(b\.test\.mjs\)/);
   } finally {
     done();
   }

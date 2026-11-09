@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { HOOK_ENTRY_LIMIT, hookEntriesRow, installEntries, liveEntries, ownerOf } from './hook-count.mjs';
+import { commandStep, firstStep } from './next-step.mjs';
 
 function withFixture(fn) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-hook-count-home-'));
@@ -103,6 +104,7 @@ test('in the harness repository one more entry than the limit in what install wr
     assert.equal(row.pass, false);
     assert.equal(row.info, false);
     assert.ok(row.lines.some((line) => /install writes 16 entries.*limit 15/.test(line)), row.lines.join('\n'));
+    assert.deepEqual(row.next, firstStep('take an entry out of what install writes, or raise HOOK_ENTRY_LIMIT in bin/lib/hook-count.mjs in a commit that says why'));
   });
 });
 
@@ -148,7 +150,7 @@ test('with "hookCount": true one extra Stop entry of js-harness turns the row re
   assert.equal(row.pass, false);
   assert.equal(row.info, false);
   assert.ok(row.lines.some((line) => line === 'js-harness Stop: 4 entries, over its ceiling of 3'), row.lines.join('\n'));
-  assert.ok(row.lines.some((line) => /raise its ceiling in HOOK_CEILINGS \(bin\/lib\/hook-count\.mjs\)/.test(line)), row.lines.join('\n'));
+  assert.deepEqual(row.next, firstStep('take the entries over their ceilings out, or raise a ceiling in HOOK_CEILINGS (bin/lib/hook-count.mjs) in a commit that says why; the ceilings of js-harness are what install writes, which js-harness sync writes again'));
 });
 
 test('with "hookCount": true a new owner and a plugin cell over its ceiling turn the row red, each named once', () => {
@@ -164,7 +166,8 @@ test('with "hookCount": true a new owner and a plugin cell over its ceiling turn
 test('"hookCount" set to anything but true fails the row, and the harness repository keeps its install limit with it', () => {
   const wrong = hookEntriesRow('.', '.', { declared: { hookCount: 'yes' }, own: false, live: [] });
   assert.equal(wrong.pass, false);
-  assert.ok(wrong.lines.some((line) => line === 'harness.json "hookCount" must be true; it is "yes"'), wrong.lines.join('\n'));
+  assert.ok(wrong.lines.some((line) => line === 'harness.json "hookCount" is "yes", not true'), wrong.lines.join('\n'));
+  assert.deepEqual(wrong.next, firstStep('set "hookCount" in harness.json to true, or take the key out'));
   const own = hookEntriesRow('.', '.', { ...counted, own: true, live: [...installEntries(), ...STACK_ENTRIES], installed: [...installEntries(), { event: 'Stop', command: 'js-harness x' }] });
   assert.equal(own.pass, false);
   assert.ok(own.lines.some((line) => /install writes 16 entries.*limit 15/.test(line)), own.lines.join('\n'));
@@ -178,5 +181,6 @@ test('the engram prompt hook back, as an engram plugin update brings it, is over
   const live = [...installEntries(), ...STACK_ENTRIES, { event: 'UserPromptSubmit', command: 'x', plugin: 'engram@engram' }];
   const row = hookEntriesRow('.', '.', { ...counted, own: false, live });
   assert.equal(row.pass, false);
-  assert.ok(row.lines.some((line) => line === 'engram@engram UserPromptSubmit: 1 entry, over its ceiling of 0; js-harness stack engram-prompt off takes it out'), row.lines.join('\n'));
+  assert.ok(row.lines.some((line) => line === 'engram@engram UserPromptSubmit: 1 entry, over its ceiling of 0'), row.lines.join('\n'));
+  assert.deepEqual(row.next, commandStep('js-harness stack engram-prompt off'));
 });

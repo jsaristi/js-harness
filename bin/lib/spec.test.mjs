@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { SPEC_PATH, checkSpec, parseSpec, specFindings } from './spec.mjs';
+import { firstStep } from './next-step.mjs';
 
 /** The lines of one capability: its heading and the six fields, each given or the default text. */
 function capability(title, fields = {}) {
@@ -225,6 +226,7 @@ test('checkSpec passes with the counts, and fails with one line per finding', ()
     assert.deepEqual(checkSpec(dir, { own: false }), [{
       name: 'spec', pass: false, detail: `1 finding in ${SPEC_PATH}`,
       lines: ['"The reply check" (line 7) has no command in backticks in its **Proof:** field'],
+      next: firstStep(`fix the findings named above in ${SPEC_PATH}`),
     }]);
   });
 });
@@ -235,8 +237,19 @@ test('checkSpec fails the row when the test file a proof names was deleted, and 
     assert.deepEqual(checkSpec(dir, { own: false }), [{
       name: 'spec', pass: false, detail: `1 finding in ${SPEC_PATH}`,
       lines: ['"The reply check" (line 7) names bin/lib/reply.test.mjs in **Proof:**, which does not exist'],
+      next: firstStep(`fix the findings named above in ${SPEC_PATH}`),
     }]);
   });
+});
+
+test('checkSpec fails the row, with the step to make the file readable, when the specification cannot be read', () => {
+  const unreadable = () => {
+    throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+  };
+  assert.deepEqual(checkSpec('.', { own: false, readFile: unreadable }), [{
+    name: 'spec', pass: false, detail: `${SPEC_PATH} cannot be read: EACCES: permission denied`,
+    next: firstStep(`make ${SPEC_PATH} readable`),
+  }]);
 });
 
 test('checkSpec holds the harness\'s own specification to its commands, entries and home files', () => {

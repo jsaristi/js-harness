@@ -32,6 +32,7 @@ const ROW_FILES = [
   'bin/lib/hook-count.mjs',
   'bin/lib/lens-review-rows.mjs',
   'bin/lib/merge-queue-reviews.mjs',
+  'bin/lib/sensor-rows.mjs',
   'bin/lib/spec.mjs',
 ];
 /** The review commands, and the modules that word a refusal they print. */
@@ -39,15 +40,9 @@ const COMMAND_FILES = ['bin/lens-review.mjs', 'bin/codex-review.mjs'];
 const WORDING_FILES = ['bin/lib/codex-review-recheck.mjs', 'bin/lib/codex-meter.mjs', 'bin/lib/codex-review-coverage.mjs'];
 
 const LEGACY = {
-  'bin/check.mjs': 'its rows word their own next step (S4b, T7)',
-  'bin/lib/ci-gate.mjs': 'its rows word their own next step (S4b, T7)',
-  'bin/lib/claude-md-budget.mjs': 'its row words its own next step (S4b, T7)',
   'bin/lib/codex-review-rows.mjs': 'its rows print an unbound codex-review command (S4b, T6)',
-  'bin/lib/flaky.mjs': 'its rows word their own next step (S4b, T7)',
-  'bin/lib/hook-count.mjs': 'its row words its own next step (S4b, T7)',
   'bin/lib/lens-review-rows.mjs': 'its rows print an unbound lens-review command (S4b, T6)',
   'bin/lib/merge-queue-reviews.mjs': 'the merge door names no command (S4b, T6)',
-  'bin/lib/spec.mjs': 'its rows word their own next step (S4b, T7)',
   'bin/lens-review.mjs': 'its refusals word their own next step (S4b, T6)',
   'bin/codex-review.mjs': 'its refusals word their own next step, some with <rev> (S4b, T6)',
   'bin/lib/codex-meter.mjs': 'its stop prints the base as typed (S4b, T6)',

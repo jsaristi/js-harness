@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseRegister } from './failures.mjs';
+import { firstStep } from './next-step.mjs';
 import { testFilesOf } from './select-tests.mjs';
 
 // The colours a reporter may write, which would hide the words around them.
@@ -45,7 +46,13 @@ export function failedTestFiles(output, testFiles) {
 // An entry counts through the day it expires; after it, its file blocks again.
 export const LEDGER = 'docs/FLAKY.md';
 const FIELDS = ['Owner', 'Expires', 'Failure'];
-const ADD = `to quarantine it, add to ${LEDGER} "### <file>" with "- Owner:", "- Expires: YYYY-MM-DD" and "- Failure: <id in docs/FAILURES.md>", and commit it`;
+// The step of a red rerun's tests (the output names them) and of a rerun that passed but has no current entry for its files.
+export const FIX_TESTS = firstStep('fix the failing tests the output names');
+const QUARANTINE = firstStep(`to quarantine each file above, give it an entry in ${LEDGER}: "### <file>" with "- Owner:", "- Expires: YYYY-MM-DD" and "- Failure: <id in docs/FAILURES.md>", and commit it (an expired entry is renewed in place)`);
+
+/** The step a rerun names for its tests when it leaves them blocking: a rerun that passed is a file to quarantine, one that
+ * failed again is a test to fix (`judgeRerun`). */
+export const rerunNext = (passed) => (passed ? QUARANTINE : FIX_TESTS);
 
 /** `n` things, in the singular for one. */
 const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
@@ -121,7 +128,7 @@ export function ledgerRow(text, { testFiles, failureIds, today }) {
     if (!testFiles.includes(one.file)) faults.push(`${one.file}: no test file of the repository has that path`);
     else if (failureIds !== null && !failureIds.includes(one.failure)) faults.push(`${one.file}: no entry "${one.failure}" in docs/FAILURES.md`);
   }
-  if (faults.length > 0) return [{ name, pass: false, detail: `${LEDGER} is not read: ${count(faults.length, 'fault')} to repair in that file`, lines: faults }];
+  if (faults.length > 0) return [{ name, pass: false, detail: `${LEDGER} is not read: ${count(faults.length, 'fault')}`, lines: faults, next: firstStep(`repair the faults named above in ${LEDGER}`) }];
   const expired = read.entries.filter((one) => one.expires < today);
   const detail = `${LEDGER} quarantines ${count(read.entries.length, 'test file')}, ${read.entries.length - expired.length} of them current; an expired entry no longer counts, so its file blocks again`;
   return [{ name, pass: true, detail, lines: expired.map((one) => `${one.file}  expired ${one.expires}  owner ${one.owner}`) }];
@@ -134,7 +141,7 @@ export function judgeRerun(rerun, entries, today) {
   const name = 'rerun';
   const files = count(rerun.files.length, 'failed test file');
   if (!rerun.pass) {
-    return { pass: false, row: { name, pass: true, info: true, detail: `the ${files} ran once more, alone, and failed again (${rerun.detail}): the tests block`, lines: [...rerun.files] } };
+    return { pass: false, row: { name, pass: true, info: true, detail: `the ${files} ran once more, alone, and failed again (${rerun.detail}): the tests block`, lines: [...rerun.files] }, next: rerun.next };
   }
   const entryOf = (file) => entries.find((one) => one.file === file) ?? null;
   const lines = [];
@@ -144,13 +151,13 @@ export function judgeRerun(rerun, entries, today) {
     if (one !== null && one.expires >= today) lines.push(`${file}  quarantined until ${one.expires} (${one.failure})`);
     else {
       uncovered += 1;
-      lines.push(one === null ? `${file}  not in ${LEDGER}: ${ADD}` : `${file}  its entry expired ${one.expires}: ${ADD}`);
+      lines.push(one === null ? `${file}  not in ${LEDGER}` : `${file}  its entry expired ${one.expires}`);
     }
   }
   const detail = uncovered === 0
     ? `the ${files} ran once more, alone, and passed: quarantined in ${LEDGER}, ${rerun.files.length === 1 ? 'it does' : 'they do'} not block`
     : `the ${files} ran once more, alone, and passed; ${uncovered} of them ${uncovered === 1 ? 'has' : 'have'} no current entry in ${LEDGER}, so the tests block`;
-  return { pass: uncovered === 0, row: { name, pass: true, info: true, detail, lines } };
+  return { pass: uncovered === 0, row: { name, pass: true, info: true, detail, lines }, ...(uncovered > 0 && { next: rerun.next }) };
 }
 
 /** The text of the ledger under `cwd`, or `null` when there is none: a file that is not there (`ENOENT`, or
@@ -184,7 +191,7 @@ export function checkLedger(cwd, { readFile = (file) => fs.readFileSync(file, 'u
   try {
     text = readLedgerText(cwd, readFile);
   } catch (err) {
-    return [{ name: 'flaky', pass: false, detail: `cannot read ${LEDGER}: ${err.code ?? err.message}` }];
+    return [{ name: 'flaky', pass: false, detail: `cannot read ${LEDGER}: ${err.code ?? err.message}`, next: firstStep(`make ${LEDGER} readable`) }];
   }
   if (text === null) return [];
   // Asked only of a register that parses whole: the entries of a damaged one are not all of them, so an id missing

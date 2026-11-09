@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { COMMANDS } from '../js-harness.mjs';
 import { components, entryComponents } from './manifest.mjs';
+import { firstStep } from './next-step.mjs';
 
 export const SPEC_PATH = 'docs/SPEC.md';
 
@@ -175,12 +176,12 @@ export function checkSpec(cwd, deps = {}) {
     markdown = readFile(path.join(cwd, SPEC_PATH));
   } catch (err) {
     if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return [];
-    return [{ name: 'spec', pass: false, detail: `${SPEC_PATH} cannot be read: ${err.message}` }];
+    return [{ name: 'spec', pass: false, detail: `${SPEC_PATH} cannot be read: ${err.message}`, next: firstStep(`make ${SPEC_PATH} readable`) }];
   }
   const { capabilities, findings } = specFindings(markdown, own ? { exists, commands, entries, homeFiles, workshopCommands } : { exists, ids: entries });
   if (findings.length === 0) {
     const counted = `${capabilities.length} ${capabilities.length === 1 ? 'capability' : 'capabilities'}`;
     return [{ name: 'spec', pass: true, detail: `${counted}, each with its proof and its files` }];
   }
-  return [{ name: 'spec', pass: false, detail: `${findings.length} ${findings.length === 1 ? 'finding' : 'findings'} in ${SPEC_PATH}`, lines: findings }];
+  return [{ name: 'spec', pass: false, detail: `${findings.length} ${findings.length === 1 ? 'finding' : 'findings'} in ${SPEC_PATH}`, lines: findings, next: firstStep(`fix the findings named above in ${SPEC_PATH}`) }];
 }
