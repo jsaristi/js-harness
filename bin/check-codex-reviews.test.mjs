@@ -16,6 +16,7 @@ import { gitDirs } from './lib/project.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
 import { reviewCoverage } from './lib/codex-review-coverage.mjs';
 import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
+import { commandStep, firstStep, noStep } from './lib/next-step.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
 let configDir;
@@ -189,7 +190,9 @@ test('an uncovered code commit fails, naming it and the command that records it'
   const lines = row.lines.join('\n');
   assert.ok(lines.includes(`${short(root, second)} feat: three, never reviewed`), lines);
   assert.ok(!lines.includes(`${short(root, first)} feat: two`), lines);
-  assert.ok(lines.includes(`js-harness codex-review --base ${short(root, second)}^`), lines);
+  // The next step is the command that makes the record, bound to the head it was computed at (HEAD, the pushed commit).
+  assert.deepEqual(row.next, commandStep(`js-harness codex-review --base ${short(root, second)}^ --at ${second.slice(0, 12)}`));
+  assert.ok(!lines.includes('make the record with'), lines);
 });
 
 /** Writes one line of the Codex run log, which a record names by its `id`, told where the git folder is. */
@@ -214,7 +217,8 @@ test('a head whose last review owes a correction is refused, naming its open fin
   assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
   const lines = row.lines.join('\n');
   assert.ok(lines.includes(priorLine(finding)), lines);
-  assert.ok(lines.includes(`js-harness codex-review --base ${short(root, head)}`), lines);
+  // The step is the commit of the correction; the run after it names the recheck's command.
+  assert.deepEqual(row.next, firstStep('fix the open findings above in code and commit the fix'));
 });
 
 test('a skip ending at a later document commit does not clear the correction the review owes', () => {
@@ -297,6 +301,17 @@ test('a review that found nothing, or a branch with no run log, passes as before
   assert.match(row.detail, /1 code commit since origin.main, all covered by a Codex review record/);
 });
 
+test('a push of a commit that is not HEAD names no command, which HEAD would not be bound to: the step is to check it out', () => {
+  const { root } = makeRepo();
+  feature(root);
+  const first = commit(root, 'b.js', 'two', 'feat: two');
+  commit(root, 'c.js', 'three', 'feat: three');
+  const row = checkCodexReviews(root, first);
+  assert.equal(row.pass, false, row.detail);
+  assert.equal(row.next.kind, 'step');
+  assert.match(row.next.text, new RegExp(`^check out ${first.slice(0, 7)}, `));
+});
+
 test('with several uncovered commits the fix starts from the oldest', () => {
   const { root } = makeRepo();
   feature(root);
@@ -306,7 +321,7 @@ test('with several uncovered commits the fix starts from the oldest', () => {
   assert.equal(row.pass, false);
   const lines = row.lines.join('\n');
   assert.ok(lines.includes(short(root, first)) && lines.includes(short(root, second)), lines);
-  assert.ok(lines.includes(`js-harness codex-review --base ${short(root, first)}^`), lines);
+  assert.deepEqual(row.next, commandStep(`js-harness codex-review --base ${short(root, first)}^ --at ${second.slice(0, 12)}`));
 });
 
 test('a commit that changes only Markdown needs no review, in any letter case', () => {
@@ -362,11 +377,13 @@ test('after main is merged in, the push row hints the base the plain row sizes, 
   commit(root, 'c.js', 'three', 'feat: three');
   const row = checkCodexReviews(root, 'HEAD');
   assert.equal(row.pass, false, row.detail);
-  const hint = row.lines.at(-1);
-  assert.notEqual(hint, `make the record with: js-harness codex-review --base ${short(root, own)}^`);
-  // The plain row's base is the one whose review it sized: both rows name one review.
+  const hint = row.next.text.replace(/ --at .*$/, '');
+  assert.notEqual(hint, `js-harness codex-review --base ${short(root, own)}^`);
+  // The push row names origin/main by its hash, the command's form; the plain row names it as origin/main. Both
+  // size the same range: the push row's hint is that main's hash, and the plain row's line names it by its name.
   const debt = checkCodexReviewDebt(root);
-  assert.equal(hint, debt.lines.find((line) => line.startsWith('make the record with: ')), debt.lines.join('\n'));
+  assert.equal(hint, `js-harness codex-review --base ${git(root, 'rev-parse', 'origin/main').slice(0, 12)}`);
+  assert.ok(debt.lines.includes('make the record with: js-harness codex-review --base origin/main'), debt.lines.join('\n'));
 });
 
 test('after main is merged in with the commits before it covered, the hint starts at the merge commit', () => {
@@ -384,7 +401,7 @@ test('after main is merged in with the commits before it covered, the hint start
   const row = checkCodexReviews(root, 'HEAD');
   // `<after>^` is the merge commit: the range from there holds only what came after it.
   assert.equal(git(root, 'rev-parse', `${after}^`), merge);
-  assert.equal(row.lines.at(-1), `make the record with: js-harness codex-review --base ${short(root, after)}^`);
+  assert.deepEqual(row.next, commandStep(`js-harness codex-review --base ${short(root, after)}^ --at ${after.slice(0, 12)}`));
 });
 
 test('a merge commit somebody wrote code in needs a record, as the commit it is', () => {
@@ -404,7 +421,8 @@ test('a merge commit somebody wrote code in needs a record, as the commit it is'
   assert.match(row.detail, /^1 of 3 code commits since origin\/main have no Codex review record/);
   // It has parents, so it is no root commit, and `<id>^` is the first of them: the range from there holds it.
   const from = `${short(root, merged)}^`;
-  assert.deepEqual(row.lines, [`${short(root, merged)} merge side, with an edit of its own`, `make the record with: js-harness codex-review --base ${from}`]);
+  assert.deepEqual(row.lines, [`${short(root, merged)} merge side, with an edit of its own`]);
+  assert.deepEqual(row.next, commandStep(`js-harness codex-review --base ${from} --at ${merged.slice(0, 12)}`));
   // The plain row counts it and names the same base: the review starts at that parent and reads the edit
   // alone, since `side` is a stacked base whose own commits have their record (odd/tasks/gate-first.md, T7).
   const debt = checkCodexReviewDebt(root);
@@ -658,7 +676,7 @@ test('a file name is read whole whatever it holds, and none is taken for the lin
   const row = checkCodexReviews(root, 'HEAD');
   assert.equal(row.pass, false, row.detail);
   assert.match(row.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
-  assert.deepEqual(row.lines.slice(0, -1), [`${short(root, code)} feat: code in a file whose name starts with a control character`]);
+  assert.deepEqual(row.lines, [`${short(root, code)} feat: code in a file whose name starts with a control character`]);
   assert.match(checkCodexReviewDebt(root).detail, /^no Codex review record for 1 of 1 code commit since origin\/main: the review of [0-9a-f]+\^\.\.HEAD is 1 part today, 1 changed line in 1 file$/);
 });
 
@@ -681,7 +699,7 @@ test('names that read as the line of a commit, or begin with a newline, are name
   const row = checkCodexReviews(root, 'HEAD');
   assert.equal(row.pass, false, row.detail);
   assert.match(row.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
-  assert.deepEqual(row.lines.slice(0, -1), [`${short(root, code)} feat: code under such names`]);
+  assert.deepEqual(row.lines, [`${short(root, code)} feat: code under such names`]);
   assert.equal(
     checkCodexReviewDebt(root).detail,
     `no Codex review record for 1 of 1 code commit since origin/main: the review of ${short(root, code)}^..HEAD is 1 part today, 3 changed lines in 3 files`,
@@ -1058,15 +1076,17 @@ test('a remote that is not configured, such as the URL git passes to a hook, get
   const row = checkCodexReviews(root, 'HEAD', { remote: url });
   assert.equal(row.pass, false);
   assert.match(row.detail, /not a configured remote/);
-  const lines = row.lines.join('\n');
-  assert.match(lines, /git remote add <name> <url>/);
-  assert.doesNotMatch(lines, /set-head/);
+  assert.equal(row.next.kind, 'step');
+  assert.match(row.next.text, /git remote add <name> <url>/);
+  assert.match(row.next.text, /--remote <name>/);
+  assert.doesNotMatch(row.next.text, /set-head/);
 });
 
 test('a configured remote with no default branch still names set-head', () => {
   const { root } = makeRepo(null);
   const row = checkCodexReviews(root, 'HEAD');
-  assert.ok(row.lines.some((line) => line.includes('git remote set-head origin --auto')));
+  assert.equal(row.next.kind, 'step');
+  assert.match(row.next.text, /git remote set-head origin --auto/);
 });
 
 test('a repository with no refs of the remote fails, naming the command that sets its default branch', () => {
@@ -1076,7 +1096,7 @@ test('a repository with no refs of the remote fails, naming the command that set
   const row = checkCodexReviews(root, 'HEAD');
   assert.equal(row.pass, false);
   assert.match(row.detail, /no default branch of origin/i);
-  assert.ok(row.lines.some((line) => line.includes('git remote set-head origin --auto')), row.lines.join('\n'));
+  assert.deepEqual(row.next, firstStep('set the default branch of origin: git remote set-head origin --auto'));
 });
 
 // S10: the first push of a project to an empty repository passes and says so: what went unread, and the
@@ -1217,12 +1237,14 @@ test('an unresolvable head fails instead of passing on an empty range', () => {
   const row = checkCodexReviews(root, 'no-such-rev');
   assert.equal(row.pass, false);
   assert.match(row.detail, /no-such-rev/);
+  assert.deepEqual(row.next, firstStep('give --head a commit this repository holds, by its hash, or check out the branch that has it'));
 });
 
-test('outside a git repository the row fails', () => {
+test('outside a git repository the row fails, and no command follows', () => {
   const row = checkCodexReviews(tmp('js-harness-check-push-nongit-'), 'HEAD');
   assert.equal(row.pass, false);
   assert.match(row.detail, /git repository/i);
+  assert.equal(row.next.kind, 'none');
 });
 
 // --- the plain check: how much code waits for a Codex review, as information ---

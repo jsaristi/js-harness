@@ -11,7 +11,7 @@ import { fixedLoadRow, hookEntriesRow } from './lib/fixed-load.mjs';
 import { depthPassFor, discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
 import { checkSpec } from './lib/spec.mjs';
-import { commandStep, firstStep, formatRow, noStep } from './lib/next-step.mjs';
+import { firstStep, formatRow, noStep } from './lib/next-step.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { readRules, ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
@@ -30,7 +30,7 @@ import { gateLogSwitchedOff, gateRecord, provenBy, readGateLog, readGateProof } 
 import { filesKey, treeKey } from './lib/gate-tree.mjs';
 import { addedLines, checkedOff, checkedTasks, resolveCitations, resolveTicks, taskText } from './lib/citations.mjs';
 import { flakyTestsOf, selectTests, testFilesOf } from './lib/select-tests.mjs';
-import { FIX_TESTS, checkLedger, failedTestFiles, failingTests, judgeRerun, ledgerEntries, localDay, rerunNext } from './lib/flaky.mjs';
+import { checkLedger, failedTestFiles, failingTests, judgeRerun, ledgerEntries, localDay, rerunNext } from './lib/flaky.mjs';
 import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
 import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, word as bashWord, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
 import { functionsOf, harnessOfTree } from './lib/project-functions.mjs';

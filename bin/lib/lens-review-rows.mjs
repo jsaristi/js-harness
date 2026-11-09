@@ -11,8 +11,25 @@ import { spawnSync } from 'node:child_process';
 import { beyondLines, defaultBranch, gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, remoteHoldsNoBranch, reviewCoverage } from './codex-review-coverage.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './project-functions.mjs';
 import { admittedLensReviews } from './lens-reviews.mjs';
+import { commandStep, firstStep, noStep, reviewCommand } from './next-step.mjs';
 
 const plural = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+/** The next step of a refusal that reruns `tool` over `base..tip` (hashes): the command bound to them, with `--at` the
+ * head it was computed at, when `tip` is the commit HEAD names, where it runs as printed; else the step to check `tip`
+ * out first, since the command is refused at any other head (`atRefusal`). Shared by the rows of both reviews. */
+export function reviewStep(cwd, { spawn = spawnSync, tool, base, tip }) {
+  const head = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
+  if (head === tip) return commandStep(reviewCommand(tool, { base, at: tip }));
+  return firstStep(`check out ${tip.slice(0, 7)}, the commit the command is bound to; HEAD is ${head ? head.slice(0, 7) : 'unborn'} here`);
+}
+
+/** The base a command that makes the record of the oldest uncovered commit is bound to, as its row prints it: that
+ * commit's parent (`<id>^`), or, for a root commit, the default branch's hash (`baseHash`). */
+const commandBase = ({ uncovered, baseHash }) => {
+  const oldest = uncovered[uncovered.length - 1];
+  return oldest.isRoot ? baseHash : `${oldest.shortId}^`;
+};
 
 /** Whether the lens review is on at the commit `id`, read from that commit's own `harness.json` (`lensReview`), so a
  * commit is asked by the switch it was made under: a branch made before a project turned the review on is never asked
@@ -31,15 +48,17 @@ const codexOffAt = (git, id) => functionsOf(harnessOfCommit(git, id), commitTree
  * off (`codexOffAt`), where the lenses are the one review. */
 export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin', whereCodexOff = false } = {}) {
   const tip = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${head}^{commit}`]);
-  if (!tip) return { unknown: `cannot resolve ${head} to a commit` };
+  if (!tip) {
+    return { unknown: `cannot resolve ${head} to a commit`, next: head === 'HEAD' ? firstStep('make the first commit of this branch, so HEAD names one') : firstStep(`give ${head} a commit this repository holds, by its hash`) };
+  }
   const branch = defaultBranch(spawn, cwd, remote);
-  if (!branch) return { unknown: `no default branch of ${remote} to compare against` };
+  if (!branch) return { unknown: `no default branch of ${remote} to compare against`, next: firstStep(`set the default branch of ${remote}: git remote set-head ${remote} --auto`) };
   // A record counts only where the run line lens-review wrote first names it (lens-reviews.mjs, provenance).
   const lens = admittedLensReviews(cwd, { spawn });
   // A record whose head lies past the tip covers nothing here, as at the merge door (`beyondTip`).
   const coverage = reviewCoverage(cwd, { from: branch.ref, tip, spawn, read: () => lens.records, isValid: lens.admitted, beyondTip: false });
-  if (coverage.unknown === MARKS_UNREAD) return { unknown: 'cannot read which files a review leaves out (`git check-attr --source` needs git 2.40 or later)' };
-  if (coverage.unknown) return { unknown: `cannot list the commits in ${branch.label}..${head}` };
+  if (coverage.unknown === MARKS_UNREAD) return { unknown: 'cannot read which files a review leaves out (`git check-attr --source` needs git 2.40 or later)', next: firstStep('use git 2.40 or later, which reads the marks of the files') };
+  if (coverage.unknown) return { unknown: `cannot list the commits in ${branch.label}..${head}`, next: noStep(`git did not list the commits in ${branch.label}..${head}`) };
   const git = gitIn(cwd, spawn);
   const asked = new Map(coverage.codeCommits.map((commit) => [commit.id, lensOnAt(git, commit.id) || (whereCodexOff && codexOffAt(git, commit.id))]));
   const due = (commit) => asked.get(commit.id) === true;
@@ -49,7 +68,9 @@ export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin', 
     coverage.stale ? `${plural(coverage.stale, 'record')} whose range no longer hashes as reviewed` : '',
     coverage.invalid ? `${plural(coverage.invalid, 'record')} that are no evidence (an incomplete run, or a record no run line of lens-review names, among them)` : '',
   ].filter(Boolean);
-  return { tip, baseRef: branch.ref, base: branch.label, codeCommits, uncovered, beyond: coverage.beyond, skips: owedSkips(coverage, codeCommits), note: noteParts.length ? `; ${noteParts.join('; ')} ignored` : '' };
+  // The hash of the default branch, which a command names as its base where the oldest uncovered commit is a root.
+  const baseHash = uncovered.length ? gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${branch.ref}^{commit}`]) : null;
+  return { tip, baseRef: branch.ref, baseHash, base: branch.label, codeCommits, uncovered, beyond: coverage.beyond, skips: owedSkips(coverage, codeCommits), note: noteParts.length ? `; ${noteParts.join('; ')} ignored` : '' };
 }
 
 /** The skips (`--unavailable`) among `coverage`'s records that still owe a review: a skip is debt only while a code
@@ -106,9 +127,16 @@ export function owedSkipLines(cwd, { spawn = spawnSync, remote = 'origin' } = {}
  * off, so a code commit never lands unreviewed (his answer to question 104, odd/tasks/f8-s11-complements.md, L14). */
 export function lensDoor(cwd, head, { spawn = spawnSync, remote = 'origin' } = {}) {
   const state = lensCoverage(cwd, head, { spawn, remote, whereCodexOff: true });
-  if (state.unknown) return { pass: false, detail: `lens review: ${state.unknown}` };
-  if (state.uncovered.length) return { pass: false, detail: `lens review: ${uncoveredDetail(state)}` };
-  return state.skips.length ? { pass: false, detail: `it holds a lens review skip, which owes a review before it lands: ${skipLine(state.skips[0])}` } : null;
+  if (state.unknown) return { pass: false, detail: `lens review: ${state.unknown}`, next: state.next };
+  // `review` names the review that pays the refusal, by its base, so the merge door can bind it to the head it judges for.
+  if (state.uncovered.length) {
+    const review = { tool: 'lens-review', base: commandBase(state) };
+    return { pass: false, detail: `lens review: ${uncoveredDetail(state)}`, next: reviewStep(cwd, { spawn, ...review, tip: state.tip }), review };
+  }
+  if (!state.skips.length) return null;
+  const [skip] = state.skips;
+  const review = { tool: 'lens-review', base: skip.base };
+  return { pass: false, detail: `it holds a lens review skip, which owes a review before it lands: ${skipLine(skip)}`, next: reviewStep(cwd, { spawn, ...review, tip: state.tip }), review };
 }
 
 /** What a range with code commits no complete lens record covers is said to hold, from `lensCoverage`'s `state`. */
@@ -116,14 +144,15 @@ const uncoveredDetail = ({ uncovered, codeCommits, base, note }) => `${uncovered
 
 /** The lines that name the `uncovered` commits since `base`, those a record covers only from past the tip (`beyond`),
  * and the command that makes their record, from `lensCoverage`'s state. */
-const uncoveredLines = ({ uncovered, base, beyond, tip }) => {
-  const oldest = uncovered[uncovered.length - 1];
-  return [
-    ...uncovered.map((commit) => `${commit.shortId} ${commit.subject}`),
-    ...beyondLines(uncovered, beyond, tip),
-    `make the record with: js-harness lens-review --base ${oldest.isRoot ? base : `${oldest.shortId}^`} --lenses <lens,...> --reason "<what it touched and how>"`,
-  ];
+const uncoveredLines = (state) => {
+  const { base } = state;
+  const oldest = state.uncovered[state.uncovered.length - 1];
+  return [...uncoveredNames(state), `make the record with: js-harness lens-review --base ${oldest.isRoot ? base : `${oldest.shortId}^`} --lenses <lens,...> --reason "<what it touched and how>"`];
 };
+
+/** The lines that name the `uncovered` commits and those a record covers only from past the tip (`beyond`): the
+ * refusal's lines, the command that makes the record being its next step. */
+const uncoveredNames = ({ uncovered, beyond, tip }) => [...uncovered.map((commit) => `${commit.shortId} ${commit.subject}`), ...beyondLines(uncovered, beyond, tip)];
 
 /** The `review` row every commit's gate shows, informing and failing nothing (odd/tasks/f8-s1-reviews.md, T5): the code
  * commits since the default branch that no lens record covers, and the skips of both reviews that still owe one, so the
@@ -156,14 +185,17 @@ export function checkLensReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote
   if (state.unknown && remoteHoldsNoBranch(cwd, { spawn, remote })) {
     return { name, pass: true, detail: `${remote} holds no branch yet, so this first push passes with no lens record, as the codex-review row says of its own` };
   }
-  if (state.unknown) return { name, pass: false, detail: state.unknown };
+  if (state.unknown) return { name, pass: false, detail: state.unknown, next: state.next };
   const { base, codeCommits, uncovered, skips, note } = state;
   if (uncovered.length) {
+    const review = { tool: 'lens-review', base: commandBase(state) };
     return {
       name,
       pass: false,
       detail: uncoveredDetail(state),
-      lines: [...uncoveredLines(state), 'an amend or a rebase after a review leaves its commits uncovered: review the range again'],
+      lines: [...uncoveredNames(state), 'an amend or a rebase after a review leaves its commits uncovered: review the range again'],
+      next: reviewStep(cwd, { spawn, ...review, tip: state.tip }),
+      review,
     };
   }
   const detail = codeCommits.length ? `${plural(codeCommits.length, 'code commit')} since ${base}, all covered by a Claude lens record${note}` : `no code commits since ${base} that ask for a lens record${note}`;

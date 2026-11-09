@@ -149,9 +149,9 @@ lead's brief says.
 5. The same: "the incident set no worse"; Cost: "about $13, the incident rerun".
 
 ## Next step
-Update ~19:15 local: slice 1 is `690bf159`, the flake fix `a6dd79ae`, and slice 2a (T5, the convention test, formatRow)
-is being committed. Next: T6 and T7 by two writers (L9). Then Codex over `09158b1c..HEAD` and the lenses per slice
-(`--head 690bf159` for slice 1), PR 1, and the ready notice.
+Update ~20:40 local: PRs 792 and 793 are open (L11). T7 is committed, T6 is being committed. Next: Codex and the lenses
+over T7 and over T6, then PRs 794 (T7) and 795 (T6), stacked. Then the `rule/` branch for pair 9, the incident rerun
+asked through the lead, and T10.
 State at 2026-11-08 ~18:40 local: `09158b1c` (this document) committed. Uncommitted and green locally: T2 and T3
 (`bin/contract.mjs`, `bin/check.mjs`, `bin/lib/depth-pass.mjs` and its test, `bin/lib/contradictions.test.mjs`), and
 T5 plus the convention test (`bin/lib/next-step.mjs` and test, `--at` in `bin/lens-review.mjs` and
@@ -285,3 +285,23 @@ rerun asked through the lead.
   threw on a HEAD that names no commit; its test was red with that TypeError and is now green: it refuses with a
   check-out step. Pair 10's row held only the entry's heading and date; it now holds the decision itself, in the
   register and in the shipped protocol.
+- L11 (2026-11-08, PRs and T6/T7): the chain is stacked to main, PR 792 (`origin/main..690bf159`, 512 lines, 270 of
+  them this document) and PR 793 (`690bf159..a1d63009`, 430, on 792's branch). The first push of 792 was refused: the
+  Codex review covered `09158b1..8435e5d` as one range, so slice 1 got its own review, `09158b1..690bf15`, correct with
+  no findings, 176,246 input tokens. `notify --kind ready` refuses 793 until it targets main; a note went instead.
+  T6 and T7 were done by two writers (haiku, high) with disjoint surfaces, and checked here. T7 took the plain rows of
+  `check`, and its row builders moved to `bin/lib/sensor-rows.mjs`, so `check.mjs` is at 1,938. T6 took the review
+  surfaces: the push rows and the door bind the command to hashes, the door to the pull request's own head and its
+  worktree (`--cwd`), and every `return 1` of the two reviews ends in its next line. Done here: the two `tag` rows,
+  red then green; `merge-queue` printing the door's `next`, which `leaveOut` dropped, red then green; the detector
+  reading an `atRefusal(` line above a block; two wordings ("commit the correction as code", and "he" in a shipped
+  message). The legacy list is empty. Tests: 24 files under the gate lock, 1,101 of 1,102, the one a ceiling, then
+  fixed; the files the fixes touched, 138 of 138, and the tag tests 29 of 29. T7 committed alone, with its half of the
+  two convention tests, so each commit passes its own gate. `notify`'s `readyProblems` still drops a `next`: notify
+  is none of the five surfaces, so it is left out.
+- L12 (2026-11-08): T6's first commit failed on CI in five tests of `bin/codex-review.second.test.mjs`, which runs the
+  second half of `bin/codex-review.test.mjs`. The writer ran only the first half, and so did the set run here, so
+  those expectations still lacked their `next:` line. They are fixed. One step was wrong too: a git older than 2.40
+  said "git did not answer" or "cannot be split"; the range's error now carries its step, "use git 2.40 or later".
+  Both halves and `check`: 591 of 593, 2 skipped, 0 failed. The lenses over T7 (`a1d6300..21fc735`): reliability 0,
+  readability 1, dead imports of `commandStep` and `FIX_TESTS` in `check.mjs`, removed in T6's commit.

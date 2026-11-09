@@ -244,28 +244,35 @@ test('a reading that failed, or that holds no weekly limit, stops nothing and sa
 });
 
 test('the stop at the floor starts nothing, asks the user about the reset and says what a typed no runs', () => {
-  const said = floorStopped({ left: 2, floor: 2, base: 'abc1234' });
+  const said = floorStopped({ left: 2, floor: 2, base: 'abc1234', at: 'def5678' });
   assert.match(said, /2% left, at or under its floor of 2% \(rule:codex-weekly-floor\)/);
   assert.match(said, /not started and nothing was recorded/);
   assert.match(said, /whether to reset/);
-  assert.match(said, /js-harness codex-review --base abc1234 --unavailable/);
-  assert.match(said, /js-harness lens-review --base abc1234/);
+  // The commands for his no are bound to the base and the head the review would have run at, never the typed base.
+  assert.match(said, /js-harness codex-review --base abc1234 --at def5678 --unavailable "weekly limit at its floor: <the user's words>"/);
+  assert.match(said, /js-harness lens-review --base abc1234 --at def5678 --lenses <the lenses not run yet> --reason/);
   assert.match(said, /codex-meter lists on every branch, and the merge door shows, until a Codex review of its range pays it/);
+  // Its last line names no command: the user decides, and the commands above are for his answer.
+  assert.match(said.split('\n').at(-1), /^next: no command, the user decides whether to reset the weekly limit/);
+});
+
+test('a floor stop is built from hashes only: a branch as its base throws, since no printed command may name one', () => {
+  assert.throws(() => floorStopped({ left: 2, floor: 2, base: 'origin/main', at: 'def5678' }), /hash/);
 });
 
 test('an interrupted read of the weekly limit stops the launch: the Ctrl-C was meant for the command', () => {
   assert.deepEqual(weeklyFloor({ ok: false, reason: 'interrupted' }, 2), { stop: true, interrupted: true });
-  const word = launchWord({ ok: false, reason: 'interrupted' }, { floor: 2, base: 'abc1234' });
+  const word = launchWord({ ok: false, reason: 'interrupted' }, { floor: 2, base: 'abc1234', at: 'def5678' });
   assert.equal(word.note, null);
   assert.match(word.stop, /interrupted, so the review was not started and nothing was recorded/);
 });
 
 test('a later part of a review in parts stopped at the floor says the parts before it are kept for the next run', () => {
-  const word = launchWord(weeklyUsed(99), { floor: 2, base: 'abc1234', part: { index: 2, of: 3 } });
+  const word = launchWord(weeklyUsed(99), { floor: 2, base: 'abc1234', at: 'def5678', part: { index: 2, of: 3 } });
   assert.match(word.stop, /so part 2 of 3 was not started, the parts before it kept for the next run, and nothing was recorded/);
-  assert.match(launchWord(weeklyUsed(99), { floor: 2, base: 'abc1234', part: { index: 1, of: 3 } }).stop, /so the review was not started/);
-  assert.deepEqual(launchWord(weeklyUsed(50), { floor: 2, base: 'abc1234' }), { note: null, stop: null });
-  assert.match(launchWord({ ok: false, reason: 'missing' }, { floor: 2, base: 'abc1234' }).note, /could not be read before the launch: .+ The review runs without it\./);
+  assert.match(launchWord(weeklyUsed(99), { floor: 2, base: 'abc1234', at: 'def5678', part: { index: 1, of: 3 } }).stop, /so the review was not started/);
+  assert.deepEqual(launchWord(weeklyUsed(50), { floor: 2, base: 'abc1234', at: 'def5678' }), { note: null, stop: null });
+  assert.match(launchWord({ ok: false, reason: 'missing' }, { floor: 2, base: 'abc1234', at: 'def5678' }).note, /could not be read before the launch: .+ The review runs without it\./);
 });
 
 test('the weekly window is the one whose length says a week, wherever the answer puts it', () => {
@@ -278,12 +285,12 @@ test('the weekly window is the one whose length says a week, wherever the answer
 });
 
 test('the share left at the floor is said to one decimal, and a read of a plan says neither reader started and what a no runs', () => {
-  assert.match(launchWord(weeklyUsed(98.1), { floor: 2, base: 'abc1234' }).stop, /has 1\.9% left/);
+  assert.match(launchWord(weeklyUsed(98.1), { floor: 2, base: 'abc1234', at: 'def5678' }).stop, /has 1\.9% left/);
   const read = launchWord(weeklyUsed(99), { floor: 2, read: true });
   assert.match(read.stop, /so neither reader was started and nothing was recorded/);
   assert.match(read.stop, /js-harness double-review skip/);
   assert.match(launchWord({ ok: false, reason: 'missing' }, { floor: 2, read: true }).note, /The read runs without it\./);
-  assert.match(floorStopped({ left: 1, floor: 2, base: 'abc1234' }), new RegExp(`--unavailable "${FLOOR_SKIP}: `));
+  assert.match(floorStopped({ left: 1, floor: 2, base: 'abc1234', at: 'def5678' }), new RegExp(`--unavailable "${FLOOR_SKIP}: `));
 });
 
 test('the floor debts are the skips made at the floor that no Codex review paid, each with the command that pays it', () => {

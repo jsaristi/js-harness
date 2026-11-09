@@ -11,8 +11,8 @@
 // prints a `<rev>` placeholder or a branch as the base of a command. The tests of each command run its refusals.
 //
 // How to comply: build the row with `next: commandStep(...)`, `firstStep(...)` or `noStep(...)`; print a command's
-// refusal with `nextLine(...)` as its last line; build a review command with `reviewCommand(...)`. LEGACY lists the
-// files that do not comply yet, each with why; it only shrinks (bin/lib/ratchet.testkit.mjs), and reaches 0 in S4b.
+// refusal with `nextLine(...)` as its last line; build a review command with `reviewCommand(...)`. LEGACY, the files
+// that did not comply yet, reached 0 in S4b; it only shrinks (bin/lib/ratchet.testkit.mjs), so it stays empty.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -39,14 +39,7 @@ const ROW_FILES = [
 const COMMAND_FILES = ['bin/lens-review.mjs', 'bin/codex-review.mjs'];
 const WORDING_FILES = ['bin/lib/codex-review-recheck.mjs', 'bin/lib/codex-meter.mjs', 'bin/lib/codex-review-coverage.mjs'];
 
-const LEGACY = {
-  'bin/lib/codex-review-rows.mjs': 'its rows print an unbound codex-review command (S4b, T6)',
-  'bin/lib/lens-review-rows.mjs': 'its rows print an unbound lens-review command (S4b, T6)',
-  'bin/lib/merge-queue-reviews.mjs': 'the merge door names no command (S4b, T6)',
-  'bin/lens-review.mjs': 'its refusals word their own next step (S4b, T6)',
-  'bin/codex-review.mjs': 'its refusals word their own next step, some with <rev> (S4b, T6)',
-  'bin/lib/codex-meter.mjs': 'its stop prints the base as typed (S4b, T6)',
-};
+const LEGACY = {};
 
 const code = (file) => withoutComments(fs.readFileSync(path.join(REPO, file), 'utf8'));
 
@@ -78,7 +71,8 @@ export function rowsWithoutNext(text) {
 }
 
 /** The `return 1` of `text` whose block prints no line through `nextLine(` before it: the lines from the block's
- * opening brace to the return. */
+ * opening brace to the return. A block right under a line that calls `atRefusal(`, whose refusal ends in its next
+ * line, prints one too. */
 export function exitsWithoutNext(text) {
   const found = [];
   for (const match of text.matchAll(/\breturn 1\b/g)) {
@@ -89,7 +83,8 @@ export function exitsWithoutNext(text) {
       else if (text[start] === '{' && depth-- === 0) break;
     }
     const block = text.slice(start, match.index);
-    if (!block.includes('nextLine(')) found.push(`line ${text.slice(0, match.index).split('\n').length}`);
+    const lineAbove = text.slice(text.lastIndexOf('\n', text.lastIndexOf('\n', start) - 1) + 1, start);
+    if (!block.includes('nextLine(') && !lineAbove.includes('atRefusal(')) found.push(`line ${text.slice(0, match.index).split('\n').length}`);
   }
   return found;
 }
@@ -117,6 +112,8 @@ test('the detectors find what they look for, and pass what complies', () => {
   assert.deepEqual(rowsWithoutNext("return { name, pass: true, detail: 'x' };"), []);
   assert.deepEqual(exitsWithoutNext("if (a) {\n  error('no');\n  return 1;\n}"), ['line 3']);
   assert.deepEqual(exitsWithoutNext("if (a) {\n  error(`no\\n${nextLine(noStep('why'))}`);\n  return 1;\n}"), []);
+  assert.deepEqual(exitsWithoutNext("const stale = atRefusal({ at, atCommit, head });\nif (stale) {\n  error(stale);\n  return 1;\n}"), []);
+  assert.deepEqual(exitsWithoutNext("const stale = atRefusal({ at, atCommit, head });\nconst other = 1;\nif (other) {\n  error('no');\n  return 1;\n}"), ['line 5']);
   assert.deepEqual(unboundCommands('make it with: js-harness codex-review --base <rev>'), ['js-harness codex-review --base <rev>']);
   assert.deepEqual(unboundCommands('js-harness lens-review --base origin/main'), ['js-harness lens-review --base origin/']);
   assert.deepEqual(unboundCommands("  'Usage: js-harness lens-review --base <rev> --lenses <lens,...>\\n' +\n  '       js-harness lens-review --base <rev> --unavailable <reason>'"), []);

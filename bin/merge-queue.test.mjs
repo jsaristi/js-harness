@@ -885,6 +885,8 @@ test('a code commit no complete lens record covers leaves the pull request out (
   const { root, head } = makeEvidenceRepo({ lens: null });
   const { out } = await dryRunEvidence(root, [pr(1, 'feat/g', head)]);
   assert.match(out[0], /^PR 1 is left out: lens review: 1 of 1 code commit since origin\/main have no complete Claude lens record/);
+  // Its next step is bound to the pull request's own head, not to the merge the door judged (S4b, spec 3).
+  assert.match(out[1], new RegExp(`^ {2}next: (js-harness lens-review --base [0-9a-f]+\\^? --at ${head.slice(0, 12)} .*--cwd |check out the pull request's branch at ${head.slice(0, 7)} )`), out.join('\n'));
 });
 
 test('a lens skip leaves the pull request out until a review of the same commits pays it (S7)', async () => {

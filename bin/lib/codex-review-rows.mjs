@@ -14,6 +14,8 @@ import { readCodexReviewRuns } from './codex-review-runs.mjs';
 import { classifyRecheck, ESCALATION_SAID, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
 import { counted, leftOutOf, rangeFiles, reviewScope } from './codex-review-scope.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './project-functions.mjs';
+import { firstStep, noStep } from './next-step.mjs';
+import { reviewStep } from './lens-review-rows.mjs';
 // The Claude lens rows, beside Codex's, for `check` to import from one place (odd/tasks/f8-s1-reviews.md, T4).
 export { checkLensReviews } from './lens-review-rows.mjs';
 
@@ -31,26 +33,28 @@ export { checkLensReviews } from './lens-review-rows.mjs';
  * check shares with `js-harness codex-review` (`./codex-review-coverage.mjs`), which reads it for the
  * range it is asked to review: what this refuses to push is what that command reviews. */
 function codexReviewCoverage(cwd, head, { spawn, remote }) {
-  const unknown = (detail, lines, why) => ({ unknown: { detail, ...(lines ? { lines } : {}), ...(why ? { why } : {}) } });
+  const unknown = (detail, why, next) => ({ unknown: { detail, ...(why ? { why } : {}), next } });
   const tip = gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${head}^{commit}`]);
   if (!tip) {
     return gitOut(spawn, cwd, ['rev-parse', '--git-dir']) === null
-      ? unknown(`${cwd} is not a git repository`, undefined, 'this is not a git repository')
-      : unknown(`cannot resolve --head ${head} to a commit`, undefined, `${head} does not name a commit`);
+      ? unknown(`${cwd} is not a git repository`, 'this is not a git repository', noStep(`${cwd} is not a git repository, so there is no range to check`))
+      : unknown(`cannot resolve --head ${head} to a commit`, `${head} does not name a commit`, firstStep('give --head a commit this repository holds, by its hash, or check out the branch that has it'));
   }
   // Git hands a hook the URL, not a name, when the push names a URL: no ref of it can exist.
   const remotes = gitOut(spawn, cwd, ['remote'])?.split('\n').map((line) => line.trim()) ?? [];
   if (!remotes.includes(remote)) {
-    return unknown(`${remote} is not a configured remote, so there is no default branch to compare against`, [
-      'push through a configured remote: git remote add <name> <url>, then git push <name> ...',
-      'or name one that exists: js-harness check --push --remote <name>',
-    ]);
+    return unknown(
+      `${remote} is not a configured remote, so there is no default branch to compare against`,
+      undefined,
+      firstStep('add a remote with git remote add <name> <url> and push through it, or name an existing one with --remote <name>'),
+    );
   }
   const branch = defaultBranch(spawn, cwd, remote);
   if (!branch) {
     return unknown(
       `no default branch of ${remote} to compare against (refs/remotes/${remote}/HEAD, ${remote}/main or ${remote}/master), so there is no range to check`,
-      [`set it with: git remote set-head ${remote} --auto`],
+      undefined,
+      firstStep(`set the default branch of ${remote}: git remote set-head ${remote} --auto`),
     );
   }
   const { ref: baseRef, label: base } = branch;
@@ -58,9 +62,9 @@ function codexReviewCoverage(cwd, head, { spawn, remote }) {
   // A record whose head lies past the tip covers nothing here, as at the merge door (`beyondTip`).
   const coverage = reviewCoverage(cwd, { from: baseRef, tip, spawn, beyondTip: false });
   if (coverage.unknown === MARKS_UNREAD) {
-    return unknown(`cannot read which files of ${base}..${head} a Codex review leaves out (\`git check-attr --source\` failed; it needs git 2.40 or later)`);
+    return unknown(`cannot read which files of ${base}..${head} a Codex review leaves out (\`git check-attr --source\` failed; it needs git 2.40 or later)`, undefined, firstStep('use git 2.40 or later, which reads the marks of the files'));
   }
-  if (coverage.unknown) return unknown(`cannot list the commits in ${base}..${head}`);
+  if (coverage.unknown) return unknown(`cannot list the commits in ${base}..${head}`, undefined, noStep(`git did not list the commits in ${base}..${head}`));
   const { codeCommits, covers, uncovered, beyond, invalid, ignored } = coverage;
   const noteParts = [
     invalid ? `${invalid} invalid record${invalid === 1 ? '' : 's'} ignored` : '',
@@ -118,10 +122,12 @@ function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
   const findings = (n) => `${n} finding${n === 1 ? '' : 's'}`;
   if (state.kind === 'recheck' && state.second !== true) {
     const at = shortOf(from);
+    // The step is the commit: the next run of the push names the recheck's command, at the head the commit makes.
     return {
       refuse: true,
       detail: `the Codex review that ended at ${at} owes a correction: ${findings(state.findings.length)} open, not rechecked`,
-      lines: [...state.findings.map(priorLine), `commit the correction, then recheck it: js-harness codex-review --base ${at}`],
+      lines: state.findings.map(priorLine),
+      next: firstStep('fix the open findings above in code and commit the fix'),
     };
   }
 
@@ -255,9 +261,9 @@ function firstPushRow(cwd, head, { spawn, remote }) {
 /** The push row with the review on: what the records say of the code commits pushed. */
 function codexCoverageRow(cwd, head, { spawn, remote }) {
   const name = 'codex-review';
-  const fail = (detail, lines) => ({ name, pass: false, detail, ...(lines ? { lines } : {}) });
+  const fail = (detail, lines, next, review) => ({ name, pass: false, detail, ...(lines ? { lines } : {}), next: next, ...(review ? { review } : {}) });
   const state = codexReviewCoverage(cwd, head, { spawn, remote });
-  if (state.unknown) return firstPushRow(cwd, head, { spawn, remote }) ?? fail(state.unknown.detail, state.unknown.lines);
+  if (state.unknown) return firstPushRow(cwd, head, { spawn, remote }) ?? fail(state.unknown.detail, undefined, state.unknown.next);
   const { tip, baseRef, base, codeCommits, covers, uncovered, note } = state;
   if (uncovered.length) {
     // `git log` lists newest first, so the oldest uncovered commit is the last one.
@@ -274,15 +280,20 @@ function codexCoverageRow(cwd, head, { spawn, remote }) {
     // commits before the merge covered, that parent is the merge commit itself.
     const range = rangeStart(cwd, { base: baseRef, tip, spawn });
     const { before } = range.unknown ? { before: null } : reviewStart(uncovered, { cwd, from: range.from, tip, spawn });
-    const hint = oldest.isRoot
-      ? `${oldest.shortId} is a root commit, so ${oldest.shortId}^ does not exist; a range from the default branch reaches it: js-harness codex-review --base ${base} (add --unavailable <reason> to record a skip instead)`
-      : `make the record with: js-harness codex-review --base ${before === null ? base : `${before.shortId}^`}`;
-    const lines = [...uncoveredNames(uncovered), ...beyondLines(uncovered, state.beyond, tip), hint];
-    return fail(`${uncovered.length} of ${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base} have no Codex review record (${codexReviewsPath(cwd, { spawn }) ?? 'no record file'})${note}`, lines);
+    // The command's base is a hash, as every printed command's is: the default branch's own where there is no parent to name.
+    const review = { tool: 'codex-review', base: before === null ? gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${baseRef}^{commit}`]) : `${before.shortId}^` };
+    const lines = [...uncoveredNames(uncovered), ...beyondLines(uncovered, state.beyond, tip)];
+    if (oldest.isRoot) lines.push(`${oldest.shortId} is a root commit, so ${oldest.shortId}^ does not exist: a range from the default branch reaches it (--unavailable <reason> records a skip instead)`);
+    return fail(
+      `${uncovered.length} of ${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base} have no Codex review record (${codexReviewsPath(cwd, { spawn }) ?? 'no record file'})${note}`,
+      lines,
+      reviewStep(cwd, { spawn, ...review, tip }),
+      review,
+    );
   }
 
   const owed = correctionOwed(cwd, state, { spawn });
-  if (owed?.refuse) return fail(`${owed.detail}${note}`, owed.lines);
+  if (owed?.refuse) return fail(`${owed.detail}${note}`, owed.lines, owed.next);
 
   // The records that cover a code commit here and are no review of Codex's, each as a line that says which
   // it is and why: an explicit skip, or a range that held nothing to review. The detail counts the commits

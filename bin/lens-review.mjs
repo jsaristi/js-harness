@@ -16,7 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { unknownArgument } from './lib/args.mjs';
-import { atRefusal } from './lib/next-step.mjs';
+import { atRefusal, firstStep, nextLine, noStep } from './lib/next-step.mjs';
 import { claudeRunner } from './lib/background.mjs';
 import { NO_ASKED } from './lib/codex-review-prompt.mjs';
 import { classifyRecheck } from './lib/codex-review-recheck.mjs';
@@ -209,7 +209,10 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
 
   const candidate = lensCandidate(cwd, { base, head });
   if (candidate.error) {
-    stderr(`js-harness lens-review: ${candidate.error}`);
+    const next = /does not name a commit/.test(candidate.error)
+      ? firstStep('give --base and --head commits this repository holds, by their hash')
+      : noStep('git could not read the range, so no lens can be handed it');
+    stderr(`js-harness lens-review: ${candidate.error}\n${nextLine(next)}`);
     return 1;
   }
   const range = `${candidate.base.slice(0, 7)}..${candidate.head.slice(0, 7)}`;
@@ -248,7 +251,7 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
   const estimated = Math.ceil((candidate.block.length + lensPrompt(picked.names[0], intent).length) / 4);
   const said = `${range}: ${candidate.manifest.length} path${candidate.manifest.length === 1 ? '' : 's'} (${candidate.leftOut.length} left out), about ${estimated.toLocaleString('en-US')} estimated input tokens a lens, ${picked.names.length} lens${picked.names.length === 1 ? '' : 'es'} (${picked.names.join(', ')})`;
   if (estimated > LENS_INPUT_LIMIT) {
-    stderr(`js-harness lens-review: ${said}, more than the ${LENS_INPUT_LIMIT.toLocaleString('en-US')} a lens is handed; review the range in smaller ranges, each with its own --base and --head.`);
+    stderr(`js-harness lens-review: ${said}, more than the ${LENS_INPUT_LIMIT.toLocaleString('en-US')} a lens is handed; review the range in smaller ranges, each with its own --base and --head.\n${nextLine(firstStep('split the range into smaller ranges, each named by its own --base and --head hashes'))}`);
     return 1;
   }
   if (options.plan) {
@@ -282,7 +285,7 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
     }
   }
   if (!complete) {
-    stderr(`The lens run over ${range} is incomplete and covers nothing; recorded in ${file}. Read why above before running it again.`);
+    stderr(`The lens run over ${range} is incomplete and covers nothing; recorded in ${file}. Read why above before running it again.\n${nextLine(firstStep('read why above, and fix what it names'))}`);
     return 1;
   }
   stdout(`The Claude lenses reviewed ${range}; recorded in ${file}. Treat their findings as Codex's: fix, then review the fix.`);

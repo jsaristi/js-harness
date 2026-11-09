@@ -87,6 +87,7 @@ test('one incomplete lens makes the run incomplete: recorded, exit 1, and no rev
   // What it answered is kept and shown, cut short, so why it failed can be read before it runs again (L10).
   assert.equal(rec.results[0].answered, 'Looks fine.');
   assert.match(err, /risk: incomplete, the answer is not one JSON object: it holds none; it answered: "Looks fine\."/);
+  assert.match(err.split('\n').at(-1), /^next: read why above, and fix what it names; then run again what printed this/);
 });
 
 test('an incomplete answer is kept on one line and cut at its first characters, never inside one', () => {
@@ -430,4 +431,21 @@ test('--at runs at the head it names and is refused, with no lens run, once HEAD
   const nowhere = run(['--base', 'HEAD~1', '--at', 'f'.repeat(40), '--lenses', 'risk', '--reason', 'a constant'], { runLens: claude.runLens });
   assert.equal(nowhere.code, 1);
   assert.match(nowhere.err, /does not name a commit/);
+});
+
+test('each refusal that ends a run prints its next step as its last line, the one the command gives', () => {
+  const unnamed = run(['--base', 'no-such-rev', '--lenses', 'risk', '--reason', 'a constant'], { runLens: fakeClaude(clean).runLens });
+  assert.equal(unnamed.code, 1);
+  assert.match(unnamed.err.split('\n').at(-1), /^next: give --base and --head commits this repository holds, by their hash; then run again what printed this/);
+  // A range too large for a lens is refused before any lens runs, with the step that splits it.
+  const big = fakeClaude(clean);
+  withoutAutoMaintenance(() => commit('a.mjs', 'const big = 1;\n'.repeat(60000), 'a range too large for one lens'));
+  try {
+    const tooLarge = run(['--base', 'HEAD~1', '--lenses', 'risk', '--reason', 'a constant'], { runLens: big.runLens });
+    assert.equal(tooLarge.code, 1, tooLarge.out);
+    assert.equal(big.calls.length, 0, 'no lens ran');
+    assert.match(tooLarge.err.split('\n').at(-1), /^next: split the range into smaller ranges, each named by its own --base and --head hashes/);
+  } finally {
+    git('reset', '-q', '--hard', 'HEAD~1');
+  }
 });
