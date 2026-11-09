@@ -175,8 +175,8 @@ rerun asked through the lead.
   converted (`check --push` rows, the merge door's review half, `lens-review`, `codex-review`)
 - [x] T7 (kind: build) spec 3: the plain `check` rows and the door's rule rows converted; the legacy list empty
 - [x] T8 (kind: verify) specs 3-4: Codex and the lenses over each slice, PR 2 and PR 3, ready notices
-- [ ] T9 (kind: verify) spec 5: the incident rerun after his yes through the lead
-- [ ] T10 (kind: docs) ROADMAP S4b State, SPEC, README, summary under `docs/sessions/`
+- [x] T9 (kind: verify) spec 5: the incident rerun after his yes through the lead
+- [x] T10 (kind: docs) ROADMAP S4b State, SPEC, README, summary under `docs/sessions/`
 
 ## Log
 - L1 (2026-11-08, the request as written): the lead's brief, from his words "Listo continuemos con todo lo siguiente"
@@ -340,3 +340,12 @@ rerun asked through the lead.
   wrote again (`docs/FAILURES.md`, eval-reply-cut-by-stop-hook). S4b touched neither the hook nor `evals/`. Not rerun:
   the yes was for one run. The control it owes, outside S4b: the reply a grader reads is every text of the turn, not
   only the message after a Stop hook's refusal.
+- L17 (2026-11-09, the contract's quotes): `bin/conventions-next-step.test.mjs` holds `const LEGACY = {};`. A review
+  command run after one more commit, `node bin/js-harness.mjs lens-review --base 06e55d17 --at 797d07f7 --lenses
+  reliability --reason "a stale command"` at `c2e517c`, prints "this command was computed at 797d07f, and HEAD is
+  c2e517c now: the range it names is no longer the branch's, so it is refused, not rerun." and "next: run again what
+  printed this command (js-harness check --push, or the merge door), for the command bound to this head". A terminal
+  refusal, `node bin/js-harness.mjs codex-review --base HEAD~1 --cwd <a folder outside git>`, ends with "next: no
+  command, the command needs a git repository, and there is none at this folder". The contract's incident line is
+  not met as scored: false premise 1 of 4 (L16). Pair 9 is recorded as his decision A; the rule text is debt until he
+  types it, as the lead set out (2026-11-09).

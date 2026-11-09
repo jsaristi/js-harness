@@ -654,8 +654,10 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   each by its own evidence: a check, a sentence, or his decision. Pair 9 is his answer A to question 229; the
   rule text waits for his typed words, since `rules change` refuses a tapped answer. Every refusal of the five
   surfaces ends with its next step from `bin/lib/next-step.mjs`. A printed review command carries `--at` and is
-  refused once `HEAD` moved. `bin/conventions-next-step.test.mjs` holds this with a legacy list at 0 (PRs 793
-  onward). The incident rerun waits for question 232.
+  refused once `HEAD` moved. `bin/conventions-next-step.test.mjs` holds this with a legacy list at 0 (PRs 793,
+  795 and 796). The incident set ran once, after question 232 (`f8-s4b-incidents`, $5.01): 13 of 20, no worse.
+  False premise came out 1 of 4, below 2: incident-04's one miss is the grader reading only the close the reply hook
+  made the agent write again (`docs/FAILURES.md`, eval-reply-cut-by-stop-hook, control owed).
 
 ### S5 Skills, memory and rules
 - **Changes:** skill bodies at most 3k and the skill lint (13.3 row 7); `MEMORY.md` at most 0.5k;
