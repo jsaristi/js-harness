@@ -196,3 +196,8 @@ three classes and refuses a live rule left owed; `failures` prints its controls 
 line, protocol = prose; measured = retired; owed named apart); the two "control lost" entries
 (`failure-cause-dropped`, `uninstall-took-user-entry`) repaired or reported. 3) T8 docs, summary, `closed` notice;
 the incident rerun (~$13) asked through the lead.
+- L8 (2026-11-09, L7's three fixed, tests first): red 3 of 8, then 8 of 8. `probeEnv` drops every `ANTHROPIC_*`,
+  `CLAUDE_CODE_USE_*`, `AWS_*`, `CLOUD_ML_*`, `GOOGLE_*` and `VERTEX_*` name before it sets its own three; an arm counts
+  only `/v1/messages` requests; the planted hook is a script beside the marks run by its quoted path, proved from a
+  folder named `O'Connor`. The real run again: plain fired `SessionEnd, SessionStart, UserPromptSubmit`, sent the
+  `CLAUDE.md`; lens fired none, sent none; 6 Messages requests each; PASS. Next: review `eb39a858..HEAD`.

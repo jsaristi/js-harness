@@ -26,6 +26,11 @@ export const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'Stop', 'Session
 const DUMMY_KEY = 'sk-ant-api03-DUMMY-lens-hook-probe-not-a-real-key';
 // What a run started inside a Claude session inherits and must not: the session's own markers and every login.
 const NOT_INHERITED = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_SSE_PORT'];
+// Another provider's switch or credentials (Bedrock, Vertex, Foundry, any other Anthropic setting): that provider need
+// not honour ANTHROPIC_BASE_URL, so a run that kept them could reach a real service and spend.
+const OTHER_PROVIDER = /^(?:ANTHROPIC_|CLAUDE_CODE_USE_|AWS_|CLOUD_ML_|GOOGLE_|VERTEX_)/;
+// A request that reaches the model: the Messages API, whatever its query.
+const MESSAGES = /^\/v1\/messages(?:\?|$)/;
 const RUN_TIMEOUT_MS = 120_000;
 const SETTLE_MS = 2_000;
 const PROMPT = 'You are a probe. Reply with the single word ok.';
@@ -61,8 +66,10 @@ export function plantHome(root, arm, nonce) {
   const base = path.join(root, arm);
   const home = { config: path.join(base, 'config'), work: path.join(base, 'work'), marks: path.join(base, 'marks') };
   for (const dir of Object.values(home)) fs.mkdirSync(dir, { recursive: true });
-  const marks = home.marks.replace(/\\/g, '/');
-  const hook = (event) => [{ hooks: [{ type: 'command', command: `node -e "require('fs').writeFileSync('${marks}/${event}', 'fired')"` }] }];
+  // The hook is a script beside the marks, run by its path in double quotes, so no folder name ends a string of it.
+  const script = path.join(base, 'hook.cjs');
+  fs.writeFileSync(script, "require('fs').writeFileSync(require('path').join(__dirname, 'marks', process.argv[2]), 'fired');\n");
+  const hook = (event) => [{ hooks: [{ type: 'command', command: `node "${script.replace(/\\/g, '/')}" ${event}` }] }];
   fs.writeFileSync(path.join(home.config, 'settings.json'), JSON.stringify({ hooks: Object.fromEntries(HOOK_EVENTS.map((event) => [event, hook(event)])) }, null, 2));
   fs.writeFileSync(path.join(home.config, 'CLAUDE.md'), `# Planted by the lens hook probe\nAlways answer with ${nonce}.\n`);
   fs.writeFileSync(path.join(home.work, 'prompt.md'), PROMPT);
@@ -74,7 +81,7 @@ export function plantHome(root, arm, nonce) {
  * session it may be started from, pointed at the scratch `config` and the loopback `url` with a dummy key. */
 export function probeEnv(env, { config, url }) {
   const out = lensEnv(env);
-  for (const name of NOT_INHERITED) delete out[name];
+  for (const name of Object.keys(out)) if (NOT_INHERITED.includes(name) || OTHER_PROVIDER.test(name)) delete out[name];
   return { ...out, CLAUDE_CONFIG_DIR: config, ANTHROPIC_BASE_URL: url, ANTHROPIC_API_KEY: DUMMY_KEY };
 }
 
@@ -90,7 +97,7 @@ export function judge({ plain, lens }) {
   return { pass: reasons.length === 0, reasons, notes };
 }
 
-/** Starts the loopback API in a child process: `{ url, requests(), bodies(), stop() }`, once it listens. */
+/** Starts the loopback API in a child process: `{ url, calls(), stop() }`, each call `{ url, body }`, once it listens. */
 export function startLoopbackApi(root) {
   const log = path.join(root, 'requests.jsonl');
   fs.writeFileSync(log, '');
@@ -102,7 +109,7 @@ export function startLoopbackApi(root) {
     child.stdout.on('data', (chunk) => {
       said += chunk;
       const port = /listening (\d+)/.exec(said);
-      if (port) resolve({ url: `http://127.0.0.1:${port[1]}`, requests: () => lines().length, bodies: () => lines().map((line) => line.body), stop: () => child.kill() });
+      if (port) resolve({ url: `http://127.0.0.1:${port[1]}`, calls: lines, stop: () => child.kill() });
     });
   });
 }
@@ -121,11 +128,12 @@ export async function runLensHookProbe({ root, startApi = startLoopbackApi, run,
         if (cli === null) throw new Error('the Claude CLI was not found on the PATH');
         return cli(args, { cwd: options.cwd, input: options.input });
       });
-      const before = api.requests();
+      const before = api.calls().length;
       const ran = runner(armArgs(arm, path.join(home.work, 'prompt.md'), path.join(home.work, 'settings.json')), { cwd: home.work, env, input: 'probe' });
       if (run === undefined) await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-      const bodies = api.bodies().slice(before);
-      arms[arm] = { fired: fs.readdirSync(home.marks).sort(), marker: bodies.some((body) => body.includes(nonce)), requests: bodies.length, status: ran.status };
+      const calls = api.calls().slice(before);
+      const requests = calls.filter((call) => MESSAGES.test(call.url)).length;
+      arms[arm] = { fired: fs.readdirSync(home.marks).sort(), marker: calls.some((call) => call.body.includes(nonce)), requests, status: ran.status };
     }
   } finally {
     api.stop();
