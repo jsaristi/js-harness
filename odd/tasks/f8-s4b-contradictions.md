@@ -305,3 +305,10 @@ rerun asked through the lead.
   said "git did not answer" or "cannot be split"; the range's error now carries its step, "use git 2.40 or later".
   Both halves and `check`: 591 of 593, 2 skipped, 0 failed. The lenses over T7 (`a1d6300..21fc735`): reliability 0,
   readability 1, dead imports of `commandStep` and `FIX_TESTS` in `check.mjs`, removed in T6's commit.
+- L13 (2026-11-08, reviews of T7 and T6): Codex over T7 alone (`a1d6300..21fc735`, with that commit checked out so
+  the push of PR 794 is covered) in 2 parts: correct, no findings, 279,824 input tokens. The lenses over T6
+  (`21fc735..0ba9b8b`): readability 0, and its earlier finding confirmed fixed; reliability 1 WARNING, taken.
+  `reviewNext` printed the rerun without the flags of the command refused, so after a skip whose record failed to
+  write it named a command that runs a review. `rerunFlags` in `bin/lib/next-step.mjs` now repeats them, except
+  the ones the rerun binds or gives again. Its unit test was red (no export) and is now green, and a codex-review
+  test holds the skip's rerun. Both halves: 333 of 335, 2 skipped, 0 failed.

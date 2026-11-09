@@ -193,7 +193,7 @@ import { ruleValue } from './lib/rules.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { harnessHome } from './lib/home.mjs';
-import { atRefusal, commandStep, firstStep, nextLine, noStep, reviewCommand } from './lib/next-step.mjs';
+import { atRefusal, commandStep, firstStep, nextLine, noStep, rerunFlags, reviewCommand } from './lib/next-step.mjs';
 
 // The model and the effort of a review. Sebastián fixed both on 2026-10-08
 // (odd/tasks/codex-review-cost.md): the one model a review runs on, at `high`, in place of the `medium` he
@@ -1205,8 +1205,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     return 1;
   }
   const commitOf = (rev) => git(spawn, root, ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`]);
-  // The command that runs this review again, bound to the base as asked and the head it is run at (as hashes).
-  const reviewNext = (flags) => commandStep(reviewCommand('codex-review', { base: requested, at: head, flags }));
+  // The command refused, run again: its flags kept (a skip stays a skip), `flags` in place of the same ones, bound to hashes.
+  const reviewNext = (flags = []) => commandStep(reviewCommand('codex-review', { base: requested, at: head, flags: [...rerunFlags(argv, { valued: KNOWN.valued, dropped: ['--base', '--at', ...flags.map((flag) => flag.split(' ')[0])] }), ...flags] }));
   const staleAt = args.at === undefined ? null : atRefusal({ at: args.at, atCommit: commitOf(args.at), head: commitOf('HEAD') });
   if (staleAt) {
     error(staleAt);

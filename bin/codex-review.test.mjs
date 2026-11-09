@@ -3416,6 +3416,16 @@ function blockRecord(root) {
   fs.mkdirSync(codexReviewsPath(root), { recursive: true });
 }
 
+test('a skip whose record cannot be written prints, as its next step, the skip again: never a command that runs a review', async () => {
+  const { root, base, head } = makeRepo();
+  blockRecord(root);
+  const result = await run(['--base', 'HEAD~1', '--unavailable', 'no quota today', '--cwd', root], fakeCodex(''));
+  assert.equal(result.code, 1);
+  assert.match(result.err, /Could not write the record: /);
+  const next = result.err.split('\n').at(-1);
+  assert.ok(next.startsWith(`next: js-harness codex-review --base ${base.slice(0, 12)} --at ${head.slice(0, 12)} --unavailable "no quota today" --cwd `), next);
+});
+
 test('a record that cannot be written after a reviewed run: exit 1, the error says so, and the run log holds the one reviewed line', async () => {
   const { root, base, head } = makeRepo();
   blockRecord(root);
@@ -5353,7 +5363,12 @@ test('a run of more than six parts is refused before anything is started, with i
     const result = await run(['--base', 'HEAD~1', ...SEVEN, ...flags, ...nothing.home, '--cwd', root], nothing.deps);
     assert.equal(result.code, 1, which);
     assert.deepEqual(result.out.split('\n'), plan, `${which}: the plan is shown`);
-    assert.equal(result.err, `The review of ${short} was not started and nothing was recorded: its 7 parts are more than ${bound}.\n${HOW}\nnext: js-harness codex-review --base ${base.slice(0, 12)} --at ${head.slice(0, 12)} --max-parts 7`, which);
+    // The rerun is the command refused, bound and with the count it needs: its other flags stay, its own count goes.
+    const [said, next] = [result.err.split('\n').slice(0, -1).join('\n'), result.err.split('\n').at(-1)];
+    assert.equal(said, `The review of ${short} was not started and nothing was recorded: its 7 parts are more than ${bound}.\n${HOW}`, which);
+    assert.ok(next.startsWith(`next: js-harness codex-review --base ${base.slice(0, 12)} --at ${head.slice(0, 12)} --part-lines 2 `), `${which}: ${next}`);
+    assert.ok(next.endsWith(' --max-parts 7') && !/--max-parts [16] /.test(next) && !next.includes('HEAD~1'), `${which}: ${next}`);
+    for (const flag of flags.filter((word) => word.startsWith('--') && word !== '--max-parts')) assert.ok(next.includes(` ${flag}`), `${which}: ${next}`);
     nothing.untouched(which);
   }
   // `--plan` never refuses: it says what the run would need, or nothing when the run names its count.

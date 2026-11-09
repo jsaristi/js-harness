@@ -50,6 +50,21 @@ export function reviewCommand(tool, { base, at, lenses = null, flags = [] }) {
   return [`js-harness ${tool} --base ${shown(base)} --at ${shown(at)}${lensPart}`, ...flags].join(' ');
 }
 
+/** The flags of `argv` that a rerun of the refused command repeats, so the command printed is the one refused: every
+ * flag but the `dropped` ones, which the caller binds or gives again; `valued` names the flags that take a value, and
+ * a value a shell would split, or would read as more than a word, is quoted. */
+export function rerunFlags(argv, { valued, dropped }) {
+  const flags = [];
+  for (let at = 0; at < argv.length; at++) {
+    const flag = argv[at];
+    const value = valued.includes(flag) ? argv[++at] : undefined;
+    if (dropped.includes(flag)) continue;
+    if (value === undefined) flags.push(flag);
+    else flags.push(`${flag} ${/^[\w./:@^=+,-]+$/.test(value) ? value : `"${value.replace(/"/g, '\\"')}"`}`);
+  }
+  return flags;
+}
+
 /** Why a review command given `--at <at>` is refused, or `null` when it may start: `atCommit` is the commit `at` names
  * (`null` when it names none) and `head` the commit `HEAD` is now (`null` on an unborn branch, or when git did not
  * answer). */
