@@ -184,18 +184,6 @@ change of a rule whose owner is `sebastian`.
   model (keep each request's path); P2 a marker path with an apostrophe breaks the planted hook's JavaScript: encode it
   with `JSON.stringify`.
 
-## Next step
-Branch `f8-s5-2-lens-probe` (worktree `D:\js-harness\.claude\worktrees\f8-s5-rules`), stacked on PR 797
-(`rule/f8-s5-memory-record`). 1) Fix L7's three findings in `evals/lens-hook-probe.mjs`, tests first, rerun the probe,
-commit; `codex-review --base eb39a858` and lenses over the fix; push, `gh pr create --base rule/f8-s5-memory-record`,
-`notify --kind ready --pr <n>`. 2) PR 3 `f8-s5-3-rule-pass` on top: in `bin/lib/rules-coverage-data.mjs` close every
-`owed` control of a live rule (48): prose rules as `protocol` (path and first phrase of the declaration; `line` for
-`bin/lib/project.mjs`), value rules as `check` with a break `('<id>', '<unit>')` → `+ 1` / `+ 'x'` in a reader and its
-sibling test, proved with `rules coverage --prove` (it works in a scratch copy); then `rules coverage` prints the
-three classes and refuses a live rule left owed; `failures` prints its controls by the same three classes (check;
-line, protocol = prose; measured = retired; owed named apart); the two "control lost" entries
-(`failure-cause-dropped`, `uninstall-took-user-entry`) repaired or reported. 3) T8 docs, summary, `closed` notice;
-the incident rerun (~$13) asked through the lead.
 - L8 (2026-11-09, L7's three fixed, tests first): red 3 of 8, then 8 of 8. `probeEnv` drops every `ANTHROPIC_*`,
   `CLAUDE_CODE_USE_*`, `AWS_*`, `CLOUD_ML_*`, `GOOGLE_*` and `VERTEX_*` name before it sets its own three; an arm counts
   only `/v1/messages` requests; the planted hook is a script beside the marks run by its quoted path, proved from a
@@ -203,3 +191,16 @@ the incident rerun (~$13) asked through the lead.
   `CLAUDE.md`; lens fired none, sent none; 6 Messages requests each; PASS. Next: review `eb39a858..HEAD`.
 - L9 (2026-11-09, the review of L8's fix): Codex over `949622f..c32a3fd`, a recheck: correct (0.96), 3 of 3 fixed;
   lenses reliability and risk over `eb39a85..c32a3fd`: 0 findings each.
+- L10 (2026-11-09): PR 798 opened for the probe, base `rule/f8-s5-memory-record`; the host compacted the
+  session after it, and it resumed from this document.
+
+## Next step
+PR 797 (`rule/f8-s5-memory-record`) and PR 798 (`f8-s5-2-lens-probe`, stacked on it) are open and reviewed. 1) PR 3
+`f8-s5-3-rule-pass` on top of 798: in `bin/lib/rules-coverage-data.mjs` close every `owed` control of a live rule
+(48): prose rules as `protocol` (path and first phrase of the declaration; `line` for `bin/lib/project.mjs`), value
+rules as `check` with a break `('<id>', '<unit>')` to `+ 1` / `+ 'x'` in a reader and its sibling test, proved with
+`rules coverage --prove` (it works in a scratch copy); then `rules coverage` prints the three classes and refuses a
+live rule left owed; `failures` prints its controls by the same three classes (check; line, protocol = prose;
+measured = retired; owed named apart); the two "control lost" entries (`failure-cause-dropped`,
+`uninstall-took-user-entry`) repaired or reported. 2) T8 docs, summary, `closed` notice; the incident rerun (~$13)
+asked through the lead.
