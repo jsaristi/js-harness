@@ -106,6 +106,19 @@ test('the report counts each class of the rules\' obligations, and the retired r
   assert.match(classes ?? '', /^ {2}classes: check \d+, prose \d+, retired \d+(, measured \d+)?(, owed \d+)? \(each obligation of a live rule; the retired rules counted\)$/, plain.all);
 });
 
+// The reliability lens on a2d55b1..2717f7c: the owed obligations were listed in the report and printed nowhere.
+test('a live rule whose control is owed again is named in a note of the plain report, which exits 0', async () => {
+  await inCopy(async (root) => {
+    edit(root, 'bin/lib/rules-coverage-data.mjs', (text) => {
+      const { register } = readCoverageText(text);
+      return writeCoverage({ ...register, controls: { ...register.controls, 'announce-finished': { level: 'owed', since: register.baseline } } });
+    });
+    const plain = await rules(['coverage'], root);
+    assert.equal(plain.code, 0, plain.all);
+    assert.ok(plain.out.includes('note: rule "announce-finished": its control is still owed: make it a check, prose that stays (a line or a protocol), or retire the rule with js-harness rules change'), plain.all);
+  });
+});
+
 test('a directive that names its rule is tied and passes; one listed as context passes with its reason printed', async () => {
   await inCopy(async (root) => {
     edit(root, 'CLAUDE.md', (text) => `${text}\nAsk one question at a time, as \`rule:questions-one-place\` says.\n`);

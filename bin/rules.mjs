@@ -495,7 +495,7 @@ function coverageForm(parsed, root, { run, stdout, stderr }) {
   const word = parsed.strict ? 'strict' : 'coverage';
   stdout(failing.length === 0 ? `PASS  ${word}  no gap opened since the baseline${parsed.strict ? ', and the register says what the texts hold' : ''}` : `FAIL  ${word}  ${failing.length} ${failing.length === 1 ? 'finding' : 'findings'}`);
   for (const line of failing) stdout(`      ${line}`);
-  if (!parsed.strict) for (const line of report.stale) stdout(`note: ${line}`);
+  if (!parsed.strict) for (const line of [...report.stale, ...report.unclassified]) stdout(`note: ${line}`);
   return parsed.strict && failing.length > 0 ? 1 : 0;
 }
 
