@@ -411,3 +411,23 @@ test('a lens run hands the CLI a settings file that sets its language to English
   assert.deepEqual(calls[0].settings, { language: 'English' });
   assert.equal(fs.existsSync(calls[0].file), false);
 });
+
+// A printed command is bound to the head it was computed at (odd/tasks/f8-s4b-contradictions.md, spec 4): once HEAD
+// moved it is refused before a lens runs, and at the same head it runs as it would without the flag.
+test('--at runs at the head it names and is refused, with no lens run, once HEAD moved', () => {
+  withoutAutoMaintenance(() => commit('a.mjs', 'export const a = 20;\n', 'a range no record covers'));
+  const at = git('rev-parse', 'HEAD');
+  const claude = fakeClaude(clean);
+  const same = run(['--base', 'HEAD~1', '--at', at.slice(0, 12), '--lenses', 'risk', '--reason', 'a constant'], { runLens: claude.runLens });
+  assert.equal(same.code, 0, same.err);
+  assert.equal(claude.calls.length, 1);
+  withoutAutoMaintenance(() => commit('a.mjs', 'export const a = 21;\n', 'one more commit'));
+  const moved = run(['--base', 'HEAD~1', '--at', at.slice(0, 12), '--lenses', 'risk', '--reason', 'a constant'], { runLens: claude.runLens });
+  assert.equal(moved.code, 1);
+  assert.equal(claude.calls.length, 1, 'no lens ran');
+  assert.match(moved.err, new RegExp(`computed at ${at.slice(0, 7)}, and HEAD is ${git('rev-parse', '--short=7', 'HEAD')} now`));
+  assert.match(moved.err.split('\n').at(-1), /^next: run again what printed this command/);
+  const nowhere = run(['--base', 'HEAD~1', '--at', 'f'.repeat(40), '--lenses', 'risk', '--reason', 'a constant'], { runLens: claude.runLens });
+  assert.equal(nowhere.code, 1);
+  assert.match(nowhere.err, /does not name a commit/);
+});

@@ -168,7 +168,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { allowanceLine, readProjectRules, reviewAllowance } from './lib/codex-review-allowance.mjs';
-import { findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer } from './lib/codex-review-answer.mjs';
+import { byPlace, findingCounts, findingLine, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer, verdictLine } from './lib/codex-review-answer.mjs';
 import { baseLeftOut, MARKS_UNREAD, mergeStart, notReviews, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { PART_MAX_CHANGED_LINES, PART_MAX_FILES, RENAMES, reviewParts } from './lib/codex-review-parts.mjs';
@@ -193,6 +193,7 @@ import { ruleValue } from './lib/rules.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { atRefusal } from './lib/next-step.mjs';
 
 // The model and the effort of a review. Sebastián fixed both on 2026-10-08
 // (odd/tasks/codex-review-cost.md): the one model a review runs on, at `high`, in place of the `medium` he
@@ -222,7 +223,7 @@ export const CODEX_WEEKLY_FLOOR = ruleValue('codex-weekly-floor', 'percent of th
 // reviews less than it was asked, or nothing, must not come as a surprise, and `--again` is the way round it.
 // `--session` is not in the usage: there is one session, so there is nothing to choose (see `SESSION`).
 export const USAGE =
-  'Usage: js-harness codex-review --base <rev> [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--request <text>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
+  'Usage: js-harness codex-review --base <rev> [--at <commit>] [--plan] [--again] [--prompt <codex|own>] [--doc <feature document>] [--request <text>] [--part-lines <n>] [--max-parts <n>] [--fresh] [--keep-home] ' +
   '[--unavailable <reason>] [--cwd <path>] [--home <path>]\n' +
   'Codex gets the diff, the repository to read and the project\'s AGENTS.md, and none of your Codex configuration; ' +
   `the review runs on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, which the command fixes.\n` +
@@ -235,7 +236,8 @@ export const USAGE =
   '`--part-lines <n>` is how many changed lines a part of a large range holds at most, in place of the default.\n' +
   '`--fresh` reviews every part of a range again, where a run otherwise keeps the parts that passed in an earlier run of it.\n' +
   '`--keep-home` leaves the Codex home of the run in place after it.\n' +
-  'A merge below HEAD, after code commits that each have a record, is cut in two turns where two cost less than one review: the merge, then the commits after it.';
+  'A merge below HEAD, after code commits that each have a record, is cut in two turns where two cost less than one review: the merge, then the commits after it.\n' +
+  '`--at <commit>` names the head a printed command was computed at (check --push and the merge door print it): the run is refused, not started, when HEAD is another commit.';
 
 // The one session a review runs in, as the run log names it (`session`): a line written while there were
 // two says `current` or `lean`, and a new one only ever says this.
@@ -265,7 +267,7 @@ function requireValue(argv, i, flag) {
 }
 
 const KNOWN = {
-  valued: ['--base', '--unavailable', '--home', '--session', '--prompt', '--doc', '--request', '--part-lines', '--max-parts', '--cwd'],
+  valued: ['--base', '--at', '--unavailable', '--home', '--session', '--prompt', '--doc', '--request', '--part-lines', '--max-parts', '--cwd'],
   bare: ['--keep-home', '--plan', '--again', '--fresh'],
 };
 
@@ -323,7 +325,7 @@ function parseArgs(argv) {
   const again = argv.includes('--again');
   // The parts that passed in earlier runs of the range are asked again, not taken from the run log.
   const fresh = argv.includes('--fresh');
-  return { base, unavailable, home, keepHome, prompt, doc, request, partLines, maxParts, plan, again, fresh, cwd: get('--cwd') ?? process.cwd() };
+  return { base, at: get('--at'), unavailable, home, keepHome, prompt, doc, request, partLines, maxParts, plan, again, fresh, cwd: get('--cwd') ?? process.cwd() };
 }
 
 const REVIEW_MAX_BUFFER = 64 * 1024 * 1024;
@@ -754,26 +756,6 @@ function spentLine(spent, items, durationMs) {
     `(${spoken(reasoningOutputTokens)} reasoning) in ${seconds} s over ${spoken(spent.requests)} request${spent.requests === 1 ? '' : 's'}: ${did}.`
   );
 }
-
-/** A text on one line: a title or an explanation the model wrapped must not break the line it is printed in. */
-const oneLine = (text) => text.replace(/\s+/g, ' ').trim();
-
-/** One finding of a review's answer (`normalizeAnswer`) as a line: `file:start-end severity title`, with
- * `file:start` for a single line and `-` for a finding the model gave no priority. The body of the finding
- * is not repeated here: it is in the review as Codex rendered it, which is passed through above. */
-function findingLine({ file, start, end, severity, title }) {
-  return `${file}:${start === end ? start : `${start}-${end}`} ${severity ?? '-'} ${oneLine(title)}`;
-}
-
-/** The verdict of a review's answer as a line, with its explanation. */
-function verdictLine({ verdict, explanation, confidence }) {
-  const sure = confidence === null ? '' : ` (confidence ${confidence})`;
-  return `Codex's verdict: the patch is ${verdict}${sure}. ${oneLine(explanation)}`.trimEnd();
-}
-
-/** Findings in the order a person reads a change in: by file, then by the line each starts at, then by the
- * one it ends at. The order of the code units, with no locale, so the same on every machine. */
-const byPlace = (a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.start - b.start || a.end - b.end);
 
 // What is said of an answer that was read from an attempt that does not stand, in place of its findings and
 // its verdict: "the patch is correct" above an error would be read as the review it is not. The counts of
@@ -1230,6 +1212,12 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   const head = asked ? asked.commits[0] : git(spawn, root, ['rev-parse', '--verify', 'HEAD^{commit}']);
   if (!head) {
     error(`Cannot resolve HEAD to a commit in ${root}.`);
+    return 1;
+  }
+  const commitOf = (rev) => git(spawn, root, ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`]);
+  const staleAt = args.at === undefined ? null : atRefusal({ at: args.at, atCommit: commitOf(args.at), head: commitOf('HEAD') });
+  if (staleAt) {
+    error(staleAt);
     return 1;
   }
   // A project that has the review off at the head it would review asks no record of it (the push row reads the

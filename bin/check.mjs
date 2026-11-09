@@ -11,6 +11,7 @@ import { fixedLoadRow, hookEntriesRow } from './lib/fixed-load.mjs';
 import { depthPassFor, discoverContracts, validateEntries } from './contract.mjs';
 import { checkFailures } from './failures.mjs';
 import { checkSpec } from './lib/spec.mjs';
+import { formatRow } from './lib/next-step.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { readRules, ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
@@ -72,7 +73,7 @@ export function checkBudget(cwd) {
  * Static only: it never runs a done-when command, which may be `npm run check` itself. */
 export function checkContracts(cwd) {
   const name = 'contracts';
-  const results = validateEntries(discoverContracts(cwd), { depthPass: depthPassFor(cwd) });
+  const results = validateEntries(discoverContracts(cwd, { documents: true }), { depthPass: depthPassFor(cwd) });
   if (results.length === 0) return { name, pass: true, detail: 'no contracts under odd/tasks' };
   const plural = (n) => `${n} contract${n === 1 ? '' : 's'}`;
   const failed = results.filter((result) => !result.ok);
@@ -1876,13 +1877,6 @@ export function passLine(rows) {
   const inner = rows.find((row) => row.inner === true);
   const counted = `${rows.length} row${rows.length === 1 ? '' : 's'} passed${info > 0 ? `, ${info} of them INFO` : ''}`;
   return `PASS  check  ${counted}; --verbose prints each${review ? `; review: ${review.detail}` : ''}${inner ? `; sensors: ${inner.detail}` : ''}`;
-}
-
-function formatRow(row) {
-  const status = row.info ? 'INFO' : row.pass ? 'PASS' : 'FAIL';
-  const lines = (row.lines ?? []).map((line) => `
-      ${line}`).join('');
-  return `${status}  ${row.name}  ${row.detail}${lines}`;
 }
 
 /** Runs all check rows and prints them; returns the process exit code. Exits 2, printing usage to

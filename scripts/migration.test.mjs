@@ -44,7 +44,7 @@ test(`a copy of a project ${RELEASE}'s init set up migrates keeping its edits, a
   t.after(() => fs.rmSync(layout.root, { recursive: true, force: true }));
   const gitConfig = path.join(layout.root, 'gitconfig');
   fs.mkdirSync(layout.home, { recursive: true });
-  fs.writeFileSync(gitConfig, '[user]\n\tname = scratch\n\temail = scratch@example.com\n[core]\n\tautocrlf = false\n');
+  fs.writeFileSync(gitConfig, '[user]\n\tname = scratch\n\temail = scratch@example.com\n[core]\n\tautocrlf = false\n[maintenance]\n\tauto = false\n[gc]\n\tauto = 0\n');
   const env = { ...rehearsalEnv(layout, process.env), GIT_CONFIG_GLOBAL: gitConfig, GIT_CONFIG_NOSYSTEM: '1' };
   const run = (command, args, cwd, extra = {}) => spawnSync(command, args, { cwd, env: { ...env, ...extra }, encoding: 'utf8', timeout: 120_000 });
   const ok = (result, what) => assert.equal(result.status, 0, `${what} exited ${result.status}:\n${result.stdout}${result.stderr}`);
@@ -71,7 +71,11 @@ test(`a copy of a project ${RELEASE}'s init set up migrates keeping its edits, a
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
   fs.writeFileSync(settingsFile, JSON.stringify({ ...settings, model: 'the-project-s-own' }, null, 2) + '\n');
   ok(run('git', ['add', '-A'], layout.project), 'git add');
-  ok(run('git', ['commit', '-q', '--no-verify', '-m', 'the project as it was'], layout.project), 'git commit');
+  // The commit starts no background maintenance: one that outlives it rewrites `.git/objects` while it is copied below
+  // (project-migrate-maintenance-flake in docs/FAILURES.md).
+  const commit = run('git', ['commit', '-q', '--no-verify', '-m', 'the project as it was'], layout.project, { GIT_TRACE: '1' });
+  ok(commit, 'git commit');
+  assert.doesNotMatch(commit.stderr, /maintenance run|gc --auto/, 'the fixture\'s commit started git maintenance');
 
   const copies = { left: path.join(layout.root, 'left'), migrated: path.join(layout.root, 'migrated') };
   for (const copy of Object.values(copies)) fs.cpSync(layout.project, copy, { recursive: true });

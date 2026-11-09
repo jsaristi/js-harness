@@ -1239,6 +1239,12 @@ with `cpSync` and set `GIT_CONFIG_GLOBAL` without maintenance off).
 - Class: machine
 - Seen: 2026-10-30 — GitHub Actions run 41116514048, the merge queue's candidate 579e918 of pull request 714 —
   `deepStrictEqual` at `bin/lib/project-migrate.test.mjs:398`; the only failing test of the run
+- Seen: 2026-11-08 — GitHub Actions run 42537343492, the pre-commit gate of S4b's slice 2a — `cpSync` at
+  `scripts/migration.test.mjs:77`, ENOENT on `.git/objects` of the fixture copied right after its commit; the 2026-10-30
+  search had looked for files that set `GIT_CONFIG_GLOBAL` and walk or copy a tree, and missed this one, which builds
+  its config inline; it now turns maintenance and gc off too, and its commit asserts under `GIT_TRACE` that none starts.
+  Searched again: the other test files that set `GIT_CONFIG_GLOBAL` and call `cpSync` without maintenance off
+  (`bin/lib/project-switches.test.mjs`, `evals/task-proof.test.mjs`) copy no repository they committed in
 - Control: check — bin/lib/project-migrate.test.mjs — "a commit in a project these tests make starts no git
   maintenance" — since 2026-10-30
 
