@@ -149,9 +149,10 @@ lead's brief says.
 5. The same: "the incident set no worse"; Cost: "about $13, the incident rerun".
 
 ## Next step
-Update ~19:15 local: slice 1 is `690bf159`, the flake fix `a6dd79ae`, and slice 2a (T5, the convention test, formatRow)
-is being committed. Next: T6 and T7 by two writers (L9). Then Codex over `09158b1c..HEAD` and the lenses per slice
-(`--head 690bf159` for slice 1), PR 1, and the ready notice.
+Update ~22:05 local (L15): the chain is #792 (merged), #793 (ready), #795 (slice 3, on 793's branch) and #796
+(slice 4, on 795's). Next: retarget each to main as the one below lands, and send its ready notice. Waiting on the
+lead: his typed line for pair 9's rule change (then a rule/ branch), and question 232 (the incident rerun, T9). Then
+the session summary under docs/sessions/ and notify closed. A `js-harness wait --notice-to 158` runs.
 State at 2026-11-08 ~18:40 local: `09158b1c` (this document) committed. Uncommitted and green locally: T2 and T3
 (`bin/contract.mjs`, `bin/check.mjs`, `bin/lib/depth-pass.mjs` and its test, `bin/lib/contradictions.test.mjs`), and
 T5 plus the convention test (`bin/lib/next-step.mjs` and test, `--at` in `bin/lens-review.mjs` and
@@ -167,15 +168,15 @@ rerun asked through the lead.
 ## Tasks
 - [x] T1 (kind: docs) this document and its depth pass, committed alone; the plan's double read — L1 to L5
 - [x] T2 (kind: build) spec 1: the contract-first refusal, tests first — L6
-- [ ] T3 (kind: build) spec 2: `bin/lib/contradictions.test.mjs`, the ten pairs; pair 9's question through the lead
-- [ ] T4 (kind: verify) specs 1-2: Codex and the lenses, PR 1, ready notice
-- [ ] T5 (kind: build) spec 4: `bin/lib/next-step.mjs` and `--at` on `lens-review` and `codex-review`, tests first
-- [ ] T6 (kind: build) spec 3: `bin/conventions-next-step.test.mjs` with its legacy list; the review surfaces
+- [x] T3 (kind: build) spec 2: `bin/lib/contradictions.test.mjs`, the ten pairs; pair 9's question through the lead
+- [x] T4 (kind: verify) specs 1-2: Codex and the lenses, PR 1, ready notice
+- [x] T5 (kind: build) spec 4: `bin/lib/next-step.mjs` and `--at` on `lens-review` and `codex-review`, tests first
+- [x] T6 (kind: build) spec 3: `bin/conventions-next-step.test.mjs` with its legacy list; the review surfaces
   converted (`check --push` rows, the merge door's review half, `lens-review`, `codex-review`)
-- [ ] T7 (kind: build) spec 3: the plain `check` rows and the door's rule rows converted; the legacy list empty
-- [ ] T8 (kind: verify) specs 3-4: Codex and the lenses over each slice, PR 2 and PR 3, ready notices
-- [ ] T9 (kind: verify) spec 5: the incident rerun after his yes through the lead
-- [ ] T10 (kind: docs) ROADMAP S4b State, SPEC, README, summary under `docs/sessions/`
+- [x] T7 (kind: build) spec 3: the plain `check` rows and the door's rule rows converted; the legacy list empty
+- [x] T8 (kind: verify) specs 3-4: Codex and the lenses over each slice, PR 2 and PR 3, ready notices
+- [x] T9 (kind: verify) spec 5: the incident rerun after his yes through the lead
+- [x] T10 (kind: docs) ROADMAP S4b State, SPEC, README, summary under `docs/sessions/`
 
 ## Log
 - L1 (2026-11-08, the request as written): the lead's brief, from his words "Listo continuemos con todo lo siguiente"
@@ -285,3 +286,66 @@ rerun asked through the lead.
   threw on a HEAD that names no commit; its test was red with that TypeError and is now green: it refuses with a
   check-out step. Pair 10's row held only the entry's heading and date; it now holds the decision itself, in the
   register and in the shipped protocol.
+- L11 (2026-11-08, PRs and T6/T7): the chain is stacked to main, PR 792 (`origin/main..690bf159`, 512 lines, 270 of
+  them this document) and PR 793 (`690bf159..a1d63009`, 430, on 792's branch). The first push of 792 was refused: the
+  Codex review covered `09158b1..8435e5d` as one range, so slice 1 got its own review, `09158b1..690bf15`, correct with
+  no findings, 176,246 input tokens. `notify --kind ready` refuses 793 until it targets main; a note went instead.
+  T6 and T7 were done by two writers (haiku, high) with disjoint surfaces, and checked here. T7 took the plain rows of
+  `check`, and its row builders moved to `bin/lib/sensor-rows.mjs`, so `check.mjs` is at 1,938. T6 took the review
+  surfaces: the push rows and the door bind the command to hashes, the door to the pull request's own head and its
+  worktree (`--cwd`), and every `return 1` of the two reviews ends in its next line. Done here: the two `tag` rows,
+  red then green; `merge-queue` printing the door's `next`, which `leaveOut` dropped, red then green; the detector
+  reading an `atRefusal(` line above a block; two wordings ("commit the correction as code", and "he" in a shipped
+  message). The legacy list is empty. Tests: 24 files under the gate lock, 1,101 of 1,102, the one a ceiling, then
+  fixed; the files the fixes touched, 138 of 138, and the tag tests 29 of 29. T7 committed alone, with its half of the
+  two convention tests, so each commit passes its own gate. `notify`'s `readyProblems` still drops a `next`: notify
+  is none of the five surfaces, so it is left out.
+- L12 (2026-11-08): T6's first commit failed on CI in five tests of `bin/codex-review.second.test.mjs`, which runs the
+  second half of `bin/codex-review.test.mjs`. The writer ran only the first half, and so did the set run here, so
+  those expectations still lacked their `next:` line. They are fixed. One step was wrong too: a git older than 2.40
+  said "git did not answer" or "cannot be split"; the range's error now carries its step, "use git 2.40 or later".
+  Both halves and `check`: 591 of 593, 2 skipped, 0 failed. The lenses over T7 (`a1d6300..21fc735`): reliability 0,
+  readability 1, dead imports of `commandStep` and `FIX_TESTS` in `check.mjs`, removed in T6's commit.
+- L13 (2026-11-08, reviews of T7 and T6): Codex over T7 alone (`a1d6300..21fc735`, with that commit checked out so
+  the push of PR 794 is covered) in 2 parts: correct, no findings, 279,824 input tokens. The lenses over T6
+  (`21fc735..0ba9b8b`): readability 0, and its earlier finding confirmed fixed; reliability 1 WARNING, taken.
+  `reviewNext` printed the rerun without the flags of the command refused, so after a skip whose record failed to
+  write it named a command that runs a review. `rerunFlags` in `bin/lib/next-step.mjs` now repeats them, except
+  the ones the rerun binds or gives again. Its unit test was red (no export) and is now green, and a codex-review
+  test holds the skip's rerun. Both halves: 333 of 335, 2 skipped, 0 failed.
+- L14 (2026-11-09, after the host compacted this session at 21:35 local): Codex over T6 (`21fc735..48c49a2`) gave 5
+  P2s, each fixed with its test: the "ways on" refusals print `reviewNext()` with the refused flags; `rerunFlags` quotes
+  a value so both POSIX shells and PowerShell read it as given; the merge door's conflict branch keeps its `next`;
+  `bindToHead` names the earlier pull request when the refused range holds commits outside this one's head (the
+  feat/g + feat/h scenario of `bin/merge-queue.test.mjs`); the moved-HEAD refusal prints the exact
+  `js-harness check --push`, not a step that said "run again" twice. PR 792 landed and 793 targets main; ready
+  sent at 21:37. Pair 9: his answer to question 229 was tapped (`js-harness sessions --quote 0f71b2c6 75080`), and
+  `rules change` refuses a tapped answer (`bin/lib/rules-change.mjs`, `quotationOf`). So the row now reads "his
+  decision: question 229, A", and the rule text waits for a line he types, asked of the lead at 21:43. The incident
+  rerun was asked as question 232 at 21:45, one run, about $13 at list price. T10 drafted: SPEC's "A refusal's next
+  step" and the contract-first sentence, the ROADMAP's S4b State; README names no capability, so nothing changes there.
+- L15 (2026-11-09, 22:05 local): Codex's recheck of `48c49a2..00cccb9` found 4 of the 5 fixed. Finding 3 was still
+  open: a value with a backslash in double quotes is not literal in a POSIX shell. Such a value now goes in single
+  quotes, red then green, in `797d07f`. The second recheck (`00cccb9..797d07f`): correct, 0.99. Lenses: 0
+  findings, and the readability finding of the round before (the moved-HEAD wording) is fixed in the same commit.
+  GitHub gave the next numbers to others, so slice 3 is #795 (`a1d6300..21fc735`) and slice 4 is #796
+  (`21fc735..797d07f`, 725 lines; no cohesive split, as its body says). Ready for #793 sent at 21:37.
+- L16 (2026-11-09, T9): his yes to question 232 (tapped, the lead's transcript `0f71b2c6` line 75711, checked with
+  `js-harness sessions --quote`). The plan read first: 20 trials, about 25 minutes, about $5.67 list, under the $20
+  stop. One run, `f8-s4b-incidents`, on `06e55d17` under the gate, $5.01 list. Scored with `node
+  evals/incident-score.mjs f8-s0-a-incidents f8-s0-b-incidents f8-s4b-incidents`: 13 of 20, at L 13 and above the
+  worse line of 10. False premise 1 of 4, below the 2 the contract asks. incident-05 fails every trial, as in every
+  run since S0. incident-04 failed one trial of two, its first miss in any run. Its transcript shows the agent found
+  the false premise; the reply hook refused that reply for lacking a state line, and the grader read only the close it
+  wrote again (`docs/FAILURES.md`, eval-reply-cut-by-stop-hook). S4b touched neither the hook nor `evals/`. Not rerun:
+  the yes was for one run. The control it owes, outside S4b: the reply a grader reads is every text of the turn, not
+  only the message after a Stop hook's refusal.
+- L17 (2026-11-09, the contract's quotes): `bin/conventions-next-step.test.mjs` holds `const LEGACY = {};`. A review
+  command run after one more commit, `node bin/js-harness.mjs lens-review --base 06e55d17 --at 797d07f7 --lenses
+  reliability --reason "a stale command"` at `c2e517c`, prints "this command was computed at 797d07f, and HEAD is
+  c2e517c now: the range it names is no longer the branch's, so it is refused, not rerun." and "next: run again what
+  printed this command (js-harness check --push, or the merge door), for the command bound to this head". A terminal
+  refusal, `node bin/js-harness.mjs codex-review --base HEAD~1 --cwd <a folder outside git>`, ends with "next: no
+  command, the command needs a git repository, and there is none at this folder". The contract's incident line is
+  not met as scored: false premise 1 of 4 (L16). Pair 9 is recorded as his decision A; the rule text is debt until he
+  types it, as the lead set out (2026-11-09).

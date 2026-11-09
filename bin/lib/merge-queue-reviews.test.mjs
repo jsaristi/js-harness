@@ -8,6 +8,7 @@ import { reviewEvidence } from './merge-queue-reviews.mjs';
 import { checkCodexReviews } from './codex-review-rows.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
 import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lens-reviews.mjs';
+import { firstStep } from './next-step.mjs';
 
 // The door's reading of a pull request's reviews, against a clone of a bare origin made here, with the Codex and lens
 // reviews on in main's harness.json and records written as the two commands write them. The queue's own runs of it,
@@ -65,6 +66,22 @@ test('a record whose head lies past the pull request covers it neither at its he
   const said = reviewEvidence(root, main, c);
   assert.equal(said.pass, false);
   assert.match(said.detail, /^1 of 1 code commit since origin\/main have no Codex review record/);
+  // No worktree has the pull request's head checked out, so the command cannot be run yet: the step is to check it out.
+  assert.equal(said.next.kind, 'step');
+  assert.match(said.next.text, new RegExp(`^check out the pull request's branch at ${c.slice(0, 7)}`));
+});
+
+test('the merge door\'s next step is the review command bound to the pull request\'s own head, run in the worktree that has that head checked out', () => {
+  const { root, main, c, d, record } = makeRepo();
+  record(main, d);
+  const elsewhere = path.join(path.dirname(root), 'pr-worktree');
+  git(root, 'worktree', 'add', '--quiet', '--detach', elsewhere, c);
+  const said = reviewEvidence(root, main, c);
+  assert.equal(said.pass, false);
+  // The command names the pull request's head, not the synthetic merge the door judged, and the path it runs in.
+  assert.equal(said.next.kind, 'command');
+  assert.match(said.next.text, new RegExp(`^js-harness codex-review --base ${c.slice(0, 7)}\\^ --at ${c.slice(0, 12)} --cwd ".*pr-worktree"$`));
+  assert.equal(git(root, 'worktree', 'remove', '--force', elsewhere), '');
 });
 
 test('a record of the pull request\'s own range passes the door, with the record named for its commit', () => {
@@ -143,6 +160,7 @@ test('a pull request that conflicts with main is refused, naming the files, and 
     pass: false,
     conflicted: ['c.txt'],
     detail: 'it does not merge onto main without a conflict (in c.txt), so its reviews cannot be read as the push of main reads them',
+    next: firstStep('settle the conflict with main in c.txt, by merging or rebasing the branch'),
   });
   assert.notEqual(main, moved);
 });

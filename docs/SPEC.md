@@ -487,7 +487,7 @@ check or an eval case ("After F8", directive coverage).
 ### The task contract
 
 **Problem:** The host's `/goal` stops when a small model judges a condition from the transcript, so a condition in prose is judged by opinion (`odd/tasks/task-contract.md`). One effort setting covered design and build tasks alike, and nothing applied or printed it (`odd/tasks/effort-by-task.md`).
-**Requirement:** A feature document opens with a contract whose done-when items are commands that exit 0; a contract with no command is rejected with the reason; one command runs them, one prints the `/goal` condition, and one prints each open task's effort and sub-agent models from the kind of work it names.
+**Requirement:** A feature document opens with a contract whose done-when items are commands that exit 0; a contract with no command is rejected with the reason; a feature document opened since contract-first came in (2026-11-08) without its contract is refused by `check`, its refusal naming `js-harness contract template` (`odd/tasks/f8-s4b-contradictions.md`); one command runs them, one prints the `/goal` condition, and one prints each open task's effort and sub-agent models from the kind of work it names.
 **Reason:** A feature's end is a set of commands that exit 0, not an opinion.
 **Proof:** `node --test bin/contract.test.mjs`, `node --test bin/lib/contract.test.mjs`
 **Discarded:** A contract as a second file beside the ODD document. A loop of the harness's own instead of the host's `/goal`.
@@ -510,6 +510,15 @@ check or an eval case ("After F8", directive coverage).
 **Proof:** `node --test bin/lens-review.test.mjs`, `node --test bin/lib/lens-candidate.test.mjs`, `node --test bin/lib/lens-result.test.mjs`, `node --test bin/lib/lens-reviews.test.mjs`
 **Discarded:** Installing the prompts as agents under `~/.claude/agents`: a second copy no runner reads. `--bare`: it reads only an API key, never his login. gentle-ai's refuter and judgment-day agents: the lens findings go to the session and Codex is the second opinion.
 **Today:** `bin/lens-review.mjs`, `bin/lib/lens-candidate.mjs`, `bin/lib/lens-prompts.mjs`, `bin/lib/lens-result.mjs`, `bin/lib/lens-reviews.mjs`, `js-harness lens-review`
+
+### A refusal's next step
+
+**Problem:** A refusal worded its own next step, so the model guessed the command; 4 printed review commands carried a `<rev>` placeholder or a branch label as their base, and none was bound to the head it was computed at, so a command copied after a commit reviewed a range that was no longer the branch's (`odd/tasks/f8-s4b-contradictions.md`, L2).
+**Requirement:** Every refusal of `check`, `check --push`, the merge door, `lens-review` and `codex-review` ends with one line in one of three forms: the exact command; the step to take first, after which the refusal that follows prints the command; or "no command" with why. A printed review command names its base and its head as hashes (`--at`), and both reviews refuse it once `HEAD` is another commit; the merge door binds it to the pull request's own head and worktree, or names the earlier pull request whose commits its range holds. A conventions test holds the five surfaces to it, with a legacy list at 0.
+**Reason:** The tool hands the next step as data, bound to the state it was issued for, as git's `push --force-with-lease=<ref>:<expect>` refuses a ref that moved.
+**Proof:** `node --test bin/lib/next-step.test.mjs`, `node --test bin/conventions-next-step.test.mjs`
+**Discarded:** A command bound to a branch name: a branch moves. Rerunning a stale command: what it names is no longer the branch.
+**Today:** `bin/lib/next-step.mjs`, `bin/lib/merge-queue-reviews.mjs`, `bin/conventions-next-step.test.mjs`
 
 ### The Codex meter
 

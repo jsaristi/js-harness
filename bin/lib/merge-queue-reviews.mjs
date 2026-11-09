@@ -7,6 +7,37 @@ import { spawnSync } from 'node:child_process';
 import { COMMIT_FORMAT, gitOut, loggedCommits, reviewCoverage } from './codex-review-coverage.mjs';
 import { checkCodexReviews, codexReviewOffAt } from './codex-review-rows.mjs';
 import { lensDoor } from './lens-review-rows.mjs';
+import { commandStep, firstStep, noStep, reviewCommand } from './next-step.mjs';
+
+/** The folder of the worktree that has the commit `head` checked out, from `git worktree list --porcelain`, or `null`
+ * when none does (or git does not answer). */
+function worktreeAt(cwd, head) {
+  const listed = gitOut(spawnSync, cwd, ['worktree', 'list', '--porcelain']);
+  if (listed === null) return null;
+  for (const block of listed.split('\n\n')) {
+    const lines = block.split('\n');
+    const folder = lines.find((line) => line.startsWith('worktree '))?.slice('worktree '.length);
+    if (folder && lines.includes(`HEAD ${head}`)) return folder;
+  }
+  return null;
+}
+
+/** The merge door's next step for a refusal (odd/tasks/f8-s4b-contradictions.md, spec 3): a refusal that names a review
+ * (`review`, its tool and base) is bound to the pull request's own head, `head`, not to the synthetic merge the door judged,
+ * and printed to run in the worktree that has that head checked out (`--cwd`); where none does, the step is to check the
+ * branch out first. Every other refusal keeps the step its row gave it. */
+function bindToHead(cwd, head, refusal, tip) {
+  if (!refusal.review) return refusal;
+  // Commits of the refused range that are not the pull request's own belong to an earlier one in the candidate: a
+  // command bound to this head cannot cover them, so the step is that earlier pull request first.
+  const others = gitOut(spawnSync, cwd, ['rev-list', '--no-merges', `${refusal.review.base}..${tip}`, `^${head}`])?.split('\n').filter(Boolean) ?? [];
+  if (others.length) return { ...refusal, next: firstStep(`review or land first the earlier pull request that holds ${others.map((id) => id.slice(0, 7)).join(', ')}, which this one's range does not reach`) };
+  const tree = worktreeAt(cwd, head);
+  const next = tree === null
+    ? firstStep(`check out the pull request's branch at ${head.slice(0, 7)} in a worktree`)
+    : commandStep(`${reviewCommand(refusal.review.tool, { base: refusal.review.base, at: head })} --cwd "${tree}"`);
+  return { ...refusal, next };
+}
 
 /** The commits of `main..head` read in `cwd` that change a file that is not Markdown, newest first
  * (`{ id, shortId, parentCount, subject }`): the code commits of a project whose Codex review is off. A merge changes
@@ -37,10 +68,16 @@ function asMerged(cwd, onto, head, where) {
   const merged = spawnSync('git', ['merge-tree', '--write-tree', '--no-messages', '--name-only', onto, head], { cwd, encoding: 'utf8', windowsHide: true });
   const [tree = '', ...conflicted] = String(merged.stdout ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
   // Exit 1 is a conflict, after the tree the files it is in; that tree is no commit the push would check.
-  if (merged.status === 1 && !merged.error) return { conflicted, error: `it does not merge onto ${where} without a conflict${conflicted.length ? ` (in ${conflicted.join(', ')})` : ''}, so its reviews cannot be read as the push of main reads them` };
+  if (merged.status === 1 && !merged.error) {
+    return {
+      conflicted,
+      error: `it does not merge onto ${where} without a conflict${conflicted.length ? ` (in ${conflicted.join(', ')})` : ''}, so its reviews cannot be read as the push of main reads them`,
+      next: firstStep(`settle the conflict with ${where} in ${conflicted.join(', ')}, by merging or rebasing the branch`),
+    };
+  }
   const identity = ['-c', 'user.name=js-harness merge-queue', '-c', 'user.email=merge-queue@js-harness.invalid'];
   const tip = !merged.error && merged.status === 0 && /^[0-9a-f]{40,64}$/.test(tree) ? gitOut(spawnSync, cwd, [...identity, 'commit-tree', '--no-gpg-sign', '-p', onto, '-p', head, '-m', 'merge-queue: the merge the push of main checks', tree]) : null;
-  return tip ? { tip } : { error: `git could not merge it onto ${where} to read its reviews as the push of main reads them` };
+  return tip ? { tip } : { error: `git could not merge it onto ${where} to read its reviews as the push of main reads them`, next: noStep(`git did not make the merge onto ${where}, so the reviews cannot be read as the push of main reads them`) };
 }
 
 /** Whether the pull request at `head` is ready by its reviews, read in `cwd` against `main` (odd/tasks/rule-hierarchy.md,
@@ -57,17 +94,17 @@ export function reviewEvidence(cwd, main, head, onto = main) {
   const alone = onto === main ? null : reviewEvidence(cwd, main, head);
   if (alone && !alone.pass) return alone;
   const merged = asMerged(cwd, onto, head, onto === main ? 'main' : 'the candidate so far');
-  if (merged.error) return { pass: false, detail: merged.error, ...(merged.conflicted && { conflicted: merged.conflicted }) };
+  if (merged.error) return { pass: false, detail: merged.error, next: merged.next, ...(merged.conflicted && { conflicted: merged.conflicted }) };
   const { tip } = merged;
   const codex = checkCodexReviews(cwd, tip);
   const refused = codex.pass ? lensDoor(cwd, tip) : codex;
-  if (refused) return refused;
+  if (refused) return bindToHead(cwd, head, refused, tip);
   const off = codexReviewOffAt(cwd, tip);
   const coverage = off ? null : reviewCoverage(cwd, { from: main, tip });
   // The commits the lines name are the pull request's: the merges made here hold nothing anybody wrote, and are never pushed.
   const own = off || coverage.unknown ? null : gitOut(spawnSync, cwd, ['rev-list', `${onto}..${head}`])?.split('\n');
   const codeCommits = off ? markdownlessCommits(cwd, onto, head) : own ? coverage.codeCommits.filter((commit) => own.includes(commit.id)) : null;
-  if (codeCommits === null) return { pass: false, detail: 'its code commits could not be read' };
+  if (codeCommits === null) return { pass: false, detail: 'its code commits could not be read', next: noStep(`git did not list the code commits of ${head.slice(0, 7)}, so its reviews cannot be read`) };
   const lines = codeCommits.map((commit) => {
     const record = coverage?.covers.find(({ covered }) => covered.has(commit.id))?.rec;
     const codexSaid = off ? 'the Codex review is off'

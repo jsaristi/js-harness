@@ -270,6 +270,19 @@ export function verdictLine({ verdict, explanation, confidence }) {
   return `Codex's verdict: the patch is ${verdict}${sure}. ${oneLine(explanation)}`.trimEnd();
 }
 
+// How many errors of an answer off its schema are named in the reason; the rest are counted.
+const ANSWER_ERRORS_SHOWN = 3;
+
+/** Why the answer of a lean review could not be read as data (a `rolloutAnswer` that is not `ok`), as the
+ * run log and the error say it. */
+export function answerFailure({ reason, errors = [] }) {
+  if (reason === 'no-review-session') return 'its Codex home holds no session of the review sub-agent, so there is no answer to read';
+  if (reason === 'no-answer') return 'the session of the review sub-agent holds no answer';
+  if (reason === 'not-json') return 'the answer of the review is not JSON';
+  const more = errors.length > ANSWER_ERRORS_SHOWN ? `; and ${errors.length - ANSWER_ERRORS_SHOWN} more` : '';
+  return `the answer of the review is off its schema (${REVIEW_ANSWER_SCHEMA_VERSION}): ${errors.slice(0, ANSWER_ERRORS_SHOWN).join('; ')}${more}`;
+}
+
 /** Findings in the order a person reads a change in: by file, then by the line each starts at, then by the
  * one it ends at. The order of the code units, with no locale, so the same on every machine. */
 export const byPlace = (a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.start - b.start || a.end - b.end);

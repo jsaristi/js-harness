@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { checkLensReviews, checkReviewDebt, lensDoor, owedSkipLines } from './lens-review-rows.mjs';
+import { commandStep } from './next-step.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
 import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lens-reviews.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, withSubjectHash } from './codex-reviews.mjs';
@@ -51,11 +52,29 @@ beforeEach(() => {
 });
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-test('a code commit with no lens record is refused, with the command that makes one', () => {
+test('a code commit with no lens record is refused, with the command that makes one, bound to the head it was computed at', () => {
   const said = row();
   assert.equal(said.pass, false);
   assert.match(said.detail, /1 of 1 code commit since origin\/main have no complete Claude lens record/);
-  assert.match(said.lines.join('\n'), /feat: two[\s\S]*js-harness lens-review --base \w+\^ --lenses/);
+  assert.match(said.lines.join('\n'), /feat: two/);
+  assert.ok(!said.lines.join('\n').includes('make the record with'), said.lines.join('\n'));
+  assert.deepEqual(said.next, commandStep(`js-harness lens-review --base ${head.slice(0, 7)}^ --at ${head.slice(0, 12)} --lenses <lens,...> --reason "<what it touched and how>"`));
+});
+
+test('a lens row that cannot read the default branch names the step that sets it, and the merge door refuses with its next step', () => {
+  git('remote', 'remove', 'origin');
+  git('remote', 'add', 'origin', 'https://example.invalid/r.git');
+  const said = row();
+  assert.equal(said.pass, false);
+  assert.equal(said.next.kind, 'step');
+  assert.equal(said.next.text, 'set the default branch of origin: git remote set-head origin --auto');
+  assert.equal(lensDoor(dir, 'HEAD').next.kind, 'step');
+});
+
+test('the merge door names the lens review of its range as the review that pays it, bound to the range base', () => {
+  const door = lensDoor(dir, 'HEAD');
+  assert.equal(door.pass, false);
+  assert.deepEqual(door.review, { tool: 'lens-review', base: `${head.slice(0, 7)}^` });
 });
 
 test('a complete record of the range covers it; an amend after it leaves the range uncovered again', () => {

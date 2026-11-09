@@ -12,6 +12,7 @@ import {
 } from './codex-review.mjs';
 import { NO_TEST_EXIT, NO_TEST_LINE, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { ESCALATION_MODEL } from './lib/codex-review-recheck.mjs';
+import { commandStep } from './lib/next-step.mjs';
 import { checkCodexReviewDebt, checkCodexReviews } from './check.mjs';
 import { createLeanHome, leanHomesDir } from './lib/codex-review-home.mjs';
 import { mergeStart, rangeDiff } from './lib/codex-review-coverage.mjs';
@@ -928,7 +929,7 @@ test('at or under the floor of the weekly limit nothing is started or recorded, 
     assert.equal(result.code, 1, result.out);
     assert.match(result.err, /at or under its floor of \d+(\.\d+)?% \(rule:codex-weekly-floor\)/);
     assert.match(result.err, /whether to reset the weekly limit/);
-    assert.match(result.err, /--base HEAD~1 --unavailable "weekly limit at its floor/);
+    assert.match(result.err, /--base [0-9a-f]{12} --at [0-9a-f]{12} --unavailable "weekly limit at its floor/);
     assert.equal(wrote(root), false);
     assert.equal(fake.calls.length, 0, 'the review is not spawned');
   }
@@ -1106,6 +1107,22 @@ test('uncommitted changes to tracked files refuse the review: nothing written, C
   assert.equal(fake.calls.length, 0);
 });
 
+test('a refusal ends its output with its next step as the last line: the step to take first, a command, or none with why', async () => {
+  const { root } = makeRepo();
+  const unnamed = await run(['--base', 'no-such-rev', '--cwd', root], fakeCodex(''));
+  assert.equal(unnamed.code, 1);
+  assert.equal(unnamed.err.split('\n').at(-1), 'next: give --base a commit this repository holds, by its hash; then run again what printed this, for the command at the new head');
+  const dirty = makeRepo();
+  fs.writeFileSync(path.join(dirty.root, 'f.txt'), 'edited but not committed', 'utf8');
+  const uncommitted = await run(['--base', 'HEAD~1', '--cwd', dirty.root], fakeCodex(reviewed(dirty.root, dirty.base)));
+  assert.equal(uncommitted.code, 1);
+  assert.equal(uncommitted.err.split('\n').at(-1), 'next: commit the tracked changes, so that the range is the committed one; then run again what printed this, for the command at the new head');
+  const outside = tmp('js-harness-codex-nongit-');
+  const nowhere = await run(['--base', 'HEAD~1', '--cwd', outside], fakeCodex(''));
+  assert.equal(nowhere.code, 1);
+  assert.equal(nowhere.err.split('\n').at(-1), 'next: no command, the command needs a git repository, and there is none at this folder');
+});
+
 test('staged but uncommitted changes refuse the review too', async () => {
   const { root, base } = makeRepo();
   const fake = fakeCodex(reviewed(root, base));
@@ -1132,6 +1149,8 @@ test('a commit made while Codex reviews leaves no record: the range it names is 
   assert.equal(result.code, 1, result.err);
   assert.match(result.err, /^HEAD moved from [0-9a-f]{7} to [0-9a-f]{7} while Codex was reviewing/m);
   assert.ok(result.err.includes(`from ${head.slice(0, 7)} to ${moved.slice(0, 7)} while`), result.err);
+  // The command it ran is bound to the head that moved away: the step is to ask for the command at the new head.
+  assert.equal(result.err.trimEnd().split('\n').at(-1), 'next: js-harness check --push', result.err);
   assert.equal(wrote(root), false);
 });
 
@@ -1472,7 +1491,7 @@ test('`--session lean` is still read and means what no flag means: the same argv
 // lean session cannot run does instead. The usage follows it, as it follows every flag given wrong.
 const SESSION_REMOVED =
   `\`--session current\` was removed on 2026-10-08: a review runs only on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, and the model that session ran on could not be verified. ` +
-  'On a machine where the lean session cannot run, record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
+  'On a machine where the lean session cannot run, record an explicit skip with `js-harness codex-review --base <hash> --at <hash> --unavailable <reason>`.';
 
 test('--session current is a usage error since the session was removed: exit 2 with the reason and what to do instead, and nothing is probed, launched, made, logged or recorded', async () => {
   const doc = featureDoc();
@@ -1987,7 +2006,8 @@ test('a lean home that cannot be made launches nothing: exit 1 with the reason, 
 // The last line of the refusal when the home of the review cannot be made. There is no other session to
 // send a person to since 2026-10-08, so the way out of a machine the review cannot run on is the one the
 // command has for a review that could not be made at all: the explicit skip, in the words it uses elsewhere.
-const WAY_OUT = 'The way out, on a machine where the lean session cannot run: record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
+// The skip is the last line as a command bound to the base and the head it was asked of, as hashes (`reviewCommand`).
+const SKIP_NEXT = /^next: js-harness codex-review --base [0-9a-f]{12} --at [0-9a-f]{12} --unavailable "<reason>"$/;
 
 test('a home that cannot be made is a refusal whose way out is to record the skip, whatever the flags: nothing launched, nothing left, and the skip it names is recorded', async () => {
   const { root, base, head } = makeRepo();
@@ -2020,7 +2040,8 @@ test('a home that cannot be made is a refusal whose way out is to record the ski
       const which = `${name} ${flags.join(' ')}`;
       assert.equal(result.code, 1, which);
       assert.match(result.err, reason, which);
-      assert.deepEqual(result.err.split('\n').slice(-2), ['The lean review was not started and nothing was recorded.', WAY_OUT], which);
+      assert.equal(result.err.split('\n').at(-2), 'The lean review was not started and nothing was recorded.', which);
+      assert.match(result.err.split('\n').at(-1), SKIP_NEXT, which);
       assert.doesNotMatch(result.err, /--session|current|Leave out/, which);
       assert.equal(fake.calls.length, 0, `${which}: nothing was launched`);
       assert.equal(wrote(root), false);
@@ -2739,7 +2760,8 @@ test('a lean review whose answer cannot be read as data is a failed attempt: log
       assert.equal(logged.outcome, 'failed', reason);
       assert.equal(logged.reason, reason);
       assert.ok(result.err.includes(`Codex's turn completed, but ${reason}; no record was written.`), result.err);
-      assert.match(result.err, /Rerun the review/);
+      assert.match(result.err, /A review that failed is run again, not skipped/);
+      assert.match(result.err.split('\n').at(-1), /^next: js-harness codex-review --base [0-9a-f]{12} --at [0-9a-f]{12}( --\S.*)?$/);
       assert.deepEqual([logged.findings, logged.verdict, logged.answerSource], [null, null, null], reason);
       assert.equal(runFindings(logged), null);
       // The session did show the whole patch: that alone is still not a review.
@@ -3022,7 +3044,9 @@ test('a run line says which model and effort its session really ran with, read f
 // --- one model: a review whose session ran on anything but what the command passed does not stand ---
 
 // What a refusal over the model or the effort ends with, after the two it names.
-const RAN_ON_ANOTHER = '; a review that ran on anything else does not stand, so nothing of what it answered is shown and no record was written.\nRerun the review: `js-harness codex-review --base <rev>`. A review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.';
+const RAN_ON_ANOTHER = '; a review that ran on anything else does not stand, so nothing of what it answered is shown and no record was written.\nA review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.';
+// The last line of such a refusal: the command that runs the review again, bound to its base and head as hashes.
+const RERUN_LAST = /\nnext: js-harness codex-review --base [0-9a-f]{12} --at [0-9a-f]{12}( --\S.*)?$/;
 
 /** A lean review of `root` that showed the whole patch, rendered `FINDINGS` and answered with three
  * findings, in a session whose own rollout file says it ran with `ran` (a `turnContext`, or none). */
@@ -3037,7 +3061,8 @@ test('a lean review whose session ran on another model does not stand: no record
   const result = await leanReviewThatRan(root, base, turnContext('gpt-6-astra', REVIEW_EFFORT), mine);
   assert.equal(result.code, 1);
   const why = `its session ran on gpt-6-astra at ${REVIEW_EFFORT} effort, and the command passed ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`;
-  assert.equal(result.err, `Codex's turn completed, but ${why}${RAN_ON_ANOTHER}`);
+  assert.equal(result.err.replace(RERUN_LAST, ''), `Codex's turn completed, but ${why}${RAN_ON_ANOTHER}`);
+  assert.match(result.err, RERUN_LAST);
   // Nothing of the answer: not the review as Codex rendered it, not a finding, not the verdict.
   assert.equal(result.shown, '', 'what Codex rendered is not passed through');
   const lines = result.out.split('\n');
@@ -3069,7 +3094,8 @@ test('a lean review whose session ran at another effort does not stand either, a
   for (const [ran, said] of refusals) {
     const result = await leanReviewThatRan(root, base, ran, mine);
     assert.equal(result.code, 1, said);
-    assert.equal(result.err, `Codex's turn completed, but ${said}, ${asked}${RAN_ON_ANOTHER}`);
+    assert.equal(result.err.replace(RERUN_LAST, ''), `Codex's turn completed, but ${said}, ${asked}${RAN_ON_ANOTHER}`);
+    assert.match(result.err, RERUN_LAST);
     assert.equal(result.shown, '', said);
     const logged = readCodexReviewRuns(root).at(-1);
     assert.deepEqual([logged.outcome, logged.reason], ['failed', `${said}, ${asked}`]);
@@ -3091,10 +3117,11 @@ test('a lean review whose session names no model does not stand: a review that c
     const result = await leanReviewThatRan(root, base, ran, mine);
     assert.equal(result.code, 1, JSON.stringify(measured));
     assert.equal(
-      result.err,
+      result.err.replace(RERUN_LAST, ''),
       `Codex's turn completed, but ${why}; a review that cannot say which model it ran on does not stand, so nothing of what it answered is shown and no record was written.\n` +
-        'Rerun the review: `js-harness codex-review --base <rev>`. A review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.',
+        'A review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.',
     );
+    assert.match(result.err, RERUN_LAST);
     // Nothing of the answer, as for a session that ran on another model: nobody can say whose review it is.
     assert.equal(result.shown, '', 'what Codex rendered is not passed through');
     const lines = result.out.split('\n');
@@ -3390,6 +3417,16 @@ function blockRunLog(root) {
 function blockRecord(root) {
   fs.mkdirSync(codexReviewsPath(root), { recursive: true });
 }
+
+test('a skip whose record cannot be written prints, as its next step, the skip again: never a command that runs a review', async () => {
+  const { root, base, head } = makeRepo();
+  blockRecord(root);
+  const result = await run(['--base', 'HEAD~1', '--unavailable', 'no quota today', '--cwd', root], fakeCodex(''));
+  assert.equal(result.code, 1);
+  assert.match(result.err, /Could not write the record: /);
+  const next = result.err.split('\n').at(-1);
+  assert.ok(next.startsWith(`next: js-harness codex-review --base ${base.slice(0, 12)} --at ${head.slice(0, 12)} --unavailable "no quota today" --cwd `), next);
+});
 
 test('a record that cannot be written after a reviewed run: exit 1, the error says so, and the run log holds the one reviewed line', async () => {
   const { root, base, head } = makeRepo();
@@ -4652,7 +4689,7 @@ test('--plan prints the plan of the run and exits 0, and starts nothing: no Code
   const unsized = (command, args, opts) => (command === 'git' && args.includes('--numstat') ? { status: 128, stdout: '', stderr: 'fatal' } : nothing.deps.spawn(command, args, opts));
   const failed = await run(['--base', 'HEAD~1', '--plan', ...nothing.home, '--cwd', root], { ...nothing.deps, spawn: unsized });
   assert.deepEqual([failed.code, failed.out], [1, '']);
-  assert.match(failed.err, /^Could not run `git diff --numstat` over [0-9a-f]{7}\.\.[0-9a-f]{7} to know how large the range is, so there is no plan of its review\.$/);
+  assert.match(failed.err, /^Could not run `git diff --numstat` over [0-9a-f]{7}\.\.[0-9a-f]{7} to know how large the range is, so there is no plan of its review\.\nnext: no command, git did not answer for the range, so no plan of its review is made$/);
   nothing.untouched('a range that cannot be sized');
 });
 
@@ -4843,11 +4880,11 @@ test('a base that shares no history with HEAD has no range: --plan exits 1 and s
   const nothing = startsNothing(root);
   const plan = await run(['--base', other, '--plan', ...nothing.home, '--cwd', root], nothing.deps);
   assert.deepEqual([plan.code, plan.out], [1, '']);
-  assert.equal(plan.err, `${other.slice(0, 7)} and HEAD share no history, so there is no range to plan the review of.`);
+  assert.equal(plan.err, `${other.slice(0, 7)} and HEAD share no history, so there is no range to plan the review of.\nnext: give --base a commit that HEAD has in its history, by its hash; then run again what printed this, for the command at the new head`);
   nothing.untouched('--plan');
   const result = await run(['--base', other, ...nothing.home, '--cwd', root], nothing.deps);
   assert.deepEqual([result.code, result.out], [1, '']);
-  assert.equal(result.err, `${other.slice(0, 7)} and HEAD share no history, so there is no range to review; nothing was recorded.`);
+  assert.equal(result.err, `${other.slice(0, 7)} and HEAD share no history, so there is no range to review; nothing was recorded.\nnext: give --base a commit that HEAD has in its history, by its hash; then run again what printed this, for the command at the new head`);
   nothing.untouched('a run');
 });
 
@@ -4896,7 +4933,7 @@ test('a range whose commits cancel out has nothing to review: the run starts not
   const before = checkCodexReviews(root, 'HEAD');
   assert.equal(before.pass, false);
   assert.match(before.detail, /^2 of 2 code commits since origin\/main have no Codex review record/);
-  assert.equal(before.lines.at(-1), `make the record with: js-harness codex-review --base ${head.slice(0, 7)}^`);
+  assert.deepEqual(before.next, commandStep(`js-harness codex-review --base ${head.slice(0, 7)}^ --at ${back.slice(0, 12)}`));
   const nothingRecord = { schema: 'js-harness.codex-review/v1', base, head: back, reviewedAt: '2026-09-29T12:00:00.000Z', outcome: 'nothing-to-review', reason: 'the range changes no file' };
   // The second is asked for with `--again`: its two commits have a record by then, the one the first wrote.
   const runs = [['--base', `${head.slice(0, 7)}^`], ['--base', 'HEAD~2', '--again', '--session', 'lean', '--prompt', 'own', '--keep-home', '--max-parts', '1']];
@@ -5068,7 +5105,7 @@ test('in parts, the files left out are in no part and in no prompt, and the part
   // `--again`: the range has its record now, and the run is to reach the check of its parts.
   const refused = await run(['--base', 'HEAD~1', '--again', '--part-lines', '2', '--cwd', root], { ...none, spawn: cut });
   assert.equal(refused.code, 1, refused.out);
-  assert.match(refused.err, /^Could not check the parts against the range\. The patch of the range holds 3 sections for its 4 files, .*\nThe review was not started and nothing was recorded\.$/);
+  assert.match(refused.err, /^Could not check the parts against the range\. The patch of the range holds 3 sections for its 4 files, .*\nThe review was not started and nothing was recorded\.\nnext: no command, the range cannot be split into parts, so no review of it is started$/);
   assert.deepEqual([none.calls.length, none.probes.length, readCodexReviews(root).length], [0, 0, 1]);
 });
 
@@ -5233,10 +5270,11 @@ test('when git cannot say what the project marks, nothing is planned or started:
   const unread = `Could not tell which commits of ${rangeOf(base, head)} a Codex review record already covers (git could not say which of their files a review leaves out), so the range is taken as it was given.`;
   const plan = await run(['--base', 'HEAD~1', '--plan', ...nothing.home, '--cwd', root], { ...nothing.deps, spawn: old });
   assert.deepEqual([plan.code, plan.out], [1, unread]);
-  assert.match(plan.err, new RegExp(`^${why}, so there is no plan of its review\\.$`));
+  const step = '\\nnext: use git 2\\.40 or later, which reads the marks of the files; then run again what printed this, for the command at the new head';
+  assert.match(plan.err, new RegExp(`^${why}, so there is no plan of its review\\.${step}$`));
   const result = await run(['--base', 'HEAD~1', ...nothing.home, '--cwd', root], { ...nothing.deps, spawn: old });
   assert.deepEqual([result.code, result.out], [1, unread]);
-  assert.match(result.err, new RegExp(`^${why}\\.\\nThe review was not started and nothing was recorded\\.$`));
+  assert.match(result.err, new RegExp(`^${why}\\.\\nThe review was not started and nothing was recorded\\.${step}$`));
   nothing.untouched('a git that cannot say what is marked');
 });
 
@@ -5327,7 +5365,12 @@ test('a run of more than six parts is refused before anything is started, with i
     const result = await run(['--base', 'HEAD~1', ...SEVEN, ...flags, ...nothing.home, '--cwd', root], nothing.deps);
     assert.equal(result.code, 1, which);
     assert.deepEqual(result.out.split('\n'), plan, `${which}: the plan is shown`);
-    assert.equal(result.err, `The review of ${short} was not started and nothing was recorded: its 7 parts are more than ${bound}.\n${HOW}`, which);
+    // The rerun is the command refused, bound and with the count it needs: its other flags stay, its own count goes.
+    const [said, next] = [result.err.split('\n').slice(0, -1).join('\n'), result.err.split('\n').at(-1)];
+    assert.equal(said, `The review of ${short} was not started and nothing was recorded: its 7 parts are more than ${bound}.\n${HOW}`, which);
+    assert.ok(next.startsWith(`next: js-harness codex-review --base ${base.slice(0, 12)} --at ${head.slice(0, 12)} --part-lines 2 `), `${which}: ${next}`);
+    assert.ok(next.endsWith(' --max-parts 7') && !/--max-parts [16] /.test(next) && !next.includes('HEAD~1'), `${which}: ${next}`);
+    for (const flag of flags.filter((word) => word.startsWith('--') && word !== '--max-parts')) assert.ok(next.includes(` ${flag}`), `${which}: ${next}`);
     nothing.untouched(which);
   }
   // `--plan` never refuses: it says what the run would need, or nothing when the run names its count.
@@ -6550,7 +6593,8 @@ test('an injected effort is what the session is held to: a review that ran at it
   const other = makeRepo();
   const falls = await leanReviewThatRan(other.root, other.base, turnContext(REVIEW_MODEL, REVIEW_EFFORT), mine, { effort: 'high' });
   assert.equal(falls.code, 1);
-  assert.equal(falls.err, `Codex's turn completed, but its session ran on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, and the command passed ${REVIEW_MODEL} at high effort${RAN_ON_ANOTHER}`);
+  assert.equal(falls.err.replace(RERUN_LAST, ''), `Codex's turn completed, but its session ran on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, and the command passed ${REVIEW_MODEL} at high effort${RAN_ON_ANOTHER}`);
+  assert.match(falls.err, RERUN_LAST);
   assert.equal(wrote(other.root), false);
 });
 

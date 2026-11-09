@@ -19,6 +19,7 @@ import { CI_WORKFLOW } from './lib/ci-gate.mjs';
 import { appendNotice, appendRelief, newNotice, NOTICE_TEXT_MAX, readNotices, reliefPath } from './lib/channel.mjs';
 import { gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { reviewEvidence } from './lib/merge-queue-reviews.mjs';
+import { nextLine } from './lib/next-step.mjs';
 import { defaultBranchOf } from './lib/default-branch.mjs';
 import { pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
@@ -139,10 +140,12 @@ function landLog({ now, session }) {
 /** The failing tests of a red suite run (`localSuite`), as a left-out entry keeps them: none where it named none. */
 const redTests = (result) => (result.failing?.length ? { failing: result.failing } : {});
 
-/** Says that `pr` is left out, and why (`line`), and records it in the land's record with its `reason` and
- * `said`, the line itself unless the cause has words of its own (a red's are the suite's). */
-function leaveOut(log, stdout, pr, reason, line, { said = line, ...extra } = {}) {
+/** Says that `pr` is left out, and why (`line`), then its `next` step where the refusal gave one (./lib/next-step.mjs),
+ * and records it in the land's record with its `reason` and `said`, the line itself unless the cause has words of its
+ * own (a red's are the suite's). */
+function leaveOut(log, stdout, pr, reason, line, { said = line, next = null, ...extra } = {}) {
   stdout(`PR ${pr.number} is left out: ${line}`);
+  if (next) stdout(`  ${nextLine(next)}`);
   log.leave(pr, reason, said, extra);
 }
 
@@ -886,8 +889,8 @@ async function queueRun(args, { run = spawnSync, covered = null, suite = null, e
     }
     const coverage = isCovered(pr.headRefOid, onto);
     const files = onto !== main && coverage?.conflicted?.length ? coverage.conflicted : null;
-    if (files) leaveOut(log, stdout, pr, 'conflict', `it conflicts with the candidate so far in ${files.join(', ')}.`, { files });
-    else if (!coverage?.pass) leaveOut(log, stdout, pr, 'review', `${String(coverage?.detail ?? 'its Codex review records could not be read').replace(/\.$/, '')}.`);
+    if (files) leaveOut(log, stdout, pr, 'conflict', `it conflicts with the candidate so far in ${files.join(', ')}.`, { files, next: coverage?.next });
+    else if (!coverage?.pass) leaveOut(log, stdout, pr, 'review', `${String(coverage?.detail ?? 'its Codex review records could not be read').replace(/\.$/, '')}.`, { next: coverage?.next });
     if (files || !coverage?.pass) continue;
     for (const line of coverage.lines?.length ? [`PR ${pr.number}, commit by commit:`, ...coverage.lines.map((said) => `  ${said}`)] : []) stdout(line);
     candidates.push(pr);

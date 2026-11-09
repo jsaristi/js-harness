@@ -25,6 +25,7 @@
 import { spawn as spawnChild } from 'node:child_process';
 import { killTree } from './process-tree.mjs';
 import { launchCodex } from './codex-launch.mjs';
+import { nextLine, noStep, reviewCommand } from './next-step.mjs';
 
 /** How long the server may take to answer the read, in ms. The app-server starts cold for each read: the one real
  * read of codex-cli 0.163.0 took about 10.6 s from start to exit on Windows 10, of which the tree kill took about
@@ -132,29 +133,31 @@ export function weeklyFloor(outcome, floor) {
  * stays a Codex debt until a Codex review pays it. `part`, `{ index, of }`, names a later part of a review in parts,
  * whose earlier parts are kept for the next run; `interrupted` is a read the person interrupted. `read` is the double
  * review's read of a plan (bin/double-review.mjs), whose two readers start together, instead of a review of code. */
-export function floorStopped({ left, floor, base, part = null, interrupted = false, read = false }) {
+export function floorStopped({ left, floor, base, at, part = null, interrupted = false, read = false }) {
   const what = read ? 'neither reader was started'
     : part === null || part.index === 1 ? 'the review was not started' : `part ${part.index} of ${part.of} was not started, the parts before it kept for the next run,`;
   if (interrupted) return `The read of Codex's weekly limit was interrupted, so ${what} and nothing was recorded.`;
+  // The commands for the user's no name the base and the head the review would have run at, as hashes (`reviewCommand`).
   const onNo = read
     ? "On the user's typed no, the read waits for the reset, or `js-harness double-review skip` records the user's words that skip it."
-    : `On the user's typed no, record the skip with \`js-harness codex-review --base ${base} --unavailable "${FLOOR_SKIP}: <the user's words>"\`, ` +
-      `and run a second Claude review in Codex's place, \`js-harness lens-review --base ${base} --lenses <the lenses not run yet> --reason "in Codex's place"\`. ` +
+    : `On the user's typed no, record the skip with \`${reviewCommand('codex-review', { base, at, flags: [`--unavailable "${FLOOR_SKIP}: <the user's words>"`] })}\`, ` +
+      `and run a second Claude review in Codex's place, \`${reviewCommand('lens-review', { base, at, lenses: '<the lenses not run yet>' })}\`. ` +
       'The skip is a Codex debt that codex-meter lists on every branch, and the merge door shows, until a Codex review of its range pays it.';
   return (
     `Codex's weekly limit has ${Math.round(left * 10) / 10}% left, at or under its floor of ${floor}% (rule:codex-weekly-floor), so ${what} and nothing was recorded.\n` +
     "Ask the user, through the lead where one leads, whether to reset the weekly limit: a reset credit is spent only on the user's word, and after a reset this runs again.\n" +
-    onNo
+    `${onNo}\n` +
+    nextLine(noStep('the user decides whether to reset the weekly limit, and no command follows until the user answers'))
   );
 }
 
 /** What a launch of `codex-review` does by the weekly limit, from an outcome of `readRateLimits`: `note`, the line
  * that says a reading is not there and the review runs, or `null`; `stop`, why nothing is launched, or `null`. */
-export function launchWord(outcome, { floor, base, part = null, read = false }) {
+export function launchWord(outcome, { floor, base, at, part = null, read = false }) {
   const weekly = weeklyFloor(outcome, floor);
   return {
     note: weekly.unread === undefined ? null : `Codex's weekly limit could not be read before the launch: ${weekly.unread} The ${read ? 'read' : 'review'} runs without it.`,
-    stop: weekly.stop ? floorStopped({ ...weekly, floor, base, part, read }) : null,
+    stop: weekly.stop ? floorStopped({ ...weekly, floor, base, at, part, read }) : null,
   };
 }
 

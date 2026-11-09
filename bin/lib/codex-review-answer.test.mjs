@@ -4,8 +4,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer, validateAnswer,
+  answerFailure, findingCounts, normalizeAnswer, REVIEW_ANSWER_SCHEMA, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer, validateAnswer,
 } from './codex-review-answer.mjs';
+
+test('an answer that cannot be read says why: the first errors of its schema are named, and the rest counted', () => {
+  assert.equal(answerFailure({ reason: 'no-review-session' }), 'its Codex home holds no session of the review sub-agent, so there is no answer to read');
+  assert.equal(answerFailure({ reason: 'no-answer' }), 'the session of the review sub-agent holds no answer');
+  assert.equal(answerFailure({ reason: 'not-json' }), 'the answer of the review is not JSON');
+  const errors = ['a', 'b', 'c', 'd', 'e'];
+  assert.equal(answerFailure({ reason: 'off-schema', errors }), `the answer of the review is off its schema (${REVIEW_ANSWER_SCHEMA_VERSION}): a; b; c; and 2 more`);
+});
 
 // Every answer and every rollout file here is invented, in the shape read from one real lean review
 // (codex-cli 0.160.1): no test reads a real Codex home.

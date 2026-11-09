@@ -168,7 +168,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { allowanceLine, readProjectRules, reviewAllowance } from './lib/codex-review-allowance.mjs';
-import { byPlace, findingCounts, findingLine, normalizeAnswer, REVIEW_ANSWER_SCHEMA_VERSION, rolloutAnswer, verdictLine } from './lib/codex-review-answer.mjs';
+import { answerFailure, byPlace, findingCounts, findingLine, normalizeAnswer, rolloutAnswer, verdictLine } from './lib/codex-review-answer.mjs';
 import { baseLeftOut, MARKS_UNREAD, mergeStart, notReviews, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { PART_MAX_CHANGED_LINES, PART_MAX_FILES, RENAMES, reviewParts } from './lib/codex-review-parts.mjs';
@@ -193,7 +193,7 @@ import { ruleValue } from './lib/rules.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { harnessHome } from './lib/home.mjs';
-import { atRefusal } from './lib/next-step.mjs';
+import { atRefusal, commandStep, firstStep, nextLine, noStep, rerunFlags, reviewCommand } from './lib/next-step.mjs';
 
 // The model and the effort of a review. Sebastián fixed both on 2026-10-08
 // (odd/tasks/codex-review-cost.md): the one model a review runs on, at `high`, in place of the `medium` he
@@ -248,7 +248,7 @@ const SESSION = 'lean';
 // that still names the removed session is one to correct, not one to guess the meaning of.
 const SESSION_REMOVED =
   `\`--session current\` was removed on 2026-10-08: a review runs only on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, and the model that session ran on could not be verified. ` +
-  'On a machine where the lean session cannot run, record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
+  'On a machine where the lean session cannot run, record an explicit skip with `js-harness codex-review --base <hash> --at <hash> --unavailable <reason>`.';
 
 // What the review is asked with; the first is the default. `codex` is the sentence Codex writes itself for
 // `--base`, `own` this command's prompt (`reviewPrompt`).
@@ -676,12 +676,12 @@ function runReview(spawnAsync, kill, platform, argv, options, { timeoutMs, maxBu
 export const REVIEW_TIMEOUT_MS = ruleValue('review-timeout', 'minutes') * 60 * 1000;
 
 // What a review that did not stand ends with. A review that failed is run again; the explicit skip is for a
-// machine where Codex cannot run (`NO_CODEX`, `SKIP_IS_THE_WAY_OUT`). The command does not tell a spent usage
+// machine where Codex cannot run (`NO_CODEX`, `skipIsTheWayOut`). The command does not tell a spent usage
 // limit from another failure, so every failed review is sent to the rerun. The rerun needs no turn of the gate
 // lock (odd/tasks/faster-check.md, part 2): out of one the review runs no test suite, which the gate already ran.
-const WAYS_ON =
-  'Rerun the review: `js-harness codex-review --base <rev>`. ' +
-  'A review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.';
+const waysOn = (rerun) =>
+  'A review that failed is run again, not skipped: `--unavailable <reason>` is for a machine where Codex cannot run.\n' +
+  nextLine(rerun);
 
 /** What a review asked for with `--prompt codex` out of a turn of the gate lock says: it is asked with the own
  * prompt, the one that can tell Codex the suite already ran. */
@@ -699,12 +699,13 @@ export const EXCUSED_LINE =
 // model nobody could check. So the way out is the one the command has for a review that could not be
 // made, the explicit skip, in the words it uses for it elsewhere (`NO_CODEX`), whatever the reason the
 // home could not be made and whatever flags the refused command carried.
-const SKIP_IS_THE_WAY_OUT =
-  'The way out, on a machine where the lean session cannot run: record an explicit skip with `js-harness codex-review --base <rev> --unavailable <reason>`.';
+const skipIsTheWayOut = (requested, at) => nextLine(commandStep(reviewCommand('codex-review', { base: requested, at, flags: ['--unavailable "<reason>"'] })));
 
 const NO_CODEX =
   'Could not run `codex`. Install it with `npm i -g @openai/codex` and log in with `codex login`, ' +
   'or record an explicit skip with `--unavailable <reason>`; nothing was recorded.';
+/** The step `NO_CODEX` names first: Codex installed and logged in, after which the refusal's command runs again. */
+const NO_CODEX_STEP = 'install Codex with npm i -g @openai/codex, and log in with codex login';
 
 /** Prints each command as it completes, so a long review shows progress. */
 function progressLine(line, log) {
@@ -883,7 +884,7 @@ function rangeGroups(spawn, root, { from, head, maxChangedLines, everyFile, wher
     const { files, why, renames, failed } = rangeFiles(numstatOf, (names) => (everyFile ? new Map() : leftOutOf(names, { cwd: root, source: head, spawn, where })));
     if (failed === 'numstat') return { error: `Could not run \`git diff --numstat\` over ${from.slice(0, 7)}..${head.slice(0, 7)} to know how large the range is` };
     if (failed === 'marks') {
-      return { error: `Could not ask git which files of the range the project leaves out of a review (\`git check-attr --source ${head.slice(0, 7)}\` failed; it needs git 2.40 or later)` };
+      return { error: `Could not ask git which files of the range the project leaves out of a review (\`git check-attr --source ${head.slice(0, 7)}\` failed; it needs git 2.40 or later)`, step: firstStep('use git 2.40 or later, which reads the marks of the files') };
     }
     const { read, leftOut } = reviewScope(files, why);
     return { groups: reviewParts(read, maxChangedLines), leftOut, paths: files.map((changed) => changed.path), why, renames };
@@ -1091,19 +1092,6 @@ function notReviewedSaid(coverage, more = '') {
   return others === 0 ? '' : ` (${others} of the records that do ${others === 1 ? 'is' : 'are'} a skip or a range with nothing to review, not a review${more})`;
 }
 
-// How many errors of an answer off its schema are named in the reason; the rest are counted.
-const ANSWER_ERRORS_SHOWN = 3;
-
-/** Why the answer of a lean review could not be read as data (a `rolloutAnswer` that is not `ok`), as the
- * run log and the error say it. */
-function answerFailure({ reason, errors = [] }) {
-  if (reason === 'no-review-session') return 'its Codex home holds no session of the review sub-agent, so there is no answer to read';
-  if (reason === 'no-answer') return 'the session of the review sub-agent holds no answer';
-  if (reason === 'not-json') return 'the answer of the review is not JSON';
-  const more = errors.length > ANSWER_ERRORS_SHOWN ? `; and ${errors.length - ANSWER_ERRORS_SHOWN} more` : '';
-  return `the answer of the review is off its schema (${REVIEW_ANSWER_SCHEMA_VERSION}): ${errors.slice(0, ANSWER_ERRORS_SHOWN).join('; ')}${more}`;
-}
-
 /** Runs the command; returns the process exit code. `deps` (all optional) injects `spawn` (git and
  * the `codex --version` probe, sync), `spawnAsync` (the review), `killTree`, `timeoutMs`,
  * `maxBuffer`, `signals` (where SIGINT/SIGTERM arrive), `now` (the wall clock, for the dates),
@@ -1175,7 +1163,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
 
   const root = git(spawn, args.cwd, ['rev-parse', '--show-toplevel']);
   if (!root) {
-    error(`${args.cwd} is not a git repository, so there is no range to record.`);
+    error(`${args.cwd} is not a git repository, so there is no range to record.\n${nextLine(noStep('the command needs a git repository, and there is none at this folder'))}`);
     return 1;
   }
   // Where the repository of this run is, for whatever would ask git that (`jsonLinesPath`, `leftOutOf`): a
@@ -1206,15 +1194,19 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   // its plan, its sessions, its run lines and its record are all of the one range it reviews.
   let base = asked ? asked.commits[1] : git(spawn, root, ['rev-parse', '--verify', `${args.base}^{commit}`]);
   if (!base) {
-    error(`Cannot resolve --base ${args.base} to a commit in ${root}.`);
+    error(`Cannot resolve --base ${args.base} to a commit in ${root}.\n${nextLine(firstStep('give --base a commit this repository holds, by its hash'))}`);
     return 1;
   }
+  // The base as it was asked, resolved: what a refusal's rerun names, since `base` moves to a later commit below.
+  const requested = base;
   const head = asked ? asked.commits[0] : git(spawn, root, ['rev-parse', '--verify', 'HEAD^{commit}']);
   if (!head) {
-    error(`Cannot resolve HEAD to a commit in ${root}.`);
+    error(`Cannot resolve HEAD to a commit in ${root}.\n${nextLine(noStep('HEAD names no commit here, so there is no range to review'))}`);
     return 1;
   }
   const commitOf = (rev) => git(spawn, root, ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`]);
+  // The command refused, run again: its flags kept (a skip stays a skip), `flags` in place of the same ones, bound to hashes.
+  const reviewNext = (flags = []) => commandStep(reviewCommand('codex-review', { base: requested, at: head, flags: [...rerunFlags(argv, { valued: KNOWN.valued, dropped: ['--base', '--at', ...flags.map((flag) => flag.split(' ')[0])] }), ...flags] }));
   const staleAt = args.at === undefined ? null : atRefusal({ at: args.at, atCommit: commitOf(args.at), head: commitOf('HEAD') });
   if (staleAt) {
     error(staleAt);
@@ -1412,7 +1404,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   if (args.plan) {
     const given = git(spawn, root, ['merge-base', base, head]);
     if (!given) {
-      error(`${base.slice(0, 7)} and HEAD share no history, so there is no range to plan the review of.`);
+      error(`${base.slice(0, 7)} and HEAD share no history, so there is no range to plan the review of.\n${nextLine(firstStep('give --base a commit that HEAD has in its history, by its hash'))}`);
       return 1;
     }
     const from = startingAt(given);
@@ -1428,7 +1420,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     } else {
       const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile, where, merge });
       if (split.error) {
-        error(`${split.error}, so there is no plan of its review.`);
+        error(`${split.error}, so there is no plan of its review.\n${nextLine(split.step ?? noStep('git did not answer for the range, so no plan of its review is made'))}`);
         return 1;
       }
       plan = planOf(split);
@@ -1483,26 +1475,26 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     if (all.over) {
       error(
         `The review of ${all.range} in two turns was not started and nothing was recorded: their ${all.parts.length} parts are more than ${partsBound(all)}.\n` +
-          `To run it all the same, pass \`--max-parts ${all.parts.length}\`.`,
+          `To run it all the same, pass \`--max-parts ${all.parts.length}\`.\n${nextLine(reviewNext([`--max-parts ${all.parts.length}`]))}`,
       );
       return 1;
     }
     // Codex is looked for before anything is made: the turn would find it missing only after its worktree was
     // added (the verifier of pull request 338).
     if (!codexVersion(spawn, platform, childEnv(env, platform))) {
-      error(NO_CODEX);
+      error(`${NO_CODEX}\n${nextLine(firstStep(NO_CODEX_STEP))}`);
       return 1;
     }
     log(turnSaid(1, turns));
     const { commonGitDir: common } = where;
     if (!common) {
-      error('Could not find the git directory, where the worktree of the merge is made, so nothing was started or recorded.');
+      error(`Could not find the git directory, where the worktree of the merge is made, so nothing was started or recorded.\n${nextLine(noStep('git did not say where its folder is, so the worktree of the merge cannot be made'))}`);
       return 1;
     }
     sweepTurnWorktrees(root, { commonGitDir: common, spawn, now: () => now().getTime() });
     const place = addTurnWorktree(root, turns.merge, { commonGitDir: common, spawn, now: () => now().getTime() });
     if (place === null) {
-      error(`Could not make a worktree at the merge ${turns.merge.slice(0, 7)}, so nothing was started or recorded.`);
+      error(`Could not make a worktree at the merge ${turns.merge.slice(0, 7)}, so nothing was started or recorded.\n${nextLine(reviewNext())}`);
       return 1;
     }
     // Resolved values only: the base by its full id, a home that is absolute, the intent already read.
@@ -1526,17 +1518,17 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       records = readCodexReviews(root, { spawn, where });
       runs = readCodexReviewRuns(root, { spawn, where });
     } catch (err) {
-      error(`Could not read the record of the turn at the merge (${err.message}), so the commits after it were not reviewed.`);
+      error(`Could not read the record of the turn at the merge (${err.message}), so the commits after it were not reviewed.\n${nextLine(reviewNext())}`);
       return 1;
     }
     const written = records.findLast((record) => record.base === turns.from && record.head === turns.merge);
     if (written === undefined) {
-      error(`The turn at the merge ${turns.merge.slice(0, 7)} wrote no record, so the commits after it were not reviewed.`);
+      error(`The turn at the merge ${turns.merge.slice(0, 7)} wrote no record, so the commits after it were not reviewed.\n${nextLine(reviewNext())}`);
       return 1;
     }
     // A record whose run line never reached the log reads as owing nothing, which says nothing here.
     if (!runsLogged(written, runs)) {
-      error(`The run line of the turn at the merge ${turns.merge.slice(0, 7)} is not in the run log, so whether it owes a correction cannot be said and the commits after it were not reviewed: run the review again.`);
+      error(`The run line of the turn at the merge ${turns.merge.slice(0, 7)} is not in the run log, so whether it owes a correction cannot be said and the commits after it were not reviewed: run the review again.\n${nextLine(reviewNext())}`);
       return 1;
     }
     if (recheckState({ from: turns.merge, records, runs }).kind !== 'review') {
@@ -1546,7 +1538,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // The commits after the merge are reviewed as committed: HEAD and the tracked tree as they were before the turn.
     const still = headAndTree();
     if (still.headNow !== head || still.tree !== '') {
-      error(`HEAD or the tracked files changed during the turn at the merge, so the commits after it were not reviewed: run the review again.`);
+      error(`HEAD or the tracked files changed during the turn at the merge, so the commits after it were not reviewed: run the review again.\n${nextLine(reviewNext())}`);
       return 1;
     }
     log(turnSaid(2, turns));
@@ -1576,13 +1568,13 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // dirty tracked tree would be reviewed and then recorded as if it were committed.
     const dirty = git(spawn, root, ['status', '--porcelain', '--untracked-files=no']);
     if (dirty === null) {
-      error('Could not run `git status` to check for uncommitted changes, so the review was not started and nothing was recorded.');
+      error(`Could not run \`git status\` to check for uncommitted changes, so the review was not started and nothing was recorded.\n${nextLine(reviewNext())}`);
       return 1;
     }
     if (dirty) {
       error(
         `Tracked files have uncommitted changes, but the record claims the committed range base..HEAD (${base.slice(0, 7)}..HEAD); ` +
-          `commit or stash them first, then rerun.\n${dirty}`,
+          `commit or stash them first, then rerun.\n${dirty}\n${nextLine(firstStep('commit the tracked changes, so that the range is the committed one'))}`,
       );
       return 1;
     }
@@ -1591,14 +1583,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // prints. Codex reviews from the same commit, so both sides mean the same patch.
     const given = git(spawn, root, ['merge-base', base, head]);
     if (!given) {
-      error(`${base.slice(0, 7)} and HEAD share no history, so there is no range to review; nothing was recorded.`);
+      error(`${base.slice(0, 7)} and HEAD share no history, so there is no range to review; nothing was recorded.\n${nextLine(firstStep('give --base a commit that HEAD has in its history, by its hash'))}`);
       return 1;
     }
     // The review starts where the records end, and there is none to start over a range they cover whole.
     let from = startingAt(given);
     if (from === null) return 0;
     if (mergeTurnOnly && merge === null) {
-      error(`${head.slice(0, 7)} is not read here as a merge of the default branch whose review reads what was written in it, so its turn was not started and nothing was recorded: it would review what that branch brought in.`);
+      error(`${head.slice(0, 7)} is not read here as a merge of the default branch whose review reads what was written in it, so its turn was not started and nothing was recorded: it would review what that branch brought in.\n${nextLine(noStep('this head is no merge of the default branch, so no turn of it is run here'))}`);
       return 1;
     }
     // A range cut at a merge of main below HEAD: the merge is reviewed first, in a turn of its own, and this run
@@ -1616,7 +1608,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // second recheck of the same findings is not run (`recheckFor`).
     const state = merge !== null ? { kind: 'review' } : recheckFor(from);
     if (state.kind === 'refused') {
-      error(secondRecheckSaid(from, state));
+      error(`${secondRecheckSaid(from, state)}\n${nextLine(firstStep('record the follow-up task the line above names, for what is still open'))}`);
       return 1;
     }
     if (state.kind === 'recheck') recheck = { of: state.of, findings: state.findings, second: state.second === true };
@@ -1627,7 +1619,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     if (patch === null) {
       // The command that ran: the remerge diff of a merge (`rangeDiff`), else the diff of the range.
       const ran = merge === null ? `git diff ${RENAMES} ${from.slice(0, 7)} HEAD` : `git diff ${RENAMES} ${merge.auto.slice(0, 7)} ${head.slice(0, 7)}`;
-      error(`Could not run \`${ran}\` to know what the review must see, so it was not started and nothing was recorded.`);
+      error(`Could not run \`${ran}\` to know what the review must see, so it was not started and nothing was recorded.\n${nextLine(reviewNext())}`);
       return 1;
     }
     const expected = patchKeys(patch);
@@ -1638,12 +1630,12 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // How the files of the range group, its plan, and the parts a large range is reviewed in. All of it is
     // worked out before anything is probed, made or launched, so a range that cannot be split, or that is
     // more parts than a run starts, leaves nothing behind.
-    const notSplit = (why) => {
-      error(`${why}${why.endsWith('.') ? '' : '.'}\nThe review was not started and nothing was recorded.`);
+    const notSplit = (why, step = null) => {
+      error(`${why}${why.endsWith('.') ? '' : '.'}\nThe review was not started and nothing was recorded.\n${nextLine(step ?? noStep('the range cannot be split into parts, so no review of it is started'))}`);
       return 1;
     };
     const split = rangeGroups(spawn, root, { from, head, maxChangedLines: args.partLines, everyFile, where, merge });
-    if (split.error) return notSplit(split.error);
+    if (split.error) return notSplit(split.error, split.step);
     // The plan, where the progress of the run is written and before its first session: what the run is
     // about to spend is on the screen before any of it is spent.
     const plan = planOf(split);
@@ -1669,7 +1661,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       }
       const reason = leftOut === null ? `the range ${changes}` : `the range ${changes}: it leaves out ${leftOutSaid(split.leftOut)}`;
       const file = writeRecord({ outcome: NOTHING_TO_REVIEW, reason, ...(leftOut === null ? {} : { leftOut }) });
-      if (file === null) return 1;
+      if (file === null) {
+        error(nextLine(reviewNext()));
+        return 1;
+      }
       log(`${nothing}, and the range was recorded as having nothing to review in ${file}.`);
       return 0;
     }
@@ -1679,7 +1674,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     if (plan.over) {
       error(
         `The review of ${plan.range} was not started and nothing was recorded: its ${plan.parts.length} parts are more than ${partsBound(plan)}.\n` +
-          `To run it all the same, pass \`--max-parts ${plan.parts.length}\`. The cheaper way is to review each slice when it closes, from the commit before it (\`--base\`).`,
+          `To run it all the same, pass \`--max-parts ${plan.parts.length}\`. The cheaper way is to review each slice when it closes, from the commit before it (\`--base\`).\n` +
+          nextLine(reviewNext([`--max-parts ${plan.parts.length}`])),
       );
       return 1;
     }
@@ -1688,7 +1684,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     if (made.error) return notSplit(made.error);
     ({ parts } = made);
     if (recheck !== null && parts !== null && parts.length > 1) {
-      error(recheckTooLarge({ of: recheck.of, parts: parts.length }));
+      error(`${recheckTooLarge({ of: recheck.of, parts: parts.length })}\n${nextLine(noStep('the recheck of this change is too large to run in parts, so none is started'))}`);
       return 1;
     }
     // The environment of the `--version` probe, and what the session's is made from: the session adds a
@@ -1697,7 +1693,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     const codexEnv = childEnv(env, platform);
     const cli = codexVersion(spawn, platform, codexEnv);
     if (!cli) {
-      error(NO_CODEX);
+      error(`${NO_CODEX}\n${nextLine(firstStep(NO_CODEX_STEP))}`);
       return 1;
     }
     // This command's own prompt, for the range the record will claim: from the merge-base to the commit
@@ -1712,7 +1708,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         promptText = reviewPrompt({ from, head, intent, suiteRan: outOfTurn });
         if (recheck !== null) promptText = recheckPrompt(promptText, recheck.findings);
       } catch (err) {
-        error(`Could not write the review prompt (${err.message}), so the review was not started and nothing was recorded.`);
+        error(`Could not write the review prompt (${err.message}), so the review was not started and nothing was recorded.\n${nextLine(reviewNext())}`);
         return 1;
       }
     }
@@ -1809,7 +1805,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       };
       // The weekly limit, read before each session: at or under its floor nothing more is started and the user decides
       // on the reset, so a part that spent down to it stops the next; a reading that is not there says so and runs.
-      const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, base: args.base, part });
+      const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, base: requested, at: head, part });
       if (weekly.note !== null) log(weekly.note);
       if (weekly.stop !== null) {
         error(weekly.stop);
@@ -1823,7 +1819,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       try {
         leanRunId = randomUUID();
       } catch (err) {
-        error(`Could not make the id of this run, which names the lean session's Codex home (${err.message}), so the review was not started and nothing was recorded.`);
+        error(`Could not make the id of this run, which names the lean session's Codex home (${err.message}), so the review was not started and nothing was recorded.\n${nextLine(reviewNext())}`);
         return { exit: 1 };
       }
       try {
@@ -1837,7 +1833,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         if (part === null || part.index === 1) sweepStaleLeanHomes(homes, { olderThanMs: 2 * timeoutMs, now: now().getTime() });
         leanHome = createLeanHome({ realHome: realCodexHome(env, homedir(), platform), parent: homes, id: leanRunId });
       } catch (err) {
-        error(`${err.message}\nThe lean review was not started and nothing was recorded.\n${SKIP_IS_THE_WAY_OUT}`);
+        error(`${err.message}\nThe lean review was not started and nothing was recorded.\n${skipIsTheWayOut(requested, head)}`);
         return { exit: 1 };
       }
       // From here on Codex is launched, so every way out leaves one line in the run log. `startedAt` is
@@ -2040,7 +2036,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         const said = evidence.errors.map((message) => `\n  Codex said: ${message}`).join('');
         const left = result.killFailure ? `\n  The process tree could not be killed (${result.killFailure}): Codex may still be running.` : '';
         logRun(result.error?.code === 'ETIMEDOUT' ? 'timed-out' : result.error?.code === 'EINTR' ? 'interrupted' : 'failed', reason);
-        error(`The Codex review did not complete (${reason}); no record was written.${said}${left}\n${WAYS_ON}`);
+        error(`The Codex review did not complete (${reason}); no record was written.${said}${left}\n${waysOn(reviewNext())}`);
         return { exit: typeof result.status === 'number' && result.status !== 0 ? result.status : 1 };
       }
       // A review runs on one model at one effort. A turn that completed on anything else is no review of
@@ -2048,7 +2044,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // a turn that completed: a failed attempt, with what ran and what was asked in its line and its error.
       if (another !== null) {
         logRun('failed', another);
-        error(`Codex's turn completed, but ${another}; a review that ran on anything else does not stand, so nothing of what it answered is shown and no record was written.\n${WAYS_ON}`);
+        error(`Codex's turn completed, but ${another}; a review that ran on anything else does not stand, so nothing of what it answered is shown and no record was written.\n${waysOn(reviewNext())}`);
         return { exit: 1 };
       }
       // A lean review answers in a structure this command reads. A turn that completed and left no such
@@ -2057,7 +2053,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       if (answered && !answered.ok) {
         const why = answerFailure(answered);
         logRun('failed', why);
-        error(`Codex's turn completed, but ${why}; no record was written.\n${WAYS_ON}`);
+        error(`Codex's turn completed, but ${why}; no record was written.\n${waysOn(reviewNext())}`);
         return { exit: 1 };
       }
       // The session answered and its file does not say on which model. Asked after the answer, because a
@@ -2066,7 +2062,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       if (!named) {
         const why = MODEL_NOT_NAMED(wanted.model);
         logRun('failed', why);
-        error(`Codex's turn completed, but ${why}; a review that cannot say which model it ran on does not stand, so nothing of what it answered is shown and no record was written.\n${WAYS_ON}`);
+        error(`Codex's turn completed, but ${why}; a review that cannot say which model it ran on does not stand, so nothing of what it answered is shown and no record was written.\n${waysOn(reviewNext())}`);
         return { exit: 1 };
       }
       if (!evidence.inspected) {
@@ -2083,7 +2079,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         const missing = evidence.missing.slice(0, 3).map((line) => `\n  missing: ${truncate(line, 100)}`).join('');
         const ran = evidence.commands.length ? '' : '\nCodex ran no commands.';
         logRun('not-inspected', why);
-        error(`Codex's turn completed, but ${why}; nothing was recorded.${unread}${missing}${ran}\n${WAYS_ON}`);
+        error(`Codex's turn completed, but ${why}; nothing was recorded.${unread}${missing}${ran}\n${waysOn(reviewNext())}`);
         return { exit: 1 };
       }
       // After the session of a part, and before its line can keep what it answered: a part that passed while
@@ -2093,7 +2089,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       if (after !== null) {
         const why = `${after} after part ${part.index} of ${part.of} passed, so what its session read is not the committed range alone`;
         logRun('failed', why);
-        error(`${why[0].toUpperCase()}${why.slice(1)}; it is not kept and no record was written. Nothing is edited or committed in a worktree while its review runs; run the review again.`);
+        error(`${why[0].toUpperCase()}${why.slice(1)}; it is not kept and no record was written. Nothing is edited or committed in a worktree while its review runs; run the review again.\n${waysOn(reviewNext())}`);
         return { exit: 1 };
       }
       // The run line goes first, so that the record can name it. If the record then cannot be written
@@ -2209,20 +2205,20 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     if (headNow !== null && headNow !== head) {
       error(
         `HEAD moved from ${head.slice(0, 7)} to ${headNow.slice(0, 7)} while Codex was reviewing, so what it read is not the range ${base.slice(0, 7)}..${head.slice(0, 7)} alone and no record was written. ` +
-          'Nothing is committed in a worktree while its review runs; run the review again.',
+          `Nothing is committed in a worktree while its review runs; the command below prints the review command bound to the new head.\n${nextLine(commandStep('js-harness check --push'))}`,
       );
       return 1;
     }
     if (tree !== null && tree !== '') {
       error(
         `Tracked files changed while Codex was reviewing, so what it read is not the committed range ${base.slice(0, 7)}..${head.slice(0, 7)} alone and no record was written. ` +
-          'Nothing is edited in a worktree while its review runs; run the review again.',
+          `Nothing is edited in a worktree while its review runs; run the review again.\n${nextLine(reviewNext())}`,
       );
       return 1;
     }
     if (headNow === null || tree === null) {
       error(
-        `Could not read HEAD and the state of the tree again after the review, so it is not known that Codex read the range ${base.slice(0, 7)}..${head.slice(0, 7)} alone and no record was written.`,
+        `Could not read HEAD and the state of the tree again after the review, so it is not known that Codex read the range ${base.slice(0, 7)}..${head.slice(0, 7)} alone and no record was written.\n${nextLine(reviewNext())}`,
       );
       return 1;
     }
@@ -2250,7 +2246,10 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // counted from the records, it is how many reviews went through that way.
     ...(outcome === 'reviewed' && excused ? { excused: EXCUSED_REFUSED_TESTS } : {}),
   });
-  if (file === null) return 1;
+  if (file === null) {
+    error(nextLine(reviewNext()));
+    return 1;
+  }
   const what = outcome === 'reviewed' ? 'the Codex review' : `an unavailable Codex review (${args.unavailable})`;
   // One part is one session, reviewed and recorded as a whole range is.
   const how = parts === null || parts.length === 1 ? '' : `, made in ${parts.length} parts,`;

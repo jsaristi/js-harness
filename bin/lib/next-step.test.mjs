@@ -3,7 +3,7 @@
 // moved.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { atRefusal, commandStep, firstStep, formatRow, nextLine, noStep, reviewCommand } from './next-step.mjs';
+import { atRefusal, commandStep, firstStep, formatRow, nextLine, noStep, rerunFlags, reviewCommand } from './next-step.mjs';
 
 const BASE = 'a'.repeat(40);
 const HEAD = 'b'.repeat(40);
@@ -42,6 +42,23 @@ test('--at is refused once HEAD is another commit, and passes at the same one', 
   const unborn = atRefusal({ at: HEAD.slice(0, 12), atCommit: HEAD, head: null });
   assert.match(unborn, /HEAD names no commit here/);
   assert.match(unborn.split('\n').at(-1), /^next: /);
+});
+
+test('a rerun repeats the flags of the command refused, but the ones it binds or gives again', () => {
+  const valued = ['--base', '--at', '--unavailable', '--max-parts', '--cwd'];
+  const argv = ['--base', 'HEAD~1', '--again', '--unavailable', 'no quota today', '--max-parts', '6', '--cwd', 'D:\\a b'];
+  assert.deepEqual(rerunFlags(argv, { valued, dropped: ['--base', '--at'] }), ['--again', '--unavailable "no quota today"', '--max-parts 6', "--cwd 'D:\\a b'"]);
+  assert.deepEqual(rerunFlags(argv, { valued, dropped: ['--base', '--at', '--max-parts'] }), ['--again', '--unavailable "no quota today"', "--cwd 'D:\\a b'"]);
+  assert.deepEqual(rerunFlags(['--base', 'x', '--at', 'y'], { valued, dropped: ['--base', '--at'] }), []);
+  // A value a shell would expand inside double quotes goes in single quotes, which both POSIX shells and PowerShell
+  // read literally; one that holds a single quote too cannot be written literally for both, so it is named, not run.
+  assert.deepEqual(rerunFlags(['--unavailable', 'cost $budget'], { valued, dropped: [] }), ["--unavailable 'cost $budget'"]);
+  assert.deepEqual(rerunFlags(['--unavailable', 'say "no"'], { valued, dropped: [] }), ["--unavailable 'say \"no\"'"]);
+  // A backslash escapes the closing double quote in a POSIX shell, and two of them collapse to one there; inside
+  // single quotes it is literal in both shells.
+  assert.deepEqual(rerunFlags(['--request', 'ends in \\'], { valued: ['--request'], dropped: [] }), ["--request 'ends in \\'"]);
+  assert.deepEqual(rerunFlags(['--request', 'two \\\\ here'], { valued: ['--request'], dropped: [] }), ["--request 'two \\\\ here'"]);
+  assert.deepEqual(rerunFlags(['--unavailable', "it's $x"], { valued, dropped: [] }), ['--unavailable "<the value given before>"']);
 });
 
 test('check prints a failing row\'s next step as its last line, and none on a row that passes or informs', () => {
