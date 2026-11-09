@@ -2205,7 +2205,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     if (headNow !== null && headNow !== head) {
       error(
         `HEAD moved from ${head.slice(0, 7)} to ${headNow.slice(0, 7)} while Codex was reviewing, so what it read is not the range ${base.slice(0, 7)}..${head.slice(0, 7)} alone and no record was written. ` +
-          `Nothing is committed in a worktree while its review runs; the command bound to the new head is what this prints.\n${nextLine(commandStep('js-harness check --push'))}`,
+          `Nothing is committed in a worktree while its review runs; the command below prints the review command bound to the new head.\n${nextLine(commandStep('js-harness check --push'))}`,
       );
       return 1;
     }

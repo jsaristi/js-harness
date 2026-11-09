@@ -51,11 +51,12 @@ export function reviewCommand(tool, { base, at, lenses = null, flags = [] }) {
 }
 
 /** `value` as a printed command writes it so both POSIX shells and PowerShell read it as given: bare when it is one
- * plain word; in double quotes when nothing in it expands there (`$`, a backtick, `!`) or ends them; in single quotes,
- * literal in both, when it holds no single quote; else a placeholder, since no one quoting is literal in both. */
+ * plain word; in double quotes when nothing in it expands there (`$`, a backtick, `!`), escapes (a backslash, in a
+ * POSIX shell) or ends them; in single quotes, literal in both, when it holds no single quote; else a placeholder,
+ * since no one quoting is literal in both. */
 function quoted(value) {
   if (/^[\w./:@^=+,-]+$/.test(value)) return value;
-  if (!/[$`"!]/.test(value)) return `"${value}"`;
+  if (!/[$`"!\\]/.test(value)) return `"${value}"`;
   return value.includes("'") ? '"<the value given before>"' : `'${value}'`;
 }
 
