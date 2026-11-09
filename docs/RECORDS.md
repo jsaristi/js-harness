@@ -699,6 +699,12 @@ The owner record of one background loop a session runs, so a stop or a status ca
 - `cwd`: string, the folder the command runs in.
 - `survivors`: array of `{ pid, createdAt }`, present only after a `stop` that left processes alive (`bin/loop.mjs` `stopLoop`), so the next stop still finds them.
 
+### `cut-<session>.json`
+
+The count of compactions the heartbeat last told a session's lead with a `CUT:` line (`bin/loop.mjs` `heartbeat`), so a cut due when a heartbeat starts wakes the lead once and a relaunch is not woken again until another compaction. Written whole on each `CUT:`; a missing or unreadable file reads as 0.
+
+- `told`: integer, the compactions counted in the session's transcript when the last `CUT:` line was told.
+
 ## Gates
 
 The machine's record of every gate and of the lock that serializes them: one JSON line per gate event in a rotating log, the lock's holder and waiting files, and the gate-first tickets. `bin/lib/gate-log.mjs` `gateRecord` builds the log lines and `appendGateEvent` appends them; `bin/lib/gate-lock.mjs` `takeGateLock` writes the holder file; `bin/lib/gate-first.mjs` `issueTicket` writes a ticket and `logTicket` its log lines.
