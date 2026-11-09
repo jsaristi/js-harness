@@ -70,7 +70,7 @@ Without \`--global\`, \`status\`, \`sync\` and \`uninstall\` act on the project 
 
 It exists because on 2026-10-15 one project's memory index had grown from 233 to 10,917 characters in 18
 days, read on every turn of every session, with rules kept where nothing acts on them. Memory holds facts of
-the machine; a rule belongs in a check, a line of \`CLAUDE.md\` or \`AGENTS.md\`, or a protocol.
+the machine; a rule belongs in a check, a line of \`CLAUDE.md\` or \`AGENTS.md\`, or a protocol. Committed documents are canonical (the roadmap, the feature documents, \`docs/\`): engram and \`MEMORY.md\` mirror them or point to them, and never hold a decision the repository does not.
 
 - \`js-harness memory status\` says whether a pass is due and why (exit 1 when due). Run a pass at a task
   boundary, never while a gate runs: the orchestrator when there is one, otherwise the session that was told.

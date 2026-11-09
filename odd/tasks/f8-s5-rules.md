@@ -150,3 +150,15 @@ change of a rule whose owner is `sebastian`.
   and larger than it was; `bin/guard.mjs` reads the rule only for a memory index (a lazy import), so every other Write
   and Edit loads what it loaded. `node --test` over guard, manifest, rules-coverage and conventions: 294 of 294; the
   skill's guard line names the new refusal, and `rules coverage --refresh` settled the one owed span it edited.
+- L4 (2026-11-08, T3): `5c25f156` merged `origin/main` in (S7's #794), since `rules change` runs only on a branch
+  based on it. `rules change memory-index-bytes`: 4000 to 2000 bytes, subject naming the guard, source this document
+  (`5cb20f46`); a rule declared after the coverage baseline names its control, so its register entry went from `owed`
+  to `check` (`bin/guard.test.mjs`, the break `* 1000` on its read in `bin/guard.mjs`), and `rules coverage --prove`:
+  "PROVEN memory-index-bytes", 18 of 18 breaks red in 63 s. Two tests stated 4000; `bin/memory.test.mjs` now reads the
+  rule. `rules change documents-canonical`: a new rule of the project, its text one sentence in the `js-harness`
+  skill's "Memory hygiene" (`bin/lib/manifest.mjs`), where the session that saves or cleans memory reads it; its
+  control `protocol` with its phrase. Owner `project`, source this document: it is a line of the F8 plan he approved
+  (the diet, section 10), not new words of his, and it changes no rule of his. What already checks part of it:
+  `rule:memory-feedback-home` (the guard refuses a feedback note with no home in the repository) and `memory verify`
+  (refuses a quotation of his in no home of the repository). `rules check`: 77 rules; `rules coverage`: 73 live,
+  check 18, owed 48, line 2, protocol 6.

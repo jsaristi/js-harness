@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `df4ed54263ed`. In force: 72 (45 of Sebastián, 27 of the project). Retired: 4.
+Hash `dedeec1a0e53`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -285,6 +285,11 @@ How long each done-when command of a contract run may run, unless the run says o
 The shortest phrase by which a control or a rule in prose is found in its file: 12 characters.
 - Read by: `bin/lib/failures.mjs`, `bin/lib/memory-feedback-guard.mjs`, `bin/lib/rules-coverage.mjs`, `bin/lib/rules.mjs`.
 - Since 2026-10-11. Row: reports. Source: design, `odd/tasks/rule-hierarchy.md`.
+
+### documents-canonical
+Committed documents are canonical: engram and the memory index mirror them or point to them, and never hold a decision the repository does not: "Committed documents are canonical (the roadmap, the feature documents, \`docs/\`): engram and \`MEMORY.md\` mirror them or point to them, and never hold a decision the repository does not."
+- Home: `bin/lib/manifest.mjs`.
+- Since 2026-11-08. Row: reports. Source: design, `odd/tasks/f8-s5-rules.md`.
 
 ### gate-log-command
 The longest command a line of the gate log holds, since what follows gate -- can hold a secret: 120 characters.

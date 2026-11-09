@@ -72,6 +72,11 @@ export const COVERAGE = {
         "replace": "if (at >= 0 && branch[at].code.length < 0) {"
       }
     },
+    "documents-canonical": {
+      "level": "protocol",
+      "path": "bin/lib/manifest.mjs",
+      "phrase": "never hold a decision the repository does not"
+    },
     "double-review": {
       "level": "line",
       "path": "bin/lib/protocols-skill.mjs",

@@ -313,6 +313,10 @@
       "by": "command"
     }
   },
+  "documents-canonical": {
+    "kind": "design",
+    "path": "odd/tasks/f8-s5-rules.md"
+  },
   "double-review": {
     "kind": "words",
     "quotes": [
