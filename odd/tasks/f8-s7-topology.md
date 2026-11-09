@@ -128,7 +128,7 @@ what it covered leaves the lead to guess what was done (the reverse-engineering 
   `bin/lib/protocols-skill.test.mjs`. Unrequested means a path in `git status --porcelain --untracked-files=all` of the
   clone after the slice that is not on its surface; names its `S#` means the sub-agent's own last reply, read from
   its transcript, opens `Covered: S<n>` or `Covered: part of S<n>`. Both per slice go in the Log.
-- [ ] T7 (docs) the roadmap's S7 state and SPEC's row; reviews; the pull request.
+- [x] T7 (docs) the roadmap's S7 state and SPEC's row; reviews; the pull request.
 
 ## Log
 - L1 The brief (2026-11-08T22:33Z): "F8 S7: topology and routing. His words (lead transcript 0f71b2c6, 2026-11-08
@@ -198,7 +198,5 @@ what it covered leaves the lead to guess what was done (the reverse-engineering 
   out of the range, so they did not see it.
 
 ## Next step
-- State (2026-11-09 ~02:40Z): four commits on `feat/f8-s7-topology` over 71b50d33 (20e53d66 this document,
-  b48111f8 the writer type and hand-off, 74644066 the heartbeat CUT and the skill cut, 8e34981d the roadmap); T6 done
-  (L10). Next: codex-review --base 71b50d33 --doc this document (one part, 326 lines) and lens-review over the same
-  range (reliability, readability, resilience); answer the findings; `npm run check`; push; PR; `notify --kind ready`.
+- State (2026-11-09 ~02:55Z): PR 794 ready, reviews recorded and answered (L11), `npm run check` PASS. Next: the
+  lead merges after his yes; L8 (the type's first turn in an app session) is owed after a restart on that main.
