@@ -149,10 +149,10 @@ lead's brief says.
 5. The same: "the incident set no worse"; Cost: "about $13, the incident rerun".
 
 ## Next step
-Update ~21:50 local (L14): the 5 P2 fixes and their tests written; commit them, Codex over `48c49a2..HEAD`, the
-lenses; then the pair-9 row and T10 docs in a commit of their own. Then PRs 794 (T7, `a1d6300..21fc735`, on 793's
-branch) and 795 (the rest, on 794's), ready notices once each targets main. Waiting on the lead: his typed line for
-pair 9's rule change, and question 232 (the incident rerun). A `js-harness wait --notice-to 158` runs.
+Update ~22:05 local (L15): the chain is #792 (merged), #793 (ready), #795 (slice 3, on 793's branch) and #796
+(slice 4, on 795's). Next: retarget each to main as the one below lands, and send its ready notice. Waiting on the
+lead: his typed line for pair 9's rule change (then a rule/ branch), and question 232 (the incident rerun, T9). Then
+the session summary under docs/sessions/ and notify closed. A `js-harness wait --notice-to 158` runs.
 State at 2026-11-08 ~18:40 local: `09158b1c` (this document) committed. Uncommitted and green locally: T2 and T3
 (`bin/contract.mjs`, `bin/check.mjs`, `bin/lib/depth-pass.mjs` and its test, `bin/lib/contradictions.test.mjs`), and
 T5 plus the convention test (`bin/lib/next-step.mjs` and test, `--at` in `bin/lens-review.mjs` and
@@ -168,13 +168,13 @@ rerun asked through the lead.
 ## Tasks
 - [x] T1 (kind: docs) this document and its depth pass, committed alone; the plan's double read — L1 to L5
 - [x] T2 (kind: build) spec 1: the contract-first refusal, tests first — L6
-- [ ] T3 (kind: build) spec 2: `bin/lib/contradictions.test.mjs`, the ten pairs; pair 9's question through the lead
-- [ ] T4 (kind: verify) specs 1-2: Codex and the lenses, PR 1, ready notice
-- [ ] T5 (kind: build) spec 4: `bin/lib/next-step.mjs` and `--at` on `lens-review` and `codex-review`, tests first
-- [ ] T6 (kind: build) spec 3: `bin/conventions-next-step.test.mjs` with its legacy list; the review surfaces
+- [x] T3 (kind: build) spec 2: `bin/lib/contradictions.test.mjs`, the ten pairs; pair 9's question through the lead
+- [x] T4 (kind: verify) specs 1-2: Codex and the lenses, PR 1, ready notice
+- [x] T5 (kind: build) spec 4: `bin/lib/next-step.mjs` and `--at` on `lens-review` and `codex-review`, tests first
+- [x] T6 (kind: build) spec 3: `bin/conventions-next-step.test.mjs` with its legacy list; the review surfaces
   converted (`check --push` rows, the merge door's review half, `lens-review`, `codex-review`)
-- [ ] T7 (kind: build) spec 3: the plain `check` rows and the door's rule rows converted; the legacy list empty
-- [ ] T8 (kind: verify) specs 3-4: Codex and the lenses over each slice, PR 2 and PR 3, ready notices
+- [x] T7 (kind: build) spec 3: the plain `check` rows and the door's rule rows converted; the legacy list empty
+- [x] T8 (kind: verify) specs 3-4: Codex and the lenses over each slice, PR 2 and PR 3, ready notices
 - [ ] T9 (kind: verify) spec 5: the incident rerun after his yes through the lead
 - [ ] T10 (kind: docs) ROADMAP S4b State, SPEC, README, summary under `docs/sessions/`
 
@@ -324,3 +324,9 @@ rerun asked through the lead.
   decision: question 229, A", and the rule text waits for a line he types, asked of the lead at 21:43. The incident
   rerun was asked as question 232 at 21:45, one run, about $13 at list price. T10 drafted: SPEC's "A refusal's next
   step" and the contract-first sentence, the ROADMAP's S4b State; README names no capability, so nothing changes there.
+- L15 (2026-11-09, 22:05 local): Codex's recheck of `48c49a2..00cccb9` found 4 of the 5 fixed. Finding 3 was still
+  open: a value with a backslash in double quotes is not literal in a POSIX shell. Such a value now goes in single
+  quotes, red then green, in `797d07f`. The second recheck (`00cccb9..797d07f`): correct, 0.99. Lenses: 0
+  findings, and the readability finding of the round before (the moved-HEAD wording) is fixed in the same commit.
+  GitHub gave the next numbers to others, so slice 3 is #795 (`a1d6300..21fc735`) and slice 4 is #796
+  (`21fc735..797d07f`, 725 lines; no cohesive split, as its body says). Ready for #793 sent at 21:37.
