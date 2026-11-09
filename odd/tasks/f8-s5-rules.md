@@ -201,3 +201,5 @@ the incident rerun (~$13) asked through the lead.
   only `/v1/messages` requests; the planted hook is a script beside the marks run by its quoted path, proved from a
   folder named `O'Connor`. The real run again: plain fired `SessionEnd, SessionStart, UserPromptSubmit`, sent the
   `CLAUDE.md`; lens fired none, sent none; 6 Messages requests each; PASS. Next: review `eb39a858..HEAD`.
+- L9 (2026-11-09, the review of L8's fix): Codex over `949622f..c32a3fd`, a recheck: correct (0.96), 3 of 3 fixed;
+  lenses reliability and risk over `eb39a85..c32a3fd`: 0 findings each.
