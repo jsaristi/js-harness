@@ -136,6 +136,10 @@ test('cmdShellGap names a backtick, a $VAR and single quotes cmd.exe would pass 
     ["bash -c 'test $(date) = x'", /single quote/],
     // Two backslashes before a quote are one backslash, and the quote ends the code: what follows is the shell's.
     ['node -e "console.log(1)\\\\" && test $COUNT -ge 3', /\$VAR/],
+    // The verifier, 2026-11-10: a split cmd.exe makes ends the code, and the special parameters are variables too.
+    ['node -e "a(\\" & echo $X & \\")"', /\$VAR/],
+    ['node x.mjs && test $? -eq 0', /\$VAR/],
+    ['node x.mjs && test $1 = a', /\$VAR/],
   ];
   for (const [bad, said] of cases) {
     const gap = cmdShellGap(bad) ?? '';
@@ -153,6 +157,7 @@ test('cmdShellGap names a backtick, a $VAR and single quotes cmd.exe would pass 
     // Codex, 2026-11-10: an escaped double quote does not end the code the program reads, so what follows it is code.
     'node -e "process.exit(\\"it\'s\\" === \\"it\'s\\" ? 0 : 1)"',
     'node -e "console.log(\\"a\\\\\\\\\\"); process.exit(`${1}` === \'1\' ? 0 : 1)"',
+    'node -e"process.exit(`${1}` === \'1\' ? 0 : 1)"',
   ]) {
     assert.equal(cmdShellGap(good), null, good);
   }

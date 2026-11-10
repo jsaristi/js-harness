@@ -107,6 +107,8 @@ skipped; check job 3 min 55 s). T6 verifier returned. Fix now, tests first, one 
   bin/codex-review.mjs: the route is the older of `reviewFromBehind(head)` and `reviewStart`'s start of the range
   (coverage computed once); integration test with a fake Codex (R0, U1, U2; review --base U1; two rechecks; then
   `--again --base R0` runs). codex-review.mjs is at its 2258-line ceiling: free lines first.
+- DONE in the commit after 99ada2d7: V5 and V6 (tests red then green, 609 commands still 0 gaps). Still owed of V6:
+  docs/RECORDS.md:108 names `$( )` alone; add the backtick, `$VAR` and single quotes there (PR 808 shares the file).
 - V5: GLOB in bin/lib/test-run-warning.mjs misses extglob `@( +( !(`; `node --test` of a directory runs no test.
 - V6: cmdShellGap: a cmd split (`&`, `|` outside cmd quotes) ends the code; `$?`, `$1`, `$@`, `$#` count; `-e"`
   with no space opens code. Left: doubled `""` and `^"` (rare, refuse more). docs/RECORDS.md:108 says `$( )` only

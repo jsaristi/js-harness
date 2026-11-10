@@ -149,7 +149,8 @@ const CODE_FLAGS = new Map([['bash', ['-c']], ['sh', ['-c']], ['pwsh', ['-c', '-
 function opensCode(before) {
   const program = /^[\s(@]*(?:"([^"]+)"|(\S+))/.exec(before);
   const name = (program?.[1] ?? program?.[2] ?? '').split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '');
-  const flag = /(\S+)\s+$/.exec(before)?.[1].toLowerCase();
+  // The flag may be written against its quote: `node -e"..."`.
+  const flag = /(\S+)\s*$/.exec(before)?.[1].toLowerCase();
   return CODE_FLAGS.get(name)?.includes(flag) ?? false;
 }
 
@@ -180,8 +181,10 @@ export function cmdShellGap(command) {
       // quote inside its code, which goes on (Codex, 2026-11-10).
       code = code ? escapedAt(command, i) : quoted && opensCode(command.slice(start, i));
     } else if (!quoted && (char === '&' || char === '|')) {
+      // cmd.exe splits here whatever a program would have read, so the code of the part before it ends too.
       if (command[i + 1] === char) i += 1;
       start = i + 1;
+      code = false;
     } else if (code) {
       continue;
     } else if (char === "'" && !quoted) {
@@ -190,7 +193,7 @@ export function cmdShellGap(command) {
       return lacks('$( )', compute);
     } else if (char === '`') {
       return lacks('a backtick substitution', compute);
-    } else if (char === '$' && /[A-Za-z_{]/.test(command[i + 1] ?? '')) {
+    } else if (char === '$' && /[A-Za-z_{0-9?@#*!$]/.test(command[i + 1] ?? '')) {
       return lacks('a $VAR', 'Read the variable inside one program instead, such as node -e "process.env.NAME"');
     }
   }

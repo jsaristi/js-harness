@@ -81,9 +81,10 @@ function gateWraps(words) {
   return gateCommands(words)?.flat() ?? null;
 }
 
-/** A word a glob expands: a wildcard, a character class or a brace list. The shell expands it when it is not quoted,
- * and `node --test` expands it itself when it is, so quoting it hides no file (M11 of the Fable 5.2 audit). */
-const GLOB = /[*?[]|\{[^}]*,[^}]*\}/;
+/** A word a glob expands: a wildcard, a character class, a brace list or an extglob (`@(a|b)`, `+(a)`, `!(a)`). The
+ * shell expands it when it is not quoted, and `node --test` expands it itself when it is, so quoting it hides no file
+ * (M11 of the Fable 5.2 audit). A folder `node --test` is given runs no test, so a plain path stays one file. */
+const GLOB = /[*?[]|[@+!]\(|\{[^}]*,[^}]*\}/;
 
 /** The files the `node --test` of `words` names, as `{ files, names }`: `files` is `0` for none (every test
  * file the runner finds) and `Infinity` when one is a wildcard (several, as a rule), and `names` holds the words

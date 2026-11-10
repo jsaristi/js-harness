@@ -187,6 +187,8 @@ test('a quoted glob is several files, as Node expands it itself, and so is a bra
     assert.equal(testRunFiles(command), Infinity, command);
     assert.equal(testRunWarning(command, { env: {}, holder: held, fileSeconds: untimed }), warned('several test files'), command);
   }
+  // The verifier, 2026-11-10: Node's glob expands an extglob too.
+  for (const command of ['node --test "bin/lib/@(contract|home).test.mjs"', 'node --test "bin/lib/+(a|b).test.mjs"', 'node --test "bin/lib/!(x).test.mjs"']) assert.equal(testRunFiles(command), Infinity, command);
   // A brace with no list in it is no glob, and a quoted pattern of a flag is no file.
   assert.equal(testRunFiles('node --test "bin/lib/{a}.test.mjs"'), 1);
   assert.equal(testRunFiles('node --test --test-name-pattern="a*" a.mjs'), 1);
