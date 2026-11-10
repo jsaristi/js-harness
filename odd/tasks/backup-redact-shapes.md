@@ -80,7 +80,7 @@ Nothing planned: his answer to question 242 chose the scope. A question goes to 
 ## Tasks
 - [x] T1 (kind: build) spec 1, 2: the tests first, then the patterns and the help · `bin/lib/backup.mjs`,
   `bin/lib/backup.test.mjs`, `bin/backup.mjs`, `bin/backup.test.mjs`, `README.md`, `docs/SPEC.md` · e631914c
-- [ ] T2 (kind: verify) Codex, the Claude lenses, an independent verifier, the pull request
+- [x] T2 (kind: verify) Codex, the Claude lenses, an independent verifier, the pull request · PR 804
 
 ## Log
 - L1 (2026-11-10T04:05:10Z, his answer to question 242, transcript `ea85ec35` line 1136): "Ampliar patrones y corregir
@@ -161,3 +161,5 @@ Nothing planned: his answer to question 242 chose the scope. A question goes to 
   each, 27,792 input tokens in all; reliability rechecked its earlier warning: fixed. Every code commit of the branch
   is covered by a Codex and a lens record. Not run again: the independent verifier, whose second pass (L9) passed
   b0c940c3; the three commits after it answer its finding A and two review findings, each with a test that failed first.
+- L12 Pull request 804 opened: https://github.com/jsaristi/js-harness/pull/804. He merges; the question said its PR is
+  asked of him before it is merged.
