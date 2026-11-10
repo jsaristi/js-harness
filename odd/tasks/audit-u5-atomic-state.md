@@ -28,7 +28,7 @@ engram hook writer, the manifests and the Rules block already write by a tempora
 - In: `bin/lib/cache.mjs`, `bin/lib/atomic-write.mjs`, `bin/lib/rules-block.mjs` (its whole-file writer moves to
   `atomic-write.mjs`, unchanged), `bin/lib/user-settings.mjs`, `bin/lib/permissions.mjs`, the two in-place writes of
   `bin/lib/manifest.mjs` and its uninstall of the cache, `bin/doctor.mjs`, the reviewed-record reader of
-  `workshop/bin/host-watch.mjs`, their tests, a new `bin/lib/user-settings.test.mjs`, this document.
+  `workshop/bin/host-watch.mjs`, the settings write of `bin/lib/stack-backup.mjs` (L6), `docs/SPEC.md`, `docs/RECORDS.md`, `docs/workshop.md`, their tests, a new `bin/lib/user-settings.test.mjs`, this document.
 - Out: the heartbeat's ticks and the project's `.claude/settings.json` hook entry (JH 166 works there); the other
   in-place writers the audit did not name (the Codex config, the components): not this unit's; lost updates between
   two writers that both read before either writes (a lock is a larger change, see Depth pass item 1).
@@ -130,3 +130,23 @@ through `js-harness notify --to orchestrator --kind question`.
   read the reviews, so a migration done at the first read came after a clean cache had already replaced the torn one,
   and the update was recorded as reviewed again. `writeCache` now reads the cache into the record before it writes,
   when there is no record yet; a cache test pins that order.
+- L5 (2026-11-10, reviews of 0b8b7c2..52367d1): Codex, part 1 incorrect (0.98), part 2 correct (0.92): a failed write
+  of the record during the migration let the cache write that followed erase an unknown state; `writeCache` now
+  leaves an existing cache in place while the record cannot take what it holds (a cache test, red first). Lenses
+  resilience and reliability, the same finding: the unknown host row said a host watch session reviews it, but a
+  host watch spans an update from the version reviewed and never sees it; the row and the notice now send it to the
+  lead and name `host-watch draft --from-desktop`. Risk and readability: 0 findings.
+- L6 (2026-11-10, the independent verifier, Opus 5.5, on 6ee974d..52367d1): 10 findings, none a blocker. Fixed, each
+  test red first where it is behaviour: (1) a migration that read a cache another process had just rewritten clean
+  overwrote that process's unknown record with `{}`: the migration now makes the record by a hard link that fails
+  when it exists, and reads it then; (2) the failed migration write, already fixed by L5; (3) a read that fails for a
+  moment (EBUSY, EPERM) was taken as a corrupt file and written as unknown for good: it is now unknown for that read
+  only, and nothing is written from it; (4) the unknown host row's words, already fixed by L5; (5) the unknown notices
+  now carry the versions read, so a further update is a new notice; (6) `stack-backup's` `setKey`, a further writer of
+  the settings, now writes by rename; (10) the comments that still put the reviews in the cache. Left, and why: (7) a
+  hard-linked settings file is detached by the rename, as the Rules block's CLAUDE.md already is: a rename cannot keep
+  a hard link, and an in-place write would bring back the torn file; (8) a rename refused while another process reads
+  the file (EPERM, 2 to 8 of 200 against a reader with no pause, none with a 5 ms pause) is said as `skipped`, never
+  silent; (9) while the record cannot be written the cache is not written either, so the latest versions are fetched
+  each run until it can: the cost of keeping the evidence. Lost updates between two writers of the record remain, each
+  one losing a review, never adding one, and narrower than before.

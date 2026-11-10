@@ -277,6 +277,90 @@ test('a write of the cache before any read of the reviews reads an old or torn c
   }
 });
 
+// Codex on 0b8b7c2..52367d1: a record that could not be written must not let the cache write erase what it would hold.
+test('while the record cannot be written, a write of the cache leaves an old or torn cache in place', (t) => {
+  const home = makeTmpHome();
+  try {
+    const raw = JSON.stringify({ ...LATEST, host: HOST }, null, 2);
+    fs.mkdirSync(path.dirname(cachePath(home)), { recursive: true });
+    fs.writeFileSync(cachePath(home), raw.slice(0, Math.floor(raw.length / 2)));
+    const torn = fs.readFileSync(cachePath(home), 'utf8');
+    // The record is made by a hard link, or a rename where there is none: both fail onto it.
+    const failing = ['renameSync', 'linkSync'].map((name) => {
+      const real = fs[name];
+      return t.mock.method(fs, name, (from, to) => {
+        if (path.resolve(String(to)) === path.resolve(reviewedPath(home))) throw Object.assign(new Error('i/o error'), { code: 'EIO' });
+        return real(from, to);
+      });
+    });
+    writeCache(home, LATEST);
+    assert.equal(fs.readFileSync(cachePath(home), 'utf8'), torn);
+    assert.equal(fs.existsSync(reviewedPath(home)), false);
+    for (const mock of failing) mock.mock.restore();
+    writeCache(home, LATEST);
+    assert.deepEqual(readReviewed(home), { host: { unreadable: true }, stack: { unreadable: true } });
+    assert.deepEqual(readCache(home), LATEST);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// The verifier on 6ee974d..52367d1, finding 1: a migration that read a cache another process had just rewritten clean
+// must not overwrite the unknown record that process wrote first.
+test('a migration that finds the record made meanwhile by another process reads that record, never overwrites it', (t) => {
+  const home = makeTmpHome();
+  try {
+    const raw = JSON.stringify({ ...LATEST, host: HOST }, null, 2);
+    fs.mkdirSync(path.dirname(cachePath(home)), { recursive: true });
+    fs.writeFileSync(cachePath(home), raw.slice(0, Math.floor(raw.length / 2)));
+    const read = fs.readFileSync;
+    let raced = false;
+    t.mock.method(fs, 'readFileSync', (file, ...rest) => {
+      if (!raced && path.resolve(String(file)) === path.resolve(cachePath(home))) {
+        // Another doctor runs whole between this one's look for the record and its read of the cache.
+        raced = true;
+        fs.writeFileSync(reviewedPath(home), JSON.stringify({ host: null, stack: null }));
+        fs.writeFileSync(cachePath(home), JSON.stringify(LATEST));
+      }
+      return read(file, ...rest);
+    });
+    assert.deepEqual(readReviewed(home), { host: { unreadable: true }, stack: { unreadable: true } });
+    assert.deepEqual(JSON.parse(read(reviewedPath(home), 'utf8')), { host: null, stack: null });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// The verifier's finding 3: a read that fails for a moment is not a corrupt file, so nothing is written from it.
+test('a record or a cache that cannot be read for a moment is unknown for that read and writes nothing', (t) => {
+  const home = makeTmpHome();
+  try {
+    writeCache(home, { ...LATEST, host: HOST, stack: STACK });
+    const cacheBytes = fs.readFileSync(cachePath(home), 'utf8');
+    const read = fs.readFileSync;
+    const busy = (target) => t.mock.method(fs, 'readFileSync', (file, ...rest) => {
+      if (path.resolve(String(file)) === path.resolve(target)) throw Object.assign(new Error('busy'), { code: 'EBUSY' });
+      return read(file, ...rest);
+    });
+    // The migration of an old cache that cannot be read now writes no record, and leaves the cache for the next run.
+    fs.rmSync(reviewedPath(home), { force: true });
+    let mock = busy(cachePath(home));
+    assert.deepEqual(readReviewed(home), { host: { unreadable: true }, stack: { unreadable: true } });
+    assert.equal(fs.existsSync(reviewedPath(home)), false);
+    writeCache(home, LATEST);
+    mock.mock.restore();
+    assert.equal(fs.readFileSync(cachePath(home), 'utf8'), cacheBytes);
+    assert.deepEqual(readReviewed(home), { host: HOST, stack: STACK });
+    // A record that cannot be read now is recorded over by nothing: the other review is never written as unknown.
+    mock = busy(reviewedPath(home));
+    assert.equal(recordReviewed(home, 'host', { ...HOST.reviewed, desktop: '9.9.9' }), false);
+    mock.mock.restore();
+    assert.deepEqual(readReviewed(home), { host: HOST, stack: STACK });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('a malformed review in an old doctor.json is unknown, not a first reading; the well-formed one beside it is kept', () => {
   const home = makeTmpHome();
   try {

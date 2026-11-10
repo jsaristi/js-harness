@@ -2137,6 +2137,9 @@ test('a corrupt doctor.json records nothing as reviewed: both reviews stay gaps,
     }
     const hook = await runDoctor(['--hook', '--home', home, '--cwd', project], {}, deps);
     assert.match(JSON.parse(hook.output).systemMessage, /record of the host review cannot be read.*record of the stack review cannot be read/);
+    // A host watch spans an update from the version reviewed, so it never sees this one: the lead is told (the lenses on
+    // 0b8b7c2..52367d1).
+    assert.match(JSON.parse(hook.output).systemMessage, /which no host watch sees: tell the lead/);
 
     const recorded = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed', '--stack-reviewed'], {}, deps);
     assert.equal(recorded.code, 0, recorded.output);
