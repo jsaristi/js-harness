@@ -66,8 +66,8 @@ useless; an unchecked second stop leaves every reply check holding for the first
    block twice." (the same).
 
 ## Tasks
-- [ ] T1 (build) spec 1: decimal and boundary in the share patterns, tests first.
-- [ ] T2 (build) spec 2: the skip phrase compared with accents folded, test first.
+- [x] T1 (build) spec 1: decimal and boundary in the share patterns, tests first: `9135a510`.
+- [x] T2 (build) spec 2: the skip phrase compared with accents folded, test first: `ede375ab`.
 - [ ] T3 (build) spec 3: the second stop checked, never blocked, the miss said in a `systemMessage`, tests first;
   an independent verifier reads it.
 
@@ -82,3 +82,7 @@ useless; an unchecked second stop leaves every reply check holding for the first
   stop with `stop_hook_active`, the reply's own checks run again (its close and labels, the UTC time, the command
   block); the wake, stale-board and return checks do not, since each already turns back once by its own record. A
   miss answers `{ systemMessage }`, never `decision: block`. The guard's share check keeps its skip: not in the unit.
+- L4 Red before the fix: `node --test bin/lib/share-check.test.mjs bin/double-review.test.mjs bin/reply.test.mjs`
+  with the new tests and the old code, 56 pass, 5 fail (the five new or changed tests); after the fixes, 61 pass,
+  0 fail; `npm run check` exit 0. docs/SPEC.md's reply check says nothing of the second stop, so it is left as is
+  (entry documents are JH 164's this morning).
