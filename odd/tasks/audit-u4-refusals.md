@@ -113,6 +113,7 @@ skipped; check job 3 min 55 s). T6 verifier returned. Fix now, tests first, one 
 - V6: cmdShellGap: a cmd split (`&`, `|` outside cmd quotes) ends the code; `$?`, `$1`, `$@`, `$#` count; `-e"`
   with no space opens code. Left: doubled `""` and `^"` (rare, refuse more). docs/RECORDS.md:108 says `$( )` only
   (PR 808 touches that file).
+- V7 DONE (a guard of a future shape: nothing red to show today). Next is V2, then the review of 99ada2d7..HEAD.
 - V7: workflow test refuses `continue-on-error` and `if:` in gate.yml.
 - Report to the lead, not fixed (scope): V1, repeated `--again` reviews of a change outside a three-review chain, or
   after one recheck, still run (L3 counts only the three-review state; the owner's bound is per change); V3, without

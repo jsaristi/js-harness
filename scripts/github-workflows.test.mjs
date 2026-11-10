@@ -82,6 +82,8 @@ test('two jobs on fixed runners, each bounded by the rule ci-gate-bound: the gat
   const windows = below(jobs, 'windows:');
   assert.deepEqual(level(windows), ['runs-on: windows-2025', bound, 'steps:']);
   assert.equal(runs(windows).at(-1), 'node --test bin/remote.test.mjs');
+  // The verifier, 2026-11-10: a step or job that may fail, or may not run, would be green without its tests.
+  assert.deepEqual(lines.filter((line) => /^(- )?(continue-on-error|if):/.test(line.text)).map((line) => line.text), []);
   // The runner's TEMP is an 8.3 short path that git answers in its long form, as the daily suite says.
   assert.deepEqual(below(below(windows, '- name: The Windows tests of js-harness remote'), 'env:').map((line) => line.text), ['TEMP: ${{ runner.temp }}', 'TMP: ${{ runner.temp }}']);
 });
