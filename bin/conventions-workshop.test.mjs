@@ -38,13 +38,13 @@ function shippedModules() {
 /** What `text` imports by a literal: static imports and re-exports, `import('...')` and `require('...')`. */
 function literalImports(text) {
   const code = withoutComments(text);
-  const dynamic = [...code.matchAll(/\b(?:import|require)\(\s*(['"])([^'"]+)\1\s*\)/g)].map((match) => match[2]);
+  const dynamic = [...code.matchAll(/\b(?:import|require)\s*\(\s*(['"])([^'"]+)\1\s*\)/g)].map((match) => match[2]);
   return [...importsOf(code), ...dynamic];
 }
 
 /** Whether `text` holds an `import(` whose argument is not a single string literal. */
 function hasValueImport(text) {
-  return /\bimport\((?!\s*(['"])[^'"]+\1\s*\))/.test(withoutComments(text));
+  return /\bimport\s*\((?!\s*(['"])[^'"]+\1\s*\))/.test(withoutComments(text));
 }
 
 /** Whether `specifier`, imported by the module at `file` (relative to `bin/`), names a file outside `bin/`. Bare
@@ -56,11 +56,19 @@ function outside(file, specifier) {
   return resolved === '..' || resolved.startsWith('../');
 }
 
-/** The files the `HELP` map of the dispatcher's `text` names, each its entry's first string. */
+/** The files the `HELP` map of the dispatcher's `text` names, each its entry's first string. A line of the map that
+ * is not an entry in single or double quotes throws, so an entry this reading cannot see is never passed over. */
 function helpFiles(text) {
-  const block = /\nconst HELP = \{\n([\s\S]*?)\n\};/.exec(text);
+  const block = /\nconst HELP = \{\r?\n([\s\S]*?)\r?\n\};/.exec(text);
   assert.ok(block, 'bin/js-harness.mjs holds no `const HELP = {` map');
-  return [...block[1].matchAll(/^\s*[\w'-]+:\s*\[\s*'([^']+)'/gm)].map((match) => match[1]);
+  return block[1]
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== '' && !/^\s*\/\//.test(line))
+    .map((line) => {
+      const entry = /^\s*[\w'"-]+:\s*\[\s*(['"])([^'"]+)\1/.exec(line);
+      if (!entry) throw new Error(`cannot read the HELP entry "${line.trim()}": write it as name: ['./file.mjs', 'USAGE'], one a line`);
+      return entry[2];
+    });
 }
 
 test('every shipped module under bin/ imports nothing outside bin/, so no workshop file reaches an install', () => {
@@ -115,5 +123,8 @@ test('the reading finds an import of the workshop in each form, and leaves comme
   assert.ok(hasValueImport('const m = await import(`./${name}.mjs`);'));
   assert.ok(!hasValueImport("const m = await import('./check.mjs');"));
   assert.ok(!hasValueImport('// await import(file) in a comment'));
-  assert.deepEqual(helpFiles("x\nconst HELP = {\n  check: ['./check.mjs', 'USAGE'],\n  'merge-queue': ['../workshop/m.mjs', 'USAGE'],\n};\n"), ['./check.mjs', '../workshop/m.mjs']);
+  assert.ok(hasValueImport('const m = await import (file);'), 'whitespace before the parenthesis is still an import');
+  assert.deepEqual(literalImports("const a = await import ('../workshop/a.mjs');\nconst b = require ( \"../workshop/b.cjs\" );"), ['../workshop/a.mjs', '../workshop/b.cjs']);
+  assert.deepEqual(helpFiles("x\nconst HELP = {\n  check: ['./check.mjs', 'USAGE'],\n  'merge-queue': [\"../workshop/m.mjs\", 'USAGE'],\n};\n"), ['./check.mjs', '../workshop/m.mjs']);
+  assert.throws(() => helpFiles('x\nconst HELP = {\n  check: [`./check.mjs`, \'USAGE\'],\n};\n'), /cannot read the HELP entry/);
 });
