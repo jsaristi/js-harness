@@ -22,7 +22,9 @@
 //   work passes to (`rule:escalation-model`); a recheck whose open findings were not kept is refused as one
 //   recheck too many, with a follow-up task (`secondRecheckRefused`). A range whose every code commit has a
 //   record needs nothing more; one that holds code no record covers is reviewed from the nearest commit behind
-//   it that starts a review, with `--again`, so that no skip leaves new code unread.
+//   it that starts a review, with `--again`, so that no skip leaves new code unread. A run with `--again` from
+//   further behind, or over a range with no new code, would review the change a fourth time, and is refused too
+//   (`againPastThreeReviews`; M12 of the Fable 5.2 audit).
 //
 // Its limit: new code committed in the same range as a correction is read as a follow-up, not reviewed;
 // only a blocking finding stops it. A session that wants new work reviewed in full commits the correction
