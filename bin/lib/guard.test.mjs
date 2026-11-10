@@ -168,22 +168,29 @@ test('the tools that do not open a session pass in this repository, whatever the
 // A session started with no effort runs at the effort of the session that started it: on 2026-10-16 two work
 // sessions opened so ran at max for two days while the rule says high (odd/tasks/harness-review.md, T6c).
 const BRIEF = { initiation: 'own_initiative', title: 'JH 32 · T9', prompt: 'Do T9.', background: 'x'.repeat(80) };
+// The rule's effort is read from the list and never written here, so a change of his needs no edit of these tests; the
+// order of the levels is the host's, written here apart from the guard's own.
+const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
+const HELD = RULES.find((rule) => rule.id === 'session-effort').value;
+const ABOVE = LEVELS.slice(LEVELS.indexOf(HELD) + 1);
+const WITHIN = LEVELS.slice(0, LEVELS.indexOf(HELD) + 1);
 
 test('in this repository a session started with no effort, or above the rule\'s, is refused, and the reason names the rule', () => {
   const noEffort = sessionEffortRefusal(BRIEF, HERE);
   assert.equal(noEffort, 'js-harness guard: start_session names no effort, so the new session would run at this session\'s '
-    + '(rule session-effort: high). Pass effort "high" or lower with context "fresh"; a fork cannot set its own effort.');
-  for (const effort of ['xhigh', 'max']) {
+    + `(rule session-effort: ${HELD}). Pass effort "${HELD}" or lower with context "fresh"; a fork cannot set its own effort.`);
+  assert.ok(LEVELS.includes(HELD), `the rule's effort, ${HELD}, is one of the levels`);
+  for (const effort of ABOVE) {
     assert.equal(sessionEffortRefusal({ ...BRIEF, effort }, HERE), `js-harness guard: start_session asks for effort "${effort}", `
-      + 'above the rule session-effort: high. Pass effort "high" or lower; a higher one is his to set.', effort);
+      + `above the rule session-effort: ${HELD}. Pass effort "${HELD}" or lower; a higher one is his to set.`, effort);
   }
   assert.equal(sessionEffortRefusal({ ...BRIEF, context: 'fork' }, HERE), noEffort);
   assert.equal(sessionEffortRefusal({ ...BRIEF, effort: 'ultra' }, HERE), 'js-harness guard: start_session asks for effort "ultra", '
-    + 'which is not one of low, medium, high, xhigh, max. Pass effort "high" or lower.');
+    + `which is not one of low, medium, high, xhigh, max. Pass effort "${HELD}" or lower.`);
 });
 
 test('a session started at the rule\'s effort or lower passes, and so do the calls that carry no brief', () => {
-  for (const effort of ['high', 'medium', 'low']) assert.equal(sessionEffortRefusal({ ...BRIEF, effort }, HERE), null, effort);
+  for (const effort of WITHIN) assert.equal(sessionEffortRefusal({ ...BRIEF, effort }, HERE), null, effort);
   assert.equal(sessionEffortRefusal({ initiation: 'offer', title: 'T9' }, HERE), null, 'an offer is a title alone');
   assert.equal(sessionEffortRefusal({ proposal_id: 'task_ab12cd34' }, HERE), null, 'a proposal starts as it was proposed');
 });

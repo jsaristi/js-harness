@@ -50,6 +50,9 @@ async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, arg
 }
 
 const denied = (result) => JSON.parse(result.out).hookSpecificOutput;
+// The effort the rule session-effort gives, read from the list and never written here: a session these tests start at it
+// passes that rule whatever his last change made it.
+const SESSION_EFFORT = RULES.find((rule) => rule.id === 'session-effort').value;
 
 test('a command typed into his terminal is denied without its note at the end, and passes with one', async () => {
   const bare = await hook({ tool_name: 'mcp__terminal__run_in_terminal', cwd: 'D:/project', tool_input: { command: 'npm test' } });
@@ -97,10 +100,10 @@ test('a session started with no effort, or above the rule session-effort, is den
   for (const tool_input of [brief, { ...brief, effort: 'max' }, { ...brief, context: 'fork' }]) {
     const refused = await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input });
     assert.equal(denied(refused).permissionDecision, 'deny', JSON.stringify(tool_input));
-    assert.match(denied(refused).permissionDecisionReason, /^js-harness guard: start_session .*session-effort: high/, JSON.stringify(tool_input));
+    assert.match(denied(refused).permissionDecisionReason, new RegExp(`^js-harness guard: start_session .*session-effort: ${SESSION_EFFORT}`), JSON.stringify(tool_input));
   }
   const passes = { code: 0, out: '', err: '' };
-  assert.deepEqual(await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: { ...brief, effort: 'high' } }), passes);
+  assert.deepEqual(await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: { ...brief, effort: SESSION_EFFORT } }), passes);
   assert.deepEqual(await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: brief }, { rulesText: null }), passes, 'no rules');
 });
 
@@ -108,7 +111,7 @@ test('a session started with no effort, or above the rule session-effort, is den
 // because PR 586 had changed sessions-open-in-sidebar in the project's list.
 test('a free title is denied by a copy whose list is behind the project\'s in another rule', async () => {
   const ahead = writeRules(RULES.map((rule) => (rule.id === 'sessions-open-in-sidebar' ? { ...rule, value: `${rule.value} with its sidebar` } : rule)));
-  const tool_input = { initiation: 'own_initiative', title: 'Codex hook trust', prompt: 'Do it.', effort: 'high', context: 'fresh' };
+  const tool_input = { initiation: 'own_initiative', title: 'Codex hook trust', prompt: 'Do it.', effort: SESSION_EFFORT, context: 'fresh' };
   const refused = await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input }, { rulesText: ahead });
   assert.equal(refused.code, 0);
   assert.equal(denied(refused).permissionDecision, 'deny');
@@ -139,7 +142,7 @@ test('a session started with a free title is denied where the rule session-title
       });
       return { code, out: out.join('') };
     };
-    const brief = { initiation: 'own_initiative', prompt: 'Install the tools.', effort: 'high', context: 'fresh' };
+    const brief = { initiation: 'own_initiative', prompt: 'Install the tools.', effort: SESSION_EFFORT, context: 'fresh' };
     const refused = await start({ ...brief, title: 'Install module for required third-party tools' });
     assert.equal(refused.code, 0);
     assert.equal(denied(refused).permissionDecision, 'deny');

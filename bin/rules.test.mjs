@@ -352,8 +352,16 @@ function launch(records, model, effort) {
   fs.utimesSync(file, NOW / 1000, NOW / 1000);
 }
 
-/** Runs `js-harness rules applied` on `project` at NOW, with `env` (by default the Claude home is `home`), collecting its output. */
-async function applied(project, home, env = { CLAUDE_CONFIG_DIR: home }, { cwd = project, git = NO_GIT } = {}) {
+/** The rule `id` as the list of this copy declares it: a test of `applied` reads a rule's value and day from here and
+ * never writes them, so a change of the rule (`js-harness rules change`) needs no edit of a test. */
+const declared = (id) => RULES.find((rule) => rule.id === id);
+/** The line `applied` opens the block of the rule `id` with, among the rules with no short name. */
+const heldLine = (id) => `  ${id}: ${declared(id).value}, since ${declared(id).since}`;
+// The efforts a session record can name; one that is not a rule's value is a difference from it.
+const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+/** Runs `js-harness rules applied` on `project` at `now` (NOW by default), with `env` (by default the Claude home is `home`), collecting its output. */
+async function applied(project, home, env = { CLAUDE_CONFIG_DIR: home }, { cwd = project, git = NO_GIT, now = NOW } = {}) {
   const out = [];
   const err = [];
   const code = await rulesMain(['applied'], {
@@ -361,7 +369,7 @@ async function applied(project, home, env = { CLAUDE_CONFIG_DIR: home }, { cwd =
     cwd,
     env,
     homedir: () => home,
-    now: () => NOW,
+    now: () => now,
     run: git,
     stdout: (line) => out.push(line),
     stderr: (line) => err.push(line),
@@ -393,8 +401,7 @@ test('applied holds what a launch ran at to subagent-effort, as information that
     assert.ok(out.some((line) => line.startsWith('To the lead: 1 launch that passed a declared short name ran at another effort than subagent-effort says (high)')), out.join('\n'));
     assert.equal(out.at(-1), 'Information: 1 record ran at another value than a rule of the block above says; this is no failure.');
     // The session rules are in force and no session is in the records: each says so, and neither is a difference.
-    assert.ok(out.includes('  session-effort: high, since 2026-10-10'), out.join('\n'));
-    assert.ok(out.includes('    nothing to compare: no session in the window since that day'), out.join('\n'));
+    assert.equal(out[out.indexOf(heldLine('session-effort')) + 1], '    nothing to compare: no session in the window since that day', out.join('\n'));
   });
 });
 
@@ -403,16 +410,25 @@ test('applied holds the last answer of a session to session-model and session-ef
     const records = recordsOf(project, home);
     fs.mkdirSync(records, { recursive: true });
     const file = path.join(records, 'session-x.jsonl');
-    const entry = { type: 'assistant', version: '2.1.200', entrypoint: 'cli', effort: 'medium', timestamp: new Date(NOW).toISOString(), message: { model: 'claude-opus-5-5' } };
+    // The session answers at noon of the day after the later of the two rules began, so both hold it; on the model its
+    // rule gives and at an effort its rule does not, so one agrees and the other is a difference.
+    const model = declared('session-model');
+    const effort = declared('session-effort');
+    const since = [model.since, effort.since].sort().at(-1);
+    const at = Date.parse(`${since}T12:00:00Z`) + 24 * 60 * 60 * 1000;
+    const other = LEVELS.find((level) => level !== effort.value);
+    const entry = { type: 'assistant', version: '2.1.200', entrypoint: 'cli', effort: other, timestamp: new Date(at).toISOString(), message: { model: model.value } };
     fs.writeFileSync(file, `${JSON.stringify(entry)}\n`, 'utf8');
-    fs.utimesSync(file, NOW / 1000, NOW / 1000);
-    const { code, out } = await applied(project, home);
-    const day = new Date(NOW).toISOString().slice(0, 10);
+    fs.utimesSync(file, at / 1000, at / 1000);
+    const { code, out } = await applied(project, home, undefined, { now: at });
+    const day = new Date(at).toISOString().slice(0, 10);
     assert.equal(code, 0, out.join('\n'));
-    assert.ok(out.includes('  session-model: claude-opus-5-5, since 2026-10-10'), out.join('\n'));
-    assert.ok(out.includes('    agree: 1 of 1 session'), out.join('\n'));
-    assert.ok(out.includes('  session-effort: high, since 2026-10-10'), out.join('\n'));
-    assert.ok(out.includes(`    medium: 1 session on cli, the last on ${day}`), out.join('\n'));
+    const modelAt = out.indexOf(heldLine('session-model'));
+    const effortAt = out.indexOf(heldLine('session-effort'));
+    assert.ok(modelAt !== -1 && effortAt !== -1, out.join('\n'));
+    assert.equal(out[modelAt + 1], '    agree: 1 of 1 session', out.join('\n'));
+    assert.equal(out[effortAt + 1], '    agree: 0 of 1 session', out.join('\n'));
+    assert.ok(out.includes(`    ${other}: 1 session on cli, the last on ${day}`), out.join('\n'));
     assert.ok(out.includes('      session-x.jsonl'), out.join('\n'));
   });
 });
