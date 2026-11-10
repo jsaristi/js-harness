@@ -23,11 +23,11 @@ const SECRETS = [
     /()-----BEGIN ([A-Z ]*)PRIVATE KEY-----(?:[^"]*?-----END \2PRIVATE KEY-----|(?:(?:[ \t]|\r?\n|\\(?:r\\)?n)+(?:[A-Za-z0-9+/=]{16,}|[A-Za-z0-9+/=]+(?=\r?\n|\\(?:r\\)?n|"|$)))*(?:(?:\r?\n|\\(?:r\\)?n)-+(?="|$))?)/g,
   ],
   ['GitHub token', /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})/g],
-  // An Anthropic or OpenAI key whose random part holds `_` or `-` (`sk-ant-api03-…`, `sk-proj-…`): the whole run over
-  // the providers' alphabet, so no part after a hyphen is left (the Fable 5.2 audit, H2). Upper and lower case, a digit,
-  // a run of 12 with no hyphen and 32 in all, which a hyphenated sentence does not have. Before the next pattern, which
-  // would blank only up to the first hyphen.
-  ['API key', /\b[a-z0-9]*sk-(?=[A-Za-z0-9_-]*[A-Z])(?=[A-Za-z0-9_-]*[a-z])(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*?[A-Za-z0-9_]{12})[A-Za-z0-9_-]{32,}/g],
+  // An Anthropic or OpenAI key whose random part holds `_` or `-` (`sk-ant-api03-…`, `sk-ant-admin01-…`, `sk-proj-…`,
+  // `sk-svcacct-…`, `sk-admin-…`): the whole run over the providers' alphabet after the provider's own prefix, so no part
+  // after a hyphen is left and no word that ends in `sk` starts one (the Fable 5.2 audit, H2; Codex P2 on
+  // b16f9e2..92d5989). Before the next pattern, which would blank only up to the first hyphen.
+  ['API key', /\bsk-(?:ant-[a-z]+\d*|proj|svcacct|admin)-[A-Za-z0-9_-]{20,}/g],
   // `sk-ant-api03-…`: a run of 20 or more without a hyphen, holding a digit, so `risk-assessment-…` is not one; or a
   // UUID after `sk-`, the shape of the Context7 key found in this machine's backups (round 2 of the readers).
   ['API key', /\b[a-z0-9]*sk-(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b|(?:[a-z0-9]+-)*(?=[A-Za-z_]*\d)[A-Za-z0-9_]{20,})/gi],
@@ -48,7 +48,7 @@ const SECRETS = [
   [
     'credential field',
     // Its quotes may be escaped (`\"password\":\"…\"`): an Engram export holds a note's JSON inside a JSON string.
-    /((?:\\?"(?:[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization)|(?:[A-Za-z0-9.-]*_)?pass|[A-Za-z0-9.-]*_pwd)\\?"|\b(?:[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization)|(?:[A-Za-z0-9.-]*_)?pass|[A-Za-z0-9.-]*_pwd))\s*[:=]\s*(?:\\?")?)[^"\s\\]{20,}/gi,
+    /((?:\\?"(?:[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization)|(?:[A-Za-z0-9_.-]*_)?pass|[A-Za-z0-9_.-]*_pwd)\\?"|\b(?:[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization)|(?:[A-Za-z0-9_.-]*_)?pass|[A-Za-z0-9_.-]*_pwd))\s*[:=]\s*(?:\\?")?)[^"\s\\]{20,}/gi,
   ],
 ];
 

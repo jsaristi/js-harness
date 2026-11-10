@@ -61,8 +61,8 @@ Nothing planned: his answer to question 242 chose the scope. A question goes to 
   spec 2: `node --test bin/backup.test.mjs`: none, new behaviour; today the help says "secrets blanked" for the whole
   backup and nothing about bundles.
 - 4. Refutation: could the wider `sk-` branch blank prose? The existing plain case holds `risk-assessment-for-the-whole-team`;
-  the new branch asks for upper case, lower case and a digit in a run of 32 or more, which a hyphenated sentence does
-  not have; the test adds `task-list-2026-11-09-for-the-review-of-the-team`, prose with digits, as a case that stays.
+  the new branch starts only at a provider's own prefix (`sk-ant-<word>-`, `sk-proj-`, `sk-svcacct-`, `sk-admin-`),
+  never at a word that ends in `sk` (L6); the test adds hyphenated prose with digits and capitals as cases that stay.
   Could a credential field swallow a word like `bypass`? The new `pass`/`pwd` names need a start or an `_` before them.
   Verdict: supports
 - 5. Request: as the Goal: the help says the bundles go as they are, not blanked, which is what the code does today.
@@ -99,3 +99,11 @@ Nothing planned: his answer to question 242 chose the scope. A question goes to 
 - L5 The first commit of the code was refused by the gate (GitHub's run): `bin/conventions-structure.test.mjs:150`,
   `bin/backup.mjs` grew to 1303 lines over its ceiling of 1302, since the help's new sentence took a line of its own.
   The sentence was folded into the line before it (1302 lines); that test and the help tests pass.
+- L6 Reviews of 92d5989c. Claude lenses risk, reliability, readability (6ee974d..92d5989): 0 findings each, 48,676
+  input tokens in all. Codex (b16f9e2..92d5989): incorrect, 0.99, 116,261 input tokens (planned 78,000 to 100,000),
+  two P2, both reproduced and fixed with a test that failed first: (1) the wider `sk-` pattern started at any word
+  ending in `sk`, so `task-Implementation-2026-11-09-for-the-review-of-the-team` was blanked whole; it now starts only
+  at a provider's prefix (`sk-ant-<word>-`, `sk-proj-`, `sk-svcacct-`, `sk-admin-`); (2) `POSTGRES_DB_PASS` and
+  `APP_DB_PWD` were left in clear, since the name before `_pass`/`_pwd` could not hold an `_`; it can now.
+  `node --test bin/lib/backup.test.mjs bin/lib/backup-summary.test.mjs bin/lib/stack-backup-walk.test.mjs`: 42 tests,
+  41 pass, 0 fail, 1 skipped.

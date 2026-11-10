@@ -57,6 +57,10 @@ test('redactSecrets blanks the provider keys whose random part holds _ or -, Bas
     ['git clone https://deploy:' + 'hunter2' + '@example.com/repo.git', 'URL password', /hunter2/],
     ['DB_PASS=' + 'Pw9'.repeat(8), 'credential field', /Pw9/],
     ['{ "db_pwd": "' + 'Dp4'.repeat(8) + '" }', 'credential field', /Dp4/],
+    // Codex P2 on b16f9e2..92d5989: a name of several parts before `_PASS` or `_PWD`.
+    ['POSTGRES_DB_PASS=' + 'Pg5'.repeat(8), 'credential field', /Pg5/],
+    ['{ "APP_DB_PWD": "' + 'Ap6'.repeat(8) + '" }', 'credential field', /Ap6/],
+    ['ANTHROPIC_ADMIN=' + 'sk-' + 'ant-admin01-' + 'Ad_9'.repeat(10) + '-' + 'Zz8'.repeat(10), 'API key', /Ad_9|Zz8/],
     ['token ' + 'glpat-' + 'Gl4b_' + 'x7Y'.repeat(6), 'GitLab token', /Gl4b|x7Y/],
     ['maps ' + 'AI' + 'za' + 'Sy' + 'G00g'.repeat(8) + '-', 'Google API key', /G00g/],
     ['STRIPE=' + 'sk_' + 'live_' + 'St7r'.repeat(6), 'Stripe key', /St7r/],
@@ -72,6 +76,8 @@ test('redactSecrets blanks the provider keys whose random part holds _ or -, Bas
   assert.equal(redactSecrets('DB_PASS=' + 'Pw9'.repeat(8)).text, 'DB_PASS=<redacted>');
   const prose = [
     'a task-list-2026-11-09-for-the-review-of-the-team note',
+    // Codex P2 on b16f9e2..92d5989: capitalized words and digits after a word that ends in `sk`.
+    'a task-Implementation-2026-11-09-for-the-review-of-the-team note',
     'a Basic understanding of the system, then http://localhost:8080/path and user@host:repo.git',
     'compass_heading: northnorthwestbynorthwest, bypass the cache',
     'PWD=/c/Users/someone/projects/a-long-folder-name',
