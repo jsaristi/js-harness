@@ -153,6 +153,14 @@ function opensCode(before) {
   return CODE_FLAGS.get(name)?.includes(flag) ?? false;
 }
 
+/** Whether the double quote at `at` of `text` is escaped for the program that reads it: an odd run of backslashes
+ * before it, as the C runtime's reading of a command line counts them. */
+function escapedAt(text, at) {
+  let backslashes = 0;
+  while (text[at - 1 - backslashes] === '\\') backslashes += 1;
+  return backslashes % 2 === 1;
+}
+
 /** Why cmd.exe, the shell a goal or done-when command runs in on Windows (`runSensor`, `shell: true`), cannot run
  * `command`, or `null`: a `$( )`, a backtick or a `$VAR` outside the double-quoted code of a program with its own
  * (`opensCode`), or a single quote outside double quotes. cmd.exe has none of them and passes each on as written, so
@@ -168,14 +176,16 @@ export function cmdShellGap(command) {
     const char = command[i];
     if (char === '"') {
       quoted = !quoted;
-      code = quoted && opensCode(command.slice(start, i));
+      // cmd.exe turns its quoting at every double quote, but a program reads one after an odd run of backslashes as a
+      // quote inside its code, which goes on (Codex, 2026-11-10).
+      code = code ? escapedAt(command, i) : quoted && opensCode(command.slice(start, i));
     } else if (!quoted && (char === '&' || char === '|')) {
       if (command[i + 1] === char) i += 1;
       start = i + 1;
-    } else if (char === "'" && !quoted) {
-      return lacks('single quotes', 'Quote with double quotes instead, or pass the text to one program that reads it, such as node -e "..."');
     } else if (code) {
       continue;
+    } else if (char === "'" && !quoted) {
+      return lacks('single quotes', 'Quote with double quotes instead, or pass the text to one program that reads it, such as node -e "..."');
     } else if (char === '$' && command[i + 1] === '(') {
       return lacks('$( )', compute);
     } else if (char === '`') {
