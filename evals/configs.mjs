@@ -363,6 +363,34 @@ const SUBAGENT_TRANSCRIPTS = {
  * of two sessions (one resumed under another name), the later one's is the reply whatever their names and however
  * their times overlap. A message with no timestamp is later than those before it. A line that is not JSON is passed
  * over. */
+export function turnReply(dir) {
+  if (!fs.existsSync(dir)) return null;
+  let texts = [];
+  for (const file of fs.readdirSync(dir).filter((name) => name.endsWith('.jsonl')).sort()) {
+    for (const raw of fs.readFileSync(path.join(dir, file), 'utf8').split('\n')) {
+      let line;
+      try {
+        line = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      if (line?.isSidechain === true) continue;
+      const content = line?.message?.content;
+      // The turn's prompt: a user line of the person's own words, not a tool's result nor a line the host adds (a
+      // Stop hook's feedback or a skill's text are `isMeta`). Every text before it is an earlier turn's.
+      if (line?.type === 'user' && line.isMeta !== true && (typeof content === 'string' || (Array.isArray(content) && !content.some((block) => block?.type === 'tool_result')))) {
+        texts = [];
+        continue;
+      }
+      if (line?.type !== 'assistant' || !Array.isArray(content) || line.message.model === '<synthetic>') continue;
+      texts.push(...content.filter((block) => block?.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '').map((block) => block.text));
+    }
+  }
+  return texts.length === 0 ? null : texts.join('\n\n');
+}
+
+/** The last text the main thread wrote, as `lastReply` below; `turnReply` above gives every text of the turn, which
+ * is what a grader reads (docs/FAILURES.md, eval-reply-cut-by-stop-hook). */
 export function lastReply(dir) {
   if (!fs.existsSync(dir)) return null;
   const messages = [];

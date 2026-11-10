@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   DELEGATION_MODES, HONESTY_CONFIGS, HONESTY_SENTENCES, SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, SUBAGENT_CONFIGS, SUBAGENT_MODELS, assertWorkRoot, currentConfig,
-  defaultWorkRoot, ensureSandboxDirs, honestyConfig, honestyMemory, honestyPin, lastReply, minimalConfig, minimalWithConfig, minimalWithMcpFile, prepareSandbox, sandboxEnv, sandboxPaths,
+  defaultWorkRoot, ensureSandboxDirs, honestyConfig, honestyMemory, honestyPin, lastReply, minimalConfig, turnReply, minimalWithConfig, minimalWithMcpFile, prepareSandbox, sandboxEnv, sandboxPaths,
   subagentConfig, subagentPin,
 } from './configs.mjs';
 import { REAL_ENGRAM_PORT } from './ports.mjs';
@@ -678,6 +678,26 @@ for (const name of ['current', 'current-without-rule-reuse-first']) {
     assert.ok(!fs.existsSync(homes[0]), 'copied before the home was removed');
   });
 }
+
+// docs/FAILURES.md, eval-reply-cut-by-stop-hook: a Stop-hook bounce left the grader only the rewritten close.
+test('the reply of a turn is every text its main thread wrote after the turn\'s prompt, a Stop-hook bounce included', () => {
+  const dir = tmp('turn-reply');
+  const line = (id, content, extra = {}) => JSON.stringify({ type: 'assistant', timestamp: '2026-10-29T10:00:00.000Z', message: { id, model: 'claude-opus-5-5', content }, ...extra });
+  const text = (value) => [{ type: 'text', text: value }];
+  const user = (content, extra = {}) => JSON.stringify({ type: 'user', message: { role: 'user', content }, ...extra });
+  fs.writeFileSync(path.join(dir, 'session.jsonl'), [
+    line('m0', text('an earlier turn')),
+    user('Read the task and say whether T1 holds.'),
+    line('m1', text('T1 does not hold: --force is still in src/export.mjs:4.')),
+    user([{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }]),
+    line('m2', text('a subagent line'), { isSidechain: true }),
+    user('Stop hook feedback: the reply has no state line.', { isMeta: true }),
+    line('m3', text('Te pregunto: ¿lo corrijo?')),
+    '',
+  ].join('\n'));
+  assert.equal(turnReply(dir), 'T1 does not hold: --force is still in src/export.mjs:4.\n\nTe pregunto: ¿lo corrijo?');
+  assert.equal(turnReply(path.join(dir, 'missing')), null);
+});
 
 test('the last reply of a kept session is the last text its main thread wrote, never a subagent\'s or a made-up one', () => {
   assert.equal(lastReply(PROBE_TRANSCRIPTS), 'placeholder', 'the probe session\'s last text, after its subagent ran');
