@@ -133,8 +133,8 @@ change of a rule whose owner is `sebastian`.
 - [x] T5 (kind: build) spec 2: the failure register's controls in the same three classes, printed by `failures`; the
   two lost controls repaired or reclassified — PR 2
 - [x] T6 (kind: build) spec 4: `evals/lens-hook-probe.mjs` and its test, run once here — PR 3
-- [ ] T7 (kind: verify) Codex and the pertinent lenses over each slice; ready notices with each PR number
-- [ ] T8 (kind: docs) ROADMAP S5 State, SPEC, a summary under `docs/sessions/`; the incident rerun asked through the lead
+- [x] T7 (kind: verify) Codex and the pertinent lenses over each slice; ready notices with each PR number
+- [x] T8 (kind: docs) ROADMAP S5 State, SPEC, a summary under `docs/sessions/`; the incident rerun asked through the lead
 
 ## Log
 - L1 (2026-11-08, the request as written): "Listo continuemos con todo lo siguiente" (his words, quoted by the
@@ -230,13 +230,26 @@ change of a rule whose owner is `sebastian`.
   retired 4", PASS. Branch `f8-s5-4-strict` from `origin/main`, commit `69564afd`. The lead's note of 22:35 adds a
   `Seen` line to `stretch-not-opened`.
 
+- L16 (2026-11-10, question 243 and the one run): the grader read what the agent printed, its last text, so a
+  Stop-hook bounce left it only the close. Searched first: `readClaudeOutput` (`evals/agent-output.mjs:103`),
+  `keptReply` (`evals/trial-transcripts.mjs:76`), `lastReply` and `SUBAGENT_TRANSCRIPTS` (`evals/configs.mjs`),
+  `runner.mjs:703`. Fixed on `f8-s5-eval-reply`, tests first (red, then green): `turnReply` gives every main-thread
+  text after the turn's prompt, and the runner reads it before the printed answer. Codex over `6ee974d..5d6234b`:
+  incorrect, 2 P2 (a compaction summary taken as a prompt; session files read in name order), both fixed in
+  `1c0c0c2`; the recheck `5d6234b..1c0c0c2`: correct (0.96), 2 of 2 fixed. Lenses reliability and resilience over
+  both ranges: 0. CI failed once on an import of `bin/lib/sessions.mjs` (`bin/pre-push-hook.test.mjs` copies the
+  trial code without `bin/`), so the prompt check is restated in `evals/`. PR 803, `ready` sent at 00:08. The run:
+  plan 20 trials, about 18 minutes, about $5.01; a wrapper stopped it past $20. A first launch was refused before any
+  trial ($0: the default work root sits under the repository's `CLAUDE.md`); with `--work-root
+  D:/js-harness-evals-work`, as S4b ran, `f8-s5-incidents` ran once on `f41f4fb2` (tree `5bfc3e3d`: origin/main
+  `6ee974d`, PR 802's head `c38aaa9`, PR 803's head `1c0c0c2`, merged in a scratch branch not pushed), $4.84 list.
+  `node evals/incident-score.mjs f8-s0-a-incidents f8-s0-b-incidents f8-s5-incidents`: 15 of 20, false premise 3 of 4,
+  at L 13 and above the worse line of 10. incident-04 2 of 2; incident-05 1 of 2, its first pass in any run (whether
+  the pass rests on text written before the bounce is not checked); incident-01 and 02 0 of 2, as in S4b. Every one of
+  the 20 transcripts holds exactly one Stop-hook feedback line (`isMeta` user lines that start "Stop hook feedback",
+  counted by a script over `evals/runs/f8-s5-incidents/`), so every trial was graded on the texts of both sides of a
+  bounce.
+
 ## Next step
-PR 802 (`f8-s5-4-strict`) waits for his yes. Question 244 withdrawn: he answered question 243, "Arreglar la prueba y
-correr una vez (recomendado)" (transcript `ea85ec35`, line 1247). Brief `2026-11-10T04-27-37-146Z-620c8604.md`. 1) Fix
-`eval-reply-cut-by-stop-hook` (`docs/FAILURES.md`): the grader reads `lastReply` of `evals/configs.mjs`, the turn's
-last message, so a Stop-hook bounce leaves only the close; its owed control says "the reply a grader reads is every text
-of the turn". Own branch from `origin/main` (`f8-s5-eval-reply`), test first, Codex and lenses, own PR, `notify
---kind ready --pr <n>`. 2) After its review: ONE incident-set run, never repeated, stopped past $20 (about $13 list,
-the last cost $5.01), on a scratch branch = origin/main + PR 802's head + the fix, not pushed as a PR; record the
-tree hash with the result. 3) The result into S4b's and S5's feature documents and ROADMAP State lines; `closed`
-with the summary. Past about two hours, or a decision of his: stop before the run and tell the lead.
+Nothing left in this session: PRs 802 and 803 wait for his yes, and merging is the lead's. The incident line holds
+for S4b and S5 (L16). The `closed` notice names the summary.

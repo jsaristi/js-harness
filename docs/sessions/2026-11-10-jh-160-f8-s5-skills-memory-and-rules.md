@@ -3,7 +3,8 @@
 ## Goal
 F8 S5, the part that stays in F8: the `MEMORY.md` budget, the rule pass (each rule and register control a check, prose
 or retired), the record rule and the lens flag parity probe. The session was opened from the brief
-`2026-11-09T03-56-27-719Z-f29e9dc5.md` and resumed after a restart from `2026-11-10T04-01-32-011Z-49cf3240.md`. Its
+`2026-11-09T03-56-27-719Z-f29e9dc5.md` and resumed after restarts from `2026-11-10T04-01-32-011Z-49cf3240.md` and
+`2026-11-10T04-27-37-146Z-620c8604.md` (the eval fix and the one incident run). Its
 feature document is `odd/tasks/f8-s5-rules.md`.
 
 ## The user's words
@@ -11,6 +12,8 @@ feature document is `odd/tasks/f8-s5-rules.md`.
   by the brief.
 - Question 235: "B: prosa en la skill del orquestador (Recomendada)", tapped; transcript `ea85ec35`, line 1029,
   2026-11-10T03:59:47Z (`js-harness sessions --quote ea85ec35-82e1-4aa9-abe3-98bd153a50b0 1029`).
+- Question 243: "Arreglar la prueba y correr una vez (recomendado)", tapped; transcript `ea85ec35`, line 1247,
+  2026-11-10T04:14:12Z. It withdrew question 244.
 
 ## Delivered
 - PR 797, merged (`6ee974d`):
@@ -26,6 +29,11 @@ feature document is `odd/tasks/f8-s5-rules.md`.
   - `writeCoverage` writes every control on one line (the register went from 1168 lines to 683).
 - PR 802, ready (`69564afd`, `8a2a9c13`, `01d588a3`): the last two rules classified as prose (question 235), and
   `rules coverage --strict` refuses an owed obligation. Classes: check 49, prose 25, retired 4, owed 0.
+- PR 803, ready (`8a4582d0`, `5d6234b0`, `1c0c0c2f`): an eval reply task is graded on every main-thread text of its
+  turn, read from the kept transcripts, before the printed answer (`eval-reply-cut-by-stop-hook`, its control now a
+  check).
+- The incident set, run once (`f8-s5-incidents`, on the scratch tree `f41f4fb2` = origin/main + PR 802 + PR 803, not
+  pushed): 15 of 20, false premise 3 of 4, no worse; the incident line of S4b and of S5 is met (L16; S4b's L18).
 
 ## Decisions
 - The user: question 235, B (above).
@@ -47,22 +55,27 @@ feature document is `odd/tasks/f8-s5-rules.md`.
     review runs.
 - An Edit lost a trailing space in the orchestrator skill. The reliability lens found it, and `01d588a3` fixed it.
 - `notify --kind ready` refuses a stacked PR, so PRs 798 and 799 were announced as notes.
+- Codex on the eval fix: 2 P2 (a compaction summary taken as a prompt; session files read in name order), fixed
+  tests-first; the recheck came back correct (0.96). CI then failed on an import of `bin/lib/sessions.mjs` from
+  `evals/`, which `bin/pre-push-hook.test.mjs` copies without `bin/`; the check is restated in `evals/` (L16).
+- A count was first read from a search cut at 10 lines ("10 of the 20 transcripts bounced"); counted whole, it is 20 of
+  20, corrected before it was committed.
 - Codex P1 on the probe: another provider's environment (Bedrock, Vertex, Foundry) could have reached a real service.
   Fixed tests-first, and the recheck came back correct (L7, L8).
 
 ## Left
-- Question 244 to the lead: the incident rerun, about $13, after PR 802 lands. It is the last line of S5's pass
-  ("the incident set no worse"), and it is his spend.
-- PR 802 to merge, which is the lead's after his yes.
+- PRs 802 and 803 to merge, which is the lead's after his yes. The S4b and S5 records written here assume both land.
+- Not checked: whether incident-05's first pass (1 of 2) rests on text written before its trial's Stop-hook bounce.
 
 ## Cost
-- Time: first notice 2026-11-09T03:56Z; last before this summary 2026-11-10T04:25Z (with a stop for the machine's
-  restart). Context at the end: about 57%. The host compacted the session once, at 00:42 local on 2026-11-09.
+- Time: first notice 2026-11-09T03:56Z; last before this summary 2026-11-10T05:45Z (with stops for the machine's
+  restarts). The host compacted the session twice, at 00:42 local on 2026-11-09 and at 23:37 on 2026-11-09.
 - Codex reviews recorded:
   - PR 797: 111,092 and 74,565 input tokens.
   - PR 798: the probe and its recheck.
   - PR 799: 228,202 input tokens.
   - PR 802: 77,117 and 30,649 input tokens.
+  - PR 803: 146,498 and 35,918 input tokens.
   - Lost to the edit: 278,727 input tokens.
 - Claude lenses: two per slice, from about 6k to 49k input tokens each.
-- Paid evals: none. The probe calls a loopback API.
+- Paid evals: one, `f8-s5-incidents`, $4.84 list (plan $5.01, stop at $20). The probe calls a loopback API.

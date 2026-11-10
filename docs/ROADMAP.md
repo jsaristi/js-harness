@@ -657,7 +657,10 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   refused once `HEAD` moved. `bin/conventions-next-step.test.mjs` holds this with a legacy list at 0 (PRs 793,
   795 and 796). The incident set ran once, after question 232 (`f8-s4b-incidents`, $5.01): 13 of 20, no worse.
   False premise came out 1 of 4, below 2: incident-04's one miss is the grader reading only the close the reply hook
-  made the agent write again (`docs/FAILURES.md`, eval-reply-cut-by-stop-hook, control owed).
+  made the agent write again (`docs/FAILURES.md`, eval-reply-cut-by-stop-hook). That grader is fixed in PR 803 (it
+  reads every text of the turn), and the set ran once more on his answer to question 243 (`f8-s5-incidents`, on
+  `f41f4fb2`, origin/main with PRs 802 and 803 merged in, $4.84): 15 of 20, false premise 3 of 4. **The incident line
+  of S4b is met.**
 
 ### S5 Skills, memory and rules
 - **Changes:** skill bodies at most 3k and the skill lint (13.3 row 7); `MEMORY.md` at most 0.5k;
@@ -669,9 +672,13 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   control classified; a headless lens run with a planted user hook shows the hook did not fire; the
   incident set no worse.
 - **Cost:** about $13, the incident rerun [i].
-- **State (2026-11-10):** PRs 797, 798 and 799 on main (`6ee974d`); the last PR in review (JH 160,
-  `odd/tasks/f8-s5-rules.md`), then the incident rerun. Skill bodies at most 3k, the skill lint and the protocols-load probe move to
-  `odd/tasks/workshop-product-split.md` (spec 7, question 190), with the incident rerun. What stays here:
+- **State (2026-11-10):** PRs 797, 798 and 799 on main (`6ee974d`); PR 802 (the last, JH 160,
+  `odd/tasks/f8-s5-rules.md`) and PR 803 (the eval's reply, below) wait for his yes. Skill bodies at most 3k, the skill
+  lint and the protocols-load probe move to `odd/tasks/workshop-product-split.md` (spec 7, question 190). What stays here:
+  - The incident set, run once on his answer to question 243 ("Arreglar la prueba y correr una vez (recomendado)",
+    transcript `ea85ec35`, line 1247) after the grader was fixed to read every text of the turn (PR 803,
+    `eval-reply-cut-by-stop-hook`): `f8-s5-incidents` on `f41f4fb2` (tree `5bfc3e3d`, origin/main with PRs 802 and 803
+    merged in, not pushed), $4.84 list: 15 of 20, false premise 3 of 4, against L 13 and the worse line of 10. No worse.
   - The `MEMORY.md` budget: `rule:memory-index-bytes` is 2000 bytes (0.5k tokens at chars/4), and the guard refuses
     a write that leaves the index over it and larger than before.
   - The record rule: `rule:documents-canonical`, in the `js-harness` skill's memory hygiene section.
