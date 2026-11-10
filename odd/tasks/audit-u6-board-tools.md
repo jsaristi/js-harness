@@ -92,7 +92,8 @@ not keep the PC on, and a summary filed under tomorrow.
   `notify --kind ready`.
 
 ## Next step
-IN PROGRESS: Codex reviewed `30cf902..643d57d` (recorded): part 2 correct; part 1 three P2 on `waitPartOf` of
+DONE since: the wake fix is committed, `df0ecca2`, tests green. NOW: `js-harness codex-review --base 643d57d5`, then
+the lenses on `6ee974dd`, then push, PR, ready. Earlier: Codex reviewed `30cf902..643d57d` (recorded): part 2 correct; part 1 three P2 on `waitPartOf` of
 bin/lib/wake.mjs: (a) `wait 1 & wait 2` serialized by `&&`; (b) a `cd` inside `( ... )` the wait is not in moved it;
 (c) `then js-harness wait` kept its keyword. Fix under way: rename to `waitPartsOf(command)` returning an ARRAY, one
 re-arm per wait; `stepsOf` emits group open/close so each `(` pushes a frame of cds that `)` pops, a wait takes the cds
