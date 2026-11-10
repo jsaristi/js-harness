@@ -19,7 +19,8 @@ quoted with their dates.
 
 ## How to read it
 
-1. Run `js-harness docs plan` in a checkout. It prints every tracked file in exactly one slice, in four
+1. Run `node workshop/js-harness-workshop.mjs docs plan` in a checkout: `docs` is a workshop command, which
+   the installed `js-harness` does not have. It prints every tracked file in exactly one slice, in four
    tiers read in order: the core (this page, the map, what loads every turn, the plan, the rules, the
    failures, then the source in the order of the map's capabilities), the tests, the feature documents
    (each with its state, open or closed, from its task boxes) and the rest. Figures are estimated tokens,
