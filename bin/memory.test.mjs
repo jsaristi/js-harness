@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { memoryMain } from './memory.mjs';
+import { ruleValue } from './lib/rules.mjs';
 
 const note = (type) => `---\nname: x\ndescription: y\nmetadata:\n  type: ${type}\n---\n\nbody\n`;
 
@@ -87,7 +88,7 @@ test('status --json gives the same state as data', async () => {
     assert.equal(data.due, true);
     assert.deepEqual(data.reasons.map((r) => r.id), ['no-pass']);
     assert.equal(data.index.bytes, Buffer.byteLength('- [a](a.md) — hook\n'));
-    assert.equal(data.budgets.indexBytes, 4000);
+    assert.equal(data.budgets.indexBytes, ruleValue('memory-index-bytes', 'bytes'));
   });
 });
 

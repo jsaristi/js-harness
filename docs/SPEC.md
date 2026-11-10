@@ -118,7 +118,7 @@ first-turn median of 105,565 tokens over five desktop sessions (`odd/tasks/f8-s0
 | `~/.claude/CLAUDE.md`: the Rules block `install` writes (G12, with the kept groups of F8 S2's T13) and graphify's lines | js-harness's block; gentle-ai's blocks left at S2 (2026-11-04) | loads in this repository too since S2's T9 reverted the exclusion |
 | The output style `js-harness` (neutral Spanish with tú) | js-harness (`claude-output-style`) | pinned by hash |
 | Skill descriptions: `js-harness`, the orchestrator, the protocols, the two ported skills; gentle-ai's until S2 | js-harness (`claude-skill`, ...) | one line each; bodies load on demand |
-| The auto-memory index, `memory/MEMORY.md` of the main checkout's project folder (`bin/lib/payload.mjs:266`) | the host, written by sessions | measured by `payload`; S5 holds it to 0.5k |
+| The auto-memory index, `memory/MEMORY.md` of the main checkout's project folder (`bin/lib/payload.mjs:266`) | the host, written by sessions | measured by `payload`; held to `rule:memory-index-bytes` by the guard when it is written (S5, `odd/tasks/f8-s5-rules.md`) |
 | The MCP servers' instructions: engram, codegraph, context7 | each tool | reported by `payload` |
 | What hooks print at session start and each prompt | each hook's owner | the doctor's notice is a `systemMessage`, which costs no model tokens |
 

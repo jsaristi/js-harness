@@ -72,6 +72,11 @@ export const COVERAGE = {
         "replace": "if (at >= 0 && branch[at].code.length < 0) {"
       }
     },
+    "documents-canonical": {
+      "level": "protocol",
+      "path": "bin/lib/manifest.mjs",
+      "phrase": "never hold a decision the repository does not"
+    },
     "double-review": {
       "level": "line",
       "path": "bin/lib/protocols-skill.mjs",
@@ -153,7 +158,15 @@ export const COVERAGE = {
       }
     },
     "memory-feedback-home": {"level":"owed","since":"2026-10-28"},
-    "memory-index-bytes": {"level":"owed","since":"2026-10-28"},
+    "memory-index-bytes": {
+      "level": "check",
+      "test": "bin/guard.test.mjs",
+      "break": {
+        "path": "bin/guard.mjs",
+        "find": "('memory-index-bytes', 'bytes')",
+        "replace": "('memory-index-bytes', 'bytes') * 1000"
+      }
+    },
     "memory-pass-days": {"level":"owed","since":"2026-10-28"},
     "mistake-report": {"level":"owed","since":"2026-10-28"},
     "owner-decisions": {
@@ -756,7 +769,7 @@ export const COVERAGE = {
       "a440cb5134de",
       "71c551731cd8",
       "3380c3e633c3",
-      "496fa9cd84d8",
+      "1320668121df",
       "bb7c472cb9cf",
       "38a703685b7a",
       "4eee354ceae4",

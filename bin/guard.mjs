@@ -27,9 +27,10 @@
 //     `Edit` stop there.
 //   - `Write` and `Edit`: a line of a project's memory index over the host's 150 characters, judged in the file the
 //     call leaves (read from disk for an Edit) and only when the call brings it
-//     (bin/lib/memory-index-guard.mjs; odd/tasks/memory-hygiene.md, T4). The hook runs on every Write and Edit of
-//     every session, so that path loads nothing but that file: the modules of the other checks are imported only for
-//     the tools they check. Then, for a Markdown file, a line that stamps today's date with an hour ahead of the clock
+//     (bin/lib/memory-index-guard.mjs; odd/tasks/memory-hygiene.md, T4); then an index the call leaves over the bytes
+//     of the rule memory-index-bytes and larger than it was (odd/tasks/f8-s5-rules.md, spec 1). The hook runs on every
+//     Write and Edit of every session, so that path loads nothing but that file, and the rules only for a memory
+//     index: the modules of the other checks are imported only for the tools they check. Then, for a Markdown file, a line that stamps today's date with an hour ahead of the clock
 //     (bin/lib/document-hour-guard.mjs; odd/tasks/session-channel.md, T12b), imported only for a `.md` path. Before it,
 //     a note of a memory folder whose type is `feedback` that names no home of its rule in the repository, where the
 //     rule `memory-feedback-home` is declared (bin/lib/memory-feedback-guard.mjs, imported only for a memory note;
@@ -126,7 +127,10 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     if (!FILE_TOOLS.has(tool)) return null;
   }
   if (FILE_TOOLS.has(tool)) {
-    const index = memoryIndexRefusal(tool, input, readIndex, claudeConfigDir);
+    // Only a memory index loads the rules, for its byte budget: every other Write and Edit loads nothing more.
+    const isIndex = memoryFileOf(input.file_path, claudeConfigDir)?.toLowerCase() === 'memory.md';
+    const maxBytes = isIndex ? (await import('./lib/rules.mjs')).ruleValue('memory-index-bytes', 'bytes') : undefined;
+    const index = memoryIndexRefusal(tool, input, readIndex, claudeConfigDir, { maxBytes });
     if (index !== null || !/\.md$/i.test(String(input.file_path ?? ''))) return index;
     const note = memoryFileOf(input.file_path, claudeConfigDir);
     const text = note !== null && note.toLowerCase() !== 'memory.md' ? noteLeft(tool, input, readIndex) : null;

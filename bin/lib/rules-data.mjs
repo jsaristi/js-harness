@@ -202,6 +202,17 @@ export const RULES = [
     ]
   },
   {
+    "id": "documents-canonical",
+    "subject": "committed documents are canonical: engram and the memory index mirror them or point to them, and never hold a decision the repository does not",
+    "owner": "project",
+    "since": "2026-11-08",
+    "path": "bin/lib/manifest.mjs",
+    "phrases": [
+      "Committed documents are canonical",
+      "never hold a decision the repository does not"
+    ]
+  },
+  {
     "id": "double-review",
     "subject": "everything that proposes something passes a blind Claude and Codex read, code passes its own pair, both judged against what was asked, at most three reviews",
     "owner": "sebastian",
@@ -334,11 +345,17 @@ export const RULES = [
   },
   {
     "id": "memory-index-bytes",
-    "subject": "the bytes the memory index may hold before a memory hygiene pass is due",
+    "subject": "the bytes the memory index may hold: the guard refuses a write that grows it past them, and a memory hygiene pass is due over them",
     "owner": "project",
-    "since": "2026-10-17",
-    "value": 4000,
-    "unit": "bytes"
+    "since": "2026-11-08",
+    "value": 2000,
+    "unit": "bytes",
+    "was": [
+      {
+        "value": 4000,
+        "until": "2026-11-08"
+      }
+    ]
   },
   {
     "id": "memory-pass-days",
