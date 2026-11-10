@@ -148,3 +148,7 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
   entry to `.claude/settings.json`; about 1 s a session start, 0 model tokens, writes nothing; authorizes no other
   hook and no other ceiling) and "Sin hook, solo a mano" (the command stays, run by hand or by the lead; nothing says
   at session start that the ticks stopped).
+- L6 (2026-11-10): reviews of `f1071b4d`. The lenses (resilience, reliability, readability): 0 findings, 108,158
+  input tokens. Codex (193,215 input tokens): one P2, taken: with `--cwd` and a relative `--home`, the home resolved
+  against the project, where `loop`, `throughput` and `windows-daily` resolve it against where the command runs
+  (`workshop/bin/throughput.mjs:657`). Fixed test first: the new test failed (10 of 11), then 11 of 11.

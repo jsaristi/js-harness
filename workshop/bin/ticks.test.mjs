@@ -176,6 +176,19 @@ test('the hook never fails a session: a reading that throws is said in the messa
   });
 });
 
+test('a relative --home is read from where the command runs, as the commands that write the records read it', async () => {
+  await withWorld(async ({ home, cwd, set }) => {
+    set.snapshot('2026-11-09');
+    set.windows(NOW - HOUR);
+    set.host(NOW - HOUR);
+    // Run from the home's parent with --cwd naming the project: the home is `./home` there, not under the project.
+    const out = [];
+    const code = await ticksMain(['--hook', '--cwd', cwd, '--home', 'home'], { cwd: path.dirname(home), env: {}, homedir: () => '/nowhere', now: () => NOW, stdout: (line) => out.push(line), stderr: () => {}, ideas: async () => null });
+    assert.equal(code, 0);
+    assert.deepEqual(out, []);
+  });
+});
+
 test('--help prints the usage, and an argument it does not know is a usage error, with --hook too', async () => {
   await withWorld(async ({ home, cwd }) => {
     const help = await runTicks(['--help'], { home, cwd });

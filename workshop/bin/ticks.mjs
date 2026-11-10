@@ -162,7 +162,8 @@ export async function ticksMain(
   const { hook } = parsed;
   try {
     const cwd = path.resolve(defaultCwd, parsed.cwd ?? '.');
-    const home = harnessHome({ given: parsed.home, env, cwd, homedir });
+    // A relative home is read from where the command runs, as `loop`, `throughput` and `windows-daily` read it.
+    const home = harnessHome({ given: parsed.home, env, cwd: defaultCwd, homedir });
     const project = mainCheckoutByFiles(cwd) ?? mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true, timeout: 5000 }), cwd);
     const found = await readTicks({ home, slug: projectSlug(project), project, now: now(), fileSystem, ideas });
     if (hook) {
