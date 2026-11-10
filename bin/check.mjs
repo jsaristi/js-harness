@@ -1052,16 +1052,16 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   // npm keeps its cache and logs under %LOCALAPPDATA% on Windows, not under HOME, so `npm run` is
   // pointed into the throwaway home as well.
   const overrides = { JS_HARNESS_CHECK_INNER: '1', HOME: home, USERPROFILE: home, npm_config_cache: path.join(home, '.npm-cache'), ...powershellCache, ...(gateHeld && { [GATE_HELD_ENV]: '1' }) };
-  // NODE_TEST_CONTEXT is set when check itself runs under `node --test`; the nested runner would act
-  // as a child and skip files. Every case variant of an override goes too: Windows keeps the
-  // uppercase one of two keys that differ only in case, and npm reads either.
-  // Git's repository variables go as well: with the `GIT_DIR` a hook exports, a sensor's own `git init`
-  // in a temp directory acts on the repository being committed to, and once left it bare.
-  // The mark of a held lock goes whenever it is not given above: the one this process carries is its
-  // parent's word, and a gate that runs its sensors without the lock must not pass it on.
-  // The variable of the tests' concurrency is check's, read above: a test of check in the suite must not see it, nor
-  // the merge hook's mark, with which the suite's tests of the commit-size row would read every commit as a merge's.
-  const replaced = new Set([...Object.keys(overrides), GATE_HELD_ENV, TEST_CONCURRENCY_ENV, MERGE_HOOK_ENV, 'NODE_TEST_CONTEXT', ...GIT_LOCAL_ENV].map((key) => key.toLowerCase()));
+  // NODE_TEST_CONTEXT is set when check itself runs under `node --test`; the nested runner would act as a child and skip
+  // files. Every case variant of an override goes too: Windows keeps the uppercase one of two keys that differ only in
+  // case, and npm reads either. Git's repository variables go as well: with the `GIT_DIR` a hook exports, a sensor's own
+  // `git init` in a temp directory acts on the repository being committed to, and once left it bare. The mark of a held
+  // lock goes whenever it is not given above: the one this process carries is its parent's word, and a gate that runs its
+  // sensors without the lock must not pass it on. The variable of the tests' concurrency is check's, read above: a test of
+  // check in the suite must not see it, nor the merge hook's mark, with which the commit-size row reads a merge's commit.
+  // `JS_HARNESS_HOME` goes, read before the user's home (./lib/home.mjs): kept, a sensor would write the real harness home
+  // past the throwaway `HOME` (M14 of the Fable 5.2 audit); without it, as in the WSL mirror's `env -i`, it is that one.
+  const replaced = new Set([...Object.keys(overrides), GATE_HELD_ENV, TEST_CONCURRENCY_ENV, MERGE_HOOK_ENV, 'NODE_TEST_CONTEXT', 'JS_HARNESS_HOME', ...GIT_LOCAL_ENV].map((key) => key.toLowerCase()));
   const inherited = Object.entries(process.env).filter(([key]) => !replaced.has(key.toLowerCase()));
   const env = { ...Object.fromEntries(inherited), ...overrides };
   // The tests sensor in shadow (odd/tasks/exact-tests.md, T3, S6): the whole suite runs under the tracer, and
