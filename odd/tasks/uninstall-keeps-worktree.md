@@ -87,3 +87,12 @@ Nothing planned: the brief names the guard to reuse and the behaviour. A questio
   you can show it is small."
 - L2 Large, not small: the change is understood within one read, but it touches an irreversible deletion (a high-risk
   item of `CLAUDE.md`), so it fails the small test and carries this document.
+- L3 Test first: the new uninstall test in `bin/sessions-background.test.mjs` failed (`0 !== 1`: the uninstall printed
+  "removed background session 0db8bc5e · Held" and exited 0), then, with the `worktreeHolding` check in
+  `undoBackground` and the `holds` settle line, `node --test bin/sessions-background.test.mjs bin/lib/background.test.mjs`
+  passed 52 of 52. The test keeps a session with `src/work.js` in its worktree beside one holding only `.git`, which is
+  removed, and settles the kept one with `sessions stop --remove-worktree` before a second uninstall ends.
+- L4 Searched before adding (`rule:reuse-first`): `worktreeHolding` is reused unchanged; no other caller of
+  `undoSession` than `sessionsStopMain` (already guarded) and `undoBackground`. `README.md` and `docs/SPEC.md` said
+  `uninstall machine` removes every resting session and now say it keeps one whose worktree holds files.
+- L5 2026-11-09, the lead (channel note 23:05): H2 comes to this session after H1, as its own slice and pull request.

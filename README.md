@@ -1324,7 +1324,7 @@ declared. Each start is recorded in `~/.js-harness/background/sessions.jsonl`: `
 stop <id>` removes a recorded session (`claude stop`, then `claude rm`; its transcript stays) and no
 other; while its worktree holds files it refuses and runs nothing unless `--remove-worktree`, since
 `claude rm` deletes them, and a message, not a stop, resumes a background session. `js-harness
-uninstall machine` removes every recorded one that is not at work and fails while one is. The board's `Background sessions` block lists the project's background sessions from
+uninstall machine` removes every recorded one that is not at work and whose worktree holds no files, keeps and names the others and fails while one is kept. The board's `Background sessions` block lists the project's background sessions from
 `claude agents --json --all`, what each waits for (a permission prompt included) and whether `start`
 recorded it; `--watch` returns when one starts waiting.
 
