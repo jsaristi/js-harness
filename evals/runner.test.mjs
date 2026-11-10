@@ -2451,12 +2451,23 @@ test('a reply task cut by its timeout is graded on the last reply of what its se
   assert.equal(record.score, 1, JSON.stringify(record));
 });
 
-test('the answer the agent printed is its reply, and its transcripts are not read for one', async () => {
+// docs/FAILURES.md, eval-reply-cut-by-stop-hook: what the agent prints is its last text, which a Stop-hook bounce can
+// leave as only the rewritten close; the turn its transcripts hold is the reply.
+test('a reply task whose config keeps transcripts is graded on the turn they hold, not on the answer the agent printed', async () => {
   const stub = stubTranscripts();
-  stub.transcripts.reply = () => assert.fail('an answer was printed');
-  const task = loadTask(makeOptionTask({ reply: true }, { graderSource: replyGrader('did nothing') }));
+  const turn = ['T1 does not hold.', 'Te pregunto: ¿lo corrijo?'].join('\n\n');
+  stub.transcripts.reply = () => turn;
+  const task = loadTask(makeOptionTask({ reply: true }, { graderSource: replyGrader(turn) }));
   const { record } = await runTrial(keepingTrial('noop', stub, { task }).options);
   assert.equal(record.score, 1, JSON.stringify(record));
+});
+
+test('the answer the agent printed is its reply when its kept transcripts hold none, or its config keeps none', async () => {
+  const stub = stubTranscripts();
+  stub.transcripts.reply = () => null;
+  const task = loadTask(makeOptionTask({ reply: true }, { graderSource: replyGrader('did nothing') }));
+  assert.equal((await runTrial(keepingTrial('noop', stub, { task }).options)).record.score, 1, 'transcripts with no turn');
+  assert.equal((await runTrial(trialEnv('noop', { task }).options)).record.score, 1, 'no transcripts kept');
 });
 
 test('a reply that cannot be read from the transcripts is logged and recorded, and the reply file is empty', async () => {

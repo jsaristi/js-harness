@@ -1324,7 +1324,7 @@ declared. Each start is recorded in `~/.js-harness/background/sessions.jsonl`: `
 stop <id>` removes a recorded session (`claude stop`, then `claude rm`; its transcript stays) and no
 other; while its worktree holds files it refuses and runs nothing unless `--remove-worktree`, since
 `claude rm` deletes them, and a message, not a stop, resumes a background session. `js-harness
-uninstall machine` removes every recorded one that is not at work and fails while one is. The board's `Background sessions` block lists the project's background sessions from
+uninstall machine` removes every recorded one that is not at work and whose worktree holds no files, keeps and names the others and fails while one is kept. The board's `Background sessions` block lists the project's background sessions from
 `claude agents --json --all`, what each waits for (a permission prompt included) and whether `start`
 recorded it; `--watch` returns when one starts waiting.
 
@@ -1850,7 +1850,7 @@ Engram, the Claude memory folders or `~/.js-harness` loses nothing that was back
 `backup run` exports Engram and copies the Claude memory folders of its scope, then the js-harness
 home and reference copies of the Claude, Codex and Engram config, the plugin lists
 (`installed_plugins.json`, `known_marketplaces.json`) and Claude Desktop's side-session notes and
-session presets, blanks every secret value it finds (a token, a key, a field named like a
+session presets, blanks every secret value it finds in the files it copies (a token, a key, a field named like a
 credential), and for each repository of `config.json`'s `bundles` (`init` seeds it with the git
 checkout it ran in, or the one `--checkout <path>` names; with none, nothing is bundled) keeps a bundle of the commits on no remote, every stash
 entry and each worktree's detached commit included, a patch of each worktree's uncommitted edits

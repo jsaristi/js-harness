@@ -572,6 +572,9 @@ not the committed range, wrote no record and had to be run again.
 - Seen: 2026-11-09 — `odd/tasks/f8-s5-rules.md` L13 (JH 160) — that document edited, after the lenses had
   finished, during the Codex review of `a2d55b1..2717f7c`; 278,727 input tokens spent on part 1 of 2, not kept,
   nothing recorded, the review run again after the commit
+- Seen: 2026-11-10 — `odd/tasks/backup-redact-shapes.md` L10 (JH 162) — `bin/lib/backup.test.mjs` edited, to
+  answer a lens finding that came back first, during the Codex review of `b0c940c..dac1ef3`; 136,092 input tokens
+  spent, nothing recorded, the review run again after the commit
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 
@@ -580,9 +583,9 @@ A gate failed on one test of `evals/isolation-probe.test.mjs` (line 1734), "the 
 trial left listening on its engram port, by number, and leaves nothing behind", in a change that touched
 nothing of the evals. The test asserts that its cleanup found exactly one listener on the trial's port
 when it killed it (`killed` deep-equal to `[[port, 1]]`). That the stand-in server had not yet listened,
-or had already gone, under load is assumed, not checked: the run's own assertion text was not read. Since
-2026-10-16 the file is quarantined in docs/FLAKY.md: it still runs in every gate, and a pass on its rerun
-does not block until the entry expires on 2026-10-23.
+or had already gone, under load is assumed, not checked: the run's own assertion text was not read. The file
+was quarantined in docs/FLAKY.md from 2026-10-16 to 2026-10-23; the expired entry left the ledger on
+2026-11-10, after one run of the file alone on Windows passed 130 of 130.
 - Class: machine
 - Seen: 2026-10-16 — the land of PR 350 in WSL2, gate log c603935e, under 59 percent load, by the lead's
   notice to JH 28 (a claim) — the only failure of that test in the gate logs; PR 350 touches nothing of
@@ -664,7 +667,11 @@ cost the run's false-premise count a trial: 1 of 4 where the contract asks 2. S4
 - Seen: 2026-11-08 — `evals/results/f8-s4b-incidents.json`, trial 1 of incident-04, and its transcript under
   `evals/runs/f8-s4b-incidents/` — one `hook_blocking_error`, and the reply before it held the finding; trial 2
   had one too and passed, because its close carried the finding
-- Control: owed — odd/tasks/f8-s4b-contradictions.md — "the reply a grader reads is every text of the turn"
+- Control: check — evals/runner.test.mjs — "is graded on the turn they hold, not on the answer the agent printed" —
+  since 2026-11-10
+- Was: owed — odd/tasks/f8-s4b-contradictions.md — "the reply a grader reads is every text of the turn"; paid on
+  2026-11-10 by `turnReply` (`evals/configs.mjs`), every main-thread text after the turn's prompt, which the runner
+  reads before what the agent printed
 
 ### failure-cause-dropped
 The facts the pages read of a stretch left out the words that say why a land or a Codex review
@@ -1888,6 +1895,9 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-11-08 — the lead's message to JH 158 (claimed; the lead's own) — he was away from 18:20 to 20:54 local
   (UTC-05:00), 2.6 h, while JH 158 and JH 159 worked, and the lead had opened no stretch, so his return had no
   estimate to measure against
+- Seen: 2026-11-09 — the lead's note to JH 160 at 22:35 local (claimed; the lead's own) — he was away from 20:00 to
+  22:31 local with question 238 on screen, JH 161's audit ran meanwhile, and the lead opened no stretch, so his
+  return had no estimate
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 

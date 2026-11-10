@@ -698,10 +698,13 @@ export async function runTrial({
     const reading = assertReading(read(run), config.name);
     if (reading.stop) return { status: 'stopped', reason: reading.stop.kind, message: reading.stop.message };
     // Written over whatever the agent left under that name, so the grader reads this trial's answer and no other.
-    // An agent that printed none, as one cut by its timeout prints none, is graded on the last reply its kept
-    // transcripts hold, as the Stop hook reads a turn's (`transcripts.reply`); empty when there is none either.
+    // The reply is the turn its kept transcripts hold (`transcripts.reply`), read first: what the agent printed is its
+    // last text alone, which a Stop hook's refusal can leave as only the rewritten close (docs/FAILURES.md,
+    // eval-reply-cut-by-stop-hook). What it printed serves when no transcripts hold a turn, and an agent cut by its
+    // timeout printed none; empty when there is neither.
     if (task.reply) {
-      const reply = typeof reading.reply === 'string' ? reading.reply : await keptReply(keeper, transcriptsDir, { trial, log, kept });
+      const turn = await keptReply(keeper, transcriptsDir, { trial, log, kept });
+      const reply = typeof turn === 'string' ? turn : reading.reply;
       fs.writeFileSync(path.join(workspace, REPLY_FILE), typeof reply === 'string' ? reply : '');
     }
 

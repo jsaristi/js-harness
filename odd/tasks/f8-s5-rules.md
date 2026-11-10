@@ -128,13 +128,13 @@ change of a rule whose owner is `sebastian`.
   PR 1
 - [x] T3 (kind: build) specs 1 and 3: `rules change memory-index-bytes` to 2000 and the new record rule with its line in
   the skill's memory section, on `rule/f8-s5-memory-record` — PR 1
-- [ ] T4 (kind: build) spec 2: every owed control of a live rule closed as a check or prose, the class totals and the
+- [x] T4 (kind: build) spec 2: every owed control of a live rule closed as a check or prose, the class totals and the
   finding in `rules coverage`, tests first — PR 2
 - [x] T5 (kind: build) spec 2: the failure register's controls in the same three classes, printed by `failures`; the
   two lost controls repaired or reclassified — PR 2
 - [x] T6 (kind: build) spec 4: `evals/lens-hook-probe.mjs` and its test, run once here — PR 3
-- [ ] T7 (kind: verify) Codex and the pertinent lenses over each slice; ready notices with each PR number
-- [ ] T8 (kind: docs) ROADMAP S5 State, SPEC, a summary under `docs/sessions/`; the incident rerun asked through the lead
+- [x] T7 (kind: verify) Codex and the pertinent lenses over each slice; ready notices with each PR number
+- [x] T8 (kind: docs) ROADMAP S5 State, SPEC, a summary under `docs/sessions/`; the incident rerun asked through the lead
 
 ## Log
 - L1 (2026-11-08, the request as written): "Listo continuemos con todo lo siguiente" (his words, quoted by the
@@ -220,12 +220,36 @@ change of a rule whose owner is `sebastian`.
   `2717f7c..766a4f1`: risk 0, reliability 1 open (the two rules of question 235). PR 799 opened, base
   `f8-s5-2-lens-probe`. T8 begun: ROADMAP S5 State and SPEC (the lens review's flag parity and the failure register's
   control classes into Capabilities; what is left of the rule pass in the table of what has no code yet).
+- L15 (2026-11-10, T4 closed): PRs 797, 798 and 799 merged by the lead (`6ee974d`); the machine restarted and
+  `sessions start --resume` brought this session back (brief `2026-11-10T04-01-32-011Z-49cf3240.md`). Question 235,
+  read with `js-harness sessions --quote ea85ec35-82e1-4aa9-abe3-98bd153a50b0 1029`: "B: prosa en la skill del
+  orquestador (Recomendada)", tapped 2026-11-10T03:59:47Z. A tap changes no rule, and B changes none: one line in the
+  orchestrator skill, where it opens sessions (`bin/lib/manifest.mjs`), names both as `rule:<id>` without their
+  values, and their controls are protocol. Tests first: `--strict` with an owed control planted on
+  `announce-finished` exited 0 (red), then 1 naming it. `rules coverage --strict`: "classes: check 49, prose 25,
+  retired 4", PASS. Branch `f8-s5-4-strict` from `origin/main`, commit `69564afd`. The lead's note of 22:35 adds a
+  `Seen` line to `stretch-not-opened`.
+
+- L16 (2026-11-10, question 243 and the one run): the grader read what the agent printed, its last text, so a
+  Stop-hook bounce left it only the close. Searched first: `readClaudeOutput` (`evals/agent-output.mjs:103`),
+  `keptReply` (`evals/trial-transcripts.mjs:76`), `lastReply` and `SUBAGENT_TRANSCRIPTS` (`evals/configs.mjs`),
+  `runner.mjs:703`. Fixed on `f8-s5-eval-reply`, tests first (red, then green): `turnReply` gives every main-thread
+  text after the turn's prompt, and the runner reads it before the printed answer. Codex over `6ee974d..5d6234b`:
+  incorrect, 2 P2 (a compaction summary taken as a prompt; session files read in name order), both fixed in
+  `1c0c0c2`; the recheck `5d6234b..1c0c0c2`: correct (0.96), 2 of 2 fixed. Lenses reliability and resilience over
+  both ranges: 0. CI failed once on an import of `bin/lib/sessions.mjs` (`bin/pre-push-hook.test.mjs` copies the
+  trial code without `bin/`), so the prompt check is restated in `evals/`. PR 803, `ready` sent at 00:08. The run:
+  plan 20 trials, about 18 minutes, about $5.01; a wrapper stopped it past $20. A first launch was refused before any
+  trial ($0: the default work root sits under the repository's `CLAUDE.md`); with `--work-root
+  D:/js-harness-evals-work`, as S4b ran, `f8-s5-incidents` ran once on `f41f4fb2` (tree `5bfc3e3d`: origin/main
+  `6ee974d`, PR 802's head `c38aaa9`, PR 803's head `1c0c0c2`, merged in a scratch branch not pushed), $4.84 list.
+  `node evals/incident-score.mjs f8-s0-a-incidents f8-s0-b-incidents f8-s5-incidents`: 15 of 20, false premise 3 of 4,
+  at L 13 and above the worse line of 10. incident-04 2 of 2; incident-05 1 of 2, its first pass in any run (whether
+  the pass rests on text written before the bounce is not checked); incident-01 and 02 0 of 2, as in S4b. Every one of
+  the 20 transcripts holds exactly one Stop-hook feedback line (`isMeta` user lines that start "Stop hook feedback",
+  counted by a script over `evals/runs/f8-s5-incidents/`), so every trial was graded on the texts of both sides of a
+  bounce.
 
 ## Next step
-Branch `f8-s5-3-rule-pass`, stacked on PR 798. 1) Read the reviews of `a2d55b18..2717f7ca` (Codex and the lenses
-risk and reliability), fix what they find tests first, push, `gh pr create --base f8-s5-2-lens-probe`, a note to the
-lead. 2) On the answer to question 235: B adds a line naming both rules to the orchestrator skill's session opening
-and their controls as protocol; A needs his typed line and `rules change` on a `rule/` branch; C a refusal in
-`sessions start`, tests first. Then `--strict` holds `report.unclassified` (the test plants an owed control on
-`announce-finished` and expects exit 1). 3) T8 docs, summary, `closed` notice; the incident rerun (~$13) asked
-through the lead.
+Nothing left in this session: PRs 802 and 803 wait for his yes, and merging is the lead's. The incident line holds
+for S4b and S5 (L16). The `closed` notice names the summary.

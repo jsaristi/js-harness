@@ -730,6 +730,37 @@ test('uninstall machine removes the recorded sessions that rest, keeps a working
   assert.equal(fs.existsSync(path.join(world.home, '.js-harness', 'background')), false);
 }));
 
+// claude rm deletes a worktree's files even when it says it refused (2026-11-04), and the uninstall reached it with no
+// look at the worktree (the Fable 5.2 audit, H1: odd/tasks/uninstall-keeps-worktree.md).
+test('uninstall machine keeps a resting session whose worktree holds files, runs no claude on it and fails until it is settled', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Held', '--brief', world.brief, '--worktree', 'held']).code, 0);
+  patchState(world, { nextId: 'c779ed44' });
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Bare', '--brief', world.brief, '--worktree', 'bare']).code, 0);
+  const held = path.join(world.project, '.claude', 'worktrees', 'held');
+  fs.writeFileSync(path.join(held, '.git'), 'gitdir: elsewhere\n');
+  fs.mkdirSync(path.join(held, 'src'));
+  fs.writeFileSync(path.join(held, 'src', 'work.js'), 'uncommitted\n');
+  fs.writeFileSync(path.join(world.project, '.claude', 'worktrees', 'bare', '.git'), 'gitdir: elsewhere\n');
+  const state = readState(world);
+  for (const agent of state.agents) [agent.status, agent.state] = ['idle', 'done'];
+  writeState(world, state);
+  const { brief } = recordLines(world)[0];
+  const first = js(world, ['uninstall', 'machine', '--home', world.home]);
+  assert.equal(first.code, 1, first.stdout);
+  assert.ok(!actions(world).some((call) => call[1] === '0db8bc5e'), 'no claude stop, no claude rm on the held one');
+  assert.equal(fs.readFileSync(path.join(held, 'src', 'work.js'), 'utf8'), 'uncommitted\n');
+  assert.ok(fs.existsSync(brief), 'its brief stays');
+  assert.ok(first.stderr.includes(`kept background session 0db8bc5e · Held: its worktree ${held} holds files (src)`), first.stderr);
+  assert.match(first.stderr, /js-harness sessions stop 0db8bc5e --remove-worktree removes it with its worktree, then run js-harness uninstall machine again/);
+  assert.match(first.stdout, /removed background session c779ed44 · Bare/);
+  assert.ok(fs.existsSync(recordFile(world)), 'the record stays while a session is kept');
+  // Settled the way the line says, the next uninstall ends.
+  assert.equal(js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']).code, 0);
+  const second = js(world, ['uninstall', 'machine', '--home', world.home]);
+  assert.equal(second.code, 0, second.stderr);
+  assert.equal(fs.existsSync(path.join(world.home, '.js-harness', 'background')), false);
+}));
+
 test('uninstall machine with a manifest that does not parse touches no background session', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
   const state = readState(world);

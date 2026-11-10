@@ -70,7 +70,7 @@ export async function keepTranscripts(keeper, context, { trial, log }) {
   return { kept, dir: context.dest };
 }
 
-/** The last reply the transcripts kept in `dir` hold, by `keeper`'s `reply`, or `null`: none when the config asks for
+/** The reply the transcripts kept in `dir` hold, by `keeper`'s `reply`, or `null`: none when the config asks for
  * none or no directory holds this trial's own copy. It never throws: a reply that cannot be read is logged and a line
  * of `kept.errors`, by its code alone as `keepTranscripts` records one, and the trial is graded on no reply. */
 export async function keptReply(keeper, dir, { trial, log, kept }) {

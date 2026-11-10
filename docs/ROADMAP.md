@@ -246,7 +246,10 @@ apliquemos todo esto y despues de todo hacemos un test completo de la aplicacion
 - [x] Every command reviewed against its help, README and SPEC, and every finding fixed or written down (`odd/tasks/launch-audit.md`, I-RM-1)
 - [x] The full application test passes on Windows and WSL2
 - [x] v0.9.0 tagged and installed from its tag by real pnpm and npm
-- [x] v1.0.0 adds a feature, and `upgrade` moves a clean home and the lead's copy from 0.9.0 to 1.0.0
+- [x] v1.0.0 adds a feature, and `upgrade` moves a clean home and the lead's copy from 0.9.0 to 1.0.0: done on
+  2026-10-18 (`odd/tasks/harness-review.md`, L58); that tag was deleted on 2026-10-19, at his answer to Pregunta 16,
+  so the run stands as the rehearsal of the update, and 1.0.0 is tagged again only on the definitive commit
+  (`odd/tasks/release-095.md`, T3 and L10; "Releases before 1.0.0" above)
 
 ### Memory that survives the machine
 His machine is slow and he cleans it with PC Manager; a past cleanup lost Engram's memories, and a
@@ -657,7 +660,10 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   refused once `HEAD` moved. `bin/conventions-next-step.test.mjs` holds this with a legacy list at 0 (PRs 793,
   795 and 796). The incident set ran once, after question 232 (`f8-s4b-incidents`, $5.01): 13 of 20, no worse.
   False premise came out 1 of 4, below 2: incident-04's one miss is the grader reading only the close the reply hook
-  made the agent write again (`docs/FAILURES.md`, eval-reply-cut-by-stop-hook, control owed).
+  made the agent write again (`docs/FAILURES.md`, eval-reply-cut-by-stop-hook). That grader is fixed in PR 803 (it
+  reads every text of the turn), and the set ran once more on his answer to question 243 (`f8-s5-incidents`, on
+  `f41f4fb2`, origin/main with PRs 802 and 803 merged in, $4.84): 15 of 20, false premise 3 of 4. **The incident line
+  of S4b is met.**
 
 ### S5 Skills, memory and rules
 - **Changes:** skill bodies at most 3k and the skill lint (13.3 row 7); `MEMORY.md` at most 0.5k;
@@ -669,18 +675,23 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   control classified; a headless lens run with a planted user hook shows the hook did not fire; the
   incident set no worse.
 - **Cost:** about $13, the incident rerun [i].
-- **State (2026-11-09):** in review (JH 160, `odd/tasks/f8-s5-rules.md`, PRs 797, 798 and 799, stacked in that
-  order). Skill bodies at most 3k, the skill lint and the protocols-load probe move to
-  `odd/tasks/workshop-product-split.md` (spec 7, question 190), with the incident rerun. What stays here:
+- **State (2026-11-10):** PRs 797, 798 and 799 on main (`6ee974d`); PR 802 (the last, JH 160,
+  `odd/tasks/f8-s5-rules.md`) and PR 803 (the eval's reply, below) wait for his yes. Skill bodies at most 3k, the skill
+  lint and the protocols-load probe move to `odd/tasks/workshop-product-split.md` (spec 7, question 190). What stays here:
+  - The incident set, run once on his answer to question 243 ("Arreglar la prueba y correr una vez (recomendado)",
+    transcript `ea85ec35`, line 1247) after the grader was fixed to read every text of the turn (PR 803,
+    `eval-reply-cut-by-stop-hook`): `f8-s5-incidents` on `f41f4fb2` (tree `5bfc3e3d`, origin/main with PRs 802 and 803
+    merged in, not pushed), $4.84 list: 15 of 20, false premise 3 of 4, against L 13 and the worse line of 10. No worse.
   - The `MEMORY.md` budget: `rule:memory-index-bytes` is 2000 bytes (0.5k tokens at chars/4), and the guard refuses
     a write that leaves the index over it and larger than before.
   - The record rule: `rule:documents-canonical`, in the `js-harness` skill's memory hygiene section.
   - The lens flag parity: `node evals/lens-hook-probe.mjs` shows that a planted user hook and `CLAUDE.md` reach a
     run without `--safe-mode` and do not reach one under the lens's flags.
-  - The rule pass, counted on 2026-11-09: 73 live rules and 4 retired. Their obligations are check 49 (49 planted
-    breaks proven), prose 23 and owed 2 (`work-sessions-public` and `work-sessions-private-wsl` have no reader;
-    question 235). `failures` prints the register's controls as check 99, prose 8, measured 2 and owed 5.
-  - What is left: the answer to question 235, then `--strict` holds an owed rule.
+  - The rule pass, counted on 2026-11-10: 73 live rules and 4 retired. Their obligations are check 49 (49 planted
+    breaks proven) and prose 25; none owed. `work-sessions-public` and `work-sessions-private-wsl`, which nothing
+    read, are named by the orchestrator skill where it opens sessions (question 235, his tap "B: prosa en la skill
+    del orquestador (Recomendada)", transcript `ea85ec35`, line 1029). `rules coverage --strict` refuses an owed
+    one. `failures` prints the register's controls as check 99, prose 8, measured 2 and owed 5.
 
 ### S5c-b Directive coverage, the filling
 - **Changes:** every span declared; each seeded `owed` closed by a check or an eval case; about 15 to

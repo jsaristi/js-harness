@@ -474,7 +474,7 @@ function coverageForm(parsed, root, { run, stdout, stderr }) {
     return 0;
   }
   const overCap = OWED_CAP_FROM !== null && report.totals.owed > OWED_CAP * report.totals.obligations;
-  const failing = parsed.strict ? [...report.findings, ...report.stale, ...(overCap ? [`owed is ${percent(report.totals.owed, report.totals.obligations)} of the obligations, over the cap of ${percent(OWED_CAP, 1)}`] : [])] : report.findings;
+  const failing = parsed.strict ? [...report.findings, ...report.stale, ...report.unclassified, ...(overCap ? [`owed is ${percent(report.totals.owed, report.totals.obligations)} of the obligations, over the cap of ${percent(OWED_CAP, 1)}`] : [])] : report.findings;
   // Each planted break is applied in a copy of the checkout, and its test must go red there.
   const proofs = parsed.prove ? proveBreaks(root, read.register, { spawn: run, tmpdir: os.tmpdir() }) : null;
   const open = proofs === null ? 0 : proofs.filter((proof) => !proof.red).length;

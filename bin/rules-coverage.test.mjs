@@ -106,16 +106,21 @@ test('the report counts each class of the rules\' obligations, and the retired r
   assert.match(classes ?? '', /^ {2}classes: check \d+, prose \d+, retired \d+(, measured \d+)?(, owed \d+)? \(each obligation of a live rule; the retired rules counted\)$/, plain.all);
 });
 
-// The reliability lens on a2d55b1..2717f7c: the owed obligations were listed in the report and printed nowhere.
-test('a live rule whose control is owed again is named in a note of the plain report, which exits 0', async () => {
+// The reliability lens on a2d55b1..2717f7c: the owed obligations were listed in the report and printed nowhere; and
+// F8 S5, spec 2: with every rule classified (question 235), --strict refuses one left owed again.
+test('a live rule whose control is owed again is a note of the plain report, which exits 0, and fails --strict by name', async () => {
   await inCopy(async (root) => {
     edit(root, 'bin/lib/rules-coverage-data.mjs', (text) => {
       const { register } = readCoverageText(text);
       return writeCoverage({ ...register, controls: { ...register.controls, 'announce-finished': { level: 'owed', since: register.baseline } } });
     });
+    const owed = 'rule "announce-finished": its control is still owed: make it a check, prose that stays (a line or a protocol), or retire the rule with js-harness rules change';
     const plain = await rules(['coverage'], root);
     assert.equal(plain.code, 0, plain.all);
-    assert.ok(plain.out.includes('note: rule "announce-finished": its control is still owed: make it a check, prose that stays (a line or a protocol), or retire the rule with js-harness rules change'), plain.all);
+    assert.ok(plain.out.includes(`note: ${owed}`), plain.all);
+    const strict = await rules(['coverage', '--strict'], root);
+    assert.equal(strict.code, 1, strict.all);
+    assert.ok(strict.out.includes(`      ${owed}`), strict.all);
   });
 });
 

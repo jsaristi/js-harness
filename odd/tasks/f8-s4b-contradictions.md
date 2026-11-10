@@ -149,6 +149,7 @@ lead's brief says.
 5. The same: "the incident set no worse"; Cost: "about $13, the incident rerun".
 
 ## Next step
+Update 2026-11-10 (L18): the incident line is met; nothing of S4b is left to run. Kept as history below.
 Update ~22:05 local (L15): the chain is #792 (merged), #793 (ready), #795 (slice 3, on 793's branch) and #796
 (slice 4, on 795's). Next: retarget each to main as the one below lands, and send its ready notice. Waiting on the
 lead: his typed line for pair 9's rule change (then a rule/ branch), and question 232 (the incident rerun, T9). Then
@@ -349,3 +350,13 @@ rerun asked through the lead.
   command, the command needs a git repository, and there is none at this folder". The contract's incident line is
   not met as scored: false premise 1 of 4 (L16). Pair 9 is recorded as his decision A; the rule text is debt until he
   types it, as the lead set out (2026-11-09).
+- L18 (2026-11-10, the incident line, by JH 160): his answer to question 243, "Arreglar la prueba y correr una vez
+  (recomendado)" (`js-harness sessions --quote ea85ec35-82e1-4aa9-abe3-98bd153a50b0 1247`, tapped
+  2026-11-10T04:14:12Z), covered the grader's fix and one run for S4b and S5. The fix is PR 803: the runner grades a
+  reply task on every main-thread text of the turn its kept transcripts hold, before the printed answer
+  (`eval-reply-cut-by-stop-hook`, its control now a check in `evals/runner.test.mjs`). `f8-s5-incidents` ran once on
+  `f41f4fb2` (tree `5bfc3e3d`: origin/main `6ee974d` with PR 802's head `c38aaa9` and PR 803's head `1c0c0c2` merged
+  in, not pushed), $4.84 list. `node evals/incident-score.mjs f8-s0-a-incidents f8-s0-b-incidents f8-s5-incidents`:
+  15 of 20, false premise 3 of 4, at L 13 and above the worse line of 10. **The contract's incident line is met.**
+  incident-04 passed 2 of 2. Every one of the 20 transcripts holds one Stop-hook feedback line, so every trial was
+  graded across a bounce (the detail: `odd/tasks/f8-s5-rules.md`, L16).
