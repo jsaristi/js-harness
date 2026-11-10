@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   DELEGATION_MODES, HONESTY_CONFIGS, HONESTY_SENTENCES, SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, SUBAGENT_CONFIGS, SUBAGENT_MODELS, assertWorkRoot, currentConfig,
-  defaultWorkRoot, ensureSandboxDirs, honestyConfig, honestyMemory, honestyPin, lastReply, minimalConfig, minimalWithConfig, minimalWithMcpFile, prepareSandbox, sandboxEnv, sandboxPaths,
+  defaultWorkRoot, ensureSandboxDirs, honestyConfig, honestyMemory, honestyPin, lastReply, minimalConfig, turnReply, minimalWithConfig, minimalWithMcpFile, prepareSandbox, sandboxEnv, sandboxPaths,
   subagentConfig, subagentPin,
 } from './configs.mjs';
 import { REAL_ENGRAM_PORT } from './ports.mjs';
@@ -679,6 +679,51 @@ for (const name of ['current', 'current-without-rule-reuse-first']) {
   });
 }
 
+// docs/FAILURES.md, eval-reply-cut-by-stop-hook: a Stop-hook bounce left the grader only the rewritten close.
+test('the reply of a turn is every text its main thread wrote after the turn\'s prompt, a Stop-hook bounce included', () => {
+  const dir = tmp('turn-reply');
+  const line = (id, content, extra = {}) => JSON.stringify({ type: 'assistant', timestamp: '2026-10-29T10:00:00.000Z', message: { id, model: 'claude-opus-5-5', content }, ...extra });
+  const text = (value) => [{ type: 'text', text: value }];
+  const user = (content, extra = {}) => JSON.stringify({ type: 'user', message: { role: 'user', content }, ...extra });
+  fs.writeFileSync(path.join(dir, 'session.jsonl'), [
+    line('m0', text('an earlier turn')),
+    user('Read the task and say whether T1 holds.'),
+    line('m1', text('T1 does not hold: --force is still in src/export.mjs:4.')),
+    user([{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }]),
+    line('m2', text('a subagent line'), { isSidechain: true }),
+    user('Stop hook feedback: the reply has no state line.', { isMeta: true }),
+    line('m3', text('Te pregunto: ¿lo corrijo?')),
+    '',
+  ].join('\n'));
+  assert.equal(turnReply(dir), 'T1 does not hold: --force is still in src/export.mjs:4.\n\nTe pregunto: ¿lo corrijo?');
+  assert.equal(turnReply(path.join(dir, 'missing')), null);
+});
+
+test('a compaction summary or a notice the host adds is no prompt, so the turn\'s texts before it stay in its reply', () => {
+  const dir = tmp('turn-reply-host-lines');
+  const line = (id, value) => JSON.stringify({ type: 'assistant', message: { id, model: 'claude-opus-5-5', content: [{ type: 'text', text: value }] } });
+  const user = (content, extra = {}) => JSON.stringify({ type: 'user', message: { role: 'user', content }, ...extra });
+  fs.writeFileSync(path.join(dir, 'session.jsonl'), [
+    user('Read the task and say whether T1 holds.'),
+    line('m1', 'T1 does not hold.'),
+    user('This session is being continued from a previous conversation.', { isCompactSummary: true }),
+    user('<task-notification><task-id>b1</task-id><status>completed</status></task-notification>'),
+    user('[Request interrupted by user]'),
+    line('m2', 'Te pregunto: ¿lo corrijo?'),
+  ].join('\n'));
+  assert.equal(turnReply(dir), 'T1 does not hold.\n\nTe pregunto: ¿lo corrijo?');
+});
+
+test('the turn is the latest by time across the kept sessions, whatever their names', () => {
+  const dir = tmp('turn-reply-order');
+  const line = (id, value, at) => JSON.stringify({ type: 'assistant', timestamp: at, message: { id, model: 'claude-opus-5-5', content: [{ type: 'text', text: value }] } });
+  const user = (value, at) => JSON.stringify({ type: 'user', timestamp: at, message: { role: 'user', content: value } });
+  // The newer session sorts first by name: read in name order, the older one's prompt would erase its reply.
+  fs.writeFileSync(path.join(dir, 'a.jsonl'), [user('the prompt again', '2026-10-29T11:00:00.000Z'), line('n1', 'the newer reply', '2026-10-29T11:00:01.000Z'), JSON.stringify({ type: 'assistant', message: { id: 'n2', model: 'claude-opus-5-5', content: [{ type: 'text', text: 'its close, with no time' }] } })].join('\n'));
+  fs.writeFileSync(path.join(dir, 'b.jsonl'), [user('the prompt', '2026-10-29T10:00:00.000Z'), line('o1', 'the older reply', '2026-10-29T10:00:01.000Z')].join('\n'));
+  assert.equal(turnReply(dir), 'the newer reply\n\nits close, with no time');
+});
+
 test('the last reply of a kept session is the last text its main thread wrote, never a subagent\'s or a made-up one', () => {
   assert.equal(lastReply(PROBE_TRANSCRIPTS), 'placeholder', 'the probe session\'s last text, after its subagent ran');
   const dir = tmp('last-reply');
@@ -717,7 +762,7 @@ test('the last reply of a kept session is the last text its main thread wrote, n
   assert.equal(lastReply(overlap), 'first block\n\nsecond block');
 });
 
-test('the current arm and the arms without a rule read their trial\'s last reply from its kept transcripts', () => {
+test('the current arm and the arms without a rule read their trial\'s reply, the whole turn, from its kept transcripts', () => {
   for (const name of ['current', 'current-without-rule-away-autonomy']) assert.equal(currentConfig({ ...OPTIONS, name }).transcripts.reply({ dir: PROBE_TRANSCRIPTS }), 'placeholder', name);
 });
 
