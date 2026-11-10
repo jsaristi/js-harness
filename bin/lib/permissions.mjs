@@ -6,6 +6,7 @@
 // only, which an ES module cycle allows.
 import fs from 'node:fs';
 import path from 'node:path';
+import { replaceText } from './atomic-write.mjs';
 import { readManifest, removeEmptyDirsUpTo, serializeJson } from './manifest.mjs';
 import { readSettings, userSettingsPath } from './user-settings.mjs';
 import { PERMISSIONS_ALLOW, PERMISSIONS_DENY } from './deny-paths.mjs';
@@ -94,11 +95,11 @@ export function holdPermissions(home, previous) {
   if (!changed) return { held: { status: 'already', path: target }, record, keep: recordWith(null) };
   try {
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, serializeJson({ ...data, permissions }, style), 'utf8');
+    replaceText(target, serializeJson({ ...data, permissions }, style));
   } catch (err) {
     return skipped(`not writable (${err.code ?? err.message})`);
   }
-  const putBack = () => (existed ? fs.writeFileSync(target, settings.raw, 'utf8') : fs.rmSync(target, { force: true }));
+  const putBack = () => (existed ? replaceText(target, settings.raw) : fs.rmSync(target, { force: true }));
   return { held: { status: 'written', path: target, ...(restored !== null && { restoredMode: restored }) }, record, keep: recordWith(putBack) };
 }
 
@@ -114,7 +115,7 @@ export function sameFile(a, b) {
  * nothing of it left to take; `kept` with a `reason` when the record names another file than the user settings of
  * `home`, left as it is, a record no run can clear; `failed` with a `code` when the file cannot be read or written,
  * and then the caller keeps the record for a run again once it is fixed. */
-export function releasePermissions(record, home, listDir, { writeFile = fs.writeFileSync, removeFile = fs.rmSync } = {}) {
+export function releasePermissions(record, home, listDir, { writeFile = replaceText, removeFile = fs.rmSync } = {}) {
   const at = userSettingsPath(home);
   if (!sameFile(record.path, at)) return { status: 'kept', path: String(record.path), reason: 'the record names another file than the user settings' };
   let settings;

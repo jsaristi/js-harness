@@ -1,5 +1,5 @@
 // The host-update row of `doctor`: the Claude Desktop app and the Claude Code CLI bundled for its Code tab, read
-// from the app's own folder, and compared with the versions last reviewed (the `host` record of the doctor cache,
+// from the app's own folder, and compared with the versions last reviewed (the `host` review of the record of reviewed versions,
 // bin/lib/cache.mjs). An update stays a gap until its review is recorded (`doctor --host-reviewed`), and an update
 // the app downloaded but did not apply is a gap of its own: on Windows an MSIX update waits while the app, its tray
 // icon included, is open (odd/tasks/host-update-check.md). Every read fails open: nothing here throws.
@@ -8,6 +8,7 @@ import path from 'node:path';
 import { windowsFolder } from './app-record.mjs';
 import { cellsOf, DELIMITER_CELL_PATTERN } from './progress.mjs';
 import { ruleHere } from './rules.mjs';
+import { UNREADABLE_RECORD } from './stack-update.mjs';
 import { compareSemver } from './version.mjs';
 
 const VERSION = /^\d+\.\d+\.\d+$/;
@@ -164,7 +165,7 @@ export function reviewFileGaps(text, versions, reviewed) {
   return gaps;
 }
 
-/** Why `doctor --host-reviewed` may not record the `versions` read now over the `reviewed` record (the cache's, or
+/** Why `doctor --host-reviewed` may not record the `versions` read now over the `reviewed` record (the record's, or
  * `null`) from `project`, or `null` when it may. With no record yet, or the versions already reviewed, there is no
  * update to account for. Otherwise the project's review file of that desktop version must hold its account
  * (`reviewFileGaps`): the review record is the machine's, the file the project's that keeps the reviews. */
@@ -203,7 +204,7 @@ function remoteControlStep(projectData) {
   return `ask the user whether to turn Remote Control back on in each work session, and turn it on only where they say yes; ${restart}`;
 }
 
-/** `{ row, record }`: the `host-update` row of `doctor` for the versions read and the reviewed ones (the cache's
+/** `{ row, record }`: the `host-update` row of `doctor` for the versions read and the reviewed ones (the record's
  * `host.reviewed`, or `null`), and the record to write: the versions read, taken as reviewed, when there is no
  * record yet and the running version was read; `null` otherwise. `projectData` is the text of the project's rules
  * file (`readProjectRulesText`), or `null`: it words the Remote Control step of a review (`remoteControlStep`). */
@@ -240,10 +241,38 @@ export function hostUpdateRow(versions, reviewed, now = () => new Date(), projec
   return { row: read, record };
 }
 
-/** What the hook's notice adds for this row: the update since the last review, and a version not applied. */
+/** The `host-update` row when the record of its review cannot be read: a gap that records nothing, so a torn record
+ * never turns an update into a reviewed one (M10 of the Fable 5.2 audit); `--host-reviewed` records the review, with no
+ * version before it to ask the review file about. A host watch (workshop/bin/host-watch.mjs) spans an update from the
+ * version reviewed, so it does not see this one: the row sends it to the lead (the lenses on 0b8b7c2..52367d1). The rest
+ * of the row is `hostUpdateRow`'s. */
+export function hostUnreadableRow(versions, now = () => new Date()) {
+  const { row } = hostUpdateRow(versions, null, now);
+  if (row.claude !== 'ok') return row;
+  const read = `Claude Desktop ${versions.desktop}${versions.code ? ` and its Code tab CLI ${versions.code}` : ''}`;
+  return {
+    ...row,
+    claude: 'stale',
+    unreadable: true,
+    fix: {
+      ...row.fix,
+      claude: [
+        `${UNREADABLE_RECORD}; with no version before it a host watch session does not see it, so the session that reads this tells the lead, who has ${read} reviewed:`,
+        `read ${DESKTOP_CHANGELOG} and the Claude Code CHANGELOG (${CODE_CHANGELOG}) since the versions the harness was last planned on (js-harness host-watch draft --from-desktop <that version> --from-code <that version> drafts their spans)`,
+        'check that the harness hooks in ~/.claude/settings.json still run',
+        'then record the review: js-harness doctor --host-reviewed',
+      ],
+    },
+  };
+}
+
+/** What the hook's notice adds for this row: the update since the last review, or that its record is unread, and a
+ * version not applied. */
 export function hostNotice(row) {
   const parts = [];
-  if (row?.claude === 'stale' && row.change) parts.push(`${row.change} since the last review, which a host watch session reviews`);
+  // Its versions enter the notice, so a further update while the record is unknown is a new notice (the verifier, finding 5).
+  if (row?.claude === 'stale' && row.unreadable) parts.push(`the record of the host review cannot be read (Claude Desktop ${row.version}), which no host watch sees: tell the lead`);
+  else if (row?.claude === 'stale' && row.change) parts.push(`${row.change} since the last review, which a host watch session reviews`);
   if (row?.upToDate === 'outdated' && row.staged) parts.push(`Claude Desktop ${row.staged} is downloaded and not applied`);
   return parts.join('; ');
 }

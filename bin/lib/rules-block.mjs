@@ -3,10 +3,9 @@
 // small recorded block that `uninstall` undoes, and touches nothing else of `~/.claude`; so his other projects keep
 // them once the global file that had them is gone. It is the marked block of ./project-template.mjs: rendered again while it
 // is unedited, and his once he edits it. The text around it is his or the global file's and is never changed.
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { renameOver } from './atomic-write.mjs';
+import { realPlace, writeWhole } from './atomic-write.mjs';
 import { markedBlock, removeBlock, renderBlock } from './project-template.mjs';
 import { recordWith, sameFile } from './permissions.mjs';
 
@@ -75,31 +74,6 @@ const rulesFile = (home) => path.join(home, '.claude', 'CLAUDE.md');
 const SEPARATORS = new Set(['', '\n', '\r\n', '\n\n', '\r\n\r\n']);
 const separatorOf = (record) => (SEPARATORS.has(record?.separator) ? record.separator : '');
 
-/** Writes `text` to `target` through a fresh sibling renamed over it, so a write that fails partway leaves the file as
- * it was (the verifier, L20). The sibling is created exclusively under a random name, so nothing already there is
- * written through, and the rename is tried again while Windows holds the file; the sibling
- * is removed when the write or the rename fails, but not when it was already there (`EEXIST`), since it is not ours.
- * The sibling takes the mode of the file it replaces, so a private file stays private (Codex on cca493e..b27d063). */
-function writeWhole(target, text, writeFile = fs.writeFileSync) {
-  const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
-  let mode = null;
-  try {
-    mode = fs.statSync(target).mode & 0o7777;
-  } catch {
-    // A file not there yet takes the default mode.
-  }
-  try {
-    // Created with the mode already, which the umask can only narrow, so a private text is never readable by others
-    // for a moment (Codex's recheck on 6df890e..4e28ec3); the chmod then gives it the exact mode.
-    writeFile(tmp, text, { encoding: 'utf8', flag: 'wx', ...(mode !== null && { mode }) });
-    if (mode !== null) fs.chmodSync(tmp, mode);
-    renameOver(tmp, target);
-  } catch (err) {
-    if (err.code !== 'EEXIST') fs.rmSync(tmp, { force: true });
-    throw err;
-  }
-}
-
 /** `before`, the text a removed block followed, without the line ends install put there: at most as many as
  * `separator` holds, either kind, and never the last one when `rest`, text after the block, follows, so no two of his
  * lines are joined (the verifier, L20). */
@@ -113,20 +87,6 @@ function withoutSeparator(before, rest, separator) {
     text = text.slice(0, -end[0].length);
   }
   return text;
-}
-
-/** The file `file` names: itself, or the one it links to, so his `CLAUDE.md` linked into a dotfiles repository stays a
- * link and the block goes into the file it names (Codex on cca493e..b27d063). A link to nothing throws (`ENOENT`):
- * nothing is written through it. */
-function realPlace(file) {
-  let link;
-  try {
-    link = fs.lstatSync(file).isSymbolicLink();
-  } catch (err) {
-    if (err.code === 'ENOENT') return file;
-    throw err;
-  }
-  return link ? fs.realpathSync(file) : file;
 }
 
 /** The text of `file` and whether it was there; a file that is not there reads as empty, any other error throws. */

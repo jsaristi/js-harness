@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { isDeepStrictEqual } from 'node:util';
+import { replaceText } from './atomic-write.mjs';
 import { defaultRun, parseStats } from './backup.mjs';
 import { copyAndHash, hashFile, inside, plainCount, powershellCount, walkRoot } from './stack-backup-walk.mjs';
 
@@ -305,7 +306,8 @@ function styled(value, style) {
 }
 
 /** Puts `value` at `key` of the JSON object in `file`, every other key and the file's style kept; `undefined` or
- * `null` at the top level removes the key. */
+ * `null` at the top level removes the key. Written whole or not at all (`replaceText`), since `file` is the user's Claude
+ * settings (M33 of the Fable 5.2 audit; the verifier of odd/tasks/audit-u5-atomic-state.md, finding 6). */
 function setKey(file, keyPath, value) {
   const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '{}\n';
   const data = readJsonQuiet(file) ?? {};
@@ -317,7 +319,7 @@ function setKey(file, keyPath, value) {
   if (value === null && keyPath.length === 1) delete node[keyPath[0]];
   else node[keyPath.at(-1)] = value;
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, styled(data, styleOf(text)));
+  replaceText(file, styled(data, styleOf(text)));
 }
 
 /** Removes the folders under `dir` that hold nothing, deepest first; `dir` itself only when `self`. */

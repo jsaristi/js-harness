@@ -5,6 +5,7 @@
 // import each other's functions only, which an ES module cycle allows.
 import fs from 'node:fs';
 import path from 'node:path';
+import { replaceText } from './atomic-write.mjs';
 import { NEW_SETTINGS_STYLE, detectIndent, keepRecord, readManifest, removeEmptyDirsUpTo, serializeJson } from './manifest.mjs';
 
 /** Claude Code's setting for messages between sessions, and the value `install --accept-session-messages` gives it:
@@ -40,7 +41,7 @@ export function readSettings(target) {
  * (recorded all the same, so `uninstall` knows to leave it); `skipped` with a `reason` when the file cannot be
  * read, is no JSON object or cannot be written, and then nothing is written or recorded. A second call keeps the first record, which holds what the user had. Like the other records kept on
  * request, `install` and `sync` carry it forward and `uninstall` puts the value back (`restoreSettings`). */
-export function acceptSessionMessages(home, { writeFile = fs.writeFileSync, record: recordIt = keepRecord } = {}) {
+export function acceptSessionMessages(home, { writeFile = replaceText, record: recordIt = keepRecord } = {}) {
   const target = userSettingsPath(home);
   const { key, value } = SESSION_MESSAGES;
   let settings;
@@ -72,7 +73,7 @@ export function acceptSessionMessages(home, { writeFile = fs.writeFileSync, reco
   try {
     keep();
   } catch (err) {
-    if (existed) fs.writeFileSync(target, settings.raw, 'utf8');
+    if (existed) replaceText(target, settings.raw);
     else fs.rmSync(target, { force: true });
     return { status: 'skipped', path: target, reason: `not recorded in the manifest (${err.code ?? err.message}), so the file was put back` };
   }
@@ -84,7 +85,7 @@ export function acceptSessionMessages(home, { writeFile = fs.writeFileSync, reco
  * not hold before is removed (`createdFile`, and nothing else in it), with the folders it leaves empty; a value the
  * user changed since is theirs and is kept, and so is a file that cannot be read. A record whose value was already
  * there before is left with nothing to do. */
-export function restoreSettings(manifest, home, listDir, { writeFile = fs.writeFileSync, removeFile = fs.rmSync } = {}) {
+export function restoreSettings(manifest, home, listDir, { writeFile = replaceText, removeFile = fs.rmSync } = {}) {
   const restored = [];
   const kept = [];
   const failed = [];

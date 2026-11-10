@@ -959,14 +959,20 @@ What `backup --session-start` leaves when it rewrites a session's SessionStart e
   and `bytesAfter` (numbers), `sha256Before` (string, of the text copied), `undo` (string, the `cp -p` that puts the copy
   back).
 
-## The doctor's cache and reviews
+## The doctor's cache
 
-The doctor's cache of the latest versions fetched and of what was last notified or reviewed; `bin/lib/cache.mjs` `writeCache` writes the whole object, and `bin/doctor.mjs` builds each key it changes.
+The doctor's cache of the latest versions fetched and of what was last notified; `bin/lib/cache.mjs` `writeCache` writes the whole object by a temporary file and a rename, and `bin/doctor.mjs` builds each key it changes. A cache that does not parse reads as empty.
 
 - `latest`: `{ checkedAt, versions }`: `checkedAt` an ISO time or `null` (refetched once it is 6 hours old), `versions` an object from a row's id to its latest version string, or `null` when looked up and not found.
 - `notified`: string or `null`, the sha256 digest of the gap list last told by `doctor --hook` (`bin/lib/digest.mjs` `gapDigest`).
-- `host`: `{ reviewed: { desktop, code, at } }`, the Claude Desktop version and its Code tab CLI version (string or `null`) last recorded as reviewed, and when.
-- `stack`: `{ reviewed: { versions, at } }`, each stack tool's version last reviewed, by id, and when.
+- `host`, `stack`: the reviews an earlier version kept here, in the shape of the record below; kept as they were, and read only into the record when there is none yet.
+
+## The reviewed versions
+
+The record of the versions last reviewed, moved out of the cache so a torn cache cannot turn a pending update into a reviewed one (M10 of the Fable 5.2 audit, `odd/tasks/audit-u5-atomic-state.md`); `bin/lib/cache.mjs` `recordReviewed` writes it whole by a temporary file and a rename, and `readReviewed` reads it. A key left out was never recorded, so its first reading is; `null`, or a record that does not parse, is unknown: nothing is taken as reviewed until `doctor --host-reviewed` or `--stack-reviewed` records it.
+
+- `host`: `{ reviewed: { desktop, code, at } }` or `null`, the Claude Desktop version and its Code tab CLI version (string or `null`) last recorded as reviewed, and when.
+- `stack`: `{ reviewed: { versions, at } }` or `null`, each stack tool's version last reviewed, by id, and when.
 
 ## Clean
 

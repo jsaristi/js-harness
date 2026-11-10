@@ -206,7 +206,7 @@ Read in 13.7 s
 
 The commands of the host watch session (F8's S9, `odd/tasks/f8-s9-host-watch.md`), which reviews
 each Claude Desktop update in depth instead of checking only that nothing broke. `draft` cuts the
-update's span of both changelogs, from the reviewed record of doctor's cache to the versions doctor
+update's span of both changelogs, from the record of reviewed versions to the versions doctor
 reads (or a span frozen with `--from-*` and `--to-*`), and prints the review file
 `doctor --host-reviewed` asks for: one row an entry, placed in the harness areas it touches, an
 entry outside the Code tab decided `ignore` and every other left `?`, the unplaced ones listed under

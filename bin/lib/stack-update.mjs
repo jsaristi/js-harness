@@ -1,5 +1,5 @@
 // The stack-update row of `doctor`: the version of each tool of the stack, and of the Claude CLI on PATH, against the
-// versions last reviewed (the `stack` record of the doctor cache, bin/lib/cache.mjs). A tool that updated itself since
+// versions last reviewed (the `stack` review of the record of reviewed versions, bin/lib/cache.mjs). A tool that updated itself since
 // is a gap until its review is recorded (`doctor --stack-reviewed`), so the session hook names it at the next start
 // instead of a measurement finding it on the version it was not planned for (docs/FAILURES.md, cli-updated-itself:
 // engram moved to 3.3.0 and the native updater replaced `claude` on PATH, each seen only when a run was about to start).
@@ -19,7 +19,7 @@ export function stackVersions(rows, claude) {
   return Object.fromEntries(Object.entries(versions).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
 
-/** `{ row, record }`: the `stack-update` row for the versions read and the reviewed record (the cache's
+/** `{ row, record }`: the `stack-update` row for the versions read and the reviewed record (the record's
  * `stack.reviewed`, or `null`), and the record to write, or `null`. The first reading is recorded as reviewed. After
  * that a tool read for the first time joins the record as it is, and a moved version is a gap that only
  * `--stack-reviewed` records. A tool no longer read is no change: uninstalling is not an update. */
@@ -55,7 +55,37 @@ export function stackUpdateRow(versions, reviewed, now = () => new Date()) {
   };
 }
 
-/** What the hook's notice adds for this row: the tools updated since the last review. */
+/** The first words of a review row whose record cannot be read (bin/lib/cache.mjs, `readReviewed`), here and in the
+ * host-update row (./host-update.mjs). */
+export const UNREADABLE_RECORD = 'the record of the versions last reviewed cannot be read (~/.js-harness/reviewed.json), so no version is taken as reviewed';
+
+/** The `stack-update` row when the record of its review cannot be read: a gap that records nothing, so a torn record
+ * never turns an update into a reviewed one (M10 of the Fable 5.2 audit); `--stack-reviewed` records the review. With
+ * no version read it is the row `stackUpdateRow` gives. */
+export function stackUnreadableRow(versions) {
+  const { row } = stackUpdateRow(versions, null);
+  if (row.installed !== 'ok') return row;
+  const named = Object.entries(versions).map(([id, version]) => `${id} ${version}`).join(', ');
+  return {
+    ...row,
+    installed: 'stale',
+    unreadable: true,
+    read: named,
+    fix: {
+      installed: [
+        `${UNREADABLE_RECORD}; review the tools at the versions read now, ${named}:`,
+        'read the changelog of each tool since the version the harness was last planned on',
+        'check that the hooks and commands of the harness that run them still work',
+        'say it to the user, and to whoever plans a measurement on the versions before',
+        'then record the review: js-harness doctor --stack-reviewed',
+      ],
+    },
+  };
+}
+
+/** What the hook's notice adds for this row: the tools updated since the last review, or that its record is unread. */
 export function stackNotice(row) {
+  // Its versions enter the notice, so a further update while the record is unknown is a new notice (the verifier, finding 5).
+  if (row?.installed === 'stale' && row.unreadable) return `the record of the stack review cannot be read (${row.read})`;
   return row?.installed === 'stale' && row.change ? `${row.change} since the last review` : '';
 }

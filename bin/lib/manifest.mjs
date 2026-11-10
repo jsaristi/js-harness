@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { cachePath } from './cache.mjs';
+import { cachePath, reviewedPath } from './cache.mjs';
 import { gateDir, readGateHolder, readGateWaiters } from './gate-lock.mjs';
 import { gateLogDir } from './gate-log.mjs';
 import { channelDir } from './channel.mjs';
@@ -20,7 +20,7 @@ import { restorePluginHooks } from './engram-prompt-hook.mjs';
 import { holdPermissions, releasePermissions, removeMadeFile } from './permissions.mjs';
 import { holdRulesBlock, releaseRulesBlock } from './rules-block.mjs';
 import { writeComponent } from './component-write.mjs';
-import { writeManifestAtomic } from './atomic-write.mjs';
+import { replaceText, writeManifestAtomic } from './atomic-write.mjs';
 // Re-exported for ./project.mjs, which writes a project's manifest with it.
 export { writeManifestAtomic };
 import { OUTPUT_STYLE_NAME, outputStyleContent } from './output-style.mjs';
@@ -544,7 +544,7 @@ function appendEntryToFile(target, pointer, entry, ours, write = true) {
   if (!has) arr.splice(stale.length > 0 ? stale[0] : arr.length, 0, entry);
   try {
     if (write) fs.mkdirSync(path.dirname(target), { recursive: true });
-    if (write) fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF, indent }), 'utf8');
+    if (write) replaceText(target, serializeJson(data, { trailingNewline, useCRLF, indent }));
   } catch (err) {
     return { skipped: true, createdFile: false, reason: err.message };
   }
@@ -612,7 +612,7 @@ function removeEntryFromFile(target, pointer, entry, createdFile, createdContain
   }
 
   removeEmptyCreatedContainers(data, pointer, createdContainers);
-  fs.writeFileSync(target, serializeJson(data, { trailingNewline, useCRLF, indent }), 'utf8');
+  replaceText(target, serializeJson(data, { trailingNewline, useCRLF, indent }));
   return { status: 'removed' };
 }
 
@@ -1224,7 +1224,7 @@ function uninstallInstalled(home, deps) {
     ? { undone: [], kept: [], failedRecords: [] }
     : deps.undoStack?.(stackRecords) ?? { undone: [], kept: stackRecords.map(({ tool, dimension }) => ({ tool, dimension, reason: 'not-judged' })), failedRecords: stackRecords };
   const clones = (manifest.clones ?? []).length === 0 ? { removed: [], kept: [], failedRecords: [] } : deps.removeClones?.(manifest.clones) ?? { removed: [], kept: manifest.clones.map((clone) => ({ path: clone.path, reason: 'not-judged' })), failedRecords: manifest.clones };
-  fs.rmSync(cachePath(home), { force: true });
+  for (const file of [cachePath(home), reviewedPath(home)]) fs.rmSync(file, { force: true });
   const gate = removeGateFolder(home, removeFile, statFile);
   const log = removeGateLogFolder(home, removeFile, statFile, gate.kept, gate.unseen);
   const tickets = removeTicketFolder(home, removeFile, statFile);

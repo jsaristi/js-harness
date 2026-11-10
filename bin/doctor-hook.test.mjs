@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { doctorMain, USAGE } from './doctor.mjs';
-import { readCache, writeCache } from './lib/cache.mjs';
+import { readCache, readReviewed, recordReviewed, writeCache } from './lib/cache.mjs';
 import { recordOptionalFile } from './lib/manifest.mjs';
 import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './lib/remote.mjs';
 
@@ -438,8 +438,8 @@ test('doctor --hook names a host update since the last review and a downloaded v
 
     const baseline = await runHook(argv, {}, deps);
     assert.equal(baseline.stdout, '', 'the first reading is the reviewed baseline: no gap, no notice');
-    const { at } = readCache(home).host.reviewed;
-    assert.deepEqual(readCache(home).host.reviewed, { desktop: '2.37337.1', code: '2.1.295', at });
+    const { at } = readReviewed(home).host.reviewed;
+    assert.deepEqual(readReviewed(home).host.reviewed, { desktop: '2.37337.1', code: '2.1.295', at });
 
     versions = { found: true, desktop: '2.37337.1', staged: '2.42304.0', code: '2.1.295' };
     const staged = await runHook(argv, {}, deps);
@@ -481,10 +481,10 @@ test('doctor --hook names a stack tool updated since the last review, once, and 
     const argv = ['--hook', '--home', home, '--cwd', project];
 
     assert.equal((await runHook(argv, {}, deps)).stdout, '', 'the first reading is the reviewed baseline');
-    const reviewed = readCache(home).stack.reviewed;
+    const reviewed = readReviewed(home).stack.reviewed;
     assert.equal(reviewed.versions.engram, '9.9.9');
 
-    writeCache(home, { ...readCache(home), stack: { reviewed: { ...reviewed, versions: { ...reviewed.versions, engram: '9.8.0' } } } });
+    recordReviewed(home, 'stack', { ...reviewed, versions: { ...reviewed.versions, engram: '9.8.0' } });
     const updated = await runHook(argv, {}, deps);
     assert.deepEqual(JSON.parse(updated.stdout), { systemMessage: 'js-harness: 1 stack gap — run js-harness doctor (engram 9.8.0 → 9.9.9 since the last review)' });
     assert.equal((await runHook(argv, {}, deps)).stdout, '', 'the same update is not notified twice');

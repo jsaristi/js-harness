@@ -1,7 +1,8 @@
 // The atomic write of a JSON record: a fresh temporary sibling, then one rename over the target, so a reader never
 // sees half a record and a failure leaves the one there before. The machine manifest (./manifest.mjs) and a
 // project's (./project.mjs) are written through it; it moved out of manifest.mjs, over its size ceiling, as is.
-// `replaceFile` does the same for a file's text as it is.
+// `replaceFile` does the same for a file's text as it is, and `replaceText` for a text file of the user's, keeping a
+// linked file a link and its mode: the user's Claude settings and the Rules block of his CLAUDE.md (./rules-block.mjs).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 
@@ -113,6 +114,51 @@ const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),
  * `deps.rename`, `deps.pause` and `deps.platform` are its seams. The Rules block writes his CLAUDE.md through it
  * (./rules-block.mjs; a review of T7 of odd/tasks/f8-s10-port.md). */
 export const renameOver = (from, to, deps = {}) => renameHeld(from, to, deps.rename ?? fs.renameSync, deps.pause ?? sleepSync, deps.platform ?? process.platform);
+
+/** Writes `text` to `target` through a fresh sibling renamed over it, so a write that fails partway leaves the file as
+ * it was (the verifier, L20 of odd/tasks/f8-s10-port.md). The sibling is created exclusively under a random name, so
+ * nothing already there is written through, and the rename is tried again while Windows holds the file; the sibling
+ * is removed when the write or the rename fails, but not when it was already there (`EEXIST`), since it is not ours.
+ * The sibling takes the mode of the file it replaces, so a private file stays private (Codex on cca493e..b27d063).
+ * It moved here from ./rules-block.mjs for the user's Claude settings (odd/tasks/audit-u5-atomic-state.md, S5). */
+export function writeWhole(target, text, writeFile = fs.writeFileSync) {
+  const tmp = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  let mode = null;
+  try {
+    mode = fs.statSync(target).mode & 0o7777;
+  } catch {
+    // A file not there yet takes the default mode.
+  }
+  try {
+    // Created with the mode already, which the umask can only narrow, so a private text is never readable by others
+    // for a moment (Codex's recheck on 6df890e..4e28ec3); the chmod then gives it the exact mode.
+    writeFile(tmp, text, { encoding: 'utf8', flag: 'wx', ...(mode !== null && { mode }) });
+    if (mode !== null) fs.chmodSync(tmp, mode);
+    renameOver(tmp, target);
+  } catch (err) {
+    if (err.code !== 'EEXIST') fs.rmSync(tmp, { force: true });
+    throw err;
+  }
+}
+
+/** The file `file` names: itself, or the one it links to, so a file linked into a dotfiles repository stays a link and
+ * the write goes into the file it names (Codex on cca493e..b27d063). A link to nothing throws (`ENOENT`): nothing is
+ * written through it. */
+export function realPlace(file) {
+  let link;
+  try {
+    link = fs.lstatSync(file).isSymbolicLink();
+  } catch (err) {
+    if (err.code === 'ENOENT') return file;
+    throw err;
+  }
+  return link ? fs.realpathSync(file) : file;
+}
+
+/** Writes `text` over the file `file` names (`realPlace`) whole or not at all (`writeWhole`): the default write of every
+ * writer of the user's Claude settings, in the shape of `fs.writeFileSync` they take as a seam (M33 of the Fable 5.2
+ * audit). */
+export const replaceText = (file, text) => writeWhole(realPlace(file), text);
 
 /** Writes `buffer` (or a string, as UTF-8) over `file` whole or not at all: a fresh temporary sibling, then one rename
  * over it (`renameOver`, whose seams `deps` carries), so a write that fails halfway leaves the bytes there before. The
