@@ -78,8 +78,8 @@ Nothing planned: his answer to question 242 chose the scope. A question goes to 
    backup help say bundles are not blanked. Not covered: scanning bundles, his pushed backup repos, rotating any key."
 
 ## Tasks
-- [ ] T1 (kind: build) spec 1, 2: the tests first, then the patterns and the help · `bin/lib/backup.mjs`,
-  `bin/lib/backup.test.mjs`, `bin/backup.mjs`, `bin/backup.test.mjs`, `README.md`, `docs/SPEC.md`
+- [x] T1 (kind: build) spec 1, 2: the tests first, then the patterns and the help · `bin/lib/backup.mjs`,
+  `bin/lib/backup.test.mjs`, `bin/backup.mjs`, `bin/backup.test.mjs`, `README.md`, `docs/SPEC.md` · e631914c
 - [ ] T2 (kind: verify) Codex, the Claude lenses, an independent verifier, the pull request
 
 ## Log
@@ -156,3 +156,8 @@ Nothing planned: his answer to question 242 chose the scope. A question goes to 
   nothing: this session edited `bin/lib/backup.test.mjs` for the lens's answer while Codex reviewed (136,092 input
   tokens spent); `edit-during-review` seen again, its `- Seen:` line in `docs/FAILURES.md`; the review runs again with
   no edit until it ends. `node --test bin/lib/backup.test.mjs`: 26 of 26; 40,000 backslashes before a key, 7.4 ms.
+- L11 Reviews of the last range, nothing edited while they ran. Codex (b0c940c..e631914): correct, 0.89, no findings,
+  73,281 input tokens (planned 84,000 to 130,000). Claude lenses risk, reliability (dac1ef3..e631914): 0 findings
+  each, 27,792 input tokens in all; reliability rechecked its earlier warning: fixed. Every code commit of the branch
+  is covered by a Codex and a lens record. Not run again: the independent verifier, whose second pass (L9) passed
+  b0c940c3; the three commits after it answer its finding A and two review findings, each with a test that failed first.
