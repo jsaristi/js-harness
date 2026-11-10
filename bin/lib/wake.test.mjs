@@ -121,6 +121,10 @@ test('only the wait of a chained line is re-armed, with the cd before it, and qu
   for (const prefixed of ['timeout 600 js-harness wait --pr 8', 'JH_X=1 js-harness wait --pr 8', 'nohup node bin/js-harness.mjs wait --pr 8', 'time timeout -k 5 600 js-harness wait --pr 8']) {
     assert.deepEqual(waitPartsOf(`git push && ${prefixed}`), [prefixed], prefixed);
   }
+  // Codex, on adf0e80: the wait's words in a prefix or an argument do not make another program a wait.
+  for (const other of ['env JH_X="js-harness wait --pr 8" js-harness install', 'node -e "js-harness wait --pr 8"', 'node bin/js-harness.mjs install "wait"']) {
+    assert.deepEqual(waitPartsOf(other), [], other);
+  }
   // A line read as a wait that yields no step to re-arm is killed work, never a wait silently dropped.
   const hidden = [{ id: 'h', text: transcript(titled('JH 6 · x'), prompt('go', at(4, 0)), ...background('h1', 'hb1', 'bash -c "js-harness wait --pr 9"', at(4, 30))) }];
   const [quiet] = wakePlan({ bootAt: BOOT, transcripts: hidden });

@@ -62,8 +62,9 @@ function stepsOf(command) {
 
 // The words a shell puts before a command it runs on a condition or in a group: a step that begins with one is that
 // command, handed back without it.
-// A step that runs the wait itself: its program is the dispatcher, node or wait.mjs, not a command that only names it.
-const RUNS_WAIT = /^["']?(?:[^\s"']*[\\/])?(?:js-harness(?:\.mjs|\.cmd)?|node(?:\.exe)?|wait\.mjs)["']?(?:\s|$)/i;
+// A step that runs the wait itself: the dispatcher and its `wait`, or wait.mjs, each as typed or through node, and
+// not a command that only names it in an argument (Codex, on adf0e80: `js-harness install "wait"` is no wait).
+const RUNS_WAIT = /^(?:["']?(?:[^\s"']*[\\/])?node(?:\.exe)?["']?\s+)?["']?(?:[^\s"']*[\\/])?(?:js-harness(?:\.mjs|\.cmd)?["']?\s+wait|wait\.mjs["']?)(?:\s|$)/i;
 const LEADING_KEYWORD = /^(?:(?:then|do|else|elif|if|while|until|!|\{)\s+)+/;
 // What may run a command for it and leave it the same command: an environment assignment, `env`, `nohup`, `time`,
 // `command`, `exec` and `timeout` with its options and duration. The step is handed back with them; the program
@@ -85,7 +86,7 @@ export function waitPartsOf(command) {
     } else {
       const bare = step.replace(LEADING_KEYWORD, '');
       if (/^cd(\s|$)/.test(bare)) frames.at(-1).push(bare);
-      else if (isWaitCommand(bare) && RUNS_WAIT.test(bare.replace(RUN_PREFIX, ''))) parts.push([...frames.flat(), bare].join(' && '));
+      else if (RUNS_WAIT.test(bare.replace(RUN_PREFIX, ''))) parts.push([...frames.flat(), bare].join(' && '));
     }
   }
   return parts;

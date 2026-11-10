@@ -93,8 +93,8 @@ not keep the PC on, and a summary filed under tomorrow.
 
 ## Next step
 DONE: Codex and the lenses on `6ee974dd..7e2b1cb`, recorded; the lens finding is fixed in the commit after this
-one. NOW: `js-harness codex-review --base 7e2b1cb5` and `js-harness lens-review --base 7e2b1cb5 --lenses reliability`
-on that fix, one at a time; then push the branch, open the PR and send `js-harness notify --to orchestrator --kind
+one, `adf0e803`; Codex's P2 on it fixed in the next. NOW: `js-harness codex-review --base adf0e803`, then
+`js-harness lens-review --base 7e2b1cb5 --lenses reliability`, one at a time; then push the branch, open the PR and send `js-harness notify --to orchestrator --kind
 ready --pr <n>`, naming shared files (none of 801-809 touched these; recheck with `gh pr diff <n> --name-only`) and
 that docs/live-board.html needs republishing; keep `js-harness wait --notice-to 168` running in the background.
 
@@ -133,6 +133,9 @@ that docs/live-board.html needs republishing; keep `js-harness wait --notice-to 
   `6ee974d..7e2b1cb`: risk and resilience 0 findings; reliability one WARNING, a wait run through a prefix
   (`timeout 600 js-harness wait`, an environment assignment, `nohup`) was dropped and subtracted from `killed`.
   Fixed test first (red: `[]` for the prefixed wait): the program is read after the prefix, the step is handed back
-  with it, and a line with no step to re-arm (`bash -c "..."`) stays killed work.
+  with it, and a line with no step to re-arm (`bash -c "..."`) stays killed work (`adf0e803`). Codex on that fix:
+  one P2, `env JH_X="js-harness wait" js-harness install` became a wait, since the words were found in the
+  assignment; fixed test first (red: the install handed back): the program after the prefixes must be the wait
+  itself, the dispatcher and its `wait` or wait.mjs, directly or through node.
 - L4 Shared files with open pull requests: none of the files in scope is changed by 801-804 or 806-809
   (`gh pr diff <n> --name-only`, 2026-11-10); bin/lib/background.mjs (801) is left alone on purpose.
