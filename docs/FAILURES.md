@@ -583,9 +583,9 @@ A gate failed on one test of `evals/isolation-probe.test.mjs` (line 1734), "the 
 trial left listening on its engram port, by number, and leaves nothing behind", in a change that touched
 nothing of the evals. The test asserts that its cleanup found exactly one listener on the trial's port
 when it killed it (`killed` deep-equal to `[[port, 1]]`). That the stand-in server had not yet listened,
-or had already gone, under load is assumed, not checked: the run's own assertion text was not read. Since
-2026-10-16 the file is quarantined in docs/FLAKY.md: it still runs in every gate, and a pass on its rerun
-does not block until the entry expires on 2026-10-23.
+or had already gone, under load is assumed, not checked: the run's own assertion text was not read. The file
+was quarantined in docs/FLAKY.md from 2026-10-16 to 2026-10-23; the expired entry left the ledger on
+2026-11-10, after one run of the file alone on Windows passed 130 of 130.
 - Class: machine
 - Seen: 2026-10-16 — the land of PR 350 in WSL2, gate log c603935e, under 59 percent load, by the lead's
   notice to JH 28 (a claim) — the only failure of that test in the gate logs; PR 350 touches nothing of

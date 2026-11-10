@@ -170,8 +170,9 @@ and S4a's row holds it there.
    writes its record under the git common directory (The Codex review; The Claude lens review).
 4. **Push.** `.githooks/pre-push` runs `check --push`, which refuses a code commit that a complete
    record of each review does not cover, where the project turns that review on (`codexReview` is on
-   by default where Codex is installed, `lensReview` off until the project turns it on,
-   `bin/lib/functions.mjs:131-135`; this repository turns both on), unless a skip is recorded; a skip is a debt that `check`'s
+   by default where a file of the project is a program, or the files could not be read, whether or not
+   Codex is installed; `lensReview` off until the project turns it on; `resolveFunctions` in
+   `bin/lib/functions.mjs`; this repository turns both on), unless a skip is recorded; a skip is a debt that `check`'s
    `review` row and `doctor`'s `review-skips` row list.
 5. **Land.** `js-harness merge-queue` builds main plus each ready pull request, tests the candidate
    on CI (a `queue/` branch) and on this machine, refuses a pull request whose commits hold a lens
@@ -252,7 +253,7 @@ owner, through one place) and reports from `report` (The status report). Every r
 of five states that the reply hook holds (The reply check); near the context limit a session writes
 its state and keeps working, and after a compaction it resumes from files (The context pause and
 the inbox; A compaction resumes from files). The orchestrator skill holds how the lead works; the
-protocols skill holds the eight protocols (The installed skills).
+protocols skill holds the nine protocols (The installed skills).
 
 ### Rules, failures and coverage
 
@@ -433,7 +434,7 @@ check or an eval case ("After F8", directive coverage).
 ### The stack install
 
 **Problem:** The doctor named a fix for each gap and nothing ran it, in an order that matters and with no record of what it wrote, so a new machine was set up by hand and nothing could undo it (`odd/tasks/stack-install.md`).
-**Requirement:** `stack` lists, read-only, the tools the harness requires that are missing for this project, in run order, each with its command and its exact undo: the Codex CLI while codexReview is not off, codegraph while codeMap is not off, and codegraph's registrations in both hosts. A tool whose undo is not exact (gentle-ai's own installer, and engram, which it brings), a login and a prerequisite are named as the person's steps and never run; context7 and typescript-lsp are optional. The package manager is named, or read from the copy, never from the word `npm`. Each row run is recorded in the machine manifest before it starts, with its undo, the environment it was given and, read back after it, what that undo applies to; `uninstall machine` undoes the records the last first, drops the record of a tool already gone, keeps and names one that changed since, and keeps the record of an undo that failed for a run again. No test runs a real command.
+**Requirement:** `stack` lists, read-only, the tools the harness requires that are missing for this project, in run order, each with its command and its exact undo: the Codex CLI while codexReview is not off, codegraph while codeMap is not off, codegraph's registrations in both hosts, and context7's, always in Claude Code and in Codex while codexReview is not off (`bin/lib/stack-install.mjs`, `wanted`). Engram and its plugin, installed by engram's own commands, a login and a prerequisite are named as the person's steps and never run; typescript-lsp alone is optional, named with doctor's fix and never run. The package manager is named, or read from the copy, never from the word `npm`. Each row run is recorded in the machine manifest before it starts, with its undo, the environment it was given and, read back after it, what that undo applies to; `uninstall machine` undoes the records the last first, drops the record of a tool already gone, keeps and names one that changed since, and keeps the record of an undo that failed for a run again. No test runs a real command.
 **Reason:** Every write outside the repository must be undoable exactly; gentle-ai's uninstall removes whole settings keys and leaves binaries and PATH entries behind, so the harness does not run it (his answer to F1, 2026-10-19).
 **Proof:** `node --test bin/lib/stack-install.test.mjs`, `node --test bin/stack.test.mjs`, `node --test bin/lib/stack-run.test.mjs`, `node --test bin/lib/manifest-stack.test.mjs`, `node --test bin/stack-install.test.mjs`
 **Discarded:** A flag on `install`: install writes the harness's own files and is safe to run unasked. Running gentle-ai's installer with only its own uninstall as the undo.
@@ -667,7 +668,7 @@ check or an eval case ("After F8", directive coverage).
 ### The installed skills
 
 **Problem:** No incident for the harness's own skill: it is the first component of install's design (`odd/tasks/install-update.md`). For the orchestrator's: on 2026-10-06 three failures in one afternoon came from no session seeing the others, and a session that led and built at once compacted twice in a day (`odd/tasks/session-board.md`). For the protocols: what to do when asking the owner for a decision, closing a reply, running something that costs, changing a rule, reporting a mistake and handing off lived only in memory notes and the lead's relief file, and two failures of the register owed their control to a place that did not exist (`odd/tasks/rule-hierarchy.md`, T7).
-**Requirement:** Install writes, for Claude Code (nothing under `~/.codex`, D4), a skill that teaches the commands and the memory hygiene protocol, and a skill that teaches how several sessions share one project: the lead and the work sessions, where each thing lives, how questions reach the owner, the lead's commands and charter, a work session's notices and close, and a third that holds the eight protocols, each section opening with the incident it came for and its date and naming the rules it relies on by id, never restating them. They load on demand, and each is recorded and removed exactly.
+**Requirement:** Install writes, for Claude Code (nothing under `~/.codex`, D4), a skill that teaches the commands and the memory hygiene protocol, and a skill that teaches how several sessions share one project: the lead and the work sessions, where each thing lives, how questions reach the owner, the lead's commands and charter, a work session's notices and close, and a third that holds the nine protocols, each section opening with the incident it came for and its date and naming the rules it relies on by id, never restating them. They load on demand, and each is recorded and removed exactly.
 **Reason:** A protocol that applies only in some situations loads on demand, while a rule for every reply needs a line in `AGENTS.md` and a check; the lead does not implement because reading code fills a context that has to last.
 **Proof:** `node --test bin/lib/manifest.test.mjs`, `node --test bin/install.test.mjs`, `node --test bin/lib/protocols-skill.test.mjs`
 **Discarded:** A watchman skill: replaced by a lead with a charter the owner decided. Six protocol skills: every installed skill's description is read on every turn. Teaching in a skill what a check now enforces. Asking the owner to compact a session.

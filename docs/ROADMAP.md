@@ -246,7 +246,10 @@ apliquemos todo esto y despues de todo hacemos un test completo de la aplicacion
 - [x] Every command reviewed against its help, README and SPEC, and every finding fixed or written down (`odd/tasks/launch-audit.md`, I-RM-1)
 - [x] The full application test passes on Windows and WSL2
 - [x] v0.9.0 tagged and installed from its tag by real pnpm and npm
-- [x] v1.0.0 adds a feature, and `upgrade` moves a clean home and the lead's copy from 0.9.0 to 1.0.0
+- [x] v1.0.0 adds a feature, and `upgrade` moves a clean home and the lead's copy from 0.9.0 to 1.0.0: done on
+  2026-10-18 (`odd/tasks/harness-review.md`, L58); that tag was deleted on 2026-10-19, at his answer to Pregunta 16,
+  so the run stands as the rehearsal of the update, and 1.0.0 is tagged again only on the definitive commit
+  (`odd/tasks/release-095.md`, T3 and L10; "Releases before 1.0.0" above)
 
 ### Memory that survives the machine
 His machine is slow and he cleans it with PC Manager; a past cleanup lost Engram's memories, and a
