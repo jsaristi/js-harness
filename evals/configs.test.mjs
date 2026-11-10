@@ -699,6 +699,31 @@ test('the reply of a turn is every text its main thread wrote after the turn\'s 
   assert.equal(turnReply(path.join(dir, 'missing')), null);
 });
 
+test('a compaction summary or a notice the host adds is no prompt, so the turn\'s texts before it stay in its reply', () => {
+  const dir = tmp('turn-reply-host-lines');
+  const line = (id, value) => JSON.stringify({ type: 'assistant', message: { id, model: 'claude-opus-5-5', content: [{ type: 'text', text: value }] } });
+  const user = (content, extra = {}) => JSON.stringify({ type: 'user', message: { role: 'user', content }, ...extra });
+  fs.writeFileSync(path.join(dir, 'session.jsonl'), [
+    user('Read the task and say whether T1 holds.'),
+    line('m1', 'T1 does not hold.'),
+    user('This session is being continued from a previous conversation.', { isCompactSummary: true }),
+    user('<task-notification><task-id>b1</task-id><status>completed</status></task-notification>'),
+    user('[Request interrupted by user]'),
+    line('m2', 'Te pregunto: ¿lo corrijo?'),
+  ].join('\n'));
+  assert.equal(turnReply(dir), 'T1 does not hold.\n\nTe pregunto: ¿lo corrijo?');
+});
+
+test('the turn is the latest by time across the kept sessions, whatever their names', () => {
+  const dir = tmp('turn-reply-order');
+  const line = (id, value, at) => JSON.stringify({ type: 'assistant', timestamp: at, message: { id, model: 'claude-opus-5-5', content: [{ type: 'text', text: value }] } });
+  const user = (value, at) => JSON.stringify({ type: 'user', timestamp: at, message: { role: 'user', content: value } });
+  // The newer session sorts first by name: read in name order, the older one's prompt would erase its reply.
+  fs.writeFileSync(path.join(dir, 'a.jsonl'), [user('the prompt again', '2026-10-29T11:00:00.000Z'), line('n1', 'the newer reply', '2026-10-29T11:00:01.000Z'), JSON.stringify({ type: 'assistant', message: { id: 'n2', model: 'claude-opus-5-5', content: [{ type: 'text', text: 'its close, with no time' }] } })].join('\n'));
+  fs.writeFileSync(path.join(dir, 'b.jsonl'), [user('the prompt', '2026-10-29T10:00:00.000Z'), line('o1', 'the older reply', '2026-10-29T10:00:01.000Z')].join('\n'));
+  assert.equal(turnReply(dir), 'the newer reply\n\nits close, with no time');
+});
+
 test('the last reply of a kept session is the last text its main thread wrote, never a subagent\'s or a made-up one', () => {
   assert.equal(lastReply(PROBE_TRANSCRIPTS), 'placeholder', 'the probe session\'s last text, after its subagent ran');
   const dir = tmp('last-reply');

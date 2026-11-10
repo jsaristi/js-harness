@@ -354,16 +354,29 @@ const SUBAGENT_TRANSCRIPTS = {
   reply: ({ dir }) => turnReply(dir),
 };
 
+/** Whether a transcript line is what the person typed, as `promptText` in `bin/lib/sessions.mjs` reads one; not
+ * imported, because the trial code is copied without `bin/` (`bin/pre-push-hook.test.mjs`). */
+function isPrompt(line) {
+  if (line.type !== 'user' || line.isMeta || line.isCompactSummary) return false;
+  const content = line.message?.content;
+  const text = typeof content === 'string' ? content : Array.isArray(content) ? content.find((block) => block?.type === 'text' && typeof block.text === 'string')?.text : undefined;
+  return typeof text === 'string' && !text.trimStart().startsWith('<') && !text.startsWith('[Request interrupted');
+}
+
 /** Every text the main thread of the session kept in `dir` wrote after the turn's prompt, joined by a blank line, or
  * `null` when it wrote none: the reply a grader reads (`runner.mjs`, `task.reply`). A Stop hook that refuses a close
  * makes the agent write again, and its last text alone, which is what it prints as its result, can be only the
- * rewritten close (docs/FAILURES.md, eval-reply-cut-by-stop-hook). The prompt is a user line of the person's own words;
- * a tool's result and a line the host adds (`isMeta`) are not. Session files are read in name order, a sidechain
- * line is a subagent's, a `<synthetic>` line is no reply, and a line that is not JSON is passed over. */
+ * rewritten close (docs/FAILURES.md, eval-reply-cut-by-stop-hook). The prompt is what the person typed, as
+ * `promptText` (`bin/lib/sessions.mjs`) reads it: not a tool's result, a line the host adds (`isMeta`), a compaction
+ * summary, a notice or an interrupt (those start with a tag or a bracket). The lines of every session file are read in time order, so a session resumed under another name is read
+ * after the one it follows whatever their names; a line with no timestamp keeps the time of the line before it in its
+ * file. A sidechain line is a subagent's, a `<synthetic>` line is no reply, and a line that is not JSON is passed
+ * over. */
 export function turnReply(dir) {
   if (!fs.existsSync(dir)) return null;
-  let texts = [];
+  const lines = [];
   for (const file of fs.readdirSync(dir).filter((name) => name.endsWith('.jsonl')).sort()) {
+    let at = '';
     for (const raw of fs.readFileSync(path.join(dir, file), 'utf8').split('\n')) {
       let line;
       try {
@@ -371,17 +384,23 @@ export function turnReply(dir) {
       } catch {
         continue;
       }
-      if (line?.isSidechain === true) continue;
-      const content = line?.message?.content;
-      // The turn's prompt: a user line of the person's own words, not a tool's result nor a line the host adds (a
-      // Stop hook's feedback or a skill's text are `isMeta`). Every text before it is an earlier turn's.
-      if (line?.type === 'user' && line.isMeta !== true && (typeof content === 'string' || (Array.isArray(content) && !content.some((block) => block?.type === 'tool_result')))) {
-        texts = [];
-        continue;
-      }
-      if (line?.type !== 'assistant' || !Array.isArray(content) || line.message.model === '<synthetic>') continue;
-      texts.push(...content.filter((block) => block?.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '').map((block) => block.text));
+      if (line === null || typeof line !== 'object' || line.isSidechain === true) continue;
+      if (typeof line.timestamp === 'string') at = line.timestamp;
+      lines.push({ at, line });
     }
+  }
+  // A stable sort: lines of one time keep their file's order, and files of one time their names' order.
+  lines.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  let texts = [];
+  for (const { line } of lines) {
+    // Every text before the turn's prompt is an earlier turn's.
+    if (isPrompt(line)) {
+      texts = [];
+      continue;
+    }
+    const content = line.message?.content;
+    if (line.type !== 'assistant' || !Array.isArray(content) || line.message.model === '<synthetic>') continue;
+    texts.push(...content.filter((block) => block?.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '').map((block) => block.text));
   }
   return texts.length === 0 ? null : texts.join('\n\n');
 }
