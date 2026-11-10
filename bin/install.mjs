@@ -671,7 +671,7 @@ async function uninstallByFlags(argv, env, deps, { projectOnly = false } = {}) {
   // parse is refused with nothing changed, as `uninstall` refuses it.
   readManifest(home);
   const background = undoBackground(home, { run: deps.claude ?? claudeRunner({ env: { ...process.env, ...env } }) });
-  const settles = { 'at-work': (id) => `js-harness sessions stop ${id} removes it, then run js-harness uninstall machine again`, refused: () => 'settle what claude says, then run js-harness uninstall machine again', unknown: () => 'run js-harness uninstall machine again once claude runs' };
+  const settles = { 'at-work': (id) => `js-harness sessions stop ${id} removes it, then run js-harness uninstall machine again`, holds: (id) => `once its work has landed and nothing in it is needed, js-harness sessions stop ${id} --remove-worktree removes it with its worktree, then run js-harness uninstall machine again`, refused: () => 'settle what claude says, then run js-harness uninstall machine again', unknown: () => 'run js-harness uninstall machine again once claude runs' };
   for (const { entry, outcome, worktreeKept } of background.undone) console.log(`${outcome === 'gone' ? `background session ${entry.id} · ${entry.title} was already gone: its record is closed` : `removed background session ${entry.id} · ${entry.title}`}${worktreeKept ? `; its worktree ${worktreeKept} stays, with what it holds` : ''}`);
   for (const { entry, why, settle } of background.kept) console.error(`kept background session ${entry.id} · ${entry.title}: ${why}; ${settles[settle](entry.id)}`);
   if (background.removedDir) console.log(`removed ${background.removedDir}`);

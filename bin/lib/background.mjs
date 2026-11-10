@@ -408,10 +408,11 @@ export function undoSession(entry, { home, run, now, alive = exists, pause = sle
 /** A session at work: busy, or waiting on something (a permission prompt). */
 export const atWork = (agent) => agent?.status === 'busy' || agent?.status === 'waiting' || agent?.state === 'working';
 
-/** The machine uninstall's part (S3): every recorded session undone as `sessions stop` does, except one at work, which
- * is kept; once none is left and every line of the record was read, the folder goes. `{ undone, kept, removedDir,
- * failed }`, each kept one with `settle`: `'at-work'`, `'refused'` (claude refused) or `'unknown'` (claude agents
- * could not say whether it is at work). A line that is not an entry may name a session that still runs, so it keeps the
+/** The machine uninstall's part (S3): every recorded session undone as `sessions stop` does, except one at work or one
+ * whose worktree holds files (`worktreeHolding`, odd/tasks/uninstall-keeps-worktree.md), which is kept with no claude
+ * command run; once none is left and every line of the record was read, the folder goes. `{ undone, kept, removedDir,
+ * failed }`, each kept one with `settle`: `'at-work'`, `'holds'` (its worktree holds files), `'refused'` (claude
+ * refused) or `'unknown'` (claude agents could not say whether it is at work). A line that is not an entry may name a session that still runs, so it keeps the
  * folder and fails. A record that could not be read fails too, after its stranded starts are undone. */
 export function undoBackground(home, { run, now = Date.now } = {}) {
   const record = readRecord(home);
@@ -434,6 +435,12 @@ export function undoBackground(home, { run, now = Date.now } = {}) {
       const agent = agents.find((item) => item.id === entry.id);
       if (atWork(agent)) {
         kept.push({ entry, settle: 'at-work', why: `it is ${agent.status ?? agent.state}` });
+        continue;
+      }
+      // The check `sessions stop` runs, before any claude command: claude rm deletes what the worktree holds.
+      const held = worktreeHolding(entry);
+      if (held !== null) {
+        kept.push({ entry, settle: 'holds', why: `its worktree ${held.worktree} holds files (${held.holds}), and claude rm deletes them even when it says it refused (2026-11-04)` });
         continue;
       }
       const done = undoSession(entry, { home, run, now });
