@@ -496,6 +496,23 @@
       "by": "command"
     }
   },
+  "lead-effort": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "de ahora en adelante el orquestador estara en Fable 5.2 Extra Altro y las sesiones en Fable 5.2 Medio cambia inclusive de una vez todas las sesiones que tengamos tanto actualmente como las de aqui al futuro",
+        "date": "2026-11-10",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 3422
+      }
+    ],
+    "reading": "The lead of this repository, his \"el orquestador\", runs at xhigh effort, his \"Extra Altro\": the lead open on 2026-11-10 and every later one. A new lead is started by the old one with the host's session-start tool under the title of a lead, <code> ORQ · <purpose>, and a start so titled is held to this value, at it or lower; every other start is held to rule:session-effort. That his \"Extra Altro\" is the level the host names xhigh is this session's reading, and his to correct. A lead he opens himself takes the level he picks in the host's menu, which no command holds.",
+    "accepted": "Typed by him in the lead's chat on 2026-11-10. Not put to him as a reading: it is this session's, and his to correct.",
+    "checked": {
+      "date": "2026-11-10",
+      "by": "command"
+    }
+  },
   "live-board": {
     "kind": "words",
     "quotes": [

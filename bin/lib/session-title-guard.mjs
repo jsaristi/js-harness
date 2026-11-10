@@ -7,6 +7,11 @@
 import { roleOfTitle } from './sessions.mjs';
 import { guardHeld, ruleHere } from './rules.mjs';
 
+/** Whether `title` is the title of a lead, `<code> ORQ · <purpose>`: the start of a session so titled is held to the
+ * rule `lead-effort`, and every other to `session-effort` (`sessionEffortRefusal` of ./guard.mjs). Only the shape is
+ * read: a title with another project's code is a lead's here and refused for its code by `sessionTitleRefusal`. */
+export const leadTitle = (title) => roleOfTitle(title)?.role === 'orchestrator';
+
 /** Why the `start_session` call whose input is `toolInput` is refused, or null. Where the rule `session-title` is
  * declared (`projectData`, the text of the project's rules file), a call that carries a `title` is refused when that
  * title is not of the agreed shape (`roleOfTitle`) with the project's own code: a work session's `<code> <n> ·

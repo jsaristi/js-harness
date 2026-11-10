@@ -6,7 +6,8 @@
 //   - The four tools that open a session in the app's Routines or in the cloud (`OPENING_TOOLS`): refused where the
 //     rule `sessions-open-in-sidebar` is declared, and the reason names `start_session` (`openingRefusal`;
 //     odd/tasks/session-channel.md, layer 3).
-//   - `mcp__ccd_session__start_session`: a session started with no effort, or above the rule `session-effort`, where
+//   - `mcp__ccd_session__start_session`: a session started with no effort, or above the rule `session-effort` (the
+//     rule `lead-effort` when its title is of a new lead), where
 //     that rule is declared (`sessionEffortRefusal`; odd/tasks/harness-review.md, T6c); then one titled otherwise than
 //     `<code> <n> · <purpose>`, where the rule `session-title` is declared, with the project's next free number
 //     (bin/lib/session-title-guard.mjs, imported only for this tool; odd/tasks/session-title.md).
@@ -52,7 +53,7 @@ import { deniedPlace, heldPlace } from './lib/deny-paths.mjs';
 export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses an Agent call on a model the rules do not give, a\n'
   + '  scheduled-task or cloud tool that opens a session where he does not see it (where the rules declare\n'
-  + '  sessions-open-in-sidebar), a start_session that names no effort or one above the rule session-effort (where\n'
+  + '  sessions-open-in-sidebar), a start_session that names no effort or one above the rule session-effort, or lead-effort for a new lead (where\n'
   + '  the rules declare it), a start_session titled otherwise than <code> <n> · <purpose>, naming the next free\n'
   + '  number (where the rules declare session-title), a message whose stamped hour is more than a minute off the clock, a Bash command\n'
   + '  with backticks inside double quotes, a command for the user\'s terminal that does not end with a note saying what it\n'
@@ -153,7 +154,9 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   if (tool === SESSION_TOOL) {
     const root = rootOf();
     const rules = rulesTextOf(root, readFile);
-    return sessionEffortRefusal(input, rules) ?? (await sessionTitleOf(input, rules, root, harnessHome({ env, homedir }), readFile));
+    // A lead's title holds the start to rule:lead-effort, any other to rule:session-effort.
+    const { leadTitle } = await import('./lib/session-title-guard.mjs');
+    return sessionEffortRefusal(input, rules, { lead: leadTitle(input.title) }) ?? (await sessionTitleOf(input, rules, root, harnessHome({ env, homedir }), readFile));
   }
   if (OPENING_TOOLS.includes(tool)) return openingRefusal(tool, rulesTextOf(rootOf(), readFile));
   if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now());

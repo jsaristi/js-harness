@@ -1319,7 +1319,7 @@ it only there, since a background session is not a row in the user's sidebar; Re
 `--no-remote-control`, so claude.ai/code and the user's phone reach it. The session reads a copy of the
 brief under `~/.js-harness/background/briefs/` that ends by telling it to report through
 `js-harness notify --to orchestrator`; `--worktree <name>`, `--model` and `--effort` go to `claude`,
-and the title and effort are held to the rules `session-title` and `session-effort` where they are
+and the title and effort are held to the rules `session-title` and `session-effort` (`lead-effort` for a title of a lead) where they are
 declared. Each start is recorded in `~/.js-harness/background/sessions.jsonl`: `js-harness sessions
 stop <id>` removes a recorded session (`claude stop`, then `claude rm`; its transcript stays) and no
 other; while its worktree holds files it refuses and runs nothing unless `--remove-worktree`, since
@@ -1652,7 +1652,7 @@ standard input and refuses these things: a sub-agent launched on a model the pro
 a scheduled-task or cloud tool that would open a session where he does not see it, in a project that
 declares `sessions-open-in-sidebar`, the reason naming `start_session`, which opens it as a row in his
 sidebar, even when he asked for it; a `start_session` with a brief that names no effort, or an effort above the
-rule `session-effort` where that rule is declared (a fork included, since it cannot set its own); a `start_session`
+rule `session-effort` where that rule is declared, or above `lead-effort` when its title is of a new lead (a fork included, since it cannot set its own); a `start_session`
 whose title is not `<code> <n> · <purpose>` (or `<code> ORQ · <purpose>` for a new lead) with the project's own code,
 harness.json `"code"` (`init` offers the initials of the project's name; this repository's is `JH`), where the rule
 `session-title` is declared, the reason naming the project's next free number, one past the highest of that code in

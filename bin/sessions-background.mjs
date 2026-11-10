@@ -2,7 +2,8 @@
 // session with `claude --bg` on a turn the user did not type, where the desktop app's `start_session` would only leave
 // a card, and removes it again. Every start is recorded under the harness home (bin/lib/background.mjs), so `stop` and
 // the machine uninstall undo exactly what was started, and touch no session they did not start.
-// The title and the effort are held to the rules `guard` holds `start_session` to, by the same functions.
+// The title and the effort are held to the rules `guard` holds `start_session` to, by the same functions: a lead's
+// title holds the effort to rule:lead-effort, any other to rule:session-effort.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -11,7 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, strandedWords, undoSession, within, worktreeHolding, worktreeOf } from './lib/background.mjs';
 import { sessionEffortRefusal } from './lib/guard.mjs';
-import { sessionTitleRefusal } from './lib/session-title-guard.mjs';
+import { leadTitle, sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { appendNotice, newNotice, nextSessionNumber, placeOf, readNotices } from './lib/channel.mjs';
 import { mainCheckout, projectCode, projectSlug, sameSession } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
@@ -28,7 +29,7 @@ export const START_USAGE = [
   '         with Remote Control on (claude.ai/code and the phone reach it) unless --no-remote-control; the session reads a copy',
   '         of the brief that ends by telling it to report through js-harness notify --to orchestrator. It prints the id and records',
   '         the start under <home>/.js-harness/background/; exit 1 when claude is missing or refuses (nothing is recorded), 2 for a',
-  '         usage error or a title or effort the rules session-title and session-effort refuse, where they are declared.',
+  '         usage error or a title or effort the rules session-title, session-effort and lead-effort refuse, where they are declared.',
   '         A run of claude that does not finish (a timeout) is looked for in claude agents and recorded when it started.',
   '         --advisor passes claude --advisor <model> (a stronger model the session consults); it is recorded with the start.',
   '         --resume resumes a recorded session whose job stopped (a restart ends every one) with claude --bg --resume, in a',
@@ -148,7 +149,7 @@ export function sessionsStartMain(argv, given = {}) {
   const top = topLevel(run, cwd);
   const rules = rulesText(top, readFile);
   const project = { codeOf: () => projectCode(root, readFile), next: (code) => nextSessionNumber(home, projectSlug(root), { code }) };
-  const refusal = sessionEffortRefusal({ prompt: brief, effort: parsed.effort }, rules, { cli: true })
+  const refusal = sessionEffortRefusal({ prompt: brief, effort: parsed.effort }, rules, { cli: true, lead: leadTitle(parsed.title) })
     ?? sessionTitleRefusal({ title: parsed.title }, rules, project, 'js-harness sessions start');
   if (refusal !== null) {
     stderr(refusal);
@@ -306,7 +307,7 @@ function resumeStart(parsed, deps) {
   const model = parsed.model ?? entry.model ?? undefined;
   const effort = parsed.effort ?? entry.effort ?? undefined;
   const advisor = parsed.advisor ?? entry.advisor ?? undefined;
-  const refusal = sessionEffortRefusal({ prompt: text, effort }, rulesText(topLevel(run, folder), readFile), { cli: true });
+  const refusal = sessionEffortRefusal({ prompt: text, effort }, rulesText(topLevel(run, folder), readFile), { cli: true, lead: leadTitle(entry.title) });
   if (refusal !== null) return refuse(refusal, 2);
   const unwritable = recordUnwritable(home);
   if (unwritable !== null) return refuse(`${unwritable}, so nothing was resumed`);

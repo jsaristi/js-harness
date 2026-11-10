@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RULES } from './rules-data.mjs';
 import { writeRules } from './rules.mjs';
-import { sessionTitleRefusal } from './session-title-guard.mjs';
+import { leadTitle, sessionTitleRefusal } from './session-title-guard.mjs';
 
 const HERE = writeRules(RULES);
 const VALUE = RULES.find((rule) => rule.id === 'session-title').value;
@@ -49,6 +49,12 @@ test('behind a project whose list declares session-title, a free title is refuse
   for (const off of [writeRules(RULES.filter((rule) => rule.id !== 'session-title')), 'an older list\n']) {
     assert.equal(sessionTitleRefusal(free, off, PROJECT), null);
   }
+});
+
+// The effort a start is held to goes by its title: a lead's is rule:lead-effort, any other rule:session-effort.
+test('a title is of a lead when it is of the agreed shape with ORQ for the number, and no other is', () => {
+  for (const title of ['JH ORQ · relevo', 'XY ORQ · otro']) assert.equal(leadTitle(title), true, title);
+  for (const title of ['JH 32 · T9', 'JH ORQ', 'JH ORQ nueva · x', 'ORQ · x', 'the new lead', '', undefined, null, 7]) assert.equal(leadTitle(title), false, String(title));
 });
 
 test('a refused title says when the next number is not known, and what it could not read', () => {

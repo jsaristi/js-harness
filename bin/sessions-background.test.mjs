@@ -676,6 +676,26 @@ test('sessions start --resume refuses while any job claude lists works the recor
   assert.equal(actions(world).length, 1, 'nothing ran');
 }));
 
+// 2026-11-10: the title of a lead holds the start, and the resume of that session, to rule:lead-effort.
+test('a session titled as a lead starts and resumes at the rule lead-effort, which the title of a work session is refused', withWorld((world) => {
+  const lead = RULES.find((rule) => rule.id === 'lead-effort').value;
+  // A word that is no level is refused under the rule that holds the title, whatever the two values are.
+  const work = js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief, '--effort', 'ultra']);
+  assert.equal(work.code, 2);
+  assert.ok(work.stderr.trimEnd().endsWith(`Pass --effort ${SESSION_EFFORT} or lower.`), work.stderr);
+  const none = js(world, ['sessions', 'start', '--title', 'JH ORQ · relevo', '--brief', world.brief, '--effort', 'ultra']);
+  assert.equal(none.code, 2);
+  assert.ok(none.stderr.trimEnd().endsWith(`Pass --effort ${lead} or lower.`), none.stderr);
+  assert.deepEqual(readState(world).calls, []);
+  const started = js(world, ['sessions', 'start', '--title', 'JH ORQ · relevo', '--brief', world.brief, '--effort', lead]);
+  assert.equal(started.code, 0, started.stderr);
+  endJob(world, '0db8bc5e');
+  patchState(world, { nextId: 'c779ed44' });
+  const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(resumed.code, 0, resumed.stderr);
+  assert.equal(recordLines(world).at(-1).effort, lead);
+}, { rules: true }));
+
 // Codex P2 on 79e3430..318f952: a resume answers to the same rules and the same record as a start.
 test('sessions start --resume holds to the effort rule, needs a writable record, and keeps what it knows when claude says less', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief, '--effort', SESSION_EFFORT]).code, 0);
