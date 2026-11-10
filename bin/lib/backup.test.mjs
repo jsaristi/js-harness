@@ -96,6 +96,13 @@ test('redactSecrets blanks the provider keys whose random part holds _ or -, Bas
       assert.doesNotMatch(inJson.text, secret, `in JSON after ${JSON.stringify(cut)}: ${key}`);
       assert.match(JSON.parse(inJson.text).content, /^The key:\s*(Authorization: Basic |Bearer )?<redacted>\s*keep it safe$/, key);
     }
+    // After a literal backslash, raw (`C:\keys\…`) or escaped in JSON (`C:\\keys\\…`), which `\b` caught on main
+    // (the independent verifier on b0c940c3).
+    // Not for a key that opens with a letter JSON escapes use: a raw `\npm_…` reads as the escape `\n` before `pm_…`.
+    if (!/^[ntrbfu]/.test(key)) assert.doesNotMatch(redactSecrets(`C:\\keys\\${key}`).text, secret, `after a raw backslash: ${key}`);
+    const path = redactSecrets(JSON.stringify({ p: `C:\\keys\\${key}` }));
+    assert.doesNotMatch(path.text, secret, `after an escaped backslash in JSON: ${key}`);
+    assert.match(JSON.parse(path.text).p, /^C:\\keys\\(Authorization: Basic |Bearer )?<redacted>$/, key);
   }
   assert.equal(redactSecrets('git clone https://deploy:' + 'hunter2' + '@example.com/repo.git').text, 'git clone https://deploy:<redacted>@example.com/repo.git', 'the user and the host stay');
   assert.equal(redactSecrets('DB_PASS=' + 'Pw9'.repeat(8)).text, 'DB_PASS=<redacted>');

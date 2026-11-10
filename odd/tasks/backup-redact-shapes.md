@@ -135,3 +135,15 @@ Nothing planned: his answer to question 242 chose the scope. A question goes to 
   92d5989c did). Fixed with a test that failed first: a bare `pass` is a field name when `=` follows it at once, an env
   line's shape that code (`const pass =`) does not have. YAML's bare `pass:` stays unblanked, since prose has the same
   shape ("after the pass: ..."); left open. `node --test bin/lib/backup.test.mjs`: 26 of 26.
+- L9 Independent verifier, second pass, pinned to b0c940c3 (137,574 tokens): PASS. Findings 1 and 2 fixed: 2,000 keys
+  a shape in 14 contexts, the JSON line start included, 0 leaks, 0 broken JSON, idempotent; over 1,013 tracked files
+  only the 7 URL fixture and doc lines differ from main; real text 19.9 MB in 1.17 s against 0.57 s (the machine
+  shared with another session's gate). Its two low notes: (A) a key right after a literal backslash (`C:\keys\sk-…`,
+  or `C:\\keys\\…` in JSON) was left whole, where main's `\b` caught it: worse than main, so fixed with a test that
+  failed first: a key also starts after an even run of backslashes, or an odd run before a letter no JSON escape uses;
+  a raw `\npm_…` stays unblanked, since it reads as the escape `\n` before `pm_…`. The run is read up to 16 long: unbounded,
+  40,000 backslashes before a key took 2,647 ms; bounded, 5.9 ms. (B) older than this branch and not made worse: a key
+  right after an ANSI colour code (`\x1b[32msk-ant-…`) keeps the part after a hyphen about half the time; left open,
+  since the backup copies no transcript. The commit 8bc45785 (L8) was not in its pass; the next review covers it.
+  After the fix: `bin/lib/backup.test.mjs` 26 of 26, `bin/lib/backup-summary.test.mjs` 5 of 5,
+  `bin/lib/stack-backup-walk.test.mjs` 10 pass, 0 fail, 1 skipped.
