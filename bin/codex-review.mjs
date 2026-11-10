@@ -12,7 +12,7 @@
 // the head of a review that found something is a recheck: its prompt lists those findings and asks whether
 // each is fixed, anything new is a follow-up that does not block unless it could make a failing check pass
 // exposes data or is a regression the correction brought, and its record names that head (`recheckOf`). From the head of a recheck that
-// left findings open, a second recheck of them is the third and last review; past it the run is refused (rule:escalation-model). No flag skips it.
+// left findings open, a second recheck of them is the third and last review; past it the run is refused (rule:escalation-model). No flag skips it: a run with `--again` from behind such a change is refused too (`againPastThreeReviews`).
 //
 // A merge of the default branch at HEAD, after a branch whose other code commits all have a record, is
 // reviewed from its first parent by what was written in it (`mergeStart` in ./lib/codex-review-coverage.mjs):
@@ -169,7 +169,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { allowanceLine, readProjectRules, reviewAllowance } from './lib/codex-review-allowance.mjs';
 import { answerFailure, byPlace, findingCounts, findingLine, normalizeAnswer, rolloutAnswer, verdictLine } from './lib/codex-review-answer.mjs';
-import { baseLeftOut, MARKS_UNREAD, mergeStart, notReviews, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
+import { baseLeftOut, baseLeftOutSaid, MARKS_UNREAD, mergeStart, notReviewedSaid, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { PART_MAX_CHANGED_LINES, PART_MAX_FILES, RENAMES, reviewParts } from './lib/codex-review-parts.mjs';
 import { counted, MAX_PARTS_WITHOUT_FLAG, methodRecord, methodRecordLine, needsFlagLine, partPlanned, partsBound, planLines, reviewPlan, thousands } from './lib/codex-review-plan.mjs';
@@ -180,7 +180,7 @@ import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, re
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews, withSubjectHash } from './lib/codex-reviews.mjs';
 import { addTurnWorktree, mergeTurn, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, turnsCheaper } from './lib/codex-review-turns.mjs';
 import {
-  classifyRecheck, openAfterRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, REVIEW_FROM_LOOK_BACK, runsLogged, secondRecheckRefused,
+  againPastThreeReviews, classifyRecheck, openAfterRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, REVIEW_FROM_LOOK_BACK, runsLogged, secondRecheckRefused,
 } from './lib/codex-review-recheck.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './lib/project-functions.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
@@ -1022,15 +1022,6 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why, merge 
   return { parts };
 }
 
-/** The line that says a run's base is a code commit of its branch that no Codex review record covers, and what
- * reviews it: `commit` is what `baseLeftOut` answers, `{ id, shortId, subject }`. A range starts after its
- * base, so the run does not read the base, and no record of the run covers it. */
-function baseLeftOutSaid({ shortId, subject, merged }) {
-  if (merged) {
-    return `The base ${shortId} (${subject}) is a merge of ${merged} that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it: \`js-harness codex-review --base ${shortId}^\` reviews it, in two turns where every code commit before it has a record and two cost less than one review of all it brought in: the merge by what was written in it, then the commits after it.`;
-  }
-  return `The base ${shortId} (${subject}) is a code commit of this branch that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it: \`js-harness codex-review --base ${shortId}^\` reviews it.`;
-}
 
 /** What the Codex review records leave of `from..head` for a run to do (both full commit ids, `from` the
  * commit the range starts at), by the definition `check --push` reads them with
@@ -1081,16 +1072,6 @@ function leftByRecords(spawn, root, { from, head, given, where }) {
   };
 }
 
-/** What a run says, in brackets after the count of code commits a record covers, of the records that do and
- * are no review of Codex's (`notReviews`): how many they are, then `more`. Nothing when there is none.
- *
- * Covered is not reviewed, and a run that leaves commits out for their record says so wherever it does: over
- * a range covered whole, and where it starts later. Said only of the first, a commit that an earlier skip
- * covers would be left out of every later run with nothing saying that no review ever read it. */
-function notReviewedSaid(coverage, more = '') {
-  const others = notReviews(coverage).length;
-  return others === 0 ? '' : ` (${others} of the records that do ${others === 1 ? 'is' : 'are'} a skip or a range with nothing to review, not a review${more})`;
-}
 
 /** Runs the command; returns the process exit code. `deps` (all optional) injects `spawn` (git and
  * the `codex --version` probe, sync), `spawnAsync` (the review), `killTree`, `timeoutMs`,
@@ -1288,34 +1269,53 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       return names === null ? null : names.split('\0').filter(Boolean);
     };
     const anchor = recheckAnchor({ from, records, back: back.split('\n').filter(Boolean), changedBetween });
-    // Whether the range's head holds `commit`; exit 1 of `--is-ancestor` is a no, anything else unknown.
-    const holds = (commit) => {
-      try {
-        const asked = spawn('git', ['merge-base', '--is-ancestor', commit, head], { cwd: root, encoding: 'utf8' });
-        return asked?.error || asked === undefined ? null : asked.status === 0 ? true : asked.status === 1 ? false : null;
-      } catch {
-        return null;
-      }
-    };
-    return recheckState({ from: anchor, records, runs: readRunLog(), holds });
+    return recheckState({ from: anchor, records, runs: readRunLog(), holds: (commit) => holdsIn(head, commit) });
   };
-  /** The refusal of a second recheck of the range from `from` (`state` its `recheckFor`), with what the
-   * records say of its code commits: those none covers are named, and with them the nearest commit behind
-   * `from`, on its first-parent line, that a run with `--again` reviews as any other. Records that cannot be
-   * read against the range are taken as leaving code unread, so no skip is offered on a guess. */
-  const secondRecheckSaid = (from, state) => {
-    let uncovered = null;
+  // Whether `tip` holds `commit`; exit 1 of `--is-ancestor` is a no, anything else unknown (`null`).
+  const holdsIn = (tip, commit) => {
+    try {
+      const asked = spawn('git', ['merge-base', '--is-ancestor', commit, tip], { cwd: root, encoding: 'utf8' });
+      return asked?.error || asked === undefined ? null : asked.status === 0 ? true : asked.status === 1 ? false : null;
+    } catch {
+      return null;
+    }
+  };
+  /** The short ids of the code commits of `from..head` no record covers, or `null` when the records cannot be read against it. */
+  const uncoveredFrom = (from) => {
     try {
       const coverage = reviewCoverage(root, { from, tip: head, spawn, where });
-      if (!coverage.unknown) uncovered = coverage.uncovered.map((commit) => commit.id.slice(0, 7));
+      return coverage.unknown ? null : coverage.uncovered.map((commit) => commit.id.slice(0, 7));
     } catch {
-      uncovered = null;
+      return null;
     }
-    let reviewFrom = null;
-    if (uncovered === null || uncovered.length > 0) {
-      const behind = git(spawn, root, ['rev-list', '--first-parent', `--max-count=${REVIEW_FROM_LOOK_BACK + 1}`, from]);
-      reviewFrom = (behind ?? '').split('\n').filter(Boolean).slice(1).find((commit) => recheckFor(commit).kind === 'review') ?? null;
+  };
+  /** The nearest commit behind `at`, on its first-parent line, that a run with `--again` reviews as any other, or `null`. */
+  const reviewFromBehind = (at) => {
+    const behind = git(spawn, root, ['rev-list', '--first-parent', `--max-count=${REVIEW_FROM_LOOK_BACK + 1}`, at]);
+    return (behind ?? '').split('\n').filter(Boolean).slice(1).find((commit) => recheckFor(commit).kind === 'review') ?? null;
+  };
+  /** What a range from `from` is (`recheckFor`), and with `--again`, which reads no record to start later, refused past
+   * three reviews of a change it holds after `from`, where `recheckFor` reads `from` alone (`againPastThreeReviews`). */
+  const recheckOrAgain = (from) => {
+    const state = recheckFor(from);
+    if (!args.again || state.kind !== 'review' || onResult !== null || everyFile) return state;
+    let records;
+    try {
+      records = readCodexReviews(root, { spawn, where });
+    } catch {
+      return state;
     }
+    const held = new Set((git(spawn, root, ['rev-list', `${from}..${head}`]) ?? '').split('\n').filter(Boolean));
+    const heads = [...new Set(records.filter((rec) => rec.outcome === 'reviewed' && held.has(rec.head)).map((rec) => rec.head))];
+    const past = heads.length === 0 ? null : againPastThreeReviews({ heads, stateOf: recheckFor, uncovered: uncoveredFrom(from), reviewFromOf: reviewFromBehind, startsAtOrAfter: (commit) => holdsIn(from, commit) });
+    return past === null ? state : { ...past.state, again: past.head };
+  };
+  /** The refusal of the range from `from` (`state` its `recheckOrAgain`): its code commits no record covers, and the
+   * commit `reviewFromBehind` finds behind `from`, or behind the head `--again` would review past. Records that cannot be
+   * read against the range are taken as leaving code unread, so no skip is offered on a guess. */
+  const secondRecheckSaid = (from, state) => {
+    const uncovered = uncoveredFrom(from);
+    const reviewFrom = uncovered === null || uncovered.length > 0 ? reviewFromBehind(state.again ?? from) : null;
     return secondRecheckRefused({ ...state, base: from, uncovered, reviewFrom });
   };
 
@@ -1412,7 +1412,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     // What a run of this range would be, when it is not a review as any other. The review of a merge is none
     // of a recheck: the findings a recheck checks were made of another diff, and neither is a cut range, whose
     // first turn is a merge and whose second starts at the merge, which no review ended at yet.
-    const state = merge !== null || turns !== null ? { kind: 'review' } : recheckFor(from);
+    const state = merge !== null || turns !== null ? { kind: 'review' } : recheckOrAgain(from);
     let plan;
     if (turns !== null) {
       for (const line of turnsLines(turns)) log(line);
@@ -1606,7 +1606,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
     }
     // A range that starts where a review that found something ended is a recheck of those findings, and a
     // second recheck of the same findings is not run (`recheckFor`).
-    const state = merge !== null ? { kind: 'review' } : recheckFor(from);
+    const state = merge !== null ? { kind: 'review' } : recheckOrAgain(from);
     if (state.kind === 'refused') {
       error(`${secondRecheckSaid(from, state)}\n${nextLine(firstStep('record the follow-up task the line above names, for what is still open'))}`);
       return 1;

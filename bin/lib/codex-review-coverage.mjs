@@ -535,3 +535,24 @@ function sideReadAs(spawn, cwd, { first, side, branch, where }) {
   if (coverage.unknown !== undefined || coverage.uncovered.some((commit) => owned.has(commit.id))) return null;
   return { kind: 'stacked', owned };
 }
+
+/** The line that says a run's base is a code commit of its branch that no Codex review record covers, and what
+ * reviews it: `commit` is what `baseLeftOut` answers, `{ id, shortId, subject }`. A range starts after its
+ * base, so the run does not read the base, and no record of the run covers it. */
+export function baseLeftOutSaid({ shortId, subject, merged }) {
+  if (merged) {
+    return `The base ${shortId} (${subject}) is a merge of ${merged} that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it: \`js-harness codex-review --base ${shortId}^\` reviews it, in two turns where every code commit before it has a record and two cost less than one review of all it brought in: the merge by what was written in it, then the commits after it.`;
+  }
+  return `The base ${shortId} (${subject}) is a code commit of this branch that no Codex review record covers. A range starts after its base, so this run does not read it, and its record will not cover it: \`js-harness codex-review --base ${shortId}^\` reviews it.`;
+}
+
+/** What a run says, in brackets after the count of code commits a record covers, of the records that do and
+ * are no review of Codex's (`notReviews`): how many they are, then `more`. Nothing when there is none.
+ *
+ * Covered is not reviewed, and a run that leaves commits out for their record says so wherever it does: over
+ * a range covered whole, and where it starts later. Said only of the first, a commit that an earlier skip
+ * covers would be left out of every later run with nothing saying that no review ever read it. */
+export function notReviewedSaid(coverage, more = '') {
+  const others = notReviews(coverage).length;
+  return others === 0 ? '' : ` (${others} of the records that do ${others === 1 ? 'is' : 'are'} a skip or a range with nothing to review, not a review${more})`;
+}

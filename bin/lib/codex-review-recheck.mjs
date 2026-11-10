@@ -176,6 +176,31 @@ export function recheckState({ from, records, runs, holds = () => null }) {
   return { kind: 'recheck', of: from, findings };
 }
 
+/** Whether a run with `--again` reviews a fourth time a change that three reviews did not settle (spec 8 of
+ * odd/tasks/double-review-alignment.md; M12 of the Fable 5.2 audit). `--again` takes its range as it was given, so
+ * `recheckState` reads its base alone, and a base behind such a change bought a whole new review of it.
+ *
+ * `heads` are the heads of the reviewed records the range holds after its base; `stateOf(head)` is what a range from
+ * one is (`recheckState`); `uncovered` the short ids of the range's code commits no record covers, or `null` when the
+ * records could not be read against it; `reviewFromOf(head)` the commit the refusal from that head names
+ * (`secondRecheckRefused`'s `reviewFrom`), or `null`; `startsAtOrAfter(commit)` whether the range starts at that
+ * commit or after it, `null` when git cannot say.
+ *
+ * `{ head, state }`, the head that ends three reviews left open and its refused state, where the run is refused;
+ * `null` where it runs: no head in the range ends three reviews, or the range holds code no review read and starts
+ * where the refusal names, which reads that code (the route `secondRecheckRefused` gives; 2026-10-19). */
+export function againPastThreeReviews({ heads, stateOf, uncovered, reviewFromOf, startsAtOrAfter }) {
+  const newCode = uncovered === null || uncovered.length > 0;
+  for (const head of heads) {
+    const state = stateOf(head);
+    if (state.kind !== 'refused' || state.reviews !== 3) continue;
+    const reviewFrom = newCode ? reviewFromOf(head) : null;
+    if (reviewFrom !== null && startsAtOrAfter(reviewFrom) === true) continue;
+    return { head, state };
+  }
+  return null;
+}
+
 /** One earlier finding on one line: `file:lines severity title`. */
 export function priorLine(finding) {
   const lines = finding.start === finding.end || finding.end === undefined ? `${finding.start}` : `${finding.start}-${finding.end}`;
@@ -281,13 +306,15 @@ export function classifyRecheck(review, prior) {
  *
  * Only a range whose every code commit has a record is offered the skip. One that holds code no review read
  * is offered the review that reads it: a skip is for when Codex cannot run (AGENTS.md), and on 2026-10-19 a
- * session that followed the skip this refusal offered left a new commit no review had read. */
-export function secondRecheckRefused({ of, open, base, uncovered = [], reviewFrom = null, reviews, findings = [] }) {
+ * session that followed the skip this refusal offered left a new commit no review had read. `again`, the head a
+ * run with `--again` from `base` would review past (`againPastThreeReviews`), says so. */
+export function secondRecheckRefused({ of, open, base, uncovered = [], reviewFrom = null, reviews, findings = [], again = null }) {
   const left = open === null ? 'findings whose counts were not kept, taken as open' : `${open === 1 ? '1 finding' : `${open} findings`} not fixed or blocking`;
   const first = open === 0 ? 'the first found every one fixed' : open === null ? 'the counts of the first were not kept' : `the first left ${left}`;
+  const fourth = again === null ? '' : `; \`--again\` from ${base.slice(0, 7)} would review it a fourth time`;
   // Past three reviews the change is not settled: it is raised and passed on, not reviewed again (`recheckState`).
   const refused = reviews === 3
-    ? `Three reviews of this change did not settle it: the third, a second recheck that ended at ${of.slice(0, 7)}, left ${left}. Nothing more is reviewed, and nothing was started or recorded.\n${findings.map((finding, at) => `  ${at + 1}. ${priorLine(finding)}\n`).join('')}`
+    ? `Three reviews of this change did not settle it: the third, a second recheck that ended at ${of.slice(0, 7)}, left ${left}${fourth}. Nothing more is reviewed, and nothing was started or recorded.\n${findings.map((finding, at) => `  ${at + 1}. ${priorLine(finding)}\n`).join('')}`
     : `A second recheck of the findings of the review that ended at ${of.slice(0, 7)} is not run: ${first}. Nothing was started or recorded.\n`;
   const task = reviews === 3 ? ESCALATION_SAID : 'Record a follow-up task for what is still open in the feature document';
   // Every code commit has a record: there is nothing to review and no skip to record, which would name a covered

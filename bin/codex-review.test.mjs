@@ -7134,6 +7134,31 @@ test('a fourth review refused over a code commit no record covers names a review
   assert.deepEqual([record.outcome, record.base, record.head, record.recheckOf], ['reviewed', base, added, undefined]);
 });
 
+// M12 of the Fable 5.2 audit: `--again` from a base behind the three reviews took the range as given, and the
+// third-review rule, read only at that base, let a fourth full review of the same change run (odd/tasks/audit-u4-refusals.md).
+test('--again from behind a change three reviews left open is refused when the range holds no new code, and nothing is launched', async () => {
+  const { root, base, head, fixed } = await reviewedThenCorrected();
+  const second = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });
+  assert.equal(second.code, 0, second.err);
+  const refixed = commitOne(root, 'f.txt', 'four\n');
+  const third = await run(['--base', fixed, '--cwd', root], { ...fakeCodex(reviewed(root, fixed), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => THIRD_ID });
+  assert.equal(third.code, 0, third.err);
+  const records = readCodexReviews(root).length;
+  const runs = readCodexReviewRuns(root).length;
+  const fake = fakeCodex(reviewed(root, base));
+  const fourth = await run(['--base', base, '--again', '--cwd', root], { ...fake, randomUUID: () => '00000000-0000-4000-8000-000000000006' });
+  assert.equal(fourth.code, 1, fourth.out);
+  assert.ok(fourth.err.startsWith(`Three reviews of this change did not settle it: the third, a second recheck that ended at ${refixed.slice(0, 7)}, left 1 finding not fixed or blocking; \`--again\` from ${base.slice(0, 7)} would review it a fourth time.`), fourth.err);
+  assert.ok(fourth.err.includes(`pass the work to ${ESCALATION_MODEL}`), fourth.err);
+  assert.ok(fourth.err.includes('Every code commit of this range has a record already'), fourth.err);
+  assert.equal(fake.calls.length, 0, 'no Codex was launched');
+  assert.deepEqual([readCodexReviews(root).length, readCodexReviewRuns(root).length], [records, runs]);
+  // The plan of the same run says it would be refused.
+  const plan = await run(['--base', base, '--again', '--plan', '--cwd', root], fakeCodex(''));
+  assert.equal(plan.code, 0, plan.err);
+  assert.ok(plan.out.split('\n').some((line) => line.startsWith(`A run of this range is refused: Three reviews of this change did not settle it`) && line.includes('a fourth time')), plan.out);
+});
+
 test('a branch forked at the head of a rechecked review, without the recheck, is new code and is reviewed as any other (L8 of merge-queue)', async () => {
   const { root, head } = await reviewedThenCorrected();
   const second = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });
