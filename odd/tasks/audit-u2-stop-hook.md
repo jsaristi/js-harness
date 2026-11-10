@@ -68,8 +68,8 @@ useless; an unchecked second stop leaves every reply check holding for the first
 ## Tasks
 - [x] T1 (build) spec 1: decimal and boundary in the share patterns, tests first: `9135a510`.
 - [x] T2 (build) spec 2: the skip phrase compared with accents folded, test first: `ede375ab`.
-- [ ] T3 (build) spec 3: the second stop checked, never blocked, the miss said in a `systemMessage`, tests first;
-  an independent verifier reads it.
+- [x] T3 (build) spec 3: the second stop checked, never blocked, the miss said in a `systemMessage`, tests first;
+  an independent verifier reads it: `4995c9ce`.
 
 ## Log
 - L1 The brief (2026-11-10T06:00Z): "Yours: exactly what the unit lists, and its "Done when" command. It is high
@@ -86,3 +86,14 @@ useless; an unchecked second stop leaves every reply check holding for the first
   with the new tests and the old code, 56 pass, 5 fail (the five new or changed tests); after the fixes, 61 pass,
   0 fail; `npm run check` exit 0. docs/SPEC.md's reply check says nothing of the second stop, so it is left as is
   (entry documents are JH 164's this morning).
+- L5 Reviews of 6ee974dd..4995c9ce: Codex, the patch is correct (0.91), no finding, 74,172 input tokens; the risk,
+  reliability and resilience lenses, 0 findings each, about 73,000 input tokens in all. The independent verifier of
+  M6 (Opus, read-only): holds. It ran 26 payloads with `stop_hook_active: true` through `replyMain` (bad stdin, bad
+  `reply` keys, unreadable files, a throwing parser and clock) and none answered `decision`; the first-stop branch is
+  identical to 6ee974dd's; Claude Code's and Codex's hook documents say only `decision: "block"` (and, for Claude
+  Code, `additionalContext` or exit 2) continues a stop, `systemMessage` is a warning shown to the user. Two low
+  findings, kept as they are: `stop_hook_active` is set on any continued stop (a `/goal` continuation too), so a reply
+  with no close in such a run now shows him a `systemMessage` each stop where it showed nothing, which is the point
+  of M6; and the second stop is no longer instant when the reply holds a command block, bounded by
+  COMMANDS_DEADLINE_MS inside the hook's 15 s, a timeout falling to no message, never a block. Not checked: a live
+  second stop in either host.
