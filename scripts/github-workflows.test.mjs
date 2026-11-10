@@ -8,7 +8,9 @@
 //   main as it will be: odd/tasks/merge-queue.md S4, odd/tasks/drop-circleci.md S2) and for nothing else, so a
 //   pull request starts no run, `pull_request_target` never hands a fork's code this repository's token, and a fork starts nothing here: a push needs write access;
 // - its token can only read, and it names no secret;
-// - each action is pinned by commit, so a moved tag cannot change what runs; one job, a fixed runner, a bound.
+// - each action is pinned by commit, so a moved tag cannot change what runs; each job has a fixed runner and a bound:
+//   the suite on Linux, and the tests of `js-harness remote`, a command of Windows alone, on Windows (M27 of the Fable
+//   5.2 audit, odd/tasks/audit-u4-refusals.md: 99 of its 119 tests skip themselves on Linux and ran in no blocking gate).
 // Zero deps: the file is read as text, by the few shapes it is allowed to take.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -67,14 +69,21 @@ test('its token reads the contents and nothing more, and no secret is named', ()
 // The job stops itself two minutes past the bound a gate waits for its run (the rule ci-gate-bound): a run whose
 // gate died and cancels nothing ends there, and a gate that is alive always cancels first, so the job's own
 // timeout never races it.
-test('one job on a fixed runner, bounded by the rule ci-gate-bound, running the gate', () => {
+test('two jobs on fixed runners, each bounded by the rule ci-gate-bound: the gate on Linux, and the Windows tests of remote on Windows', () => {
   const lines = workflowLines();
   const jobs = below(lines, 'jobs:');
-  assert.deepEqual(level(jobs), ['check:']);
-  const job = level(below(jobs, 'check:'));
-  assert.deepEqual(job, ['runs-on: ubuntu-24.04', `timeout-minutes: ${ruleValue('ci-gate-bound', 'minutes') + 2}`, 'steps:']);
-  const runs = lines.filter((line) => line.text.startsWith('run:') || line.text.startsWith('- run:')).map((line) => line.text);
-  assert.ok(runs.some((text) => text.endsWith('node bin/check.mjs')), 'a step runs `node bin/check.mjs`');
+  assert.deepEqual(level(jobs), ['check:', 'windows:']);
+  const bound = `timeout-minutes: ${ruleValue('ci-gate-bound', 'minutes') + 2}`;
+  const check = below(jobs, 'check:');
+  assert.deepEqual(level(check), ['runs-on: ubuntu-24.04', bound, 'steps:']);
+  const runs = (job) => job.filter((line) => /^(- )?run:/.test(line.text)).map((line) => line.text.replace(/^(- )?run:\s*/, ''));
+  assert.ok(runs(check).some((text) => text === 'node bin/check.mjs'), 'a step of check runs `node bin/check.mjs`');
+  // The exact image the daily suite runs on, and the one test file whose tests skip themselves off Windows.
+  const windows = below(jobs, 'windows:');
+  assert.deepEqual(level(windows), ['runs-on: windows-2025', bound, 'steps:']);
+  assert.equal(runs(windows).at(-1), 'node --test bin/remote.test.mjs');
+  // The runner's TEMP is an 8.3 short path that git answers in its long form, as the daily suite says.
+  assert.deepEqual(below(below(windows, '- name: The Windows tests of js-harness remote'), 'env:').map((line) => line.text), ['TEMP: ${{ runner.temp }}', 'TMP: ${{ runner.temp }}']);
 });
 
 test('every action is pinned by commit and is one of GitHub\'s own', () => {
@@ -119,7 +128,7 @@ test('the daily Windows suite is one bounded job on an exact Windows image, with
   assert.deepEqual(below(suite, 'env:').map((line) => line.text), ['TEMP: ${{ runner.temp }}', 'TMP: ${{ runner.temp }}']);
   const uses = lines.filter((line) => /^(- )?uses:/.test(line.text)).map((line) => line.text.replace(/^(- )?uses:\s*/, ''));
   const gateUses = workflowLines().filter((line) => /^(- )?uses:/.test(line.text)).map((line) => line.text.replace(/^(- )?uses:\s*/, ''));
-  assert.deepEqual(uses, gateUses, 'the same actions at the same commits as the gate');
+  assert.deepEqual(uses, [...new Set(gateUses)], 'the same actions at the same commits as the gate');
   assert.doesNotMatch(text, SECRET, 'a secret');
   assert.doesNotMatch(text, /GITHUB_TOKEN|github\.token/, 'the token handed to a step');
   assert.doesNotMatch(text, /persist-credentials:\s*true/);
@@ -148,7 +157,7 @@ test('engines names the Node major the gate runs, and the README and the guide s
 test('the daily Windows suite sets up the exact node the gate sets up', () => {
   const [gateNode, ...more] = nodeVersions(fs.readFileSync(GATE, 'utf8'));
   assert.match(gateNode ?? '', /^\d+\.\d+\.\d+$/, 'the gate sets up an exact node');
-  assert.deepEqual(more, [], 'the gate sets up one node');
+  assert.deepEqual(more, [gateNode], 'each job of the gate sets up that one node');
   assert.deepEqual(nodeVersions(fs.readFileSync(DAILY, 'utf8')), [gateNode]);
   // The control: a workflow one patch behind is caught.
   assert.notDeepEqual(nodeVersions('node-version: 24.20.0'), ['24.21.0']);
