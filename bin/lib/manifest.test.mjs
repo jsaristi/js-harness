@@ -29,7 +29,7 @@ import {
   runSchtasks,
 } from './manifest.mjs';
 import { writeManifestAtomic } from './atomic-write.mjs';
-import { cachePath, writeCache } from './cache.mjs';
+import { cachePath, recordReviewed, reviewedPath, writeCache } from './cache.mjs';
 import { gateDir, gateLockDir, takeGateLock } from './gate-lock.mjs';
 import { appendGateEvent, gateLogDir, gateRecord, readGateLog } from './gate-log.mjs';
 import { gateFirstDir, issueTicket } from './gate-first.mjs';
@@ -2310,16 +2310,18 @@ test('an old manifest without an entries field still loads for sync and uninstal
   }
 });
 
-test('uninstall also removes the doctor cache and the now-empty .js-harness directory', () => {
+test('uninstall also removes the doctor cache, the record of the reviewed versions and the now-empty .js-harness directory', () => {
   const home = makeTmpHome();
   try {
     install(home, '0.1.0');
     writeCache(home, { latest: { checkedAt: null, versions: {} }, notified: null });
+    assert.equal(recordReviewed(home, 'stack', { versions: { engram: '3.7.0' }, at: '2026-11-10T00:00:00.000Z' }), true);
     assert.ok(fs.existsSync(cachePath(home)));
 
     uninstall(home);
 
     assert.equal(fs.existsSync(cachePath(home)), false);
+    assert.equal(fs.existsSync(reviewedPath(home)), false);
     assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

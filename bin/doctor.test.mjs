@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { doctorMain, resolveLatestVersions } from './doctor.mjs';
-import { readCache, writeCache } from './lib/cache.mjs';
+import { readCache, readReviewed, writeCache } from './lib/cache.mjs';
 import { recordOptionalFile } from './lib/manifest.mjs';
 import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './lib/remote.mjs';
 import { projectSlug } from './lib/sessions.mjs';
@@ -1983,8 +1983,8 @@ test('doctorMain records the first host reading as reviewed, and shows a staged 
     assert.equal(code, 0);
     assert.match(output, /^host-update\s+2\.37337\.1\s+ok\s+n\/a\s+n\/a\s+outdated$/m);
     assert.ok(output.includes('\n  host-update (upToDate): Claude Desktop 2.42304.0 is downloaded and not applied (running 2.37337.1): quit Claude fully, the tray icon included, and open it again\n'), output);
-    const { at } = readCache(home).host.reviewed;
-    assert.deepEqual(readCache(home).host.reviewed, { desktop: '2.37337.1', code: '2.1.295', at });
+    const { at } = readReviewed(home).host.reviewed;
+    assert.deepEqual(readReviewed(home).host.reviewed, { desktop: '2.37337.1', code: '2.1.295', at });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -2024,7 +2024,7 @@ test('a host update since the reviewed versions is stale, with the versions and 
     const json = await runDoctor(['--home', home, '--cwd', project, '--json'], {}, { spawn, fetch: noopFetch, host });
     const row = JSON.parse(json.output).find((item) => item.id === 'host-update');
     assert.deepEqual(row.gaps, [{ dimension: 'claude', state: 'stale', fix: row.fix.claude }]);
-    assert.equal(readCache(home).host.reviewed.desktop, '2.37337.1', 'a report records nothing while the update is unreviewed');
+    assert.equal(readReviewed(home).host.reviewed.desktop, '2.37337.1', 'a report records nothing while the update is unreviewed');
 
     // The lead's mistake of 2026-10-30 (docs/FAILURES.md, host-review-without-research): the update recorded as
     // reviewed with no account of what it brings. With no review file, or one that lacks a part, nothing is recorded.
@@ -2046,7 +2046,7 @@ test('a host update since the reviewed versions is stale, with the versions and 
       `js-harness doctor: no review file docs/host-updates/claude-desktop-2.42304.0.md in ${project}: the review of Claude Desktop 2.42304.0 is recorded from the project that keeps the host reviews, once that file holds it (the host-update row's fix says what it holds). Nothing was recorded.`,
       'js-harness doctor: docs/host-updates/claude-desktop-2.42304.0.md does not hold the review of Claude Desktop 2.42304.0 yet: it lacks row 1: a Decision of adopt, adapt or ignore (it reads "maybe"); a "## Sources" section. Nothing was recorded.',
     ]);
-    assert.equal(readCache(home).host.reviewed.desktop, '2.37337.1', 'a refused review records nothing');
+    assert.equal(readReviewed(home).host.reviewed.desktop, '2.37337.1', 'a refused review records nothing');
     fs.writeFileSync(file, [
       '# Claude Desktop 2.42304.0', '', 'Code tab CLI: 2.1.299', '',
       '| Change | Decision | Reason |', '|---|---|---|', '| Mods | adapt | the board could be a panel beside the chat |', '',
@@ -2056,7 +2056,7 @@ test('a host update since the reviewed versions is stale, with the versions and 
     const reviewed = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed'], {}, { spawn, fetch: noopFetch, host });
     assert.equal(reviewed.code, 0);
     assert.equal(reviewed.output, 'Recorded Claude Desktop 2.42304.0 and its Code tab CLI 2.1.299 as reviewed.\n');
-    assert.deepEqual([readCache(home).host.reviewed.desktop, readCache(home).host.reviewed.code], ['2.42304.0', '2.1.299']);
+    assert.deepEqual([readReviewed(home).host.reviewed.desktop, readReviewed(home).host.reviewed.code], ['2.42304.0', '2.1.299']);
     const after = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, host });
     assert.match(after.output, /^host-update\s+2\.42304\.0\s+ok\s+n\/a\s+n\/a\s+ok$/m);
   } finally {
@@ -2077,7 +2077,7 @@ test('a stack tool updated since the reviewed versions is stale, named by the ho
 
     const first = await runDoctor(['--home', home, '--cwd', project], {}, deps('2.1.296'));
     assert.match(first.output, /^stack-update\s+\d+ tools?\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
-    const baseline = readCache(home).stack.reviewed.versions;
+    const baseline = readReviewed(home).stack.reviewed.versions;
     assert.equal(baseline.claude, '2.1.296', 'the first reading is the reviewed one');
     assert.equal(baseline.codex, '0.130.0');
     assert.equal(baseline.engram, '3.7.0', 'every tool of the stack is read, since no tool has a row of its own (F8 S11)');
@@ -2093,7 +2093,7 @@ test('a stack tool updated since the reviewed versions is stale, named by the ho
       '    then record the review: js-harness doctor --stack-reviewed',
     ].join('\n');
     assert.ok(table.output.includes(`\n${steps}\n`), table.output);
-    assert.equal(readCache(home).stack.reviewed.versions.claude, '2.1.296', 'a report records nothing while the update is unreviewed');
+    assert.equal(readReviewed(home).stack.reviewed.versions.claude, '2.1.296', 'a report records nothing while the update is unreviewed');
 
     const hook = await runDoctor(['--hook', '--home', home, '--cwd', project], {}, deps('2.1.299'));
     assert.match(JSON.parse(hook.output).systemMessage, /claude 2\.1\.296 → 2\.1\.299 since the last review/);
@@ -2101,9 +2101,48 @@ test('a stack tool updated since the reviewed versions is stale, named by the ho
     const reviewed = await runDoctor(['--home', home, '--cwd', project, '--stack-reviewed'], {}, deps('2.1.299'));
     assert.equal(reviewed.code, 0);
     assert.match(reviewed.output, /^Recorded (.+, )?claude 2\.1\.299(, .+)? as reviewed\.\n$/);
-    assert.equal(readCache(home).stack.reviewed.versions.claude, '2.1.299');
+    assert.equal(readReviewed(home).stack.reviewed.versions.claude, '2.1.299');
     const after = await runDoctor(['--home', home, '--cwd', project], {}, deps('2.1.299'));
     assert.match(after.output, /^stack-update\s+\d+ tools?\s+n\/a\s+n\/a\s+n\/a\s+n\/a$/m);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// M10 of the Fable 5.2 audit (odd/tasks/audit-u5-atomic-state.md, S4): a torn cache read as empty made both updates
+// "the first reading", recorded as reviewed. Now neither is taken as reviewed, on that run or the next one, once the
+// cache is written clean again, until the review is recorded.
+test('a corrupt doctor.json records nothing as reviewed: both reviews stay gaps, run after run, until the flags record them', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const at = '2026-10-15T00:00:00.000Z';
+    writeCache(home, { ...readCache(home), host: { reviewed: { desktop: '2.37337.1', code: '2.1.295', at } }, stack: { reviewed: { versions: { claude: '2.1.296' }, at } } });
+    const file = path.join(home, '.js-harness', 'doctor.json');
+    const raw = fs.readFileSync(file, 'utf8');
+    fs.writeFileSync(file, raw.slice(0, Math.floor(raw.length / 2)));
+    const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0', claude: '2.1.299 (Claude Code)\n' }, gitToplevel: project, codexLogin: 'in' });
+    const host = () => ({ found: true, desktop: '2.42304.0', code: '2.1.299' });
+    const deps = { spawn, fetch: noopFetch, host, stackUpdate: true };
+
+    for (const run of ['the run that finds the cache torn', 'the next run, the cache written clean']) {
+      const { code, output } = await runDoctor(['--home', home, '--cwd', project], {}, deps);
+      assert.equal(code, 0, run);
+      assert.match(output, /^host-update\s+2\.42304\.0\s+stale\s/m, run);
+      assert.match(output, /^stack-update\s+stale\s/m, run);
+      assert.ok(output.includes('the record of the versions last reviewed cannot be read'), output);
+      assert.deepEqual(readReviewed(home), { host: { unreadable: true }, stack: { unreadable: true } }, run);
+    }
+    const hook = await runDoctor(['--hook', '--home', home, '--cwd', project], {}, deps);
+    assert.match(JSON.parse(hook.output).systemMessage, /record of the host review cannot be read.*record of the stack review cannot be read/);
+
+    const recorded = await runDoctor(['--home', home, '--cwd', project, '--host-reviewed', '--stack-reviewed'], {}, deps);
+    assert.equal(recorded.code, 0, recorded.output);
+    assert.deepEqual([readReviewed(home).host.reviewed.desktop, readReviewed(home).stack.reviewed.versions.claude], ['2.42304.0', '2.1.299']);
+    const after = await runDoctor(['--home', home, '--cwd', project], {}, deps);
+    assert.doesNotMatch(after.output, /^(host|stack)-update\s.*stale/m);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -2120,7 +2159,7 @@ test('--stack-reviewed keeps the reviewed version of a tool whose probe failed t
     const spawn = fakeSpawn({ versions: { engram: 'engram 3.7.0' }, gitToplevel: project, codexLogin: 'in' });
     const reviewed = await runDoctor(['--home', home, '--cwd', project, '--stack-reviewed'], {}, { spawn, fetch: noopFetch, stackUpdate: true });
     assert.equal(reviewed.code, 0);
-    const { versions } = readCache(home).stack.reviewed;
+    const { versions } = readReviewed(home).stack.reviewed;
     assert.equal(versions.codex, '0.130.0');
     assert.equal(versions.claude, '2.1.290');
   } finally {
@@ -2176,7 +2215,7 @@ test('the host check reads the home doctor was given, and --host-reviewed --json
     assert.equal(recorded.code, 0);
     const reviewed = { desktop: '2.42304.0', code: '2.1.299', at: '2026-10-15T23:00:00.000Z' };
     assert.deepEqual(JSON.parse(recorded.output), { reviewed });
-    assert.deepEqual(readCache(home).host.reviewed, reviewed);
+    assert.deepEqual(readReviewed(home).host.reviewed, reviewed);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -2201,16 +2240,16 @@ test('--host-reviewed --stack-reviewed in one call records both reviews, and --j
     assert.deepEqual(lines[0], 'Recorded Claude Desktop 2.42304.0 and its Code tab CLI 2.1.299 as reviewed.');
     assert.match(lines[1], /^Recorded (.+, )?claude 2\.1\.299(, .+)? as reviewed\.$/);
     assert.equal(lines.length, 2);
-    assert.deepEqual(readCache(home).host.reviewed, { desktop: '2.42304.0', code: '2.1.299', at: '2026-10-30T15:00:00.000Z' });
-    assert.equal(readCache(home).stack.reviewed.versions.claude, '2.1.299');
+    assert.deepEqual(readReviewed(home).host.reviewed, { desktop: '2.42304.0', code: '2.1.299', at: '2026-10-30T15:00:00.000Z' });
+    assert.equal(readReviewed(home).stack.reviewed.versions.claude, '2.1.299');
 
     // The order of the flags does not matter, and --json prints one object that parses, keyed by review.
     const json = await runDoctor(['--home', home, '--cwd', project, '--stack-reviewed', '--host-reviewed', '--json'], {}, deps);
     assert.equal(json.code, 0);
     const printed = JSON.parse(json.output);
     assert.deepEqual(Object.keys(printed), ['host', 'stack']);
-    assert.deepEqual(printed.host, { reviewed: readCache(home).host.reviewed });
-    assert.deepEqual(printed.stack, { reviewed: readCache(home).stack.reviewed });
+    assert.deepEqual(printed.host, { reviewed: readReviewed(home).host.reviewed });
+    assert.deepEqual(printed.stack, { reviewed: readReviewed(home).stack.reviewed });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(project, { recursive: true, force: true });
@@ -2232,7 +2271,7 @@ test('--host-reviewed --stack-reviewed records the review it can when the other 
     assert.deepEqual(errors, ['js-harness doctor: could not read the running Claude Desktop version: nothing was recorded.']);
     assert.match(output, /^Recorded (.+, )?claude 2\.1\.299(, .+)? as reviewed\.\n$/);
     assert.equal('host' in readCache(home), false);
-    assert.equal(readCache(home).stack.reviewed.versions.claude, '2.1.299');
+    assert.equal(readReviewed(home).stack.reviewed.versions.claude, '2.1.299');
   } finally {
     console.error = original;
     fs.rmSync(home, { recursive: true, force: true });

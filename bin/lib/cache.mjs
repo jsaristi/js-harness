@@ -2,8 +2,14 @@
 // their fetch time, so `doctor` only hits the network every 6h — see `isStale`) and the last gap
 // digest already notified to the user via `doctor --hook` (T3). Malformed or missing on disk reads
 // as an empty cache; nothing here ever throws.
+//
+// Beside it, the record of the versions last reviewed: `<home>/.js-harness/reviewed.json` (`readReviewed`). It was the
+// cache's `host` and `stack` keys until a torn cache, read as empty, turned a pending update into "reviewed" (M10 of
+// the Fable 5.2 audit, odd/tasks/audit-u5-atomic-state.md). Both files are written by a temporary file and a rename
+// (./atomic-write.mjs), so a reader sees the bytes before or after a write, never half of one.
 import fs from 'node:fs';
 import path from 'node:path';
+import { writeManifestAtomic } from './atomic-write.mjs';
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
@@ -71,15 +77,84 @@ function sanitizeHost(host) {
 /** R3-101 (accepted T2/T3 review follow-up): best-effort. The cache is optional plumbing — a
  * refetched version that cannot be saved must never crash `doctor`, which is a report, not a gate.
  * An unwritable home, or a home path that turns out to be a plain file, is swallowed here instead
- * of propagating up through `doctorMain`. */
+ * of propagating up through `doctorMain`. Written whole or not at all (`writeManifestAtomic`). With no record of the
+ * reviews yet, the cache there is read into it first (`readReviewed`): `doctor` writes the cache before it reads the
+ * reviews, and that write would otherwise lose an old cache's reviews, or the sign that a torn one held some. */
 export function writeCache(home, cache) {
   const file = cachePath(home);
   try {
+    if (!fs.existsSync(reviewedPath(home))) readReviewed(home);
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify(cache, null, 2), 'utf8');
+    writeManifestAtomic(file, cache);
   } catch {
     // Best-effort: see the doc comment above.
   }
+}
+
+/** The two reviews the record keeps: the host's (./host-update.mjs) and the stack's (./stack-update.mjs). */
+const REVIEWS = { host: sanitizeHost, stack: sanitizeStack };
+
+export function reviewedPath(home) {
+  return path.join(home, '.js-harness', 'reviewed.json');
+}
+
+/** Each review of `source`, an object read from the record or from an old cache: `{ reviewed }` when it is well formed,
+ * `{ unreadable: true }` when it is there and is not (`null` in the record is how an unknown one is kept), and left
+ * out when it is not there, which is a review never recorded. */
+function reviewsOf(source) {
+  const reviews = {};
+  for (const [key, sanitize] of Object.entries(REVIEWS)) {
+    if (!Object.hasOwn(source, key)) continue;
+    reviews[key] = sanitize(source[key]) ?? { unreadable: true };
+  }
+  return reviews;
+}
+
+/** Both reviews unknown: what a record or an old cache that cannot be read says. */
+const unknown = () => Object.fromEntries(Object.keys(REVIEWS).map((key) => [key, { unreadable: true }]));
+
+/** The object of the JSON file `file`, `undefined` when there is none, `null` when it cannot be read as an object. */
+function readObject(file) {
+  if (!fs.existsSync(file)) return undefined;
+  try {
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Writes `reviews` to the record whole or not at all, an unknown review as `null`; whether it was written. */
+function writeReviews(home, reviews) {
+  const record = Object.fromEntries(Object.entries(reviews).map(([key, review]) => [key, review.unreadable ? null : { reviewed: review.reviewed }]));
+  try {
+    fs.mkdirSync(path.dirname(reviewedPath(home)), { recursive: true });
+    writeManifestAtomic(reviewedPath(home), record);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The versions last reviewed, as `{ host?, stack? }`, each `{ reviewed }`, or `{ unreadable: true }` when its record
+ * cannot be read: then nothing is taken as reviewed, and only `doctor --host-reviewed` or `--stack-reviewed` records
+ * it. A review left out was never recorded, so its first reading is. A record that does not parse leaves both unknown.
+ * With no record yet, an old cache's `host` and `stack` are read instead and written to the record then, before a
+ * later write of the cache could lose them; a cache that does not parse leaves both unknown, kept so in the record. */
+export function readReviewed(home) {
+  const record = readObject(reviewedPath(home));
+  if (record !== undefined) return record === null ? unknown() : reviewsOf(record);
+  const cache = readObject(cachePath(home));
+  if (cache === undefined) return {};
+  const reviews = cache === null ? unknown() : reviewsOf(cache);
+  writeReviews(home, reviews);
+  return reviews;
+}
+
+/** Records `reviewed` as the `key` review (`host` or `stack`), the other kept as the record holds it, read again just
+ * before the write; whether it was written, since a review that cannot be recorded must be said. */
+export function recordReviewed(home, key, reviewed) {
+  return writeReviews(home, { ...readReviewed(home), [key]: { reviewed } });
 }
 
 /** True when the cached latest versions are stale enough to refetch: absent, unparseable, or 6h

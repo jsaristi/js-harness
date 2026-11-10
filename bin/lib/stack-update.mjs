@@ -55,7 +55,35 @@ export function stackUpdateRow(versions, reviewed, now = () => new Date()) {
   };
 }
 
-/** What the hook's notice adds for this row: the tools updated since the last review. */
+/** The first words of a review row whose record cannot be read (bin/lib/cache.mjs, `readReviewed`), here and in the
+ * host-update row (./host-update.mjs). */
+export const UNREADABLE_RECORD = 'the record of the versions last reviewed cannot be read (~/.js-harness/reviewed.json), so no version is taken as reviewed';
+
+/** The `stack-update` row when the record of its review cannot be read: a gap that records nothing, so a torn record
+ * never turns an update into a reviewed one (M10 of the Fable 5.2 audit); `--stack-reviewed` records the review. With
+ * no version read it is the row `stackUpdateRow` gives. */
+export function stackUnreadableRow(versions) {
+  const { row } = stackUpdateRow(versions, null);
+  if (row.installed !== 'ok') return row;
+  const named = Object.entries(versions).map(([id, version]) => `${id} ${version}`).join(', ');
+  return {
+    ...row,
+    installed: 'stale',
+    unreadable: true,
+    fix: {
+      installed: [
+        `${UNREADABLE_RECORD}; review the tools at the versions read now, ${named}:`,
+        'read the changelog of each tool since the version the harness was last planned on',
+        'check that the hooks and commands of the harness that run them still work',
+        'say it to the user, and to whoever plans a measurement on the versions before',
+        'then record the review: js-harness doctor --stack-reviewed',
+      ],
+    },
+  };
+}
+
+/** What the hook's notice adds for this row: the tools updated since the last review, or that its record is unread. */
 export function stackNotice(row) {
+  if (row?.installed === 'stale' && row.unreadable) return 'the record of the stack review cannot be read';
   return row?.installed === 'stale' && row.change ? `${row.change} since the last review` : '';
 }

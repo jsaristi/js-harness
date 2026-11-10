@@ -8,6 +8,7 @@ import path from 'node:path';
 import { windowsFolder } from './app-record.mjs';
 import { cellsOf, DELIMITER_CELL_PATTERN } from './progress.mjs';
 import { ruleHere } from './rules.mjs';
+import { UNREADABLE_RECORD } from './stack-update.mjs';
 import { compareSemver } from './version.mjs';
 
 const VERSION = /^\d+\.\d+\.\d+$/;
@@ -240,10 +241,35 @@ export function hostUpdateRow(versions, reviewed, now = () => new Date(), projec
   return { row: read, record };
 }
 
-/** What the hook's notice adds for this row: the update since the last review, and a version not applied. */
+/** The `host-update` row when the record of its review cannot be read: a gap that records nothing, so a torn record
+ * never turns an update into a reviewed one (M10 of the Fable 5.2 audit); `--host-reviewed` records the review, with no
+ * version before it to ask the review file about. The rest of the row is `hostUpdateRow`'s. */
+export function hostUnreadableRow(versions, now = () => new Date()) {
+  const { row } = hostUpdateRow(versions, null, now);
+  if (row.claude !== 'ok') return row;
+  const read = `Claude Desktop ${versions.desktop}${versions.code ? ` and its Code tab CLI ${versions.code}` : ''}`;
+  return {
+    ...row,
+    claude: 'stale',
+    unreadable: true,
+    fix: {
+      ...row.fix,
+      claude: [
+        `${UNREADABLE_RECORD}; a host watch session reviews ${read}, and any other session tells the lead and records no review:`,
+        `read ${DESKTOP_CHANGELOG} and the Claude Code CHANGELOG (${CODE_CHANGELOG}) since the versions the harness was last planned on`,
+        'check that the harness hooks in ~/.claude/settings.json still run',
+        'then record the review: js-harness doctor --host-reviewed',
+      ],
+    },
+  };
+}
+
+/** What the hook's notice adds for this row: the update since the last review, or that its record is unread, and a
+ * version not applied. */
 export function hostNotice(row) {
   const parts = [];
-  if (row?.claude === 'stale' && row.change) parts.push(`${row.change} since the last review, which a host watch session reviews`);
+  if (row?.claude === 'stale' && row.unreadable) parts.push('the record of the host review cannot be read, which a host watch session reviews');
+  else if (row?.claude === 'stale' && row.change) parts.push(`${row.change} since the last review, which a host watch session reviews`);
   if (row?.upToDate === 'outdated' && row.staged) parts.push(`Claude Desktop ${row.staged} is downloaded and not applied`);
   return parts.join('; ');
 }

@@ -229,7 +229,8 @@ family by folder and child names; the fields of each are in `docs/RECORDS.md`, a
 | The remote server | `~/.js-harness/remote/`: `<id>.json`, `<id>.lock`, `<id>.log`, `<id>.stopped`, `<id>.task.xml` | `bin/remote.mjs` `remoteMain`; `bin/lib/remote.mjs` `supervise` | `remote status`, `remote stop` |
 | Refresh backups | `~/.js-harness/refresh-backups/settings-<stamp>.json`, and pnpm's global `package.json` | `bin/lib/refresh-copy.mjs` `refreshCopy` | the undo line that refresh prints |
 | Session env trims | `~/.js-harness/session-env-trims/`: `trims.jsonl` and the backups `<session>/sessionstart-hook-<n>.<stamp>.sh` | `bin/lib/session-env.mjs` `trimSessionEnv` | the undo of each record; the fallback hook |
-| The doctor's cache and reviews | `~/.js-harness/doctor.json` | `bin/lib/cache.mjs` `writeCache` | `doctor` and its hook |
+| The doctor's cache | `~/.js-harness/doctor.json` | `bin/lib/cache.mjs` `writeCache` | `doctor` and its hook |
+| The reviewed versions | `~/.js-harness/reviewed.json` | `bin/lib/cache.mjs` `recordReviewed` | `doctor`, its hook, `host-watch` |
 | Clean | `~/.js-harness/clean.json`, `clean-log.jsonl` | `bin/lib/clean.mjs` `writeMeasure` `applyKinds` | `clean`, `doctor` |
 | The status line | `~/.js-harness/status-line/line.txt` | `bin/lib/status-line.mjs` `writeStatusLine` | the host's status line |
 | The memory backup | `~/.js-harness/memory-backup/`: `config.json`, `last.json`, `transcripts.json`, `transcripts.lock`, the transcript clones `transcripts/<repo>/`, and the clone `repo/` with `manifest.json`, `RECENT.md`, `RESTORE.md`, `engram/export.json` | `bin/backup.mjs` `runBackup` `backupMain`; `bin/lib/backup.mjs` `exportEngram`; `bin/lib/backup-transcripts.mjs` `copyTranscripts` | `backup`, `backup restore`, `doctor` |

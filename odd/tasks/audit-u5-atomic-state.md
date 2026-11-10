@@ -105,8 +105,8 @@ through `js-harness notify --to orchestrator --kind question`.
 6. The record is js-harness's and goes with the cache: `uninstall machine` removes it.
 
 ## Tasks
-- [ ] T1 (kind: build) S5: settings writes by rename (atomic-write, manifest, user-settings, permissions, rules-block), tests first; commit `fix(settings): ...`
-- [ ] T2 (kind: build) S1-S4, S6: the reviewed record and the cache by rename (cache, doctor, host-watch, manifest uninstall), tests first; commit `fix(doctor): ...`
+- [x] T1 (kind: build) S5: settings writes by rename (atomic-write, manifest, user-settings, permissions, rules-block), tests first; commit 0b8b7c25; Codex: correct (0.94), lenses risk, resilience, reliability: 0 findings
+- [x] T2 (kind: build) S1-S4, S6: the reviewed record and the cache by rename (cache, doctor, host-watch, manifest uninstall), tests first; commit `fix(doctor): ...`
 - [ ] T3 (kind: verify) Codex and the lenses on each slice; an independent verifier on the whole change (high risk 1 and 4)
 
 ## Log
@@ -123,3 +123,10 @@ through `js-harness notify --to orchestrator --kind question`.
   until a flag records it, rather than refusing to write: a corrupt cache would otherwise be rewritten clean by the
   next `doctor` and its unknown would become a first reading again one run later. `--host-reviewed` on an unknown
   record has no earlier version to ask the review file about, so it records what it reads, as on a first reading.
+- L4 (2026-11-10, evidence): T1's tests were red before the fix, 3 of 4 (the link test passes either way, and is
+  skipped on this machine, which cannot make links): `acceptSessionMessages` returned `written` past a failed rename,
+  and `install` and `uninstall` changed the settings. T2's new tests were red on the missing exports, then the doctor
+  test of spec 4 found a flaw in the design itself: `doctor` writes the latest versions to the cache before the rows
+  read the reviews, so a migration done at the first read came after a clean cache had already replaced the torn one,
+  and the update was recorded as reviewed again. `writeCache` now reads the cache into the record before it writes,
+  when there is no record yet; a cache test pins that order.

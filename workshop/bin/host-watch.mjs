@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { backgroundDir, readRecord } from '../../bin/lib/background.mjs';
-import { readCache } from '../../bin/lib/cache.mjs';
+import { readReviewed } from '../../bin/lib/cache.mjs';
 import { channelDir, nextSessionNumber, readNotices } from '../../bin/lib/channel.mjs';
 import { harnessHome } from '../../bin/lib/home.mjs';
 import { hostUpdateRow, readHostVersions } from '../../bin/lib/host-update.mjs';
@@ -256,7 +256,7 @@ export async function hostWatchTick({
   now = Date.now,
   cwd = process.cwd(),
   host = () => readHostVersions({ home }),
-  reviewed = () => readCache(home).host?.reviewed ?? null,
+  reviewed = () => readReviewed(home).host?.reviewed ?? null,
   titles = () => {
     // A session that only read the channel is there by its reading's title (Codex on 34562cc).
     const channel = readNotices(home, slug);
@@ -302,7 +302,7 @@ export async function hostWatchMain(argv = [], deps = {}) {
     stdout,
     stderr,
     host: deps.host ?? (() => readHostVersions({ home })),
-    reviewed: deps.reviewed ?? (() => readCache(home).host?.reviewed ?? null),
+    reviewed: deps.reviewed ?? (() => readReviewed(home).host?.reviewed ?? null),
     project: deps.project ?? (() => resolveProjectRoot(deps.cwd ?? process.cwd())),
     now: deps.now ?? (() => new Date()),
     next: deps.next ?? (() => nextOf(home, deps.cwd ?? process.cwd())),

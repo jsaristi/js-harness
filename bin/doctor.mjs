@@ -13,15 +13,15 @@ import crypto from 'node:crypto';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { probeStack, probeVersionCommand, resolveProjectRoot, tools } from './lib/stack.mjs';
-import { stackNotice, stackUpdateRow, stackVersions } from './lib/stack-update.mjs';
+import { stackNotice, stackUnreadableRow, stackUpdateRow, stackVersions } from './lib/stack-update.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './lib/project-functions.mjs';
 import { compareSemver } from './lib/version.mjs';
-import { readCache, writeCache, isStale } from './lib/cache.mjs';
+import { readCache, readReviewed, recordReviewed, reviewedPath, writeCache, isStale } from './lib/cache.mjs';
 import { fetchLatestVersions, isLookupAttempted, isLocalSource, readLocalLatestVersions } from './lib/latest.mjs';
 import { GAP_STATES, gapList, gapDigest } from './lib/digest.mjs';
 import { harnessRulesRow } from './lib/rules-installed.mjs';
 import { unknownArgument } from './lib/args.mjs';
-import { hostNotice, hostReviewRefusal, hostUpdateRow, readHostVersions, readProjectRulesText } from './lib/host-update.mjs';
+import { hostNotice, hostReviewRefusal, hostUnreadableRow, hostUpdateRow, readHostVersions, readProjectRulesText } from './lib/host-update.mjs';
 import { owedSkipLines } from './lib/lens-review-rows.mjs';
 import { worktreesInMain } from './lib/worktrees.mjs';
 import { backupHealth } from './backup.mjs';
@@ -238,11 +238,13 @@ function readStackVersions(rows, { home, spawn, platform }) {
 }
 
 /** The stack-update row (bin/lib/stack-update.mjs): each tool's version against the one last reviewed, recorded like
- * the host-update row's, so a tool that updated itself stays a gap until `--stack-reviewed` records its review. */
+ * the host-update row's, so a tool that updated itself stays a gap until `--stack-reviewed` records its review. A record
+ * that cannot be read takes nothing as reviewed and records nothing (`readReviewed`, bin/lib/cache.mjs). */
 function stackRow(versions, home, now) {
-  const cache = readCache(home);
-  const { row, record } = stackUpdateRow(versions, cache.stack?.reviewed ?? null, now);
-  if (record) writeCache(home, { ...cache, stack: { reviewed: record } });
+  const kept = readReviewed(home).stack;
+  if (kept?.unreadable) return stackUnreadableRow(versions);
+  const { row, record } = stackUpdateRow(versions, kept?.reviewed ?? null, now);
+  if (record) recordReviewed(home, 'stack', record);
   return row;
 }
 
@@ -250,9 +252,10 @@ function stackRow(versions, home, now) {
  * last reviewed. The first reading, with no record, is recorded as reviewed; after that only `--host-reviewed`
  * records, so an update stays a gap until its review is done. */
 function hostRow(host, home, now, project) {
-  const cache = readCache(home);
-  const { row, record } = hostUpdateRow(host(home), cache.host?.reviewed ?? null, now, readProjectRulesText(project));
-  if (record) writeCache(home, { ...cache, host: { reviewed: record } });
+  const kept = readReviewed(home).host;
+  if (kept?.unreadable) return hostUnreadableRow(host(home), now);
+  const { row, record } = hostUpdateRow(host(home), kept?.reviewed ?? null, now, readProjectRulesText(project));
+  if (record) recordReviewed(home, 'host', record);
   return row;
 }
 
@@ -478,14 +481,14 @@ function recordHostReview({ home, cwd }, deps) {
     console.error('js-harness doctor: could not read the running Claude Desktop version: nothing was recorded.');
     return null;
   }
-  const refusal = hostReviewRefusal({ project: resolveProjectRoot(cwd, deps.spawn ?? spawnSync), versions, reviewed: readCache(home).host?.reviewed ?? null });
+  const refusal = hostReviewRefusal({ project: resolveProjectRoot(cwd, deps.spawn ?? spawnSync), versions, reviewed: readReviewed(home).host?.reviewed ?? null });
   if (refusal !== null) {
     console.error(`js-harness doctor: ${refusal}. Nothing was recorded.`);
     return null;
   }
   const now = deps.now ?? (() => new Date());
   const reviewed = { desktop: versions.desktop, code: versions.code, at: now().toISOString() };
-  writeCache(home, { ...readCache(home), host: { reviewed } });
+  if (!recordReviewed(home, 'host', reviewed)) return unrecorded(home);
   return { reviewed, line: `Recorded Claude Desktop ${versions.desktop}${versions.code ? ` and its Code tab CLI ${versions.code}` : ''} as reviewed.` };
 }
 
@@ -504,11 +507,16 @@ function recordStackReview({ home, cwd }, deps) {
   const now = deps.now ?? (() => new Date());
   // A tool whose probe failed this time keeps the version reviewed before: dropped, its next reading would join the
   // record as a new tool and an update since would never be named (Codex, 2026-10-16).
-  const cache = readCache(home);
-  const reviewed = { versions: { ...cache.stack?.reviewed.versions, ...versions }, at: now().toISOString() };
-  writeCache(home, { ...cache, stack: { reviewed } });
+  const reviewed = { versions: { ...readReviewed(home).stack?.reviewed?.versions, ...versions }, at: now().toISOString() };
+  if (!recordReviewed(home, 'stack', reviewed)) return unrecorded(home);
   const named = Object.entries(versions).map(([id, version]) => `${id} ${version}`).join(', ');
   return { reviewed, line: `Recorded ${named} as reviewed.` };
+}
+
+/** A review that could not be written to its record: said on stderr, and `null`, as a review that records nothing. */
+function unrecorded(home) {
+  console.error(`js-harness doctor: ${reviewedPath(home)} could not be written: nothing was recorded.`);
+  return null;
 }
 
 /** `doctor --hook`: a `SessionStart` hook, at zero model tokens when nothing changed. Computes the

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { cachePath, readCache, writeCache, isStale } from './cache.mjs';
+import { cachePath, readCache, readReviewed, recordReviewed, reviewedPath, writeCache, isStale } from './cache.mjs';
 
 function makeTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-cache-home-'));
@@ -170,6 +170,148 @@ test('readCache drops a non-string, non-null version entry but keeps valid ones'
     const cache = readCache(home);
 
     assert.deepEqual(cache.latest.versions, { 'gentle-ai': '3.7.0', engram: null });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// --- M10 of the Fable 5.2 audit (odd/tasks/audit-u5-atomic-state.md, S1 to S4): the cache is written by rename, and
+// the versions last reviewed live in their own record, where a key that cannot be read is unknown, never empty ---
+
+const HOST = { reviewed: { desktop: '2.37337.1', code: '2.1.295', at: '2026-10-15T00:00:00.000Z' } };
+const STACK = { reviewed: { versions: { claude: '2.1.296', engram: '3.3.0' }, at: '2026-10-16T00:00:00.000Z' } };
+const LATEST = { latest: { checkedAt: null, versions: {} }, notified: null };
+
+/** Makes every rename onto `target` fail as a full disk would, the others going through. */
+function failRenameOnto(t, target) {
+  const rename = fs.renameSync;
+  t.mock.method(fs, 'renameSync', (from, to) => {
+    if (path.resolve(String(to)) === path.resolve(target)) throw Object.assign(new Error('i/o error'), { code: 'EIO' });
+    return rename(from, to);
+  });
+}
+
+test('writeCache writes by rename: a rename that fails leaves the cache there before, and no temporary file', (t) => {
+  const home = makeTmpHome();
+  try {
+    writeCache(home, { ...LATEST, notified: 'before' });
+    const before = fs.readFileSync(cachePath(home), 'utf8');
+    failRenameOnto(t, cachePath(home));
+    assert.doesNotThrow(() => writeCache(home, { ...LATEST, notified: 'after' }));
+    assert.equal(fs.readFileSync(cachePath(home), 'utf8'), before);
+    assert.deepEqual(fs.readdirSync(path.dirname(cachePath(home))).filter((name) => name.endsWith('.tmp')), []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('reviewedPath points at <home>/.js-harness/reviewed.json', () => {
+  assert.equal(reviewedPath('/h'), path.join('/h', '.js-harness', 'reviewed.json'));
+});
+
+test('with no record and no cache nothing was ever reviewed, and nothing is written', () => {
+  const home = makeTmpHome();
+  try {
+    assert.deepEqual(readReviewed(home), {});
+    assert.equal(fs.existsSync(reviewedPath(home)), false);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an old doctor.json is read into the record without loss, and keeps its keys', () => {
+  const home = makeTmpHome();
+  try {
+    writeCache(home, { ...LATEST, host: HOST, stack: STACK });
+    const cache = fs.readFileSync(cachePath(home), 'utf8');
+    assert.deepEqual(readReviewed(home), { host: HOST, stack: STACK });
+    assert.deepEqual(JSON.parse(fs.readFileSync(reviewedPath(home), 'utf8')), { host: HOST, stack: STACK });
+    assert.equal(fs.readFileSync(cachePath(home), 'utf8'), cache, 'the cache is not rewritten');
+    // From then on the record is what is read: a later cache holds nothing of the reviews.
+    writeCache(home, LATEST);
+    assert.deepEqual(readReviewed(home), { host: HOST, stack: STACK });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an old doctor.json with one record and not the other migrates that one; the other was never reviewed', () => {
+  const home = makeTmpHome();
+  try {
+    writeCache(home, { ...LATEST, host: HOST });
+    assert.deepEqual(readReviewed(home), { host: HOST });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a corrupt doctor.json with no record leaves both reviews unknown, and they stay unknown once the cache is rewritten', () => {
+  const home = makeTmpHome();
+  try {
+    writeCache(home, { ...LATEST, host: HOST, stack: STACK });
+    const raw = fs.readFileSync(cachePath(home), 'utf8');
+    fs.writeFileSync(cachePath(home), raw.slice(0, Math.floor(raw.length / 2)));
+    assert.deepEqual(readReviewed(home), { host: { unreadable: true }, stack: { unreadable: true } });
+    writeCache(home, LATEST);
+    assert.deepEqual(readReviewed(home), { host: { unreadable: true }, stack: { unreadable: true } });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// doctor writes the latest versions to the cache before it reads the reviews: that write must not lose them.
+test('a write of the cache before any read of the reviews reads an old or torn cache into the record first', () => {
+  const home = makeTmpHome();
+  try {
+    writeCache(home, { ...LATEST, host: HOST, stack: STACK });
+    writeCache(home, LATEST);
+    assert.deepEqual(readReviewed(home), { host: HOST, stack: STACK });
+    // A cache an earlier version wrote, torn, with no record yet.
+    fs.rmSync(reviewedPath(home));
+    const raw = JSON.stringify({ ...LATEST, host: HOST }, null, 2);
+    fs.writeFileSync(cachePath(home), raw.slice(0, Math.floor(raw.length / 2)));
+    writeCache(home, LATEST);
+    assert.deepEqual(readReviewed(home), { host: { unreadable: true }, stack: { unreadable: true } });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a malformed review in an old doctor.json is unknown, not a first reading; the well-formed one beside it is kept', () => {
+  const home = makeTmpHome();
+  try {
+    writeCache(home, { ...LATEST, host: { reviewed: { desktop: 2, code: null, at: 'x' } }, stack: STACK });
+    assert.deepEqual(readReviewed(home), { host: { unreadable: true }, stack: STACK });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a corrupt record leaves both reviews unknown; a recorded review takes its key and leaves the other unknown', () => {
+  const home = makeTmpHome();
+  try {
+    fs.mkdirSync(path.dirname(reviewedPath(home)), { recursive: true });
+    fs.writeFileSync(reviewedPath(home), '{"host": {"revi');
+    assert.deepEqual(readReviewed(home), { host: { unreadable: true }, stack: { unreadable: true } });
+    assert.equal(recordReviewed(home, 'host', HOST.reviewed), true);
+    assert.deepEqual(readReviewed(home), { host: HOST, stack: { unreadable: true } });
+    assert.equal(recordReviewed(home, 'stack', STACK.reviewed), true);
+    assert.deepEqual(readReviewed(home), { host: HOST, stack: STACK });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('recordReviewed keeps the other key and writes by rename: a rename that fails records nothing and says so', (t) => {
+  const home = makeTmpHome();
+  try {
+    assert.equal(recordReviewed(home, 'host', HOST.reviewed), true);
+    assert.equal(recordReviewed(home, 'stack', STACK.reviewed), true);
+    assert.deepEqual(readReviewed(home), { host: HOST, stack: STACK });
+    const before = fs.readFileSync(reviewedPath(home), 'utf8');
+    failRenameOnto(t, reviewedPath(home));
+    assert.equal(recordReviewed(home, 'host', { ...HOST.reviewed, desktop: '9.9.9' }), false);
+    assert.equal(fs.readFileSync(reviewedPath(home), 'utf8'), before);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
