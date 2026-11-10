@@ -77,7 +77,7 @@ Nothing planned: the brief names the guard to reuse and the behaviour. A questio
 ## Tasks
 - [x] T1 (kind: build) spec 1: the test first, then the check in `undoBackground` and its settle line ·
   `bin/lib/background.mjs`, `bin/install.mjs`, `bin/sessions-background.test.mjs`, `README.md`, `docs/SPEC.md` · bd161b52
-- [ ] T2 (kind: verify) Codex, the Claude lenses, an independent verifier, the pull request
+- [x] T2 (kind: verify) Codex, the Claude lenses, an independent verifier, the pull request · PR 801
 
 ## Log
 - L1 (2026-11-09, the brief from the lead, JH 161's audit finding H1): "`uninstall machine` never removes a background
@@ -106,3 +106,4 @@ Nothing planned: the brief names the guard to reuse and the behaviour. A questio
   session whose worktree holds files, where stop will refuse and the next uninstall prints the `holds` line, so nothing
   is lost (out of scope above); (3) "removes it with its worktree" matches stop's own words, though claude rm has left
   `.git` behind.
+- L7 Pull request 801 opened: https://github.com/jsaristi/js-harness/pull/801. The owner merges.
