@@ -152,3 +152,7 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
   input tokens. Codex (193,215 input tokens): one P2, taken: with `--cwd` and a relative `--home`, the home resolved
   against the project, where `loop`, `throughput` and `windows-daily` resolve it against where the command runs
   (`workshop/bin/throughput.mjs:657`). Fixed test first: the new test failed (10 of 11), then 11 of 11.
+- L7 (2026-11-10): the first runs of the reviews of the fix `c1a3720e` were stopped by Claude Code for low memory,
+  unrecorded; the lead held them, then asked for them one at a time after JH 167 closed. Codex: correct (0.99), its
+  P2 fixed, 33,311 input tokens; the reliability lens: 0 findings, 11,428 input tokens. T1 goes out as its pull
+  request; T2 waits on question 245.
