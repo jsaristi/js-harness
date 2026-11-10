@@ -862,6 +862,8 @@ test('the sender carries the share of its context its transcript gives: the toke
   const reply = { type: 'assistant', timestamp: AT, isSidechain: false, message: { role: 'assistant', model: 'made-up-model', stop_reason: 'end_turn', content: [{ type: 'text', text: 'made up' }], usage: { input_tokens: 150000, cache_read_input_tokens: 50000, cache_creation_input_tokens: 0, output_tokens: 300 } } };
   const withUsage = transcript({ type: 'custom-title', customTitle: 'JH 5 · canal entre sesiones' }, { type: 'user', timestamp: AT, permissionMode: 'auto', origin: { kind: 'human' }, message: { role: 'user', content: 'made up' } }, reply);
   assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: SESSION }, ...folder({ [`${SESSION}.jsonl`]: withUsage }) }), { host: 'claude-code', id: SESSION, source: 'environment', title: 'JH 5 · canal entre sesiones', permissionMode: 'auto', context: { tokens: 200000, percent: 40 } });
+  // Audit M21: the share is of the window the host compacts on when one is given, the pause's window, not the default.
+  assert.deepEqual(channel.senderOf({ env: { CLAUDE_CODE_SESSION_ID: SESSION }, contextWindow: 350000, ...folder({ [`${SESSION}.jsonl`]: withUsage }) }).context, { tokens: 200000, percent: 57 });
 });
 
 test('--self names the sender instead, by its id or the start of it, and the record says the id came from the flag', () => {

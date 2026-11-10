@@ -705,7 +705,8 @@ export function transcriptOf(given, projectDirs, readdir) {
  * 'environment'`), or the one `self` names in its place, as on the board (`--self`, `source: 'flag'`, a
  * whole id or its first eight characters or more). The title, the permission mode and the share of the
  * context (`context`: `{ tokens, percent }`, the tokens of its last reply with usage and their whole
- * percentage of the window, as the board says it) are read from that session's transcript in `projectDir`,
+ * percentage of `contextWindow`, the host's window as the board and the pause read it, else the default) are read
+ * from that session's transcript in `projectDir`,
  * with the board's reader: a title only when the session was given one, `null` for whatever cannot be
  * read, and `context` is `null` when the transcript gives no context. An id from the flag that no transcript
  * carries is only what the caller typed, so no host is named for it.
@@ -713,7 +714,7 @@ export function transcriptOf(given, projectDirs, readdir) {
  * With neither, the sender is not known and the notice is recorded all the same: `{ host: 'unknown', id:
  * null, ... }`. That is every Codex session today: nothing in this repository reads a session id from
  * Codex, and none of the variables its commands carry is known to hold one. */
-export function senderOf({ self = null, env = {}, projectDir, projectDirs = [projectDir], readdir, readFile, readFacts = sessionFacts }) {
+export function senderOf({ self = null, env = {}, projectDir, projectDirs = [projectDir], readdir, readFile, readFacts = sessionFacts, contextWindow = undefined }) {
   const fromFlag = typeof self === 'string' && self !== '';
   const given = fromFlag ? self : env.CLAUDE_CODE_SESSION_ID || null;
   if (given === null) return { host: 'unknown', id: null, source: null, title: null, permissionMode: null, context: null };
@@ -723,7 +724,7 @@ export function senderOf({ self = null, env = {}, projectDir, projectDirs = [pro
   try {
     sender.id = found.id;
     sender.host = 'claude-code';
-    const facts = readFacts(readFile(found.file), { tail: 0 });
+    const facts = readFacts(readFile(found.file), { tail: 0, ...(contextWindow === undefined ? {} : { contextWindow }) });
     sender.title = facts.titleSource === 'custom-title' && typeof facts.title === 'string' ? facts.title : null;
     sender.permissionMode = facts.permissionMode ?? null;
     const measured = Number.isFinite(facts.context?.tokens) && Number.isFinite(facts.contextPercent);

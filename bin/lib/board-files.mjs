@@ -1,6 +1,8 @@
-// The files the board reads whole or in part: the orchestrator's relief file, and the tail of a transcript.
+// The files the board reads whole or in part: the orchestrator's relief file, the tail of a transcript, and the file a
+// running piece of work writes (moved here from bin/sessions.mjs, which was at its size ceiling).
 
 import fs from 'node:fs';
+import path from 'node:path';
 
 /** How many lines of the relief file the board prints: enough to see what the orchestrator noted last,
  * and whoever needs the rest reads the file. */
@@ -35,5 +37,46 @@ export function tailOfFile(file, bytes) {
     return buffer.toString('utf8');
   } finally {
     fs.closeSync(fd);
+  }
+}
+
+/** The id of the subagent the tool call `toolUseId` launched, from the `agent-<id>.meta.json` that names
+ * it — the only place it is written while a foreground subagent runs. `null` when no file names it. */
+function agentOfCall(subagentsDir, toolUseId, { readdir, readFile }) {
+  let names;
+  try {
+    names = readdir(subagentsDir);
+  } catch {
+    return null;
+  }
+  for (const name of names) {
+    const match = /^agent-(.+)\.meta\.json$/.exec(name);
+    if (!match) continue;
+    try {
+      if (JSON.parse(readFile(path.join(subagentsDir, name))).toolUseId === toolUseId) return match[1];
+    } catch {
+      // a meta file being written, or one that is not JSON, names nothing
+    }
+  }
+  return null;
+}
+
+/** Where a piece of work writes while it runs, and when it last did: a subagent's own transcript, a
+ * shell's output file. `{ path, modifiedAt }`, or `unavailable` with the reason. */
+export function workFile(work, { sessionDir, tasksDir }, io) {
+  let file;
+  if (work.tool === 'Agent') {
+    const subagentsDir = path.join(sessionDir, 'subagents');
+    const agent = work.id ?? agentOfCall(subagentsDir, work.toolUseId, io);
+    if (agent === null) return { unavailable: 'no subagent file of the session names this tool call' };
+    file = path.join(subagentsDir, `agent-${agent}.jsonl`);
+  } else {
+    if (work.id === null) return { unavailable: 'the transcript does not record its task id yet' };
+    file = path.join(tasksDir, `${work.id}.output`);
+  }
+  try {
+    return { path: file, modifiedAt: new Date(io.stat(file).mtimeMs).toISOString() };
+  } catch (err) {
+    return { path: file, unavailable: err.code ?? err.message };
   }
 }

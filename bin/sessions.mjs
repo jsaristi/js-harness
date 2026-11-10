@@ -57,7 +57,7 @@ import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
 import { readTickets } from './lib/gate-first.mjs';
 import { appendReading, findOpenings, newReading, readNotices, recordPath, recordedQuestions, reliefPath, senderOf } from './lib/channel.mjs';
 import { dayStartOf, keptByGitLog, keptByRelief, keptEither, localDay, measuresLines, measuresTotal, reliefLines, reliefMeasures, reliefsTotal, reopenCandidates, reopenLines } from './lib/measures.mjs';
-import { toldBetween } from './lib/pause.mjs';
+import { configuredWindow, toldBetween } from './lib/pause.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { readStalled } from './lib/stall.mjs';
 
@@ -65,7 +65,7 @@ import { readStalled } from './lib/stall.mjs';
 const STALL_MINUTES = ruleValue('session-stall', 'minutes');
 import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFAULT_CONTEXT_WINDOW, NOT_VISIBLE, boardChanges, channelOf, compactionMeasures, hostsOf, compactionMissOf, openQuestionsOf, questionRecordOf, hasTitle, isSelf, mainCheckout, namesAFile, percentOf, projectDirsOf, projectSlug, quoteOf, transcriptNamed, shareOf, readGateLock, readGateTickets, readGates, readPullRequests, readWorktrees, renderBoard, roleHolders, roleNamed, roleOfTitle, rosterOf, sameSession, heldPastLimit, sessionFacts, titledByReadings, watchBaseline } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
-import { readRelief, tailOfFile } from './lib/board-files.mjs';
+import { readRelief, tailOfFile, workFile } from './lib/board-files.mjs';
 import { backgroundChanges, boardBackground, claudeRunner, listAgents, recordFileOf, recordedFolders } from './lib/background.mjs';
 import { LIVE_USAGE, START_USAGE, nextNumberMain, sessionsLiveMain, sessionsStartMain, sessionsStopMain } from './sessions-background.mjs';
 
@@ -75,6 +75,8 @@ export const USAGE = [
   '                           [--watch [--interval <seconds>] [--timeout <seconds>]]',
   '                           [--cwd <path>] [--claude-home <path>] [--tmp <path>] [--relief <path>]',
   `         --context-pause is ${DEFAULT_CONTEXT_PAUSE_PERCENT}% of the context window by default, and --context-compaction ${DEFAULT_CONTEXT_COMPACTION_PERCENT}%`,
+  `         the window is the one the host compacts on, as the pause reads it (CLAUDE_CODE_AUTO_COMPACT_WINDOW, else`,
+  `         autoCompactWindow of the settings), else ${DEFAULT_CONTEXT_WINDOW}, unless --context-window gives one`,
   '       js-harness sessions --address orchestrator|<number> [--hours <n>] [--self <session id>]',
   '                           [--cwd <path>] [--claude-home <path>]',
   '         prints the title of the one other session that holds the role: exit 0 for one,',
@@ -152,8 +154,8 @@ const CONTEXT_MARKS = new Map([
 
 /** Walks argv token by token, like `progress`: anything that is not a known flag is a usage error, never
  * a token that is silently ignored. `--hours` is a number above zero, `--tail` a whole number from zero. */
-function parseArgs(argv) {
-  const parsed = { hours: 12, tail: 3, json: false, contextWindow: DEFAULT_CONTEXT_WINDOW, watch: false, measures: false };
+function parseArgs(argv, { windowOf = () => DEFAULT_CONTEXT_WINDOW } = {}) {
+  const parsed = { hours: 12, tail: 3, json: false, contextWindow: undefined, watch: false, measures: false };
   const marks = new Map([...CONTEXT_MARKS].map(([flag, mark]) => [flag, `${mark.percent}%`]));
   const given = new Set();
   // A Map, not an object: `constructor`, `toString` and `__proto__` are keys of every object literal, and
@@ -241,6 +243,9 @@ function parseArgs(argv) {
     if (flag === '--measures' && parsed.watch) throw new SessionsArgError(`${flag} prints ${what}: it does not go with --watch`);
     if (flag !== '--measures' && (parsed.watch || parsed.json)) throw new SessionsArgError(`${flag} prints ${what}: it does not go with --watch or --json`);
   }
+  // With no --context-window, the window the host compacts on, read as the pause reads it (`windowOf`): two windows
+  // gave one session two shares, 57% on the board against 87% in the pause (audit M21, 2026-11-09).
+  parsed.contextWindow ??= windowOf(parsed);
   // The marks are read last: as a percentage each is a share of the window, whichever flag came first.
   for (const [flag, mark] of CONTEXT_MARKS) {
     parsed[mark.key] = contextMarkOf(marks.get(flag), parsed.contextWindow);
@@ -278,47 +283,6 @@ export function lockLibraryBesideScript(script, { realpath = fs.realpathSync, ex
     return exists(path.join(path.dirname(realpath(script)), 'lib', 'gate-lock.mjs'));
   } catch {
     return false;
-  }
-}
-
-/** The id of the subagent the tool call `toolUseId` launched, from the `agent-<id>.meta.json` that names
- * it — the only place it is written while a foreground subagent runs. `null` when no file names it. */
-function agentOfCall(subagentsDir, toolUseId, { readdir, readFile }) {
-  let names;
-  try {
-    names = readdir(subagentsDir);
-  } catch {
-    return null;
-  }
-  for (const name of names) {
-    const match = /^agent-(.+)\.meta\.json$/.exec(name);
-    if (!match) continue;
-    try {
-      if (JSON.parse(readFile(path.join(subagentsDir, name))).toolUseId === toolUseId) return match[1];
-    } catch {
-      // a meta file being written, or one that is not JSON, names nothing
-    }
-  }
-  return null;
-}
-
-/** Where a piece of work writes while it runs, and when it last did: a subagent's own transcript, a
- * shell's output file. `{ path, modifiedAt }`, or `unavailable` with the reason. */
-function workFile(work, { sessionDir, tasksDir }, io) {
-  let file;
-  if (work.tool === 'Agent') {
-    const subagentsDir = path.join(sessionDir, 'subagents');
-    const agent = work.id ?? agentOfCall(subagentsDir, work.toolUseId, io);
-    if (agent === null) return { unavailable: 'no subagent file of the session names this tool call' };
-    file = path.join(subagentsDir, `agent-${agent}.jsonl`);
-  } else {
-    if (work.id === null) return { unavailable: 'the transcript does not record its task id yet' };
-    file = path.join(tasksDir, `${work.id}.output`);
-  }
-  try {
-    return { path: file, modifiedAt: new Date(io.stat(file).mtimeMs).toISOString() };
-  } catch (err) {
-    return { path: file, unavailable: err.code ?? err.message };
   }
 }
 
@@ -517,8 +481,16 @@ export async function sessionsMain(
     return ({ start: sessionsStartMain, stop: sessionsStopMain, live: sessionsLiveMain })[argv[0]](argv.slice(1), { cwd: defaultCwd, stdout, stderr, env, now, homedir, run });
   }
   let parsed;
+  // The host's window, from the Claude home the board reads the transcripts from and the folder it runs in: files
+  // only, so a usage error still runs nothing.
+  const windowOf = (given) => configuredWindow({
+    env,
+    claudeHome: given.claudeHome ?? env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'),
+    projectDir: path.resolve(given.cwd ?? defaultCwd),
+    fileSystem: { readFileSync: (file) => readFile(file) },
+  })?.window ?? DEFAULT_CONTEXT_WINDOW;
   try {
-    parsed = parseArgs(argv);
+    parsed = parseArgs(argv, { windowOf });
   } catch (err) {
     stderr(`${err.message}\n\n${USAGE}`);
     return 2; // a usage error, as in `progress`, `remote` and `codex-review`; 1 is "no sessions folder" below
