@@ -72,6 +72,29 @@ test('redactSecrets blanks the provider keys whose random part holds _ or -, Bas
     assert.match(result.text, /<redacted>/, text);
     assert.doesNotMatch(result.text, secret, text);
   }
+  // A key alone at the start of a line inside a JSON string, the shape of an Engram export: `\n` puts an `n` before the
+  // key, and the blanked document stays JSON (the independent verifier on 9396ec2c).
+  const alone = [
+    ['sk-' + 'ant-api03-Ab1c_' + 'T3sT'.repeat(3) + '-' + 'K9m'.repeat(12), /T3sT|K9m/],
+    ['sk-' + 'proj-Ab_cD-' + 'Zq8'.repeat(20), /Ab_cD|Zq8/],
+    ['sk-' + 'ant-api03-' + 'c1'.repeat(20), /(c1){20}/],
+    ['glpat-' + 'Gl4b_' + 'x7Y'.repeat(6), /Gl4b|x7Y/],
+    ['AI' + 'za' + 'Sy' + 'G00g'.repeat(8) + '-', /G00g/],
+    ['sk_' + 'live_' + 'St7r'.repeat(6), /St7r/],
+    ['npm_' + 'Np4m'.repeat(9), /Np4m/],
+    ['gh' + 'p_' + 'a'.repeat(36), /a{36}/],
+    ['AKIA' + 'E'.repeat(16), /E{16}/],
+    ['xox' + 'b-' + 'S1ack'.repeat(4), /S1ack/],
+    ['Bearer ' + 'Zx9'.repeat(10), /(Zx9){10}/],
+    ['Authorization: Basic ' + 'dXNlcjpw' + 'YXNzd29yZA==', /dXNlcjpw/],
+  ];
+  for (const [key, secret] of alone) {
+    for (const cut of ['\n', '\t', '\r\n']) {
+      const inJson = redactSecrets(JSON.stringify({ content: `The key:${cut}${key}${cut}keep it safe` }));
+      assert.doesNotMatch(inJson.text, secret, `in JSON after ${JSON.stringify(cut)}: ${key}`);
+      assert.match(JSON.parse(inJson.text).content, /^The key:\s*(Authorization: Basic |Bearer )?<redacted>\s*keep it safe$/, key);
+    }
+  }
   assert.equal(redactSecrets('git clone https://deploy:' + 'hunter2' + '@example.com/repo.git').text, 'git clone https://deploy:<redacted>@example.com/repo.git', 'the user and the host stay');
   assert.equal(redactSecrets('DB_PASS=' + 'Pw9'.repeat(8)).text, 'DB_PASS=<redacted>');
   const prose = [
@@ -82,6 +105,9 @@ test('redactSecrets blanks the provider keys whose random part holds _ or -, Bas
     'compass_heading: northnorthwestbynorthwest, bypass the cache',
     'PWD=/c/Users/someone/projects/a-long-folder-name',
     '{ "pass": "short" }',
+    // A bare `pass` is code or prose (the independent verifier on 9396ec2c): only `_pass` or a quoted "pass" is a field.
+    "const pass = (passLines(markdown) ?? []).join('\\n');",
+    'Found after the pass: restart-the-sessions-quotation',
   ];
   for (const text of prose) assert.deepEqual(redactSecrets(text), { text, kinds: [] }, text);
   const two = redactSecrets('sk-' + 'proj-Ab_cD-' + 'Zq8'.repeat(20) + ' and ANTHROPIC_API_KEY=sk-ant-api03-' + 'c1'.repeat(20));

@@ -107,3 +107,25 @@ Nothing planned: his answer to question 242 chose the scope. A question goes to 
   `APP_DB_PWD` were left in clear, since the name before `_pass`/`_pwd` could not hold an `_`; it can now.
   `node --test bin/lib/backup.test.mjs bin/lib/backup-summary.test.mjs bin/lib/stack-backup-walk.test.mjs`: 42 tests,
   41 pass, 0 fail, 1 skipped.
+- L7 Independent verifier on 92d5989c and 9396ec2c (a fresh sub-agent, 102,455 tokens): FAIL. Its findings, each with
+  what was done:
+  (1) high: a key that starts a line inside a JSON string, the shape of an Engram export, follows `\n`, whose `n` a
+  `\b` reads as part of the key: GitLab, Google, Stripe and npm keys were left whole (2,000 of 2,000), and the old
+  `sk-` pattern, whose `[a-z0-9]*` took the `n`, blanked Anthropic and OpenAI keys only up to a hyphen and left a
+  `\<` that broke the JSON (true before this change too). Fixed: every pattern that starts at a key's prefix opens
+  after a character that is neither a word's nor a backslash, or after `\n`, `\t` or `\r`; a test puts twelve keys
+  alone after `\n`, `\t` and `\r\n` in a JSON string, failed first, and checks the document still parses.
+  (2) medium: a bare `pass` blanked code (`const pass = (passLines(markdown) ...` in `bin/lib/depth-pass.mjs:118`)
+  and prose in two feature documents; `redactSecrets` also blanks worktree patches, so a restored patch would not
+  apply. Fixed: `pass` is a field name only after an `_` or quoted alone; both lines are test cases that stay.
+  (3) low, left: the URL-password pattern blanks example URLs in test fixtures and docs (`bin/backup.mjs:1003`,
+  `bin/fetch.test.mjs:157`, among others); a patch that touches them changes that text.
+  (4) low, left: quadratic backtracking on hostile input, mostly older than this change (the credential field took
+  30.3 s against 16.8 s before on 180 KB of `sk-Aa1bbbbbbbbbbb-`); the whole repo's 19.9 MB scans in 0.94 s against
+  0.55 s before.
+  (5) low, left: shapes outside the nine stay in clear: `DB_PASSPHRASE=`, a URL with escaped slashes, `curl -u
+  user:pw`, an `sk-` key of 48 letters with no digit (about 1 in 2,000).
+  Passed by it: 2,000 keys a shape at real lengths fully blanked in env, JSON, double JSON, prose and raw-newline
+  contexts; idempotent on about 128,000 outputs; no blanked value holds a quote or a backslash; the help is true.
+  After the fix: `node --test bin/lib/backup.test.mjs` 26 of 26, `bin/lib/backup-summary.test.mjs` 5 of 5,
+  `bin/lib/stack-backup-walk.test.mjs` 10 pass, 0 fail, 1 skipped.
