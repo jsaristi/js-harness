@@ -97,6 +97,28 @@ can write his real harness home, and 99 of 119 tests of a Windows-only command t
 - [ ] T5 (kind: build) spec 5: a Windows job in gate.yml runs `bin/remote.test.mjs`, the workflow test first.
 - [ ] T6 (kind: verify) an independent verifier reads T1-T5.
 
+## Next step
+State at 2026-11-10T10:40Z, branch worktree-audit-u4-refusals, worktree D:\js-harness\.claude\worktrees\audit-u4-refusals.
+Done and reviewed (Codex + lenses on each slice): T1 eb1ecf8a, T3 ee0fd35a + 8ef687f8 (Codex P2 fixed, recheck
+correct), T4 cf6a38ed, T2 ea621c72 + 3b2ea1c1, T5 e6b3760b (gate run 42796545026: windows job 48 s, 119 pass, 0
+skipped; check job 3 min 55 s). T6 verifier returned. Fix now, tests first, one commit each, then Codex + lenses on
+3b2ea1c1..HEAD wait no: on e6b3760b..HEAD:
+- V2: `--again --base U1^` with U1 uncovered behind the chain is refused and names `--base U1`, a dead end. Fix in
+  bin/codex-review.mjs: the route is the older of `reviewFromBehind(head)` and `reviewStart`'s start of the range
+  (coverage computed once); integration test with a fake Codex (R0, U1, U2; review --base U1; two rechecks; then
+  `--again --base R0` runs). codex-review.mjs is at its 2258-line ceiling: free lines first.
+- V5: GLOB in bin/lib/test-run-warning.mjs misses extglob `@( +( !(`; `node --test` of a directory runs no test.
+- V6: cmdShellGap: a cmd split (`&`, `|` outside cmd quotes) ends the code; `$?`, `$1`, `$@`, `$#` count; `-e"`
+  with no space opens code. Left: doubled `""` and `^"` (rare, refuse more). docs/RECORDS.md:108 says `$( )` only
+  (PR 808 touches that file).
+- V7: workflow test refuses `continue-on-error` and `if:` in gate.yml.
+- Report to the lead, not fixed (scope): V1, repeated `--again` reviews of a change outside a three-review chain, or
+  after one recheck, still run (L3 counts only the three-review state; the owner's bound is per change); V3, without
+  `--again` a start behind the chain (an older uncovered commit) reviews it a fourth time (not introduced); V4, an
+  `--again` base at an unrechecked reviewed head skips the check. The Goal line overclaims: correct it.
+- Then: Log L5-L7, tasks ticked, `npm run check`, push, `gh pr create`, `js-harness notify --to orchestrator --kind
+  ready --pr <n>` naming shared files (README.md with 801/804, docs/RECORDS.md with 808 if edited).
+
 ## Log
 - L1 The brief (2026-11-10T09:10Z): "Yours: exactly what the unit lists and its "Done when". It is high risk: item 2
   (guards, and the sandbox of a sensor, M14), item 5 for M27 (CI, `.github/workflows/gate.yml`), and M12 guards a
