@@ -37,7 +37,8 @@ only brings the evidence.
 - Read-only — because the brief says so and a finding is a proposal he decides through the lead.
 - No spend — because question 239 told him "No gasta dólares; usa tu plan"; a Codex read is spend of his weekly
   limit, so the Codex half of `rule:double-review` cannot run here (L4).
-- Sub-agent readers run on Opus 5.5 at high effort (`rule:subagent-reader-model`, `rule:subagent-effort`) and
+- Sub-agent readers run on the model and effort the rules give them (`rule:subagent-reader-model`,
+  `rule:subagent-effort`) and
   only map; whatever a finding rests on is read or run by this session before it is written as checked.
 - One slice does not hold the subject (Depth pass, item 4), so coverage is said per area, never assumed.
 
@@ -107,7 +108,7 @@ nothing. A finding that looks urgent (data at risk, a secret exposed) goes to th
   feature documents (spec 2)
 - [x] T3 (kind: verify) Verify at the source every claim that becomes a finding, and try to refute it (spec 3)
 - [x] T4 (kind: docs) The audit document: findings by severity, coverage, candidates apart (specs 3 and 5)
-- [ ] T5 (kind: docs) The session summary, the pull request, `notify --kind ready`, then closed (spec 4)
+- [x] T5 (kind: docs) The session summary, the pull request, `notify --kind ready`, then closed (spec 4)
 
 ## Log
 - L1 (2026-11-09, his words, lead transcript `ea85ec35`, as the opening quotes them; not read at their line by
@@ -156,3 +157,6 @@ nothing. A finding that looks urgent (data at risk, a secret exposed) goes to th
   audit is public once pushed, with its two security findings. It names shapes the blanking misses, not a secret;
   the backup repositories it concerns are private. Said to the lead in the ready notice, for him to weigh before
   the merge.
+- L11 (2026-11-09, delivered): pull request 800, documents alone, open; the audit is commit `20da2404`. The session
+  summary is `docs/sessions/2026-11-10-jh-161-fable-5-2-audit-of-the-whole-harness.md`. The notices ready and
+  closed follow this commit. Merging is the lead's, after his yes.
