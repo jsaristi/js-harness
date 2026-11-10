@@ -76,8 +76,8 @@ export const COVERAGE = {
     "wait-every": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/wait.mjs","find":"('wait-every', 'seconds')","replace":"('wait-every', 'seconds') + 1"}},
     "wait-for": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/wait.mjs","find":"('wait-for', 'minutes')","replace":"('wait-for', 'minutes') + 1"}},
     "wording-is-the-need": {"level":"line","path":"bin/lib/project.mjs","phrase":"The owner's wording is the need, not the specification"},
-    "work-sessions-private-wsl": {"level":"owed","since":"2026-10-28"},
-    "work-sessions-public": {"level":"owed","since":"2026-10-28"}
+    "work-sessions-private-wsl": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"in a private one used with WSL: count them on the board"},
+    "work-sessions-public": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"The most work sessions open at one time is"}
   },
   "cases": [
     "commit-no-attribution",
