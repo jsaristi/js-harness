@@ -231,7 +231,12 @@ change of a rule whose owner is `sebastian`.
   `Seen` line to `stretch-not-opened`.
 
 ## Next step
-Branch `f8-s5-4-strict` from `origin/main`. 1) Codex and the lenses over `6ee974dd..HEAD`, nothing edited while
-they run; fix what they find tests first; push, `gh pr create --base main`, `notify --kind ready --pr <n>`. 2) The
-summary under `docs/sessions/` (`js-harness summary template`), committed and pushed; the incident rerun (~$13)
-asked through the lead with `notify --kind question`; the `closed` notice with `--summary`.
+PR 802 (`f8-s5-4-strict`) waits for his yes. Question 244 withdrawn: he answered question 243, "Arreglar la prueba y
+correr una vez (recomendado)" (transcript `ea85ec35`, line 1247). Brief `2026-11-10T04-27-37-146Z-620c8604.md`. 1) Fix
+`eval-reply-cut-by-stop-hook` (`docs/FAILURES.md`): the grader reads `lastReply` of `evals/configs.mjs`, the turn's
+last message, so a Stop-hook bounce leaves only the close; its owed control says "the reply a grader reads is every text
+of the turn". Own branch from `origin/main` (`f8-s5-eval-reply`), test first, Codex and lenses, own PR, `notify
+--kind ready --pr <n>`. 2) After its review: ONE incident-set run, never repeated, stopped past $20 (about $13 list,
+the last cost $5.01), on a scratch branch = origin/main + PR 802's head + the fix, not pushed as a PR; record the
+tree hash with the result. 3) The result into S4b's and S5's feature documents and ROADMAP State lines; `closed`
+with the summary. Past about two hours, or a decision of his: stop before the run and tell the lead.
