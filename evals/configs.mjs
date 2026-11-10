@@ -351,18 +351,15 @@ export function subagentPin(name) {
 const SUBAGENT_TRANSCRIPTS = {
   keep: ({ home, dest }) => keepTranscripts({ projectsDir: path.join(sandboxPaths(home).CLAUDE_CONFIG_DIR, 'projects'), dest }),
   summarize: ({ dir, usage }) => trialListCost({ dir, modelUsage: usage.modelUsage }),
-  reply: ({ dir }) => lastReply(dir),
+  reply: ({ dir }) => turnReply(dir),
 };
 
-/** The last text the main thread of the session kept in `dir` wrote, or `null` when it wrote none: what the Stop hook
- * reads as the reply that ends a turn, for a trial cut by its timeout before it printed a result
- * (`odd/tasks/f8-s5c-a-coverage.md`, L35). Only the session files at the top of `dir` are the main thread's: a
- * subagent's sit in `<session>/subagents/` (`transcript-usage.mjs`), and a sidechain line is a subagent's too. A line
- * Claude Code made up itself (`<synthetic>`) is no reply. It writes a line per content block of a message, so the text
- * blocks of each message are gathered first, by its id, and the last message is the one whose latest line is latest:
- * of two sessions (one resumed under another name), the later one's is the reply whatever their names and however
- * their times overlap. A message with no timestamp is later than those before it. A line that is not JSON is passed
- * over. */
+/** Every text the main thread of the session kept in `dir` wrote after the turn's prompt, joined by a blank line, or
+ * `null` when it wrote none: the reply a grader reads (`runner.mjs`, `task.reply`). A Stop hook that refuses a close
+ * makes the agent write again, and its last text alone, which is what it prints as its result, can be only the
+ * rewritten close (docs/FAILURES.md, eval-reply-cut-by-stop-hook). The prompt is a user line of the person's own words;
+ * a tool's result and a line the host adds (`isMeta`) are not. Session files are read in name order, a sidechain
+ * line is a subagent's, a `<synthetic>` line is no reply, and a line that is not JSON is passed over. */
 export function turnReply(dir) {
   if (!fs.existsSync(dir)) return null;
   let texts = [];
@@ -389,8 +386,15 @@ export function turnReply(dir) {
   return texts.length === 0 ? null : texts.join('\n\n');
 }
 
-/** The last text the main thread wrote, as `lastReply` below; `turnReply` above gives every text of the turn, which
- * is what a grader reads (docs/FAILURES.md, eval-reply-cut-by-stop-hook). */
+/** The last text the main thread of the session kept in `dir` wrote, or `null` when it wrote none: what the Stop hook
+ * reads as the reply that ends a turn, for a trial cut by its timeout before it printed a result
+ * (`odd/tasks/f8-s5c-a-coverage.md`, L35). Only the session files at the top of `dir` are the main thread's: a
+ * subagent's sit in `<session>/subagents/` (`transcript-usage.mjs`), and a sidechain line is a subagent's too. A line
+ * Claude Code made up itself (`<synthetic>`) is no reply. It writes a line per content block of a message, so the text
+ * blocks of each message are gathered first, by its id, and the last message is the one whose latest line is latest:
+ * of two sessions (one resumed under another name), the later one's is the reply whatever their names and however
+ * their times overlap. A message with no timestamp is later than those before it. A line that is not JSON is passed
+ * over. */
 export function lastReply(dir) {
   if (!fs.existsSync(dir)) return null;
   const messages = [];

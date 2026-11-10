@@ -737,7 +737,7 @@ test('the last reply of a kept session is the last text its main thread wrote, n
   assert.equal(lastReply(overlap), 'first block\n\nsecond block');
 });
 
-test('the current arm and the arms without a rule read their trial\'s last reply from its kept transcripts', () => {
+test('the current arm and the arms without a rule read their trial\'s reply, the whole turn, from its kept transcripts', () => {
   for (const name of ['current', 'current-without-rule-away-autonomy']) assert.equal(currentConfig({ ...OPTIONS, name }).transcripts.reply({ dir: PROBE_TRANSCRIPTS }), 'placeholder', name);
 });
 

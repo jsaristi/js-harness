@@ -664,7 +664,11 @@ cost the run's false-premise count a trial: 1 of 4 where the contract asks 2. S4
 - Seen: 2026-11-08 — `evals/results/f8-s4b-incidents.json`, trial 1 of incident-04, and its transcript under
   `evals/runs/f8-s4b-incidents/` — one `hook_blocking_error`, and the reply before it held the finding; trial 2
   had one too and passed, because its close carried the finding
-- Control: owed — odd/tasks/f8-s4b-contradictions.md — "the reply a grader reads is every text of the turn"
+- Control: check — evals/runner.test.mjs — "is graded on the turn they hold, not on the answer the agent printed" —
+  since 2026-11-10
+- Was: owed — odd/tasks/f8-s4b-contradictions.md — "the reply a grader reads is every text of the turn"; paid on
+  2026-11-10 by `turnReply` (`evals/configs.mjs`), every main-thread text after the turn's prompt, which the runner
+  reads before what the agent printed
 
 ### failure-cause-dropped
 The facts the pages read of a stretch left out the words that say why a land or a Codex review
