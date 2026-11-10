@@ -22,23 +22,46 @@ const SECRETS = [
     'private key',
     /()-----BEGIN ([A-Z ]*)PRIVATE KEY-----(?:[^"]*?-----END \2PRIVATE KEY-----|(?:(?:[ \t]|\r?\n|\\(?:r\\)?n)+(?:[A-Za-z0-9+/=]{16,}|[A-Za-z0-9+/=]+(?=\r?\n|\\(?:r\\)?n|"|$)))*(?:(?:\r?\n|\\(?:r\\)?n)-+(?="|$))?)/g,
   ],
-  ['GitHub token', /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})/g],
+  // A key starts after a character that is not a word's or a backslash, or after an escape of JSON (`\n`, `\t`, `\r`): in
+  // an Engram export a key that starts a line follows `\n`, whose `n` a `\b` would take for part of the key (the
+  // independent verifier on 9396ec2c). It also starts after a literal backslash: an even run of them (JSON's `\\`), or
+  // an odd run before a letter no JSON escape uses, as in a raw `C:\keys\…` (the verifier on b0c940c3); a run is read
+  // up to 16 long, so a run of thousands costs a bounded look, not one over the whole run. Each pattern below that
+  // starts at a key's prefix opens so.
+  ['GitHub token', /(?:(?<![\w\\])|(?<=\\[ntr])|(?<=(?<!\\)(?:\\\\){1,8})|(?<=(?<!\\)(?:\\\\){0,7}\\)(?![ntrbfu]))(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})/g],
+  // An Anthropic or OpenAI key whose random part holds `_` or `-` (`sk-ant-api03-…`, `sk-ant-admin01-…`, `sk-proj-…`,
+  // `sk-svcacct-…`, `sk-admin-…`): the whole run over the providers' alphabet after the provider's own prefix, so no part
+  // after a hyphen is left and no word that ends in `sk` starts one (the Fable 5.2 audit, H2; Codex P2 on
+  // b16f9e2..92d5989). Before the next pattern, which would blank only up to the first hyphen.
+  ['API key', /(?:(?<![\w\\])|(?<=\\[ntr])|(?<=(?<!\\)(?:\\\\){1,8})|(?<=(?<!\\)(?:\\\\){0,7}\\)(?![ntrbfu]))sk-(?:ant-[a-z]+\d*|proj|svcacct|admin)-[A-Za-z0-9_-]{20,}/g],
   // `sk-ant-api03-…`: a run of 20 or more without a hyphen, holding a digit, so `risk-assessment-…` is not one; or a
   // UUID after `sk-`, the shape of the Context7 key found in this machine's backups (round 2 of the readers).
-  ['API key', /\b[a-z0-9]*sk-(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b|(?:[a-z0-9]+-)*(?=[A-Za-z_]*\d)[A-Za-z0-9_]{20,})/gi],
-  ['Slack token', /\bxox[abpr]-[A-Za-z0-9-]{10,}/g],
-  ['AWS key', /\bAKIA[A-Z0-9]{16}\b/g],
-  ['bearer token', /(\bBearer\s+)[A-Za-z0-9._~+/=-]{20,}/g],
+  ['API key', /(?:(?<![\w\\])|(?<=\\[ntr])|(?<=(?<!\\)(?:\\\\){1,8})|(?<=(?<!\\)(?:\\\\){0,7}\\)(?![ntrbfu]))[a-z0-9]*sk-(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b|(?:[a-z0-9]+-)*(?=[A-Za-z_]*\d)[A-Za-z0-9_]{20,})/gi],
+  ['Slack token', /(?:(?<![\w\\])|(?<=\\[ntr])|(?<=(?<!\\)(?:\\\\){1,8})|(?<=(?<!\\)(?:\\\\){0,7}\\)(?![ntrbfu]))xox[abpr]-[A-Za-z0-9-]{10,}/g],
+  ['AWS key', /(?:(?<![\w\\])|(?<=\\[ntr])|(?<=(?<!\\)(?:\\\\){1,8})|(?<=(?<!\\)(?:\\\\){0,7}\\)(?![ntrbfu]))AKIA[A-Z0-9]{16}\b/g],
+  ['bearer token', /((?:(?<![\w\\])|(?<=\\[ntr])|(?<=(?<!\\)(?:\\\\){1,8})|(?<=(?<!\\)(?:\\\\){0,7}\\)(?![ntrbfu]))Bearer\s+)[A-Za-z0-9._~+/=-]{20,}/g],
+  ['GitLab token', /(?:(?<![\w\\])|(?<=\\[ntr])|(?<=(?<!\\)(?:\\\\){1,8})|(?<=(?<!\\)(?:\\\\){0,7}\\)(?![ntrbfu]))glpat-[A-Za-z0-9_-]{20,}/g],
+  ['Google API key', /(?:(?<![\w\\])|(?<=\\[ntr])|(?<=(?<!\\)(?:\\\\){1,8})|(?<=(?<!\\)(?:\\\\){0,7}\\)(?![ntrbfu]))AIza[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])/g],
+  ['Stripe key', /(?:(?<![\w\\])|(?<=\\[ntr])|(?<=(?<!\\)(?:\\\\){1,8})|(?<=(?<!\\)(?:\\\\){0,7}\\)(?![ntrbfu]))[rs]k_(?:live|test)_[A-Za-z0-9]{20,}/g],
+  ['npm token', /(?:(?<![\w\\])|(?<=\\[ntr])|(?<=(?<!\\)(?:\\\\){1,8})|(?<=(?<!\\)(?:\\\\){0,7}\\)(?![ntrbfu]))npm_[A-Za-z0-9]{36,}/g],
+  // An `Authorization: Basic` header, bare or as JSON with its quotes escaped or not: base64 of `user:password`.
+  ['basic auth', /((?:(?<![\w\\])|(?<=\\[ntr])|(?<=(?<!\\)(?:\\\\){1,8})|(?<=(?<!\\)(?:\\\\){0,7}\\)(?![ntrbfu]))Authorization\\?"?\s*[:=]\s*\\?"?Basic\s+)[A-Za-z0-9+/]{8,}={0,2}/gi],
+  // The password of a URL's userinfo (`https://user:pass@host`), the user and the host kept.
+  ['URL password', /(\b[a-z][a-z0-9+.-]*:\/\/[^\s:/?#@"'\\<>]+:)[^\s/?#@"'\\<>]+(?=@)/gi],
   // A field named like a credential, in JSON, TOML or an env line, whose value is long enough to be one: "short" is a
-  // placeholder. Its name may carry a prefix (`CONTEXT7_API_KEY`, `refresh_token`, `accessToken`).
+  // placeholder. Its name may carry a prefix (`CONTEXT7_API_KEY`, `refresh_token`, `accessToken`). `pass` is one after an
+  // `_` (`DB_PASS`), quoted alone (`"pass"`) or bare as an env line's (`PASS=` at a line's start, raw or after JSON's
+  // `\n`, or after `export `, with one `=`), so `bypass` and code's `const pass =` or `pass===` are not, nor YAML's
+  // `pass:`, which prose has too; `pwd` only after an `_`
+  // (`DB_PWD`), so a shell's `PWD` is not.
   [
     'credential field',
     // Its quotes may be escaped (`\"password\":\"…\"`): an Engram export holds a note's JSON inside a JSON string.
-    /((?:\\?"[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization)\\?"|\b[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization))\s*[:=]\s*(?:\\?")?)[^"\s\\]{20,}/gi,
+    /((?:\\?"(?:[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization)|(?:[A-Za-z0-9_.-]*_)?pass|[A-Za-z0-9_.-]*_pwd)\\?"|\b(?:[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization)|[A-Za-z0-9_.-]*_pass|[A-Za-z0-9_.-]*_pwd)|(?<=^|[\r\n]|\\n|\bexport\s)pass(?==(?!=)))\s*[:=]\s*(?:\\?")?)[^"\s\\]{20,}/gi,
   ],
 ];
 
-/** `text` with every secret value replaced by `<redacted>`, and the kinds found, in the order of `SECRETS`. */
+/** `text` with every secret value replaced by `<redacted>`, and the kinds found, each once, in the order of `SECRETS`. */
 export function redactSecrets(text) {
   const kinds = [];
   let out = text;
@@ -48,7 +71,7 @@ export function redactSecrets(text) {
       found = true;
       return (typeof kept === 'string' ? kept : '') + REDACTED;
     });
-    if (found) kinds.push(name);
+    if (found && !kinds.includes(name)) kinds.push(name);
   }
   return { text: out, kinds };
 }

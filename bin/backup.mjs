@@ -40,7 +40,7 @@ const USAGE = [
   '    js-harness home, reference copies of the config, the plugin lists and Claude Desktop\'s notes and presets, and for',
   '    each repository of config.json\'s `bundles` a bundle of what no remote holds (every stash entry included), a',
   '    patch of each worktree\'s uncommitted edits with its untracked files, and the records in its .git/js-harness;',
-  '    secrets blanked, into the private clone, then push it. The',
+  '    secrets blanked in every copied file, into the private clone, then push it; the bundles go as they are, not blanked. The',
   '    scope is config.json\'s `scope`: "all" for every project, or one project name (js-harness when unset). It',
   '    refuses an export that lost more than a tenth of any count (a wiped Engram looks like that; --allow-shrink when',
   '    the drop is meant), a clone whose fetch or push URL is not the configured repository on github.com, and a',

@@ -1324,6 +1324,14 @@ test('the usage says what deleting the backup folder does not undo', async (t) =
   assert.match(deps.stdout.text, /Deleting that folder[\s\S]*restore-progress\.json/);
 });
 
+// The bundles are git's own, written by git bundle create and pushed as they are (the Fable 5.2 audit, H2).
+test('the usage says the bundles are pushed as they are, not blanked', async (t) => {
+  const { deps } = setup(t);
+
+  assert.equal(await backupMain(['--help'], deps), 0);
+  assert.match(deps.stdout.text, /bundles[^.]*as they are, not blanked/);
+});
+
 /** A repository standing for the public one: a bare remote and a clone with a roadmap and one feature on main. */
 test('the public summary is opt-in: init names a summary repository only when --summary-repo says so', async (t) => {
   const { root, paths, deps, state } = setup(t);
