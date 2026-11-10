@@ -167,3 +167,40 @@ change of a rule whose owner is `sebastian`.
   (0.92), 111,092 input tokens; lenses risk and reliability: 0 findings each. Codex over `5c25f15..4f3ba97` (the two
   rule changes): correct (0.92), 74,565 input tokens; lenses risk and readability: 0 findings each. No independent
   verifier: the slice names no high-risk item (it adds a refusal, loud when wrong, and weakens no guard).
+- L6 (2026-11-09, T6, red then green): `evals/lens-hook-probe.test.mjs` written first, red (`ERR_MODULE_NOT_FOUND`);
+  then `evals/lens-hook-probe.mjs`: the lens arm runs `claudeArgs` as `bin/lens-review.mjs` builds them, the plain arm
+  the same without `--safe-mode` alone; each in a scratch `CLAUDE_CONFIG_DIR` with a user hook on `SessionStart`,
+  `UserPromptSubmit`, `Stop` and `SessionEnd` and a user `CLAUDE.md` holding a nonce; the API a loopback server in a
+  child process (the CLI is started synchronously, as `claudeRunner` starts it for a lens) that logs each request and
+  answers 400; a dummy key and `lensEnv`, so no login token. 5 of 5. The real run, `node evals/lens-hook-probe.mjs`,
+  exit 0: "plain exit 1 7 requests fired: SessionEnd, SessionStart, UserPromptSubmit user CLAUDE.md sent: yes";
+  "lens exit 1 7 requests fired: none user CLAUDE.md sent: no"; "PASS a planted user hook fires without --safe-mode
+  and not under the lens's flags". So `--safe-mode` drops the user's hooks and `CLAUDE.md` as gentle-ai's
+  `--setting-sources ""` aims to; `Stop` fires in neither arm, since a 400 ends the run before a reply. Spend: none.
+- L7 (2026-11-09, T7 for the probe slice `777a123..eb39a85`): lenses reliability and risk 0 findings each. Codex:
+  incorrect (0.94), three to take, tests first: P1 `probeEnv` keeps Bedrock, Vertex or Foundry switches and their
+  credentials from the parent (`CLAUDE_CODE_USE_BEDROCK`, `_VERTEX`, `_FOUNDRY`, `AWS_*`, `ANTHROPIC_VERTEX_*`...), which
+  need not honour `ANTHROPIC_BASE_URL`: drop them; P2 count only `/v1/messages` requests as the lens reaching the
+  model (keep each request's path); P2 a marker path with an apostrophe breaks the planted hook's JavaScript: encode it
+  with `JSON.stringify`.
+
+- L8 (2026-11-09, L7's three fixed, tests first): red 3 of 8, then 8 of 8. `probeEnv` drops every `ANTHROPIC_*`,
+  `CLAUDE_CODE_USE_*`, `AWS_*`, `CLOUD_ML_*`, `GOOGLE_*` and `VERTEX_*` name before it sets its own three; an arm counts
+  only `/v1/messages` requests; the planted hook is a script beside the marks run by its quoted path, proved from a
+  folder named `O'Connor`. The real run again: plain fired `SessionEnd, SessionStart, UserPromptSubmit`, sent the
+  `CLAUDE.md`; lens fired none, sent none; 6 Messages requests each; PASS. Next: review `eb39a858..HEAD`.
+- L9 (2026-11-09, the review of L8's fix): Codex over `949622f..c32a3fd`, a recheck: correct (0.96), 3 of 3 fixed;
+  lenses reliability and risk over `eb39a85..c32a3fd`: 0 findings each.
+- L10 (2026-11-09): PR 798 opened for the probe, base `rule/f8-s5-memory-record`; the host compacted the
+  session after it, and it resumed from this document.
+
+## Next step
+PR 797 (`rule/f8-s5-memory-record`) and PR 798 (`f8-s5-2-lens-probe`, stacked on it) are open and reviewed. 1) PR 3
+`f8-s5-3-rule-pass` on top of 798: in `bin/lib/rules-coverage-data.mjs` close every `owed` control of a live rule
+(48): prose rules as `protocol` (path and first phrase of the declaration; `line` for `bin/lib/project.mjs`), value
+rules as `check` with a break `('<id>', '<unit>')` to `+ 1` / `+ 'x'` in a reader and its sibling test, proved with
+`rules coverage --prove` (it works in a scratch copy); then `rules coverage` prints the three classes and refuses a
+live rule left owed; `failures` prints its controls by the same three classes (check; line, protocol = prose;
+measured = retired; owed named apart); the two "control lost" entries (`failure-cause-dropped`,
+`uninstall-took-user-entry`) repaired or reported. 2) T8 docs, summary, `closed` notice; the incident rerun (~$13)
+asked through the lead.
