@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { NOTICE_TEXT_MAX } from './channel.mjs';
-import { isWaitCommand, waitPartOf, wakePlan, wakeText } from './wake.mjs';
+import { isWaitCommand, waitPartsOf, wakePlan, wakeText } from './wake.mjs';
 
 const BOOT = '2026-10-15T04:52:00.000Z';
 const at = (hour, minute) => `2026-10-15T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00.000Z`;
@@ -108,7 +108,15 @@ test('only the wait of a chained line is re-armed, with the cd before it, and qu
     ['(cd /d/x && js-harness wait --pr 9) & sleep 1', 'cd /d/x && js-harness wait --pr 9'],
     [WAIT, WAIT],
   ];
-  for (const [line, part] of cases) assert.equal(waitPartOf(line), part, line);
+  for (const [line, part] of cases) assert.deepEqual(waitPartsOf(line), [part], line);
+  // Codex, on 643d57d: two waits are two re-arms, never one serialized by &&; a cd inside a group the wait is not in
+  // does not move it; a wait inside if/then or a loop is handed back without the keyword.
+  assert.deepEqual(waitPartsOf('js-harness wait --pr 1 & js-harness wait --pr 2'), ['js-harness wait --pr 1', 'js-harness wait --pr 2']);
+  assert.deepEqual(waitPartsOf('(cd /d/other && git status); js-harness wait --pr 3'), ['js-harness wait --pr 3']);
+  assert.deepEqual(waitPartsOf('cd /d/x && (cd sub && js-harness wait --pr 4); js-harness wait --pr 5'), ['cd /d/x && cd sub && js-harness wait --pr 4', 'cd /d/x && js-harness wait --pr 5']);
+  assert.deepEqual(waitPartsOf('if true; then js-harness wait --pr 5; fi'), ['js-harness wait --pr 5']);
+  assert.deepEqual(waitPartsOf('while true; do js-harness wait --pr 6; done'), ['js-harness wait --pr 6']);
+  assert.deepEqual(waitPartsOf('echo "js-harness wait --pr 7"'), []);
   const texts = [
     { id: 'p', text: transcript(titled('JH 5 · canal'), prompt('go', at(4, 0)), ...background('t1', 'b1', 'git push origin feat && js-harness wait --pr 5', at(4, 30))) },
   ];

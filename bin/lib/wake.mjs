@@ -24,17 +24,19 @@ export function isWaitCommand(command) {
   return typeof command === 'string' && WAIT_COMMAND.test(command);
 }
 
-/** The steps of the shell command `command`, each as it was typed and trimmed: split at `&&`, `||`, `;`, `|`, `&`, a
- * line break and a group's parentheses, never inside quotes or a `$(...)`, and not at the `&` of a redirection
- * (`2>&1`, `&>`). The guard's `shellWords` gives a step's words with their quotes taken off; a step handed back to
- * be run again has to keep them. */
+/** The steps of the shell command `command`, in order, each `{ step }` as it was typed and trimmed, with `{ open }`
+ * and `{ close }` where a group's parentheses start and end: split at `&&`, `||`, `;`, `|`, `&` and a line break,
+ * never inside quotes or a `$(...)`, and not at the `&` of a redirection (`2>&1`, `&>`). The guard's `shellWords`
+ * gives a step's words with their quotes taken off; a step handed back to be run again has to keep them. */
 function stepsOf(command) {
   const steps = [];
   let from = 0;
   let quote = null;
   let depth = 0;
-  const cut = (at, width) => {
-    steps.push(command.slice(from, at));
+  const cut = (at, width, mark = null) => {
+    const step = command.slice(from, at).trim();
+    if (step !== '') steps.push({ step });
+    if (mark !== null) steps.push({ [mark]: true });
     from = at + width;
   };
   for (let i = 0; i < command.length; i += 1) {
@@ -51,27 +53,38 @@ function stepsOf(command) {
       if (c === ')') depth -= 1;
     } else if ((c === '&' || c === '|') && command[i + 1] === c) cut(i++, 2);
     else if (c === '&' && (command[i - 1] === '>' || command[i - 1] === '<' || command[i + 1] === '>')) continue;
-    else if (c === ';' || c === '|' || c === '&' || c === '\n' || c === '\r' || c === '(' || c === ')') cut(i, 1);
+    else if (c === '(' || c === ')') cut(i, 1, c === '(' ? 'open' : 'close');
+    else if (c === ';' || c === '|' || c === '&' || c === '\n' || c === '\r') cut(i, 1);
   }
-  steps.push(command.slice(from));
-  return steps.map((step) => step.trim()).filter((step) => step !== '');
+  cut(command.length, 0);
+  return steps;
 }
 
-/** The part of the command line `command` that re-arms its `js-harness wait`: its wait steps, each with the `cd`
- * steps before it, joined by `&&` so a wait never runs in a folder it was not meant for; `null` when no step of it is
- * a wait (the words were only quoted). A chained line was handed back whole, so a push before its wait would have run
- * again after a boot (audit M31, 2026-11-09). */
-export function waitPartOf(command) {
-  const kept = [];
-  let folders = [];
-  for (const step of stepsOf(command)) {
-    if (/^cd(\s|$)/.test(step)) folders.push(step);
-    else if (isWaitCommand(step)) {
-      kept.push(...folders, step);
-      folders = [];
+// The words a shell puts before a command it runs on a condition or in a group: a step that begins with one is that
+// command, handed back without it.
+// A step that runs the wait itself: its program is the dispatcher, node or wait.mjs, not a command that only names it.
+const RUNS_WAIT = /^["']?(?:[^\s"']*[\\/])?(?:js-harness(?:\.mjs|\.cmd)?|node(?:\.exe)?|wait\.mjs)["']?(?:\s|$)/i;
+const LEADING_KEYWORD = /^(?:(?:then|do|else|elif|if|while|until|!|\{)\s+)+/;
+
+/** The commands that re-arm the `js-harness wait` calls of the command line `command`, one for each, in order: the
+ * wait step, without a keyword before it, after the `cd` steps that move it, joined by `&&` so it runs only in that
+ * folder. A `cd` inside a group moves only what is in that group. `[]` when no step is a wait (the words were only
+ * quoted). A chained line was handed back whole, so a push before its wait would have run again after a boot (audit
+ * M31, 2026-11-09); two waits are two commands, since one joined to the other would wait for it (Codex, on 643d57d). */
+export function waitPartsOf(command) {
+  const parts = [];
+  const frames = [[]];
+  for (const { step, open, close } of stepsOf(command)) {
+    if (open) frames.push([]);
+    else if (close) {
+      if (frames.length > 1) frames.pop();
+    } else {
+      const bare = step.replace(LEADING_KEYWORD, '');
+      if (/^cd(\s|$)/.test(bare)) frames.at(-1).push(bare);
+      else if (isWaitCommand(bare) && RUNS_WAIT.test(bare)) parts.push([...frames.flat(), bare].join(' && '));
     }
   }
-  return kept.some(isWaitCommand) ? kept.join(' && ') : null;
+  return parts;
 }
 
 const timeOf = (iso) => (typeof iso === 'string' ? Date.parse(iso) : NaN);
@@ -123,7 +136,7 @@ export function wakePlan({ bootAt, transcripts, readings = [], openingOf = () =>
       return !work.ended || !(timeOf(work.endedAt) <= bootMs);
     });
     const lines = killedByBoot.map((work) => (work.tool === 'Bash' ? commands.get(work.toolUseId) : undefined)).filter(isWaitCommand);
-    const waits = lines.map(waitPartOf).filter((part) => part !== null);
+    const waits = lines.flatMap(waitPartsOf);
     plan.push({
       id,
       title,

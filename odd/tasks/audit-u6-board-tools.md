@@ -92,7 +92,14 @@ not keep the PC on, and a summary filed under tomorrow.
   `notify --kind ready`.
 
 ## Next step
-T7: `js-harness codex-review --base 6ee974dd`, then `js-harness lens-review --base 6ee974dd --lenses
+IN PROGRESS: Codex reviewed `30cf902..643d57d` (recorded): part 2 correct; part 1 three P2 on `waitPartOf` of
+bin/lib/wake.mjs: (a) `wait 1 & wait 2` serialized by `&&`; (b) a `cd` inside `( ... )` the wait is not in moved it;
+(c) `then js-harness wait` kept its keyword. Fix under way: rename to `waitPartsOf(command)` returning an ARRAY, one
+re-arm per wait; `stepsOf` emits group open/close so each `(` pushes a frame of cds that `)` pops, a wait takes the cds
+of all open frames; strip a leading `then|do|else|elif|if|while|until|!|{` from a step; `wakePlan` uses
+`lines.flatMap(waitPartsOf)`. The new tests are already in bin/lib/wake.test.mjs (uncommitted, red). Then commit
+`fix(wake): ...` answering Codex, run `js-harness codex-review --base 643d57d5` on the fix, then the lenses below.
+Then: `js-harness codex-review --base 6ee974dd` DONE; next `js-harness lens-review --base 6ee974dd --lenses
 risk,reliability,resilience --reason "<why>"`, one at a time (the machine is short of memory). Then push the branch,
 open the PR and send `js-harness notify --to orchestrator --kind ready --pr <n>`, naming the shared file
 `bin/conventions-structure.test.mjs` (none of 801-809 touches it; recheck) and keep `js-harness wait --notice-to 168`
