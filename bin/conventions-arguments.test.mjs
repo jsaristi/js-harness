@@ -117,7 +117,7 @@ test('every command refuses an unknown flag with exit 2 and "unknown argument: <
 
 test('every workshop command refuses an unknown flag with exit 2 and "unknown argument: <token>"', () => {
   const commands = dispatched(WORKSHOP);
-  assert.equal(commands.length, 10, `the workshop's --help lists ${commands.length} commands, not 10`);
+  assert.equal(commands.length, 11, `the workshop's --help lists ${commands.length} commands, not 11`);
   const printed = [];
   for (const command of commands) {
     const args = probe(command, WORKSHOP_BEFORE[command] ?? []);

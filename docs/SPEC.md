@@ -469,11 +469,11 @@ check or an eval case ("After F8", directive coverage).
 ### The throughput review
 
 **Problem:** The 2026-10-17 measure of where a task's wall-clock goes took hand-written scripts in the lead's notes, and its gate figures could not be taken again a few days later: the gate log rotates in about 2.3 days, so a before/after comparison had nothing to read (`odd/tasks/throughput-review.md`).
-**Requirement:** A read-only command prints a fixed table of a window of UTC days in which every figure names its source, and a fact no record holds yet says which recorder it waits for, never a zero. A settled day's gates are kept in a dated snapshot under the home, which the table reads in place of the rotated log; append-only records are read live.
-**Reason:** A measure taken again the same way is what tells a change that helped from noise, and it cannot depend on someone keeping scripts.
-**Proof:** `node --test workshop/bin/throughput.test.mjs`, `node --test workshop/lib/throughput.test.mjs`
-**Discarded:** Snapshotting main's history and the Codex runs, which are append-only: a snapshot would freeze what a stale fetch had not seen. GitHub's `mergedAt`, which needs the network on every read.
-**Today:** `workshop/bin/throughput.mjs`, `workshop/lib/throughput.mjs`, `js-harness-workshop throughput` (with snapshot, status, reviewed and shipped)
+**Requirement:** A read-only command prints a fixed table of a window of UTC days in which every figure names its source, and a fact no record holds yet says which recorder it waits for, never a zero. A settled day's gates are kept in a dated snapshot under the home, which the table reads in place of the rotated log; append-only records are read live. A read-only command says when the heartbeat's three ticks (this snapshot, the daily Windows run, the host watch) have not run for half a day, from what each leaves, and names the heartbeat on record when it is the product's, which runs none.
+**Reason:** A measure taken again the same way is what tells a change that helped from noise, and it cannot depend on someone keeping scripts. A tick that never starts reports nothing: from 2026-11-03 to 2026-11-10 no heartbeat ran them and nothing said so (`odd/tasks/audit-u3-heartbeat-ticks.md`).
+**Proof:** `node --test workshop/bin/throughput.test.mjs`, `node --test workshop/lib/throughput.test.mjs`, `node --test workshop/bin/ticks.test.mjs`
+**Discarded:** Snapshotting main's history and the Codex runs, which are append-only: a snapshot would freeze what a stale fetch had not seen. GitHub's `mergedAt`, which needs the network on every read. Running the ticks from the session start hook: they notify and write records, which every session starting at once would race on, and the heartbeat is the lead's.
+**Today:** `workshop/bin/throughput.mjs`, `workshop/lib/throughput.mjs`, `js-harness-workshop throughput` (with snapshot, status, reviewed and shipped), `workshop/bin/ticks.mjs`, `js-harness-workshop ticks`
 
 ### The stretch
 

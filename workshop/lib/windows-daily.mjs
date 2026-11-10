@@ -28,6 +28,9 @@ export function dailyDir(home, slug) {
   return path.join(channelDir(home), 'windows-daily', slug);
 }
 
+/** The file that holds when the tick last asked, which `ticks` reads for the tick's age. */
+export const askedFile = (home, slug) => path.join(dailyDir(home, slug), 'asked');
+
 /** What the newest completed run of the daily workflow on the repository's default branch says:
  * `{ state: 'skip', why }` when it cannot be read, `{ state: 'none', branch }` before any run, or
  * `{ state: 'green' | 'red', run, ageMs, names, total, files, quarantined }`. `git` and `gh` take the arguments of
@@ -153,7 +156,7 @@ export async function windowsDaily({ home, slug, cwd, notify = (argv, out) => no
 /** `windowsDaily` when the last ask of the project is `everyMs` old or older, or null. The time of the last ask is kept
  * in a file, so a heartbeat that ends every half hour and is started again still asks once an interval. */
 export async function windowsDailyTick({ home, slug, everyMs, now = Date.now, ...options }) {
-  const file = path.join(dailyDir(home, slug), 'asked');
+  const file = askedFile(home, slug);
   let last = -Infinity;
   try {
     last = Date.parse(fs.readFileSync(file, 'utf8').trim());

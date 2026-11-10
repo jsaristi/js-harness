@@ -108,10 +108,10 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
    appears here."
 
 ## Tasks
-- [ ] T1 (kind: build) spec 1, 3: `workshop/bin/ticks.mjs` and its test, test first; the exports of one home; the
+- [x] T1 (kind: build) spec 1, 3: `workshop/bin/ticks.mjs` and its test, test first; the exports of one home; the
   dispatcher. Route: inline. Commit: `feat(workshop): ticks --hook says when the heartbeat's ticks stopped`
-- [ ] T2 (kind: build) spec 2: `.claude/settings.json` and the SPEC claim, with the measured time. Route: inline.
-  Commit: same pull request, its own commit
+- [ ] T2 (kind: build) spec 2, 5: `.claude/settings.json`, its test and the `workshop` cell of `HOOK_CEILINGS`, with
+  the measured time. Waits on his word, question 245 (L5). Route: inline. Commit: its own, after T1's
 - [ ] T3 (kind: verify) Codex and the lenses on each code commit; `npm run check`; the pull request; the ready notice.
 
 ## Log
@@ -125,3 +125,26 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
   split merged (pull request 776, 2026-11-06), so before the split no heartbeat ran either: two causes, one after the
   other, and neither was said. What `ticks --hook` must do follows: say the age of each tick and the command that
   runs them, and say when the loop on record is the product's.
+- L3 (2026-11-10): T1 and T2 built test first. `node --test workshop/bin/ticks.test.mjs` failed with the module
+  missing, then 11 of 11 passed; with the dispatcher's, hook-count's, throughput's, windows-daily's and host-watch's
+  tests, 92 of 92; `node workshop/js-harness-workshop.mjs spec`: PASS, 79 capabilities. The stale threshold is 12 hours (`TICKS_STALE_HOURS`): a night away
+  is no stall, and a heartbeat that runs no tick is told on the next morning's first session start.
+- L4 (2026-11-10): run here against the real home, through a child `node` as the host runs it, five times:
+  exit 0 each, stderr 0 bytes, 634 bytes of stdout, median 1,041 ms, max 1,169 ms. Without the idea-watch row
+  (`ideas` given as none) it takes a median of 256 ms (3 runs); module load alone 239 ms: the rest is the network list
+  of the upstream's tags, bounded at 5 s. What it said today:
+  `{"systemMessage":"js-harness workshop: the heartbeat's ticks have not run for 12 hours: throughput: the newest
+  snapshot is 2026-11-02, and 2026-11-03, settled at 2026-11-04T01:00:00.000Z, has none; windows-daily: last read at
+  2026-11-03T02:18:40.158Z; host-watch: last read at 2026-11-03T02:18:43.635Z. the heartbeat on record (since
+  2026-11-10T06:15:54.144Z) runs js-harness loop heartbeat, the product's, which runs no tick. [...] idea-watch: 1
+  release not yet read (the last read is v4.3.1): v4.4.0"}` (the parts are joined by "; and " since).
+- L5 (2026-11-10): the commit of T1 and T2 was refused by `check`'s `hook entries` row: "workshop: a new owner, not
+  in the table: SessionStart 1". `HOOK_CEILINGS` (`bin/lib/hook-count.mjs:20-31`) says a ceiling goes up only on his
+  word, as engram's did through question 225 (`odd/tasks/f8-s4a-hook-count.md`, L15); the plan's design (a project
+  declaring its owners in `harness.json`, `workshop-product-split.md`:455-457) was not what S4a built. So T2 waits on
+  his word, asked through the lead as question 245 (recorded 2026-11-10T06:46:04Z), and T1 lands alone: the command,
+  without the settings entry. The question, in short: "¿Aceptas que este repo tenga un hook propio al iniciar sesión, `node workshop/js-harness-workshop.mjs ticks
+  --hook`?", options "Aceptar el hook (recomendado)" (adds `workshop: { SessionStart: 1 }` to `HOOK_CEILINGS` and the
+  entry to `.claude/settings.json`; about 1 s a session start, 0 model tokens, writes nothing; authorizes no other
+  hook and no other ceiling) and "Sin hook, solo a mano" (the command stays, run by hand or by the lead; nothing says
+  at session start that the ticks stopped).
