@@ -117,7 +117,19 @@ test('redactSecrets blanks the provider keys whose random part holds _ or -, Bas
     // A bare `pass` is code or prose (the independent verifier on 9396ec2c): only `_pass` or a quoted "pass" is a field.
     "const pass = (passLines(markdown) ?? []).join('\\n');",
     'Found after the pass: restart-the-sessions-quotation',
+    // Chosen, not missed (the reliability lens on b0c940c..dac1ef3): a bare `pass` with a space or `:` before its value
+    // is code's or prose's shape as much as a field's (Python's `pass = …`, YAML's `pass:` and a sentence alike), and
+    // main never blanked either; only `PASS=`, `_pass` and a quoted "pass" are fields.
+    'pass = compute_the_next_password_hint(user)',
+    'pass: the-second-pass-over-the-whole-roadmap',
+    // Codex P2 on b0c940c..dac1ef3: `pass=` inside code is no env line.
+    'if (pass===expectedResultForThisStep) return true;',
+    'let ok = pass=computeTheNextValueOfTheLoop(step);',
   ];
+  // An env line's bare PASS: at a line's start, raw or after JSON's `\n`, or after `export `.
+  for (const line of ['PASS=' + 'Ps7'.repeat(8), 'a\nexport PASS=' + 'Ps7'.repeat(8), JSON.stringify('a\nPASS=' + 'Ps7'.repeat(8))]) {
+    assert.doesNotMatch(redactSecrets(line).text, /Ps7/, line);
+  }
   for (const text of prose) assert.deepEqual(redactSecrets(text), { text, kinds: [] }, text);
   const two = redactSecrets('sk-' + 'proj-Ab_cD-' + 'Zq8'.repeat(20) + ' and ANTHROPIC_API_KEY=sk-ant-api03-' + 'c1'.repeat(20));
   assert.deepEqual(two.kinds, ['API key'], 'a kind is named once');

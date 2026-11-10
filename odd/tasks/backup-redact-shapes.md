@@ -147,3 +147,12 @@ Nothing planned: his answer to question 242 chose the scope. A question goes to 
   since the backup copies no transcript. The commit 8bc45785 (L8) was not in its pass; the next review covers it.
   After the fix: `bin/lib/backup.test.mjs` 26 of 26, `bin/lib/backup-summary.test.mjs` 5 of 5,
   `bin/lib/stack-backup-walk.test.mjs` 10 pass, 0 fail, 1 skipped.
+- L10 Reviews of b0c940c..dac1ef3. Claude lens risk: 0 findings; reliability: its warning again (YAML's `pass:` and
+  `PASS = value` not blanked, no test pinning it): answered as chosen, both shapes being code's or prose's as much as
+  a field's and never blanked on main, and pinned by test cases that stay. Codex: incorrect, 0.98, one P2, reproduced
+  by it and fixed with a test that failed first: `pass(?==)` blanked code (`if (pass===expected…)` became
+  `if (pass=<redacted> return true;`), and the backup blanks worktree patches; a bare `pass` is now a field only as an
+  env line's, at a line's start (raw, or after JSON's `\n`) or after `export `, with one `=`. Its run recorded
+  nothing: this session edited `bin/lib/backup.test.mjs` for the lens's answer while Codex reviewed (136,092 input
+  tokens spent); `edit-during-review` seen again, its `- Seen:` line in `docs/FAILURES.md`; the review runs again with
+  no edit until it ends. `node --test bin/lib/backup.test.mjs`: 26 of 26; 40,000 backslashes before a key, 7.4 ms.

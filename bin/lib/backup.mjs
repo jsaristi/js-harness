@@ -50,13 +50,14 @@ const SECRETS = [
   ['URL password', /(\b[a-z][a-z0-9+.-]*:\/\/[^\s:/?#@"'\\<>]+:)[^\s/?#@"'\\<>]+(?=@)/gi],
   // A field named like a credential, in JSON, TOML or an env line, whose value is long enough to be one: "short" is a
   // placeholder. Its name may carry a prefix (`CONTEXT7_API_KEY`, `refresh_token`, `accessToken`). `pass` is one after an
-  // `_` (`DB_PASS`), quoted alone (`"pass"`) or bare with `=` right after it (an env line's `PASS=`), so `bypass` and
-  // code's `const pass =` are not, nor YAML's `pass:`, which prose has too; `pwd` only after an `_`
+  // `_` (`DB_PASS`), quoted alone (`"pass"`) or bare as an env line's (`PASS=` at a line's start, raw or after JSON's
+  // `\n`, or after `export `, with one `=`), so `bypass` and code's `const pass =` or `pass===` are not, nor YAML's
+  // `pass:`, which prose has too; `pwd` only after an `_`
   // (`DB_PWD`), so a shell's `PWD` is not.
   [
     'credential field',
     // Its quotes may be escaped (`\"password\":\"…\"`): an Engram export holds a note's JSON inside a JSON string.
-    /((?:\\?"(?:[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization)|(?:[A-Za-z0-9_.-]*_)?pass|[A-Za-z0-9_.-]*_pwd)\\?"|\b(?:[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization)|[A-Za-z0-9_.-]*_pass|pass(?==)|[A-Za-z0-9_.-]*_pwd))\s*[:=]\s*(?:\\?")?)[^"\s\\]{20,}/gi,
+    /((?:\\?"(?:[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization)|(?:[A-Za-z0-9_.-]*_)?pass|[A-Za-z0-9_.-]*_pwd)\\?"|\b(?:[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api_?key|authorization)|[A-Za-z0-9_.-]*_pass|[A-Za-z0-9_.-]*_pwd)|(?<=^|[\r\n]|\\n|\bexport\s)pass(?==(?!=)))\s*[:=]\s*(?:\\?")?)[^"\s\\]{20,}/gi,
   ],
 ];
 
