@@ -82,12 +82,21 @@ not keep the PC on, and a summary filed under tomorrow.
 6. "name a summary by the local day" (the same).
 
 ## Tasks
-- [ ] T1 (build) spec 1: the board and `notify` read the host's window as the pause does, tests first.
-- [ ] T2 (build) spec 2: a bracketed answer that is no option is the host's, test first.
-- [ ] T3 (build) spec 3: `failure:<HH:MM>` is the local hour, `<HH:MM>Z` the UTC one, test first.
-- [ ] T4 (build) spec 4: the wake note keeps only the wait and the `cd` before it, test first.
-- [ ] T5 (build) spec 5: one list of work for `quiet` and the board, tests first.
-- [ ] T6 (build) spec 6: the summary named by the local day, test first.
+- [x] T1 (build) spec 1: the board and `notify` read the host's window as the pause does, tests first: `4bd22c89`.
+- [x] T2 (build) spec 2: a bracketed answer that is no option is the host's, test first: `a218390f`.
+- [x] T3 (build) spec 3: `failure:<HH:MM>` is the local hour, `<HH:MM>Z` the UTC one, test first: `0bf59f00`.
+- [x] T4 (build) spec 4: the wake note keeps only the wait and the `cd` before it, test first: `80993e51`.
+- [x] T5 (build) spec 5: one list of work for `quiet` and the board, tests first: `0983e8b4`.
+- [x] T6 (build) spec 6: the summary named by the local day, test first: `0bf59f00`.
+- [ ] T7 (verify) Codex and the lenses on `6ee974dd..0983e8b4`, one at a time; findings fixed or answered; push, PR,
+  `notify --kind ready`.
+
+## Next step
+T7: `js-harness codex-review --base 6ee974dd`, then `js-harness lens-review --base 6ee974dd --lenses
+risk,reliability,resilience --reason "<why>"`, one at a time (the machine is short of memory). Then push the branch,
+open the PR and send `js-harness notify --to orchestrator --kind ready --pr <n>`, naming the shared file
+`bin/conventions-structure.test.mjs` (none of 801-809 touches it; recheck) and keep `js-harness wait --notice-to 168`
+running in the background.
 
 ## Follow-ups
 - The JH 166 case (the brief): at 02:40 local `js-harness quiet --wait` exited 0 while a background session started
@@ -112,5 +121,11 @@ not keep the PC on, and a summary filed under tomorrow.
   to the kinds in board-checked.json, which docs/live-board.html reads (docs/RECORDS.md "running"); the page shows an
   unknown kind as its name, and the label is added beside the others. An added value, not a changed one: not high
   risk by item 3. The page is published from the repo; republishing it is the lead's.
+- L5 Red before each fix, then green: summary (1 fail, the UTC day), stretch explain (2 fail), quoteOf (1 fail),
+  wake (import missing), quiet and the board (2 fail), the window (3 fail). Two modules were at their size ceilings
+  (bin/conventions-structure.test.mjs): `agentOfCall` and `workFile` moved to bin/lib/board-files.mjs, so
+  bin/sessions.mjs is at 980 lines and its ceiling left the list; the reading of an answer moved to the new
+  bin/lib/question-answer.mjs, so bin/lib/sessions.mjs is at 3389 and its ceiling went down to it. Each of the five
+  code commits passed the pre-commit gate.
 - L4 Shared files with open pull requests: none of the files in scope is changed by 801-804 or 806-809
   (`gh pr diff <n> --name-only`, 2026-11-10); bin/lib/background.mjs (801) is left alone on purpose.
