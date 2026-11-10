@@ -47,6 +47,41 @@ test('redactSecrets blanks each secret value in place, names its kind, and leave
   assert.deepEqual(JSON.parse(redactSecrets(inJson).text), { a: '<redacted>', b: 'kept' }, 'a key with no end stops at its quote');
 });
 
+// The shapes the Fable 5.2 audit found left in clear (H2, odd/tasks/backup-redact-shapes.md). Each key is built from
+// parts at run time, so no literal here looks like a live provider key to a secret scanner; none is real.
+test('redactSecrets blanks the provider keys whose random part holds _ or -, Basic auth, a URL password and DB_PASS', () => {
+  const cases = [
+    ['ANTHROPIC_API_KEY=' + 'sk-' + 'ant-api03-Ab1c_' + 'T3sT'.repeat(3) + '-' + 'K9m'.repeat(12) + '-' + 'pQ7'.repeat(12) + 'AA', 'API key', /T3sT|K9m|pQ7/],
+    ['key: ' + 'sk-' + 'proj-Ab_cD-' + 'Zq8'.repeat(20), 'API key', /Ab_cD|Zq8/],
+    ['curl -H "Authorization: Basic ' + 'dXNlcjpw' + 'YXNzd29yZA==' + '" https://example.com', 'basic auth', /dXNlcjpw/],
+    ['git clone https://deploy:' + 'hunter2' + '@example.com/repo.git', 'URL password', /hunter2/],
+    ['DB_PASS=' + 'Pw9'.repeat(8), 'credential field', /Pw9/],
+    ['{ "db_pwd": "' + 'Dp4'.repeat(8) + '" }', 'credential field', /Dp4/],
+    ['token ' + 'glpat-' + 'Gl4b_' + 'x7Y'.repeat(6), 'GitLab token', /Gl4b|x7Y/],
+    ['maps ' + 'AI' + 'za' + 'Sy' + 'G00g'.repeat(8) + '-', 'Google API key', /G00g/],
+    ['STRIPE=' + 'sk_' + 'live_' + 'St7r'.repeat(6), 'Stripe key', /St7r/],
+    ['//registry.npmjs.org/:_authToken ' + 'npm_' + 'Np4m'.repeat(9), 'npm token', /Np4m/],
+  ];
+  for (const [text, kind, secret] of cases) {
+    const result = redactSecrets(text);
+    assert.deepEqual(result.kinds, [kind], text);
+    assert.match(result.text, /<redacted>/, text);
+    assert.doesNotMatch(result.text, secret, text);
+  }
+  assert.equal(redactSecrets('git clone https://deploy:' + 'hunter2' + '@example.com/repo.git').text, 'git clone https://deploy:<redacted>@example.com/repo.git', 'the user and the host stay');
+  assert.equal(redactSecrets('DB_PASS=' + 'Pw9'.repeat(8)).text, 'DB_PASS=<redacted>');
+  const prose = [
+    'a task-list-2026-11-09-for-the-review-of-the-team note',
+    'a Basic understanding of the system, then http://localhost:8080/path and user@host:repo.git',
+    'compass_heading: northnorthwestbynorthwest, bypass the cache',
+    'PWD=/c/Users/someone/projects/a-long-folder-name',
+    '{ "pass": "short" }',
+  ];
+  for (const text of prose) assert.deepEqual(redactSecrets(text), { text, kinds: [] }, text);
+  const two = redactSecrets('sk-' + 'proj-Ab_cD-' + 'Zq8'.repeat(20) + ' and ANTHROPIC_API_KEY=sk-ant-api03-' + 'c1'.repeat(20));
+  assert.deepEqual(two.kinds, ['API key'], 'a kind is named once');
+});
+
 test('redactSecrets blanks a credential field inside a JSON string, the shape an Engram export gives it', () => {
   const doc = JSON.stringify({ observations: [{ content: '{"password":"' + 'z'.repeat(32) + '"} and api_key="' + 'y'.repeat(24) + '"' }] });
   const { text, kinds } = redactSecrets(doc);

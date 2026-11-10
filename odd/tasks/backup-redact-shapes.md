@@ -65,8 +65,7 @@ Nothing planned: his answer to question 242 chose the scope. A question goes to 
   not have; the test adds `task-list-2026-11-09-for-the-review-of-the-team`, prose with digits, as a case that stays.
   Could a credential field swallow a word like `bypass`? The new `pass`/`pwd` names need a start or an `_` before them.
   Verdict: supports
-- 5. Request: as the Goal; the help also names that the bundles are guarded only by the private repository's check,
-  which is what the code does today, not a new behaviour.
+- 5. Request: as the Goal: the help says the bundles go as they are, not blanked, which is what the code does today.
   Adds: none
 
 ## Specs
@@ -87,3 +86,16 @@ Nothing planned: his answer to question 242 chose the scope. A question goes to 
 - L1 (2026-11-10T04:05:10Z, his answer to question 242, transcript `ea85ec35` line 1136): "Ampliar patrones y corregir
   la ayuda (recomendado)".
 - L2 Large, not small: it touches what leaves his machine and a guard on secrets (high-risk items of `CLAUDE.md`).
+- L3 Tests first: the new `redactSecrets` test failed on its first case (the Anthropic key with `_` came back with only
+  a part blanked), and the help test failed (no sentence on bundles). With the patterns and the help,
+  `node --test bin/backup.test.mjs bin/lib/backup.test.mjs bin/lib/backup-*.test.mjs bin/lib/stack-backup-walk*.test.mjs`
+  ran 171 tests: 169 pass, 0 fail, 2 skipped by their own condition. The new `sk-` pattern runs before the old one,
+  which would blank only up to the first hyphen; the old one stays for the keys with no upper case. A kind is named
+  once now, since two entries carry the name `API key`.
+- L4 What a value must be to be blanked is unchanged for a credential field: 20 or more characters, so a short
+  password behind `DB_PASS=` stays, as one behind `password=` does today. Prose kept by the test: a hyphenated line
+  with digits, "Basic understanding", `localhost:8080`, `user@host:repo.git`, `compass_heading`, `bypass`, a shell's
+  `PWD=`.
+- L5 The first commit of the code was refused by the gate (GitHub's run): `bin/conventions-structure.test.mjs:150`,
+  `bin/backup.mjs` grew to 1303 lines over its ceiling of 1302, since the help's new sentence took a line of its own.
+  The sentence was folded into the line before it (1302 lines); that test and the help tests pass.

@@ -1850,7 +1850,7 @@ Engram, the Claude memory folders or `~/.js-harness` loses nothing that was back
 `backup run` exports Engram and copies the Claude memory folders of its scope, then the js-harness
 home and reference copies of the Claude, Codex and Engram config, the plugin lists
 (`installed_plugins.json`, `known_marketplaces.json`) and Claude Desktop's side-session notes and
-session presets, blanks every secret value it finds (a token, a key, a field named like a
+session presets, blanks every secret value it finds in the files it copies (a token, a key, a field named like a
 credential), and for each repository of `config.json`'s `bundles` (`init` seeds it with the git
 checkout it ran in, or the one `--checkout <path>` names; with none, nothing is bundled) keeps a bundle of the commits on no remote, every stash
 entry and each worktree's detached commit included, a patch of each worktree's uncommitted edits
