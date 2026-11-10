@@ -75,8 +75,8 @@ Nothing planned: the brief names the guard to reuse and the behaviour. A questio
    and is red before the fix. Do not reproduce the loss on a real session: use fixtures." (the brief, 2026-11-09)
 
 ## Tasks
-- [ ] T1 (kind: build) spec 1: the test first, then the check in `undoBackground` and its settle line ·
-  `bin/lib/background.mjs`, `bin/install.mjs`, `bin/sessions-background.test.mjs`, `README.md`, `docs/SPEC.md`
+- [x] T1 (kind: build) spec 1: the test first, then the check in `undoBackground` and its settle line ·
+  `bin/lib/background.mjs`, `bin/install.mjs`, `bin/sessions-background.test.mjs`, `README.md`, `docs/SPEC.md` · bd161b52
 - [ ] T2 (kind: verify) Codex, the Claude lenses, an independent verifier, the pull request
 
 ## Log
@@ -96,3 +96,13 @@ Nothing planned: the brief names the guard to reuse and the behaviour. A questio
   `undoSession` than `sessionsStopMain` (already guarded) and `undoBackground`. `README.md` and `docs/SPEC.md` said
   `uninstall machine` removes every resting session and now say it keeps one whose worktree holds files.
 - L5 2026-11-09, the lead (channel note 23:05): H2 comes to this session after H1, as its own slice and pull request.
+- L6 Reviews of bd161b52. Codex (ea6a22d..bd161b5): correct, 0.94, no findings, 67,757 input tokens (planned 69,000
+  to 93,000). Claude lenses risk, reliability, readability (6ee974d..bd161b5): 0 findings each, 37,617 input tokens in
+  all. Independent verifier (a fresh sub-agent given the request and the code, 73,621 tokens): PASS. With the guard set
+  to `null` in an archive copy, the new test fails ("removed background session 0db8bc5e · Held", exit 0); in the
+  worktree, 52 of 52 pass. Its three low notes, left open: (1) older than this change and shared with `sessions stop`:
+  a `--worktree` name claude rewrites (a separator, say) leaves `worktreeOf` on a folder that is not there, which
+  `worktreeHolding` reads as none; (2) the `at-work` settle line still says "sessions stop <id> removes it" for a busy
+  session whose worktree holds files, where stop will refuse and the next uninstall prints the `holds` line, so nothing
+  is lost (out of scope above); (3) "removes it with its worktree" matches stop's own words, though claude rm has left
+  `.git` behind.
