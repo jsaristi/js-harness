@@ -8,6 +8,13 @@ import { DEFAULT_CONTEXT_WINDOW, percentOf } from './sessions.mjs';
  * app's own reading within 2 points in 110 of 127 matched cases (odd/tasks/honesty-audit.md, version 4). */
 export const SHARE_TOLERANCE = 2;
 
+// A share as written, read whole: up to three digits, a decimal part after a point or a comma ("77.5", "77,5"), and
+// no digit before it, alone or with a separator, so the tail of "1050" or of "77.5" is no share (the Fable 5.2 audit, M7).
+const NUMBER = String.raw`(?<!\d)(?<!\d[.,])\d{1,3}(?:[.,]\d+)?`;
+const NUMBER_AT_START = new RegExp(`^${NUMBER}`);
+const RANGE_AT_START = new RegExp(String.raw`^${NUMBER}\s?%?\s*[-–]\s*\d`);
+const WINDOW_AT_START = new RegExp(String.raw`^${NUMBER}\s?%\s*(?:\(\s*\d+\s?k\s+)?(?:de|of)\s+(\d+)\s?k\b`, 'i');
+
 // The share after a context word that is the writer's: "Contexto: 77%", "Mi contexto: 62 %", "contexto de esta
 // sesión está en 76%". The context word opens the clause (after list and bold marks), or follows "mi"/"my", or is
 // followed by "de esta sesión"/"of this session"; between it and the number stand only a colon, bold marks and a
@@ -16,13 +23,13 @@ const LEAD_IN = String.raw`(?:~|≈|cerca\s+del?|alrededor\s+del?|en|al|at|about
 const AFTER = new RegExp(
   String.raw`(?:^[\s\-*>#|]*(?:\*\*)?(?:mi\s+|my\s+)?|\b(?:mi|my)\s+|\b(?=context(?:o)?\s+(?:de\s+esta\s+sesi[óo]n|of\s+this\s+session)))`
   + String.raw`(?:el\s+|the\s+)?context(?:o)?(?:\s+de\s+esta\s+sesi[óo]n|\s+of\s+this\s+session)?`
-  + String.raw`\s*(?:\*\*)?\s*:?\s*(?:\*\*)?\s*(?:${LEAD_IN}\s*)?(?:\*\*)?(\d{1,3})\s?%`,
+  + String.raw`\s*(?:\*\*)?\s*:?\s*(?:\*\*)?\s*(?:${LEAD_IN}\s*)?(?:\*\*)?(${NUMBER})\s?%`,
   'gid',
 );
 
 // The share before a context word, said of the writer: "Estoy en 77 % de contexto", "Volví con el 24 % de mi
 // contexto", "esta sesión está cerca del 87% de contexto". "de su contexto" and "of its context" are another's.
-const BEFORE = /(\d{1,3})\s?%\s+(?:de|del|of)\s+(?:mi\s+|my\s+|el\s+|the\s+)?context(?:o)?\b/gi;
+const BEFORE = new RegExp(String.raw`(${NUMBER})\s?%\s+(?:de|del|of)\s+(?:mi\s+|my\s+|el\s+|the\s+)?context(?:o)?\b`, 'gi');
 // Who says it, before the number in the clause: the writer in the first person, or "esta sesión".
 const SELF = /\b(?:estoy|voy|llevo|ando|vuelvo|volv[íi]|quedo|tengo|i'm|i\s+am|i've|esta\s+sesi[óo]n|this\s+session|la\s+sesi[óo]n)\b|\bde\s+mi\s+contexto|\bof\s+my\s+context/i;
 
@@ -56,11 +63,11 @@ export function ownShares(text, window = DEFAULT_CONTEXT_WINDOW) {
     for (const at of [...numbers].sort((a, b) => a - b)) {
       const rest = clause.slice(at);
       // Either end of a range, "40%-50%" or "40-50 %", is no exact claim (Codex, 2026-10-15).
-      if (/[-–]\s*$/.test(clause.slice(0, at)) || /^\d{1,3}\s?%?\s*[-–]\s*\d/.test(rest)) continue;
+      if (/[-–]\s*$/.test(clause.slice(0, at)) || RANGE_AT_START.test(rest)) continue;
       // A window named right after the share, "70 % de 350k" or "49% (148k de 300k)", that is not the session's.
-      const named = /^\d{1,3}\s?%\s*(?:\(\s*\d+\s?k\s+)?(?:de|of)\s+(\d+)\s?k\b/i.exec(rest);
+      const named = WINDOW_AT_START.exec(rest);
       if (named !== null && Number(named[1]) * 1000 !== window) continue;
-      found.push({ stated: Number(/^\d{1,3}/.exec(rest)[0]), clause });
+      found.push({ stated: Number(NUMBER_AT_START.exec(rest)[0].replace(',', '.')), clause });
     }
   }
   return found;

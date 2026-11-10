@@ -86,9 +86,21 @@ test('a reply that gives a UTC clock time in its prose is turned back with rule:
   assert.deepEqual([quoted.code, quoted.out], [0, PASS]);
 });
 
-test('a stop the hooks already turned back is let through without reading the project, so it cannot loop', async () => {
-  const result = await hook(stopPayload('No state here.', { stop_hook_active: true }));
-  assert.deepEqual([result.code, result.out, result.read], [0, PASS, []]);
+test('a stop the hooks already turned back is checked again and let through: a miss is said, never blocked, so it cannot loop (the Fable 5.2 audit, M6)', async () => {
+  const missed = await hook(stopPayload('No state here.', { stop_hook_active: true }));
+  assert.equal(missed.code, 0);
+  const answer = JSON.parse(missed.out);
+  assert.deepEqual(Object.keys(answer), ['systemMessage'], 'no decision: a second block would loop');
+  assert.match(answer.systemMessage, /turned back once/);
+  assert.match(answer.systemMessage, /no state/, 'the miss names what still fails');
+  const utc = JSON.parse((await hook(stopPayload('Volviste a las 05:46Z.\n\n**Sigo solo** — espero el gate.', { stop_hook_active: true }))).out);
+  assert.deepEqual(Object.keys(utc), ['systemMessage']);
+  assert.match(utc.systemMessage, /rule:local-time/);
+  const fixed = await hook(stopPayload('Hecho.\n\n**Sigo solo** — espero el gate.', { stop_hook_active: true }));
+  assert.deepEqual([fixed.code, fixed.out, fixed.err], [0, PASS, ''], 'a corrected reply passes in silence');
+  assert.deepEqual(fixed.read, [path.join(PROJECT, 'harness.json')], 'only the reply is checked again: no record of the wake, board or return checks is read');
+  const off = await hook(stopPayload('No state here.', { stop_hook_active: true }), { files: {} });
+  assert.equal(off.out, PASS, 'a project with no reply key');
 });
 
 test('it acts only where a harness.json above the folder holds a reply key', async () => {

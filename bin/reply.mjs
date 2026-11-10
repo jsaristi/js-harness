@@ -5,8 +5,10 @@
 // again in its next words.
 //
 // It acts only where the nearest `harness.json` above the session's folder holds a `reply` key, so the entry install
-// writes for every session of the machine does nothing in a project that did not turn it on. It lets through a stop
-// the hooks already turned back (`stop_hook_active`), so a session is turned back once per stop and never loops. It
+// writes for every session of the machine does nothing in a project that did not turn it on. A stop the hooks already
+// turned back (`stop_hook_active`) is let through, so a session is turned back once per stop and never loops; its
+// corrected reply is still checked, and a miss is said in a `systemMessage`, which blocks nothing (M6 of the Fable 5.2
+// audit, odd/tasks/audit-u2-stop-hook.md). It
 // does not run for sub-agents: their end is the host's `SubagentStop`, not `Stop`. Its answer is always JSON and it
 // always exits 0: Codex reads a `Stop` hook's exit 0 only with JSON on standard output (its hooks documentation, read
 // on 2026-10-16), Claude Code reads `{}` as nothing to say, and whatever the hook cannot read lets the session stop.
@@ -43,7 +45,11 @@ const USAGE = 'Usage: js-harness reply --hook\n'
   + '  stretch or its stretch is still open, and when a fenced block hands the user a\n'
   + '  shell command\n'
   + '  not tagged for his shell, not run by the session with success first, or rejected by his shell\'s parser;\n'
+  + '  a stop already turned back has the reply checked again and is let through, a miss said in a systemMessage;\n'
   + '  writes nothing and always exits 0\n';
+
+/** What opens the `systemMessage` of a second stop whose reply still fails: the host lets a hook turn a stop back once. */
+const MISSED_AGAIN = 'js-harness reply: this reply was turned back once and still fails its checks; it is let through, as a hook turns a stop back only once:';
 
 /** The parsed `harness.json` nearest above `start` (that folder included), or `null` when none is found. A file that
  * is there and cannot be read or parsed throws. */
@@ -219,13 +225,24 @@ export async function replyMain(argv, {
     // Input the host did not send as JSON is no reply to check.
   }
   const message = payload?.last_assistant_message;
-  if (payload?.stop_hook_active !== true && typeof message === 'string') {
+  // A stop the hooks already turned back (`stop_hook_active`): the host sets it so a hook cannot loop.
+  const again = payload?.stop_hook_active === true;
+  if (typeof message === 'string') {
     try {
       const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
       const harness = nearestHarness(cwd, readFile);
       const config = replyConfig(harness);
       if (config?.error) stderr(`js-harness reply: ${config.error}; the reply check did not run\n`);
-      else if (config !== null) {
+      else if (config !== null && again) {
+        // The corrected reply's own checks run again; the wake, board and return checks each turned back once by
+        // their own record already, so they do not (the Fable 5.2 audit, M6).
+        reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks) });
+        const times = utcTimeWarning(message, { now: now() });
+        const commands = commandsOf(payload, message, { readFile, platform, parse, now, started }, stderr);
+        for (const warning of [times, commands]) {
+          if (warning !== null) reason = reason === null ? warning : `${reason}\n\n${warning}`;
+        }
+      } else if (config !== null) {
         reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks) });
         const times = utcTimeWarning(message, { now: now() });
         const state = closingState(message, config);
@@ -246,6 +263,8 @@ export async function replyMain(argv, {
       stderr(`js-harness reply: ${err?.message ?? err}; the reply check did not run\n`);
     }
   }
-  stdout(`${JSON.stringify(reason === null ? {} : { decision: 'block', reason })}\n`);
+  // A miss on the second stop is said, never blocked: a `systemMessage` shows and turns nothing back, on both hosts.
+  const answer = reason === null ? {} : again ? { systemMessage: `${MISSED_AGAIN}\n\n${reason}` } : { decision: 'block', reason };
+  stdout(`${JSON.stringify(answer)}\n`);
   return 0;
 }

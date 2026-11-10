@@ -391,6 +391,16 @@ test('skip records the user\'s typed words that skip a read, checked at the line
   assert.deepEqual([skip.kind, skip.what, skip.words, skip.transcript, skip.line, skip.date], ['skip', 'the plan of JH 130', 'no quiero la revisión de este', 's1', 1, '2026-10-31']);
 });
 
+test('skip takes the phrase as he types it, with or without its accent (the Fable 5.2 audit, M8)', async (t) => {
+  const root = makeRepo(t);
+  const typed = ['Sigue, no quiero la revision de este', 'NO QUIERO LA REVISION del otro']
+    .map((content) => JSON.stringify({ type: 'user', origin: { kind: 'human' }, timestamp: AT, message: { role: 'user', content } })).join('\n');
+  const run = deps(t, root, fakeSpawn(() => ({})).spawn, { transcriptOf: (session) => (session === 's1' ? typed : null) });
+  assert.equal(await doubleReviewMain(skipArgv('no quiero la revision de este', 1), {}, run.deps), 0, run.lines.error.join('\n'));
+  assert.equal(await doubleReviewMain(skipArgv('NO QUIERO LA REVISION del otro', 2), {}, run.deps), 0, run.lines.error.join('\n'));
+  assert.deepEqual(readDoubleReviews(root).map((skip) => skip.words), ['no quiero la revision de este', 'NO QUIERO LA REVISION del otro'], 'his words are kept as he typed them');
+});
+
 test('skip reads the transcript where the board does, in the sessions folder of the checkout or of any of its worktrees', async (t) => {
   const root = makeRepo(t);
   const claudeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-double-review-claude-'));
