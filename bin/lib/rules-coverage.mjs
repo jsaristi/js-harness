@@ -392,7 +392,7 @@ export function coverageOf({ register, sources, messages, rules, cases, readFile
   }
   for (const id of Object.keys(register.controls)) if (!live.some((rule) => rule.id === id)) findings.push(`the register holds a control for "${id}", which is no live rule`);
   // Every rule is a check, prose that stays, or retired (F8 S5, odd/tasks/f8-s5-rules.md, spec 2), counted by each
-  // obligation of a live rule; one still owed is named in `unclassified`, which the report prints as a note.
+  // obligation of a live rule; one still owed is named in `unclassified`, a note of the report that --strict refuses.
   const classes = { check: 0, prose: 0, retired: rules.length - live.length, measured: 0, owed: 0 };
   report.unclassified = [];
   for (const rule of live) {
