@@ -3,7 +3,8 @@
 // PC stays on for nothing, and a session that waits for him moves only when he answers. The lead keeps the wait
 // running while he is away and tells him, by a push notification, when it ends. The sources are the board's: the
 // sessions `claude agents --json --all` lists, the record of `js-harness sessions start`, the machine's gate lock and
-// the process listing (merge-queue lands, Codex reviews). Read-only; a source that could not be read is never quiet.
+// the process listing (lands, Codex and lens reviews, eval batches: the one list of ./lib/quiet.mjs, which the board
+// reads too). Read-only; a source that could not be read is never quiet.
 // Zero dependencies; `--json` gives the same data as the text.
 
 import os from 'node:os';
@@ -28,7 +29,8 @@ export const USAGE = [
   'One look at the machine: quiet (exit 0), busy (exit 1) or unknown (exit 3, a source could not be read and nothing',
   'was seen to run), with what runs, what needs you and what could not be read. Work is a session claude agents',
   '--json --all lists as busy (or a background one working), the gate lock\'s holder and the gates that wait for it, a',
-  'merge-queue --land and a codex exec or codex-review process. A session waiting on a permission prompt or a question',
+  'merge-queue --land, a codex exec, codex-review or lens-review process and an evals/suite.mjs batch (a review',
+  'with --unavailable only records a skip, and is not). A session waiting on a permission prompt or a question',
   'needs you and is not work. A session the listing does not show is not seen. --self (else CLAUDE_CODE_SESSION_ID)',
   'leaves out the session that runs the command, by its id or its first eight characters or more.',
   '',

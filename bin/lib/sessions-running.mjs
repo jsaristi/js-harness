@@ -1,25 +1,18 @@
-// The work that runs on the machine, for the live board (odd/tasks/visual-pages.md, spec 4, T5): the gates, the Codex
-// and lens reviews and the eval batches, read from the process listing at a check of the board and held until the
-// next, so the board shows "en curso" while a paid batch runs and no session writes. It reads nothing itself:
+// The work that runs on the machine, for the live board (odd/tasks/visual-pages.md, spec 4, T5): the gates, and the
+// lands, Codex and lens reviews and eval batches, read from the process listing at a check of the board and held until
+// the next, so the board shows "en curso" while a paid batch runs and no session writes. It reads nothing itself:
 // `readRunning` calls the `listProcesses` it is handed.
 //
-// A process is matched by its arguments, as `findGates` matches a gate: the script itself (`bin/codex-review.mjs`,
-// `bin/lens-review.mjs`, `evals/suite.mjs`) or the dispatcher with the verb right after it, so a test file whose
-// name holds the same words is none.
+// A gate is matched as `findGates` matches one; every other kind by `workOf` of ./quiet.mjs, the one list `quiet`
+// reads too (audit M34): by what runs, the program, the script or the dispatcher's verb, so a test file whose name
+// holds the same words is none.
 
-import { argumentsOf, comparable, DISPATCHER_PATTERN, findGates } from './sessions.mjs';
+import { QUIET_PROCESSES, workOf } from './quiet.mjs';
+import { comparable, findGates } from './sessions.mjs';
 
-/** The listing's filter, as `listCommandLines` takes it: every command line any kind below could match. */
-export const RUNNING_PROCESSES = String.raw`check\.mjs|codex-review|lens-review|suite\.mjs|js-harness(\.mjs)?"?\s+"?check`;
-
-// Each kind by its script, and by the dispatcher's verb where it has one.
-const KINDS = [
-  { kind: 'codex-review', script: /(^|[\\/])bin[\\/]codex-review\.mjs$/, verb: 'codex-review' },
-  { kind: 'lens-review', script: /(^|[\\/])bin[\\/]lens-review\.mjs$/, verb: 'lens-review' },
-  { kind: 'evals', script: /(^|[\\/])evals[\\/]suite\.mjs$/ },
-];
-
-const NODE = /^\s*(?:"([^"]+)"|(\S+))/;
+/** The listing's filter, as `listCommandLines` takes it: the gates `findGates` reads, and every process the one list
+ * of work of ./quiet.mjs may count. */
+export const RUNNING_PROCESSES = String.raw`check\.mjs|js-harness(\.mjs)?"?\s+"?check|${QUIET_PROCESSES}`;
 
 /** The one of `worktrees` that holds `file`, or `null`. */
 function worktreeOf(file, worktrees) {
@@ -41,16 +34,9 @@ export function findRunning(processes, worktrees = []) {
   }));
   const others = [];
   for (const { pid, createdAt, commandLine } of processes) {
-    const program = NODE.exec(commandLine);
-    if (!program || !/(^|[\\/])node(\.exe)?$/i.test(program[1] ?? program[2])) continue;
-    const args = argumentsOf(commandLine.slice(program[0].length));
-    const [first] = args;
-    if (first === undefined) continue;
-    const byScript = KINDS.find((one) => one.script.test(first));
-    const byVerb = DISPATCHER_PATTERN.test(first) ? KINDS.find((one) => one.verb !== undefined && one.verb === args[1]) : undefined;
-    const found = byScript ?? byVerb;
-    if (found === undefined) continue;
-    others.push({ kind: found.kind, pid, since: sinceOf(createdAt), where: byScript ? worktreeOf(first, worktrees) : null });
+    const work = typeof commandLine === 'string' ? workOf(commandLine) : null;
+    if (work === null) continue;
+    others.push({ kind: work.kind, pid, since: sinceOf(createdAt), where: work.script === null ? null : worktreeOf(work.script, worktrees) });
   }
   return [...gates, ...others];
 }

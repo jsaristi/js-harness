@@ -272,6 +272,8 @@ test('the board page says what ran on the machine at the check, and that it coul
   assert.equal(runningText({ at, until, items }, after), 'Corría a las 01:00 (lectura vieja, puede haber terminado): lote de evals en f8-s5c (empezó a las 00:40) · revisión de Codex');
   assert.equal(runningText({ at, until, items: [] }, after), 'Nada corría en la máquina a las 01:00 (lectura vieja)');
   assert.equal(runningText({ at, items: [] }, within), 'Nada corría en la máquina a las 01:00 (lectura vieja)', 'a reading with no until holds nothing');
+  // Audit M34: the board reads the one list of work `quiet` reads, so a land is a kind it names too.
+  assert.equal(runningText({ at, until, items: [{ kind: 'land', pid: 3, since: null, where: null }] }, within), 'En curso a las 01:00: land de la cola de merge');
 });
 
 // odd/tasks/visual-pages.md, spec 7: each session's card says how long it has been on its task and about how long the
