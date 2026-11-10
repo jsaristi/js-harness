@@ -154,11 +154,13 @@ function opensCode(before) {
 }
 
 /** Why cmd.exe, the shell a goal or done-when command runs in on Windows (`runSensor`, `shell: true`), cannot run
- * `command`, or `null`: a `$( )` outside the double-quoted code of a program with its own (`opensCode`). cmd.exe has
- * none and passes the text on as written, so the command fails, or passes, on a value it never computed (JH 136: a
- * met goal read "not met (exit 2)"). Its parts are cut at `&&`, `||`, `&` and `|` outside double quotes, the only
- * quotes cmd.exe has. */
+ * `command`, or `null`: a `$( )`, a backtick or a `$VAR` outside the double-quoted code of a program with its own
+ * (`opensCode`), or a single quote outside double quotes. cmd.exe has none of them and passes each on as written, so
+ * the command fails, or passes, on a value it never computed (JH 136: a met goal read "not met (exit 2)"; M13 of the
+ * Fable 5.2 audit). Its parts are cut at `&&`, `||`, `&` and `|` outside double quotes, the only quotes cmd.exe has. */
 export function cmdShellGap(command) {
+  const lacks = (what, instead) => `it uses ${what}, which cmd.exe, the shell it runs in on Windows, does not have: it passes the text on as written. ${instead}`;
+  const compute = 'Compute the value inside one program instead, such as node -e "..."';
   let start = 0;
   let quoted = false;
   let code = false;
@@ -170,8 +172,16 @@ export function cmdShellGap(command) {
     } else if (!quoted && (char === '&' || char === '|')) {
       if (command[i + 1] === char) i += 1;
       start = i + 1;
-    } else if (char === '$' && command[i + 1] === '(' && !code) {
-      return 'it uses $( ), which cmd.exe, the shell it runs in on Windows, does not have: it passes the text on as written. Compute the value inside one program instead, such as node -e "..."';
+    } else if (char === "'" && !quoted) {
+      return lacks('single quotes', 'Quote with double quotes instead, or pass the text to one program that reads it, such as node -e "..."');
+    } else if (code) {
+      continue;
+    } else if (char === '$' && command[i + 1] === '(') {
+      return lacks('$( )', compute);
+    } else if (char === '`') {
+      return lacks('a backtick substitution', compute);
+    } else if (char === '$' && /[A-Za-z_{]/.test(command[i + 1] ?? '')) {
+      return lacks('a $VAR', 'Read the variable inside one program instead, such as node -e "process.env.NAME"');
     }
   }
   return null;

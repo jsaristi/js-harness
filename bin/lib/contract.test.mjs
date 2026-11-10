@@ -122,6 +122,37 @@ test('cmdShellGap names a $( ) cmd.exe would pass on as written, and not one han
   }
 });
 
+// M13 of the Fable 5.2 audit: cmd.exe has no backtick substitution, no `$VAR` and no single quotes, and passes each on
+// as written, as it does a `$( )` (odd/tasks/audit-u4-refusals.md, spec 3).
+test('cmdShellGap names a backtick, a $VAR and single quotes cmd.exe would pass on as written, and not inside code a program reads', () => {
+  const cases = [
+    ['test `git rev-list --count HEAD` -ge 3', /backtick/],
+    ['git fetch -q && test "`date`" = x', /backtick/],
+    ['test $COUNT -ge 3', /\$VAR/],
+    ['test "${COUNT}" -ge 3', /\$VAR/],
+    ['node x.mjs && test "$HOME" != ""', /\$VAR/],
+    ["node -e 'process.exit(0)'", /single quote/],
+    ["grep -q 'two words' notes.txt", /single quote/],
+    ["bash -c 'test $(date) = x'", /single quote/],
+  ];
+  for (const [bad, said] of cases) {
+    const gap = cmdShellGap(bad) ?? '';
+    assert.match(gap, said, bad);
+    assert.match(gap, /cmd\.exe/, bad);
+  }
+  for (const good of [
+    'node -e "const x = `a${1}`; process.exit(x === \'a1\' ? 0 : 1)"',
+    'bash -c "test $COUNT -ge 3 && echo `date`"',
+    'powershell -c "$env:PATH"',
+    'git commit -m "it\'s done"',
+    'grep -E "end$" notes.txt',
+    'node x.mjs --price "5$"',
+    "node -e \"process.exit(JSON.parse(require('fs').readFileSync('.claude/settings.json','utf8')).claudeMdExcludes[0]==='**/.claude/CLAUDE.md'?0:1)\"",
+  ]) {
+    assert.equal(cmdShellGap(good), null, good);
+  }
+});
+
 test('a done-when command with a $( ) cmd.exe cannot run is rejected on Windows alone', () => {
   const md = withSection('Done when', '- `test $(git rev-list --count HEAD) -ge 3` exits 0');
   const { ok, errors } = validateContract(md, { platform: 'win32' });
@@ -247,7 +278,8 @@ test('an unmatched <!-- inside a code span does not hide the sections after it',
   const md = withSection('Done when', "- `echo '<!--'` exits 0");
   assert.deepEqual(doneWhen(md).commands, ["echo '<!--'"]);
   assert.equal(parseContract(md).get('Effort'), 'high');
-  assert.equal(validateContract(md).ok, true);
+  // Off Windows: on it, the single quotes are a cmd.exe gap of their own (cmdShellGap), which is not this test's subject.
+  assert.equal(validateContract(md, { platform: 'linux' }).ok, true);
 });
 
 test('a double-backtick span keeps a comment marker too, but a real comment next to a span is still removed', () => {
