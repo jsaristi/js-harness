@@ -25,6 +25,11 @@ const OWN = [
   ['Context: 35%.', [35]],
   ['I am at 40% of my context.', [40]],
   ['Estoy en 77 % de contexto (383k de 500k).', [77]],
+  // A decimal share is read whole, with a point or a comma (the Fable 5.2 audit, M7).
+  ['Estoy en 77.5 % de contexto.', [77.5]],
+  ['Estoy en 77,5 % de contexto.', [77.5]],
+  ['Contexto: 77.5%.', [77.5]],
+  ['Mi contexto: 77,5 %.', [77.5]],
 ];
 
 // Clauses that name a context share that is not the writer's present one: another session's, a threshold, a
@@ -50,6 +55,9 @@ const NOT_OWN = [
   'Mi contexto: 40%-50%.',
   'Contexto: 40-50 %.',
   'Contexto: 40 % – 50 %.',
+  // Four digits are no share, nor is their tail (the Fable 5.2 audit, M7).
+  'Estoy en 1050% de contexto.',
+  'Contexto: 1050%.',
 ];
 
 test('ownShares reads the share a session states of its own context', () => {
@@ -133,6 +141,10 @@ test('shareRefusal refuses a stated own share more than 2 points from the record
   assert.equal(shareRefusal('JH 9 está al 10 % de contexto.', { tokens: 300000, window: 500000 }), null, 'another session\'s share');
   assert.equal(shareRefusal('Nothing about it.', { tokens: 300000, window: 500000 }), null);
   assert.match(shareRefusal('Mi contexto: 40 %.', { tokens: 300000, window: 350000 }), /records 86% of a 350k window/, 'a share of the window read');
+  assert.equal(shareRefusal('Estoy en 60.5 % de contexto.', { tokens: 300000, window: 500000 }), null, 'a decimal share, not its last digit');
+  assert.equal(shareRefusal('Estoy en 60,5 % de contexto.', { tokens: 300000, window: 500000 }), null, 'a decimal comma');
+  assert.equal(shareRefusal('Estoy en 1050% de contexto.', { tokens: 300000, window: 500000 }), null, 'four digits are no share');
+  assert.match(shareRefusal('Estoy en 63.5 % de contexto.', { tokens: 300000, window: 500000 }) ?? '', /states your context at 63\.5%/, 'a decimal share past the tolerance');
 });
 
 // --- windowBefore: the window of a session's own last get_usage read before a time (session channel, T9) ---
