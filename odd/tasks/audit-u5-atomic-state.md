@@ -107,7 +107,7 @@ through `js-harness notify --to orchestrator --kind question`.
 ## Tasks
 - [x] T1 (kind: build) S5: settings writes by rename (atomic-write, manifest, user-settings, permissions, rules-block), tests first; commit 0b8b7c25; Codex: correct (0.94), lenses risk, resilience, reliability: 0 findings
 - [x] T2 (kind: build) S1-S4, S6: the reviewed record and the cache by rename (cache, doctor, host-watch, manifest uninstall), tests first; commit `fix(doctor): ...`
-- [ ] T3 (kind: verify) Codex and the lenses on each slice; an independent verifier on the whole change (high risk 1 and 4)
+- [x] T3 (kind: verify) Codex and the lenses on each slice; an independent verifier on the whole change (high risk 1 and 4): L5, L6, L7
 
 ## Log
 - L1 (2026-11-10, the lead's brief): "Yours: exactly what the unit lists and its "Done when". It is high risk, items 1
@@ -150,3 +150,8 @@ through `js-harness notify --to orchestrator --kind question`.
   silent; (9) while the record cannot be written the cache is not written either, so the latest versions are fetched
   each run until it can: the cost of keeping the evidence. Lost updates between two writers of the record remain, each
   one losing a review, never adding one, and narrower than before.
+- L7 (2026-11-10, reviews of 52367d1..66bf679): Codex, correct (0.96), its finding of L5 rechecked fixed. Lenses risk
+  and reliability: 0 findings, reliability's earlier one fixed. Resilience keeps one, not blocking: `host-watch` still
+  reads an unknown host record as none. Answered, not changed: a host watch spans an update from the version
+  reviewed, and an unknown record has none, so the case goes to the lead by the doctor row and the hook notice, which
+  now say so; making the watch tick name it would touch the heartbeat's ticks, which JH 166 holds (the brief).
