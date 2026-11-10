@@ -641,8 +641,14 @@ export const RULES = [
     "subject": "the effort a session runs at",
     "owner": "sebastian",
     "scope": "repository",
-    "since": "2026-10-10",
-    "value": "high",
+    "since": "2026-11-10",
+    "value": "medium",
+    "was": [
+      {
+        "value": "high",
+        "until": "2026-11-10"
+      }
+    ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\b(?:at|on) `?{amount}`? effort"
     ]

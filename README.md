@@ -1329,7 +1329,7 @@ uninstall machine` removes every recorded one that is not at work and whose work
 recorded it; `--watch` returns when one starts waiting.
 
 ```console
-$ js-harness sessions start --title "JH 45 · thing" --brief brief.md --worktree thing --effort high
+$ js-harness sessions start --title "JH 45 · thing" --brief brief.md --worktree thing --effort medium
 started 0db8bc5e · JH 45 · thing
   js-harness sessions stop 0db8bc5e removes it; claude attach 0db8bc5e opens it here; js-harness sessions lists it
   Remote Control is on: claude.ai/code and the user's phone reach it
