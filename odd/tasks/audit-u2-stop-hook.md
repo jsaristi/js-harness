@@ -97,3 +97,13 @@ useless; an unchecked second stop leaves every reply check holding for the first
   of M6; and the second stop is no longer instant when the reply holds a command block, bounded by
   COMMANDS_DEADLINE_MS inside the hook's 15 s, a timeout falling to no message, never a block. Not checked: a live
   second stop in either host.
+- L6 The merge queue left PR 807 out (2026-11-10, 11:48 local): `FAIL contracts 1 of 178 contracts fail`. The
+  cause is not this contract. The order control of `rule:depth-pass` reads the branch as `origin/HEAD..HEAD`
+  (`branchOf`, bin/contract.mjs:445), and the candidate held PR 806 merged ahead of this one while origin's main was
+  still `c2153daf`, so 806's code counted as code committed before this document's verdict. Reproduced read-only
+  with a loose commit of the candidate's shape (parents `ec4b4c74`, `c85bbb14`) and the judge given each trunk:
+  trunk `c2153daf`, "1 of 178 fail ... code was committed before the pass's verdict:
+  bin/conventions-workshop.test.mjs" (a file of PR 806); trunk `ec4b4c74`, "0 of 178 fail". With 806 in main the
+  branch passes as it is: `node bin/js-harness.mjs check` after `git merge origin/main`, exit 0, 178 contracts
+  checked. Nothing changed in this branch but that merge. The fault stays open for the lead: any pull request with
+  a new feature document fails this way when a pull request with code is merged ahead of it in one candidate.
