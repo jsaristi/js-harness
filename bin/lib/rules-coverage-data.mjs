@@ -5,258 +5,77 @@
 export const COVERAGE = {
   "baseline": "2026-10-28",
   "controls": {
-    "agents-budget": {
-      "level": "check",
-      "test": "bin/lib/rules-bindings.test.mjs",
-      "break": {
-        "path": "bin/check.mjs",
-        "find": "('agents-budget', 'estimated tokens')",
-        "replace": "('agents-budget', 'estimated tokens') + 1"
-      }
-    },
-    "announce-finished": {"level":"owed","since":"2026-10-28"},
-    "away-autonomy": {
-      "level": "line",
-      "path": "bin/lib/manifest.mjs",
-      "phrase": "the share of the planned that was met, the map by phase before and after, the timeline"
-    },
-    "background-task-declared": {"level":"owed","since":"2026-10-28"},
-    "chained-steps": {
-      "level": "check",
-      "test": "bin/lib/chained-step-guard.test.mjs",
-      "break": {
-        "path": "bin/lib/chained-step-guard.mjs",
-        "find": "if (step !== null && before && Object.hasOwn(JOINERS, joiner)) return { step, joiner };",
-        "replace": "if (step !== null && before && Object.hasOwn(JOINERS, joiner) && step === '') return { step, joiner };"
-      }
-    },
-    "ci-gate-bound": {"level":"owed","since":"2026-10-28"},
-    "claude-md-budget": {"level":"owed","since":"2026-10-28"},
-    "codex-review-floor": {"level":"owed","since":"2026-10-28"},
-    "codex-review-margin": {"level":"owed","since":"2026-10-28"},
-    "codex-review-rate": {"level":"owed","since":"2026-10-28"},
-    "codex-weekly-floor": {
-      "level": "check",
-      "test": "bin/codex-review-switch.test.mjs",
-      "break": {
-        "path": "bin/codex-review.mjs",
-        "find": "('codex-weekly-floor'",
-        "replace": "('review-model'"
-      }
-    },
-    "context-pause": {
-      "level": "check",
-      "test": "bin/lib/rules-bindings.test.mjs",
-      "break": {
-        "path": "bin/lib/sessions.mjs",
-        "find": "('context-pause', 'percent of the context window')",
-        "replace": "('context-pause', 'percent of the context window') + 1"
-      }
-    },
-    "contract-run-timeout": {
-      "level": "check",
-      "test": "bin/lib/rules-bindings.test.mjs",
-      "break": {
-        "path": "bin/contract.mjs",
-        "find": "('contract-run-timeout', 'minutes')",
-        "replace": "('contract-run-timeout', 'minutes') + 1"
-      }
-    },
-    "control-phrase-min": {"level":"owed","since":"2026-10-28"},
-    "depth-pass": {
-      "level": "check",
-      "test": "bin/lib/depth-pass.test.mjs",
-      "break": {
-        "path": "bin/lib/depth-pass.mjs",
-        "find": "if (at >= 0 && branch[at].code.length > 0) {",
-        "replace": "if (at >= 0 && branch[at].code.length < 0) {"
-      }
-    },
-    "documents-canonical": {
-      "level": "protocol",
-      "path": "bin/lib/manifest.mjs",
-      "phrase": "never hold a decision the repository does not"
-    },
-    "double-review": {
-      "level": "line",
-      "path": "bin/lib/protocols-skill.mjs",
-      "phrase": "it first passes the double review of section 1"
-    },
-    "escalation-model": {
-      "level": "check",
-      "test": "bin/lib/codex-review-recheck.test.mjs",
-      "break": {
-        "path": "bin/lib/codex-review-recheck.mjs",
-        "find": "('escalation-model')",
-        "replace": "('review-model')"
-      }
-    },
-    "fixed-load-budget": {"level":"owed","since":"2026-10-28"},
-    "gate-log-command": {
-      "level": "check",
-      "test": "bin/lib/rules-bindings.test.mjs",
-      "break": {
-        "path": "bin/lib/gate-log.mjs",
-        "find": "('gate-log-command', 'characters')",
-        "replace": "('gate-log-command', 'characters') + 1"
-      }
-    },
-    "gate-log-size": {
-      "level": "check",
-      "test": "bin/lib/rules-bindings.test.mjs",
-      "break": {
-        "path": "bin/lib/gate-log.mjs",
-        "find": "('gate-log-size', 'KiB')",
-        "replace": "('gate-log-size', 'KiB') + 1"
-      }
-    },
-    "gate-max": {
-      "level": "check",
-      "test": "bin/lib/rules-bindings.test.mjs",
-      "break": {
-        "path": "bin/gate.mjs",
-        "find": "('gate-max', 'minutes')",
-        "replace": "('gate-max', 'minutes') + 1"
-      }
-    },
-    "gate-wait": {
-      "level": "check",
-      "test": "bin/lib/rules-bindings.test.mjs",
-      "break": {
-        "path": "bin/lib/gate-lock.mjs",
-        "find": "('gate-wait', 'minutes')",
-        "replace": "('gate-wait', 'minutes') + 1"
-      }
-    },
-    "growth-limit": [
-      {
-        "of": "the week is red when its open steps grew",
-        "level": "check",
-        "test": "bin/lib/progress-pace.test.mjs",
-        "break": {
-          "path": "bin/lib/progress-pace.mjs",
-          "find": "red: grew > 0 };",
-          "replace": "red: grew < 0 };"
-        }
-      },
-      {
-        "of": "the lead opens no new work but what it names while the week is red",
-        "level": "protocol",
-        "path": "bin/lib/manifest.mjs",
-        "phrase": "while it says red, open only what it names, and write anything else in the roadmap's Later list"
-      }
-    ],
-    "lead-charter": {"level":"owed","since":"2026-10-28"},
-    "live-board": {"level":"owed","since":"2026-10-28"},
-    "local-time": {
-      "level": "check",
-      "test": "bin/lib/reply-time.test.mjs",
-      "break": {
-        "path": "bin/lib/reply-time.mjs",
-        "find": "if (times.length === 0) return null;",
-        "replace": "if (times.length >= 0) return null;"
-      }
-    },
-    "memory-feedback-home": {"level":"owed","since":"2026-10-28"},
-    "memory-index-bytes": {
-      "level": "check",
-      "test": "bin/guard.test.mjs",
-      "break": {
-        "path": "bin/guard.mjs",
-        "find": "('memory-index-bytes', 'bytes')",
-        "replace": "('memory-index-bytes', 'bytes') * 1000"
-      }
-    },
-    "memory-pass-days": {"level":"owed","since":"2026-10-28"},
-    "mistake-report": {"level":"owed","since":"2026-10-28"},
-    "owner-decisions": {
-      "level": "protocol",
-      "path": "bin/lib/protocols-skill.mjs",
-      "phrase": "Decide everything else, say what it costs, and go on."
-    },
-    "person-present": {"level":"owed","since":"2026-10-28"},
-    "question-context": {"level":"owed","since":"2026-10-28"},
-    "questions-one-place": {"level":"owed","since":"2026-10-28"},
-    "recap-effort-line": {"level":"owed","since":"2026-10-28"},
-    "remote-control-yes": {"level":"owed","since":"2026-10-28"},
-    "reply-five-states": {"level":"owed","since":"2026-10-28"},
-    "report-table": {"level":"owed","since":"2026-10-28"},
-    "reports-spanish-visual": {
-      "level": "protocol",
-      "path": "bin/lib/protocols-skill.mjs",
-      "phrase": "the page is the one a command makes from the records"
-    },
-    "restart-announce": {"level":"owed","since":"2026-10-28"},
-    "reuse-first": {"level":"owed","since":"2026-10-28"},
-    "review-effort": {"level":"owed","since":"2026-10-28"},
-    "review-model": {"level":"owed","since":"2026-10-28"},
-    "review-part-files": {"level":"owed","since":"2026-10-28"},
-    "review-part-lines": {"level":"owed","since":"2026-10-28"},
-    "review-parts-unflagged": {"level":"owed","since":"2026-10-28"},
-    "review-timeout": {"level":"owed","since":"2026-10-28"},
-    "reviewed-commit-lines": {"level":"owed","since":"2026-10-28"},
-    "rules-live-in-the-harness": {
-      "level": "protocol",
-      "path": "bin/lib/protocols-skill.mjs",
-      "phrase": "An output the user sees again and again is cemented the same way, as a template of five parts"
-    },
-    "sensor-silence": {
-      "level": "check",
-      "test": "bin/lib/rules-bindings.test.mjs",
-      "break": {
-        "path": "bin/check.mjs",
-        "find": "('sensor-silence', 'minutes')",
-        "replace": "('sensor-silence', 'minutes') + 1"
-      }
-    },
-    "sensor-timeout": {
-      "level": "check",
-      "test": "bin/lib/rules-bindings.test.mjs",
-      "break": {
-        "path": "bin/check.mjs",
-        "find": "('sensor-timeout', 'minutes')",
-        "replace": "('sensor-timeout', 'minutes') + 1"
-      }
-    },
-    "session-effort": {"level":"owed","since":"2026-10-28"},
-    "session-housekeeping": {"level":"owed","since":"2026-10-28"},
-    "session-model": {"level":"owed","since":"2026-10-28"},
-    "session-prompts": {"level":"owed","since":"2026-10-28"},
-    "session-stall": {"level":"owed","since":"2026-10-28"},
-    "session-title": {"level":"owed","since":"2026-10-28"},
-    "sessions-open-in-sidebar": {"level":"owed","since":"2026-10-28"},
-    "status-report": {
-      "level": "protocol",
-      "path": "bin/lib/manifest.mjs",
-      "phrase": "6. What you propose next, each step with its why: the criterion that puts it there, never a step alone."
-    },
-    "subagent-effort": {"level":"owed","since":"2026-10-28"},
-    "subagent-reader-model": {"level":"owed","since":"2026-10-28"},
-    "subagent-writer-model": {"level":"owed","since":"2026-10-28"},
-    "terminal-note": {"level":"owed","since":"2026-10-28"},
-    "throughput-backfill-days": {"level":"owed","since":"2026-10-28"},
-    "throughput-compare-days": {"level":"owed","since":"2026-10-28"},
-    "throughput-quiet-days": {"level":"owed","since":"2026-10-28"},
-    "throughput-quiet-runs": {"level":"owed","since":"2026-10-28"},
-    "wait-every": {
-      "level": "check",
-      "test": "bin/lib/rules-bindings.test.mjs",
-      "break": {
-        "path": "bin/wait.mjs",
-        "find": "('wait-every', 'seconds')",
-        "replace": "('wait-every', 'seconds') + 1"
-      }
-    },
-    "wait-for": {
-      "level": "check",
-      "test": "bin/lib/rules-bindings.test.mjs",
-      "break": {
-        "path": "bin/wait.mjs",
-        "find": "('wait-for', 'minutes')",
-        "replace": "('wait-for', 'minutes') + 1"
-      }
-    },
-    "wording-is-the-need": {"level":"owed","since":"2026-10-28"},
+    "agents-budget": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/check.mjs","find":"('agents-budget', 'estimated tokens')","replace":"('agents-budget', 'estimated tokens') + 1"}},
+    "announce-finished": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"when a stretch or a session ends, that it ended and which session to return to."},
+    "away-autonomy": {"level":"line","path":"bin/lib/manifest.mjs","phrase":"the share of the planned that was met, the map by phase before and after, the timeline"},
+    "background-task-declared": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"A background task a session starts (a wait, a watch, a timer) says in its description what it is for and what ends it"},
+    "chained-steps": {"level":"check","test":"bin/lib/chained-step-guard.test.mjs","break":{"path":"bin/lib/chained-step-guard.mjs","find":"if (step !== null && before && Object.hasOwn(JOINERS, joiner)) return { step, joiner };","replace":"if (step !== null && before && Object.hasOwn(JOINERS, joiner) && step === '') return { step, joiner };"}},
+    "ci-gate-bound": {"level":"check","test":"bin/lib/ci-gate.test.mjs","break":{"path":"bin/lib/ci-gate.mjs","find":"('ci-gate-bound', 'minutes')","replace":"('ci-gate-bound', 'minutes') + 1"}},
+    "claude-md-budget": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/lib/claude-md-budget.mjs","find":"('claude-md-budget', 'estimated tokens')","replace":"('claude-md-budget', 'estimated tokens') + 1"}},
+    "codex-review-floor": {"level":"check","test":"bin/lib/codex-review-allowance.test.mjs","break":{"path":"bin/lib/codex-review-allowance.mjs","find":"('codex-review-floor', 'input tokens a review', text, list)","replace":"('codex-review-floor', 'input tokens a review', null, list)"}},
+    "codex-review-margin": {"level":"check","test":"bin/lib/codex-review-allowance.test.mjs","break":{"path":"bin/lib/codex-review-allowance.mjs","find":"('codex-review-margin', 'percent of the allowance', text, list)","replace":"('codex-review-margin', 'percent of the allowance', null, list)"}},
+    "codex-review-rate": {"level":"check","test":"bin/lib/codex-review-allowance.test.mjs","break":{"path":"bin/lib/codex-review-allowance.mjs","find":"('codex-review-rate', 'input tokens a changed line', text, list)","replace":"('codex-review-rate', 'input tokens a changed line', null, list)"}},
+    "codex-weekly-floor": {"level":"check","test":"bin/codex-review-switch.test.mjs","break":{"path":"bin/codex-review.mjs","find":"('codex-weekly-floor'","replace":"('review-model'"}},
+    "context-pause": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/lib/sessions.mjs","find":"('context-pause', 'percent of the context window')","replace":"('context-pause', 'percent of the context window') + 1"}},
+    "contract-run-timeout": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/contract.mjs","find":"('contract-run-timeout', 'minutes')","replace":"('contract-run-timeout', 'minutes') + 1"}},
+    "control-phrase-min": {"level":"check","test":"bin/lib/failures.test.mjs","break":{"path":"bin/lib/failures.mjs","find":"('control-phrase-min', 'characters')","replace":"('control-phrase-min', 'characters') + 1"}},
+    "depth-pass": {"level":"check","test":"bin/lib/depth-pass.test.mjs","break":{"path":"bin/lib/depth-pass.mjs","find":"if (at >= 0 && branch[at].code.length > 0) {","replace":"if (at >= 0 && branch[at].code.length < 0) {"}},
+    "documents-canonical": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"never hold a decision the repository does not"},
+    "double-review": {"level":"line","path":"bin/lib/protocols-skill.mjs","phrase":"it first passes the double review of section 1"},
+    "escalation-model": {"level":"check","test":"bin/lib/codex-review-recheck.test.mjs","break":{"path":"bin/lib/codex-review-recheck.mjs","find":"('escalation-model')","replace":"('review-model')"}},
+    "fixed-load-budget": {"level":"check","test":"bin/lib/fixed-load.test.mjs","break":{"path":"bin/lib/fixed-load.mjs","find":"('fixed-load-budget', 'tokens')","replace":"('fixed-load-budget', 'tokens') + 1"}},
+    "gate-log-command": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/lib/gate-log.mjs","find":"('gate-log-command', 'characters')","replace":"('gate-log-command', 'characters') + 1"}},
+    "gate-log-size": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/lib/gate-log.mjs","find":"('gate-log-size', 'KiB')","replace":"('gate-log-size', 'KiB') + 1"}},
+    "gate-max": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/gate.mjs","find":"('gate-max', 'minutes')","replace":"('gate-max', 'minutes') + 1"}},
+    "gate-wait": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/lib/gate-lock.mjs","find":"('gate-wait', 'minutes')","replace":"('gate-wait', 'minutes') + 1"}},
+    "growth-limit": [{"of":"the week is red when its open steps grew","level":"check","test":"bin/lib/progress-pace.test.mjs","break":{"path":"bin/lib/progress-pace.mjs","find":"red: grew > 0 };","replace":"red: grew < 0 };"}},{"of":"the lead opens no new work but what it names while the week is red","level":"protocol","path":"bin/lib/manifest.mjs","phrase":"while it says red, open only what it names, and write anything else in the roadmap's Later list"}],
+    "lead-charter": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"merge pull requests by the rules below"},
+    "live-board": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"Every event of your work reaches the user's live board as a notice"},
+    "local-time": {"level":"check","test":"bin/lib/reply-time.test.mjs","break":{"path":"bin/lib/reply-time.mjs","find":"if (times.length === 0) return null;","replace":"if (times.length >= 0) return null;"}},
+    "memory-feedback-home": {"level":"check","test":"bin/guard-feedback.test.mjs","break":{"path":"bin/lib/memory-feedback-guard.mjs","find":"('memory-feedback-home', undefined, rulesText)","replace":"('memory-feedback-home', undefined, null)"}},
+    "memory-index-bytes": {"level":"check","test":"bin/guard.test.mjs","break":{"path":"bin/guard.mjs","find":"('memory-index-bytes', 'bytes')","replace":"('memory-index-bytes', 'bytes') * 1000"}},
+    "memory-pass-days": {"level":"check","test":"bin/lib/memory-hygiene.test.mjs","break":{"path":"bin/lib/memory-hygiene.mjs","find":"('memory-pass-days', 'days')","replace":"('memory-pass-days', 'days') + 1"}},
+    "mistake-report": {"level":"protocol","path":"bin/lib/protocols-skill.mjs","phrase":"What stops it from happening again: a check before a line, a line before a protocol."},
+    "owner-decisions": {"level":"protocol","path":"bin/lib/protocols-skill.mjs","phrase":"Decide everything else, say what it costs, and go on."},
+    "person-present": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/lib/sessions.mjs","find":"PERSON_PRESENT_MS = 15 * 60 * 1000","replace":"PERSON_PRESENT_MS = 16 * 60 * 1000"}},
+    "question-context": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"Every question opens with what it is for: the work it belongs to"},
+    "questions-one-place": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"Every question of the project reaches the user in one place"},
+    "recap-effort-line": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"one line a session: its state, the effort mode its kind of work calls for and why;"},
+    "remote-control-yes": {"level":"check","test":"bin/lib/host-update.test.mjs","break":{"path":"bin/lib/host-update.mjs","find":"('remote-control-yes', undefined, projectData)","replace":"('remote-control-yes', undefined, null)"}},
+    "reply-five-states": {"level":"protocol","path":"bin/lib/protocols-skill.mjs","phrase":"A reply ends in one of five states."},
+    "report-table": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"Show each section that holds items as a table: one row an item"},
+    "reports-spanish-visual": {"level":"protocol","path":"bin/lib/protocols-skill.mjs","phrase":"the page is the one a command makes from the records"},
+    "restart-announce": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"tell the user in capitals: YA PUEDES REINICIAR Y ACTUALIZAR!!!"},
+    "reuse-first": {"level":"protocol","path":"bin/lib/protocols-skill.mjs","phrase":"search for one that already does it"},
+    "review-effort": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/codex-review.mjs","find":"('review-effort')","replace":"('review-effort') + 'x'"}},
+    "review-model": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/codex-review.mjs","find":"('review-model')","replace":"('review-model') + 'x'"}},
+    "review-part-files": {"level":"check","test":"bin/lib/codex-review-parts.test.mjs","break":{"path":"bin/lib/codex-review-parts.mjs","find":"('review-part-files', 'files')","replace":"('review-part-files', 'files') + 1"}},
+    "review-part-lines": {"level":"check","test":"bin/lib/codex-review-parts.test.mjs","break":{"path":"bin/lib/codex-review-parts.mjs","find":"('review-part-lines', 'changed lines')","replace":"('review-part-lines', 'changed lines') + 1"}},
+    "review-parts-unflagged": {"level":"check","test":"bin/lib/codex-review-plan.test.mjs","break":{"path":"bin/lib/codex-review-plan.mjs","find":"('review-parts-unflagged', 'parts')","replace":"('review-parts-unflagged', 'parts') + 1"}},
+    "review-timeout": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/codex-review.mjs","find":"('review-timeout', 'minutes')","replace":"('review-timeout', 'minutes') + 1"}},
+    "reviewed-commit-lines": {"level":"check","test":"bin/check-commit-size.test.mjs","break":{"path":"bin/check.mjs","find":"const most = rule.value;","replace":"const most = rule.value + 1;"}},
+    "rules-live-in-the-harness": {"level":"protocol","path":"bin/lib/protocols-skill.mjs","phrase":"An output the user sees again and again is cemented the same way, as a template of five parts"},
+    "sensor-silence": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/check.mjs","find":"('sensor-silence', 'minutes')","replace":"('sensor-silence', 'minutes') + 1"}},
+    "sensor-timeout": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/check.mjs","find":"('sensor-timeout', 'minutes')","replace":"('sensor-timeout', 'minutes') + 1"}},
+    "session-effort": {"level":"check","test":"bin/lib/guard.test.mjs","break":{"path":"bin/lib/guard.mjs","find":"('session-effort', undefined, projectData)","replace":"('session-effort', undefined, null)"}},
+    "session-housekeeping": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"by title, the sessions to archive and the ones stopped, with what each waits for"},
+    "session-model": {"level":"check","test":"bin/rules.test.mjs","break":{"path":"bin/rules.mjs","find":"('session-model'), of: 'sessions', field: 'model' }","replace":"('subagent-writer-model'), of: 'sessions', field: 'model' }"}},
+    "session-prompts": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"Give prompts only for yourself. A prompt meant for another session names that session in its first line."},
+    "session-stall": {"level":"check","test":"bin/lib/stretch.test.mjs","break":{"path":"bin/lib/stretch.mjs","find":"('session-stall', 'minutes')","replace":"('session-stall', 'minutes') + 1"}},
+    "session-title": {"level":"check","test":"bin/lib/session-title-guard.test.mjs","break":{"path":"bin/lib/session-title-guard.mjs","find":"('session-title', undefined, projectData)","replace":"('session-title', undefined, null)"}},
+    "sessions-open-in-sidebar": {"level":"check","test":"bin/lib/guard.test.mjs","break":{"path":"bin/lib/guard.mjs","find":"('sessions-open-in-sidebar', undefined, projectData)","replace":"('sessions-open-in-sidebar', undefined, null)"}},
+    "status-report": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"6. What you propose next, each step with its why: the criterion that puts it there, never a step alone."},
+    "subagent-effort": {"level":"check","test":"bin/lib/contract.test.mjs","break":{"path":"bin/lib/contract.mjs","find":"subagent: 'subagent-effort',","replace":"subagent: 'session-model',"}},
+    "subagent-reader-model": {"level":"check","test":"bin/lib/guard.test.mjs","break":{"path":"bin/lib/guard.mjs","find":"('subagent-reader-model', undefined, projectData)","replace":"('subagent-reader-model', undefined, null)"}},
+    "subagent-writer-model": {"level":"check","test":"bin/lib/guard.test.mjs","break":{"path":"bin/lib/guard.mjs","find":"('subagent-writer-model', undefined, projectData)","replace":"('subagent-writer-model', undefined, null)"}},
+    "terminal-note": {"level":"check","test":"bin/lib/guard.test.mjs","break":{"path":"bin/lib/guard.mjs","find":"('terminal-note', undefined, projectData)","replace":"('terminal-note', undefined, null)"}},
+    "throughput-backfill-days": {"level":"check","test":"workshop/bin/throughput.test.mjs","break":{"path":"workshop/bin/throughput.mjs","find":"('throughput-backfill-days', 'days')","replace":"('throughput-backfill-days', 'days') + 1"}},
+    "throughput-compare-days": {"level":"check","test":"workshop/lib/throughput.test.mjs","break":{"path":"workshop/lib/throughput.mjs","find":"('throughput-compare-days', 'days')","replace":"('throughput-compare-days', 'days') + 1"}},
+    "throughput-quiet-days": {"level":"check","test":"workshop/lib/throughput.test.mjs","break":{"path":"workshop/lib/throughput.mjs","find":"('throughput-quiet-days', 'days')","replace":"('throughput-quiet-days', 'days') + 1"}},
+    "throughput-quiet-runs": {"level":"check","test":"workshop/lib/throughput.test.mjs","break":{"path":"workshop/lib/throughput.mjs","find":"('throughput-quiet-runs', 'reviews')","replace":"('throughput-quiet-runs', 'reviews') + 1"}},
+    "wait-every": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/wait.mjs","find":"('wait-every', 'seconds')","replace":"('wait-every', 'seconds') + 1"}},
+    "wait-for": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/wait.mjs","find":"('wait-for', 'minutes')","replace":"('wait-for', 'minutes') + 1"}},
+    "wording-is-the-need": {"level":"line","path":"bin/lib/project.mjs","phrase":"The owner's wording is the need, not the specification"},
     "work-sessions-private-wsl": {"level":"owed","since":"2026-10-28"},
     "work-sessions-public": {"level":"owed","since":"2026-10-28"}
   },

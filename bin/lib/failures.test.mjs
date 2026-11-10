@@ -680,6 +680,19 @@ test('the counts by class follow the order the classes are declared in, a class 
   ]);
 });
 
+// F8 S5, spec 2 (odd/tasks/f8-s5-rules.md): the controls in the classes the rules are counted in.
+test('the counts by control give each class, a check, prose (a line or a protocol), measured or owed, and the entries with none', () => {
+  const entries = [
+    recorded({ id: 'alpha-failure', control: IN_PLACE }),
+    recorded({ id: 'beta-failure', control: { ...IN_PLACE, level: 'line' } }),
+    recorded({ id: 'delta-failure', control: { ...IN_PLACE, level: 'protocol' } }),
+    recorded({ id: 'epsilon-failure', control: MEASURED }),
+    recorded({ id: 'eta-failure', control: OWED }),
+    recorded({ id: 'gamma-failure' }),
+  ];
+  assert.deepEqual(summarize({ classes: ['machine'], entries }, yes).byControl, { check: 1, prose: 2, measured: 1, owed: 1, none: 1 });
+});
+
 test('the counts by state name all ten, and count the same sighting once', () => {
   const twice = recorded({ id: 'read-twice' });
   twice.seen.push({ ...twice.seen[0] });

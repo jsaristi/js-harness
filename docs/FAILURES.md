@@ -569,6 +569,9 @@ not the committed range, wrote no record and had to be run again.
 - Seen: 2026-11-05 — `odd/tasks/workshop-product-split.md` L24 (JH 142) — that document edited, after the
   lenses had finished, during the Codex review of `52d0703..3ec2263`; 128,424 input tokens spent on part 1 of 3,
   not kept, nothing recorded, the review run again after the commit
+- Seen: 2026-11-09 — `odd/tasks/f8-s5-rules.md` L13 (JH 160) — that document edited, after the lenses had
+  finished, during the Codex review of `a2d55b1..2717f7c`; 278,727 input tokens spent on part 1 of 2, not kept,
+  nothing recorded, the review run again after the commit
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 
@@ -670,8 +673,11 @@ read as an exit code or an outcome alone.
 - Class: unseen-state
 - Seen: 2026-10-29 — docs/sessions/2026-10-29-jh-79-visual-pages-the-harness-shows-its-moments-as-pages.md,
   "Left" — found closing visual pages; `stretch explain` was the only way to say why
-- Control: check — workshop/lib/throughput.test.mjs — "a land keeps the last line it said, and a Codex run
-  the reason it was logged with" — since 2026-10-29
+- Control: check — bin/lib/land-records.test.mjs — "a land keeps the last line it said, and a Codex run
+  the reason it was logged with" — since 2026-11-05
+- Was: check — workshop/lib/throughput.test.mjs — the same test, which moved with the land and Codex run
+  records to bin/lib/land-records.test.mjs on 2026-11-05 (`81088583`); found as "control lost" by F8 S5's rule
+  pass (odd/tasks/f8-s5-rules.md)
 
 ### fixture-refuses-late-check
 The rules tests' fixture owed every check since the coverage register's baseline, which a rule
@@ -2059,8 +2065,12 @@ A hook entry the user's host file already held, identical to one of ours, was re
 - Seen: 2026-10-29 — bin/lib/manifest.mjs:583-585 and :744 on main `4b1a7b71` — found by JH 80's
   independent verifier on PR 653; a scratch home seeded with our own Claude and Codex entries came
   back with `"SessionStart": []` after install, install and uninstall
-- Control: check — bin/lib/manifest.test.mjs — "an entry the Codex hooks.json already held,
-  identical to ours, keeps its place and its trust through install and uninstall" — since 2026-10-29
+- Control: check — bin/lib/manifest.test.mjs — "an entry the Claude settings already held, identical to ours, is
+  recorded as the" — since 2026-10-29
+- Was: check — bin/lib/manifest.test.mjs — "an entry the Codex hooks.json already held, identical to ours, keeps its
+  place and its trust through install and uninstall"; that test was renamed when install stopped writing under
+  ~/.codex on 2026-10-30 (`57486c74`), and the Claude half of the same fix, landed with it, holds the failure; found
+  as "control lost" by F8 S5's rule pass (odd/tasks/f8-s5-rules.md)
 
 ### update-took-user-entry
 A hook entry recorded as the user's, equal to an older form of ours, was taken out by an update's

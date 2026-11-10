@@ -337,6 +337,15 @@ test('failures prints the entries and the sightings of each class, in the order 
   });
 });
 
+test('failures prints its controls by class, after the classes of failure', async () => {
+  await inProject(FULL, async (dir) => {
+    const lines = (await run([], dir)).stdout.split('\n');
+    const at = lines.indexOf('By control');
+    assert.ok(at > lines.indexOf('By class'), lines.join('\n'));
+    assert.match(lines[at + 1], /^ {2}check \d+, prose \d+, measured \d+, owed \d+; \d+ with no control$/);
+  });
+});
+
 test('failures prints one line per entry, the most seen first, with its class, its state and the first day it was seen', async () => {
   await inProject(FULL, async (dir) => {
     const { stdout } = await run([], dir);

@@ -9,6 +9,7 @@ import { REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS } from '../codex-review.
 import { DEFAULT_TIMEOUT_MINUTES } from '../contract.mjs';
 import { GATE_MAX_MINUTES } from '../gate.mjs';
 import { WAIT_EVERY_SECONDS, WAIT_FOR_MINUTES } from '../wait.mjs';
+import { CLAUDE_MD_BUDGET } from './claude-md-budget.mjs';
 import { GATE_WAIT_MS } from './gate-lock.mjs';
 import { GATE_COMMAND_MAX, GATE_LOG_MAX_BYTES } from './gate-log.mjs';
 import { ruleValue } from './rules.mjs';
@@ -33,6 +34,10 @@ test('the silence a sensor of the gate may keep is the declared sensor-silence i
 
 test('the budget AGENTS.md is held to is the declared agents-budget', () => {
   assert.equal(TOKEN_BUDGET, ruleValue('agents-budget', 'estimated tokens'));
+});
+
+test('the budget the root CLAUDE.md is held to is the declared claude-md-budget', () => {
+  assert.equal(CLAUDE_MD_BUDGET, ruleValue('claude-md-budget', 'estimated tokens'));
 });
 
 test('the timeout of a done-when command of a contract run is the declared contract-run-timeout', () => {

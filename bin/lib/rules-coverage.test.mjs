@@ -213,6 +213,21 @@ test('the seeded baseline holds: no finding, every count said, and the owed shar
   assert.deepEqual(report.cases.map((item) => [item.name, item.owed]), [['incident-01-paid-eval', true], ['incident-02-review-consent', false]]);
 });
 
+// F8 S5, spec 2 (odd/tasks/f8-s5-rules.md): every rule is a check, prose that stays, or retired, counted from the
+// register on the day it runs, and one left owed is named for --strict.
+test('each obligation of a live rule is in a class, check or prose, the retired are counted, and an owed one is named', () => {
+  const report = whole();
+  assert.deepEqual(report.classes, { check: 1, prose: 0, retired: 1, measured: 0, owed: 1 });
+  assert.deepEqual(report.unclassified, ['rule "ask-first": its control is still owed: make it a check, prose that stays (a line or a protocol), or retire the rule with js-harness rules change']);
+  const line = { level: 'line', path: 'bin/x.mjs', phrase: 'const a = 1;' };
+  const bundled = [{ of: 'the ask', ...line }, { of: 'the run', level: 'eval', cases: ['incident-02-review-consent'] }, { of: 'the rest', ...OWED }];
+  assert.deepEqual(whole({ register: { controls: { 'ask-first': line, 'some-value': CHECK } } }).classes, { check: 1, prose: 1, retired: 1, measured: 0, owed: 0 });
+  assert.deepEqual(whole({ register: { controls: { 'ask-first': line, 'some-value': CHECK } } }).unclassified, []);
+  const mixed = whole({ register: { controls: { 'ask-first': bundled, 'some-value': CHECK } } });
+  assert.deepEqual(mixed.classes, { check: 2, prose: 1, retired: 1, measured: 0, owed: 1 });
+  assert.deepEqual(mixed.unclassified, ['rule "ask-first" (the rest): its control is still owed: make it a check, prose that stays (a line or a protocol), or retire the rule with js-harness rules change']);
+});
+
 test('a case the register owes stays owed when it names its rules: its paid proof is what is owed', () => {
   const report = whole({ register: { cases: ['incident-01-paid-eval', 'incident-02-review-consent'] } });
   assert.deepEqual([report.findings, report.stale], [[], []]);
@@ -281,12 +296,12 @@ test('the register is written in one shape, and a register of another shape is r
   ]);
 });
 
-test('a control that fits on one line is written on one, a longer one over several, and both read back', () => {
+test('every control is written on one line, however long, and reads back', () => {
   const long = { level: 'line', path: 'bin/lib/manifest.mjs', phrase: 'a phrase long enough that its control cannot fit on one line of the register' };
   const given = { ...register(), controls: { short: { level: 'owed', since: BASELINE }, long } };
   const text = writeCoverage(given);
   assert.match(text, /^ {4}"short": \{"level":"owed","since":"\d{4}-\d{2}-\d{2}"\}$/m);
-  assert.match(text, /^ {4}"long": \{\n {6}"level": "line",$/m);
+  assert.match(text, /^ {4}"long": \{"level":"line","path":"bin\/lib\/manifest\.mjs","phrase":"[^"]+"\},$/m);
   assert.deepEqual(JSON.parse(text.slice(text.indexOf('= {') + 2, text.lastIndexOf(';'))).controls, given.controls);
   assert.match(writeCoverage({ ...register(), controls: {} }), /"controls": \{\},/);
   // A planted break is code, and code holds $: written as it is, never read as a replacement pattern.

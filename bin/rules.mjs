@@ -438,6 +438,9 @@ function coverageLines(report) {
   const byLevel = {};
   for (const rule of report.rules) for (const level of rule.levels.length === 0 ? ['none'] : rule.levels) byLevel[level] = (byLevel[level] ?? 0) + 1;
   lines.push(`  rules: ${report.rules.length} live, by the level of each obligation: ${Object.entries(byLevel).map(([level, n]) => `${level} ${n}`).join(', ')}`);
+  const { check, prose, retired, measured, owed: owedRules } = report.classes;
+  const apart = [...(measured > 0 ? [`measured ${measured}`] : []), ...(owedRules > 0 ? [`owed ${owedRules}`] : [])];
+  lines.push(`  classes: check ${check}, prose ${prose}, retired ${retired}${apart.map((item) => `, ${item}`).join('')} (each obligation of a live rule; the retired rules counted)`);
   const naming = report.cases.filter((item) => item.rules.length > 0).length;
   lines.push(`  cases: ${report.cases.length}: ${naming} name their rules, ${report.cases.filter((item) => item.owed).length} owed`);
   const cap = OWED_CAP_FROM === null ? 'not yet held (S8 sets the day)' : `held since ${OWED_CAP_FROM}`;
@@ -492,7 +495,7 @@ function coverageForm(parsed, root, { run, stdout, stderr }) {
   const word = parsed.strict ? 'strict' : 'coverage';
   stdout(failing.length === 0 ? `PASS  ${word}  no gap opened since the baseline${parsed.strict ? ', and the register says what the texts hold' : ''}` : `FAIL  ${word}  ${failing.length} ${failing.length === 1 ? 'finding' : 'findings'}`);
   for (const line of failing) stdout(`      ${line}`);
-  if (!parsed.strict) for (const line of report.stale) stdout(`note: ${line}`);
+  if (!parsed.strict) for (const line of [...report.stale, ...report.unclassified]) stdout(`note: ${line}`);
   return parsed.strict && failing.length > 0 ? 1 : 0;
 }
 

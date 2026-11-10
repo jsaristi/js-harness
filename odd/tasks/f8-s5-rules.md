@@ -123,16 +123,16 @@ change of a rule whose owner is `sebastian`.
    siguiente".
 
 ## Tasks
-- [ ] T1 (kind: docs) this document and its depth pass, committed alone — PR 1
-- [ ] T2 (kind: build) spec 1: the guard refuses a write that grows the index over `memory-index-bytes`, tests first —
+- [x] T1 (kind: docs) this document and its depth pass, committed alone — PR 1
+- [x] T2 (kind: build) spec 1: the guard refuses a write that grows the index over `memory-index-bytes`, tests first —
   PR 1
-- [ ] T3 (kind: build) specs 1 and 3: `rules change memory-index-bytes` to 2000 and the new record rule with its line in
+- [x] T3 (kind: build) specs 1 and 3: `rules change memory-index-bytes` to 2000 and the new record rule with its line in
   the skill's memory section, on `rule/f8-s5-memory-record` — PR 1
 - [ ] T4 (kind: build) spec 2: every owed control of a live rule closed as a check or prose, the class totals and the
   finding in `rules coverage`, tests first — PR 2
-- [ ] T5 (kind: build) spec 2: the failure register's controls in the same three classes, printed by `failures`; the
+- [x] T5 (kind: build) spec 2: the failure register's controls in the same three classes, printed by `failures`; the
   two lost controls repaired or reclassified — PR 2
-- [ ] T6 (kind: build) spec 4: `evals/lens-hook-probe.mjs` and its test, run once here — PR 3
+- [x] T6 (kind: build) spec 4: `evals/lens-hook-probe.mjs` and its test, run once here — PR 3
 - [ ] T7 (kind: verify) Codex and the pertinent lenses over each slice; ready notices with each PR number
 - [ ] T8 (kind: docs) ROADMAP S5 State, SPEC, a summary under `docs/sessions/`; the incident rerun asked through the lead
 
@@ -193,14 +193,39 @@ change of a rule whose owner is `sebastian`.
   lenses reliability and risk over `eb39a85..c32a3fd`: 0 findings each.
 - L10 (2026-11-09): PR 798 opened for the probe, base `rule/f8-s5-memory-record`; the host compacted the
   session after it, and it resumed from this document.
+- L11 (2026-11-09, T4, PR 3 `f8-s5-3-rule-pass`): 48 live rules owed their control. 31 value rules got a check
+  with a planted break in their reader (`+ 1`, `+ 'x'`, a guard's project text set to `null`, an id swapped), 15 prose
+  rules their declaration's first phrase as a protocol (a line for `bin/lib/project.mjs`). `rules coverage --prove`:
+  48 of 49 red at once; `control-phrase-min` stayed green against `bin/lib/rules-coverage.test.mjs` and went red
+  against `bin/lib/failures.test.mjs`, which holds its boundary. `claude-md-budget` got a binding test, since only
+  the five-minute `bin/check.test.mjs` read it. `work-sessions-public` and `work-sessions-private-wsl` have no reader
+  (`git grep` in bin, workshop and the skills): question 235 to the lead, A retire, B prose in the orchestrator skill
+  (recommended), C a check. Tests first: the classes red (`actual: undefined`), then green; `rules coverage`:
+  "classes: check 49, prose 23, retired 4, owed 2". The register reached 1168 lines, over the module limit, so
+  `writeCoverage` writes every control on one line (683 lines). The `--strict` hold of an owed rule waits on question
+  235, since the two would turn the real package's `--strict` test red. Commit `37d7ff61`.
+- L12 (2026-11-09, T5): `failures` prints "By control": check 99, prose 8, measured 2, owed 5, 26 with none (tests
+  first, red then green). The two "control lost" entries kept their control under another name:
+  `failure-cause-dropped` (the test moved to `bin/lib/land-records.test.mjs`, `81088583`) and
+  `uninstall-took-user-entry` (the Codex test renamed by `57486c74`; the Claude test of the same fix holds it); each
+  now names the current one and keeps a `Was` line. `failures check`: 9 not settled, from 11. Commit `2717f7ca`.
+- L13 (2026-11-09, T7 for `a2d55b1..2717f7c`): lenses risk 0, reliability 2 warnings: the two rules left owed (known,
+  question 235) and `report.unclassified` printed nowhere while a comment said `--strict` held it. Fixed tests first
+  (red, then green): the plain report prints each owed obligation as a note, and the comment says what the code does.
+  Codex wrote no record: this document was edited while it reviewed part 1 of 2 (278,727 input tokens spent), the
+  13th sighting of `edit-during-review`, whose `Seen` line this commit adds. The review runs again after the commit,
+  with nothing edited until it ends. What would stop it: a guard that refuses an edit of a tracked file in a worktree
+  while that worktree's Codex review runs; proposed to the lead, not built here (the guard is not this session's).
+- L14 (2026-11-09): Codex over `a2d55b1..766a4f1`: correct (0.89 and 0.94), 228,202 input tokens; lenses on the fix
+  `2717f7c..766a4f1`: risk 0, reliability 1 open (the two rules of question 235). PR 799 opened, base
+  `f8-s5-2-lens-probe`. T8 begun: ROADMAP S5 State and SPEC (the lens review's flag parity and the failure register's
+  control classes into Capabilities; what is left of the rule pass in the table of what has no code yet).
 
 ## Next step
-PR 797 (`rule/f8-s5-memory-record`) and PR 798 (`f8-s5-2-lens-probe`, stacked on it) are open and reviewed. 1) PR 3
-`f8-s5-3-rule-pass` on top of 798: in `bin/lib/rules-coverage-data.mjs` close every `owed` control of a live rule
-(48): prose rules as `protocol` (path and first phrase of the declaration; `line` for `bin/lib/project.mjs`), value
-rules as `check` with a break `('<id>', '<unit>')` to `+ 1` / `+ 'x'` in a reader and its sibling test, proved with
-`rules coverage --prove` (it works in a scratch copy); then `rules coverage` prints the three classes and refuses a
-live rule left owed; `failures` prints its controls by the same three classes (check; line, protocol = prose;
-measured = retired; owed named apart); the two "control lost" entries (`failure-cause-dropped`,
-`uninstall-took-user-entry`) repaired or reported. 2) T8 docs, summary, `closed` notice; the incident rerun (~$13)
-asked through the lead.
+Branch `f8-s5-3-rule-pass`, stacked on PR 798. 1) Read the reviews of `a2d55b18..2717f7ca` (Codex and the lenses
+risk and reliability), fix what they find tests first, push, `gh pr create --base f8-s5-2-lens-probe`, a note to the
+lead. 2) On the answer to question 235: B adds a line naming both rules to the orchestrator skill's session opening
+and their controls as protocol; A needs his typed line and `rules change` on a `rule/` branch; C a refusal in
+`sessions start`, tests first. Then `--strict` holds `report.unclassified` (the test plants an owed control on
+`announce-finished` and expects exit 1). 3) T8 docs, summary, `closed` notice; the incident rerun (~$13) asked
+through the lead.

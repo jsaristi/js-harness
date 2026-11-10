@@ -12,6 +12,9 @@ import { ruleValue } from './rules.mjs';
 export const SPAN_ID_LENGTH = 12;
 /** The levels a control can be at: the failure register's four, its `owed` with a date, and `eval`. */
 export const LEVELS = ['check', 'eval', 'line', 'protocol', 'measured', 'owed'];
+// The class of each level: a check (a test or an eval proves it), prose that stays (a line or a protocol holds it),
+// a measurement that found a control not worth it, or still owed.
+const CLASS_OF = { check: 'check', eval: 'check', line: 'prose', protocol: 'prose', measured: 'measured', owed: 'owed' };
 // The keys of a control at each level; `of` names one obligation of a rule that bundles several.
 const LEVEL_KEYS = {
   check: ['level', 'test', 'break'],
@@ -388,6 +391,20 @@ export function coverageOf({ register, sources, messages, rules, cases, readFile
     for (const fault of faults) findings.push(`rule "${rule.id}": ${fault}`);
   }
   for (const id of Object.keys(register.controls)) if (!live.some((rule) => rule.id === id)) findings.push(`the register holds a control for "${id}", which is no live rule`);
+  // Every rule is a check, prose that stays, or retired (F8 S5, odd/tasks/f8-s5-rules.md, spec 2), counted by each
+  // obligation of a live rule; one still owed is named in `unclassified`, which the report prints as a note.
+  const classes = { check: 0, prose: 0, retired: rules.length - live.length, measured: 0, owed: 0 };
+  report.unclassified = [];
+  for (const rule of live) {
+    const control = Object.hasOwn(register.controls, rule.id) ? register.controls[rule.id] : undefined;
+    for (const item of control === undefined ? [] : [control].flat()) {
+      const kind = CLASS_OF[item?.level];
+      if (kind === undefined) continue;
+      classes[kind] += 1;
+      if (kind === 'owed') report.unclassified.push(`rule "${rule.id}"${item.of === undefined ? '' : ` (${item.of})`}: its control is still owed: make it a check, prose that stays (a line or a protocol), or retire the rule with js-harness rules change`);
+    }
+  }
+  report.classes = classes;
 
   for (const { name, rules: named } of cases) {
     const ids = Array.isArray(named) ? named : [];
@@ -455,21 +472,18 @@ export function readCoverageText(text) {
   return { register };
 }
 
-// What stands for the controls while the rest is written, and the widest line a control takes on its own.
+// What stands for the controls while the rest is written.
 const CONTROLS_MARK = '\0controls';
-const CONTROL_LINE = 120;
 
 /** The whole text of rules-coverage-data.mjs for `register`, its keys in one order and its controls sorted by id. */
 export function writeCoverage(register) {
   const controls = Object.fromEntries(Object.keys(register.controls).sort().map((id) => [id, register.controls[id]]));
   const sources = Object.fromEntries(Object.keys(register.sources).sort().map((id) => [id, register.sources[id]]));
   const ordered = { baseline: register.baseline, controls: CONTROLS_MARK, cases: [...register.cases].sort(), messages: [...register.messages].sort(), sources };
-  // A control that fits on one line is written on one, so the register stays under the module size limit as rules
-  // are added (bin/conventions-structure.test.mjs); a longer one is written as JSON indents it.
-  const lines = Object.entries(controls).map(([id, control]) => {
-    const one = `    ${JSON.stringify(id)}: ${JSON.stringify(control)}`;
-    return one.length <= CONTROL_LINE ? one : `    ${JSON.stringify(id)}: ${JSON.stringify(control, null, 2).replace(/\n/g, '\n    ')}`;
-  });
+  // Every control is written on one line, so the register stays under the module size limit as rules are added
+  // (bin/conventions-structure.test.mjs): F8 S5 gave each live rule a control, and a check over nine lines put it
+  // past that limit.
+  const lines = Object.entries(controls).map(([id, control]) => `    ${JSON.stringify(id)}: ${JSON.stringify(control)}`);
   const written = lines.length === 0 ? '{}' : `{\n${lines.join(',\n')}\n  }`;
   return `${COVERAGE_HEADER}export const COVERAGE = ${JSON.stringify(ordered, null, 2).replace(JSON.stringify(CONTROLS_MARK), () => written)};\n`;
 }
