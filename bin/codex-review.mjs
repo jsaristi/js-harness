@@ -1280,42 +1280,42 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       return null;
     }
   };
-  /** The short ids of the code commits of `from..head` no record covers, or `null` when the records cannot be read against it. */
-  const uncoveredFrom = (from) => {
+  /** What the records leave of `from..head`: the short ids of its code commits none covers, and where a run would start to
+   * read them (`reviewStart`); both `null` when the records cannot be read against it. */
+  const leftFrom = (from) => {
     try {
       const coverage = reviewCoverage(root, { from, tip: head, spawn, where });
-      return coverage.unknown ? null : coverage.uncovered.map((commit) => commit.id.slice(0, 7));
+      if (coverage.unknown) return { uncovered: null, start: null };
+      return { uncovered: coverage.uncovered.map((commit) => commit.id.slice(0, 7)), start: reviewStart(coverage.uncovered, { cwd: root, from, tip: head, spawn }).start };
     } catch {
-      return null;
+      return { uncovered: null, start: null };
     }
   };
-  /** The nearest commit behind `at`, on its first-parent line, that a run with `--again` reviews as any other, or `null`. */
-  const reviewFromBehind = (at) => {
+  /** The nearest commit behind `at`, on its first-parent line, that a run with `--again` reviews as any other, or `null`;
+   * with `start` (`leftFrom`), the older of the two, since code left out behind `at` is read only from `start`. */
+  const reviewFromBehind = (at, start = null) => {
     const behind = git(spawn, root, ['rev-list', '--first-parent', `--max-count=${REVIEW_FROM_LOOK_BACK + 1}`, at]);
-    return (behind ?? '').split('\n').filter(Boolean).slice(1).find((commit) => recheckFor(commit).kind === 'review') ?? null;
+    const nearest = (behind ?? '').split('\n').filter(Boolean).slice(1).find((commit) => recheckFor(commit).kind === 'review') ?? null;
+    return nearest !== null && start !== null && holdsIn(nearest, start) === true ? start : nearest;
   };
   /** What a range from `from` is (`recheckFor`), and with `--again`, which reads no record to start later, refused past
    * three reviews of a change it holds after `from`, where `recheckFor` reads `from` alone (`againPastThreeReviews`). */
   const recheckOrAgain = (from) => {
     const state = recheckFor(from);
     if (!args.again || state.kind !== 'review' || onResult !== null || everyFile) return state;
-    let records;
-    try {
-      records = readCodexReviews(root, { spawn, where });
-    } catch {
-      return state;
-    }
+    // Records that cannot be read leave the range a review, as they do `recheckFor`.
+    const records = (() => { try { return readCodexReviews(root, { spawn, where }); } catch { return []; } })();
     const held = new Set((git(spawn, root, ['rev-list', `${from}..${head}`]) ?? '').split('\n').filter(Boolean));
     const heads = [...new Set(records.filter((rec) => rec.outcome === 'reviewed' && held.has(rec.head)).map((rec) => rec.head))];
-    const past = heads.length === 0 ? null : againPastThreeReviews({ heads, stateOf: recheckFor, uncovered: uncoveredFrom(from), reviewFromOf: reviewFromBehind, startsAtOrAfter: (commit) => holdsIn(from, commit) });
+    const left = heads.length === 0 ? null : leftFrom(from);
+    const past = left === null ? null : againPastThreeReviews({ heads, stateOf: recheckFor, uncovered: left.uncovered, reviewFromOf: (at) => reviewFromBehind(at, left.start), startsAtOrAfter: (commit) => holdsIn(from, commit) });
     return past === null ? state : { ...past.state, again: past.head };
   };
-  /** The refusal of the range from `from` (`state` its `recheckOrAgain`): its code commits no record covers, and the
-   * commit `reviewFromBehind` finds behind `from`, or behind the head `--again` would review past. Records that cannot be
-   * read against the range are taken as leaving code unread, so no skip is offered on a guess. */
+  /** The refusal of the range from `from` (`state` its `recheckOrAgain`), naming the commit `reviewFromBehind` finds; records
+   * unread against the range are taken as leaving code unread, so no skip is offered on a guess. */
   const secondRecheckSaid = (from, state) => {
-    const uncovered = uncoveredFrom(from);
-    const reviewFrom = uncovered === null || uncovered.length > 0 ? reviewFromBehind(state.again ?? from) : null;
+    const { uncovered, start } = leftFrom(from);
+    const reviewFrom = uncovered === null || uncovered.length > 0 ? (state.again ? reviewFromBehind(state.again, start) : reviewFromBehind(from)) : null;
     return secondRecheckRefused({ ...state, base: from, uncovered, reviewFrom });
   };
 

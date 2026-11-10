@@ -7159,6 +7159,26 @@ test('--again from behind a change three reviews left open is refused when the r
   assert.ok(plan.out.split('\n').some((line) => line.startsWith(`A run of this range is refused: Three reviews of this change did not settle it`) && line.includes('a fourth time')), plan.out);
 });
 
+// The verifier of odd/tasks/audit-u4-refusals.md: a code commit left out behind the three reviews (their first range
+// started after it) is read only from the commit before it; the refusal named the commit itself, whose range left it out.
+test('--again from the commit before code left out behind three reviews runs, since no later start reads that code', async () => {
+  const { root, base, head: left } = makeRepo();
+  const first = commitOne(root, 'g.txt', 'reviewed code\n');
+  const one = await run(['--base', left, '--cwd', root], fakeCodex(reviewed(root, left), {}, PROBE_OK, answerWith(root)));
+  assert.equal(one.code, 0, one.err);
+  const fixed = commitOne(root, 'f.txt', 'three');
+  const two = await run(['--base', first, '--cwd', root], { ...fakeCodex(reviewed(root, first), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });
+  assert.equal(two.code, 0, two.err);
+  commitOne(root, 'f.txt', 'four\n');
+  const three = await run(['--base', fixed, '--cwd', root], { ...fakeCodex(reviewed(root, fixed), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => THIRD_ID });
+  assert.equal(three.code, 0, three.err);
+  const fake = fakeCodex(reviewed(root, base));
+  const again = await run(['--base', base, '--again', '--cwd', root], { ...fake, randomUUID: () => '00000000-0000-4000-8000-000000000007' });
+  assert.equal(again.code, 0, again.err);
+  assert.equal(fake.calls.length, 1, 'Codex reviewed it');
+  assert.deepEqual([readCodexReviews(root).at(-1).base, readCodexReviews(root).at(-1).head], [base, git(root, 'rev-parse', 'HEAD')]);
+});
+
 test('a branch forked at the head of a rechecked review, without the recheck, is new code and is reviewed as any other (L8 of merge-queue)', async () => {
   const { root, head } = await reviewedThenCorrected();
   const second = await run(['--base', head, '--cwd', root], { ...fakeCodex(reviewed(root, head), {}, PROBE_OK, recheckAnswer(root)), randomUUID: () => RECHECK_ID });

@@ -1,6 +1,6 @@
 ## Goal
 Five refusals of the harness hold against the way past each had: a quoted whole-suite glob is refused beside a gate,
-`--again` cannot buy a fourth Codex review of a change, a "Done when" command cmd.exe cannot run is caught for a
+`--again` cannot buy a fourth Codex review of a change whose three left findings open, a "Done when" command cmd.exe cannot run is caught for a
 backtick, a `$VAR` and single quotes, a sensor's throwaway home moves `JS_HARNESS_HOME` too, and the Windows-only
 tests of `js-harness remote` run in a gate that blocks.
 
@@ -89,38 +89,30 @@ can write his real harness home, and 99 of 119 tests of a Windows-only command t
    local Windows run before the WSL mirror)" (the same).
 
 ## Tasks
-- [ ] T1 (kind: build) spec 1: a word a glob expands counts as several files, quoted or not, test first.
-- [ ] T2 (kind: build) spec 2: `--again` refused over a change three reviews left open, unless the range holds new
-  code and starts at or after the commit the refusal names; recheck tests and a fake-Codex test first.
-- [ ] T3 (kind: build) spec 3: `cmdShellGap` names a backtick, a `$VAR` and single quotes, test first.
-- [ ] T4 (kind: build) spec 4: the sensor's environment drops `JS_HARNESS_HOME`, test first.
-- [ ] T5 (kind: build) spec 5: a Windows job in gate.yml runs `bin/remote.test.mjs`, the workflow test first.
-- [ ] T6 (kind: verify) an independent verifier reads T1-T5.
+- [x] T1 (kind: build) spec 1: a word a glob expands counts as several files, quoted or not, test first. eb1ecf8a,
+  130b2373 (extglob).
+- [x] T2 (kind: build) spec 2: `--again` refused over a change three reviews left open, unless the range holds new
+  code and starts at or after the commit the refusal names; recheck tests and a fake-Codex test first. ea621c72,
+  3b2ea1c1, and the V2 commit.
+- [x] T3 (kind: build) spec 3: `cmdShellGap` names a backtick, a `$VAR` and single quotes, test first. ee0fd35a,
+  8ef687f8, 130b2373.
+- [x] T4 (kind: build) spec 4: the sensor's environment drops `JS_HARNESS_HOME`, test first. cf6a38ed.
+- [x] T5 (kind: build) spec 5: a Windows job in gate.yml runs `bin/remote.test.mjs`, the workflow test first.
+  e6b3760b, 8f6b893f.
+- [x] T6 (kind: verify) an independent verifier reads T1-T5. Its findings in L6.
 
 ## Next step
-State at 2026-11-10T10:40Z, branch worktree-audit-u4-refusals, worktree D:\js-harness\.claude\worktrees\audit-u4-refusals.
-Done and reviewed (Codex + lenses on each slice): T1 eb1ecf8a, T3 ee0fd35a + 8ef687f8 (Codex P2 fixed, recheck
-correct), T4 cf6a38ed, T2 ea621c72 + 3b2ea1c1, T5 e6b3760b (gate run 42796545026: windows job 48 s, 119 pass, 0
-skipped; check job 3 min 55 s). T6 verifier returned. Fix now, tests first, one commit each, then Codex + lenses on
-3b2ea1c1..HEAD wait no: on e6b3760b..HEAD:
-- V2: `--again --base U1^` with U1 uncovered behind the chain is refused and names `--base U1`, a dead end. Fix in
-  bin/codex-review.mjs: the route is the older of `reviewFromBehind(head)` and `reviewStart`'s start of the range
-  (coverage computed once); integration test with a fake Codex (R0, U1, U2; review --base U1; two rechecks; then
-  `--again --base R0` runs). codex-review.mjs is at its 2258-line ceiling: free lines first.
-- DONE in the commit after 99ada2d7: V5 and V6 (tests red then green, 609 commands still 0 gaps). Still owed of V6:
-  docs/RECORDS.md:108 names `$( )` alone; add the backtick, `$VAR` and single quotes there (PR 808 shares the file).
-- V5: GLOB in bin/lib/test-run-warning.mjs misses extglob `@( +( !(`; `node --test` of a directory runs no test.
-- V6: cmdShellGap: a cmd split (`&`, `|` outside cmd quotes) ends the code; `$?`, `$1`, `$@`, `$#` count; `-e"`
-  with no space opens code. Left: doubled `""` and `^"` (rare, refuse more). docs/RECORDS.md:108 says `$( )` only
-  (PR 808 touches that file).
-- V7 DONE (a guard of a future shape: nothing red to show today). Next is V2, then the review of 99ada2d7..HEAD.
-- V7: workflow test refuses `continue-on-error` and `if:` in gate.yml.
-- Report to the lead, not fixed (scope): V1, repeated `--again` reviews of a change outside a three-review chain, or
-  after one recheck, still run (L3 counts only the three-review state; the owner's bound is per change); V3, without
-  `--again` a start behind the chain (an older uncovered commit) reviews it a fourth time (not introduced); V4, an
-  `--again` base at an unrechecked reviewed head skips the check. The Goal line overclaims: correct it.
-- Then: Log L5-L7, tasks ticked, `npm run check`, push, `gh pr create`, `js-harness notify --to orchestrator --kind
-  ready --pr <n>` naming shared files (README.md with 801/804, docs/RECORDS.md with 808 if edited).
+State at 2026-11-10T10:50Z, branch worktree-audit-u4-refusals, worktree D:\js-harness\.claude\worktrees\audit-u4-refusals.
+Done: T1-T6 (ticked above). Verifier findings fixed: V5 and V6 in 130b2373, V7 in 8f6b893f, V2 in the commit that
+writes this state; the Goal corrected to what L3 decided. Left, in order:
+- docs/RECORDS.md:108 names `$( )` alone: add the backtick, `$VAR` and single quotes (PR 808 shares the file).
+- Codex, then the lenses (risk, reliability, resilience), one at a time, on 99ada2d7..HEAD.
+- Log L5-L7; `npm run check`; push; `gh pr create`; `js-harness notify --to orchestrator --kind ready --pr <n>`
+  naming shared files (README.md with 801/804, docs/RECORDS.md with 808); V1, V3, V4 reported to the lead as open.
+- Reported, not fixed (scope): V1, repeated `--again` reviews of a change outside a three-review chain, or after one
+  recheck, still run (L3 counts only the three-review state; the owner's bound is per change); V3, without `--again`
+  a start behind the chain (an older uncovered commit) reviews it a fourth time (not introduced here); V4, an
+  `--again` base at a reviewed head never rechecked skips the check.
 
 ## Log
 - L1 The brief (2026-11-10T09:10Z): "Yours: exactly what the unit lists and its "Done when". It is high risk: item 2
@@ -140,3 +132,19 @@ skipped; check job 3 min 55 s). T6 verifier returned. Fix now, tests first, one 
   counts: a range over a change rechecked once is a third review at most, within his bound of three.
 - L4 M27, decided here by what the repository does (item 5 above): the Windows job, `windows-2025` as the daily run
   pins it, the same bound as the Linux job, running `node --test bin/remote.test.mjs` with the runner's long TEMP.
+- L5 Reviews, one at a time. Slice A (T1, T3, T4): Codex 302,320 input tokens, one P2 (a quote escaped inside
+  `node -e "..."` refused), fixed in 8ef687f8, its recheck 32,596 tokens, correct; lenses risk and reliability, 0
+  findings. Slice B (T2, 8ef687f8..3b2ea1c1): Codex 224,957 tokens, correct; lenses risk, reliability and resilience,
+  0 findings. Slice C (T5, 3b2ea1c1..e6b3760b): Codex 59,329 tokens, correct; lenses 0 findings. Each fix's test was
+  run red before the fix in this session (its transcript); the commit bodies do not record those runs. V7 had no red
+  state to show: it guards a shape gate.yml does not have.
+- L6 The verifier (Opus 5.5, high, read-only) on T1-T5: V1 (high, scope) repeated `--again` full reviews outside a
+  three-review chain, or after one recheck, still run; V2 (medium) `--again` from the commit before code left out
+  behind the chain was refused with a route that is itself refused; V3 (preexisting) without `--again`, a start
+  behind the chain reviews it a fourth time; V4 (low) an `--again` base at a reviewed head never rechecked skips the
+  check; V5 extglob missed; V6 cmd.exe edges in `cmdShellGap`; V7 nothing stops the Windows job from being made
+  non-blocking. Fixed: V2, V5, V6 (except a doubled `""` and `^"`, rare and refusing more), V7. Reported to the lead,
+  not fixed: V1 (L3 bounds only the three-review state; widening it is a decision on his rule), V3, V4. The Goal's
+  first wording, "a fourth Codex review of a change", overclaimed and now says what L3 decided.
+- L7 Gate run 42796545026 (the commit of T5): the windows job ran `bin/remote.test.mjs` in 48 s, tests 119, pass 119,
+  skipped 0; the check job took 3 min 55 s, so the gate waits no longer than before.
