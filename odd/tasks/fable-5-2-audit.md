@@ -102,11 +102,11 @@ nothing. A finding that looks urgent (data at risk, a secret exposed) goes to th
 
 ## Tasks
 - [x] T1 (kind: design) The depth pass and this document, committed alone before anything else (specs 1 to 5)
-- [ ] T2 (kind: verify) Map the subject with Opus readers, each batch leaving a ledger in the session's notes
+- [x] T2 (kind: verify) Map the subject with Opus readers, each batch leaving a ledger in the session's notes
   folder: 15 batches of the core source, then the evals and scripts, the tests by sample, the documents and the
   feature documents (spec 2)
-- [ ] T3 (kind: verify) Verify at the source every claim that becomes a finding, and try to refute it (spec 3)
-- [ ] T4 (kind: docs) The audit document: findings by severity, coverage, candidates apart (specs 3 and 5)
+- [x] T3 (kind: verify) Verify at the source every claim that becomes a finding, and try to refute it (spec 3)
+- [x] T4 (kind: docs) The audit document: findings by severity, coverage, candidates apart (specs 3 and 5)
 - [ ] T5 (kind: docs) The session summary, the pull request, `notify --kind ready`, then closed (spec 4)
 
 ## Log
@@ -133,3 +133,26 @@ nothing. A finding that looks urgent (data at risk, a secret exposed) goes to th
 - L6 (2026-11-09, cost said first): T2 launches about 21 Opus 5.5 readers at high effort, each over at most about
   90,000 estimated tokens of files, in waves; they use his plan and no dollars. The commit of this document runs
   the gate's document sensors once (`harness.json`, `documentSensors`), under the shared gate lock.
+- L7 (2026-11-09, state, written before the context pause): 21 readers launched (15 batches of the core source,
+  two of the evals and scripts, one of the tests, two of the documents, one of the feature documents); the host
+  allows 20 at once, so the last entered when the first ended. Each reader's ledger and this session's own ledger
+  of what it verified (`AUDITOR-LEDGER.md`) are in the session's notes folder, under `jh161/`, outside the
+  repository. A resumed session reads that ledger first: it names which readers returned, what was verified at
+  its line and what is still a reader's word. Notices sent: opened, and the first third.
+- L8 (2026-11-09, state after the compaction): the host compacted this session by itself after L7; it resumed from
+  L7 and its ledger, and told the lead. The 21 readers all returned. Notices sent since: the note of the
+  compaction and the second third.
+- L9 (2026-11-09, result against the depth pass): the request held (item 4, "supports"). Item 3, the bar, at the
+  close: spec 1, the subject is recorded in the audit's first line; spec 2, the audit's "Coverage" names each area
+  as read by this session, mapped by a reader, sampled or not read, and no area is called clean; spec 3,
+  `docs/audits/2026-11-09-fable-5-2-audit.md` holds 2 high, 37 medium and 8 low findings verified by this session,
+  and 44 medium and 247 low reported by a reader and marked assumed; spec 4, `git diff --stat 378642bb HEAD -- bin
+  evals scripts workshop` is empty; spec 5, 27 candidates sit in their own section. What a single read by one
+  context would have missed is the reason the readers were used; what the readers' word alone would have got
+  wrong is why each high and medium was read again: four reader claims were lowered (the rule proofs, the
+  heartbeat ticks, the stretch control and the v1.0.0 box), and one first test of the blanking, run on samples with no digit, gave a
+  false result before it was run again with real shapes.
+- L10 (2026-11-09, decision of this session): the repository is public (`gh repo view --json visibility`), so the
+  audit is public once pushed, with its two security findings. It names shapes the blanking misses, not a secret;
+  the backup repositories it concerns are private. Said to the lead in the ready notice, for him to weigh before
+  the merge.
