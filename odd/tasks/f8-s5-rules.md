@@ -128,7 +128,7 @@ change of a rule whose owner is `sebastian`.
   PR 1
 - [x] T3 (kind: build) specs 1 and 3: `rules change memory-index-bytes` to 2000 and the new record rule with its line in
   the skill's memory section, on `rule/f8-s5-memory-record` — PR 1
-- [ ] T4 (kind: build) spec 2: every owed control of a live rule closed as a check or prose, the class totals and the
+- [x] T4 (kind: build) spec 2: every owed control of a live rule closed as a check or prose, the class totals and the
   finding in `rules coverage`, tests first — PR 2
 - [x] T5 (kind: build) spec 2: the failure register's controls in the same three classes, printed by `failures`; the
   two lost controls repaired or reclassified — PR 2
@@ -220,12 +220,18 @@ change of a rule whose owner is `sebastian`.
   `2717f7c..766a4f1`: risk 0, reliability 1 open (the two rules of question 235). PR 799 opened, base
   `f8-s5-2-lens-probe`. T8 begun: ROADMAP S5 State and SPEC (the lens review's flag parity and the failure register's
   control classes into Capabilities; what is left of the rule pass in the table of what has no code yet).
+- L15 (2026-11-10, T4 closed): PRs 797, 798 and 799 merged by the lead (`6ee974d`); the machine restarted and
+  `sessions start --resume` brought this session back (brief `2026-11-10T04-01-32-011Z-49cf3240.md`). Question 235,
+  read with `js-harness sessions --quote ea85ec35-82e1-4aa9-abe3-98bd153a50b0 1029`: "B: prosa en la skill del
+  orquestador (Recomendada)", tapped 2026-11-10T03:59:47Z. A tap changes no rule, and B changes none: one line in the
+  orchestrator skill, where it opens sessions (`bin/lib/manifest.mjs`), names both as `rule:<id>` without their
+  values, and their controls are protocol. Tests first: `--strict` with an owed control planted on
+  `announce-finished` exited 0 (red), then 1 naming it. `rules coverage --strict`: "classes: check 49, prose 25,
+  retired 4", PASS. Branch `f8-s5-4-strict` from `origin/main`, commit `69564afd`. The lead's note of 22:35 adds a
+  `Seen` line to `stretch-not-opened`.
 
 ## Next step
-Branch `f8-s5-3-rule-pass`, stacked on PR 798. 1) Read the reviews of `a2d55b18..2717f7ca` (Codex and the lenses
-risk and reliability), fix what they find tests first, push, `gh pr create --base f8-s5-2-lens-probe`, a note to the
-lead. 2) On the answer to question 235: B adds a line naming both rules to the orchestrator skill's session opening
-and their controls as protocol; A needs his typed line and `rules change` on a `rule/` branch; C a refusal in
-`sessions start`, tests first. Then `--strict` holds `report.unclassified` (the test plants an owed control on
-`announce-finished` and expects exit 1). 3) T8 docs, summary, `closed` notice; the incident rerun (~$13) asked
-through the lead.
+Branch `f8-s5-4-strict` from `origin/main`. 1) Codex and the lenses over `6ee974dd..HEAD`, nothing edited while
+they run; fix what they find tests first; push, `gh pr create --base main`, `notify --kind ready --pr <n>`. 2) The
+summary under `docs/sessions/` (`js-harness summary template`), committed and pushed; the incident rerun (~$13)
+asked through the lead with `notify --kind question`; the `closed` notice with `--summary`.

@@ -669,18 +669,19 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   control classified; a headless lens run with a planted user hook shows the hook did not fire; the
   incident set no worse.
 - **Cost:** about $13, the incident rerun [i].
-- **State (2026-11-09):** in review (JH 160, `odd/tasks/f8-s5-rules.md`, PRs 797, 798 and 799, stacked in that
-  order). Skill bodies at most 3k, the skill lint and the protocols-load probe move to
+- **State (2026-11-10):** PRs 797, 798 and 799 on main (`6ee974d`); the last PR in review (JH 160,
+  `odd/tasks/f8-s5-rules.md`), then the incident rerun. Skill bodies at most 3k, the skill lint and the protocols-load probe move to
   `odd/tasks/workshop-product-split.md` (spec 7, question 190), with the incident rerun. What stays here:
   - The `MEMORY.md` budget: `rule:memory-index-bytes` is 2000 bytes (0.5k tokens at chars/4), and the guard refuses
     a write that leaves the index over it and larger than before.
   - The record rule: `rule:documents-canonical`, in the `js-harness` skill's memory hygiene section.
   - The lens flag parity: `node evals/lens-hook-probe.mjs` shows that a planted user hook and `CLAUDE.md` reach a
     run without `--safe-mode` and do not reach one under the lens's flags.
-  - The rule pass, counted on 2026-11-09: 73 live rules and 4 retired. Their obligations are check 49 (49 planted
-    breaks proven), prose 23 and owed 2 (`work-sessions-public` and `work-sessions-private-wsl` have no reader;
-    question 235). `failures` prints the register's controls as check 99, prose 8, measured 2 and owed 5.
-  - What is left: the answer to question 235, then `--strict` holds an owed rule.
+  - The rule pass, counted on 2026-11-10: 73 live rules and 4 retired. Their obligations are check 49 (49 planted
+    breaks proven) and prose 25; none owed. `work-sessions-public` and `work-sessions-private-wsl`, which nothing
+    read, are named by the orchestrator skill where it opens sessions (question 235, his tap "B: prosa en la skill
+    del orquestador (Recomendada)", transcript `ea85ec35`, line 1029). `rules coverage --strict` refuses an owed
+    one. `failures` prints the register's controls as check 99, prose 8, measured 2 and owed 5.
 
 ### S5c-b Directive coverage, the filling
 - **Changes:** every span declared; each seeded `owed` closed by a check or an eval case; about 15 to
