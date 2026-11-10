@@ -24,6 +24,56 @@ export function isWaitCommand(command) {
   return typeof command === 'string' && WAIT_COMMAND.test(command);
 }
 
+/** The steps of the shell command `command`, each as it was typed and trimmed: split at `&&`, `||`, `;`, `|`, `&`, a
+ * line break and a group's parentheses, never inside quotes or a `$(...)`, and not at the `&` of a redirection
+ * (`2>&1`, `&>`). The guard's `shellWords` gives a step's words with their quotes taken off; a step handed back to
+ * be run again has to keep them. */
+function stepsOf(command) {
+  const steps = [];
+  let from = 0;
+  let quote = null;
+  let depth = 0;
+  const cut = (at, width) => {
+    steps.push(command.slice(from, at));
+    from = at + width;
+  };
+  for (let i = 0; i < command.length; i += 1) {
+    const c = command[i];
+    if (quote !== null) {
+      if (quote === '"' && c === '\\') i += 1;
+      else if (c === quote) quote = null;
+    } else if (c === '\\') i += 1;
+    else if (c === '"' || c === "'") quote = c;
+    else if (c === '$' && command[i + 1] === '(') {
+      depth += 1;
+      i += 1;
+    } else if (depth > 0) {
+      if (c === ')') depth -= 1;
+    } else if ((c === '&' || c === '|') && command[i + 1] === c) cut(i++, 2);
+    else if (c === '&' && (command[i - 1] === '>' || command[i - 1] === '<' || command[i + 1] === '>')) continue;
+    else if (c === ';' || c === '|' || c === '&' || c === '\n' || c === '\r' || c === '(' || c === ')') cut(i, 1);
+  }
+  steps.push(command.slice(from));
+  return steps.map((step) => step.trim()).filter((step) => step !== '');
+}
+
+/** The part of the command line `command` that re-arms its `js-harness wait`: its wait steps, each with the `cd`
+ * steps before it, joined by `&&` so a wait never runs in a folder it was not meant for; `null` when no step of it is
+ * a wait (the words were only quoted). A chained line was handed back whole, so a push before its wait would have run
+ * again after a boot (audit M31, 2026-11-09). */
+export function waitPartOf(command) {
+  const kept = [];
+  let folders = [];
+  for (const step of stepsOf(command)) {
+    if (/^cd(\s|$)/.test(step)) folders.push(step);
+    else if (isWaitCommand(step)) {
+      kept.push(...folders, step);
+      folders = [];
+    }
+  }
+  return kept.some(isWaitCommand) ? kept.join(' && ') : null;
+}
+
 const timeOf = (iso) => (typeof iso === 'string' ? Date.parse(iso) : NaN);
 
 /** What the transcript `text` says for a plan: the newest time an entry was written at or before `bootMs`
@@ -72,14 +122,15 @@ export function wakePlan({ bootAt, transcripts, readings = [], openingOf = () =>
       if (!(Number.isFinite(launched) && launched <= bootMs) || work.mode !== 'background') return false;
       return !work.ended || !(timeOf(work.endedAt) <= bootMs);
     });
-    const waits = killedByBoot.map((work) => (work.tool === 'Bash' ? commands.get(work.toolUseId) : undefined)).filter(isWaitCommand);
+    const lines = killedByBoot.map((work) => (work.tool === 'Bash' ? commands.get(work.toolUseId) : undefined)).filter(isWaitCommand);
+    const waits = lines.map(waitPartOf).filter((part) => part !== null);
     plan.push({
       id,
       title,
       role: shaped === null ? null : { role: shaped.role, number: shaped.number },
       opening: title === null ? null : openingOf(title),
       waits,
-      killed: killedByBoot.length - waits.length,
+      killed: killedByBoot.length - lines.length,
       lastAt: new Date(lastAt).toISOString(),
     });
   }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { NOTICE_TEXT_MAX } from './channel.mjs';
-import { isWaitCommand, wakePlan, wakeText } from './wake.mjs';
+import { isWaitCommand, waitPartOf, wakePlan, wakeText } from './wake.mjs';
 
 const BOOT = '2026-10-15T04:52:00.000Z';
 const at = (hour, minute) => `2026-10-15T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00.000Z`;
@@ -96,6 +96,25 @@ test('a wait written on several lines is told on one, its lines joined as the sh
   const text = wakeText({ title: 'JH 2 · x', opening: null, waits: ['cd /d/project\n  js-harness wait --pr 162\r\n'], killed: 0 }, BOOT);
   assert.ok(!/[\r\n]/.test(text), JSON.stringify(text));
   assert.ok(text.includes('1) cd /d/project ; js-harness wait --pr 162'), text);
+});
+
+// Audit M31 (2026-11-09): a chained line was handed back whole, so a push before the wait would run again.
+test('only the wait of a chained line is re-armed, with the cd before it, and quoted text is no step', () => {
+  const cases = [
+    ['git push origin feat && js-harness wait --pr 5 --for 60', 'js-harness wait --pr 5 --for 60'],
+    ['cd /d/x && git commit -m "a; b && c" ; js-harness wait --main-has abc', 'cd /d/x && js-harness wait --main-has abc'],
+    ['js-harness wait --notice-to 7 || echo "wait failed"', 'js-harness wait --notice-to 7'],
+    ['npm run check | tail -3 ; node bin/js-harness.mjs wait --label "x && y" --for 30', 'node bin/js-harness.mjs wait --label "x && y" --for 30'],
+    ['(cd /d/x && js-harness wait --pr 9) & sleep 1', 'cd /d/x && js-harness wait --pr 9'],
+    [WAIT, WAIT],
+  ];
+  for (const [line, part] of cases) assert.equal(waitPartOf(line), part, line);
+  const texts = [
+    { id: 'p', text: transcript(titled('JH 5 · canal'), prompt('go', at(4, 0)), ...background('t1', 'b1', 'git push origin feat && js-harness wait --pr 5', at(4, 30))) },
+  ];
+  const [one] = wakePlan({ bootAt: BOOT, transcripts: texts });
+  assert.deepEqual(one.waits, ['js-harness wait --pr 5']);
+  assert.ok(!wakeText(one, BOOT).includes('git push'), wakeText(one, BOOT));
 });
 
 test('the note of a session with no wait says to re-arm none, and a long list is cut to fit a notice with the count left out', () => {
