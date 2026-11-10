@@ -60,6 +60,8 @@ export const USAGE =
 
 // The phrase that skips a read: the user's words of question 146, "a menos que yo como usuario te diga que no quiero la revision".
 export const SKIP_PHRASE = 'no quiero la revisión';
+/** `text` in lower case with its accents taken off, "Revisión" read as "revision": how the skip phrase is compared. */
+const folded = (text) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 // The Claude reader runs on `rule:subagent-reader-model`, a rule of this repository: a project that does not declare
 // it reads on that rule's alias.
 const CLAUDE_FALLBACK = 'opus';
@@ -562,8 +564,9 @@ function skipCommand(args, root, env, deps, { log, error }) {
     error(`not recorded: ${err.message}; only the user's own typed words skip a read`);
     return 1;
   }
-  // His words, but also the ones the announce gave: a typed "no" to something else is no skip.
-  if (!quoted.quote.toLowerCase().includes(SKIP_PHRASE)) {
+  // His words, but also the ones the announce gave: a typed "no" to something else is no skip. Compared as he types
+  // them, in any case and with or without the accent, as question 146 has it (the Fable 5.2 audit, M8).
+  if (!folded(quoted.quote).includes(folded(SKIP_PHRASE))) {
     error(`not recorded: the words do not hold "${SKIP_PHRASE}", the phrase each read's announce gives for a skip`);
     return 1;
   }
