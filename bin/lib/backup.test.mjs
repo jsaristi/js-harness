@@ -59,6 +59,8 @@ test('redactSecrets blanks the provider keys whose random part holds _ or -, Bas
     ['{ "db_pwd": "' + 'Dp4'.repeat(8) + '" }', 'credential field', /Dp4/],
     // Codex P2 on b16f9e2..92d5989: a name of several parts before `_PASS` or `_PWD`.
     ['POSTGRES_DB_PASS=' + 'Pg5'.repeat(8), 'credential field', /Pg5/],
+    // The reliability lens on 92d5989..b0c940c: an env line's bare PASS, `=` right after the name, as code never has it.
+    ['PASS=' + 'Ps7'.repeat(8), 'credential field', /Ps7/],
     ['{ "APP_DB_PWD": "' + 'Ap6'.repeat(8) + '" }', 'credential field', /Ap6/],
     ['ANTHROPIC_ADMIN=' + 'sk-' + 'ant-admin01-' + 'Ad_9'.repeat(10) + '-' + 'Zz8'.repeat(10), 'API key', /Ad_9|Zz8/],
     ['token ' + 'glpat-' + 'Gl4b_' + 'x7Y'.repeat(6), 'GitLab token', /Gl4b|x7Y/],

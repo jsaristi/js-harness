@@ -129,3 +129,9 @@ Nothing planned: his answer to question 242 chose the scope. A question goes to 
   contexts; idempotent on about 128,000 outputs; no blanked value holds a quote or a backslash; the help is true.
   After the fix: `node --test bin/lib/backup.test.mjs` 26 of 26, `bin/lib/backup-summary.test.mjs` 5 of 5,
   `bin/lib/stack-backup-walk.test.mjs` 10 pass, 0 fail, 1 skipped.
+- L8 Reviews of 92d5989..b0c940c. Codex: correct, 0.98, 44,422 input tokens; a recheck of its two findings, both
+  fixed, so it did not look afresh at the JSON-escape start, which the verifier's second pass covers. Claude lens risk:
+  0 findings; reliability: 1 warning, answered: a bare `PASS=<value>` had stopped being blanked (main never blanked it,
+  92d5989c did). Fixed with a test that failed first: a bare `pass` is a field name when `=` follows it at once, an env
+  line's shape that code (`const pass =`) does not have. YAML's bare `pass:` stays unblanked, since prose has the same
+  shape ("after the pass: ..."); left open. `node --test bin/lib/backup.test.mjs`: 26 of 26.
