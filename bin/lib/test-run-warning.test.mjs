@@ -179,6 +179,19 @@ test('testRunWarning counts a glob as several files, reads quotes whole, and exe
   assert.equal(testRunWarning('js-harness gate --wait 240 -- node --test a.mjs b.mjs && echo ok', { env: {}, holder: held, fileSeconds: untimed }), null);
 });
 
+// M11 of the Fable 5.2 audit: `node --test` expands a glob it is given itself, so a quoted one, which the shell leaves
+// as it is, is as many files as an unquoted one: `node --test "bin/lib/{contract,home}.test.mjs"` ran 52 tests, the
+// 44 and the 8 of the two files (odd/tasks/audit-u4-refusals.md, spec 1).
+test('a quoted glob is several files, as Node expands it itself, and so is a brace list or a character class', () => {
+  for (const command of ['node --test "bin/**/*.test.mjs"', "node --test 'bin/lib/*.test.mjs'", 'node --test "bin/lib/{contract,home}.test.mjs"', 'node --test bin/lib/{contract,home}.test.mjs', 'node --test "bin/lib/[ab]*.mjs"', 'node --test "bin/lib/a?.test.mjs"']) {
+    assert.equal(testRunFiles(command), Infinity, command);
+    assert.equal(testRunWarning(command, { env: {}, holder: held, fileSeconds: untimed }), warned('several test files'), command);
+  }
+  // A brace with no list in it is no glob, and a quoted pattern of a flag is no file.
+  assert.equal(testRunFiles('node --test "bin/lib/{a}.test.mjs"'), 1);
+  assert.equal(testRunFiles('node --test --test-name-pattern="a*" a.mjs'), 1);
+});
+
 
 // first-version T6a: a heavy run beside a gate is refused whatever its size. Two single files of 65 to 200 s ran
 // beside gates past the protocol line, and one made a gate fail (docs/FAILURES.md, heavy-run-beside-gate).
