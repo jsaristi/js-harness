@@ -88,15 +88,15 @@ not keep the PC on, and a summary filed under tomorrow.
 - [x] T4 (build) spec 4: the wake note keeps only the wait and the `cd` before it, test first: `80993e51`.
 - [x] T5 (build) spec 5: one list of work for `quiet` and the board, tests first: `0983e8b4`.
 - [x] T6 (build) spec 6: the summary named by the local day, test first: `0bf59f00`.
-- [ ] T7 (verify) Codex and the lenses on `6ee974dd..0983e8b4`, one at a time; findings fixed or answered; push, PR,
-  `notify --kind ready`.
+- [x] T7 (verify) Codex and the lenses on `6ee974dd..e5616f39`, one at a time; findings fixed and rechecked (L6):
+  `df0ecca2`, `adf0e803`, `e5616f39`; push, PR, `notify --kind ready`.
 
 ## Next step
-DONE: Codex and the lenses on `6ee974dd..7e2b1cb`, recorded; the lens finding is fixed in the commit after this
-one, `adf0e803`; Codex's P2 on it fixed in the next. NOW: `js-harness codex-review --base adf0e803`, then
-`js-harness lens-review --base 7e2b1cb5 --lenses reliability`, one at a time; then push the branch, open the PR and send `js-harness notify --to orchestrator --kind
-ready --pr <n>`, naming shared files (none of 801-809 touched these; recheck with `gh pr diff <n> --name-only`) and
-that docs/live-board.html needs republishing; keep `js-harness wait --notice-to 168` running in the background.
+DONE: every review recorded and clean (L6): Codex correct (0.97) on `adf0e80..e5616f3`, the reliability lens 0
+findings on `7e2b1cb..e5616f3`. No file of this branch is changed by any open pull request (`gh pr diff <n>
+--name-only` over all 12 open, 2026-11-10 04:05 local). NOW: push, open the PR, send `js-harness notify --to
+orchestrator --kind ready --pr <n>` (docs/live-board.html needs republishing after the merge), keep
+`js-harness wait --notice-to 168` running. After the merge: the summary and `notify --kind closed --summary <file>`.
 
 ## Follow-ups
 - The JH 166 case (the brief): at 02:40 local `js-harness quiet --wait` exited 0 while a background session started
