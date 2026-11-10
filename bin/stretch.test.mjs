@@ -474,11 +474,16 @@ test('explain names a failure by its start, in full or by its minute, asks which
   const explain = (target, more = []) => stretch(place, ['explain', target, '--source', 'commit:e6c8214c', ...more], { hours: 10, deps });
   const byMinute = await explain('failure:16:00Z', ['--why', 'la cola lo rechazó: sin registro de Codex']);
   assert.equal(byMinute.code, 0, byMinute.err);
-  assert.equal((await explain(`failure:${at(4)}`, ['--fixed', '--fix', 'se cubrió con codex-review --again'])).code, 0);
-  const two = await explain('failure:17:00', ['--why', 'x']);
+  // Audit M23: the hour the page prints (`localHour`, 11:00 for 16:00Z) names the same failure.
+  const local = await explain('failure:11:00', ['--fixed', '--fix', 'se cubrió con codex-review --again']);
+  assert.equal(local.code, 0, local.err);
+  // The minute the page shows is local (17:00Z is 12:00 in Bogotá, the zone of these tests); with a Z it is UTC.
+  const two = await explain('failure:12:00', ['--why', 'x']);
   assert.equal(two.code, 1);
   assert.ok(two.err.includes(`failure:${at(5)}`) && two.err.includes(`failure:${second}`), two.err);
-  assert.equal((await explain('failure:18:00', ['--why', 'x'])).code, 1, 'no failure starts then');
+  assert.equal((await explain('failure:17:00Z', ['--why', 'x'])).code, 1, 'the same minute in UTC');
+  assert.equal((await explain('failure:17:00', ['--why', 'x'])).code, 1, 'no failure starts at 17:00 local');
+  assert.equal((await explain('failure:13:00', ['--why', 'x'])).code, 1, 'no failure starts then');
   assert.equal((await explain('failure:mañana', ['--why', 'x'])).code, 1);
   assert.deepEqual(events(place).filter((event) => event.event === 'explain').map((one) => [one.kind, one.target]), [['failure', at(4)], ['failure', at(4)]]);
   const shown = JSON.parse((await stretch(place, ['show', '--json'], { hours: 11, deps })).out);
@@ -493,7 +498,7 @@ test('explain tells apart two failures cut to the opening by the start each reco
   await stretch(place, ['open', '--plan', planFile(place, PLAN)], { deps });
   await stretch(place, ['close'], { hours: 9, deps });
   const explain = (target) => stretch(place, ['explain', target, '--source', 'commit:e6c8214c', '--why', 'x'], { hours: 10, deps });
-  const which = await explain('failure:12:00');
+  const which = await explain('failure:07:00');
   assert.equal(which.code, 1);
   assert.ok(which.err.includes(`failure:${at(-1)} (land exit 1, orquestador)`) && which.err.includes(`failure:${at(-0.5)} (land exit 4, orquestador)`), which.err);
   assert.equal((await explain(`failure:${at(0)}`)).code, 1, 'both show the opening');

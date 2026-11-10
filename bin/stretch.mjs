@@ -17,6 +17,7 @@ import { codexReviewRunsPath } from './lib/codex-review-runs.mjs';
 import { cmdShellGap } from './lib/contract.mjs';
 import { readGateLog } from './lib/gate-log.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { localHour } from './lib/local-time.mjs';
 import { appendPage, pagesFile } from './lib/pages-record.mjs';
 import { parseRoadmap } from './lib/progress.mjs';
 import { gitRead, headBefore, momentAt, pullRequestsOf, readRef } from './lib/report-git.mjs';
@@ -78,7 +79,7 @@ export const USAGE = [
   '  explain: records why a goal, an item or a failure of the stretch went wrong, how it was or can be fixed (--fixed',
   '    when it was), or why it is not (--open), with its source: commit:<hash> git knows, or notice:<at> of the',
   '    channel. A goal and an item are named by id (goal:<id> or item:<id> when both share it), a failure by its start,',
-  '    failure:<HH:MM> or failure:<time> as the return shows it, or failure:<time> its record holds, which tells apart',
+  '    failure:<HH:MM> in the local hour the return shows (<HH:MM>Z in UTC), or failure:<time> its record holds, which tells apart',
   '    two cut to the opening. The return shows it beside its row, over what the records say alone. It explains the',
   '    open stretch, else the last closed one, or the one --stretch <id> names; two whose records start in the same',
   '    millisecond share that name and one explanation. Exit 1 for an unknown target, a start two failures share',
@@ -582,17 +583,19 @@ function explainCommand(ctx, flags, [target], events) {
 
 /** The goal, item or failure `target` names in `stretch`, as `{ kind, target }`, or `{ error }`. A goal and an item
  * may share an id: `goal:<id>` or `item:<id>` says which, and a bare id must name only one. A failure is named by its
- * start, `failure:<time>` in full or `failure:<HH:MM>` as the page shows it, among the failures measured to the close,
+ * start, `failure:<time>` in full or `failure:<HH:MM>` in the local hour the page shows it, among the failures measured to the close,
  * or to now while the stretch is open; a minute two of them start in is refused with the full time of each. */
 function explainTarget(ctx, stretch, target) {
   const { id: stretchId, plan } = stretch.open;
   const [, kindAsked, id] = /^(?:(goal|item|failure):)?(.+)$/.exec(target);
   if (kindAsked === 'failure') {
     const failures = failuresOf(measure(ctx, stretch, ctx.now()));
-    const minute = /^(\d{2}:\d{2})Z?$/.exec(id)?.[1];
+    // `HH:MM` is the local hour the page prints (`localHour`, rule:local-time); `HH:MMZ` the UTC one the records hold.
+    const [, minute, utc] = /^(\d{2}:\d{2})(Z?)$/.exec(id) ?? [];
+    const minuteOf = (at) => (utc ? new Date(at).toISOString().slice(11, 16) : localHour(at));
     const wanted = Date.parse(id);
     const named = failures.filter((one) => Date.parse(one.target) === wanted);
-    const found = named.length > 0 ? named : failures.filter((one) => (minute ? one.at.slice(11, 16) === minute : Date.parse(one.at) === wanted));
+    const found = named.length > 0 ? named : failures.filter((one) => (minute ? minuteOf(one.at) === minute : Date.parse(one.at) === wanted));
     const targets = [...new Set(found.map((one) => one.target))];
     if (targets.length === 1) return { kind: 'failure', target: targets[0] };
     return { error: targets.length === 0 ? `the stretch ${stretchId} has no failure that starts at ${id}` : `${found.length} failures of the stretch ${stretchId} start at ${id}: name one by the start its record holds, ${found.map((one) => `failure:${one.target} (${one.what}, ${one.who})`).join(' or ')}` };
