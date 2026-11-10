@@ -117,6 +117,15 @@ test('only the wait of a chained line is re-armed, with the cd before it, and qu
   assert.deepEqual(waitPartsOf('if true; then js-harness wait --pr 5; fi'), ['js-harness wait --pr 5']);
   assert.deepEqual(waitPartsOf('while true; do js-harness wait --pr 6; done'), ['js-harness wait --pr 6']);
   assert.deepEqual(waitPartsOf('echo "js-harness wait --pr 7"'), []);
+  // The reliability lens, on 7e2b1cb: a wait run through a prefix is still the wait, handed back with its prefix.
+  for (const prefixed of ['timeout 600 js-harness wait --pr 8', 'JH_X=1 js-harness wait --pr 8', 'nohup node bin/js-harness.mjs wait --pr 8', 'time timeout -k 5 600 js-harness wait --pr 8']) {
+    assert.deepEqual(waitPartsOf(`git push && ${prefixed}`), [prefixed], prefixed);
+  }
+  // A line read as a wait that yields no step to re-arm is killed work, never a wait silently dropped.
+  const hidden = [{ id: 'h', text: transcript(titled('JH 6 · x'), prompt('go', at(4, 0)), ...background('h1', 'hb1', 'bash -c "js-harness wait --pr 9"', at(4, 30))) }];
+  const [quiet] = wakePlan({ bootAt: BOOT, transcripts: hidden });
+  assert.deepEqual(quiet.waits, []);
+  assert.equal(quiet.killed, 1);
   const texts = [
     { id: 'p', text: transcript(titled('JH 5 · canal'), prompt('go', at(4, 0)), ...background('t1', 'b1', 'git push origin feat && js-harness wait --pr 5', at(4, 30))) },
   ];

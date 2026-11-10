@@ -65,6 +65,10 @@ function stepsOf(command) {
 // A step that runs the wait itself: its program is the dispatcher, node or wait.mjs, not a command that only names it.
 const RUNS_WAIT = /^["']?(?:[^\s"']*[\\/])?(?:js-harness(?:\.mjs|\.cmd)?|node(?:\.exe)?|wait\.mjs)["']?(?:\s|$)/i;
 const LEADING_KEYWORD = /^(?:(?:then|do|else|elif|if|while|until|!|\{)\s+)+/;
+// What may run a command for it and leave it the same command: an environment assignment, `env`, `nohup`, `time`,
+// `command`, `exec` and `timeout` with its options and duration. The step is handed back with them; the program
+// after them is the one RUNS_WAIT reads (the reliability lens, on 7e2b1cb: a prefixed wait was dropped).
+const RUN_PREFIX = /^(?:(?:[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|\S*)|env|nohup|time|command|exec|timeout(?:\s+-\w+(?:\s+\d\S*)?)*\s+\d\S*)\s+)+/;
 
 /** The commands that re-arm the `js-harness wait` calls of the command line `command`, one for each, in order: the
  * wait step, without a keyword before it, after the `cd` steps that move it, joined by `&&` so it runs only in that
@@ -81,7 +85,7 @@ export function waitPartsOf(command) {
     } else {
       const bare = step.replace(LEADING_KEYWORD, '');
       if (/^cd(\s|$)/.test(bare)) frames.at(-1).push(bare);
-      else if (isWaitCommand(bare) && RUNS_WAIT.test(bare)) parts.push([...frames.flat(), bare].join(' && '));
+      else if (isWaitCommand(bare) && RUNS_WAIT.test(bare.replace(RUN_PREFIX, ''))) parts.push([...frames.flat(), bare].join(' && '));
     }
   }
   return parts;
@@ -136,14 +140,17 @@ export function wakePlan({ bootAt, transcripts, readings = [], openingOf = () =>
       return !work.ended || !(timeOf(work.endedAt) <= bootMs);
     });
     const lines = killedByBoot.map((work) => (work.tool === 'Bash' ? commands.get(work.toolUseId) : undefined)).filter(isWaitCommand);
-    const waits = lines.flatMap(waitPartsOf);
+    // A line read as a wait with no step to re-arm (one run inside `bash -c "..."`) stays killed work, so the
+    // note never says no wait ran when one did.
+    const parts = lines.map(waitPartsOf);
+    const waits = parts.flat();
     plan.push({
       id,
       title,
       role: shaped === null ? null : { role: shaped.role, number: shaped.number },
       opening: title === null ? null : openingOf(title),
       waits,
-      killed: killedByBoot.length - lines.length,
+      killed: killedByBoot.length - parts.filter((part) => part.length > 0).length,
       lastAt: new Date(lastAt).toISOString(),
     });
   }

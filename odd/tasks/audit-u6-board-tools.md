@@ -92,19 +92,11 @@ not keep the PC on, and a summary filed under tomorrow.
   `notify --kind ready`.
 
 ## Next step
-DONE since: the wake fix is committed, `df0ecca2`, tests green. NOW: `js-harness codex-review --base 643d57d5`, then
-the lenses on `6ee974dd`, then push, PR, ready. Earlier: Codex reviewed `30cf902..643d57d` (recorded): part 2 correct; part 1 three P2 on `waitPartOf` of
-bin/lib/wake.mjs: (a) `wait 1 & wait 2` serialized by `&&`; (b) a `cd` inside `( ... )` the wait is not in moved it;
-(c) `then js-harness wait` kept its keyword. Fix under way: rename to `waitPartsOf(command)` returning an ARRAY, one
-re-arm per wait; `stepsOf` emits group open/close so each `(` pushes a frame of cds that `)` pops, a wait takes the cds
-of all open frames; strip a leading `then|do|else|elif|if|while|until|!|{` from a step; `wakePlan` uses
-`lines.flatMap(waitPartsOf)`. The new tests are already in bin/lib/wake.test.mjs (uncommitted, red). Then commit
-`fix(wake): ...` answering Codex, run `js-harness codex-review --base 643d57d5` on the fix, then the lenses below.
-Then: `js-harness codex-review --base 6ee974dd` DONE; next `js-harness lens-review --base 6ee974dd --lenses
-risk,reliability,resilience --reason "<why>"`, one at a time (the machine is short of memory). Then push the branch,
-open the PR and send `js-harness notify --to orchestrator --kind ready --pr <n>`, naming the shared file
-`bin/conventions-structure.test.mjs` (none of 801-809 touches it; recheck) and keep `js-harness wait --notice-to 168`
-running in the background.
+DONE: Codex and the lenses on `6ee974dd..7e2b1cb`, recorded; the lens finding is fixed in the commit after this
+one. NOW: `js-harness codex-review --base 7e2b1cb5` and `js-harness lens-review --base 7e2b1cb5 --lenses reliability`
+on that fix, one at a time; then push the branch, open the PR and send `js-harness notify --to orchestrator --kind
+ready --pr <n>`, naming shared files (none of 801-809 touched these; recheck with `gh pr diff <n> --name-only`) and
+that docs/live-board.html needs republishing; keep `js-harness wait --notice-to 168` running in the background.
 
 ## Follow-ups
 - The JH 166 case (the brief): at 02:40 local `js-harness quiet --wait` exited 0 while a background session started
@@ -135,5 +127,12 @@ running in the background.
   bin/sessions.mjs is at 980 lines and its ceiling left the list; the reading of an answer moved to the new
   bin/lib/question-answer.mjs, so bin/lib/sessions.mjs is at 3389 and its ceiling went down to it. Each of the five
   code commits passed the pre-commit gate.
+- L6 Reviews. Codex on `30cf902..643d57d`: part 2 correct; part 1 three P2 on the wake note's split (two waits
+  serialized by `&&`, a `cd` inside a group the wait is not in, a keyword such as `then` kept), fixed in `df0ecca2`
+  and rechecked correct (0.96) on `643d57d..7e2b1cb`. The lenses risk, reliability and resilience on
+  `6ee974d..7e2b1cb`: risk and resilience 0 findings; reliability one WARNING, a wait run through a prefix
+  (`timeout 600 js-harness wait`, an environment assignment, `nohup`) was dropped and subtracted from `killed`.
+  Fixed test first (red: `[]` for the prefixed wait): the program is read after the prefix, the step is handed back
+  with it, and a line with no step to re-arm (`bash -c "..."`) stays killed work.
 - L4 Shared files with open pull requests: none of the files in scope is changed by 801-804 or 806-809
   (`gh pr diff <n> --name-only`, 2026-11-10); bin/lib/background.mjs (801) is left alone on purpose.
