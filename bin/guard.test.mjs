@@ -8,6 +8,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { guardMain } from './guard.mjs';
+import { appRoot } from './lib/app-record.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { ruleValue, writeRules } from './lib/rules.mjs';
 import { testRunWarning } from './lib/test-run-warning.mjs';
@@ -17,7 +18,7 @@ const AT_1444 = new Date(2026, 9, 14, 14, 44, 30);
 
 /** Runs the hook on `payload` (an object, or a raw text) in a project whose rules file reads `rulesText` (null for
  * none), with the machine's gate lock held by `held` (null for free), and returns `{ code, out, err }`. */
-async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, timed = {}, index = null, configDir, exists = () => false, baseContains, app } = {}) {
+async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, timed = {}, index = null, configDir, exists = () => false, baseContains, app, env = {}, home = path.join(os.tmpdir(), 'js-harness-guard-test-no-home') } = {}) {
   const out = [];
   const err = [];
   const code = await guardMain(args, {
@@ -38,8 +39,8 @@ async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, arg
     testRun: (command, options) => testRunWarning(command, { env: {}, holder: () => held, fileSeconds: (file) => timed[file], ...options }),
     claudeConfigDir: configDir,
     baseContains,
-    env: {},
-    homedir: () => path.join(os.tmpdir(), 'js-harness-guard-test-no-home'),
+    env,
+    homedir: () => home,
     exists,
     // `app` stands in for the desktop app's session records, by session id; without it the real reader finds none
     // under the home of these tests.
@@ -146,8 +147,36 @@ test('a start_session from a session whose own app record is off the home is den
   // A reader that fails is a record that cannot be read: the start passes, and the board shows the session.
   assert.deepEqual(await hook(call, { app: { get: () => { throw new Error('locked'); } } }), passes);
   // A call the start's own rules refuse says that first, and reads no record.
-  const first = await hook({ ...call, tool_input: { ...call.tool_input, effort: undefined } }, { app: { get: () => assert.fail('no record is read') } });
+  // The hook swallows what a reader throws, so the read is counted, not failed from inside it.
+  let reads = 0;
+  const counted = { get: (id) => { reads += 1; return record({ model: next }).get(id); } };
+  const first = await hook({ ...call, tool_input: { ...call.tool_input, effort: undefined } }, { app: counted });
   assert.match(denied(first).permissionDecisionReason, /names no effort/);
+  assert.equal(reads, 0, 'no record is read');
+  assert.match(denied(await hook(call, { app: counted })).permissionDecisionReason, /whose own record holds the model/);
+  assert.equal(reads, 1, 'the counting reader is the one the hook reads');
+});
+
+// The reliability lens on 268991a..e878d8b: the reader the hook is installed with was held by no test, and the hook
+// swallows what it throws, so a mistake in its wiring would leave the refusal inert with every test green.
+test('with no reader given, the hook finds the calling session\'s record in the app\'s folder of this platform', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-guard-app-'));
+  try {
+    const env = { APPDATA: path.join(dir, 'AppData', 'Roaming') };
+    const folder = path.join(appRoot(env, process.platform, dir), 'claude-code-sessions', 'account', 'org');
+    fs.mkdirSync(folder, { recursive: true });
+    const model = RULES.find((rule) => rule.id === 'session-model').value;
+    const next = model.replace(/\d+$/, (digits) => String(Number(digits) + 1));
+    const write = (held) => fs.writeFileSync(path.join(folder, 'local_1.json'), JSON.stringify({ cliSessionId: 'c-starter', title: 'JH 7 · thing', model: held, effort: 'max', cwd: 'D:/project' }));
+    const call = { tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', session_id: 'c-starter', tool_input: { initiation: 'own_initiative', title: 'JH 32 · T9', prompt: 'Do T9.', background: 'x'.repeat(80), effort: SESSION_EFFORT, context: 'fresh' } };
+    write(next);
+    const off = await hook(call, { env, home: dir });
+    assert.match(denied(off).permissionDecisionReason, new RegExp(`whose own record holds the model "${next}", not the one of the rule session-model: ${model}, and a start is capped at the session that makes it\\. The lead sets that session's with its session tools\\.`));
+    write(model);
+    assert.deepEqual(await hook(call, { env, home: dir }), { code: 0, out: '', err: '' });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // 2026-11-10: his words give the lead a level of its own, and the old lead starts the new one with this tool.
