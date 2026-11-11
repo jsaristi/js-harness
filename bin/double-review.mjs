@@ -63,8 +63,9 @@ export const SKIP_PHRASE = 'no quiero la revisión';
 /** `text` in lower case with its accents taken off, "Revisión" read as "revision": how the skip phrase is compared. */
 const folded = (text) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 // The Claude reader runs on `rule:subagent-reader-model`, a rule of this repository: a project that does not declare
-// it reads on that rule's alias.
-const CLAUDE_FALLBACK = 'opus';
+// it reads on the same model, by its full id (no short name gave it on 2026-11-10; until then the fallback was the
+// alias `opus`). A read passes no effort, as before.
+const CLAUDE_FALLBACK = 'claude-fable-5-2';
 // What one read cost when it was measured by this command, on this feature's own document (the feature document,
 // L12): input counted with its cache reads, as the record counts it, and said as measured once, not as a bound.
 const MEASURED_COST = 'about 1.1M tokens of Claude and 0.9M of Codex, most of them cache reads, and 1% of Codex\'s weekly limit';

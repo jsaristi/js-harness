@@ -133,7 +133,7 @@ test('--plan says what a read costs and the user\'s words that skip it, and star
   const run = deps(t, root, spawn);
   assert.equal(await doubleReviewMain(['read', 'plan.md', '--plan'], {}, run.deps), 0);
   const said = run.lines.log.join('\n');
-  assert.match(said, /Claude reader on opus and a Codex reader/, 'a project that does not declare the reader model reads on its alias');
+  assert.match(said, /Claude reader on claude-fable-5-2 and a Codex reader/, 'a project that does not declare the reader model reads on the fallback, by its full id');
   assert.match(said, /tokens/);
   assert.ok(said.includes(SKIP_PHRASE));
   assert.equal(calls.length, 0);

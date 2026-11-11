@@ -27,8 +27,11 @@ import { LENS_NAMES, LENSES, lensPrompt } from './lib/lens-prompts.mjs';
 import { LENS_ANSWER_SCHEMA, lensResult } from './lib/lens-result.mjs';
 import { appendLensReview, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, readLensReviews, startLensRun } from './lib/lens-reviews.mjs';
 
-// The model the lens agents name (`model: sonnet`), as an alias, so the newest Sonnet answers.
-export const LENS_MODEL = 'sonnet';
+// The model each lens runs on, by its full id: no short name gave it when it was set (on 2026-11-10 `fable` gave
+// claude-fable-5-1 on cli 2.1.319). Until that day the lenses ran on the alias `sonnet`; his "todos los modelos de
+// ahora en adelante va a ser Fable 5.2 Alto" of that day moved them, by the lead's reading. A lens run passes no
+// effort, as before: it runs at the CLI's default for the model.
+export const LENS_MODEL = 'claude-fable-5-2';
 // The most a lens is handed, in estimated tokens (four characters a token): a range past it is reviewed in smaller
 // ranges, since a lens that cannot hold the whole block can only answer incomplete.
 export const LENS_INPUT_LIMIT = 150_000;
