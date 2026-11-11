@@ -382,6 +382,68 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 18:40: commit 1 of the paragraph below landed, `d37308a2`. Commit 2 (the command's own tests, the
+README, the SPEC and this document) carries this line. Next, in order: Codex on `4d020cfb` to the head, then the
+risk, reliability and readability lenses, one at a time under the gate; fix or answer; the dry run; T8.
+2026-11-11 18:36, at 88 %: the runner alone did NOT land (run 43120474896): three tests of
+`bin/lib/rules-change-run.test.mjs` run `rules switch` through `bin/rules.mjs`, which that commit lacked ("unknown
+argument: --claude"). The split of the paragraph below is wrong. The split that holds: commit 1 is everything in the
+tree but `bin/lib/rules-switch.test.mjs`, `README.md`, `docs/SPEC.md` and this document (about 1,070 lines, under
+1,200), subject "feat(rules): rules switch tries a new model, then writes a home's rules in one pass"; commit 2 is
+those four, subject "test(rules): the tests of rules switch, and its texts". The rest of the paragraph below
+stands (reviews on `4d020cfb` to the head, the dry run, T8, pull request 4, summary, closed). The lead's wait was
+run again at 18:36 after the installed copy's refresh to `ba06e01`.
+2026-11-11 18:31, the session at 86 % of its context: T7's one commit was refused before any test ran: 1,436
+changed lines a review reads, over the 1,200 of `rule:reviewed-commit-lines`. It is two commits now, neither
+importing the other. (1) The runner, `bin/lib/rules-change-run.mjs` and its test, 439 lines, in the gate when this
+was written: check it with `git log --oneline -1` (subject "feat(rules): the runner of rules change writes a
+home's rules in one pass..."); if it is not there, read why in the gate's output before anything runs again.
+(2) The command, everything else left in the tree: `git add -A`, subject "feat(rules): rules switch tries a new
+model, then writes a home's rules in one pass", the body as the refused commit had it (the job's transcript holds
+it). Then, in order: Codex, the risk lens, the reliability lens and the readability lens on `4d020cfb` to T7's
+head, BEFORE main is merged in (this corrects the last sentence of the paragraph below); the dry run on a scratch
+`rule/` branch that merges origin/main and is deleted after (`node bin/js-harness.mjs rules switch --claude
+claude-fable-5-2@high --quote ea85ec35-82e1-4aa9-abe3-98bd153a50b0:11679 --reading "..." --accepted "..."
+--dry-run`); T8 on this branch; `check --push`, the push, pull request 4 on main, the ready notice; the summary
+under `docs/sessions/` and the `closed` notice.
+2026-11-11 18:29: the writer returned T7 (`Covered: S1`), and it is in the commit that carries this line. Checked
+here, not taken from its report: `git status` holds only files of its surface; 395 tests pass over
+`bin/lib/rules-switch.test.mjs`, the runner's, `rules change`'s, `bin/rules.test.mjs`, the home's, the writer
+agent's, doctor's, the dispatcher's, the conventions and the docs' records; `rules coverage --strict` and `rules
+check` pass (78 rules); the Claude probe's arguments are a lens's (`bin/lens-review.mjs:75`) without its schema.
+What it built: `bin/lib/rules-switch.mjs` (493 lines, no I/O of its own) with 18 tests; `changeRules` beside
+`changeRule` in the runner, one pass for several rules, the half in force skipped and named; `rules change` refuses a
+home's new value and names the switch; `machineProbes` and `switchForm` in `bin/rules.mjs` (760 lines).
+Its decisions where this document was silent, to say in pull request 4's body: `--lead <effort>` beside `--claude`,
+the lead's level kept without it; one probe for each (model, level) pair the home will hold that main does not, so
+a new Claude model is asked twice; on his no to one commit, `--rule-by-rule` writes one rule a run and prints the
+numbered sequence, each run probing again; Codex's floor is read before any probe and an unreadable meter stops
+nothing, as `codex-review`; the agent file's effort follows `session-effort`. NOT checked by anyone: the real
+launch of either CLI by `machineProbes` (every test injects them), and the events `codex exec --json` gives, which
+are assumed. Two of its tests were not red first (`readSettings`, `agentCopy`). A dry run from a scratch `rule/`
+branch was refused, rightly: the branch is not based on origin/main (`ba06e01`). Next: `git merge origin/main`
+into this branch after the commit (its tree is main's, so the merge changes no file), the dry run again, then Codex
+and the lenses (risk, reliability, readability for the printout) from that merge commit... no: from `4d020cfb`, the
+last reviewed boundary on the first-parent line, to the head; then T8.
+2026-11-11 18:09: pull request 3 is in main. The lead's message says main is `ba06e01` with 836 and 837, checked
+here: `git ls-remote origin refs/heads/main` gives `ba06e01ffb19`, and `gh pr view` gives both `MERGED` at
+2026-11-11T23:07:08Z. No further cut of 836 was asked. The installed copy is still at `58c8d32` (the lead refreshes
+it once JH 187's double review ends, and that refresh stops this session's wait, to run again). Pull request 4
+therefore goes on main alone: `feat/model-home-switch` was cut from 837's head, which main holds, so it needs no
+rebase. The writer of T7 is at work; nothing of it is checked yet.
+2026-11-11 17:53: both pull requests are marked `ready` (836 at 17:50, 837 at 17:51, head `4d020cfb`), and the
+list of the sessions off the home went to the lead in a note at 17:50. T7 starts now on `feat/model-home-switch`,
+cut from 837's head and not from main as the paragraph below says: the switch's printout reads this pull
+request's list (`bin/lib/home-sessions.mjs`) and its settings notes (`bin/lib/home-doctor.mjs`), so pull request 4
+is the third of the stack. T7 is written by one writer sub-agent (type `js-harness-writer`), the reason being this
+session's context, 73 % at 17:51: its brief names spec 8 (S1) with L13's answer to Claude 7 and L27's amendment,
+the edit surface (`bin/lib/rules-switch.mjs` and its test, the runner and `rules change` with their tests,
+`bin/rules.mjs` and its test, the help, the README, the SPEC, the coverage register and the structure ceilings),
+tests first, no commit, no push, no real probe and no real switch. What it returns is checked here before it is
+committed: `git diff --stat`, the tests named in "Done when", the conventions, `rules coverage --strict`. The
+question still open with the lead, whether the switch may write a home's rules in one commit, blocks nothing: both
+ways are built and tested (L13, Claude 7). Then Codex and the lenses on `4d020cfb` to T7's head, T8 on the same
+branch, pull request 4, the summary and the closed notice.
 2026-11-11 17:50: pull request 3 is open as two stacked pull requests on main, not four: 836
 (`feat/model-home-sessions-1`, `268991a7..e878d8be`, T5, 516 changed lines of code and tests) and 837
 (`feat/model-home-sessions`, `e878d8be` to the head, T6 and the fixes, 742). The cut of the 17:35 paragraph did not

@@ -1001,7 +1001,14 @@ read, an app record included; it reads the records and writes none. `rules chang
 on a `rule/` branch, it takes the change as JSON on standard input and writes the declaration, its
 source and `docs/RULES.md`, and appends a relief line; `--dry-run` prints them and writes nothing (it
 fetches nothing either: a turn to refuse counts on the `origin/main` this clone holds, and says so), and
-`--check-source` checks a stored source against its transcript again. In a project that installs
+`--check-source` checks a stored source against its transcript again. `rules switch [--claude <model>@<effort>]
+[--lead <effort>] [--codex <model>@<effort>]` moves a home of a model and an effort, with his words (`--quote
+<session>:<line>`, `--reading`, `--accepted`): it says what its probe costs, asks each new model one short question
+through the installed CLI, and writes nothing when the CLI refuses the id or the level, another model answers or
+Codex is at its weekly floor; then it writes the rules of the homes named in one pass with the writer's agent file,
+and prints the commit to make, what is left outside the repository and what the new model may make stale.
+`--rule-by-rule` writes one rule a run, for a commit a rule, and `--dry-run` probes nothing and writes nothing;
+`rules change` refuses a new value for a rule of a home and names the switch. In a project that installs
 the harness, the project's own rules in `docs/rules.json` are listed too, and `rules check` holds
 them: each phrase still in its file, each sensor still declared, no rule deleted since HEAD.
 
