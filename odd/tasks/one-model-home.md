@@ -382,6 +382,20 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+At 14:15: `prove.mjs` saw the 15 breaks of the three bundles red. An independent verifier on the guard runs as a
+sub-agent (read-only; its report is read, one thing of it checked, and its findings fixed or answered before the
+reviews). No review has run yet. The reviews go in six units, because main was merged in between and a range
+across a merge would hold main's work: U1 `8007f0fe..efc0ec97`, U2 `5deec5b6..34bbb538`, U3 `34bbb538..52824f6e`,
+U4 `0abb1d2c..8f7a2f76`, U5 `bb1e9ea5..8673a328`, U6 `ce97742a..914fc9c6`. For each, in order and one command at a
+time under `js-harness gate --wait 40 --max 15 --`: `js-harness codex-review --base <base> --doc
+odd/tasks/one-model-home.md` with HEAD detached at the unit's head (it takes no `--head`; check out
+`rule/one-model-home` again after), then `js-harness lens-review --base <base> --head <head> --lenses <one> --reason
+<why> --doc odd/tasks/one-model-home.md`, one lens a run (risk and reliability for the units with guard or reader
+code, readability where messages or documents changed). Findings are fixed on top of the branch or answered
+(`js-harness double-review answer`). The slicing, 958 changed lines of code: four stacked `rule/` branches cut at
+`5ebe0e38` (214 lines), `1765b5aa` (262), `f6b6176f` (235) and the head (354), made only once the reviews are done;
+told to the lead in the note of 14:13, which may answer with another cut. Then the push, the pull requests with the
+body the list below describes, and `js-harness notify --to orchestrator --kind ready --pr <n>`.
 At 14:00: every rule change of pull request 2 is committed, local, not pushed and not reviewed. After S8's two:
 `25355026` (`subagent-writer-model` retired), `8f7a2f76` (`subagent-reader-model` retired; `readerModel(root)`
 left `bin/double-review.mjs`, since it gave the home's model in every case, for `READER_MODEL`), `da5d6166`
