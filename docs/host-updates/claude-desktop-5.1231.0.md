@@ -21,6 +21,24 @@ user's turn (code 2.1.318 #3 and #16, now in the app's CLI); and the types name 
 whether a mod can reach it is documented, not exercised. The map and section 5 of the proposal say so from this pull
 request. None of it was exercised: this session wrote no mod.
 
+The window of Fable 5.2, a row the lead asked for while this review ran (work sessions on `claude-fable-5-2` show a
+window of 316k to 326k tokens and compact about every 20 minutes): the model's window is 1M by default and the figure
+seen is his own setting, not the model's. The changelog of the span says "Added Claude Fable 5.2 (`claude-fable-5-2`),
+now the default Fable model — 1M context" (code 2.1.321 #1, in the sources of this review). The published pages,
+fetched 2026-11-11 and quoted as the fetch summarized them, not as byte copies, say the same: the Fable 5.2 model
+page (platform.claude.com/docs/en/models/fable-5-2/overview) lists "Context window: 1M tokens"; the context-windows
+page says that for every model with a 1M window "1M is the default: you don't need a beta header"; Claude Code's
+model-config page (code.claude.com/docs/en/model-config) says "Fable models, Sonnet 5 and later, Haiku 5.5, and Opus
+4.7 and later run with the 1M window by default, with no `[1m]` suffix needed" and that such models compact "at about
+967K tokens by default". No page read ties Fable's window to a plan, names Max 20x, or prints `fable[1m]` or
+`claude-fable-5-2[1m]`: a session asks for nothing. What holds the sessions near 350k is `autoCompactWindow: 350000`
+in `C:\Users\Oficina\.claude\settings.json` (line 3, read 2026-11-11), which `docs/ROADMAP.md` records as his setting
+of 2026-10-15 and which the context pause reads; the model-config page says that setting, the environment's
+`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, `--autocompact` and `/autocompact` move the point of compaction, from 100K to 1M.
+It was in force while the jobs ran on `opus[1m]` too, so the model change of 2026-11-10 did not shorten the window.
+Not checked: a session on Fable 5.2 with a larger `autoCompactWindow`, and what 1M costs against his plan's allowance.
+Nothing is adopted: the setting is his.
+
 | Change | Decision | Reason | Map row | Evidence | Windows | Phone |
 | --- | --- | --- | --- | --- | --- | --- |
 | Added run status to scheduled tasks that run on your computer, in Cowork and Code. A task's card can now say "Last run failed", "Last run failed, will try again", "Needs input" or "Didn't run", or why a run that is due hasn't started, such as "Waiting for its previous run to finish". | ignore | run status on the cards of scheduled tasks; the harness refuses to open scheduled tasks (map 22, `OPENING_TOOLS` in `bin/lib/guard.mjs`), and `unseen` reads the registry file, not the cards | 22 | desktop 5.1231.0 #1 | unknown | unknown |
