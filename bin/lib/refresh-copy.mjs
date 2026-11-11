@@ -155,11 +155,43 @@ export function pruneStalePnpm({ binDir, now = Date.now, isPnpmRunning, fsys = f
     } catch {
       continue;
     }
-    const target = cmd ? /global\\v11\\[^"]+/.exec(text)?.[0].replace(/\\/g, '/') : /global\/v11\/[^"'\s]+/.exec(text)?.[0];
     const shim = path.basename(name, '.cmd');
-    if (target && !fsys.existsSync(path.join(home, target)) && !broken.includes(shim)) broken.push(shim);
+    if (shimTargets(text, cmd).some((target) => !fsys.existsSync(path.join(home, target))) && !broken.includes(shim)) broken.push(shim);
   }
   return { removed, backups, kept, broken };
+}
+
+/** What the shim `text` must still find under pnpm's home, `/`-separated from `global/v11`: the paths it runs, which it
+ * names behind its own folder (`"%~dp0\..\global\v11\..."` in a .cmd, `'../global/v11/...'` in the POSIX shim). The
+ * store paths it adds to `NODE_PATH` are whole paths and are never read as its target: pnpm 12 names there a
+ * `node_modules/.pnpm/node_modules` it makes only for a package with dependencies, and the first store path of the shim
+ * was once taken for the target, so every refresh of js-harness, which has none, ended as a broken shim
+ * (odd/tasks/land-two-defects.md). A shim that names the store with no path behind its own folder (a target on another
+ * drive is written whole) is held by the store paths of its lines that set no `NODE_PATH`; and one that names the store
+ * only there, by the store folders it names, which is what a prune can remove. So no shim that names the store goes
+ * unchecked. A path is read as the shim's word that holds it, a quoted word whole: a target with a space is quoted,
+ * and cut at the space it named a file that never was (Codex on e0e2755a..adc2978c). */
+function shimTargets(text, cmd) {
+  // `'` quotes nothing in a .cmd. A quote with no end on its line opens no word.
+  const word = cmd ? /"([^"]*)"|[^\s"]+/g : /"([^"]*)"|'([^']*)'|[^\s"']+/g;
+  const comment = cmd ? /^\s*@?(?:rem\b|::)/i : /^\s*#/;
+  /** The store paths of `lines`, each from `global/v11` to the end of its word: those behind `..`, or any. */
+  const stored = (lines, behind) => {
+    const found = new Set();
+    for (const match of lines.flatMap((line) => [...line.matchAll(word)])) {
+      const one = match[1] ?? match[2] ?? match[0];
+      const at = one.search(behind ? /\.\.[\\/]global[\\/]v11[\\/]/ : /global[\\/]v11[\\/]/);
+      if (at >= 0) found.add(one.slice(behind ? at + 3 : at).replace(/\\/g, '/'));
+    }
+    return [...found];
+  };
+  const lines = text.split(/\r?\n/);
+  const behind = stored(lines, true);
+  if (behind.length > 0) return behind;
+  // A comment runs nothing, and is not quoted: `# cmd-shim-target=` with a space in its path would be cut.
+  const whole = stored(lines.filter((line) => !/node_path\s*=/i.test(line) && !comment.test(line)), false);
+  if (whole.length > 0) return whole;
+  return [...new Set([...text.matchAll(/global[\\/]v11[\\/]([^\\/"'\s;:]+)/g)].map((match) => `global/v11/${match[1]}`))];
 }
 
 /** Copies the Claude settings to `dir` as `settings-<stamp>.json`, then keeps the newest `KEEP_SETTINGS_BACKUPS` of those

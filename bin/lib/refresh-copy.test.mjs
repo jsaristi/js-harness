@@ -31,7 +31,7 @@ const tempDir = (prefix) => {
 const EMPTY_BLOB = 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391';
 const MAIN_BIN = `100644 blob ${EMPTY_BLOB}\tbin/js-harness.mjs\n100644 blob ${'1'.repeat(40)}\tbin/js-harness.test.mjs\n`;
 
-function machine({ prev = null, deliver = true, answers = null, pathAnswers = null, addStatus = 0, mainBin = MAIN_BIN } = {}) {
+function machine({ prev = null, deliver = true, answers = null, pathAnswers = null, addStatus = 0, mainBin = MAIN_BIN, pnpm12 = false } = {}) {
   const top = tempDir('js-harness-refresh-');
   const pnpmHome = path.join(top, 'pnpm');
   const binDir = path.join(pnpmHome, 'bin');
@@ -50,6 +50,11 @@ function machine({ prev = null, deliver = true, answers = null, pathAnswers = nu
     fs.mkdirSync(path.join(folder, 'node_modules', 'js-harness', 'bin'), { recursive: true });
     fs.writeFileSync(path.join(folder, 'node_modules', 'js-harness', 'bin', 'js-harness.mjs'), '');
     fs.writeFileSync(path.join(binDir, 'js-harness'), 'exec "$basedir/../global/v11/h-1/node_modules/js-harness/bin/js-harness.mjs"\n');
+    if (!pnpm12) return;
+    // The pair pnpm 12 writes, `NODE_PATH` first (`pnpm12Shims`).
+    const { sh, cmd } = pnpm12Shims('C:/Users/someone/AppData/Local/pnpm', 'h-1', 'node_modules/js-harness/bin/js-harness.mjs');
+    fs.writeFileSync(path.join(binDir, 'js-harness'), sh);
+    fs.writeFileSync(path.join(binDir, 'js-harness.cmd'), cmd);
   };
   if (prev) writeCopy(prev);
   const spawn = (cmd, args) => {
@@ -337,6 +342,143 @@ test('pruneStalePnpm names a broken shim once when its .cmd and its POSIX shim b
   fs.writeFileSync(path.join(bin, 'gone'), `#!/bin/sh\nexec node "$basedir/../${target}" "$@"\n`);
   const result = pruneStalePnpm({ binDir: bin, now: () => NOW, isPnpmRunning: () => false });
   assert.deepEqual(result.broken, ['gone']);
+});
+
+/** The two shims of `name` as pnpm 12.18.0 writes them on Windows (read on 2026-11-11, shortened to the lines that name
+ * the store): `NODE_PATH` first, its last entry the store folder's `node_modules/.pnpm/node_modules`, which pnpm makes
+ * only for a package with dependencies; then the target, behind the shim's own folder. `at` is pnpm's home there. */
+function pnpm12Shims(at, id, target) {
+  const win = (text) => text.replace(/\//g, '\\');
+  const nodePath = `${at}/store/v11/links/@/pkg/1.0.0/abc/node_modules;${at}/global/v11/${id}/node_modules/.pnpm/node_modules`;
+  const sh = [
+    '#!/bin/sh',
+    'if [ -n "$msys" ]; then',
+    `  new_node_path='${win(nodePath)}'`,
+    'else',
+    `  new_node_path='${nodePath.replace(/;/g, ':').replace(/C:/g, '/mnt/c')}'`,
+    'fi',
+    'export NODE_PATH="$new_node_path"',
+    `exec node  "$basedir_abs"/'../global/v11/${id}/${target}' "$@"`,
+    `# cmd-shim-target=${at}/global/v11/${id}/${target}`,
+    '',
+  ].join('\n');
+  const cmd = [
+    '@SETLOCAL',
+    '@IF NOT DEFINED NODE_PATH (',
+    `  @SET "NODE_PATH=${win(nodePath)}"`,
+    ') ELSE (',
+    `  @SET "NODE_PATH=${win(nodePath)};%NODE_PATH%"`,
+    ')',
+    `node  "%~dp0\\..\\global\\v11\\${id}\\${win(target)}" %*`,
+    '',
+  ].join('\r\n');
+  return { sh, cmd };
+}
+
+/** A pnpm home with the shims of `pnpm12Shims` for each of `shims` (`{ name, id, target, there, nodePath }`): the
+ * store folder, the target when `there`, and the `NODE_PATH` folder when `nodePath`. */
+function pnpm12Home(shims) {
+  const home = path.join(tempDir('js-harness-prune-pnpm12-'), 'pnpm');
+  const bin = path.join(home, 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  for (const { name, id, target, there, nodePath } of shims) {
+    const folder = path.join(home, 'global', 'v11', id);
+    fs.mkdirSync(path.join(folder, 'node_modules'), { recursive: true });
+    if (nodePath) fs.mkdirSync(path.join(folder, 'node_modules', '.pnpm', 'node_modules'), { recursive: true });
+    if (there) {
+      fs.mkdirSync(path.dirname(path.join(folder, target)), { recursive: true });
+      fs.writeFileSync(path.join(folder, target), '');
+    }
+    const { sh, cmd } = pnpm12Shims('C:/Users/someone/AppData/Local/pnpm', id, target);
+    fs.writeFileSync(path.join(bin, name), sh);
+    fs.writeFileSync(path.join(bin, `${name}.cmd`), cmd);
+  }
+  return { home, bin };
+}
+
+// The eleven lands of 2026-11-10 (odd/tasks/land-two-defects.md): the check read the shim's first store path, a
+// `NODE_PATH` entry pnpm never makes for a package with no dependencies, and said the shim was broken after a refresh that worked.
+test('pruneStalePnpm does not name a shim whose target is there, though the NODE_PATH folder it names first is not', () => {
+  const { bin } = pnpm12Home([{ name: 'js-harness', id: 'a1b2c3-0123456789abcdef-0', target: 'node_modules/js-harness/bin/js-harness.mjs', there: true, nodePath: false }]);
+  assert.deepEqual(pruneStalePnpm({ binDir: bin, now: () => NOW, isPnpmRunning: () => false }).broken, []);
+});
+
+// The other half of the same reading: a shim whose `NODE_PATH` folder is there passed whatever became of its target.
+test('pruneStalePnpm names a shim whose target is gone, though the NODE_PATH folder it names first is there', () => {
+  const { bin } = pnpm12Home([
+    { name: 'gone', id: '0000aa-0000000000000000-9', target: 'node_modules/gone/bin/gone.js', there: false, nodePath: true },
+    { name: 'js-harness', id: 'a1b2c3-0123456789abcdef-0', target: 'node_modules/js-harness/bin/js-harness.mjs', there: true, nodePath: false },
+  ]);
+  assert.deepEqual(pruneStalePnpm({ binDir: bin, now: () => NOW, isPnpmRunning: () => false }).broken, ['gone']);
+});
+
+test('pruneStalePnpm names a shim of pnpm 12 whose store folder the prune removed, and says so once', () => {
+  const { home, bin } = pnpm12Home([{ name: 'js-harness', id: 'a1b2c3-0123456789abcdef-0', target: 'node_modules/js-harness/bin/js-harness.mjs', there: true, nodePath: false }]);
+  fs.rmSync(path.join(home, 'global', 'v11', 'a1b2c3-0123456789abcdef-0'), { recursive: true, force: true });
+  assert.deepEqual(pruneStalePnpm({ binDir: bin, now: () => NOW, isPnpmRunning: () => false }).broken, ['js-harness']);
+});
+
+// A shim that names the store with no path behind its own folder (a target on another drive is written whole) never
+// goes unchecked: it is held by the store paths its other lines name, the ones that set `NODE_PATH` aside, and one
+// that names the store only there by the store folders, which is what a prune can remove (the verifier of e0e2755a).
+test('pruneStalePnpm holds a shim that names its target whole by that target, and one that names only NODE_PATH by its store folder', () => {
+  const home = path.join(tempDir('js-harness-prune-whole-'), 'pnpm');
+  const bin = path.join(home, 'bin');
+  const [kept, hollow, gone] = ['a1b2c3-0123456789abcdef-0', 'b1b2c3-0123456789abcdef-0', '0000aa-0000000000000000-9'];
+  fs.mkdirSync(bin, { recursive: true });
+  fs.mkdirSync(path.join(home, 'global', 'v11', kept, 'node_modules', 'x', 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'global', 'v11', kept, 'node_modules', 'x', 'bin', 'x.mjs'), '');
+  fs.mkdirSync(path.join(home, 'global', 'v11', hollow, 'node_modules'), { recursive: true });
+  const nodePath = (id) => `export NODE_PATH="/somewhere/pnpm/global/v11/${id}/node_modules/.pnpm/node_modules"\n`;
+  const whole = (id) => `#!/bin/sh\n${nodePath(id)}exec node "/somewhere/pnpm/global/v11/${id}/node_modules/x/bin/x.mjs" "$@"\n`;
+  fs.writeFileSync(path.join(bin, 'kept'), whole(kept));
+  fs.writeFileSync(path.join(bin, 'hollow'), whole(hollow));
+  fs.writeFileSync(path.join(bin, 'gone'), whole(gone));
+  fs.writeFileSync(path.join(bin, 'only-path'), `#!/bin/sh\n${nodePath(hollow)}exec node "$elsewhere/x.mjs" "$@"\n`);
+  fs.writeFileSync(path.join(bin, 'only-path-gone'), `#!/bin/sh\n${nodePath(gone)}exec node "$elsewhere/x.mjs" "$@"\n`);
+  assert.deepEqual(pruneStalePnpm({ binDir: bin, now: () => NOW, isPnpmRunning: () => false }).broken.sort(), ['gone', 'hollow', 'only-path-gone']);
+});
+
+// Codex on e0e2755a..adc2978c, P2, and the reliability lens on the same range: a quoted target with a space was cut at
+// the space, so a shim that worked was named broken; and the .cmd form of a target named whole had no test.
+test('pruneStalePnpm reads a quoted target whole, its spaces kept, behind the shim\'s folder or named whole, in a POSIX shim and in a .cmd', () => {
+  const home = path.join(tempDir('js-harness-prune-spaces-'), 'pnpm');
+  const bin = path.join(home, 'bin');
+  const id = 'a1b2c3-0123456789abcdef-0';
+  const target = path.join(home, 'global', 'v11', id, 'node_modules', 'x', 'bin', 'my cli.mjs');
+  fs.mkdirSync(bin, { recursive: true });
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, '');
+  const posix = `global/v11/${id}/node_modules/x/bin/my cli.mjs`;
+  const windows = posix.replace(/\//g, '\\');
+  fs.writeFileSync(path.join(bin, 'behind'), `#!/bin/sh\nexec node "$basedir/../${posix}" "$@"\n`);
+  fs.writeFileSync(path.join(bin, 'behind.cmd'), `@node  "%~dp0\\..\\${windows}" %*\r\n`);
+  fs.writeFileSync(path.join(bin, 'whole'), `#!/bin/sh\nexport NODE_PATH="/some where/pnpm/global/v11/${id}/node_modules/.pnpm/node_modules"\nexec node "/some where/pnpm/${posix}" "$@"\n# cmd-shim-target=/some where/pnpm/${posix}\n`);
+  fs.writeFileSync(path.join(bin, 'win.cmd'), `@SET "NODE_PATH=C:\\some where\\pnpm\\global\\v11\\${id}\\node_modules\\.pnpm\\node_modules"\r\n@REM C:\\some where\\pnpm\\${windows}\r\nnode  "C:\\some where\\pnpm\\${windows}" %*\r\n`);
+  fs.writeFileSync(path.join(bin, 'bare.cmd'), `node C:\\somewhere\\pnpm\\global\\v11\\${id}\\node_modules\\x\\bin\\cli.mjs %*\r\n`);
+  fs.writeFileSync(path.join(path.dirname(target), 'cli.mjs'), '');
+  const broken = () => pruneStalePnpm({ binDir: bin, now: () => NOW, isPnpmRunning: () => false }).broken.sort();
+  assert.deepEqual(broken(), [], 'each target is there');
+  fs.rmSync(target);
+  assert.deepEqual(broken(), ['behind', 'whole', 'win'], 'the target with a space is gone, its folder still there');
+  fs.rmSync(path.join(path.dirname(target), 'cli.mjs'));
+  assert.deepEqual(broken(), ['bare', 'behind', 'whole', 'win']);
+});
+
+test('refreshCopy ends 0 on the shims pnpm 12 writes, and 6 with PRUNE BROKE when the copy they run is gone after the prune', async () => {
+  const run = await refresh(machine({ prev: PREV, pnpm12: true }));
+  assert.equal(run.code, 0, run.err);
+  assert.doesNotMatch(run.err, /PRUNE BROKE/);
+  // The copy goes as the doctor runs, the last step before the prune: the check after the prune is what says so.
+  const m = machine({ prev: PREV, pnpm12: true });
+  const spawn = (cmd, args) => {
+    const result = m.spawn(cmd, args);
+    if (cmd === process.execPath && args[1] === 'doctor') fs.rmSync(path.join(m.pnpmHome, 'global', 'v11', 'h-1', 'node_modules', 'js-harness'), { recursive: true, force: true });
+    return result;
+  };
+  const broke = await refresh(m, { spawn });
+  assert.equal(broke.code, 6, broke.out);
+  assert.match(broke.err, /PRUNE BROKE js-harness: its target is missing/);
 });
 
 test('pruneStalePnpm removes nothing while a pnpm process runs, or when the process list cannot be read', () => {

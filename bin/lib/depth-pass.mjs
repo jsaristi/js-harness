@@ -7,8 +7,10 @@
 //
 // The order is judged on the branch alone, the commits `HEAD` holds and the trunk (`origin/HEAD`, `origin/main` or
 // `origin/master`) does not: once a feature is on the trunk its order was judged, and a squash, a refuted plan left
-// there or another feature's later code says nothing new. Pure: the command reads the history (`depthPassFor`,
-// ../contract.mjs) and hands this module what it read.
+// there or another feature's later code says nothing new. A candidate of the merge queue holds several branches past
+// one trunk, one a pull request: there each document is judged on the commits of its own pull request (`side`), so the
+// code of a pull request merged ahead is not read as code before another's verdict. Pure: the command reads the
+// history (`depthPassFor`, ../contract.mjs) and hands this module what it read.
 import { isContract, parseContract } from './contract.mjs';
 import { tokenize } from './progress.mjs';
 import { citationsIn } from './citations.mjs';
@@ -97,7 +99,8 @@ export function depthPassOrder({ branch, staged, verdict, answered }) {
 
 /** The control over one project, as `(file, markdown) => faults`, `file` the document's project path, from the
  * history the command read: `since` and `today`; `opened`, each document's path to `{ day }` it first came in, renames
- * followed; `branch`, the branch's commits oldest first as `{ hash, files }`, or `null` where no trunk is known;
+ * followed; `branch`, the branch's commits oldest first as `{ hash, files }`, or `null` where no trunk is known, each
+ * with the `side` of its pull request where the branch is a candidate of the merge queue;
  * `staged`, the staged files; and three readers of one document: `onTrunk(file)`, its text on the trunk or `null`;
  * `trail(file)`, the branch's commits that touched it oldest first as `{ hash, path }`, renames followed; and
  * `version(hash, path)`, its text at that commit or `null`. */
@@ -114,7 +117,11 @@ export function depthPassJudge({ since, today, opened, branch, staged, onTrunk, 
     const touched = trail(file);
     if (opened.has(file) && touched.length === 0) return errors;
     const first = touched.find(({ hash, path }) => verdictOf(version(hash, path)) !== null);
-    const facts = branch.map(({ hash, files }) => ({ code: files.filter((name) => !isDocument(name)), brings: hash === first?.hash }));
+    // In a candidate, the document's pull request: the side of the commit that brings its verdict, or that first
+    // touched it. A commit with no side, or one the branch does not hold, leaves the whole branch, the strict reading.
+    const side = branch.find(({ hash }) => hash === (first ?? touched[0])?.hash)?.side;
+    const own = side === undefined ? branch : branch.filter((commit) => commit.side === side);
+    const facts = own.map(({ hash, files }) => ({ code: files.filter((name) => !isDocument(name)), brings: hash === first?.hash }));
     const pass = (passLines(markdown) ?? []).join('\n');
     const code = staged.filter((name) => !isDocument(name));
     return [...errors, ...depthPassOrder({ branch: facts, staged: code, verdict: verdictOf(markdown), answered: ANSWERED.test(pass) })];
