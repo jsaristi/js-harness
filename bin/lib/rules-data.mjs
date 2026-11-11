@@ -317,7 +317,13 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-11-10",
-    "value": "xhigh"
+    "value": "high",
+    "was": [
+      {
+        "value": "xhigh",
+        "until": "2026-11-10"
+      }
+    ]
   },
   {
     "id": "live-board",

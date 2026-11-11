@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `06059808c307`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 4.
+Hash `677373b9f050`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -84,8 +84,9 @@ What the lead does alone and tells him after, and what stays his, asked one at a
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-09, 2026-10-11, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-10, 2026-10-15, 2026-10-15, 2026-10-24, checked by the command on 2026-10-22.
 
 ### lead-effort
-The effort the lead's session runs at: xhigh.
+The effort the lead's session runs at: high.
 - Of this repository only: not in force in a project that installs the harness.
+- Was: xhigh until 2026-11-10.
 - Read by: `bin/lib/guard.mjs`.
 - Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 

@@ -73,9 +73,10 @@ const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
  * `cli` words the reasons for `js-harness sessions start`, which holds the same rule over its `--effort`
  * (odd/tasks/background-sessions.md, S5). `lead` says the call starts a new lead, which the caller reads from its
  * title (`leadTitle` of ./session-title-guard.mjs): it is held to the rule `lead-effort` where that rule gives a
- * value, and to `session-effort` where it gives none. His words of 2026-11-10 give the lead a level above the work
- * sessions', and at a cut the old lead starts the new one with this tool (./manifest.mjs, "The cut"): held to
- * `session-effort`, that start was refused at the lead's own level. */
+ * value, and to `session-effort` where it gives none. His words give the lead a level of its own, which may stand
+ * above the work sessions' (it did for a few hours of 2026-11-10; his correction of that day levels them), and at a
+ * cut the old lead starts the new one with this tool (./manifest.mjs, "The cut"): held to `session-effort`, a start
+ * at a lead's higher level would be refused. */
 export function sessionEffortRefusal(toolInput, projectData, { cli = false, lead = false } = {}) {
   if (typeof toolInput?.prompt !== 'string' || toolInput.prompt === '') return null;
   const ofLead = lead ? guardHeld('lead-effort', ruleHere('lead-effort', undefined, projectData)) : null;
