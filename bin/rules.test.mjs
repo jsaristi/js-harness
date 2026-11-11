@@ -14,6 +14,7 @@ import { RULES } from './lib/rules-data.mjs';
 import { rulesHash, writeRules } from './lib/rules.mjs';
 import { controlFaults, readCoverageText, writeCoverage } from './lib/rules-coverage.mjs';
 import { projectSlug } from './lib/sessions.mjs';
+import { appendRecord } from './lib/background.mjs';
 
 const PACKAGE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCES_TEXT = fs.readFileSync(path.join(PACKAGE, 'docs', 'rule-sources.json'), 'utf8');
@@ -384,7 +385,7 @@ const agrees = (out) => (SHORT !== undefined
   : out[out.lastIndexOf(heldLine('session-model')) + 1] === '    agree: 1 of 1 launch');
 
 /** Runs `js-harness rules applied` on `project` at `now` (NOW by default), with `env` (by default the Claude home is `home`), collecting its output. */
-async function applied(project, home, env = { CLAUDE_CONFIG_DIR: home }, { cwd = project, git = NO_GIT, now = NOW } = {}) {
+async function applied(project, home, env = { CLAUDE_CONFIG_DIR: home }, { cwd = project, git = NO_GIT, now = NOW, readApp, agents } = {}) {
   const out = [];
   const err = [];
   const code = await rulesMain(['applied'], {
@@ -394,11 +395,46 @@ async function applied(project, home, env = { CLAUDE_CONFIG_DIR: home }, { cwd =
     homedir: () => home,
     now: () => now,
     run: git,
+    readApp,
+    agents,
     stdout: (line) => out.push(line),
     stderr: (line) => err.push(line),
   });
   return { code, out, err };
 }
+
+// odd/tasks/one-model-home.md, spec 6: the sessions off the home, with what each source gives and the act that corrects it.
+test('applied lists the sessions off the home, desktop and background, with what corrects each, and says nothing of them where the project declares no home', async () => {
+  await withHome(LIST, async (project, home) => {
+    const model = declared('session-model').value;
+    const effort = declared('session-effort').value;
+    const lead = declared('lead-effort').value;
+    const other = LEVELS.find((level) => level !== effort && level !== lead);
+    const app = new Map([
+      ['c1', { where: 'sessions', model, effort: other, archived: false, title: 'JH 7 · work', cwd: project }],
+      ['c2', { where: 'sessions', model, effort: lead, archived: false, title: 'JH ORQ · lead', cwd: project }],
+      ['c3', { where: 'archived', model: 'claude-opus-5-5', effort, archived: true, title: 'JH 1 · old', cwd: project }],
+      ['c4', { where: 'sessions', model: 'claude-opus-5-5', effort: other, archived: false, title: 'JH 9 · elsewhere', cwd: home }],
+    ]);
+    appendRecord(home, { event: 'started', at: new Date(NOW).toISOString(), id: 'job-1', sessionId: null, title: 'JH 8 · job', root: project, cwd: project, worktree: null, worktreePath: null, model, effort: other });
+    const { code, out } = await applied(project, home, undefined, { readApp: () => app, agents: () => [{ id: 'job-1', status: 'busy' }] });
+    assert.equal(code, 0, out.join('\n'));
+    const at = out.indexOf(`Sessions off the home: a session is held to ${model} at ${effort}, and the lead to ${lead}`);
+    assert.notEqual(at, -1, out.join('\n'));
+    assert.equal(out[at - 1], '');
+    assert.deepEqual(out.slice(at + 1), [
+      `  desktop  "JH 7 · work"  its menu holds ${model} at ${other}; held to ${model} at ${effort}; corrected by the lead's session tools`,
+      `  background  "JH 8 · job" (job-1)  no reply of it was read; its start asked for ${model} at ${other}; its job: busy; held to ${model} at ${effort}; corrected by a resume once its job is no longer at work, which a resume refuses until then: js-harness sessions start --resume job-1`,
+      `  1 archived desktop session is off it too (1 at claude-opus-5-5 at ${effort}): nothing corrects one while it is archived; he can unarchive it, and it is then listed`,
+      '  on the home: 1 desktop, not archived, and 0 background',
+      '  The app\'s record does not say whether a session that is not archived is running. Nothing was written.',
+    ]);
+  });
+  await withHome({}, async (project, home) => {
+    const { out } = await applied(project, home, undefined, { readApp: () => assert.fail('no home, so no record is read') });
+    assert.ok(!out.some((line) => line.startsWith('Sessions off the home')), out.join('\n'));
+  });
+});
 
 test('applied passes when a writer launch is answered by the model its rule declares', async () => {
   await withHome(LIST, async (project, home) => {
@@ -427,7 +463,9 @@ test('applied holds what a launch ran at to session-effort, as information that 
     assert.ok(out.includes(`    ${off}: 1 launch of general-purpose, the last on ${day}`), out.join('\n'));
     assert.ok(out.includes('      session-1/subagents/agent-x.jsonl'), out.join('\n'));
     if (SHORT !== undefined) assert.ok(out.some((line) => line.startsWith(`To the lead: 1 launch that passed a declared short name ran at another effort than session-effort says (${held})`)), out.join('\n'));
-    assert.equal(out.at(-1), 'Information: 1 record ran at another value than a rule of the block above says; this is no failure.');
+    // The line closes the report of the records: the block of the sessions off the home opens after it, past an empty line.
+    const sessionsAt = out.findIndex((line) => line.startsWith('Sessions off the home'));
+    assert.deepEqual(out.slice(sessionsAt - 2, sessionsAt), ['Information: 1 record ran at another value than a rule of the block above says; this is no failure.', '']);
     // The session rules are in force and no session is in the records: each says so, and neither is a difference.
     assert.equal(out[out.indexOf(heldLine('session-effort')) + 1], '    nothing to compare: no session in the window since that day', out.join('\n'));
   });

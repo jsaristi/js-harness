@@ -350,8 +350,8 @@ S7, amends specs 1, 5, 7 and 8 and the task T4 after it, and wins over both:
 - [x] T2 (kind: design) (1-10) The double review of this design (`js-harness double-review read`), every finding answered, and one notice to the lead with its verdict. Route: inline. Commits: 0907ed7d, 9033dcf6, 649fbad1. Three reads, not passed; the lead's yes to build from L13 (L14).
 - [x] T3 (kind: build) (2, 3) Pull request 1, branch `feat/model-home-module`, cut from T2's commit: `bin/lib/model-home.mjs` and its test; the faults of the homes in `readRules`; the lenses and the double review's fallback and effort read the home; the writer's agent file compared with the home; the convention test over code; the runner of `rules change` takes `--with <path>...`, with its tests beside `bin/lib/rules-change-run.test.mjs:159` and `:172`; the check of marks stops at a document's `## Log`, as the scan of restated values does (`bin/lib/rules-scan.mjs:11`), since a Log tells what a rule was called. No reader of a rule that leaves moves here. Route: inline. Commits: 38fe1b2d (pull request 822), 8007f0fe (pull request 825), both in main.
 - [x] T4 (kind: build) (1, 2, 5, 10) Pull request 2, branch `rule/one-model-home`, on main once pull request 1 lands: `rules change --with` nine times, a commit each, every commit with the readers, the tests, the marks, the patterns carried to the home and the planted break of its rule: the two subjects widened, each home's control made a bundle; `lead-effort` and `subagent-effort` retired with the guard's start held to the home's effort alone; the two sub-agent model rules and `escalation-model` retired with the guard, the double review, the contract's modes, the sub-agent row and the recheck reading the home; the guard's refusal of a sub-agent call that names an effort; the patterns of Codex's two rules. Before each retirement, its dry run, and a grep of its id as a bare word over `bin/`, `workshop/`, `.claude/agents/`, README, `docs/` and `odd/tasks/` above each Log. Then an independent verifier on the guard. Route: inline, then one verifier. Commits: 5deec5b6, 1765b5aa, 0abb1d2c, 8f7a2f76 and ed3b2006, the last code commit (pull requests 831 to 835, ready, not landed).
-- [ ] T5 (kind: build) (5, 7) Pull request 3, branch `feat/model-home-sessions`: a start and a resume take the home and refuse another, in `sessions start` and in the guard's `start_session`, with the starter's own record; `appSessions` gives the model; the board's mark, both levels and the line. Route: inline.
-- [ ] T6 (kind: build) (6, 7) Pull request 3: `rules applied` lists the sessions off the home from the app's records, the record of starts, the last replies and the jobs; the `doctor` row with his settings read. Then the list goes to the lead in one notice. Route: inline.
+- [x] T5 (kind: build) (5, 7) Pull request 3, branch `feat/model-home-sessions`: a start and a resume take the home and refuse another, in `sessions start` and in the guard's `start_session`, with the starter's own record; `appSessions` gives the model; the board's mark, both levels and the line. Route: inline. Commits: 1bef0243, a4f33b41, 1f28f4b9, 2df39fb6, e878d8be, 7a63f4f0.
+- [x] T6 (kind: build) (6, 7) Pull request 3: `rules applied` lists the sessions off the home from the app's records, the record of starts, the last replies and the jobs; the `doctor` row with his settings read. Then the list goes to the lead in one notice. Route: inline. Commits: 6df6a4ba, and the `doctor` row in the commit that carries this line.
 - [ ] T7 (kind: build) (8, 10) Pull request 4, branch `feat/model-home-switch`: the runner of `rules change` writes several rules in one pass and refuses a home's value alone; `rules switch` with its probe, the agent file, `--dry-run` and its printout. Route: inline.
 - [ ] T8 (kind: docs) (4, 9, 10) Pull request 4: the section "A new model" of the orchestrator skill and its test; the convention test over the texts; README, `docs/ROADMAP.md`'s Decided rows, `docs/future-model.md`'s pointer, the help texts and the lead's start line name the rule. Route: inline.
 - [ ] T9 (kind: verify) (1-10) Each pull request: gate, Codex and the pertinent lenses, one at a time; ready; `js-harness notify --to orchestrator --kind ready --pr <n>`; the next one starts from main once it lands. Then the summary and the closed notice. Route: inline.
@@ -382,6 +382,92 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 17:50: pull request 3 is open as two stacked pull requests on main, not four: 836
+(`feat/model-home-sessions-1`, `268991a7..e878d8be`, T5, 516 changed lines of code and tests) and 837
+(`feat/model-home-sessions`, `e878d8be` to the head, T6 and the fixes, 742). The cut of the 17:35 paragraph did not
+hold: the pre-push check takes a branch only where a reviewed range ends (`2df39fb6 lies in a range reviewed up to
+e878d8b ... push up to e878d8b`), and the two rounds of reviews ended at `e878d8be` and at the head. A cut inside a
+range costs a Codex review and two lens runs each, and one at `6df6a4ba` would part the list from Codex's three
+corrections of it; I spent none, and both bodies say their size and why. The lead may answer with another cut.
+`js-harness check --push` at the head: both reviews cover the 9 code commits. Two faults of mine in the push, no
+harm: four pushes chained through `tail`, which hid three refusals, and three branches pushed from another
+checkout than their own; the local labels `-2` and `-3` are deleted, never pushed. Owed: the ready notices and the
+list of the sessions off the home to the lead; then T7 on `feat/model-home-switch`, cut from main once 836 and 837
+land, since the switch builds on the home's readers of this pull request.
+2026-11-11 17:44: the corrections are `ec8b8829`, and the second round of reviews is whole. The risk lens on
+`e878d8be..ec8b8829`: 0 findings. The reliability lens on the same range: 0 findings, and its two findings of the
+first round rechecked as fixed. Codex's confirming review of `533f8a63..ec8b8829`: correct, its three findings
+fixed (it could not run the tests, a spawn its sandbox refuses). Owed: `js-harness check --push`, the push of the
+four branches as the paragraph below cuts them, the four pull requests on main with the bodies drafted in the job's
+`tmp/b3-1.md` to `b3-4.md`, the ready notices and the list of the sessions off the home to the lead; then T7 on
+`feat/model-home-switch`, cut from main.
+2026-11-11 17:35: the `doctor` row is `533f8a63`. Codex on `e878d8be..533f8a63` (2 parts, 442,782 input tokens):
+incorrect, three P2 findings, all three true and taken, fixed in the commit that carries this line, each with its
+test seen red first. (1) `home-sessions-read.mjs` called the app's reader with no one to tell of a record or a
+folder it could not read, so such a session was absent with nothing said: the reader is now given a callback, and
+what it passes over is counted in `not read`, the first one named. (2) A job's transcript was looked for under the
+record's `worktreePath`, which a start recorded before 2026-10-28 holds as the main checkout: it is `worktreeOf`
+now, as `recordedFolders` does. (3) A busy job's correction was a resume, which `resumeStart` refuses while a job
+works its conversation (`bin/sessions-background.mjs:310`): a job gains `working` (`atWork`) and its act reads "a
+resume once its job is no longer at work, which a resume refuses until then". Owed: the risk lens and the
+reliability lens on `e878d8be` to the head, then Codex's confirming review of the corrections on `533f8a63` to the
+head. The slicing of pull request 3, 1,368 changed lines: four stacked branches on main, cut at `2df39fb6` (256
+lines of code and tests: start, resume and the guard), `7a63f4f0` (297: the board), `6df6a4ba` (440, one commit
+that cannot shrink: the list of `rules applied`, its reader and their tests) and the head (the `doctor` row and the
+fixes of the reviews), named `feat/model-home-sessions-1` to `-3` and `feat/model-home-sessions`.
+2026-11-11 17:23: the commit of the `doctor` row was refused at its first try too (run 43110036622, 456 s): the
+dispatch test `bin/js-harness.test.mjs:285` lists doctor's rows in order and lacked `model-home`. I had run doctor's
+own tests and not searched the tests for a neighbour row's id; `grep -rn -l "'stack-update'" bin workshop` finds that
+test and `bin/clean-home.test.mjs`, whose list is the harness's own rows and stays. The test now holds the row, last,
+and `n/a` for a project that declares no home (54 of 55 pass here). The one that fails here is not this change's:
+`bin/clean-home.test.mjs:153`, its `upgrade` step, "js-harness stack upgrade runs nothing without a terminal", which
+passed on GitHub's machines in that same run with this tree; not looked into, this change touches no upgrade code.
+The commit is made again with the test, and its body corrected: `bin/lib/permissions.mjs` holds the allow and the
+deny lists of that file, not the denies alone.
+2026-11-11 17:13: T6 is whole. Its first part landed as `6df6a4ba`; the `doctor` row `model-home` is in the commit
+that carries this line: `bin/lib/home-doctor.mjs` with its test (4 pass), the row in `bin/doctor.mjs` (99 pass), the
+README's paragraph and the SPEC's entry; the conventions, the records table and `rules coverage --strict` pass. Seen
+in a real run from this job: the row is `ok`, this session has no app record (a background job has none), and its
+note gives his default model `opus[1m]` and the missing `modelSettings` entry for the home's model. A project's
+local settings are read from the checkout `doctor` runs in, so a worktree, which has none, says nothing of them.
+Owed from here, in order: Codex, the risk lens and the reliability lens on `e878d8be` to the head, one at a time;
+`check --push`, the push of `feat/model-home-sessions`, pull request 3 on main, the ready notice and the list of
+the sessions off the home to the lead in one notice; then T7 on a new branch from main.
+2026-11-11 17:06, after a compaction by the host at 17:05: the commit the paragraph below names did not land at
+its first try. The gate on GitHub's machines refused it (run 43107839923, the `docs` row): `<*>.jsonl
+(bin/lib/home-sessions-read.mjs) is a record the source writes and no row of the table holds`. The module reads a
+session's transcript, as five others do, so it joined the `files` of the `<*>.jsonl` entry of `NOT_RECORDS` in
+`workshop/lib/docs-records.mjs` (its test, 18 pass), and the commit was made again with that. Still owed from here:
+the `doctor` row, the reviews on `e878d8be` to the head, the push and pull request 3.
+2026-11-11 16:58, after the line below: T6's first part is in the commit that carries this line, the removed jobs
+counted in one line and its tests changed for it (`bin/lib/home-sessions.test.mjs` 5 pass, `bin/rules.test.mjs` 39,
+the conventions and `rules coverage --strict` pass). What the two paragraphs below say is still owed begins at the
+`doctor` row.
+2026-11-11 16:58, at 88 %: of the paragraph below, the change "a removed job is counted, not a row" is applied in
+`bin/lib/home-sessions.mjs` (`removedOff` in the result, one line for it, no `removed` field in a row), NOT yet in
+its tests: `bin/lib/home-sessions.test.mjs` still expects rows for removed jobs (ids `6`, `j2`) and the `removed`
+field, so it is red until changed; the function's comment still names `removed` and `none` and is to be reworded.
+Nothing of T6 is committed. The wait `js-harness wait --notice-to 172` runs in the background.
+2026-11-11 16:56, the session at 86 % of its context. Unit (d) is `e878d8be`. Reviews of `268991a7..e878d8be`:
+Codex correct with no finding (two parts); the risk lens 0 findings; the reliability lens 2 findings, both taken
+(run `acd07b49`, answer recorded) and fixed in `7a63f4f0` (a test that could not fail now counts the read; the
+hook's own reader of the app's records has a test). The recheck of that fix is NOT run yet: it rides in the next
+slice's reviews, whose base is `e878d8be`. Main was not merged: `git diff --name-only 268991a7 origin/main` is empty,
+so the branch holds main's tree plus its own work. T6 first part (spec 6) is written and NOT committed, in the
+tree: `bin/lib/home-sessions.mjs` (`sessionsOffHome`, `offHomeLines`, `homeInForce`),
+`bin/lib/home-sessions-read.mjs` (`readHomeSessions`), their two tests, `heldValues` in `bin/lib/model-home.mjs`
+(`bin/sessions.mjs` reads it), the block in `appliedForm` of `bin/rules.mjs` with `readApp` and `agents` as parts,
+a command test in `bin/rules.test.mjs`, the README and the help. All pass (`bin/rules.test.mjs` 39, the three
+library files 5, 4 and 11). Two decisions of mine in it, to say in the pull request: an archived desktop session is
+counted by what it holds, not listed (this machine holds 123 off the home), and a removed background job is read
+only when started in the last 7 days. One thing to change BEFORE the commit, seen on the real run: 30 removed jobs
+were listed one a line, which buries the 4 sessions that run; in `sessionsOffHome` a removed job off the home is to
+be counted (`removedOff`, one line: "N background jobs the harness removed in the window ran off it"), not a row,
+with its test and the command test changed. Then: conventions and `rules coverage --strict`, commit; then the
+`doctor` row, drafted and NOT applied: the job's `tmp/t6/home-doctor.mjs` and its test (copy to `bin/lib/`) and
+`tmp/pairs-t6d.json` (`node tmp/swap.mjs`: the row `model-home` in `bin/doctor.mjs` and its test); then the README
+and SPEC for that row, commit, Codex and the lenses (risk, reliability) on `e878d8be` to the head, push, pull
+request 3 on main, ready notice; then T7.
 2026-11-11 16:39: pull request 2 is in main (`58c8d324`, pull requests 831 to 835 merged in order; the lead's
 message of 16:36, checked against `origin/main`). The texts of unit (c) are `2df39fb6`. Unit (d) is in the commit
 that carries this line, its tests seen red first: `offHome` in `bin/lib/model-home.mjs`; a new module,

@@ -34,6 +34,7 @@ import { importHealth } from './lib/claude-import.mjs';
 import { backgroundMeasure, cleanNotice, cleanRow } from './lib/clean.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { readSigninExpiry, signinRow } from './lib/signin-expiry.mjs';
+import { modelHomeHealth } from './lib/home-doctor.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
@@ -237,7 +238,8 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   const withHost = deps.host ? [...withSignin, hostRow(deps.host, home, now, project)] : withSignin;
   const withStack = deps.stackUpdate ? [...withHost, stackRow(readStackVersions(rows, { home, spawn, platform }), home, now)] : withHost;
   // The clean row reads the last measure; a due one is started detached, never run here (odd/tasks/clean.md, S8).
-  return deps.clean ? [...withStack, cleanRow({ home, now, start: deps.clean.start })] : withStack;
+  const withClean = deps.clean ? [...withStack, cleanRow({ home, now, start: deps.clean.start })] : withStack;
+  return deps.modelHome ? [...withClean, modelHomeRow(deps.modelHome, project, home)] : withClean;
 }
 
 /** The versions the stack-update row watches: the tools of `rows` and the Claude CLI on PATH. */
@@ -302,6 +304,20 @@ function permissionsRow(permissions, home) {
   try {
     const health = permissions(home);
     return { ...row, claude: health.state, fix: health.fix.length ? { claude: health.fix } : {} };
+  } catch {
+    return { ...row, claude: 'unknown' };
+  }
+}
+
+/** The model-home row (bin/lib/home-doctor.mjs; odd/tasks/one-model-home.md, spec 7): the session that asks is a gap
+ * when the app's record of it holds another model or level than the home its project's rules declare, with the line
+ * to give the user, since a session cannot change its own; what his settings say that the home does not is the row's
+ * note, gap or not; `n/a` where the project declares no home. Fails open to `unknown`. */
+function modelHomeRow(modelHome, project, home) {
+  const row = { id: 'model-home', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'n/a', upToDate: 'n/a', fix: {} };
+  try {
+    const health = modelHome(project, home);
+    return { ...row, claude: health.state, ...(health.note && { note: health.note }), fix: health.fix.length ? { claude: health.fix } : {} };
   } catch {
     return { ...row, claude: 'unknown' };
   }
@@ -421,7 +437,7 @@ async function ideasRow(ideas, project) {
 }
 
 /** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, templates, claude-import,
- * permissions, claude-signin, host-update, stack-update and clean rows. Their checks are given only here, so `doctorMain` alone keeps the rows its
+ * permissions, claude-signin, host-update, stack-update, clean and model-home rows. Their checks are given only here, so `doctorMain` alone keeps the rows its
  * callers give it. `extra` adds rows' checks the product does not give: the workshop gives the idea-watch row. */
 export function doctorCommand(argv, extra = {}) {
   return doctorMain(argv, process.env, {
@@ -439,6 +455,7 @@ export function doctorCommand(argv, extra = {}) {
     templates: (project, home) => templatesHealth(project, home),
     backup: (home, now) => backupHealth(home, now),
     permissions: (home) => permissionsHealth(home),
+    modelHome: (project, home) => modelHomeHealth({ project, rulesText: readProjectRulesText(project), claudeDir: process.env.CLAUDE_CONFIG_DIR || `${home}/.claude`, homedir: os.homedir }),
     imports: (project, home) => importHealth(project, { home }),
     signin: (home) => readSigninExpiry({ home }),
     clean: { start: backgroundMeasure(process.env, argv) },

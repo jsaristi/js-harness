@@ -36,6 +36,10 @@ import { changeRule } from './lib/rules-change-run.mjs';
 import { proofSaid, proveBreaks, readCoverage, REGISTER_PATH } from './lib/rules-coverage-read.mjs';
 import { OWED_CAP, OWED_CAP_FROM, refreshRegister, writeCoverage } from './lib/rules-coverage.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { heldValues } from './lib/model-home.mjs';
+import { homeInForce, offHomeLines, sessionsOffHome } from './lib/home-sessions.mjs';
+import { readHomeSessions } from './lib/home-sessions-read.mjs';
+import { leadTitle } from './lib/session-title-guard.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] [--with <path>...] | --hook]';
@@ -409,12 +413,16 @@ function heldRules() {
  * short name, as information, over the last APPLIED_DAYS days. The records
  * are those of the main checkout, under `env.CLAUDE_CONFIG_DIR` or else the user's `.claude`; the rules are those of the
  * project's own rules-data.mjs. Nothing is written. The exit is 1 when a short name gives another model than its rule
- * declares on the engine in use, and 0 otherwise, and when no record folder is there. */
-function appliedForm({ cwd, env, homedir, now, run }, stdout) {
+ * declares on the engine in use, and 0 otherwise, and when no record folder is there. Where the project declares a home
+ * (`heldValues`), a last block lists the sessions that are off it, desktop and background, with what corrects each
+ * (./lib/home-sessions.mjs), as information: `readApp` and `agents` stand in for the app's records and for the list
+ * `claude agents` gives. */
+function appliedForm({ cwd, env, homedir, now, run, readApp, agents }, stdout) {
   const project = projectOf(run, cwd);
   const main = mainCheckout(run, cwd);
   const recordsDir = path.join(env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude'), 'projects', projectSlug(main));
-  const { rules, leftOut } = rulesInForce(readOptional(project, 'bin/lib/rules-data.mjs'));
+  const projectData = readOptional(project, 'bin/lib/rules-data.mjs');
+  const { rules, leftOut } = rulesInForce(projectData);
   const at = now();
   const records = readRecords(recordsDir, { now: at, days: APPLIED_DAYS, maxFiles: APPLIED_MAX_FILES });
   const today = new Date(at).toISOString().slice(0, 10);
@@ -432,6 +440,12 @@ function appliedForm({ cwd, env, homedir, now, run }, stdout) {
     leftOut,
   });
   for (const line of lines) stdout(line);
+  const home = heldValues(projectData);
+  if (homeInForce(home)) {
+    const claudeDir = env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude');
+    const read = readHomeSessions({ main, home: harnessHome({ env, homedir }), claudeDir, now: at, days: APPLIED_DAYS, env, homedir, ...(readApp && { readApp }), ...(agents && { agents }) });
+    for (const line of offHomeLines(sessionsOffHome(home, { ...read, isLead: leadTitle }), home, { unread: read.unread })) stdout(line);
+  }
   return records.exists ? result.exit : 0;
 }
 
@@ -531,6 +545,9 @@ export async function rulesMain(argv, {
   run = (command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }),
   stdin = () => fs.readFileSync(0, 'utf8'),
   rename = fs.renameSync,
+  // What `applied` reads of the sessions, each the real one when not given: the app's records and `claude agents`.
+  readApp,
+  agents,
 } = {}) {
   // Letter F's turn-start hook is a module of its own (bin/lib/rules-reach.mjs); run on its own, this sends it there.
   if (argv[0] === '--hook') return (await import('./lib/rules-reach.mjs')).rulesHookMain(argv.slice(1));
@@ -594,7 +611,7 @@ export async function rulesMain(argv, {
   // `applied` reads no document of the package, so it runs before the package is read at all.
   if (parsed.command === 'applied') {
     try {
-      return appliedForm({ cwd, env, homedir, now, run }, stdout);
+      return appliedForm({ cwd, env, homedir, now, run, readApp, agents }, stdout);
     } catch (err) {
       stderr(err.message);
       return 1;
