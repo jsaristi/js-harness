@@ -1,9 +1,11 @@
 // The rules of this project as data: what each one says, with its value and unit or its prose and
 // phrases, and what makes a list of them unreadable. This file reads a list and names each fault in
 // it; it holds no fs and no process access, and every function takes plain data. It imports only
-// createHash of node:crypto and RULES of ./rules-data.mjs, so no command can form a cycle.
+// createHash of node:crypto, RULES of ./rules-data.mjs and the shape of a home's value of ./model-shape.mjs, which
+// imports nothing, so no command can form a cycle.
 import { createHash } from 'node:crypto';
 import { RULES } from './rules-data.mjs';
+import { homeFaults } from './model-shape.mjs';
 
 /** The owners a rule can have: the person who decides it, or the project itself. */
 export const OWNERS = ['sebastian', 'project'];
@@ -247,7 +249,7 @@ function ruleFaults(rule, { minPhrase, declared, project }) {
   else if (bodies.length > 1) faults.push('more than one body: a rule has a value, or a path with phrases, or is retired');
   const body = bodies.length === 1 ? bodies[0] : null;
 
-  if (body === 'value') faults.push(...valueFaults(rule));
+  if (body === 'value') faults.push(...valueFaults(rule), ...homeFaults(rule));
   if (body === 'text') faults.push(...textFaults(rule, minPhrase));
   if (body === 'retired') faults.push(...retiredFaults(rule, declared));
   // A retired rule whose earlier values are numbers keeps its unit, so that its history says minutes or seconds.

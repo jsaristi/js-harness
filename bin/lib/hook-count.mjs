@@ -23,9 +23,12 @@ export const HOOK_ENTRY_LIMIT = 15;
  * reaches 0 leaves the table, as engram's `UserPromptSubmit` did when D8 was applied on 2026-11-08 (L14); one goes
  * up only on his word, as engram's `PostToolUse` did the same day: the plugin's 0.1.22 added one entry, matched to
  * `^SubagentHandback$`, and his answer to question 225 accepted it (L15). An owner that is not here is a new owner,
- * whatever its count. */
+ * whatever its count. `workshop` is this repository's own session start hook, `ticks --hook`, which says when the
+ * heartbeat's ticks stopped: his answer to question 245 accepted that one entry on 2026-11-10
+ * (odd/tasks/audit-u3-heartbeat-ticks.md, L8). */
 export const HOOK_CEILINGS = Object.freeze({
   codegraph: Object.freeze({ UserPromptSubmit: 1 }),
+  workshop: Object.freeze({ SessionStart: 1 }),
   'engram@engram': Object.freeze({ PreToolUse: 1, SessionStart: 3, PostToolUse: 1, SubagentStop: 1, SessionEnd: 1 }),
   'codex@openai-codex': Object.freeze({ SessionStart: 1, SessionEnd: 1, Stop: 1 }),
 });

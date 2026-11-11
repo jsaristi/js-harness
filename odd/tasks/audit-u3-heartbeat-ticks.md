@@ -110,9 +110,12 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
 ## Tasks
 - [x] T1 (kind: build) spec 1, 3: `workshop/bin/ticks.mjs` and its test, test first; the exports of one home; the
   dispatcher. Route: inline. Commit: `feat(workshop): ticks --hook says when the heartbeat's ticks stopped`
-- [ ] T2 (kind: build) spec 2, 5: `.claude/settings.json`, its test and the `workshop` cell of `HOOK_CEILINGS`, with
-  the measured time. Waits on his word, question 245 (L5). Route: inline. Commit: its own, after T1's
-- [ ] T3 (kind: verify) Codex and the lenses on each code commit; `npm run check`; the pull request; the ready notice.
+- [x] T2 (kind: build) spec 2, 5: `.claude/settings.json`, its test and the `workshop` cell of `HOOK_CEILINGS`, with
+  the measured time. His word: question 245 (L8). Route: inline. Commit: its own pull request, after T1's landed
+- [x] T3 (kind: verify) Codex and the lenses on each code commit; `npm run check`; the pull request; the ready notice.
+- [ ] T4 (kind: build) spec 2: the land's red test of 2026-11-11 (L15): the hook runs the dispatcher in the folder
+  that holds it, test first, proved in a WSL mirror with no `.git`; its reviews; main merged in. Route: inline.
+  Commit: `fix(workshop): the session start hook reads its repository's records`
 
 ## Log
 - L1 (2026-11-10, the lead's brief `2026-11-10T06-31-36-662Z-8f2df985.md`): "Yours: exactly what the unit lists and
@@ -156,3 +159,104 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
   unrecorded; the lead held them, then asked for them one at a time after JH 167 closed. Codex: correct (0.99), its
   P2 fixed, 33,311 input tokens; the reliability lens: 0 findings, 11,428 input tokens. T1 goes out as its pull
   request; T2 waits on question 245.
+- L8 (2026-11-11): T1 landed as pull request 809 (merged 2026-11-11T02:23:39Z, after his yes to the lead's question
+  252). Question 245 is answered: he tapped "Aceptar el hook (recomendado)" (the lead's transcript
+  `ea85ec35-82e1-4aa9-abe3-98bd153a50b0`, line 5903, 2026-11-11T04:22:56Z, read with `js-harness sessions --quote`).
+  It covers `workshop: { SessionStart: 1 }` in `HOOK_CEILINGS` and the one entry in `.claude/settings.json`; no other
+  hook and no other ceiling. T2 is built on `audit-u3-ticks-hook`, from main at `7525a4e5`, test first: the two new
+  tests failed (25 passed, 2 failed), then with the conventions and the dispatcher's tests 62 of 62 passed;
+  `node workshop/js-harness-workshop.mjs spec`: PASS, 79 capabilities.
+- L9 (2026-11-11): the hook measured again against the real home, five runs through a child `node`, with three other
+  sessions on the machine: exit 0 each, stderr 0 bytes, median 1,418 ms, max 1,514 ms, against the 15 s of its
+  timeout. It still says the three ticks are stale, and names no heartbeat on record: the machine restarted and none
+  runs. The snapshot of the day has not appeared; it will when the lead's heartbeat runs the workshop's loop.
+  Undo: delete `.claude/settings.json`'s entry and the `workshop` cell; the hook wrote nothing to undo.
+- L10 (2026-11-11): reviews of T2, `7c962911`. The lenses (risk, reliability): 0 findings, 17,478 input tokens.
+  Codex (104,751 input tokens): one P2, answered and not taken: the relative script path fails when the hook runs
+  from a subdirectory, and it asks for `"$CLAUDE_PROJECT_DIR"`. By Claude Code's documentation (settings and hooks
+  pages, read through the guide sub-agent on 2026-11-11, whose fetch summarizes; not checked by a run): the project's
+  `.claude/settings.json` is read from the session's primary working directory, so a session started in a
+  subdirectory does not load this hook at all, and where it loads, the handler runs in that directory, the root.
+  `$CLAUDE_PROJECT_DIR` expands in Git Bash and is null in PowerShell, the shell of a Windows with no Git Bash, where
+  it would break a hook that works today; and `ownerOf` (`bin/lib/hook-count.mjs:76`) would read it as a new owner,
+  so the product would change too. What stays open: a resumed session whose directory moved, not documented; there
+  the hook fails without blocking the session, and its notice is missing.
+- L11 (2026-11-11): L10's answer is withdrawn and Codex's P2 taken. The push was refused, `check --push`: "the Codex
+  review that ended at 7c962911 owes a correction: 1 finding open", and the door keeps no record for an answered
+  finding. The lead's note of 00:14 local: "take the finding, do not answer it [...] the hook must run when the
+  session's folder is not the repo root, without resting on a variable that is empty in one shell (a fallback when
+  it is empty is fine), with the test that proves both cases." The entry's command is now `node -e "<code>"
+  workshop/js-harness-workshop.mjs ticks --hook`: node itself reads `CLAUDE_PROJECT_DIR`, or the folder it runs in
+  when the variable is empty, and takes the nearest folder from there upwards that holds the dispatcher, so the
+  command holds no `$` and no backtick for one shell to read its own way; it sets `argv[1]` to the real script, which
+  the dispatcher's main guard needs, and where none is found it prints nothing and exits 0. `ownerOf` reads it as
+  `workshop` unchanged, so the product's code does not change, only its test. Test first: the three new tests failed
+  (the command's shape, a subfolder with the variable set, no dispatcher found), then with hook-count's, the
+  conventions' and the dispatcher's 64 of 64 passed. They run the command as the settings hold it through the
+  platform's shell: from the root, from a subfolder with the variable set, unset and empty, from outside the
+  repository with it set, and with no dispatcher to find. Run by hand from `workshop/bin` against the real home, with
+  other sessions on the machine: Git Bash, 5 runs with the variable, exit 0, stderr 0 bytes, median 2,047 ms, max
+  2,196 ms; without it, 2 runs, 2,211 ms at most; PowerShell without it, 3 runs, median 4,788 ms, max 6,883 ms, of
+  which PowerShell's own start is most; cmd, 2 runs, 1,965 ms at most. Each time includes the shell's start, which
+  L9's runs through a child `node` did not; all are under the 15 s of the timeout.
+- L12 (2026-11-11): reviews of the fix, `7a343c87`. Codex's recheck (35,092 input tokens): "the patch is correct"
+  (0.94), its P2 fixed, 0 not fixed. The reliability lens (7,242 input tokens): 3 warnings, all taken, test first.
+  One: a dispatcher found that does not load ended the hook in silence; it is now said to the session as one
+  `systemMessage` line, still exit 0 and nothing on stderr. Two: the variable naming a folder that holds no
+  dispatcher hid the one in the folder the hook runs in; the search now goes from the variable's folder upwards, then
+  from the folder it runs in upwards. Three: no test ran the command in hook mode; one now runs it as the settings
+  hold it from `workshop/bin` against a home with one fresh reading filed under this repository, and that row is
+  missing from the message while the other two are said. Two of the three new tests failed first (14 passed, 2
+  failed; the hook-mode one passed, being coverage that was missing), then with hook-count's, the conventions' and
+  the dispatcher's 66 of 66. Run by hand again from `workshop/bin` against the real home, other sessions on the
+  machine, each exit 0 and stderr 0 bytes: Git Bash without the variable, 5 runs, median 1,836 ms, max 2,262 ms; cmd
+  without it, 3 runs, median 3,509 ms, max 3,622 ms; PowerShell with it, 3 runs, median 7,514 ms, max 7,737 ms, of
+  which an empty PowerShell took a median of 4,387 ms to start in the same minute (Git Bash, 98 ms). All under the
+  15 s of the timeout; PowerShell is the host's shell only where Git Bash is not installed.
+- L13 (2026-11-11): reviews of `5900c32a`. Codex (74,236 input tokens): "the patch is correct" (0.91), no finding.
+  The reliability lens (7,707 input tokens): its three findings fixed, 0 not fixed, and one follow-up, taken: the
+  hook-mode test ran the idea-watch reading, which asks the network. The tests' runs of the command now give git a
+  proxy on a local port nothing listens on, so no run reaches the network, and the test holds what the hook says
+  offline: the ticks' part first, then "idea-watch: could not be read (", exit 0, nothing on stderr. Run by hand
+  with that proxy from `workshop/bin` against the real home: exit 0, stderr 0 bytes, 4,655 and 5,481 ms, most of it
+  git's two refused connections, under the 5 s that bounds each and the 15 s of the timeout. 66 of 66 passed.
+
+- L14 (2026-11-11): reviews of `bb04ec83`. Codex (89,131 input tokens): "the patch is correct" (0.92), no finding;
+  the reliability lens (5,727 input tokens): 0 findings, its follow-up fixed. `js-harness check --push`: the
+  `codex-review` and `lens-review` rows pass over the four code commits. Pushed; pull request 815 opened as a draft.
+  `js-harness notify --to orchestrator --kind ready --pr 815` was refused, "PR 815 is a draft". The lead's note of
+  01:00 local (the lead's claim): "leave PR 815 as it is. The lead marks it ready itself when it lands it [...]
+  Finish your summary and send the closed notice; no ready notice is needed." So T3 closes with no ready notice on
+  record for 815, by the lead's word.
+- L15 (2026-11-11, the lead's brief `2026-11-11T08-31-47-969Z-0bdf5962.md`): pull request 815 did not land. The
+  land's suite (gate `f7a95e59`, `~/.js-harness/gate-log/failed.jsonl`, "ranIn":"wsl", 559.7 s, no timeout) failed
+  one test, mine: "the hook itself, run from a subfolder, reads the records of this repository". What happened: a
+  gate in WSL runs in a mirror of the tree synced without `.git` (`bin/lib/gate-wsl.mjs:112`). With no `.git` above
+  it, the folder a command runs in is its own project (`mainCheckoutByFiles`, `bin/lib/inbox.mjs:125`), so the hook,
+  run from `workshop/bin`, found the dispatcher above it and read the records of `workshop/bin`:
+  "throughput: no snapshot is kept (.../throughput/-tmp-tmp-8d2hGC2iHi-workshop-bin); windows-daily: never read".
+  The lead's guess (the worktree's `.git` file naming a Windows path) is dropped: the mirror holds no `.git` at all.
+  My own gates never saw it: each commit's tests ran on GitHub's machines, in a clone that holds `.git`. Reproduced
+  with `workshop/bin/ticks.test.mjs` alone in a mirror made as the runner makes it (rsync without `.git`, `env -i`,
+  the gate's node): 1 failed, `doesNotMatch(/windows-daily:/)` at line 281. The fault is the hook's, and wider than
+  the mirror: from a folder outside the repository with `CLAUDE_PROJECT_DIR` set, on Windows too, it found the
+  dispatcher by the variable and read the records of the folder it ran in, so it would say the ticks stopped when
+  they run. The fix now, checked: the command moves to the folder that holds the dispatcher before it runs it
+  (`process.chdir`), so what it reads is that repository's whatever folder the hook ran in. Test first: two tests
+  failed on Windows (15 passed, 2 failed), one with a tree of no git and a dispatcher that prints its folder, one
+  the hook itself from outside the repository by the variable; then 17 of 17 on Windows and 17 of 17 in the WSL
+  mirror with no `.git`. What stops it recurring: the test with a tree of no git runs in every gate, on GitHub and
+  in the mirror alike. Not a register entry: `docs/FAILURES.md` was searched ("mirror", "no .git", "no git", the
+  entries on tests and lands) and holds no such kind, and the land's gate was the control, working. The proof it
+  has not come back: the land's suite passes that test.
+
+## Next step
+For a resume (2026-11-11): T4 is open. The fix of L15 is in `.claude/settings.json` and
+`workshop/bin/ticks.test.mjs`. Left, in order: one commit through the gate; Codex and the reliability lens over it,
+one at a time (`js-harness check --push` names the commands); merge `origin/main` in; `npm run check` once; push;
+`js-harness notify --to orchestrator --kind note` saying it is fixed and how it was proved in WSL (never mark the
+pull request ready here: the lead does, and lands it); the summary
+`docs/sessions/2026-11-11-jh-166-audit-unit-3-the-heartbeat-s-ticks.md` brought up to date, committed and pushed;
+then the closed notice with it. The reproduction is
+`wsl.exe -d Ubuntu --exec bash <job tmp>/repro-wsl.sh /mnt/d/js-harness/.claude/worktrees/audit-u3-heartbeat-ticks`.
+The snapshot of the day is the lead's: the heartbeat must run `node workshop/js-harness-workshop.mjs loop heartbeat`.

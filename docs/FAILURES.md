@@ -621,6 +621,10 @@ on it.
 - Seen: 2026-10-14 — this session's (JH 7) transcript 9265156a, its replies of about 05:20 and
   06:00 — "Contexto cerca del 35 %", said without a read; `get_usage` read 76 percent at 06:25,
   the first read after 26 percent at about 04:30
+- Seen: 2026-11-11 — the channel's note of JH 172 at 01:02 local — "8 are stopped or blocked with a
+  start that named no model, so they ran on the host's default, opus[1m]": the starts named no
+  model and his settings name that default, but no transcript of the eight was read; corrected in
+  a note at 01:22 and in odd/tasks/one-model-home.md, L12
 - Control: check — bin/guard.test.mjs — "a reply whose stated own share is more than 2 points off
   the recorded one is blocked from stopping, with the reason" — since 2026-10-15
 

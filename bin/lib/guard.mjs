@@ -4,6 +4,7 @@
 // entry ends in `|| exit 0` (bin/lib/manifest.mjs), and a refusal by exit code would be swallowed. Zero deps.
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { EFFORTS } from './model-home.mjs';
 import { guardHeld, ruleHere, ruleOf, staleNote } from './rules.mjs';
 
 /** The models a sub-agent may be launched on in the project whose rules file has the text `projectData`, as
@@ -69,8 +70,6 @@ export function openingRefusal(toolName, projectData) {
 
 /** The tool that starts a session in the desktop app, a row in his sidebar. */
 export const SESSION_TOOL = 'mcp__ccd_session__start_session';
-
-const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 /** Why the `start_session` call whose input is `toolInput` is refused, or null. A session started with no effort runs
  * at the effort of the one that started it: on 2026-10-16 two work sessions started so ran at max for two days while

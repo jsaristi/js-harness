@@ -53,6 +53,8 @@ test('the owner of an entry is its plugin, else the name of the program its comm
   assert.equal(ownerOf({ command: 'node /usr/local/lib/tool/run.js' }), 'run');
   // A flag's value is no script: the script is the first word with a script's extension.
   assert.equal(ownerOf({ command: 'node --max-old-space-size 4096 tools/a.mjs' }), 'tools');
+  // Code given to node that finds the script by itself is a flag's value too: the owner is still the script's folder.
+  assert.equal(ownerOf({ command: 'node -e "import(require(\'path\').resolve(process.argv[1]))" workshop/js-harness-workshop.mjs ticks --hook' }), 'workshop');
   // The package managers' subcommands name no owner; what they run does.
   assert.equal(ownerOf({ command: 'npm run lint' }), 'lint');
   assert.equal(ownerOf({ command: 'pnpm exec foo --bar' }), 'foo');
@@ -161,6 +163,20 @@ test('with "hookCount": true a new owner and a plugin cell over its ceiling turn
   assert.ok(row.lines.some((line) => line === 'engram@engram SessionStart: 4 entries, over its ceiling of 3'), row.lines.join('\n'));
   assert.equal(row.lines.filter((line) => line.includes('orca-hook')).length, 1, 'the failure names the owner; no warning repeats it');
   assert.match(row.detail, /2 over the table/);
+});
+
+// His answer to question 245, "Aceptar el hook (recomendado)" (odd/tasks/audit-u3-heartbeat-ticks.md, L8): this
+// repository's own session start hook, one entry and no more.
+test('with "hookCount": true the workshop\'s session start hook is in the table at one entry, and a second is over its ceiling', () => {
+  const ticks = { event: 'SessionStart', command: 'node workshop/js-harness-workshop.mjs ticks --hook' };
+  const row = hookEntriesRow('.', '.', { ...counted, own: true, live: [...installEntries(), ...STACK_ENTRIES, ticks] });
+  assert.equal(row.pass, true, row.lines.join('\n'));
+  assert.ok(row.lines.some((line) => line === 'workshop: SessionStart 1/1'), row.lines.join('\n'));
+  const twice = hookEntriesRow('.', '.', { ...counted, own: true, live: [...installEntries(), ...STACK_ENTRIES, ticks, ticks] });
+  assert.equal(twice.pass, false);
+  assert.ok(twice.lines.some((line) => line === 'workshop SessionStart: 2 entries, over its ceiling of 1'), twice.lines.join('\n'));
+  const elsewhere = hookEntriesRow('.', '.', { ...counted, own: true, live: [...installEntries(), ...STACK_ENTRIES, { ...ticks, event: 'Stop' }] });
+  assert.ok(elsewhere.lines.some((line) => line === 'workshop Stop: 1 entry, over its ceiling of 0'), elsewhere.lines.join('\n'));
 });
 
 test('"hookCount" set to anything but true fails the row, and the harness repository keeps its install limit with it', () => {

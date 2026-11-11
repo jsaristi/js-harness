@@ -10,6 +10,7 @@ import { NOT_FIXED } from './lib/codex-review-recheck.mjs';
 import { LENS_ANSWER_SCHEMA } from './lib/lens-result.mjs';
 import { askedText, NO_ASKED, requestIntent, reviewIntent } from './lib/codex-review-prompt.mjs';
 import { lensPrompt } from './lib/lens-prompts.mjs';
+import { claudeHome } from './lib/model-home.mjs';
 import { UNCLOSED_INSPECTION_STDOUT } from './lib/lens-review-answers.testkit.mjs';
 import { withoutAutoMaintenance } from './lib/git-fixture.testkit.mjs';
 
@@ -388,7 +389,7 @@ test('a lens runs tool-less on the CLI login: no eval token, no API key, no cust
   assert.deepEqual(valueOf('--tools'), ['--tools', '']);
   // The model and the effort are both named on the call: a run that names no effort takes the CLI's saved one.
   assert.deepEqual(valueOf('--model'), ['--model', LENS_MODEL]);
-  assert.deepEqual([LENS_MODEL, LENS_EFFORT], ['claude-fable-5-2', 'high']);
+  assert.deepEqual({ model: LENS_MODEL, effort: LENS_EFFORT }, claudeHome(), 'a lens runs on the home, read and not written again');
   assert.deepEqual(valueOf('--effort'), ['--effort', LENS_EFFORT]);
   assert.deepEqual(valueOf('--system-prompt-file'), ['--system-prompt-file', 'prompt.txt']);
   assert.deepEqual(valueOf('--output-format'), ['--output-format', 'json']);

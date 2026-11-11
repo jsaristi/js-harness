@@ -171,31 +171,24 @@ again while he is at the PC.
   beside `loggedIn` false is kept, and once past it the note says when the sign-in ended.
 
 ## Next step
-State of JH 179 on 2026-11-11 at 08:49Z (read from the clock), written with the fix of the second slice's review.
+State of JH 179 on 2026-11-11, written with the second merge of main (its commit's hour is this section's).
 Worktree `D:\js-harness\.claude\worktrees\signin-expiry-notice`.
 - First slice: pull request 818, merged at 08:32Z (`gh pr view 818 --json mergedAt`). Nothing is owed on it.
-- Second slice: branch `worktree-signin-expiry-heartbeat`, cut from `9a4318e7`. `94d9d5c3` is the heartbeat's tick,
-  reviewed by Codex and the four lenses (Log, L16); the commit after it is the fix of the lenses' three findings.
-1. If the tree is dirty, the fix is not committed yet: `node --test bin/loop-bodies.test.mjs` (35), then commit (the
-   gate) as `fix(loop): the heartbeat confirms the sign-in's end with a reading before it tells it`.
-   Update at 09:02Z: steps 1 and 2 are done (Log, L17); one follow-up was taken in the commit after `8e7a0fd6`,
-   and its review, base `8e7a0fd6`, Codex then the reliability lens, is the third and last of this slice. Then
-   step 3.
-2. Confirming reviews of the fix, base `94d9d5c3`: `js-harness codex-review --base 94d9d5c3 --doc
-   odd/tasks/signin-expiry-notice.md`, then `js-harness lens-review --base 94d9d5c3 --lenses reliability,readability
-   --reason "<the fix>" --doc odd/tasks/signin-expiry-notice.md`. Read each verdict before the next command. This is
-   the second review of the slice; a third is the last the protocol allows.
-3. `git fetch origin` and look at `git log --oneline origin/main -3`: 818 is merged, so the branch may need main
-   merged in before the pull request shows this slice alone (never a rebase of pushed work; nothing of this branch
-   is pushed yet, and the review base after a merge of main is that merge commit). Push the branch and open the
-   second pull request with `--base main`, then `js-harness notify --to orchestrator --kind ready --pr <n> "<one
-   line>"` with the installed `js-harness`. Its body is drafted in `C:\Users\Oficina\.claude\jobs\c825f4a7\tmp\pr2.md`
-   (written for a base of 818's branch: say base `main` instead).
-4. Tick T4, write `docs/sessions/2026-11-11-jh-179-doctor-and-the-heartbeat-warn-before-the-claude-sign.md`
-   (`js-harness summary template --title "JH 179 · doctor and the heartbeat warn before the Claude sign-in expires"`),
-   commit and push it on the second branch, then `js-harness notify --to orchestrator --kind closed --summary <that
-   file> "<line>"`.
-Keep `js-harness wait --notice-to 179` running in the background while waiting. Report only through `js-harness
+- Second slice: branch `worktree-signin-expiry-heartbeat`, pull request 823 against `main`, open; pushed up to
+  `f70902d9`. Local, not pushed: `e54847c5` (the merge of main that resolved the conflict with pull request 820) and
+  the merge of `260bc749` after it, which holds this section (Log, L18 and L19).
+1. The reviews the pre-push check asks for, of the merges, base main's tip that the branch holds: `js-harness
+   codex-review --base 260bc749 --doc odd/tasks/signin-expiry-notice.md`, then `js-harness lens-review --base 260bc749
+   --lenses reliability,readability --reason "<the merge's resolution in bin/loop.mjs>" --doc
+   odd/tasks/signin-expiry-notice.md`. Read each verdict before the next command.
+2. `git push`, then `gh pr view 823 --json mergeable`, then `js-harness notify --to orchestrator --kind ready --pr 823
+   "<one line>"`. If it is not mergeable, main moved again: merge `origin/main` once more first (the lead's word).
+3. Tick T4, write `docs/sessions/2026-11-11-jh-179-doctor-and-the-heartbeat-warn-before-the-claude-sign.md` (its draft
+   is `C:\Users\Oficina\.claude\jobs\c825f4a7\tmp\summary.md`; else `js-harness summary template --title "JH 179 ·
+   doctor and the heartbeat warn before the Claude sign-in expires"`), commit it with this document, push, then
+   `js-harness notify --to orchestrator --kind closed --summary <that file> "<line>"`.
+If Claude Code stops a background command for low memory again: one waiting notice to the lead, and stop (the
+lead's word, L19). Keep `js-harness wait --notice-to 179` running while waiting. Report only through `js-harness
 notify --to orchestrator`. Commits carry no AI attribution (his global rule). An hour written here is read from the
 clock (`date -u`) or is a commit's, never estimated (Log, L15).
 
@@ -308,3 +301,29 @@ clock (`date -u`) or is a commit's, never estimated (Log, L15).
   that failed when called would have printed. That is a run by hand, not a test; a test of it would run the real
   CLI for the real account at every gate, which the tests of this feature never do (L5, D10). `git fetch` at 09:02Z:
   `origin/main` holds `9a4318e7`, so a pull request against `main` shows this slice alone.
+- L18 (the third review, the pull request and what stopped, 2026-11-11, hours from the clock or the commits). The
+  follow-up of L17 is commit `f70902d9` (09:03Z by `git log -1 --format=%cI`). Third and last
+  review, `8e7a0fd..f70902d`: Codex "the patch is correct" (confidence 0.94), no finding, 99,307 input tokens in 84
+  s; the reliability lens rechecked the follow-up as fixed and repeated the one open suggestion (the default reader's
+  pattern over the source, answered in L16 and L17), which is no failure of behaviour and is said as open in the
+  pull request. The branch was pushed and pull request 823 opened against `main`. The ready notice was refused,
+  "PR 823 is not mergeable (CONFLICTING)": pull request 820, merged meanwhile, added the user's-absence notice in the
+  same lines of `bin/loop.mjs`. `origin/main` was merged in with `--no-commit`: three conflicts, each two neighbours'
+  additions, resolved keeping both (the comment over `ending`; the opening line with both clauses; a tick that weighs
+  the sign-in and then reads the transcript as main does); `node --test bin/loop-bodies.test.mjs` passes 45 of 45 on
+  the merged tree. Its commit could not finish: GitHub's machines gave no answer ("gh run view failed"), so the tests
+  were to run here, 3 gates ahead, and at about 09:25Z Claude Code stopped this session's background commands (the
+  commit and `js-harness wait`) because the machine was critically low on memory, with the note not to start them
+  again unless asked. At 09:27Z the machine had 7.3 GB free of 19.7. The lead was told with a waiting notice; the
+  state is `## Next step`.
+- L19 (the go and the merge, 2026-11-11, hours from the clock or the commits). The waiting notice was recorded at
+  09:30Z. The lead answered by a message to this session: "go. Rerun your one commit (the staged merge of main into
+  PR 823's branch), push and send ready", with the memory it measured (7.8 GB of 19.7 free), that main had moved to
+  `260bc74`, and "If the host stops you again for memory, send the lead one waiting notice and stop; do not retry
+  alone". The merge was committed as `e54847c5`, its gate passed (17 rows). `git merge-tree --write-tree HEAD
+  origin/main` against `260bc749` exits 0: no new conflict. The push was refused by the pre-push check: the merge
+  commit, holding a resolution, is a code commit with no review record, "next: js-harness codex-review --base
+  260bc7493947 --at e54847c57708". That base is main's tip, which `e54847c5` does not hold (it merged `c742cbe5`), so
+  the range would show main's newer work reversed. Decided: merge `origin/main` once more, clean, in the commit that
+  holds this entry, so that `260bc749..HEAD` is this slice alone as merged, and give that range to Codex and the
+  lenses. It is a review of the merge's resolution, not a fourth round of the slice's fixes.
