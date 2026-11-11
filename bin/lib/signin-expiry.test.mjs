@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { localMinute, localZone } from './local-time.mjs';
-import { SIGNED_OUT_FIX, SIGNIN_FIX, SIGNIN_READ_TIMEOUT_MS, SIGNIN_WARN_DAYS, readSigninExpiry, signinReading, signinRow } from './signin-expiry.mjs';
+import { SIGNED_OUT_FIX, SIGNIN_FIX, SIGNIN_READ_TIMEOUT_MS, SIGNIN_WARN_DAYS, readSigninExpiry, signinReading, signinRow, signinTold } from './signin-expiry.mjs';
 
 // Every answer here is made up: the real `claude auth status` names an account, so no test runs it.
 const EXPIRES = '2026-11-23T16:11:04.604Z';
@@ -51,7 +51,7 @@ test('the reader runs claude auth status and nothing else, bounded by its own ti
   assert.ok(SIGNIN_READ_TIMEOUT_MS > 6030, 'over the slowest reading measured on 2026-11-11');
 });
 
-test('a home that is not the user\'s own is not asked: no CLI runs, and the row is n/a with no note', () => {
+test('a home that is not the user\'s own is not asked: no CLI runs, the row is n/a with no note and the heartbeat is told nothing', () => {
   const calls = [];
   const spawn = (...call) => {
     calls.push(call);
@@ -62,6 +62,7 @@ test('a home that is not the user\'s own is not asked: no CLI runs, and the row 
   assert.deepEqual(reading, { expiresAt: null, stored: null, why: null, asked: false });
   assert.equal(calls.length, 0, 'the sign-in is the real home\'s: a fixture home never reads it');
   assert.deepEqual(signinRow(reading, END), { ...ROW, claude: 'n/a' });
+  assert.deepEqual(signinTold(reading, END), { level: null, line: null, why: null });
   // The user's own home, however it is spelled, is asked: with a trailing separator, through a folder and back, and
   // on Windows in another letter case. Each spelling is another string than `real`, built without path.join; a
   // case variant that changes nothing (a checkout path already all in one case) is left out, and the folder's own
@@ -210,4 +211,40 @@ test('a date that cannot be read is unknown, no gap, and the note says why', () 
   for (const nothing of [null, undefined, {}]) {
     assert.deepEqual(signinRow(nothing, END), { ...ROW, claude: 'unknown', note: 'when the claude.ai sign-in stored on this machine ends cannot be read: the reader gave nothing' });
   }
+});
+
+test('the heartbeat is told nothing while the margin is far, and the days left once inside it', () => {
+  const edge = END - SIGNIN_WARN_DAYS * DAY;
+  assert.deepEqual(signinTold(READ, edge - 1), { level: 0, line: null, why: null });
+  assert.deepEqual(signinTold(READ, END - 6 * DAY - HOUR), {
+    level: 1,
+    line: `SIGN-IN: the claude.ai sign-in stored on this machine ends in 6 days, on ${WHEN}: tell the user, who signs in again while at the machine (claude auth login); once it ends, every background session, lens review and remote server fails at once`,
+    why: null,
+  });
+});
+
+test('the heartbeat is told a sign-in that ended as a level above one that ends soon', () => {
+  assert.deepEqual(signinTold(READ, END + HOUR), {
+    level: 2,
+    line: `SIGN-IN: the claude.ai sign-in stored on this machine ended on ${WHEN}: tell the user, who signs in again at the machine (claude auth login); until then no background session, lens review or remote server runs`,
+    why: null,
+  });
+});
+
+test('the heartbeat is told a CLI that is not signed in as an ended sign-in, whatever date it prints, never as days left', () => {
+  const why = 'the Claude CLI says it is not signed in';
+  const step = 'tell the user, who signs in again at the machine (claude auth login); until then no background session, lens review or remote server runs';
+  assert.deepEqual(signinTold({ expiresAt: null, stored: false, why, signedOut: true }, END), { level: 2, line: `SIGN-IN: ${why}: ${step}`, why: null });
+  // A date still ahead is not said: the CLI's word decides, as it does for the row.
+  assert.deepEqual(signinTold({ expiresAt: EXPIRES, stored: false, why, signedOut: true }, END - 10 * DAY), { level: 2, line: `SIGN-IN: ${why}: ${step}`, why: null });
+  assert.deepEqual(signinTold({ expiresAt: EXPIRES, stored: false, why, signedOut: true }, END + HOUR), {
+    level: 2,
+    line: `SIGN-IN: ${why}: the claude.ai sign-in stored on this machine ended on ${WHEN}: ${step}`,
+    why: null,
+  });
+});
+
+test('the heartbeat is told why a date cannot be read, with no level and no line', () => {
+  assert.deepEqual(signinTold({ expiresAt: null, stored: null, why: 'claude auth status did not answer in 20 seconds' }, END), { level: null, line: null, why: 'claude auth status did not answer in 20 seconds' });
+  assert.deepEqual(signinTold(null, END), { level: null, line: null, why: 'the reader gave nothing' });
 });

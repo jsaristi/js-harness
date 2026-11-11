@@ -962,6 +962,11 @@ Hours written in the relief file were not read from a clock.
 - Seen: 2026-10-16 — the record of notices, D--js-harness.jsonl — 73 of the 74 lead notices that
   opened "HH:MM JH ORQ:" (10-15 to 10-16) were more than a minute off the local clock: notify text
   sent through Bash met no hour check (bin/guard.mjs:81 holds only message tools)
+- Seen: 2026-11-11 — odd/tasks/signin-expiry-notice.md, Next step and Log, commits 83059554 to
+  9a4318e7 — JH 179 wrote nine hours as "about HH:MMZ" without reading the clock, up to 100 minutes
+  ahead ("about 09:45Z" in a block committed at 08:04Z); found when a notice printed the clock,
+  corrected with the commits' hours in the commit after 9a4318e7. The documents control reads a line
+  that opens with the date and an hour, and these stood inside a sentence, in UTC
 - Control: check — bin/notify.test.mjs — "a notice whose text stamps an hour more than a minute off
   the clock is refused, with the right hour, and not recorded" — since 2026-10-16
 - Proof: messages to another session: bin/guard.test.mjs:54, "a message to another session, by
@@ -1396,6 +1401,10 @@ session as just opened.
 A record held a fact that was not true when written or stopped being true, and was read later as it
 stood.
 - Class: wrong-information
+- Seen: 2026-11-11 — odd/tasks/signin-expiry-notice.md, D8, and bin/loop.mjs at 94d9d5c3 (JH 179's own) — D8 said
+  the heartbeat's sign-in line "is said at the start"; the code only saved it, and no test asked for it. Three Codex
+  reviews and three lens reviews read both and did not see it; Codex found it in the review of the merge of main
+  (260bc74..52c9845). Fixed in ec517abb with the test that was missing
 - Seen: 2026-10-06 — odd/tasks/session-board.md:18-19 — a process recorded as "was not killed" while
   another session killed it
 - Seen: 2026-10-07 — odd/tasks/session-board.md:932-937 — an entry named the wrong cause of a wake;

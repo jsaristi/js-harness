@@ -60,7 +60,7 @@ again while he is at the PC.
   runs a CLI on Windows and elsewhere; `localMinute` and `localZone` (`bin/lib/local-time.mjs`) already say a local
   time (`rule:local-time`).
 - 2. Raw material: the CLI's own answer on this PC (CLI 2.1.322, `claude.exe` in `~/.local/bin`), read four times on
-  2026-11-11 from 06:25Z by `spawnSync('claude auth status')`: exit 0, JSON with the keys `loggedIn`, `authMethod`,
+  2026-11-11 between 06:14Z and 06:26Z by `spawnSync('claude auth status')`: exit 0, JSON with the keys `loggedIn`, `authMethod`,
   `apiProvider`, `analyticsDisabled`, `projectsDirectory`, `configDirectory`, `loginExpiresAt`, `email`, `orgId`,
   `orgName`, `subscriptionType`, `storedClaudeAiLogin`, `planTier`; `loginExpiresAt` `2026-11-23T16:11:04.604Z`,
   `storedClaudeAiLogin` `true`, `authMethod` `claude.ai`, `loggedIn` `true`, nothing on stderr; it took 5859, 4398
@@ -112,9 +112,9 @@ again while he is at the PC.
   inline, test first; first pull request
 - [x] T2 (kind: build) the `claude-signin` row in the interactive `doctor`, and the notes it prints — S2; inline,
   test first; first pull request
-- [ ] T3 (kind: build) the heartbeat's sign-in tick, with `signinTold` — S3; inline, test first; second pull
+- [x] T3 (kind: build) the heartbeat's sign-in tick, with `signinTold` — S3; inline, test first; second pull
   request, stacked on the first
-- [ ] T4 (kind: verify) `doctor` and the heartbeat run here; Codex and the lenses on the code commits; `npm run
+- [x] T4 (kind: verify) `doctor` and the heartbeat run here; Codex and the lenses on the code commits; `npm run
   check`; the pull request, the ready notice, the summary — S5, S6
 
 ## Decisions
@@ -148,7 +148,12 @@ again while he is at the PC.
   `SIGNIN_HOURS` (6): a reading blocks the loop for about 5 s, and a date with a margin of days needs no more. Inside
   the margin the line is said at the start and after every line that ends the loop, as the reviews due are; the loop
   itself ends only when a reading crosses into the margin or past the end, so a heartbeat started inside the margin is
-  not ended by what it just said. A date that cannot be read is said once, with why.
+  not ended by what it just said. A date that cannot be read is said once, with why. A reading that finds the CLI
+  not signed in (D9) is told as a sign-in that ended, whatever date it prints: the top level, so it ends the loop
+  once, and its line names the CLI's word instead of days left. (Added after the lenses' review, L16) Neither the
+  ending nor the line rests on a date read hours ago: both are first confirmed by a reading at that tick, at a cost
+  of about 5 s at an ending inside the margin, so a sign-in he renewed since the last reading is not told for up to
+  six hours more. The opening line promises the readings only for a home that is asked.
 - D10 The reading is made only for the user's own home: with a `--home` (or `JS_HARNESS_HOME`) that is another
   folder the CLI is not run, the row is `n/a` and the heartbeat is told nothing. `claude auth status` answers for the
   OS user's home whatever home the harness was given, so a fixture home would otherwise read the real account, which
@@ -166,39 +171,12 @@ again while he is at the PC.
   beside `loggedIn` false is kept, and once past it the note says when the sign-in ended.
 
 ## Next step
-State of JH 179 at 2026-11-11 about 08:50Z, read after a compaction. Worktree
-`D:\js-harness\.claude\worktrees\signin-expiry-notice`, branch `worktree-signin-expiry-notice`, nothing pushed yet.
-Commits: `83059554` (this document), `fa682dde` (first slice: reader and `doctor` row; gate passed; Codex and the
-four lenses recorded on `8305955..fa682dd`), `06e24923` (the fix of the lenses' findings; gate passed; NOT reviewed).
-1. Confirming review of `06e24923`: `js-harness codex-review --base fa682dde --doc odd/tasks/signin-expiry-notice.md`,
-   then `js-harness lens-review --base fa682dde --lenses resilience,reliability,readability --reason "<the fix>" --doc
-   odd/tasks/signin-expiry-notice.md`. Read each verdict before the next command; fix or answer findings in the Log.
-2. Push the branch and open the first pull request against `main` (title `feat(doctor): a claude-signin row says when
-   the stored sign-in ends`; body: start, end, what follows, size, why over 400 per D11), then `js-harness notify --to
-   orchestrator --kind ready --pr <n> "<one line>"` with the installed `js-harness`.
-3. Second slice: `git switch -c worktree-signin-expiry-heartbeat` from the first branch. Its files, whole and green
-   before the split, are in `C:\Users\Oficina\.claude\jobs\c825f4a7\tmp\full\` (`bin/loop.mjs`,
-   `bin/loop-bodies.test.mjs`, `README.md`, `bin/lib/signin-expiry.mjs` and its test). Copy `bin/loop.mjs` and
-   `bin/loop-bodies.test.mjs` over the branch's. Do NOT copy the saved `signin-expiry.mjs`, its test or `README.md`
-   over the branch's (they lack the fix of `06e24923`): from the saved copies take only `signinTold` and its three
-   tests, the `signinTold` assertion of the not-asked test, the header's and the margin comment's words about the
-   heartbeat, and the README paragraph that starts "At its start and every six hours". Add to `signinTold`: a
-   `signedOut` reading is level 2 with a line that says the CLI is not signed in (test first). Then one file at a
-   time: `node --test bin/lib/signin-expiry.test.mjs`, `node --test bin/loop-bodies.test.mjs`. Commit (the gate),
-   Codex and lenses with `--base 06e24923` (or the first branch's tip), push, a pull request based on
-   `worktree-signin-expiry-notice` that shows the chain, the ready notice with `--pr`.
-4. Tick T3 and T4, write `docs/sessions/2026-11-11-jh-179-doctor-and-the-heartbeat-warn-before-the-claude-sign.md`
-   (`js-harness summary template --title "JH 179 · doctor and the heartbeat warn before the Claude sign-in expires"`),
-   commit and push it, then `js-harness notify --to orchestrator --kind closed --summary <that file> "<line>"`.
-Keep `js-harness wait --notice-to 179` running in the background while waiting. Report only through `js-harness
-notify --to orchestrator`. Commits carry no AI attribution (his global rule).
-
-Update, about 09:20Z: `421f994c` holds this section. Codex on `fa682dd..421f994` found one P2 (Log, L12), fixed in
-the commit after it; step 1 is now the confirming review of that commit, base `421f994c`, Codex then the lenses over
-`fa682dde..HEAD` (the lenses have not read `06e24923` yet).
-
-Update, about 09:45Z: step 1 is done (Log, L13), both reviews cover the first slice up to `5f35d1a3`. Next is step 2,
-the push and the first pull request, then step 3 with its review base `5f35d1a3`.
+Closed by JH 179 on 2026-11-11 with the commit that holds this section. Pull request 818 is merged. Pull request 823
+(branch `worktree-signin-expiry-heartbeat`, base `main`) holds the heartbeat's tick, reviewed in five rounds (Log,
+L16 to L21); the merge is his, and the lead lands it on the closed notice. Nothing is owed by this session. Open for
+whoever next touches the tick, none blocking: the default reader's test is a pattern over the source (L16, L17); the
+name `signinNews` is used for a function and for a tick's flag in `bin/loop.mjs` (L21). The session's summary is
+`docs/sessions/2026-11-11-jh-179-doctor-and-the-heartbeat-warn-before-the-claude-sign.md`.
 
 ## Log
 - L1 (his request, as written; lead transcript ea85ec35 line 6716, 2026-11-11T05:26:36Z, printed by `js-harness
@@ -208,8 +186,9 @@ the push and the first pull request, then step 3 with its review base `5f35d1a3`
   latido, con su prueba, en una sesión propia" and does not authorize "iniciar sesión por ti, guardar ni tocar
   credenciales: el arnés solo leería la fecha con claude auth status". The brief, written by JH 174 and started by
   the lead as JH 179: `~/.js-harness/background/briefs/2026-11-11T06-14-31-879Z-2075a3fa.md`, quoted in `## Specs`.
-- L2 (evidence, measured 2026-11-11 from 06:25Z, this PC, CLI 2.1.322): the readings of item 2 of the depth pass.
-- L3 (state, 2026-11-11 about 06:50Z): this document written before any code; next T1, test first.
+- L2 (evidence, measured 2026-11-11 between 06:14Z, the brief's hour, and 06:26Z, the first commit's; this PC, CLI
+  2.1.322): the readings of item 2 of the depth pass.
+- L3 (state, 2026-11-11 at 06:26Z, the hour of commit `83059554`): this document written before any code; next T1, test first.
 - L4 (red, then green, T1): with the test first, `node --test bin/lib/signin-expiry.test.mjs` failed (no module); with
   `bin/lib/signin-expiry.mjs` and `spawnProbeOrThrow` exported with its `timeout`, it passes 20 of 20.
 - L5 (found while writing T2, decision D10): `bin/js-harness.test.mjs:293` runs the real `doctor` with a temp home, and
@@ -220,7 +199,7 @@ the push and the first pull request, then step 3 with its review base `5f35d1a3`
 - L7 (red, then green, T3, written before the split): `node --test bin/loop-bodies.test.mjs` failed 7 of 33 before
   `bin/loop.mjs` changed and passes 33 of 33 after; the tick is the `signinExpiry` seam of `loopMain`, read at the
   start and every `SIGNIN_HOURS`, its line after every ending, the loop ended by a level that rises.
-- L8 (evidence, this PC, 2026-11-11 about 07:55Z, the branch's own copy): `node bin/js-harness.mjs doctor --offline`
+- L8 (evidence, this PC, 2026-11-11 before 06:57Z, the hour of commit `fa682dde`; the branch's own copy): `node bin/js-harness.mjs doctor --offline`
   prints `claude-signin   n/a       ok        n/a       n/a       n/a` and, under `Notes:`, `claude-signin: the
   claude.ai sign-in stored on this machine ends in 12 days, on 2026-11-23 11:11 (UTC-05:00)`. `node
   bin/js-harness.mjs loop heartbeat --quiet 1 --every 20 --max 1`, stopped after 45 s, opens with "every 6 hours, the
@@ -229,7 +208,7 @@ the push and the first pull request, then step 3 with its review base `5f35d1a3`
   returns "SIGN-IN: the claude.ai sign-in stored on this machine ends in 6 days, on 2026-11-23 11:11 (UTC-05:00):
   tell the user, who signs in again while at the machine (claude auth login); once it ends, every background session,
   lens review and remote server fails at once" (a real reading, a moved clock).
-- L9 (state, 2026-11-11 about 08:05Z): the change split as D11 says. The working tree holds the first slice only; the
+- L9 (state, 2026-11-11 before 06:57Z, as L8): the change split as D11 says. The working tree holds the first slice only; the
   second slice's files, whole and green, are kept outside the repository in `$CLAUDE_JOB_DIR/tmp/full/` (`bin/loop.mjs`,
   `bin/loop-bodies.test.mjs`, `bin/lib/signin-expiry.mjs` and its test with `signinTold`, `README.md` with the
   heartbeat's paragraph) until the first slice is committed. Next: the first slice's gate, Codex and the lenses, its
@@ -249,7 +228,8 @@ the push and the first pull request, then step 3 with its review base `5f35d1a3`
   equal to the home, and the test's own `notEqual` fails. Taken: a variant that changes nothing is left out. The
   signed-out handling it read as consistent with what was asked. The first commit of `421f994c` failed its gate once
   and passed on the second try; which test failed was not read (the output was cut), so it is not known.
-- L13 (the confirming reviews of the first slice, 2026-11-11 about 09:45Z). Codex on `421f994..5f35d1a`: "the patch
+- L13 (the confirming reviews of the first slice, 2026-11-11 between 07:51Z and 08:04Z, the hours of the commits
+  around them). Codex on `421f994..5f35d1a`: "the patch
   is correct" (confidence 0.99), its P2 rechecked as fixed, 33,819 input tokens in 37 s. The lenses on
   `fa682dd..5f35d1a`: resilience 0 findings, readability 0, reliability 1; the three earlier findings rechecked as
   fixed, none blocking. The one finding, reliability SUGGESTION marked follow-up, `bin/lib/signin-expiry.mjs:69-72`:
@@ -257,3 +237,102 @@ the push and the first pull request, then step 3 with its review base `5f35d1a3`
   Answered, not fixed here: the heartbeat's code is the second pull request, where `signinTold` gets that case with
   its test first (step 3 of `## Next step`). Two Codex reviews and two lens reviews on this slice, under the three the
   protocol allows.
+- L14 (the second slice, T3, on `worktree-signin-expiry-heartbeat`, 2026-11-11 from 08:10Z to 08:25Z by the clock).
+  The first slice was pushed and is pull request 818; the ready notice was recorded at 08:07Z. Red, then green: with
+  the tests of `signinTold` added first, `node --test bin/lib/signin-expiry.test.mjs` failed whole (the module had no
+  `signinTold`); with it, 22 of 22, and `node --test bin/loop-bodies.test.mjs` 34 of 34, `node --test
+  bin/doctor-signin.test.mjs` 8 of 8. L13's follow-up is answered here: a signed-out reading is level 2 and its line
+  is the CLI's word, in a test of `signinTold` (three shapes: no date, a date ahead, a date past) and one of the
+  heartbeat (a second reading that finds the CLI signed out ends the loop). Searched before the change: every caller
+  of `loopMain` (`workshop/js-harness-workshop.mjs`, `bin/loop.test.mjs`, `bin/loop-bodies.test.mjs`) and every text
+  that says what the product's heartbeat runs. One was made untrue by this slice, `workshop/bin/ticks.mjs:95`, "the
+  product's, which runs no tick": it now says "none of these ticks", with its test (11 of 11). Evidence on this PC,
+  the branch's own copy: `node bin/js-harness.mjs loop heartbeat --quiet 1 --every 20 --max 1`, stopped after 40 s,
+  opens with "every 6 hours, the end of the stored claude.ai sign-in is read, and one that comes within 7 days, or
+  passes, ends it" and says no sign-in line (12 days left); `signinTold` given this PC's real reading says nothing
+  now, the `SIGN-IN:` line of L8 with the clock 6 days ahead, and "SIGN-IN: the claude.ai sign-in stored on this
+  machine ended on 2026-11-23 11:11 (UTC-05:00): tell the user, who signs in again at the machine (claude auth
+  login); until then no background session, lens review or remote server runs" with it 13 days ahead (a real reading,
+  a moved clock).
+- L15 (a mistake of this session, found at 08:09Z when the ready notice printed the clock): the hours this document
+  gave as "about HH:MMZ" in `## Next step` and in L2, L3, L8, L9 and L13 were estimated, not read, and ran up to 100
+  minutes ahead ("about 09:45Z" in a block committed at 08:04Z). Fixed in this commit: each is now a commit's hour or
+  a span between two of them, read from `git log --format=%cI`. The guard that refuses an hour ahead of the clock
+  reads a line that opens with the date and an hour, and these stood inside a sentence. It is a `- Seen:` line of
+  `hours-guessed` in `docs/FAILURES.md`.
+- L16 (the reviews of the second slice, `9a4318e..94d9d5c`, 2026-11-11 between 08:27Z, the commit's hour, and
+  08:49Z by the clock). Pull request 818 was merged at 08:32Z, while they ran, so the second pull request's
+  base is `main`. Codex: "the patch is correct" (confidence 0.88), no finding, 129,583 input tokens in 107 s. The
+  lenses: risk 0 findings, resilience 0, reliability 2, readability 1. (1) Reliability WARNING, `bin/loop.mjs:494-513`,
+  the loop ended and said its line from a reading up to 6 hours old, so a sign-in renewed since was still told.
+  Taken (D8): news and the line are confirmed by a reading at that tick; tests first, red 5 of 35 in
+  `bin/loop-bodies.test.mjs`, green 35 of 35. (2) Readability SUGGESTION, `bin/loop.mjs:614`, the opening line
+  promised the readings for a home that is never asked. Taken: the opening reading comes first, and the clause is
+  said only where a home is asked; what that reading says is held until the line is out. (3) Reliability SUGGESTION,
+  `bin/loop-bodies.test.mjs:586-589`, the default reader is proved by a pattern over the source. Half taken, half
+  answered: the pattern no longer depends on spacing; an observable proof is not written because no test may run the
+  real `claude auth status` (it names an account and takes seconds), and for a fixture home the default reads
+  nothing by design, which is what no reader does too. What the default does is proved in `readSigninExpiry`'s own
+  test, and on this PC by the run of L14.
+- L17 (the confirming reviews of `94d9d5c..8e7a0fd`, 2026-11-11 before 09:02Z by the clock). Codex: "the patch is
+  correct" (confidence 0.9), no finding, 80,459 input tokens in 50 s. The lenses: readability 0 findings, its
+  earlier one rechecked as fixed; reliability 2 suggestions, none blocking, the warning rechecked as fixed. (1)
+  Reliability SUGGESTION, follow-up, `bin/loop.mjs:501-504`: when the confirming reading fails, the loop still ends
+  and says its line from a date read hours before, with nothing that says so. Taken: such a line ends "(read at
+  HH:MM; a reading now could not be made)"; tests first, red 2 of 36 in `bin/loop-bodies.test.mjs`, green 36 of 36.
+  (2) Reliability SUGGESTION, "not fixed", the default reader's pattern over the source: answered a second time, on
+  evidence. The default was called and worked on this PC after the fix: `node bin/js-harness.mjs loop heartbeat
+  --quiet 1 --every 20 --max 1` printed the clause "every 6 hours, the end of the stored claude.ai sign-in is read",
+  which since L16 is said only when the opening reading was asked, and no "could not be read" line, which a default
+  that failed when called would have printed. That is a run by hand, not a test; a test of it would run the real
+  CLI for the real account at every gate, which the tests of this feature never do (L5, D10). `git fetch` at 09:02Z:
+  `origin/main` holds `9a4318e7`, so a pull request against `main` shows this slice alone.
+- L18 (the third review, the pull request and what stopped, 2026-11-11, hours from the clock or the commits). The
+  follow-up of L17 is commit `f70902d9` (09:03Z by `git log -1 --format=%cI`). Third and last
+  review, `8e7a0fd..f70902d`: Codex "the patch is correct" (confidence 0.94), no finding, 99,307 input tokens in 84
+  s; the reliability lens rechecked the follow-up as fixed and repeated the one open suggestion (the default reader's
+  pattern over the source, answered in L16 and L17), which is no failure of behaviour and is said as open in the
+  pull request. The branch was pushed and pull request 823 opened against `main`. The ready notice was refused,
+  "PR 823 is not mergeable (CONFLICTING)": pull request 820, merged meanwhile, added the user's-absence notice in the
+  same lines of `bin/loop.mjs`. `origin/main` was merged in with `--no-commit`: three conflicts, each two neighbours'
+  additions, resolved keeping both (the comment over `ending`; the opening line with both clauses; a tick that weighs
+  the sign-in and then reads the transcript as main does); `node --test bin/loop-bodies.test.mjs` passes 45 of 45 on
+  the merged tree. Its commit could not finish: GitHub's machines gave no answer ("gh run view failed"), so the tests
+  were to run here, 3 gates ahead, and at about 09:25Z Claude Code stopped this session's background commands (the
+  commit and `js-harness wait`) because the machine was critically low on memory, with the note not to start them
+  again unless asked. At 09:27Z the machine had 7.3 GB free of 19.7. The lead was told with a waiting notice; the
+  state is `## Next step`.
+- L19 (the go and the merge, 2026-11-11, hours from the clock or the commits). The waiting notice was recorded at
+  09:30Z. The lead answered by a message to this session: "go. Rerun your one commit (the staged merge of main into
+  PR 823's branch), push and send ready", with the memory it measured (7.8 GB of 19.7 free), that main had moved to
+  `260bc74`, and "If the host stops you again for memory, send the lead one waiting notice and stop; do not retry
+  alone". The merge was committed as `e54847c5`, its gate passed (17 rows). `git merge-tree --write-tree HEAD
+  origin/main` against `260bc749` exits 0: no new conflict. The push was refused by the pre-push check: the merge
+  commit, holding a resolution, is a code commit with no review record, "next: js-harness codex-review --base
+  260bc7493947 --at e54847c57708". That base is main's tip, which `e54847c5` does not hold (it merged `c742cbe5`), so
+  the range would show main's newer work reversed. Decided: merge `origin/main` once more, clean, in the commit that
+  holds this entry, so that `260bc749..HEAD` is this slice alone as merged, and give that range to Codex and the
+  lenses. It is a review of the merge's resolution, not a fourth round of the slice's fixes.
+- L20 (a real failure found by the fourth review, 2026-11-11 at 10:00Z by the clock). The second merge is `52c98450`,
+  its gate passed (17 rows). Codex on `260bc74..52c9845`: "the patch is incorrect" (confidence 0.96), one P2,
+  `bin/loop.mjs:703-707`: a heartbeat started inside the margin, or with the CLI signed out, kept its `SIGN-IN:` line
+  until something ended the loop, hours later, while D8 says the line is said at the start. True, and in the slice
+  since `94d9d5c3`: three Codex reviews and three lens reviews read it and did not see it, and no test asked for the
+  line at the start. This is past the three reviews `rule:double-review` allows, so it is raised to the lead as a
+  problem (a waiting notice) with the fix written: the line is said right after the opening line, and an ending at
+  that same tick does not say it twice; tests first, red 2 of 46 in `bin/loop-bodies.test.mjs`, green 47 of 47 with
+  one more for the ending at the start. What it needs is a fifth review, of this fix, with the lenses' review of the
+  merged range the pre-push check still asks for.
+- L21 (the fifth round, on the lead's go, and the close; 2026-11-11, by the records). The fix is `ec517abb`, its gate
+  passed. Codex on `52c9845..ec517ab`: "the patch is correct" (0.97), the P2 rechecked as fixed, 37,634 input
+  tokens. The lens run was stopped once by Claude Code for low memory (waiting notice at 10:12Z) and rerun on the
+  lead's second go: reliability 0 findings; readability 2, both answered, no code changed. (1) WARNING,
+  `bin/loop.mjs:537-538`, "the guard compares two ctx.now() readings": not so for the case the guard is for, an
+  ending in the start section, where `signin.tick` and `signin.saidAt` are both the one value `started`. An ending at
+  a later tick, the first included, says the line again after a confirming reading, which is D8 as written ("after
+  every line that ends the loop"); the frozen test clock makes the first tick equal the start, which a real clock
+  does not. (2) SUGGESTION, `bin/loop.mjs:741`, the tick's flag `signinNews` shadows the function of that name: true
+  and harmless today; a rename is a code change that would need a sixth round, so it is left, named in the pull
+  request, for whoever next touches the tick. Depth pass, at the close: predicted 4 of 4 specs with a proof,
+  measured 4 of 4 (each has its test file green in the gate); the refutation's verdict, supports, held. Not
+  checked: a real heartbeat crossing the margin, and what the CLI prints after the end date.

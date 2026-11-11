@@ -131,7 +131,7 @@ test('a heartbeat on record that runs the product\'s command is named as the cau
     set.snapshot('2026-11-01');
     set.loop(['js-harness', 'loop', 'heartbeat']);
     const product = messageOf((await runTicks(['--hook'], { home, cwd })).out);
-    assert.match(product, /the heartbeat on record \(since 2026-11-10T06:15:54\.144Z\) runs js-harness loop heartbeat, the product's, which runs no tick/);
+    assert.match(product, /the heartbeat on record \(since 2026-11-10T06:15:54\.144Z\) runs js-harness loop heartbeat, the product's, which runs none of these ticks/);
     set.loop(['node', 'workshop/js-harness-workshop.mjs', 'loop', 'heartbeat']);
     assert.doesNotMatch(messageOf((await runTicks(['--hook'], { home, cwd })).out), /on record/);
   });

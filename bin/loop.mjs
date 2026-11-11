@@ -30,6 +30,7 @@ import { readStalled } from './lib/stall.mjs';
 import { isLeadSession } from './lib/stale-board.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { SIGNIN_WARN_DAYS, readSigninExpiry, signinTold } from './lib/signin-expiry.mjs';
 
 // The lead's cut (F8 S7, odd/tasks/f8-s7-topology.md, spec 1): the lead is cut at a phase's close or after this many
 // compactions of its session, the diet's starting line (docs/proposals/harness-diet.md, section 6), which S8 measures.
@@ -361,6 +362,11 @@ const WINDOWS_MINUTES = 60;
 // says it again each hour until a host watch session opens for it (odd/tasks/f8-s9-host-watch.md, S4).
 const HOST_MINUTES = 60;
 
+// How often the heartbeat reads when the stored claude.ai sign-in ends, in hours (bin/lib/signin-expiry.mjs): one
+// reading runs the Claude CLI for about five seconds, and a date with a margin of days needs no more. Between two
+// readings the clock is weighed at every tick against the date last read, so the margin is met at the tick it falls.
+const SIGNIN_HOURS = 6;
+
 /** The compactions of the session's own thread in `text`, whole transcript lines: a sub-agent's (a side chain) is not
  * the session's. Only a line that names a compaction is parsed, so a long transcript is read at the speed of a scan. */
 export function compactionsIn(text) {
@@ -482,6 +488,62 @@ async function heartbeat(ctx, parsed, { home, slug }) {
       hostSaid.add(line);
     }
     return result.told;
+  };
+  // The stored sign-in's end (odd/tasks/signin-expiry-notice.md, S3): read at the start and every SIGNIN_HOURS, and
+  // weighed against the clock at every tick. Its line is said from the margin on, after whatever ends the loop, as
+  // the reviews due are; the loop itself ends only when the level rises (into the margin, or past the end), so a
+  // heartbeat started inside the margin is not ended by what it already knows. Neither is done on a date read hours
+  // ago: news and the line are first confirmed by a reading at that tick, so a sign-in renewed since the last reading
+  // ends nothing and is not told. A reading that cannot be made is said once each, and the last date a reading gave
+  // still stands. `atStart` is the reading the heartbeat opens with, which ends nothing whatever it finds.
+  // `readAt` is the last reading tried, `heldAt` the one whose answer stands, `saidAt` the start when it said the line.
+  const signin = { reading: null, readAt: null, heldAt: null, saidAt: null, tick: null, level: null, line: null, unread: new Set() };
+  const signinRead = (now, say = ctx.out) => {
+    signin.readAt = now;
+    let fresh;
+    try {
+      fresh = ctx.signinExpiry(home);
+    } catch (err) {
+      fresh = { expiresAt: null, stored: null, why: `the reading failed (${err.message})` };
+    }
+    const { why } = signinTold(fresh, now);
+    if (why !== null && !signin.unread.has(why)) say(`sign-in: when the stored claude.ai sign-in ends could not be read: ${why}`);
+    if (why !== null) signin.unread.add(why);
+    if (why === null || signin.reading === null) {
+      signin.reading = fresh;
+      signin.heldAt = now;
+    }
+  };
+  // What is news: a level that rises, or a date first read inside the margin after a start that could not read one.
+  const signinNews = (told, atStart) =>
+    told.level !== null && (signin.level === null ? !atStart && told.level > 0 : told.level > signin.level);
+  const signinRose = (now, atStart = false, say = ctx.out) => {
+    if (!ctx.signinExpiry) return false;
+    signin.tick = now;
+    if (signin.readAt === null || now - signin.readAt >= SIGNIN_HOURS * 3600000) signinRead(now, say);
+    let told = signinTold(signin.reading, now);
+    if (signinNews(told, atStart) && signin.readAt !== now) {
+      signinRead(now, say);
+      told = signinTold(signin.reading, now);
+    }
+    const rose = signinNews(told, atStart);
+    if (told.level !== null) signin.level = told.level;
+    signin.line = told.line;
+    return rose;
+  };
+  // The sign-in's line for an ending, from a reading of this tick: one weighed from an older reading is read again,
+  // and where that reading cannot be made the line says when its date was read, since it may have been renewed since.
+  const signinLines = () => {
+    // Said at this very tick already: an ending at the start does not say the opening's line twice.
+    if (signin.saidAt === signin.tick) return [];
+    if (signin.line !== null && signin.readAt !== signin.tick) {
+      signinRead(signin.tick);
+      const told = signinTold(signin.reading, signin.tick);
+      if (told.level !== null) signin.level = told.level;
+      signin.line = told.line;
+    }
+    if (signin.line === null) return [];
+    return [signin.heldAt === signin.tick ? signin.line : `${signin.line} (read at ${hourOf(signin.heldAt)}; a reading now could not be made)`];
   };
   // The throughput review (odd/tasks/throughput-review.md, S4): each tick keeps the settled days that have no
   // snapshot and reads the reviews due; a due one ends the loop when it falls due and again each time its wait,
@@ -610,9 +672,11 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     }
     return departureLine(found);
   };
-  // Every line that ends the loop is followed by the reviews still due, so whatever wakes the lead names them.
+  // Every line that ends the loop is followed by the sign-in's line, from its margin on, and by the reviews still due,
+  // so whatever wakes the lead names them. The ending's own lines are said first: the sign-in's may wait on a reading.
   const ending = (lines, dues, code) => {
-    for (const line of [...lines, ...dues.map((due) => due.line)]) ctx.out(line);
+    for (const line of lines) ctx.out(line);
+    for (const line of [...signinLines(), ...dues.map((due) => due.line)]) ctx.out(line);
     return code;
   };
   const started = ctx.now();
@@ -636,7 +700,19 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     }
     return last;
   };
-  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 || !ctx.windowsDaily ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}${ctx.hostWatch ? '; every hour, the host\'s versions are read, and an update no host watch session holds ends it' : ''}${ctx.throughputTick ? '; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it' : ''}${transcript === null ? '' : `; each tick reads this session's compactions, and a compaction that brings them to ${LEAD_CUT_COMPACTIONS} or more ends it: the lead's cut after ${LEAD_CUT_COMPACTIONS} compactions; each tick reads when the user last wrote to this session, and in the lead's session ${plural(ABSENCE_MS / 3600000, 'hour')} with no message and no stretch covering them end it`}`);
+  // The opening reading comes before the opening line, which promises the readings only where one is made: a home
+  // that is not the user's own is never asked. What that reading has to say is held until the line is out.
+  const signinHeld = [];
+  signinRose(started, true, (line) => signinHeld.push(line));
+  const signinAsked = Boolean(ctx.signinExpiry) && signin.reading?.asked !== false;
+  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 || !ctx.windowsDaily ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}${ctx.hostWatch ? '; every hour, the host\'s versions are read, and an update no host watch session holds ends it' : ''}${ctx.throughputTick ? '; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it' : ''}${signinAsked ? `; every ${plural(SIGNIN_HOURS, 'hour')}, the end of the stored claude.ai sign-in is read, and one that comes within ${plural(SIGNIN_WARN_DAYS, 'day')}, or passes, ends it` : ''}${transcript === null ? '' : `; each tick reads this session's compactions, and a compaction that brings them to ${LEAD_CUT_COMPACTIONS} or more ends it: the lead's cut after ${LEAD_CUT_COMPACTIONS} compactions; each tick reads when the user last wrote to this session, and in the lead's session ${plural(ABSENCE_MS / 3600000, 'hour')} with no message and no stretch covering them end it`}`);
+  for (const line of signinHeld) ctx.out(line);
+  // A heartbeat started inside the margin says the line now, without ending for it: the loop may run for hours, and
+  // the lead should not learn at its end what was known at its start.
+  if (signin.line !== null) {
+    ctx.out(signin.line);
+    signin.saidAt = started;
+  }
   let compactions = compactionsNow();
   for (const item of stalledAt(started)) {
     told.set(identity(item), crossing(item));
@@ -661,6 +737,8 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     const last = lastWrite();
     const now = ctx.now();
     const dues = await duesAt(now);
+    // Weighed before anything ends the loop, so every ending carries the line of this tick.
+    const signinNews = signinRose(now);
     // The transcript is read first, so an absence that starts in this tick is told with whatever else ends it: a STALL
     // told alone would end the loop with his absence unsaid, and the lead may start no heartbeat after it.
     const counted = compactionsNow();
@@ -678,6 +756,7 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     if (windowsLine !== null) return ending([windowsLine], dues, 0);
     const hostLine = await hostTold();
     if (hostLine !== null) return ending([hostLine], dues, 0);
+    if (signinNews) return ending([], dues, 0);
     if (dues.some((due) => dueCrossing(due, now) > (dueTold.get(due.id) ?? -1))) return ending([], dues, 0);
     if (now >= end) return ending([`js-harness loop heartbeat: ${plural(max, 'hour')} cap reached (${hourOf(now)})`], dues, 1);
     await ctx.sleep(Math.min(every, end - now, last + quiet * 60000 - now));
@@ -783,6 +862,9 @@ export async function loopMain(
     windowsDaily = null,
     throughputTick = null,
     hostWatch = null,
+    // The heartbeat's reading of when the stored claude.ai sign-in ends: the product's own, since a sign-in that ends
+    // stops any project's unattended work. It runs the Claude CLI, only for the user's own home; `null` reads nothing.
+    signinExpiry = (home) => readSigninExpiry({ home }),
   } = {},
 ) {
   let parsed;
@@ -798,7 +880,7 @@ export async function loopMain(
   const slug = projectSlug(mainCheckout(run, cwd));
   // Where Claude Code keeps its session records, as `check`'s sub-agent row reads them (bin/lib/subagent-records.mjs).
   const claudeDir = env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude');
-  const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile, readTail, writeFile, claudeDir, run, windowsDaily, throughputTick, hostWatch };
+  const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile, readTail, writeFile, claudeDir, run, windowsDaily, throughputTick, hostWatch, signinExpiry };
   if (parsed.verb === 'status') return status(ctx, parsed, loopsFolder(home, slug));
   if (parsed.verb === 'heartbeat' || parsed.verb === 'channel-watch') {
     try {

@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import path from 'node:path';
 import { loopMain } from './loop.mjs';
+import { localMinute, localZone } from './lib/local-time.mjs';
 import { gateLogDir } from './lib/gate-log.mjs';
 import { NOTICE_SCHEMA, recordPath } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
@@ -40,6 +42,8 @@ function world({ files = {}, channel = '', onSleep = () => {} } = {}) {
     throughputTick: async () => null,
     // And the host watch's reading: no body here reads the app's versions.
     hostWatch: async () => null,
+    // Nor the stored sign-in's end: the product's default reader runs the Claude CLI.
+    signinExpiry: null,
     readdir: (dir) => Object.keys(state.files).filter((file) => path.dirname(file) === dir).map((file) => path.basename(file)),
     mtime: (file) => {
       if (state.files[file] === undefined) throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
@@ -626,4 +630,204 @@ test('heartbeat tells no absence from a transcript it could not read in that tic
   assert.equal(await loopMain(['heartbeat', '--max', '3', '--every', '600'], ENV, deps), 1);
   assert.deepEqual(awayLines(state), [], 'two hours passed, and nothing is told on the last good read');
   assert.equal(state.out.filter((line) => line.startsWith("the lead's cut could not read")).length, 1);
+});
+
+// odd/tasks/signin-expiry-notice.md, S3: the heartbeat reads when the stored claude.ai sign-in ends, at its start and
+// every SIGNIN_HOURS, and says the days left once inside the margin. Every reading here is made up.
+const SIGNIN_END = T0 + 10 * 86400000;
+const SIGNIN_READ = { expiresAt: new Date(SIGNIN_END).toISOString(), stored: true, why: null };
+const SIGNIN_WHEN = `${localMinute(SIGNIN_END)} (${localZone(SIGNIN_END)})`;
+const signinLine = (span) => `SIGN-IN: the claude.ai sign-in stored on this machine ends in ${span}, on ${SIGNIN_WHEN}: tell the user, who signs in again while at the machine (claude auth login); once it ends, every background session, lens review and remote server fails at once`;
+
+test('heartbeat is quiet about a sign-in whose margin is far, and reads it at the start and every six hours', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  const asked = [];
+  deps.signinExpiry = (home) => {
+    asked.push([home, state.clock]);
+    return SIGNIN_READ;
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '10', '--every', '600'], {}, deps), 1);
+  assert.deepEqual(asked, [[HOME, T0], [HOME, T0 + 6 * 3600000]], 'a reading takes seconds, so not every tick makes one');
+  assert.deepEqual(state.out.filter((line) => /sign-in/i.test(line)), [state.out[0]], 'only the first line, which says what the loop reads');
+  assert.match(state.out[0], /; every 6 hours, the end of the stored claude\.ai sign-in is read, and one that comes within 7 days, or passes, ends it/);
+});
+
+test('heartbeat started inside the margin says its SIGN-IN line at once, is not ended by it, and says it again after whatever ends it', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 - 3600000 } });
+  state.clock = SIGNIN_END - 6 * 86400000 - 3600000;
+  let readings = 0;
+  deps.signinExpiry = () => {
+    readings += 1;
+    return SIGNIN_READ;
+  };
+  assert.equal(await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], {}, deps), 0);
+  assert.equal(state.sleeps > 1, true, 'the margin alone did not end it at the start');
+  assert.match(state.out.at(-2), /^STALL: no gate-log or channel write since /);
+  assert.equal(state.out.at(-1), signinLine('6 days'));
+  assert.match(state.out[0], /^js-harness loop heartbeat: /);
+  assert.equal(state.out[1], signinLine('6 days'), 'a loop that may run for hours does not hold what it already knows until it ends');
+  assert.equal(state.out.filter((line) => line.startsWith('SIGN-IN:')).length, 2, 'at the start and at the end');
+  assert.equal(readings, 2, 'at the start, and once more before the line is said at the end');
+});
+
+test('heartbeat started with the CLI not signed in says so at once, after its opening line', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 - 3600000 } });
+  deps.signinExpiry = () => ({ expiresAt: null, stored: false, why: 'the Claude CLI says it is not signed in', signedOut: true });
+  const line = 'SIGN-IN: the Claude CLI says it is not signed in: tell the user, who signs in again at the machine (claude auth login); until then no background session, lens review or remote server runs';
+  assert.equal(await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], {}, deps), 0);
+  assert.equal(state.out[1], line);
+  assert.equal(state.out.at(-1), line);
+});
+
+test('heartbeat ended at its very start by the cut says the SIGN-IN line once, not again after the cut', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 } });
+  state.transcript = boundary() + boundary() + boundary() + turn;
+  deps.readTail = tailOf(state);
+  deps.signinExpiry = () => ({ expiresAt: null, stored: false, why: 'the Claude CLI says it is not signed in', signedOut: true });
+  assert.equal(await loopMain(['heartbeat', '--every', '120'], { CLAUDE_CODE_SESSION_ID: OWNER }, deps), 0);
+  assert.equal(state.clock, T0, 'ended at the start');
+  assert.match(state.out.at(-1), /^CUT: /);
+  assert.equal(state.out.filter((line) => line.startsWith('SIGN-IN:')).length, 1);
+});
+
+test('heartbeat confirms with a reading before it ends for the sign-in or says its line, so one renewed since is not told', async () => {
+  const renewed = { expiresAt: new Date(SIGNIN_END + 30 * 86400000).toISOString(), stored: true, why: null };
+  // The margin is reached between two readings, and the reading that confirms it finds the new date.
+  const crossing = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  crossing.state.clock = SIGNIN_END - 7 * 86400000 - 10 * 60000;
+  let readings = 0;
+  crossing.deps.signinExpiry = () => {
+    readings += 1;
+    return readings === 1 ? SIGNIN_READ : renewed;
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '120'], {}, crossing.deps), 1, 'the cap ends it, not the margin');
+  assert.equal(readings, 2, 'the confirming reading, and no other until six hours pass');
+  assert.deepEqual(crossing.state.out.filter((line) => line.startsWith('SIGN-IN:')), []);
+
+  // Started inside the margin and renewed before the stall that ends it: the line is not said.
+  const stalled = world({ files: { [GATE_LOG]: T0 - 3600000 } });
+  stalled.state.clock = SIGNIN_END - 6 * 86400000 - 3600000;
+  let asked = 0;
+  stalled.deps.signinExpiry = () => {
+    asked += 1;
+    return asked === 1 ? SIGNIN_READ : renewed;
+  };
+  assert.equal(await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], {}, stalled.deps), 0);
+  assert.match(stalled.state.out.at(-1), /^STALL: no gate-log or channel write since /);
+  assert.equal(asked, 2);
+});
+
+test('heartbeat ends with the SIGN-IN line at the tick the margin is reached, between two readings', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  state.clock = SIGNIN_END - 7 * 86400000 - 10 * 60000;
+  const started = state.clock;
+  let readings = 0;
+  deps.signinExpiry = () => {
+    readings += 1;
+    return SIGNIN_READ;
+  };
+  assert.equal(await loopMain(['heartbeat', '--every', '120'], {}, deps), 0);
+  assert.equal(state.clock, started + 10 * 60000, 'the clock is weighed at every tick against the date last read');
+  assert.equal(readings, 2, 'at the start, and the one that confirms the news before the loop ends for it');
+  assert.equal(state.out.at(-1), signinLine('7 days'));
+});
+
+test('heartbeat ends again when a sign-in inside the margin passes its end', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  state.clock = SIGNIN_END - 4 * 60000;
+  deps.signinExpiry = () => SIGNIN_READ;
+  assert.equal(await loopMain(['heartbeat', '--every', '120'], {}, deps), 0);
+  assert.equal(state.clock, SIGNIN_END);
+  assert.equal(state.out.at(-1), `SIGN-IN: the claude.ai sign-in stored on this machine ended on ${SIGNIN_WHEN}: tell the user, who signs in again at the machine (claude auth login); until then no background session, lens review or remote server runs`);
+});
+
+test('heartbeat says once why the sign-in cannot be read, ends nothing for it, and keeps the last date a reading gave', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  state.clock = SIGNIN_END - 3 * 86400000;
+  const started = state.clock;
+  let readings = 0;
+  deps.signinExpiry = () => {
+    readings += 1;
+    if (readings === 1) return SIGNIN_READ;
+    if (readings === 2) throw new Error('the reader broke');
+    return { expiresAt: null, stored: null, why: 'claude auth status did not answer in 20 seconds' };
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '20', '--every', '600'], {}, deps), 1);
+  assert.equal(readings, 5, 'at the start, at 6, 12 and 18 hours, and once more before the line is said at the end');
+  assert.deepEqual(state.out.filter((line) => line.startsWith('sign-in:')), [
+    'sign-in: when the stored claude.ai sign-in ends could not be read: the reading failed (the reader broke)',
+    'sign-in: when the stored claude.ai sign-in ends could not be read: claude auth status did not answer in 20 seconds',
+  ]);
+  assert.match(state.out.at(-2), /heartbeat: 20 hours cap reached/);
+  assert.equal(state.out.at(-1), `${signinLine('2 days')} (read at ${hour(started)}; a reading now could not be made)`, 'the date read at the start still stands, and the line says how old it is');
+});
+
+test('heartbeat that cannot confirm the margin it reached still ends, and its line says when the date was read', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  state.clock = SIGNIN_END - 7 * 86400000 - 10 * 60000;
+  const started = state.clock;
+  let readings = 0;
+  deps.signinExpiry = () => {
+    readings += 1;
+    return readings === 1 ? SIGNIN_READ : { expiresAt: null, stored: null, why: 'claude auth status did not answer in 20 seconds' };
+  };
+  assert.equal(await loopMain(['heartbeat', '--every', '120'], {}, deps), 0);
+  assert.equal(state.clock, started + 10 * 60000);
+  assert.equal(readings, 2, 'the confirming reading is made once, not again for the line');
+  assert.deepEqual(state.out.slice(-2), [
+    'sign-in: when the stored claude.ai sign-in ends could not be read: claude auth status did not answer in 20 seconds',
+    `${signinLine('7 days')} (read at ${hour(started)}; a reading now could not be made)`,
+  ]);
+});
+
+test('heartbeat says a sign-in that cannot be read at the start once, and a later reading inside the margin ends it', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  state.clock = SIGNIN_END - 3 * 86400000;
+  const started = state.clock;
+  let readings = 0;
+  deps.signinExpiry = () => {
+    readings += 1;
+    return readings === 1 ? { expiresAt: null, stored: null, why: 'the claude command could not be started' } : SIGNIN_READ;
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '10', '--every', '600'], {}, deps), 0);
+  assert.equal(state.out.filter((line) => line === 'sign-in: when the stored claude.ai sign-in ends could not be read: the claude command could not be started').length, 1);
+  assert.match(state.out[0], /^js-harness loop heartbeat: .*; every 6 hours, the end of the stored claude\.ai sign-in is read/, 'the opening line comes first and still says what is read');
+  assert.equal(state.out[1], 'sign-in: when the stored claude.ai sign-in ends could not be read: the claude command could not be started');
+  assert.equal(state.clock, started + 6 * 3600000, 'a date first read inside the margin is news: it ends the loop');
+  assert.equal(state.out.at(-1), signinLine('2 days'));
+});
+
+test('heartbeat ends when a later reading finds the CLI not signed in, and says so instead of days left', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  const started = state.clock;
+  let readings = 0;
+  deps.signinExpiry = () => {
+    readings += 1;
+    // The date is still days ahead in both: the CLI's word that it is signed out decides.
+    return readings === 1 ? SIGNIN_READ : { ...SIGNIN_READ, stored: false, why: 'the Claude CLI says it is not signed in', signedOut: true };
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '10', '--every', '600'], {}, deps), 0);
+  assert.equal(state.clock, started + 6 * 3600000, 'at the second reading');
+  assert.equal(state.out.at(-1), 'SIGN-IN: the Claude CLI says it is not signed in: tell the user, who signs in again at the machine (claude auth login); until then no background session, lens review or remote server runs');
+  assert.deepEqual(state.out.filter((line) => line.startsWith('sign-in:')), [], 'it is no reading that failed');
+});
+
+test('heartbeat given no sign-in reader reads none, and a home that is not asked says nothing', async () => {
+  const quiet = world({ files: { [GATE_LOG]: T0 - 3600000 } });
+  assert.equal(quiet.deps.signinExpiry, null, 'no body here reads the sign-in unless its test asks');
+  assert.equal(await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], {}, quiet.deps), 0);
+  assert.deepEqual(quiet.state.out.filter((line) => /sign-in/i.test(line)), []);
+
+  const other = world({ files: { [GATE_LOG]: T0 - 3600000 } });
+  other.deps.signinExpiry = () => ({ expiresAt: null, stored: null, why: null, asked: false });
+  assert.equal(await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], {}, other.deps), 0);
+  assert.deepEqual(other.state.out.filter((line) => /sign-in/i.test(line)), [], 'not even the opening line promises a reading that is never made');
+});
+
+// No test runs the default reader for the real home: it would run the real `claude auth status`, which names an
+// account and takes seconds, and for a fixture home it reads nothing by design, as no reader does. So the default is
+// held by its text, whatever its spacing; what it does is `readSigninExpiry`'s own test.
+test('the product heartbeat reads the sign-in by default, for the home it was given and against the real user home', () => {
+  const source = fs.readFileSync(new URL('./loop.mjs', import.meta.url), 'utf8');
+  assert.match(source, /signinExpiry\s*=\s*\(home\)\s*=>\s*readSigninExpiry\(\{\s*home\s*\}\)/);
 });
