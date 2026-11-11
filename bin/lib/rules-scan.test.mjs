@@ -154,6 +154,13 @@ test('on the real list, review-model finds a restated id that does not begin gpt
   assert.equal(foundAfterSwitch('review-model', `The review runs on \`${NEXT_CODEX}\`.`), 1);
 });
 
+test('on the real list, review-effort finds its level beside an id that does not begin gpt-, and leaves a Claude id to the Claude home', () => {
+  const level = RULES.find((rule) => rule.id === 'review-effort').value;
+  assert.equal(foundAfterSwitch('review-effort', `The review runs ${NEXT_CODEX} at ${level}.`), 1);
+  assert.equal(foundAfterSwitch('review-effort', `It is set to \`${NEXT_CODEX}\` at \`${level}\`.`), 1);
+  assert.equal(foundAfterSwitch('review-effort', `A work session runs claude-fable-5-2 at ${level}.`), 0);
+});
+
 test('a pattern that is no regular expression is not scanned, so the scan never throws: readRules reports it', () => {
   const broken = { ...WAIT, patterns: ['(', 'wait.{0,40}{amount}'] };
   const files = [{ path: 'docs/ROADMAP.md', text: 'wait 60 minutes\n' }];

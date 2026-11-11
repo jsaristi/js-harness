@@ -382,6 +382,19 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+At 14:00: every rule change of pull request 2 is committed, local, not pushed and not reviewed. After S8's two:
+`25355026` (`subagent-writer-model` retired), `8f7a2f76` (`subagent-reader-model` retired; `readerModel(root)`
+left `bin/double-review.mjs`, since it gave the home's model in every case, for `READER_MODEL`), `da5d6166`
+(`escalation-model` retired; the recheck's refusal keeps its wording and names `rule:session-model`), `8673a328`
+(the guard's `agentEffortRefusal`: a sub-agent call that names another effort than `session-effort` is refused,
+none passes), `be2cfa0e` and the commit after it (the patterns of `review-model` and `review-effort` by the id's
+shape). Main was merged three more times as it moved (`bb1e9ea5`, `ce97742a`; a `rules change` refuses a branch
+that lacks main's head). `session-model`'s bundle holds eight breaks, `session-effort`'s four, `lead-effort`'s
+three. For the pull request's body: a lead's sub-agent launched with no effort runs at the lead's level, which the
+guard does not hold; the shape Codex's patterns look for is words joined by hyphens with a number in one, so an id
+with a digit in its first word is not found. Next: `prove.mjs` on the three bundles, the independent verifier on
+the guard, the local gate, Codex and the lenses a slice (the diff is over 400 lines of code, so slices), the pull
+request, the `ready` notice.
 At 13:15, after the host compacted the session at 12:55: main is merged (`0abb1d2c`, main `51932db`; one conflict
 in `docs/ROADMAP.md`, both rows kept). S8 is built in two commits: `1201bb1a`, `rules change lead-effort` with
 `LENS_EFFORT = claudeHome().lead`, its two tests and the two breaks moved to `lead-effort`'s bundle (135 tests of

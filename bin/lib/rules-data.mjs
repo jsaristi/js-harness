@@ -549,7 +549,7 @@ export const RULES = [
     "value": "medium",
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bcodex\\b.{0,60}\\bat `?{amount}`? effort",
-      "^(?!.*\\bruleValue\\().*\\b(?:runs?|is run|set to)\\b.{0,30}\\bgpt-[\\w.-]+`?\\s+at\\s+`?{amount}`?"
+      "^(?!.*\\bruleValue\\().*\\b(?:runs?|is run|set to)\\b.{0,30}(?<![\\w.-])(?!claude-)(?=[a-z]+(?:-[a-z0-9.]+)*-\\d)[a-z][\\w.-]+`?\\s+at\\s+`?{amount}`?"
     ]
   },
   {
