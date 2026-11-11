@@ -23,7 +23,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { RULES } from './lib/rules-data.mjs';
-import { beforeProgress, checkRules } from './lib/rules-check.mjs';
+import { beforeHistory, checkRules } from './lib/rules-check.mjs';
 import { countFindings, registerFindings } from './lib/rules-scan.mjs';
 import { parseRegister } from './lib/failures.mjs';
 import { renderList, rulesHash, ruleHere, ruleOf, unscoped } from './lib/rules.mjs';
@@ -38,7 +38,7 @@ import { OWED_CAP, OWED_CAP_FROM, refreshRegister, writeCoverage } from './lib/r
 import { harnessHome } from './lib/home.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] | --hook]';
+export const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] [--with <path>...] | --hook]';
 const SOURCES = 'docs/rule-sources.json';
 const LIST = 'docs/RULES.md';
 // The two findings a render writes over: the list is missing, or it is not what the declarations give.
@@ -53,16 +53,27 @@ class RulesArgError extends Error {}
 /** The words of argv, walked token by token: a flag is a usage error, and so is a second word. */
 function parseArgs(argv) {
   // `change <id>` is the one form with options: `--dry-run` prints what it would write, `--check-source` checks a
-  // stored source again instead of a change.
+  // stored source again instead of a change, and `--with` names the paths whose changes in the tree go in the same
+  // commit as the rule's, every word after it up to the next flag.
   if (argv[0] === 'change') {
-    const parsed = { command: 'change', id: undefined, dryRun: false, checkSource: false };
-    for (const token of argv.slice(1)) {
+    const parsed = { command: 'change', id: undefined, dryRun: false, checkSource: false, withPaths: null };
+    const tokens = argv.slice(1);
+    for (let index = 0; index < tokens.length; index += 1) {
+      const token = tokens[index];
       if (token === '--dry-run') parsed.dryRun = true;
       else if (token === '--check-source') parsed.checkSource = true;
-      else if (token.startsWith('-') || parsed.id !== undefined) throw new RulesArgError(`unknown argument: ${token}`);
+      else if (token === '--with') {
+        if (parsed.withPaths !== null) throw new RulesArgError('--with is given once, with every path after it');
+        parsed.withPaths = [];
+        while (index + 1 < tokens.length && !tokens[index + 1].startsWith('-')) parsed.withPaths.push(tokens[index += 1]);
+        if (parsed.withPaths.length === 0) throw new RulesArgError('--with needs at least one path');
+      } else if (token.startsWith('-') || parsed.id !== undefined) throw new RulesArgError(`unknown argument: ${token}`);
       else parsed.id = token;
     }
+    if (parsed.id === undefined && parsed.withPaths !== null) throw new RulesArgError('rules change needs the id of the rule before --with: every word after --with is a path');
     if (parsed.id === undefined) throw new RulesArgError('rules change needs the id of the rule');
+    if (parsed.checkSource && parsed.withPaths !== null) throw new RulesArgError('--with goes with a change: --check-source writes nothing');
+    parsed.withPaths ??= [];
     return parsed;
   }
   // `coverage` takes its flags, each once at most; `--refresh` writes the register and goes alone.
@@ -131,7 +142,7 @@ function codeFilesUnder(root) {
 }
 
 /** The progress records and plans read for the marks of rules: the roadmap and the spec when they exist, then each
- * feature document under `odd/tasks/`, cut at its `## Progress` line, sorted by path. */
+ * feature document under `odd/tasks/`, cut at its `## Progress` or `## Log` line, sorted by path. */
 function textFilesUnder(root) {
   const files = [];
   for (const file of ['docs/ROADMAP.md', 'docs/SPEC.md']) {
@@ -144,7 +155,7 @@ function textFilesUnder(root) {
     .sort();
   for (const file of tasks) {
     const text = readOptional(root, file);
-    if (text !== null) files.push({ path: file, text: beforeProgress(text) });
+    if (text !== null) files.push({ path: file, text: beforeHistory(text) });
   }
   return files;
 }
