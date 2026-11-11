@@ -115,14 +115,15 @@ export function removableWorktrees({ cwd, base, branches = null, gitIn, now = Da
 /** How long one git call of `boundedGit` may run before it is killed. */
 const GIT_TIMEOUT_MS = 20_000;
 
-/** A `gitIn(dir, ...args)` over `run` that answers `{ ok, out, err }`, each call bounded by `GIT_TIMEOUT_MS`, as the
- * heartbeat bounds its commands: one that hangs counts as a no (T11). */
-export function boundedGit(run = spawnSync) {
+/** A `gitIn(dir, ...args)` over `run` that answers `{ ok, out, err }`, each call bounded by `timeout`, `GIT_TIMEOUT_MS`
+ * unless given, as the heartbeat bounds its commands: one that hangs counts as a no (T11). That bound is for a
+ * question; a call that deletes is given a longer one, since killing it part-way leaves a folder half removed. */
+export function boundedGit(run = spawnSync, timeout = GIT_TIMEOUT_MS) {
   return (dir, ...args) => {
     // No optional locks: a `git status` killed at its limit would otherwise leave an index.lock that breaks a worktree
     // that was only slow (a review, 2026-10-17, R4).
     const env = { ...process.env, GIT_OPTIONAL_LOCKS: '0' };
-    const result = run('git', args, { cwd: dir, encoding: 'utf8', windowsHide: true, timeout: GIT_TIMEOUT_MS, env });
+    const result = run('git', args, { cwd: dir, encoding: 'utf8', windowsHide: true, timeout, env });
     return { ok: !result?.error && result?.status === 0, out: String(result?.stdout ?? ''), err: String(result?.stderr || result?.error?.message || '').trim() };
   };
 }

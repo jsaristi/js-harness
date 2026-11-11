@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, strandedWords, undoSession, within, worktreeHolding, worktreeOf } from './lib/background.mjs';
+import { CLOSE_FINISHED, appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedNote, resumePrompt, retireResumed, saidBy, startArgs, startPrompt, strandedWords, undoSession, within, worktreeHolding, worktreeOf } from './lib/background.mjs';
 import { closeFinishedIn, closedLines } from './lib/background-close.mjs';
 import { sessionEffortRefusal } from './lib/guard.mjs';
 import { leadTitle, sessionTitleRefusal } from './lib/session-title-guard.mjs';
@@ -47,11 +47,12 @@ export const START_USAGE = [
   '         While the session\'s worktree holds files (anything but .git), stop refuses and runs nothing unless --remove-worktree:',
   '         claude rm deletes them (2026-11-04). It is not how a background session restarts: a message resumes it.',
   '         stop --finished closes every finished session of the project that loses nothing, as a land does after it lands:',
-  '         one whose newest notice of its state is closed and that has no job at work. Its worktree goes first, by git',
-  '         worktree remove with no --force, only when its head is in the default branch as origin holds it here, git status',
-  '         shows nothing (ignored files too, but the settings copy claude writes there), its index stood still for 10',
-  '         minutes and it is not locked; then claude stop and claude rm take its jobs. It names each one it keeps with why',
-  '         and what settles it; exit 1 only when it could not look (the records, claude agents, the default branch).',
+  '         one whose newest notice of its state is closed and that has no job at work. Its worktree must pass first: its',
+  '         head in the default branch as origin holds it here, git status showing nothing (ignored files too, but the',
+  '         settings copy claude writes there), its index still for 10 minutes, no lock. Then claude stop ends its jobs,',
+  '         which deletes nothing; the worktree is looked at again and goes by git worktree remove with no --force; and',
+  '         claude rm takes the jobs. It names each one it keeps with why and what settles it, and says when its job was',
+  '         already stopped; exit 1 only when it could not look (the records, claude agents, the default branch).',
   '         js-harness uninstall machine removes every recorded session that is not at work, and fails while one is.',
 ].join('\n');
 
@@ -360,7 +361,9 @@ function resumeStart(parsed, deps) {
   }
   const job = {
     event: 'started', at: new Date(now()).toISOString(), id, sessionId: resumed?.sessionId ?? entry.sessionId, title: entry.title, root: entry.root, cwd: entry.cwd,
-    worktree: entry.worktree ?? null, worktreePath: worktreeOf(entry), model: model ?? null, effort: effort ?? null, advisor: advisor ?? null, remoteControl, brief: copy, resumedFrom: entry.id,
+    worktree: entry.worktree ?? null, worktreePath: worktreeOf(entry), model: model ?? null, effort: effort ?? null, advisor: advisor ?? null, remoteControl, brief: copy,
+    // A claude that kept the job's id made no second job: one that named itself as its past would hide from every listing.
+    ...(id === entry.id ? {} : { resumedFrom: entry.id }),
   };
   try {
     appendRecord(home, job);
@@ -371,7 +374,22 @@ function resumeStart(parsed, deps) {
     return refuse(`the job ${id} resumed ${name} and could not be recorded (${err.code ?? err.message}), so ${stopped ? 'it was stopped' : 'it still runs'}${strandedWords(home, job)}`);
   }
   stdout(`resumed ${entry.id} as ${id} · ${entry.title}`);
+  if (id === entry.id) {
+    stdout(`  claude kept the job's id; js-harness sessions stop ${id} removes it; claude attach ${id} opens it here`);
+    return 0;
+  }
+  // 19 of 19 recorded resumes left the job they resumed on the machine (odd/tasks/sessions-close-themselves.md, L3).
+  if (worktreeOf(entry) === null) {
+    const still = retireResumed(entry, { home, run: claude, now });
+    if (still === null) {
+      stdout(`  ${entry.id}, the job it resumed, was removed: the session has no worktree, and its transcript stays`);
+      stdout(`  js-harness sessions stop ${id} removes the new job; claude attach ${id} opens it here`);
+      return 0;
+    }
+    stdout(`  ${entry.id}, the job it resumed, is still there: ${still}`);
+  }
   stdout(`  js-harness sessions stop ${id} removes it and ${entry.id}, the job it resumed; claude attach ${id} opens it here`);
+  if (worktreeOf(entry) !== null) stdout(`  ${entry.id} stays until then: claude holds the worktree under it, so it goes with the session, which ${CLOSE_FINISHED} or a land closes once it said closed`);
   return 0;
 }
 

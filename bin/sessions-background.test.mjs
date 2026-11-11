@@ -148,6 +148,9 @@ const writeState = (world, state) => fs.writeFileSync(world.state, JSON.stringif
 const patchState = (world, patch) => writeState(world, { ...readState(world), ...patch });
 const recordFile = (world) => path.join(world.home, '.js-harness', 'background', 'sessions.jsonl');
 const recordLines = (world) => (fs.existsSync(recordFile(world)) ? fs.readFileSync(recordFile(world), 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line)) : []);
+/** The jobs the record says were started, oldest first: a resume of a session with no worktree also records the removal
+ * of the job it resumed, so the last line of the record is not always the last start. */
+const startedLines = (world) => recordLines(world).filter((line) => line.event === 'started');
 
 /** The environment of a run: this one's, with the shim folder first on PATH and the world's harness home. */
 function envOf(world) {
@@ -662,6 +665,34 @@ test('a resumed job replaces the one it resumed: that one is neither resumed nor
   assert.equal(fs.existsSync(first.brief), false);
 }));
 
+// odd/tasks/sessions-close-themselves.md, spec 3: 19 of 19 recorded resumes left the job they resumed on the machine.
+test('a resume retires the job it resumed when the session has no worktree, keeps the brief, and takes a kept id as no second job', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Read the thing', '--brief', world.brief]).code, 0);
+  const [first] = recordLines(world);
+  endJob(world, '0db8bc5e');
+  patchState(world, { nextId: 'c779ed44' });
+  const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(resumed.code, 0, resumed.stderr);
+  assert.match(resumed.stdout, /resumed 0db8bc5e as c779ed44/);
+  assert.match(resumed.stdout, /0db8bc5e, the job it resumed, was removed: the session has no worktree, and its transcript stays/);
+  assert.doesNotMatch(resumed.stdout, /removes it and 0db8bc5e/);
+  assert.deepEqual(actions(world).slice(-2), [['stop', '0db8bc5e'], ['rm', '0db8bc5e']]);
+  assert.deepEqual(recordLines(world).slice(1).map((line) => [line.event, line.id]), [['started', 'c779ed44'], ['removed', '0db8bc5e']]);
+  assert.ok(fs.existsSync(first.brief), 'the brief the new job reads stays');
+  // A claude that keeps the job's id on a resume made no second job: nothing is retired, and the job is not its own past.
+  endJob(world, 'c779ed44');
+  const same = js(world, ['sessions', 'start', '--resume', 'c779ed44']);
+  assert.equal(same.code, 0, same.stderr);
+  assert.equal(recordLines(world).at(-1).resumedFrom, undefined);
+  assert.notDeepEqual(actions(world).at(-1), ['rm', 'c779ed44']);
+  // The job that is left stands alone: stopped by its id, with no word to a job already gone, and its brief goes with it.
+  const acted = actions(world).length;
+  const stopped = js(world, ['sessions', 'stop', 'c779ed44']);
+  assert.equal(stopped.code, 0, stopped.stderr);
+  assert.deepEqual(actions(world).slice(acted), [['stop', 'c779ed44'], ['rm', 'c779ed44']]);
+  assert.equal(fs.existsSync(first.brief), false);
+}));
+
 // Codex P1 on 79e3430..318f952: a job the lead resumed by hand works the same conversation under another id.
 test('sessions start --resume refuses while any job claude lists works the recorded conversation', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
@@ -693,7 +724,7 @@ test('a session titled as a lead starts and resumes at the rule lead-effort, whi
   patchState(world, { nextId: 'c779ed44' });
   const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
   assert.equal(resumed.code, 0, resumed.stderr);
-  assert.equal(recordLines(world).at(-1).effort, lead);
+  assert.equal(startedLines(world).at(-1).effort, lead);
 }, { rules: true }));
 
 // Codex P2 on 79e3430..318f952: a resume answers to the same rules and the same record as a start.
@@ -714,14 +745,14 @@ test('sessions start --resume holds to the effort rule, needs a writable record,
   patchState(world, { nextId: 'c779ed44', quiet: true });
   const quiet = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
   assert.equal(quiet.code, 0, quiet.stderr);
-  assert.equal(recordLines(world).at(-1).id, 'c779ed44');
+  assert.equal(startedLines(world).at(-1).id, 'c779ed44');
   // claude agents fails once the job runs: the conversation the resume named is recorded.
   endJob(world, 'c779ed44');
   patchState(world, { nextId: 'a1b2c3d4', quiet: false, agentsFailAfterStart: 'agents down' });
   const blind = js(world, ['sessions', 'start', '--resume', 'c779ed44']);
   assert.equal(blind.code, 0, blind.stderr);
-  const last = recordLines(world).at(-1);
-  assert.deepEqual([last.id, last.sessionId, last.resumedFrom], ['a1b2c3d4', recordLines(world).at(-2).sessionId, 'c779ed44']);
+  const last = startedLines(world).at(-1);
+  assert.deepEqual([last.id, last.sessionId, last.resumedFrom], ['a1b2c3d4', startedLines(world).at(-2).sessionId, 'c779ed44']);
   // Neither an id nor a listing: nothing is recorded, and the new brief stays for the job that may run.
   patchState(world, { agentsFail: undefined, agentsFailAfterStart: undefined, nextId: 'b2c3d4e5', quiet: true, ghost: true });
   endJob(world, 'a1b2c3d4');
@@ -729,7 +760,7 @@ test('sessions start --resume holds to the effort rule, needs a writable record,
   assert.equal(lost.code, 1);
   const kept = /its brief stays at (\S+\.md)/.exec(lost.stderr);
   assert.ok(kept && fs.existsSync(kept[1]), lost.stderr);
-  assert.equal(recordLines(world).at(-1).id, 'a1b2c3d4');
+  assert.equal(startedLines(world).at(-1).id, 'a1b2c3d4');
   assert.notEqual(first.sessionId, null);
 }, { rules: true }));
 
@@ -808,6 +839,9 @@ test('sessions stop --finished takes no id and no --remove-worktree, and closes 
   said(world, '0db8bc5e', 'closed');
   const acted = actions(world).length;
   for (const args of [['0db8bc5e', '--finished'], ['--finished', '--remove-worktree'], ['--finished', '--finished']]) assert.equal(js(world, ['sessions', 'stop', ...args]).code, 2, args.join(' '));
+  const noClaude = spawnSync(process.execPath, [BIN, 'sessions', 'stop', '--finished'], { cwd: world.project, env: { ...envOf(world), PATH: emptyDir(world) }, encoding: 'utf8' });
+  assert.equal(noClaude.status, 1);
+  assert.match(noClaude.stderr, /js-harness sessions stop: claude is not on PATH/);
   // Whether a session is at work is claude's to say: a listing that fails closes nothing.
   patchState(world, { agentsFail: 'agents: made up' });
   const blind = js(world, ['sessions', 'stop', '--finished']);

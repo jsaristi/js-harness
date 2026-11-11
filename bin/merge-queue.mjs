@@ -31,6 +31,7 @@ import { agentOnlyWaits, refreshNowRun } from './lib/merge-queue-refresh-now.mjs
 import { unansweredApply } from './lib/refresh-consent.mjs';
 import { pnpmBinDir } from './update.mjs';
 import { claudeRunner, listAgents } from './lib/background.mjs';
+import { closeAfterLand } from './lib/background-close.mjs';
 import { harnessHome } from './lib/home.mjs';
 
 // Where `notify --kind ready` has read it from (bin/notify.mjs), and where the tests read the copy guard.
@@ -102,6 +103,9 @@ when its head is in the main it pushed, git status shows nothing, ignored files 
 changed for 10 minutes, and it is not under .claude/worktrees or orca/workspaces (other apps' own), the main
 one, locked, or the one the land runs from. The branch stays; the record names each one removed (removed). A removal that fails is said and changes
 no exit.
+Then it closes the project's finished background sessions, as js-harness sessions stop --finished does (its help says
+the rule): those whose work it landed and any an earlier land left; the record names each one closed (closed), each
+kept is said with why, and nothing of it changes the exit.
 --prune fetches origin and removes, by the same rule, every worktree on a branch origin's default branch holds, whatever
 landed it; it asks about no pull request, moves nothing, writes no record and exits 0 unless git cannot fetch or
 list the worktrees.`;
@@ -115,7 +119,7 @@ const RETARGET_LIMIT = 1000;
  * dry run and found its git directory; `said` keeps the last line the land printed. */
 function landLog({ now, session }) {
   const iso = (ms) => new Date(ms).toISOString();
-  const record = { v: 1, startedAt: iso(now()), endedAt: null, session, main: null, considered: [], leftOut: [], phases: [], actions: null, candidate: null, landed: [], removed: [], exit: null, said: null };
+  const record = { v: 1, startedAt: iso(now()), endedAt: null, session, main: null, considered: [], leftOut: [], phases: [], actions: null, candidate: null, landed: [], removed: [], closed: [], exit: null, said: null };
   return {
     record,
     file: null,
@@ -787,6 +791,17 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
       removeLandedWorktrees({ cwd: args.cwd, run: deps.run ?? spawnSync, now, log, stdout: printOut });
     } catch (err) {
       printOut(`Could not remove the worktrees of the landed pull requests (${err.message}): the land's exit stands.`);
+    }
+    // The background sessions that finished go too, by their own rule (odd/tasks/sessions-close-themselves.md): the
+    // removal above leaves everything under .claude/worktrees, where `sessions start` puts every session's worktree.
+    try {
+      const run = deps.run ?? spawnSync;
+      const claude = deps.claude === undefined ? claudeRunner({ env }) : deps.claude;
+      const list = deps.listAgents ?? (() => listAgents(claudeRunner({ env, timeout: 15000 })));
+      const root = mainCheckout((command, gitArgs, options) => run(command, gitArgs, { ...options, encoding: 'utf8' }), args.cwd);
+      log.record.closed.push(...closeAfterLand({ home: harnessHomeOf(env), root, cwd: args.cwd, base: log.record.candidate, run, claude, list, now, say: printOut }));
+    } catch (err) {
+      printOut(`Could not close the finished background sessions (${err.message}): the land's exit stands.`);
     }
   }
   let exit = code;

@@ -6,8 +6,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { appendRecord, finishedOf, readRecord } from './background.mjs';
-import { closeFinished } from './background-close.mjs';
+import { appendRecord, backgroundLines, boardBackground, finishedHere, finishedOf, readRecord, recordFileOf } from './background.mjs';
+import { REMOVAL_WAIT_MS, closeAfterLand, closeFinished, closeFinishedIn, closedLines, finishedIn } from './background-close.mjs';
+import { NOTICE_SCHEMA, recordPath } from './channel.mjs';
+import { projectSlug } from './sessions.mjs';
 
 const HOUR = 60 * 60_000;
 
@@ -30,7 +32,8 @@ function makeWorld() {
   world.git(world.root, 'commit', '-q', '-m', 'init');
   world.gitIn = (cwd, ...args) => {
     world.gitCalls.push(args);
-    const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
+    // No optional locks, as `boundedGit` asks: a git status that rewrote the index would make the next look find it fresh.
+    const result = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } });
     return { ok: result.status === 0, out: String(result.stdout ?? ''), err: String(result.stderr ?? '').trim() };
   };
   world.claude = (args) => {
@@ -43,8 +46,8 @@ function makeWorld() {
 
 /** A recorded session `id` with a worktree of its own, as `sessions start --worktree` leaves one once its work is in
  * main: a branch with a commit main holds, claude's settings copy in it, an index that stood still for an hour. */
-function startSession(world, id, { worktree = id, landed = true, title = `JH 1 · ${id}`, resumedFrom } = {}) {
-  const entry = { event: 'started', at: new Date(Date.now() - 3 * HOUR).toISOString(), id, sessionId: `${id}-0000-4000-8000-000000000000`, title, root: world.root, cwd: world.root, worktree: null, worktreePath: null, brief: path.join(world.dir, `${id}.md`), ...(resumedFrom ? { resumedFrom } : {}) };
+function startSession(world, id, { worktree = id, landed = true, title = `JH 1 · ${id}`, resumedFrom, cwd = world.root } = {}) {
+  const entry = { event: 'started', at: new Date(Date.now() - 3 * HOUR).toISOString(), id, sessionId: `${id}-0000-4000-8000-000000000000`, title, root: world.root, cwd, worktree: null, worktreePath: null, brief: path.join(world.dir, `${id}.md`), ...(resumedFrom ? { resumedFrom } : {}) };
   fs.writeFileSync(entry.brief, 'brief\n');
   if (worktree !== null) {
     const place = path.join(world.root, '.claude', 'worktrees', worktree);
@@ -146,9 +149,9 @@ test('closeFinished leaves the worktree while the job\'s process still runs or c
   assert.deepEqual(running.closed, []);
   assert.match(running.kept[0].why, /stays: the process of aaaa1111, pid 4242, still ran \d+ s after claude stop/);
   assert.match(running.kept[0].settle, /js-harness sessions stop --finished tries again/);
+  assert.equal(running.kept[0].stopped, true);
+  assert.match(closedLines(running).join('\n'), /claude stop was sent to its job before that, which deletes nothing; js-harness sessions start --resume aaaa1111 resumes it/);
   world.refuse.stop = 'stop: made up';
-  // The first look ran git status with no GIT_OPTIONAL_LOCKS=0 (this world's git, not boundedGit), which rewrote the index.
-  rest(world, entry.worktreePath);
   const refused = closeFinished({ ...given, alive: () => false, pause: () => {} });
   assert.match(refused.kept[0].why, /stays: claude stop aaaa1111: stop: made up/);
   assert.ok(!world.claudeCalls.some((args) => args[0] === 'rm'));
@@ -232,6 +235,36 @@ test('closeFinished closes a session with no worktree, one whose worktree is gon
   assert.equal(world.gitCalls.filter((args) => args[0] === 'worktree' && args[1] === 'remove').length, 1);
 }));
 
+// JH 155 on 2026-11-11: no worktree in the record, and its job stood in the worktree of another session, full of files.
+// The guard of `sessions stop` looks only at the recorded worktree, so claude rm would have run with nobody looking.
+test('closeFinished keeps a session with no worktree of its own whose job stands in another folder that holds files, and closes it once that folder holds none', withWorld((world) => {
+  const startedIn = path.join(world.dir, 'started-in');
+  const listedIn = path.join(world.dir, 'listed-in');
+  for (const folder of [startedIn, listedIn]) {
+    fs.mkdirSync(folder);
+    fs.writeFileSync(path.join(folder, 'notes.txt'), 'work\n');
+  }
+  const started = startSession(world, 'aaaa1111', { worktree: null, cwd: startedIn });
+  const listed = startSession(world, 'bbbb2222', { worktree: null });
+  const agents = [{ id: 'zzzz9999', sessionId: listed.sessionId, state: 'done', cwd: listedIn }];
+  const notices = [started, listed].map((entry) => notice(entry, 'closed', 30));
+  const run = () => closeFinished({ home: world.home, root: world.root, cwd: world.root, base: 'origin/main', notices, agents, gitIn: world.gitIn, claude: world.claude });
+  const first = run();
+  assert.deepEqual(first.closed, []);
+  assert.deepEqual(world.claudeCalls, [], 'claude was asked nothing');
+  assert.deepEqual(first.kept.map((item) => item.entry.id), ['aaaa1111', 'bbbb2222']);
+  assert.ok(first.kept[0].why.includes(`its job stands in ${startedIn}, which is not the main checkout and holds files`), first.kept[0].why);
+  assert.ok(first.kept[1].why.includes(`its job stands in ${listedIn}`), first.kept[1].why);
+  assert.equal(first.kept[0].settle, 'once nothing there is needed, js-harness sessions stop aaaa1111 removes its job and leaves that folder to you');
+  assert.deepEqual(open(world), ['aaaa1111', 'bbbb2222']);
+  // A land removed the worktree it stood in, and the folder stays empty under the job: nothing is left to lose.
+  fs.rmSync(path.join(startedIn, 'notes.txt'));
+  fs.rmSync(listedIn, { recursive: true });
+  const second = run();
+  assert.deepEqual(second.kept, []);
+  assert.deepEqual(second.closed.map((item) => item.entry.id), ['aaaa1111', 'bbbb2222']);
+}));
+
 test('closeFinished says so when claude keeps the job after its worktree went, and touches no session that is not finished', withWorld((world) => {
   const entry = startSession(world, 'aaaa1111');
   const waiting = startSession(world, 'bbbb2222');
@@ -244,6 +277,137 @@ test('closeFinished says so when claude keeps the job after its worktree went, a
   assert.match(result.kept[0].settle, /js-harness sessions stop aaaa1111$/);
   assert.equal(fs.existsSync(waiting.worktreePath), true);
   assert.deepEqual(open(world), ['aaaa1111', 'bbbb2222']);
+}));
+
+// Five sessions stood this way on 2026-11-11 (L5): an earlier claude rm emptied the folder, left its .git, and now refuses.
+test('closeFinished says what settles a session whose folder holds only a leftover .git, which claude will not remove', withWorld((world) => {
+  const entry = startSession(world, 'aaaa1111');
+  for (const name of fs.readdirSync(entry.worktreePath)) if (name !== '.git') fs.rmSync(path.join(entry.worktreePath, name), { recursive: true, force: true });
+  world.refuse.rm = `kept aaaa1111 — its worktree is still at "${entry.worktreePath}"`;
+  const result = close(world, [notice(entry, 'closed', 30)]);
+  assert.deepEqual(result.closed, []);
+  assert.match(result.kept[0].why, /claude rm aaaa1111: kept aaaa1111/);
+  assert.ok(result.kept[0].settle.includes(`claude keeps the job while its folder ${entry.worktreePath} is there, and it holds nothing but a leftover .git: once that folder is deleted by hand, js-harness sessions stop aaaa1111 tries the job again`), result.kept[0].settle);
+  assert.ok(!world.gitCalls.some((args) => args[0] === 'worktree' && args[1] === 'remove'), 'git is asked to remove nothing: its files are not there to judge');
+  assert.equal(fs.existsSync(path.join(entry.worktreePath, '.git')), true);
+}));
+
+// Three findings of the lenses on 8cee927..d77b331 (2026-11-11): the look at the worktree came once, before a wait of up
+// to a minute; the listing was read once for every session; a job listed under another id was not stopped.
+test('closeFinished looks at the worktree again after the wait for its job, and keeps one that gained a file meanwhile', withWorld((world) => {
+  const entry = startSession(world, 'aaaa1111');
+  const result = closeFinished({
+    home: world.home, root: world.root, cwd: world.root, base: 'origin/main', notices: [notice(entry, 'closed', 30)], gitIn: world.gitIn, claude: world.claude,
+    // claude lists the job under another id, on the session's conversation: it is stopped and waited for all the same.
+    agents: [{ id: 'zzzz9999', sessionId: entry.sessionId, kind: 'background', pid: 4242, status: 'idle', state: 'done' }],
+    alive: () => { fs.mkdirSync(path.join(entry.worktreePath, 'evals', 'runs'), { recursive: true }); fs.writeFileSync(path.join(entry.worktreePath, 'evals', 'runs', 'late.json'), '{}\n'); return false; },
+    pause: () => {},
+  });
+  assert.deepEqual(result.closed, []);
+  assert.match(result.kept[0].why, /stays: it holds what no branch brings back: !! evals\//);
+  assert.equal(result.kept[0].stopped, true);
+  assert.deepEqual(world.claudeCalls, [['stop', 'zzzz9999']]);
+  assert.ok(!world.gitCalls.some((args) => args[0] === 'worktree' && args[1] === 'remove'));
+  assert.equal(fs.existsSync(path.join(entry.worktreePath, 'evals', 'runs', 'late.json')), true);
+}));
+
+test('closeFinished reads claude\'s listing again after it acted, and keeps a session that went to work meanwhile', withWorld((world) => {
+  const [first, second, third] = ['aaaa1111', 'bbbb2222', 'cccc3333'].map((id) => startSession(world, id, { worktree: null }));
+  let lists = 0;
+  const result = closeFinished({
+    home: world.home, root: world.root, cwd: world.root, base: 'origin/main', notices: [first, second, third].map((entry) => notice(entry, 'closed', 30)), agents: [], gitIn: world.gitIn, claude: world.claude,
+    // Read again only after an act, since only an act takes time: once and it fails, then once more.
+    list: () => { lists += 1; if (lists === 1) throw new Error('claude agents: made up'); return [{ id: 'cccc3333', kind: 'background', status: 'busy', state: 'working' }]; },
+  });
+  assert.deepEqual(result.closed.map((item) => item.entry.id), ['aaaa1111']);
+  assert.deepEqual(result.kept.map((item) => [item.entry.id, item.why]), [
+    ['bbbb2222', 'whether it is at work cannot be told (claude agents: made up)'],
+    ['cccc3333', 'it is busy: a session at work is not closed'],
+  ]);
+  assert.equal(lists, 2);
+  assert.deepEqual(open(world), ['bbbb2222', 'cccc3333']);
+}));
+
+test('the removal is the one git call given the long bound, and closeFinishedIn closes nothing when it cannot look', withWorld((world) => {
+  const entry = startSession(world, 'aaaa1111');
+  const removals = [];
+  const done = closeFinished({
+    home: world.home, root: world.root, cwd: world.root, base: 'origin/main', notices: [notice(entry, 'closed', 30)], agents: [], claude: world.claude,
+    gitIn: (cwd, ...args) => { assert.notEqual(args[1], 'remove', 'a question\'s git does not delete'); return world.gitIn(cwd, ...args); },
+    removeIn: (cwd, ...args) => { removals.push(args); return world.gitIn(cwd, ...args); },
+  });
+  assert.deepEqual([done.closed.length, removals.map((args) => args.slice(0, 2))], [1, [['worktree', 'remove']]]);
+  assert.ok(REMOVAL_WAIT_MS >= 5 * 60_000);
+  // What is left is finished too, so each look below would have something to close.
+  const left = startSession(world, 'bbbb2222', { worktree: null });
+  const channel = recordPath(world.home, projectSlug(world.root));
+  fs.mkdirSync(path.dirname(channel), { recursive: true });
+  fs.writeFileSync(channel, `${JSON.stringify({ schema: NOTICE_SCHEMA, text: 'delivered', to: { role: 'orchestrator' }, ...notice(left, 'closed', 30) })}\n`);
+  const given = { home: world.home, root: world.root, run: spawnSync, claude: world.claude, list: () => [] };
+  // This repository has no origin: the default branch cannot be named, so nothing is compared against a guess.
+  const noBranch = closeFinishedIn(given);
+  assert.equal(typeof noBranch.unavailable, 'string', JSON.stringify(noBranch));
+  assert.match(closeFinishedIn({ ...given, list: () => { throw new Error('made up'); } }).unavailable, /whether a session is at work cannot be told \(made up\)/);
+  assert.match(closeFinishedIn({ ...given, claude: null }).unavailable, /^claude is not on PATH$/);
+  // What doctor lists reads the same records: the one left, and a throw where it cannot look.
+  assert.deepEqual(finishedIn({ home: world.home, root: world.root, list: () => [] }).map((item) => item.id), ['bbbb2222']);
+  assert.deepEqual(finishedIn({ home: world.home, root: world.root, list: () => [{ id: 'bbbb2222', status: 'busy' }] }), []);
+  const record = recordFileOf(world.home);
+  fs.renameSync(record, `${record}.aside`);
+  fs.mkdirSync(record);
+  assert.match(closeFinishedIn(given).unavailable, /the record of background sessions could not be read/);
+  assert.throws(() => finishedIn({ home: world.home, root: world.root, list: () => [] }), /the record of background sessions could not be read/);
+  fs.rmdirSync(record);
+  fs.renameSync(`${record}.aside`, record);
+  fs.rmSync(channel);
+  fs.mkdirSync(channel);
+  assert.match(closeFinishedIn(given).unavailable, /the channel's record .* could not be read/);
+  assert.deepEqual(world.claudeCalls.filter((args) => args[1] === 'bbbb2222'), []);
+  assert.deepEqual(open(world), ['bbbb2222']);
+}));
+
+test('after a land the finished sessions are closed against the main it pushed, each said in a line, and what cannot look only says so', withWorld((world) => {
+  const done = startSession(world, 'aaaa1111');
+  const ahead = startSession(world, 'bbbb2222', { landed: false });
+  const channel = recordPath(world.home, projectSlug(world.root));
+  fs.mkdirSync(path.dirname(channel), { recursive: true });
+  fs.writeFileSync(channel, [done, ahead].map((entry) => `${JSON.stringify({ schema: NOTICE_SCHEMA, text: 'delivered', to: { role: 'orchestrator' }, ...notice(entry, 'closed', 30) })}\n`).join(''));
+  const said = [];
+  const given = { home: world.home, root: world.root, cwd: world.root, base: world.git(world.root, 'rev-parse', 'main'), run: spawnSync, claude: world.claude, list: () => [], say: (line) => said.push(line) };
+  assert.deepEqual(closeAfterLand({ ...given, claude: null }), []);
+  assert.deepEqual(closeAfterLand({ ...given, list: () => { throw new Error('made up'); } }), []);
+  assert.deepEqual(said, [
+    'No finished background session was closed: claude is not on PATH. js-harness sessions stop --finished tries again.',
+    'No finished background session was closed: whether a session is at work cannot be told (made up). js-harness sessions stop --finished tries again.',
+  ]);
+  assert.deepEqual(world.claudeCalls, []);
+  said.length = 0;
+  assert.deepEqual(closeAfterLand(given), [{ id: 'aaaa1111', title: 'JH 1 · aaaa1111', worktree: done.worktreePath }]);
+  assert.equal(said[0], 'Finished background sessions: 1 closed, 1 kept.');
+  assert.match(said[1], /^closed aaaa1111 · JH 1 · aaaa1111: git removed its worktree /);
+  assert.match(said[2], /^kept bbbb2222 · JH 1 · bbbb2222: its worktree .* stays: its head is not in main$/);
+  assert.deepEqual([fs.existsSync(done.worktreePath), fs.existsSync(ahead.worktreePath)], [false, true]);
+  // With none finished and still here, a land says nothing of them.
+  fs.rmSync(channel);
+  said.length = 0;
+  assert.deepEqual([closeAfterLand(given), said], [[], []]);
+}));
+
+test('the board names each finished session still on the machine with the command that closes it, and none that is at work', withWorld((world) => {
+  const [done, busy, open] = ['aaaa1111', 'bbbb2222', 'cccc3333'].map((id) => startSession(world, id, { worktree: null }));
+  const notices = [notice(done, 'closed', 30), notice(busy, 'closed', 20), notice(open, 'ready', 10)];
+  const given = { home: world.home, root: world.root, worktrees: { available: false }, list: () => [{ id: 'bbbb2222', kind: 'background', cwd: world.root, status: 'busy', state: 'working' }] };
+  const fact = boardBackground({ ...given, notices });
+  assert.deepEqual(fact.finished, [{ id: 'aaaa1111', title: 'JH 1 · aaaa1111', closedAt: notices[0].at }]);
+  assert.deepEqual(finishedHere(readRecord(world.home), notices, world.root, []).map((item) => item.id), ['aaaa1111', 'bbbb2222']);
+  const lines = backgroundLines(fact, (iso) => (iso === notices[0].at ? '30 min ago' : 'some time ago'));
+  const at = lines.findIndex((line) => line.startsWith('  1 finished and still on the machine'));
+  assert.match(lines[at], /js-harness sessions stop --finished closes each that loses nothing and says why it keeps the rest$/);
+  assert.equal(lines[at + 1], '    aaaa1111  JH 1 · aaaa1111  closed 30 min ago');
+  // A board with no channel record at hand (`notices` null) names none, and prints no line for none.
+  const blind = boardBackground(given);
+  assert.deepEqual(blind.finished, []);
+  assert.ok(!backgroundLines(blind, () => 'some time ago').some((line) => /finished/.test(line)));
 }));
 
 test('closeFinished closes nothing when git cannot list the worktrees', withWorld((world) => {

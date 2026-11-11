@@ -300,11 +300,12 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
       // last, after the checks. `host-update` is there on any machine, `n/a` where no Claude Desktop folder is, and so
       // is `stack-update`, whatever tools it reads. `js-harness`, the harness's own rules against main's, comes right
       // after the checks, for every caller. `worktrees` (odd/tasks/land-unattended.md, T10) follows `unseen`, then
+      // `finished`, the finished background sessions still here (odd/tasks/sessions-close-themselves.md),
       // `review-skips` (odd/tasks/f8-s1-reviews.md, T5), `templates` (odd/tasks/templates.md), and
       // `memory-backup` (odd/tasks/memory-backup.md) follows it, then `claude-import` (odd/tasks/f8-s13-rehearsal.md, T8)
       // and `permissions` (odd/tasks/f8-s10-port.md, T4).
       // `clean` (odd/tasks/clean.md) follows `stack-update`.
-      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-daemon', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'review-skips', 'templates', 'memory-backup', 'claude-import', 'permissions', 'host-update', 'stack-update', 'clean'],
+      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-daemon', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'finished', 'review-skips', 'templates', 'memory-backup', 'claude-import', 'permissions', 'host-update', 'stack-update', 'clean'],
     );
     // A temp home has no install: nothing holds the permissions, and that is no gap.
     assert.equal(rows.find((r) => r.id === 'permissions').claude, 'n/a');
@@ -317,6 +318,8 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
     assert.equal(rows.find((r) => r.id === 'js-harness').upToDate, 'n/a');
     // A folder outside git has no origin/main to hold a branch: the worktrees row cannot tell.
     assert.equal(rows.find((r) => r.id === 'worktrees').project, 'unknown');
+    // A temp home records no background session, so none is finished and claude is not asked.
+    assert.equal(rows.find((r) => r.id === 'finished').project, 'ok');
     // A temp home was never set up for a backup: no gap.
     assert.equal(rows.find((r) => r.id === 'memory-backup').claude, 'n/a');
     // The temp folder holds a harness.json and no AGENTS.md: no project to load, so no gap.
