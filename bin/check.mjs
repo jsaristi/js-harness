@@ -1621,7 +1621,7 @@ export function checkFunctions(cwd) {
   if (harness.error) return [];
   const { errors } = functionsOf(harness, { paths: [] });
   if (errors.length === 0) return [];
-  return [{ name: 'functions', pass: false, detail: errors.join('; '), lines: ['until it is fixed every switch is read as on'], next: firstStep('fix the switches named above in harness.json "functions"') }];
+  return [{ name: 'functions', pass: false, detail: errors.join('; '), lines: ['until it is fixed every check is read as on, and nothing is pushed unasked or for the remote gate'], next: firstStep('fix the switches named above in harness.json "functions"') }];
 }
 
 /** The `functions` information row: one line for each way this clone is not what its switches ask, or no row.

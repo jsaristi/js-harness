@@ -25,6 +25,7 @@ async function eventsOf(ci, takeGateLock = async () => ({ release: () => {}, bea
       git: () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' }),
       takeGateLock,
       ciGateWanted: () => FIRST,
+      remoteGateKeeps: () => null,
       runCiGate: async () => ci,
     }, { home, wait: true, waitMinutes: 1, load: false, log: true, env: {}, remote: 'origin' });
     return readGateLog(home).events;

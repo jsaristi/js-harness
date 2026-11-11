@@ -41,6 +41,8 @@ async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, arg
     env: {},
     homedir: () => path.join(os.tmpdir(), 'js-harness-guard-test-no-home'),
     exists,
+    // The project of these tests declares its remote gate on, as this repository does.
+    remoteGate: () => 'on',
     readIndex: () => {
       if (index === null) throw Object.assign(new Error('no file'), { code: 'ENOENT' });
       return index;
@@ -338,7 +340,7 @@ test('a commit wrapped in js-harness gate -- runs, with the hint beside its resu
   const command = 'js-harness gate -- git commit -m x';
   const hinted = await hook({ tool_name: 'Bash', cwd: 'D:/project', tool_input: { command } }, { exists: workflow });
   assert.equal(hinted.code, 0);
-  assert.deepEqual(JSON.parse(hinted.out), { hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: wrappedCommitHint(command, { cwd: 'D:/project', env: {}, projectRoot: () => 'D:/project', exists: workflow }) } });
+  assert.deepEqual(JSON.parse(hinted.out), { hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: wrappedCommitHint(command, { cwd: 'D:/project', env: {}, projectRoot: () => 'D:/project', exists: workflow, remoteGate: () => 'on' }) } });
   assert.match(denied(hinted).additionalContext, /could not go to GitHub's machines/);
   assert.equal(denied(hinted).permissionDecision, undefined);
   const refused = await hook({ tool_name: 'Bash', cwd: 'D:/project', tool_input: { command: 'js-harness gate -- git commit -m "fix the `check` row"' } }, { exists: workflow });
