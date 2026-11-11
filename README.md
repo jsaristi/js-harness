@@ -166,7 +166,12 @@ given), reads that workflow's run in the GitHub repository the remote names with
 branch, and lets the commit through only on green. The `tests` row then names the run. A gate that
 gets no answer from GitHub (a remote not on GitHub, no push, `gh` not signed in, no run within 3
 minutes, a run cancelled or timed out, or one not done within `rule:ci-gate-bound` of the push,
-which is then cancelled) runs here under the lock, after one `check:` line on stderr that says why. The gate log keeps both: a run's red tests by name, read from its log with gh's prefix taken off, and a `ci-fallback` line with why and what the wait cost, under the id of the gate that then runs here. `JS_HARNESS_GATE_CI=0` keeps every gate here. The suite's runner is Linux; a second job of the
+which is then cancelled) runs here under the lock, after one `check:` line on stderr that says why. That push
+publishes the tree before its commit exists, and a commit the gate refuses was pushed all the same, so the project
+decides it with the `remoteGate` switch (`js-harness functions`): `on` sends the tree, `off` keeps every gate here,
+and a project that says nothing sends it only where GitHub says its repository is private, so a public project
+publishes nothing until its owner turns the switch on. This repository is public and declares it on. A tree the
+switch keeps runs its tests here, after one `check:` line that says why. The gate log keeps both: a run's red tests by name, read from its log with gh's prefix taken off, and a `ci-fallback` line with why and what the wait cost, under the id of the gate that then runs here. `JS_HARNESS_GATE_CI=0` keeps every gate here. The suite's runner is Linux; a second job of the
 same run tests `bin/remote.test.mjs` on Windows, since `js-harness remote` runs on Windows alone and most of its tests
 skip themselves elsewhere, and the run is green only when both jobs are. Any other test that runs only on Windows is
 left to the daily Windows suite: `.github/workflows/windows-daily.yml` runs the whole suite once a day on
@@ -1254,7 +1259,11 @@ TypeScript plugin, and where `codexReview` is off no row for Codex. `pushUnasked
 session pushes without asking: a project that says nothing is asked before each push, and the
 switch is turned on by its owner (js-harness declares it on). `lensReview` says whether a code commit
 asks for a Claude lens record (`js-harness lens-review`) at the push: a commit is asked only where its own
-`harness.json` turns it on, which a project that says nothing does not (js-harness does).
+`harness.json` turns it on, which a project that says nothing does not (js-harness does). `remoteGate` says
+whether the tree of a commit being made may be pushed to the remote for its gate, before the commit exists: `on`
+always, `off` never, and `private`, which a project that says nothing has, only where GitHub says the repository
+is private; a public project turns it on to publish each commit's tree for the length of its run (js-harness
+does), and a switch or a visibility that cannot be read keeps the tree here.
 
 ```console
 $ js-harness functions
@@ -1263,13 +1272,16 @@ languageServer  off        auto: no file of the project is TypeScript
 codexReview     off        auto: no file of the project is a program
 pushUnasked     off        auto: the project asks until its owner turns it on
 lensReview      off        auto: a commit asks for a lens record only where the project turns the lens review on
+engramPlugin    on         auto: the engram plugin is part of every preset until the project turns it off
+remoteGate      private    auto: a commit's tree is pushed for its gate only where GitHub says the repository is private, until the project turns it on
 ```
 
 `js-harness functions apply` makes this clone what the switches ask: the code map index, the
 pre-push check, and the keys of `.claude/settings.local.json`, each recorded in the project manifest
 so `uninstall` undoes it. It needs no pin. `js-harness functions set <name> <value>` writes one
 switch into `harness.json` and applies it: `codeMap` takes `auto`, `on-demand`, `always` or `off`;
-`languageServer`, `codexReview`, `pushUnasked` and `lensReview` take `auto`, `on` or `off`. `--json` prints the list and `--cwd
+`languageServer`, `codexReview`, `pushUnasked`, `lensReview` and `engramPlugin` take `auto`, `on` or `off`;
+`remoteGate` takes `auto`, `private`, `on` or `off`. `--json` prints the list and `--cwd
 <path>` names another project. A `--cwd` with no path, or followed by another flag, exits 2 with `--cwd requires a value`.
 
 ### js-harness remote

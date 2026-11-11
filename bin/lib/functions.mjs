@@ -1,5 +1,6 @@
 // The functions a project can turn off and on: the code map, the language server, the Codex review, pushing
-// unasked and the Claude lens review, declared under `harness.json` `"functions"`. This module only reads what is
+// unasked, the Claude lens review, the engram plugin and the remote gate (whether the tree of a commit being made may
+// be pushed for its gate), declared under `harness.json` `"functions"`. This module only reads what is
 // declared and says what each switch resolves to; it spawns nothing and reads no file, so the rules are all
 // testable as data. The commands that act on a switch (check, init, sync, doctor, codex-review) ask it. See
 // odd/tasks/on-demand-functions.md.
@@ -10,7 +11,8 @@ const CODEX_REVIEW_DEFAULT = 'auto';
 
 /** Each switch: the values it takes, the one it has when the project declares none (`fallback`), and the
  * one it is read as when what is declared cannot be read (`strict`). A check is on there, since a switch that
- * cannot be read must never turn a check off; pushing unasked is off, since it must never push unseen. */
+ * cannot be read must never turn a check off; pushing unasked and the remote gate are off, since neither must ever
+ * push unseen. */
 export const SWITCHES = {
   codeMap: { values: ['auto', 'on-demand', 'always', 'off'], fallback: 'auto', strict: 'on-demand' },
   languageServer: { values: ['auto', 'on', 'off'], fallback: 'auto', strict: 'on' },
@@ -18,6 +20,7 @@ export const SWITCHES = {
   pushUnasked: { values: ['auto', 'on', 'off'], fallback: 'auto', strict: 'off' },
   lensReview: { values: ['auto', 'on', 'off'], fallback: 'auto', strict: 'on' },
   engramPlugin: { values: ['auto', 'on', 'off'], fallback: 'auto', strict: 'on' },
+  remoteGate: { values: ['auto', 'private', 'on', 'off'], fallback: 'auto', strict: 'off' },
 };
 
 /** The presets `init --preset` writes (G14, odd/tasks/f8-s11-complements.md, L9): the switches each declares. Every
@@ -169,6 +172,9 @@ export function resolveFunctions(values, tree) {
     lensReview: () => ({ value: 'off', because: 'a commit asks for a lens record only where the project turns the lens review on' }),
     // Auto is on: engram's setup installs the plugin on every machine, and a preset drops it only by declaring off.
     engramPlugin: () => ({ value: 'on', because: 'the engram plugin is part of every preset until the project turns it off' }),
+    // Auto is private: a public repository's commit is not published before it exists unless its owner says so
+    // (odd/tasks/publish-decision.md). No file of the project says which it is: ./ci-gate.mjs asks GitHub at the push.
+    remoteGate: () => ({ value: 'private', because: "a commit's tree is pushed for its gate only where GitHub says the repository is private, until the project turns it on" }),
   };
 
   return Object.fromEntries(

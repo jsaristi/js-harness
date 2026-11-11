@@ -59,11 +59,12 @@ test('-n is read as --no-verify only for a commit, and only before an option tha
 // Folders resolved here, so `-C ../project` reads the same on Windows and on the Linux machines of CI.
 const ROOT = path.resolve('project');
 const OTHER = path.resolve('other');
-const hint = (command, { env = {}, workflow = true, cwd = ROOT } = {}) => wrappedCommitHint(command, {
+const hint = (command, { env = {}, workflow = true, cwd = ROOT, remoteGate = 'on' } = {}) => wrappedCommitHint(command, {
   cwd,
   env,
   projectRoot: (dir) => dir,
   exists: (file) => workflow && file === path.join(ROOT, CI_WORKFLOW),
+  remoteGate: () => remoteGate,
 });
 
 test('in a project whose commit gates go to GitHub, the hint says the wrapped commit ran here and could not go there', () => {
@@ -84,6 +85,10 @@ test('without the workflow, with the switch off or on a CI machine, the hint say
   assert.equal(hint('js-harness gate -- git commit -m x', { env: { [CI_GATE_ENV]: '0' } }), plain);
   assert.equal(hint('js-harness gate -- git commit -m x', { env: { CI: 'true' } }), plain);
   assert.notEqual(hint('js-harness gate -- git commit -m x', { env: { CI: 'false' } }), plain);
+  // The project's own switch (odd/tasks/publish-decision.md): off keeps every gate here, and under private whether a
+  // commit would have gone is not known without asking GitHub, so the hint claims it only where the switch reads on.
+  assert.equal(hint('js-harness gate -- git commit -m x', { remoteGate: 'off' }), plain);
+  assert.equal(hint('js-harness gate -- git commit -m x', { remoteGate: 'private' }), plain);
 });
 
 test('the project is the one git -C names, read from the folder the command runs in', () => {

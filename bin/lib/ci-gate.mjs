@@ -12,6 +12,11 @@
 // on green only. Anything that is not a green or a red run (no push, no `gh`, no run, a run cancelled or past
 // its bound) is no answer, `{ ran: false, why }`, and the caller runs the gate here as it always did: CI only
 // ever shortens a wait, it never makes a gate impossible.
+//
+// That push publishes a tree before its commit exists, and one the gate refuses all the same, so it is the project's
+// written decision (odd/tasks/publish-decision.md; the audit's M1): the `remoteGate` switch of harness.json
+// "functions" (./functions.mjs), read before anything is written (`remoteGateKeeps`). A project that says nothing
+// sends its tree only where GitHub says its repository is private; this repository is public and declares it on.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,6 +24,7 @@ import { failingTests } from './flaky.mjs';
 import { gateRecord } from './gate-log.mjs';
 import { gateLogRows, gateRow } from './gate-turn.mjs';
 import { firstStep } from './next-step.mjs';
+import { functionsOf, harnessOfTree } from './project-functions.mjs';
 import { ruleValue } from './rules.mjs';
 
 /** Set to `0`, the gate never goes to CI. */
@@ -55,11 +61,13 @@ function failedLog(stdout, id) {
  * lock is not read: a free one no longer keeps a gate here. A check by hand stays here: CI tests the index
  * (`git write-tree`), and a check by hand tests the working tree, unstaged edits included. A commit's hook is told
  * by `GIT_INDEX_FILE`, which git hands every hook that commits and a check by hand is not given, as
- * ../check.mjs tells it. */
+ * ../check.mjs tells it. A project whose `remoteGate` switch reads off keeps its gate here like one with no workflow;
+ * one that reads private is asked at the push, where its visibility is read (`remoteGateKeeps`). */
 export function ciGateWanted({ cwd, env = process.env }) {
   if (env[CI_GATE_ENV] === '0' || onCiMachine(env)) return null;
   if (!Object.keys(env).some((key) => key.toUpperCase() === 'GIT_INDEX_FILE')) return null;
   if (!fs.existsSync(path.join(cwd, CI_WORKFLOW))) return null;
+  if (remoteGateOf(cwd).value === 'off') return null;
   return `the project holds ${CI_WORKFLOW}, so a commit's tests go to GitHub's machines first`;
 }
 
@@ -92,6 +100,44 @@ export function githubRepository(url) {
   return match ? `${match[1]}/${match[2]}` : null;
 }
 
+/** What the project at `cwd` says of the remote gate, as `{ value, errors }`: `on`, `private` or `off`, from the
+ * harness.json of its working tree, which the gate of the same commit reads its other switches from (`checkFunctions`
+ * of ../check.mjs), and what could not be read in it, which is then read as off. */
+export function remoteGateOf(cwd) {
+  const { errors, resolved } = functionsOf(harnessOfTree(cwd), { paths: [] });
+  return { value: resolved.remoteGate.value, errors };
+}
+
+/** The URL `remote` pushes to, as it is written (its push URL first), before git rewrites it. */
+const pushUrl = (git, remote) => git('config', '--get', `remote.${remote}.pushurl`).stdout.trim() || git('config', '--get', `remote.${remote}.url`).stdout.trim();
+
+const KEPT = 'the tree being committed was not pushed';
+
+/** Why the tree of the commit being made stays on this machine, or null where the project lets it be pushed for its
+ * gate: `remoteGate` on, or private with a repository GitHub says is `PRIVATE`, asked as ../backup.mjs asks it before
+ * its own push. Everything else keeps it: the switch off or unreadable, a repository that is public or internal, a
+ * visibility `gh` could not read. `repository` is the `owner/name` the push goes to, or null for a remote that is
+ * not GitHub's. */
+function keptHere({ cwd, remote, url, repository, gh }) {
+  const { value, errors } = remoteGateOf(cwd);
+  if (value === 'on') return null;
+  if (value === 'off') return `remoteGate reads off in harness.json${errors.length > 0 ? ` (${errors.join('; ')})` : ''}, so ${KEPT}`;
+  if (!repository) return `${remote} is not a GitHub repository (${url || 'no URL'}), so nothing says it is private and ${KEPT}`;
+  const seen = gh(['repo', 'view', repository, '--json', 'visibility', '-q', '.visibility'], { cwd });
+  const visibility = seen.status === 0 ? seen.stdout.trim() : '';
+  if (!visibility) return `the visibility of ${repository} could not be read (${firstLine(seen.stderr) || 'gh said nothing'}), so it is not known to be private and ${KEPT}`;
+  if (visibility !== 'PRIVATE') return `${repository} reads ${visibility}, not PRIVATE, and harness.json does not turn remoteGate on (js-harness functions set remoteGate on), so ${KEPT}`;
+  return null;
+}
+
+/** `keptHere` for a caller that has not read the remote: the gate asks it before it says a push starts
+ * (`testsOnCi`). `runCiGate` asks again by itself, so no caller pushes past the switch. `gh` is injectable. */
+export function remoteGateKeeps({ cwd, remote = 'origin', env = process.env, gh }) {
+  const runGit = spawner('git', pushEnv(env));
+  const url = pushUrl((...args) => runGit(['-C', cwd, ...args]), remote);
+  return keptHere({ cwd, remote, url, repository: githubRepository(url), gh: gh ?? spawner('gh', env) });
+}
+
 /** The commits `MERGE_HEAD` names while a merge is being made, one a line (an octopus merge names several), or none. */
 function mergeHeads(git) {
   const at = git('rev-parse', '--path-format=absolute', '--git-path', 'MERGE_HEAD');
@@ -116,10 +162,13 @@ export async function runCiGate({ cwd, remote = 'origin', env = process.env, gh,
   };
   // The repository the push goes to, as the remote is written (its push URL first), before git rewrites it: `gh`
   // is asked about that repository and no other, whatever folder `check` was started from.
-  const url = git('config', '--get', `remote.${remote}.pushurl`).stdout.trim() || git('config', '--get', `remote.${remote}.url`).stdout.trim();
+  const url = pushUrl(git, remote);
   const repository = githubRepository(url);
   if (!repository) return { ran: false, why: `${remote} is not a GitHub repository (${url || 'no URL'})` };
   const runGh = gh ?? spawner('gh', env);
+  // Before anything is written: what the project's switch keeps here leaves no object and no branch behind.
+  const kept = keptHere({ cwd, remote, url, repository, gh: runGh });
+  if (kept) return { ran: false, why: kept };
   const ghIn = ([verb, sub, ...rest]) => runGh([verb, sub, '--repo', repository, ...rest], { cwd });
   // Asked before anything is written or pushed: a `gh` missing, signed out or barred from the repository would
   // otherwise leave a run going that no one reads, after a push every commit pays.
@@ -196,11 +245,18 @@ async function followRun({ sha, gh, now, sleep, startedAt }) {
  * index the run is of, which `filesNow` gives (`filesKey` of ./gate-tree.mjs) or `null`: what lets a failure here
  * stand against a pass of the same files elsewhere (`provenBy` of ./gate-log.mjs). A gate CI gave no answer leaves a
  * `ci-fallback` line under `local`'s id, the record of the gate that then runs here, with what the wait cost.
- * `deps.ciGateWanted` and `deps.runCiGate` stand in for the two halves. Moved here from ../check.mjs on 2026-10-30
+ * A tree the project's `remoteGate` switch keeps here is said so before any push is announced, and leaves no
+ * `ci-fallback` line: CI was never asked. `deps.ciGateWanted`, `deps.remoteGateKeeps` and `deps.runCiGate` stand in
+ * for the three steps. Moved here from ../check.mjs on 2026-10-30
  * (odd/tasks/gate-narrow-pass.md), which may not grow. */
 export async function testsOnCi(cwd, lock, deps, local = null, filesNow = () => null) {
   const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, env: lock.env ?? process.env });
   if (!why) return null;
+  const kept = (deps.remoteGateKeeps ?? remoteGateKeeps)({ cwd, remote: lock.remote ?? 'origin', env: lock.env ?? process.env });
+  if (kept) {
+    console.error(`check: ${kept}; the tests run here`);
+    return null;
+  }
   console.error(`check: ${why}; the push of the tree being committed starts their run`);
   // Asked before the push, of the index `runCiGate` writes the tree of.
   const files = filesNow();

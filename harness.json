@@ -22,7 +22,8 @@
   "hookCount": true,
   "functions": {
     "pushUnasked": "on",
-    "lensReview": "on"
+    "lensReview": "on",
+    "remoteGate": "on"
   },
   "templates": true,
   "reply": {

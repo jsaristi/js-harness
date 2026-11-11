@@ -14,16 +14,19 @@ is a setting of his account, so this work only hands him its command.
 ## Done when
 - `node --test bin/lib/ci-gate.test.mjs` exits 0
 - `node --test bin/lib/functions.test.mjs bin/functions.test.mjs bin/lib/wrapped-commit.test.mjs` exits 0
+- `node --test scripts/github-ruleset.test.mjs` exits 0
 - `npm run check` exits 0
 - `js-harness notify --to orchestrator --kind ready --pr <n>` records the notice
 - The pull request's body holds the one command that creates the rule on GitHub, the one that reads it back and the
   one that undoes it, and says that they wait for his hands.
 
 ## In scope / Out of scope
-- In: bin/lib/functions.mjs (the switch), bin/lib/ci-gate.mjs (read before the push), bin/lib/wrapped-commit.mjs (its
-  hint follows the switch), their tests and the tests that list the switches, harness.json (declared on), README.md,
-  docs/SPEC.md and docs/RECORDS.md where they describe the switches or the remote gate, this document, the session's
-  summary.
+- In: bin/lib/functions.mjs (the switch), bin/lib/ci-gate.mjs (read before the push), bin/lib/wrapped-commit.mjs and
+  bin/guard.mjs (the hint follows the switch), the one line of the orchestrator skill that says where a commit's gate
+  goes (bin/lib/manifest.mjs), their tests and the tests that list the switches or stand in for the remote gate,
+  harness.json (declared on), README.md, docs/SPEC.md and docs/RECORDS.md where they describe the switches or the
+  remote gate, `.github/rulesets/main.json` (the body of the rule he sends) with its test, this document, the
+  session's summary.
 - Out: any setting of GitHub (the rule on `main` is his account's: the pull request's body carries its command and
   nobody runs it for him); making the repository private and asking pull requests on GitHub (his answer says a yes
   does not cover them); the three `gate/*` and two `queue/*` branches left on `origin` (deleting a remote branch is
@@ -74,8 +77,9 @@ is a setting of his account, so this work only hands him its command.
   project setting).
   spec 2: `node --test bin/lib/functions.test.mjs bin/functions.test.mjs bin/lib/wrapped-commit.test.mjs`: none, new
   behaviour (six switches today, none of them about the remote gate).
-  spec 3: left out because the rule on GitHub waits for his hands: `gh api repos/jsaristi/js-harness/rulesets --jq
-  length` prints 0 today and will print 1 only after he runs the pull request's command.
+  spec 3: `node --test scripts/github-ruleset.test.mjs`: none, new behaviour (the body of the rule; the rule itself
+  waits for his hands: `gh api repos/jsaristi/js-harness/rulesets --jq length` prints 0 today and will print 1 only
+  after he runs the pull request's command).
 - 4. Refutation: two things could show the request does not hold. That nothing is exposed: `gh api
   repos/jsaristi/js-harness --jq .visibility` printed `public`; `gh api repos/jsaristi/js-harness/rulesets --jq
   length` printed 0; `gh api repos/jsaristi/js-harness/branches/main/protection` answered 404 "Branch not
@@ -138,8 +142,10 @@ is a setting of his account, so this work only hands him its command.
 - D4 (spec 2). `wrappedCommitHint` says "it could not go to GitHub's machines" only where the switch reads `on`:
   under `private` the answer is not known without `gh`, and the short hint is true either way.
 - D5 (spec 3). The rule is a repository ruleset (the triage's proof counts rulesets), named for what it does, on
-  `refs/heads/main` alone, with the two rule types `deletion` and `non_fast_forward` and no bypass actor. Its body
-  goes on standard input (`--input -`), so the command reads the same in PowerShell and in bash.
+  `refs/heads/main` alone, with the two rule types `deletion` and `non_fast_forward` and no bypass actor. Its body is
+  a file of the repository, `.github/rulesets/main.json`, sent with `gh api --input <file>`, the form `gh api --help`
+  shows for a ruleset: the command is then the same in every shell, the body is the record of what was asked of
+  GitHub, and `scripts/github-ruleset.test.mjs` holds it to those two rules (L6 below says why not standard input).
 
 ## Tasks
 - [ ] T1 (docs) this document: the contract, the depth pass, the specs and the design, committed with documents alone.
@@ -162,5 +168,16 @@ is a setting of his account, so this work only hands him its command.
 - L4 Found while reading the land: it pushes `main` with `--force-with-lease` (`bin/merge-queue.mjs:649`). The push
   is a fast-forward, so the rule should let it through (Depth pass, 4); it is read and not run, and said so in the
   pull request beside the command that undoes the rule.
-- L5 State (2026-11-11, JH 180, about 50 % of the window): nothing built yet. Next: T1's commit, then the tests of
-  T2 first (bin/lib/ci-gate.test.mjs: `project()` declares the switch; three new cases), then the code.
+- L5 State (2026-11-11, JH 180): T1 committed, `2eec546f`. T2 written: the gate's tests first (red: the test file
+  failed to load, `remoteGateKeeps` not exported), then the code; `node --test bin/lib/ci-gate.test.mjs` 16 of 16,
+  and the switch, hint and stubbed-gate tests 77 of 77, `bin/guard.test.mjs` 39 of 39. Not red first, said plainly:
+  the switch's own cases in bin/lib/functions.test.mjs and the ruleset body's test were written with their code in
+  one step. Left: the whole gate at the commit; Codex and the lenses; then T3 (the verifier) and T4 (the pull request
+  with the three commands, summary, notices).
+- L6 The body on standard input was my first design and it was wrong for his machine: checked with a script that
+  pipes the same line to a JSON parser, Windows PowerShell puts a byte-order mark before a piped string, which is not
+  valid JSON (`SyntaxError: Unexpected token`), while bash does not. So the body is a file (D5), with no mark, and
+  the test refuses one.
+- L7 The hint of a commit wrapped in `js-harness gate --` and the orchestrator skill's line both said a commit's gate
+  goes to GitHub "in a project that holds the workflow"; with the switch that is true only where it lets the tree be
+  pushed, so both follow it: the hint claims it only where the switch reads on, the skill's line names the switch.

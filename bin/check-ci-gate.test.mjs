@@ -18,8 +18,8 @@ function project() {
 
 /** The deps of a gate: a sensor that passes and counts its runs, a lock taken at once that counts its takes, and
  * the CI gate as `wanted` and `ci` say. */
-function deps({ wanted, ci }) {
-  const seen = { sensors: 0, takes: 0, ciRuns: 0, wantedWith: null, ranWith: null };
+function deps({ wanted, ci, kept = null }) {
+  const seen = { sensors: 0, takes: 0, ciRuns: 0, wantedWith: null, ranWith: null, keptWith: null };
   return {
     seen,
     spawn: () => {
@@ -34,6 +34,10 @@ function deps({ wanted, ci }) {
     ciGateWanted: (asked) => {
       seen.wantedWith = asked;
       return wanted;
+    },
+    remoteGateKeeps: (asked) => {
+      seen.keptWith = asked;
+      return kept;
     },
     runCiGate: async (asked) => {
       seen.ciRuns += 1;
@@ -91,6 +95,17 @@ test('a gate with no answer from CI runs here under the lock, and says why', asy
   assert.deepEqual({ sensors: seen.sensors, takes: seen.takes, ciRuns: seen.ciRuns }, { sensors: 1, takes: 1, ciRuns: 1 });
   assert.equal(rows.find((row) => row.name === 'tests').pass, true);
   assert.match(errors, /^check: no answer from GitHub's machines \(gh run list failed: no auth\), so the tests run here$/m);
+});
+
+test('a gate whose tree the project keeps here (remoteGate) runs here and says why: no push is announced, CI is not asked, no fallback is logged', async () => {
+  const KEPT = 'o/r reads PUBLIC, not PRIVATE, and harness.json does not turn remoteGate on (js-harness functions set remoteGate on), so the tree being committed was not pushed';
+  let events;
+  const { rows, seen, errors, dir } = await gate({ wanted: FIRST, kept: KEPT, ci: { ran: true, pass: true, url: URL, seconds: 1, output: '' } }, { log: true, look: (home) => { events = readGateLog(home).events; } });
+  assert.deepEqual({ sensors: seen.sensors, takes: seen.takes, ciRuns: seen.ciRuns }, { sensors: 1, takes: 1, ciRuns: 0 });
+  assert.deepEqual(seen.keptWith, { cwd: dir, remote: 'upstream', env: { SOME: 'env' } }, 'asked of the remote the check was given');
+  assert.equal(rows.find((row) => row.name === 'tests').pass, true);
+  assert.deepEqual(errors.split('\n').filter((line) => /GitHub|pushed/.test(line)), [`check: ${KEPT}; the tests run here`]);
+  assert.deepEqual(events.map((event) => event.event), ['start', 'end'], 'the gate that ran here, and no ci-fallback line');
 });
 
 test('a gate CI is not wanted for (no workflow, the switch, a CI machine) runs here and never asks CI', async () => {

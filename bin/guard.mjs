@@ -202,12 +202,13 @@ async function sessionTitleOf(input, rules, root, home, readFile) {
 }
 
 /** The hint for the Bash call of `payload` that wraps a commit in `js-harness gate --`, or null (lib/wrapped-commit.mjs).
- * A command that names no commit loads nothing. */
-async function hintOf(payload, { env, projectRoot, exists }) {
+ * A command that names no commit loads nothing. `remoteGate` stands in for the project's switch, read from its
+ * harness.json when not given. */
+async function hintOf(payload, { env, projectRoot, exists, remoteGate }) {
   const command = String(payload.tool_input?.command ?? '');
   if (!/\bgate\b/.test(command) || !/\b(commit|merge)\b/.test(command)) return null;
   const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
-  return (await import('./lib/wrapped-commit.mjs')).wrappedCommitHint(command, { cwd, env, projectRoot, exists });
+  return (await import('./lib/wrapped-commit.mjs')).wrappedCommitHint(command, { cwd, env, projectRoot, exists, remoteGate });
 }
 
 /** Why the reply that ends the turn of the `Stop` payload is to be corrected, or null. The text is the host's
@@ -288,6 +289,7 @@ export async function guardMain(argv, {
   env = process.env,
   homedir = os.homedir,
   exists = fs.existsSync,
+  remoteGate,
 } = {}) {
   if (argv[0] === '--memory' && argv.length === 2) return memoryForm(argv[1], { projectRoot, readFile, stdout, stderr });
   if (argv.length !== 1 || (argv[0] !== '--hook' && argv[0] !== '--stop')) {
@@ -310,7 +312,7 @@ export async function guardMain(argv, {
     const payload = JSON.parse(readStdin());
     reason = await refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, env, homedir });
     // A denial wins; a Bash call that runs adds the hint for a wrapped commit beside its result (commit-gates-first S4).
-    if (reason === null && payload?.tool_name === 'Bash') hint = await hintOf(payload, { env, projectRoot, exists });
+    if (reason === null && payload?.tool_name === 'Bash') hint = await hintOf(payload, { env, projectRoot, exists, remoteGate });
   } catch {
     return 0;
   }
