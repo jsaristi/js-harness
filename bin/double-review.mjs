@@ -34,6 +34,7 @@ import { runAnswerFindings } from './lib/codex-review-recheck.mjs';
 import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { LENS_NAMES } from './lib/lens-prompts.mjs';
 import { readLensReviews } from './lib/lens-reviews.mjs';
+import { claudeHome } from './lib/model-home.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { resolveClaude } from './lib/claude-path.mjs';
 import { transcriptOf as findTranscript } from './lib/channel.mjs';
@@ -63,9 +64,10 @@ export const SKIP_PHRASE = 'no quiero la revisión';
 /** `text` in lower case with its accents taken off, "Revisión" read as "revision": how the skip phrase is compared. */
 const folded = (text) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 // The Claude reader runs on `rule:subagent-reader-model`, a rule of this repository: a project that does not declare
-// it reads on the same model, by its full id (no short name gave it on 2026-11-10; until then the fallback was the
-// alias `opus`). It reads at the lenses' effort, named on the call.
-const CLAUDE_FALLBACK = 'claude-fable-5-2';
+// it reads on the Claude home's model (`rule:session-model`), a full id read from the declared list (until
+// 2026-11-10 the fallback was a short name, which gives whatever the engine in use has for it). It reads at the
+// lenses' effort, named on the call.
+const CLAUDE_FALLBACK = claudeHome().model;
 // What one read cost when it was measured by this command, on this feature's own document (the feature document,
 // L12): input counted with its cache reads, as the record counts it, and said as measured once, not as a bound.
 const MEASURED_COST = 'about 1.1M tokens of Claude and 0.9M of Codex, most of them cache reads, and 1% of Codex\'s weekly limit';

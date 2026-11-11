@@ -29,14 +29,10 @@ const FOLDERS = ['bin', 'workshop', 'scripts'];
 const HOME = ['bin/lib/rules-data.mjs', 'bin/lib/model-home.mjs'];
 
 const MODEL_LEGACY = {
-  'bin/double-review.mjs': 'CLAUDE_FALLBACK, the reader\'s model where a project declares no rule, written by hand',
-  'bin/lens-review.mjs': 'LENS_MODEL, written by hand',
   'scripts/practice.mjs': 'a rehearsal host on a cheaper model under a cap of 0.5 USD a run; the user\'s to decide (the feature document, Ask me before, 2)',
   'scripts/rehearsal.mjs': 'a rehearsal host on a cheaper model under a cap of 0.5 USD a run; the user\'s to decide (the feature document, Ask me before, 2)',
 };
-const EFFORT_LEGACY = {
-  'bin/lens-review.mjs': 'LENS_EFFORT, written by hand',
-};
+const EFFORT_LEGACY = {};
 
 const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const LEVEL = `(?:${EFFORTS.join('|')})`;

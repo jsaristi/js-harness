@@ -182,7 +182,7 @@ A rule he gives is cemented in the harness where something acts on it, never onl
 The effort a session runs at: high.
 - Of this repository only: not in force in a project that installs the harness.
 - Was: medium until 2026-11-10; high until 2026-11-10.
-- Read by: `bin/lib/guard.mjs`, `bin/lib/model-home.mjs`, `bin/rules.mjs`, `workshop/bin/host-watch.mjs`.
+- Read by: `bin/lib/guard.mjs`, `bin/lib/model-home.mjs`, `bin/rules.mjs`.
 - Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
 ### session-housekeeping

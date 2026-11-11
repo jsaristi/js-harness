@@ -14,7 +14,7 @@ import { channelDir, nextSessionNumber, readNotices } from '../../bin/lib/channe
 import { harnessHome } from '../../bin/lib/home.mjs';
 import { hostUpdateRow, readHostVersions } from '../../bin/lib/host-update.mjs';
 import { CODE_CHANGELOG, DESKTOP_CHANGELOG, checkReview, cutSpan, diffTools, draftReview, entriesBetween, hostTools, parseChangelog, parseToolList, renderBrief, renderToolList, surfaceRefusal, watchLine, watchOpened, watchTitle } from '../lib/host-watch.mjs';
-import { ruleOf } from '../../bin/lib/rules.mjs';
+import { claudeHome } from '../../bin/lib/model-home.mjs';
 import { mainCheckout, projectCode, projectSlug } from '../../bin/lib/sessions.mjs';
 import { resolveProjectRoot } from '../../bin/lib/stack.mjs';
 
@@ -285,7 +285,7 @@ export async function hostWatchTick({
   // The folder the brief is written to is there before the command that writes it is handed (Codex on 34562cc).
   fs.mkdirSync(backgroundDir(home), { recursive: true });
   const brief = path.join(backgroundDir(home), `host-watch-${versions.desktop}.md`);
-  return { lines: [], told: watchLine({ change, version: versions.desktop, title: watchTitle(next(), versions.desktop), brief, effort: ruleOf('session-effort').value, home }) };
+  return { lines: [], told: watchLine({ change, version: versions.desktop, title: watchTitle(next(), versions.desktop), brief, effort: claudeHome().effort, home }) };
 }
 
 /** The command. The seams are the output, the versions read now (`host`), the reviewed record (`reviewed`), the
