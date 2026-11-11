@@ -167,12 +167,18 @@ export function pruneStalePnpm({ binDir, now = Date.now, isPnpmRunning, fsys = f
  * `node_modules/.pnpm/node_modules` it makes only for a package with dependencies, and the first store path of the shim
  * was once taken for the target, so every refresh of js-harness, which has none, ended as a broken shim
  * (odd/tasks/land-two-defects.md). A shim that names the store with no path behind its own folder (a target on another
- * drive is written whole) is held by the store folders it names, which is what a prune can remove. */
+ * drive is written whole) is held by the store paths of its lines that set no `NODE_PATH`; and one that names the store
+ * only there, by the store folders it names, which is what a prune can remove. So no shim that names the store goes
+ * unchecked. */
 function shimTargets(text, cmd) {
   const run = cmd ? /\.\.\\(global\\v11\\[^"\r\n]+)/g : /\.\.\/(global\/v11\/[^"'\s]+)/g;
-  const targets = [...text.matchAll(run)].map((match) => match[1].replace(/\\/g, '/'));
-  const named = targets.length > 0 ? targets : [...text.matchAll(/global[\\/]v11[\\/]([^\\/"'\s;:]+)/g)].map((match) => `global/v11/${match[1]}`);
-  return [...new Set(named)];
+  const paths = (found) => [...new Set(found.map((one) => one.replace(/\\/g, '/')))];
+  const behind = [...text.matchAll(run)].map((match) => match[1]);
+  if (behind.length > 0) return paths(behind);
+  const whole = text.split(/\r?\n/).filter((line) => !/node_path\s*=/i.test(line))
+    .flatMap((line) => [...line.matchAll(cmd ? /global[\\/]v11[\\/][^"\r\n]+/g : /global[\\/]v11[\\/][^"'\s]+/g)].map((match) => match[0]));
+  if (whole.length > 0) return paths(whole);
+  return paths([...text.matchAll(/global[\\/]v11[\\/]([^\\/"'\s;:]+)/g)].map((match) => `global/v11/${match[1]}`));
 }
 
 /** Copies the Claude settings to `dir` as `settings-<stamp>.json`, then keeps the newest `KEEP_SETTINGS_BACKUPS` of those

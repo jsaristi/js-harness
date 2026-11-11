@@ -418,17 +418,25 @@ test('pruneStalePnpm names a shim of pnpm 12 whose store folder the prune remove
   assert.deepEqual(pruneStalePnpm({ binDir: bin, now: () => NOW, isPnpmRunning: () => false }).broken, ['js-harness']);
 });
 
-// A shim that names the store with no path behind its own folder (a target on another drive is written whole): it is
-// held by the store folders it names, which is what a prune can remove, so it never goes unchecked.
-test('pruneStalePnpm holds a shim that names its target whole by the store folder it names', () => {
+// A shim that names the store with no path behind its own folder (a target on another drive is written whole) never
+// goes unchecked: it is held by the store paths its other lines name, the ones that set `NODE_PATH` aside, and one
+// that names the store only there by the store folders, which is what a prune can remove (the verifier of e0e2755a).
+test('pruneStalePnpm holds a shim that names its target whole by that target, and one that names only NODE_PATH by its store folder', () => {
   const home = path.join(tempDir('js-harness-prune-whole-'), 'pnpm');
   const bin = path.join(home, 'bin');
+  const [kept, hollow, gone] = ['a1b2c3-0123456789abcdef-0', 'b1b2c3-0123456789abcdef-0', '0000aa-0000000000000000-9'];
   fs.mkdirSync(bin, { recursive: true });
-  fs.mkdirSync(path.join(home, 'global', 'v11', 'a1b2c3-0123456789abcdef-0'), { recursive: true });
-  const whole = (id) => `#!/bin/sh\nexport NODE_PATH="/somewhere/pnpm/global/v11/${id}/node_modules/.pnpm/node_modules"\nexec node "/somewhere/pnpm/global/v11/${id}/node_modules/x/bin/x.mjs" "$@"\n`;
-  fs.writeFileSync(path.join(bin, 'kept'), whole('a1b2c3-0123456789abcdef-0'));
-  fs.writeFileSync(path.join(bin, 'gone'), whole('0000aa-0000000000000000-9'));
-  assert.deepEqual(pruneStalePnpm({ binDir: bin, now: () => NOW, isPnpmRunning: () => false }).broken, ['gone']);
+  fs.mkdirSync(path.join(home, 'global', 'v11', kept, 'node_modules', 'x', 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'global', 'v11', kept, 'node_modules', 'x', 'bin', 'x.mjs'), '');
+  fs.mkdirSync(path.join(home, 'global', 'v11', hollow, 'node_modules'), { recursive: true });
+  const nodePath = (id) => `export NODE_PATH="/somewhere/pnpm/global/v11/${id}/node_modules/.pnpm/node_modules"\n`;
+  const whole = (id) => `#!/bin/sh\n${nodePath(id)}exec node "/somewhere/pnpm/global/v11/${id}/node_modules/x/bin/x.mjs" "$@"\n`;
+  fs.writeFileSync(path.join(bin, 'kept'), whole(kept));
+  fs.writeFileSync(path.join(bin, 'hollow'), whole(hollow));
+  fs.writeFileSync(path.join(bin, 'gone'), whole(gone));
+  fs.writeFileSync(path.join(bin, 'only-path'), `#!/bin/sh\n${nodePath(hollow)}exec node "$elsewhere/x.mjs" "$@"\n`);
+  fs.writeFileSync(path.join(bin, 'only-path-gone'), `#!/bin/sh\n${nodePath(gone)}exec node "$elsewhere/x.mjs" "$@"\n`);
+  assert.deepEqual(pruneStalePnpm({ binDir: bin, now: () => NOW, isPnpmRunning: () => false }).broken.sort(), ['gone', 'hollow', 'only-path-gone']);
 });
 
 test('refreshCopy ends 0 on the shims pnpm 12 writes, and 6 with PRUNE BROKE when the copy they run is gone after the prune', async () => {
