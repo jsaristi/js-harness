@@ -18,7 +18,19 @@ function bytesAt(target, readFile) {
   }
 }
 
+/** Where the copy of a file that was at `target` before the harness first wrote there is kept: beside it, named by
+ * what it is and by its bytes, so a second copy of the same text lands on the first and one of another text never
+ * writes over it. No host reads a file of that name as a skill, an agent or a prompt. */
+function copyPathOf(target, there) {
+  return `${target}.before-js-harness-${sha256(there).slice(0, 8)}`;
+}
+
 /** Writes `content` to `target` and returns its record, `{ path, sha256, skipped: false }`, unless:
+ * - there is no `previous` record and a file with other bytes is already there: it is not the harness's, so a copy
+ *   of it is kept first (`copyPathOf`), named in the record as `replaced` for `install` to say, and when the file
+ *   cannot be read or the copy cannot be made nothing is written, `null`, as for a write that fails (the audit's L3:
+ *   a first install wrote over it with no copy). The copy is the person's file under another name: `uninstall`
+ *   leaves it, deleting it undoes it, and a later run's record no longer names it;
  * - `previous`, the record of the last run, says install wrote it, and the file there now holds neither those bytes
  *   nor `content`: the user changed it, so it is left, and its record is carried forward with the recorded hash,
  *   which `uninstall` then reads as theirs, marked `edited` and `skipped` (not written this run);
@@ -31,17 +43,20 @@ function bytesAt(target, readFile) {
 export function writeComponent(target, content, previous, writeFile = fs.writeFileSync, readFile = fs.readFileSync) {
   let there = null;
   try {
-    there = previous ? bytesAt(target, readFile) : null;
+    there = bytesAt(target, readFile);
   } catch (err) {
-    return { path: previous.path, sha256: previous.sha256, skipped: true, reason: `not readable (${err.code ?? err.message})` };
+    return previous ? { path: previous.path, sha256: previous.sha256, skipped: true, reason: `not readable (${err.code ?? err.message})` } : null;
   }
-  if (there !== null && sha256(there) !== previous.sha256 && sha256(there) !== sha256(content)) {
+  const other = there !== null && sha256(there) !== sha256(content);
+  if (previous && other && sha256(there) !== previous.sha256) {
     return { path: previous.path, sha256: previous.sha256, skipped: true, edited: true, reason: 'changed since it was written' };
   }
   try {
     fs.mkdirSync(path.dirname(target), { recursive: true });
+    const replaced = !previous && other ? copyPathOf(target, there) : null;
+    if (replaced && !fs.existsSync(replaced)) writeFile(replaced, there);
     writeFile(target, content, 'utf8');
-    return { path: target, sha256: sha256(content), skipped: false };
+    return { path: target, sha256: sha256(content), skipped: false, ...(replaced && { replaced }) };
   } catch (err) {
     return previous ? { path: previous.path, sha256: previous.sha256, skipped: true, reason: err.message } : null;
   }

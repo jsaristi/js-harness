@@ -11,14 +11,32 @@ const TARBALL_RE = /^js-harness-(\d+\.\d+\.\d+)\.tgz$/;
  * `vendor-snapshot` is no release for either. */
 export const VERSION_TAG_REF = /^refs\/tags\/v(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]*)?)$/;
 
-/** Compares two "x.y.z" versions. Returns -1, 0, or 1. No pre-release/build metadata support. */
+/** The parts of a version the order reads: its three numbers, and the identifiers of its prerelease (`-rc.1`), an
+ * empty list for a release. Build metadata (`+…`) is no part of the order. */
+function orderOf(version) {
+  const [core, ...pre] = version.split('+')[0].split('-');
+  return { numbers: core.split('.').map(Number), pre: pre.length > 0 ? pre.join('-').split('.') : [] };
+}
+
+/** Compares two versions, "x.y.z" with an optional prerelease, by semver's precedence (semver.org, item 11), which
+ * `VERSION_TAG_REF` below needs since it accepts a prerelease tag: -1, 0 or 1. The three numbers first; then a
+ * prerelease is older than its release, and two prereleases compare identifier by identifier, numbers as numbers
+ * and older than words, words by their characters, the shorter list older when the rest is equal. */
 export function compareSemver(a, b) {
-  const pa = a.split('.').map(Number);
-  const pb = b.split('.').map(Number);
+  const [va, vb] = [orderOf(a), orderOf(b)];
   for (let i = 0; i < 3; i++) {
-    if (pa[i] !== pb[i]) return pa[i] > pb[i] ? 1 : -1;
+    if (va.numbers[i] !== vb.numbers[i]) return va.numbers[i] > vb.numbers[i] ? 1 : -1;
   }
-  return 0;
+  if (va.pre.length === 0 || vb.pre.length === 0) return Math.sign(vb.pre.length - va.pre.length);
+  for (let i = 0; i < Math.min(va.pre.length, vb.pre.length); i++) {
+    const [ia, ib] = [va.pre[i], vb.pre[i]];
+    if (ia === ib) continue;
+    const [na, nb] = [/^\d+$/.test(ia), /^\d+$/.test(ib)];
+    if (na && nb) return Number(ia) > Number(ib) ? 1 : -1;
+    if (na !== nb) return na ? -1 : 1;
+    return ia > ib ? 1 : -1;
+  }
+  return Math.sign(va.pre.length - vb.pre.length);
 }
 
 /** True when `candidate` is strictly newer than `current`. */

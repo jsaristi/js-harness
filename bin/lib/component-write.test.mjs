@@ -81,3 +81,69 @@ test('a failed write carries a record forward, and gives nothing for a file neve
     s.done();
   }
 });
+
+// A first install wrote over whatever was at a component's path and kept no copy (the audit's L3): a file `uninstall`
+// had left as the person's, or one of their own under the same name, was lost on the next install.
+test('a file with no record that holds other text is copied beside itself before it is written over', () => {
+  const s = scratch();
+  try {
+    fs.mkdirSync(path.dirname(s.file), { recursive: true });
+    fs.writeFileSync(s.file, 'his own text');
+    const copy = `${s.file}.before-js-harness-${sha256('his own text').slice(0, 8)}`;
+    assert.deepEqual(writeComponent(s.file, 'v2', undefined), { path: s.file, sha256: sha256('v2'), skipped: false, replaced: copy });
+    assert.equal(fs.readFileSync(s.file, 'utf8'), 'v2');
+    assert.equal(fs.readFileSync(copy, 'utf8'), 'his own text');
+    // The same text put back and installed again: the copy is already there, and is not made twice.
+    fs.writeFileSync(s.file, 'his own text');
+    assert.deepEqual(writeComponent(s.file, 'v3', undefined), { path: s.file, sha256: sha256('v3'), skipped: false, replaced: copy });
+    assert.deepEqual(fs.readdirSync(path.dirname(s.file)).sort(), ['SKILL.md', path.basename(copy)]);
+  } finally {
+    s.done();
+  }
+});
+
+test('a file with no record that already holds the text to write gets no copy', () => {
+  const s = scratch();
+  try {
+    fs.mkdirSync(path.dirname(s.file), { recursive: true });
+    fs.writeFileSync(s.file, 'v2');
+    assert.deepEqual(writeComponent(s.file, 'v2', undefined), { path: s.file, sha256: sha256('v2'), skipped: false });
+    assert.deepEqual(fs.readdirSync(path.dirname(s.file)), ['SKILL.md']);
+  } finally {
+    s.done();
+  }
+});
+
+test('a file with no record is left as it is when its copy cannot be made, or when it cannot be read', () => {
+  const s = scratch();
+  try {
+    fs.mkdirSync(path.dirname(s.file), { recursive: true });
+    fs.writeFileSync(s.file, 'his own text');
+    const noCopy = (target, ...rest) => {
+      if (target !== s.file) throw new Error('ENOSPC: no space left');
+      fs.writeFileSync(target, ...rest);
+    };
+    assert.equal(writeComponent(s.file, 'v2', undefined, noCopy), null);
+    assert.equal(fs.readFileSync(s.file, 'utf8'), 'his own text');
+    const unreadable = () => {
+      throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+    };
+    assert.equal(writeComponent(s.file, 'v2', undefined, fs.writeFileSync, unreadable), null);
+    assert.equal(fs.readFileSync(s.file, 'utf8'), 'his own text');
+  } finally {
+    s.done();
+  }
+});
+
+test('a recorded file is never copied: its record says the harness wrote it', () => {
+  const s = scratch();
+  try {
+    fs.mkdirSync(path.dirname(s.file), { recursive: true });
+    fs.writeFileSync(s.file, 'v1');
+    const previous = { path: s.file, sha256: sha256('v1'), skipped: false };
+    assert.deepEqual(writeComponent(s.file, 'v2', previous), { path: s.file, sha256: sha256('v2'), skipped: false });
+    assert.deepEqual(fs.readdirSync(path.dirname(s.file)), ['SKILL.md']);
+  } finally {
+    s.done();
+  }
+});

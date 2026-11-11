@@ -474,6 +474,38 @@ test('upgradeMain installs the resolved spec and syncs the newly installed binar
   }
 });
 
+// The sync runs piped, so what it said was lost and only its exit code reached the person (the audit's M30).
+test('upgradeMain prints what the sync after upgrade said when it fails, and why one could not start', async () => {
+  const home = makeTmpDir('js-harness-upgrade-home-syncfail-');
+  const prefix = makeTmpDir('js-harness-upgrade-prefix-syncfail-');
+  const source = makeSource(NEWER);
+  try {
+    const binDir = path.join(prefix, 'lib', 'node_modules', 'js-harness', 'bin');
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.writeFileSync(path.join(binDir, 'js-harness.mjs'), '// stub, never executed in this test');
+    const failing = (answer) => (cmd, args) => {
+      if (args.includes('sync')) return answer;
+      return { status: 0, stdout: args.includes('--version') ? `${NEWER}\n` : '', stderr: '' };
+    };
+    const argv = ['--source', source, '--prefix', prefix, '--home', home];
+
+    const said = await runCommand(upgradeMain, argv, {}, failing({ status: 3, stdout: 'wrote 4 files\n', stderr: 'the machine manifest does not parse: fix it\nsecond line\n' }), 'linux');
+    assert.equal(said.code, 3);
+    assert.deepEqual(said.err.split('\n').slice(-4), ['wrote 4 files', 'the machine manifest does not parse: fix it', 'second line', 'sync after upgrade failed: exited 3']);
+
+    const silent = await runCommand(upgradeMain, argv, {}, failing({ status: 2, stdout: '', stderr: '' }), 'linux');
+    assert.equal(silent.err.split('\n').at(-1), 'sync after upgrade failed: exited 2, and it said nothing');
+
+    const unstarted = await runCommand(upgradeMain, argv, {}, failing({ status: null, error: new Error('spawn node ENOENT') }), 'linux');
+    assert.equal(unstarted.code, 1);
+    assert.equal(unstarted.err.split('\n').at(-1), 'sync after upgrade failed: it could not start (spawn node ENOENT)');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(prefix, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true });
+  }
+});
+
 test('upgradeMain uses the POSIX --prefix layout (lib/node_modules) for the synced bin', async () => {
   const home = makeTmpDir('js-harness-upgrade-home-posix-');
   const prefix = makeTmpDir('js-harness-upgrade-prefix-posix-');

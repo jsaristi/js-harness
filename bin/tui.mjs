@@ -54,7 +54,8 @@ const MENU_LABELS = {
 // remote server asks too: the sessions the phone opened through it end with it.
 const CONFIRM_PROMPTS = {
   'uninstall-project': 'Undo js-harness in this project? It removes what init recorded in this clone and keeps the files you edited and the machine install. (y/N)',
-  'uninstall-machine': 'Uninstall js-harness from this home? It removes what install recorded and the folders js-harness keeps here, and keeps the files you edited, the memory snapshots, the throughput records and the program. (y/N)',
+  // It names each folder `uninstall` removes (the audit's M36); bin/tui.test.mjs holds the names to what it does.
+  'uninstall-machine': "Uninstall js-harness from this home? It removes what install recorded, the background sessions it started that are idle and hold no files, and these folders of .js-harness: gate, gate-log and gate-first (the gates' lock, log and tickets), channel (the sessions' notices), remote (the remote server's log), background (the record and briefs of those sessions) and memory-hygiene without its snapshots. It keeps the files you edited, the memory snapshots, the throughput records, every other folder of .js-harness and the program. (y/N)",
   'uninstall-snapshots': 'Uninstall js-harness from this home and remove the memory snapshots, the only copy of what a pass changed? It keeps the files you edited, the throughput records and the program. (y/N)',
   // It names the snapshots too (release-095 S5, Pregunta 17).
   'uninstall-everything': "Remove everything js-harness keeps on this machine: the whole .js-harness folder of this home (the lead's notes, the backups, the memory snapshots) and the js-harness program itself? It keeps the projects' files. This cannot be undone. (y/N)",

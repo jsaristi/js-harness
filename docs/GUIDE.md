@@ -61,7 +61,7 @@ The Uninstall submenu:
 | Kind | Removes | Keeps |
 |---|---|---|
 | Project (inside a project `init` touched) | what `init` recorded in this clone | files you edited, the machine install |
-| Machine | what `install` recorded, and the folders js-harness keeps in the home | files you edited, the memory snapshots, the throughput records, the program |
+| Machine | what `install` recorded; the background sessions it started that are idle and hold no files; and, of `.js-harness`, the folders `gate`, `gate-log`, `gate-first`, `channel`, `remote`, `background` and `memory-hygiene` without its snapshots | files you edited, the memory snapshots, the throughput records, every other folder of `.js-harness`, the program |
 | Machine + memory snapshots | the same, and the memory snapshots | the throughput records, the program |
 | Everything | the same, the whole `.js-harness` folder and the program; cannot be undone | projects' files |
 
