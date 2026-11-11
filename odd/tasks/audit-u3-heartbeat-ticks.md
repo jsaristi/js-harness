@@ -112,7 +112,7 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
   dispatcher. Route: inline. Commit: `feat(workshop): ticks --hook says when the heartbeat's ticks stopped`
 - [x] T2 (kind: build) spec 2, 5: `.claude/settings.json`, its test and the `workshop` cell of `HOOK_CEILINGS`, with
   the measured time. His word: question 245 (L8). Route: inline. Commit: its own pull request, after T1's landed
-- [ ] T3 (kind: verify) Codex and the lenses on each code commit; `npm run check`; the pull request; the ready notice.
+- [x] T3 (kind: verify) Codex and the lenses on each code commit; `npm run check`; the pull request; the ready notice.
 
 ## Log
 - L1 (2026-11-10, the lead's brief `2026-11-10T06-31-36-662Z-8f2df985.md`): "Yours: exactly what the unit lists and
@@ -218,11 +218,17 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
   with that proxy from `workshop/bin` against the real home: exit 0, stderr 0 bytes, 4,655 and 5,481 ms, most of it
   git's two refused connections, under the 5 s that bounds each and the 15 s of the timeout. 66 of 66 passed.
 
+- L14 (2026-11-11): reviews of `bb04ec83`. Codex (89,131 input tokens): "the patch is correct" (0.92), no finding;
+  the reliability lens (5,727 input tokens): 0 findings, its follow-up fixed. `js-harness check --push`: the
+  `codex-review` and `lens-review` rows pass over the four code commits. Pushed; pull request 815 opened as a draft.
+  `js-harness notify --to orchestrator --kind ready --pr 815` was refused, "PR 815 is a draft". The lead's note of
+  01:00 local (the lead's claim): "leave PR 815 as it is. The lead marks it ready itself when it lands it [...]
+  Finish your summary and send the closed notice; no ready notice is needed." So T3 closes with no ready notice on
+  record for 815, by the lead's word.
+
 ## Next step
-For a resume (2026-11-11): the fix of L11 (`7a343c87`), the lens's three findings of L12 (`5900c32a`) and its
-follow-up of L13 (the commit after it, tests only) are committed. Left, in order: `js-harness check --push`, and
-the review it names over the last commit, one at a time; push,
-the pull request for T2 as a draft the lead marks ready (never mark it ready here), `js-harness notify --to
-orchestrator --kind ready --pr <n>`, the summary in `docs/sessions/` (`js-harness summary template`), committed and
-pushed, then `notify --kind closed --summary <file>`. The snapshot of the day is the lead's: the heartbeat must run
-`node workshop/js-harness-workshop.mjs loop heartbeat`.
+For a resume (2026-11-11): nothing is left to build. Pull request 815 is open as a draft, reviewed at the door
+(L14); the lead marks it ready and lands it, and no ready notice is owed. The summary is
+`docs/sessions/2026-11-11-jh-166-audit-unit-3-the-heartbeat-s-ticks.md`; once it is committed and pushed,
+`js-harness notify --to orchestrator --kind closed --summary <that file>` closes the session. The snapshot of the day
+is the lead's: the heartbeat must run `node workshop/js-harness-workshop.mjs loop heartbeat`.
