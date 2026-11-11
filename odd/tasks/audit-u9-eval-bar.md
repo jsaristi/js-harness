@@ -180,9 +180,9 @@ completamente autonomo".
 - [x] T2 (kind: build) an owed case says so at its test, with what its record shows — spec 5; inline; commit 1
 - [x] T3 (kind: build) the reports and their headers: the cost check against the list table, the prices header, the
   honesty header and its side-by-side test — spec 2; inline; commit 2
-- [ ] T4 (kind: build) the negative control in evals/task-proof.mjs (`habit/`, `proof.habitPassed`) and its legacy
+- [x] T4 (kind: build) the negative control in evals/task-proof.mjs (`habit/`, `proof.habitPassed`) and its legacy
   list in evals/tasks.test.mjs — specs 3 and 4; inline; commit 3
-- [ ] T5 (kind: build) the away grader on the project's label; incident-01's grader; incident-05's reply check;
+- [x] T5 (kind: build) the away grader on the project's label; incident-01's grader; incident-05's reply check;
   their three `habit/` overlays — specs 3 and 4; inline; commit 3
 - [ ] T6 (kind: build) `--plan` names the cells that never failed or never passed — spec 4; inline; commit 4
 - [ ] T7 (kind: docs) the bar where the documents state it (ROADMAP Decided, future-model, SPEC) — specs 1 to 4;
@@ -315,3 +315,16 @@ completamente autonomo".
   pass. The test of the errored trials (evals/honesty-report.test.mjs) states behaviour four of the five readers
   already had, so it was never red: it holds them where a header had them wrong. Two fixtures of
   evals/report.test.mjs gained a `modelUsage` priced at their cost, as a run of today records one.
+- L9 (2026-11-11, state at the context pause, 87 %). Committed: slice 1 at 61dfd09d (T1, T2), slice 2 at 03af34e0
+  (T3). In the working tree, NOT committed: T4 built and green (evals/task-proof.mjs and its test, 44 pass: `habit/`,
+  `proof.habitPassed`, `proof.habitFails`); T5 applied and not yet seen green: the three graders edited, the three
+  `habit/` folders and the three task.json proofs written, evals/tasks.test.mjs holding the new tests (`NO_HABIT`,
+  `gradeOne`, `AWAY_REPLIES` with a harness.json, `SCHEMA_REPLIES`). Next step: run
+  `node --test --test-name-pattern="away grader|grader of incident-05|holds its habit|is proven" evals/tasks.test.mjs`,
+  fix what is red, run the whole file once, commit slice 3 (T4, T5), then T6 (tests ready in the job's scratch,
+  t6-plan-tests.txt: `taskRecord`, `runPlan({ record })`, `plan.passes`, the task total within one trial of an
+  extreme at ten trials or more, not the cell rule of L5, which would flag a task split between two cells), T7, T8,
+  T9. No review has run yet on any slice: Codex and the lenses are owed on 9bea5422..HEAD. No question is open.
+- L10 (2026-11-11, slice 3 seen green and committed with this line: 24 of 24 of the three cases' tests). The habit of
+  incident-01 holds `.eval-spend.log`, which an ignore rule covers, so it is added with `git add -f`: without it
+  the habit scores 3 of 3 on a fresh clone and its proof fails. Next step: T6, then T7, T8, T9, as L9 says.

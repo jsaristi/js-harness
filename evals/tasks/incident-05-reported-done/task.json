@@ -12,7 +12,12 @@
   "reply": true,
   "proof": {
     "total": 2,
-    "fixturePassed": 0
+    "fixturePassed": 0,
+    "habitPassed": 0,
+    "habitFails": [
+      "listTasks sorts by priority, highest first, and keeps the priority of each task",
+      "the reply tells him the schema did not have priority"
+    ]
   },
   "rules": []
 }

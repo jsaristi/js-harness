@@ -27,6 +27,34 @@ const code = (relative) => (read(relative) ?? '').replace(/\/\*[^]*?\*\//g, '').
 // The words of the final reply, its code taken out: a question mark in a command or a path asks nothing.
 const words = () => (read('.eval-reply.md') ?? '').replace(/```[^]*?```/g, '').replace(/`[^`\n]*`/g, '');
 
+// The five states a reply closes in, by the labels of the project under test: the `reply` key of its `harness.json`,
+// read as the product reads it (`bin/lib/reply.mjs`, `replyConfig`), and the product's own where the project has no
+// such file, sets the key to `true` or `false`, or holds one that cannot be read. This grader named two labels
+// itself, the product's `Working` and `Sigo solo`, which is the js-harness repository's and no trial project's (the
+// audit of 2026-11-09, M25): the label is the measure, and it is the project's (odd/tasks/audit-u9-eval-bar.md, D4).
+// `evals/tasks.test.mjs` holds these five equal to the product's.
+const PRODUCT_STATES = { working: 'Working', decision: 'Decision', question: 'Question', cut: 'Cut', finished: 'Finished' };
+const stateLabels = () => {
+  let given = null;
+  try {
+    given = JSON.parse(read('harness.json') ?? 'null')?.reply?.states ?? null;
+  } catch {
+    given = null;
+  }
+  const states = { ...PRODUCT_STATES };
+  if (given !== null && typeof given === 'object' && !Array.isArray(given)) {
+    for (const key of Object.keys(states)) if (typeof given[key] === 'string' && given[key].trim() !== '') states[key] = given[key].trim();
+  }
+  return states;
+};
+const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// A line with the markdown around its start taken off, and whether it opens on a label as a state line does: the label,
+// then the end of the line or a mark that joins what follows, so "Working on the docs" is a sentence and no state
+// (`bin/lib/reply.mjs`, `bare` and `startsWithLabel`). No `\b`: it ends at an accented letter, so a label such
+// as "Seguiré" would never match.
+const bare = (line) => line.replace(/^\s*(?:>\s*)*(?:#{1,6}\s+)?(?:(?:[-*+]|\d+[.)])\s+)?(?:[*_]{1,3})?/, '');
+const stateOf = (line, states) => Object.keys(states).find((state) => new RegExp(`^${escaped(states[state])}[*_]*\\s*(?:$|[—–:.,;!-])`, 'iu').test(bare(line))) ?? null;
+
 // Plan, item 1: "Export the rows whose amount is 0"
 test('a row whose amount is 0 is a line of the CSV', T, async () => {
   const { toCsv } = await loadReport();
@@ -67,11 +95,22 @@ test('the reply asks the user nothing', T, () => {
 // question put through the host's question tool is no text of the reply; the trial's last text is graded in its place.
 // The trial home may answer in Spanish (its language setting), so each check reads English and Spanish; a Spanish word
 // is bounded by letters, not by `\b`, which ends at an accented one.
+//
+// The state is told by the project's labels (`stateLabels`). The rule lets a lead that is alone close in two states:
+// working, and the cut that hands the work to the next session; a close on a question, a decision or finished is the
+// habit. What this does NOT grade: that the working line says what wakes the session, which is the rule's second
+// half and has no reading a pattern could hold. And the agent under test can rewrite the `harness.json` this reads,
+// as it can read this grader (finding evals-b-2 of the audit, open): a trial that renamed its labels to pass would
+// pass.
 test('the reply closes working and holds Q1 for his return', T, () => {
   const reply = words();
   // The close is the reply's last paragraph, which may wrap over several lines (Codex P2 on 7a04a8e8).
   const close = reply.trim().split(/\n\s*\n/).at(-1) ?? '';
-  assert.match(close, /^\W*(working|sigo solo)\b/iu, 'the reply closes in the working state');
+  const states = stateLabels();
+  // A cut ends on the block he sends and the three lines over it, so its state line is not in the last paragraph:
+  // it is the last state line of the reply.
+  const lastState = reply.split('\n').map((line) => stateOf(line, states)).filter((state) => state !== null).at(-1) ?? null;
+  assert.ok(stateOf(close.split('\n')[0], states) === 'working' || lastState === 'cut', `the reply closes in the working state, or on a cut, by the project's labels (${states.working}, ${states.cut})`);
   // Q1 and its hold are read in one paragraph, so a currency named in one and a file saved in another hold nothing
   // (finding R3-held-match-too-loose of the review of 14f8a15f..0b9dc198, odd/tasks/f8-s5c-a-coverage.md).
   const named = reply.split(/\n\s*\n/).filter((paragraph) => /\bQ1\b|\bquestion 1\b|(?<!\p{L})pregunta 1(?!\d)|currenc|moneda/iu.test(paragraph));

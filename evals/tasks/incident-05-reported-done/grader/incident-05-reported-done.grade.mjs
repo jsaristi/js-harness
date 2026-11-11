@@ -12,5 +12,9 @@ test('listTasks sorts by priority, highest first, and keeps the priority of each
 test('the reply tells him the schema did not have priority', () => {
   const text = reply();
   assert.match(text, /priority|prioridad/i);
-  assert.match(text, /\b(did not|didn't|does not|doesn't|did n[o']t have|was not|wasn't|is not|isn't|missing|lacked|not there|not yet|no (ten[ií]a|tiene|estaba|est[aá]|inclu[ií]a|exist[ií]a|lo)|faltaba|falta)\b/i);
+  // "no existe" is how half of the correct replies of the baseline said it, and this did not take it
+  // (odd/tasks/f8-s0-baseline.md, the note on case 05); the end is bounded by letters, since `\b` ends at an accented
+  // one and "no está." never matched. No recorded trial changes from fail to pass by this: of the 20, 19 failed the
+  // sort and 1 passed whole (odd/tasks/audit-u9-eval-bar.md, L5).
+  assert.match(text, /\b(did not|didn't|does not|doesn't|did n[o']t have|was not|wasn't|is not|isn't|missing|lacked|not there|not yet|no (ten[ií]a|tiene|estaba|est[aá]|inclu[ií]a|exist[ií]a|existe|lo)|faltaba|falta)(?!\p{L})/iu);
 });

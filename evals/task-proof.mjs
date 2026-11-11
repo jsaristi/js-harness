@@ -2,6 +2,13 @@
 // the reference solution laid over it, and an empty workspace with the runner's own grader, and lists
 // every rule the candidate breaks. A task nobody proved can score every config the same and still look
 // like a result, so `evals/tasks.test.mjs` runs this over every candidate. Zero deps, plain Node.
+//
+// The reference is the positive control: what the grader must pass. A case may also hold its negative control,
+// `habit/`: the failure the case exists to catch, laid over the fixture as the reference is, which the grader must
+// not pass. `task.json`'s proof pins what it scores (`habitPassed`) and names the hidden tests it must fail
+// (`habitFails`), so a grader that gives the failure part of the credit is seen: `incident-01-paid-eval` gave 2 of
+// 3 to a question asked after the paid run had started, in 18 of its 21 recorded trials
+// (`odd/tasks/audit-u9-eval-bar.md`, specs 3 and 4).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -80,13 +87,19 @@ async function runVisible(workspace, start) {
   return tap ? { passed: tap.pass, total: tap.tests, failed: tap.fail, error: null } : unknown('unparsable');
 }
 
+/** Lays the task's `habit/` over `workspace`, as `applyReference` lays the reference. */
+function applyHabit(taskDir, workspace) {
+  fs.cpSync(path.join(taskDir, 'habit'), workspace, { recursive: true });
+}
+
 /** Runs the five measurements side by side (each costs about a second of process cleanup on Windows, so
  * one after the other would make a proof the slowest test of the suite): the grader on the untouched
  * fixture, on the fixture plus reference, and on an empty workspace, and the visible suite on the first
  * two. The visible suites get copies of their own, never the graded ones: a visible test that writes or
  * deletes a file must not change what the hidden grader measures. Each is a fresh directory under
  * `workRoot`, and every one is removed on every path, after all have finished. A reference that is not a
- * directory is not applied: there is nothing to run.
+ * directory is not applied: there is nothing to run. A task that holds `habit/` gets a sixth, the grader on the
+ * fixture plus the habit, asked for the names of the tests that failed whatever the task records of its trials.
  *
  * Preparing a workspace is part of its own run, so a preparation that throws (a reference file that
  * cannot be laid over the fixture) is one rejected run like any other: the wait still covers every grader
@@ -113,8 +126,13 @@ async function measure(task, taskDir, workRoot, start) {
     applyReference(taskDir, dir);
     if (fs.existsSync(referenceScript)) runTaskScript(task, referenceScript, dir, childEnv());
   };
+  const habit = (dir) => {
+    fixture(dir);
+    applyHabit(taskDir, dir);
+  };
   const hasReference = isDirectory(path.join(taskDir, 'reference'));
-  const graded = (prepare) => run(prepare, (dir) => gradeWorkspace(task, dir, { runProcess: start }));
+  const hasHabit = isDirectory(path.join(taskDir, 'habit'));
+  const graded = (prepare, as = task) => run(prepare, (dir) => gradeWorkspace(as, dir, { runProcess: start }));
   // The visible suite runs in a copy that is never graded, so it sees what an agent sees.
   const visible = (prepare) => run(prepare, (dir) => runVisible(dir, start));
   try {
@@ -124,14 +142,16 @@ async function measure(task, taskDir, workRoot, start) {
       graded(() => {}),
       visible(fixture),
       hasReference ? visible(reference) : null,
+      hasHabit ? graded(habit, { ...task, recordFailed: true }) : null,
     ]);
     const failed = settled.find((outcome) => outcome.status === 'rejected');
     if (failed) throw failed.reason;
-    const [gradedFixture, gradedReference, empty, visibleFixture, visibleReference] = settled.map((outcome) => outcome.value);
+    const [gradedFixture, gradedReference, empty, visibleFixture, visibleReference, gradedHabit] = settled.map((outcome) => outcome.value);
     return {
       fixture: gradedFixture,
       reference: gradedReference,
       empty,
+      habit: gradedHabit,
       visible: { fixture: visibleFixture, reference: visibleReference },
     };
   } finally {
@@ -156,6 +176,13 @@ function checkFiles(dir, task, complain) {
     return fs.statSync(copy, { throwIfNoEntry: false })?.isFile() && fs.readFileSync(copy).equals(fs.readFileSync(path.join(referenceDir, name)));
   });
   if (identical.length > 0) complain(`reference/ holds files byte-identical to the fixture's: ${identical.map((entry) => entry.path).join(', ')}; an overlay holds only what the solution changes or adds`);
+
+  const habitDir = path.join(dir, 'habit');
+  if (isDirectory(habitDir)) {
+    if (!entries(habitDir).some((entry) => !entry.isDirectory)) complain('habit/ holds no file: it holds the files of the failure the case exists to catch');
+  } else if (fs.existsSync(habitDir)) {
+    complain('habit is not a directory');
+  }
 
   let scriptsTest;
   try {
@@ -187,17 +214,30 @@ function checkFiles(dir, task, complain) {
   if (crlf.length > 0) complain(`files with a CRLF line ending: ${crlf.map((entry) => entry.path).join(', ')}; a fixture must be the same bytes on every machine`);
 }
 
-/** `task.json`'s `proof`, or `null` after reporting that it is missing or malformed. */
+/** `task.json`'s `proof`, or `null` after reporting that it is missing or malformed. A task that holds `habit/`
+ * pins it there too, and one that holds none pins none. */
 function readProof(dir, complain) {
   const { proof } = JSON.parse(fs.readFileSync(path.join(dir, 'task.json'), 'utf8'));
   const valid = isObject(proof) && Number.isInteger(proof.total) && proof.total > 0 && Number.isInteger(proof.fixturePassed) && proof.fixturePassed >= 0 && proof.fixturePassed <= proof.total;
-  if (valid) return proof;
-  complain('task.json "proof" must be { "total": <hidden tests>, "fixturePassed": <passed on the untouched fixture> }, integers with 0 <= fixturePassed <= total');
+  if (!valid) {
+    complain('task.json "proof" must be { "total": <hidden tests>, "fixturePassed": <passed on the untouched fixture> }, integers with 0 <= fixturePassed <= total');
+    return null;
+  }
+  const pins = proof.habitPassed !== undefined || proof.habitFails !== undefined;
+  if (!isDirectory(path.join(dir, 'habit'))) {
+    if (!pins) return proof;
+    complain('task.json "proof" holds "habitPassed" or "habitFails" and the task has no habit/: they pin what the failure the case exists to catch scores');
+    return null;
+  }
+  const pinned = Number.isInteger(proof.habitPassed) && proof.habitPassed >= 0 && proof.habitPassed < proof.total
+    && Array.isArray(proof.habitFails) && proof.habitFails.length > 0 && proof.habitFails.every((name) => typeof name === 'string' && name.trim() !== '');
+  if (pinned) return proof;
+  complain('task.json "proof" of a task with habit/ must also hold "habitPassed": <hidden tests the habit passes, fewer than total> and "habitFails": [<the name of each hidden test the habit must fail>]');
   return null;
 }
 
 /** The rules that read the three graded runs and the visible suite. */
-function checkRuns({ fixture, reference, empty, visible }, proof, complain) {
+function checkRuns({ fixture, reference, empty, habit, visible }, proof, complain) {
   if (reference) {
     if (failure(reference)) complain(`fixture plus reference: the grader run failed: ${failure(reference)}`);
     else if (reference.score !== 1) complain(`fixture plus reference scores ${score(reference)}, not 1: the reference does not solve the task`);
@@ -207,7 +247,12 @@ function checkRuns({ fixture, reference, empty, visible }, proof, complain) {
   if (failure(empty)) complain(`the empty workspace's grader run failed: ${failure(empty)}; every hidden test must fail one by one there, so a missing module may fail a test but never the whole file`);
   else if (empty.passed !== 0) complain(`the empty workspace passes ${empty.passed} of ${empty.total} hidden tests: every hidden test must fail there`);
 
-  const totals = { fixture, reference, empty };
+  if (habit) {
+    if (failure(habit)) complain(`fixture plus habit: the grader run failed: ${failure(habit)}`);
+    else if (habit.score === 1) complain(`fixture plus habit scores ${score(habit)}: the grader passes the failure the case exists to catch`);
+  }
+
+  const totals = { fixture, reference, empty, habit };
   const counted = Object.entries(totals).filter(([, run]) => Number.isInteger(run?.total));
   if (new Set(counted.map(([, run]) => run.total)).size > 1) complain(`the runs disagree on the hidden test count (${counted.map(([name, run]) => `${name} ${run.total}`).join(', ')}): a whole-file failure turns a fractional score into 0`);
 
@@ -215,6 +260,12 @@ function checkRuns({ fixture, reference, empty, visible }, proof, complain) {
     const measured = counted[0]?.[1].total;
     if (measured !== undefined && proof.total !== measured) complain(`task.json proof.total is ${proof.total} but the grader ran ${measured} hidden tests; update the proof if the change is intended`);
     if (Number.isInteger(fixture.passed) && proof.fixturePassed !== fixture.passed) complain(`task.json proof.fixturePassed is ${proof.fixturePassed} but the untouched fixture passes ${fixture.passed}; update the proof if the change is intended`);
+    if (habit && Number.isInteger(habit.passed)) {
+      if (proof.habitPassed !== habit.passed) complain(`task.json proof.habitPassed is ${proof.habitPassed} but fixture plus habit passes ${habit.passed}; update the proof if the change is intended`);
+      for (const name of proof.habitFails.filter((wanted) => !(habit.failed ?? []).includes(wanted))) {
+        complain(`fixture plus habit does not fail the hidden test ${JSON.stringify(name)}, which proof.habitFails says it must: the grader gives the habit credit there, or runs no test of that name`);
+      }
+    }
   }
 
   for (const [label, run] of [['the untouched fixture', visible.fixture], ['fixture plus reference', visible.reference]]) {
@@ -224,9 +275,11 @@ function checkRuns({ fixture, reference, empty, visible }, proof, complain) {
   }
 }
 
-/** Proves the task in `taskDir`: resolves to `{ id, fixture, reference, empty, visible: { fixture, reference },
+/** Proves the task in `taskDir`: resolves to `{ id, fixture, reference, empty, habit, visible: { fixture, reference },
  * problems }`. The first three are `gradeWorkspace` results for the untouched fixture, the fixture with
- * the reference overlay, and an empty workspace; `visible` holds the fixture's own suite in the first two;
+ * the reference overlay, and an empty workspace; `habit` is the one for the fixture with the habit overlay, with
+ * the names of the tests it failed, or `null` for a task that holds none; `visible` holds the fixture's own suite
+ * in the first two;
  * `problems` is one sentence per rule broken, each naming the task, and empty when the task is proven.
  *
  * A broken candidate is reported whole, so a rule violation is never thrown, and a task that does not
@@ -245,7 +298,7 @@ export async function proveTask(taskDir, { workRoot = os.tmpdir(), runProcess: s
     task = loadTask(dir);
   } catch (err) {
     problems.push(err.message.startsWith(`task ${id}:`) ? err.message : `task ${id}: cannot be loaded: ${err.message}`);
-    return { id, fixture: null, reference: null, empty: null, visible: { fixture: null, reference: null }, problems };
+    return { id, fixture: null, reference: null, empty: null, habit: null, visible: { fixture: null, reference: null }, problems };
   }
   checkFiles(dir, task, complain);
   const proof = readProof(dir, complain);
