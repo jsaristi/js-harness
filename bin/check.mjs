@@ -37,7 +37,7 @@ import { functionsOf, harnessOfTree } from './lib/project-functions.mjs';
 import { clonePending } from './lib/project.mjs';
 import { readProjectRules as readRulesData } from './lib/codex-review-allowance.mjs';
 import { CLAUDE_MD_BUDGET, checkClaudeBudget } from './lib/claude-md-budget.mjs';
-import { compareLaunches, subagentRowLines } from './lib/subagent-check.mjs';
+import { compareLaunches, subagentRowLines, SUBAGENT_RULES } from './lib/subagent-check.mjs';
 import { dayOf, launchesOf } from './lib/subagent-count.mjs';
 import { readRecords, recordFolders } from './lib/subagent-records.mjs';
 import { testsOnCi } from './lib/ci-gate.mjs';
@@ -1632,10 +1632,6 @@ export function checkFunctionsPending(cwd, { spawn = spawnSync } = {}) {
   if (pending.length === 0) return [];
   return [{ name: 'functions', pass: true, info: true, detail: 'this clone is not what its switches ask: js-harness functions apply makes it so', lines: pending }];
 }
-
-/** The rules the sub-agent row reads, by id: a writer and an explorer, reviewer or verifier against the model of
- * the Claude home, and every launch's effort against its level. */
-const SUBAGENT_RULES = { writer: 'session-model', reader: 'session-model', effort: 'session-effort' };
 
 /** Why a rule is not in force, as `ruleHere` names it: no rules file here, or one that is not the harness's list. */
 const OFF_WHY = { elsewhere: 'this project keeps no bin/lib/rules-data.mjs', behind: "its bin/lib/rules-data.mjs is not the harness's list" };

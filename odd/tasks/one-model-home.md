@@ -382,6 +382,20 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+At 16:10, after the host compacted this session a third time (about 15:50): Codex read all seven units, each "the
+patch is correct", no finding (U5 `bb1e9ea..8673a32`, U6 `ce97742..914fc9c`, U7 `02b6f3d..4a535e3`). Lenses run
+since: U2 readability 2 findings (run `88c1cdba`), U3 reliability 3 (run `4a445cf6`), U4 risk 0, U4 reliability 1
+(run `6831a33c`). What they found and what was done, in the fix commit that carries this paragraph (U8, from
+`4a535e32`): the break of the lens in `lead-effort`'s bundle swapped `.lead` for `.effort`, which proves nothing
+once both levels are equal, and swaps to `.model` now (the three breaks of `lead-effort` seen red); the start_session
+sentence of the manifest says "each only where its rule is in force; a fork cannot set its own effort"; the ids the
+row of `check --subagents` reads have one home, `SUBAGENT_RULES` in `bin/lib/subagent-check.mjs`, with a test that
+each is a live rule. Answered as already met: the resume's message (`1a9dc1e5`), the mode line against the two
+sub-agent model rules (retired in `25355026` and `8f7a2f76`), the writer's file (at medium since `62efbcca`, a
+Markdown file a lens is not handed). Still to do: the answers recorded with `js-harness double-review answer <run>
+<lens>`; the lenses of U5 (risk, reliability: `bb1e9ea5..8673a328`), U6 (reliability: `ce97742a..914fc9c6`), U7
+(risk, reliability: `02b6f3d3..4a535e32`) and U8 (Codex and reliability); then `js-harness check --push`, the four
+branches, the push, the pull requests and the ready notices.
 At 15:10, the session at 88 % of its context: the fixes of the verifier and of the lens are `1a9dc1e5`, a seventh
 unit (U7 `02b6f3d3..1a9dc1e5`). Codex ran on U1, U2, U3 and U4: each "the patch is correct", no finding, recorded
 (U3 as `1765b5a..52824f6`, U4 as `0abb1d2..8f7a2f7`). Lenses run and answered: U1 risk and reliability, U2 risk

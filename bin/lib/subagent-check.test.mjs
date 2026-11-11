@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compareLaunches, subagentRowLines } from './subagent-check.mjs';
+import { compareLaunches, subagentRowLines, SUBAGENT_RULES } from './subagent-check.mjs';
+import { RULES as LISTED } from './rules-data.mjs';
 
 const RULES = {
   writerModel: { value: 'claude-haiku-5-5', alias: 'haiku' },
@@ -23,6 +24,16 @@ function launch(fields = {}) {
     ...fields,
   };
 }
+
+// The row of `check --subagents` reads these ids, and a retired one is in force nowhere: the row would compare
+// nothing and say so of a rule that left (the two sub-agent model rules left on 2026-11-11).
+test('the rules the sub-agent row reads are live rules of the list, a model for each side and a level', () => {
+  assert.deepEqual(Object.keys(SUBAGENT_RULES), ['writer', 'reader', 'effort']);
+  for (const [side, id] of Object.entries(SUBAGENT_RULES)) {
+    const rule = LISTED.find((listed) => listed.id === id);
+    assert.ok(rule !== undefined && rule.retired === undefined, `${side}: ${id}`);
+  }
+});
 
 test('launches all on the rules give a result and a row that say so', () => {
   const launches = [launch({ role: 'writer' }), launch({ role: 'explorer', modelRan: 'claude-sonnet-5-5' })];
