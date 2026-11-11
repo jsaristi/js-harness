@@ -141,6 +141,14 @@ export const COVERAGE = {
       "81cb012ae0fc",
       "333d9f0ffc13",
       "40257c275fdf",
+      {
+        "hash": "77e6684109fe",
+        "context": "the high-risk list, his text copied to where Codex reads it (question 4 of the audit triage, odd/tasks/high-risk-list.md): bin/lib/rules-block.test.mjs holds the copy to the kept line of bin/lib/rules-block.mjs, which the register counts in its own source, rules-block; a definition, whose obligation is in the sentences that act on it"
+      },
+      {
+        "hash": "8bb99c7e2494",
+        "context": "the high-risk list, his text copied to where Codex reads it (question 4 of the audit triage, odd/tasks/high-risk-list.md): bin/lib/rules-block.test.mjs holds the copy to the kept line of bin/lib/rules-block.mjs, which the register counts in its own source, rules-block; a definition, whose obligation is in the sentences that act on it"
+      },
       "4987d95339a1",
       "e53fceb09fb4",
       "625adc25c069",
@@ -162,7 +170,7 @@ export const COVERAGE = {
       "8390e0cec0e8",
       "7b70374575b5",
       "7774030582f5",
-      "7e910ca794b1",
+      "e9b82d54e988",
       "fbb4d5c957e3",
       "87be64196dc8",
       "49cf30e33785",
