@@ -86,7 +86,7 @@ function fakeGh({ runs = [[]], views = [], log = '', visibility: said = 'PUBLIC'
     }
     if (args[0] === 'run' && args[1] === 'cancel') return { status: 0, stdout: '', stderr: '' };
     if (args[0] === 'repo' && args[1] === 'view') {
-      const visibility = said !== null && typeof said === 'object' ? said[args[2]] : said;
+      const visibility = said !== null && typeof said === 'object' ? said[args[2].replace(/^github\.com\//, '')] : said;
       return visibility === null ? { status: 1, stdout: '', stderr: 'HTTP 401: Bad credentials' } : { status: 0, stdout: `${visibility}\n`, stderr: '' };
     }
     return { status: 1, stdout: '', stderr: `unexpected gh ${args.join(' ')}` };
@@ -114,6 +114,8 @@ test('a commit\'s gate goes to CI first whenever the project has the workflow an
     assert.equal(ciGateWanted({ cwd: p.cwd, env: { ...hook, [CI_GATE_ENV]: '0' } }), null, 'switched off');
     fs.writeFileSync(path.join(p.cwd, 'harness.json'), JSON.stringify({ functions: { remoteGate: 'off' } }));
     assert.equal(ciGateWanted({ cwd: p.cwd, env: hook }), null, 'the project keeps the trees of its commits here');
+    fs.writeFileSync(path.join(p.cwd, 'harness.json'), JSON.stringify({ functions: { remoteGate: 'on', remotegate: 'off' } }));
+    assert.equal(ciGateWanted({ cwd: p.cwd, env: hook }), null, 'a file with an error in its switches is read as off, whatever else it says');
     fs.rmSync(path.join(p.cwd, 'harness.json'));
     assert.match(ciGateWanted({ cwd: p.cwd, env: hook }), first, 'a project that says nothing is asked at the push, where its visibility is read');
     fs.writeFileSync(path.join(p.cwd, 'harness.json'), JSON.stringify({ functions: { remoteGate: 'on' } }));
@@ -151,10 +153,13 @@ test('a green run passes the gate: the staged tree went to gate/<sha>, and the b
 });
 
 // odd/tasks/publish-decision.md: what a commit's gate publishes is the project's written decision (the audit's M1).
-const VISIBILITY = ['repo', 'view', 'o/r', '--json', 'visibility', '-q', '.visibility'];
+// The repository is named with its host: `gh` asks the host of `GH_HOST` about a bare `owner/name`, which may be
+// another GitHub than the one the push goes to.
+const VISIBILITY = ['repo', 'view', 'github.com/o/r', '--json', 'visibility', '-q', '.visibility'];
 const GREEN = () => ({ runs: [[RUN]], views: [{ ...RUN, status: 'completed', conclusion: 'success' }] });
-/** What git was asked beyond reading its configuration and where the remote pushes: nothing, for a tree that stays. */
-const written = (calls) => calls.filter((args) => args[0] !== 'config' && args[0] !== 'remote');
+/** What git was asked beyond reading its configuration, where the remote pushes and where the working tree starts:
+ * nothing, for a tree that stays. */
+const written = (calls) => calls.filter((args) => args[0] !== 'config' && args[0] !== 'remote' && args.join(' ') !== 'rev-parse --show-toplevel');
 
 test('a public repository that says nothing pushes nothing: the tree of its commit stays here', async () => {
   const p = project({ remoteGate: null, ssh: true });
@@ -205,6 +210,10 @@ test('whatever does not say the repository is private keeps the tree here: a rea
     // Read as off, never as on: a switch nobody could read publishes nothing (`strict` of ./functions.mjs), and says why.
     [{ harness: '{ "functions": { "remoteGate": "yes" } }' }, 'PRIVATE', 'remoteGate reads off in harness.json (harness.json "functions"."remoteGate" must be one of "auto", "private", "on", "off"; it is "yes"), so the tree being committed was not pushed', []],
     [{ harness: '{ not json' }, 'PRIVATE', /^remoteGate reads off in harness\.json \(harness\.json is not valid JSON: .+\), so the tree being committed was not pushed$/, []],
+    // A switch misspelt is an error of the file, and a file with an error declares nothing that publishes: the
+    // default would have pushed this one to its private repository while the gate's `functions` row refused it.
+    [{ harness: '{ "functions": { "remotegate": "off" } }', ssh: true }, 'PRIVATE', /^remoteGate reads off in harness\.json \(harness\.json "functions" holds "remotegate", which is no switch; .+\), so the tree being committed was not pushed$/, []],
+    [{ harness: '{ "functions": { "remoteGate": "on", "codexreview": "on" } }' }, 'PRIVATE', /^remoteGate reads off in harness\.json \(harness\.json "functions" holds "codexreview", which is no switch; .+\), so the tree being committed was not pushed$/, []],
   ];
   for (const [declares, visibility, why, asked] of cases) {
     const p = project(declares);
@@ -272,7 +281,7 @@ test('every place the push goes to must be private: a second push URL, or a URL 
     // Both private: each is asked once, and the tree goes.
     const both = fakeGh({ ...GREEN(), visibility: { 'o/r': 'PRIVATE', 'o/open': 'PRIVATE' } });
     assert.equal(remoteGateKeeps({ cwd: two.cwd, env: { ...cleanEnv, ...identity, ...two.env }, gh: both }), null);
-    assert.deepEqual(both.calls.map((args) => args[2]), ['o/open', 'o/r']);
+    assert.deepEqual(both.calls.map((args) => args[2]), ['github.com/o/open', 'github.com/o/r']);
   } finally {
     two.done();
   }
@@ -290,6 +299,66 @@ test('every place the push goes to must be private: a second push URL, or a URL 
     assert.deepEqual(written(gitCalls), []);
   } finally {
     rewritten.done();
+  }
+});
+
+// The independent verifier, 2026-11-11, on 445a43c4 (odd/tasks/publish-decision.md, L13): three states in which a
+// tree was pushed that the switch should have kept. Each is a reading of the wrong thing: the host of a URL, the
+// GitHub that `gh` asks, the folder harness.json is read from.
+test('a URL is GitHub\'s only where git would go to github.com: a host before an "@" that is no user name is not read as one', async () => {
+  const { githubRepository } = await import('./ci-gate.mjs');
+  // What comes before "@" is a user name only while it holds no "#", "?" or "\": with one, the host is what comes
+  // before it, and "@github.com/..." is a fragment, a query or a path of that host.
+  for (const host of ['example.invalid#', 'example.invalid?', 'example.invalid\\', 'example.invalid/x', 'a b', '']) {
+    assert.equal(githubRepository(`https://${host}@github.com/o/r`), null, `https://${host}@github.com/o/r`);
+  }
+  assert.equal(githubRepository('https://github.com:8443/o/r'), null, 'another port is another server');
+  assert.equal(githubRepository('https://github.com.example.invalid/o/r'), null);
+  assert.equal(githubRepository('https://x-access-token:ghs_A1b2%40c@github.com/o/r.git'), 'o/r', 'a user and a token are still read past');
+  assert.equal(githubRepository('https://user@github.com/o/r'), 'o/r');
+  // And the gate keeps the tree of such a remote, whatever `gh` would say of the name after the "@".
+  const p = project({ remoteGate: null });
+  try {
+    git(p.cwd, 'config', '--unset', `url.${p.remote}.insteadOf`);
+    git(p.cwd, 'remote', 'set-url', 'origin', 'https://example.invalid#@github.com/o/r');
+    const gh = fakeGh({ ...GREEN(), visibility: 'PRIVATE' });
+    const gitCalls = [];
+    const result = await runCiGate(options(p, gh, clock(), { onGit: (args) => gitCalls.push(args) }));
+    assert.equal(result.ran, false);
+    assert.match(result.why, /is not a GitHub repository/);
+    assert.deepEqual(gh.calls, []);
+    assert.deepEqual(written(gitCalls), []);
+  } finally {
+    p.done();
+  }
+});
+
+test('the switch is the one at the top of the working tree, from whatever folder below it the gate is asked', async () => {
+  const p = project({ remoteGate: 'off', ssh: true });
+  try {
+    const below = path.join(p.cwd, 'packages', 'one');
+    fs.mkdirSync(below, { recursive: true });
+    const gh = fakeGh({ ...GREEN(), visibility: 'PRIVATE' });
+    const gitCalls = [];
+    const result = await runCiGate({ ...options(p, gh, clock(), { onGit: (args) => gitCalls.push(args) }), cwd: below });
+    assert.deepEqual(result, { ran: false, why: 'remoteGate reads off in harness.json, so the tree being committed was not pushed' });
+    assert.deepEqual(gh.calls, [], 'the visibility is not asked: the project said off');
+    assert.deepEqual(written(gitCalls), []);
+    assert.equal(remoteBranches(p.remote), '');
+    assert.deepEqual(remoteGateKeeps({ cwd: below, env: { ...cleanEnv, ...identity, ...p.env }, gh }), { why: 'remoteGate reads off in harness.json, so the tree being committed was not pushed', known: true });
+  } finally {
+    p.done();
+  }
+  // A folder git knows no working tree of has no harness.json to read: nothing says the tree may go.
+  const nowhere = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-gate-nowhere-'));
+  try {
+    const gh = fakeGh({ visibility: 'PRIVATE' });
+    const kept = remoteGateKeeps({ cwd: nowhere, env: { ...cleanEnv, GIT_CEILING_DIRECTORIES: path.dirname(nowhere) }, gh });
+    assert.match(kept.why, /^git could not say where the working tree of .+ starts, so its harness\.json was not read and the tree being committed was not pushed$/);
+    assert.equal(kept.known, false);
+    assert.deepEqual(gh.calls, []);
+  } finally {
+    fs.rmSync(nowhere, { recursive: true, force: true });
   }
 });
 
@@ -425,10 +494,10 @@ test('a push that fails, or a gh that cannot list runs, is no answer', async () 
     git(p.cwd, 'config', `url.${p.remote}.insteadOf`, 'https://github.com/o/r.git');
     const noGh = () => ({ status: 1, stdout: '', stderr: 'gh: To get started with GitHub CLI, please run: gh auth login' });
     const gitCalls = [];
-    const unlisted = await runCiGate(options(p, noGh, clock(), { onGit: (args) => gitCalls.push(args[0]) }));
+    const unlisted = await runCiGate(options(p, noGh, clock(), { onGit: (args) => gitCalls.push(args) }));
     assert.equal(unlisted.ran, false);
     assert.equal(unlisted.why, 'gh cannot read the runs of o/r, so nothing was pushed: gh: To get started with GitHub CLI, please run: gh auth login');
-    assert.deepEqual(gitCalls.filter((verb) => verb !== 'config'), [], 'a gh that cannot answer is found before any tree is written or pushed');
+    assert.deepEqual(written(gitCalls), [], 'a gh that cannot answer is found before any tree is written or pushed');
     assert.equal(remoteBranches(p.remote), '');
   } finally {
     p.done();

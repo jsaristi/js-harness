@@ -212,6 +212,33 @@ is a setting of his account, so this work only hands him its command.
   pushed for its gate`; (5) the session's summary (`js-harness summary path`), `js-harness notify --to orchestrator
   --kind ready --pr <n>`, then `--kind closed --summary <file>`; tick T1 to T4 with their commits (T1 `2eec546f`, T2
   `c0d570d3` and `2abc371a`).
+- L12 Steps 1 and 2 of L11 done: `445a43c4`, gate green. Codex on `2abc371..445a43c`: correct (0.93), no finding.
+  Lenses (resilience, reliability) on it: the 4 earlier findings fixed; one suggestion, answered and not changed: on
+  a failed read the line "the push ... starts their run" comes before the fallback line. That order is the one any
+  `gh` failure had before this work (`gh cannot read the runs ... so nothing was pushed`), and nothing is pushed.
+  NEXT: step 3 of L11 (the verifier), then 4 and 5.
 - L7 The hint of a commit wrapped in `js-harness gate --` and the orchestrator skill's line both said a commit's gate
   goes to GitHub "in a project that holds the workflow"; with the switch that is true only where it lets the tree be
   pushed, so both follow it: the hint claims it only where the switch reads on, the skill's line names the switch.
+- L13 T3, the independent verifier (one general-purpose sub-agent, read-only, on `445a43c4`; it ran its cases in a
+  scratch folder against bare remotes on disk and a stood-in `gh`). It found three states in which a tree was pushed
+  that the switch should have kept, each a reading of the wrong thing, and each checked by me before the fix
+  (`githubRepository` answered `o/r` for such a URL; `GH_HOST=<another host> gh repo view github.com/<o>/<r>` still
+  answers for github.com). All three taken, tests first (red: 7 of 19 in bin/lib/ci-gate.test.mjs, then 19 of 19):
+  (1) the host of a URL: what stood before `@github.com` was read as a user name whatever it held, so a URL whose
+  real host comes before a `#`, a `?` or a `\` read as GitHub's; a user name is now only the characters a URL allows
+  there. (2) the GitHub that `gh` asks: a bare `owner/name` is asked of the host of `GH_HOST`; the visibility is now
+  asked of `github.com/<owner>/<name>`. (3) the folder harness.json is read from: the gate asked from a folder below
+  the top read no switch there and fell to the default; the switch is now the one at the top of the working tree
+  (`git rev-parse --show-toplevel`), and a folder git knows no working tree of keeps the tree. Its two lesser cases:
+  a switch misspelt (`remotegate`) is an error the gate's `functions` row fails on, yet the value fell to the default
+  and the tree went to a private repository; taken, a harness.json with any error in its switches now reads off
+  here, which also makes that row's line true ("nothing is pushed ... for the remote gate"). A top-level key
+  misspelt (`Functions`) raises no error anywhere; answered, not changed: harness.json's other keys are not this
+  feature's to refuse, and such a project has the default, which publishes only where GitHub says private. What
+  held, by its runs: every other shape of the switch read off with no git write; several push URLs, `pushInsteadOf`,
+  `insteadOf`, other remote names and look-alike hosts all kept; nothing but `write-tree`, `rev-parse` and
+  `commit-tree` runs between the guard and the push; no other caller in bin/ pushes a staged tree; the land's push is
+  a fast-forward. Not guarded, and said in the pull request: an ssh alias for `github.com`, `core.sshCommand`, a
+  proxy or a hosts file sends a URL that names github.com elsewhere; those are the machine's own settings, and the
+  guard reads what git names, not where the network goes.

@@ -97,18 +97,22 @@ export function pushEnv(env) {
 }
 
 /** The `owner/name` of a GitHub repository from a remote's URL, in the forms git takes (https, ssh, scp-style), or
- * null for a URL that is not GitHub's. */
+ * null for a URL that is not GitHub's. What an https URL may hold before `@github.com` is a user and a password in
+ * the characters a URL allows there (RFC 3986, userinfo) and nothing else: with a `#`, a `?` or a `\` before the `@`
+ * the host is what comes before that character, and git goes there, not to github.com. */
 export function githubRepository(url) {
-  const match = /^(?:https?:\/\/(?:[^@/]+@)?github\.com\/|ssh:\/\/git@github\.com\/|git@github\.com:)([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(String(url).trim());
+  const match = /^(?:https?:\/\/(?:[\w.~%!$&'()*+,;=:-]+@)?github\.com\/|ssh:\/\/git@github\.com\/|git@github\.com:)([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(String(url).trim());
   return match ? `${match[1]}/${match[2]}` : null;
 }
 
-/** What the project at `cwd` says of the remote gate, as `{ value, errors }`: `on`, `private` or `off`, from the
- * harness.json of its working tree, which the gate of the same commit reads its other switches from (`checkFunctions`
- * of ../check.mjs), and what could not be read in it, which is then read as off. */
-export function remoteGateOf(cwd) {
-  const { errors, resolved } = functionsOf(harnessOfTree(cwd), { paths: [] });
-  return { value: resolved.remoteGate.value, errors };
+/** What the project whose harness.json is in `root` says of the remote gate, as `{ value, errors }`: `on`, `private`
+ * or `off`, from the file of its working tree, which the gate of the same commit reads its other switches from
+ * (`checkFunctions` of ../check.mjs), and what could not be read in it. A file with any error is read as off, an
+ * error in another switch too: a name misspelt is otherwise the default, and that gate fails at its `functions` row
+ * all the same, so nothing is pushed for a gate that cannot pass. */
+export function remoteGateOf(root) {
+  const { errors, resolved } = functionsOf(harnessOfTree(root), { paths: [] });
+  return { value: errors.length > 0 ? 'off' : resolved.remoteGate.value, errors };
 }
 
 /** The URL `remote` pushes to, as it is written (its push URL first), before git rewrites it. */
@@ -132,20 +136,29 @@ const withoutCredentials = (url) => url.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@]*
  * it be pushed for its gate: `remoteGate` on, or private with every place the push goes to (`pushDestinations`) a
  * repository GitHub says is `PRIVATE`, asked as ../backup.mjs asks it before its own push. Everything else keeps it.
  * `known` tells the two kinds apart: true for a decision (the switch off, a destination that is public, internal or
- * not GitHub's), false for a read that failed (git could not name the destinations, `gh` could not read a
- * visibility), which is a fault to log and not what the project chose. `git` runs git in the project. */
+ * not GitHub's), false for a read that failed (git could not name the working tree or the destinations, `gh` could
+ * not read a visibility), which is a fault to log and not what the project chose. `git` runs git in the project.
+ *
+ * Three readings here are of the thing itself and not of what stands for it (the independent verifier, L13 of the
+ * feature document). The switch is the one at the top of the working tree, since the tree pushed is the whole one
+ * from whatever folder below it the gate was asked. A destination is GitHub's by `githubRepository`, which reads the
+ * host git would go to. And `gh` is asked of `github.com/<owner>/<name>`: of a bare `owner/name` it asks the host of
+ * `GH_HOST`, another GitHub whose answer says nothing of where the push goes. */
 function keptHere({ cwd, remote, git, gh }) {
-  const { value, errors } = remoteGateOf(cwd);
-  if (value === 'on') return null;
   const decided = (why) => ({ why: `${why} ${KEPT}`, known: true });
   const unread = (why) => ({ why: `${why} ${KEPT}`, known: false });
+  const top = git('rev-parse', '--show-toplevel');
+  const root = top.status === 0 ? top.stdout.trim() : '';
+  if (!root) return unread(`git could not say where the working tree of ${cwd} starts, so its harness.json was not read and`);
+  const { value, errors } = remoteGateOf(root);
+  if (value === 'on') return null;
   if (value === 'off') return decided(`remoteGate reads off in harness.json${errors.length > 0 ? ` (${errors.join('; ')})` : ''}, so`);
   const urls = pushDestinations(git, remote);
   if (urls.length === 0) return unread(`git could not say where ${remote} pushes to, so nothing says it is private and`);
   const elsewhere = urls.find((url) => !githubRepository(url));
   if (elsewhere) return decided(`${remote} pushes to ${withoutCredentials(elsewhere)}, which is not a GitHub repository, so nothing says it is private and`);
   for (const repository of new Set(urls.map(githubRepository))) {
-    const seen = gh(['repo', 'view', repository, '--json', 'visibility', '-q', '.visibility'], { cwd });
+    const seen = gh(['repo', 'view', `github.com/${repository}`, '--json', 'visibility', '-q', '.visibility'], { cwd });
     const visibility = seen.status === 0 ? seen.stdout.trim() : '';
     if (!visibility) return unread(`the visibility of ${repository} could not be read (${firstLine(seen.stderr) || 'gh said nothing'}), so it is not known to be private and`);
     if (visibility !== 'PRIVATE') return decided(`${repository} reads ${visibility}, not PRIVATE, and harness.json does not turn remoteGate on (js-harness functions set remoteGate on), so`);
