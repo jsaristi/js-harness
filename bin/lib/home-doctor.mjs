@@ -51,6 +51,13 @@ function jsonOf(readFile, file) {
   }
 }
 
+/** His settings as `settingsNotes` takes them, `{ user, project }`: the user settings under `claudeDir` and the local
+ * settings of the project `project`, each the parsed object, or null when it is missing or cannot be read. Read and
+ * never written; the doctor row and `js-harness rules switch` both read them here. */
+export function readSettings({ claudeDir, project, readFile = (file) => fs.readFileSync(file, 'utf8') }) {
+  return { user: jsonOf(readFile, path.join(claudeDir, 'settings.json')), project: jsonOf(readFile, path.join(project, '.claude', 'settings.local.json')) };
+}
+
 /** The doctor row's reading, `{ state, note, fix }`, for the session `env.CLAUDE_CODE_SESSION_ID` names in the
  * project `project`, whose rules file has the text `rulesText` (null when it has none). `n/a` where the project
  * declares no home. `stale` when the app's record of the session holds another model or level than it is held to,
@@ -89,6 +96,6 @@ export function modelHomeHealth({
       fix.push(`this session's menu holds ${said(record)} and it is held to ${said(held)}; a session cannot change its own: ${who}.${line}`);
     }
   }
-  notes.push(...settingsNotes(home, { user: jsonOf(readFile, path.join(claudeDir, 'settings.json')), project: jsonOf(readFile, path.join(project, '.claude', 'settings.local.json')) }));
+  notes.push(...settingsNotes(home, readSettings({ claudeDir, project, readFile })));
   return { state: fix.length > 0 ? 'stale' : 'ok', note: notes.join('; '), fix };
 }

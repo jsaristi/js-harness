@@ -34,7 +34,7 @@ export const NOT_RECORDS = [
   { name: 'daemon.stderr.log', why: "the Codex daemon's state, read" },
   { name: 'daemon-updater.pid', why: "the Codex daemon's state, read" },
   { name: 'daemon-updater.stderr.log', why: "the Codex daemon's state, read" },
-  { name: 'prompt.md', files: ['bin/lens-review.mjs'], why: "a lens's prompt, in a temporary folder removed after the run" },
+  { name: 'prompt.md', files: ['bin/lens-review.mjs', 'bin/rules.mjs'], why: "a lens's prompt, or the prompt of a probe of `rules switch`, in a temporary folder removed after the run" },
   { name: 'schema.json', files: ['bin/double-review.mjs'], why: "the Codex reader's answer schema, in a temporary folder removed after the read" },
   { name: 'verify-export.json', why: "engram's export in a scratch home a backup check removes" },
   { name: 'ls-files', why: 'a git subcommand in a constant of arguments' },

@@ -26,7 +26,7 @@ const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
 const IN_FORCE = RULES.filter((rule) => !Object.hasOwn(rule, 'retired'));
 const SCANNED = IN_FORCE.filter((rule) => Array.isArray(rule.patterns)).map((rule) => `${rule.id} 0`);
 const PATTERNS_LINE = `patterns: ${SCANNED.length === 0 ? 'none' : SCANNED.join(', ')}; unscanned: ${IN_FORCE.length - SCANNED.length}`;
-const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] [--with <path>...] | --hook]';
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] [--with <path>...] | switch [--claude <model>@<effort>] [--lead <effort>] [--codex <model>@<effort>] --quote <session>:<line>... --reading <text> --accepted <text> [--rule-by-rule] [--dry-run] | --hook]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
 /** The coverage register `text` (the package's) with every check owed, since a project of these tests holds none of the
@@ -326,7 +326,16 @@ test('a flag, or a second word, is a usage error: exit 2, with the message and t
 test('the usage names the applied form, and a word after applied is a usage error', async () => {
   await inProject(BASE(), async (dir) => {
     assert.deepEqual(await run(['applied', 'extra'], dir), { code: 2, out: [], err: [`unknown argument: extra\n\n${USAGE}`] });
-    assert.match(USAGE, /\| applied \| coverage [^|]*(?:\| [^|]*)*\| change <id> \[--dry-run \| --check-source\] \[--with <path>\.\.\.\] \| --hook\]$/);
+    assert.match(USAGE, /\| applied \| coverage [^|]*(?:\| [^|]*)*\| change <id> \[--dry-run \| --check-source\] \[--with <path>\.\.\.\] \| switch [^|]* \| --hook\]$/);
+  });
+});
+
+test('the switch of a home is a form of its own: no home named, or a value that cannot be one, is a usage error', async () => {
+  await inProject(BASE(), async (dir) => {
+    assert.deepEqual(await run(['switch'], dir), { code: 2, out: [], err: [`rules switch names no home: give --claude <model>@<effort>, --lead <effort> or --codex <model>@<effort>\n\n${USAGE}`] });
+    const short = await run(['switch', '--claude', 'saga@high', '--quote', 'abc:1', '--reading', 'r', '--accepted', 'a'], dir);
+    assert.equal(short.code, 2);
+    assert.match(short.err[0], /not a full Claude id, claude-<family>-<version>/);
   });
 });
 

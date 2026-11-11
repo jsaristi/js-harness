@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { claudeHome } from './model-home.mjs';
+import { EFFORTS, claudeHome } from './model-home.mjs';
+import { agentCopy } from './rules-switch.mjs';
 
 // F8 S7 (odd/tasks/f8-s7-topology.md, spec 2 and 3): the agent type this repository's writers launch as. It starts a
 // writer from a small fixed context, its own prompt, six tools and none of the instruction files, on the model and at
 // the effort the rules give. The host reads only the file, so it keeps a copy of both values; this test is what holds
-// that copy to the rules, and a `rules change` of either rule edits the file in the same commit.
+// that copy to the rules, and `js-harness rules switch`, the command that changes either rule, writes the file in the
+// same pass (bin/lib/rules-switch.mjs, `agentCopy`).
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const FILE = path.join(ROOT, '.claude', 'agents', 'js-harness-writer.md');
 
@@ -28,9 +30,18 @@ function parse(text) {
 const { fields, body } = parse(fs.readFileSync(FILE, 'utf8'));
 
 test('the writer runs on the model and at the effort the rules give', () => {
-  const edit = 'edit .claude/agents/js-harness-writer.md in the same commit as the rule';
+  const edit = 'js-harness rules switch writes .claude/agents/js-harness-writer.md with the rule; a copy edited by hand is put back to the rule\'s';
   assert.equal(fields.model, claudeHome().model, `rule:session-model changed: ${edit}`);
   assert.equal(fields.effort, claudeHome().effort, `rule:session-effort changed: ${edit}`);
+});
+
+test('the copy the switch writes of the real file is the file itself while the home holds, and follows a new home', () => {
+  const text = fs.readFileSync(FILE, 'utf8');
+  const { model, effort } = claudeHome();
+  assert.equal(agentCopy(text, { model, effort }), text);
+  const [other] = EFFORTS.filter((level) => level !== effort);
+  const moved = parse(agentCopy(text, { model: 'claude-saga-9-1', effort: other }));
+  assert.deepEqual({ model: moved.fields.model, effort: moved.fields.effort, body: moved.body }, { model: 'claude-saga-9-1', effort: other, body });
 });
 
 test('the writer starts without the instruction files and with six tools', () => {

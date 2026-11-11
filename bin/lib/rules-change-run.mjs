@@ -4,11 +4,15 @@
 // repository (./rules-check.mjs), and only then
 // writes the declaration, the sources and docs/RULES.md, and appends one line to the relief file. It never commits:
 // the commit, the gate, the reviews and the pull request are the session's. It runs only in the checkout it changes.
+// `js-harness rules switch` writes the rules of a home of a model and an effort through the same pass, several at
+// once (`changeRules`): on 2026-11-10 a change of both homes was four runs, four JSON objects and four commits, with
+// no try of the new model before it was written (odd/tasks/one-model-home.md, spec 8).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { appendRelief, reliefLineOf, reliefPath } from './channel.mjs';
 import { parseRegister } from './failures.mjs';
+import { CLAUDE_HOME, CODEX_HOME } from './model-home.mjs';
 import { checkRules } from './rules-check.mjs';
 import { countFindings, isTextInForce } from './rules-scan.mjs';
 import { RuleChangeError, changedList, sourceOf } from './rules-change.mjs';
@@ -90,6 +94,16 @@ function changedPaths(porcelain) {
   return porcelain.split(/\r?\n/).filter((line) => line.trim() !== '').flatMap((line) => line.slice(3).split(' -> ')).map((file) => file.replace(/^"|"$/g, ''));
 }
 
+/** Orders declarations by id, as the list keeps them. */
+const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+// The rules of the two homes of a model and an effort, each with the flag of `js-harness rules switch` that names it.
+// `rules change` refuses a new value for one: a home's value is tried on the installed CLI before it is written, and
+// the switch is the command that tries it (odd/tasks/one-model-home.md, spec 8).
+const CLAUDE_FLAG = '--claude <model>@<effort>';
+const CODEX_FLAG = '--codex <model>@<effort>';
+const HOME_FLAGS = { [CLAUDE_HOME.model]: CLAUDE_FLAG, [CLAUDE_HOME.effort]: CLAUDE_FLAG, [CLAUDE_HOME.lead]: '--lead <effort>', [CODEX_HOME.model]: CODEX_FLAG, [CODEX_HOME.effort]: CODEX_FLAG };
+
 /**
  * Runs the change of the rule `id` in the checkout `top` and gives the exit code: 0 when it is written (or printed,
  * with `dryRun`), 1 when it is refused. `checkSource` checks the stored source of `id` again instead of a change.
@@ -99,13 +113,40 @@ function changedPaths(porcelain) {
  * the one of `slug` under `home`, and a transcript is read from `transcripts`. `rename` is fs.renameSync unless a test
  * makes it fail.
  */
-export function changeRule({ id, dryRun, checkSource, withPaths = [], top, packageRoot, readTree, git, stdin, now, home, slug, transcripts, rename = fs.renameSync }, stdout, stderr) {
+export function changeRule(options, stdout, stderr) {
+  return runPass({ ...options, changes: null }, stdout, stderr).code;
+}
+
+/**
+ * Writes several rules in one pass, for `js-harness rules switch`: the rules of a home change by one sentence of his,
+ * so they are checked together and written together, the declarations, their sources, docs/RULES.md and a relief line
+ * a rule. `changes` is `[{ id, change }]` in the order they are written, each `change` what `rules change` takes on
+ * standard input. A change that gives the value in force on origin/main is skipped and named, so the half of a home
+ * that does not change is not written; a pass that changes nothing is refused.
+ *
+ * It has two ways (odd/tasks/one-model-home.md, L13, "Claude 7"). By default every rule is written now, for one
+ * commit. With `oneAtATime`, his no to one commit for several rules, a run writes the first rule the branch does not
+ * hold yet and keeps the ones it holds, so the same command run after each commit gives a commit a rule, in order.
+ *
+ * `also(list, ids)` gives the other files of the same commit as `[[path, text]]`, from the list the pass writes and
+ * the ids it writes now: a copy a foreign reader needs. They are written, and put back, with the three files. `command`
+ * is the sub-command a refusal names and `branchName` the branch it proposes. The rest is `changeRule`'s.
+ *
+ * It gives `{ code }`, and with code 0 also `{ branch, today, written: [{ id, what, from, to }], skipped: [{ id,
+ * value }], already: [id], left: [id], files, baseList, list }`: the lists are origin/main's and the one written.
+ */
+export function changeRules(options, stdout, stderr) {
+  return runPass({ ...options, id: undefined, checkSource: false, withPaths: [] }, stdout, stderr);
+}
+
+function runPass({ id: oneId, changes, oneAtATime = false, also = () => [], command = 'change', branchName, dryRun, checkSource, withPaths = [], top, packageRoot, readTree, git, stdin, now, home, slug, transcripts, rename = fs.renameSync }, stdout, stderr) {
+  const several = changes !== null;
   try {
-    return runChange();
+    return run();
   } catch (err) {
     if (!(err instanceof RuleChangeError)) throw err;
     stderr(`not changed: ${err.message}`);
-    return 1;
+    return { code: 1 };
   }
 
   function out(args) {
@@ -114,20 +155,20 @@ export function changeRule({ id, dryRun, checkSource, withPaths = [], top, packa
     return String(result.stdout ?? '').trim();
   }
 
-  function runChange() {
+  function run() {
     if (!fs.existsSync(path.join(top, DATA)) || !samePath(top, packageRoot)) {
-      throw new RuleChangeError(`the command runs from the checkout it changes: run node bin/js-harness.mjs rules change in ${top}, not the installed command`);
+      throw new RuleChangeError(`the command runs from the checkout it changes: run node bin/js-harness.mjs rules ${command} in ${top}, not the installed command`);
     }
 
     // The branch: rule/<name>, based on origin/main.
     const branch = out(['rev-parse', '--abbrev-ref', 'HEAD']);
     if (!branch.startsWith('rule/')) {
-      throw new RuleChangeError(`it runs on a branch rule/<name> based on ${BASE}, and this is ${branch}: git switch -c rule/${id} ${BASE}`);
+      throw new RuleChangeError(`it runs on a branch rule/<name> based on ${BASE}, and this is ${branch}: git switch -c rule/${branchName ?? oneId} ${BASE}`);
     }
     // The change is read now and refused for its shape later, where it always was. A turn to refuse is counted on
     // origin/main as it is now, not on a copy fetched days ago (T16d), so it fetches before origin/main is read. A dry
     // run moves no ref: it reads the origin/main this clone holds, and says so.
-    const input = checkSource ? null : stdin();
+    const input = several || checkSource ? null : stdin();
     let peeked = null;
     try {
       peeked = input === null ? null : JSON.parse(input);
@@ -148,7 +189,7 @@ export function changeRule({ id, dryRun, checkSource, withPaths = [], top, packa
     // The list and the sources in force, from origin/main.
     const base = rulesOfText(out(['show', `${BASE}:${DATA}`]));
     const baseSources = JSON.parse(out(['show', `${BASE}:${SOURCES}`]));
-    const before = base.find((rule) => rule.id === id);
+    const inBase = (id) => base.find((rule) => rule.id === id);
 
     // The one open change: another rule/ branch holding a declaration it changed that origin/main does not hold.
     // Only the ids a branch changed since its merge base count, so a branch landed by a merge (its tip is the base)
@@ -180,24 +221,57 @@ export function changeRule({ id, dryRun, checkSource, withPaths = [], top, packa
       }
     }
 
-    // The list the change starts from: this branch's, so a second id on it keeps the first, with the declaration of
-    // `id` taken from origin/main, so a run again on an id corrects it instead of stacking on a value never in force.
     const head = rulesOfText(out(['show', `HEAD:${DATA}`]));
     const headSources = JSON.parse(out(['show', `HEAD:${SOURCES}`]));
-    const start = [...head.filter((rule) => rule.id !== id), ...(before === undefined ? [] : [before])].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+    // Which rules this pass writes. One rule: the id given. Several: every change but one that gives the value in
+    // force, which is skipped and named; and, a rule at a time, only the first the branch does not hold yet.
+    let items = several ? [] : [{ id: oneId, change: null }];
+    const skipped = [];
+    let already = [];
+    let left = [];
+    if (several) {
+      const changing = [];
+      for (const item of changes) {
+        const before = inBase(item.id);
+        if (before !== undefined && Object.hasOwn(before, 'value') && before.value === item.change.value) skipped.push({ id: item.id, value: before.value });
+        else changing.push({ id: item.id, change: item.change });
+      }
+      if (changing.length === 0) throw new RuleChangeError(`nothing changes: ${skipped.map((one) => `${one.id} is ${one.value}`).join(' and ')} on ${BASE} already`);
+      items = changing;
+      if (oneAtATime) {
+        const pending = changing.filter((item) => head.find((rule) => rule.id === item.id)?.value !== item.change.value);
+        already = changing.filter((item) => !pending.includes(item)).map((item) => item.id);
+        if (pending.length === 0) throw new RuleChangeError(`every rule named is on ${branch} already (${already.join(', ')}): nothing is left to write`);
+        items = [pending[0]];
+        left = pending.slice(1).map((item) => item.id);
+      }
+    }
+    const ids = items.map((item) => item.id);
+
+    // The list the change starts from: this branch's, so a second id on it keeps the first, with the declaration of
+    // each id it writes taken from origin/main, so a run again on an id corrects it instead of stacking on a value
+    // never in force.
+    const start = [...head.filter((rule) => !ids.includes(rule.id)), ...ids.map(inBase).filter((rule) => rule !== undefined)].sort(byId);
     const startSources = { ...headSources };
-    if (Object.hasOwn(baseSources, id)) startSources[id] = baseSources[id];
-    else delete startSources[id];
+    for (const id of ids) {
+      if (Object.hasOwn(baseSources, id)) startSources[id] = baseSources[id];
+      else delete startSources[id];
+    }
     const today = dayOf(now());
 
-    let change = null;
-    if (!checkSource) {
+    if (!several && !checkSource) {
+      let change;
       try {
         change = JSON.parse(input);
       } catch {
         throw new RuleChangeError('the change on standard input is not JSON');
       }
       if (change === null || typeof change !== 'object' || Array.isArray(change)) throw new RuleChangeError('the change is a JSON object');
+      if (Object.hasOwn(change, 'value') && Object.hasOwn(HOME_FLAGS, oneId)) {
+        throw new RuleChangeError(`"${oneId}" is a rule of a home of a model and an effort, and a home's new value is tried on the installed CLI before it is written: js-harness rules switch ${HOME_FLAGS[oneId]}, with his words; a change of its form, its patterns or its subject still runs here`);
+      }
+      items[0].change = change;
     }
 
     // What the keys of the row `rules` are checked against: the entries of the register on this branch, and the
@@ -210,25 +284,38 @@ export function changeRule({ id, dryRun, checkSource, withPaths = [], top, packa
       return countFindings([rule], mainTexts).counts[rule.id] ?? 0;
     };
 
-    let changed;
+    // Each change in its turn, on the list the one before it gave.
+    let list = checkSource ? head : start;
     try {
-      changed = checkSource ? { list: head, rule: head.find((item) => item.id === id), what: 'source checked' } : changedList(start, id, change, { today, failures, countOf });
+      for (const item of items) {
+        item.before = inBase(item.id);
+        if (checkSource) {
+          item.rule = head.find((rule) => rule.id === item.id);
+          item.what = 'source checked';
+          continue;
+        }
+        const changed = changedList(list, item.id, item.change, { today, failures, countOf });
+        list = changed.list;
+        item.rule = changed.rule;
+        item.what = changed.what;
+      }
     } catch (error) {
       // A dry run fetched nothing, so a refusal it reaches may rest on an old origin/main: it says so, as its output does.
       if (error instanceof RuleChangeError && refusing && dryRun) throw new RuleChangeError(`${error.message} (${NOT_FETCHED})`);
       throw error;
     }
-    const { list, rule, what } = changed;
-    if (rule === undefined) throw new RuleChangeError(`no rule "${id}" is declared on ${branch}`);
-    if (isAgents(before?.path) || isAgents(rule.path)) {
-      throw new RuleChangeError('a phrase of AGENTS.md changes only by its approved draft (letter G), which is not built');
+    for (const { id, before, rule } of items) {
+      if (rule === undefined) throw new RuleChangeError(`no rule "${id}" is declared on ${branch}`);
+      if (isAgents(before?.path) || isAgents(rule.path)) {
+        throw new RuleChangeError('a phrase of AGENTS.md changes only by its approved draft (letter G), which is not built');
+      }
     }
 
     // The tree may differ from the branch only in the home of a text that changes with its declaration, and in the
     // paths `--with` names: what moves in the same commit as the rule, as the readers of one that retires do. A path
     // named is one that holds a change, so a misspelled one is not passed over, and never one of the three files
     // this command writes.
-    const homes = new Set([before?.path, rule.path].filter((file) => typeof file === 'string' && change !== null && (Object.hasOwn(change, 'path') || Object.hasOwn(change, 'phrases'))));
+    const homes = new Set(items.flatMap(({ before, rule, change }) => [before?.path, rule.path].filter((file) => typeof file === 'string' && change !== null && (Object.hasOwn(change, 'path') || Object.hasOwn(change, 'phrases')))));
     const named = withPaths.map((file) => path.posix.normalize(String(file).replace(/\\/g, '/')));
     const own = named.find((file) => [DATA, SOURCES, LIST].includes(file));
     if (own !== undefined) throw new RuleChangeError(`--with names ${own}, which the command writes itself`);
@@ -244,32 +331,38 @@ export function changeRule({ id, dryRun, checkSource, withPaths = [], top, packa
       throw new RuleChangeError(`the tree holds changes outside the rule's home${named.length > 0 ? ' and the paths named' : ''}: ${outside.join(', ')}${written}`);
     }
 
-    // The source, read from its transcripts and checked.
-    let given;
-    if (checkSource) {
-      const stored = headSources[id];
-      if (stored?.kind !== 'words') throw new RuleChangeError(`the source of "${id}" is not his words, so there is nothing to check against a transcript`);
-      given = { kind: 'words', quotes: stored.quotes.map((quote) => ({ session: quote.session, line: quote.line, excerpt: quote.quote })), reading: stored.reading, accepted: stored.accepted };
-    } else {
-      given = change.source;
-    }
+    // The source of each change, read from its transcripts and checked.
     const transcriptOf = (session) => {
       if (!isSessionId(session)) return null;
       const file = path.join(transcripts, `${session}.jsonl`);
       return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
     };
-    // A change of form alone (patterns or failure, nothing else) says nothing of the value, so the rule keeps the source
-    // of its value, and the relief line names where the change came from; any other change stores its own source.
-    const formOnly = change !== null && what === 'form' && Object.hasOwn(startSources, id)
-      && Object.keys(change).every((key) => key === 'set' || key === 'source')
-      && Object.keys(change.set ?? {}).length > 0 && Object.keys(change.set).every((key) => key === 'patterns' || key === 'failure');
-    // A rule of his needs his words whether it is his before the change or after it, except for a change of its form
-    // alone, which keeps his words as its source (his answer of 2026-10-16, odd/tasks/rule-hierarchy.md).
-    const owner = before?.owner === 'sebastian' ? 'sebastian' : rule.owner;
-    const source = sourceOf(given, { owner, form: formOnly, today, transcriptOf, exists: (file) => isFileOf(top, file) });
-    const stored = formOnly ? startSources[id] : source;
-    const sources = sortedKeys({ ...startSources, [id]: stored });
-    const sourceSaid = formOnly ? `${source.kind}${source.kind === 'design' ? ` ${source.path}` : ''}, the rule's own source kept` : source.kind;
+    let sources = { ...startSources };
+    for (const item of items) {
+      const { id, before, rule, change, what } = item;
+      let given;
+      if (checkSource) {
+        const stored = headSources[id];
+        if (stored?.kind !== 'words') throw new RuleChangeError(`the source of "${id}" is not his words, so there is nothing to check against a transcript`);
+        given = { kind: 'words', quotes: stored.quotes.map((quote) => ({ session: quote.session, line: quote.line, excerpt: quote.quote })), reading: stored.reading, accepted: stored.accepted };
+      } else {
+        given = change.source;
+      }
+      // A change of form alone (patterns or failure, nothing else) says nothing of the value, so the rule keeps the source
+      // of its value, and the relief line names where the change came from; any other change stores its own source.
+      const formOnly = change !== null && what === 'form' && Object.hasOwn(startSources, id)
+        && Object.keys(change).every((key) => key === 'set' || key === 'source')
+        && Object.keys(change.set ?? {}).length > 0 && Object.keys(change.set).every((key) => key === 'patterns' || key === 'failure');
+      // A rule of his needs his words whether it is his before the change or after it, except for a change of its form
+      // alone, which keeps his words as its source (his answer of 2026-10-16, odd/tasks/rule-hierarchy.md).
+      const owner = before?.owner === 'sebastian' ? 'sebastian' : rule.owner;
+      const source = sourceOf(given, { owner, form: formOnly, today, transcriptOf, exists: (file) => isFileOf(top, file) });
+      item.formOnly = formOnly;
+      item.stored = formOnly ? startSources[id] : source;
+      item.sourceSaid = formOnly ? `${source.kind}${source.kind === 'design' ? ` ${source.path}` : ''}, the rule's own source kept` : source.kind;
+      sources[id] = item.stored;
+    }
+    sources = sortedKeys(sources);
 
     // The new list, checked against the repository before anything is written.
     const dataText = writeRules(list);
@@ -279,47 +372,60 @@ export function changeRule({ id, dryRun, checkSource, withPaths = [], top, packa
     if (findings.length > 0) throw new RuleChangeError(`the new list has ${findings.length === 1 ? 'a finding' : 'findings'}:\n${findings.map((finding) => `      ${finding}`).join('\n')}`);
     const listText = renderList(list, { sources, readers: first.readers, sentences: first.sentences });
     const sourcesText = `${JSON.stringify(sources, null, 2)}\n`;
+    // The other files of the same commit, each a copy of what the list now says.
+    const copies = several ? also(list, ids) : [];
 
-    // The relief line, built and checked before any write.
+    // The relief line of each rule, built and checked before any write.
     const reliefFile = reliefPath(home, slug);
     const relief = fs.existsSync(reliefFile) ? fs.readFileSync(reliefFile, 'utf8') : '';
-    const previous = lastLineFor(relief, id);
-    const line = `rule:${id} proposed on ${branch}, not landed: ${what}; source ${sourceSaid}; supersedes ${previous === null ? 'no relief line' : `relief line ${previous}`}; declaration and source ${declarationOf(dataText, id, sources)}`;
-    try {
-      reliefLineOf(line);
-    } catch (err) {
-      throw new RuleChangeError(err.message);
+    for (const item of items) {
+      const previous = lastLineFor(relief, item.id);
+      item.line = `rule:${item.id} proposed on ${branch}, not landed: ${item.what}; source ${item.sourceSaid}; supersedes ${previous === null ? 'no relief line' : `relief line ${previous}`}; declaration and source ${declarationOf(dataText, item.id, sources)}`;
+      try {
+        reliefLineOf(item.line);
+      } catch (err) {
+        throw new RuleChangeError(err.message);
+      }
+      const { id, before, rule, what } = item;
+      item.memory = before !== undefined && Object.hasOwn(before, 'value') && what !== 'form' && what !== 'source checked'
+        ? `memory: a memory note or engram observation that states ${before.unit === undefined ? before.value : `${before.value} ${before.unit}`} for ${before.subject} is changed to point to rule:${id}; the command reads no memory`
+        : `memory: a memory note that restates "${id}" points to rule:${id}; the command reads no memory`;
+      // A rule with patterns says how many findings they have on origin/main, so a first pattern is tried by its dry run.
+      const count = !checkSource && Array.isArray(rule.patterns) ? countOf(rule) : null;
+      item.countLine = count === null ? null : `count: ${count} ${count === 1 ? 'finding' : 'findings'} of its patterns in ${BASE}'s texts in force`;
     }
-
-    const memory = before !== undefined && Object.hasOwn(before, 'value') && what !== 'form' && what !== 'source checked'
-      ? `memory: a memory note or engram observation that states ${before.unit === undefined ? before.value : `${before.value} ${before.unit}`} for ${before.subject} is changed to point to rule:${id}; the command reads no memory`
-      : `memory: a memory note that restates "${id}" points to rule:${id}; the command reads no memory`;
-
-    // A rule with patterns says how many findings they have on origin/main, so a first pattern is tried by its dry run.
-    const count = !checkSource && Array.isArray(rule.patterns) ? countOf(rule) : null;
-    const countLine = count === null ? null : `count: ${count} ${count === 1 ? 'finding' : 'findings'} of its patterns in ${BASE}'s texts in force`;
+    const skippedLines = skipped.map((one) => `skipped: ${one.id} stays ${one.value}, the value in force on ${BASE}`);
+    const writes = [[DATA, dataText], [SOURCES, sourcesText], [LIST, listText], ...copies];
+    const result = {
+      code: 0, branch, today, skipped, already, left, files: writes.map(([file]) => file), baseList: base, list,
+      written: items.map(({ id, what, before, rule }) => ({ id, what, from: before?.value, to: rule.value })),
+    };
 
     if (dryRun) {
-      stdout(JSON.stringify(list.find((item) => item.id === id), null, 2));
-      stdout(`Source: ${formOnly ? "kept, the rule's own: " : ''}${JSON.stringify(stored, null, 2)}`);
-      stdout(`Relief line: ${line}`);
-      if (refusing) stdout(NOT_FETCHED);
-      if (countLine !== null) stdout(countLine);
-      stdout(memory);
+      for (const item of items) {
+        stdout(JSON.stringify(list.find((rule) => rule.id === item.id), null, 2));
+        stdout(`Source: ${item.formOnly ? "kept, the rule's own: " : ''}${JSON.stringify(item.stored, null, 2)}`);
+        stdout(`Relief line: ${item.line}`);
+        if (refusing) stdout(NOT_FETCHED);
+        if (item.countLine !== null) stdout(item.countLine);
+        stdout(item.memory);
+      }
+      for (const line of skippedLines) stdout(line);
+      for (const [file] of copies) stdout(`also written: ${file}`);
       stdout(COST);
-      return 0;
+      return result;
     }
 
-    // The write: each file beside itself, then renamed, then the relief line; a failure puts the three back.
-    const writes = [[DATA, dataText], [SOURCES, sourcesText], [LIST, listText]];
-    let written;
+    // The write: each file beside itself, then renamed, then the relief lines; a failure puts the files back. A relief
+    // line appended before a later one failed stays: it proposes what was put back, and the next run supersedes it.
+    const reliefs = [];
     try {
       for (const [file, text] of writes) {
         const target = path.join(top, ...file.split('/'));
         fs.writeFileSync(`${target}.change-tmp`, text, 'utf8');
         rename(`${target}.change-tmp`, target);
       }
-      written = appendRelief(home, slug, line, now(), 'rules change');
+      for (const item of items) reliefs.push(appendRelief(home, slug, item.line, now(), `rules ${command}`));
     } catch (err) {
       for (const [file] of writes) fs.rmSync(path.join(top, ...file.split('/')) + '.change-tmp', { force: true });
       const files = writes.map(([file]) => file);
@@ -327,14 +433,21 @@ export function changeRule({ id, dryRun, checkSource, withPaths = [], top, packa
       stderr(restored
         ? `not changed: a file could not be written (${err.code ?? err.message}); ${files.join(', ')} are as they were`
         : `not changed: a file could not be written (${err.code ?? err.message}), and putting ${files.join(', ')} back failed too: git checkout HEAD -- ${files.join(' ')}`);
-      return 1;
+      return { code: 1 };
     }
-    stdout(`changed: ${id}, ${what}; ${writes.map(([file]) => file).join(', ')} written`);
-    stdout(`relief: ${written.line}`);
-    if (countLine !== null) stdout(countLine);
-    stdout(memory);
+    items.forEach((item, index) => {
+      stdout(`changed: ${item.id}, ${item.what}; ${result.files.join(', ')} written`);
+      stdout(`relief: ${reliefs[index].line}`);
+      if (item.countLine !== null) stdout(item.countLine);
+      stdout(item.memory);
+    });
+    for (const line of skippedLines) stdout(line);
     stdout(COST);
-    stdout(`next: commit on ${branch}, through the gate and both reviews, in a pull request of its own against main`);
-    return 0;
+    const gate = 'through the gate and both reviews';
+    if (!several) stdout(`next: commit on ${branch}, ${gate}, in a pull request of its own against main; the rules of a home change together, by js-harness rules switch, and land in one pull request`);
+    else if (!oneAtATime) stdout(`next: one commit on ${branch} for the ${items.length === 1 ? 'rule' : `${items.length} rules`}, ${gate}: the rules of a home land in one pull request against main`);
+    else stdout(`next: commit ${ids[0]} on ${branch}${left.length === 0 ? ': it is the last' : `, then run the same command again for ${left.join(', ')}, a commit a rule in this order`}; the rules of a home still land in one pull request against main`);
+    return result;
   }
 }
+

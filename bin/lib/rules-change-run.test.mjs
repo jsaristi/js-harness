@@ -795,3 +795,177 @@ test('the order of one run an id folds five rules into the two homes, each run k
   assert.equal(ruleOf(repo, 'session-model').subject, firstOf('session-model').subject, 'the subject of origin/main is back');
   assert.equal(ruleOf(repo, 'subagent-writer-model').retired, TODAY, 'what the runs on the other ids wrote is kept');
 });
+
+// ── the rules of a home, written in one pass (odd/tasks/one-model-home.md, spec 8) ─────────────────
+//
+// `rules switch` hands the runner the rules of the homes it names. Run here on a real repository, with the probes, the
+// meter, the app's records and the list of jobs made up: no test asks a model or starts a CLI.
+const SWITCH_IDS = ['control-phrase-min', 'lead-effort', 'review-effort', 'review-model', 'session-effort', 'session-model'];
+const SWITCH_LIST = HOME_LIST.filter((rule) => SWITCH_IDS.includes(rule.id)).map((rule) => (rule.id === 'session-effort' ? { ...rule, value: 'medium' } : rule));
+const AGENT_FILE = '.claude/agents/js-harness-writer.md';
+const agentOf = (model, effort) => `---\nname: js-harness-writer\nmodel: ${model}\neffort: ${effort}\n---\nYou write.\n`;
+const HIS_SESSION = '11111111-2222-3333-4444-555555555555';
+const HIS_WORDS = ['--quote', `${HIS_SESSION}:1`, '--reading', 'everything runs on the new model', '--accepted', 'he typed it'];
+const hisSource = { kind: 'words', quotes: [{ quote: 'Todo va a correr en el modelo nuevo', date: localDay(Date.parse('2026-10-15T17:00:00.000Z')), session: HIS_SESSION, line: 1 }], reading: 'everything runs on the new model', accepted: 'he typed it', checked: { date: TODAY, by: 'command' } };
+
+/** The repository of a switch, on `branch`: the two homes in force on origin/main, the writer's agent file and the
+ * transcript that holds his words. */
+function switchRepository(branch = 'rule/new-model') {
+  const repo = repository({ branch, list: SWITCH_LIST, files: { [AGENT_FILE]: agentOf('claude-saga-9-1', 'medium') } });
+  write(path.join(repo.claude, 'projects', repo.slug), `${HIS_SESSION}.jsonl`, `${JSON.stringify({ type: 'user', origin: { kind: 'human' }, timestamp: '2026-10-15T17:00:00.000Z', message: { role: 'user', content: 'Todo va a correr en el modelo nuevo' } })}\n`);
+  return repo;
+}
+
+/** Runs `rules switch` in `repo` with made-up probes that answer as the model asked: `{ code, out, err, asked }`.
+ * `probes` replaces any of them. */
+async function switchRun(repo, argv, probes = {}) {
+  const out = [];
+  const err = [];
+  const asked = [];
+  const code = await rulesMain(['switch', ...argv], {
+    root: repo.dir,
+    cwd: repo.dir,
+    env: { JS_HARNESS_HOME: repo.home, CLAUDE_CONFIG_DIR: repo.claude },
+    now: () => NOW,
+    stdout: (line) => out.push(line),
+    stderr: (line) => err.push(line),
+    readApp: () => new Map(),
+    agents: () => [],
+    switchDeps: {
+      probeClaude: (probe) => (asked.push(`${probe.model}@${probe.effort}`), { status: 0, stdout: JSON.stringify({ result: 'ready', modelUsage: { [probe.model]: {} } }), stderr: '' }),
+      probeCodex: (probe) => (asked.push(`${probe.model}@${probe.effort}`), { status: 0, stdout: JSON.stringify({ type: 'turn.completed' }), stderr: '' }),
+      claudeVersion: () => '9.9.9',
+      codexVersion: () => '0.200.0',
+      readMeter: async () => ({ ok: false, reason: 'missing' }),
+      ...probes,
+    },
+  });
+  return { code, out: out.join('\n'), err: err.join('\n'), asked };
+}
+
+const changedFiles = (repo) => git(repo.dir, 'status', '--porcelain', '-uall').split('\n').map((line) => line.trim().replace(/^\S+\s+/, '')).filter(Boolean).sort();
+
+test('rules switch writes the rules of a home in one pass for one commit: each with his words, the half that does not change skipped and named, and the agent file', async () => {
+  const repo = switchRepository();
+  const result = await switchRun(repo, ['--claude', 'claude-nova-1-0@medium', '--lead', 'xhigh', ...HIS_WORDS]);
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(result.asked, ['claude-nova-1-0@medium', 'claude-nova-1-0@xhigh']);
+  const { was, since, value } = ruleOf(repo, 'session-model');
+  assert.deepEqual({ was, since, value }, { was: [{ value: 'claude-saga-9-1', until: TODAY }], since: TODAY, value: 'claude-nova-1-0' });
+  assert.equal(ruleOf(repo, 'lead-effort').value, 'xhigh');
+  assert.deepEqual(ruleOf(repo, 'session-effort'), SWITCH_LIST.find((rule) => rule.id === 'session-effort'), 'the half that does not change is as it was');
+  const sources = sourcesOf(repo);
+  assert.deepEqual(sources['session-model'], hisSource);
+  assert.deepEqual(sources['lead-effort'], hisSource);
+  assert.deepEqual(sources['session-effort'], DESIGN);
+  assert.equal(read(repo.dir, 'docs/RULES.md'), listTextOf(repo.dir, rulesOfText(read(repo.dir, 'bin/lib/rules-data.mjs')), sources));
+  assert.equal(read(repo.dir, AGENT_FILE), agentOf('claude-nova-1-0', 'medium'));
+  const relief = fs.readFileSync(reliefFile(repo), 'utf8');
+  assert.match(relief, /rule:session-model proposed on rule\/new-model, not landed: claude-saga-9-1 to claude-nova-1-0; source words; supersedes no relief line; declaration and source [0-9a-f]{12}\n/);
+  assert.match(relief, /rule:lead-effort proposed on rule\/new-model, not landed: high to xhigh; source words;/);
+  assert.doesNotMatch(relief, /rule:session-effort/);
+  assert.match(result.out, /^skipped: session-effort stays medium, the value in force on origin\/main$/m);
+  assert.match(result.out, /^next: one commit on rule\/new-model for the 2 rules, through the gate and both reviews: the rules of a home land in one pull request against main$/m);
+  assert.deepEqual(changedFiles(repo), [AGENT_FILE, 'bin/lib/rules-data.mjs', 'docs/RULES.md', 'docs/rule-sources.json']);
+  assert.match(result.out, new RegExp(`git add bin/lib/rules-data\\.mjs docs/rule-sources\\.json docs/RULES\\.md ${AGENT_FILE.replace(/\./g, '\\.')}$`, 'm'));
+});
+
+test('rules switch writes nothing when a probe fails, when it runs dry, off a rule/ branch, or when nothing changes', async () => {
+  const repo = switchRepository();
+  const before = [...snapshot(repo), read(repo.dir, AGENT_FILE)];
+  const untouched = () => {
+    assert.deepEqual([...snapshot(repo), read(repo.dir, AGENT_FILE)], before);
+    assert.equal(fs.existsSync(reliefFile(repo)), false);
+    assert.deepEqual(changedFiles(repo), []);
+  };
+  const refused = await switchRun(repo, ['--claude', 'claude-nova-1-0@medium', ...HIS_WORDS], { probeClaude: () => ({ status: 1, stdout: '', stderr: 'unknown model' }) });
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /not switched: the claude CLI refused claude-nova-1-0 at medium/);
+  untouched();
+
+  const dry = await switchRun(repo, ['--codex', 'astra@high', '--dry-run', ...HIS_WORDS]);
+  assert.equal(dry.code, 0, dry.err);
+  assert.deepEqual(dry.asked, []);
+  assert.match(dry.out, /"value": "astra"/);
+  assert.match(dry.out, /dry run: nothing was probed and nothing was written/);
+  untouched();
+
+  const same = await switchRun(repo, ['--claude', 'claude-saga-9-1@medium', ...HIS_WORDS]);
+  assert.equal(same.code, 1);
+  assert.match(same.err, /not changed: nothing changes: session-model is claude-saga-9-1 and session-effort is medium on origin\/main already/);
+  assert.deepEqual(same.asked, []);
+  untouched();
+
+  const noWords = await switchRun(repo, ['--claude', 'claude-nova-1-0@medium', '--quote', `${HIS_SESSION}:9`, '--reading', 'r', '--accepted', 'a']);
+  assert.equal(noWords.code, 1);
+  assert.deepEqual(noWords.asked, [], 'a source that is not his words costs no probe');
+  untouched();
+
+  const off = switchRepository('feat/other');
+  const offBranch = await switchRun(off, ['--claude', 'claude-nova-1-0@medium', ...HIS_WORDS]);
+  assert.equal(offBranch.code, 1);
+  assert.match(offBranch.err, /runs on a branch rule\/<name> based on origin\/main, and this is feat\/other: git switch -c rule\/model-home origin\/main/);
+  assert.deepEqual(offBranch.asked, []);
+});
+
+test('on his no to one commit, rules switch --rule-by-rule writes one rule a run, in order, each run keeping the commits before it', async () => {
+  const repo = switchRepository();
+  const argv = ['--claude', 'claude-nova-1-0@high', '--codex', 'astra@medium', '--rule-by-rule', ...HIS_WORDS];
+  const commit = (message) => {
+    git(repo.dir, 'add', '-A');
+    git(repo.dir, 'commit', '-q', '-m', message);
+  };
+  const first = await switchRun(repo, argv);
+  assert.equal(first.code, 0, first.err);
+  assert.deepEqual(changedFiles(repo), [AGENT_FILE, 'bin/lib/rules-data.mjs', 'docs/RULES.md', 'docs/rule-sources.json']);
+  assert.equal(read(repo.dir, AGENT_FILE), agentOf('claude-nova-1-0', 'medium'), 'the copy follows the rule its commit holds');
+  assert.equal(ruleOf(repo, 'session-effort').value, 'medium');
+  assert.match(first.out, /^next: commit session-model on rule\/new-model, then run the same command again for session-effort, review-model, a commit a rule in this order; the rules of a home still land in one pull request against main$/m);
+  assert.match(first.out, /^skipped: review-effort stays medium/m);
+  commit('session-model');
+
+  const second = await switchRun(repo, argv);
+  assert.equal(second.code, 0, second.err);
+  assert.equal(ruleOf(repo, 'session-model').value, 'claude-nova-1-0', 'the first commit is kept');
+  assert.equal(ruleOf(repo, 'session-effort').value, 'high');
+  assert.equal(ruleOf(repo, 'review-model').value, 'gpt-0.1-fixture');
+  assert.equal(read(repo.dir, AGENT_FILE), agentOf('claude-nova-1-0', 'high'));
+  assert.match(second.out, /1\. session-model: on the branch already/);
+  commit('session-effort');
+
+  const third = await switchRun(repo, argv);
+  assert.equal(third.code, 0, third.err);
+  assert.equal(ruleOf(repo, 'review-model').value, 'astra');
+  assert.deepEqual(changedFiles(repo), ['bin/lib/rules-data.mjs', 'docs/RULES.md', 'docs/rule-sources.json']);
+  assert.match(third.out, /^next: commit review-model on rule\/new-model: it is the last; the rules of a home still land in one pull request against main$/m);
+  commit('review-model');
+
+  const done = await switchRun(repo, argv);
+  assert.equal(done.code, 1);
+  assert.match(done.err, /not changed: every rule named is on rule\/new-model already \(session-model, session-effort, review-model\): nothing is left to write/);
+});
+
+test('rules change refuses a new value for a rule of a home and names the switch; a change of its form or its subject still passes', async () => {
+  const repo = switchRepository();
+  const before = snapshot(repo);
+  for (const [id, value, flag] of [['session-model', 'claude-nova-1-0', '--claude <model>@<effort>'], ['session-effort', 'high', '--claude <model>@<effort>'], ['lead-effort', 'xhigh', '--lead <effort>'], ['review-model', 'astra', '--codex <model>@<effort>'], ['review-effort', 'high', '--codex <model>@<effort>']]) {
+    for (const dry of [[], ['--dry-run']]) {
+      const refused = await change(repo, [id, ...dry], { value, source: DESIGN });
+      assert.equal(refused.code, 1, id);
+      assert.ok(refused.err.includes(`not changed: "${id}" is a rule of a home of a model and an effort, and a home's new value is tried on the installed CLI before it is written: js-harness rules switch ${flag}`), refused.err);
+    }
+  }
+  assert.deepEqual(snapshot(repo), before);
+  const form = await change(repo, ['session-model', '--dry-run'], { set: { patterns: ['\\blenses?\\b.{0,50}\\bon (?=claude-){amount}'] }, source: DESIGN });
+  assert.equal(form.code, 0, form.err);
+  const subject = await change(repo, ['session-effort'], { set: { subject: 'the effort everything but the lead runs at' }, source: DESIGN });
+  assert.equal(subject.code, 0, subject.err);
+  assert.equal(ruleOf(repo, 'session-effort').subject, 'the effort everything but the lead runs at');
+});
+
+test('the closing line of rules change says a rule lands in its own pull request and the rules of a home in one', async () => {
+  const repo = repository();
+  const result = await change(repo, ['gate-wait'], { value: 30, source: DESIGN });
+  assert.equal(result.code, 0, result.err);
+  assert.match(result.out, /^next: commit on rule\/gate-wait, through the gate and both reviews, in a pull request of its own against main; the rules of a home change together, by js-harness rules switch, and land in one pull request$/m);
+});
