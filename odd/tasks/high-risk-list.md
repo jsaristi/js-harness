@@ -105,9 +105,10 @@ in the lead's chat (transcript ea85ec35-82e1-4aa9-abe3-98bd153a50b0), on 2026-11
   `CLAUDE.md:21`, the two doc comments of bin/lib/rules-block.mjs and the register's two entries; inline; one commit.
 - [x] T3 (kind: verify) an independent verifier reads T2 against the request (high risk, item 3 in part: instructions
   others consume); one read-only sub-agent: "holds" at f6a2be08, three defects that do not block, answered in L7.
-- [ ] T4 (kind: verify) the gate, then Codex and the pertinent lenses on the slice, one at a time; findings fixed or
-  answered.
-- [ ] T5 (kind: docs) main merged in, the pull request ready, the ready notice, the session summary, the closed notice.
+- [x] T4 (kind: verify) the gate, then Codex and the pertinent lenses on the slice, one at a time; findings fixed or
+  answered: Codex no finding, the lenses one warning rebutted (L8).
+- [x] T5 (kind: docs) main merged in (9e29880a), the pull request ready, the ready notice, the session summary, the
+  closed notice.
 
 ## Log
 - L1 The brief (the lead, 2026-11-11T10:46Z, with an addition of 05:48 local): "You own one feature: the high-risk
@@ -166,3 +167,20 @@ in the lead's chat (transcript ea85ec35-82e1-4aa9-abe3-98bd153a50b0), on 2026-11
   of a file another session edits tonight, and line 25 is already 115. Not checked by the verifier, by its own
   list: `npm run check` (the commit hook ran it), the count of 36 test files, the 454 owed and the red-first run,
   which are this session's own measures above.
+- L8 T4, the reviews of the slice 52925c7b..a16a9e3 (f6a2be08 and a16a9e3), each run once. The gate: `npm run check`
+  passed in the hook of each of the three commits. Codex (gpt-6.1-sol, medium, 42,838 input tokens, 22 s, given this
+  document): "the patch is correct (confidence 0.96)", no finding. The Claude lenses, run d10f1702 (risk,
+  readability, reliability; about 7,150 input tokens each): risk 0 findings, readability 0, reliability 1 warning,
+  rebutted with evidence and recorded with `js-harness double-review answer`: it read that "the range carries no
+  patch for either file" and that the test would fail at head. A lens is not given Markdown (3 files left out), so
+  it could not see them; `git diff --stat 52925c7b..a16a9e3 -- AGENTS.md CLAUDE.md` gives 10 insertions and 1
+  changed line, and at head the test file gives 24 pass, 3 skipped.
+- L9 Main merged in at 9e29880a (8007f0fe, pull request 825 of JH 172: `rules change --with` and its fixes), with no
+  conflict; the merge wrote nothing of its own, so no review is owed for it. On the merged tree `rules check`
+  passes, bin/lib/rules-block.test.mjs gives 24 pass and 3 skipped, and the hook's `npm run check` passed.
+- L10 The close against the depth pass. Item 3: predicted 2 of 2 specs, measured 2 of 2: `git grep -c -i "high
+  risk" -- AGENTS.md` gives `AGENTS.md:2` and exits 0, and the one test holds the list as its own paragraph and the
+  pointer of `CLAUDE.md`. Item 4: the verdict held; the list fits at 1210 of 1500, 36 under the figure measured
+  there because the added sentence left. What the pass did not foresee: `rules check` holds every sentence of
+  `AGENTS.md` to a rule or to a listed reason (L6), which added one file to the change and one decision that stays
+  his, whether the list becomes a declared rule.
