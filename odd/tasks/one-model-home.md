@@ -382,6 +382,35 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 16:07, the session at 86 % of its context. Unit (b) is in the commit that carries this line: `appSessions`
+gives `model` (test seen red; the 685 tests of its readers pass). Unit (c) is designed and its tests are drafted,
+NOT applied: the job's `tmp/pairs-t5g.json`, applied with `node tmp/swap.mjs tmp/pairs-t5g.json` (it adds an `app`
+option to the `hook` helper of `bin/guard.test.mjs`, a hook test and a test of `starterRefusal` in
+`bin/lib/guard.test.mjs`; that test also needs `EFFORTS` and `menuLine` imported from `./model-home.mjs`). The code
+to write after seeing them red: in `bin/lib/guard.mjs`, `starterRefusal(starter, projectData, { lead, starterLead })`:
+null for no record or no rule; refused when the record's model is not the home's (`sameClaudeModel`), or its
+level is one of `EFFORTS` under the level the start is held to (`lead-effort` for a new lead, else
+`session-effort`); the message is the one the tests hold, ending with who corrects it (a lead starter: "Only the
+user changes a lead's own: " and `menuLine` with the lead's level; another: "The lead sets that session's with its
+session tools.") and the way out by `js-harness sessions start`. In `bin/guard.mjs`: a `readApp` part
+(`appSessions(appRoot(env, process.platform, homedir()))`, loaded only for this tool), the starter read by
+`payload.session_id` inside a try (a reader that fails is no record), judged after `sessionStartRefusal` and only
+for a call with a prompt, before the title's check; `starterLead` is `leadTitle` of the record's title. Then the
+texts (the guard's help in `bin/js-harness.mjs`, `bin/lib/manifest.mjs:62` with `rules coverage --refresh`,
+`docs/SPEC.md:636`, README near line 1719), a break for it in `session-model`'s bundle, one commit; then units (d)
+and T6 as the paragraph below says. The wait for the lead's notice (`js-harness wait --notice-to 172`) still runs.
+2026-11-11 16:04: pull request 3 (T5, T6) is begun on `feat/model-home-sessions`, cut from the head of
+`rule/one-model-home` (`268991a7`) while the lead lands 831 to 835: main merges by merge commits, so the branch is
+on main once they land; if a slice changes on its way in, this branch merges main. Unit (a), `1bef0243`: a start
+and a resume take the home's model and level where the call names none, a resume never its record's
+(`sessionStartHome` in `bin/lib/guard.mjs`, read by `bin/sessions-background.mjs`); three tests seen red first. Not
+reviewed yet. GitHub's machines did not answer that commit's gate in 8 minutes (the lead's merge queue holds
+them), so its tests ran here. Next units, in order: (b) `appSessions` gives the record's `model` (the field is
+`model`, a full id, in all 142 records of this machine; three ids, none with a date or a bracket); (c) the guard
+refuses a `start_session` from a session whose own app record holds another model or a lower level than the one
+the start is held to, with who corrects it, and passes a starter with no record (the hook's `session_id` is the
+record's `cliSessionId`); (d) the board's mark and the line for him (`menuLine` of `bin/lib/model-home.mjs`); then
+T6, `rules applied` and the `doctor` row. Each unit: its test red first, one commit, then Codex and the lenses.
 2026-11-11 15:36: pull request 2 is up and ready, and T4 is done. Five pull requests, all on main, landed in order
 by the lead: 831 (`rule/one-model-home-1`, head `5deec5b6`), 832 (`-2`, `1765b5aa`; it carries `session-effort` at
 medium), 833 (`-3`, `0abb1d2c`), 834 (`-4`, `8f7a2f76`) and 835 (`rule/one-model-home`, this branch's head); a ready
