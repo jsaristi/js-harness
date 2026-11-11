@@ -339,7 +339,7 @@ specs 1, 4, 5, 8 and 10 and the tasks T3 and T4, and wins where it differs from 
 
 ## Tasks
 - [x] T1 (kind: design) (1-10) This document, its depth pass and the inventory, committed with documents alone. Route: inline, with one read-only explorer for the inventory. Commit: f325a56e.
-- [ ] T2 (kind: design) (1-10) The double review of this design (`js-harness double-review read`), every finding answered, and one notice to the lead with its verdict. Route: inline.
+- [x] T2 (kind: design) (1-10) The double review of this design (`js-harness double-review read`), every finding answered, and one notice to the lead with its verdict. Route: inline. Commits: 0907ed7d, 9033dcf6, 649fbad1. Three reads, not passed; the lead's yes to build from L13 (L14).
 - [ ] T3 (kind: build) (2, 3) Pull request 1, branch `feat/model-home-module`, cut from T2's commit: `bin/lib/model-home.mjs` and its test; the faults of the homes in `readRules`; the lenses and the double review's fallback and effort read the home; the writer's agent file compared with the home; the convention test over code; the runner of `rules change` takes `--with <path>...`, with its tests beside `bin/lib/rules-change-run.test.mjs:159` and `:172`; the check of marks stops at a document's `## Log`, as the scan of restated values does (`bin/lib/rules-scan.mjs:11`), since a Log tells what a rule was called. No reader of a rule that leaves moves here. Route: inline.
 - [ ] T4 (kind: build) (1, 2, 5, 10) Pull request 2, branch `rule/one-model-home`, on main once pull request 1 lands: `rules change --with` nine times, a commit each, every commit with the readers, the tests, the marks, the patterns carried to the home and the planted break of its rule: the two subjects widened, each home's control made a bundle; `lead-effort` and `subagent-effort` retired with the guard's start held to the home's effort alone; the two sub-agent model rules and `escalation-model` retired with the guard, the double review, the contract's modes, the sub-agent row and the recheck reading the home; the guard's refusal of a sub-agent call that names an effort; the patterns of Codex's two rules. Before each retirement, its dry run, and a grep of its id as a bare word over `bin/`, `workshop/`, `.claude/agents/`, README, `docs/` and `odd/tasks/` above each Log. Then an independent verifier on the guard. Route: inline, then one verifier.
 - [ ] T5 (kind: build) (5, 7) Pull request 3, branch `feat/model-home-sessions`: a start and a resume take the home and refuse another, in `sessions start` and in the guard's `start_session`, with the starter's own record; `appSessions` gives the model; the board's mark, both levels and the line. Route: inline.
@@ -347,6 +347,32 @@ specs 1, 4, 5, 8 and 10 and the tasks T3 and T4, and wins where it differs from 
 - [ ] T7 (kind: build) (8, 10) Pull request 4, branch `feat/model-home-switch`: the runner of `rules change` writes several rules in one pass and refuses a home's value alone; `rules switch` with its probe, the agent file, `--dry-run` and its printout. Route: inline.
 - [ ] T8 (kind: docs) (4, 9, 10) Pull request 4: the section "A new model" of the orchestrator skill and its test; the convention test over the texts; README, `docs/ROADMAP.md`'s Decided rows, `docs/future-model.md`'s pointer, the help texts and the lead's start line name the rule. Route: inline.
 - [ ] T9 (kind: verify) (1-10) Each pull request: gate, Codex and the pertinent lenses, one at a time; ready; `js-harness notify --to orchestrator --kind ready --pr <n>`; the next one starts from main once it lands. Then the summary and the closed notice. Route: inline.
+
+## Next step
+State at 2026-11-11 01:30 local, written at the context pause (86 percent). Nothing but documents is committed;
+`origin/rule/one-model-home` holds them, `ec737551` and this commit. `js-harness wait --notice-to 172` runs.
+Next, in order:
+1. Cut `feat/model-home-module` from this branch's head (`git switch -c`), the branch of pull request 1 (T3).
+2. Tests first, then code, one work unit a commit: (a) `bin/lib/model-home.mjs` with `bin/lib/model-home.test.mjs`:
+   the ids of both homes, `claudeHome()` by `ruleOf`, what a guard holds (`guardHeld(ruleHere(...))`), the list of
+   levels moved from `bin/lib/guard.mjs:73`, the menu's Spanish names and the display name of an id; (b) the faults
+   of the homes in `ruleFaults` of `bin/lib/rules.mjs` (after line 264), tests in `bin/lib/rules.test.mjs`;
+   (c) `LENS_MODEL`, `LENS_EFFORT` (`bin/lens-review.mjs:33`, `:36`) and `CLAUDE_FALLBACK`
+   (`bin/double-review.mjs:68`) read the home, `workshop/bin/host-watch.mjs:288` through the module;
+   (d) `rules change --with <path>...` in `bin/lib/rules-change-run.mjs` (the refusal at `:229-235`), tests beside
+   `bin/lib/rules-change-run.test.mjs:159`, `:172`; the check of marks cuts at `## Progress` or `## Log`
+   (`bin/rules.mjs:133-147`); (e) `bin/conventions-model-home.test.mjs` over code, with `ratchet` and
+   `sourceModules` of `bin/lib/*.testkit.mjs` as `bin/conventions-errors.test.mjs` uses them. The writer's test and
+   every reader of a rule that leaves stay as they are until T4.
+3. `npm run check`; then, one at a time and their cost said first, `js-harness codex-review --base <the commit
+   before the first code commit> --doc odd/tasks/one-model-home.md` and `js-harness lens-review --base <same>
+   --lenses <pertinent> --reason <why> --doc odd/tasks/one-model-home.md`; fix or answer; push; `gh pr create`;
+   `js-harness notify --to orchestrator --kind ready --pr <n>`.
+4. The pull request's body says in plain words, for him, that the design did not pass three double reviews, the
+   two high findings of the third (L13: Claude 1 with Codex 1, and Claude 2) and the answer to each; and that the
+   lead said yes to building from L13 (L14).
+Open with the lead, not blocking pull request 1: one `start_session` that names the home's model, and whether
+the switch may write a home's rules in one commit.
 
 ## Inventory
 Where a model or an effort is named, read on 2026-11-11 at `7525a4e5`. The table of pull request 813 was the start;
@@ -558,3 +584,4 @@ each row was read again. "Reader" means the value comes from a rule; "by hand" m
   - Codex 4 (L12 turned what a start asked into what ran): taken, L12 is reworded.
   - Codex 5 (a tool list of `docs/host-updates/` names the wrong CLI build): rebutted for this document, on
     evidence: the file came with the merge of `origin/main` (`12bd856c`) and is JH 174's; it is passed to the lead.
+- L14. The lead's answer, 01:24 local on 2026-11-11, to the `waiting` notice of 01:21: yes to the recommended way, by his lines 6716 and 6905 ("contesta TODAS las preguntas con recomendado TODAS y avanza los mas posible eres completamente autonomo", read with `js-harness sessions --quote`). No fourth read; build from L13, pull request 1 first, each through Codex and the lenses against this document; each body says in plain words that the design did not pass three double reviews, the two high findings of the third and the answer to each; a part a high finding disputes waits for the pull request that answers it.
