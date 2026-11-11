@@ -193,6 +193,10 @@ four lenses recorded on `8305955..fa682dd`), `06e24923` (the fix of the lenses' 
 Keep `js-harness wait --notice-to 179` running in the background while waiting. Report only through `js-harness
 notify --to orchestrator`. Commits carry no AI attribution (his global rule).
 
+Update, about 09:20Z: `421f994c` holds this section. Codex on `fa682dd..421f994` found one P2 (Log, L12), fixed in
+the commit after it; step 1 is now the confirming review of that commit, base `421f994c`, Codex then the lenses over
+`fa682dde..HEAD` (the lenses have not read `06e24923` yet).
+
 ## Log
 - L1 (his request, as written; lead transcript ea85ec35 line 6716, 2026-11-11T05:26:36Z, printed by `js-harness
   sessions --quote ea85ec35 6716 --cwd D:/js-harness`): "une lo que quede listo y tienes autorizacion para poder
@@ -237,3 +241,8 @@ notify --to orchestrator`. Commits carry no AI attribution (his global rule).
   (2) reliability SUGGESTION, `bin/lib/signin-expiry.test.mjs:65`, the "however it is spelled" assertion passed a
   path `path.join` had already normalised: it now passes a trailing separator, a folder and back built by hand, and
   on Windows another letter case, each asserted to be another string than the home. Nothing rebutted.
+- L12 (Codex on `fa682dd..421f994`, the fix `06e24923`: "the patch is incorrect", confidence 0.95, one P2,
+  `bin/lib/signin-expiry.test.mjs:67-69`): on Windows a checkout path already all in one case makes a case variant
+  equal to the home, and the test's own `notEqual` fails. Taken: a variant that changes nothing is left out. The
+  signed-out handling it read as consistent with what was asked. The first commit of `421f994c` failed its gate once
+  and passed on the second try; which test failed was not read (the output was cut), so it is not known.

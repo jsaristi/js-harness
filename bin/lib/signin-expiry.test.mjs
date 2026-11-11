@@ -63,8 +63,11 @@ test('a home that is not the user\'s own is not asked: no CLI runs, and the row 
   assert.equal(calls.length, 0, 'the sign-in is the real home\'s: a fixture home never reads it');
   assert.deepEqual(signinRow(reading, END), { ...ROW, claude: 'n/a' });
   // The user's own home, however it is spelled, is asked: with a trailing separator, through a folder and back, and
-  // on Windows in another letter case. Each spelling is another string than `real`, built without path.join.
-  const spellings = [`${real}${path.sep}`, `${real}${path.sep}sub${path.sep}..`, ...(process.platform === 'win32' ? [real.toUpperCase(), real.toLowerCase()] : [])];
+  // on Windows in another letter case. Each spelling is another string than `real`, built without path.join; a
+  // case variant that changes nothing (a checkout path already all in one case) is left out, and the folder's own
+  // name has lower-case letters, so the upper-case one always stays.
+  const cased = process.platform === 'win32' ? [real.toUpperCase(), real.toLowerCase()].filter((spelling) => spelling !== real) : [];
+  const spellings = [`${real}${path.sep}`, `${real}${path.sep}sub${path.sep}..`, ...cased];
   for (const home of spellings) {
     assert.notEqual(home, real);
     assert.deepEqual(readSigninExpiry({ spawn, platform: 'linux', home, homedir: () => real }), READ, home);
