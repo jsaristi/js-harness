@@ -113,7 +113,7 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
 - [x] T2 (kind: build) spec 2, 5: `.claude/settings.json`, its test and the `workshop` cell of `HOOK_CEILINGS`, with
   the measured time. His word: question 245 (L8). Route: inline. Commit: its own pull request, after T1's landed
 - [x] T3 (kind: verify) Codex and the lenses on each code commit; `npm run check`; the pull request; the ready notice.
-- [ ] T4 (kind: build) spec 2: the land's red test of 2026-11-11 (L15): the hook runs the dispatcher in the folder
+- [x] T4 (kind: build) spec 2: the land's red test of 2026-11-11 (L15): the hook runs the dispatcher in the folder
   that holds it, test first, proved in a WSL mirror with no `.git`; its reviews; main merged in. Route: inline.
   Commit: `fix(workshop): the session start hook reads its repository's records`
 
@@ -249,14 +249,19 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
   in the mirror alike. Not a register entry: `docs/FAILURES.md` was searched ("mirror", "no .git", "no git", the
   entries on tests and lands) and holds no such kind, and the land's gate was the control, working. The proof it
   has not come back: the land's suite passes that test.
+- L16 (2026-11-11): reviews of the fix, 9c619b76. Codex (66,898 input tokens): "the patch is correct" (0.93), no
+  finding; the reliability lens (7,028 input tokens): 0 findings. origin/main merged in (b2f1aa22, no conflict);
+  on the merged tree the ticks, hook-count, conventions and dispatcher tests passed 67 of 67 on Windows and the
+  ticks file 17 of 17 in the WSL mirror with no .git. The whole gate once, by hand: pass, gate ba62ae4d of
+  ~/.js-harness/gate-log/log.jsonl, "ranIn":"wsl", tests 684.9 s with 190 of 364 files skipped by selection, 881 s
+  in all. The door: both review rows pass over the five code commits. Pushed; the lead told by a note at 04:17
+  local. Not checked: the land itself, which is the lead's and runs the suite whole.
 
 ## Next step
-For a resume (2026-11-11): T4 is open. The fix of L15 is in `.claude/settings.json` and
-`workshop/bin/ticks.test.mjs`. Left, in order: one commit through the gate; Codex and the reliability lens over it,
-one at a time (`js-harness check --push` names the commands); merge `origin/main` in; `npm run check` once; push;
-`js-harness notify --to orchestrator --kind note` saying it is fixed and how it was proved in WSL (never mark the
-pull request ready here: the lead does, and lands it); the summary
-`docs/sessions/2026-11-11-jh-166-audit-unit-3-the-heartbeat-s-ticks.md` brought up to date, committed and pushed;
-then the closed notice with it. The reproduction is
-`wsl.exe -d Ubuntu --exec bash <job tmp>/repro-wsl.sh /mnt/d/js-harness/.claude/worktrees/audit-u3-heartbeat-ticks`.
-The snapshot of the day is the lead's: the heartbeat must run `node workshop/js-harness-workshop.mjs loop heartbeat`.
+For a resume (2026-11-11): nothing is left to build. Pull request 815 holds the fix of L15 and main (b2f1aa22),
+reviewed at the door (L16); the lead marks it ready and lands it, never this session. Left: the summary
+docs/sessions/2026-11-11-jh-166-audit-unit-3-the-heartbeat-s-ticks.md is up to date; once committed and pushed, the
+closed notice with it. If the land fails again, read its row in ~/.js-harness/gate-log/failed.jsonl first and
+reproduce with the one file in a mirror with no .git (rsync without .git, env -i, the node of
+~/.js-harness/gate-wsl.json). The snapshot of the day is the lead's: the heartbeat must run
+node workshop/js-harness-workshop.mjs loop heartbeat.
