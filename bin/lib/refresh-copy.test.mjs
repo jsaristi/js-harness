@@ -439,6 +439,32 @@ test('pruneStalePnpm holds a shim that names its target whole by that target, an
   assert.deepEqual(pruneStalePnpm({ binDir: bin, now: () => NOW, isPnpmRunning: () => false }).broken.sort(), ['gone', 'hollow', 'only-path-gone']);
 });
 
+// Codex on e0e2755a..adc2978c, P2, and the reliability lens on the same range: a quoted target with a space was cut at
+// the space, so a shim that worked was named broken; and the .cmd form of a target named whole had no test.
+test('pruneStalePnpm reads a quoted target whole, its spaces kept, behind the shim\'s folder or named whole, in a POSIX shim and in a .cmd', () => {
+  const home = path.join(tempDir('js-harness-prune-spaces-'), 'pnpm');
+  const bin = path.join(home, 'bin');
+  const id = 'a1b2c3-0123456789abcdef-0';
+  const target = path.join(home, 'global', 'v11', id, 'node_modules', 'x', 'bin', 'my cli.mjs');
+  fs.mkdirSync(bin, { recursive: true });
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, '');
+  const posix = `global/v11/${id}/node_modules/x/bin/my cli.mjs`;
+  const windows = posix.replace(/\//g, '\\');
+  fs.writeFileSync(path.join(bin, 'behind'), `#!/bin/sh\nexec node "$basedir/../${posix}" "$@"\n`);
+  fs.writeFileSync(path.join(bin, 'behind.cmd'), `@node  "%~dp0\\..\\${windows}" %*\r\n`);
+  fs.writeFileSync(path.join(bin, 'whole'), `#!/bin/sh\nexport NODE_PATH="/some where/pnpm/global/v11/${id}/node_modules/.pnpm/node_modules"\nexec node "/some where/pnpm/${posix}" "$@"\n# cmd-shim-target=/some where/pnpm/${posix}\n`);
+  fs.writeFileSync(path.join(bin, 'win.cmd'), `@SET "NODE_PATH=C:\\some where\\pnpm\\global\\v11\\${id}\\node_modules\\.pnpm\\node_modules"\r\n@REM C:\\some where\\pnpm\\${windows}\r\nnode  "C:\\some where\\pnpm\\${windows}" %*\r\n`);
+  fs.writeFileSync(path.join(bin, 'bare.cmd'), `node C:\\somewhere\\pnpm\\global\\v11\\${id}\\node_modules\\x\\bin\\cli.mjs %*\r\n`);
+  fs.writeFileSync(path.join(path.dirname(target), 'cli.mjs'), '');
+  const broken = () => pruneStalePnpm({ binDir: bin, now: () => NOW, isPnpmRunning: () => false }).broken.sort();
+  assert.deepEqual(broken(), [], 'each target is there');
+  fs.rmSync(target);
+  assert.deepEqual(broken(), ['behind', 'whole', 'win'], 'the target with a space is gone, its folder still there');
+  fs.rmSync(path.join(path.dirname(target), 'cli.mjs'));
+  assert.deepEqual(broken(), ['bare', 'behind', 'whole', 'win']);
+});
+
 test('refreshCopy ends 0 on the shims pnpm 12 writes, and 6 with PRUNE BROKE when the copy they run is gone after the prune', async () => {
   const run = await refresh(machine({ prev: PREV, pnpm12: true }));
   assert.equal(run.code, 0, run.err);
