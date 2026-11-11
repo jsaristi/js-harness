@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RULES } from './rules-data.mjs';
 import { ruleHere, writeRules } from './rules.mjs';
-import { agentEffortRefusal, allowedModels, denial, hourRefusal, openingRefusal, sessionStartRefusal, stampedHour } from './guard.mjs';
+import { agentEffortRefusal, allowedModels, denial, hourRefusal, openingRefusal, sessionStartHome, sessionStartRefusal, stampedHour } from './guard.mjs';
 import { backtickRefusal, backticksInDoubleQuotes, driveRootRemovalRefusal, modelRefusal, onFirstParentLine, reviewBaseRefusal, terminalNoteRefusal } from './guard.mjs';
 import { RECORD_HANDLES, REVIEW_RECORD_FILES, reviewRecordOf, reviewRecordWriteRefusal } from './guard.mjs';
 import { codexReviewsPath } from './codex-reviews.mjs';
@@ -195,6 +195,13 @@ test('the tools that do not open a session pass in this repository, whatever the
     assert.equal(openingRefusal(tool, HERE), null, tool);
     assert.equal(openingRefusal(tool, null), null, tool);
   }
+});
+
+// odd/tasks/one-model-home.md, spec 5: what a start does not name is the home's, a lead's level for a lead.
+test('sessionStartHome gives the model and the level a start takes: the home\'s where declared, nothing where not', () => {
+  assert.deepEqual(sessionStartHome(HERE), { model: MODEL_RULES[0].value, effort: HELD });
+  assert.deepEqual(sessionStartHome(HERE, { lead: true }), { model: MODEL_RULES[0].value, effort: LEAD });
+  assert.deepEqual(sessionStartHome(null), { model: undefined, effort: undefined });
 });
 
 // A session started with no effort runs at the effort of the session that started it: on 2026-10-16 two work

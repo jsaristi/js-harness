@@ -19,6 +19,7 @@ const BIN = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
 const RULES_DATA = fileURLToPath(new URL('./lib/rules-data.mjs', import.meta.url));
 // The effort the rule session-effort gives, read from the list a world with rules copies and never written here.
 const SESSION_EFFORT = RULES.find((rule) => rule.id === 'session-effort').value;
+const SESSION_MODEL = RULES.find((rule) => rule.id === 'session-model').value;
 
 const FAKE = String.raw`
 import fs from 'node:fs';
@@ -422,17 +423,20 @@ test('sessions start says so when claude is not on PATH', withWorld((world) => {
   assert.match(result.stderr, /claude is not on PATH/);
 }));
 
-test('where session-title and session-effort are declared, a free title or no effort is refused with the guard\'s reasons', withWorld((world) => {
+test('where the rules are declared, a free title is refused with the guard\'s reason, and a start that names no model or effort takes the home\'s', withWorld((world) => {
   const free = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--effort', SESSION_EFFORT]);
   assert.equal(free.code, 2);
   assert.match(free.stderr, /js-harness sessions start titles the session "Build the thing"/);
   assert.match(free.stderr, /Title it "JH 1 · <purpose>"/);
-  const noEffort = js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief]);
-  assert.equal(noEffort.code, 2);
-  assert.match(noEffort.stderr, /js-harness sessions start names no effort/);
-  assert.ok(noEffort.stderr.includes(`--effort ${SESSION_EFFORT}`), noEffort.stderr);
   assert.deepEqual(readState(world).calls, []);
-  assert.equal(js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief, '--effort', SESSION_EFFORT]).code, 0);
+  // odd/tasks/one-model-home.md, spec 5: a start that names neither takes the home's model and level, on the call
+  // to claude and in the record.
+  const noEffort = js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief]);
+  assert.equal(noEffort.code, 0, noEffort.stderr);
+  const call = actions(world).at(-1);
+  assert.deepEqual([call[call.indexOf('--model') + 1], call[call.indexOf('--effort') + 1]], [SESSION_MODEL, SESSION_EFFORT]);
+  const [line] = startedLines(world);
+  assert.deepEqual([line.model, line.effort], [SESSION_MODEL, SESSION_EFFORT]);
 }, { rules: true }));
 
 test('sessions stop stops and removes a recorded session, drops its brief and records the removal', withWorld((world) => {
@@ -735,8 +739,10 @@ test('a session titled as a lead starts and resumes at the rule lead-effort, whi
   assert.equal(none.code, 2);
   assert.ok(none.stderr.trimEnd().endsWith(`Pass --effort ${lead}.`), none.stderr);
   assert.deepEqual(readState(world).calls, []);
-  const started = js(world, ['sessions', 'start', '--title', 'JH ORQ · relevo', '--brief', world.brief, '--effort', lead]);
+  // A lead's start that names no level takes the lead's, not the sessions' (odd/tasks/one-model-home.md, L27).
+  const started = js(world, ['sessions', 'start', '--title', 'JH ORQ · relevo', '--brief', world.brief]);
   assert.equal(started.code, 0, started.stderr);
+  assert.deepEqual([startedLines(world).at(-1).model, startedLines(world).at(-1).effort], [SESSION_MODEL, lead]);
   endJob(world, '0db8bc5e');
   patchState(world, { nextId: 'c779ed44' });
   const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
@@ -768,29 +774,16 @@ test('sessions start --resume holds to the effort rule, needs a writable record,
     assert.equal(empty.code, 2, JSON.stringify(text));
     assert.match(empty.stderr, /the brief .* is empty, so nothing was resumed/);
   }
-  // A level or a model the call does not name is the record's: the refusal says so, since "or none" takes it again.
+  // odd/tasks/one-model-home.md, spec 5: what a resume does not name is the home's, never the record's. A record off
+  // the home (a session started before the rule, or by hand) stays off it through the steps below, and the resume
+  // that runs takes the home's model and level.
   const recordText = fs.readFileSync(recordFile(world), 'utf8');
   const offHome = recordText.trimEnd().split('\n').map((line) => JSON.parse(line)).map((line) => (line.id === '0db8bc5e' ? { ...line, effort: 'max', model: 'opus' } : line));
   fs.writeFileSync(recordFile(world), `${offHome.map((line) => JSON.stringify(line)).join('\n')}\n`);
-  const recorded = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
-  assert.equal(recorded.code, 2);
-  assert.match(recorded.stderr, /names the model "opus"/);
-  assert.ok(recorded.stderr.includes('The record of 0db8bc5e holds model "opus" and effort "max", which a resume takes again where the call names none: name the rule\'s on the call.'), recorded.stderr);
-  const half = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--model', RULES.find((rule) => rule.id === 'session-model').value]);
-  assert.equal(half.code, 2);
-  assert.ok(half.stderr.includes('The record of 0db8bc5e holds effort "max", which'), half.stderr);
-  // The note names only what is refused: a level named on the call is the call's, whatever the record holds.
-  const homeModel = RULES.find((rule) => rule.id === 'session-model').value;
-  const onHome = offHome.map((line) => (line.id === '0db8bc5e' ? { ...line, model: homeModel } : line));
-  fs.writeFileSync(recordFile(world), `${onHome.map((line) => JSON.stringify(line)).join('\n')}\n`);
+  // A level named on the call is the call's, and is refused when it is not the home's.
   const named = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--effort', 'max']);
   assert.equal(named.code, 2);
   assert.match(named.stderr, /effort "max"/);
-  assert.ok(!named.stderr.includes('The record of'), named.stderr);
-  const level = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
-  assert.equal(level.code, 2);
-  assert.ok(level.stderr.includes('The record of 0db8bc5e holds effort "max", which'), level.stderr);
-  fs.writeFileSync(recordFile(world), recordText);
   assert.equal(actions(world).length, 1, 'nothing ran');
   fs.chmodSync(recordFile(world), 0o444);
   const unwritable = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
@@ -803,6 +796,9 @@ test('sessions start --resume holds to the effort rule, needs a writable record,
   const quiet = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
   assert.equal(quiet.code, 0, quiet.stderr);
   assert.equal(startedLines(world).at(-1).id, 'c779ed44');
+  const taken = actions(world).at(-1);
+  assert.deepEqual([taken[taken.indexOf('--model') + 1], taken[taken.indexOf('--effort') + 1]], [SESSION_MODEL, SESSION_EFFORT], 'the home\'s, not the record\'s opus at max');
+  assert.deepEqual([startedLines(world).at(-1).model, startedLines(world).at(-1).effort], [SESSION_MODEL, SESSION_EFFORT]);
   // claude agents fails once the job runs: the conversation the resume named is recorded.
   endJob(world, 'c779ed44');
   patchState(world, { nextId: 'a1b2c3d4', quiet: false, agentsFailAfterStart: 'agents down' });

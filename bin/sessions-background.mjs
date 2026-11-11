@@ -4,7 +4,7 @@
 // the machine uninstall undo exactly what was started, and touch no session they did not start.
 // The title, the effort and a named model are held to the rules `guard` holds `start_session` to, by the same
 // functions: a lead's title holds the effort to rule:lead-effort, any other to rule:session-effort, and a model that
-// is named is rule:session-model's.
+// is named is rule:session-model's. What a start or a resume does not name is those rules', where they are declared.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { CLOSE_FINISHED, appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, strandedWords, undoSession, within, worktreeHolding, worktreeOf } from './lib/background.mjs';
 import { closeFinishedIn, closedLines } from './lib/background-close.mjs';
-import { sessionStartRefusal } from './lib/guard.mjs';
+import { sessionStartHome, sessionStartRefusal } from './lib/guard.mjs';
 import { leadTitle, sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { appendNotice, newNotice, nextSessionNumber, placeOf, readNotices } from './lib/channel.mjs';
 import { mainCheckout, projectCode, projectSlug, sameSession } from './lib/sessions.mjs';
@@ -34,10 +34,12 @@ export const START_USAGE = [
   '         the start under <home>/.js-harness/background/; exit 1 when claude is missing or refuses (nothing is recorded), 2 for a',
   '         usage error or a title, an effort or a model the rules session-title, session-effort, lead-effort and session-model',
   '         refuse, where they are declared: the effort is that rule\'s one level, and a model that is named is that rule\'s.',
+  '         A start that names no --model or no --effort takes those rules\', and so does a resume, whatever its record holds.',
   '         A run of claude that does not finish (a timeout) is looked for in claude agents and recorded when it started.',
   '         --advisor passes claude --advisor <model> (a stronger model the session consults); it is recorded with the start.',
   '         --resume resumes a recorded session whose job stopped (a restart ends every one) with claude --bg --resume, in a',
-  '         new job in its folder, under its title, model, effort and advisor, and records the new job; one that still runs is refused.',
+  '         new job in its folder, under its title and advisor (its model and effort too, where the rules declare none), and',
+  '         records the new job; one that still runs is refused.',
   '         The lead uses it only on a turn the user did not type, where start_session would leave a card: a background session',
   '         is not a row in the desktop sidebar. The board lists the project\'s background sessions, what each waits for',
   '         (a permission prompt included) and whether start recorded it; --watch returns when one starts waiting.',
@@ -166,7 +168,12 @@ export function sessionsStartMain(argv, given = {}) {
   const top = topLevel(run, cwd);
   const rules = rulesText(top, readFile);
   const project = { codeOf: () => projectCode(root, readFile), next: (code) => nextSessionNumber(home, projectSlug(root), { code }) };
-  const refusal = sessionStartRefusal({ prompt: brief, effort: parsed.effort, model: parsed.model }, rules, { cli: true, lead: leadTitle(parsed.title) })
+  // What the call does not name is the home's, where this project declares it (odd/tasks/one-model-home.md, spec 5).
+  const lead = leadTitle(parsed.title);
+  const taken = sessionStartHome(rules, { lead });
+  const model = parsed.model ?? taken.model;
+  const effort = parsed.effort ?? taken.effort;
+  const refusal = sessionStartRefusal({ prompt: brief, effort, model }, rules, { cli: true, lead })
     ?? sessionTitleRefusal({ title: parsed.title }, rules, project, 'js-harness sessions start');
   if (refusal !== null) {
     stderr(refusal);
@@ -198,7 +205,7 @@ export function sessionsStartMain(argv, given = {}) {
   const launchedAt = new Date(now()).toISOString();
   let result;
   try {
-    result = claude(startArgs({ ...parsed, briefs, prompt: startPrompt(copy) }), { cwd });
+    result = claude(startArgs({ ...parsed, model, effort, briefs, prompt: startPrompt(copy) }), { cwd });
   } catch (err) {
     // A character cmd.exe would act on, in the title or a path: nothing ran.
     fs.rmSync(copy, { force: true });
@@ -235,7 +242,7 @@ export function sessionsStartMain(argv, given = {}) {
   }
   const entry = {
     event: 'started', at: new Date(now()).toISOString(), id, sessionId: agent?.sessionId ?? null, title: parsed.title, root, cwd,
-    worktree: parsed.worktree ?? null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: parsed.model ?? null, effort: parsed.effort ?? null, advisor: parsed.advisor ?? null, remoteControl: parsed.remoteControl, brief: copy,
+    worktree: parsed.worktree ?? null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: model ?? null, effort: effort ?? null, advisor: parsed.advisor ?? null, remoteControl: parsed.remoteControl, brief: copy,
   };
   try {
     appendRecord(home, entry);
@@ -278,7 +285,8 @@ export function sessionsStartMain(argv, given = {}) {
 
 /** `sessions start --resume <id>`: the recorded session `id` names, whose job stopped (a restart of the machine ends every
  * one), resumed with `claude --bg --resume` in a new job, in the folder it worked in, under its title, model, effort and
- * advisor (`--model`, `--effort`, `--advisor` and `--brief` replace the record's), held to the effort rule as a start is. The new job is
+ * advisor (`--model`, `--effort`, `--advisor` and `--brief` replace the record's, and the home's model and level do where the
+ * project declares them), held to the rules as a start is. The new job is
  * recorded with `resumedFrom`, and replaces the stopped one, which stays recorded: the two share a worktree and a brief,
  * so they are undone together (`undoSession`). Exit 0 once the new job runs and is recorded; 1 when the record holds no
  * such session or cannot be written, a job works its conversation or that cannot be told, its folder is gone, or claude
@@ -323,22 +331,17 @@ function resumeStart(parsed, deps) {
   }
   // The guard judges nothing of a call with no brief, so an empty one is refused here, as a start refuses it.
   if (text.trim() === '') return refuse(`the brief ${briefPath} is empty, so nothing was resumed`, 2);
-  const model = parsed.model ?? entry.model ?? undefined;
-  const effort = parsed.effort ?? entry.effort ?? undefined;
-  const advisor = parsed.advisor ?? entry.advisor ?? undefined;
+  // What the call does not name is the home's and never the record's, where the project declares the home
+  // (odd/tasks/one-model-home.md, spec 5): a session started before a switch is resumed on the new home. Where it
+  // declares none, the record's stands, as before.
   const rules = rulesText(topLevel(run, folder), readFile);
-  const held = { cli: true, lead: leadTitle(entry.title) };
-  const refusal = sessionStartRefusal({ prompt: text, effort, model }, rules, held);
-  if (refusal !== null) {
-    // What the call does not name is the record's, which the refusal's "or none" would take again. The note names
-    // only what is refused: the model is judged first, so the level's own answer is the call's with no model.
-    const ofEffort = sessionStartRefusal({ prompt: text, effort }, rules, held);
-    const kept = [['model', parsed.model, entry.model, refusal !== ofEffort], ['effort', parsed.effort, entry.effort, ofEffort !== null]]
-      .filter(([, named, recorded, refused]) => refused && named === undefined && typeof recorded === 'string')
-      .map(([what, , recorded]) => `${what} ${JSON.stringify(recorded)}`);
-    const record = kept.length === 0 ? '' : ` The record of ${entry.id} holds ${kept.join(' and ')}, which a resume takes again where the call names none: name the rule's on the call.`;
-    return refuse(`${refusal}${record}`, 2);
-  }
+  const lead = leadTitle(entry.title);
+  const taken = sessionStartHome(rules, { lead });
+  const model = parsed.model ?? taken.model ?? entry.model ?? undefined;
+  const effort = parsed.effort ?? taken.effort ?? entry.effort ?? undefined;
+  const advisor = parsed.advisor ?? entry.advisor ?? undefined;
+  const refusal = sessionStartRefusal({ prompt: text, effort, model }, rules, { cli: true, lead });
+  if (refusal !== null) return refuse(refusal, 2);
   const unwritable = recordUnwritable(home);
   if (unwritable !== null) return refuse(`${unwritable}, so nothing was resumed`);
   let copy = entry.brief;

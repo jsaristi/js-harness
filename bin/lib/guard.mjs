@@ -114,6 +114,15 @@ export function sessionStartRefusal(toolInput, projectData, { cli = false, lead 
   return reason === null ? null : `${reason}${rule.note}`;
 }
 
+/** The model and the level a start takes where its call names none, as `{ model, effort }`: the home's values in the
+ * project whose rules file has the text `projectData`, a lead's level for a lead as `sessionStartRefusal` holds it,
+ * each undefined where the project does not declare its rule (odd/tasks/one-model-home.md, spec 5). */
+export function sessionStartHome(projectData, { lead = false } = {}) {
+  const home = claudeHeld(projectData);
+  const level = lead && home.lead !== null ? home.lead : home.effort;
+  return { model: home.model?.value, effort: level?.value };
+}
+
 /** Why the model `toolInput` names is refused under the home's model `value`, or null: none named, or the home's,
  * a date at its end or a bracket aside (`sameClaudeModel`). A short name is refused too, since it names whatever
  * the engine in use gives it. */

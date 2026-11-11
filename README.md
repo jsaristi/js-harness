@@ -1393,11 +1393,15 @@ uninstall machine` removes every recorded one that is not at work and whose work
 recorded it; `--watch` returns when one starts waiting.
 
 ```console
-$ js-harness sessions start --title "JH 45 · thing" --brief brief.md --worktree thing --effort high
+$ js-harness sessions start --title "JH 45 · thing" --brief brief.md --worktree thing
 started 0db8bc5e · JH 45 · thing
   js-harness sessions stop 0db8bc5e removes it; claude attach 0db8bc5e opens it here; js-harness sessions lists it
   Remote Control is on: claude.ai/code and the user's phone reach it
 ```
+
+A start that names no `--model` or no `--effort` takes the rules `session-model` and `session-effort`
+(`lead-effort` for a lead's title) where the project declares them, and `--resume` takes them whatever its
+record holds; a value other than the rule's is refused.
 
 ```console
 $ js-harness sessions --address orchestrator
