@@ -12,19 +12,24 @@ const said = ({ model, effort }) => `${model ?? 'no model'} at ${effort ?? 'no l
 /** True when `home` (`{ model, effort, lead }`, each a value or null) holds something a session can be off. */
 export const homeInForce = (home) => home !== null && typeof home === 'object' && [home.model, home.effort, home.lead].some((value) => typeof value === 'string');
 
-/** The sessions off `home`, as `{ rows, archived, on }`.
+/** The act that puts the background job `job` on the home: a resume, which waits for a job at work to end. */
+const resumeOf = (job) => `a resume${job.working === true ? ' once its job is no longer at work, which a resume refuses until then:' : ','} js-harness sessions start --resume ${job.id}`;
+
+/** The sessions off `home`, as `{ rows, archived, removedOff, on }`.
  *
  * `desktop` is the app's records of the project's sessions, each `{ id, title, model, effort, archived }`; `background`
- * the jobs `sessions start` recorded, each `{ id, title, asked, replied, state, removed }`: `asked` and `replied` are
+ * the jobs `sessions start` recorded, each `{ id, title, asked, replied, state, working, removed }`: `asked` and `replied` are
  * `{ model, effort }`, what its start named (null where it named none) and what its last reply ran on (`replied` is
- * null when no reply was read), `state` what `claude agents` says of its job, as words. `isLead(title)` says whether a
+ * null when no reply was read), `state` what `claude agents` says of its job, as words, and `working` whether that job is at work. `isLead(title)` says whether a
  * title is a lead's, which is held to the lead's level where the home gives one.
  *
  * A row is `{ kind, id, title, held, off, corrects }` with what the session holds: a desktop row its `holds`, a
  * background row its `asked`, `replied` and `state`. A background session is judged by its last reply, and
  * by what its start asked only where no reply was read. `corrects` is the act that puts it on the home: `his menu`
  * for a lead in the app, since only the user changes a lead's own; `the lead's session tools` for another desktop
- * session; a resume for a background one, which takes the home's; none for a job the harness removed, which is in no row: `removedOff` counts those off the home.
+ * session; a resume for a background one, which takes the home's, once its job is no longer at work where it is, since
+ * `sessions start --resume` refuses a conversation a job works; none for a job the harness removed, which is in no
+ * row: `removedOff` counts those off the home.
  *
  * An archived desktop session is in no row: nothing corrects one while it is archived, and this machine held 124 of
  * them on 2026-11-11. `archived` counts them by what they hold, `[{ holds, count }]`, the most first. `on` counts the
@@ -50,7 +55,7 @@ export function sessionsOffHome(home, { desktop = [], background = [], isLead = 
     if (job.removed === true) {
       if (off !== null) removedOff += 1;
     } else if (off === null) on.background += 1;
-    else rows.push({ kind: 'background', id: job.id, title: job.title ?? null, asked: job.asked, replied: job.replied ?? null, state: job.state ?? null, held, off, corrects: `a resume, js-harness sessions start --resume ${job.id}` });
+    else rows.push({ kind: 'background', id: job.id, title: job.title ?? null, asked: job.asked, replied: job.replied ?? null, state: job.state ?? null, held, off, corrects: resumeOf(job) });
   }
   return { rows, archived: [...archived].map(([holds, count]) => ({ holds, count })).sort((one, other) => other.count - one.count), removedOff, on };
 }

@@ -424,7 +424,7 @@ test('applied lists the sessions off the home, desktop and background, with what
     assert.equal(out[at - 1], '');
     assert.deepEqual(out.slice(at + 1), [
       `  desktop  "JH 7 · work"  its menu holds ${model} at ${other}; held to ${model} at ${effort}; corrected by the lead's session tools`,
-      `  background  "JH 8 · job" (job-1)  no reply of it was read; its start asked for ${model} at ${other}; its job: busy; held to ${model} at ${effort}; corrected by a resume, js-harness sessions start --resume job-1`,
+      `  background  "JH 8 · job" (job-1)  no reply of it was read; its start asked for ${model} at ${other}; its job: busy; held to ${model} at ${effort}; corrected by a resume once its job is no longer at work, which a resume refuses until then: js-harness sessions start --resume job-1`,
       `  1 archived desktop session is off it too (1 at claude-opus-5-5 at ${effort}): nothing corrects one while it is archived; he can unarchive it, and it is then listed`,
       '  on the home: 1 desktop, not archived, and 0 background',
       '  The app\'s record does not say whether a session that is not archived is running. Nothing was written.',

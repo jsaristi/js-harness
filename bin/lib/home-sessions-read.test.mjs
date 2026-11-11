@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { appRoot } from './app-record.mjs';
 import { appendRecord, recordFileOf } from './background.mjs';
 import { projectSlug } from './sessions.mjs';
 import { readHomeSessions } from './home-sessions-read.mjs';
@@ -64,10 +65,10 @@ test('a background session is each start recorded for the project, with what it 
   started(machine, 'job-f', 3, { sessionId: 's-f', resumedFrom: 'job-g' });
   const { background, unread } = read(machine, { agents: () => [{ id: 'job-a', status: 'busy' }, { id: 'other', sessionId: 's-f', state: 'working' }] });
   assert.deepEqual(background, [
-    { id: 'job-a', title: 'JH job-a · job', asked: { model: MODEL, effort: 'high' }, replied: { model: MODEL, effort: 'medium' }, state: 'busy', removed: false },
-    { id: 'job-b', title: 'JH job-b · job', asked: { model: null, effort: null }, replied: null, state: 'not listed by claude agents', removed: false },
-    { id: 'job-d', title: 'JH job-d · job', asked: { model: null, effort: 'high' }, replied: null, state: null, removed: true },
-    { id: 'job-f', title: 'JH job-f · job', asked: { model: null, effort: null }, replied: null, state: 'working', removed: false },
+    { id: 'job-a', title: 'JH job-a · job', asked: { model: MODEL, effort: 'high' }, replied: { model: MODEL, effort: 'medium' }, state: 'busy', working: true, removed: false },
+    { id: 'job-b', title: 'JH job-b · job', asked: { model: null, effort: null }, replied: null, state: 'not listed by claude agents', working: false, removed: false },
+    { id: 'job-d', title: 'JH job-d · job', asked: { model: null, effort: 'high' }, replied: null, state: null, working: null, removed: true },
+    { id: 'job-f', title: 'JH job-f · job', asked: { model: null, effort: null }, replied: null, state: 'working', working: true, removed: false },
   ], 'left out: one removed before the window, one of another project, and one a later start resumed');
   assert.deepEqual(unread, []);
 }));
@@ -79,11 +80,36 @@ test('a source that cannot be read is named and never taken as empty: the app\'s
   assert.equal(noApp.background.length, 1);
   const noList = read(machine, { agents: () => { throw new Error('claude is not on PATH'); } });
   assert.deepEqual(noList.unread, ['the state of the background jobs (claude is not on PATH)']);
-  assert.equal(noList.background[0].state, null);
+  assert.deepEqual([noList.background[0].state, noList.background[0].working], [null, null], 'a list that was not read says nothing of a job, at work or not');
   const file = recordFileOf(machine.home);
   const noRecord = read(machine, { readFile: (asked) => { if (asked === file) throw Object.assign(new Error('denied'), { code: 'EACCES' }); return fs.readFileSync(asked, 'utf8'); } });
   assert.deepEqual(noRecord.unread, ['the record of the background sessions (EACCES)']);
   assert.deepEqual(noRecord.background, []);
+}));
+
+// Codex on e878d8b..533f8a6: the app's reader swallows a record or a folder it cannot read unless it is given someone
+// to tell, so a session whose record could not be read was absent from the list with nothing said.
+test('an app record or a folder of them that cannot be read is counted in what was not read, with the first one named', withMachine((machine) => {
+  const told = read(machine, { readApp: (unreadable) => { unreadable('X:/app/org', 'EPERM'); unreadable('X:/app/org/local_1.json', 'EACCES'); return new Map(); } });
+  assert.deepEqual(told.unread, ['2 of the app\'s session records or their folders (X:/app/org: EPERM, and 1 more)']);
+  // The reader of this platform's folder, with no reader given: one record reads, and one is a folder, which no read opens.
+  const env = { APPDATA: path.join(machine.home, 'appdata') };
+  const homedir = () => machine.home;
+  const org = path.join(appRoot(env, process.platform, machine.home), 'claude-code-sessions', 'account', 'org');
+  fs.mkdirSync(path.join(org, 'local_bad.json'), { recursive: true });
+  fs.writeFileSync(path.join(org, 'local_1.json'), JSON.stringify({ cliSessionId: 'c1', title: 'JH 1 · a', cwd: machine.main, model: MODEL, effort: 'high' }));
+  const { desktop, unread } = readHomeSessions({ main: machine.main, home: machine.home, claudeDir: machine.claudeDir, now: NOW, days: 7, env, homedir, agents: () => [] });
+  assert.deepEqual(desktop.map((record) => record.id), ['c1']);
+  assert.equal(unread.length, 1, unread.join('\n'));
+  assert.match(unread[0], /^1 of the app's session records or their folders \(.*local_bad\.json: [A-Z]+\)$/);
+}));
+
+// Codex on e878d8b..533f8a6: a start recorded before 2026-10-28 holds the main checkout as its `worktreePath`
+// (`worktreeOf` in ./background.mjs), and its transcript is under the worktree's folder all the same.
+test('the last reply of a job whose record holds the main checkout as its worktree\'s path is read under its worktree', withMachine((machine) => {
+  started(machine, 'job-old', 1, { sessionId: 's-old', worktree: 'a', worktreePath: machine.main, effort: 'medium' });
+  writeReply(machine, machine.tree, 's-old', MODEL, 'high');
+  assert.deepEqual(read(machine).background[0].replied, { model: MODEL, effort: 'high' });
 }));
 
 test('with no record and no app record there is nothing, and nothing is unread', withMachine((machine) => {

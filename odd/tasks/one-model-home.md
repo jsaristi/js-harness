@@ -382,6 +382,20 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 17:35: the `doctor` row is `533f8a63`. Codex on `e878d8be..533f8a63` (2 parts, 442,782 input tokens):
+incorrect, three P2 findings, all three true and taken, fixed in the commit that carries this line, each with its
+test seen red first. (1) `home-sessions-read.mjs` called the app's reader with no one to tell of a record or a
+folder it could not read, so such a session was absent with nothing said: the reader is now given a callback, and
+what it passes over is counted in `not read`, the first one named. (2) A job's transcript was looked for under the
+record's `worktreePath`, which a start recorded before 2026-10-28 holds as the main checkout: it is `worktreeOf`
+now, as `recordedFolders` does. (3) A busy job's correction was a resume, which `resumeStart` refuses while a job
+works its conversation (`bin/sessions-background.mjs:310`): a job gains `working` (`atWork`) and its act reads "a
+resume once its job is no longer at work, which a resume refuses until then". Owed: the risk lens and the
+reliability lens on `e878d8be` to the head, then Codex's confirming review of the corrections on `533f8a63` to the
+head. The slicing of pull request 3, 1,368 changed lines: four stacked branches on main, cut at `2df39fb6` (256
+lines of code and tests: start, resume and the guard), `7a63f4f0` (297: the board), `6df6a4ba` (440, one commit
+that cannot shrink: the list of `rules applied`, its reader and their tests) and the head (the `doctor` row and the
+fixes of the reviews), named `feat/model-home-sessions-1` to `-3` and `feat/model-home-sessions`.
 2026-11-11 17:23: the commit of the `doctor` row was refused at its first try too (run 43110036622, 456 s): the
 dispatch test `bin/js-harness.test.mjs:285` lists doctor's rows in order and lacked `model-home`. I had run doctor's
 own tests and not searched the tests for a neighbour row's id; `grep -rn -l "'stack-update'" bin workshop` finds that

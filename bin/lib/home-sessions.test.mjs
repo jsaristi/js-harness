@@ -39,7 +39,7 @@ test('an archived desktop session is in no row: the archived ones off the home a
 });
 
 test('a background session is judged by its last reply, by what its start asked where no reply was read, and a resume corrects it unless its job was removed', () => {
-  const job = (id, more) => ({ id, title: `JH ${id} · job`, asked: { model: null, effort: null }, replied: null, state: 'busy', removed: false, ...more });
+  const job = (id, more) => ({ id, title: `JH ${id} · job`, asked: { model: null, effort: null }, replied: null, state: 'idle', working: false, removed: false, ...more });
   const background = [
     job('1', { asked: on, replied: on }),
     job('2', { asked: on, replied: { ...on, effort: 'high' } }),
@@ -48,14 +48,19 @@ test('a background session is judged by its last reply, by what its start asked 
     job('5', {}),
     job('6', { replied: { model: 'claude-opus-5-5', effort: 'medium' }, state: null, removed: true }),
     job('7', { replied: on, removed: true }),
+    job('8', { replied: { ...on, effort: 'high' }, state: 'busy', working: true }),
+    job('9', { replied: { ...on, effort: 'high' }, state: null, working: null }),
   ];
   const result = sessionsOffHome(HOME, { background, isLead });
   assert.deepEqual(result.rows.map((row) => [row.id, row.off, row.corrects]), [
     ['2', { model: null, effort: 'high' }, 'a resume, js-harness sessions start --resume 2'],
     ['4', { model: null, effort: 'high' }, 'a resume, js-harness sessions start --resume 4'],
+    // Codex on e878d8b..533f8a6: `sessions start --resume` refuses a conversation a job works, so the act says when.
+    ['8', { model: null, effort: 'high' }, 'a resume once its job is no longer at work, which a resume refuses until then: js-harness sessions start --resume 8'],
+    ['9', { model: null, effort: 'high' }, 'a resume, js-harness sessions start --resume 9'],
   ]);
   assert.equal(result.removedOff, 1, 'a removed job off the home is counted, and is no row: nothing corrects a job that is gone');
-  assert.deepEqual(result.rows[0], { kind: 'background', id: '2', title: 'JH 2 · job', asked: on, replied: { ...on, effort: 'high' }, state: 'busy', held: on, off: { model: null, effort: 'high' }, corrects: 'a resume, js-harness sessions start --resume 2' });
+  assert.deepEqual(result.rows[0], { kind: 'background', id: '2', title: 'JH 2 · job', asked: on, replied: { ...on, effort: 'high' }, state: 'idle', held: on, off: { model: null, effort: 'high' }, corrects: 'a resume, js-harness sessions start --resume 2' });
   assert.deepEqual(result.on, { desktop: 0, background: 3 }, 'a start that asked another model and now replies on the home is on it; a removed job is not counted');
 });
 
@@ -67,7 +72,7 @@ test('the block says of each session what its source gives, what it is held to a
       { id: 'c', title: 'JH 2 · on it', ...on, archived: false },
     ],
     background: [
-      { id: 'j1', title: 'JH 3 · job', asked: { model: null, effort: null }, replied: { ...on, effort: 'high' }, state: 'busy', removed: false },
+      { id: 'j1', title: 'JH 3 · job', asked: { model: null, effort: null }, replied: { ...on, effort: 'high' }, state: 'busy', working: true, removed: false },
       { id: 'j2', title: 'JH 4 · gone', asked: { ...on, effort: 'high' }, replied: null, state: null, removed: true },
       { id: 'j3', title: null, asked: { model: 'claude-opus-5-5', effort: null }, replied: null, state: null, removed: false },
     ],
@@ -77,7 +82,7 @@ test('the block says of each session what its source gives, what it is held to a
     '',
     'Sessions off the home: a session is held to claude-fable-5-2 at medium, and the lead to high',
     '  desktop  "JH ORQ · lead"  its menu holds claude-fable-5-2 at xhigh; held to claude-fable-5-2 at high; corrected by his menu',
-    '  background  "JH 3 · job" (j1)  its last reply ran on claude-fable-5-2 at high; its start named no model and no level; its job: busy; held to claude-fable-5-2 at medium; corrected by a resume, js-harness sessions start --resume j1',
+    '  background  "JH 3 · job" (j1)  its last reply ran on claude-fable-5-2 at high; its start named no model and no level; its job: busy; held to claude-fable-5-2 at medium; corrected by a resume once its job is no longer at work, which a resume refuses until then: js-harness sessions start --resume j1',
     '  background  "(no title)" (j3)  no reply of it was read; its start asked for claude-opus-5-5 at no level; its job: not read; held to claude-fable-5-2 at medium; corrected by a resume, js-harness sessions start --resume j3',
     '  1 archived desktop session is off it too (1 at claude-opus-5-5 at high): nothing corrects one while it is archived; he can unarchive it, and it is then listed',
     '  1 background job the harness removed ran off it too: nothing corrects a job that is gone',
