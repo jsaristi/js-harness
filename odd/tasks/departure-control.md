@@ -243,7 +243,30 @@ the lead with `js-harness notify --to orchestrator`.
   due at a heartbeat's start returned before the absence was read, so the loop ended with `CUT:` alone. Red first,
   `node --test bin/loop-bodies.test.mjs`: 1 of 32 fails ("an absence in course at a start that a cut already due ends
   is told with the cut, in one ending"); fixed in `bin/loop.mjs` (the absence is read before the cut's ending, as a
-  tick does); green, 32 of 32.
+  tick does); green, 32 of 32. Committed as `f910b9d1` (gate PASS).
+- L18 (2026-11-11, the Claude lenses): `js-harness lens-review --base 8ff0b26a --lenses
+  risk,resilience,readability,reliability --doc odd/tasks/departure-control.md` over `8ff0b26..f910b9d`: risk 0
+  findings, resilience 1, readability 3, reliability 2; all taken.
+  - Readability and reliability, one finding: "held" was written twice with different conditions (the tick: any
+    question after his last message with no result yet; the return: his return is the tapped answer to a question asked
+    by the absence's start), so one absence could be sent to two entries. Now one rule both call, `heldAtStart`: a
+    question call made from his last message to the moment the absence starts, with no result at that moment. The
+    watch keeps the calls made since his last message with their results; the return reads the same from the whole
+    transcript (`heldIn`), so a return he types after closing the question is held too. The held AWAY line also names
+    the stretch command, for where he is still away once the tool returned. Red first, `node --test
+    bin/lib/return-report.test.mjs`: 3 of 32 fail, among them the new "the tick and the return use one rule for a
+    held session" (7 variants); green, 32 of 32.
+  - Resilience: a "no" of the lead check was kept for the whole absence; now only a yes is kept, and a no is read
+    again at the next tick. Red first, `node --test bin/loop-bodies.test.mjs`: 1 of 34 fails ("a session that becomes
+    the lead during his absence is told at the next tick"); green, 34 of 34.
+  - Readability: the usage, the first line, the dispatcher's summary and the README now say the lead's session, and
+    that a work session is told nothing; `away.read` and `away.unread` are `transcriptRead` and `failureSaid`, with
+    what each is about.
+  - Reliability: the two failure paths have their assertions (the notices record that cannot be read, said once; no
+    absence told from a transcript a tick could not read).
+  A limit of the one rule, said: a question closed with no message after the absence started, hours before his return,
+  is recorded as held although the session was free from then on; the held AWAY line, read at that moment, asks for
+  the stretch.
 
 ## Next step
 Done: the lead gate, T7, the 9 sightings under `question-tool-holds-asker` (L11 to L13). In order: (d) the brief of

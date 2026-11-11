@@ -352,13 +352,17 @@ test('a question on his screen holds the session: the line says since when, and 
   const found = departure({ pieces: [[his(LEFT), asked()]] });
   assert.deepEqual(found, { before: LEFT, away: ABSENCE_MS + 60_000, heldSince: ASKED });
   const told = departureLine(found);
-  assert.match(told, /question tool has held this session since 13:56/);
+  assert.match(told, /The question tool held this session from 13:56, through the start of this absence/);
   assert.match(told, /`question-tool-holds-asker` in docs\/FAILURES\.md/, 'its own failure, recorded apart');
   assert.doesNotMatch(told, /stretch-not-opened/, 'a held session skipped no duty');
-  assert.doesNotMatch(told, /stretch open --plan/, 'a held session is told nothing it cannot do');
-  // Answered, or closed without an answer, the question holds nothing.
+  // The line is read once the tool returned: a stretch is asked for only where he is still away then.
+  assert.match(told, /where they are still away, open a stretch now, `js-harness stretch open --plan <file> --html <file>`/);
+  // Closed without an answer before the absence started, the question held nothing when it did.
   assert.equal(departure({ pieces: [[his(LEFT), asked(), dismissed('2026-10-30T18:57:00.000Z')]] }).heldSince, null);
   assert.equal(departure({ pieces: [[his(LEFT), asked(), dismissed('2026-10-30T18:57:00.000Z'), asked('2026-10-30T18:58:00.000Z', 'toolu_q2')]] }).heldSince, '2026-10-30T18:58:00.000Z');
+  // Closed once it had started, it held the session then; asked once it had started, it did not.
+  assert.equal(departure({ pieces: [[his(LEFT), asked(), dismissed(new Date(STARTS - 30_000).toISOString())]] }).heldSince, ASKED);
+  assert.equal(departure({ pieces: [[his(LEFT), asked(new Date(Date.parse(LEFT) + ABSENCE_MS + 1).toISOString())]] }).heldSince, null);
   // A side chain's question is not the session's.
   const side = line({ ...JSON.parse(asked()), isSidechain: true });
   assert.equal(departure({ pieces: [[his(LEFT), side]] }).heldSince, null);
@@ -369,7 +373,7 @@ test('a return that answers a question asked before the absence started names qu
   // (9 of the 23 absences no stretch covered from 2026-10-31 to 2026-11-10, odd/tasks/departure-control.md, L3).
   const held = stretchCheck({ transcript: [his(LEFT), asked(), tapped(BACK)] });
   assert.ok(held.includes(NO_STRETCH_MARKER), held);
-  assert.match(held, /The question tool held this session from 13:56 until his answer/);
+  assert.match(held, /The question tool held this session from 13:56 to \d\d:\d\d, through the start of his absence/);
   assert.match(held, /`question-tool-holds-asker` in docs\/FAILURES\.md/);
   assert.doesNotMatch(held, /stretch-not-opened/);
   assert.match(held, /once for this return/);
@@ -378,9 +382,35 @@ test('a return that answers a question asked before the absence started names qu
   const late = stretchCheck({ transcript: [his(LEFT), asked(new Date(Date.parse(LEFT) + ABSENCE_MS + 1).toISOString()), tapped(BACK)] });
   assert.match(late, /stretch-not-opened/);
   assert.doesNotMatch(late, /question-tool-holds-asker/);
-  // So is a return he typed, and a question a stretch covered is no warning at all.
+  // So did a question he closed before it started. One he closed at his return, typing his answer, held the session.
   assert.match(stretchCheck({ transcript: [his(LEFT), asked(), dismissed('2026-10-30T18:57:00.000Z'), his(BACK)] }), /stretch-not-opened/);
+  assert.match(stretchCheck({ transcript: [his(LEFT), asked(), dismissed(new Date(Date.parse(BACK) - 5000).toISOString()), his(BACK)] }), /`question-tool-holds-asker` in docs\/FAILURES\.md/);
+  // A question a stretch covered is no warning at all.
   assert.equal(stretchCheck({ transcript: [his(LEFT), asked(), tapped(BACK)], stretches: [opened('2026-10-30T18:00:00.000Z', 's1'), closed('2026-10-31T01:40:00.000Z', 's1')] }), null);
+});
+
+test('the tick and the return use one rule for a held session: what the tick calls held, the return records as held', () => {
+  // Held is one question: a call asked from his last message to the moment the absence starts, with no result at
+  // that moment. Each variant is what the transcript holds between his last message and his return, then his return.
+  const start = Date.parse(LEFT) + ABSENCE_MS;
+  const at = (ms) => new Date(ms).toISOString();
+  const variants = [
+    { between: [asked()], back: tapped(BACK), held: true },
+    { between: [asked(at(start))], back: tapped(BACK), held: true },
+    { between: [asked(at(start + 1))], back: tapped(BACK), held: false },
+    { between: [asked(), dismissed(at(start - 1))], back: his(BACK), held: false },
+    { between: [asked(), dismissed(at(start + 1))], back: his(BACK), held: true },
+    { between: [asked(), dismissed('2026-10-30T18:57:00.000Z'), asked(at(start - 60_000), 'toolu_q2')], back: tapped(BACK, 'toolu_q2'), held: true },
+    { between: [asked(), dismissed(at(start + 1)), asked(at(start + 2), 'toolu_q2')], back: tapped(BACK, 'toolu_q2'), held: true },
+  ];
+  for (const [index, { between, back, held }] of variants.entries()) {
+    // The instant before his return: the tick has read everything but it.
+    const tick = departure({ pieces: [[his(LEFT), ...between]], now: Date.parse(BACK) - 1 });
+    const atReturn = stretchCheck({ transcript: [his(LEFT), ...between, back] });
+    assert.equal(tick.heldSince !== null, held, `the tick, variant ${index}`);
+    assert.equal(atReturn.includes('`question-tool-holds-asker`'), held, `the return, variant ${index}`);
+    assert.equal(atReturn.includes('`stretch-not-opened`'), !held, `the return names one failure, variant ${index}`);
+  }
 });
 
 test('a transcript read piece by piece gives what the whole gives, a question and its result apart included', () => {

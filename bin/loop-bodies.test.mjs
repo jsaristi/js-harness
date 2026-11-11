@@ -488,7 +488,7 @@ test('heartbeat ends with the AWAY line when he last wrote to its session two ho
   assert.equal(state.clock, T0 + HOUR + 120000, 'the first tick after the gap is longer than two hours');
   assert.match(state.out.at(-1), /^AWAY: the user last wrote to this session at \d\d:\d\d, local time \(UTC[+-]\d\d:\d\d\), 2\.0 hours ago, and no stretch covers the time since/);
   assert.ok(state.out.at(-1).includes('js-harness stretch open --plan <file> --html <file>'));
-  assert.match(state.out[0], /each tick reads when the user last wrote to this session, and 2 hours with no message and no stretch covering them end it/);
+  assert.match(state.out[0], /each tick reads when the user last wrote to this session, and in the lead's session 2 hours with no message and no stretch covering them end it/);
   assert.deepEqual(JSON.parse(state.marks[AWAY_MARK]), { told: iso(T0 - HOUR), at: iso(T0 + HOUR + 120000), heldSince: null });
 });
 
@@ -542,7 +542,7 @@ test('heartbeat: a question on his screen is said in the AWAY line, since the se
   state.transcript = his(T0 - 3 * HOUR) + question(T0 - 3 * HOUR + 60000);
   deps.readTail = tailOf(state);
   assert.equal(await loopMain(['heartbeat', '--every', '120'], ENV, deps), 0);
-  assert.match(state.out.at(-1), /^AWAY: .*The question tool has held this session since \d\d:\d\d/);
+  assert.match(state.out.at(-1), /^AWAY: .*The question tool held this session from \d\d:\d\d, through the start of this absence/);
   assert.equal(JSON.parse(state.marks[AWAY_MARK]).heldSince, iso(T0 - 3 * HOUR + 60000));
 });
 
@@ -586,4 +586,44 @@ test('heartbeat tells no work session, nor a session whose notices cannot be rea
   state.channel = '';
   assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], ENV, deps), 1);
   assert.deepEqual(awayLines(state), [], 'a session that sent no notice is no lead');
+
+  // A record of notices that is there and cannot be read is said once, and nobody is told on a guess.
+  state.out = [];
+  const read = deps.readFile;
+  deps.readFile = (file) => {
+    if (file === CHANNEL) throw Object.assign(new Error('EACCES: the record is held'), { code: 'EACCES' });
+    return read(file);
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], ENV, deps), 1);
+  assert.deepEqual(awayLines(state), []);
+  assert.equal(state.out.filter((line) => line.startsWith('the user\'s absence could not be read: the record of notices')).length, 1);
+});
+
+test('heartbeat: a session that becomes the lead during his absence is told at the next tick, not left out of it', async () => {
+  // The lead check is read again while it says no: a lead's first notice may come after the absence started.
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: (s) => {
+    busy(s);
+    s.channel = notice({ at: s.clock, id: OWNER, title: 'JH ORQ · lead' });
+  } });
+  state.transcript = his(T0 - 3 * HOUR);
+  deps.readTail = tailOf(state);
+  assert.equal(await loopMain(['heartbeat', '--every', '600'], ENV, deps), 0);
+  assert.equal(state.clock, T0 + 600000, 'told at the first tick that finds it the lead');
+  assert.equal(awayLines(state).length, 1);
+});
+
+test('heartbeat tells no absence from a transcript it could not read in that tick', async () => {
+  // His last message is read at the start; every later read fails, so what he wrote since is not known.
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, channel: LEADS, onSleep: busy });
+  state.transcript = his(T0 - HOUR);
+  const tail = tailOf(state);
+  let reads = 0;
+  deps.readTail = (file, start) => {
+    reads += 1;
+    if (reads > 1) throw Object.assign(new Error('EBUSY: the transcript is held'), { code: 'EBUSY' });
+    return tail(file, start);
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '3', '--every', '600'], ENV, deps), 1);
+  assert.deepEqual(awayLines(state), [], 'two hours passed, and nothing is told on the last good read');
+  assert.equal(state.out.filter((line) => line.startsWith("the lead's cut could not read")).length, 1);
 });
