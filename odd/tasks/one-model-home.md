@@ -382,6 +382,14 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+At 13:15, after the host compacted the session at 12:55: main is merged (`0abb1d2c`, main `51932db`; one conflict
+in `docs/ROADMAP.md`, both rows kept). S8 is built in two commits: `1201bb1a`, `rules change lead-effort` with
+`LENS_EFFORT = claudeHome().lead`, its two tests and the two breaks moved to `lead-effort`'s bundle (135 tests of
+six files pass); then `rules change session-effort` made again whole, its subject without the reviewers. The
+tapped answer is no quotation: the quotations are his typed lines (4744, 5167, 11253, 11679) and line 822 is named
+in `accepted`. Next: the three model retirements, the guard's sub-agent call, Codex's two patterns, `prove.mjs` on
+the two homes and `lead-effort`, the verifier, the gate and both reviews (the base of the reviews is `0abb1d2c`'s
+side of the first-parent line; main is in).
 At 13:10: the first retirement is committed, `62efbcca`. Its first try was refused by the convention of structure:
 `bin/check.mjs` is at its ceiling of 1,938 lines, so nothing is added to it (the rule's id is written there, with
 no import). Next, in this order: the lenses at high (S8; read the note on a tapped answer below first), the three

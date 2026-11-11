@@ -1633,9 +1633,9 @@ export function checkFunctionsPending(cwd, { spawn = spawnSync } = {}) {
   return [{ name: 'functions', pass: true, info: true, detail: 'this clone is not what its switches ask: js-harness functions apply makes it so', lines: pending }];
 }
 
-/** The rules the sub-agent row reads, by id: a writer against the first, an explorer, reviewer or verifier
- * against the second, and every launch's effort against the third, the level of the Claude home. */
-const SUBAGENT_RULES = { writer: 'subagent-writer-model', reader: 'subagent-reader-model', effort: 'session-effort' };
+/** The rules the sub-agent row reads, by id: a writer and an explorer, reviewer or verifier against the model of
+ * the Claude home, and every launch's effort against its level. */
+const SUBAGENT_RULES = { writer: 'session-model', reader: 'session-model', effort: 'session-effort' };
 
 /** Why a rule is not in force, as `ruleHere` names it: no rules file here, or one that is not the harness's list. */
 const OFF_WHY = { elsewhere: 'this project keeps no bin/lib/rules-data.mjs', behind: "its bin/lib/rules-data.mjs is not the harness's list" };

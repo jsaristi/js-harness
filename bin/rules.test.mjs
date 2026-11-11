@@ -333,7 +333,7 @@ test('the usage names the applied form, and a word after applied is a usage erro
 
 // Noon of the day after the newest of the rules the records are held to began, so every one of them holds a record
 // written at NOW, whatever day his last change of one fell on.
-const HELD_IDS = ['session-model', 'session-effort', 'subagent-writer-model', 'subagent-reader-model'];
+const HELD_IDS = ['session-model', 'session-effort'];
 const NOW = Date.parse(`${RULES.filter((rule) => HELD_IDS.includes(rule.id)).map((rule) => rule.since).sort().at(-1)}T12:00:00Z`) + 24 * 60 * 60 * 1000;
 const RULES_DATA_TEXT = fs.readFileSync(path.join(PACKAGE, 'bin', 'lib', 'rules-data.mjs'), 'utf8');
 const LIST = { 'bin/lib/rules-data.mjs': RULES_DATA_TEXT };
@@ -374,12 +374,14 @@ const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
 // The writer rule and its short name. While the rule declares one, `applied` compares what the short name gave and
 // fails on another model; while it declares none (since 2026-11-10 no short name gives Fable 5.2), a launch's model is
 // held to the rule as information. The tests below follow whichever the list declares.
-const WRITER = declared('subagent-writer-model');
+// The writers' own rule retired into the home on 2026-11-11: a launch's model is held to the home's, whose line for
+// the launches comes after its line for the sessions.
+const WRITER = declared('session-model');
 const SHORT = WRITER.alias;
 /** Whether `out` says the one launch answered by the writer rule's model agrees with it. */
 const agrees = (out) => (SHORT !== undefined
-  ? out.includes(`subagent-writer-model: ${WRITER.value}, passed as \`${SHORT}\`, since ${WRITER.since}`) && out.includes('PASS  rules applied: each short name gave its model')
-  : out[out.indexOf(heldLine('subagent-writer-model')) + 1] === '    agree: 1 of 1 launch');
+  ? out.includes(`session-model: ${WRITER.value}, passed as \`${SHORT}\`, since ${WRITER.since}`) && out.includes('PASS  rules applied: each short name gave its model')
+  : out[out.lastIndexOf(heldLine('session-model')) + 1] === '    agree: 1 of 1 launch');
 
 /** Runs `js-harness rules applied` on `project` at `now` (NOW by default), with `env` (by default the Claude home is `home`), collecting its output. */
 async function applied(project, home, env = { CLAUDE_CONFIG_DIR: home }, { cwd = project, git = NO_GIT, now = NOW } = {}) {
@@ -487,13 +489,13 @@ test('applied fails, with the line to the lead, when a short name is answered by
     const { code, out } = await applied(project, home);
     if (SHORT === undefined) {
       const day = new Date(NOW).toISOString().slice(0, 10);
-      const at = out.indexOf(heldLine('subagent-writer-model'));
+      const at = out.lastIndexOf(heldLine('session-model'));
       assert.equal(code, 0, out.join('\n'));
       assert.deepEqual(out.slice(at + 1, at + 3), ['    agree: 0 of 1 launch', `    claude-haiku-4-5: 1 launch of general-purpose, the last on ${day}`], out.join('\n'));
       return;
     }
     assert.equal(code, 1, out.join('\n'));
-    assert.ok(out.some((line) => line.startsWith('FAIL  subagent-writer-model:')), out.join('\n'));
+    assert.ok(out.some((line) => line.startsWith('FAIL  session-model:')), out.join('\n'));
     assert.ok(out.some((line) => line.startsWith('To the lead:')), out.join('\n'));
     assert.ok(!out.includes('PASS  rules applied: each short name gave its model'));
   });

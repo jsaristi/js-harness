@@ -494,16 +494,34 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "Por que me equivoque, no podemos utilizar Fable 5.2 en Medio sino en Alto y este orquestador en Alto",
+        "quote": "haz la correcion completa osea todos los modelos de ahora en adelante va a ser Fable 5.2 Alto",
         "date": "2026-11-10",
         "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
         "line": 4744
+      },
+      {
+        "quote": "Vamos a unificar y todo va a ser con Fable 5.2 Alto y necesito que lo cambies tanto en la documentacion y lo unifiques en un solo lugar",
+        "date": "2026-11-10",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 5167
+      },
+      {
+        "quote": "Va a tocar utilizar Fable 5.2 en Alto solo para el orquestador y para las sesiones solo Fable 5.2 en Medio",
+        "date": "2026-11-11",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 11253
+      },
+      {
+        "quote": "Sí, aplícalo",
+        "date": "2026-11-11",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 11679
       }
     ],
-    "reading": "The lead of this repository, his \"este orquestador\", runs at high effort, his \"en Alto\": the lead open on 2026-11-10 and every later one. It corrects his \"Extra Altro\" of the same day (line 3422 of the same transcript). A new lead is started by the old one with the host's session-start tool under the title of a lead, <code> ORQ · <purpose>, and a start so titled is held to this value, at it or lower; every other start is held to rule:session-effort, which his same words put at the same level. A lead he opens himself takes the level he picks in the host's menu, which no command holds.",
-    "accepted": "Typed by him in the lead's chat on 2026-11-10. Not put to him as a reading: it is this session's, and his to correct.",
+    "reading": "Everything Claude the harness starts reads its model and its effort in one place: his \"todos los modelos de ahora en adelante\" and \"lo unifiques en un solo lugar\" of 2026-11-10. That day it was one model at one effort; on 2026-11-11, after the limit of Fable stopped the sessions, he kept the one model and split the effort in two, high for the orchestrator alone and medium for the sessions and the sub-agents. This rule is the higher of the two levels, his \"Alto\", which the host names high. It was the lead's session alone; asked on 2026-11-11 at which effort the lenses and the double review's Claude reader review, he chose high, so the two read this rule and not rule:session-effort. Their model is rule:session-model, as everything's.",
+    "accepted": "Typed by him in the lead's chat on 2026-11-10 and 2026-11-11. His \"Sí, aplícalo\" answers the lead's scheme of line 11674 of the same transcript, \"Orquestador: Fable 5.2 alto\" and \"Sesiones y subagentes nuevos: Fable 5.2 medio\". The rest of the reading was not put to him: it is the lead's, in the brief of JH 172 and its notices of 2026-11-11, and his to correct. The reviewers at high: his answer of 2026-11-11 12:24 local to the lead's question 260, \"¿A qué esfuerzo quieres que revisen las lentes y el lector Claude de la doble revisión?\", the option \"Lentes en alto (Recomendado)\", tapped and so not quoted (transcript f0959bbd-5f7a-4360-b626-048caf21067f, line 822).",
     "checked": {
-      "date": "2026-11-10",
+      "date": "2026-11-11",
       "by": "command"
     }
   },
@@ -1109,8 +1127,8 @@
         "line": 11679
       }
     ],
-    "reading": "Everything Claude the harness starts reads its model and its effort in one place: his \"todos los modelos de ahora en adelante\" and \"lo unifiques en un solo lugar\" of 2026-11-10. That day it was one model at one effort; on 2026-11-11, after the limit of Fable stopped the sessions, he kept the one model and split the effort in two, high for the orchestrator alone and medium for the sessions and the sub-agents. This rule is the level of everything but the lead's session, his \"Medio\", which the host names medium; the lead's is rule:lead-effort, and the model of both is rule:session-model. That the lenses and the double review's Claude reader go with the sessions is the lead's reading of his \"en Alto solo para el orquestador\" (its message of 2026-11-11 to JH 172). A session open on 2026-11-11 keeps the level it has: the scheme he answered lets the stopped ones end at high. The effort of a Codex review is another vendor's and keeps its own home, rule:review-effort.",
-    "accepted": "Typed by him in the lead's chat on 2026-11-10 and 2026-11-11. His \"Sí, aplícalo\" answers the lead's scheme of line 11674 of the same transcript, \"Orquestador: Fable 5.2 alto\" and \"Sesiones y subagentes nuevos: Fable 5.2 medio\". The rest of the reading was not put to him: it is the lead's, in the brief of JH 172 and its notices of 2026-11-11, and his to correct.",
+    "reading": "Everything Claude the harness starts reads its model and its effort in one place: his \"todos los modelos de ahora en adelante\" and \"lo unifiques en un solo lugar\" of 2026-11-10. That day it was one model at one effort; on 2026-11-11, after the limit of Fable stopped the sessions, he kept the one model and split the effort in two, high for the orchestrator alone and medium for the sessions and the sub-agents. This rule is the level of everything but the lead's session and the reviewers, his \"Medio\", which the host names medium; the lead's is rule:lead-effort, and the model of both is rule:session-model. The lenses and the double review's Claude reader do not go with the sessions: asked on 2026-11-11 at which effort they review, he chose high, so they read rule:lead-effort. A session open on 2026-11-11 keeps the level it has: the scheme he answered lets the stopped ones end at high. The effort of a Codex review is another vendor's and keeps its own home, rule:review-effort.",
+    "accepted": "Typed by him in the lead's chat on 2026-11-10 and 2026-11-11. His \"Sí, aplícalo\" answers the lead's scheme of line 11674 of the same transcript, \"Orquestador: Fable 5.2 alto\" and \"Sesiones y subagentes nuevos: Fable 5.2 medio\". The rest of the reading was not put to him: it is the lead's, in the brief of JH 172 and its notices of 2026-11-11, and his to correct. The reviewers at high: his answer of 2026-11-11 12:24 local to the lead's question 260, \"¿A qué esfuerzo quieres que revisen las lentes y el lector Claude de la doble revisión?\", the option \"Lentes en alto (Recomendado)\", tapped and so not quoted (transcript f0959bbd-5f7a-4360-b626-048caf21067f, line 822).",
     "checked": {
       "date": "2026-11-11",
       "by": "command"
@@ -1355,12 +1373,30 @@
         "date": "2026-11-10",
         "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
         "line": 4744
+      },
+      {
+        "quote": "Vamos a unificar y todo va a ser con Fable 5.2 Alto y necesito que lo cambies tanto en la documentacion y lo unifiques en un solo lugar",
+        "date": "2026-11-10",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 5167
+      },
+      {
+        "quote": "Va a tocar utilizar Fable 5.2 en Alto solo para el orquestador y para las sesiones solo Fable 5.2 en Medio",
+        "date": "2026-11-11",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 11253
+      },
+      {
+        "quote": "Sí, aplícalo",
+        "date": "2026-11-11",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 11679
       }
     ],
-    "reading": "A sub-agent that explores, reviews or verifies runs on Fable 5.2, which the session records name claude-fable-5-2. That his \"todos los modelos\" takes in these sub-agents is the lead's reading (JH ORQ, the brief of this change), and his to stop; his words of 2026-10-10 already allowed a Fable at high in place of Opus 5.5 once one existed. His \"Alto\" for them is rule:subagent-effort, already high. The rule declares no short name: measured on 2026-11-10 with one prompt on cli 2.1.319, `fable` is answered by claude-fable-5-1 and the full id claude-fable-5-2 by itself, so such a sub-agent is launched with no model, on its session's (rule:session-model), and the double review's Claude reader passes the id. A short name comes back by a reading, once one is measured to give this model.",
-    "accepted": "Typed by him in the lead's chat on 2026-11-10. Not put to him as a reading: it is the lead's, and his to correct.",
+    "reading": "Everything Claude the harness starts reads its model and its effort in one place: his \"todos los modelos de ahora en adelante\" and \"lo unifiques en un solo lugar\" of 2026-11-10. That day it was one model at one effort; on 2026-11-11, after the limit of Fable stopped the sessions, he kept the one model and split the effort in two, high for the orchestrator alone and medium for the sessions and the sub-agents. This rule restated a value of that place for one kind of work, so it retires into rule:session-model, which holds it.",
+    "accepted": "Typed by him in the lead's chat on 2026-11-10 and 2026-11-11. His \"Sí, aplícalo\" answers the lead's scheme of line 11674 of the same transcript, \"Orquestador: Fable 5.2 alto\" and \"Sesiones y subagentes nuevos: Fable 5.2 medio\". The rest of the reading was not put to him: it is the lead's, in the brief of JH 172 and its notices of 2026-11-11, and his to correct.",
     "checked": {
-      "date": "2026-11-10",
+      "date": "2026-11-11",
       "by": "command"
     }
   },
@@ -1372,12 +1408,30 @@
         "date": "2026-11-10",
         "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
         "line": 4744
+      },
+      {
+        "quote": "Vamos a unificar y todo va a ser con Fable 5.2 Alto y necesito que lo cambies tanto en la documentacion y lo unifiques en un solo lugar",
+        "date": "2026-11-10",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 5167
+      },
+      {
+        "quote": "Va a tocar utilizar Fable 5.2 en Alto solo para el orquestador y para las sesiones solo Fable 5.2 en Medio",
+        "date": "2026-11-11",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 11253
+      },
+      {
+        "quote": "Sí, aplícalo",
+        "date": "2026-11-11",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 11679
       }
     ],
-    "reading": "In this repository's way of working a sub-agent that writes scoped code runs on Fable 5.2, which the session records name claude-fable-5-2. That his \"todos los modelos\" takes in the sub-agents, and so ends his \"solo para codificar quiero el haiku\" of 2026-10-10, is the lead's reading (JH ORQ, the brief of this change), not his sentence about writers: it is his to stop. His \"Alto\" for them is rule:subagent-effort, already high. The rule declares no short name: measured on 2026-11-10 with one prompt on cli 2.1.319, `fable` is answered by claude-fable-5-1 and the full id claude-fable-5-2 by itself, so a writer is launched as the agent type js-harness-writer, whose file names the id, or with no model, on its session's (rule:session-model). A short name comes back by a reading, once one is measured to give this model.",
-    "accepted": "Typed by him in the lead's chat on 2026-11-10. Not put to him as a reading: it is the lead's, and his to correct.",
+    "reading": "Everything Claude the harness starts reads its model and its effort in one place: his \"todos los modelos de ahora en adelante\" and \"lo unifiques en un solo lugar\" of 2026-11-10. That day it was one model at one effort; on 2026-11-11, after the limit of Fable stopped the sessions, he kept the one model and split the effort in two, high for the orchestrator alone and medium for the sessions and the sub-agents. This rule restated a value of that place for one kind of work, so it retires into rule:session-model, which holds it.",
+    "accepted": "Typed by him in the lead's chat on 2026-11-10 and 2026-11-11. His \"Sí, aplícalo\" answers the lead's scheme of line 11674 of the same transcript, \"Orquestador: Fable 5.2 alto\" and \"Sesiones y subagentes nuevos: Fable 5.2 medio\". The rest of the reading was not put to him: it is the lead's, in the brief of JH 172 and its notices of 2026-11-11, and his to correct.",
     "checked": {
-      "date": "2026-11-10",
+      "date": "2026-11-11",
       "by": "command"
     }
   },

@@ -8,18 +8,16 @@ import { CLAUDE_HOME, EFFORTS, claudeHeld, sameClaudeModel } from './model-home.
 import { guardHeld, ruleHere, ruleOf, staleNote } from './rules.mjs';
 
 /** The models a sub-agent may be launched on in the project whose rules file has the text `projectData`, as
- * `[{ alias, id, rule }]`, writer first, `alias` null for a rule that declares no short name; or null when the rules
- * are not in force there (no rules file, or one that does not declare them), and then no model is refused. Behind a project that declares them the copy's own are held,
- * each with a `note` where the project declares it otherwise (`guardHeld`). The two model rules are read with
- * `ruleHere`, by their ids written out so that `rules check` lists this file as their reader, because both are of
- * this repository only: a project that installs the harness turns nothing on by default (his answer of 2026-10-14,
- * odd/tasks/honesty-audit.md S5). */
+ * `[{ alias, id, rule }]`, `alias` null for a rule that declares no short name; or null when the rule is not in force
+ * there (no rules file, or one that does not declare it), and then no model is refused. Behind a project that
+ * declares it the copy's own is held, with a `note` where the project declares it otherwise (`guardHeld`). It is the
+ * one model of the Claude home, read through `claudeHeld`: the writers' and the readers' own rules retired into it
+ * on 2026-11-11. The rule is of this repository only: a project that installs the harness turns nothing on by
+ * default (his answer of 2026-10-14, odd/tasks/honesty-audit.md S5). */
 export function allowedModels(projectData) {
-  const writer = guardHeld('subagent-writer-model', ruleHere('subagent-writer-model', undefined, projectData));
-  const reader = guardHeld('subagent-reader-model', ruleHere('subagent-reader-model', undefined, projectData));
-  if (writer === null || reader === null) return null;
-  const entry = (rule, { value, note }) => ({ alias: ruleOf(rule).alias ?? null, id: value, rule, ...(note !== '' && { note }) });
-  return [entry('subagent-writer-model', writer), entry('subagent-reader-model', reader)];
+  const held = claudeHeld(projectData).model;
+  if (held === null) return null;
+  return [{ alias: ruleOf(CLAUDE_HOME.model).alias ?? null, id: held.value, rule: CLAUDE_HOME.model, ...(held.note !== '' && { note: held.note }) }];
 }
 
 /** Why the `Agent` call whose input is `toolInput` is refused, or null when it is not. A call with no `model`

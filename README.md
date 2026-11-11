@@ -218,7 +218,7 @@ INFO  hook entries  16 entries in this home and project: js-harness 15, codegrap
 INFO  sensors  no sensors declared: add test, lint or typecheck scripts to package.json, or a "sensors" object to harness.json
 ```
 
-`js-harness check --subagents` adds one INFO row, `subagents`, for today's sub-agents of this project, read from the Claude Code records: each writer launch is compared with `subagent-writer-model`, each explorer, reviewer or verifier with `subagent-reader-model`, and every launch's effort with `session-effort`. It says how many ran off those rules and fails nothing. It is opt-in: the commit gate runs plain `check`, which reads no record, and a day of records is about 231 MB.
+`js-harness check --subagents` adds one INFO row, `subagents`, for today's sub-agents of this project, read from the Claude Code records: each writer, explorer, reviewer or verifier launch is compared with `session-model`, and every launch's effort with `session-effort`. It says how many ran off those rules and fails nothing. It is opt-in: the commit gate runs plain `check`, which reads no record, and a day of records is about 231 MB.
 
 Three more forms of `check` share the same command:
 
@@ -1097,7 +1097,7 @@ alone. A reader that could not answer exits 1, its reason recorded; a usage erro
 
 ```console
 $ js-harness double-review read odd/tasks/plan.md --plan
-double review of odd/tasks/plan.md: a Claude reader on <subagent-reader-model> and a Codex reader on <review-model>, blind, started at once on one frozen copy
+double review of odd/tasks/plan.md: a Claude reader on <session-model> and a Codex reader on <review-model>, blind, started at once on one frozen copy
 cost: measured once, about 116k tokens of Claude and 55k of Codex, about 1% of Codex's weekly limit (odd/tasks/double-review-alignment.md, L8); js-harness codex-meter reads what is left
 only the user's own words skip it, "no quiero la revisión", recorded with js-harness double-review skip
 ```
@@ -1770,9 +1770,9 @@ judged by the file it leaves, read from disk, so a short clause that makes a lin
 line that was already long there is left to the memory hygiene pass rather than blocking the edit.
 
 The hook always exits 0 and writes nothing. A check that cannot read what it checks lets the call run.
-The model rules are the project's `subagent-writer-model` and `subagent-reader-model`. A project
-that installs the harness has them off by default, so the model check applies only where the
-project sets them.
+The model rule is the project's `session-model`. A project
+that installs the harness has it off by default, so the model check applies only where the
+project sets it.
 
 ```console
 $ js-harness guard --hook < send.json

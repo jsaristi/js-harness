@@ -46,7 +46,6 @@ import { appendDoubleReview, codeTallyOf, findingsOf, READERS, readDoubleReviews
 import { harnessHome } from './lib/home.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { RuleChangeError, quotationOf } from './lib/rules-change.mjs';
-import { ruleHere } from './lib/rules.mjs';
 import { mainCheckout, projectDirsOf } from './lib/sessions.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 
@@ -63,11 +62,11 @@ export const USAGE =
 export const SKIP_PHRASE = 'no quiero la revisión';
 /** `text` in lower case with its accents taken off, "Revisión" read as "revision": how the skip phrase is compared. */
 const folded = (text) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-// The Claude reader runs on `rule:subagent-reader-model`, a rule of this repository: a project that does not declare
-// it reads on the Claude home's model (`rule:session-model`), a full id read from the declared list (until
-// 2026-11-10 the fallback was a short name, which gives whatever the engine in use has for it). It reads at the
-// lenses' effort, named on the call.
-const CLAUDE_FALLBACK = claudeHome().model;
+// The Claude reader runs on the Claude home's model (`rule:session-model`), in this repository and in a project
+// that declares no rules alike: a full id read from the declared list (until 2026-11-10 a project with no rules read
+// on a short name, which gives whatever the engine in use has for it). The readers' own model rule retired into the
+// home on 2026-11-11. It reads at the lenses' effort, named on the call.
+export const READER_MODEL = claudeHome().model;
 // What one read cost when it was measured by this command, on this feature's own document (the feature document,
 // L12): input counted with its cache reads, as the record counts it, and said as measured once, not as a bound.
 const MEASURED_COST = 'about 1.1M tokens of Claude and 0.9M of Codex, most of them cache reads, and 1% of Codex\'s weekly limit';
@@ -302,18 +301,6 @@ export function codexOutcome(ran, tokens) {
   return echoed(answer, tokens, { usage });
 }
 
-/** The model of the Claude reader in the project at `root`: `rule:subagent-reader-model` where its rules file is this
- * copy's list, else the fallback. */
-export function readerModel(root) {
-  let text;
-  try {
-    text = fs.readFileSync(path.join(root, 'bin', 'lib', 'rules-data.mjs'), 'utf8');
-  } catch {
-    text = undefined;
-  }
-  return ruleHere('subagent-reader-model', undefined, text).value ?? CLAUDE_FALLBACK;
-}
-
 /** The repository's top level around `cwd`, or `null` outside one. */
 function topLevel(cwd) {
   const ran = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8' });
@@ -443,7 +430,7 @@ async function readCommand(args, root, env, deps, { log, error }) {
     }
     sources.push({ abs, rel: path.relative(root, abs).split(path.sep).join('/') });
   }
-  const model = readerModel(root);
+  const model = READER_MODEL;
   for (const line of announceLines({ files: sources.map((one) => one.rel), diff: args.diff, model })) log(line);
   if (args.plan) return 0;
   // The weekly limit, read before both readers start (rule:codex-weekly-floor): at or under its floor neither starts.

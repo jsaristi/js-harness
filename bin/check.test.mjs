@@ -5595,7 +5595,7 @@ function subagentProject({ rules = true, records = true } = {}) {
       fs.writeFileSync(path.join(agents, `agent-${id}.jsonl`), recordLine([turnAt(stamp, model)]));
       fs.writeFileSync(path.join(agents, `agent-${id}.meta.json`), JSON.stringify(meta));
     };
-    agent('w1', { agentType: 'general-purpose', description: 'Write the change' }, RULES.find((rule) => rule.id === 'subagent-writer-model').value, '2026-10-14T14:02:00Z');
+    agent('w1', { agentType: 'general-purpose', description: 'Write the change' }, RULES.find((rule) => rule.id === 'session-model').value, '2026-10-14T14:02:00Z');
     agent('e1', { agentType: 'Explore', description: 'Map things' }, 'claude-sonnet-5-5', '2026-10-14T14:03:00Z');
   }
   return { dir, config, cleanup: () => { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(config, { recursive: true, force: true }); } };
@@ -5629,7 +5629,7 @@ test('check --subagents prints an INFO subagents row that counts today\'s launch
     const [row] = subagentRows(output);
     assert.ok(row?.startsWith('INFO  subagents  '), output);
     assert.match(row, /2 launches today: 1 on a model off the rules/, output);
-    assert.ok(output.split('\n').some((line) => line.includes('claude-sonnet-5-5') && line.includes('subagent-reader-model')), output);
+    assert.ok(output.split('\n').some((line) => line.includes('claude-sonnet-5-5') && line.includes('session-model')), output);
     assert.notEqual(code, 2, output);
   } finally {
     project.cleanup();

@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `13dfdb334353`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 5.
+Hash `fe84ba88b915`. In force: 71 (43 of Sebastián, 28 of the project). Retired: 7.
 
 ## Sebastián's
 
@@ -85,11 +85,11 @@ What the lead does alone and tells him after, and what stays his, asked one at a
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-09, 2026-10-11, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-10, 2026-10-15, 2026-10-15, 2026-10-24, checked by the command on 2026-10-22.
 
 ### lead-effort
-The effort the lead's session runs at: high.
+The effort the lead's session, the lenses and the double review's Claude reader run at: high.
 - Of this repository only: not in force in a project that installs the harness.
 - Was: xhigh until 2026-11-10.
 - Read by: `bin/lib/model-home.mjs`.
-- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
+- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, 2026-11-10, 2026-11-11, 2026-11-11, checked by the command on 2026-11-11.
 
 ### live-board
 The harness never works as a black box: work sessions write each event as a notice (a session starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends them to the live board, a page that updates by itself, and points every reply to it: "- Every event of your work reaches the user's live board as a notice: \`js-harness notify --to orchestrator\` with \`opened\` when you start, \`note\` when a step of your plan finishes, a pull request opens or merges, a decision is made or you report spend, and \`ready\` and \`closed\` as below."
@@ -179,7 +179,7 @@ A rule he gives is cemented in the harness where something acts on it, never onl
 - Since 2026-10-29. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, 2026-10-26, 2026-10-26, 2026-10-26, 2026-10-28, 2026-10-28, checked by the command on 2026-10-29.
 
 ### session-effort
-The effort everything Claude the harness starts runs at but the lead's session: every work session, every sub-agent, the lenses and the double review's Claude reader: medium.
+The effort every work session and every sub-agent the harness starts runs at; the lead's session, the lenses and the double review's Claude reader run at rule:lead-effort: medium.
 - Of this repository only: not in force in a project that installs the harness.
 - Was: high until 2026-11-11; medium until 2026-11-10; high until 2026-11-10.
 - Read by: `bin/lib/model-home.mjs`, `bin/rules.mjs`.
@@ -218,20 +218,6 @@ The way a session opens another in this repository, so that the user can see eve
 Asked how the work goes, the lead reports everything since the last report, in detail, and each step it proposes next with its why: "## The status report When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well."
 - Home: `bin/lib/manifest.mjs`.
 - Since 2026-10-29. Row: reports. Source: his words of 2026-10-20, 2026-10-29, checked by the command on 2026-10-29.
-
-### subagent-reader-model
-The model of a sub-agent that explores, reviews or verifies: claude-fable-5-2.
-- Of this repository only: not in force in a project that installs the harness.
-- Was: claude-opus-5-5 until 2026-11-10.
-- Read by: `bin/double-review.mjs`, `bin/lib/guard.mjs`.
-- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
-
-### subagent-writer-model
-The model of a sub-agent that writes scoped code, in this repository: claude-fable-5-2.
-- Of this repository only: not in force in a project that installs the harness.
-- Was: claude-haiku-5-5 until 2026-11-10.
-- Read by: `bin/lib/guard.mjs`.
-- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
 ### terminal-note
 The note that ends a command typed into his Terminal panel, saying what it does in everyday words, so he reads it beside the command where it runs: the guard refuses a run_in_terminal command without it: <command>; Write-Host 'NOTE: <what it does>'.
@@ -416,6 +402,16 @@ A reply ends in one of five states, and a question is his decision alone, explai
 ### subagent-effort
 The effort every sub-agent is launched with. Retired on 2026-11-11: read `session-effort` instead.
 - Was: high until 2026-11-11.
+- Source: his words of 2026-11-10, 2026-11-10, 2026-11-11, 2026-11-11, checked by the command on 2026-11-11.
+
+### subagent-reader-model
+The model of a sub-agent that explores, reviews or verifies. Retired on 2026-11-11: read `session-model` instead.
+- Was: claude-fable-5-2 until 2026-11-11; claude-opus-5-5 until 2026-11-10.
+- Source: his words of 2026-11-10, 2026-11-10, 2026-11-11, 2026-11-11, checked by the command on 2026-11-11.
+
+### subagent-writer-model
+The model of a sub-agent that writes scoped code, in this repository. Retired on 2026-11-11: read `session-model` instead.
+- Was: claude-fable-5-2 until 2026-11-11; claude-haiku-5-5 until 2026-11-10.
 - Source: his words of 2026-11-10, 2026-11-10, 2026-11-11, 2026-11-11, checked by the command on 2026-11-11.
 
 ### work-sessions

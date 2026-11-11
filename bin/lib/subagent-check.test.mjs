@@ -59,7 +59,7 @@ test('a writer on a model the rules do not give is counted and named in its role
   assert.deepEqual(result.byRole.writer.offModel, [{ modelRan: 'claude-sonnet-5-5', count: 2 }]);
   assert.deepEqual(subagentRowLines(result, RULES), {
     detail: '3 launches today: 2 on a model off the rules',
-    lines: ['writer: 2 of 3 ran on claude-sonnet-5-5 (subagent-writer-model gives haiku)'],
+    lines: ['writer: 2 of 3 ran on claude-sonnet-5-5 (session-model gives haiku)'],
   });
 });
 
@@ -79,7 +79,7 @@ test('explorers, reviewers and verifiers all count as readers against the reader
     { modelRan: 'claude-opus-5-0', count: 1 },
   ]);
   assert.deepEqual(subagentRowLines(result, RULES).lines, [
-    'reader: 2 of 3 ran on claude-haiku-5-5, claude-opus-5-0 (subagent-reader-model gives sonnet)',
+    'reader: 2 of 3 ran on claude-haiku-5-5, claude-opus-5-0 (session-model gives sonnet)',
   ]);
 });
 
@@ -144,7 +144,7 @@ test('a null expectation is skipped, and the row names its role as not compared'
   assert.deepEqual(result.byRole.writer.offModel, []);
   assert.deepEqual(subagentRowLines(result, expected), {
     detail: '2 launches today: 1 on a model off the rules; 1 writer launch not compared (no rule in force)',
-    lines: ['reader: 1 of 1 ran on claude-opus-5-0 (subagent-reader-model gives sonnet)'],
+    lines: ['reader: 1 of 1 ran on claude-opus-5-0 (session-model gives sonnet)'],
   });
 });
 
