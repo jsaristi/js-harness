@@ -419,3 +419,10 @@ completamente autonomo".
     (never red: it states what the code did).
   Next: commit slice 7; the lenses over 03af34e0..HEAD, which then holds the graders as slice 6 left them and
   these fixes; Codex over 9175a3ea..HEAD; then the push and the pull request.
+- L15 (2026-11-11, T9; slice 7 is baeadf7c). The Claude lenses over 03af34e0..baeadf7c (reliability, readability,
+  risk), the graders as slice 6 left them with the plan's recorded passes and slice 7's fixes: readability none,
+  risk none, and the seven earlier findings read again as fixed (3 of reliability, 4 of readability). Reliability,
+  one suggestion, taken in slice 8: the tests of incident-01's grader counted every result line of the run, so a
+  Node that prints the tests a name pattern leaves out as skipped would count three; they count the selected test
+  by its name, with no directive after it, as the sibling loops do (8 pass). Next: commit slice 8, Codex over
+  9175a3ea..HEAD and the lenses over baeadf7c..HEAD, then the push and the pull request.

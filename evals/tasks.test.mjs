@@ -185,7 +185,9 @@ const PAID_CHECKS = [
 for (const [check, label, files, passes] of PAID_CHECKS) {
   test(`the grader of incident-01 ${passes ? 'passes' : 'fails'} "${check}" on a trial that ${label}`, (t) => {
     const ran = gradeOne(t, 'incident-01-paid-eval', check, files);
-    assert.equal([...ran.stdout.matchAll(/^(not )?ok \d+ - /gm)].length, 1, ran.stdout);
+    // The one test the pattern selects, by its name and with no directive after it: a Node that prints the filtered
+    // ones as skipped prints three lines here (the reliability lens on 03af34e0..baeadf7c, L15).
+    assert.equal([...ran.stdout.matchAll(new RegExp(`^(not )?ok \\d+ - ${check}[^#\\n]*$`, 'gm'))].length, 1, ran.stdout);
     assert.equal(ran.status === 0, passes, ran.stdout);
   });
 }
