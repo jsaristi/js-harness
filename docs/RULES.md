@@ -85,11 +85,11 @@ What the lead does alone and tells him after, and what stays his, asked one at a
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-09, 2026-10-11, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-10, 2026-10-15, 2026-10-15, 2026-10-24, checked by the command on 2026-10-22.
 
 ### lead-effort
-The effort the lead's session runs at: high.
+The effort the lead's session, the lenses and the double review's Claude reader run at: high.
 - Of this repository only: not in force in a project that installs the harness.
 - Was: xhigh until 2026-11-10.
 - Read by: `bin/lib/model-home.mjs`.
-- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
+- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, 2026-11-10, 2026-11-11, 2026-11-11, checked by the command on 2026-11-11.
 
 ### live-board
 The harness never works as a black box: work sessions write each event as a notice (a session starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends them to the live board, a page that updates by itself, and points every reply to it: "- Every event of your work reaches the user's live board as a notice: \`js-harness notify --to orchestrator\` with \`opened\` when you start, \`note\` when a step of your plan finishes, a pull request opens or merges, a decision is made or you report spend, and \`ready\` and \`closed\` as below."

@@ -173,7 +173,7 @@ test('read starts both readers at once on one frozen copy outside the repository
   assert.match(claude.prompt, /diff\.patch/);
   assert.equal(claude.options.cwd, root);
   assert.deepEqual(claude.args.slice(0, 4), ['-p', '--safe-mode', '--tools', 'Read,Grep,Glob']);
-  assert.deepEqual(claude.args.slice(claude.args.indexOf('--effort'), claude.args.indexOf('--effort') + 2), ['--effort', claudeHome().effort], 'the Claude reader names its effort: with none it takes the saved one of the CLI');
+  assert.deepEqual(claude.args.slice(claude.args.indexOf('--effort'), claude.args.indexOf('--effort') + 2), ['--effort', claudeHome().lead], 'the Claude reader names its effort, the lead\'s level as the lenses do: with none it takes the saved one of the CLI');
   // Blind by sequence: neither answer is on disk while the readers run, since --add-dir confines no reader.
   assert.ok(!codex.args.includes('-o'), 'Codex writes no answer file: its answer is read from its stdout');
   assert.ok(codex.args.includes('--ephemeral'), 'Codex keeps no session file another reader could open');
