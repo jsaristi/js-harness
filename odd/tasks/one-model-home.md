@@ -357,7 +357,21 @@ S7, amends specs 1, 5, 7 and 8 and the task T4 after it, and wins over both:
 - [ ] T9 (kind: verify) (1-10) Each pull request: gate, Codex and the pertinent lenses, one at a time; ready; `js-harness notify --to orchestrator --kind ready --pr <n>`; the next one starts from main once it lands. Then the summary and the closed notice. Route: inline.
 
 ## Next step
-State at 2026-11-11 11:13 local, written by the session that took pull request 2 (JH 172 again, a fresh session
+State at 2026-11-11 12:15 local, after the lead's message resumed this session (11:20) and the host compacted it
+(11:24): points 1 to 5 of the list below are done, each a commit on `rule/one-model-home`, local, not pushed and not
+reviewed. Main was merged twice (`275b707b` for pull request 826, `5deec5b6` for 827, main `9b2de655`), with no
+conflict. `ffce3478`, `rules change session-effort` at medium (449 tests of the files that read the level pass, none
+changed); `0d60e631`, `rules change session-model`, the source alone; `5ebe0e38`, the home module names
+`lead-effort` as `lead`; `34bbb538`, the guard's start, `sessionStartRefusal`, which reads the home through
+`claudeHeld` (the eight breaks of `session-effort`, `session-model` and `lead-effort` each seen red). The next is
+point 6, the four retirements. Two things for the pull request's body that the list does not say: a resume of a
+record at another level or model than the home's is refused until `--effort` or `--model` names the home's (pull
+request 3 makes a resume take the home); and `rules change` printed that a memory note that states high for a
+session's effort is changed to name the rule, which is under `~/.claude` and so the lead's or his, not this
+session's. A text of an installed skill or of the manifest that changes needs `rules coverage --refresh` in the
+same commit: the first try of `34bbb538` was refused by the gate for one span of the manifest edited in place.
+
+What follows is the state at 11:13 local, written by the session that took pull request 2 (JH 172 again, a fresh session
 under the brief `~/.js-harness/background/briefs/2026-11-11T11-09-01-276Z-e93e8864.md`) as it stops. The lead's
 notice of 11:07 gives his decision of S7 and says the lead resumes this session by message when JH 180 or JH 181
 closes: he approved resuming the stopped sessions two at a time. Nothing of this work runs until that message.
