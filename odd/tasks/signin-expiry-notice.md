@@ -134,8 +134,8 @@ again while he is at the PC.
   not need the network (checked for the proxy variables only; whether the CLI honours them for every request it could
   make is assumed).
 - D5 States, in the `claude` cell: `ok` with more than the margin left; `stale`, a gap, from the margin on and after
-  the end, its fix saying he signs in again with `claude auth login` while he is present; `unknown`, no gap, when the
-  date cannot be read, with why. `GAP_STATES` (`bin/lib/digest.mjs`) has no state for "ends soon", and `stale` is what
+  the end, its fix saying he signs in again with `claude auth login` while he is present; `missing`, a gap, when the
+  CLI says it is not signed in (D9); `unknown`, no gap, when the date cannot be read for another reason, with why. `GAP_STATES` (`bin/lib/digest.mjs`) has no state for "ends soon", and `stale` is what
   the rows about something due use (`unseen`, `worktrees`, `review-skips`).
 - D6 The days left and the local date are a `note` of the row, which `doctor` prints under the table for every row
   that has one: the table's cells hold a state each, the version cell is a tool's (and a version there would read as
@@ -159,8 +159,11 @@ again while he is at the PC.
   second, on `worktree-signin-expiry-heartbeat` and based on the first, is the heartbeat's tick with `signinTold`
   (T3). The first stays over 400 (its count is in the Log): about 310 of its lines are the tests of the reader and
   the row, and a reader split from its one caller would be a module nothing runs, which is no work unit.
-- D9 A CLI that reports no sign-in at all (`loggedIn` false) is `unknown` with that as the reason, not a gap: the
-  brief lists what cannot be read and asks no new gap, and by then every session has already failed aloud.
+- D9 (changed after the lenses' review, L11) A CLI that reports no sign-in at all (`loggedIn` false) is `missing`, a
+  gap whose fix is `claude auth login`, as `doctor` already shows a logged-out Codex. It was first `unknown`, no gap;
+  two lenses found that if an ended sign-in reads as "not signed in", the row would fall from a gap to a quiet
+  `unknown` at the moment it warns of, and what the CLI prints after the end is not known. A date it still prints
+  beside `loggedIn` false is kept, and once past it the note says when the sign-in ended.
 
 ## Log
 - L1 (his request, as written; lead transcript ea85ec35 line 6716, 2026-11-11T05:26:36Z, printed by `js-harness
@@ -196,3 +199,13 @@ again while he is at the PC.
   `bin/loop-bodies.test.mjs`, `bin/lib/signin-expiry.mjs` and its test with `signinTold`, `README.md` with the
   heartbeat's paragraph) until the first slice is committed. Next: the first slice's gate, Codex and the lenses, its
   push and pull request; then the second branch from it.
+- L10 (the first slice, commit fa682dde; its gate passed, 21 rows): 700 changed lines against main, 490 of them code
+  and tests a review reads in 6 files, the rest this document and the README. Codex on `8305955..fa682dd`, 2 parts:
+  "the patch is correct" for both (confidence 0.9 and 0.94), no finding, 151,593 input tokens in 177 s.
+- L11 (the lenses on `8305955..fa682dd`: risk 0 findings, readability 0, resilience 1, reliability 2). Taken: (1)
+  resilience SUGGESTION and reliability WARNING, `bin/lib/signin-expiry.mjs:63`, the same point, D9 as first written
+  made a signed-out CLI a quiet `unknown`: now `missing`, a gap with the fix, and a date printed beside it is kept
+  (tests first, red: the module had no `SIGNED_OUT_FIX`; green 18 of 18, and `bin/doctor-signin.test.mjs` 8 of 8).
+  (2) reliability SUGGESTION, `bin/lib/signin-expiry.test.mjs:65`, the "however it is spelled" assertion passed a
+  path `path.join` had already normalised: it now passes a trailing separator, a folder and back built by hand, and
+  on Windows another letter case, each asserted to be another string than the home. Nothing rebutted.

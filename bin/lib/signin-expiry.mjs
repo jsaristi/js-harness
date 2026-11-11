@@ -26,6 +26,8 @@ export const SIGNIN_READ_TIMEOUT_MS = 20000;
 
 export const SIGNIN_FIX =
   'sign in again while you are at the machine: once the stored sign-in ends, every background session, lens review and remote server fails at once until you do (the harness never signs in for you):';
+export const SIGNED_OUT_FIX =
+  'the Claude CLI is not signed in, so no background session, lens review or remote server runs: sign in at the machine (the harness never signs in for you):';
 const SIGNIN_COMMAND = 'claude auth login';
 
 const SUBJECT = 'the claude.ai sign-in stored on this machine';
@@ -36,13 +38,15 @@ const MINUTE_MS = 60000;
 const METHOD = /^[A-Za-z][\w.-]{0,39}$/;
 
 const unread = (why, stored = null) => ({ expiresAt: null, stored, why });
+/** A printed `loginExpiresAt` as milliseconds, `NaN` when it is no date: only an ISO text is one. */
+const dateOf = (printed) => (typeof printed === 'string' && printed !== '' ? Date.parse(printed) : NaN);
 
 /** What one answer of `claude auth status` says, from the result of its spawn (`spawnSync`'s shape, or `null` when it
  * could not be started): `{ expiresAt, stored, why }`. `expiresAt` is the end date as an ISO time, or `null` with
  * `why` saying what kept it from being read: a CLI that could not be started or did not answer in time, an answer
- * that is no JSON object, a CLI that is not signed in or is signed in another way, one that prints no date (older
- * than 2.1.318) or one that is no date. `stored` is whether a claude.ai sign-in is stored, `null` when the answer
- * does not say. The exit code is not asked first: the answer is read whatever it is. Never throws. */
+ * that is no JSON object, a CLI that is signed in another way, one that prints no date (older than 2.1.318) or one
+ * that is no date. A CLI that says it is not signed in is `signedOut: true`, with the date it still prints, if any.
+ * `stored` is whether a claude.ai sign-in is stored, `null` when the answer does not say. The exit code is not asked first: the answer is read whatever it is. Never throws. */
 export function signinReading(result) {
   if (!result) return unread('the claude command could not be started');
   // A timed-out child may carry an ETIMEDOUT error too, so the timeout is told before the error.
@@ -60,7 +64,12 @@ export function signinReading(result) {
       ? 'claude auth status answered no JSON object: the Claude CLI may be older than its JSON answer'
       : `claude auth status ended with exit ${result.status ?? 'without a code'} and no JSON: the Claude CLI is not on the path, or does not know the command`);
   }
-  if (answer.loggedIn === false) return unread('the Claude CLI says it is not signed in', false);
+  // What the CLI prints once a stored sign-in has ended is not known: `loggedIn` false is its own word that nothing
+  // unattended runs, and a date it still prints beside it is kept, so the row can say when the sign-in ended.
+  if (answer.loggedIn === false) {
+    const ended = dateOf(answer.loginExpiresAt);
+    return { ...unread('the Claude CLI says it is not signed in', false), expiresAt: Number.isNaN(ended) ? null : new Date(ended).toISOString(), signedOut: true };
+  }
   if (answer.storedClaudeAiLogin === false) {
     const method = typeof answer.authMethod === 'string' && METHOD.test(answer.authMethod) ? ` (it is signed in by ${answer.authMethod})` : '';
     return unread(`the Claude CLI holds no stored claude.ai sign-in${method}`, false);
@@ -70,7 +79,7 @@ export function signinReading(result) {
   if (printed === undefined || printed === null) {
     return unread('claude auth status prints no loginExpiresAt, which Claude Code prints from 2.1.318 on for a stored claude.ai sign-in: the Claude CLI is older, or signed in another way', stored);
   }
-  const at = typeof printed === 'string' && printed !== '' ? Date.parse(printed) : NaN;
+  const at = dateOf(printed);
   if (Number.isNaN(at)) return unread('claude auth status prints a loginExpiresAt that is not a date', stored);
   return { expiresAt: new Date(at).toISOString(), stored, why: null };
 }
@@ -117,13 +126,26 @@ const whyOf = (reading) => reading?.why ?? 'the reader gave nothing';
 
 /** The `claude-signin` row of `doctor`, from a reading and the clock (`now`, ms): nothing to install, and the
  * `claude` cell carries the state. `ok` with more than the margin left; `stale`, a gap, from the margin on and past
- * the end, its fix saying who signs in and with what; `unknown`, no gap, when the date cannot be read. `note` is
+ * the end, its fix saying who signs in and with what; `missing`, a gap with the same command, when the CLI says it
+ * is not signed in, which is what an ended sign-in may read as; `unknown`, no gap, when the date cannot be read
+ * for another reason; `n/a` for a home that was not asked. `note` is
  * what `doctor` prints under its table: the time left and the local end date, or why there is none. `expiresAt` and
  * `daysLeft` (whole days, below 0 past the end) are for `--json`. */
 export function signinRow(reading, now) {
   const row = { id: 'claude-signin', version: null, installed: 'n/a', claude: 'unknown', codex: 'n/a', project: 'n/a', upToDate: 'n/a', fix: {} };
   if (reading?.asked === false) return { ...row, claude: 'n/a' };
   const left = leftOf(reading, now);
+  if (reading?.signedOut === true) {
+    // The CLI's word decides, whatever date it prints; a date already past says when the sign-in ended.
+    const ended = left !== null && left.ended;
+    return {
+      ...row,
+      claude: 'missing',
+      ...(ended ? { expiresAt: reading.expiresAt, daysLeft: Math.floor(left.ms / DAY_MS) } : {}),
+      note: ended ? `${whyOf(reading)}: ${left.words}` : whyOf(reading),
+      fix: { claude: [SIGNED_OUT_FIX, SIGNIN_COMMAND] },
+    };
+  }
   if (left === null) return { ...row, note: `when ${SUBJECT} ends cannot be read: ${whyOf(reading)}` };
   return {
     ...row,

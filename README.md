@@ -640,8 +640,10 @@ review and remote server fails at once until the user signs in again. The row ru
 `claude auth status`, which prints the date from Claude Code 2.1.318 on, and keeps the date and
 nothing else of the answer: it reads no credential and never signs in. Under the table, `Notes:`
 gives the time left and the local end date. With seven days or fewer left, and after the end, the
-row is `stale` and its fix is the user's to run, `claude auth login`. A date that cannot be read
-(no CLI, an older one, a sign-in of another kind) is `unknown`, with why in its note. One reading
+row is `stale` and its fix is the user's to run, `claude auth login`. A CLI that says it is not
+signed in is `missing`, a gap with the same fix, since that may be how an ended sign-in reads. A
+date that cannot be read for another reason (no CLI, an older one, a sign-in of another kind) is
+`unknown`, with why in its note. One reading
 takes about five seconds, so the session-start hook never makes one, and with a `--home` that is
 not the user's own home the CLI is not run and the row is `n/a`. `--json` adds `expiresAt`,
 `daysLeft` and `note` to the row.

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { localMinute, localZone } from './local-time.mjs';
-import { SIGNIN_FIX, SIGNIN_READ_TIMEOUT_MS, SIGNIN_WARN_DAYS, readSigninExpiry, signinReading, signinRow } from './signin-expiry.mjs';
+import { SIGNED_OUT_FIX, SIGNIN_FIX, SIGNIN_READ_TIMEOUT_MS, SIGNIN_WARN_DAYS, readSigninExpiry, signinReading, signinRow } from './signin-expiry.mjs';
 
 // Every answer here is made up: the real `claude auth status` names an account, so no test runs it.
 const EXPIRES = '2026-11-23T16:11:04.604Z';
@@ -62,9 +62,14 @@ test('a home that is not the user\'s own is not asked: no CLI runs, and the row 
   assert.deepEqual(reading, { expiresAt: null, stored: null, why: null, asked: false });
   assert.equal(calls.length, 0, 'the sign-in is the real home\'s: a fixture home never reads it');
   assert.deepEqual(signinRow(reading, END), { ...ROW, claude: 'n/a' });
-  // The user's own home, however it is spelled, is asked.
-  assert.deepEqual(readSigninExpiry({ spawn, platform: 'linux', home: path.join(real, 'sub', '..'), homedir: () => real }), READ);
-  assert.equal(calls.length, 1);
+  // The user's own home, however it is spelled, is asked: with a trailing separator, through a folder and back, and
+  // on Windows in another letter case. Each spelling is another string than `real`, built without path.join.
+  const spellings = [`${real}${path.sep}`, `${real}${path.sep}sub${path.sep}..`, ...(process.platform === 'win32' ? [real.toUpperCase(), real.toLowerCase()] : [])];
+  for (const home of spellings) {
+    assert.notEqual(home, real);
+    assert.deepEqual(readSigninExpiry({ spawn, platform: 'linux', home, homedir: () => real }), READ, home);
+  }
+  assert.equal(calls.length, spellings.length);
 });
 
 test('the reading keeps the end date and whether a sign-in is stored, and nothing else of the answer', () => {
@@ -104,12 +109,30 @@ test('an answer that is not a JSON object is said, with its exit when that is no
   }
 });
 
-test('a CLI that is not signed in says so, whatever its exit', () => {
-  assert.deepEqual(signinReading(printed({ loggedIn: false, authMethod: 'none', apiProvider: 'firstParty' }, 1)), {
-    expiresAt: null,
-    stored: false,
-    why: 'the Claude CLI says it is not signed in',
+test('a CLI that is not signed in says so, whatever its exit, and keeps an end date printed beside it', () => {
+  const why = 'the Claude CLI says it is not signed in';
+  assert.deepEqual(signinReading(printed({ loggedIn: false, authMethod: 'none', apiProvider: 'firstParty' }, 1)), { expiresAt: null, stored: false, why, signedOut: true });
+  // What the CLI prints once a stored sign-in has ended is not known: a date beside `loggedIn` false is kept.
+  assert.deepEqual(signinReading(printed(answer({ loggedIn: false }), 1)), { expiresAt: EXPIRES, stored: false, why, signedOut: true });
+  assert.deepEqual(signinReading(printed(answer({ loggedIn: false, loginExpiresAt: 'soon' }), 1)), { expiresAt: null, stored: false, why, signedOut: true });
+});
+
+test('a CLI that is not signed in is a gap, never a quiet unknown: it is what the row warns of, the moment it happens', () => {
+  const why = 'the Claude CLI says it is not signed in';
+  const fix = { claude: [SIGNED_OUT_FIX, 'claude auth login'] };
+  assert.deepEqual(signinRow({ expiresAt: null, stored: false, why, signedOut: true }, END), { ...ROW, claude: 'missing', note: why, fix });
+  // With the date of the sign-in that ended, the note says when; before that date, the CLI's word still decides.
+  assert.deepEqual(signinRow({ expiresAt: EXPIRES, stored: false, why, signedOut: true }, END + HOUR), {
+    ...ROW,
+    claude: 'missing',
+    expiresAt: EXPIRES,
+    daysLeft: -1,
+    note: `${why}: the claude.ai sign-in stored on this machine ended on ${WHEN}`,
+    fix,
   });
+  assert.deepEqual(signinRow({ expiresAt: EXPIRES, stored: false, why, signedOut: true }, END - 3 * DAY), { ...ROW, claude: 'missing', note: why, fix });
+  assert.match(SIGNED_OUT_FIX, /^the Claude CLI is not signed in/);
+  assert.match(SIGNED_OUT_FIX, /never signs in for you/);
 });
 
 test('a CLI signed in another way holds no stored claude.ai sign-in, and its method is named only when it reads as one', () => {
@@ -179,8 +202,8 @@ test('past the end the row stays a gap and says when it ended', () => {
 });
 
 test('a date that cannot be read is unknown, no gap, and the note says why', () => {
-  const row = signinRow({ expiresAt: null, stored: false, why: 'the Claude CLI says it is not signed in' }, END);
-  assert.deepEqual(row, { ...ROW, claude: 'unknown', note: 'when the claude.ai sign-in stored on this machine ends cannot be read: the Claude CLI says it is not signed in' });
+  const row = signinRow({ expiresAt: null, stored: false, why: 'the Claude CLI holds no stored claude.ai sign-in (it is signed in by api_key)' }, END);
+  assert.deepEqual(row, { ...ROW, claude: 'unknown', note: 'when the claude.ai sign-in stored on this machine ends cannot be read: the Claude CLI holds no stored claude.ai sign-in (it is signed in by api_key)' });
   for (const nothing of [null, undefined, {}]) {
     assert.deepEqual(signinRow(nothing, END), { ...ROW, claude: 'unknown', note: 'when the claude.ai sign-in stored on this machine ends cannot be read: the reader gave nothing' });
   }

@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { doctorMain } from './doctor.mjs';
 import { localMinute, localZone } from './lib/local-time.mjs';
-import { SIGNIN_FIX } from './lib/signin-expiry.mjs';
+import { SIGNED_OUT_FIX, SIGNIN_FIX } from './lib/signin-expiry.mjs';
 
 const EXPIRES = '2026-11-23T16:11:04.604Z';
 const WHEN = `${localMinute(Date.parse(EXPIRES))} (${localZone(Date.parse(EXPIRES))})`;
@@ -89,6 +89,15 @@ test('doctor shows the row unknown, no gap, when the date cannot be read, and th
   assert.match(output, /^claude-signin\s+n\/a\s+unknown\s+n\/a\s+n\/a\s+n\/a$/m);
   assert.ok(output.includes(`  claude-signin: when the claude.ai sign-in stored on this machine ends cannot be read: ${why}\n`), output);
   assert.doesNotMatch(output, /claude-signin \(claude\)/);
+});
+
+test('doctor shows a CLI that is not signed in as a gap whose fix is the sign-in, under Notes and under Fix', async () => {
+  const why = 'the Claude CLI says it is not signed in';
+  const { code, output } = await runDoctor([], { signin: () => ({ expiresAt: null, stored: false, why, signedOut: true }), at: '2026-11-24T06:30:00.000Z' });
+  assert.equal(code, 0);
+  assert.match(output, /^claude-signin\s+n\/a\s+missing\s+n\/a\s+n\/a\s+n\/a$/m);
+  assert.ok(output.includes(`  claude-signin: ${why}\n`), output);
+  assert.ok(output.includes(`  claude-signin (claude):\n    ${SIGNED_OUT_FIX}\n    claude auth login\n`), output);
 });
 
 test('doctor shows the row unknown and still exits 0 when the reader throws', async () => {
