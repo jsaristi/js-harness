@@ -1161,14 +1161,20 @@
         "line": 5167
       },
       {
-        "quote": "TODO pero TODO va a correr siempre en Fable 5.2 Alto",
-        "date": "2026-11-10",
+        "quote": "Va a tocar utilizar Fable 5.2 en Alto solo para el orquestador y para las sesiones solo Fable 5.2 en Medio",
+        "date": "2026-11-11",
         "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
-        "line": 5255
+        "line": 11253
+      },
+      {
+        "quote": "Sí, aplícalo",
+        "date": "2026-11-11",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 11679
       }
     ],
-    "reading": "Everything Claude the harness starts runs on this one model at this one effort: his \"todos los modelos de ahora en adelante\", \"todo va a ser con Fable 5.2 Alto ... en un solo lugar\" and \"TODO pero TODO\". That the lenses, the double review's reader and the escalation are part of \"todo\" is the lead's reading in the brief of JH 172, and his to correct. This rule is the model of that home, which the session records name claude-fable-5-2; its effort is rule:session-effort. A host's agent type that sets its own model is not the harness's to set. The model of a Codex review is another vendor's and keeps its own home, rule:review-model.",
-    "accepted": "Typed by him in the lead's chat on 2026-11-10. Not put to him as a reading: it is the lead's, in the brief of JH 172, and his to correct.",
+    "reading": "Everything Claude the harness starts reads its model and its effort in one place: his \"todos los modelos de ahora en adelante\" and \"lo unifiques en un solo lugar\" of 2026-11-10. That day it was one model at one effort; on 2026-11-11, after the limit of Fable stopped the sessions, he kept the one model and split the effort in two, high for the orchestrator alone and medium for the sessions and the sub-agents. This rule is that one model, which the session records name claude-fable-5-2, for the lead's session as for every other. That the lenses, the double review's reader and the escalation are part of his \"todos los modelos\" is the lead's reading. A host's agent type that sets its own model is not the harness's to set. The model of a Codex review is another vendor's and keeps its own home, rule:review-model.",
+    "accepted": "Typed by him in the lead's chat on 2026-11-10 and 2026-11-11. His \"Sí, aplícalo\" answers the lead's scheme of line 11674 of the same transcript, \"Orquestador: Fable 5.2 alto\" and \"Sesiones y subagentes nuevos: Fable 5.2 medio\". The rest of the reading was not put to him: it is the lead's, in the brief of JH 172 and its notices of 2026-11-11, and his to correct.",
     "checked": {
       "date": "2026-11-11",
       "by": "command"

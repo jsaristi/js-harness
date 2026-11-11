@@ -195,7 +195,7 @@ The model everything Claude the harness starts runs on: every session, the lead'
 - Of this repository only: not in force in a project that installs the harness.
 - Was: claude-opus-5-5 until 2026-11-10.
 - Read by: `bin/lib/model-home.mjs`, `bin/rules.mjs`.
-- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, 2026-11-10, 2026-11-10, checked by the command on 2026-11-11.
+- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, 2026-11-10, 2026-11-11, 2026-11-11, checked by the command on 2026-11-11.
 
 ### session-prompts
 Sessions pass notices through the channel, each gives prompts only for itself, and the lead keeps the order: "## A work session - Give prompts only for yourself. A prompt meant for another session names that session in its first line."
