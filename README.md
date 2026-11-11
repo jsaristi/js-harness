@@ -634,6 +634,20 @@ call, both reviews are recorded, and `--json` prints `{ host, stack }`. The row 
 `outdated` when the app downloaded an update it has not applied: on Windows that waits until
 Claude is quit fully, the tray icon included.
 
+Its `claude-signin` row, in an interactive run, says when the claude.ai sign-in stored on the
+machine ends. That sign-in has an end date, and once it passes every background session, lens
+review and remote server fails at once until the user signs in again. The row runs
+`claude auth status`, which prints the date from Claude Code 2.1.318 on, and keeps the date and
+nothing else of the answer: it reads no credential and never signs in. Under the table, `Notes:`
+gives the time left and the local end date. With seven days or fewer left, and after the end, the
+row is `stale` and its fix is the user's to run, `claude auth login`. A CLI that says it is not
+signed in is `missing`, a gap with the same fix, since that may be how an ended sign-in reads. A
+date that cannot be read for another reason (no CLI, an older one, a sign-in of another kind) is
+`unknown`, with why in its note. One reading
+takes about five seconds, so the session-start hook never makes one, and with a `--home` that is
+not the user's own home the CLI is not run and the row is `n/a`. `--json` adds `expiresAt`,
+`daysLeft` and `note` to the row.
+
 Its `stack-update` row does the same for the tools of the stack and for the `claude` on PATH:
 the first reading is recorded as reviewed, and a tool that updated itself since (engram, codex, the
 Claude CLI's native updater) stays `stale`, named by the session-start hook, until

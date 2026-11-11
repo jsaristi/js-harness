@@ -43,11 +43,13 @@ function spawnProbe(command, args, deps) {
 }
 
 /** `spawnProbe` without the catch: a throw from `spawn` reaches the caller. `input`, when given, is the child's standard
- * input. The hook commands check needs both: its empty input, and a runner that throws read as `unknown`, not as missing. */
-function spawnProbeOrThrow(command, args, { spawn = spawnSync, platform = process.platform, env, input } = {}) {
+ * input. The hook commands check needs both: its empty input, and a runner that throws read as `unknown`, not as missing.
+ * `timeout`, when given, is the probe's own limit: the sign-in reader's command takes longer than the others'
+ * (bin/lib/signin-expiry.mjs), which is why this is exported. */
+export function spawnProbeOrThrow(command, args, { spawn = spawnSync, platform = process.platform, env, input, timeout = PROBE_TIMEOUT_MS } = {}) {
   const shell = platform === 'win32';
   const [file, argv] = shell ? [[command, ...args].join(' '), []] : [command, args];
-  const options = { encoding: 'utf8', shell, timeout: PROBE_TIMEOUT_MS };
+  const options = { encoding: 'utf8', shell, timeout };
   if (env) options.env = { ...process.env, ...env };
   if (input !== undefined) options.input = input;
   return spawn(file, argv, options);
@@ -56,7 +58,7 @@ function spawnProbeOrThrow(command, args, { spawn = spawnSync, platform = proces
 /** Node kills a timed-out spawnSync child with a signal (status becomes null); it may also carry
  * an ETIMEDOUT error instead, depending on where the timeout was detected. Either shape means the
  * tool could not be reached in time, not that it is missing. */
-function probeTimedOut(result) {
+export function probeTimedOut(result) {
   return Boolean(result.signal || result.error?.code === 'ETIMEDOUT');
 }
 
