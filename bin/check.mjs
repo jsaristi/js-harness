@@ -1634,8 +1634,8 @@ export function checkFunctionsPending(cwd, { spawn = spawnSync } = {}) {
 }
 
 /** The rules the sub-agent row reads, by id: a writer against the first, an explorer, reviewer or verifier
- * against the second, and every launch's effort against the third. */
-const SUBAGENT_RULES = { writer: 'subagent-writer-model', reader: 'subagent-reader-model', effort: 'subagent-effort' };
+ * against the second, and every launch's effort against the third, the level of the Claude home. */
+const SUBAGENT_RULES = { writer: 'subagent-writer-model', reader: 'subagent-reader-model', effort: 'session-effort' };
 
 /** Why a rule is not in force, as `ruleHere` names it: no rules file here, or one that is not the harness's list. */
 const OFF_WHY = { elsewhere: 'this project keeps no bin/lib/rules-data.mjs', behind: "its bin/lib/rules-data.mjs is not the harness's list" };

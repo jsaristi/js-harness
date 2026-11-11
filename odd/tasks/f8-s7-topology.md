@@ -26,14 +26,14 @@ what it covered leaves the lead to guess what was done (the reverse-engineering 
   lead's, after his yes).
 
 ## Constraints
-- The writer's model and effort have their home in `rule:subagent-writer-model` and `rule:subagent-effort`; the agent
+- The writer's model and effort have their home in `rule:subagent-writer-model` and `rule:session-effort`; the agent
   file keeps a copy because the host reads only the file, and `bin/lib/writer-agent.test.mjs` fails until a change of
   either rule edits the file in the same commit — because a value has one home (`AGENTS.md`), and a copy no check
   holds drifts.
 - A running session does not see a first agent file in a new `.claude/agents/` folder until it restarts
   (code.claude.com/docs/en/sub-agents, "Claude Code watches") — so the probe runs in new headless processes, and the
   lead's sessions pick the type up when they next start.
-- Every sub-agent at the effort `rule:subagent-effort` gives — because it is his rule.
+- Every sub-agent at the effort `rule:session-effort` gives — because it is his rule.
 
 ## Ask me before
 - The writer's model for the five slices: Sonnet 5.5 as the plan wrote, or Haiku 5.5 as his rule says (question 227,
@@ -93,7 +93,7 @@ what it covered leaves the lead to guess what was done (the reverse-engineering 
   no measure in the plan's pass line; it is tested as behaviour here and stays a hypothesis for S8.
   Verdict: supports
 - 5. Request: give writing sub-agents a project agent type, `js-harness-writer`, on the model of
-  `rule:subagent-writer-model` at the effort of `rule:subagent-effort`, with `omitClaudeMd` and six tools, whose own
+  `rule:subagent-writer-model` at the effort of `rule:session-effort`, with `omitClaudeMd` and six tools, whose own
   prompt carries what it loses with the instruction files (tests first, the allowed edit surface, nothing unrequested,
   a real check, the `S#` it covered in its return); write into the protocols skill that a writer's brief names its
   `S#` and the return says which it covered; move the orchestrator skill's relief from "only on request" to the cut

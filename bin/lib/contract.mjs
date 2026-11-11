@@ -4,6 +4,7 @@
 // function takes markdown text, so the tests use inline fixture strings.
 import { tokenize } from './progress.mjs';
 import { taskId } from './sessions.mjs';
+import { CLAUDE_HOME } from './model-home.mjs';
 
 export const CONTRACT_TEMPLATE = `## Goal
 <one sentence: the outcome, not the steps>
@@ -284,42 +285,21 @@ function itemEnd(tokens, index) {
   return last;
 }
 
-// The rows of the rules list a task's mode is read from (bin/lib/rules-data.mjs). A kind may have its own
-// session effort, `session-effort-<kind>`; none is declared today (his answer of 2026-10-14, "Ninguno
-// todavía"), so every kind takes `session-effort`.
-const MODE_RULES = {
-  session: 'session-effort',
-  writer: 'subagent-writer-model',
-  reader: 'subagent-reader-model',
-  subagent: 'subagent-effort',
-};
-// The kinds whose tasks launch writers; a task with no kind may be any work, so it names both roles.
-const WRITING_KINDS = new Set(['build', null]);
-
-/** The mode of each task of the checklist, done ones included: `{ id, kind, done, effort, writerModel,
- * readerModel, subagentEffort, off }`. `readRule(id)` is the caller's `ruleHere` bound to the project's
- * rules text, giving `{ value, alias? }` or `{ off }`, or `null` for a rule the list does not declare.
- * `off` is `null`, or `'elsewhere'` / `'behind'` as `ruleHere` says, and then the four values are `null`.
- * A kind that is not one of TASK_KINDS is read as no kind here; `validateContract` names it. */
+/** The mode of each task of the checklist, done ones included: `{ id, kind, done, model, effort, off }`, the model
+ * and the level of the Claude home (./model-home.mjs; odd/tasks/one-model-home.md, spec 2), which the session and
+ * every sub-agent it launches run on whatever the task's kind: the rules that restated them for a kind of work are
+ * retired into the home. `readRule(id)` is the caller's `ruleHere` bound to the project's rules text, giving
+ * `{ value }` or `{ off }`, or `null` for a rule the list does not declare. `off` is `null`, or `'elsewhere'` /
+ * `'behind'` as `ruleHere` says, and then the two values are `null`. A kind that is not one of TASK_KINDS is read
+ * as no kind here; `validateContract` names it. */
 export function taskModes(markdown, readRule) {
   return tasksOf(markdown).map(({ id, kind: written, done }) => {
     const kind = TASK_KINDS.includes(written) ? written : null;
-    const session = (kind && readRule(`session-effort-${kind}`)) || readRule(MODE_RULES.session);
-    const writer = readRule(MODE_RULES.writer);
-    const reader = readRule(MODE_RULES.reader);
-    const subagent = readRule(MODE_RULES.subagent);
-    const off = [session, writer, reader, subagent].find((rule) => rule?.off)?.off ?? null;
-    if (off) return { id, kind, done, effort: null, writerModel: null, readerModel: null, subagentEffort: null, off };
-    return {
-      id,
-      kind,
-      done,
-      effort: session?.value ?? null,
-      writerModel: WRITING_KINDS.has(kind) ? (writer?.alias ?? writer?.value ?? null) : null,
-      readerModel: reader?.alias ?? reader?.value ?? null,
-      subagentEffort: subagent?.value ?? null,
-      off: null,
-    };
+    const model = readRule(CLAUDE_HOME.model);
+    const effort = readRule(CLAUDE_HOME.effort);
+    const off = [model, effort].find((rule) => rule?.off)?.off ?? null;
+    if (off) return { id, kind, done, model: null, effort: null, off };
+    return { id, kind, done, model: model?.value ?? null, effort: effort?.value ?? null, off: null };
   });
 }
 
@@ -329,13 +309,9 @@ const OFF_TEXT = {
 };
 
 /** One task's mode as `contract modes` prints it:
- * `T3 (kind: build): session high; writers claude-fable-5-2, readers claude-fable-5-2; every sub-agent at high`. */
+ * `T3 (kind: build): the session and every sub-agent on claude-fable-5-2 at medium`. */
 export function modeLine(mode) {
   const head = `${mode.id} ${mode.kind ? `(kind: ${mode.kind})` : '(no kind)'}`;
   if (mode.off) return `${head}: ${OFF_TEXT[mode.off]}`;
-  const roles = [mode.writerModel && `writers ${mode.writerModel}`, mode.readerModel && `readers ${mode.readerModel}`].filter(Boolean);
-  const parts = [`session ${mode.effort ?? 'not declared'}`];
-  if (roles.length) parts.push(roles.join(', '));
-  if (mode.subagentEffort) parts.push(`every sub-agent at ${mode.subagentEffort}`);
-  return `${head}: ${parts.join('; ')}`;
+  return `${head}: the session and every sub-agent on ${mode.model ?? 'a model not declared'} at ${mode.effort ?? 'an effort not declared'}`;
 }

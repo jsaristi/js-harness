@@ -333,7 +333,7 @@ test('the usage names the applied form, and a word after applied is a usage erro
 
 // Noon of the day after the newest of the rules the records are held to began, so every one of them holds a record
 // written at NOW, whatever day his last change of one fell on.
-const HELD_IDS = ['session-model', 'session-effort', 'subagent-effort', 'subagent-writer-model', 'subagent-reader-model'];
+const HELD_IDS = ['session-model', 'session-effort', 'subagent-writer-model', 'subagent-reader-model'];
 const NOW = Date.parse(`${RULES.filter((rule) => HELD_IDS.includes(rule.id)).map((rule) => rule.since).sort().at(-1)}T12:00:00Z`) + 24 * 60 * 60 * 1000;
 const RULES_DATA_TEXT = fs.readFileSync(path.join(PACKAGE, 'bin', 'lib', 'rules-data.mjs'), 'utf8');
 const LIST = { 'bin/lib/rules-data.mjs': RULES_DATA_TEXT };
@@ -408,17 +408,23 @@ test('applied passes when a writer launch is answered by the model its rule decl
   });
 });
 
-test('applied holds what a launch ran at to subagent-effort, as information that does not fail', async () => {
+// The sub-agents' own effort rule retired into the home on 2026-11-11: a launch is held to the level a session is.
+test('applied holds what a launch ran at to session-effort, as information that does not fail', async () => {
   await withHome(LIST, async (project, home) => {
-    launch(recordsOf(project, home), WRITER.value, 'medium');
+    const held = declared('session-effort').value;
+    const off = LEVELS.find((level) => level !== held);
+    launch(recordsOf(project, home), WRITER.value, off);
     const { code, out } = await applied(project, home);
     const day = new Date(NOW).toISOString().slice(0, 10);
     assert.equal(code, 0, out.join('\n'));
     assert.ok(out.includes('What ran, against the rules with no short name (information, never a failure):'), out.join('\n'));
-    assert.ok(out.includes('  subagent-effort: high, since 2026-10-07'), out.join('\n'));
-    assert.ok(out.includes(`    medium: 1 launch of general-purpose, the last on ${day}`), out.join('\n'));
+    // The rule has two lines, one for the sessions and one for the launches, in that order.
+    const ofLaunches = out.lastIndexOf(heldLine('session-effort'));
+    assert.ok(ofLaunches > out.indexOf(heldLine('session-effort')), out.join('\n'));
+    assert.equal(out[ofLaunches + 1], '    agree: 0 of 1 launch', out.join('\n'));
+    assert.ok(out.includes(`    ${off}: 1 launch of general-purpose, the last on ${day}`), out.join('\n'));
     assert.ok(out.includes('      session-1/subagents/agent-x.jsonl'), out.join('\n'));
-    if (SHORT !== undefined) assert.ok(out.some((line) => line.startsWith('To the lead: 1 launch that passed a declared short name ran at another effort than subagent-effort says (high)')), out.join('\n'));
+    if (SHORT !== undefined) assert.ok(out.some((line) => line.startsWith(`To the lead: 1 launch that passed a declared short name ran at another effort than session-effort says (${held})`)), out.join('\n'));
     assert.equal(out.at(-1), 'Information: 1 record ran at another value than a rule of the block above says; this is no failure.');
     // The session rules are in force and no session is in the records: each says so, and neither is a difference.
     assert.equal(out[out.indexOf(heldLine('session-effort')) + 1], '    nothing to compare: no session in the window since that day', out.join('\n'));
@@ -463,11 +469,11 @@ test('applied in a project that does not declare the rules holds nothing to them
   });
 });
 
-test('the three rules with no short name are read by the command, so the check lists it as their reader', async () => {
+test('the two rules of the Claude home are read by the command, so the check lists it as their reader', async () => {
   // Both rules of the Claude home are read by the module every launch and the guard read them through
   // (bin/lib/model-home.mjs): the guard, which refuses a session started at another level (harness-review T6c),
   // names neither rule by its id.
-  const readers = { 'session-model': 'Read by: bin/lib/model-home.mjs, bin/rules.mjs', 'session-effort': 'Read by: bin/lib/model-home.mjs, bin/rules.mjs', 'subagent-effort': 'Read by: bin/rules.mjs' };
+  const readers = { 'session-model': 'Read by: bin/lib/model-home.mjs, bin/rules.mjs', 'session-effort': 'Read by: bin/lib/model-home.mjs, bin/rules.mjs' };
   for (const [id, line] of Object.entries(readers)) {
     const out = [];
     assert.equal(await rulesMain([id], { stdout: (line) => out.push(line), stderr: () => {} }), 0);

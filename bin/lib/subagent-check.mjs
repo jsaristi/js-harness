@@ -1,7 +1,9 @@
 // The comparison of today's sub-agent launches with the rules in force (odd/tasks/honesty-audit.md, JH 15 T13):
 // the INFO row of `check --subagents` says whether each writer and reader ran on the model and at the effort
 // the rules give. Pure: the launches are the ones launchesOf returns and the rules are handed in, so a test never
-// reads the project's rules. Nothing here fails a launch: an off value is reported, not refused.
+// reads the project's rules; the one name it takes from elsewhere is the id of the home's effort rule, which its
+// lines name. Nothing here fails a launch: an off value is reported, not refused.
+import { CLAUDE_HOME } from './model-home.mjs';
 
 /** The roles that a writer rule covers; the others are compared against the reader rule. */
 const READER_ROLES = new Set(['explorer', 'reviewer', 'verifier']);
@@ -133,7 +135,7 @@ export function subagentRowLines(result, expected) {
 
   const parts = [];
   if (result.offModel > 0) parts.push(`${result.offModel} on a model off the rules`);
-  if (result.offEffort > 0) parts.push(`${result.offEffort} at an effort off subagent-effort (${effort})`);
+  if (result.offEffort > 0) parts.push(`${result.offEffort} at an effort off ${CLAUDE_HOME.effort} (${effort})`);
   if (result.unknownModel > 0) parts.push(`${result.unknownModel} with an unknown model`);
   if (result.unknownEffort > 0) parts.push(`${result.unknownEffort} at an unknown effort`);
 
@@ -173,7 +175,7 @@ export function subagentRowLines(result, expected) {
     if (role.offEffort.length > 0) {
       const ran = role.offEffort.map((entry) => entry.effortRan).join(', ');
       const total = role.offEffort.reduce((sum, entry) => sum + entry.count, 0);
-      segments.push(`${total} of ${role.launches} ran at effort ${ran} (subagent-effort gives ${effort})`);
+      segments.push(`${total} of ${role.launches} ran at effort ${ran} (${CLAUDE_HOME.effort} gives ${effort})`);
     }
     if (segments.length > 0) lines.push(`${side}: ${segments.join('; ')}`);
   }

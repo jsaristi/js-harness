@@ -710,7 +710,7 @@ test('a turn to refuse with a pattern that is no regular expression is refused f
 });
 
 // ---- the order of a change that folds several rules into two (odd/tasks/one-model-home.md, L13) -------------------
-// On 2026-11-11 five rules that restated a model or an effort were retired into the two that are the home. A run on an
+// On 2026-11-11 four rules that restated a model or an effort were retired into the two that are the home (this fixture retires five: the order is the same for any count). A run on an
 // id starts from origin/main's declaration of it, so a second run on a home would undo its first; and `--with` admits
 // the change of a path, never of another declaration. So the order is one run an id: the two homes first, each run
 // carrying its widened subject and every pattern the rules that leave hold, then each retirement with its reader

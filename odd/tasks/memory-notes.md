@@ -67,7 +67,7 @@ The move pass of 2026-10-22 shrank these to pointers; what they held is in `odd/
 | cross-session-prompts.md | `rule:session-prompts` (bin/lib/manifest.mjs) |
 | dogfooding-rules-go-in-the-harness.md | `rule:rules-live-in-the-harness` (bin/lib/protocols-skill.mjs); `rule:memory-feedback-home` (check: bin/lib/memory-feedback-guard.mjs) |
 | double-review-before-proposing.md | `rule:double-review` (bin/lib/protocols-skill.mjs:102, bin/lib/manifest.mjs:140) |
-| effort-by-kind-of-work.md | `rule:recap-effort-line`, `rule:session-effort` (check: bin/lib/guard.mjs), `rule:subagent-effort`, `rule:subagent-writer-model` (check: bin/lib/guard.mjs) |
+| effort-by-kind-of-work.md | `rule:recap-effort-line`, `rule:session-effort` (check: bin/lib/guard.mjs), `rule:subagent-writer-model` (check: bin/lib/guard.mjs) |
 | guide-not-literal.md | `rule:wording-is-the-need` (bin/lib/project.mjs) |
 | mistake-report-four-parts.md | `rule:mistake-report` (bin/lib/protocols-skill.mjs); CLAUDE.md:55-58 |
 | notify-when-done.md | `rule:announce-finished` (bin/lib/manifest.mjs); `rule:context-pause` (check: bin/lib/sessions.mjs) |

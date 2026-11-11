@@ -2,8 +2,8 @@
 // `contract`: the task contract at the head of a feature document (see odd/tasks/task-contract.md
 // and bin/lib/contract.mjs). `template` prints the template; `check` validates contracts statically
 // and never runs the commands they name; `run` runs them and reports met or not met; `goal` prints
-// the `/goal` condition that makes a session run `run`; `modes` prints the effort and sub-agent models
-// each task's kind calls for (odd/tasks/effort-by-task.md). Zero dependencies.
+// the `/goal` condition that makes a session run `run`; `modes` prints the model and the effort
+// each task runs on, the Claude home's (odd/tasks/effort-by-task.md, odd/tasks/one-model-home.md). Zero dependencies.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -358,7 +358,7 @@ export function modeLines(markdown, root) {
   return taskModes(markdown, ruleReader(projectData)).map((mode) => ({ id: mode.id, kind: mode.kind, done: mode.done, line: modeLine(mode) }));
 }
 
-/** `modes`: the mode each open task calls for (its kind's effort and sub-agent models, from the rules
+/** `modes`: the mode each open task calls for (the model and the effort of the Claude home, from the rules
  * list), or the one task `--task` names, open or done. It never runs or changes anything. */
 function modesCommand(argv, { cwd: defaultCwd, stdout, stderr, spawn }) {
   const parsed = parseOneFile(argv, stderr, defaultCwd, { task: true });
