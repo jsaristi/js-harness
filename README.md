@@ -411,6 +411,14 @@ Every `--windows` minutes (an hour; `0` for never) it also reads the daily Windo
 told before. The time of the last reading is kept in a file, so a heartbeat started again after a
 `STALL` still reads it once an hour. With nothing else, it ends after `--max` hours (10, exit 1).
 
+Run from the lead's session, each tick also reads when the user last wrote to it. Once that is more
+than two hours ago, the absence of the reply hook's return check, and no stretch covers the time
+since, the heartbeat ends with an `AWAY:` line that names the command that opens one, so the lead
+is told when the absence starts and not at the return; a work session is told nothing. Where the
+question tool held the session when the absence started, the line says since when: a held session
+could open no stretch then and reads the line only once the tool returned. It is told once an
+absence, and a heartbeat started again names it on an `already told:` line.
+
 Each tick also keeps the throughput snapshot of every settled day of the last
 `throughput-backfill-days` that the gate log holds and that has none, never while a gate holds
 the lock, and reads the throughput reviews due (`js-harness throughput status`). One that falls
