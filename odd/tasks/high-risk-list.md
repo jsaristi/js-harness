@@ -107,8 +107,8 @@ in the lead's chat (transcript ea85ec35-82e1-4aa9-abe3-98bd153a50b0), on 2026-11
   others consume); one read-only sub-agent: "holds" at f6a2be08, three defects that do not block, answered in L7.
 - [x] T4 (kind: verify) the gate, then Codex and the pertinent lenses on the slice, one at a time; findings fixed or
   answered: Codex no finding, the lenses one warning rebutted (L8).
-- [x] T5 (kind: docs) main merged in (9e29880a), the pull request ready, the ready notice, the session summary, the
-  closed notice.
+- [x] T5 (kind: docs) main merged in (9e29880a), pull request 826 ready, the ready notice, the session summary
+  (docs/sessions/2026-11-11-jh-182-the-high-risk-list-where-codex-reads-it.md), the closed notice.
 
 ## Log
 - L1 The brief (the lead, 2026-11-11T10:46Z, with an addition of 05:48 local): "You own one feature: the high-risk
