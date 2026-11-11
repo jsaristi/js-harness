@@ -15,7 +15,7 @@ import { tools } from './stack.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './project-functions.mjs';
 import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, planFunctions, settingLabel, settingPending, valueAt } from './project-apply.mjs';
 import { EXCLUDED, addExclude, isValidExcludeRecord, undoExclude } from './project-exclude.mjs';
-import { excludeToWrite, sharedElsewhere } from './project-shared.mjs';
+import { excludeToWrite, hookElsewhere } from './project-shared.mjs';
 import { FAILURES_TEMPLATE, TEMPLATE_BLOCK_MARK, agentsFile, claudeFile, renderBlock } from './project-template.mjs';
 import { HOOKS } from './project-hooks.mjs';
 import { localDay } from './flaky.mjs';
@@ -330,7 +330,7 @@ function absoluteFrom(root, raw) {
  * inside some base, and a symlink in its chain is what sent it outside — as opposed to the
  * configured location itself (`core.hooksPath`, or the default) being outside from the start, with
  * no symlink involved in that verdict (T2e item 7). */
-function resolveHookContainment(root, hookPath, gitBases = {}) {
+export function resolveHookContainment(root, hookPath, gitBases = {}) {
   const realRoot = fs.realpathSync(root);
   const realGitDir = safeRealpath(gitBases.gitDir);
   const realCommonGitDir = safeRealpath(gitBases.commonGitDir);
@@ -665,7 +665,7 @@ function writeHookGate(root, spawn, writeFile, state, hook = HOOKS.preCommit) {
     } else {
       const hookRel = pathShapeFor(root, hookPath, hookIsWorkingTree);
       // A hook outside the working tree of a linked worktree is every worktree's: the main checkout writes it (./project-shared.mjs).
-      const elsewhere = hookOccupied || hookIsWorkingTree ? null : sharedElsewhere(gitBases, `add ${hook.command} to its ${hook.name} yourself`);
+      const elsewhere = hookElsewhere({ occupied: hookOccupied, isWorkingTree: hookIsWorkingTree }, gitBases, `add ${hook.command} to its ${hook.name} yourself`);
       if (hookOccupied) {
         actions.push(kept(hookRel, `exists; add ${hook.command} to it`, false, !hookIsWorkingTree));
       } else if (elsewhere) {
@@ -1461,15 +1461,15 @@ function restoreRecordedHook(root, manifest, gitBases, writeFile, createdPaths, 
 
   const { real, outside, occupied, isWorkingTree, viaLink, base } = resolveHookContainment(root, abs, gitBases);
   if (outside) {
-    const reason = viaLink
-      ? 'a link now sends its directory outside the repository; not written again'
-      : 'it is outside the repository; not written again';
+    const reason = viaLink ? 'a link now sends its directory outside the repository; not written again' : 'it is outside the repository; not written again';
     actions.push(kept(toForwardSlashes(real), reason, true));
     return;
   }
   const label = pathShapeFor(root, abs, isWorkingTree);
-  if (occupied) {
-    actions.push(kept(label, 'a link is in its path; not written again', false, !isWorkingTree));
+  // One a linked worktree recorded under an earlier version is every worktree's: not written again from here either.
+  const elsewhere = hookElsewhere({ occupied, isWorkingTree }, gitBases, `add ${hook.command} to its ${hook.name} yourself`);
+  if (occupied || elsewhere) {
+    actions.push(occupied ? kept(label, 'a link is in its path; not written again', false, !isWorkingTree) : { kind: 'skip', path: label, reason: elsewhere });
     return;
   }
 
@@ -1477,9 +1477,7 @@ function restoreRecordedHook(root, manifest, gitBases, writeFile, createdPaths, 
   if (shallow) {
     const dirEntry = manifestEntry(root, shallow, isWorkingTree);
     manifest.dirs = manifest.dirs ?? [];
-    if (!manifest.dirs.some((d) => d.path === dirEntry.path && !!d.gitDir === !!dirEntry.gitDir)) {
-      manifest.dirs.push(dirEntry);
-    }
+    if (!manifest.dirs.some((d) => d.path === dirEntry.path && !!d.gitDir === !!dirEntry.gitDir)) manifest.dirs.push(dirEntry);
   }
   createdPaths.push(abs);
   writeFile(abs, hook.content, 'utf8');

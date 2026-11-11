@@ -36,6 +36,15 @@ export function sharedElsewhere(gitBases, otherwise) {
   return `${shared}, so the record of this one would not outlive it: js-harness sync in ${path.dirname(common)} writes and records it once that checkout holds harness.json`;
 }
 
+/** Why the checkout does not write the hook whose place `at` describes (`resolveHookContainment` of ./project.mjs),
+ * or `null` where it does, or keeps it for a reason of its own: one under its working tree (`core.hooksPath`) is
+ * this checkout's, one already there or outside the repository is kept as in any checkout, and any other is every
+ * worktree's (`sharedElsewhere`). The one verdict for `sync`, which acts on it, and for the migration's plan, which
+ * says what `sync` would do (the reliability lens on 620f337..99020c1: the plan named a hook `sync` now skips). */
+export function hookElsewhere(at, gitBases, otherwise) {
+  return at.outside || at.occupied || at.isWorkingTree ? null : sharedElsewhere(gitBases, otherwise);
+}
+
 /** `target`, what `excludeFile` of ./project.mjs gave, for a run that would add the line: in a linked worktree,
  * where its lines do not leave `.atl/` out yet, it comes back with the reason it is kept (`sharedElsewhere`), and
  * as it is everywhere else. `uninstall` reads `excludeFile` itself, since it undoes what a manifest of an earlier

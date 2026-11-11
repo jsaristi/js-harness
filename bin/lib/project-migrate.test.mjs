@@ -567,6 +567,50 @@ test("the plan names what sync would repair: a recorded gate that is gone and th
   }
 });
 
+// The reliability lens on 620f337..99020c1: in a linked worktree sync leaves a hook every worktree shares to the main
+// checkout (odd/tasks/install-uninstall-edges.md, S1), and the plan still said sync would write it.
+test('in a linked worktree the plan names no hook that sync leaves to the main checkout', () => {
+  const { dir, manifestPath, home } = oldProject({ pin: RUNNING });
+  const holder = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-migrate-linked-'));
+  const linked = path.join(holder, 'wt');
+  try {
+    assert.equal(migrateProject(dir, RUNNING, { home, today: TODAY }).code, 0);
+    commitAll(dir);
+    git(dir, 'worktree', 'add', '-q', '-b', 'linked', linked);
+    // The worktree's own record: the main checkout's, with a gate that is gone and no commit-msg step.
+    const hooks = path.join(dir, '.git', 'hooks');
+    const manifest = JSON.parse(read(manifestPath));
+    const nameOf = (entry) => entry.path.split('/').pop();
+    manifest.files = manifest.files
+      .filter((entry) => !['commit-msg', 'pre-push'].includes(nameOf(entry)))
+      .map((entry) => (nameOf(entry) === 'pre-commit' ? { ...entry, path: path.join(hooks, 'pre-commit').split(path.sep).join('/'), gitDir: true } : entry));
+    manifest.kept = (manifest.kept ?? []).filter((entry) => nameOf(entry) !== 'commit-msg');
+    delete manifest.exclude;
+    const own = path.resolve(linked, git(linked, 'rev-parse', '--git-path', 'js-harness/manifest.json').trim());
+    fs.mkdirSync(path.dirname(own), { recursive: true });
+    fs.writeFileSync(own, JSON.stringify(manifest, null, 2) + '\n');
+    fs.rmSync(path.join(hooks, 'pre-commit'));
+    fs.rmSync(path.join(hooks, 'commit-msg'));
+    // The shared exclude file without its line, so the line too is one sync would leave to the main checkout.
+    fs.writeFileSync(path.join(dir, '.git', 'info', 'exclude'), '');
+
+    const plan = migrationPlan(linked, RUNNING, { home, today: TODAY });
+    assert.equal(plan.code, 0, JSON.stringify(plan));
+    assert.deepEqual(plan.pending.filter((line) => /pre-commit|commit-msg|\.atl\//.test(line)), []);
+    // And sync, which the migration hands the rest to, writes neither: the plan said what it does.
+    assert.equal(migrateProject(linked, RUNNING, { home, today: TODAY }).code, 0);
+    assert.deepEqual(['pre-commit', 'commit-msg'].filter((name) => fs.existsSync(path.join(hooks, name))), []);
+
+    // A hook already there is kept and recorded as kept, as in any checkout, so its line stays.
+    fs.writeFileSync(own, JSON.stringify(manifest, null, 2) + '\n');
+    fs.writeFileSync(path.join(hooks, 'commit-msg'), '#!/bin/sh\n');
+    assert.match(migrationPlan(linked, RUNNING, { home, today: TODAY }).pending.join('\n'), /commit-msg step .* kept and recorded as kept/);
+  } finally {
+    git(dir, 'worktree', 'remove', '--force', linked);
+    cleanup(dir, home, holder);
+  }
+});
+
 test("a failure in sync's part names what the migration wrote before it, which stays recorded", () => {
   const { dir, manifestPath, home } = oldProject();
   try {

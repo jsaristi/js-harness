@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { excludeToWrite, sharedElsewhere } from './project-shared.mjs';
+import { excludeToWrite, hookElsewhere, sharedElsewhere } from './project-shared.mjs';
 
 /** A folder laid out as a main checkout with one linked worktree's git dir, or as a bare repository with one. */
 function layout(common) {
@@ -48,6 +48,22 @@ test('a worktree of a repository with no main checkout is told what to do by han
       sharedElsewhere({ gitDir: repo.gitDir, commonGitDir: repo.commonGitDir }, 'add the line yourself'),
       'shared by every worktree of this repository, which has no main checkout whose record would keep it: add the line yourself',
     );
+  } finally {
+    repo.done();
+  }
+});
+
+test('a hook is left to the main checkout only where a linked worktree would write one every worktree shares', () => {
+  const repo = layout(['main', '.git']);
+  try {
+    const linked = { gitDir: repo.gitDir, commonGitDir: repo.commonGitDir };
+    const main = { gitDir: repo.commonGitDir, commonGitDir: repo.commonGitDir };
+    assert.match(hookElsewhere({ outside: false, occupied: false, isWorkingTree: false }, linked, 'by hand'), /^shared by every worktree/);
+    assert.match(hookElsewhere({ isWorkingTree: false }, linked, 'by hand'), /^shared by every worktree/, 'a place half described');
+    assert.equal(hookElsewhere({ isWorkingTree: true }, linked, 'by hand'), null, 'under its own working tree (core.hooksPath)');
+    assert.equal(hookElsewhere({ occupied: true, isWorkingTree: false }, linked, 'by hand'), null, 'already there: kept, as in any checkout');
+    assert.equal(hookElsewhere({ outside: true, isWorkingTree: false }, linked, 'by hand'), null, 'outside the repository: kept, as in any checkout');
+    assert.equal(hookElsewhere({ isWorkingTree: false }, main, 'by hand'), null, 'the main checkout writes it');
   } finally {
     repo.done();
   }

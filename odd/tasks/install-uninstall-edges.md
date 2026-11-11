@@ -23,8 +23,9 @@ comparison that is wrong for the prerelease tags `check` accepts.
 - the pull request is ready and told to the lead with `js-harness notify --to orchestrator --kind ready --pr <n>`
 
 ## In scope / Out of scope
-- In: `bin/lib/project.mjs` (the hook step and the exclude step in a linked worktree), `bin/update.mjs` (the sync's
-  error), `bin/lib/status-line-uninstall.ps1`, `bin/tui.mjs` (one prompt), `bin/lib/version.mjs` (`compareSemver`),
+- In: `bin/lib/project.mjs` (the hook step and the exclude step in a linked worktree), its new neighbour
+  `bin/lib/project-shared.mjs` and the plan of `bin/lib/project-migrate.mjs` that says what `sync` would do,
+  `bin/update.mjs` (the sync's error), `bin/lib/status-line-uninstall.ps1`, `bin/tui.mjs` (one prompt), `bin/lib/version.mjs` (`compareSemver`),
   `bin/lib/component-write.mjs`, `bin/install.mjs` (one line of the report), their tests, this document, the session
   summary and the documents that state the changed behaviour.
 - Out: `bin/lib/manifest.mjs`, which is at its size ceiling (1,650 of 1,650, `bin/conventions-structure.test.mjs:72`)
@@ -105,11 +106,13 @@ record keeps them, or refuse `init` there; print the sync's own error after an u
 policy value only when it holds what install wrote; name the folders in the uninstall prompt; compare prerelease
 versions; keep a copy of a file a first install would overwrite."
 
-- S1 (M29). In a linked worktree, `init` and the first `sync` of a clone write no hook outside the working tree and
-  no line of the shared `info/exclude`; each is reported as skipped with where it is written and recorded:
-  `js-harness sync` in the main checkout. A per-worktree manifest then records only what dies with the worktree.
+- S1 (M29). In a linked worktree, `init` and `sync` (the first of a clone, and a later one that would write a
+  recorded hook again) write no hook outside the working tree and no line of the shared `info/exclude`; each is
+  reported as skipped with where it is written and recorded: `js-harness sync` in the main checkout; the
+  migration's plan names none of them as a write. A per-worktree manifest then records only what dies with the
+  worktree.
 - S2 (M30). When the sync after an upgrade fails, `upgrade` prints what that sync wrote to its error stream (and
-  the error of a sync that could not start) before "sync after upgrade failed".
+  the error of a sync that did not run to its end) before "sync after upgrade failed".
 - S3 (M35). `status-line-uninstall.ps1` removes `sessionStatusLine` only when it holds the value the install
   writes for that folder; any other value is left and said.
 - S4 (M36). The prompt of `uninstall machine` names each folder of `.js-harness` it removes, and a test holds the
@@ -226,4 +229,39 @@ versions; keep a copy of a file a first install would overwrite."
   before this feature (`compareSemver orders by major, then minor, then patch` predates it); a major past 2^53
   is outside what `TARBALL_RE` and a release tag give this function in practice, and Codex did not flag it.
   After the fix: `bin/lib/component-write.test.mjs` 11 of 11, `bin/lib/version.test.mjs` 14 of 14,
-  `bin/install.test.mjs` 119 of 119, each run whole.
+  `bin/install.test.mjs` 119 of 119, each run whole. The fix is `c36f512a`, its gate green (18 rows).
+- L18. Review, Codex, the confirming one, 2026-11-11, `99020c10..c36f512a`, 1 part, 50,712 input tokens (28,672
+  cached), 72 s: "the patch is correct (confidence 0.97)", "2 fixed, 0 not fixed". Two Codex reviews in all.
+- L19. Review, the Claude lenses, 2026-11-11, each a fresh run on `claude-fable-5-2` at high effort. Slice A,
+  `62bb01f6..620f337d`, risk, resilience, readability, reliability, about 16,000 input tokens each: three
+  warnings, all the copy taken by its name alone, the defect Codex found and `c36f512a` had already fixed (the
+  range ends before the fix, so the lenses could not see it); one suggestion, new and real: "sync after upgrade
+  failed: it could not start" was printed for any spawn error, and the spawn also gives one for a sync that
+  started and was then stopped (output past the 1 MB buffer; no timeout is set, `bin/update.mjs:560-567`), right
+  under what that sync had said. The line now reads "it did not run to its end (<error>)"; test seen red first.
+  Slice B, `620f337d..99020c10`, risk, reliability, readability, about 22,200 input tokens each: the three of
+  slice A carried as "not fixed", their code being outside the range, and one warning, new and real: the
+  migration's plan (`repairLines`, `bin/lib/project-migrate.mjs`) still said `sync` would write the commit-msg
+  step in a linked worktree, where `sync` now skips it. The plan asks the verdict `sync` acts on, now one
+  function, `hookElsewhere` (`bin/lib/project-shared.mjs`), and names no hook `sync` leaves to the main checkout.
+- L20. Failure of this feature's own, found by the test written for L19, 2026-11-11: L7 says "The guard covers
+  every writer of a shared file". It did not. `restoreRecordedHook` (`bin/lib/project.mjs`), which writes a
+  recorded hook again when it is gone, is a second writer, reached by a worktree an earlier version initialised:
+  `sync` there wrote the shared pre-commit hook again (the test's third assertion: `['pre-commit']` where `[]`
+  was expected). The claim rested on reading `writeHookGate`'s callers, not on a search for every write of a
+  hook's content. Fixed: the same verdict there, a `skip` with the reason; the record stays, so `uninstall` still
+  reports it as gone. The search that closes it: `writeFile(` with `hook.content` in `bin/lib/project.mjs` has two
+  sites, `writeHookGate` and `restoreRecordedHook`, both now behind `hookElsewhere`. What stops it recurring is
+  the test, `in a linked worktree the plan names no hook that sync leaves to the main checkout`
+  (`bin/lib/project-migrate.test.mjs`), which runs the migration's `sync` in a linked worktree whose record names
+  a hook that is gone and reads the shared hooks folder after it. `bin/lib/project.mjs` is 1,975 lines, its
+  ceiling lowered with it.
+- L21. Evidence, 2026-11-11: `node --test bin/lib/project.test.mjs bin/lib/project-shared.test.mjs
+  bin/lib/project-migrate.test.mjs bin/lib/project-exclude.test.mjs bin/lib/project-switches.test.mjs
+  bin/conventions-structure.test.mjs bin/update.test.mjs`, whole, through `js-harness gate`, on the tree of L19
+  and L20: 343 tests, 332 pass, 0 fail, 11 skipped (the same of this machine as in L13, 10 for a symbolic link
+  and the 8.3 short-name case), 214 s.
+- L22. Seen and left, older than this feature: the plan's line for the `.atl/` exclude record
+  (`repairLines`) is printed whenever the manifest holds no record, also where the line is already in the file
+  and `sync` then records nothing (`addExclude` gives `null`). It is the same in a main checkout, and the test
+  `the plan names what sync would repair` holds it as it is. Not this unit's; named in the session summary.

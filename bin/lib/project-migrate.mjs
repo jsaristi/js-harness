@@ -16,7 +16,7 @@ import { checkProjectRules, PROJECT_RULES_PATH } from './project-rules.mjs';
 import { isNewer } from './version.mjs';
 import { localDay } from './flaky.mjs';
 import { renderBlock, TEMPLATE_BLOCK_MARK } from './project-template.mjs';
-import { excludeToWrite } from './project-shared.mjs';
+import { excludeToWrite, hookElsewhere } from './project-shared.mjs';
 import {
   InitWriteError,
   agentsBlock,
@@ -30,6 +30,8 @@ import {
   projectFiles,
   readPin,
   readRecorded,
+  resolveGitPath,
+  resolveHookContainment,
   resolveManifestEntryPath,
   syncProject,
   templateBlock,
@@ -183,17 +185,24 @@ function repairLines({ root, manifest, spawn }) {
   const lines = [];
   const hook = (name) => manifest.files.find((file) => file.path.split('/').pop() === name);
   const gone = (entry) => !fs.existsSync(resolveManifestEntryPath(root, entry));
+  // A hook every worktree shares gets no line in a linked worktree: sync leaves it to the main checkout and says so
+  // (`hookElsewhere`, the verdict sync itself acts on), so here nothing would be written or recorded.
+  const gitBases = gitDirs(root, spawn);
+  const add = (name, line) => {
+    const hookPath = resolveGitPath(root, `hooks/${name}`, spawn);
+    if (!hookPath || !hookElsewhere(resolveHookContainment(root, hookPath, gitBases), gitBases, '')) lines.push(line);
+  };
   const gate = hook('pre-commit');
-  if (manifest.scope === 'functions') lines.push('the pre-commit gate: written, as sync sets the clone up the rest of the way');
-  else if (gate && gone(gate)) lines.push('the pre-commit gate: written again, since the one recorded is gone');
+  if (manifest.scope === 'functions') add('pre-commit', 'the pre-commit gate: written, as sync sets the clone up the rest of the way');
+  else if (gate && gone(gate)) add('pre-commit', 'the pre-commit gate: written again, since the one recorded is gone');
   const commitMsg = hook('commit-msg');
   const kept = (manifest.kept ?? []).some((entry) => entry.path.split('/').pop() === 'commit-msg');
-  if (!commitMsg && !kept) lines.push("the commit-msg step that takes the host's attribution lines out: written, or kept and recorded as kept where a hook of that name is already there or the hooks path is outside the repository");
-  else if (commitMsg && gone(commitMsg)) lines.push('the commit-msg step: written again, since the one recorded is gone');
+  if (!commitMsg && !kept) add('commit-msg', "the commit-msg step that takes the host's attribution lines out: written, or kept and recorded as kept where a hook of that name is already there or the hooks path is outside the repository");
+  else if (commitMsg && gone(commitMsg)) add('commit-msg', 'the commit-msg step: written again, since the one recorded is gone');
   // Only where sync would write it: an exclude file behind a link, outside the repository, or shared with the main
   // checkout from a linked worktree, sync keeps as it is.
   if (!manifest.exclude) {
-    const target = excludeToWrite(excludeFile(root, spawn), gitDirs(root, spawn));
+    const target = excludeToWrite(excludeFile(root, spawn), gitBases);
     if (target.file && !target.reason) lines.push(".atl/: its exclude line added to the clone's exclude file and recorded");
   }
   return lines;

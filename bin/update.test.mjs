@@ -475,7 +475,7 @@ test('upgradeMain installs the resolved spec and syncs the newly installed binar
 });
 
 // The sync runs piped, so what it said was lost and only its exit code reached the person (the audit's M30).
-test('upgradeMain prints what the sync after upgrade said when it fails, and why one could not start', async () => {
+test('upgradeMain prints what the sync after upgrade said when it fails, and why one did not run to its end', async () => {
   const home = makeTmpDir('js-harness-upgrade-home-syncfail-');
   const prefix = makeTmpDir('js-harness-upgrade-prefix-syncfail-');
   const source = makeSource(NEWER);
@@ -498,7 +498,13 @@ test('upgradeMain prints what the sync after upgrade said when it fails, and why
 
     const unstarted = await runCommand(upgradeMain, argv, {}, failing({ status: null, error: new Error('spawn node ENOENT') }), 'linux');
     assert.equal(unstarted.code, 1);
-    assert.equal(unstarted.err.split('\n').at(-1), 'sync after upgrade failed: it could not start (spawn node ENOENT)');
+    assert.equal(unstarted.err.split('\n').at(-1), 'sync after upgrade failed: it did not run to its end (spawn node ENOENT)');
+
+    // The readability lens on 62bb01f..620f337: the spawn also gives an error for a sync that started and was then
+    // stopped (output past the buffer), so the line never says it did not start, under what that sync had said.
+    const cut = await runCommand(upgradeMain, argv, {}, failing({ status: null, stdout: 'wrote 4 files\n', stderr: '', error: new Error('spawnSync node ENOBUFS') }), 'linux');
+    assert.equal(cut.code, 1);
+    assert.deepEqual(cut.err.split('\n').slice(-2), ['wrote 4 files', 'sync after upgrade failed: it did not run to its end (spawnSync node ENOBUFS)']);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(prefix, { recursive: true, force: true });
