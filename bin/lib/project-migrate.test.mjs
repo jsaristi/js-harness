@@ -605,6 +605,16 @@ test('in a linked worktree the plan names no hook that sync leaves to the main c
     fs.writeFileSync(own, JSON.stringify(manifest, null, 2) + '\n');
     fs.writeFileSync(path.join(hooks, 'commit-msg'), '#!/bin/sh\n');
     assert.match(migrationPlan(linked, RUNNING, { home, today: TODAY }).pending.join('\n'), /commit-msg step .* kept and recorded as kept/);
+
+    // Codex on c36f512..90f3241: a recorded hook is judged where its record says it was, as sync judges it, not
+    // where git puts hooks today. One recorded under the worktree's own folder (a core.hooksPath since reset) is
+    // this checkout's: the plan names it, and sync writes it again.
+    const local = manifest.files.map((entry) => (nameOf(entry) === 'pre-commit' ? { path: '.githooks/pre-commit', sha256: entry.sha256 } : entry));
+    fs.writeFileSync(own, JSON.stringify({ ...manifest, files: local }, null, 2) + '\n');
+    assert.match(migrationPlan(linked, RUNNING, { home, today: TODAY }).pending.join('\n'), /the pre-commit gate: written again/);
+    assert.equal(migrateProject(linked, RUNNING, { home, today: TODAY }).code, 0);
+    assert.equal(fs.existsSync(path.join(linked, '.githooks', 'pre-commit')), true);
+    assert.equal(fs.existsSync(path.join(hooks, 'pre-commit')), false);
   } finally {
     git(dir, 'worktree', 'remove', '--force', linked);
     cleanup(dir, home, holder);

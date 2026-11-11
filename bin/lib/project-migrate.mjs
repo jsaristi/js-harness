@@ -186,19 +186,21 @@ function repairLines({ root, manifest, spawn }) {
   const hook = (name) => manifest.files.find((file) => file.path.split('/').pop() === name);
   const gone = (entry) => !fs.existsSync(resolveManifestEntryPath(root, entry));
   // A hook every worktree shares gets no line in a linked worktree: sync leaves it to the main checkout and says so
-  // (`hookElsewhere`, the verdict sync itself acts on), so here nothing would be written or recorded.
+  // (`hookElsewhere`, the verdict sync itself acts on), so here nothing would be written or recorded. The place
+  // judged is the one sync writes: where the record says the hook was, for one written again, and where git puts
+  // hooks today, for a new one (Codex on c36f512..90f3241: the two differ once `core.hooksPath` has changed).
   const gitBases = gitDirs(root, spawn);
-  const add = (name, line) => {
-    const hookPath = resolveGitPath(root, `hooks/${name}`, spawn);
+  const add = (name, line, recorded) => {
+    const hookPath = recorded ? resolveManifestEntryPath(root, recorded) : resolveGitPath(root, `hooks/${name}`, spawn);
     if (!hookPath || !hookElsewhere(resolveHookContainment(root, hookPath, gitBases), gitBases, '')) lines.push(line);
   };
   const gate = hook('pre-commit');
   if (manifest.scope === 'functions') add('pre-commit', 'the pre-commit gate: written, as sync sets the clone up the rest of the way');
-  else if (gate && gone(gate)) add('pre-commit', 'the pre-commit gate: written again, since the one recorded is gone');
+  else if (gate && gone(gate)) add('pre-commit', 'the pre-commit gate: written again, since the one recorded is gone', gate);
   const commitMsg = hook('commit-msg');
   const kept = (manifest.kept ?? []).some((entry) => entry.path.split('/').pop() === 'commit-msg');
   if (!commitMsg && !kept) add('commit-msg', "the commit-msg step that takes the host's attribution lines out: written, or kept and recorded as kept where a hook of that name is already there or the hooks path is outside the repository");
-  else if (commitMsg && gone(commitMsg)) add('commit-msg', 'the commit-msg step: written again, since the one recorded is gone');
+  else if (commitMsg && gone(commitMsg)) add('commit-msg', 'the commit-msg step: written again, since the one recorded is gone', commitMsg);
   // Only where sync would write it: an exclude file behind a link, outside the repository, or shared with the main
   // checkout from a linked worktree, sync keeps as it is.
   if (!manifest.exclude) {

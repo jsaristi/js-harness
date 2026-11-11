@@ -261,6 +261,17 @@ versions; keep a copy of a file a first install would overwrite."
   bin/conventions-structure.test.mjs bin/update.test.mjs`, whole, through `js-harness gate`, on the tree of L19
   and L20: 343 tests, 332 pass, 0 fail, 11 skipped (the same of this machine as in L13, 10 for a symbolic link
   and the 8.3 short-name case), 214 s.
+- L23. Review, Codex, 2026-11-11, `c36f512a..90f32411` (the commit of L19 and L20), 1 part, 72,324 input tokens
+  (42,752 cached), 82 s: "the patch is incorrect (confidence 0.96)", one P2, real: the plan judged a hook that
+  is written again where git puts hooks today, and `sync` writes it where its record says it was; the two differ
+  once `core.hooksPath` has changed, so the plan was silent on a hook `sync` wrote (recorded under the worktree's
+  own folder) and named one `sync` skipped (the reverse). `repairLines` now judges the recorded place for a hook
+  written again and git's place for a new one. Seen red first: the plan gave the commit-msg line alone where
+  "the pre-commit gate: written again" was expected. `bin/lib/project-migrate.test.mjs` whole after it: 34, none
+  failing. The count of reviews: this is the third Codex run of the feature and the first of this commit, a
+  change the first two never read; `rule:escalation-model` passes a change three reviews did not settle to
+  `claude-fable-5-2`, the model this session already runs on, so the work stays here, and the lead is told of
+  the count in the summary.
 - L22. Seen and left, older than this feature: the plan's line for the `.atl/` exclude record
   (`repairLines`) is printed whenever the manifest holds no record, also where the line is already in the file
   and `sync` then records nothing (`addExclude` gives `null`). It is the same in a main checkout, and the test
