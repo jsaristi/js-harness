@@ -161,8 +161,12 @@ the lead with `js-harness notify --to orchestrator --kind waiting`.
   request · pull request 821 (L9, L15 to L19)
 
 ## Next step
-Every task is done and pull request 821 is open, its code reviewed up to `e64fd44f` (L19). The merge is the lead's
-after the owner's yes. Open with the lead (`notify --kind waiting`, L17): whether a resume leaves the job it resumed
+Every task is done and pull request 821 is open, its code reviewed up to `e64fd44f` (L19). It conflicts with main
+until the merge of main, staged in the worktree with its conflicts resolved, is committed (L20): the host stopped
+that commit for low memory, and it is run again only on the lead's or the owner's word. Then: `git commit -F` with
+the message of L20's merge, the push, whatever review the push asks of the merge, `notify --kind ready --pr 821`,
+the summary's `Time` line set to the real time of that notice, and `notify --kind closed --summary`. The merge is
+the lead's after the owner's yes. Open with the lead (`notify --kind waiting`, L17): whether a resume leaves the job it resumed
 to the close, as built (L16), or removes it at once, as the brief's words say; with no answer the pull request keeps
 what is built. If he chooses the other, it is one more slice: `resumeStart` in `bin/sessions-background.mjs`, its
 test, and the guard of L13 on that path. The cleanup file of L14 and L17 is the lead's to run after the owner's yes;
@@ -348,12 +352,12 @@ this session ran none of it.
   once PR 816 merged), 8 to look at first, 3 not in main, 4 with a leftover folder, 4 not closed, 6 at work, JH 137
   left out, 5 outside the record. A third copy is `~/.js-harness/background/cleanup-2026-11-11.md`, one file to
   delete, since claude rm takes this session's scratch with its job.
-- L18 Codex on T8's slice `a9f9f979..f3754c2a` (2026-11-11 04:10 local): incorrect (0.96), one finding, P2, 136,847
+- L18 Codex on T8's slice `a9f9f979..f3754c2a` (2026-11-11): incorrect (0.96), one finding, P2, 136,847
   input tokens. `readRecord` counts a stranded start it cannot read in `skipped`, so the new refusal named
   `sessions.jsonl` and told the reader to repair a file that was whole. Fixed in the commit after `f3754c2a`, test
   first (seen to fail): `readRecord` names those files (`strandedUnread`), and the refusal names each thing where it
   is, the lines of the record and the stranded starts by their paths.
-- L19 The close (2026-11-11 04:45 local). Codex on `f3754c2a..e64fd44f`: correct (0.98), the finding of L18 fixed,
+- L19 The close (2026-11-11). Codex on `f3754c2a..e64fd44f`: correct (0.98), the finding of L18 fixed,
   35,142 input tokens. The four lenses on `a9f9f979..e64fd44f`: no finding, each earlier one rechecked as fixed, about
   16,000 input tokens each. The push's own check: 5 code commits, all covered by a Codex record and by a lens record.
   Pull request 821, `https://github.com/jsaristi/js-harness/pull/821`, from `worktree-sessions-close-themselves`.
@@ -368,3 +372,13 @@ this session ran none of it.
   once the worktree is gone; the tests use a real git and a claude that logs its calls. The push printed one note: a
   comment in `bin/lib/background-close.mjs` says "up to a minute", the value the rule `wait-for` also holds; the
   comment speaks of `LOCK_WAIT_MS`, another wait, and the note refuses nothing.
+- L20 The `ready` notice was refused (2026-11-11, about 04:15 local): pull request 821 was CONFLICTING, since main
+  had gained doctor's `claude-signin` row (JH 179) and lines of `docs/FAILURES.md` (JH 175, JH 176) where this branch
+  wrote. Main was merged into the branch: the list of doctor's rows in `bin/js-harness.test.mjs` holds both new rows;
+  under `edit-during-review` both sightings stay; under `stretch-not-opened` this branch's line for the absence of
+  2026-11-10 is dropped, since main records that absence from JH 176 with its evidence and its new control. The tests
+  the merge reaches pass (`bin/doctor.test.mjs`, the doctor rows of `bin/js-harness.test.mjs`, the land's close in
+  `bin/merge-queue.test.mjs`, `bin/lib/background-close.test.mjs`). The host then stopped the merge commit in its
+  gate, and the wait for the lead's notices, for low memory, and told the session not to run it again on its own:
+  sent to the lead as `waiting` at 04:26 local. The clock times L18 and L19 first carried were guesses and were
+  taken out.

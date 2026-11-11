@@ -6,6 +6,7 @@ import { gateLogDir } from './lib/gate-log.mjs';
 import { NOTICE_SCHEMA, recordPath } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { loopsFolder, readRecords } from './lib/loops.mjs';
+import { RECORD_SCHEMA as STRETCH_SCHEMA, stretchFile } from './lib/stretch.mjs';
 
 // The bodies a loop runs. Every seam is fake: the clock, the sleep, the files' times and the channel's text.
 const T0 = Date.parse('2026-10-15T05:00:00.000Z');
@@ -460,4 +461,169 @@ test('heartbeat run outside a session reads no transcript for the cut', async ()
   assert.equal(await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], {}, deps), 0);
   assert.equal(state.tails, undefined);
   assert.doesNotMatch(state.out[0], /cut/);
+  assert.doesNotMatch(state.out[0], /last wrote/);
+});
+
+// odd/tasks/departure-control.md, specs 1 and 3: `stretch-not-opened` was turned back at his return, after the time
+// away it is about. The heartbeat is alive while he is away and its end wakes the lead, so each tick reads when he last
+// wrote to the session it runs in, and ends with an AWAY line once that is longer ago than the return check's absence
+// (two hours) with no stretch covering the time since. Told once an absence, its mark kept beside the cut's.
+const ENV = { CLAUDE_CODE_SESSION_ID: OWNER };
+const HOUR = 3600000;
+const AWAY_MARK = path.join(loopsFolder(HOME, projectSlug(CWD)), 'away', `${OWNER}.json`);
+const STRETCHES = stretchFile(HOME, projectSlug(CWD));
+const iso = (ms) => new Date(ms).toISOString();
+const his = (at) => `${JSON.stringify({ type: 'user', timestamp: iso(at), origin: { kind: 'human' }, message: { role: 'user', content: 'sigue' } })}\n`;
+const question = (at) => `${JSON.stringify({ type: 'assistant', timestamp: iso(at), message: { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_q', name: 'AskUserQuestion', input: { questions: [{ question: 'Pregunta 255: ¿uno el PR 812?', options: [{ label: 'Sí' }, { label: 'No' }] }] } }] } })}\n`;
+const stretchOpened = (at) => `${JSON.stringify({ schema: STRETCH_SCHEMA, event: 'open', id: iso(at), at: iso(at), plan: { hours: 4 } })}\n`;
+const awayLines = (state) => state.out.filter((line) => line.startsWith('AWAY:'));
+// Who the lead is, is the return check's rule: the newest notice the session sent carries the lead's title.
+const LEADS = notice({ at: T0 - 4 * HOUR, id: OWNER, title: 'JH ORQ · lead' });
+
+test('heartbeat ends with the AWAY line when he last wrote to its session two hours ago and no stretch covers the time since', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, channel: LEADS, onSleep: busy });
+  state.transcript = turn + his(T0 - HOUR);
+  deps.readTail = tailOf(state);
+  assert.equal(await loopMain(['heartbeat', '--every', '120'], ENV, deps), 0);
+  assert.equal(state.clock, T0 + HOUR + 120000, 'the first tick after the gap is longer than two hours');
+  assert.match(state.out.at(-1), /^AWAY: the user last wrote to this session at \d\d:\d\d, local time \(UTC[+-]\d\d:\d\d\), 2\.0 hours ago, and no stretch covers the time since/);
+  assert.ok(state.out.at(-1).includes('js-harness stretch open --plan <file> --html <file>'));
+  assert.match(state.out[0], /each tick reads when the user last wrote to this session, and in the lead's session 2 hours with no message and no stretch covering them end it/);
+  assert.deepEqual(JSON.parse(state.marks[AWAY_MARK]), { told: iso(T0 - HOUR), at: iso(T0 + HOUR + 120000), heldSince: null });
+});
+
+test('heartbeat: an absence in course at its start ends it once; a relaunch names it and goes on, and his next absence is told again', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, channel: LEADS, onSleep: busy });
+  state.transcript = his(T0 - 3 * HOUR);
+  deps.readTail = tailOf(state);
+  assert.equal(await loopMain(['heartbeat', '--every', '120'], ENV, deps), 0);
+  assert.equal(state.clock, T0, 'the absence in course ends the first heartbeat at once');
+  assert.equal(awayLines(state).length, 1);
+
+  state.out = [];
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], ENV, deps), 1);
+  assert.deepEqual(awayLines(state), [], 'the relaunch is not woken by the absence it was told');
+  assert.equal(state.out.filter((line) => /^already told: the user's absence since \d\d:\d\d, with no stretch covering it$/.test(line)).length, 1);
+
+  state.out = [];
+  const again = state.clock;
+  state.transcript += his(again);
+  assert.equal(await loopMain(['heartbeat', '--every', '600'], ENV, deps), 0);
+  assert.equal(awayLines(state).length, 1);
+  assert.equal(state.clock, again + 2 * HOUR + 600000);
+  assert.equal(JSON.parse(state.marks[AWAY_MARK]).told, iso(again));
+  // The mark is not a loop record: loop status reads every .json entry of the loops folder as one.
+  const loops = loopsFolder(HOME, projectSlug(CWD));
+  assert.deepEqual(Object.keys(state.marks).filter((mark) => path.dirname(mark) === loops), []);
+});
+
+test('heartbeat tells nothing while a stretch covers his absence, and says once a stretch record it cannot read', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, channel: LEADS, onSleep: busy });
+  state.transcript = his(T0 - 3 * HOUR);
+  state.marks = { [STRETCHES]: stretchOpened(T0 - HOUR) };
+  deps.readTail = tailOf(state);
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], ENV, deps), 1);
+  assert.deepEqual(awayLines(state), []);
+  assert.equal(state.marks[AWAY_MARK], undefined, 'nothing told, nothing marked');
+
+  state.out = [];
+  const read = deps.readFile;
+  deps.readFile = (file) => {
+    if (file === STRETCHES) throw Object.assign(new Error('EACCES: the record is held'), { code: 'EACCES' });
+    return read(file);
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], ENV, deps), 1);
+  assert.deepEqual(awayLines(state), [], 'an absence it cannot check is not told');
+  assert.equal(state.out.filter((line) => line.startsWith('the user\'s absence could not be read: the stretch record')).length, 1);
+});
+
+test('heartbeat: a question on his screen is said in the AWAY line, since the session it holds can open no stretch', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, channel: LEADS, onSleep: busy });
+  state.transcript = his(T0 - 3 * HOUR) + question(T0 - 3 * HOUR + 60000);
+  deps.readTail = tailOf(state);
+  assert.equal(await loopMain(['heartbeat', '--every', '120'], ENV, deps), 0);
+  assert.match(state.out.at(-1), /^AWAY: .*The question tool held this session from \d\d:\d\d, through the start of this absence/);
+  assert.equal(JSON.parse(state.marks[AWAY_MARK]).heldSince, iso(T0 - 3 * HOUR + 60000));
+});
+
+test('heartbeat: an absence that starts in the tick of a STALL is told with it, in one ending', async () => {
+  // Nothing writes: the STALL falls due at T0 + 30 minutes, the tick his silence becomes longer than two hours.
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 - HOUR }, channel: LEADS });
+  state.transcript = his(T0 - 2 * HOUR + 30 * 60000 - 1);
+  deps.readTail = tailOf(state);
+  assert.equal(await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], ENV, deps), 0);
+  assert.equal(state.clock, T0 + 30 * 60000);
+  assert.match(state.out.at(-2), /^AWAY: /);
+  assert.equal(state.out.at(-1), `STALL: no gate-log or channel write since ${hour(T0)}`);
+});
+
+test('heartbeat: an absence in course at a start that a cut already due ends is told with the cut, in one ending', async () => {
+  // The cut's ending comes first at a start: told alone, it would end the loop with his absence unsaid.
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, channel: LEADS, onSleep: busy });
+  state.transcript = boundary() + boundary() + his(T0 - 3 * HOUR);
+  deps.readTail = tailOf(state);
+  assert.equal(await loopMain(['heartbeat', '--every', '120'], ENV, deps), 0);
+  assert.equal(state.clock, T0, 'both end the heartbeat at once');
+  assert.match(state.out.at(-2), /^AWAY: /);
+  assert.match(state.out.at(-1), /^CUT: this session has been compacted 2 times since it started: /);
+  assert.equal(JSON.parse(state.marks[AWAY_MARK]).told, iso(T0 - 3 * HOUR));
+
+  state.out = [];
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], ENV, deps), 1);
+  assert.deepEqual(awayLines(state), [], 'the relaunch tells neither again');
+  assert.equal(state.out.filter((line) => line.startsWith('already due: the lead') || line.startsWith('already told: the user')).length, 2);
+});
+
+test('heartbeat tells no work session, nor a session whose notices cannot be read: only the lead is asked for a stretch', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, channel: notice({ at: T0 - 4 * HOUR, id: OWNER, title: 'JH 5 · canal' }), onSleep: busy });
+  state.transcript = his(T0 - 3 * HOUR);
+  deps.readTail = tailOf(state);
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], ENV, deps), 1);
+  assert.deepEqual(awayLines(state), []);
+  assert.equal(state.marks?.[AWAY_MARK], undefined);
+
+  state.out = [];
+  state.channel = '';
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], ENV, deps), 1);
+  assert.deepEqual(awayLines(state), [], 'a session that sent no notice is no lead');
+
+  // A record of notices that is there and cannot be read is said once, and nobody is told on a guess.
+  state.out = [];
+  const read = deps.readFile;
+  deps.readFile = (file) => {
+    if (file === CHANNEL) throw Object.assign(new Error('EACCES: the record is held'), { code: 'EACCES' });
+    return read(file);
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], ENV, deps), 1);
+  assert.deepEqual(awayLines(state), []);
+  assert.equal(state.out.filter((line) => line.startsWith('the user\'s absence could not be read: the record of notices')).length, 1);
+});
+
+test('heartbeat: a session that becomes the lead during his absence is told at the next tick, not left out of it', async () => {
+  // The lead check is read again while it says no: a lead's first notice may come after the absence started.
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: (s) => {
+    busy(s);
+    s.channel = notice({ at: s.clock, id: OWNER, title: 'JH ORQ · lead' });
+  } });
+  state.transcript = his(T0 - 3 * HOUR);
+  deps.readTail = tailOf(state);
+  assert.equal(await loopMain(['heartbeat', '--every', '600'], ENV, deps), 0);
+  assert.equal(state.clock, T0 + 600000, 'told at the first tick that finds it the lead');
+  assert.equal(awayLines(state).length, 1);
+});
+
+test('heartbeat tells no absence from a transcript it could not read in that tick', async () => {
+  // His last message is read at the start; every later read fails, so what he wrote since is not known.
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, channel: LEADS, onSleep: busy });
+  state.transcript = his(T0 - HOUR);
+  const tail = tailOf(state);
+  let reads = 0;
+  deps.readTail = (file, start) => {
+    reads += 1;
+    if (reads > 1) throw Object.assign(new Error('EBUSY: the transcript is held'), { code: 'EBUSY' });
+    return tail(file, start);
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '3', '--every', '600'], ENV, deps), 1);
+  assert.deepEqual(awayLines(state), [], 'two hours passed, and nothing is told on the last good read');
+  assert.equal(state.out.filter((line) => line.startsWith("the lead's cut could not read")).length, 1);
 });

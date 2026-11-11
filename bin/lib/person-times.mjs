@@ -21,8 +21,14 @@ export function personTimesOf(entries) {
 /** `personTimesOf` for a transcript's `text`, parsing only the lines that can hold the person's words or a question
  * call: his entries carry the origin `"human"`, his answers `"answers"`, and the calls they answer the tool's name. */
 export function personTimesIn(text) {
-  const marks = ['"human"', '"answers"', ...QUESTION_TOOLS.map((tool) => `"${tool}"`)];
-  return personTimesOf(parseTranscript(linesHolding(text, marks).join('\n')).entries);
+  return personTimesOf(parseTranscript(personLinesIn(text).join('\n')).entries);
+}
+
+/** The lines of a transcript's `text` that `personTimesIn` parses, in file order: a process that reads a transcript
+ * piece by piece (the heartbeat's departure watch, bin/lib/return-report.mjs) keeps them, since his answer to a
+ * question and the call it answers are often read in different pieces. */
+export function personLinesIn(text) {
+  return linesHolding(text, ['"human"', '"answers"', ...QUESTION_TOOLS.map((tool) => `"${tool}"`)]);
 }
 
 // What the host writes of its own requests: a copy of the whole prompt, which names every tool and holds any word, and

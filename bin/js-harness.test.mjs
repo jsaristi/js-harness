@@ -303,10 +303,13 @@ test('doctor dispatches to a temp home and exits 0, hermetically (no host binari
       // `finished`, the finished background sessions still here (odd/tasks/sessions-close-themselves.md),
       // `review-skips` (odd/tasks/f8-s1-reviews.md, T5), `templates` (odd/tasks/templates.md), and
       // `memory-backup` (odd/tasks/memory-backup.md) follows it, then `claude-import` (odd/tasks/f8-s13-rehearsal.md, T8)
-      // and `permissions` (odd/tasks/f8-s10-port.md, T4).
+      // and `permissions` (odd/tasks/f8-s10-port.md, T4), then `claude-signin` (odd/tasks/signin-expiry-notice.md).
       // `clean` (odd/tasks/clean.md) follows `stack-update`.
-      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-daemon', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'finished', 'review-skips', 'templates', 'memory-backup', 'claude-import', 'permissions', 'host-update', 'stack-update', 'clean'],
+      ['engram', 'engram-plugin', 'codegraph', 'context7', 'typescript-lsp', 'memory-rules', 'session-classes', 'claude-account', 'remote-server', 'codex-daemon', 'hook-commands', 'pnpm-lock', 'js-harness', 'unseen', 'worktrees', 'finished', 'review-skips', 'templates', 'memory-backup', 'claude-import', 'permissions', 'claude-signin', 'host-update', 'stack-update', 'clean'],
     );
+    // The sign-in is the user's own home's: for a temp home the Claude CLI is never run, and the row is n/a.
+    const signin = rows.find((r) => r.id === 'claude-signin');
+    assert.deepEqual([signin.claude, 'note' in signin], ['n/a', false]);
     // A temp home has no install: nothing holds the permissions, and that is no gap.
     assert.equal(rows.find((r) => r.id === 'permissions').claude, 'n/a');
     // The host check reads the app folder under `--home`, never this machine's own (gentle-ai review of PR 242):

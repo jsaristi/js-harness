@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { pullRequestProblems } from './pull-request.mjs';
+import { QUEUE_TRAILER, mergeMessage, pullRequestProblems } from './pull-request.mjs';
 
 const pr = (over = {}) => ({ number: 7, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'Risk: none.', ...over });
 
@@ -28,4 +28,9 @@ test('each check of the pull request itself says which, in order', () => {
 
 test('a body that names no review is no problem: the reviews are read from their records (F8 S11, L11)', () => {
   for (const body of ['No checks here.', null]) assert.deepEqual(pullRequestProblems(pr({ body }), 'main'), []);
+});
+
+test('the queue\'s merge message is GitHub\'s subject for a merged pull request, then the trailer that says the queue made it', () => {
+  assert.equal(mergeMessage({ number: 807, headRefName: 'audit-u2-stop-hook' }), 'Merge pull request #807 from audit-u2-stop-hook\n\nMerged-by: js-harness merge-queue');
+  assert.deepEqual(QUEUE_TRAILER, { key: 'Merged-by', value: 'js-harness merge-queue' });
 });

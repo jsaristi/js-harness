@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { CONTRACT_TEMPLATE, doneWhen, isContract, modeLine, parseContract, taskModes, validateContract } from './lib/contract.mjs';
 import { ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
 import { depthPassJudge } from './lib/depth-pass.mjs';
+import { QUEUE_TRAILER } from './lib/pull-request.mjs';
 import { localDay } from './lib/flaky.mjs';
 
 export const USAGE =
@@ -440,8 +441,9 @@ function openedIn(git, rev) {
   return opened;
 }
 
-/** The trunk and the branch's commits oldest first, `{ trunk, commits: [{ hash, files }] }`, from the trunk to
- * `HEAD`, merges left out; `null` where no trunk is known, so no order can be judged. */
+/** The trunk and the branch's commits oldest first, `{ trunk, commits: [{ hash, files, side? }] }`, from the trunk to
+ * `HEAD`, merges left out; `null` where no trunk is known, so no order can be judged. In a candidate of the merge
+ * queue each commit carries its `side` (`sidesOf`). */
 function branchOf(git) {
   const trunk = TRUNKS.find((ref) => git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]) !== null);
   if (!trunk) return null;
@@ -450,7 +452,34 @@ function branchOf(git) {
     if (line.startsWith('>')) commits.push({ hash: line.slice(1), files: [] });
     else commits.at(-1)?.files.push(line);
   }
+  const sides = sidesOf(git, trunk);
+  if (sides !== null) for (const commit of commits) commit.side = sides.get(commit.hash);
   return { trunk, commits };
+}
+
+/** The pull request each commit past `trunk` belongs to, hash to a number, where `HEAD` is a candidate of the merge
+ * queue; `null` for any other history, which is one branch and is read whole. A candidate is the trunk with one merge
+ * a pull request on its first-parent line, each with the queue's trailer (`mergeMessage`, ./lib/pull-request.mjs), so a
+ * branch that merged another in, by git or by GitHub's merge button, whose subject is the queue's and whose message
+ * has no such trailer, or a line with a commit of its own, is none. The commits a merge brings are those it
+ * holds and its first parent does not: with the trunk behind them all, as it is until the candidate lands, the code of
+ * a pull request merged ahead stood before the verdict of the next one's new document (PR 806 and PR 807, 2026-11-10,
+ * odd/tasks/land-two-defects.md). A commit no merge places has no side, and the judge then reads the whole. */
+function sidesOf(git, trunk) {
+  // One line a commit: its hash and parents, then what its message gives the queue's trailer, nothing where it has none.
+  const format = `--format=%H %P>%(trailers:key=${QUEUE_TRAILER.key},valueonly,separator=%x2C)`;
+  const line = (git(['log', '--first-parent', format, `${trunk}..HEAD`]) ?? []).map((text) => {
+    const [hash, ...parents] = text.slice(0, text.indexOf('>')).split(' ').filter(Boolean);
+    return { hash, parents, by: text.slice(text.indexOf('>') + 1).trim() };
+  });
+  if (line.length === 0 || !line.every(({ parents, by }) => parents.length > 1 && by === QUEUE_TRAILER.value)) return null;
+  const sides = new Map();
+  for (const [side, { hash, parents }] of line.entries()) {
+    const brought = git(['rev-list', '--no-merges', `${parents[0]}..${hash}`]);
+    if (brought === null) return null;
+    for (const commit of brought) sides.set(commit, side);
+  }
+  return sides;
 }
 
 /** The day `root`'s `harness.json` holds the control from, or `null` where it declares none. */

@@ -33,6 +33,7 @@ import { permissionsHealth } from './lib/permissions.mjs';
 import { importHealth } from './lib/claude-import.mjs';
 import { backgroundMeasure, cleanNotice, cleanRow } from './lib/clean.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { readSigninExpiry, signinRow } from './lib/signin-expiry.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
@@ -231,7 +232,9 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   const withBackup = deps.backup ? [...withUnseen, backupRow(deps.backup, home, now)] : withUnseen;
   const withImport = deps.imports ? [...withBackup, importRow(deps.imports, project, home)] : withBackup;
   const withPermissions = deps.permissions ? [...withImport, permissionsRow(deps.permissions, home)] : withImport;
-  const withHost = deps.host ? [...withPermissions, hostRow(deps.host, home, now, project)] : withPermissions;
+  // A reading of the sign-in's end runs the Claude CLI for seconds: the interactive report only, never the hook.
+  const withSignin = deps.signin && interactive ? [...withPermissions, signinRowOf(deps.signin, home, now)] : withPermissions;
+  const withHost = deps.host ? [...withSignin, hostRow(deps.host, home, now, project)] : withSignin;
   const withStack = deps.stackUpdate ? [...withHost, stackRow(readStackVersions(rows, { home, spawn, platform }), home, now)] : withHost;
   // The clean row reads the last measure; a due one is started detached, never run here (odd/tasks/clean.md, S8).
   return deps.clean ? [...withStack, cleanRow({ home, now, start: deps.clean.start })] : withStack;
@@ -302,6 +305,20 @@ function permissionsRow(permissions, home) {
   } catch {
     return { ...row, claude: 'unknown' };
   }
+}
+
+/** The claude-signin row (bin/lib/signin-expiry.mjs): when the claude.ai sign-in stored on the machine ends, a gap
+ * from `SIGNIN_WARN_DAYS` before it, with the time left and the local date as the row's note; `unknown`, with why,
+ * when the date cannot be read, and `n/a` for a home that is not the user's own. `signin` makes the one reading, of
+ * the home it is given. Fails open to `unknown`. */
+function signinRowOf(signin, home, now) {
+  let reading;
+  try {
+    reading = signin(home);
+  } catch {
+    reading = { expiresAt: null, stored: null, why: 'the reading failed' };
+  }
+  return signinRow(reading, Number((now ?? (() => new Date()))()));
 }
 
 /** The claude-import row (bin/lib/claude-import.mjs; the reverse-engineering document, 13.3 row 16): the project's root
@@ -404,7 +421,7 @@ async function ideasRow(ideas, project) {
 }
 
 /** `js-harness doctor` as the dispatcher runs it: the report with the unseen, review-skips, templates, claude-import,
- * permissions, host-update, stack-update and clean rows. Their checks are given only here, so `doctorMain` alone keeps the rows its
+ * permissions, claude-signin, host-update, stack-update and clean rows. Their checks are given only here, so `doctorMain` alone keeps the rows its
  * callers give it. `extra` adds rows' checks the product does not give: the workshop gives the idea-watch row. */
 export function doctorCommand(argv, extra = {}) {
   return doctorMain(argv, process.env, {
@@ -423,6 +440,7 @@ export function doctorCommand(argv, extra = {}) {
     backup: (home, now) => backupHealth(home, now),
     permissions: (home) => permissionsHealth(home),
     imports: (project, home) => importHealth(project, { home }),
+    signin: (home) => readSigninExpiry({ home }),
     clean: { start: backgroundMeasure(process.env, argv) },
   });
 }
@@ -459,6 +477,13 @@ export async function doctorMain(argv, env = process.env, deps = {}) {
 
   console.log(headerRow());
   for (const row of rows) console.log(formatRow(row));
+
+  // What a row says beyond its cells, gap or not: the claude-signin row's time left, or why it cannot be read.
+  const noted = rows.filter((row) => typeof row.note === 'string' && row.note !== '');
+  if (noted.length > 0) {
+    console.log('\nNotes:');
+    for (const row of noted) console.log(`  ${row.id}: ${row.note}`);
+  }
 
   const gapLines = rows.flatMap((row) => rowGaps(row).map((gap) => ({ id: row.id, ...gap })));
   if (gapLines.length > 0) {

@@ -411,6 +411,14 @@ Every `--windows` minutes (an hour; `0` for never) it also reads the daily Windo
 told before. The time of the last reading is kept in a file, so a heartbeat started again after a
 `STALL` still reads it once an hour. With nothing else, it ends after `--max` hours (10, exit 1).
 
+Run from the lead's session, each tick also reads when the user last wrote to it. Once that is more
+than two hours ago, the absence of the reply hook's return check, and no stretch covers the time
+since, the heartbeat ends with an `AWAY:` line that names the command that opens one, so the lead
+is told when the absence starts and not at the return; a work session is told nothing. Where the
+question tool held the session when the absence started, the line says since when: a held session
+could open no stretch then and reads the line only once the tool returned. It is told once an
+absence, and a heartbeat started again names it on an `already told:` line.
+
 Each tick also keeps the throughput snapshot of every settled day of the last
 `throughput-backfill-days` that the gate log holds and that has none, never while a gate holds
 the lock, and reads the throughput reviews due (`js-harness throughput status`). One that falls
@@ -633,6 +641,20 @@ nothing, names what is missing and exits 1. With `--json` it prints the record i
 call, both reviews are recorded, and `--json` prints `{ host, stack }`. The row also shows
 `outdated` when the app downloaded an update it has not applied: on Windows that waits until
 Claude is quit fully, the tray icon included.
+
+Its `claude-signin` row, in an interactive run, says when the claude.ai sign-in stored on the
+machine ends. That sign-in has an end date, and once it passes every background session, lens
+review and remote server fails at once until the user signs in again. The row runs
+`claude auth status`, which prints the date from Claude Code 2.1.318 on, and keeps the date and
+nothing else of the answer: it reads no credential and never signs in. Under the table, `Notes:`
+gives the time left and the local end date. With seven days or fewer left, and after the end, the
+row is `stale` and its fix is the user's to run, `claude auth login`. A CLI that says it is not
+signed in is `missing`, a gap with the same fix, since that may be how an ended sign-in reads. A
+date that cannot be read for another reason (no CLI, an older one, a sign-in of another kind) is
+`unknown`, with why in its note. One reading
+takes about five seconds, so the session-start hook never makes one, and with a `--home` that is
+not the user's own home the CLI is not run and the row is `n/a`. `--json` adds `expiresAt`,
+`daysLeft` and `note` to the row.
 
 Its `stack-update` row does the same for the tools of the stack and for the `claude` on PATH:
 the first reading is recorded as reviewed, and a tool that updated itself since (engram, codex, the
@@ -1850,9 +1872,26 @@ exits 3 and says why and what the next rung is: the built-in browser's `get_page
 `resume --pause` hook names this command after a WebFetch answered 402, 403, 429 or 503, and after one
 that failed as a tool error.
 
-It sends no cookie and no key. The URL goes to a third party, so a host that is not public (no
-dot, loopback, a private address), a URL with a user or a password, or a query parameter named
-like a secret is refused with exit 1 before anything is sent.
+It sends no cookie and no key of its own. The URL goes to a third party, so a host that is not
+public (no dot, loopback, a private address), a URL with a user or a password, a query parameter
+named like a secret, or a path segment, a query name or a query value that reads as a key is
+refused with exit 1 before anything is sent. One reads as a key when its pieces that mix letters
+and digits add up to 20 characters or more: a random token, a UUID, the id of a page that is
+private by its link, the code of a sign-in callback. The refusal names a path segment and a query
+parameter by their place, adds the parameter's name when that is a plain word and the key is its
+value, and never repeats the key.
+
+Those checks read names and shapes, and know no secret, so they err both ways. These go out with
+the URL: a key of letters alone or of digits alone; one shorter than 20 characters; one that
+other characters (a hyphen, an underscore, a dot, an escape) cut into pieces too few of which mix
+letters and digits (about one random 22-character base64url key in four); one spread over several
+segments or parameters; one escaped twice; one in the host's name. Do not hand this command a URL
+that holds a key. The other way round, a public page is refused as well when its path holds an id
+of that shape (a commit hash, a UUID), when a slug or a search holds words that mix letters and
+digits (`gpt4`, `llama3`, a 12-character id) that add up to 20 characters, and when its query
+carries an id of that shape (a playlist, a click id such as `fbclid`). Without a click id the page
+is the same page, so drop the parameter the refusal names; the built-in browser reads the others,
+sending the URL to no third party.
 
 ```console
 $ js-harness fetch https://www.npmjs.com/package/react
