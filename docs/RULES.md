@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `a1ee0c6e5e08`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 4.
+Hash `517413979f10`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -179,11 +179,11 @@ A rule he gives is cemented in the harness where something acts on it, never onl
 - Since 2026-10-29. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, 2026-10-26, 2026-10-26, 2026-10-26, 2026-10-28, 2026-10-28, checked by the command on 2026-10-29.
 
 ### session-effort
-The effort everything Claude the harness starts runs at: every session, the lead's included, every sub-agent, the lenses and the double review's Claude reader: high.
+The effort everything Claude the harness starts runs at but the lead's session: every work session, every sub-agent, the lenses and the double review's Claude reader: medium.
 - Of this repository only: not in force in a project that installs the harness.
-- Was: medium until 2026-11-10; high until 2026-11-10.
+- Was: high until 2026-11-11; medium until 2026-11-10; high until 2026-11-10.
 - Read by: `bin/lib/guard.mjs`, `bin/lib/model-home.mjs`, `bin/rules.mjs`.
-- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, 2026-11-10, 2026-11-10, checked by the command on 2026-11-11.
+- Since 2026-11-11. Row: reports. Source: his words of 2026-11-10, 2026-11-10, 2026-11-11, 2026-11-11, checked by the command on 2026-11-11.
 
 ### session-housekeeping
 Each recap names the sessions to archive and the stopped ones, and the lead archives finished sessions without asking: "## The recap Each reply that closes a stretch of work carries: - one line a session: its state, the effort mode its kind of work calls for and why; - by title, the sessions to archive and the ones stopped, with what each waits for; a session a scheduled task opened is named as a routine; - the Codex meter, read at that moment, when the project reviews with Codex; - what waits for the user in a session, said only after reading that session at that moment; - when a stretch or a session ends, that it ended and which session to return to."

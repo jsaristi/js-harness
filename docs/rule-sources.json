@@ -1097,14 +1097,20 @@
         "line": 5167
       },
       {
-        "quote": "TODO pero TODO va a correr siempre en Fable 5.2 Alto",
-        "date": "2026-11-10",
+        "quote": "Va a tocar utilizar Fable 5.2 en Alto solo para el orquestador y para las sesiones solo Fable 5.2 en Medio",
+        "date": "2026-11-11",
         "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
-        "line": 5255
+        "line": 11253
+      },
+      {
+        "quote": "Sí, aplícalo",
+        "date": "2026-11-11",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 11679
       }
     ],
-    "reading": "Everything Claude the harness starts runs on this one model at this one effort: his \"todos los modelos de ahora en adelante\", \"todo va a ser con Fable 5.2 Alto ... en un solo lugar\" and \"TODO pero TODO\". That the lenses, the double review's reader and the escalation are part of \"todo\" is the lead's reading in the brief of JH 172, and his to correct. This rule is the effort of that home, his \"Alto\", which the host names high; its model is rule:session-model. The lead runs at it as every session does: his \"este orquestador en Alto\" of the same day. The effort of a Codex review is another vendor's and keeps its own home, rule:review-effort.",
-    "accepted": "Typed by him in the lead's chat on 2026-11-10. Not put to him as a reading: it is the lead's, in the brief of JH 172, and his to correct.",
+    "reading": "Everything Claude the harness starts reads its model and its effort in one place: his \"todos los modelos de ahora en adelante\" and \"lo unifiques en un solo lugar\" of 2026-11-10. That day it was one model at one effort; on 2026-11-11, after the limit of Fable stopped the sessions, he kept the one model and split the effort in two, high for the orchestrator alone and medium for the sessions and the sub-agents. This rule is the level of everything but the lead's session, his \"Medio\", which the host names medium; the lead's is rule:lead-effort, and the model of both is rule:session-model. That the lenses and the double review's Claude reader go with the sessions is the lead's reading of his \"en Alto solo para el orquestador\" (its message of 2026-11-11 to JH 172). A session open on 2026-11-11 keeps the level it has: the scheme he answered lets the stopped ones end at high. The effort of a Codex review is another vendor's and keeps its own home, rule:review-effort.",
+    "accepted": "Typed by him in the lead's chat on 2026-11-10 and 2026-11-11. His \"Sí, aplícalo\" answers the lead's scheme of line 11674 of the same transcript, \"Orquestador: Fable 5.2 alto\" and \"Sesiones y subagentes nuevos: Fable 5.2 medio\". The rest of the reading was not put to him: it is the lead's, in the brief of JH 172 and its notices of 2026-11-11, and his to correct.",
     "checked": {
       "date": "2026-11-11",
       "by": "command"
