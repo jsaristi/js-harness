@@ -96,6 +96,16 @@ function makeTmpRepoWithCommit(prefix = 'js-harness-project-wt-main-') {
   return root;
 }
 
+/** A repository whose git dir is outside its working tree (`git init --separate-git-dir`): one checkout, no linked
+ * worktree, whose hooks live outside the working tree as a submodule's do. */
+function makeSeparateGitDirRepo(prefix) {
+  const root = makeTmpDir(prefix);
+  const gitDir = path.join(makeTmpDir(`${prefix}gitdir-`), 'repo.git');
+  const init = spawnSync('git', ['init', '--separate-git-dir', gitDir], { cwd: root, encoding: 'utf8' });
+  assert.equal(init.status, 0, `git init --separate-git-dir failed: ${init.stderr}`);
+  return { root, gitDir, done: () => [root, path.dirname(gitDir)].forEach((dir) => fs.rmSync(dir, { recursive: true, force: true })) };
+}
+
 /** A spawn that runs `git` for real (tests use real repos) but never touches a real `codegraph`
  * binary — the second argument controls what the fake codegraph call reports. A successful call
  * creates `.codegraph` under the spawn's own `cwd` (now the resolved root — see runCodegraphInit's
@@ -1578,24 +1588,18 @@ test('gitDirs asks for each directory alone when the one answer is not two lines
 // --- worktrees and submodules: the shared hooks directory lives outside the working tree ---
 // (T2e item 4, R3-worktree-submodule-hook-misclassified-outside)
 
-test('initProject writes the pre-commit hook into a linked worktree\'s common git dir, recorded absolute with gitDir: true', () => {
-  const main = makeTmpRepoWithCommit();
-  const worktree = makeTmpDir('js-harness-project-wt-linked-');
-  fs.rmSync(worktree, { recursive: true, force: true }); // `git worktree add` needs the path free
+test('initProject writes the pre-commit hook into a git dir outside the working tree, recorded absolute with gitDir: true', () => {
+  const repo = makeSeparateGitDirRepo('js-harness-project-sepgit-');
   try {
-    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-wt'], { cwd: main, encoding: 'utf8' });
-    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
-
-    const result = initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    const result = initProject(repo.root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
 
     assert.equal(result.code, 0);
     // git normalizes to forward slashes; compare real paths, like the fresh-repo test does.
-    assert.equal(fs.realpathSync(result.root), fs.realpathSync(worktree));
+    assert.equal(fs.realpathSync(result.root), fs.realpathSync(repo.root));
 
-    const hookInCommonDir = path.join(main, '.git', 'hooks', 'pre-commit');
-    assert.ok(fs.existsSync(hookInCommonDir), 'expected the hook in the main repo\'s common git dir');
-    assert.equal(fs.existsSync(path.join(worktree, '.git')), true); // the worktree's own (file) .git
-    assert.equal(fs.existsSync(path.join(worktree, 'hooks', 'pre-commit')), false); // never here
+    const hookInGitDir = path.join(repo.gitDir, 'hooks', 'pre-commit');
+    assert.ok(fs.existsSync(hookInGitDir), 'expected the hook in the git dir');
+    assert.equal(fs.existsSync(path.join(repo.root, 'hooks', 'pre-commit')), false); // never here
 
     const fileEntry = result.manifest.files.find((f) => f.path.endsWith('hooks/pre-commit'));
     assert.ok(fileEntry, 'expected the hook recorded in manifest.files');
@@ -1604,7 +1608,7 @@ test('initProject writes the pre-commit hook into a linked worktree\'s common gi
     assert.ok(path.isAbsolute(fileEntry.path.split('/').join(path.sep)));
     assert.equal(
       fs.realpathSync(fileEntry.path.split('/').join(path.sep)),
-      fs.realpathSync(hookInCommonDir),
+      fs.realpathSync(hookInGitDir),
     );
 
     const wroteAction = result.actions.find((a) => a.kind === 'wrote' && a.path.endsWith('hooks/pre-commit'));
@@ -1615,9 +1619,62 @@ test('initProject writes the pre-commit hook into a linked worktree\'s common gi
       if (f.path.endsWith('harness.json') || f.path.endsWith('AGENTS.md')) assert.ok(!('gitDir' in f));
     }
   } finally {
-    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
-    fs.rmSync(main, { recursive: true, force: true });
-    fs.rmSync(worktree, { recursive: true, force: true });
+    repo.done();
+  }
+});
+
+// The audit's M29: a linked worktree's manifest lives in its own git dir (`.git/worktrees/<name>`), which
+// `git worktree remove` deletes, while the hooks and `info/exclude` are the whole repository's. `init` there wrote
+// them and recorded them in that manifest, so removing the worktree left them with no record. It now writes none of
+// them from a linked worktree and says where they are written and recorded: the main checkout.
+test('initProject in a linked worktree writes none of what every worktree shares, and says where it is written and recorded', () => {
+  const main = makeTmpRepoWithCommit();
+  const worktree = makeTmpDir('js-harness-project-wt-linked-');
+  const second = makeTmpDir('js-harness-project-wt-second-');
+  for (const dir of [worktree, second]) fs.rmSync(dir, { recursive: true, force: true }); // `git worktree add` needs the path free
+  try {
+    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-wt'], { cwd: main, encoding: 'utf8' });
+    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
+    const excludePath = path.join(main, '.git', 'info', 'exclude');
+    const excludeBefore = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, 'utf8') : null;
+
+    const result = initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+
+    assert.equal(result.code, 0);
+    assert.equal(fs.realpathSync(result.root), fs.realpathSync(worktree));
+    assert.ok(fs.existsSync(path.join(worktree, 'harness.json')), 'what lives in the working tree is written as before');
+    assert.match(result.manifestPath.split(path.sep).join('/'), /\.git\/worktrees\//, 'its manifest is the worktree\'s own');
+
+    // Nothing shared was written, and the manifest records nothing outside the working tree.
+    for (const hook of ['pre-commit', 'commit-msg']) assert.equal(fs.existsSync(path.join(main, '.git', 'hooks', hook)), false, hook);
+    assert.equal(fs.existsSync(excludePath) ? fs.readFileSync(excludePath, 'utf8') : null, excludeBefore, 'info/exclude is as it was');
+    assert.deepEqual(result.manifest.files.filter((f) => f.gitDir), []);
+    assert.deepEqual(result.manifest.dirs.filter((d) => d.gitDir), []);
+    assert.equal('exclude' in result.manifest, false);
+
+    // Each is said, with the checkout whose record keeps it.
+    const where = /shared by every worktree of this repository, so the record of this one would not outlive it: js-harness sync in .+ writes and records it once that checkout holds harness\.json$/;
+    const skipped = result.actions.filter((a) => a.kind === 'skip' && /hooks\/(pre-commit|commit-msg)$/.test(a.path));
+    assert.deepEqual(skipped.map((a) => a.path.split('/').pop()), ['pre-commit', 'commit-msg']);
+    for (const action of skipped) assert.match(action.reason, where, action.path);
+    const excludeKept = result.actions.find((a) => a.kind === 'kept' && a.path.endsWith('info/exclude'));
+    assert.match(excludeKept.reason, where);
+
+    // The main checkout writes and records them, and a worktree made after that has nothing left to say of them.
+    const inMain = initProject(main, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(inMain.code, 0);
+    assert.ok(fs.existsSync(path.join(main, '.git', 'hooks', 'pre-commit')));
+    assert.ok(inMain.manifest.files.some((f) => f.path.endsWith('hooks/pre-commit')), 'recorded where the main checkout keeps its record');
+    assert.ok(inMain.manifest.exclude, 'the exclude line too');
+    const addSecond = spawnSync('git', ['worktree', 'add', second, '-b', 'js-harness-test-wt-second'], { cwd: main, encoding: 'utf8' });
+    assert.equal(addSecond.status, 0, `git worktree add failed: ${addSecond.stderr}`);
+    const later = initProject(second, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(later.code, 0);
+    assert.deepEqual(later.actions.filter((a) => where.test(a.reason ?? '')), [], 'nothing shared is missing any more');
+    assert.deepEqual(later.manifest.files.filter((f) => f.gitDir), []);
+  } finally {
+    for (const dir of [worktree, second]) spawnSync('git', ['worktree', 'remove', '--force', dir], { cwd: main, encoding: 'utf8' });
+    for (const dir of [main, worktree, second]) fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
@@ -1625,23 +1682,18 @@ test('initProject writes the pre-commit hook into a linked worktree\'s common gi
 // actually contains the directory (working tree, git dir, or common git dir), not always the
 // working tree — otherwise, for a multi-level missing chain inside a git dir outside the working
 // tree, only the deepest directory is recorded, and its newly created parents leak on rollback or
-// uninstall. ---
+// uninstall. A git dir apart from its working tree stands for it: a linked worktree no longer writes there. ---
 
 test('initProject records the shallowest created directory chain in an outside git dir, not just the deepest', () => {
-  const main = makeTmpRepoWithCommit();
-  const worktree = makeTmpDir('js-harness-project-wt-deepdirs-');
-  fs.rmSync(worktree, { recursive: true, force: true });
+  const repo = makeSeparateGitDirRepo('js-harness-project-sepgit-deepdirs-');
   try {
-    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-wt-deepdirs'], { cwd: main, encoding: 'utf8' });
-    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
-
-    const { commonGitDir } = gitDirs(worktree, spawnSync);
+    const { commonGitDir } = gitDirs(repo.root, spawnSync);
     const hooksDir = path.join(commonGitDir, 'custom', 'nested', 'hooks');
     assert.equal(fs.existsSync(path.join(commonGitDir, 'custom')), false); // both levels missing
-    const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksDir], { cwd: worktree, encoding: 'utf8' });
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksDir], { cwd: repo.root, encoding: 'utf8' });
     assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
 
-    const result = initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    const result = initProject(repo.root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
 
     assert.equal(result.code, 0);
     assert.ok(fs.existsSync(path.join(hooksDir, 'pre-commit')));
@@ -1649,23 +1701,16 @@ test('initProject records the shallowest created directory chain in an outside g
     const expectedShallowest = path.join(commonGitDir, 'custom').split(path.sep).join('/');
     assert.deepEqual(result.manifest.dirs, [{ path: 'docs' }, { path: expectedShallowest, gitDir: true }]);
   } finally {
-    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
-    fs.rmSync(main, { recursive: true, force: true });
-    fs.rmSync(worktree, { recursive: true, force: true });
+    repo.done();
   }
 });
 
 test('initProject rolls back the whole created directory chain in an outside git dir, not just the deepest directory', () => {
-  const main = makeTmpRepoWithCommit();
-  const worktree = makeTmpDir('js-harness-project-wt-deepdirs-rb-');
-  fs.rmSync(worktree, { recursive: true, force: true });
+  const repo = makeSeparateGitDirRepo('js-harness-project-sepgit-deepdirs-rb-');
   try {
-    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-wt-deepdirs-rb'], { cwd: main, encoding: 'utf8' });
-    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
-
-    const { commonGitDir } = gitDirs(worktree, spawnSync);
+    const { commonGitDir } = gitDirs(repo.root, spawnSync);
     const hooksDir = path.join(commonGitDir, 'custom', 'nested', 'hooks');
-    const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksDir], { cwd: worktree, encoding: 'utf8' });
+    const cfg = spawnSync('git', ['config', 'core.hooksPath', hooksDir], { cwd: repo.root, encoding: 'utf8' });
     assert.equal(cfg.status, 0, `git config failed: ${cfg.stderr}`);
 
     const open = (tmp) => {
@@ -1673,7 +1718,7 @@ test('initProject rolls back the whole created directory chain in an outside git
     };
 
     assert.throws(
-      () => initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open }),
+      () => initProject(repo.root, '0.1.0', { spawn: makeSpawn(), platform: 'linux', open }),
       (err) => err instanceof InitWriteError,
     );
 
@@ -1681,9 +1726,7 @@ test('initProject rolls back the whole created directory chain in an outside git
     // just the deepest directory.
     assert.equal(fs.existsSync(path.join(commonGitDir, 'custom')), false);
   } finally {
-    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
-    fs.rmSync(main, { recursive: true, force: true });
-    fs.rmSync(worktree, { recursive: true, force: true });
+    repo.done();
   }
 });
 
@@ -2123,7 +2166,29 @@ test('uninstallProject leaves a plain repo byte-identical to before init', () =>
   }
 });
 
-test('uninstallProject leaves a worktree and its common git dir byte-identical to before init', () => {
+test('uninstallProject leaves a repo whose git dir is outside its working tree byte-identical to before init', () => {
+  const repo = makeSeparateGitDirRepo('js-harness-project-uninstall-sepgit-');
+  try {
+    const hooksDir = path.join(repo.gitDir, 'hooks');
+    const before = repoTreeSnapshot(repo.root, hooksDir);
+
+    const initResult = initProject(repo.root, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+    const hookEntry = initResult.manifest.files.find((f) => f.path.endsWith('hooks/pre-commit'));
+    assert.equal(hookEntry.gitDir, true); // sanity: this is exactly the outside-working-tree case
+
+    const uninstallResult = uninstallProject(repo.root, { spawn: spawnSync });
+    assert.equal(uninstallResult.code, 0);
+
+    assert.deepEqual(repoTreeSnapshot(repo.root, hooksDir), before);
+  } finally {
+    repo.done();
+  }
+});
+
+// The audit's M29, the round trip: `init` in a linked worktree writes nothing every worktree shares, so its undo
+// has nothing there to take back, and the hooks and `info/exclude` of the repository are as they were throughout.
+test('uninstallProject leaves a linked worktree and its common git dir byte-identical to before init', () => {
   const main = makeTmpRepoWithCommit();
   const worktree = makeTmpDir('js-harness-project-uninstall-wt-');
   fs.rmSync(worktree, { recursive: true, force: true });
@@ -2136,17 +2201,59 @@ test('uninstallProject leaves a worktree and its common git dir byte-identical t
 
     const { commonGitDir } = gitDirs(worktree, spawnSync);
     const hooksDir = path.join(commonGitDir, 'hooks');
+    const excludePath = path.join(commonGitDir, 'info', 'exclude');
+    const excludeOf = () => (fs.existsSync(excludePath) ? fs.readFileSync(excludePath, 'utf8') : null);
     const before = repoTreeSnapshot(worktree, hooksDir);
+    const excludeBefore = excludeOf();
 
     const initResult = initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
     assert.equal(initResult.code, 0);
-    const hookEntry = initResult.manifest.files.find((f) => f.path.endsWith('hooks/pre-commit'));
-    assert.equal(hookEntry.gitDir, true); // sanity: this is exactly the outside-working-tree case
+    assert.deepEqual(initResult.manifest.files.filter((f) => f.gitDir), [], 'nothing outside the working tree is recorded');
+    assert.deepEqual(listFilesRecursive(hooksDir), before.hooks, 'and nothing was written there');
+    assert.equal(excludeOf(), excludeBefore);
 
     const uninstallResult = uninstallProject(worktree, { spawn: spawnSync });
     assert.equal(uninstallResult.code, 0);
 
     assert.deepEqual(repoTreeSnapshot(worktree, hooksDir), before);
+    assert.equal(excludeOf(), excludeBefore);
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.rmSync(worktree, { recursive: true, force: true });
+  }
+});
+
+// A linked worktree an earlier version initialised has the shared hook in its own manifest. That record is still
+// read and undone as it was written: the change to `init` orphans nothing already on a machine.
+test('uninstallProject still removes a shared hook that an earlier init recorded in a linked worktree\'s manifest', () => {
+  const main = makeTmpRepoWithCommit();
+  const worktree = makeTmpDir('js-harness-project-uninstall-wt-legacy-');
+  fs.rmSync(worktree, { recursive: true, force: true });
+  try {
+    const add = spawnSync('git', ['worktree', 'add', worktree, '-b', 'js-harness-test-uninstall-wt-legacy'], {
+      cwd: main,
+      encoding: 'utf8',
+    });
+    assert.equal(add.status, 0, `git worktree add failed: ${add.stderr}`);
+
+    const initResult = initProject(worktree, '0.1.0', { spawn: makeSpawn(), platform: 'linux' });
+    assert.equal(initResult.code, 0);
+
+    // What the earlier version left: the hook in the common git dir, and its entry in the worktree's manifest.
+    const { commonGitDir } = gitDirs(worktree, spawnSync);
+    const hookPath = path.join(commonGitDir, 'hooks', 'pre-commit');
+    const hookText = '#!/bin/sh\njs-harness check\n';
+    fs.mkdirSync(path.dirname(hookPath), { recursive: true });
+    fs.writeFileSync(hookPath, hookText, 'utf8');
+    const manifest = JSON.parse(fs.readFileSync(initResult.manifestPath, 'utf8'));
+    manifest.files.push({ path: hookPath.split(path.sep).join('/'), sha256: sha256(hookText), gitDir: true });
+    fs.writeFileSync(initResult.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+
+    const uninstallResult = uninstallProject(worktree, { spawn: spawnSync });
+    assert.equal(uninstallResult.code, 0, JSON.stringify(uninstallResult.notRemoved ?? uninstallResult));
+    assert.equal(fs.existsSync(hookPath), false, 'the recorded hook is taken back');
+    assert.equal(fs.existsSync(path.join(worktree, 'harness.json')), false);
   } finally {
     spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd: main, encoding: 'utf8' });
     fs.rmSync(main, { recursive: true, force: true });

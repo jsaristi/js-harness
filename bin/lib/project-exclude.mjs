@@ -31,6 +31,12 @@ const readOrNull = (file) => {
   }
 };
 
+/** Whether the lines of the exclude file `file` already leave `.atl/` out, so `addExclude` would write nothing. */
+export function alreadyExcluded(file) {
+  const text = readOrNull(file);
+  return text !== null && leavesOut(text);
+}
+
 /** Adds `EXCLUDED` to the exclude file `file` once: the record to keep in the manifest, `{ line, separator,
  * createdFile, createdDir }`, or `null` where its lines already leave `.atl` out, nothing being written.
  * `separator` says a line break was put before the line, to end a last line that had none. */

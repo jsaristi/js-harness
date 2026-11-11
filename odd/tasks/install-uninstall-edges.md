@@ -120,10 +120,10 @@ versions; keep a copy of a file a first install would overwrite."
   before writing, names the copy in the record, and writes nothing when the copy cannot be made; `install` says it.
 
 ## Tasks
-- [ ] T1 (kind: docs) this document, with its depth pass, before any code · S1-S6 · inline · commit 1
-- [ ] T2 (kind: build) S5 `compareSemver` and S2 the sync's error · inline · slice A
-- [ ] T3 (kind: build) S6 the kept copy and S4 the prompt · inline · slice A
-- [ ] T4 (kind: build) S3 the status-line undo and S1 the linked worktree · inline · slice B
+- [x] T1 (kind: docs) this document, with its depth pass, before any code · S1-S6 · inline · `62bb01f6`
+- [x] T2 (kind: build) S5 `compareSemver` and S2 the sync's error · inline · slice A
+- [x] T3 (kind: build) S6 the kept copy and S4 the prompt · inline · slice A
+- [x] T4 (kind: build) S3 the status-line undo and S1 the linked worktree · inline · slice B
 - [ ] T5 (kind: verify) gate, Codex and the lenses on slice A, then on slice B; the independent verifier on S1, S3
   and S6
 - [ ] T6 (kind: docs) the session summary, the pull request, the notices
@@ -147,3 +147,57 @@ versions; keep a copy of a file a first install would overwrite."
   it, since it is the person's file; putting it back is out of scope (the ceiling of `manifest.mjs`).
 - L4. Decision, S3: no test writes to the registry (`bin/lib/status-line-install.test.mjs:1-4` says why); the test
   holds the script's text, and the script is run once by hand against a scratch key, recorded here.
+- L5. Evidence, S3, 2026-11-11: the undo run twice against a throwaway key `HKCU:\SOFTWARE\js-harness-scratch-178`,
+  a temp folder and a task name nothing registers. Run 1, the key holding `{"command":"C:\\someone\\else.ps1"}`:
+  "policy value kept: … sessionStatusLine = {"command":"C:\\someone\\else.ps1"}, which the install did not write",
+  and the value was still there. Run 2, the key holding the install's value for that folder: "policy value
+  removed", "policy key removed, it held nothing else". The script's last line: "scratch key left behind: False".
+- L6. Evidence, S4: the new test found a seventh folder the audit had not counted. `uninstall machine` also undoes
+  the background sessions `sessions start` recorded that are idle and hold no files, and removes
+  `.js-harness/background` with their record and briefs (`undoBackground`, `bin/lib/background.mjs:417`, called
+  at `bin/install.mjs:675`). The prompt, `docs/GUIDE.md` and `README.md` now name it and say what it does.
+- L7. Decision, S1: both files that would grow are at their ceilings (`bin/lib/manifest.mjs` 1,650,
+  `bin/lib/project.mjs` 1,978, `bin/conventions-structure.test.mjs:72-74`), so the verdict lives in a new module,
+  `bin/lib/project-shared.mjs`, with its test, and `project.mjs` holds the calls alone: three lines in, the
+  destructuring of `writeHookGate` joined from eight lines to two, 1,977 lines, its ceiling lowered with it.
+  Searched first: `mainCheckoutOf` (`bin/lib/claude-import.mjs:93`) answers a nearby question, but gives `null`
+  both for a main checkout and for a worktree of a bare repository, which S1 must tell apart, and asks git twice
+  for what the caller already holds. The guard covers every writer of a shared file: `writeHookGate` (init, the
+  first sync of a clone, a hook a later sync adds), the two exclude steps of `project.mjs` and the migration's
+  preview. `uninstall` still reads `excludeFile` itself and a manifest's recorded hooks, so a worktree an earlier
+  version initialised is still undone as it recorded. Only where a write would happen is anything said: a hook
+  already there is kept as before, and an exclude file that already holds the line gives no notice.
+- L8. Evidence, S1: the three tests that proved the outside-git-dir machinery through a linked worktree
+  (`T2e item 4`, `T2f item 2`) now use a repository made with `git init --separate-git-dir`, one checkout whose
+  hooks live outside its working tree as a submodule's do; they passed on the old code and pass on the new. The
+  new linked-worktree test failed on the old code (1 of 6) and passes (6 of 6).
+- L9. Decision, S6: a later run's record does not carry `replaced`: the copy's name says what it is, deleting it
+  undoes it, and `install` says it once, in the run that made it. With no record, a file that cannot be read is
+  now left unwritten (`null`), where before a write was tried over it.
+- L10. Red first: S5, S6, S4 and S1 were seen failing before their code. S2's test was written, its code applied,
+  then the test run against the old `bin/update.mjs` (the change reversed with `git apply -R`): it failed with
+  only "sync after upgrade failed: exited 3". S3's test was not run against the old script; it fails there by
+  construction, the old script having no `$value` line.
+- L11. State, 2026-11-11 at 01:58 local: all six specs have code and tests in the working tree, nothing
+  committed after `62bb01f6`. Next: the affected test files through `js-harness gate`, one commit a spec pair,
+  then gate, Codex and the lenses on slice A (S2, S4, S5, S6) and slice B (S1, S3), the verifier, the pull request.
+- L12. Failure, 2026-11-11: the first run of every affected test file gave 797 of 809 passing, 11 skipped and 1
+  failing, `uninstallProject leaves a worktree and its common git dir byte-identical to before init`
+  (`TypeError: Cannot read properties of undefined (reading 'gitDir')`). Not a defect of the change: its sanity
+  line took for granted that `init` in a linked worktree records the shared hook. The runs before the code had
+  been filtered by name ("linked worktree|outside git dir|outside the working tree"), and this test says "a
+  worktree", so it was never seen. The background task reported exit 0 while the log's last line said `exit 1`:
+  the command line ended in an `echo`, whose exit code the task took. Fixed by splitting the test in two (a
+  repository with its git dir apart, which keeps the outside-working-tree undo; a linked worktree, the round trip
+  of S1) and adding the one the constraint needed and nothing held: `uninstall` still takes back a shared hook
+  that an earlier version recorded in a linked worktree's manifest. What stops it: the whole file is run, never
+  a name pattern, before a commit, and a background run ends on the command whose exit code matters.
+- L13. Evidence, 2026-11-11: `node --test bin/lib/project.test.mjs bin/lib/project-shared.test.mjs
+  bin/lib/project-migrate.test.mjs bin/lib/project-exclude.test.mjs`, whole, through `js-harness gate`: 238 tests,
+  227 pass, 0 fail, 11 skipped. The skips are this machine's, none new: 10 say "symlinks need privileges on this
+  machine" and 1 is the 8.3 short-name case. So the tests of a link in the hooks path or the exclude path, the
+  branches S1 sits behind, were not run here; the pre-commit gate runs the suite on GitHub's machines too
+  (`.github/workflows/gate.yml`), where they do run.
+- L14. State, 2026-11-11: slice A (S2, S4, S5, S6) is `620f337d`, its pre-commit gate green (17 rows). Slice B
+  (S1, S3) is the next commit, with this document and `README.md`. Then Codex and the lenses on each slice, the
+  independent verifier on S1, S3 and S6, the session summary and the pull request.

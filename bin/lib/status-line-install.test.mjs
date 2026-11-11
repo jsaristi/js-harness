@@ -29,6 +29,21 @@ test('the undo removes what the install writes: the same folder, policy key, val
   }
 });
 
+// The audit's M35: the undo removed `sessionStatusLine` whatever it held, while the install refuses to write over a
+// value that is not its own. Both now build the value the same way and compare what the key holds with it.
+test('the undo removes the policy value only when it holds what the install writes, and says when it leaves another', () => {
+  const valueOf = (file) => textOf(file).match(/^\$value = (.+)$/m)?.[1];
+  const installedOf = (file) => textOf(file).match(/^\$installed = (.+)$/m)?.[1];
+  assert.equal(valueOf(INSTALL), '@{ command = $installed } | ConvertTo-Json -Compress');
+  assert.equal(valueOf(UNINSTALL), valueOf(INSTALL), 'the same value');
+  assert.equal(installedOf(UNINSTALL), installedOf(INSTALL), 'of the same program');
+  const undo = textOf(UNINSTALL);
+  const removal = undo.split(/\r?\n/).findIndex((line) => line.includes('Remove-ItemProperty'));
+  const guard = undo.split(/\r?\n/).slice(0, removal).reverse().find((line) => /^\s*(if|elseif)\b/.test(line));
+  assert.match(guard, /\$found -eq \$value/, 'the removal is under the comparison');
+  assert.match(undo, /"policy value kept: \$Policy sessionStatusLine = \$found, which the install did not write"/);
+});
+
 test('the install runs the writer through the stable shim, unelevated, and registers again over its own task', () => {
   const install = textOf(INSTALL);
   assert.match(defaults(INSTALL).Shim, /pnpm\\bin\\js-harness\.cmd/, 'not the version folder import.meta.dirname resolves to');

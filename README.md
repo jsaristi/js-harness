@@ -31,7 +31,9 @@ js-harness init
 3. `js-harness init`, in a git repository, writes `harness.json` (the pin, `"code"`, the project's
    identifier its sessions' titles start with, offered from the initials of its name, and `"reply": true`,
    which turns the reply check on), `AGENTS.md`, an empty failures register (`docs/FAILURES.md`)
-   and the pre-commit gate of that project.
+   and the pre-commit gate of that project. In a linked worktree it writes the files of the working tree
+   and leaves the hooks and the `info/exclude` line, which every worktree shares, to `js-harness sync` in the
+   main checkout, whose record keeps them; it says so.
 4. `js-harness doctor` tells you which tools of the stack are missing and the command that sets
    up each one.
 
@@ -495,7 +497,7 @@ Each kind also has a name, and a named kind never acts by location:
 | Kind | Same as | Removes | Keeps |
 |---|---|---|---|
 | `uninstall project [--cwd <path>]` | `uninstall` inside a project | what `init` recorded in this clone | files you edited, the machine install |
-| `uninstall machine` | `uninstall --global` | what `install` recorded, and the folders js-harness keeps in the home | files you edited, the memory snapshots, the throughput records, the program |
+| `uninstall machine` | `uninstall --global` | what `install` recorded; the background sessions it started that are idle and hold no files; and, of `.js-harness`, the folders `gate`, `gate-log`, `gate-first`, `channel`, `remote`, `background` and `memory-hygiene` without its snapshots | files you edited, the memory snapshots, the throughput records, every other folder of `.js-harness`, the program |
 | `uninstall snapshots` | `uninstall --global --full` | the same, and the memory snapshots | the throughput records, the program |
 | `uninstall everything` | `uninstall --global --everything` | the same, the whole `.js-harness` folder and the program | projects' files |
 

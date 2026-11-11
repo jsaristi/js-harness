@@ -15,6 +15,7 @@ import { tools } from './stack.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './project-functions.mjs';
 import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, planFunctions, settingLabel, settingPending, valueAt } from './project-apply.mjs';
 import { EXCLUDED, addExclude, isValidExcludeRecord, undoExclude } from './project-exclude.mjs';
+import { excludeToWrite, sharedElsewhere } from './project-shared.mjs';
 import { FAILURES_TEMPLATE, TEMPLATE_BLOCK_MARK, agentsFile, claudeFile, renderBlock } from './project-template.mjs';
 import { HOOKS } from './project-hooks.mjs';
 import { localDay } from './flaky.mjs';
@@ -648,14 +649,8 @@ function writeHookGate(root, spawn, writeFile, state, hook = HOOKS.preCommit) {
     actions.push({ kind: 'skip', path: `hooks/${hook.name}`, reason: 'could not resolve the git hooks path' });
   } else {
     const gitBases = gitDirs(root, spawn);
-    const {
-      real: realHookPath,
-      outside: hookOutside,
-      occupied: hookOccupied,
-      isWorkingTree: hookIsWorkingTree,
-      viaLink: hookViaLink,
-      base: hookBase,
-    } = resolveHookContainment(root, hookPath, gitBases);
+    const { real: realHookPath, outside: hookOutside, occupied: hookOccupied, isWorkingTree: hookIsWorkingTree, viaLink: hookViaLink, base: hookBase } =
+      resolveHookContainment(root, hookPath, gitBases);
     if (hookOutside) {
       // T2b R3-hookspath-outside-repo-written / Codex P2, T2c Codex P1 symlink, T2d dangling
       // symlink: a `core.hooksPath` outside the repo — directly, through an in-repo symlink, or
@@ -669,8 +664,12 @@ function writeHookGate(root, spawn, writeFile, state, hook = HOOKS.preCommit) {
       actions.push(kept(toForwardSlashes(realHookPath), reason, true));
     } else {
       const hookRel = pathShapeFor(root, hookPath, hookIsWorkingTree);
+      // A hook outside the working tree of a linked worktree is every worktree's: the main checkout writes it (./project-shared.mjs).
+      const elsewhere = hookOccupied || hookIsWorkingTree ? null : sharedElsewhere(gitBases, `add ${hook.command} to its ${hook.name} yourself`);
       if (hookOccupied) {
         actions.push(kept(hookRel, `exists; add ${hook.command} to it`, false, !hookIsWorkingTree));
+      } else if (elsewhere) {
+        actions.push({ kind: 'skip', path: hookRel, reason: elsewhere });
       } else {
         // T2f item 2: bounded by `hookBase` (the git dir or common git dir, for a worktree or a
         // submodule), not always `root` — otherwise the climb stops before it starts whenever the
@@ -855,7 +854,7 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     }
 
     // `.atl/` left out of what git calls untracked, in this clone's exclude file (./project-exclude.mjs).
-    const target = excludeFile(root, spawn);
+    const target = excludeToWrite(excludeFile(root, spawn), gitDirs(root, spawn));
     if (target.file && target.reason) actions.push(kept(notRemovedLabel(root, target.file), target.reason));
     if (target.file && !target.reason) {
       excludePath = target.file;
@@ -1583,7 +1582,7 @@ function updateRecorded(root, manifest, gitBases, steps) {
     // A clone `init` set up before it wrote the `.atl/` line gets it here, recorded as `init` records it; a record
     // already there is left alone, so a line somebody took out stays out (odd/tasks/sync-exclude.md).
     if (sync && !next.exclude) {
-      const target = excludeFile(root, spawn);
+      const target = excludeToWrite(excludeFile(root, spawn), gitBases);
       if (target.file && target.reason) actions.push(kept(notRemovedLabel(root, target.file), target.reason));
       const record = target.file && !target.reason ? addExclude(target.file, { writeFile }) : null;
       if (record) {

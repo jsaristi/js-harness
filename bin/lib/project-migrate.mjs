@@ -16,6 +16,7 @@ import { checkProjectRules, PROJECT_RULES_PATH } from './project-rules.mjs';
 import { isNewer } from './version.mjs';
 import { localDay } from './flaky.mjs';
 import { renderBlock, TEMPLATE_BLOCK_MARK } from './project-template.mjs';
+import { excludeToWrite } from './project-shared.mjs';
 import {
   InitWriteError,
   agentsBlock,
@@ -189,9 +190,10 @@ function repairLines({ root, manifest, spawn }) {
   const kept = (manifest.kept ?? []).some((entry) => entry.path.split('/').pop() === 'commit-msg');
   if (!commitMsg && !kept) lines.push("the commit-msg step that takes the host's attribution lines out: written, or kept and recorded as kept where a hook of that name is already there or the hooks path is outside the repository");
   else if (commitMsg && gone(commitMsg)) lines.push('the commit-msg step: written again, since the one recorded is gone');
-  // Only where sync would write it: an exclude file behind a link, or outside the repository, sync keeps as it is.
+  // Only where sync would write it: an exclude file behind a link, outside the repository, or shared with the main
+  // checkout from a linked worktree, sync keeps as it is.
   if (!manifest.exclude) {
-    const target = excludeFile(root, spawn);
+    const target = excludeToWrite(excludeFile(root, spawn), gitDirs(root, spawn));
     if (target.file && !target.reason) lines.push(".atl/: its exclude line added to the clone's exclude file and recorded");
   }
   return lines;
