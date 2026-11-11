@@ -1325,7 +1325,17 @@ and the title and effort are held to the rules `session-title` and `session-effo
 declared. Each start is recorded in `~/.js-harness/background/sessions.jsonl`: `js-harness sessions
 stop <id>` removes a recorded session (`claude stop`, then `claude rm`; its transcript stays) and no
 other; while its worktree holds files it refuses and runs nothing unless `--remove-worktree`, since
-`claude rm` deletes them, and a message, not a stop, resumes a background session. `js-harness
+`claude rm` deletes them, and a message, not a stop, resumes a background session. A session that
+finished is closed without anyone remembering to: one whose newest notice of its state is `closed`
+and that has no job at work is closed by every land, and by `js-harness sessions stop --finished` at
+any time. Its worktree goes by `git worktree remove`, never forced, only when its head is in the
+default branch, `git status` shows nothing but the settings copy `claude` writes there (ignored files
+count), its index stood still for 10 minutes and it is not locked; `claude stop` ends its jobs
+before that and `claude rm` removes them after. One with no worktree in the record whose job stands
+in a folder other than the main checkout stays while that folder holds files. One that cannot go that way stays whole, named with
+why and with what settles it, and the board and `doctor` (the `finished` row) list each finished
+session still on the machine. A resume removes the job it resumed when the session has no worktree;
+with one, that job goes with the session. `js-harness
 uninstall machine` removes every recorded one that is not at work and whose worktree holds no files, keeps and names the others and fails while one is kept. The board's `Background sessions` block lists the project's background sessions from
 `claude agents --json --all`, what each waits for (a permission prompt included) and whether `start`
 recorded it; `--watch` returns when one starts waiting.

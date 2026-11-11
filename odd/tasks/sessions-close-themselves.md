@@ -138,21 +138,24 @@ the lead with `js-harness notify --to orchestrator --kind waiting`.
 - [x] T1 (kind: build) specs 2, 5: the loss rule named for one worktree, the finished predicate and the closing
   function, `sessions stop --finished`; tests first · inline · `bin/lib/worktrees.mjs`, `bin/lib/background-close.mjs`,
   `bin/sessions-background.mjs` · the commit after `8cee9278` (L8)
-- [ ] T2 (kind: build) specs 2, 4: the land's call, the board's lines and the doctor row; tests first · inline ·
-  `bin/merge-queue.mjs`, `bin/lib/background.mjs`, `bin/sessions.mjs`, `bin/doctor.mjs`
-- [ ] T3 (kind: build) spec 3: a resume removes the job it resumed when that job holds no worktree; tests first ·
-  inline · `bin/sessions-background.mjs`
-- [ ] T4 (kind: docs) specs 2 to 4, 7: the orchestrator skill, `README.md`, `docs/SPEC.md`, `docs/FAILURES.md` · inline
-- [ ] T5 (kind: docs) spec 6: the cleanup file for the lead, outside the repository
+- [x] T2 (kind: build) specs 2, 4: the land's call, the board's lines and the doctor row; tests first · inline ·
+  `bin/merge-queue.mjs`, `bin/lib/background.mjs`, `bin/sessions.mjs`, `bin/doctor.mjs` · `7b92d493` (L9, L10,
+  L12, L13)
+- [x] T3 (kind: build) spec 3: a resume removes the job it resumed when that job holds no worktree; tests first ·
+  inline · `bin/sessions-background.mjs` · `7b92d493` (L11)
+- [x] T4 (kind: docs) specs 2 to 4, 7: the orchestrator skill, `README.md`, `docs/SPEC.md`, `docs/FAILURES.md` ·
+  inline · the documents commit after `7b92d493`
+- [x] T5 (kind: docs) spec 6: the cleanup file for the lead, outside the repository · inline · no commit, it is
+  not in the repository (L14)
 - [ ] T6 (kind: verify) Codex and the Claude lenses on each slice, an independent verifier on what deletes, the pull
   request
 
 ## Next step
-T2: the land's call after `removeLandedWorktrees` (`closeFinishedIn` with the main it pushed as `base`, the lines of
-`closedLines`, its exit unchanged), the board's lines for finished sessions and the doctor row, tests first. Before it,
-T1's slice goes through Codex and the lenses, base `8cee9278`. JH 175 is at work on the land and may touch
-`bin/merge-queue.mjs`: tell the lead before T2 writes there. Then T3 to T6 as listed. The scratch of the survey and
-the dry run is `~/.claude/jobs/b126e3c8/tmp` (`survey.json`, `dryrun.mjs`); the cleanup file of T5 goes there.
+T1's slice `8cee9278..d77b3315` is reviewed (L9). T2 and T3 are in `7b92d493`, T4 in the documents commit after it,
+and T5 is written (L14). What is left is T6: the slice whose base is `d77b3315` goes through Codex and the four
+lenses, one at a time, with the worktree untouched while either runs; the independent verifier on what deletes gives
+its verdict, which goes in the Log; then the push, the pull request, `notify --kind ready --pr`, the summary and
+`notify --kind closed --summary`.
 
 ## Log
 - L1 (2026-11-10 22:44 local, the owner, typed in the lead's chat; transcript `ea85ec35`, line 5421): "y entonces por
@@ -218,3 +221,55 @@ the dry run is `~/.claude/jobs/b126e3c8/tmp` (`survey.json`, `dryrun.mjs`); the 
   loss rule was written. The close is a module of its own, `bin/lib/background-close.mjs` (140 lines), because the land,
   the command and the listings all call it and it joins three records `bin/lib/background.mjs` (572 lines) does not
   read: the channel, git's worktrees and the default branch.
+- L9 The reviews of T1, `8cee927..d77b331` (2026-11-11). A mistake of this session first: it began T2 in the worktree
+  while Codex reviewed, so the run that had passed part 1 of 2 kept nothing (210,836 input tokens; `edit-during-review`
+  in `docs/FAILURES.md`). The work was set aside and the review run again with the tree still: Codex passed both
+  parts with no finding (confidence 0.85 and 0.86; 499,569 input tokens). The four lenses: risk none; resilience 1;
+  readability 1; reliability 4. Each is answered in T2's commit: (1) `git worktree remove` ran under the 20 s bound
+  of a question, so a slow removal was killed half done: it now has its own bound, `REMOVAL_WAIT_MS`, five minutes;
+  (2) the help said the worktree goes before `claude stop`: rewritten, and a kept session whose job was stopped says so
+  with the command that resumes it; (3) the worktree was looked at once, before a wait of up to a minute: it is held
+  to the rule again after the wait, test "looks at the worktree again"; (4) claude's listing was read once for every
+  session: it is read again after each act, and a listing that fails keeps the next session; (5) three of the four
+  "could not look" exits had no test: all have one now, with claude missing from PATH; (6) a job listed under another
+  id on the session's conversation was not stopped: `endJobs` matches as `workingIn` does. Not taken: nothing.
+- L10 T2 (2026-11-11), tests first, each seen fail before its code: the board (`finishedHere`, a line that counts the
+  finished sessions still here and names `js-harness sessions stop --finished`, from the records and one listing, no
+  git); the land (`closeAfterLand`, after its own removals, against the main it pushed, each line said, `closed` in
+  its record, its exit unchanged; test in `bin/merge-queue.test.mjs`); doctor (the row `finished`, its id short for
+  the table's 16-character column, interactive only since it may ask claude). Added for the five sessions of L5 whose
+  folder holds only a leftover `.git`: the kept line says claude keeps the job while that folder is there and that
+  deleting it is done by hand; no command of the harness deletes it, since `git worktree remove` refuses a tree whose
+  tracked files are gone and nothing here forces it. JH 175 was told where the land's call goes (a note to the lead,
+  00:45 local); no answer changed it.
+- L11 T3 (2026-11-11), test first. A resume retires the job it resumed, and the jobs that one had resumed, only when
+  the session has no worktree (`retireResumed`): claude stop, claude rm, each removal recorded, the brief kept. Checked
+  before building, against the machine: of 83 jobs the record says were removed, 83 still have their transcript; of
+  19 recorded resumes, 0 share the session id of the job resumed, so removing the old job cannot take the new one's
+  conversation (`kept-transcripts.mjs` in the scratch). With a worktree the old job stays until the close, and the
+  resume says so. A claude that keeps the job's id on a resume is recorded as no second job: with `resumedFrom`
+  naming itself the session would have left every listing. `readRecord` now also gives `removed`, so a job a resume
+  retired is not asked of claude again when its session is undone.
+- L12 The first commit of T2 and T3 was refused by the gate (2026-11-11, run 42974918803): four tests written before
+  this work no longer said what the code does. The orchestrator skill's sentence on removal, the land record without
+  `closed`, and two resume tests that read the record's last line, which after a resume with no worktree is now the
+  removal of the job it resumed. Each was read and corrected; none showed a defect in the change. Not run before the
+  commit: those three files whole, which the targeted runs of L10 and L11 did not cover.
+- L13 A guard added while writing the cleanup file (2026-11-11), test first. Two sessions have no worktree in the
+  record while their job stands in a folder that is not the main checkout: JH 155 in
+  `.claude/worktrees/probe-auto-archive-3b36c3`, 19 entries, and JH 171 in `D:\js-harness-worktrees\rule-all-fable-high`,
+  empty now that PR 813 merged (who emptied it was not checked). `worktreeHolding` looks only at the recorded worktree, so an automatic close would
+  have run claude rm with nobody looking at that folder. Seen once that claude rm leaves it: JH 102 (`309cf665`) was
+  removed and its folder `tui-gentle-level-a6afd3` still holds 19 entries (`cwd-evidence.mjs` in the scratch); once is
+  not a rule. `closeFinished` now keeps such a session while a folder its job was started in or is listed in holds
+  something besides `.git`, with `js-harness sessions stop <id>` as what settles it; an empty or missing folder holds
+  nothing to lose and the session closes. `sessions stop <id>` by hand is unchanged.
+- L14 T5 (2026-11-11 02:17 local). The cleanup file is
+  `%LOCALAPPDATA%\Temp\claude\756cad32478b1733\b126e3c8-486f-46a5-a403-99c65de3bc47\scratchpad\cleanup-background-sessions.md`,
+  with a copy in `~/.claude/jobs/b126e3c8/tmp`; `gen-cleanup.mjs` there writes it from a read-only survey
+  (`survey.mjs`), and this session ran none of its commands. 48 jobs: 35 sessions of this project in 43 jobs, and 5
+  jobs outside its record. Of the 35: 8 to close now, 8 whose worktree holds ignored files to look at first (`.atl/`,
+  `evals/runs/`, an ignored `.claude/`), 4 whose head is not in main, 4 whose folder holds only a leftover `.git`, 4
+  whose newest state notice is not `closed`, 6 at work, and JH 137, left out as the brief says. Three of the four not
+  closed said `ready` last and their pull request merged (JH 127, 159, 165): the harness takes only `closed` as
+  finished, so a session that never sends it stays a hand's work. That is a limit of this change, not built here.

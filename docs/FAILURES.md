@@ -575,6 +575,9 @@ not the committed range, wrote no record and had to be run again.
 - Seen: 2026-11-10 — `odd/tasks/backup-redact-shapes.md` L10 (JH 162) — `bin/lib/backup.test.mjs` edited, to
   answer a lens finding that came back first, during the Codex review of `b0c940c..dac1ef3`; 136,092 input tokens
   spent, nothing recorded, the review run again after the commit
+- Seen: 2026-11-11 — `odd/tasks/sessions-close-themselves.md` L9 (JH 173) — `bin/lib/background.mjs` and three
+  more files edited, to start the next task, during the Codex review of `8cee927..d77b331`; 210,836 input tokens
+  spent on part 1 of 2, not kept, nothing recorded, the review run again with the work set aside
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 
@@ -685,6 +688,19 @@ read as an exit code or an outcome alone.
 - Was: check — workshop/lib/throughput.test.mjs — the same test, which moved with the land and Codex run
   records to bin/lib/land-records.test.mjs on 2026-11-05 (`81088583`); found as "control lost" by F8 S5's rule
   pass (odd/tasks/f8-s5-rules.md)
+
+### finished-sessions-left
+Background sessions that had finished, their work landed and their `closed` notice sent, stayed on the machine and
+in the Claude app's list: closing one was a sentence of the orchestrator skill, and no command ran it.
+- Class: rule-not-acting
+- Seen: 2026-11-10 — odd/tasks/sessions-close-themselves.md, L1 to L5 (his words, the lead's transcript `ea85ec35`,
+  line 5421) — 43 jobs on the machine at 00:05 local on 2026-11-11, 30 of them of 25 resting sessions of this
+  project; a land skips every worktree under `.claude/worktrees`, where
+  `sessions start` puts each session's, and each holds an ignored settings copy besides, so `sessions stop <id>`
+  refused 19 of the 33 the lead tried and `--remove-worktree` was never typed; 19 of 19 resumes left the job they
+  resumed
+- Control: check — bin/merge-queue.test.mjs — "a land closes the finished background session whose work it landed:
+  its worktree by git, its job by claude, named in its record" — since 2026-11-11
 
 ### fixture-refuses-late-check
 The rules tests' fixture owed every check since the coverage register's baseline, which a rule
@@ -827,6 +843,17 @@ feature it found: it extracted files holding a key to a temporary folder and com
   after the first printed nothing; the first's commit, never pushed, undone with `git reset --soft`, its extracted
   folder removed by its own command
 - Control: owed — odd/tasks/f8-s2-removal.md — "starts with `/` runs under `MSYS_NO_PATHCONV=1`"
+
+### heartbeat-ticks-stopped
+The heartbeat's three workshop ticks (throughput, the Windows daily check, the host watch) stopped running, and
+nothing said so: the scheduled task went on running the product's `loop heartbeat`, which runs no tick.
+- Class: unseen-state
+- Seen: 2026-11-02 — odd/tasks/audit-u3-heartbeat-ticks.md, L2, and the lead's brief to JH 173 (claimed; the lead's
+  own) — the three ticks last ran together at 21:18 local on 2026-11-02 (UTC-05:00), before the workshop was split
+  from the product, and did not run again; it was seen only when pull request 809 printed their age at a session
+  start, on 2026-11-10
+- Control: check — workshop/bin/ticks.test.mjs — "a stale row against a home whose newest snapshot is two days old:
+  the hook exits 0 and says it" — since 2026-11-10
 
 ### heavy-run-beside-gate
 A test run or a count started while a gate, or a batch that measures durations, was running.
@@ -1898,6 +1925,8 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-11-09 — the lead's note to JH 160 at 22:35 local (claimed; the lead's own) — he was away from 20:00 to
   22:31 local with question 238 on screen, JH 161's audit ran meanwhile, and the lead opened no stretch, so his
   return had no estimate
+- Seen: 2026-11-10 — the lead's brief to JH 173 (claimed; the lead's own) — he was away from 18:08 to 21:17 local
+  (UTC-05:00) with question 255 on his screen, and no stretch was opened
 - Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — since 2026-10-31
 
