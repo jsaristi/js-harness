@@ -1337,7 +1337,11 @@ the host made, whether the session was told the pause and committed its feature 
 orchestrator may write a line in its relief file instead), and how many compactions miss one of
 those facts (nobody announces a compaction: he does not compact by hand); then the reliefs of the record (each `relieved` notice, judged by the context its relieved session was at: filled at the pause or another reason) and the Log lines that name a reopening, as candidates for the lead. Under each roster row's
 mode line, a line says how its session was opened, where the desktop app keeps it and its effort,
-and marks a session outside his sidebar (in Routines, or not in the app) and an effort below `high`.
+and marks a session outside his sidebar (in Routines, or not in the app) and one that is off the home the
+project's rules declare: what its menu holds (the app's record; with no record, said, its last reply) that the
+model and the level it is held to do not, the lead's level for the orchestrator's row, both levels where the menu
+and the last reply disagree, and for the session that reads the board the line to give him, since a session cannot
+change its own.
 A session that closed with its summary (`notify --kind closed --summary`) and is not archived yet
 gets a `to archive:` line naming the file: the lead reads it, then archives the session, first
 turning its Remote Control off when the host refuses it as live work. A session that closed or

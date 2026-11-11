@@ -59,6 +59,7 @@ import { appendReading, findOpenings, newReading, readNotices, recordPath, recor
 import { dayStartOf, keptByGitLog, keptByRelief, keptEither, localDay, measuresLines, measuresTotal, reliefLines, reliefMeasures, reliefsTotal, reopenCandidates, reopenLines } from './lib/measures.mjs';
 import { configuredWindow, toldBetween } from './lib/pause.mjs';
 import { ruleValue } from './lib/rules.mjs';
+import { claudeHeld } from './lib/model-home.mjs';
 import { readStalled } from './lib/stall.mjs';
 
 // How long a work session that holds handed work may go with no commit, notice or gate: the declared rule.
@@ -558,6 +559,19 @@ export async function sessionsMain(
     }
   };
 
+  /** The home the project's rules give its sessions, `{ model, effort, lead }`, each null where the project does not
+   * declare that rule or has no rules file that can be read: the roster marks the rows that are off it. */
+  const readHome = () => {
+    let text = null;
+    try {
+      text = readFile(path.join(root, 'bin', 'lib', 'rules-data.mjs'));
+    } catch {
+      text = null;
+    }
+    const held = claudeHeld(text);
+    return { model: held.model?.value ?? null, effort: held.effort?.value ?? null, lead: held.lead?.value ?? null };
+  };
+
   /** The board's stalled sessions at `at` (ms): `{ limitMinutes, items, unavailable }`, read as the heartbeat reads them. */
   const stalledOf = (at) => {
     const { stalled, unavailable } = readStalled({ home, slug, now: at, limitMs: STALL_MINUTES * 60 * 1000, windowMs: parsed.hours * 3600 * 1000, run, fileSystem: { readFileSync: (file) => readFile(file), readdirSync: readdir } });
@@ -576,6 +590,7 @@ export async function sessionsMain(
     }
     const { generatedAt, since, sessions, record } = seen;
     const app = readAppRecords();
+    const modelHome = readHome();
     const worktrees = readWorktrees(run, root, { readFile });
     // The processes first, the lock after: a gate that starts is a process for a moment before it stands
     // in line, and read the other way round more of them would be shown as not yet in line. The waiters
@@ -634,7 +649,9 @@ export async function sessionsMain(
       // channel's record, the openings and the gate log under the home: what the heartbeat reads too, without a transcript.
       stalled: stalledOf(generatedAt),
       // The window lists a transcript whose file changed; a row of the roster wants an entry of that time.
-      roster: rosterOf(sessions, { worktrees, since, record, app, hosts }),
+      // The home the roster judges its rows by, as the project's rules give it.
+      home: modelHome,
+      roster: rosterOf(sessions, { worktrees, since, record, app, hosts, home: modelHome }),
       // The record's last notices and the last messages between these sessions: `notify` writes the
       // first, the transcripts hold the second, and this command writes neither.
       channel: channelOf(record, sessions),

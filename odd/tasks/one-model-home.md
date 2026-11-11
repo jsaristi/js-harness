@@ -382,6 +382,18 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 16:39: pull request 2 is in main (`58c8d324`, pull requests 831 to 835 merged in order; the lead's
+message of 16:36, checked against `origin/main`). The texts of unit (c) are `2df39fb6`. Unit (d) is in the commit
+that carries this line, its tests seen red first: `offHome` in `bin/lib/model-home.mjs`; a new module,
+`bin/lib/roster-home.mjs` with its test, holds `rowHome`, `openerLine` and `forHimLine`, because
+`bin/lib/sessions.mjs` was at its ceiling (it went from 3389 lines to 3387, and its ceiling with it); `rosterOf`
+takes `home` and a row gains `menu`, `held` and `off`; `bin/sessions.mjs` reads the home from the root's rules file
+and the board carries it as `home`; the README says the marks. 611 tests of those files and of the conventions
+pass. Next, in order: Codex and the lenses (risk, reliability) on `268991a7` to the head, one at a time under the
+gate's lock, before main is merged into this branch (after a merge of main the base of a review is that merge, so
+the units before it must have their records first); then merge `origin/main`; then T6 (`rules applied` lists the
+sessions off the home with what corrects each, `bin/rules.mjs` `appliedForm` and `bin/lib/rules-applied.mjs`; the
+`doctor` row, which reads his settings and never writes), which can read a row's `off` through `rowHome`.
 2026-11-11 16:29, after the host compacted the session at 16:16: unit (c) is `1f28f4b9` (its first try was refused
 by the gate: the new function repeated a line a planted break of `lead-effort` must find once, so it names the same
 test `newLead`), and its texts are in the commit that carries this line: the guard's help, the manifest's line (the
