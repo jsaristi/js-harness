@@ -21,7 +21,7 @@ import { gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { reviewEvidence } from './lib/merge-queue-reviews.mjs';
 import { nextLine } from './lib/next-step.mjs';
 import { defaultBranchOf } from './lib/default-branch.mjs';
-import { pullRequestProblems } from './lib/pull-request.mjs';
+import { mergeMessage, pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
 import { refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
@@ -355,7 +355,7 @@ function mainHasDoor(checker) {
 function mergeThroughDoor({ run, gitIn, place, door, pr, stdout }) {
   const commit = () => gitIn(place, 'rev-parse', 'HEAD').out.trim();
   const before = commit();
-  const done = answer(run, 'git', ['merge', '--no-ff', '--no-verify', '--quiet', '-m', `Merge pull request #${pr.number} from ${pr.headRefName}`, pr.headRefOid], place);
+  const done = answer(run, 'git', ['merge', '--no-ff', '--no-verify', '--quiet', '-m', mergeMessage(pr), pr.headRefOid], place);
   if (!done.ok) {
     const conflicted = gitIn(place, 'diff', '--name-only', '--diff-filter=U').out.split('\n').map((line) => line.trim()).filter(Boolean);
     gitIn(place, 'merge', '--abort');

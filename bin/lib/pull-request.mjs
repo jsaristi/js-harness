@@ -15,3 +15,13 @@ export function pullRequestProblems(pr, base = 'main') {
   if (pr.baseRefName !== base) said.push(`${name} targets ${pr.baseRefName}, not ${base}.`);
   return said;
 }
+
+/** The trailer of every merge commit the queue makes, and of no other: GitHub's merge button writes the same subject,
+ * so the subject alone does not say a merge is the queue's. */
+export const QUEUE_TRAILER = { key: 'Merged-by', value: 'js-harness merge-queue' };
+
+/** The message of the merge commit the queue merges `pr` into its candidate with: GitHub's subject for a merged pull
+ * request, which the reports read, then `QUEUE_TRAILER`. One home: the queue writes it (`mergeThroughDoor`,
+ * ../merge-queue.mjs) and the control of `rule:depth-pass` knows a candidate by its trailer (`sidesOf`,
+ * ../contract.mjs). */
+export const mergeMessage = (pr) => `Merge pull request #${pr.number} from ${pr.headRefName}\n\n${QUEUE_TRAILER.key}: ${QUEUE_TRAILER.value}`;

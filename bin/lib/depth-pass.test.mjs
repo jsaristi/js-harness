@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { depthPassText } from './depth-pass.mjs';
+import { mergeMessage } from './pull-request.mjs';
 import { checkContracts } from '../check.mjs';
 import { depthPassFor } from '../contract.mjs';
 import { contractMain } from '../contract.mjs';
@@ -372,4 +373,97 @@ test('a document with no "## Goal" opened before the day, or in a project with n
     assert.equal(row.pass, true, JSON.stringify(row));
     assert.equal(row.detail, '1 contract checked', 'a document left as it was is not counted as a contract');
   }
+});
+
+/** Two pull requests cut from the trunk of `root`: `code`, one code file and no document; and `doc`, which opens the
+ * feature document with its pass (`pass`) and holds one code file of its own, committed after the pass, or before it
+ * with `early`, or not at all with `own` false. */
+function twoPullRequests(root, { pass = PASS, early = false, own = true } = {}) {
+  git(root, 'checkout', '-q', '-b', 'code', 'origin/main');
+  write(root, 'bin/b.mjs', 'b\n');
+  commit(root, 'feat: the code of another pull request', 'bin/b.mjs');
+  git(root, 'checkout', '-q', '-b', 'doc', 'origin/main');
+  const itsCode = () => {
+    write(root, 'bin/c.mjs', 'c\n');
+    commit(root, 'feat: its own code', 'bin/c.mjs');
+  };
+  if (own && early) itsCode();
+  write(root, FILE, document(pass));
+  commit(root, 'docs: the pass', FILE);
+  if (own && !early) itsCode();
+}
+
+/** The message of a merge the queue makes (`mergeThroughDoor`, ../merge-queue.mjs), and of one GitHub's merge button
+ * makes: the same subject, without the queue's trailer. */
+const byQueue = (number, branch) => mergeMessage({ number, headRefName: branch });
+const byButton = (number, branch) => `Merge pull request #${number} from ${branch}`;
+
+/** The candidate of `order` on the trunk, as the merge queue builds it: one merge a pull request, with the queue's
+ * message unless `message` gives another. */
+function candidate(root, order, message = byQueue) {
+  git(root, 'checkout', '-q', '--detach', 'origin/main');
+  order.forEach((branch, k) => git(root, 'merge', '-q', '--no-ff', '-m', message(806 + k, branch), branch));
+}
+
+// The land of 2026-11-10 (odd/tasks/land-two-defects.md): PR 806's code, merged ahead of PR 807 in one candidate, was
+// read as code committed before the verdict of 807's new document, since the trunk was still behind both.
+test('in a candidate of the merge queue each pull request is judged by its own commits, whichever is merged first', (t) => {
+  for (const order of [['code', 'doc'], ['doc', 'code'], ['doc']]) {
+    const root = repo();
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    twoPullRequests(root);
+    candidate(root, order);
+    assert.deepEqual(errorsOf(root), [], order.join(', '));
+  }
+});
+
+test('a pull request with its own code before its verdict is refused in a candidate too, by its own files alone', (t) => {
+  for (const order of [['doc'], ['code', 'doc'], ['doc', 'code']]) {
+    const root = repo();
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    twoPullRequests(root, { early: true });
+    candidate(root, order);
+    assert.deepEqual(errorsOf(root), ['code was committed before the pass\'s verdict: bin/c.mjs'], order.join(', '));
+  }
+});
+
+test('a refuting verdict in a candidate counts the code of its own pull request, not another\'s', (t) => {
+  const refutes = PASS.replace('Verdict: supports', 'Verdict: refutes');
+  const [alone, withCode] = [repo(), repo()];
+  t.after(() => [alone, withCode].forEach((root) => fs.rmSync(root, { recursive: true, force: true })));
+  twoPullRequests(alone, { pass: refutes, own: false });
+  candidate(alone, ['code', 'doc']);
+  assert.deepEqual(errorsOf(alone), []);
+  twoPullRequests(withCode, { pass: refutes });
+  candidate(withCode, ['code', 'doc']);
+  assert.deepEqual(errorsOf(withCode), ['the verdict refutes and code is on the branch with no `answered: question <n>` in the pass']);
+});
+
+// Codex and the risk lens on e0e2755a..adc2978c: GitHub's merge button writes the queue's subject, so the subject alone
+// read a branch made of such merges as a candidate, and code merged in ahead of its verdict passed at its own check.
+// The queue's trailer is what makes a candidate: such a branch is one pull request, read whole, alone and at the land.
+test('a branch made of merges of GitHub\'s merge button is one pull request, read whole by itself and in the candidate', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  twoPullRequests(root);
+  candidate(root, ['code', 'doc'], byButton);
+  assert.deepEqual(errorsOf(root), ['code was committed before the pass\'s verdict: bin/b.mjs'], 'checked by itself');
+  git(root, 'checkout', '-q', '-b', 'big');
+  candidate(root, ['big']);
+  assert.deepEqual(errorsOf(root), ['code was committed before the pass\'s verdict: bin/b.mjs'], 'as one pull request of the candidate');
+});
+
+// Only the queue's merges make a candidate: a branch that merged another branch in is one pull request, read whole.
+test('a branch whose merges are not the queue\'s is one pull request, and code merged in ahead of its verdict counts', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  twoPullRequests(root);
+  candidate(root, ['code', 'doc'], (number, branch) => `Merge branch '${branch}'`);
+  assert.deepEqual(errorsOf(root), ['code was committed before the pass\'s verdict: bin/b.mjs']);
+  // One merge of the queue's and one that is not: no candidate either.
+  const mixed = repo();
+  t.after(() => fs.rmSync(mixed, { recursive: true, force: true }));
+  twoPullRequests(mixed);
+  candidate(mixed, ['code', 'doc'], (number, branch) => (branch === 'code' ? byQueue(number, branch) : byButton(number, branch)));
+  assert.deepEqual(errorsOf(mixed), ['code was committed before the pass\'s verdict: bin/b.mjs']);
 });
