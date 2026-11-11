@@ -1,6 +1,6 @@
 # surface: background
-# Claude Desktop 4.23118.0, Code tab CLI 2.1.317
-# recorded: 2026-11-06
+# Claude Desktop 5.1231.0, Code tab CLI 2.1.321
+# recorded: 2026-11-11
 # provenance: transcribed by the model from its tool definitions and its deferred-tool list; a removal is confirmed with ToolSearch select:<name> before a review claims it
 Agent
 Artifact
@@ -36,6 +36,8 @@ ReportFindings
 ScheduleWakeup
 SendFeedback
 SendMessage
+SendToProject
+SendToProjectContext
 SendUserFile
 Skill
 TaskCreate
