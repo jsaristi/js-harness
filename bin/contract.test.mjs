@@ -12,6 +12,10 @@ import { RULES } from './lib/rules-data.mjs';
 
 // The effort the rule session-effort gives, read from the list `modes` reads and never written here.
 const SESSION_EFFORT = RULES.find((rule) => rule.id === 'session-effort').value;
+// A model rule as a mode line names it: its short name where it declares one, else its id. Read from the list too.
+const modelOf = (id) => { const rule = RULES.find((entry) => entry.id === id); return rule.alias ?? rule.value; };
+const WRITERS = modelOf('subagent-writer-model');
+const READERS = modelOf('subagent-reader-model');
 
 const GOOD = [
   '# A feature',
@@ -613,15 +617,15 @@ test('modes prints one line per open task with its kind, effort and models, and 
   const { code, stdout, stderr } = await modesFor(['modes']);
   assert.equal(code, 0, stderr);
   assert.deepEqual(stdout.split('\n'), [
-    `T2 (kind: build): session ${SESSION_EFFORT}; writers haiku, readers opus; every sub-agent at high`,
-    `T3 (no kind): session ${SESSION_EFFORT}; writers haiku, readers opus; every sub-agent at high`,
+    `T2 (kind: build): session ${SESSION_EFFORT}; writers ${WRITERS}, readers ${READERS}; every sub-agent at high`,
+    `T3 (no kind): session ${SESSION_EFFORT}; writers ${WRITERS}, readers ${READERS}; every sub-agent at high`,
   ]);
 });
 
 test('modes --task prints that task, done or not; an unknown task exits 1 saying so', async () => {
   const done = await modesFor(['modes', '--task', 'T1']);
   assert.equal(done.code, 0, done.stderr);
-  assert.equal(done.stdout, `T1 (kind: design): session ${SESSION_EFFORT}; readers opus; every sub-agent at high`);
+  assert.equal(done.stdout, `T1 (kind: design): session ${SESSION_EFFORT}; readers ${READERS}; every sub-agent at high`);
   const missing = await modesFor(['modes', '--task', 'T9']);
   assert.equal(missing.code, 1);
   assert.match(missing.stderr, /no task T9 in /);
@@ -649,8 +653,8 @@ test('goal keeps its stdout the condition alone and prints the open tasks\' mode
   assert.equal(code, 0, stderr);
   assert.ok(!stdout.includes('\n') && !stdout.includes('(kind:'), stdout);
   assert.deepEqual(stderr.split('\n'), [
-    `T2 (kind: build): session ${SESSION_EFFORT}; writers haiku, readers opus; every sub-agent at high`,
-    `T3 (no kind): session ${SESSION_EFFORT}; writers haiku, readers opus; every sub-agent at high`,
+    `T2 (kind: build): session ${SESSION_EFFORT}; writers ${WRITERS}, readers ${READERS}; every sub-agent at high`,
+    `T3 (no kind): session ${SESSION_EFFORT}; writers ${WRITERS}, readers ${READERS}; every sub-agent at high`,
   ]);
 });
 

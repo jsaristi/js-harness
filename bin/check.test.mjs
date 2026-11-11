@@ -9,6 +9,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, runSensor, takeGateTurn, claimOf, main } from './check.mjs';
 import { SENSOR_SILENCE_MS, SENSOR_TIMEOUT_MS, TOKEN_BUDGET, CLAUDE_MD_BUDGET, checkClaudeBudget } from './check.mjs';
+import { RULES } from './lib/rules-data.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { projectSlug } from './lib/sessions.mjs';
@@ -5572,8 +5573,8 @@ function gitOf(dir) {
   };
 }
 
-/** A project of today's sub-agents: a writer on haiku and an explorer on sonnet, the explorer off the reader's
- * rule (opus). `rules` gives the project the harness's rules file, the one the rules are read from; `records`
+/** A project of today's sub-agents: a writer on its rule's model, read from the list, and an explorer on sonnet, off the reader's
+ * rule. `rules` gives the project the harness's rules file, the one the rules are read from; `records`
  * gives it a config folder with the records. */
 function subagentProject({ rules = true, records = true } = {}) {
   const dir = makeTmpDir();
@@ -5592,7 +5593,7 @@ function subagentProject({ rules = true, records = true } = {}) {
       fs.writeFileSync(path.join(agents, `agent-${id}.jsonl`), recordLine([turnAt(stamp, model)]));
       fs.writeFileSync(path.join(agents, `agent-${id}.meta.json`), JSON.stringify(meta));
     };
-    agent('w1', { agentType: 'general-purpose', description: 'Write the change' }, 'claude-haiku-5-5', '2026-10-14T14:02:00Z');
+    agent('w1', { agentType: 'general-purpose', description: 'Write the change' }, RULES.find((rule) => rule.id === 'subagent-writer-model').value, '2026-10-14T14:02:00Z');
     agent('e1', { agentType: 'Explore', description: 'Map things' }, 'claude-sonnet-5-5', '2026-10-14T14:03:00Z');
   }
   return { dir, config, cleanup: () => { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(config, { recursive: true, force: true }); } };

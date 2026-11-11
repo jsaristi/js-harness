@@ -777,9 +777,14 @@ export const RULES = [
     "subject": "the model of a sub-agent that writes scoped code, in this repository",
     "owner": "sebastian",
     "scope": "repository",
-    "since": "2026-10-11",
-    "value": "claude-haiku-5-5",
-    "alias": "haiku",
+    "since": "2026-11-10",
+    "value": "claude-fable-5-2",
+    "was": [
+      {
+        "value": "claude-haiku-5-5",
+        "until": "2026-11-10"
+      }
+    ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bwriters?\\b.{0,50}\\bon `?(?=claude-){amount}"
     ]
