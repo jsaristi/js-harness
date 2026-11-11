@@ -161,12 +161,9 @@ the lead with `js-harness notify --to orchestrator --kind waiting`.
   request · pull request 821 (L9, L15 to L19)
 
 ## Next step
-Every task is done and pull request 821 is open, its code reviewed up to `e64fd44f` (L19). It conflicts with main
-until the merge of main, staged in the worktree with its conflicts resolved, is committed (L20): the host stopped
-that commit for low memory, and it is run again only on the lead's or the owner's word. Then: `git commit -F` with
-the message of L20's merge, the push, whatever review the push asks of the merge, `notify --kind ready --pr 821`,
-the summary's `Time` line set to the real time of that notice, and `notify --kind closed --summary`. The merge is
-the lead's after the owner's yes. Open with the lead (`notify --kind waiting`, L17): whether a resume leaves the job it resumed
+Every task is done. Pull request 821 is open and `ready` was sent at 04:50 local on 2026-11-11, its code reviewed up
+to the merge of main, `9d174d49` (L19 to L21). What follows this commit is its push and `notify --kind closed
+--summary`. The merge is the lead's after the owner's yes. Open with the lead (`notify --kind waiting`, L17): whether a resume leaves the job it resumed
 to the close, as built (L16), or removes it at once, as the brief's words say; with no answer the pull request keeps
 what is built. If he chooses the other, it is one more slice: `resumeStart` in `bin/sessions-background.mjs`, its
 test, and the guard of L13 on that path. The cleanup file of L14 and L17 is the lead's to run after the owner's yes;
@@ -382,3 +379,10 @@ this session ran none of it.
   gate, and the wait for the lead's notices, for low memory, and told the session not to run it again on its own:
   sent to the lead as `waiting` at 04:26 local. The clock times L18 and L19 first carried were guesses and were
   taken out.
+- L21 The lead's go (a message of JH ORQ to this session, after 04:29 local, a claim of the lead and not the owner's
+  word): commit the staged merge, push, send `ready`; memory measured by it at 7.1 GB free of 19.7. The merge is
+  `9d174d49`, its gate green behind the land that ran. A dry merge with the main of that moment (`git merge-tree`)
+  gave no conflict. The push refused it until the merge had its two reviews, by what was written in it and not by
+  what it brought in: Codex on `36927d7c..9d174d49`, 6 changed lines in one file, correct (0.99), 59,916 input
+  tokens; the reliability lens, no finding, 78,476 input tokens. Pushed; `notify --kind ready --pr 821` recorded at
+  04:50 local. A note asked the lead to hold the land until this last documents commit is pushed.

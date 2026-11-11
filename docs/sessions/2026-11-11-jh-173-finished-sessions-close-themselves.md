@@ -18,7 +18,8 @@ lead's chat; transcript `ea85ec35`, line 5421, quoted in L1 of the feature docum
   --finished`; `7b92d493` the land's call, the board's lines and the doctor row; `5ac20ed2` the documents and
   `docs/FAILURES.md` (`finished-sessions-left`, and the two lines the lead owed); `a9f9f979` claude's own lock, and a
   resume that leaves the old job to the close; `f3754c2a` the lock read again before it is released, and a refusal
-  that says what settles it; `e64fd44f` a stranded start named by its file.
+  that says what settles it; `e64fd44f` a stranded start named by its file; `9d174d49` the merge of main, which the
+  branch had come to conflict with (L20, L21).
 - The cause, with counts (L2 to L6): nothing ran the close; 359 lands removed no worktree under `.claude/worktrees`
   and no job; `sessions stop` refuses while a worktree holds files, and every worktree claude makes holds an ignored
   copy of the local settings; 19 of 19 resumes left the job they resumed.
@@ -53,6 +54,10 @@ lead's chat; transcript `ea85ec35`, line 5421, quoted in L1 of the feature docum
 - The tests of `a9f9f979` were written with their code and not seen to fail first (L16); those of `f3754c2a` and
   `e64fd44f` were seen to fail first.
 - Codex found, in the fix itself, a refusal that named the wrong file (L18); fixed in `e64fd44f`.
+- The first `ready` notice was refused: the pull request conflicted with a main that had moved. Main was merged in;
+  the host then stopped that commit's gate for low memory and it ran again on the lead's go (L20, L21).
+- Clock times written into L18 and L19 were guesses and wrong by up to half an hour; taken out. A time in a record
+  is read from a command's output, not estimated.
 
 ## Left
 - The lead: the answer on the resume (above); the merge of pull request 821; the cleanup file, after the owner's yes.
@@ -63,9 +68,10 @@ lead's chat; transcript `ea85ec35`, line 5421, quoted in L1 of the feature docum
   gone. The first real close is the land of this pull request.
 
 ## Cost
-- Time: brief of 2026-11-10 23:55 local; `ready` at about 05:00 local on 2026-11-11. Two compactions by the host.
-- Context at the end: about 65 percent of the window, an estimate.
-- Codex: 6 runs, 1,389,644 input tokens (210,836 lost, 499,569, 367,642, 139,608, 136,847, 35,142).
-- The Claude lenses: 12 runs in 3 rounds of 4 (the last two rounds about 51,000 and 16,000 input tokens a run).
+- Time: brief of 2026-11-10 23:55 local; `ready` recorded at 04:50 local on 2026-11-11. Two compactions by the host.
+- Context at the end: 78 percent of the window, as the `ready` notice printed it.
+- Codex: 7 runs, 1,449,560 input tokens (210,836 lost, 499,569, 367,642, 139,608, 136,847, 35,142, 59,916).
+- The Claude lenses: 13 runs, 3 rounds of 4 and one lens on the merge (the last two rounds about 51,000 and 16,000
+  input tokens a run, the merge's 78,476).
 - The independent verifier: one sub-agent, two readings, 225,188 and 295,009 tokens.
-- Gate runs: 9 commits, one of them refused once (L12), so 10 runs.
+- Gate runs: 10 commits with this one; one refused once (L12) and one stopped by the host (L20), so 12 runs.
