@@ -53,6 +53,8 @@ test('the owner of an entry is its plugin, else the name of the program its comm
   assert.equal(ownerOf({ command: 'node /usr/local/lib/tool/run.js' }), 'run');
   // A flag's value is no script: the script is the first word with a script's extension.
   assert.equal(ownerOf({ command: 'node --max-old-space-size 4096 tools/a.mjs' }), 'tools');
+  // Code given to node that finds the script by itself is a flag's value too: the owner is still the script's folder.
+  assert.equal(ownerOf({ command: 'node -e "import(require(\'path\').resolve(process.argv[1]))" workshop/js-harness-workshop.mjs ticks --hook' }), 'workshop');
   // The package managers' subcommands name no owner; what they run does.
   assert.equal(ownerOf({ command: 'npm run lint' }), 'lint');
   assert.equal(ownerOf({ command: 'pnpm exec foo --bar' }), 'foo');

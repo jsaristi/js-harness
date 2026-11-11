@@ -178,9 +178,29 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
   it would break a hook that works today; and `ownerOf` (`bin/lib/hook-count.mjs:76`) would read it as a new owner,
   so the product would change too. What stays open: a resumed session whose directory moved, not documented; there
   the hook fails without blocking the session, and its notice is missing.
+- L11 (2026-11-11): L10's answer is withdrawn and Codex's P2 taken. The push was refused, `check --push`: "the Codex
+  review that ended at 7c962911 owes a correction: 1 finding open", and the door keeps no record for an answered
+  finding. The lead's note of 00:14 local: "take the finding, do not answer it [...] the hook must run when the
+  session's folder is not the repo root, without resting on a variable that is empty in one shell (a fallback when
+  it is empty is fine), with the test that proves both cases." The entry's command is now `node -e "<code>"
+  workshop/js-harness-workshop.mjs ticks --hook`: node itself reads `CLAUDE_PROJECT_DIR`, or the folder it runs in
+  when the variable is empty, and takes the nearest folder from there upwards that holds the dispatcher, so the
+  command holds no `$` and no backtick for one shell to read its own way; it sets `argv[1]` to the real script, which
+  the dispatcher's main guard needs, and where none is found it prints nothing and exits 0. `ownerOf` reads it as
+  `workshop` unchanged, so the product's code does not change, only its test. Test first: the three new tests failed
+  (the command's shape, a subfolder with the variable set, no dispatcher found), then with hook-count's, the
+  conventions' and the dispatcher's 64 of 64 passed. They run the command as the settings hold it through the
+  platform's shell: from the root, from a subfolder with the variable set, unset and empty, from outside the
+  repository with it set, and with no dispatcher to find. Run by hand from `workshop/bin` against the real home, with
+  other sessions on the machine: Git Bash, 5 runs with the variable, exit 0, stderr 0 bytes, median 2,047 ms, max
+  2,196 ms; without it, 2 runs, 2,211 ms at most; PowerShell without it, 3 runs, median 4,788 ms, max 6,883 ms, of
+  which PowerShell's own start is most; cmd, 2 runs, 1,965 ms at most. Each time includes the shell's start, which
+  L9's runs through a child `node` did not; all are under the 15 s of the timeout.
 
 ## Next step
-For a resume (2026-11-11): T2 is committed (`7c962911`) on `audit-u3-ticks-hook`, reviewed by both (L10). Left: push,
+For a resume (2026-11-11): the fix of L11 is committed after `c6c6cbaa`. Left, in order: the recheck,
+`js-harness codex-review --base 7c962911 --doc odd/tasks/audit-u3-heartbeat-ticks.md --at <head>`, and the
+reliability lens on the fix, one at a time; `js-harness check --push`; push,
 the pull request for T2 as a draft the lead marks ready (never mark it ready here), `js-harness notify --to
 orchestrator --kind ready --pr <n>`, the summary in `docs/sessions/` (`js-harness summary template`), committed and
 pushed, then `notify --kind closed --summary <file>`. The snapshot of the day is the lead's: the heartbeat must run

@@ -6,6 +6,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { ownerOf } from '../../bin/lib/hook-count.mjs';
 import { projectSlug } from '../../bin/lib/sessions.mjs';
 import { TICKS_STALE_HOURS, ticksMain } from './ticks.mjs';
 
@@ -209,9 +211,59 @@ test('--help prints the usage, and an argument it does not know is a usage error
 // hold it alone, so another hook, or another key, enters them only in a change that says why.
 test('this repository runs it at each session start, alone in its project settings, with a timeout of its own', () => {
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude', 'settings.json'), 'utf8'));
+  const command = hookCommand();
   assert.deepEqual(settings, {
     hooks: {
-      SessionStart: [{ matcher: 'startup|resume', hooks: [{ type: 'command', command: 'node workshop/js-harness-workshop.mjs ticks --hook', timeout: 15 }] }],
+      SessionStart: [{ matcher: 'startup|resume', hooks: [{ type: 'command', command, timeout: 15 }] }],
     },
   });
+  // node finds the dispatcher itself, so the command holds nothing a shell expands or reads its own way: Git Bash
+  // and PowerShell, the two shells the host runs a hook in on Windows, expand `$` and the backtick differently.
+  assert.match(command, /^node -e "[^"$`\\%!^]+" workshop\/js-harness-workshop\.mjs ticks --hook$/);
+  // The row that counts the hooks still reads it as the workshop's, the owner his answer covers.
+  assert.equal(ownerOf({ command }), 'workshop');
+});
+
+/** The command of the one hook this repository's settings hold. */
+function hookCommand() {
+  return JSON.parse(fs.readFileSync(path.join(ROOT, '.claude', 'settings.json'), 'utf8')).hooks.SessionStart[0].hooks[0].command;
+}
+
+/** Run the hook's command as written, through the platform's shell, from `cwd` with `projectDir` as the host's
+ * variable (`undefined` for none). It asks for the usage instead of the reading, which needs the network. */
+function runHookCommand(cwd, projectDir) {
+  const env = { ...process.env };
+  delete env.CLAUDE_PROJECT_DIR;
+  if (projectDir !== undefined) env.CLAUDE_PROJECT_DIR = projectDir;
+  const command = hookCommand().replace(/^node /, `"${process.execPath}" `).replace(/--hook$/, '--help');
+  const result = spawnSync(command, { cwd, env, shell: true, encoding: 'utf8', timeout: 30_000 });
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+// Codex's finding on 7c962911: a relative script is looked for in the folder the hook runs in, so from any other
+// folder node failed with its module not found and the notice was lost.
+test('the hook\'s command finds the dispatcher from a folder that is not the root, by the host\'s variable or without it', () => {
+  const deep = path.join(ROOT, 'workshop', 'bin');
+  for (const [cwd, projectDir, why] of [
+    [ROOT, undefined, 'the root, no variable'],
+    [deep, ROOT, 'a subfolder, the variable set'],
+    [deep, undefined, 'a subfolder, no variable: the nearest folder above that holds the dispatcher'],
+    [deep, '', 'a subfolder, the variable empty, as one shell leaves it'],
+    [os.tmpdir(), ROOT, 'a folder outside the repository, the variable set'],
+  ]) {
+    const result = runHookCommand(cwd, projectDir);
+    assert.deepEqual({ status: result.status, stderr: result.stderr }, { status: 0, stderr: '' }, why);
+    assert.match(result.stdout, /^Usage: node workshop\/js-harness-workshop\.mjs ticks/, why);
+  }
+});
+
+test('the hook\'s command never fails a session where no dispatcher is found: nothing printed, exit 0', () => {
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'ticks-hook-'));
+  try {
+    for (const projectDir of [undefined, '', outside, path.join(outside, 'gone')]) {
+      assert.deepEqual(runHookCommand(outside, projectDir), { status: 0, stdout: '', stderr: '' }, String(projectDir));
+    }
+  } finally {
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
 });
