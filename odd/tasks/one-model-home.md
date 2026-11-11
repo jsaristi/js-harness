@@ -382,6 +382,13 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 17:44: the corrections are `ec8b8829`, and the second round of reviews is whole. The risk lens on
+`e878d8be..ec8b8829`: 0 findings. The reliability lens on the same range: 0 findings, and its two findings of the
+first round rechecked as fixed. Codex's confirming review of `533f8a63..ec8b8829`: correct, its three findings
+fixed (it could not run the tests, a spawn its sandbox refuses). Owed: `js-harness check --push`, the push of the
+four branches as the paragraph below cuts them, the four pull requests on main with the bodies drafted in the job's
+`tmp/b3-1.md` to `b3-4.md`, the ready notices and the list of the sessions off the home to the lead; then T7 on
+`feat/model-home-switch`, cut from main.
 2026-11-11 17:35: the `doctor` row is `533f8a63`. Codex on `e878d8be..533f8a63` (2 parts, 442,782 input tokens):
 incorrect, three P2 findings, all three true and taken, fixed in the commit that carries this line, each with its
 test seen red first. (1) `home-sessions-read.mjs` called the app's reader with no one to tell of a record or a
