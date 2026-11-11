@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { recordPath } from './channel.mjs';
-import { ABSENCE_MS, NO_STRETCH_MARKER, OPEN_STRETCH_MARKER, RETURN_MARKER, returnReportWarning, returnStretchWarning } from './return-report.mjs';
+import { ABSENCE_MS, AWAY_MARKER, NO_STRETCH_MARKER, OPEN_STRETCH_MARKER, RETURN_MARKER, departureLine, departureWatch, returnReportWarning, returnStretchWarning, stretchRecordsIn } from './return-report.mjs';
 import { mainCheckout, projectSlug } from './sessions.mjs';
 import { RECORD_SCHEMA as STRETCH_SCHEMA, stretchFile } from './stretch.mjs';
 import { RENDERED_SCHEMA, renderedFile } from './template-record.mjs';
@@ -274,4 +274,154 @@ test('no return, a work session and Codex are not told of the stretch', () => {
 
 test('a stretch record it cannot read throws, so the hook says the check did not run', () => {
   assert.throws(() => stretchCheck({ stretches: UNREADABLE }), /stretch record/);
+});
+
+// --- the start of his absence (odd/tasks/departure-control.md, specs 1 and 3) ---
+// The lead's heartbeat reads the transcript piece by piece and asks, each tick, whether he has been away longer than
+// `ABSENCE_MS` with no stretch covering the time since: the lead is told then, not at his return. On 2026-11-10 he was
+// away from 18:08 to 21:17 local with question 255 on his screen (the lead's transcript ea85ec35, lines 4515 to 4518).
+const STARTS = Date.parse(LEFT) + ABSENCE_MS + 60_000;
+const ASKED = '2026-10-30T18:56:00.000Z';
+const asked = (at = ASKED, id = 'toolu_q') => line({ type: 'assistant', timestamp: at, message: { role: 'assistant', content: [{ type: 'tool_use', id, name: 'AskUserQuestion', input: { questions: [{ question: 'Pregunta 255: ¿uno el PR 812?', options: [{ label: 'Sí' }, { label: 'No' }] }] } }] } });
+const tapped = (at, id = 'toolu_q') => line({ type: 'user', timestamp: at, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'Sí' }] }, toolUseResult: { answers: { 'Pregunta 255: ¿uno el PR 812?': 'Sí' } } });
+const dismissed = (at, id = 'toolu_q') => line({ type: 'user', timestamp: at, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, is_error: true, content: 'The user doesn\'t want to proceed with this tool use.' }] } });
+const records = (stretches) => stretchRecordsIn(stretches === null ? '' : `${stretches.join('\n')}\n`);
+
+/** What a tick at `now` sees of `pieces`, each the transcript lines one tick read. */
+function departure({ pieces = [[his(LEFT, 'me voy')]], stretches = null, now = STARTS } = {}) {
+  const watch = departureWatch();
+  for (const piece of pieces) watch.add(`${piece.join('\n')}\n`);
+  return watch.read(records(stretches), now);
+}
+
+test('at the start of an absence no stretch covers, the lead is told: when he last wrote and the command that opens a stretch', () => {
+  const found = departure();
+  assert.deepEqual(found, { before: LEFT, away: ABSENCE_MS + 60_000, heldSince: null });
+  const told = departureLine(found);
+  assert.ok(told.startsWith(`${AWAY_MARKER} `), told);
+  assert.match(told, /13:54/, 'the hour he last wrote, local');
+  assert.match(told, /local time \(UTC-05:00\)/, 'the zone, said once');
+  assert.match(told, /2\.0 hours/);
+  assert.ok(told.includes('js-harness stretch open --plan <file> --html <file>'), told);
+  assert.match(told, /rule:away-autonomy/);
+  assert.match(told, /once for this absence/);
+  assert.doesNotMatch(told, /question tool/);
+});
+
+test('nothing is told before the absence starts, nor with no message of his to count from', () => {
+  assert.equal(departure({ now: Date.parse(LEFT) + ABSENCE_MS }), null, 'the gap must be longer than the absence, as at the return');
+  assert.equal(departure({ pieces: [[said(LEFT, 'Sigo solo.')]] }), null);
+  assert.equal(departure({ pieces: [] }), null);
+});
+
+test('a stretch open at any time since his last message covers the absence; one closed before it does not', () => {
+  assert.equal(departure({ stretches: [opened('2026-10-30T18:00:00.000Z', 's1')] }), null, 'opened before he left, still open');
+  assert.equal(departure({ stretches: [opened('2026-10-30T19:30:00.000Z', 's2')] }), null, 'opened after he left');
+  assert.equal(departure({ stretches: [opened('2026-10-30T18:00:00.000Z', 's3'), closed('2026-10-30T19:00:00.000Z', 's3')] }), null, 'closed after he left');
+  assert.notEqual(departure({ stretches: [opened('2026-10-30T10:38:59.222Z', 's0'), closed('2026-10-30T13:13:20.627Z', 's0')] }), null);
+  assert.notEqual(departure({ stretches: [opened(new Date(STARTS + 60_000).toISOString(), 's4')] }), null, 'one opened after the tick is not there yet');
+});
+
+test('the tick and the return use one cover test: what the tick would tell just before his return, the return turns back', () => {
+  const variants = [
+    null,
+    [opened('2026-10-30T10:38:59.222Z', 's0'), closed('2026-10-30T13:13:20.627Z', 's0')],
+    [opened('2026-10-30T18:00:00.000Z', 's1'), closed('2026-10-30T18:30:00.000Z', 's1')],
+    [opened('2026-10-30T18:00:00.000Z', 's2'), closed('2026-10-30T19:00:00.000Z', 's2')],
+    [opened('2026-10-30T22:00:00.000Z', 's3'), closed('2026-10-31T01:40:00.000Z', 's3')],
+    [opened('2026-10-31T01:50:00.000Z', 's4')],
+  ];
+  for (const stretches of variants) {
+    const atReturn = stretchCheck({ stretches });
+    const turnedBack = atReturn !== null && atReturn.includes(NO_STRETCH_MARKER);
+    // The instant before his return: the tick has not read his message yet.
+    const told = departure({ stretches, now: Date.parse(BACK) - 1 }) !== null;
+    assert.equal(told, turnedBack, JSON.stringify(stretches));
+  }
+});
+
+test('a tapped answer is his last message, and a message of his after the absence started ends it', () => {
+  const answered = '2026-10-30T19:10:00.000Z';
+  const found = departure({ pieces: [[his(LEFT), asked(), tapped(answered)]], now: Date.parse(answered) + ABSENCE_MS + 1 });
+  assert.equal(found.before, answered);
+  assert.equal(found.heldSince, null);
+  assert.equal(departure({ pieces: [[his(LEFT)], [his(new Date(STARTS).toISOString(), 'ya volví')]], now: STARTS + 60_000 }), null);
+});
+
+test('a question on his screen holds the session: the line says since when, and that it could open no stretch', () => {
+  const found = departure({ pieces: [[his(LEFT), asked()]] });
+  assert.deepEqual(found, { before: LEFT, away: ABSENCE_MS + 60_000, heldSince: ASKED });
+  const told = departureLine(found);
+  assert.match(told, /The question tool held this session from 13:56, through the start of this absence/);
+  assert.match(told, /`question-tool-holds-asker` in docs\/FAILURES\.md/, 'its own failure, recorded apart');
+  assert.doesNotMatch(told, /stretch-not-opened/, 'a held session skipped no duty');
+  // The line is read once the tool returned: a stretch is asked for only where he is still away then.
+  assert.match(told, /where they are still away, open a stretch now, `js-harness stretch open --plan <file> --html <file>`/);
+  // Closed without an answer before the absence started, the question held nothing when it did.
+  assert.equal(departure({ pieces: [[his(LEFT), asked(), dismissed('2026-10-30T18:57:00.000Z')]] }).heldSince, null);
+  assert.equal(departure({ pieces: [[his(LEFT), asked(), dismissed('2026-10-30T18:57:00.000Z'), asked('2026-10-30T18:58:00.000Z', 'toolu_q2')]] }).heldSince, '2026-10-30T18:58:00.000Z');
+  // Closed once it had started, it held the session then; asked once it had started, it did not.
+  assert.equal(departure({ pieces: [[his(LEFT), asked(), dismissed(new Date(STARTS - 30_000).toISOString())]] }).heldSince, ASKED);
+  assert.equal(departure({ pieces: [[his(LEFT), asked(new Date(Date.parse(LEFT) + ABSENCE_MS + 1).toISOString())]] }).heldSince, null);
+  // A side chain's question is not the session's.
+  const side = line({ ...JSON.parse(asked()), isSidechain: true });
+  assert.equal(departure({ pieces: [[his(LEFT), side]] }).heldSince, null);
+});
+
+test('a return that answers a question asked before the absence started names question-tool-holds-asker, not the missed stretch', () => {
+  // The question tool held the session from the call to his answer: no turn of its own could open a stretch
+  // (8 of the 23 absences no stretch covered from 2026-10-31 to 2026-11-10, odd/tasks/departure-control.md, L19).
+  const held = stretchCheck({ transcript: [his(LEFT), asked(), tapped(BACK)] });
+  assert.ok(held.includes(NO_STRETCH_MARKER), held);
+  assert.match(held, /The question tool held this session from 13:56 to \d\d:\d\d, through the start of his absence/);
+  assert.match(held, /`question-tool-holds-asker` in docs\/FAILURES\.md/);
+  assert.doesNotMatch(held, /stretch-not-opened/);
+  assert.match(held, /once for this return/);
+  assert.equal(stretchCheck({ transcript: [his(LEFT), asked(), tapped(BACK), warned(held)] }), null, 'said once, as the other form is');
+  // A question asked once the absence had started held nothing while it started: the session was free to open one.
+  const late = stretchCheck({ transcript: [his(LEFT), asked(new Date(Date.parse(LEFT) + ABSENCE_MS + 1).toISOString()), tapped(BACK)] });
+  assert.match(late, /stretch-not-opened/);
+  assert.doesNotMatch(late, /question-tool-holds-asker/);
+  // So did a question he closed before it started. One he closed at his return, typing his answer, held the session.
+  assert.match(stretchCheck({ transcript: [his(LEFT), asked(), dismissed('2026-10-30T18:57:00.000Z'), his(BACK)] }), /stretch-not-opened/);
+  assert.match(stretchCheck({ transcript: [his(LEFT), asked(), dismissed(new Date(Date.parse(BACK) - 5000).toISOString()), his(BACK)] }), /`question-tool-holds-asker` in docs\/FAILURES\.md/);
+  // A question a stretch covered is no warning at all.
+  assert.equal(stretchCheck({ transcript: [his(LEFT), asked(), tapped(BACK)], stretches: [opened('2026-10-30T18:00:00.000Z', 's1'), closed('2026-10-31T01:40:00.000Z', 's1')] }), null);
+});
+
+test('the tick and the return use one rule for a held session: what the tick calls held, the return records as held', () => {
+  // Held is one question: a call asked from his last message to the moment the absence starts, with no result at
+  // that moment. Each variant is what the transcript holds between his last message and his return, then his return.
+  const start = Date.parse(LEFT) + ABSENCE_MS;
+  const at = (ms) => new Date(ms).toISOString();
+  const variants = [
+    { between: [asked()], back: tapped(BACK), held: true },
+    { between: [asked(at(start))], back: tapped(BACK), held: true },
+    { between: [asked(at(start + 1))], back: tapped(BACK), held: false },
+    { between: [asked(), dismissed(at(start - 1))], back: his(BACK), held: false },
+    { between: [asked(), dismissed(at(start + 1))], back: his(BACK), held: true },
+    { between: [asked(), dismissed('2026-10-30T18:57:00.000Z'), asked(at(start - 60_000), 'toolu_q2')], back: tapped(BACK, 'toolu_q2'), held: true },
+    { between: [asked(), dismissed(at(start + 1)), asked(at(start + 2), 'toolu_q2')], back: tapped(BACK, 'toolu_q2'), held: true },
+  ];
+  for (const [index, { between, back, held }] of variants.entries()) {
+    // The instant before his return: the tick has read everything but it.
+    const tick = departure({ pieces: [[his(LEFT), ...between]], now: Date.parse(BACK) - 1 });
+    const atReturn = stretchCheck({ transcript: [his(LEFT), ...between, back] });
+    assert.equal(tick.heldSince !== null, held, `the tick, variant ${index}`);
+    assert.equal(atReturn.includes('`question-tool-holds-asker`'), held, `the return, variant ${index}`);
+    assert.equal(atReturn.includes('`stretch-not-opened`'), !held, `the return names one failure, variant ${index}`);
+  }
+});
+
+test('a transcript read piece by piece gives what the whole gives, a question and its result apart included', () => {
+  const lines = [his('2026-10-30T15:00:00.000Z'), asked('2026-10-30T15:01:00.000Z', 'toolu_a'), dismissed('2026-10-30T15:02:00.000Z', 'toolu_a'), his(LEFT), asked(), tapped('2026-10-30T19:10:00.000Z'), asked('2026-10-30T19:11:00.000Z', 'toolu_z')];
+  const now = Date.parse('2026-10-30T19:10:00.000Z') + ABSENCE_MS + 1;
+  const whole = departure({ pieces: [lines], now });
+  assert.deepEqual(whole, { before: '2026-10-30T19:10:00.000Z', away: ABSENCE_MS + 1, heldSince: '2026-10-30T19:11:00.000Z' });
+  for (let cut = 1; cut < lines.length; cut += 1) assert.deepEqual(departure({ pieces: [lines.slice(0, cut), lines.slice(cut)], now }), whole, `cut at ${cut}`);
+  assert.deepEqual(departure({ pieces: lines.map((one) => [one]), now }), whole, 'a line a tick');
+  // A call the host writes again in a later piece is the call already read, with the result it already has.
+  const closed = [his(LEFT), asked(), dismissed('2026-10-30T18:57:00.000Z')];
+  assert.equal(departure({ pieces: [closed, [asked()]] }).heldSince, departure({ pieces: [[...closed, asked()]] }).heldSince);
+  assert.equal(departure({ pieces: [closed, [asked()]] }).heldSince, null);
 });
