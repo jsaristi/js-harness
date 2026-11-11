@@ -147,6 +147,27 @@ queue that lands one pull request a run spends a whole suite for each.
   the 4 new tests fail (the fourth pins what must not change: merges that are not the queue's are read whole, and it
   passes on both); after the fix, with bin/lib/pull-request.test.mjs, 36 pass, 0 fail. The commit's gate: `PASS check
   17 rows passed`.
+- L10 Reviews of e0e2755a..adc2978c, first round. A mistake of this session: it edited this document while Codex
+  read, so that run (160,698 input tokens) wrote no record and was run again; entered in docs/FAILURES.md. Codex, P2,
+  taken in `e228ff7c`: a quoted target with a space was cut at the space, a new false alarm for a target named whole
+  (the POSIX pattern behind the shim's folder cut the same way, as the check always had). The reliability lens, taken
+  in the same commit: the .cmd form of a target named whole had no test. The risk lens, first answered with a test
+  alone (`bacfc1e6`), then taken (L11): the queue's subject is GitHub's merge button's.
+- L11 Second round, e0e2755a..8a3476af: Codex, P2 (190,666 input tokens), and both lenses, the same finding, not
+  answered by `bacfc1e6`: a single pull request made of merge-button merges read as a candidate at its own check.
+  Taken: the queue signs its merges with a trailer, `Merged-by: js-harness merge-queue` (`QUEUE_TRAILER`,
+  `mergeMessage`, bin/lib/pull-request.mjs), and the control parts a history only by it. D2 above is amended by
+  this: the trailer, not the subject, is what makes a candidate. Main's merge commits gain that one line; told to the
+  lead by a note (01:44 local). The red of the merge-button test is the reviewers' reading of `adc2978c`, not a run
+  of this session's; with the trailer, bin/lib/depth-pass.test.mjs 33 pass, 0 fail.
+- L12 State at 85% of this session's context (2026-11-11 01:45 local), for a resume. Done: T1 and T2 with their
+  fixes, each commit's gate green. Running: the gate of the trailer commit. Left, in order: (1) Codex on
+  `js-harness codex-review --base 8a3476af --doc odd/tasks/land-two-defects.md` and the lenses on the same base
+  (risk, reliability), with no edit of a tracked file while either runs; a third round that still finds a real fault
+  goes to the lead as a problem (`rule:double-review`); (2) `git fetch origin`, merge origin/main (L9), `npm run
+  check`; (3) the summary in docs/sessions/2026-11-11-jh-175-the-land-the-false-prune-alarm-and-the-order-control.md
+  (`js-harness summary template`), commit, push, a ready pull request, `js-harness notify --to orchestrator --kind
+  ready --pr <n>`, then `--kind closed --summary <file>`; (4) stop the background `js-harness wait --notice-to 175`.
 - L9 From the lead (a note to 175, 2026-11-11 00:47 local): JH 173 adds lines to bin/merge-queue.mjs after the
   `removeLandedWorktrees` block of `mergeQueueMain` and lands first; this branch stays out of that block (its two
   edits there are the import line and the merge's subject in `mergeThroughDoor`) and merges origin/main before its
