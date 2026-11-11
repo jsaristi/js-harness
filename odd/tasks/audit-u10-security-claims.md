@@ -257,6 +257,8 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
   0 fail, both among the refused cases. Item 4: predicted "supports"; the measure run after the change agrees, 0 of
   the repository's 24 URLs with a query refused. Not checked: the whole of the unit's command on this machine (the
   gate ran it on GitHub at each commit), and no page was fetched from the network, since the tests stub `fetch`.
-- State (for a session that resumes): unit 10 is in pull request 817, ready. On `feat/fetch-query-values`: T5 and
-  T6 are done, the last code commit is c9b2ca40; next the push, the pull request on base
-  `worktree-fetch-path-limit`, the ready notice, then the summary with the closed notice.
+- L19 Pull request 817 merged at 2026-11-11T07:29Z (`1254b15e`), before the second was opened, so the second, pull
+  request 819, is on main and not stacked; its difference from main is spec 3 alone. The session's summary is
+  docs/sessions/2026-11-11-jh-177-fetch-refuses-a-key-in-the-path-and-two-protections-s.md.
+- State (for a session that resumes): every task is done. Pull request 817 is merged and 819 is ready, the land
+  the lead's. Nothing is left to this session but its ready and closed notices.
