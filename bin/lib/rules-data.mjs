@@ -658,7 +658,7 @@ export const RULES = [
   },
   {
     "id": "session-effort",
-    "subject": "the effort a session runs at",
+    "subject": "the effort everything Claude the harness starts runs at: every session, the lead's included, every sub-agent, the lenses and the double review's Claude reader",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-11-10",
@@ -674,7 +674,9 @@ export const RULES = [
       }
     ],
     "patterns": [
-      "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\b(?:at|on) `?{amount}`? effort"
+      "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\b(?:at|on) `?{amount}`? effort",
+      "^(?!.*\\bruleValue\\().*(?<![\\w/.-])(?:subagents?|sub-agents?|agent calls?|writers?|verifiers?|readers?)\\b(?![\\w-]*\\.\\w).{0,40}\\b(?:runs?|launched|launch(?:es)?|go(?:es)?)\\b.{0,20}\\b(?:at|with) `?{amount}`? effort",
+      "^(?!.*\\bruleValue\\()(?!.*(?:codex|review)).*\\beffort: \"{amount}\""
     ]
   },
   {

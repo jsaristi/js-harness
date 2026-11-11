@@ -78,7 +78,11 @@ const PLANTED = {
   'reviewed-commit-lines': { line: 'A reviewed commit holds up to 1,200 changed lines.', marked: 'A reviewed commit holds up to `rule:reviewed-commit-lines`.' },
   'sensor-silence': { line: 'A sensor that stays silent for 20 minutes is stopped.', marked: 'A sensor that stays silent for `rule:sensor-silence` is stopped.' },
   'sensor-timeout': { line: 'A sensor is stopped after 60 minutes.', marked: 'A sensor is stopped at `rule:sensor-timeout`.' },
-  'session-effort': { line: 'A work session runs at `high` effort.', marked: 'A work session runs at the effort of `rule:session-effort`.' },
+  'session-effort': [
+    { line: 'A work session runs at `high` effort.', marked: 'A work session runs at the effort of `rule:session-effort`.' },
+    { line: 'Every subagent runs at `high` effort.', marked: 'Every subagent runs at the effort of `rule:session-effort`.' },
+    { line: 'The call passes effort: "high" to the writer.', marked: 'The call passes the effort of `rule:session-effort` to the writer.' },
+  ],
   'session-model': [
     { line: 'A work session runs on claude-opus-5-5.', marked: 'A work session runs on the model of `rule:session-model`.' },
     { line: 'A narrow writer runs on claude-haiku-5-5.', marked: 'A narrow writer runs on the model of `rule:session-model`.' },
@@ -123,6 +127,14 @@ const NEAR_MISS = {
   'review-parts-unflagged': 'A run of 28 parts started without the numbers.',
   'review-timeout': 'The Codex login is stopped past codex-review-prompt.mjs:51.',
   'reviewed-commit-lines': 'The commit is 5,222 changed lines.',
+  // The wordings it took from the sub-agents' rule, with what they were narrowed for. A line of Codex's is left out by
+  // naming Codex or the review, not by the prefix its ids had on the day the pattern was written.
+  'session-effort': [
+    'codexOrchestratorAssignment: { model: "astra", effort: "medium" }',
+    'The Codex orchestrator runs on gpt-6.1-sol with effort: "medium".',
+    'Two readers on Opus at high effort read the first version.',
+    'Measured (`odd/tasks/subagent-model-routing.md`): Opus 5.5 at high effort.',
+  ],
   'subagent-effort': [
     'The orchestrator runs on gpt-6.1-sol with effort: "medium".',
     'Two readers on Opus at high effort read the first version.',
