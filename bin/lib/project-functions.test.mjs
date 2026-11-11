@@ -140,12 +140,12 @@ test('the functions of a project: what it declares, resolved over its files', (t
   assert.deepEqual(resolved.codeMap, { value: 'on-demand', declared: 'auto', because: 'src/fetch.py is a program' });
 });
 
-test('the functions of a project whose harness.json cannot be read: the error, every check on, pushing unasked off', (t) => {
+test('the functions of a project whose harness.json cannot be read: the error, every check on, pushing unasked and the remote gate off', (t) => {
   const { errors, resolved } = functionsOf({ error: 'harness.json is not valid JSON: x' }, { paths: [] });
   assert.deepEqual(errors, ['harness.json is not valid JSON: x']);
   assert.deepEqual(
     Object.fromEntries(Object.entries(resolved).map(([name, { value }]) => [name, value])),
-    { codeMap: 'on-demand', languageServer: 'on', codexReview: 'on', pushUnasked: 'off', lensReview: 'on', engramPlugin: 'on' },
+    { codeMap: 'on-demand', languageServer: 'on', codexReview: 'on', pushUnasked: 'off', lensReview: 'on', engramPlugin: 'on', remoteGate: 'off' },
   );
 });
 

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PRESETS, SWITCHES, presetFunctions, programFile, readFunctions, resolveFunctions, typeScriptFile } from './functions.mjs';
 
-const DEFAULTS = { codeMap: 'auto', languageServer: 'auto', codexReview: 'auto', pushUnasked: 'auto', lensReview: 'auto', engramPlugin: 'auto' };
+const DEFAULTS = { codeMap: 'auto', languageServer: 'auto', codexReview: 'auto', pushUnasked: 'auto', lensReview: 'auto', engramPlugin: 'auto', remoteGate: 'auto' };
 
 test('a harness.json with no "functions" is every switch at its default, with no error', () => {
   assert.deepEqual(readFunctions({ version: '0.1.0' }), { values: DEFAULTS, declared: {}, errors: [] });
@@ -57,6 +57,21 @@ test('pushing unasked is on only where the project declares it on, whatever its 
   assert.deepEqual(resolved.pushUnasked, { value: 'on', declared: 'on', because: 'declared in harness.json' });
 });
 
+test('the remote gate is private where the project says nothing, and a value it cannot read keeps the tree here (odd/tasks/publish-decision.md)', () => {
+  const because = "a commit's tree is pushed for its gate only where GitHub says the repository is private, until the project turns it on";
+  // No file of the project decides it: the visibility is asked where the push is made (./ci-gate.mjs).
+  for (const tree of [{ paths: ['README.md'] }, { paths: ['src/fetch.py'] }, { unknown: 'git failed' }]) {
+    assert.deepEqual(resolveFunctions(DEFAULTS, tree).remoteGate, { value: 'private', declared: 'auto', because });
+  }
+  for (const declared of ['private', 'on', 'off']) {
+    assert.deepEqual(resolveFunctions({ ...DEFAULTS, remoteGate: declared }, { paths: [] }).remoteGate, { value: declared, declared, because: 'declared in harness.json' });
+  }
+  // Read as off, as pushing unasked is: a switch nobody could read never publishes.
+  assert.equal(readFunctions({ functions: { remoteGate: 'yes' } }).values.remoteGate, 'off');
+  assert.equal(readFunctions({ functions: 'all' }).values.remoteGate, 'off');
+  assert.equal(readFunctions({}).values.remoteGate, 'auto');
+});
+
 test('the Claude lens review is off where the project says nothing, and on only where it declares it (odd/tasks/f8-s1-reviews.md, L9)', () => {
   const because = 'a commit asks for a lens record only where the project turns the lens review on';
   for (const tree of [{ paths: ['src/fetch.py'] }, { unknown: 'git failed' }]) {
@@ -70,7 +85,7 @@ test('the Claude lens review is off where the project says nothing, and on only 
 test('a name that is no switch is an error, so a misspelt switch is never a silent default', () => {
   const read = readFunctions({ functions: { codexreview: 'off' } });
   assert.deepEqual(read.errors, [
-    'harness.json "functions" holds "codexreview", which is no switch; the switches are "codeMap", "languageServer", "codexReview", "pushUnasked", "lensReview", "engramPlugin"',
+    'harness.json "functions" holds "codexreview", which is no switch; the switches are "codeMap", "languageServer", "codexReview", "pushUnasked", "lensReview", "engramPlugin", "remoteGate"',
   ]);
   assert.deepEqual(read.values, DEFAULTS);
 });
@@ -79,7 +94,7 @@ test('a "functions" that is not an object is an error and every switch is read a
   for (const functions of ['off', ['codexReview'], null, 3]) {
     const read = readFunctions({ functions });
     assert.deepEqual(read.errors, [`harness.json "functions" must be an object; it is ${JSON.stringify(functions)}`]);
-    assert.deepEqual(read.values, { codeMap: 'on-demand', languageServer: 'on', codexReview: 'on', pushUnasked: 'off', lensReview: 'on', engramPlugin: 'on' });
+    assert.deepEqual(read.values, { codeMap: 'on-demand', languageServer: 'on', codexReview: 'on', pushUnasked: 'off', lensReview: 'on', engramPlugin: 'on', remoteGate: 'off' });
   }
 });
 
@@ -141,7 +156,7 @@ test('auto for the language server goes by TypeScript, not by any program', () =
 });
 
 test('a declared value is the answer whatever the files are', () => {
-  const values = { codeMap: 'always', languageServer: 'on', codexReview: 'off', pushUnasked: 'on', lensReview: 'on', engramPlugin: 'off' };
+  const values = { codeMap: 'always', languageServer: 'on', codexReview: 'off', pushUnasked: 'on', lensReview: 'on', engramPlugin: 'off', remoteGate: 'on' };
   for (const paths of [[], ['src/fetch.py', 'web/app.ts']]) {
     assert.deepEqual(resolveFunctions(values, { paths }), {
       codeMap: { value: 'always', declared: 'always', because: 'declared in harness.json' },
@@ -150,6 +165,7 @@ test('a declared value is the answer whatever the files are', () => {
       pushUnasked: { value: 'on', declared: 'on', because: 'declared in harness.json' },
       lensReview: { value: 'on', declared: 'on', because: 'declared in harness.json' },
       engramPlugin: { value: 'off', declared: 'off', because: 'declared in harness.json' },
+      remoteGate: { value: 'on', declared: 'on', because: 'declared in harness.json' },
     });
   }
 });
@@ -171,7 +187,7 @@ test('a name every object inherits is no switch either: an error, never a crash'
   for (const name of ['constructor', 'toString', '__proto__']) {
     const read = readFunctions(JSON.parse(`{ "functions": { "${name}": "off" } }`));
     assert.deepEqual(read.errors, [
-      `harness.json "functions" holds "${name}", which is no switch; the switches are "codeMap", "languageServer", "codexReview", "pushUnasked", "lensReview", "engramPlugin"`,
+      `harness.json "functions" holds "${name}", which is no switch; the switches are "codeMap", "languageServer", "codexReview", "pushUnasked", "lensReview", "engramPlugin", "remoteGate"`,
     ]);
     assert.deepEqual(read.values, DEFAULTS);
   }

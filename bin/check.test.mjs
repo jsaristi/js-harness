@@ -4983,6 +4983,7 @@ test('a tree whose tests failed on CI is not proven by a narrower pass here: the
     const red = { ran: true, pass: false, url: 'https://github.com/o/r/actions/runs/42', seconds: 200, output: '✖ failing tests:\n\ntest at bin/a.test.mjs:1:1\n✖ a test that needs .git (1ms)\n' };
     const onCi = {
       ciGateWanted: () => 'the project holds .github/workflows/gate.yml, so a commit\'s tests go to GitHub\'s machines first',
+      remoteGateKeeps: () => null,
       runCiGate: async () => {
         ciRuns += 1;
         return red;
@@ -5011,6 +5012,7 @@ test('a tree whose tests failed on CI is not proven by a narrower pass here afte
     let ciRuns = 0;
     const onCi = {
       ciGateWanted: () => 'the project holds .github/workflows/gate.yml, so a commit\'s tests go to GitHub\'s machines first',
+      remoteGateKeeps: () => null,
       runCiGate: async () => {
         ciRuns += 1;
         return { ran: true, pass: false, url: 'https://github.com/o/r/actions/runs/42', seconds: 200, output: '✖ failing tests:\n\ntest at bin/a.test.mjs:1:1\n✖ a test that needs .git (1ms)\n' };

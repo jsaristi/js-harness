@@ -3,7 +3,7 @@
 // it to GitHub (../check.mjs, `lock.held`). The commit still runs correctly, only slower and holding the lock, so the
 // guard adds a hint beside its result instead of refusing it. A whole test run stays wrapped: the skill requires it.
 import path from 'node:path';
-import { CI_GATE_ENV, CI_WORKFLOW, onCiMachine } from './ci-gate.mjs';
+import { CI_GATE_ENV, CI_WORKFLOW, onCiMachine, remoteGateOf } from './ci-gate.mjs';
 import { commandsOf, gateCommands, shellScript } from './test-run-warning.mjs';
 
 const GIT = /(^|[\\/])git(\.exe)?$/i;
@@ -100,14 +100,16 @@ function commitIn(words, depth = 0) {
 
 /** The hint for the command line `command`, run in the folder `cwd`, or `null` when it wraps no commit. Its words
  * follow the conditions of `ciGateWanted` (./ci-gate.mjs): where the project of the commit holds the workflow, the
- * switch is not off and this is no CI machine, a plain commit's gate goes to GitHub first, and the hint says so;
- * elsewhere it says only that the hook waits for its turn by itself. `projectRoot` gives the top of the work tree of
- * a folder, and `exists` whether a file is there. */
-export function wrappedCommitHint(command, { cwd, env, projectRoot, exists }) {
+ * switch is not off, this is no CI machine and the project's `remoteGate` switch reads on, a plain commit's gate goes
+ * to GitHub first, and the hint says so; elsewhere it says only that the hook waits for its turn by itself, which is
+ * true under `private` too, where whether the commit would have gone is not known without asking GitHub.
+ * `projectRoot` gives the top of the work tree of a folder, `exists` whether a file is there, and `remoteGate` what
+ * the switch of the project at a folder reads. */
+export function wrappedCommitHint(command, { cwd, env, projectRoot, exists, remoteGate = (root) => remoteGateOf(root).value }) {
   const found = wrappedCommit(command);
   if (found === null) return null;
   const root = projectRoot(found.dir === null ? cwd : path.resolve(cwd, found.dir));
-  const toGithub = env[CI_GATE_ENV] !== '0' && !onCiMachine(env) && exists(path.join(root, CI_WORKFLOW));
+  const toGithub = env[CI_GATE_ENV] !== '0' && !onCiMachine(env) && exists(path.join(root, CI_WORKFLOW)) && remoteGate(root) === 'on';
   const plain = `${found.verb[0].toUpperCase()}${found.verb.slice(1)} with a plain \`git ${found.verb}\`: its hook waits for its turn by itself. `
     + 'A test run of your own still goes through `js-harness gate --`.';
   const ran = `js-harness guard: this \`git ${found.verb}\` ran inside \`js-harness gate --\`, so its gate held the machine's lock`;

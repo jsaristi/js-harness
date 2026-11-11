@@ -12,6 +12,11 @@
 // on green only. Anything that is not a green or a red run (no push, no `gh`, no run, a run cancelled or past
 // its bound) is no answer, `{ ran: false, why }`, and the caller runs the gate here as it always did: CI only
 // ever shortens a wait, it never makes a gate impossible.
+//
+// That push publishes a tree before its commit exists, and one the gate refuses all the same, so it is the project's
+// written decision (odd/tasks/publish-decision.md; the audit's M1): the `remoteGate` switch of harness.json
+// "functions" (./functions.mjs), read before anything is written (`remoteGateKeeps`). A project that says nothing
+// sends its tree only where GitHub says its repository is private; this repository is public and declares it on.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,6 +24,7 @@ import { failingTests } from './flaky.mjs';
 import { gateRecord } from './gate-log.mjs';
 import { gateLogRows, gateRow } from './gate-turn.mjs';
 import { firstStep } from './next-step.mjs';
+import { functionsOf, harnessOfTree } from './project-functions.mjs';
 import { ruleValue } from './rules.mjs';
 
 /** Set to `0`, the gate never goes to CI. */
@@ -55,11 +61,16 @@ function failedLog(stdout, id) {
  * lock is not read: a free one no longer keeps a gate here. A check by hand stays here: CI tests the index
  * (`git write-tree`), and a check by hand tests the working tree, unstaged edits included. A commit's hook is told
  * by `GIT_INDEX_FILE`, which git hands every hook that commits and a check by hand is not given, as
- * ../check.mjs tells it. */
+ * ../check.mjs tells it. A project whose `remoteGate` switch reads off keeps its gate here like one with no workflow,
+ * with no line of its own: a switch declared off is the project's standing choice, and one read as off because
+ * harness.json could not be read fails the gate at its `functions` or `sensors` row, which names the error
+ * (`checkFunctions` of ../check.mjs). One that reads private is asked at the push, where its visibility is read
+ * (`remoteGateKeeps`). */
 export function ciGateWanted({ cwd, env = process.env }) {
   if (env[CI_GATE_ENV] === '0' || onCiMachine(env)) return null;
   if (!Object.keys(env).some((key) => key.toUpperCase() === 'GIT_INDEX_FILE')) return null;
   if (!fs.existsSync(path.join(cwd, CI_WORKFLOW))) return null;
+  if (remoteGateOf(cwd).value === 'off') return null;
   return `the project holds ${CI_WORKFLOW}, so a commit's tests go to GitHub's machines first`;
 }
 
@@ -86,10 +97,92 @@ export function pushEnv(env) {
 }
 
 /** The `owner/name` of a GitHub repository from a remote's URL, in the forms git takes (https, ssh, scp-style), or
- * null for a URL that is not GitHub's. */
+ * null for a URL that is not GitHub's. What an https URL may hold before `@github.com` is a user and a password in
+ * the characters a URL allows there (RFC 3986, userinfo) and nothing else: with a `#`, a `?` or a `\` before the `@`
+ * the host is what comes before that character, and git goes there, not to github.com. */
 export function githubRepository(url) {
-  const match = /^(?:https?:\/\/(?:[^@/]+@)?github\.com\/|ssh:\/\/git@github\.com\/|git@github\.com:)([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(String(url).trim());
+  const match = /^(?:https?:\/\/(?:[\w.~%!$&'()*+,;=:-]+@)?github\.com\/|ssh:\/\/git@github\.com\/|git@github\.com:)([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(String(url).trim());
   return match ? `${match[1]}/${match[2]}` : null;
+}
+
+/** What the project whose harness.json is in `root` says of the remote gate, as `{ value, errors }`: `on`, `private`
+ * or `off`, from the file of its working tree, which the gate of the same commit reads its other switches from
+ * (`checkFunctions` of ../check.mjs), and what could not be read in it. A file with any error is read as off, an
+ * error in another switch too: a name misspelt is otherwise the default, and that gate fails at its `functions` row
+ * all the same, so nothing is pushed for a gate that cannot pass. */
+export function remoteGateOf(root) {
+  const { errors, resolved } = functionsOf(harnessOfTree(root), { paths: [] });
+  return { value: errors.length > 0 ? 'off' : resolved.remoteGate.value, errors };
+}
+
+/** The URL `remote` pushes to, as it is written (its push URL first), before git rewrites it. */
+const pushUrl = (git, remote) => git('config', '--get', `remote.${remote}.pushurl`).stdout.trim() || git('config', '--get', `remote.${remote}.url`).stdout.trim();
+
+const KEPT = 'the tree being committed was not pushed';
+
+/** Every URL a push to `remote` goes to, as git resolves them: each of its push URLs, since a remote may hold several
+ * and a push goes to them all, after the rewrites of `url.<base>.insteadOf` and `pushInsteadOf`. None where git
+ * could not say. `pushUrl` above is one of them as written, which is what `gh` is asked the runs of; these are where
+ * the tree would land. */
+function pushDestinations(git, remote) {
+  const listed = git('remote', 'get-url', '--push', '--all', remote);
+  return listed.status === 0 ? listed.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [];
+}
+
+/** `url` without the user and password it may carry, for a line that is printed and logged. Its host is what stands
+ * before the first `/`, `?`, `#` or `\`, as git reads it, without what precedes an `@` there. A rest that holds an
+ * `@` may be the end of a password that held one of those characters, and what reads as the port its start: both
+ * are left out then, and the line names the host alone. */
+function withoutCredentials(url) {
+  // `s`: a URL of git's configuration may hold a line break, and one the pattern did not match would be printed whole.
+  const parts = /^([a-z][a-z0-9+.-]*:\/\/)([^/?#\\]*)(.*)$/is.exec(url);
+  if (!parts) return url;
+  const [, scheme, authority, rest] = parts;
+  const host = authority.slice(authority.lastIndexOf('@') + 1);
+  return rest.includes('@') ? `${scheme}${host.split(':')[0]}` : `${scheme}${host}${rest}`;
+}
+
+/** Why the tree of the commit being made stays on this machine, as `{ why, known }`, or null where the project lets
+ * it be pushed for its gate: `remoteGate` on, or private with every place the push goes to (`pushDestinations`) a
+ * repository GitHub says is `PRIVATE`, asked as ../backup.mjs asks it before its own push. Everything else keeps it.
+ * `known` tells the two kinds apart: true for a decision (the switch off, a destination that is public, internal or
+ * not GitHub's), false for a read that failed (git could not name the working tree or the destinations, `gh` could
+ * not read a visibility), which is a fault to log and not what the project chose. `git` runs git in the project.
+ *
+ * Three readings here are of the thing itself and not of what stands for it (the independent verifier, L13 of the
+ * feature document). The switch is the one at the top of the working tree, since the tree pushed is the whole one
+ * from whatever folder below it the gate was asked. A destination is GitHub's by `githubRepository`, which reads the
+ * host git would go to. And `gh` is asked of `github.com/<owner>/<name>`: of a bare `owner/name` it asks the host of
+ * `GH_HOST`, another GitHub whose answer says nothing of where the push goes. */
+function keptHere({ cwd, remote, git, gh }) {
+  const decided = (why) => ({ why: `${why} ${KEPT}`, known: true });
+  const unread = (why) => ({ why: `${why} ${KEPT}`, known: false });
+  const top = git('rev-parse', '--show-toplevel');
+  const root = top.status === 0 ? top.stdout.trim() : '';
+  if (!root) return unread(`git could not say where the working tree of ${cwd} starts, so its harness.json was not read and`);
+  const { value, errors } = remoteGateOf(root);
+  if (value === 'on') return null;
+  if (value === 'off') return decided(`remoteGate reads off in harness.json${errors.length > 0 ? ` (${errors.join('; ')})` : ''}, so`);
+  const urls = pushDestinations(git, remote);
+  if (urls.length === 0) return unread(`git could not say where ${remote} pushes to, so nothing says it is private and`);
+  const elsewhere = urls.find((url) => !githubRepository(url));
+  if (elsewhere) return decided(`${remote} pushes to ${withoutCredentials(elsewhere)}, which is not a GitHub repository, so nothing says it is private and`);
+  for (const repository of new Set(urls.map(githubRepository))) {
+    const seen = gh(['repo', 'view', `github.com/${repository}`, '--json', 'visibility', '-q', '.visibility'], { cwd });
+    const visibility = seen.status === 0 ? seen.stdout.trim() : '';
+    if (!visibility) return unread(`the visibility of ${repository} could not be read (${firstLine(seen.stderr) || 'gh said nothing'}), so it is not known to be private and`);
+    if (visibility !== 'PRIVATE') return decided(`${repository} reads ${visibility}, not PRIVATE, and harness.json does not turn remoteGate on (js-harness functions set remoteGate on), so`);
+  }
+  return null;
+}
+
+/** `keptHere` for a caller that runs no git of its own: the gate asks it before it says a push starts (`testsOnCi`).
+ * `runCiGate` asks again by itself, so no caller pushes past the switch: the second question costs one `gh` call
+ * (0.6 s, measured once on 2026-11-11) a destination, only under `private`, on a path that then waits minutes for
+ * the run. `gh` is injectable. */
+export function remoteGateKeeps({ cwd, remote = 'origin', env = process.env, gh }) {
+  const runGit = spawner('git', pushEnv(env));
+  return keptHere({ cwd, remote, git: (...args) => runGit(['-C', cwd, ...args]), gh: gh ?? spawner('gh', env) });
 }
 
 /** The commits `MERGE_HEAD` names while a merge is being made, one a line (an octopus merge names several), or none. */
@@ -116,10 +209,13 @@ export async function runCiGate({ cwd, remote = 'origin', env = process.env, gh,
   };
   // The repository the push goes to, as the remote is written (its push URL first), before git rewrites it: `gh`
   // is asked about that repository and no other, whatever folder `check` was started from.
-  const url = git('config', '--get', `remote.${remote}.pushurl`).stdout.trim() || git('config', '--get', `remote.${remote}.url`).stdout.trim();
+  const url = pushUrl(git, remote);
   const repository = githubRepository(url);
-  if (!repository) return { ran: false, why: `${remote} is not a GitHub repository (${url || 'no URL'})` };
+  if (!repository) return { ran: false, why: `${remote} is not a GitHub repository (${url ? withoutCredentials(url) : 'no URL'})` };
   const runGh = gh ?? spawner('gh', env);
+  // Before anything is written: what the project's switch keeps here leaves no object and no branch behind.
+  const kept = keptHere({ cwd, remote, git, gh: runGh });
+  if (kept) return { ran: false, why: kept.why };
   const ghIn = ([verb, sub, ...rest]) => runGh([verb, sub, '--repo', repository, ...rest], { cwd });
   // Asked before anything is written or pushed: a `gh` missing, signed out or barred from the repository would
   // otherwise leave a run going that no one reads, after a push every commit pays.
@@ -196,11 +292,21 @@ async function followRun({ sha, gh, now, sleep, startedAt }) {
  * index the run is of, which `filesNow` gives (`filesKey` of ./gate-tree.mjs) or `null`: what lets a failure here
  * stand against a pass of the same files elsewhere (`provenBy` of ./gate-log.mjs). A gate CI gave no answer leaves a
  * `ci-fallback` line under `local`'s id, the record of the gate that then runs here, with what the wait cost.
- * `deps.ciGateWanted` and `deps.runCiGate` stand in for the two halves. Moved here from ../check.mjs on 2026-10-30
+ * A tree the project's `remoteGate` switch keeps here by decision is said so before any push is announced, and
+ * leaves no `ci-fallback` line: CI was never asked. A visibility that could not be read is no decision and falls
+ * back as any gate with no answer does. `deps.ciGateWanted`, `deps.remoteGateKeeps` and `deps.runCiGate` stand in
+ * for the three steps. Moved here from ../check.mjs on 2026-10-30
  * (odd/tasks/gate-narrow-pass.md), which may not grow. */
 export async function testsOnCi(cwd, lock, deps, local = null, filesNow = () => null) {
   const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, env: lock.env ?? process.env });
   if (!why) return null;
+  const kept = (deps.remoteGateKeeps ?? remoteGateKeeps)({ cwd, remote: lock.remote ?? 'origin', env: lock.env ?? process.env });
+  // Only a decision ends it here. A read that failed goes on to `runCiGate`, which asks again and, when it fails
+  // again, is a gate with no answer from CI like any other: said so, and logged with what the wait cost.
+  if (kept?.known) {
+    console.error(`check: ${kept.why}; the tests run here`);
+    return null;
+  }
   console.error(`check: ${why}; the push of the tree being committed starts their run`);
   // Asked before the push, of the index `runCiGate` writes the tree of.
   const files = filesNow();
