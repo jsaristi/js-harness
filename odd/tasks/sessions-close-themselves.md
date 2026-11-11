@@ -157,17 +157,16 @@ the lead with `js-harness notify --to orchestrator --kind waiting`.
   recorded session has, a refusal over a damaged record line that says what settles it, comments that still spoke of a
   resume that retires; tests first · inline · `bin/lib/background-close.mjs`, `bin/lib/background.mjs`,
   `README.md` · the commit after `a9f9f979` (L17)
-- [ ] T6 (kind: verify) Codex and the Claude lenses on each slice, an independent verifier on what deletes, the pull
-  request
+- [x] T6 (kind: verify) Codex and the Claude lenses on each slice, an independent verifier on what deletes, the pull
+  request · pull request 821 (L9, L15 to L19)
 
 ## Next step
-Reviewed up to `a9f9f979`: Codex on every slice, the four lenses on `8cee9278..d77b3315` and on
-`d77b3315..a9f9f979`, the verifier twice (L9, L15 to L17). What they found in `a9f9f979` is fixed in T8, the commit
-after it. What is left of T6: Codex and the four lenses on T8's slice, base `a9f9f979`, one at a time, with the
-worktree untouched while either runs; then the push, the pull request, `notify --kind ready --pr`, the summary and
-`notify --kind closed --summary`. Open with the lead (`notify --kind waiting`, L17): whether a resume leaves the job
-it resumed to the close, as built (L16), or removes it at once, as the brief's words say. The cleanup file of L14 was
-written again from a survey of 03:21 local (L17).
+Every task is done and pull request 821 is open, its code reviewed up to `e64fd44f` (L19). The merge is the lead's
+after the owner's yes. Open with the lead (`notify --kind waiting`, L17): whether a resume leaves the job it resumed
+to the close, as built (L16), or removes it at once, as the brief's words say; with no answer the pull request keeps
+what is built. If he chooses the other, it is one more slice: `resumeStart` in `bin/sessions-background.mjs`, its
+test, and the guard of L13 on that path. The cleanup file of L14 and L17 is the lead's to run after the owner's yes;
+this session ran none of it.
 
 ## Log
 - L1 (2026-11-10 22:44 local, the owner, typed in the lead's chat; transcript `ea85ec35`, line 5421): "y entonces por
@@ -354,3 +353,18 @@ written again from a survey of 03:21 local (L17).
   `sessions.jsonl` and told the reader to repair a file that was whole. Fixed in the commit after `f3754c2a`, test
   first (seen to fail): `readRecord` names those files (`strandedUnread`), and the refusal names each thing where it
   is, the lines of the record and the stranded starts by their paths.
+- L19 The close (2026-11-11 04:45 local). Codex on `f3754c2a..e64fd44f`: correct (0.98), the finding of L18 fixed,
+  35,142 input tokens. The four lenses on `a9f9f979..e64fd44f`: no finding, each earlier one rechecked as fixed, about
+  16,000 input tokens each. The push's own check: 5 code commits, all covered by a Codex record and by a lens record.
+  Pull request 821, `https://github.com/jsaristi/js-harness/pull/821`, from `worktree-sessions-close-themselves`.
+  Against the depth pass. Item 3: the proofs of specs 2, 4 and 5 pass in the gate of `e64fd44f`; spec 3 passes as
+  rebuilt in L16, not as written, and waits on the lead (L17); specs 1, 6 and 7 are the Log, the cleanup file and
+  `docs/FAILURES.md`. Item 4: predicted 7 of 20 finished sessions closed by the rule; measured 9 of 22 by the
+  read-only survey of 03:21 local (the 8 with a clean landed worktree and JH 171, which has none), with no close run
+  on the machine: the first real one is the land of this pull request or the lead's `sessions stop --finished` after
+  it. What the prediction missed is L15's: two of the 9 (JH 174, JH 175) hold claude's lock and would have been kept
+  by the rule as first built.
+  Not checked against the real CLI: what `claude stop` does to the lock claude holds on a worktree, and `claude rm`
+  once the worktree is gone; the tests use a real git and a claude that logs its calls. The push printed one note: a
+  comment in `bin/lib/background-close.mjs` says "up to a minute", the value the rule `wait-for` also holds; the
+  comment speaks of `LOCK_WAIT_MS`, another wait, and the note refuses nothing.
