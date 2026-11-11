@@ -370,7 +370,7 @@ test('a question on his screen holds the session: the line says since when, and 
 
 test('a return that answers a question asked before the absence started names question-tool-holds-asker, not the missed stretch', () => {
   // The question tool held the session from the call to his answer: no turn of its own could open a stretch
-  // (9 of the 23 absences no stretch covered from 2026-10-31 to 2026-11-10, odd/tasks/departure-control.md, L3).
+  // (8 of the 23 absences no stretch covered from 2026-10-31 to 2026-11-10, odd/tasks/departure-control.md, L19).
   const held = stretchCheck({ transcript: [his(LEFT), asked(), tapped(BACK)] });
   assert.ok(held.includes(NO_STRETCH_MARKER), held);
   assert.match(held, /The question tool held this session from 13:56 to \d\d:\d\d, through the start of his absence/);
@@ -420,4 +420,8 @@ test('a transcript read piece by piece gives what the whole gives, a question an
   assert.deepEqual(whole, { before: '2026-10-30T19:10:00.000Z', away: ABSENCE_MS + 1, heldSince: '2026-10-30T19:11:00.000Z' });
   for (let cut = 1; cut < lines.length; cut += 1) assert.deepEqual(departure({ pieces: [lines.slice(0, cut), lines.slice(cut)], now }), whole, `cut at ${cut}`);
   assert.deepEqual(departure({ pieces: lines.map((one) => [one]), now }), whole, 'a line a tick');
+  // A call the host writes again in a later piece is the call already read, with the result it already has.
+  const closed = [his(LEFT), asked(), dismissed('2026-10-30T18:57:00.000Z')];
+  assert.equal(departure({ pieces: [closed, [asked()]] }).heldSince, departure({ pieces: [[...closed, asked()]] }).heldSince);
+  assert.equal(departure({ pieces: [closed, [asked()]] }).heldSince, null);
 });

@@ -37,7 +37,7 @@ alive while he is away, reads the lead's transcript each tick and wakes the lead
   - the reply hook's return checks (`returnReportWarning`, `returnStretchWarning`, `bin/reply.mjs`): they stay the
     backstop as they are; JH 165 holds `bin/reply.mjs`.
   - a declared suspension that would satisfy the check (the sighting of 2026-11-07): it changes what counts.
-  - an absence the question tool holds the lead through (9 of 23, L3): no process can tell a held session; it goes to
+  - an absence the question tool holds the lead through (8 of 23, L3 as L19 corrected it): no process can tell a held session; it goes to
     the lead as a notice, his call.
   - `stretch open --draft` (JH 123's next task, `odd/tasks/departure-stretch.md` L18): a feature of its own.
 
@@ -93,10 +93,12 @@ the lead with `js-harness notify --to orchestrator`.
 - 4. Refutation: if no control could reach the lead when an absence starts, the request would not hold. Replayed now,
   read-only, with this branch's `personTimesIn`, `ABSENCE_MS` and `eventsOf` over the two transcripts since
   2026-10-31T12:00Z (`node replay.mjs`, the job's scratch; its table is L3): 31 absences, 8 a stretch covered, 23 not.
-  Of the 23, when the gap crossed two hours the lead was awake in 9 (entries of its own before his return, a stop in
-  5 of them), idle in 5 (its turn ended, no entry until his return) and held by the question tool until his return
-  in 9. So a line that wakes the lead reaches 9 for certain and up to 14 of 23 (61%) where a heartbeat is alive and
-  the machine on; 9 of 23 (39%), and 4 of the last 5, no control can reach while a question holds the lead.
+  Of the 23, when the gap crossed two hours the lead was awake in 6 (entries of its own before his return), idle in 9
+  (its turn ended, no entry of its own until his return) and held by the question tool in 8. So a line that wakes the
+  lead reaches 6 for certain and up to 15 of 23 (65%) where a heartbeat is alive and the machine on; 8 of 23 (35%),
+  and 4 of the last 5, no control can reach while a question holds the lead. These figures are the verifier's, from
+  the built code (L19); the pass first read 9, 5 and 9 from a scratch script that was wrong in one absence and
+  counted the host's own lines as the lead's (L20). The verdict did not depend on the difference.
   Verdict: supports
 - 5. Request: build the control he chose in question 5 where it can act: each tick of the lead's heartbeat reads when
   he last wrote to the lead, by the return check's rule, and when that is longer ago than `ABSENCE_MS` and no stretch
@@ -147,7 +149,9 @@ the lead with `js-harness notify --to orchestrator`.
   and `... 6716`; each is "sent by the user". The triage was read from `origin/docs/audit-triage` and the audit from
   `origin/claude/fable-5-2-audit-531f8e` (neither is on main yet).
 - L3 (2026-11-11, the replay, item 4; local time, UTC-05:00; "+2h" is his last message plus `ABSENCE_MS`). The 23
-  absences no stretch covered, by what the lead's transcript holds between +2h and his return:
+  absences no stretch covered, by what the lead's transcript holds between +2h and his return. As first written, and
+  wrong in three figures that L19 corrects: the first "held" (11-01 21:35) was not held, so held is 8; awake is 6 and
+  idle 9. The lists below are left as the scratch script gave them:
   - held by the question tool until his return, 9: 11-01 21:35 to 11-02 04:01; 11-02 12:59 to 15:01; 11-04 09:01 to
     11:43; 11-05 13:25 to 18:12; 11-05 19:35 to 11-06 00:36; 11-08 18:20 to 20:54; 11-09 07:59 to 19:58; 11-09 20:00
     to 22:31; 11-10 18:08 to 21:17.
@@ -220,8 +224,8 @@ the lead with `js-harness notify --to orchestrator`.
   `question-tool-holds-asker` (one sighting, 2026-10-13: a question asked while he was away held the lead seven hours;
   control: the protocol's sentence that the tool is called at once only when he wrote a short while ago, since
   2026-10-14). It is the same failure, so no second entry: `HELD_FAILURE` names it, its text gained the case of a
-  question left on his screen when he leaves, and the 9 held absences of L3 are its `- Seen:` lines. Its state is now
-  "seen again", which is true: 9 sightings after its control. What settles it is the question unit's, not this
+  question left on his screen when he leaves, and the held absences of L3 are its `- Seen:` lines (9 as written then;
+  8 after L19). Its state is now "seen again", which is true: 8 sightings after its control. What settles it is the question unit's, not this
   document's. `node bin/js-harness.mjs failures check` exits 0 (141 failures, 9 not settled, one more than before);
   `node --test bin/lib/return-report.test.mjs`, 31 of 31 after the rename.
 - L14 (2026-11-11, a red run that was the machine): `bin/loop.test.mjs` "a real loop: run in the background, status
@@ -266,11 +270,45 @@ the lead with `js-harness notify --to orchestrator`.
     absence told from a transcript a tick could not read).
   A limit of the one rule, said: a question closed with no message after the absence started, hours before his return,
   is recorded as held although the session was free from then on; the held AWAY line, read at that moment, asks for
-  the stretch.
+  the stretch. Committed as `95d80ccc` (gate PASS). Confirming reviews: Codex over `916bfcc..95d80cc`, "the patch is
+  correct" (confidence 0.98), its finding fixed; the lenses over `f910b9d..95d80cc`, the 6 earlier findings fixed, risk,
+  resilience and readability 0 new, reliability 1 suggestion, taken: the watch keeps a question call by its id, as the
+  return reads them, so a call the host writes again is not counted twice (red first, 1 of 32; green, 32 of 32).
+- L19 (2026-11-11, the independent verifier, spec 5; one sub-agent on claude-fable-5-2 at high, read-only on the
+  repository). It replayed the built code (`departureWatch`, `returnStretchWarning`) over the lead's transcripts
+  0f71b2c6 and ea85ec35 and the real stretch record, for local 2026-10-31 to 2026-11-10: 33 absences (31 in the depth
+  pass's window, which starts at 07:00 local on 10-31), 8 covered, 17 told plain (15 in the window), 8 told held. The
+  tick at the start, the tick a minute before his return and the return's warning agree in all 33: 0 disagreements,
+  and feeding the watch whole, in 4 to 48 pieces or as one watch alive across the transcript gave the same answer. Its
+  own parse, not the repository's code, finds a question call of the main thread with no result at `before +
+  ABSENCE_MS` in exactly the 8 held ones. A probe over 8,000 random synthetic transcripts gave 0 differences between
+  the tick and the return. Timings on the 122 MB transcript, on a loaded machine: one whole-file `add` 0.41 to 0.50 s
+  (once a heartbeat's start), a later tick at most 54 ms, `returnStretchWarning` about 1 s, of which the held scan is
+  0.2 to 0.3 s and only at the first stop after an uncovered return. No defect in `bin/`. Reproduce: `node
+  C:/Users/Oficina/.claude/jobs/f2405333/tmp/verifier/replay.mjs` from the worktree (about 2 minutes; the job's
+  scratch, outside the repository). Checked by this session in one thing: lines 49240, 49244, 50491 and 50687 of
+  0f71b2c6 (the question of 2026-11-01 was asked at 22:16:31Z and answered at 22:26:31Z; his return at 09:01:37Z is
+  typed; the next question is after it).
+  What it corrects in this document and the register: held is 8 of 23, not 9 (the absence of 11-01 21:35 had no
+  question open); 11-09 07:59 was held from 08:06 to 15:51, when the question was closed, not until 19:58; the lead
+  wrote an entry of its own between +2h and his return in 6 of the 23, not 9, and in none in 9, not 5. L4's count of
+  stops (5) was not measured again; it is at most 6. Not checked by the verifier: the heartbeat's wiring in
+  `bin/loop.mjs` was read, not run (the tests of L8, L17 and L18 run it); whether a heartbeat was alive in any
+  absence; a question call the host writes again (neither transcript holds one).
+- L20 (2026-11-11, a mistake of this session, in five parts). What happened: the depth pass's scratch replay paired a
+  question with the first later result that held a phrase, not with the result of its own id, so it counted the
+  absence of 11-01 21:35 as held; "9 of 23" went to the lead in a note at 00:53 local, into the brief of the question
+  unit, into two code comments, into two commit messages (`55091455`, `916bfccf`) and into a `- Seen:` line of
+  `question-tool-holds-asker`. The fix now, checked: the line is removed, every figure in the repository is 8
+  (`js-harness failures` counts 9 sightings for the entry, one of 10-13 and 8 of the replay), the brief file says 8,
+  and the lead is told by a note; the two commit messages stay as written, and the pull request says so. What stops it:
+  a figure from a scratch script is checked on one case by hand in the record before it is written or sent, and the
+  held rule now has a test over the built code. Where it enters: this pull request (`docs/FAILURES.md`,
+  `record-states-wrong-fact`, a `- Seen:` line). Proof it has not come back: the verifier's command of L19 prints 8.
 
 ## Next step
-Done: the lead gate, T7, the 9 sightings under `question-tool-holds-asker` (L11 to L13). In order: (d) the brief of
-the question unit to a file outside the repository and its path to the lead in one notice; (e) commit T2, T3, T4 and
-T7 (the gate), Codex, the lenses, the verifier's replay with the built code, push, the pull request, the ready
-notice, the summary, the closed notice. The wait for notices runs as task `bpelqu9mm` (`js-harness wait --notice-to
+Done: T1 to T4 and T7 in four commits (`55091455`, `916bfccf`, `f910b9d1`, `95d80ccc`), Codex and the lenses with
+their confirming reviews (L17, L18), the verifier's replay (L19), the brief of the question unit sent to the lead. In
+order: commit the verifier's corrections and the lenses' last suggestion (the gate), their confirming reviews, push,
+the pull request, the ready notice, the summary, the closed notice. The wait for notices runs as task `bpelqu9mm` (`js-harness wait --notice-to
 176`, ends on a notice to 176 or after 8 hours; this session stops it at its close).

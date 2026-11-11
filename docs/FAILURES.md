@@ -1324,17 +1324,17 @@ skipped no duty.
 - Seen: 2026-10-13 — relief file, line 560 — asked at about 05:57 when his last word was of 04:2x,
   answered at about 13:05; pull request 98 waited from 06:30, 99 from 07:16, 100 from 07:32, and
   JH 8 had nothing to do from 07:32
-- Seen: 2026-11-01 — the lead's transcript 0f71b2c6, replayed by JH 176 (`odd/tasks/departure-control.md`, L3: 9 of
-  the 23 absences no stretch covered from 2026-10-31 to 2026-11-10; local time, UTC-05:00) — he last wrote at 21:35 and
-  answered the question on his screen at 04:01 on 2026-11-02; no turn of the lead from two hours after his last
-  message to that answer, as in each line below
-- Seen: 2026-11-02 — the same replay — he last wrote at 12:59 and answered at 15:01
+- Seen: 2026-11-02 — the lead's transcript 0f71b2c6, replayed with the built code by JH 176's verifier
+  (`odd/tasks/departure-control.md`, L3 and L19: 8 of the 23 absences no stretch covered from 2026-10-31 to
+  2026-11-10; local time, UTC-05:00) — he last wrote at 12:59 and answered the question on his screen, asked at 13:00,
+  at 15:01; a question call of the lead had no result when the absence started, as in each line below
 - Seen: 2026-11-04 — the same replay — he last wrote at 09:01 and answered at 11:43
 - Seen: 2026-11-05 — the same replay, the absence of the afternoon — he last wrote at 13:25 and answered at 18:12
 - Seen: 2026-11-05 — the same replay, the absence of the night — he last wrote at 19:35 and answered at 00:36 on
   2026-11-06
 - Seen: 2026-11-08 — the same replay — he last wrote at 18:20 and answered at 20:54
-- Seen: 2026-11-09 — the same replay — he last wrote at 07:59 and answered at 19:58
+- Seen: 2026-11-09 — the same replay — he last wrote at 07:59; the question asked at 08:06 was closed with no answer
+  at 15:51 and he wrote again at 19:58
 - Seen: 2026-11-09 — the same replay, the lead's transcript ea85ec35 — he last wrote at 20:00 and answered at 22:31
 - Seen: 2026-11-10 — the lead's transcript ea85ec35, lines 4515 to 4518 (read by JH 176) — question 255 was asked at
   18:08, 30 seconds after his answer to question 254, and answered at 21:17; also the sighting of that day under
@@ -1378,7 +1378,17 @@ stood.
 - Seen: 2026-11-04 — the channel, JH 137's notes to the lead at 02:01:18Z and 02:01:47Z (this session's own) — the
   first named commit `18c3a5a0`, written before `git log` printed the real one, `d3b35511`; corrected 29 seconds later,
   before the lead built on it. The check that stops it: a hash goes into a notice only from an output already read
-- Control: check — bin/check-citations.test.mjs — "a task the change checks off names a commit
+- Seen: 2026-11-11 — `odd/tasks/departure-control.md`, L3 and L19, and JH 176's note to the lead at 00:53 local (this
+  session's own) — the depth pass's replay said the question tool held the lead in 9 of 23 uncovered absences; it
+  was 8. The throwaway script paired a question with the first later result holding a phrase, not with the result of
+  its own id, so the absence of 2026-11-01 21:35, whose question had been answered four hours before, was counted as
+  held, and written as a `- Seen:` line of `question-tool-holds-asker`. Found by the independent verifier's replay
+  with the built code, before the pull request; the line was removed and every figure corrected in the same pull
+  request, and the lead told (checked: `js-harness failures question-tool-holds-asker` counts 9 sightings, 8 of them
+  from the replay). What stops it: a figure from a scratch script is checked on one case by hand, in the record
+  itself, before it is written or sent; here the verifier's brief asks for it, and a replay now exists in the tests
+  (`bin/lib/return-report.test.mjs`, the one rule for a held session). Proof it has not come back: the verifier's
+  command in L19 gives 8 again — "a task the change checks off names a commit
   reachable from HEAD, unless it rides with staged work" — since 2026-10-17
 - Was: owed — odd/tasks/commands-and-doctor.md — "a task the change checks off in a feature
   document names a commit, and that commit is reachable from HEAD" — replaced on 2026-10-17: T6 built
@@ -1922,8 +1932,8 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-11-10 — the lead's brief to JH 176 (claimed; the lead's own) and the lead's transcript ea85ec35, lines
   4515 to 4518 (read by JH 176) — he was away from 18:08 to 21:17 local (UTC-05:00) with question 255 on his screen and
   no stretch opened; the reply hook said so only at his return. The question tool held the lead the whole time: its
-  transcript holds no entry between the call at 2026-11-10T23:08:41Z and his answer at 2026-11-11T02:17:03Z, as in 9 of
-  the 23 absences no stretch covered since 2026-10-31 (`odd/tasks/departure-control.md`, L3). Fixed where a session can
+  transcript holds no entry between the call at 2026-11-10T23:08:41Z and his answer at 2026-11-11T02:17:03Z, as in 8 of
+  the 23 absences no stretch covered since 2026-10-31 (`odd/tasks/departure-control.md`, L3 and L19). Fixed where a session can
   be told (JH 176): the lead's heartbeat reads at each tick when he last wrote to the lead, and ends with an `AWAY:`
   line once that is over two hours ago with no stretch covering the time since, naming `stretch open`, once an absence
   (`bin/loop.mjs`; `departureWatch` in `bin/lib/return-report.mjs`, with the return's own measure and cover test). Where

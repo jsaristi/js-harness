@@ -299,7 +299,7 @@ function heldIn(text, before) {
 //
 // What it cannot do is said, not hidden. The question tool holds the session that calls it until he answers, and the
 // host delivers a loop's end only then: of the 23 absences no stretch covered from 2026-10-31 to 2026-11-10, a
-// question held the lead until his return in 9. The line then says since when, so the sighting can.
+// question held the lead when the absence started in 8. The line then says since when, so the sighting can.
 
 /** The word the heartbeat's departure line opens with. */
 export const AWAY_MARKER = 'AWAY:';
@@ -321,7 +321,8 @@ export function departureWatch() {
       if (lines.length > 0) {
         kept.push(...lines);
         times = personTimesOf(parseTranscript(kept.join('\n')).entries);
-        calls.push(...ownQuestionCalls(lines).map((call) => ({ ...call, result: null })));
+        // By its id, as the return reads them: a call the host writes again is the one already kept, with its result.
+        for (const call of ownQuestionCalls(lines)) if (!calls.some((known) => known.id === call.id)) calls.push({ ...call, result: null });
       }
       const beforeMs = Date.parse(times.at(-1) ?? '');
       calls = calls.filter((call) => !(Date.parse(call.at ?? '') < beforeMs));
