@@ -229,8 +229,14 @@ export const RULES = [
     "id": "escalation-model",
     "subject": "the strongest model a change passes to when three reviews of it did not settle it",
     "owner": "sebastian",
-    "since": "2026-11-02",
-    "value": "claude-fable-5-1"
+    "since": "2026-11-10",
+    "value": "claude-fable-5-2",
+    "was": [
+      {
+        "value": "claude-fable-5-1",
+        "until": "2026-11-10"
+      }
+    ]
   },
   {
     "id": "fixed-load-budget",
