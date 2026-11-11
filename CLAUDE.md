@@ -18,7 +18,7 @@ against that document. What he is given at that point is the pause notice's (`cu
 `bin/lib/sessions.mjs`).
 
 A task is small when it is understood (the outcome, where to change and no open decision, shown
-within one short read), touches no high-risk item (below) and could be finished from the request
+within one short read), touches no high-risk item (`AGENTS.md`) and could be finished from the request
 and `git diff` alone. Small work stays inline with no feature document; it is large only when that
 resume test fails, never by counting files, tests or lines. Large work opens
 `odd/tasks/<feature>.md` before the first source write, in this order: the task contract;

@@ -68,6 +68,23 @@ test('the kept groups are Appendix A.1\'s lines, word for word and in its order,
   assert.ok(!body.includes('graphify'));
 });
 
+// Unit 11 of the audit triage (odd/tasks/high-risk-list.md, M20): a Codex review is given the project's AGENTS.md and
+// none of his configuration, so the high-risk list his global block holds never reached it, and the root CLAUDE.md
+// pointed at a list "below" that had left with T9. His answer to question 4 copies the six items to AGENTS.md as they
+// are; the copy is read here from the kept line and is a paragraph by itself, so neither changes without the other
+// and nothing is written around the copy.
+test('the root AGENTS.md holds the high-risk line of the kept groups as one paragraph, word for word, and the root CLAUDE.md names AGENTS.md for it', () => {
+  const root = path.join(import.meta.dirname, '..', '..');
+  const text = (file) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
+  const words = (part) => part.replace(/\s+/g, ' ').trim();
+  const highRisk = KEPT_GROUPS.flatMap((group) => group.lines).filter((line) => line.startsWith('**High risk**: '));
+  assert.equal(highRisk.length, 1);
+  for (const item of [1, 2, 3, 4, 5, 6]) assert.ok(highRisk[0].includes(` (${item}) `), `item ${item}`);
+  const paragraphs = text('AGENTS.md').split(/\n\s*\n/).map(words);
+  assert.deepEqual(paragraphs.filter((paragraph) => paragraph.includes('**High risk**')), highRisk, 'one paragraph, the line whole and alone, whatever its line breaks: it is copied from KEPT_GROUPS, and changes there first');
+  assert.ok(words(text('CLAUDE.md')).includes('touches no high-risk item (`AGENTS.md`)'), 'the sizing sentence names where the list is');
+});
+
 test('in an empty home install writes the file with the block alone, and uninstall takes the file away', () => {
   const m = machine();
   try {

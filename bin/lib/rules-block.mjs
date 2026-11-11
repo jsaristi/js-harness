@@ -9,8 +9,9 @@ import { realPlace, writeWhole } from './atomic-write.mjs';
 import { markedBlock, removeBlock, renderBlock } from './project-template.mjs';
 import { recordWith, sameFile } from './permissions.mjs';
 
-/** His nine Rules lines, word for word as his answer D7 left them. The root `CLAUDE.md` of this repo keeps the same
- * lines under "Kept from the global file", and a test holds the two together. */
+/** His nine Rules lines, word for word as his answer D7 left them. The root `CLAUDE.md` of this repo kept the same
+ * lines under "Kept from the global file" until F8 S2's T9; a test holds them to the diet's Appendix A.1 where it
+ * quotes them, and all nine by a hash. */
 export const RULES_LINES = [
   'One question at a time; keep doing what does not depend on the answer.',
   'Verify a claim before building on it.',
@@ -23,10 +24,12 @@ export const RULES_LINES = [
   'Preserve human control: user decisions beat agent momentum.',
 ];
 
-/** The rest of the diet's Appendix A.1 (docs/proposals/harness-diet.md), word for word as the root `CLAUDE.md` keeps it
- * under "Kept from the global file", so every project keeps these lines once the old stack's blocks leave his global file
+/** The rest of the diet's Appendix A.1 (docs/proposals/harness-diet.md), word for word as the root `CLAUDE.md` kept it
+ * under "Kept from the global file" until F8 S2's T9, so every project keeps these lines once the old stack's blocks leave his global file
  * (F8 S2, T13: his answer to question 181). graphify's lines are left out, since graphify's own install writes them there, and so are the engram lines, since engram's protocol comes from engram alone (row 11, odd/tasks/f8-s11-complements.md). A
- * test holds the groups equal to the root `CLAUDE.md`'s. */
+ * test holds the lines to A.1 where it quotes them and the grouping by a hash. The root `AGENTS.md` copies the High risk
+ * line, since a Codex review reads that file and never his global one (odd/tasks/high-risk-list.md), and a test holds
+ * that copy to this line. */
 export const KEPT_GROUPS = [
   {
     title: "CodeGraph",

@@ -36,6 +36,16 @@ whether a check or an existing rule could do it, and what it costs and what leav
 leaves is retired with its successor, never deleted; one of the owner's changes only with the
 owner's words, quoted with their date. `js-harness rules check` holds all of this.
 
+**High risk**: a mistake would be hard to detect, hard to undo, or reaches beyond the change. It
+touches (1) data or irreversible effects: migrations, changing or deleting existing stored data,
+persisted format changes (not saving new records); (2) security: auth, permissions, credentials,
+secrets, guards, sandbox; (3) contracts others consume: changing or removing public API, CLI flags,
+config formats, published exports, or mirrored prompts or contracts others already consume (not
+adding a flag, command, or optional field; requested changes are not high risk by themselves;
+unrequested breaks in shared code are); (4) concurrency: locks, races, async ordering; (5) delivery
+or environment: installers, release, CI, deploy, dependencies; (6) no test would catch a regression
+in what changes.
+
 ## What good looks like
 
 A behavior change arrives with the test that proves it, written first. A claim about this repo
