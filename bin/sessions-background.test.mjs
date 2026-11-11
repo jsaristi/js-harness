@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sessionsMain } from './sessions.mjs';
-import { sessionsStartMain } from './sessions-background.mjs';
+import { runText, sessionsStartMain } from './sessions-background.mjs';
 import { appendNotice, newNotice } from './lib/channel.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { projectSlug } from './lib/sessions.mjs';
@@ -148,6 +148,9 @@ const writeState = (world, state) => fs.writeFileSync(world.state, JSON.stringif
 const patchState = (world, patch) => writeState(world, { ...readState(world), ...patch });
 const recordFile = (world) => path.join(world.home, '.js-harness', 'background', 'sessions.jsonl');
 const recordLines = (world) => (fs.existsSync(recordFile(world)) ? fs.readFileSync(recordFile(world), 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line)) : []);
+/** The jobs the record says were started, oldest first: the record also holds the lines of removals, so its last line
+ * is not always the last start. */
+const startedLines = (world) => recordLines(world).filter((line) => line.event === 'started');
 
 /** The environment of a run: this one's, with the shim folder first on PATH and the world's harness home. */
 function envOf(world) {
@@ -662,6 +665,51 @@ test('a resumed job replaces the one it resumed: that one is neither resumed nor
   assert.equal(fs.existsSync(first.brief), false);
 }));
 
+// The verifier, 2026-11-11: this command's runner forced 30 s over every call, the removal of a worktree included, which
+// asks for five minutes so that git is not killed half-way through a folder.
+test('the runner of these commands bounds a call at 30 s unless the call names its own bound', () => {
+  const calls = [];
+  const run = runText((command, args, options) => { calls.push(options); return { status: 0 }; });
+  run('git', ['status'], { cwd: 'x' });
+  run('git', ['worktree', 'remove', 'x'], { cwd: 'x', timeout: 300000, encoding: 'buffer' });
+  run('git', ['status']);
+  assert.deepEqual(calls, [
+    { cwd: 'x', encoding: 'utf8', windowsHide: true, timeout: 30000 },
+    { cwd: 'x', timeout: 300000, encoding: 'utf8', windowsHide: true },
+    { encoding: 'utf8', windowsHide: true, timeout: 30000 },
+  ]);
+});
+
+// odd/tasks/sessions-close-themselves.md, spec 3 and L15: 19 of 19 recorded resumes left the job they resumed, and a
+// resume still leaves it: claude rm deletes that job's scratch folder, which the conversation that goes on may read.
+test('a resume leaves the job it resumed for the close of its session and says why, and a kept id is no second job and keeps its past', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Read the thing', '--brief', world.brief]).code, 0);
+  const [first] = recordLines(world);
+  endJob(world, '0db8bc5e');
+  patchState(world, { nextId: 'c779ed44' });
+  const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(resumed.code, 0, resumed.stderr);
+  assert.match(resumed.stdout, /resumed 0db8bc5e as c779ed44/);
+  assert.match(resumed.stdout, /js-harness sessions stop c779ed44 removes it and 0db8bc5e, the job it resumed/);
+  assert.match(resumed.stdout, /0db8bc5e stays until then: claude rm would delete its scratch folder, which this conversation may still use; it goes with the session, which js-harness sessions stop --finished or a land closes once it said closed/);
+  assert.ok(!actions(world).some(([verb]) => verb === 'rm'), 'no job was removed');
+  assert.deepEqual(recordLines(world).map((line) => [line.event, line.id]), [['started', '0db8bc5e'], ['started', 'c779ed44']]);
+  assert.ok(fs.existsSync(first.brief), 'the brief the new job reads stays');
+  // A claude that keeps the job's id on a resume made no second job: it is not its own past, and it keeps the job it
+  // had resumed, which would otherwise stand as a session of its own (Codex, 2026-11-11).
+  endJob(world, 'c779ed44');
+  const same = js(world, ['sessions', 'start', '--resume', 'c779ed44']);
+  assert.equal(same.code, 0, same.stderr);
+  assert.match(same.stdout, /claude kept the job's id/);
+  assert.equal(recordLines(world).at(-1).resumedFrom, '0db8bc5e');
+  // The session goes whole: the job and the one it resumed, and the brief with them.
+  const acted = actions(world).length;
+  const stopped = js(world, ['sessions', 'stop', 'c779ed44']);
+  assert.equal(stopped.code, 0, stopped.stderr);
+  assert.deepEqual(actions(world).slice(acted), [['stop', 'c779ed44'], ['rm', 'c779ed44'], ['stop', '0db8bc5e'], ['rm', '0db8bc5e']]);
+  assert.equal(fs.existsSync(first.brief), false);
+}));
+
 // Codex P1 on 79e3430..318f952: a job the lead resumed by hand works the same conversation under another id.
 test('sessions start --resume refuses while any job claude lists works the recorded conversation', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
@@ -693,7 +741,7 @@ test('a session titled as a lead starts and resumes at the rule lead-effort, whi
   patchState(world, { nextId: 'c779ed44' });
   const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
   assert.equal(resumed.code, 0, resumed.stderr);
-  assert.equal(recordLines(world).at(-1).effort, lead);
+  assert.equal(startedLines(world).at(-1).effort, lead);
 }, { rules: true }));
 
 // Codex P2 on 79e3430..318f952: a resume answers to the same rules and the same record as a start.
@@ -714,14 +762,14 @@ test('sessions start --resume holds to the effort rule, needs a writable record,
   patchState(world, { nextId: 'c779ed44', quiet: true });
   const quiet = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
   assert.equal(quiet.code, 0, quiet.stderr);
-  assert.equal(recordLines(world).at(-1).id, 'c779ed44');
+  assert.equal(startedLines(world).at(-1).id, 'c779ed44');
   // claude agents fails once the job runs: the conversation the resume named is recorded.
   endJob(world, 'c779ed44');
   patchState(world, { nextId: 'a1b2c3d4', quiet: false, agentsFailAfterStart: 'agents down' });
   const blind = js(world, ['sessions', 'start', '--resume', 'c779ed44']);
   assert.equal(blind.code, 0, blind.stderr);
-  const last = recordLines(world).at(-1);
-  assert.deepEqual([last.id, last.sessionId, last.resumedFrom], ['a1b2c3d4', recordLines(world).at(-2).sessionId, 'c779ed44']);
+  const last = startedLines(world).at(-1);
+  assert.deepEqual([last.id, last.sessionId, last.resumedFrom], ['a1b2c3d4', startedLines(world).at(-2).sessionId, 'c779ed44']);
   // Neither an id nor a listing: nothing is recorded, and the new brief stays for the job that may run.
   patchState(world, { agentsFail: undefined, agentsFailAfterStart: undefined, nextId: 'b2c3d4e5', quiet: true, ghost: true });
   endJob(world, 'a1b2c3d4');
@@ -729,9 +777,102 @@ test('sessions start --resume holds to the effort rule, needs a writable record,
   assert.equal(lost.code, 1);
   const kept = /its brief stays at (\S+\.md)/.exec(lost.stderr);
   assert.ok(kept && fs.existsSync(kept[1]), lost.stderr);
-  assert.equal(recordLines(world).at(-1).id, 'a1b2c3d4');
+  assert.equal(startedLines(world).at(-1).id, 'a1b2c3d4');
   assert.notEqual(first.sessionId, null);
 }, { rules: true }));
+
+/** The folder the fake made for the worktree `name` turned into a real one whose branch main and origin/main hold, at
+ * rest for an hour, with claude's settings copy in it; the session of the fake that works there has ended. */
+function landWorktree(world, name) {
+  const git = (cwd, ...args) => {
+    const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf8' });
+    assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
+    return result.stdout.trim();
+  };
+  const place = path.join(world.project, '.claude', 'worktrees', name);
+  fs.rmSync(place, { recursive: true, force: true });
+  git(world.project, 'worktree', 'add', '-q', '-b', `feat/${name}`, place);
+  fs.mkdirSync(path.join(place, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(place, '.gitignore'), '.claude/settings.local.json\n');
+  fs.writeFileSync(path.join(place, '.claude', 'settings.json'), '{}\n');
+  fs.writeFileSync(path.join(place, `${name}.txt`), 'work\n');
+  git(place, 'add', '.');
+  git(place, 'commit', '-q', '-m', `work of ${name}`);
+  fs.writeFileSync(path.join(place, '.claude', 'settings.local.json'), '{}\n');
+  git(world.project, 'merge', '-q', '--ff-only', `feat/${name}`);
+  git(world.project, 'update-ref', 'refs/remotes/origin/main', 'main');
+  git(world.project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main');
+  const old = new Date(Date.now() - 60 * 60_000);
+  fs.utimesSync(path.resolve(place, git(place, 'rev-parse', '--git-path', 'index')), old, old);
+  const state = readState(world);
+  for (const agent of state.agents.filter((item) => item.worktree && path.basename(item.worktree) === name)) {
+    [agent.status, agent.state] = ['idle', 'done'];
+    // No pid: the wait for a process is held with a made-up one in bin/lib/background-close.test.mjs.
+    delete agent.pid;
+  }
+  writeState(world, state);
+  return place;
+}
+
+/** The session `id` of the record says `kind` in the channel now, after the `opened` row its start wrote. */
+function said(world, id, kind) {
+  const entry = recordLines(world).find((line) => line.id === id);
+  appendNotice(world.home, projectSlug(entry.root), newNotice({ at: new Date().toISOString(), from: { host: 'claude-code', id: entry.sessionId, title: entry.title }, to: 'orchestrator', kind, text: `${kind}: made up`, cwd: world.project }));
+}
+
+// On 2026-11-10 the owner found dozens of finished background sessions still listed by the Claude app: nothing ran
+// sessions stop, and it refuses a worktree that holds files (odd/tasks/sessions-close-themselves.md).
+test('sessions stop --finished closes the finished sessions that lose nothing, and names the ones it keeps with why', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Landed', '--brief', world.brief, '--worktree', 'landed']).code, 0);
+  patchState(world, { nextId: 'c779ed44' });
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Dirty', '--brief', world.brief, '--worktree', 'dirty']).code, 0);
+  patchState(world, { nextId: 'a1b2c3d4' });
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Waiting', '--brief', world.brief, '--worktree', 'waiting']).code, 0);
+  const [landed, dirty, waiting] = ['landed', 'dirty', 'waiting'].map((name) => landWorktree(world, name));
+  fs.writeFileSync(path.join(dirty, 'notes.md'), 'uncommitted\n');
+  said(world, '0db8bc5e', 'closed');
+  said(world, 'c779ed44', 'closed');
+  said(world, 'a1b2c3d4', 'waiting');
+  const acted = actions(world).length;
+  const result = js(world, ['sessions', 'stop', '--finished']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.ok(result.stdout.includes(`closed 0db8bc5e · Landed: git removed its worktree ${landed}, which held nothing to lose, and claude removed its job, with the scratch folder claude keeps for it; its transcript stays`), result.stdout);
+  assert.match(result.stdout, /kept c779ed44 · Dirty: its worktree .*dirty stays: it holds what no branch brings back: \?\? notes\.md\n {2}once nothing there is needed, js-harness sessions stop c779ed44 --remove-worktree removes it with its worktree/);
+  assert.match(result.stdout, /^1 closed, 1 kept\.$/m);
+  assert.doesNotMatch(result.stdout, /a1b2c3d4/);
+  // The stop that ends the job's process before git removes its worktree, then the stop and the rm of the removal.
+  assert.deepEqual(actions(world).slice(acted), [['stop', '0db8bc5e'], ['stop', '0db8bc5e'], ['rm', '0db8bc5e']]);
+  assert.deepEqual([fs.existsSync(landed), fs.readFileSync(path.join(dirty, 'notes.md'), 'utf8'), fs.existsSync(waiting)], [false, 'uncommitted\n', true]);
+  assert.deepEqual(recordLines(world).filter((line) => line.event === 'removed').map((line) => line.id), ['0db8bc5e']);
+  // A second run has nothing to close and says what is still kept.
+  const again = js(world, ['sessions', 'stop', '--finished', '--home', world.home]);
+  assert.equal(again.code, 0, again.stderr);
+  assert.match(again.stdout, /^0 closed, 1 kept\.$/m);
+}));
+
+test('sessions stop --finished takes no id and no --remove-worktree, and closes nothing when it cannot look', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Landed', '--brief', world.brief, '--worktree', 'landed']).code, 0);
+  const landed = landWorktree(world, 'landed');
+  said(world, '0db8bc5e', 'closed');
+  const acted = actions(world).length;
+  for (const args of [['0db8bc5e', '--finished'], ['--finished', '--remove-worktree'], ['--finished', '--finished']]) assert.equal(js(world, ['sessions', 'stop', ...args]).code, 2, args.join(' '));
+  const noClaude = spawnSync(process.execPath, [BIN, 'sessions', 'stop', '--finished'], { cwd: world.project, env: { ...envOf(world), PATH: emptyDir(world) }, encoding: 'utf8' });
+  assert.equal(noClaude.status, 1);
+  assert.match(noClaude.stderr, /js-harness sessions stop: claude is not on PATH/);
+  // Whether a session is at work is claude's to say: a listing that fails closes nothing.
+  patchState(world, { agentsFail: 'agents: made up' });
+  const blind = js(world, ['sessions', 'stop', '--finished']);
+  assert.equal(blind.code, 1);
+  assert.match(blind.stderr, /whether a session is at work cannot be told \(.*made up.*\), so nothing was closed/s);
+  patchState(world, { agentsFail: undefined });
+  // With no finished session there is nothing to say but that.
+  fs.rmSync(channelFile(world));
+  const none = js(world, ['sessions', 'stop', '--finished']);
+  assert.equal(none.code, 0, none.stderr);
+  assert.match(none.stdout, /no finished background session of this project is on the machine/);
+  assert.equal(actions(world).length, acted);
+  assert.equal(fs.existsSync(landed), true);
+}));
 
 test('uninstall machine removes the recorded sessions that rest, keeps a working one and fails until it is stopped', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Busy', '--brief', world.brief]).code, 0);

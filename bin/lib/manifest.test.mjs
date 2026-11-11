@@ -3283,7 +3283,9 @@ test('the orchestrator skill resumes a background session by message and never r
   const restart = text.slice(text.indexOf('\n## The restart\n'), text.indexOf('\n## The recap\n'));
   assert.ok(restart.includes('A background session is resumed the same way: `SendMessage` to its title resumes it from its transcript'), restart);
   assert.ok(restart.includes('never `js-harness sessions stop` and `sessions start` to restart one'), restart);
-  assert.ok(text.includes('`js-harness sessions stop <id> --remove-worktree` removes it with its worktree once its work has landed'));
+  // 2026-11-11: 46 finished sessions stayed because closing one waited to be remembered (odd/tasks/sessions-close-themselves.md).
+  assert.ok(text.includes('A session that said `closed` is closed by the harness, not by memory: a land closes every finished one that loses nothing, `js-harness sessions stop --finished` does the same at any time'));
+  assert.ok(text.includes('`js-harness sessions stop <id> --remove-worktree` removes that one with its worktree once what it holds was looked at'));
   assert.doesNotMatch(text, /`js-harness sessions stop <id>` removes it once its work has landed/);
 });
 

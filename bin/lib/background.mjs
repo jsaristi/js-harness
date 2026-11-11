@@ -176,7 +176,8 @@ function closeEntry(home, job, now) {
  * worktree and brief, so the two are undone together (`resumedChain`); `{ none: true }` when there is no record;
  * `{ unavailable }` when it could not be read. A line that is not an entry of this schema is skipped and counted
  * (`skipped`). The stranded starts (`strandEntry`) are read after the lines, each marked with its file (`stranded`),
- * unless a line records its removal; a stranded file that is not such an entry is skipped and counted too. A record
+ * unless a line records its removal; a stranded file that is not such an entry is skipped and counted too, and named
+ * in `strandedUnread`, since what repairs it is that file and not a line of the record. A record
  * that could not be read gives them all the same, as `{ unavailable, stranded }`: each is a session that runs and that
  * the record does not hold, so `sessions stop` and the machine uninstall undo it without the record (Codex P2 on
  * 62315e6..e16b577). */
@@ -190,17 +191,17 @@ export function readRecord(home, { readFile = (file) => fs.readFileSync(file, 'u
   /** The stranded starts whose removal is not in `removed`, and how many files are not such a start. */
   const strandedOf = (removed) => {
     const entries = [];
-    let unread = 0;
+    const unread = [];
     for (const name of strandedNames) {
       const file = path.join(strandedDirOf(home), name);
       let entry;
       try {
         entry = JSON.parse(readFile(file));
       } catch {
-        unread += 1;
+        unread.push(file);
         continue;
       }
-      if (entry?.schema !== BACKGROUND_SCHEMA || entry.event !== 'started' || typeof entry.id !== 'string') unread += 1;
+      if (entry?.schema !== BACKGROUND_SCHEMA || entry.event !== 'started' || typeof entry.id !== 'string') unread.push(file);
       else if (!removed.has(entry.id)) entries.push({ ...entry, stranded: file });
     }
     return { entries, unread };
@@ -235,13 +236,15 @@ export function readRecord(home, { readFile = (file) => fs.readFileSync(file, 'u
     } else skipped += 1;
   }
   const stranded = strandedOf(removed);
-  skipped += stranded.unread;
+  skipped += stranded.unread.length;
   for (const entry of stranded.entries) {
     open.set(entry.id, entry);
     started.push(entry);
   }
   const resumedAs = new Map([...open.values()].filter((entry) => open.has(entry.resumedFrom)).map((entry) => [entry.resumedFrom, entry]));
-  return { sessions: [...open.values()], started, resumedAs, skipped };
+  // `removed`, the ids of the jobs already removed: one of a chain an undo got only part of is in `started` and is no
+  // job to undo.
+  return { sessions: [...open.values()], started, resumedAs, skipped, strandedUnread: stranded.unread, removed };
 }
 
 /** The jobs the recorded job `entry` resumed, the last one first, read from `started` (readRecord's). */
@@ -256,6 +259,51 @@ export function resumedChain(started, entry) {
     chain.push(at);
   }
   return chain;
+}
+
+/** The kinds of notice that say where a session's work stands: the newest one tells whether it is finished. */
+const STATE_KINDS = new Set(['opened', 'waiting', 'question', 'ready', 'closed']);
+
+/** Whether the channel notice `notice` came from the recorded job `job`: its sender is the job's id or session id, or
+ * the start of that session id, as `recordedNamed` reads an id. */
+const sentBy = (notice, job) => {
+  const sender = notice?.from?.id;
+  if (typeof sender !== 'string' || sender === '') return false;
+  return sender === job.id || (sender.length >= 8 && String(job.sessionId ?? '').startsWith(sender)) || (job.id.length >= 8 && sender.startsWith(job.id));
+};
+
+/** The recorded sessions of the project at `root` that are finished and still on the machine
+ * (odd/tasks/sessions-close-themselves.md): those whose newest notice of `STATE_KINDS`, among the channel's `notices`
+ * and from any job of theirs, is `closed`. Each `{ entry, chain, closedAt }`: `entry` the last job, `chain` it and the
+ * jobs it resumed, which go together. A session that said nothing is not finished: it may be waiting on the user. */
+export function finishedOf(record, notices, root) {
+  const found = [];
+  for (const entry of record.sessions ?? []) {
+    if (entry.root !== root || record.resumedAs?.has(entry.id)) continue;
+    const chain = [entry, ...resumedChain(record.started ?? [], entry)];
+    let last = null;
+    for (const notice of notices) {
+      if (!STATE_KINDS.has(notice?.kind) || typeof notice.at !== 'string' || !chain.some((job) => sentBy(notice, job))) continue;
+      if (last === null || notice.at >= last.at) last = notice;
+    }
+    // The notices of a job already removed still count; the job itself is no longer one to remove.
+    if (last?.kind === 'closed') found.push({ entry, chain: chain.filter((job) => job === entry || !record.removed?.has(job.id)), closedAt: last.at });
+  }
+  return found;
+}
+
+/** The command that closes the finished sessions, as the board, doctor and a resume name it. */
+export const CLOSE_FINISHED = 'js-harness sessions stop --finished';
+
+/** The agent of claude's listing `agents` that is at work among the jobs of `chain`, or `undefined`. */
+export const workingIn = (chain, agents) => agents.find((agent) => atWork(agent) && chain.some((job) => agent.id === job.id || (typeof job.sessionId === 'string' && agent.sessionId === job.sessionId)));
+
+/** The debt the board and doctor list: the finished sessions of `root` (`finishedOf`) with no job at work in `agents`,
+ * each `{ id, title, closedAt }`. From the records and one listing alone: what a worktree holds is for the close to say. */
+export function finishedHere(record, notices, root, agents) {
+  return finishedOf(record, notices, root)
+    .filter(({ chain }) => workingIn(chain, agents) === undefined)
+    .map(({ entry, closedAt }) => ({ id: entry.id, title: entry.title ?? null, closedAt }));
 }
 
 /** Why `id`, a session `resumedAs` (readRecord's) names, is not acted on alone: the job that resumed it, the last one. */
@@ -335,7 +383,7 @@ const LOCK_PID = /lock on the worktree names a process that is still running \(p
 const FILES_BUSY = /\bEBUSY\b/;
 
 /** Whether a process with this pid exists: one this process may not signal does. */
-function exists(pid) {
+export function exists(pid) {
   try {
     process.kill(pid, 0);
     return true;
@@ -344,7 +392,7 @@ function exists(pid) {
   }
 }
 
-const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+export const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
 /** claude rm of the job `id` after its stop: tried again once the process claude's lock names has ended (looked for
  * with `alive` up to LOCK_WAIT_MS), and up to RM_TRIES times while claude says files are busy. Kills nothing: a pid in
@@ -382,7 +430,7 @@ export function undoSession(entry, { home, run, now, alive = exists, pause = sle
   let stopped;
   let removed;
   const record = readRecord(home);
-  const chain = [entry, ...resumedChain(record.started ?? [], entry)];
+  const chain = [entry, ...liveChain(record, entry)];
   const worktree = worktreeOf(entry);
   const was = worktree !== null && fs.existsSync(worktree);
   for (const job of chain) {
@@ -404,6 +452,9 @@ export function undoSession(entry, { home, run, now, alive = exists, pause = sle
   const kept = worktree !== null && fs.existsSync(worktree);
   return { outcome: lostSaid(stopped) && lostSaid(removed) ? 'gone' : 'removed', worktreeKept: kept ? worktree : null, worktreeGone: was && !kept ? worktree : null, worktreeMissing: worktree !== null && !was ? worktree : null };
 }
+
+/** The jobs the recorded job `entry` resumed that are still to undo (`resumedChain` without those already removed). */
+const liveChain = (record, entry) => resumedChain(record.started ?? [], entry).filter((job) => !record.removed?.has(job.id));
 
 /** A session at work: busy, or waiting on something (a permission prompt). */
 export const atWork = (agent) => agent?.status === 'busy' || agent?.status === 'waiting' || agent?.state === 'working';
@@ -513,7 +564,13 @@ export function backgroundLines(fact, ago) {
     const whose = item.recorded ? 'recorded by js-harness sessions start' : 'not started by js-harness';
     return `  ${item.id}  ${item.title ?? '(no title)'}  ${standing(item)}  started ${ago(item.startedAt)}  ${item.cwd}  ${whose}`;
   });
-  return [title, ...(rows.length === 0 ? ['  none'] : rows), ...(fact.skipped > 0 ? [`  ${fact.skipped} line${fact.skipped === 1 ? '' : 's'} of the record could not be read`] : []), ''];
+  const finished = fact.finished ?? [];
+  // A debt, with the one command that pays it (odd/tasks/sessions-close-themselves.md): why one is kept is that command's to say.
+  const debt = finished.length === 0 ? [] : [
+    `  ${finished.length} finished and still on the machine (each said closed, and no job of it is at work): ${CLOSE_FINISHED} closes each that loses nothing and says why it keeps the rest`,
+    ...finished.map((item) => `    ${item.id}  ${item.title ?? '(no title)'}  closed ${ago(item.closedAt)}`),
+  ];
+  return [title, ...(rows.length === 0 ? ['  none'] : rows), ...debt, ...(fact.skipped > 0 ? [`  ${fact.skipped} line${fact.skipped === 1 ? '' : 's'} of the record could not be read`] : []), ''];
 }
 
 /** The changes a watch returns for (S4): a background session that waits now and did not before. Nothing is compared
@@ -529,13 +586,14 @@ export function backgroundChanges(before, after) {
 /** The board's background sessions (S4), from one listing (`list`) and the record under `home`: those in the folders of
  * `root` and its `worktrees`, marked by whether the record of this project holds them. A failure is unavailable, never
  * none. */
-export function boardBackground({ home, root, worktrees, list, platform = process.platform, readFile }) {
+export function boardBackground({ home, root, worktrees, list, platform = process.platform, readFile, notices = null }) {
   try {
     const record = readRecord(home, { readFile });
     if (record.unavailable !== undefined) throw new Error(`the record of background sessions could not be read (${record.unavailable})`);
     const roots = [root, ...(worktrees.available ? worktrees.items.map((tree) => tree.path) : [])];
     const recorded = record.sessions.filter((entry) => entry.root === root);
-    return { available: true, items: backgroundOf(list(), { roots, recorded, platform }), skipped: record.skipped };
+    const agents = list();
+    return { available: true, items: backgroundOf(agents, { roots, recorded, platform }), skipped: record.skipped, finished: notices === null ? [] : finishedHere(record, notices, root, agents) };
   } catch (err) {
     return { available: false, reason: err.message };
   }

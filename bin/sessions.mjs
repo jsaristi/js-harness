@@ -654,7 +654,8 @@ export async function sessionsMain(
       notVisible: NOT_VISIBLE,
       // The project's background sessions (odd/tasks/background-sessions.md, S4): what `claude agents` lists in its
       // folders, each marked by whether `sessions start` recorded it. A listing that fails is unavailable, never none.
-      background: boardBackground({ home, root, worktrees, list: listBackground, platform, readFile }),
+      // With the channel's notices it names the finished ones still here (odd/tasks/sessions-close-themselves.md).
+      background: boardBackground({ home, root, worktrees, list: listBackground, platform, readFile, notices: record.unavailable === undefined ? record.notices : null }),
     };
   };
   const boardLines = (board) => renderBoard(board, { now: Date.parse(board.generatedAt) });

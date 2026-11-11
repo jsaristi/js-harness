@@ -2557,6 +2557,37 @@ test('doctorMain shows the worktrees row ok with none, unknown when it cannot te
   }
 });
 
+// odd/tasks/sessions-close-themselves.md: a finished background session still on the machine is a debt with one command.
+test('doctorMain names the finished background sessions still on the machine with the command that closes them, and its hook never asks', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const run = (finishedSessions, argv = []) => runDoctor([...argv, '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, finishedSessions });
+
+    const stale = await run((cwd, given) => { assert.deepEqual([cwd, given], [project, home]); return [{ id: 'aaaa1111', title: 'JH 1 · a' }, { id: 'bbbb2222', title: null }]; });
+    assert.match(stale.output, /^finished\s+n\/a\s+n\/a\s+n\/a\s+stale\s+n\/a$/m);
+    assert.ok(stale.output.includes('  finished (project):\n    2 finished background sessions still on the machine: js-harness sessions stop --finished closes each that loses nothing and says why it keeps the rest\n    aaaa1111 · JH 1 · a\n    bbbb2222 · (no title)\n'), stale.output);
+
+    const none = await run(() => []);
+    assert.match(none.output, /^finished\s+n\/a\s+n\/a\s+n\/a\s+ok\s+n\/a$/m);
+    assert.doesNotMatch(none.output, /^ {2}finished \(/m);
+
+    const unread = await run(() => { throw new Error('the record could not be read'); });
+    assert.match(unread.output, /^finished\s+n\/a\s+n\/a\s+n\/a\s+unknown\s+n\/a$/m);
+
+    let asked = false;
+    const hook = await run(() => { asked = true; return []; }, ['--hook']);
+    assert.equal(hook.code, 0);
+    assert.equal(asked, false, 'the hook asked for the finished sessions');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // The review-skips row (odd/tasks/f8-s1-reviews.md, T5; S7: a skip is listed by `check` and `doctor`): the skips of both
 // reviews that still owe one, read only by the interactive report, as the worktrees row is.
 test('doctorMain lists the review skips that still owe a review, ok with none, unknown when it cannot tell, and its hook never reads them', async () => {

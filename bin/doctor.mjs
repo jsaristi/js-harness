@@ -24,6 +24,9 @@ import { unknownArgument } from './lib/args.mjs';
 import { hostNotice, hostReviewRefusal, hostUnreadableRow, hostUpdateRow, readHostVersions, readProjectRulesText } from './lib/host-update.mjs';
 import { owedSkipLines } from './lib/lens-review-rows.mjs';
 import { worktreesInMain } from './lib/worktrees.mjs';
+import { CLOSE_FINISHED, claudeRunner, listAgents } from './lib/background.mjs';
+import { finishedIn } from './lib/background-close.mjs';
+import { mainCheckout } from './lib/sessions.mjs';
 import { backupHealth } from './backup.mjs';
 import { templatesHealth } from './template.mjs';
 import { permissionsHealth } from './lib/permissions.mjs';
@@ -219,7 +222,9 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   // Counting asks a `git status` of each worktree: the interactive report only, never the hook of every session start.
   const withTrees = deps.worktrees && interactive ? [...withUnseenOnly, worktreesRow(deps.worktrees, project)] : withUnseenOnly;
   // Reading the skips asks git for the branch's commits and their records: the interactive report only, as above.
-  const withSkips = deps.reviewSkips && interactive ? [...withTrees, reviewSkipsRow(deps.reviewSkips, project)] : withTrees;
+  // The finished sessions may ask claude for its listing: the interactive report only, as above.
+  const withFinished = deps.finishedSessions && interactive ? [...withTrees, finishedSessionsRow(deps.finishedSessions, project, home)] : withTrees;
+  const withSkips = deps.reviewSkips && interactive ? [...withFinished, reviewSkipsRow(deps.reviewSkips, project)] : withFinished;
   // The templates' records are read by the interactive report only, as the skips are.
   const withTemplates = deps.templates && interactive ? [...withSkips, templatesRow(deps.templates, project, home)] : withSkips;
   // The idea watch lists the upstream tags over the network: the interactive online report only.
@@ -345,6 +350,23 @@ function worktreesRow(worktrees, project) {
   return { ...row, project: 'stale', fix: { project: [`${count} on branches origin/main holds, clean and idle: js-harness merge-queue --prune removes them`, ...found.map((tree) => `${tree.path} (${tree.branch})`)] } };
 }
 
+/** The finished row (odd/tasks/sessions-close-themselves.md), its id short for the table's column: the background sessions of the project that said
+ * closed, have no job at work and are still on the machine, a gap with the one command that closes them and each one;
+ * `unknown` when a record or claude's listing cannot be read. `finished(project, home)` gives them or throws. */
+function finishedSessionsRow(finished, project, home) {
+  const row = { id: 'finished', version: null, installed: 'n/a', claude: 'n/a', codex: 'n/a', project: 'ok', upToDate: 'n/a', fix: {} };
+  let found;
+  try {
+    found = finished(project, home);
+  } catch {
+    found = null;
+  }
+  if (!Array.isArray(found)) return { ...row, project: 'unknown' };
+  if (found.length === 0) return row;
+  const count = `${found.length} finished background session${found.length === 1 ? '' : 's'}`;
+  return { ...row, project: 'stale', fix: { project: [`${count} still on the machine: ${CLOSE_FINISHED} closes each that loses nothing and says why it keeps the rest`, ...found.map((item) => `${item.id} · ${item.title ?? '(no title)'}`)] } };
+}
+
 /** The review-skips row (odd/tasks/f8-s1-reviews.md, T5): the skips of both reviews on the branch that still owe a
  * review (`owedSkipLines`), `stale` with each while any does, since the door refuses a pull request that holds a lens
  * skip. `ok` with none, `unknown` when they cannot be read. */
@@ -408,6 +430,11 @@ export function doctorCommand(argv, extra = {}) {
     host: (home) => readHostVersions({ home }),
     stackUpdate: true,
     worktrees: (cwd) => worktreesInMain({ cwd }),
+    finishedSessions: (cwd, home) => finishedIn({
+      home,
+      root: mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }), cwd),
+      list: () => listAgents(claudeRunner({ env: process.env, timeout: 15000 })),
+    }),
     reviewSkips: (cwd) => owedSkipLines(cwd),
     templates: (project, home) => templatesHealth(project, home),
     backup: (home, now) => backupHealth(home, now),

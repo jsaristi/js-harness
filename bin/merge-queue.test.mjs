@@ -6,7 +6,8 @@ import path from 'node:path';
 import test, { after, before } from 'node:test';
 import * as queue from './merge-queue.mjs';
 import { actionsState, failedRows, failingTests, landingLines, localSuite, mergeQueueMain, staleBin, tellLeftOut } from './merge-queue.mjs';
-import { appendNotice, newNotice, NOTICE_TEXT_MAX, readNotices } from './lib/channel.mjs';
+import { appendRecord } from './lib/background.mjs';
+import { appendNotice, newNotice, NOTICE_SCHEMA, NOTICE_TEXT_MAX, readNotices } from './lib/channel.mjs';
 import { checkCodexReviews } from './lib/codex-review-rows.mjs';
 import { appendGateEvent } from './lib/gate-log.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
@@ -217,10 +218,10 @@ function landRunner(prs, checks, onChecks = () => {}, gh = {}) {
 
 const workflowRun = (status, conclusion = null, more = {}) => ({ id: 1, name: 'gate', path: '.github/workflows/gate.yml', status, conclusion, html_url: 'https://github.com/o/r/actions/runs/1', ...more });
 
-async function land(root, prs, { suite = () => ({ ok: true }), checks = [[workflowRun('completed', 'success')]], onChecks, wrap = (run) => run, env, cwd = root, gh } = {}) {
+async function land(root, prs, { suite = () => ({ ok: true }), checks = [[workflowRun('completed', 'success')]], onChecks, wrap = (run) => run, env, cwd = root, gh, more = {} } = {}) {
   const { run, calls } = landRunner(prs, checks, onChecks, gh);
   const out = [];
-  const code = await mergeQueueMain(['--land', '--cwd', cwd], { run: wrap(run), covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line), ...(env && { env }) });
+  const code = await mergeQueueMain(['--land', '--cwd', cwd], { run: wrap(run), covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line), ...(env && { env }), ...more });
   return { code, out, calls };
 }
 
@@ -1451,6 +1452,7 @@ test('--land writes one land record: the pull requests it looked at, each left o
     candidate: landed,
     landed: [1, 2],
     removed: [],
+    closed: [],
     exit: 0,
     said: out.at(-1),
   });
@@ -1802,6 +1804,47 @@ test('a land removes the worktree of a landed pull request that is clean and idl
   assert.deepEqual(removedOf(root), [[1, 'wt-a']]);
   assert.ok(out.some((line) => line.startsWith('Removed the worktree of PR 1 at ')), out.join('\n'));
   assert.match(landsOf(root).at(-1).said, /^Landed: /);
+});
+
+// odd/tasks/sessions-close-themselves.md: a worktree under .claude/worktrees is left by the rule above, and it is where
+// `sessions start --worktree` puts every session's, so a land closes the finished sessions by their own rule.
+test('a land closes the finished background session whose work it landed: its worktree by git, its job by claude, named in its record', async () => {
+  const { root, heads } = makeQueueRepo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-land-home-'));
+  const main = mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' }), root);
+  const place = idle(worktree(root, path.join(root, '.claude', 'worktrees', 'a'), 'feat/a'));
+  const entry = { event: 'started', at: new Date(Date.now() - 3_600_000).toISOString(), id: 'aaaa1111', sessionId: 'aaaa1111-0000-4000-8000-000000000000', title: 'JH 1 · a', root: main, cwd: main, worktree: 'a', worktreePath: place, brief: null };
+  appendRecord(home, entry);
+  appendNotice(home, projectSlug(main), { schema: NOTICE_SCHEMA, at: new Date(Date.now() - 60_000).toISOString(), from: { id: entry.sessionId, title: entry.title }, to: { role: 'orchestrator' }, kind: 'closed', text: 'delivered' });
+  // As claude leaves it: the worktree locked for the session's job, whose process has ended by now.
+  const ended = spawnSync(process.execPath, ['-e', '']).pid;
+  git(root, 'worktree', 'lock', '--reason', `claude session a (pid ${ended})`, place);
+  const asked = [];
+  const claude = (args) => { asked.push(args); return { status: 0, stdout: '', stderr: '' }; };
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { env: { ...process.env, JS_HARNESS_HOME: home }, more: { claude, listAgents: () => [] } });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(fs.existsSync(place), false, out.join('\n'));
+  assert.deepEqual(asked, [['stop', 'aaaa1111'], ['rm', 'aaaa1111']]);
+  assert.equal(git(root, 'rev-parse', 'feat/a'), heads['feat/a'], 'the branch stays');
+  assert.deepEqual(landsOf(root).at(-1).closed, [{ id: 'aaaa1111', title: 'JH 1 · a', worktree: place }]);
+  assert.ok(out.includes('Finished background sessions: 1 closed, 0 kept.'), out.join('\n'));
+  assert.deepEqual(removedOf(root), [], 'the land\'s own rule still leaves what is under .claude/worktrees');
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test('a land whose close of the finished sessions fails says so in a line, and its exit and its record stand', async () => {
+  const { root, heads } = makeQueueRepo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-land-home-'));
+  const main = mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' }), root);
+  const entry = { event: 'started', at: new Date(Date.now() - 3_600_000).toISOString(), id: 'aaaa1111', sessionId: 'aaaa1111-0000-4000-8000-000000000000', title: 'JH 1 · a', root: main, cwd: main, worktree: null, worktreePath: null, brief: null };
+  appendRecord(home, entry);
+  appendNotice(home, projectSlug(main), { schema: NOTICE_SCHEMA, at: new Date(Date.now() - 60_000).toISOString(), from: { id: entry.sessionId, title: entry.title }, to: { role: 'orchestrator' }, kind: 'closed', text: 'delivered' });
+  const claude = () => { throw new Error('claude: made up'); };
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { env: { ...process.env, JS_HARNESS_HOME: home }, more: { claude, listAgents: () => [] } });
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(out.includes('Could not close the finished background sessions (claude: made up): the land\'s exit stands.'), out.join('\n'));
+  assert.deepEqual([landsOf(root).at(-1).closed, landsOf(root).at(-1).landed], [[], [1]]);
+  fs.rmSync(home, { recursive: true, force: true });
 });
 
 test('a land keeps a landed worktree under .claude/worktrees, the app\'s, and the worktree it runs from', async () => {
