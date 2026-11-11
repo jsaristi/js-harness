@@ -25,7 +25,9 @@ import {
 import { readNotices, recordPath } from './lib/channel.mjs';
 import { gateLogDir } from './lib/gate-log.mjs';
 import { ruleValue } from './lib/rules.mjs';
+import { ABSENCE_MS, departureLine, departureWatch, stretchesOf } from './lib/return-report.mjs';
 import { readStalled } from './lib/stall.mjs';
+import { isLeadSession } from './lib/stale-board.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 
@@ -64,6 +66,10 @@ export const USAGE = [
   '    with a CUT line (exit 0) when, run from a session (CLAUDE_CODE_SESSION_ID), a compaction brings that session\'s',
   `    compactions to ${LEAD_CUT_COMPACTIONS} or more: the lead's cut, one already due at the start ending it once and then`,
   '    named on an "already due:" line by each relaunch, the count told kept in a cuts folder under the loop records;',
+  `    with an AWAY line (exit 0) when, run from a session, the user last wrote to it more than ${ABSENCE_MS / 3600000} hours ago (the absence`,
+  '    of the reply hook\'s return check) and no stretch covers the time since (js-harness stretch): it names the',
+  '    command that opens one, or says since when the question tool has held the session, which can then open none;',
+  '    told once an absence, kept in an away folder under the loop records, and named on an "already told:" line by a relaunch;',
   '    with the DUE line of a throughput review (exit 0) when it falls due and again an hour, three and',
   '    seven after, one already due at the start being named on an "already due:" line; or after --max hours (10,',
   '    exit 1). Every line that ends it is followed by the DUE lines still open. Each tick also keeps, as',
@@ -533,6 +539,10 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     return cutLine(count);
   };
   const cut = { offset: 0, count: 0, unread: false };
+  // His absence (odd/tasks/departure-control.md): the same pieces of the transcript feed the watch of when he last
+  // wrote, so a tick reads the file once for both. `read` says whether the last read of the transcript worked: an
+  // absence is never told from a transcript that could not be read.
+  const away = { watch: departureWatch(), read: false, unread: false };
   const compactionsNow = () => {
     if (transcript === null) return null;
     let tail;
@@ -541,12 +551,60 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     } catch (err) {
       if (!cut.unread) ctx.out(`the lead's cut could not read ${transcript}: ${err.code ?? err.message}`);
       cut.unread = true;
+      away.read = false;
       return null;
     }
-    if (tail.restarted) cut.count = 0;
+    if (tail.restarted) {
+      cut.count = 0;
+      away.watch = departureWatch();
+    }
     cut.count += compactionsIn(tail.text);
     cut.offset = tail.end;
+    away.watch.add(tail.text);
+    away.read = true;
     return cut.count;
+  };
+  // The absence told last for this session, kept as the cut's count is, in a folder of its own: an absence in course
+  // when a heartbeat starts wakes the lead once, and a relaunch after it names it and goes on until he writes again.
+  const awayFile = session === null ? null : path.join(loopsFolder(home, slug), 'away', `${session}.json`);
+  const toldAway = () => {
+    try {
+      const told = JSON.parse(ctx.readFile(awayFile)).told;
+      return typeof told === 'string' ? told : null;
+    } catch {
+      return null;
+    }
+  };
+  // Only the lead is told: the user's messages reach the lead's chat, and a work session that runs a heartbeat plans
+  // no stretch. Who the lead is, is the return check's rule (`isLeadSession`), read once an absence.
+  const leadAt = new Map();
+  const isLead = (before) => {
+    if (!leadAt.has(before)) {
+      const record = readNotices(home, slug, { readFile: (file) => ctx.readFile(file) });
+      if (record.unavailable !== undefined) throw new Error(`the record of notices (${record.path}): ${record.unavailable}`);
+      leadAt.set(before, isLeadSession(record.notices, session));
+    }
+    return leadAt.get(before);
+  };
+  /** The absence in course at `now` that no stretch covers, after this tick's read of the transcript, or `null`. */
+  const awayAt = (now) => {
+    if (!away.read) return null;
+    try {
+      const found = away.watch.read(stretchesOf(home, slug, (file) => ctx.readFile(file)), now);
+      return found !== null && isLead(found.before) ? found : null;
+    } catch (err) {
+      if (!away.unread) ctx.out(`the user's absence could not be read: ${err.message}`);
+      away.unread = true;
+      return null;
+    }
+  };
+  const tellAway = (found, now) => {
+    try {
+      ctx.writeFile(awayFile, `${JSON.stringify({ told: found.before, at: new Date(now).toISOString(), heldSince: found.heldSince })}\n`);
+    } catch (err) {
+      ctx.out(`the user's absence could not keep its mark ${awayFile}: ${err.code ?? err.message}`);
+    }
+    return departureLine(found);
   };
   // Every line that ends the loop is followed by the reviews still due, so whatever wakes the lead names them.
   const ending = (lines, dues, code) => {
@@ -574,7 +632,7 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     }
     return last;
   };
-  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 || !ctx.windowsDaily ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}${ctx.hostWatch ? '; every hour, the host\'s versions are read, and an update no host watch session holds ends it' : ''}${ctx.throughputTick ? '; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it' : ''}${transcript === null ? '' : `; each tick reads this session's compactions, and a compaction that brings them to ${LEAD_CUT_COMPACTIONS} or more ends it: the lead's cut after ${LEAD_CUT_COMPACTIONS} compactions`}`);
+  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 || !ctx.windowsDaily ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}${ctx.hostWatch ? '; every hour, the host\'s versions are read, and an update no host watch session holds ends it' : ''}${ctx.throughputTick ? '; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it' : ''}${transcript === null ? '' : `; each tick reads this session's compactions, and a compaction that brings them to ${LEAD_CUT_COMPACTIONS} or more ends it: the lead's cut after ${LEAD_CUT_COMPACTIONS} compactions; each tick reads when the user last wrote to this session, and ${plural(ABSENCE_MS / 3600000, 'hour')} with no message and no stretch covering them end it`}`);
   let compactions = compactionsNow();
   for (const item of stalledAt(started)) {
     told.set(identity(item), crossing(item));
@@ -589,18 +647,28 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     if (compactions > toldCut()) return ending([tellCut(compactions)], startDues, 0);
     ctx.out(`already due: the lead's cut, ${compactions} compactions in this session, told before`);
   }
+  const awayAtStart = awayAt(started);
+  if (awayAtStart !== null) {
+    if (awayAtStart.before !== toldAway()) return ending([tellAway(awayAtStart, started)], startDues, 0);
+    ctx.out(`already told: the user's absence since ${hourOf(Date.parse(awayAtStart.before))}, with no stretch covering it`);
+  }
   for (;;) {
     const last = lastWrite();
     const now = ctx.now();
     const dues = await duesAt(now);
-    if (now - last >= quiet * 60000) return ending([`STALL: no gate-log or channel write since ${hourOf(last)}`], dues, 0);
-    const fresh = stalledAt(now).filter((item) => crossing(item) > (told.get(identity(item)) ?? -1));
-    if (fresh.length > 0) return ending(fresh.map(stalledLine), dues, 0);
+    // The transcript is read first, so an absence that starts in this tick is told with whatever else ends it: a STALL
+    // told alone would end the loop with his absence unsaid, and the lead may start no heartbeat after it.
     const counted = compactionsNow();
+    const gone = awayAt(now);
+    const awayLines = gone !== null && gone.before !== toldAway() ? [tellAway(gone, now)] : [];
+    if (now - last >= quiet * 60000) return ending([...awayLines, `STALL: no gate-log or channel write since ${hourOf(last)}`], dues, 0);
+    const fresh = stalledAt(now).filter((item) => crossing(item) > (told.get(identity(item)) ?? -1));
+    if (fresh.length > 0) return ending([...awayLines, ...fresh.map(stalledLine)], dues, 0);
     // Against the mark as well: a transcript unread at the start leaves `compactions` null, and a count already told
     // before is not told again when it becomes readable.
-    if (counted !== null && counted > (compactions ?? 0) && counted >= LEAD_CUT_COMPACTIONS && counted > toldCut()) return ending([tellCut(counted)], dues, 0);
+    if (counted !== null && counted > (compactions ?? 0) && counted >= LEAD_CUT_COMPACTIONS && counted > toldCut()) return ending([...awayLines, tellCut(counted)], dues, 0);
     if (counted !== null) compactions = counted;
+    if (awayLines.length > 0) return ending(awayLines, dues, 0);
     const windowsLine = await windowsTold();
     if (windowsLine !== null) return ending([windowsLine], dues, 0);
     const hostLine = await hostTold();

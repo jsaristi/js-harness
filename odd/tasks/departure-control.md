@@ -130,9 +130,10 @@ the lead with `js-harness notify --to orchestrator`.
 
 ## Tasks
 - [x] T1 (kind: design) spec 1, 2, 3: this document, its depth pass and the replay. Route: inline. Commit: `docs(tasks): departure-control, the depth pass`
-- [ ] T2 (kind: build) spec 1, 3: the absence in course and the one cover test in `bin/lib/return-report.mjs`, the lines a tick keeps in `bin/lib/person-times.mjs`, tests first. Route: inline. Commit: with T3
-- [ ] T3 (kind: build) spec 1, 3: the heartbeat's `AWAY:` line and its mark, tests first; usage, the lead's sentence, SPEC. Route: inline. Commit: `feat(loop): the heartbeat tells the lead when he has been away two hours with no stretch`
-- [ ] T4 (kind: docs) spec 4: the sighting of 2026-11-10 and the control in `docs/FAILURES.md`. Route: inline. Commit: with T3
+- [x] T2 (kind: build) spec 1, 3: the absence in course and the one cover test in `bin/lib/return-report.mjs`, the lines a tick keeps in `bin/lib/person-times.mjs`, tests first. Route: inline. Commit: with T3
+- [x] T3 (kind: build) spec 1, 3: the heartbeat's `AWAY:` line and its mark, tests first; usage, the lead's sentence, SPEC. Route: inline. Commit: `feat(loop): the heartbeat tells the lead when he has been away two hours with no stretch`
+- [x] T4 (kind: docs) spec 4: the sighting of 2026-11-10 and the control in `docs/FAILURES.md`. Route: inline. Commit: with T3
+- [x] T7 (kind: build) spec 4, L10: a held absence is recorded apart, under the existing entry `question-tool-holds-asker`, and the two texts that ask for the sighting name it, tests first. Route: inline. Commit: with T3
 - [ ] T5 (kind: verify) spec 5: Codex and the lenses on the slice, the independent verifier's replay, the pull request, the ready notice. Route: inline, one verifier sub-agent
 - [ ] T6 (kind: docs) the summary under `docs/sessions/` and the closed notice. Route: inline
 
@@ -167,5 +168,77 @@ the lead with `js-harness notify --to orchestrator`.
   message covers, so the tick predicts what the return check will ask. Held is said in the line, not acted on: the
   host delivers the loop's end when the question returns, and the lead then writes the sighting with it.
 
+- L5 (2026-11-11, T1): committed as `8ff0b26a` (gate PASS, 20 rows). The lead was sent the held finding as a note
+  at 00:53 local, with the recommended option (record a held absence apart, as its own failure with its own unit).
+  This session is JH 176; `js-harness wait --notice-to 176` runs in its background (task `baj8tokm3`, ends on a notice
+  to 176 or after 8 hours; this session stops it at its close).
+- L6 (2026-11-11, T2): red first, `node --test bin/lib/return-report.test.mjs`: "SyntaxError: The requested module
+  './return-report.mjs' does not provide an export named 'AWAY_MARKER'". Built in `bin/lib/return-report.mjs`:
+  `stretchRecordsIn` and `stretchesOf` exported, `covers` (the one cover test, which `returnStretchWarning` now
+  calls), `departureWatch()` (`add(text)` a piece of the transcript, `read(stretches, now)` the absence in course as
+  `{ before, away, heldSince }`), `departureLine(found)` and `AWAY_MARKER`; `personLinesIn` in
+  `bin/lib/person-times.mjs`. Green: `node --test bin/lib/return-report.test.mjs bin/lib/person-times.test.mjs`, 33
+  of 33 (7 new).
+- L7 (2026-11-11, T3): red first, `node --test bin/loop-bodies.test.mjs`: 5 of 30 fail, the five new heartbeat cases
+  (the AWAY line at the first tick past two hours; told at once at a start and named by a relaunch; nothing while a
+  stretch covers, an unreadable record said once; the held line; told with a STALL of the same tick), 25 pass.
+
+- L8 (2026-11-11, T3, uncommitted): the heartbeat built in `bin/loop.mjs` (the watch fed by the tail the cut reads,
+  `awayAt`, `tellAway`, the mark `loops/<project>/away/<session>.json` holding `{ told, at, heldSince }`, the AWAY
+  line put before whatever ends the same tick, the first line and the usage); green, `node --test
+  bin/loop-bodies.test.mjs bin/loop.test.mjs bin/lib/return-report.test.mjs bin/lib/person-times.test.mjs
+  bin/reply.test.mjs` 116 of 116. The new messages name "the user", as shipped text does. Texts: the lead's sentence
+  in `bin/lib/manifest.mjs` (line 147), the dispatcher's summary in `bin/js-harness.mjs`, a paragraph in `README.md`;
+  `rules coverage` PASS with no refresh, `rules check` PASS (78 rules). T4: the sighting of 2026-11-10 and the control
+  in `docs/FAILURES.md` (the old control moved to a `- Was:` line); `failures check` exits 0, the entry reads
+  "controlled (22 sightings)".
+- L9 (2026-11-11, design, the lead's rule): only the lead is told. A work session that ran a heartbeat would be told of
+  an absence that is not its to plan, so the line is given only where `isLeadSession` says the session is the lead,
+  the return check's rule, read from the notices once an absence. Its tests are written (the five AWAY cases carry a
+  lead's notice; a sixth shows a work session and a session with no notice told nothing).
+- L10 (2026-11-11 01:13 local, the lead's note to 176, read from the wait's output): "your recommended option is
+  taken, by his words of 00:30 (transcript ea85ec35, line 6905: every question with the recommended option). Record a
+  held absence as its own failure, apart from stretch-not-opened, in docs/FAILURES.md in your pull request, with the 9
+  of 23 and where the replay is. Its own unit (how a question stops holding the lead) is NOT yours: write its brief to
+  a file outside the repo and send me the path in one notice; I start it. Go on with the AWAY line." The reading that
+  line 6905 covers a question the triage did not put to him is the lead's, and his to correct when he reads the pull
+  request; the brief had said such a decision is not covered. Taken as the lead's instruction: a held absence is recorded apart,
+  its control owed to its own unit: how a question stops holding the lead.
+  So that the two entries stay apart after this pull request, the two texts that ask for the sighting name the right
+  entry: the AWAY line's held form, and the return's stretch warning, which names the held entry when his return
+  is the answer to a question asked before the absence started (a new T7, the reply hook's text path: high risk,
+  the verifier reads it).
+- L11 (2026-11-11, the lead gate, Next step (a)): built in `bin/loop.mjs` (`isLead(before)` over `readNotices`, cached
+  by the absence's start; notices that cannot be read are said once, as an unreadable stretch record is); green,
+  `node --test bin/loop-bodies.test.mjs`, the six AWAY cases pass.
+- L12 (2026-11-11, T7): red first, `node --test bin/lib/return-report.test.mjs`: 2 of 31 fail (the held line names
+  its own entry; a return that answers a question asked before the absence started names it too). Built:
+  `HELD_FAILURE`, `heldThrough(text, before, back)` (his entry at `back` is an answer, by `quoteEntry`, to a question
+  asked at or before `before + ABSENCE_MS`), the held form of `returnStretchWarning` and of `departureLine`. Green:
+  `node --test bin/lib/return-report.test.mjs bin/reply.test.mjs bin/loop-bodies.test.mjs`, 94 of 94.
+- L13 (2026-11-11, the search of `rule:reuse-first` on the register, late): `docs/FAILURES.md` already held
+  `question-tool-holds-asker` (one sighting, 2026-10-13: a question asked while he was away held the lead seven hours;
+  control: the protocol's sentence that the tool is called at once only when he wrote a short while ago, since
+  2026-10-14). It is the same failure, so no second entry: `HELD_FAILURE` names it, its text gained the case of a
+  question left on his screen when he leaves, and the 9 held absences of L3 are its `- Seen:` lines. Its state is now
+  "seen again", which is true: 9 sightings after its control. What settles it is the question unit's, not this
+  document's. `node bin/js-harness.mjs failures check` exits 0 (141 failures, 9 not settled, one more than before);
+  `node --test bin/lib/return-report.test.mjs`, 31 of 31 after the rename.
+- L14 (2026-11-11, a red run that was the machine): `bin/loop.test.mjs` "a real loop: run in the background, status
+  sees it alive, stop leaves no process of it" failed once after 101 s ("the record appears: false") while another
+  session's gate held the cores (`node bin/js-harness.mjs loop status` took 4.4 s, the board over 120 s). It passed in
+  the 116-test run of L8, before the lead gate; not run again here, the gate runs it on GitHub's machines. From
+  01:27 local the guard refuses `node --test` of two files while a gate holds the machine's lock, so each file is run
+  alone.
+- L15 (2026-11-11, a limit of the control, checked): nothing obliges the lead to keep a heartbeat alive. `js-harness
+  loop status` read "no loop is recorded for this project" during this work, so the AWAY line reaches a lead only
+  while its heartbeat runs, or at the heartbeat's next start. Not known: whether one was alive in the 5 idle absences
+  of L3. Told to the lead with the ready notice; a heartbeat kept by the host is not this unit's.
+- L16 (2026-11-11 01:29 local): the host compacted this session by itself; the resume was read from this document.
+
 ## Next step
-T2: the tests of the absence in course in `bin/lib/return-report.test.mjs`, red first.
+Done: the lead gate, T7, the 9 sightings under `question-tool-holds-asker` (L11 to L13). In order: (d) the brief of
+the question unit to a file outside the repository and its path to the lead in one notice; (e) commit T2, T3, T4 and
+T7 (the gate), Codex, the lenses, the verifier's replay with the built code, push, the pull request, the ready
+notice, the summary, the closed notice. The wait for notices runs as task `bpelqu9mm` (`js-harness wait --notice-to
+176`, ends on a notice to 176 or after 8 hours; this session stops it at its close).

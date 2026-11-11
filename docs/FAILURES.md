@@ -1315,11 +1315,32 @@ gave the question another, so the text he would see named a question that does n
 
 ### question-tool-holds-asker
 The question tool holds the session that asks until he answers, so a question asked while he was
-away held the lead, and the merges it owed, for seven hours.
+away held the lead, and the merges it owed, for seven hours. A question left on his screen when he
+leaves does the same through the whole absence: the lead lands nothing, opens no session and no
+stretch, and no process can tell it anything, since the host delivers a background task's end only
+when the tool returns. Such an absence is recorded here, not under `stretch-not-opened`: a held lead
+skipped no duty.
 - Class: tool
 - Seen: 2026-10-13 — relief file, line 560 — asked at about 05:57 when his last word was of 04:2x,
   answered at about 13:05; pull request 98 waited from 06:30, 99 from 07:16, 100 from 07:32, and
   JH 8 had nothing to do from 07:32
+- Seen: 2026-11-01 — the lead's transcript 0f71b2c6, replayed by JH 176 (`odd/tasks/departure-control.md`, L3: 9 of
+  the 23 absences no stretch covered from 2026-10-31 to 2026-11-10; local time, UTC-05:00) — he last wrote at 21:35 and
+  answered the question on his screen at 04:01 on 2026-11-02; no turn of the lead from two hours after his last
+  message to that answer, as in each line below
+- Seen: 2026-11-02 — the same replay — he last wrote at 12:59 and answered at 15:01
+- Seen: 2026-11-04 — the same replay — he last wrote at 09:01 and answered at 11:43
+- Seen: 2026-11-05 — the same replay, the absence of the afternoon — he last wrote at 13:25 and answered at 18:12
+- Seen: 2026-11-05 — the same replay, the absence of the night — he last wrote at 19:35 and answered at 00:36 on
+  2026-11-06
+- Seen: 2026-11-08 — the same replay — he last wrote at 18:20 and answered at 20:54
+- Seen: 2026-11-09 — the same replay — he last wrote at 07:59 and answered at 19:58
+- Seen: 2026-11-09 — the same replay, the lead's transcript ea85ec35 — he last wrote at 20:00 and answered at 22:31
+- Seen: 2026-11-10 — the lead's transcript ea85ec35, lines 4515 to 4518 (read by JH 176) — question 255 was asked at
+  18:08, 30 seconds after his answer to question 254, and answered at 21:17; also the sighting of that day under
+  `stretch-not-opened`, the last one a held absence adds there: the reply hook's return warning and the heartbeat's
+  `AWAY:` line now name this entry for it (JH 176). What stops a question holding the lead is owed: a unit of its own,
+  for the lead to open
 - Control: protocol — bin/lib/manifest.mjs — "So it is called at once only when the user wrote in
   that session a short while ago" — since 2026-10-14
 - Was: owed — odd/tasks/session-channel.md — "T17 Questions to him go through the question tool and
@@ -1898,8 +1919,25 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-11-09 — the lead's note to JH 160 at 22:35 local (claimed; the lead's own) — he was away from 20:00 to
   22:31 local with question 238 on screen, JH 161's audit ran meanwhile, and the lead opened no stretch, so his
   return had no estimate
-- Control: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
-  once, naming the failure to record" — since 2026-10-31
+- Seen: 2026-11-10 — the lead's brief to JH 176 (claimed; the lead's own) and the lead's transcript ea85ec35, lines
+  4515 to 4518 (read by JH 176) — he was away from 18:08 to 21:17 local (UTC-05:00) with question 255 on his screen and
+  no stretch opened; the reply hook said so only at his return. The question tool held the lead the whole time: its
+  transcript holds no entry between the call at 2026-11-10T23:08:41Z and his answer at 2026-11-11T02:17:03Z, as in 9 of
+  the 23 absences no stretch covered since 2026-10-31 (`odd/tasks/departure-control.md`, L3). Fixed where a session can
+  be told (JH 176): the lead's heartbeat reads at each tick when he last wrote to the lead, and ends with an `AWAY:`
+  line once that is over two hours ago with no stretch covering the time since, naming `stretch open`, once an absence
+  (`bin/loop.mjs`; `departureWatch` in `bin/lib/return-report.mjs`, with the return's own measure and cover test). Where
+  a question holds the lead the line says since when and nothing can open the stretch: that case went to the lead as
+  his call. It enters at the first heartbeat started after the pull request lands and the installed copy is refreshed;
+  its proof is `node --test bin/loop-bodies.test.mjs bin/lib/return-report.test.mjs`, and no later sighting of an
+  absence the lead was not held through without the time of its `AWAY:` line beside it (the mark under
+  `~/.js-harness/loops/<project>/away/`)
+- Control: check — bin/loop-bodies.test.mjs — "heartbeat ends with the AWAY line when he last wrote to its session two
+  hours ago and no stretch covers the time since" — since 2026-11-11
+- Was: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
+  once, naming the failure to record" — replaced on 2026-11-11: it acts at his return, after the time away it is
+  about, and 16 sightings came after it (the Fable 5.2 audit, M9); it stays in force as the backstop, and the control
+  is now the heartbeat's line, which acts when the absence starts
 
 ### taskstop-leaves-work-alive
 Stopping a background task of the host ends its shell and not what that shell started, so the work
