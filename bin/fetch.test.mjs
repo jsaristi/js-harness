@@ -245,7 +245,7 @@ test('a public page whose path holds a long slug, numbers and short ids is sent'
   }
 });
 
-test('the limit the help states holds: a key of letters alone, of digits alone, under 20 characters, cut into pieces that do not mix, or in a query value under an ordinary name is not seen, and is sent', async () => {
+test('the limit the help states holds: a key of letters alone, of digits alone, under 20 characters, cut into pieces that do not mix, or spread over segments or parameters is not seen, and is sent', async () => {
   const letters = HEX_KEY.replace(/[0-9]/g, '').padEnd(32, 'q').slice(0, 32);
   const digits = HEX_KEY.replace(/[a-f]/g, '').padEnd(18, '7').slice(0, 18);
   const unseen = [
@@ -258,8 +258,7 @@ test('the limit the help states holds: a key of letters alone, of digits alone, 
     `https://example.com/share/${letters.slice(0, 16)}.${digits.slice(0, 16)}`,
     `https://example.com/share/${HEX_KEY.slice(0, 19)}/${HEX_KEY.slice(19, 38)}`,
     `https://example.com/share/${[...HEX_KEY.slice(0, 32)].map((char) => `%25${char.charCodeAt(0).toString(16)}`).join('')}`,
-    `https://example.com/callback?code=${HEX_KEY}`,
-    `https://example.com/callback?${HEX_KEY}`,
+    `https://example.com/callback?first=${HEX_KEY.slice(0, 19)}&second=${HEX_KEY.slice(19, 38)}`,
   ];
   for (const url of unseen) {
     const fake = fakeFetch(200, PAGE);
@@ -268,10 +267,48 @@ test('the limit the help states holds: a key of letters alone, of digits alone, 
   // The help is wrapped by hand, so it is read as one line.
   const help = (await run(['--help'], fakeFetch(200, PAGE).fn)).stdout.replace(/\s+/g, ' ');
   for (const said of [
-    'one whose path holds a segment that reads as a key (its pieces that mix letters and digits add up to 20 characters or more) is refused with exit 1',
-    "These go out with the URL: a key of letters alone or of digits alone; one shorter than 20 characters; one that other characters (a hyphen, an underscore, a dot, an escape) cut into pieces too few of which mix letters and digits (about one random 22-character base64url key in four); one spread over several segments; one escaped twice; one in the query, unless its parameter is named like a secret; one in the host's name.",
-    'these public pages are refused as well: one whose path holds an id of that shape (a commit hash, a UUID), and a slug whose words that mix letters and digits (gpt4, llama3, a 12-character id) add up to 20 characters. Read them in the built-in browser',
+    'one that holds a path segment, a query name or a query value that reads as a key (its pieces that mix letters and digits add up to 20 characters or more) is refused with exit 1',
+    "These go out with the URL: a key of letters alone or of digits alone; one shorter than 20 characters; one that other characters (a hyphen, an underscore, a dot, an escape) cut into pieces too few of which mix letters and digits (about one random 22-character base64url key in four); one spread over several segments or parameters; one escaped twice; one in the host's name.",
+    'these public pages are refused as well: one whose path holds an id of that shape (a commit hash, a UUID), a slug whose words that mix letters and digits (gpt4, llama3, a 12-character id) add up to 20 characters, and one whose query carries a tracking value of that shape: the refusal names the parameter, and the page without it is the same page. Read the others in the built-in browser',
   ]) assert.ok(help.includes(said), said);
+});
+
+test('a URL whose query holds a value or a name that reads as a key is refused with exit 1 and nothing is sent; a value is named by its parameter, a name by its place', async () => {
+  const escaped = [...HEX_KEY.slice(0, 32)].map((char) => `%${char.charCodeAt(0).toString(16)}`).join('');
+  const cases = [
+    [`https://example.com/callback?code=${HEX_KEY}&state=ok`, 'its query carries a value that reads as a key (code)'],
+    [`https://example.com/open?page=2&doc=${UUID_KEY}`, 'its query carries a value that reads as a key (doc)'],
+    [`https://example.com/open?next=${escaped}`, 'its query carries a value that reads as a key (next)'],
+    [`https://example.com/open?id=${ID_KEY}#top`, 'its query carries a value that reads as a key (id)'],
+    // A key in the place of a name is never repeated: it is named by where it stands.
+    [`https://example.com/callback?${HEX_KEY}`, 'its query carries a name that reads as a key (parameter 1)'],
+    [`https://example.com/callback?page=2&${URL_KEY}=1`, 'its query carries a name that reads as a key (parameter 2)'],
+    // The price, pinned: a tracking value of a public page has the same shape, and the refusal says which to drop.
+    [`https://example.com/article?utm_source=mail&fbclid=${URL_KEY}`, 'its query carries a value that reads as a key (fbclid)'],
+  ];
+  for (const [url, why] of cases) {
+    const fake = fakeFetch(200, PAGE);
+    const result = await run([url], fake.fn);
+    assert.deepEqual([result.code, result.stdout, fake.calls.length], [1, '', 0], url);
+    assert.equal(result.stderr, `js-harness fetch: ${url} is not read: ${why}. r.jina.ai is a third party, so only a public page goes to it.`, url);
+  }
+});
+
+test('a public page whose query holds words, numbers and short ids is sent', async () => {
+  const pages = [
+    'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s',
+    'https://www.google.com/search?q=h264+vs+h265+vs+av1+vs+vp9+2026',
+    'https://www.amazon.com/s?k=iphone+15+pro+256gb&crid=2Q8X5N7Z1K3LM&sprefix=iphone+15%2Caps%2C120',
+    'https://github.com/search?q=repo%3Anodejs%2Fnode+keyLike&type=code',
+    'https://example.com/article?utm_source=newsletter&utm_medium=email&utm_campaign=2026w46',
+    'https://en.wikipedia.org/w/index.php?title=Node.js&oldid=1251234567',
+    'https://example.com/login?next=%2Fdashboard%2Fsettings',
+    `https://example.com/open?id=${ID_KEY.slice(0, 19)}`,
+  ];
+  for (const url of pages) {
+    const fake = fakeFetch(200, PAGE);
+    assert.deepEqual([(await run([url], fake.fn)).code, fake.calls.length], [0, 1], url);
+  }
 });
 
 test('a public page with an ordinary query is sent', async () => {

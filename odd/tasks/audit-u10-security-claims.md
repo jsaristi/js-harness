@@ -214,8 +214,16 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
   branch holds unit 10's code), so the spec lives here. The independent verifier of T4 read `keyLikeSegment` and
   `notPublic` whole; T5 calls the same judgement, so the reviews of its slice are its check and no second verifier
   is started.
-- State (for a session that resumes): unit 10 is in pull request 817, ready. On `feat/fetch-query-values`: next
-  T5's red test, the change, the gate, Codex and the lenses from 07cffc8c, the push, the pull request on base
-  `worktree-fetch-path-limit`, the ready notice. Before that state: the push, the pull
-  request, the ready notice, then the second unit of L9 on a branch of its own from this one, and the summary with
-  the closed notice.
+- L14 T5, test first: `node --test bin/fetch.test.mjs` gave 11 pass and 2 fail before the change (the refusal over
+  the query, and the help's new words) and 13 pass after. `readsAsKey` is the one judgement, taken out of
+  `keyLikeSegment`, which keeps its own decoding of the path; the query is judged on the names and values
+  `URLSearchParams` decoded, after the path. The two cases the limit's test sent at 07cffc8c, a key as a value under
+  `code` and a key in a name's place, are now refused cases; a key spread over two parameters is the sent case in
+  their place. The measure, run again after the change: 0 of the repository's 24 URLs with a query refused, 5 of the
+  27 hand-written shapes, as before it. Searched before writing: `git grep` for every text that lists the refusals
+  (the help, README.md, bin/js-harness.mjs:52, docs/SPEC.md:663), all four changed; the hook's notice in
+  `bin/lib/web-block.mjs` lists none and stays, as in L10. The session was compacted by the host between the red
+  test and the change (2026-11-11T07:16Z) and resumed from this document.
+- State (for a session that resumes): unit 10 is in pull request 817, ready. On `feat/fetch-query-values`: T5 is
+  written; next the gate, Codex and the lenses from 07cffc8c, the push, the pull request on base
+  `worktree-fetch-path-limit`, the ready notice, then the summary with the closed notice.

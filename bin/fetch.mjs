@@ -6,10 +6,11 @@
 // browser). Exit 1: not a public page, and nothing sent. Exit 2: a usage error. Zero dependencies: Node's fetch.
 import { BLOCK_STATUSES } from './lib/web-block.mjs';
 
-/** How many characters the pieces of one path segment that mix letters and digits may add up to before the segment
- * reads as a key. Measured in odd/tasks/audit-u10-security-claims.md (the depth pass, item 4): at 20 it refuses the
- * 22-character ids of private pages by link and no other of the 333 URLs this repository cites; at 16 it also
- * refuses a Medium slug with one word such as `python3` beside its 12-character id; at 24 those ids pass. */
+/** How many characters the pieces that mix letters and digits may add up to, in one path segment, one query name or
+ * one query value, before it reads as a key. Measured in odd/tasks/audit-u10-security-claims.md (the depth pass,
+ * item 4): at 20 it refuses the 22-character ids of private pages by link and no other of the 333 URLs this
+ * repository cites, none of them by its query; at 16 it also refuses a Medium slug with one word such as `python3`
+ * beside its 12-character id; at 24 those ids pass. */
 const KEY_LIKE_LENGTH = 20;
 
 const USAGE = [
@@ -19,17 +20,17 @@ const USAGE = [
   '    empty page, an error of r.jina.ai, or no answer within 60 s), with the reason and the next rung on stderr: the',
   "    built-in browser's get_page_text.",
   '  It sends no cookie and no key of its own. The URL goes to a third party, so a host that is not public (no dot,',
-  '    loopback, a private address), a URL with a user or a password, one whose query names a secret, or one whose',
-  `    path holds a segment that reads as a key (its pieces that mix letters and digits add up to ${KEY_LIKE_LENGTH}`,
-  '    characters or more) is refused with exit 1 and nothing is sent. Exit 2: a usage error.',
+  '    loopback, a private address), a URL with a user or a password, one whose query names a secret, or one that',
+  '    holds a path segment, a query name or a query value that reads as a key (its pieces that mix letters and digits',
+  `    add up to ${KEY_LIKE_LENGTH} characters or more) is refused with exit 1 and nothing is sent. Exit 2: a usage error.`,
   '  Those checks read names and shapes, and know no secret. These go out with the URL: a key of letters alone or of',
   `    digits alone; one shorter than ${KEY_LIKE_LENGTH} characters; one that other characters (a hyphen, an underscore, a dot, an`,
   '    escape) cut into pieces too few of which mix letters and digits (about one random 22-character base64url key',
-  '    in four); one spread over several segments; one escaped twice; one in the query, unless its parameter is named',
-  "    like a secret; one in the host's name.",
-  '  And these public pages are refused as well: one whose path holds an id of that shape (a commit hash, a UUID), and',
-  `    a slug whose words that mix letters and digits (gpt4, llama3, a 12-character id) add up to ${KEY_LIKE_LENGTH} characters. Read`,
-  '    them in the built-in browser, which sends the URL to no third party.',
+  "    in four); one spread over several segments or parameters; one escaped twice; one in the host's name.",
+  '  And these public pages are refused as well: one whose path holds an id of that shape (a commit hash, a UUID), a',
+  `    slug whose words that mix letters and digits (gpt4, llama3, a 12-character id) add up to ${KEY_LIKE_LENGTH} characters, and one`,
+  '    whose query carries a tracking value of that shape: the refusal names the parameter, and the page without it is',
+  '    the same page. Read the others in the built-in browser, which sends the URL to no third party.',
 ].join('\n');
 
 const READER = 'https://r.jina.ai/';
@@ -57,20 +58,33 @@ export function notPublic(text) {
   const place = keyLikeSegment(url.pathname);
   // The segment is named by its place and never quoted: a reason is copied into reports.
   if (place !== 0) return `its path carries a segment that reads as a key (segment ${place})`;
+  // The names and values are the ones `URLSearchParams` decoded, as the site will read them. A value is named by its
+  // parameter, since the page without a tracking parameter is the same page; a name that is the key, by its place.
+  for (const [index, [name, value]] of [...url.searchParams].entries()) {
+    if (readsAsKey(name)) return `its query carries a name that reads as a key (parameter ${index + 1})`;
+    if (readsAsKey(value)) return `its query carries a value that reads as a key (${name})`;
+  }
   return null;
 }
 
-/** The place, counted from 1, of the first segment of `pathname` that reads as a key, or 0 when none does. A segment
- * is cut at every character that is no ASCII letter or digit; the pieces that hold both a letter and a digit are
- * added up, and `KEY_LIKE_LENGTH` characters of them or more is a key: a random token in hex or base62, a UUID, a
- * session id written beside its name, and most tokens in base64url. A word, a number and one short id
- * (`a64152b37c35`, `256GB`) are no key, so a slug of plain words passes at any length.
+/** Whether `text` reads as a key: cut at every character that is no ASCII letter or digit, its pieces that hold both
+ * a letter and a digit add up to `KEY_LIKE_LENGTH` characters or more. The one judgement of the path and the query. */
+function readsAsKey(text) {
+  const mixed = text.split(/[^A-Za-z0-9]+/).filter((piece) => /[A-Za-z]/.test(piece) && /[0-9]/.test(piece));
+  return mixed.reduce((sum, piece) => sum + piece.length, 0) >= KEY_LIKE_LENGTH;
+}
+
+/** The place, counted from 1, of the first segment of `pathname` that reads as a key, or 0 when none does. What
+ * `readsAsKey` takes for one: a random token in hex or base62, a UUID, a session id written beside its name, and
+ * most tokens in base64url. A word, a number and one short id (`a64152b37c35`, `256GB`) are no key, so a slug of
+ * plain words passes at any length.
  *
- * It reads a shape and knows no secret, so it errs both ways, and the help says each. Sent: a key of letters alone
- * or of digits alone, one spread over several segments, one escaped twice, and a key whose other characters (the
- * hyphens and underscores of base64url, the escapes of standard base64) leave too few pieces that mix the two (about
- * one of 22 characters in four, one of 32 in twenty). Refused: a public id of the same shape (a commit hash), and a
- * slug whose letter-and-digit words add up to the limit (`gpt4`, `llama3` and a 12-character id).
+ * It reads a shape and knows no secret, so it errs both ways, in the path and in the query alike, and the help says
+ * each. Sent: a key of letters alone or of digits alone, one spread over several segments or parameters, one escaped
+ * twice, and a key whose other characters (the hyphens and underscores of base64url, the escapes of standard base64)
+ * leave too few pieces that mix the two (about one of 22 characters in four, one of 32 in twenty). Refused: a public
+ * id of the same shape (a commit hash, a tracking value), and a slug whose letter-and-digit words add up to the
+ * limit (`gpt4`, `llama3` and a 12-character id).
  *
  * Each escape of an ASCII character is decoded on its own, as the site will read it, and any other escape is a cut:
  * a segment decoded whole would be judged as written the moment one escape in it is malformed, and a key written in
@@ -79,8 +93,7 @@ function keyLikeSegment(pathname) {
   const segments = pathname.split('/').slice(1);
   for (const [index, raw] of segments.entries()) {
     const segment = raw.replace(/%([0-9A-Fa-f]{2})/g, (escape, hex) => (parseInt(hex, 16) < 0x80 ? String.fromCharCode(parseInt(hex, 16)) : ' '));
-    const mixed = segment.split(/[^A-Za-z0-9]+/).filter((piece) => /[A-Za-z]/.test(piece) && /[0-9]/.test(piece));
-    if (mixed.reduce((sum, piece) => sum + piece.length, 0) >= KEY_LIKE_LENGTH) return index + 1;
+    if (readsAsKey(segment)) return index + 1;
   }
   return 0;
 }
