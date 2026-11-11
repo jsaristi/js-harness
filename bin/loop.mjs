@@ -496,8 +496,8 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   // ago: news and the line are first confirmed by a reading at that tick, so a sign-in renewed since the last reading
   // ends nothing and is not told. A reading that cannot be made is said once each, and the last date a reading gave
   // still stands. `atStart` is the reading the heartbeat opens with, which ends nothing whatever it finds.
-  // `readAt` is the last reading tried, `heldAt` the one whose answer stands.
-  const signin = { reading: null, readAt: null, heldAt: null, tick: null, level: null, line: null, unread: new Set() };
+  // `readAt` is the last reading tried, `heldAt` the one whose answer stands, `saidAt` the start when it said the line.
+  const signin = { reading: null, readAt: null, heldAt: null, saidAt: null, tick: null, level: null, line: null, unread: new Set() };
   const signinRead = (now, say = ctx.out) => {
     signin.readAt = now;
     let fresh;
@@ -534,6 +534,8 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   // The sign-in's line for an ending, from a reading of this tick: one weighed from an older reading is read again,
   // and where that reading cannot be made the line says when its date was read, since it may have been renewed since.
   const signinLines = () => {
+    // Said at this very tick already: an ending at the start does not say the opening's line twice.
+    if (signin.saidAt === signin.tick) return [];
     if (signin.line !== null && signin.readAt !== signin.tick) {
       signinRead(signin.tick);
       const told = signinTold(signin.reading, signin.tick);
@@ -705,6 +707,12 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   const signinAsked = Boolean(ctx.signinExpiry) && signin.reading?.asked !== false;
   ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 || !ctx.windowsDaily ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}${ctx.hostWatch ? '; every hour, the host\'s versions are read, and an update no host watch session holds ends it' : ''}${ctx.throughputTick ? '; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it' : ''}${signinAsked ? `; every ${plural(SIGNIN_HOURS, 'hour')}, the end of the stored claude.ai sign-in is read, and one that comes within ${plural(SIGNIN_WARN_DAYS, 'day')}, or passes, ends it` : ''}${transcript === null ? '' : `; each tick reads this session's compactions, and a compaction that brings them to ${LEAD_CUT_COMPACTIONS} or more ends it: the lead's cut after ${LEAD_CUT_COMPACTIONS} compactions; each tick reads when the user last wrote to this session, and in the lead's session ${plural(ABSENCE_MS / 3600000, 'hour')} with no message and no stretch covering them end it`}`);
   for (const line of signinHeld) ctx.out(line);
+  // A heartbeat started inside the margin says the line now, without ending for it: the loop may run for hours, and
+  // the lead should not learn at its end what was known at its start.
+  if (signin.line !== null) {
+    ctx.out(signin.line);
+    signin.saidAt = started;
+  }
   let compactions = compactionsNow();
   for (const item of stalledAt(started)) {
     told.set(identity(item), crossing(item));

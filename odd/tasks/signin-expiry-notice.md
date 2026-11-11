@@ -171,26 +171,33 @@ again while he is at the PC.
   beside `loggedIn` false is kept, and once past it the note says when the sign-in ended.
 
 ## Next step
-State of JH 179 on 2026-11-11, written with the second merge of main (its commit's hour is this section's).
+State of JH 179 on 2026-11-11 at 10:01Z (read from the clock). WAITING for the lead's go on a fifth review.
 Worktree `D:\js-harness\.claude\worktrees\signin-expiry-notice`.
 - First slice: pull request 818, merged at 08:32Z (`gh pr view 818 --json mergedAt`). Nothing is owed on it.
 - Second slice: branch `worktree-signin-expiry-heartbeat`, pull request 823 against `main`, open; pushed up to
-  `f70902d9`. Local, not pushed: `e54847c5` (the merge of main that resolved the conflict with pull request 820) and
-  the merge of `260bc749` after it, which holds this section (Log, L18 and L19).
-1. The reviews the pre-push check asks for, of the merges, base main's tip that the branch holds: `js-harness
-   codex-review --base 260bc749 --doc odd/tasks/signin-expiry-notice.md`, then `js-harness lens-review --base 260bc749
-   --lenses reliability,readability --reason "<the merge's resolution in bin/loop.mjs>" --doc
-   odd/tasks/signin-expiry-notice.md`. Read each verdict before the next command.
-2. `git push`, then `gh pr view 823 --json mergeable`, then `js-harness notify --to orchestrator --kind ready --pr 823
+  `f70902d9`. Local, not pushed: `e54847c5` and `52c98450` (the two merges of main, L18 and L19) and the commit after
+  them, `fix(loop): a heartbeat started inside the margin says its sign-in line at once`, which holds this section
+  and the fix of the P2 the fourth review found (L20).
+- The lead has two waiting notices (09:30Z, answered with a go; 10:01Z, the problem past three reviews, not answered
+  when this was written). Its answer comes as a message to this session, or as a notice `js-harness wait --notice-to
+  179` catches.
+1. If the tree is dirty, the fix is not committed: `node --test bin/loop-bodies.test.mjs` (47), then commit it (the
+   gate) with the message in `C:\Users\Oficina\.claude\jobs\c825f4a7\tmp\commit11.txt`.
+2. Only with the lead's go: `js-harness codex-review --base 52c98450 --doc odd/tasks/signin-expiry-notice.md` (the
+   recheck of the P2), then `js-harness lens-review --base 260bc749 --lenses reliability,readability --reason "<the
+   merge's resolution in bin/loop.mjs and the line said at the start>" --doc odd/tasks/signin-expiry-notice.md`. Read
+   each verdict before the next command. A real failure found here goes to the lead as a problem, not to a sixth
+   review.
+3. `git push`, then `gh pr view 823 --json mergeable`, then `js-harness notify --to orchestrator --kind ready --pr 823
    "<one line>"`. If it is not mergeable, main moved again: merge `origin/main` once more first (the lead's word).
-3. Tick T4, write `docs/sessions/2026-11-11-jh-179-doctor-and-the-heartbeat-warn-before-the-claude-sign.md` (its draft
-   is `C:\Users\Oficina\.claude\jobs\c825f4a7\tmp\summary.md`; else `js-harness summary template --title "JH 179 ·
-   doctor and the heartbeat warn before the Claude sign-in expires"`), commit it with this document, push, then
-   `js-harness notify --to orchestrator --kind closed --summary <that file> "<line>"`.
+4. Tick T4, write `docs/sessions/2026-11-11-jh-179-doctor-and-the-heartbeat-warn-before-the-claude-sign.md` (its draft
+   is `C:\Users\Oficina\.claude\jobs\c825f4a7\tmp\summary.md`, to bring up to date with L18 to L20; else `js-harness
+   summary template --title "JH 179 · doctor and the heartbeat warn before the Claude sign-in expires"`), commit it
+   with this document, push, then `js-harness notify --to orchestrator --kind closed --summary <that file> "<line>"`.
 If Claude Code stops a background command for low memory again: one waiting notice to the lead, and stop (the
-lead's word, L19). Keep `js-harness wait --notice-to 179` running while waiting. Report only through `js-harness
-notify --to orchestrator`. Commits carry no AI attribution (his global rule). An hour written here is read from the
-clock (`date -u`) or is a commit's, never estimated (Log, L15).
+lead's word, L19). Report only through `js-harness notify --to orchestrator`, 500 characters a notice at most.
+Commits carry no AI attribution (his global rule). An hour written here is read from the clock (`date -u`) or is a
+commit's, never estimated (Log, L15).
 
 ## Log
 - L1 (his request, as written; lead transcript ea85ec35 line 6716, 2026-11-11T05:26:36Z, printed by `js-harness
@@ -327,3 +334,13 @@ clock (`date -u`) or is a commit's, never estimated (Log, L15).
   the range would show main's newer work reversed. Decided: merge `origin/main` once more, clean, in the commit that
   holds this entry, so that `260bc749..HEAD` is this slice alone as merged, and give that range to Codex and the
   lenses. It is a review of the merge's resolution, not a fourth round of the slice's fixes.
+- L20 (a real failure found by the fourth review, 2026-11-11 at 10:00Z by the clock). The second merge is `52c98450`,
+  its gate passed (17 rows). Codex on `260bc74..52c9845`: "the patch is incorrect" (confidence 0.96), one P2,
+  `bin/loop.mjs:703-707`: a heartbeat started inside the margin, or with the CLI signed out, kept its `SIGN-IN:` line
+  until something ended the loop, hours later, while D8 says the line is said at the start. True, and in the slice
+  since `94d9d5c3`: three Codex reviews and three lens reviews read it and did not see it, and no test asked for the
+  line at the start. This is past the three reviews `rule:double-review` allows, so it is raised to the lead as a
+  problem (a waiting notice) with the fix written: the line is said right after the opening line, and an ending at
+  that same tick does not say it twice; tests first, red 2 of 46 in `bin/loop-bodies.test.mjs`, green 47 of 47 with
+  one more for the ending at the start. What it needs is a fifth review, of this fix, with the lenses' review of the
+  merged range the pre-push check still asks for.
