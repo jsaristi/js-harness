@@ -179,7 +179,7 @@ A rule he gives is cemented in the harness where something acts on it, never onl
 - Since 2026-10-29. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, 2026-10-26, 2026-10-26, 2026-10-26, 2026-10-28, 2026-10-28, checked by the command on 2026-10-29.
 
 ### session-effort
-The effort everything Claude the harness starts runs at but the lead's session: every work session, every sub-agent, the lenses and the double review's Claude reader: medium.
+The effort every work session and every sub-agent the harness starts runs at; the lead's session, the lenses and the double review's Claude reader run at rule:lead-effort: medium.
 - Of this repository only: not in force in a project that installs the harness.
 - Was: high until 2026-11-11; medium until 2026-11-10; high until 2026-11-10.
 - Read by: `bin/lib/model-home.mjs`, `bin/rules.mjs`.
