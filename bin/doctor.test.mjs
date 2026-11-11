@@ -2452,6 +2452,35 @@ test('doctorMain shows the memory-backup row stale with its reason, and n/a wher
   }
 });
 
+// The model-home row (odd/tasks/one-model-home.md, spec 7): the asking session off the home is a gap with the line for
+// the user, and what his settings say is the row's note, gap or not.
+test('doctorMain shows the model-home row stale with the line for the user, its note in every state, and no row where no check is given', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const asked = [];
+    const stale = (...given) => { asked.push(given); return { state: 'stale', note: 'his settings hold no modelSettings entry for claude-fable-5-2', fix: ['this session\'s menu holds claude-fable-5-2 at xhigh and it is held to claude-fable-5-2 at high'] }; };
+    const { output } = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, modelHome: stale });
+    assert.match(output, /^model-home\s+n\/a\s+stale\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.ok(output.includes('  model-home: his settings hold no modelSettings entry for claude-fable-5-2'), output);
+    assert.ok(output.includes('this session\'s menu holds claude-fable-5-2 at xhigh and it is held to claude-fable-5-2 at high'), output);
+    assert.deepEqual(asked, [[project, home]], 'the check is given the project and the home');
+
+    const ok = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, modelHome: () => ({ state: 'ok', note: 'not asked from a session, so no session was checked', fix: [] }) });
+    assert.match(ok.output, /^model-home\s+n\/a\s+ok\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.ok(ok.output.includes('  model-home: not asked from a session, so no session was checked'), ok.output);
+    const broken = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, modelHome: () => { throw new Error('boom'); } });
+    assert.match(broken.output, /^model-home\s+n\/a\s+unknown\s+n\/a\s+n\/a\s+n\/a$/m);
+    const none = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch });
+    assert.doesNotMatch(none.output, /^model-home/m);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // The permissions row (odd/tasks/f8-s10-port.md, T4): a deny install holds that went missing is a gap, with each entry.
 test('doctorMain shows the permissions row stale with each missing entry, and n/a where nothing is installed', async () => {
   const home = makeTmpHome();

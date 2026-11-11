@@ -680,6 +680,17 @@ Claude CLI's native updater) stays `stale`, named by the session-start hook, unt
 `js-harness doctor --stack-reviewed` records its review. A tool installed since joins the record as
 it is; one removed is no update.
 
+Its `model-home` row is the session that asks, held to the home its project's rules declare for
+the model and the effort (`n/a` where they declare none). A session cannot change its own model
+or level, so the row is `stale` when the app's record of the session holds another than the home
+gives it, the lead's level for a lead, and its fix says what the menu holds and gives the line for
+the user, in the words his menu shows. A session with no app record that can be read is not
+checked, and the note says so; `js-harness rules applied` lists every session off the home. Under
+the table, `Notes:` also gives what his settings say that the home does not: his default model, a
+cap of the effort under the home's, the entry of the home's model under `modelSettings`, and an
+`effortLevel` in his settings or in the project's `.claude/settings.local.json`. The row reads
+those files and writes none: the settings are his.
+
 Its `js-harness` row is the harness's own rules: the version column holds the first 8 characters
 of the hash of the installed copy's rules with no scope, and `up to date` compares it with the same
 hash of the default branch's list. A rule scoped to the harness's own repository never calls a copy

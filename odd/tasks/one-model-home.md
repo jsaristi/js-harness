@@ -350,8 +350,8 @@ S7, amends specs 1, 5, 7 and 8 and the task T4 after it, and wins over both:
 - [x] T2 (kind: design) (1-10) The double review of this design (`js-harness double-review read`), every finding answered, and one notice to the lead with its verdict. Route: inline. Commits: 0907ed7d, 9033dcf6, 649fbad1. Three reads, not passed; the lead's yes to build from L13 (L14).
 - [x] T3 (kind: build) (2, 3) Pull request 1, branch `feat/model-home-module`, cut from T2's commit: `bin/lib/model-home.mjs` and its test; the faults of the homes in `readRules`; the lenses and the double review's fallback and effort read the home; the writer's agent file compared with the home; the convention test over code; the runner of `rules change` takes `--with <path>...`, with its tests beside `bin/lib/rules-change-run.test.mjs:159` and `:172`; the check of marks stops at a document's `## Log`, as the scan of restated values does (`bin/lib/rules-scan.mjs:11`), since a Log tells what a rule was called. No reader of a rule that leaves moves here. Route: inline. Commits: 38fe1b2d (pull request 822), 8007f0fe (pull request 825), both in main.
 - [x] T4 (kind: build) (1, 2, 5, 10) Pull request 2, branch `rule/one-model-home`, on main once pull request 1 lands: `rules change --with` nine times, a commit each, every commit with the readers, the tests, the marks, the patterns carried to the home and the planted break of its rule: the two subjects widened, each home's control made a bundle; `lead-effort` and `subagent-effort` retired with the guard's start held to the home's effort alone; the two sub-agent model rules and `escalation-model` retired with the guard, the double review, the contract's modes, the sub-agent row and the recheck reading the home; the guard's refusal of a sub-agent call that names an effort; the patterns of Codex's two rules. Before each retirement, its dry run, and a grep of its id as a bare word over `bin/`, `workshop/`, `.claude/agents/`, README, `docs/` and `odd/tasks/` above each Log. Then an independent verifier on the guard. Route: inline, then one verifier. Commits: 5deec5b6, 1765b5aa, 0abb1d2c, 8f7a2f76 and ed3b2006, the last code commit (pull requests 831 to 835, ready, not landed).
-- [ ] T5 (kind: build) (5, 7) Pull request 3, branch `feat/model-home-sessions`: a start and a resume take the home and refuse another, in `sessions start` and in the guard's `start_session`, with the starter's own record; `appSessions` gives the model; the board's mark, both levels and the line. Route: inline.
-- [ ] T6 (kind: build) (6, 7) Pull request 3: `rules applied` lists the sessions off the home from the app's records, the record of starts, the last replies and the jobs; the `doctor` row with his settings read. Then the list goes to the lead in one notice. Route: inline.
+- [x] T5 (kind: build) (5, 7) Pull request 3, branch `feat/model-home-sessions`: a start and a resume take the home and refuse another, in `sessions start` and in the guard's `start_session`, with the starter's own record; `appSessions` gives the model; the board's mark, both levels and the line. Route: inline. Commits: 1bef0243, a4f33b41, 1f28f4b9, 2df39fb6, e878d8be, 7a63f4f0.
+- [x] T6 (kind: build) (6, 7) Pull request 3: `rules applied` lists the sessions off the home from the app's records, the record of starts, the last replies and the jobs; the `doctor` row with his settings read. Then the list goes to the lead in one notice. Route: inline. Commits: 6df6a4ba, and the `doctor` row in the commit that carries this line.
 - [ ] T7 (kind: build) (8, 10) Pull request 4, branch `feat/model-home-switch`: the runner of `rules change` writes several rules in one pass and refuses a home's value alone; `rules switch` with its probe, the agent file, `--dry-run` and its printout. Route: inline.
 - [ ] T8 (kind: docs) (4, 9, 10) Pull request 4: the section "A new model" of the orchestrator skill and its test; the convention test over the texts; README, `docs/ROADMAP.md`'s Decided rows, `docs/future-model.md`'s pointer, the help texts and the lead's start line name the rule. Route: inline.
 - [ ] T9 (kind: verify) (1-10) Each pull request: gate, Codex and the pertinent lenses, one at a time; ready; `js-harness notify --to orchestrator --kind ready --pr <n>`; the next one starts from main once it lands. Then the summary and the closed notice. Route: inline.
@@ -382,6 +382,24 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 17:23: the commit of the `doctor` row was refused at its first try too (run 43110036622, 456 s): the
+dispatch test `bin/js-harness.test.mjs:285` lists doctor's rows in order and lacked `model-home`. I had run doctor's
+own tests and not searched the tests for a neighbour row's id; `grep -rn -l "'stack-update'" bin workshop` finds that
+test and `bin/clean-home.test.mjs`, whose list is the harness's own rows and stays. The test now holds the row, last,
+and `n/a` for a project that declares no home (54 of 55 pass here). The one that fails here is not this change's:
+`bin/clean-home.test.mjs:153`, its `upgrade` step, "js-harness stack upgrade runs nothing without a terminal", which
+passed on GitHub's machines in that same run with this tree; not looked into, this change touches no upgrade code.
+The commit is made again with the test, and its body corrected: `bin/lib/permissions.mjs` holds the allow and the
+deny lists of that file, not the denies alone.
+2026-11-11 17:13: T6 is whole. Its first part landed as `6df6a4ba`; the `doctor` row `model-home` is in the commit
+that carries this line: `bin/lib/home-doctor.mjs` with its test (4 pass), the row in `bin/doctor.mjs` (99 pass), the
+README's paragraph and the SPEC's entry; the conventions, the records table and `rules coverage --strict` pass. Seen
+in a real run from this job: the row is `ok`, this session has no app record (a background job has none), and its
+note gives his default model `opus[1m]` and the missing `modelSettings` entry for the home's model. A project's
+local settings are read from the checkout `doctor` runs in, so a worktree, which has none, says nothing of them.
+Owed from here, in order: Codex, the risk lens and the reliability lens on `e878d8be` to the head, one at a time;
+`check --push`, the push of `feat/model-home-sessions`, pull request 3 on main, the ready notice and the list of
+the sessions off the home to the lead in one notice; then T7 on a new branch from main.
 2026-11-11 17:06, after a compaction by the host at 17:05: the commit the paragraph below names did not land at
 its first try. The gate on GitHub's machines refused it (run 43107839923, the `docs` row): `<*>.jsonl
 (bin/lib/home-sessions-read.mjs) is a record the source writes and no row of the table holds`. The module reads a
