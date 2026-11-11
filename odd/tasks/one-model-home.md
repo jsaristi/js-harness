@@ -11,10 +11,10 @@ check and text in force reads them from there, and the day a better model comes 
 commit.
 
 ## Why
-On 2026-11-10 he changed the model and the effort twice in one day. Each change was carried by hand through seven
-rules, three constants, one agent file, two readers that assumed a short name, two README lines and the tests that
+On 2026-11-10 he changed the model and the effort twice in one day. Each change was carried by hand through the
+values of seven rules, three constants, one agent file, two readers that assumed a short name, two README lines and the tests that
 wrote a value by hand (`docs/sessions/2026-11-10-jh-171-rule-every-model-on-fable-5-2-at-high.md`, "Left"). The lead's
-session showed extra high in the app's menu for hours after he said high, and he had to say it three times (S1, S2,
+session showed extra high in the app's menu for about an hour after he said high, and he had to say it three times (S1, S2,
 S5). A value restated in many places goes stale in some of them: the failure section 4 of `js-harness-protocols`
 exists for, met again one level up. He also said the reviewer's model will change soon (S4), so the same way has to
 carry Codex.
@@ -30,10 +30,12 @@ carry Codex.
 - `node --test bin/lib/rules-switch.test.mjs bin/lib/rules-change-run.test.mjs` exits 0
 - `node --test bin/lib/manifest.test.mjs bin/codex-review.test.mjs bin/double-review.test.mjs bin/lens-review.test.mjs` exits 0
 - `node bin/js-harness.mjs rules coverage` exits 0
+- `npm run check` exits 0
 - Each pull request is ready and the lead holds its `ready` notice; the last one's body says, in plain words, what he
   types the day a new model comes out, and names every exception to "everything" that stays and why.
 - The lead holds one notice with the list `rules applied` gives of the sessions off the home, since the sessions
-  are the lead's to set and the lead's own level is his to pick (S2, S3).
+  are the lead's to set and the lead's own level is his to pick (S2, S3); and the closing summary carries a second
+  run of `rules applied`, made after the lead says it acted, that names each session still off the home and why.
 
 ## In scope / Out of scope
 - In: the rules of the two homes and the five rules that leave (`js-harness rules change`, his words as their source);
@@ -58,7 +60,11 @@ carry Codex.
   old id must be told what replaces it (`liveRule`, `bin/lib/rules.mjs`).
 - A rule's readers and its planted break move in the commit that retires it, never earlier, because a live rule
   that nothing reads is enforced by nothing and its control in the coverage register finds no text
-  (`bin/lib/rules-coverage.mjs:196`, `:217`). Earlier retirements carried their code so (`238ee185`).
+  (`bin/lib/rules-coverage.mjs:196`, `:217`). `rules change` cannot do that today: it refuses a tree with changes
+  (`bin/lib/rules-change-run.mjs:229-235`) and refuses a retirement while code reads the rule (`:266-269`; a dry run
+  of each of the five on 2026-11-11 named its readers, L11). So pull request 1 first gives the runner
+  `--with <path>...`: the changes of the paths named are admitted, the new list is checked against the tree as it
+  then is, and any other change is refused as before.
 - Every rule change sits on the one branch `rule/one-model-home`, because `rules change` refuses to run while
   another `rule/` branch holds a change that is not on `origin/main`.
 - The guard's change gets an independent verifier, and every behaviour its test first, because a guard that fails
@@ -88,6 +94,9 @@ carry Codex.
      in the protocols is his.
   6. Whether a sub-agent launch from a session that is off the home should be refused. Here it is shown and
      corrected, not refused (L9, Codex 2).
+  7. A session he opens himself outside the harness starts on what his user settings say: the default model
+     `opus[1m]` and, for Opus 5.5, medium. The two keys are his to set, or to let the lead set.
+  8. Codex reviews at `review-effort`, medium, not at Alto: the brief reads his "Fable 5.2 Alto" as Claude's.
 
 ## Depth pass
 - 1. Method: configuration management, where the practitioner's standard is one source of truth: a value is declared
@@ -155,7 +164,7 @@ carry Codex.
   spec 1: `node bin/js-harness.mjs rules`: 7 live rules hold a Claude model or effort today (counted with `grep -c`); the bar is 2, and 5 retired with a successor.
   spec 2: `node --test bin/conventions-model-home.test.mjs`: none, new behaviour; today 2 files of `bin/` outside the list hold a model id as a value (`bin/lens-review.mjs:33`, `bin/double-review.mjs:68`; `grep -nE` for a Claude or Codex id over the non-test files of `bin/` gives 7 more, all comments or sample text) and `.claude/agents/js-harness-writer.md` holds one that only its test compares.
   spec 3: `node --test bin/lib/rules.test.mjs`: today a list whose `session-model` is `fable` reads with no fault; the bar is a fault that names the full id.
-  spec 4: `node --test bin/conventions-model-home.test.mjs`: none, new behaviour; a scratch count of 2026-11-11 over the nine texts the test will read finds 18 lines that restate a model or an effort (README 7, `docs/ROADMAP.md` 7, `docs/future-model.md` 2, the agent file 2), and `rules check` passes with all of them; the bar is none outside a list of dated lines that only shrinks.
+  spec 4: `node --test bin/conventions-model-home.test.mjs`: none, new behaviour; a scratch count of 2026-11-11 over the nine texts the test will read finds 16 lines in the eight texts that restate a model or an effort (README 7, `docs/ROADMAP.md` 7, `docs/future-model.md` 2), and `rules check` passes with all of them; the bar is none outside a list of dated lines that only shrinks.
   spec 5: `node --test bin/sessions-background.test.mjs bin/lib/guard.test.mjs`: today a resume with no flag passes the record's model and effort (`bin/sessions-background.mjs:307-308`), a start with no `--model` passes none, and a start at medium passes (`bin/lib/guard.mjs:112`); the bar is the home's on both and any other level refused.
   spec 6: `node bin/js-harness.mjs rules applied`: today it compares transcripts alone and lists no desktop or background record; the bar is every session whose record or last reply differs from the home, each with what each source says of it.
   spec 7: `node bin/js-harness.mjs sessions`: today the board marks only `effort below high`, a level written by hand (`bin/lib/sessions.mjs:3058`), prefers the transcript's effort to the app's, and said `effort high` of the lead while its menu said extra high; the bar is a mark on any row whose app record differs from the home, both levels where they disagree, and for the session that reads the board the line he is given.
@@ -168,12 +177,15 @@ carry Codex.
   `xhigh`, though the app answered `xhigh` at lines 5063 and 5263. So a check on the transcript would have said all
   was well, as the board did. The app's own record holds the level his menu shows, the harness already reads that
   file, and on 2026-11-11 it reads `claude-fable-5-2` and `high` for the lead, after his change. His user settings
-  cap the effort at high (`maxEffortLevel`), which fits both readings: the menu said extra high and the engine ran
-  at the cap. That the cap is why is assumed, not measured: no session was set above the cap to see its stamp,
-  since no open session's level is this work's to change. A second test, on the claim that one place is possible:
+  cap the effort at high (`maxEffortLevel`), which would fit both readings: the menu said extra high and the record
+  stopped at the cap. A third reading, of the past: in the 126 transcripts of this project written since 2026-10-12, a
+  scratch count finds 97,331 replies stamped `high` and none stamped above it, though `odd/tasks/harness-review.md:100`
+  records two sessions the app said ran at max and a lead at xhigh on 2026-10-16 to 10-18. So a reply's stamp has
+  never gone above the cap whatever the menu said. Whether the engine then worked at the cap or at the menu's level
+  is not known: the stamp is what the record says, and this document calls it the recorded effort. A second test, on the claim that one place is possible:
   the one reader that is not ours, the host reading the writer's agent file, takes a full id, so that file is a
   copy a command writes and a test compares, not a second home. The request holds, with the app's record as what
-  the mark is about and the transcript beside it as what ran.
+  the mark is about and the transcript's stamp beside it as the recorded effort.
   Verdict: supports
 - 5. Request: declare the Claude model and effort once, as the rules `session-model` and `session-effort` widened to
   everything Claude the harness starts, and retire the five rules that restate them; keep Codex's pair, `review-model`
@@ -230,7 +242,10 @@ What they become, numbered as the bar of the depth pass:
    whatever its parent runs on: the switch writes the two lines and `bin/lib/writer-agent.test.mjs` compares them
    with the home. A convention test refuses, in the code in force of `bin/`, `workshop/` and `scripts/`, a Claude
    or Codex model id written as a value and an effort level written at a launch (`--effort`, `effort:`), outside
-   the list and the module, with a legacy list that only shrinks.
+   the list and the module, with a legacy list that only shrinks. Each rule of the home keeps a control in the
+   coverage register that is a bundle, one planted break for each consumer that enforces it or launches on it (the
+   guard's start, the guard's sub-agent call, the lenses, the double review's reader, the default of
+   `sessions start`, the writer file's test), so going through one module does not shrink what is proven.
 3. The home holds full ids (the alias trap JH 171 measured). `readRules` reports a fault for a `session-model` that
    is not a full Claude id (`claude-<family>-<version>`, no bracket), for a `session-effort` or a `review-effort`
    that is no level, and for a `review-model` that is empty, holds a space, is a Claude id or is a level;
@@ -241,27 +256,40 @@ What they become, numbered as the bar of the depth pass:
    `docs/README.md`, `docs/future-model.md` and `docs/ROADMAP.md`, and refuses a line with a Claude model id, a
    value Codex's home holds or held (its `was`), a model's display name with its version, or a level beside the
    word effort, outside a list of dated lines that only shrinks (a conclusion of a past measurement, the sample of
-   an attribution line). Help texts that must show the value print it from the home. The rules' own patterns stay
-   as they count today, in the feature documents.
+   an attribution line). Help texts that must show the value print it from the home. The writer's agent file is
+   not one of these texts: it is the copy the switch writes and its own test compares. The patterns of the rules
+   that leave do not leave with them: each retirement carries its wordings (a sub-agent, a writer, a reader, a
+   verifier, `effort: "<level>"`) onto the home's rule by a form change, with its planted case, so the skills' texts
+   and the feature documents above their Log stay scanned as today. The test's search for a value Codex's home
+   holds or held also reads the feature documents above their Log, since the patterns find only an id shaped as
+   `{amount}` knows one (a hyphen and a digit).
 5. A start and a resume take the home (S2, S3, S5). `sessions start` with no `--model` or `--effort` passes the
    home's where the home is in force; `--resume` with no flag passes the home's and never the record's; a `--model`
    or an `--effort` other than the home's is refused, lower as well as higher. The guard refuses a `start_session`
-   that names no effort or another than the home's, one that names another model, and one from a session whose own
-   app record is known and holds another model or a lower effort than the home's, since the new session takes
-   what it does not name from the one that starts it and is capped by it. A session whose record cannot be read is
-   not refused: a record that fails to read would stop every start.
+   that does not name the home's model and the home's effort, both written out, since what a start does not name
+   it takes from the session that starts it; and one from a session whose own app record holds another model or a
+   lower effort than the home's, since the tool's own words cap a start at its starter. Every such refusal names
+   the way out, `js-harness sessions start`, which starts by the CLI with the home's values and is capped by no
+   session, and a test holds that sentence. A model is compared with its date suffix and any bracket taken off,
+   with a test for each shape the real records hold. A starter whose record is missing or unreadable is not
+   refused, and is shown: the board and `doctor` mark a session with no readable record. Whether the tool takes a
+   full id is not known (no call of the lead named a model): the protocol names it as the first thing to check
+   the first time a start is refused for it. The guard also refuses a sub-agent call that names an effort, a
+   level or `lower` or `higher`: a call that names none runs at its session's, which is the home's.
 6. The sessions off the home (S3). `rules applied` lists every session, desktop or background, that differs from
    the home, and says what each source gives: for a desktop session the app record's model and effort and whether
    it is archived (he can unarchive one, and the record does not say whether an open one is running); for a
-   background session the model and effort of its last reply, which is what ran, beside what its start asked,
+   background session the model and the recorded effort of its last reply beside what its start asked,
    where a start that named none says so, and its job's state as `claude agents` gives it, or that the harness
    removed it. It says of each which act corrects it: the lead's session tools, a resume, his menu, or none. It
    reads the records and writes none.
 7. The session that cannot change itself (S5). The board marks any row whose app record differs from the home,
-   says both levels where the app record and the last reply disagree (the menu's, and what ran), and for the
-   session that reads it prints the line to give him; `doctor` has the same row. The line is the one he acted on:
-   "En esta sesión, abre el selector de modelo que está junto a la caja donde escribes y elige <modelo> con
-   esfuerzo <nivel>." The `doctor` row also reads, and never writes, what his settings say that the home does not:
+   says both levels where the app record and the last reply disagree (the menu's, and the recorded one), and for
+   the session that reads it prints the line to give him; `doctor` has the same row. The line is modelled on the
+   one he acted on, in the words his menu shows: "En esta sesión, abre el selector de modelo que está junto a la
+   caja donde escribes y elige <modelo> con esfuerzo <nivel>", which for today's home reads "elige Fable 5.2 con
+   esfuerzo Alto". The model's name is derived from its id (family and version) and the level from one map in
+   `model-home.mjs`, whose Medio, Alto and Extra alto are his words and whose two ends are assumed. The `doctor` row also reads, and never writes, what his settings say that the home does not:
    the default model, the effort and its cap in his user settings, the entry of the home's model under
    `modelSettings`, and the project's `effortLevel`; today it would say that his default model is `opus[1m]`, a
    short name and not the home's, which a session started outside the harness runs on.
@@ -269,8 +297,11 @@ What they become, numbered as the bar of the depth pass:
    <session>:<line> [--quote ...] --reading "<what his words mean>" --accepted "<where he accepted it>"`, run from
    a checkout of a `rule/` branch as `rules change` is. It first asks each new model one short question with the
    installed CLI at the effort given, saying the cost before, and writes nothing when the CLI refuses the id or
-   the level, when another model answers, or when Codex is at or under its weekly floor. Then it writes the rules
-   of the homes named in one pass, each with his words as its source, and the writer's agent file, and prints the
+   the level, when another model answers, or when Codex is at or under its weekly floor. The question is asked as
+   the lenses ask theirs, with no tools, no session kept and a temporary folder, so it leaves no record a listing
+   would count. It proves which model answered and that the CLI took the level; the effort the model then works at
+   is not proven, and the printout says so. Then it writes the rules of the homes named in one pass, the half of a
+   home that does not change skipped and named, each with his words as its source, and the writer's agent file, and prints the
    commit to make with what the probe answered (model, CLI version, day). `rules change` refuses a new value for a
    rule of a home and names the switch, so no home changes untried. It prints what is left outside the
    repository: each open desktop session off the home with the session tool that sets it, the session that only
@@ -289,7 +320,9 @@ What they become, numbered as the bar of the depth pass:
    `docs/future-model.md` stays the measuring and points to it.
 10. Codex's side, prepared and not switched (S4). `review-model` and `review-effort` are the second home, never
     mixed into Claude's; the switch and the probe take them; the patterns of the two rules lose their `gpt-` and
-    find any id that is not Claude's, by a form change with a planted case; the protocol says what is checked the
+    find any id of the shape `{amount}` knows that is not Claude's, by a form change with a planted case; an id of
+    another shape is found by the convention test, which searches the home's values as they are written, with a
+    planted case of an id that has no hyphen and no digit; the protocol says what is checked the
     day before a Codex switch lands: the id the installed `codex` takes (the probe, one cheap call, said before it
     runs), that `js-harness codex-meter` still reads its limits, and that a review of one small slice runs end to
     end from the branch's copy. It also says what a Codex switch does to the figures: the plan of a review
@@ -301,8 +334,8 @@ What they become, numbered as the bar of the depth pass:
 ## Tasks
 - [x] T1 (kind: design) (1-10) This document, its depth pass and the inventory, committed with documents alone. Route: inline, with one read-only explorer for the inventory. Commit: f325a56e.
 - [ ] T2 (kind: design) (1-10) The double review of this design (`js-harness double-review read`), every finding answered, and one notice to the lead with its verdict. Route: inline.
-- [ ] T3 (kind: build) (2, 3) Pull request 1, branch `feat/model-home-module`, cut from T2's commit: `bin/lib/model-home.mjs` and its test; the faults of the homes in `readRules`; the lenses and the double review's fallback and effort read the home; the writer's agent file compared with the home; the convention test over code. No reader of a rule that leaves moves here. Route: inline.
-- [ ] T4 (kind: build) (1, 2, 5, 10) Pull request 2, branch `rule/one-model-home`, on main once pull request 1 lands: `rules change` nine times, a commit each, every commit with the readers, the tests, the marks and the planted break of its rule: the two subjects widened; `lead-effort` and `subagent-effort` retired with the guard's start held to the home's effort alone; the two sub-agent model rules and `escalation-model` retired with the guard, the double review, the contract's modes, the sub-agent row and the recheck reading the home; the patterns of Codex's two rules. Before each retirement, a grep of its id as a bare word over `bin/`, `workshop/`, README and `docs/`. Then an independent verifier on the guard. Route: inline, then one verifier.
+- [ ] T3 (kind: build) (2, 3) Pull request 1, branch `feat/model-home-module`, cut from T2's commit: `bin/lib/model-home.mjs` and its test; the faults of the homes in `readRules`; the lenses and the double review's fallback and effort read the home; the writer's agent file compared with the home; the convention test over code; the runner of `rules change` takes `--with <path>...`, with its tests beside `bin/lib/rules-change-run.test.mjs:159` and `:172`; the check of marks stops at a document's `## Log`, as the scan of restated values does (`bin/lib/rules-scan.mjs:11`), since a Log tells what a rule was called. No reader of a rule that leaves moves here. Route: inline.
+- [ ] T4 (kind: build) (1, 2, 5, 10) Pull request 2, branch `rule/one-model-home`, on main once pull request 1 lands: `rules change --with` nine times, a commit each, every commit with the readers, the tests, the marks, the patterns carried to the home and the planted break of its rule: the two subjects widened, each home's control made a bundle; `lead-effort` and `subagent-effort` retired with the guard's start held to the home's effort alone; the two sub-agent model rules and `escalation-model` retired with the guard, the double review, the contract's modes, the sub-agent row and the recheck reading the home; the guard's refusal of a sub-agent call that names an effort; the patterns of Codex's two rules. Before each retirement, its dry run, and a grep of its id as a bare word over `bin/`, `workshop/`, `.claude/agents/`, README, `docs/` and `odd/tasks/` above each Log. Then an independent verifier on the guard. Route: inline, then one verifier.
 - [ ] T5 (kind: build) (5, 7) Pull request 3, branch `feat/model-home-sessions`: a start and a resume take the home and refuse another, in `sessions start` and in the guard's `start_session`, with the starter's own record; `appSessions` gives the model; the board's mark, both levels and the line. Route: inline.
 - [ ] T6 (kind: build) (6, 7) Pull request 3: `rules applied` lists the sessions off the home from the app's records, the record of starts, the last replies and the jobs; the `doctor` row with his settings read. Then the list goes to the lead in one notice. Route: inline.
 - [ ] T7 (kind: build) (8, 10) Pull request 4, branch `feat/model-home-switch`: the runner of `rules change` writes several rules in one pass and refuses a home's value alone; `rules switch` with its probe, the agent file, `--dry-run` and its printout. Route: inline.
@@ -337,13 +370,16 @@ each row was read again. "Reader" means the value comes from a rule; "by hand" m
 | his user settings: `model`, `maxEffortLevel`, `modelSettings` | `opus[1m]`, `high`, an entry for Opus 5.5 alone | his; read by `doctor` and the switch, never written (T6, T7) |
 | the project's `.claude/settings.local.json` `effortLevel` | `high`, in a file git ignores | read by `doctor` and the switch, never written (T6, T7) |
 | `bin/lib/manifest.mjs:156` (the lead's text) | `sessions start ... --effort <level>` | the flag leaves the example (T8) |
-| `bin/lib/protocols-skill.mjs:43`, `:102`; `bin/guard.mjs:10`, `:56`, `:157`; `bin/sessions-background.mjs:6`, `:32`; `bin/codex-review.mjs:15`; `bin/lib/hook-entries.mjs:72`; `bin/lib/session-title-guard.mjs:11`; `README.md:1324`; `docs/ROADMAP.md:723`, `:806` | name a rule that leaves, by a mark or as a bare word | name the home, in the commit that retires the rule (T4) |
+| `bin/lib/protocols-skill.mjs:43`, `:102`; `bin/guard.mjs:10`, `:56`, `:157`; `bin/sessions-background.mjs:6`, `:32`; `bin/codex-review.mjs:15`; `bin/lib/hook-entries.mjs:72`; `bin/lib/session-title-guard.mjs:11`; `README.md:214`, `:1060`, `:1324`, `:1657`, `:1711`; `docs/SPEC.md:636`, `:744`; `docs/ROADMAP.md:72`, `:723`, `:806`; `bin/lib/manifest.mjs:62`; `bin/double-review.mjs:65`, `:303`; `.claude/agents/js-harness-writer.md:4`; `odd/tasks/f8-s7-topology.md:29`, `:36`, `:96`; `odd/tasks/memory-notes.md:70`; `odd/tasks/onboarding.md:873`, `:897`, `:921`; `odd/tasks/double-review-alignment.md:319` | name a rule that leaves, by a mark or as a bare word | name the home, in the commit that retires the rule (T4) |
+| `odd/tasks/double-review-alignment.md:396`, `odd/tasks/workshop-product-split.md:683` | a mark of a rule that leaves, inside a Log | stay: the check of marks stops at the Log (T3) |
+| the two home rules' planted breaks, `bin/lib/rules-coverage-data.mjs:61`, `:63`, and the Read-by list pinned at `bin/rules.test.mjs:460` | one break each, on a read the module replaces | a bundle of breaks, one a consumer (T4) |
+| tests that read a rule that leaves by its id: `bin/lib/guard.test.mjs:226`, `bin/guard.test.mjs:112`, `bin/sessions-background.test.mjs:681`, `bin/lib/codex-review-recheck.test.mjs:219`, `bin/double-review.test.mjs:145`, `bin/lib/protocols-skill.test.mjs:146` | would read `undefined`, or throw, after the retirement | read the home, in the commit that retires the rule (T4) |
 | `bin/lib/subagent-count.mjs:57` | a launch on a haiku model counts as a writer | stays: it classifies recorded launches of the days a writer ran on Haiku, and gives nothing started now its model |
 | `bin/commit-msg.mjs:31` `HOST_NAME` | the family names of a host's attribution line | stays; the switch says when the new id's family is not in it (T7) |
 | `bin/lib/sessions.mjs:25`, `:37` | the model's context window and the app's compaction share, by hand | stay; the switch names the first as a value to read again on a new model (T7) |
 | `bin/double-review.mjs:71` `MEASURED_COST`; rules `codex-review-rate`, `codex-review-floor`; `bin/lib/codex-review-plan.mjs:107-115` | measured on the models of today; the plan estimates from every part until five exist on the pair asked | stay; the protocol says what a switch does to them (T8) |
 | `README.md:1070`, `:1293`, `:1334`, `:1015` (a sample of output) | values restated | name the rule; a sample shows `<model>` (T8) |
-| `docs/ROADMAP.md:68`, `:72`, Decided rows "Review model" and "Effort" | values restated, `:72` stale: Opus 5.5, Haiku 5.5 for writers | name the rules (T8) |
+| `docs/ROADMAP.md:68`, `:72`, Decided rows "Review model" and "Effort" | values restated, `:72` stale: Opus 5.5, Haiku 5.5 for writers | name the rules: `:72` in T4, since it marks rules that leave; `:68` in T8 |
 | `README.md:1812`, `:1824-1825` | "Claude Opus 5.5" as the sample of an attribution line the hook removes | stay, on the test's list: the name of a host in a sample, not a pick |
 | tests that write today's value: `bin/lens-review.test.mjs:391`, `bin/double-review.test.mjs:136`, `:175`, `bin/rules.test.mjs:285`, `:409`, `:412`, `bin/resume.test.mjs:1881`, `bin/contract.test.mjs:620-657`, `bin/lib/sessions.test.mjs:2429-2432`, `bin/sessions.test.mjs:1472`, `bin/lib/writer-agent.test.mjs:32-33` | red the day a value changes | read the home (T3, T4, T5) |
 | each retired rule's other records: `docs/rule-sources.json`, its planted break in `bin/lib/rules-coverage-data.mjs`, its entry of `PLANTED` in `bin/lib/rules-scan.test.mjs:56-87` | one a rule | move with the retirement (T4) |
@@ -432,3 +468,32 @@ each row was read again. "Reader" means the value comes from a rule; "by hand" m
 - L10. The lead's notice, 00:29 local on 2026-11-11: his message on Codex is line 6185; and, by the lead's account
   of his line 6716 (00:26), he let the lead land what gets ready while he is away about ten hours, so a `ready`
   goes out as soon as a pull request is ready and each lands alone. Not checked by this session beyond the notice.
+- L11. The confirming read of the corrected design, read `75e3c984-ffec-4c8e-a926-4b4f0e125eb8`, on the copy of
+  `0907ed7d`: Claude 11 findings (2,932,508 tokens), Codex 7 (2,046,887 tokens), three high. All real; what each
+  changed:
+  - Claude 1, Codex 1 (the retirement in one commit cannot run through `rules change`): taken. Checked with a dry
+    run of the five, after merging `origin/main` (`12bd856c`): each is refused for its readers, in the command's own
+    words ("bin/lib/guard.mjs: reads rule "lead-effort", which has no value"). The runner gets `--with` in pull
+    request 1, and the wrong precedent is gone from the constraint.
+  - Claude 2 (marks in feature documents, the roadmap's line 72, two marks inside Logs): taken, from the same dry
+    runs: the inventory names them, `:72` moves to T4, and the check of marks stops at a Log.
+  - Claude 3 (the home's own planted breaks vanish behind the module): taken, a bundle of breaks, one a consumer.
+  - Claude 4, Codex 4 (the patterns of the rules that leave left the skills' texts and the feature documents
+    unscanned): taken, against L9's rebuttal, which was wrong: each retirement carries its wordings to the home.
+  - Claude 5, Codex 3 (no closing condition after the lead acts; two exceptions missing): taken. Done when asks a
+    second run; exceptions 7 and 8; a first list went to the lead from a scratch read (L12).
+  - Claude 6, Codex 6 (the cap as cause could be tested on the past; a stamp is not what ran): taken. Measured:
+    97,331 stamps at `high` and none above it in 126 transcripts since 2026-10-12, sessions the app showed at max
+    among them. The stamp is now called the recorded effort, and what the engine worked at stays not known.
+  - Claude 7, Codex 5 (a refused start was a dead end; an unreadable record failed open unseen): taken. The refusal
+    names `sessions start`, a start names the home's model and effort outright, and a missing record is marked.
+  - Codex 2 (a sub-agent call may name another effort): taken, the guard refuses one that names any.
+  - Codex 7 (dropping `gpt-` does not find an id of another shape): taken, the convention test searches the values
+    as written.
+  - Claude 8, 9, 10, 11 (the line in his menu's words; `npm run check` and the tests that read a leaving rule; a
+    half of a home that does not change, and the probe's flags; three wrong figures in Why and the bar): taken.
+- L12. A scratch read for the lead, 2026-11-11 01:00 local, not the command of spec 6: `claude agents --json --all`
+  gave 46 jobs, 16 not done. Six work on `claude-fable-5-2` at high by their start record. Eight are stopped or
+  blocked with a start that named no model at high (JH 126, 130, 134, 137, and two rows each of JH 160 and 166),
+  so they ran on the host's default; two have no start record (JH 65, and the lead's own row). The four open
+  desktop sessions read `claude-fable-5-2` at high in the app's records.
