@@ -1,11 +1,11 @@
 // The one module that reads the two homes of a model and an effort (odd/tasks/one-model-home.md, spec 2).
-// Everything Claude the harness starts runs on the Claude home, `session-model` at `session-effort`; a Codex review
-// runs on the Codex home, `review-model` at `review-effort`. On 2026-11-10 the user changed model and effort twice in
-// a day, and each change was carried by hand through seven rules, three constants and an agent file; a launcher, a
-// guard or a check that needs a model or an effort reads it here, so the next change is one place. Which rules the
-// homes are and what shape their values have is `model-shape.mjs`, which the rules list reads too; this module gives
-// those names on, so a reader imports this one alone. It prints nothing and reads no file: a caller that holds a
-// project's rules file passes its text in.
+// Everything Claude the harness starts runs on the Claude home, `session-model` at `session-effort`, the lead's
+// session at `lead-effort` since his decision of 2026-11-11; a Codex review runs on the Codex home, `review-model`
+// at `review-effort`. On 2026-11-10 the user changed model and effort twice in a day, and each change was carried by
+// hand through seven rules, three constants and an agent file; a launcher, a guard or a check that needs a model or
+// an effort reads it here, so the next change is one place. Which rules the homes are and what shape their values
+// have is `model-shape.mjs`, which the rules list reads too; this module gives those names on, so a reader imports
+// this one alone. It prints nothing and reads no file: a caller that holds a project's rules file passes its text in.
 import { CLAUDE_ID } from './model-shape.mjs';
 import { RULES } from './rules-data.mjs';
 import { guardHeld, ruleHere, ruleOf } from './rules.mjs';
@@ -16,11 +16,12 @@ export { CLAUDE_HOME, CODEX_HOME, EFFORTS } from './model-shape.mjs';
  * (2026-11-10); the two ends are assumed, and his to correct. */
 export const MENU_LEVELS = Object.freeze({ low: 'Bajo', medium: 'Medio', high: 'Alto', xhigh: 'Extra alto', max: 'Máximo' });
 
-/** The Claude home as `{ model, effort }`, the declared values whatever project the caller runs in: the harness's own
- * launches (a lens, the double review's reader) run on it everywhere. A guard, which holds a project to the home only
+/** The Claude home as `{ model, effort, lead }`, the declared values whatever project the caller runs in: the
+ * harness's own launches (a lens, the double review's reader) run on `model` at `effort` everywhere. `lead` is the
+ * level of the lead's session alone, which runs on the same model. A guard, which holds a project to the home only
  * where that project declares the rules, reads `claudeHeld` instead. */
 export function claudeHome(list = RULES) {
-  return { model: ruleOf('session-model', list).value, effort: ruleOf('session-effort', list).value };
+  return { model: ruleOf('session-model', list).value, effort: ruleOf('session-effort', list).value, lead: ruleOf('lead-effort', list).value };
 }
 
 /** The Codex home as `{ model, effort }`. `bin/codex-review.mjs` keeps the read its launches use; this one is for
@@ -30,12 +31,14 @@ export function codexHome(list = RULES) {
 }
 
 /** What a guard holds of the Claude home in the project whose rules file has the text `projectData`, as
- * `{ model, effort }`, each `{ value, note }` as `guardHeld` gives it, or null where the project does not declare
- * the rules: a project that installs the harness is held to nothing. */
+ * `{ model, effort, lead }`, each `{ value, note }` as `guardHeld` gives it, or null where the project does not
+ * declare that rule: a project that installs the harness is held to nothing, and one that declares no level for its
+ * lead holds a lead to none of its own. */
 export function claudeHeld(projectData) {
   return {
     model: guardHeld('session-model', ruleHere('session-model', undefined, projectData)),
     effort: guardHeld('session-effort', ruleHere('session-effort', undefined, projectData)),
+    lead: guardHeld('lead-effort', ruleHere('lead-effort', undefined, projectData)),
   };
 }
 

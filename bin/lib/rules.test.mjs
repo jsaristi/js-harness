@@ -245,8 +245,8 @@ test('a full Claude id is the model of the Claude home with no fault, a dated on
   }
 });
 
-test('the effort of each home is one of the five levels a host takes', () => {
-  for (const id of ['session-effort', 'review-effort']) {
+test('the effort of each home, the lead\'s level too, is one of the five levels a host takes', () => {
+  for (const id of ['session-effort', 'lead-effort', 'review-effort']) {
     for (const value of ['low', 'medium', 'high', 'xhigh', 'max']) {
       assert.deepEqual(readRules([homeRule(id, value)]), [], `${id} ${value}`);
     }
@@ -265,13 +265,13 @@ test('the model of the Codex home has no shape of its own: only what cannot be o
 });
 
 test('an empty value of a home keeps the one fault every value has, and no second one', () => {
-  for (const id of ['session-model', 'session-effort', 'review-model', 'review-effort']) {
+  for (const id of ['session-model', 'session-effort', 'lead-effort', 'review-model', 'review-effort']) {
     assert.deepEqual(readRules([homeRule(id, '')]), [`rule "${id}": the value is not a number or a text`], id);
   }
 });
 
 test('a number is no value of a home, with its unit or without: it would be handed to a launch as it is', () => {
-  const faults = { 'session-model': NOT_FULL_ID, 'session-effort': NOT_A_LEVEL, 'review-model': NOT_CODEX, 'review-effort': NOT_A_LEVEL };
+  const faults = { 'session-model': NOT_FULL_ID, 'session-effort': NOT_A_LEVEL, 'lead-effort': NOT_A_LEVEL, 'review-model': NOT_CODEX, 'review-effort': NOT_A_LEVEL };
   for (const [id, fault] of Object.entries(faults)) {
     assert.deepEqual(readRules([valueRule(id, { value: 5 })]), [`rule "${id}": ${fault}`], id);
   }

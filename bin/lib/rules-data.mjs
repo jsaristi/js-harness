@@ -658,12 +658,16 @@ export const RULES = [
   },
   {
     "id": "session-effort",
-    "subject": "the effort everything Claude the harness starts runs at: every session, the lead's included, every sub-agent, the lenses and the double review's Claude reader",
+    "subject": "the effort everything Claude the harness starts runs at but the lead's session: every work session, every sub-agent, the lenses and the double review's Claude reader",
     "owner": "sebastian",
     "scope": "repository",
-    "since": "2026-11-10",
-    "value": "high",
+    "since": "2026-11-11",
+    "value": "medium",
     "was": [
+      {
+        "value": "high",
+        "until": "2026-11-11"
+      },
       {
         "value": "medium",
         "until": "2026-11-10"

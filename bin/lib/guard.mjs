@@ -4,7 +4,7 @@
 // entry ends in `|| exit 0` (bin/lib/manifest.mjs), and a refusal by exit code would be swallowed. Zero deps.
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { EFFORTS } from './model-home.mjs';
+import { CLAUDE_HOME, EFFORTS, claudeHeld, sameClaudeModel } from './model-home.mjs';
 import { guardHeld, ruleHere, ruleOf, staleNote } from './rules.mjs';
 
 /** The models a sub-agent may be launched on in the project whose rules file has the text `projectData`, as
@@ -73,43 +73,57 @@ export const SESSION_TOOL = 'mcp__ccd_session__start_session';
 
 /** Why the `start_session` call whose input is `toolInput` is refused, or null. A session started with no effort runs
  * at the effort of the one that started it: on 2026-10-16 two work sessions started so ran at max for two days while
- * the rule `session-effort` says high (odd/tasks/harness-review.md, T6c). Where that rule gives a value, a call that
- * carries a brief (`prompt`) is refused when it names no effort, a fork included since a fork cannot set its own, or
- * one above the rule's; a call with no brief (an offer's title, a proposal started as proposed) passes. Where the
- * rule is not declared nothing is refused; behind a project that declares it, the copy's value is held (`guardHeld`).
- * `cli` words the reasons for `js-harness sessions start`, which holds the same rule over its `--effort`
+ * the rule `session-effort` said high (odd/tasks/harness-review.md, T6c). The home is read through `claudeHeld` of
+ * ./model-home.mjs (odd/tasks/one-model-home.md, spec 5): where it gives a level, a call that carries a brief
+ * (`prompt`) is refused when it names no effort, a fork included since a fork cannot set its own, or another level
+ * than that one, lower as well as higher, since the level is the one he set and a start below it would be a change
+ * of his nobody told him of; where it gives a model, a call that names another model is refused, and one that names
+ * none passes, since whether the tool takes a full id is not known yet (the same document, L13). A call with no brief
+ * (an offer's title, a proposal started as proposed) passes. Where a rule is not declared nothing is refused under
+ * it; behind a project that declares it, the copy's value is held (`guardHeld`). `cli` words the reasons for
+ * `js-harness sessions start`, which holds the same rules over its `--effort` and its `--model`
  * (odd/tasks/background-sessions.md, S5). `lead` says the call starts a new lead, which the caller reads from its
- * title (`leadTitle` of ./session-title-guard.mjs): it is held to the rule `lead-effort` where that rule gives a
- * value, and to `session-effort` where it gives none. His words give the lead a level of its own, which may stand
- * above the work sessions' (it did for a few hours of 2026-11-10; his correction of that day levels them), and at a
- * cut the old lead starts the new one with this tool (./manifest.mjs, "The cut"): held to `session-effort`, a start
- * at a lead's higher level would be refused. */
-export function sessionEffortRefusal(toolInput, projectData, { cli = false, lead = false } = {}) {
+ * title (`leadTitle` of ./session-title-guard.mjs): it is held to the home's level for the lead, the rule
+ * `lead-effort`, where that rule gives a value, and to the sessions' where it gives none. His decision of 2026-11-11
+ * gives the lead a level of its own, and at a cut the old lead starts the new one with this tool (./manifest.mjs,
+ * "The cut"): held to the sessions' level, that start would be refused at the lead's. */
+export function sessionStartRefusal(toolInput, projectData, { cli = false, lead = false } = {}) {
   if (typeof toolInput?.prompt !== 'string' || toolInput.prompt === '') return null;
-  const ofLead = lead ? guardHeld('lead-effort', ruleHere('lead-effort', undefined, projectData)) : null;
-  const id = ofLead === null ? 'session-effort' : 'lead-effort';
-  const rule = ofLead ?? guardHeld('session-effort', ruleHere('session-effort', undefined, projectData));
+  const home = claudeHeld(projectData);
+  const who = cli ? 'js-harness sessions start' : 'js-harness guard: start_session';
+  const model = home.model === null ? null : modelReason(toolInput, home.model.value, who, cli);
+  if (model !== null) return `${model}${home.model.note}`;
+  const ofLead = lead && home.lead !== null;
+  const rule = ofLead ? home.lead : home.effort;
   if (rule === null) return null;
-  const reason = effortReason(toolInput, id, rule.value, cli);
+  const reason = effortReason(toolInput, ofLead ? CLAUDE_HOME.lead : CLAUDE_HOME.effort, rule.value, who, cli);
   return reason === null ? null : `${reason}${rule.note}`;
 }
 
-/** Why `toolInput` is refused under the rule `id` (session-effort, or lead-effort) of value `value`, or null. */
-function effortReason(toolInput, id, value, cli) {
+/** Why the model `toolInput` names is refused under the home's model `value`, or null: none named, or the home's,
+ * a date at its end or a bracket aside (`sameClaudeModel`). A short name is refused too, since it names whatever
+ * the engine in use gives it. */
+function modelReason(toolInput, value, who, cli) {
+  const { model } = toolInput;
+  if (model === undefined || model === null || model === '' || sameClaudeModel(model, value)) return null;
+  const pass = cli ? `Pass --model ${value}, or none` : `Pass model "${value}", or none`;
+  return `${who} names the model "${model}", not the one of the rule ${CLAUDE_HOME.model}: ${value}. ${pass}; another model is his to set.`;
+}
+
+/** Why `toolInput` is refused under the rule `id` (the sessions' level, or the lead's) of value `value`, or null. */
+function effortReason(toolInput, id, value, who, cli) {
   const effort = toolInput.context === 'fork' ? undefined : toolInput.effort;
-  const who = cli ? 'js-harness sessions start' : 'js-harness guard: start_session';
-  const pass = cli ? `Pass --effort ${value} or lower` : `Pass effort "${value}" or lower`;
+  const pass = cli ? `Pass --effort ${value}` : `Pass effort "${value}"`;
   if (effort === undefined || effort === null || effort === '') {
     if (cli) return `${who} names no effort, so the new session would run at the host's default (rule ${id}: ${value}). ${pass}.`;
     return `${who} names no effort, so the new session would run at this session's `
       + `(rule ${id}: ${value}). ${pass} with context "fresh"; a fork cannot set its own effort.`;
   }
-  const asked = EFFORTS.indexOf(effort);
-  if (asked === -1) {
+  if (!EFFORTS.includes(effort)) {
     return `${who} asks for effort "${effort}", which is not one of ${EFFORTS.join(', ')}. ${pass}.`;
   }
-  if (asked <= EFFORTS.indexOf(value)) return null;
-  return `${who} asks for effort "${effort}", above the rule ${id}: ${value}. ${pass}; a higher one is his to set.`;
+  if (effort === value) return null;
+  return `${who} asks for effort "${effort}", not the level of the rule ${id}: ${value}. ${pass}; another level is his to set.`;
 }
 
 // The hour a message stamps as the time it is sent: in its opening header, after nothing but the sender's label

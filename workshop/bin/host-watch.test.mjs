@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { hostWatchMain, hostWatchTick } from './host-watch.mjs';
-import { sessionEffortRefusal } from '../../bin/lib/guard.mjs';
+import { sessionStartRefusal } from '../../bin/lib/guard.mjs';
 import { sessionTitleRefusal } from '../../bin/lib/session-title-guard.mjs';
 import { appendReading, newReading } from '../../bin/lib/channel.mjs';
 import { ruleOf } from '../../bin/lib/rules.mjs';
@@ -242,7 +242,7 @@ test('the tick names an update no host watch session holds, once an hour, with a
     const title = /--title "([^"]+)"/.exec(told.told)[1];
     const effort = /--effort (\S+)$/.exec(told.told)[1];
     assert.equal(sessionTitleRefusal({ title }, RULES, { codeOf: () => ({ code: 'JH' }), next: () => ({ number: 120 }) }, 'js-harness sessions start'), null);
-    assert.equal(sessionEffortRefusal({ prompt: 'the brief', effort }, RULES, { cli: true }), null);
+    assert.equal(sessionStartRefusal({ prompt: 'the brief', effort }, RULES, { cli: true }), null);
     assert.equal(await tickOf(w), null, 'within the hour it is not read again');
     const later = await tickOf(w, { now: () => Date.parse('2026-11-06T11:00:00Z') });
     assert.match(later.told, /^HOST: /, 'an hour later, with no session opened, it is said again');

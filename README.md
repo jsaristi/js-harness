@@ -1715,8 +1715,8 @@ session, on `Bash`, on `Read`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit` and 
 standard input and refuses these things: a sub-agent launched on a model the project's rules do not give;
 a scheduled-task or cloud tool that would open a session where he does not see it, in a project that
 declares `sessions-open-in-sidebar`, the reason naming `start_session`, which opens it as a row in his
-sidebar, even when he asked for it; a `start_session` with a brief that names no effort, or an effort above the
-rule `session-effort` where that rule is declared, or above `lead-effort` when its title is of a new lead (a fork included, since it cannot set its own); a `start_session`
+sidebar, even when he asked for it; a `start_session` with a brief that names no effort, or another level than the
+rule `session-effort` where that rule is declared, or than `lead-effort` when its title is of a new lead (a fork included, since it cannot set its own), or that names a model other than the rule `session-model`; a `start_session`
 whose title is not `<code> <n> · <purpose>` (or `<code> ORQ · <purpose>` for a new lead) with the project's own code,
 harness.json `"code"` (`init` offers the initials of the project's name; this repository's is `JH`), where the rule
 `session-title` is declared, the reason naming the project's next free number, one past the highest of that code in

@@ -7,9 +7,11 @@ import { CLAUDE_HOME, CODEX_HOME, EFFORTS, MENU_LEVELS, claudeHeld, claudeHome, 
 // odd/tasks/one-model-home.md, specs 2 and 7: the one module that knows which rules are the two homes.
 const valueOf = (id, list = RULES) => list.find((rule) => rule.id === id).value;
 
-test('the two homes are four live rules that hold a value, and no rule is in both', () => {
+// His decision of 2026-11-11 (S7): one model and two levels, the lead's session at its own.
+test('the two homes are five live rules that hold a value, the lead\'s level among Claude\'s, and no rule is in both', () => {
+  assert.deepEqual(CLAUDE_HOME, { model: 'session-model', effort: 'session-effort', lead: 'lead-effort' });
   const ids = [...Object.values(CLAUDE_HOME), ...Object.values(CODEX_HOME)];
-  assert.equal(new Set(ids).size, 4);
+  assert.equal(new Set(ids).size, 5);
   for (const id of ids) {
     const rule = RULES.find((item) => item.id === id);
     assert.ok(rule && Object.hasOwn(rule, 'value') && !Object.hasOwn(rule, 'retired'), `${id} is a live rule with a value`);
@@ -17,7 +19,7 @@ test('the two homes are four live rules that hold a value, and no rule is in bot
 });
 
 test('claudeHome and codexHome give what the rules declare, wherever they are read', () => {
-  assert.deepEqual(claudeHome(), { model: valueOf('session-model'), effort: valueOf('session-effort') });
+  assert.deepEqual(claudeHome(), { model: valueOf('session-model'), effort: valueOf('session-effort'), lead: valueOf('lead-effort') });
   assert.deepEqual(codexHome(), { model: valueOf('review-model'), effort: valueOf('review-effort') });
 });
 
@@ -25,13 +27,20 @@ test('a list given to claudeHome is the one read, so a switch is seen by every r
   const list = RULES.map((rule) => (rule.id === 'session-model' ? { ...rule, value: 'claude-saga-9-1' } : rule));
   assert.equal(claudeHome(list).model, 'claude-saga-9-1');
   assert.equal(claudeHome(list).effort, valueOf('session-effort'));
+  // The lead's level is its own rule's, whatever the sessions' is.
+  const levels = RULES.map((rule) => (rule.id === 'session-effort' ? { ...rule, value: 'low' } : rule.id === 'lead-effort' ? { ...rule, value: 'max' } : rule));
+  assert.deepEqual([claudeHome(levels).effort, claudeHome(levels).lead], ['low', 'max']);
 });
 
 test('a guard holds the home where the project declares the rules, and nothing where it does not', () => {
   const here = claudeHeld(writeRules(RULES));
-  assert.deepEqual(here, { model: { value: valueOf('session-model'), note: '' }, effort: { value: valueOf('session-effort'), note: '' } });
-  assert.deepEqual(claudeHeld(undefined), { model: null, effort: null });
-  assert.deepEqual(claudeHeld('export const RULES = [];\n'), { model: null, effort: null });
+  const held = (id) => ({ value: valueOf(id), note: '' });
+  assert.deepEqual(here, { model: held('session-model'), effort: held('session-effort'), lead: held('lead-effort') });
+  assert.deepEqual(claudeHeld(undefined), { model: null, effort: null, lead: null });
+  assert.deepEqual(claudeHeld('export const RULES = [];\n'), { model: null, effort: null, lead: null });
+  // A project that declares the sessions' level and none for its lead: the guard holds what is declared.
+  const without = claudeHeld(writeRules(RULES.filter((rule) => rule.id !== 'lead-effort')));
+  assert.deepEqual(without, { model: held('session-model'), effort: held('session-effort'), lead: null });
 });
 
 test('the levels are the five a host takes, lowest first', () => {

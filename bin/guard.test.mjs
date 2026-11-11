@@ -97,9 +97,10 @@ test('a scheduled-task or cloud tool that opens a session is denied in the proje
 });
 
 // odd/tasks/harness-review.md, T6c: a session started with no effort ran at the max of the session that started it.
-test('a session started with no effort, or above the rule session-effort, is denied where the rule is declared', async () => {
+test('a session started with no effort, or at another level than the rule session-effort, is denied where the rule is declared', async () => {
   const brief = { initiation: 'own_initiative', title: 'JH 32 · T9', prompt: 'Do T9.', background: 'x'.repeat(80) };
-  for (const tool_input of [brief, { ...brief, effort: 'max' }, { ...brief, context: 'fork' }]) {
+  const others = ['low', 'max'].filter((level) => level !== SESSION_EFFORT);
+  for (const tool_input of [brief, ...others.map((effort) => ({ ...brief, effort })), { ...brief, context: 'fork' }]) {
     const refused = await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input });
     assert.equal(denied(refused).permissionDecision, 'deny', JSON.stringify(tool_input));
     assert.match(denied(refused).permissionDecisionReason, new RegExp(`^js-harness guard: start_session .*session-effort: ${SESSION_EFFORT}`), JSON.stringify(tool_input));
@@ -110,21 +111,23 @@ test('a session started with no effort, or above the rule session-effort, is den
 });
 
 // 2026-11-10: his words give the lead a level of its own, and the old lead starts the new one with this tool.
-test('a new lead, by its title, is started at the rule lead-effort, which a work session is refused where it is above its own', async () => {
+test('a new lead, by its title, is started at the rule lead-effort, which a work session is refused where it is not its own', async () => {
   const lead = RULES.find((rule) => rule.id === 'lead-effort').value;
   const brief = { initiation: 'own_initiative', prompt: 'Take over as the lead.', background: 'x'.repeat(80), effort: lead, context: 'fresh' };
   assert.deepEqual(await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: { ...brief, title: 'JH ORQ · relevo' } }), { code: 0, out: '', err: '' });
-  const levels = ['low', 'medium', 'high', 'xhigh', 'max'];
   // The title of a work session is held to its own rule: at the lead's level it passes only where the two rules agree.
   const work = await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: { ...brief, title: 'JH 32 · T9' } });
-  if (levels.indexOf(lead) > levels.indexOf(SESSION_EFFORT)) {
-    assert.match(denied(work).permissionDecisionReason, new RegExp(`^js-harness guard: start_session asks for effort "${lead}", above the rule session-effort: ${SESSION_EFFORT}`));
+  if (lead !== SESSION_EFFORT) {
+    assert.match(denied(work).permissionDecisionReason, new RegExp(`^js-harness guard: start_session asks for effort "${lead}", not the level of the rule session-effort: ${SESSION_EFFORT}`));
   } else assert.deepEqual(work, { code: 0, out: '', err: '' });
   // A word that is no level is refused under the rule that holds the start, whatever the two values are.
   const refused = await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: { ...brief, title: 'JH ORQ · relevo', effort: 'ultra' } });
-  assert.ok(denied(refused).permissionDecisionReason.endsWith(`Pass effort "${lead}" or lower.`), refused.out);
+  assert.ok(denied(refused).permissionDecisionReason.endsWith(`Pass effort "${lead}".`), refused.out);
   const other = await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: { ...brief, title: 'JH 32 · T9', effort: 'ultra' } });
-  assert.ok(denied(other).permissionDecisionReason.endsWith(`Pass effort "${SESSION_EFFORT}" or lower.`), other.out);
+  assert.ok(denied(other).permissionDecisionReason.endsWith(`Pass effort "${SESSION_EFFORT}".`), other.out);
+  // A start that names a model other than the home's is denied whatever its title.
+  const model = await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: { ...brief, title: 'JH ORQ · relevo', model: 'opus' } });
+  assert.match(denied(model).permissionDecisionReason, /^js-harness guard: start_session names the model "opus", not the one of the rule session-model: /);
 });
 
 // odd/tasks/behind-copy-guard.md, S1: the installed 0.97.0 passed "Codex hook trust" while the repository's copy denied it,

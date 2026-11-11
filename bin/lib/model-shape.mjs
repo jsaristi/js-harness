@@ -1,11 +1,13 @@
 // The shape of the values of the two homes of a model and an effort (odd/tasks/one-model-home.md, spec 3): which
-// rules are the homes, the effort levels a host takes, what a full Claude id looks like, and the faults of a home's
+// rules are the homes, the lead's level among Claude's, the effort levels a host takes, what a full Claude id looks like, and the faults of a home's
 // declaration. It is apart from `model-home.mjs`, which reads the homes, because the rules list reads it to hold a
 // home's value to its shape and `model-home.mjs` reads the rules list: one module for both would import in a circle.
 // It imports nothing, and every other module takes these names from `model-home.mjs`, which gives them on.
 
-/** The ids of the rules of each home, which `js-harness rules switch` changes together. */
-export const CLAUDE_HOME = Object.freeze({ model: 'session-model', effort: 'session-effort' });
+/** The ids of the rules of each home, which `js-harness rules switch` changes together. Claude's is one model and
+ * two levels since his decision of 2026-11-11 (odd/tasks/one-model-home.md, S7): `effort` is the level of everything
+ * but the lead's session, and `lead` the level of that one. */
+export const CLAUDE_HOME = Object.freeze({ model: 'session-model', effort: 'session-effort', lead: 'lead-effort' });
 export const CODEX_HOME = Object.freeze({ model: 'review-model', effort: 'review-effort' });
 
 /** The effort levels a host takes, lowest first: the order that says one level is above another. */
@@ -27,7 +29,7 @@ export function homeFaults(rule) {
   if (id === CLAUDE_HOME.model && !(text && CLAUDE_ID.test(value))) {
     return ['the value is not a full Claude id, claude-<family>-<version>: a short name gives whatever model the engine in use has for it'];
   }
-  if ((id === CLAUDE_HOME.effort || id === CODEX_HOME.effort) && !EFFORTS.includes(value)) {
+  if ((id === CLAUDE_HOME.effort || id === CLAUDE_HOME.lead || id === CODEX_HOME.effort) && !EFFORTS.includes(value)) {
     return [`the value is not an effort level: ${EFFORTS.slice(0, -1).join(', ')} or ${EFFORTS.at(-1)}`];
   }
   if (id === CODEX_HOME.model && (!text || /\s/.test(value) || /^claude\b/i.test(value) || EFFORTS.includes(value))) {
