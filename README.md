@@ -1841,7 +1841,8 @@ named like a secret, or a path segment, a query name or a query value that reads
 refused with exit 1 before anything is sent. One reads as a key when its pieces that mix letters
 and digits add up to 20 characters or more: a random token, a UUID, the id of a page that is
 private by its link, the code of a sign-in callback. The refusal names a path segment and a query
-name by their place and a query value by its parameter, and never repeats the key.
+parameter by their place, adds the parameter's name when that is a plain word and the key is its
+value, and never repeats the key.
 
 Those checks read names and shapes, and know no secret, so they err both ways. These go out with
 the URL: a key of letters alone or of digits alone; one shorter than 20 characters; one that
@@ -1849,10 +1850,11 @@ other characters (a hyphen, an underscore, a dot, an escape) cut into pieces too
 letters and digits (about one random 22-character base64url key in four); one spread over several
 segments or parameters; one escaped twice; one in the host's name. Do not hand this command a URL
 that holds a key. The other way round, a public page is refused as well when its path holds an id
-of that shape (a commit hash, a UUID) or a slug whose words that mix letters and digits (`gpt4`,
-`llama3`, a 12-character id) add up to 20 characters, and when its query carries a tracking value
-of that shape (`fbclid`, `gclid`): the page without that parameter is the same page, and the
-built-in browser reads the others, sending the URL to no third party.
+of that shape (a commit hash, a UUID), when a slug or a search holds words that mix letters and
+digits (`gpt4`, `llama3`, a 12-character id) that add up to 20 characters, and when its query
+carries an id of that shape (a playlist, a click id such as `fbclid`). Without a click id the page
+is the same page, so drop the parameter the refusal names; the built-in browser reads the others,
+sending the URL to no third party.
 
 ```console
 $ js-harness fetch https://www.npmjs.com/package/react

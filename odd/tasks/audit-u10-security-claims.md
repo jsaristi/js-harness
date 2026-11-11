@@ -131,9 +131,10 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
   not confinement, with the test that holds the limit. Commit 53bf1d2.
 - [x] T4 (kind: verify) an independent verifier reads T2, the guard: "holds" at f0e62d7d (L10); the lens fixes are
   commit f0e62d7d.
-- [ ] T5 (kind: build) spec 3: `notPublic` refuses a query name or value that reads as a key, by the function and
+- [x] T5 (kind: build) spec 3: `notPublic` refuses a query name or value that reads as a key, by the function and
   the limit of the path, test first; a value is named by its parameter's name and a name by its place, never
   quoted; the help, the README, the dispatcher's line and docs/SPEC.md say it and drop the query from what goes out.
+  Commit 724e8cbd.
 - [ ] T6 (kind: verify) Codex and the lenses on T5's slice, from 07cffc8c.
 
 ## Log
@@ -224,6 +225,20 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
   (the help, README.md, bin/js-harness.mjs:52, docs/SPEC.md:663), all four changed; the hook's notice in
   `bin/lib/web-block.mjs` lists none and stays, as in L10. The session was compacted by the host between the red
   test and the change (2026-11-11T07:16Z) and resumed from this document.
+- L15 Reviews of T5's slice, 07cffc8c..724e8cbd. Codex (gpt-6.1-sol, medium, 80,964 input tokens, 64 s): "the patch
+  is correct (confidence 0.94)", no finding. The Claude lenses risk, readability and reliability: four findings,
+  three distinct, all taken. (1) risk and reliability, the same: the reason of a refused value repeated the
+  parameter's name as decoded, so a name could carry a line break, a control character or free text into a line
+  copied into reports. A parameter is now named by its place, and by its name too only when that is a short plain
+  word (`PLAIN_NAME`). (2) readability: an empty name gave `()` and a repeated one was ambiguous; the place answers
+  both. (3) reliability: the help named a tracking value alone as the public page refused, and said the page
+  without it is the same page; a playlist's id and a search of several letter-and-digit words are refused too, and
+  are not the same page without the parameter. The help and the README say so and both are pinned as cases.
+  Found while testing (1), in the check beside it and older than this unit: a line break in a parameter's name hid
+  it from the check of names like a secret (the pattern's `.` stopped at it), and that reason repeated the name the
+  same way. The pattern reads through line breaks now, and that reason names an unplain name by its place; a plain
+  name reads as before, so the tests of that check did not change. Two cases hold it.
 - State (for a session that resumes): unit 10 is in pull request 817, ready. On `feat/fetch-query-values`: T5 is
-  written; next the gate, Codex and the lenses from 07cffc8c, the push, the pull request on base
-  `worktree-fetch-path-limit`, the ready notice, then the summary with the closed notice.
+  committed (724e8cbd) and its first review round answered; next the confirming review of the fixes from 724e8cbd,
+  the push, the pull request on base `worktree-fetch-path-limit`, the ready notice, then the summary with the
+  closed notice.

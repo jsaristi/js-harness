@@ -269,22 +269,35 @@ test('the limit the help states holds: a key of letters alone, of digits alone, 
   for (const said of [
     'one that holds a path segment, a query name or a query value that reads as a key (its pieces that mix letters and digits add up to 20 characters or more) is refused with exit 1',
     "These go out with the URL: a key of letters alone or of digits alone; one shorter than 20 characters; one that other characters (a hyphen, an underscore, a dot, an escape) cut into pieces too few of which mix letters and digits (about one random 22-character base64url key in four); one spread over several segments or parameters; one escaped twice; one in the host's name.",
-    'these public pages are refused as well: one whose path holds an id of that shape (a commit hash, a UUID), a slug whose words that mix letters and digits (gpt4, llama3, a 12-character id) add up to 20 characters, and one whose query carries a tracking value of that shape: the refusal names the parameter, and the page without it is the same page. Read the others in the built-in browser',
+    'these public pages are refused as well: one whose path holds an id of that shape (a commit hash, a UUID), a slug or a search whose words that mix letters and digits (gpt4, llama3, a 12-character id) add up to 20 characters, and one whose query carries an id of that shape (a playlist, a click id such as fbclid). The refusal names the parameter: without a click id the page is the same page. Read the others in the built-in browser',
   ]) assert.ok(help.includes(said), said);
 });
 
 test('a URL whose query holds a value or a name that reads as a key is refused with exit 1 and nothing is sent; a value is named by its parameter, a name by its place', async () => {
   const escaped = [...HEX_KEY.slice(0, 32)].map((char) => `%${char.charCodeAt(0).toString(16)}`).join('');
   const cases = [
-    [`https://example.com/callback?code=${HEX_KEY}&state=ok`, 'its query carries a value that reads as a key (code)'],
-    [`https://example.com/open?page=2&doc=${UUID_KEY}`, 'its query carries a value that reads as a key (doc)'],
-    [`https://example.com/open?next=${escaped}`, 'its query carries a value that reads as a key (next)'],
-    [`https://example.com/open?id=${ID_KEY}#top`, 'its query carries a value that reads as a key (id)'],
+    [`https://example.com/callback?code=${HEX_KEY}&state=ok`, 'its query carries a value that reads as a key (parameter 1, code)'],
+    [`https://example.com/open?page=2&doc=${UUID_KEY}`, 'its query carries a value that reads as a key (parameter 2, doc)'],
+    [`https://example.com/open?next=${escaped}`, 'its query carries a value that reads as a key (parameter 1, next)'],
+    [`https://example.com/open?id=${ID_KEY}#top`, 'its query carries a value that reads as a key (parameter 1, id)'],
+    // The place tells a repeated name apart, and stands alone for a name that is empty or no plain word: a decoded
+    // name can hold a line break or a control character, and a reason is copied into reports.
+    [`https://example.com/open?id=7&id=${UUID_KEY}`, 'its query carries a value that reads as a key (parameter 2, id)'],
+    [`https://example.com/open?=${HEX_KEY}`, 'its query carries a value that reads as a key (parameter 1)'],
+    [`https://example.com/open?a%0Ab=${HEX_KEY}`, 'its query carries a value that reads as a key (parameter 1)'],
+    [`https://example.com/open?a%1B%5B31m=${HEX_KEY}`, 'its query carries a value that reads as a key (parameter 1)'],
+    [`https://example.com/open?${'n'.repeat(41)}=${HEX_KEY}`, 'its query carries a value that reads as a key (parameter 1)'],
     // A key in the place of a name is never repeated: it is named by where it stands.
     [`https://example.com/callback?${HEX_KEY}`, 'its query carries a name that reads as a key (parameter 1)'],
     [`https://example.com/callback?page=2&${URL_KEY}=1`, 'its query carries a name that reads as a key (parameter 2)'],
-    // The price, pinned: a tracking value of a public page has the same shape, and the refusal says which to drop.
-    [`https://example.com/article?utm_source=mail&fbclid=${URL_KEY}`, 'its query carries a value that reads as a key (fbclid)'],
+    // The price, pinned: these public pages have the same shape. Without its click id the first is the same page;
+    // the playlist and the search are not, and the help sends them to the built-in browser.
+    [`https://example.com/article?utm_source=mail&fbclid=${URL_KEY}`, 'its query carries a value that reads as a key (parameter 2, fbclid)'],
+    [`https://www.youtube.com/playlist?list=PL${URL_KEY.slice(0, 32)}`, 'its query carries a value that reads as a key (parameter 1, list)'],
+    ['https://www.google.com/search?q=h264+vs+h265+vs+av1+vs+vp9+vs+mp4+vs+rtx4090', 'its query carries a value that reads as a key (parameter 1, q)'],
+    // A name like a secret is told the same way, and a line break in it hides it no more.
+    ['https://example.com/open?a%1B_token=1', 'its query carries a parameter named like a secret (parameter 1)'],
+    ['https://example.com/open?page=2&a%0A_token=1', 'its query carries a parameter named like a secret (parameter 2)'],
   ];
   for (const [url, why] of cases) {
     const fake = fakeFetch(200, PAGE);

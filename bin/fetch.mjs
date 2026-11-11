@@ -28,16 +28,21 @@ const USAGE = [
   '    escape) cut into pieces too few of which mix letters and digits (about one random 22-character base64url key',
   "    in four); one spread over several segments or parameters; one escaped twice; one in the host's name.",
   '  And these public pages are refused as well: one whose path holds an id of that shape (a commit hash, a UUID), a',
-  `    slug whose words that mix letters and digits (gpt4, llama3, a 12-character id) add up to ${KEY_LIKE_LENGTH} characters, and one`,
-  '    whose query carries a tracking value of that shape: the refusal names the parameter, and the page without it is',
-  '    the same page. Read the others in the built-in browser, which sends the URL to no third party.',
+  `    slug or a search whose words that mix letters and digits (gpt4, llama3, a 12-character id) add up to ${KEY_LIKE_LENGTH}`,
+  '    characters, and one whose query carries an id of that shape (a playlist, a click id such as fbclid). The refusal',
+  '    names the parameter: without a click id the page is the same page. Read the others in the built-in browser,',
+  '    which sends the URL to no third party.',
 ].join('\n');
 
 const READER = 'https://r.jina.ai/';
 const TIMEOUT_MS = 60_000;
 
 const CHALLENGE_TITLE = /^Title: (Just a moment\.\.\.|Attention Required! \| Cloudflare|Access to this page has been denied|Access Denied)\s*$/m;
-const SECRET_NAME = /^(?:.*[-_])?(?:token|key|apikey|secret|password|passwd|pwd|sig|signature|auth|session|sessionid|credential|credentials)$/i;
+// The `s` flag: a decoded name can hold a line break, and without it one before the separator hid the name.
+const SECRET_NAME = /^(?:.*[-_])?(?:token|key|apikey|secret|password|passwd|pwd|sig|signature|auth|session|sessionid|credential|credentials)$/is;
+/** A parameter's name that a reason may repeat: a short plain word. Any other is named by its place alone, since a
+ * decoded name can hold line breaks, control characters and free text, and a reason is copied into reports. */
+const PLAIN_NAME = /^[A-Za-z0-9_.[\]-]{1,40}$/;
 const PRIVATE_SUFFIX = /\.(?:localhost|local|internal|test|lan|home\.arpa)$/i;
 
 /** Why `text` is not a public page to hand a third party, or `null` when it is one. */
@@ -51,18 +56,22 @@ export function notPublic(text) {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return 'only http and https pages are read';
   if (url.username !== '' || url.password !== '') return 'it carries a user or a password';
   if (!publicHost(url.hostname)) return 'its host is not public';
-  for (const name of url.searchParams.keys()) {
+  const parameters = [...url.searchParams];
+  for (const [index, [name]] of parameters.entries()) {
     // `accessToken` is `access_token` in camelCase: a boundary of case counts as a separator.
-    if (SECRET_NAME.test(name.replace(/([a-z0-9])([A-Z])/g, '$1_$2'))) return `its query carries a parameter named like a secret (${name})`;
+    if (SECRET_NAME.test(name.replace(/([a-z0-9])([A-Z])/g, '$1_$2'))) {
+      return `its query carries a parameter named like a secret (${PLAIN_NAME.test(name) ? name : `parameter ${index + 1}`})`;
+    }
   }
   const place = keyLikeSegment(url.pathname);
   // The segment is named by its place and never quoted: a reason is copied into reports.
   if (place !== 0) return `its path carries a segment that reads as a key (segment ${place})`;
-  // The names and values are the ones `URLSearchParams` decoded, as the site will read them. A value is named by its
-  // parameter, since the page without a tracking parameter is the same page; a name that is the key, by its place.
-  for (const [index, [name, value]] of [...url.searchParams].entries()) {
+  // The names and values are the ones `URLSearchParams` decoded, as the site will read them. A parameter is named by
+  // its place, which no empty or repeated name leaves in doubt; a value's parameter by its name too when that is a
+  // plain word, since the page without a click id is the same page; a name that is the key, never.
+  for (const [index, [name, value]] of parameters.entries()) {
     if (readsAsKey(name)) return `its query carries a name that reads as a key (parameter ${index + 1})`;
-    if (readsAsKey(value)) return `its query carries a value that reads as a key (${name})`;
+    if (readsAsKey(value)) return `its query carries a value that reads as a key (parameter ${index + 1}${PLAIN_NAME.test(name) ? `, ${name}` : ''})`;
   }
   return null;
 }
