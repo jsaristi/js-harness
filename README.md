@@ -423,8 +423,9 @@ At its start and every six hours it reads when the claude.ai sign-in stored on t
 nothing while more than seven days are left. From then on a `SIGN-IN:` line with the time left and
 the local end date follows every line that ends the heartbeat, and the heartbeat ends when the
 seven days begin and again when the sign-in ends; one started inside those days is not ended by
-them. A reading that finds the CLI not signed in counts as a sign-in that ended, whatever date it
-prints. The user signs in again; the heartbeat only says when. A date that cannot be read is said
+them. Before it ends for the sign-in or says that line it reads the date again, so a sign-in
+renewed since the last reading is not told. A reading that finds the CLI not signed in counts as a
+sign-in that ended, whatever date it prints. The user signs in again; the heartbeat only says when. A date that cannot be read is said
 once, with why.
 
 ```console

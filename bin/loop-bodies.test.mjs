@@ -489,12 +489,44 @@ test('heartbeat is quiet about a sign-in whose margin is far, and reads it at th
 test('heartbeat started inside the margin is not ended by it, and its SIGN-IN line follows whatever ends it', async () => {
   const { state, deps } = world({ files: { [GATE_LOG]: T0 - 3600000 } });
   state.clock = SIGNIN_END - 6 * 86400000 - 3600000;
-  deps.signinExpiry = () => SIGNIN_READ;
+  let readings = 0;
+  deps.signinExpiry = () => {
+    readings += 1;
+    return SIGNIN_READ;
+  };
   assert.equal(await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], {}, deps), 0);
   assert.equal(state.sleeps > 1, true, 'the margin alone did not end it at the start');
   assert.match(state.out.at(-2), /^STALL: no gate-log or channel write since /);
   assert.equal(state.out.at(-1), signinLine('6 days'));
   assert.equal(state.out.filter((line) => line.startsWith('SIGN-IN:')).length, 1);
+  assert.equal(readings, 2, 'at the start, and once more before the line is said');
+});
+
+test('heartbeat confirms with a reading before it ends for the sign-in or says its line, so one renewed since is not told', async () => {
+  const renewed = { expiresAt: new Date(SIGNIN_END + 30 * 86400000).toISOString(), stored: true, why: null };
+  // The margin is reached between two readings, and the reading that confirms it finds the new date.
+  const crossing = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  crossing.state.clock = SIGNIN_END - 7 * 86400000 - 10 * 60000;
+  let readings = 0;
+  crossing.deps.signinExpiry = () => {
+    readings += 1;
+    return readings === 1 ? SIGNIN_READ : renewed;
+  };
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '120'], {}, crossing.deps), 1, 'the cap ends it, not the margin');
+  assert.equal(readings, 2, 'the confirming reading, and no other until six hours pass');
+  assert.deepEqual(crossing.state.out.filter((line) => line.startsWith('SIGN-IN:')), []);
+
+  // Started inside the margin and renewed before the stall that ends it: the line is not said.
+  const stalled = world({ files: { [GATE_LOG]: T0 - 3600000 } });
+  stalled.state.clock = SIGNIN_END - 6 * 86400000 - 3600000;
+  let asked = 0;
+  stalled.deps.signinExpiry = () => {
+    asked += 1;
+    return asked === 1 ? SIGNIN_READ : renewed;
+  };
+  assert.equal(await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], {}, stalled.deps), 0);
+  assert.match(stalled.state.out.at(-1), /^STALL: no gate-log or channel write since /);
+  assert.equal(asked, 2);
 });
 
 test('heartbeat ends with the SIGN-IN line at the tick the margin is reached, between two readings', async () => {
@@ -508,7 +540,7 @@ test('heartbeat ends with the SIGN-IN line at the tick the margin is reached, be
   };
   assert.equal(await loopMain(['heartbeat', '--every', '120'], {}, deps), 0);
   assert.equal(state.clock, started + 10 * 60000, 'the clock is weighed at every tick against the date last read');
-  assert.equal(readings, 1);
+  assert.equal(readings, 2, 'at the start, and the one that confirms the news before the loop ends for it');
   assert.equal(state.out.at(-1), signinLine('7 days'));
 });
 
@@ -532,7 +564,7 @@ test('heartbeat says once why the sign-in cannot be read, ends nothing for it, a
     return { expiresAt: null, stored: null, why: 'claude auth status did not answer in 20 seconds' };
   };
   assert.equal(await loopMain(['heartbeat', '--max', '20', '--every', '600'], {}, deps), 1);
-  assert.equal(readings, 4, 'at the start and at 6, 12 and 18 hours');
+  assert.equal(readings, 5, 'at the start, at 6, 12 and 18 hours, and once more before the line is said at the end');
   assert.deepEqual(state.out.filter((line) => line.startsWith('sign-in:')), [
     'sign-in: when the stored claude.ai sign-in ends could not be read: the reading failed (the reader broke)',
     'sign-in: when the stored claude.ai sign-in ends could not be read: claude auth status did not answer in 20 seconds',
@@ -552,6 +584,8 @@ test('heartbeat says a sign-in that cannot be read at the start once, and a late
   };
   assert.equal(await loopMain(['heartbeat', '--max', '10', '--every', '600'], {}, deps), 0);
   assert.equal(state.out.filter((line) => line === 'sign-in: when the stored claude.ai sign-in ends could not be read: the claude command could not be started').length, 1);
+  assert.match(state.out[0], /^js-harness loop heartbeat: .*; every 6 hours, the end of the stored claude\.ai sign-in is read/, 'the opening line comes first and still says what is read');
+  assert.equal(state.out[1], 'sign-in: when the stored claude.ai sign-in ends could not be read: the claude command could not be started');
   assert.equal(state.clock, started + 6 * 3600000, 'a date first read inside the margin is news: it ends the loop');
   assert.equal(state.out.at(-1), signinLine('2 days'));
 });
@@ -580,10 +614,13 @@ test('heartbeat given no sign-in reader reads none, and a home that is not asked
   const other = world({ files: { [GATE_LOG]: T0 - 3600000 } });
   other.deps.signinExpiry = () => ({ expiresAt: null, stored: null, why: null, asked: false });
   assert.equal(await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], {}, other.deps), 0);
-  assert.deepEqual(other.state.out.slice(1).filter((line) => /sign-in/i.test(line)), []);
+  assert.deepEqual(other.state.out.filter((line) => /sign-in/i.test(line)), [], 'not even the opening line promises a reading that is never made');
 });
 
+// No test runs the default reader for the real home: it would run the real `claude auth status`, which names an
+// account and takes seconds, and for a fixture home it reads nothing by design, as no reader does. So the default is
+// held by its text, whatever its spacing; what it does is `readSigninExpiry`'s own test.
 test('the product heartbeat reads the sign-in by default, for the home it was given and against the real user home', () => {
   const source = fs.readFileSync(new URL('./loop.mjs', import.meta.url), 'utf8');
-  assert.match(source, /signinExpiry = \(home\) => readSigninExpiry\(\{ home \}\),/);
+  assert.match(source, /signinExpiry\s*=\s*\(home\)\s*=>\s*readSigninExpiry\(\{\s*home\s*\}\)/);
 });
