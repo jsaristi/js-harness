@@ -1,12 +1,11 @@
 // The rules of this project as data: what each one says, with its value and unit or its prose and
 // phrases, and what makes a list of them unreadable. This file reads a list and names each fault in
 // it; it holds no fs and no process access, and every function takes plain data. It imports only
-// createHash of node:crypto and RULES of ./rules-data.mjs, so no command can form a cycle.
+// createHash of node:crypto, RULES of ./rules-data.mjs and the shape of a home's value of ./model-shape.mjs, which
+// imports nothing, so no command can form a cycle.
 import { createHash } from 'node:crypto';
 import { RULES } from './rules-data.mjs';
-// The two modules import each other: `model-home.mjs` reads the rules through this one, and this one asks it what
-// shape a home's value has. Neither uses the other while it loads, only inside a function, so either may load first.
-import { homeFaults } from './model-home.mjs';
+import { homeFaults } from './model-shape.mjs';
 
 /** The owners a rule can have: the person who decides it, or the project itself. */
 export const OWNERS = ['sebastian', 'project'];

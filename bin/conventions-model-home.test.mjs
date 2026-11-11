@@ -5,16 +5,18 @@
 // reached; a constant that is forgotten keeps a launch on the model he left.
 //
 // How to comply: where code needs the model or the effort of a launch, read `claudeHome()` or `codexHome()` of
-// `bin/lib/model-home.mjs` (a guard reads `claudeHeld`), and pass that value on. Do not write a model id as a
-// value, nor an effort level at a launch (`--effort`, `effort:`, a constant named for an effort).
+// `bin/lib/model-home.mjs` (a guard reads `claudeHeld`), and pass that value on. Do not write a model as a value,
+// by its id or by a short name, nor an effort level at a launch (`--effort`, `effort:`, a constant named for one).
 //
-// Only what a test can see is checked: a quoted text that is a whole Claude or Codex model id, or one of the homes'
-// values as it is written today, and a level beside a name of effort, read from the source with its comment lines
-// left out. An id inside a longer text, a usage line or a message, is prose, which the convention over the texts
-// reads. Every module under `bin/`, `workshop/` and `scripts/` is read, at any depth (bin/lib/source.testkit.mjs);
-// `evals/` is not, since its models are what a measurement was or will be made on and `docs/future-model.md` owns
-// changing them. HOME names the two files where the values belong. LEGACY lists the modules that still write one,
-// each with why; it only shrinks (bin/lib/ratchet.testkit.mjs).
+// Only what a test can see is checked, read from the source with its comment lines left out: a quoted text that is
+// a whole Claude or Codex model id, or one of the homes' values as it is written today; a model after `--model` or
+// given to a name of model, by its id or by a short name (SHORT_NAMES, and the family of the home's model); and a
+// level after `--effort` or given to a name of effort. An id inside a longer text that is no launch, a usage line or
+// a message, is prose, which the convention over the texts reads. Every module under `bin/`, `workshop/` and
+// `scripts/` is read, at any depth (bin/lib/source.testkit.mjs), the two modules of the home among them; `evals/` is
+// not, since its models are what a measurement was or will be made on and `docs/future-model.md` owns changing them.
+// LIST is the one file where the values belong. LEGACY lists the modules that still write one, each with why; it
+// only shrinks (bin/lib/ratchet.testkit.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -25,8 +27,14 @@ import { sourceModules, withoutComments } from './lib/source.testkit.mjs';
 
 const ROOT = path.join(import.meta.dirname, '..');
 const FOLDERS = ['bin', 'workshop', 'scripts'];
-// The list that declares the values, and the module that names their shape and their levels.
-const HOME = ['bin/lib/rules-data.mjs', 'bin/lib/model-home.mjs'];
+// The list that declares the values: the one module that is not read.
+const LIST = 'bin/lib/rules-data.mjs';
+// The fewest modules a walk of the three folders gives. They hold over 270 today, so a count under this says the
+// walk went wrong, a folder moved or the filter of the testkit changed, and every check below would pass on nothing;
+// lower it only if the repository itself shrank that far.
+const FLOOR = 100;
+// The short names a host has taken for a Claude model. Each gives whatever model the engine in use has for it.
+const SHORT_NAMES = ['opus', 'sonnet', 'haiku', 'fable'];
 
 const MODEL_LEGACY = {
   'scripts/practice.mjs': 'a rehearsal host on a cheaper model under a cap of 0.5 USD a run; the user\'s to decide (the feature document, Ask me before, 2)',
@@ -38,11 +46,22 @@ const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const LEVEL = `(?:${EFFORTS.join('|')})`;
 const QUOTE = '[\'"`]';
 
-/** True when `code` holds a model id as a value: a quoted text that is a whole Claude or Codex id, or one of
- * `models`, the homes' values as they are written, so an id of another shape is found the day it is a home's. */
+const FULL_IDS = ['claude-[a-z]+-\\d[\\w.-]*', 'gpt-\\d[\\w.-]*'];
+
+/** The family of a Claude id, `saga` of `claude-saga-9-1`, in a list that is empty for an id of another shape. */
+const familyOf = (id) => /^claude-([a-z]+)-\d/.exec(id)?.slice(1) ?? [];
+
+/** True when `code` holds a model as a value. `models` are the homes' values as they are written, so an id of
+ * another shape is found the day it is a home's. Three forms: a quoted text that is a whole Claude or Codex id or
+ * one of `models`; an id, one of `models` or a short name after `--model`, as the next argument or in the same text;
+ * and a short name, with a bracket or without, given to a key or a constant named for a model. */
 function holdsModel(code, models) {
-  const ids = ['claude-[a-z]+-\\d[\\w.-]*', 'gpt-\\d[\\w.-]*', ...models.map(escaped)];
-  return new RegExp(`(${QUOTE})(?:${ids.join('|')})\\1`).test(code);
+  const ids = [...FULL_IDS, ...models.map(escaped)].join('|');
+  const short = [...new Set([...SHORT_NAMES, ...models.flatMap(familyOf)])].join('|');
+  const whole = new RegExp(`(${QUOTE})(?:${ids})\\1`);
+  const flag = new RegExp(`--model(?:${QUOTE}\\s*,\\s*${QUOTE}|[ =])(?:${ids}|(?:${short})\\b)`);
+  const named = new RegExp(`model\\w*${QUOTE}?\\s*[:=]\\s*(${QUOTE})(?:${short})(?:\\[[^\\]]*\\])?\\1`, 'i');
+  return whole.test(code) || flag.test(code) || named.test(code);
 }
 
 /** True when `code` writes an effort level at a launch: after `--effort`, as the next argument or in the same text,
@@ -53,22 +72,21 @@ function holdsEffort(code) {
   return flag.test(code) || named.test(code);
 }
 
-/** Every module the convention reads, as its path from the repository's root, but the two of HOME. */
+/** Every module the convention reads, as its path from the repository's root: all but LIST. */
 function modules() {
-  return FOLDERS.flatMap((folder) => sourceModules(path.join(ROOT, folder)).map((name) => `${folder}/${name}`)).filter((name) => !HOME.includes(name));
+  return FOLDERS.flatMap((folder) => sourceModules(path.join(ROOT, folder)).map((name) => `${folder}/${name}`)).filter((name) => name !== LIST);
 }
 
 const code = (name) => withoutComments(fs.readFileSync(path.join(ROOT, name), 'utf8'));
 const homeModels = () => [claudeHome().model, codexHome().model];
 
-test('the modules of bin, workshop and scripts are read, at any depth, and the two of the home are left out', () => {
+test('the modules of bin, workshop and scripts are read, at any depth, and only the list of rules is left out', () => {
   const read = modules();
-  assert.ok(read.length >= 250, `only ${read.length} modules were read`);
+  assert.ok(read.length >= FLOOR, `the walk of ${FOLDERS.join(', ')} read only ${read.length} modules, under its floor of ${FLOOR}: it reads less than it should, so no check below holds`);
   for (const folder of FOLDERS) assert.ok(read.some((name) => name.startsWith(`${folder}/`)), `no module of ${folder}/ was read`);
-  for (const name of HOME) {
-    assert.ok(fs.existsSync(path.join(ROOT, name)), `${name} is a file of the repository`);
-    assert.ok(!read.includes(name), `${name} is where the values belong`);
-  }
+  assert.ok(fs.existsSync(path.join(ROOT, LIST)), `${LIST} is a file of the repository`);
+  assert.ok(!read.includes(LIST), `${LIST} is where the values belong`);
+  for (const name of ['bin/lib/model-home.mjs', 'bin/lib/model-shape.mjs']) assert.ok(read.includes(name), `${name} is read as any other module`);
 });
 
 test('no module writes a model id as a value, but the legacy ones', () => {
@@ -92,6 +110,19 @@ test('a quoted model id is a value: Claude\'s, Codex\'s, and a home\'s id of ano
   // An id with no hyphen and no digit has no shape to know it by: it is found because a home holds it.
   assert.ok(!holdsModel('const MODEL = \'astra\';\n', []));
   assert.ok(holdsModel('const MODEL = \'astra\';\n', ['claude-saga-9-1', 'astra']));
+});
+
+test('a short name at a launch is a model written by hand too: after --model, or given to a name of model', () => {
+  // The form the launchers held until 2026-11-10: a short name gives whatever model the engine in use has for it.
+  assert.ok(holdsModel('const ARGS = [\'--model\', \'opus\'];\n', []));
+  assert.ok(holdsModel('const LINE = \'claude -p --model sonnet --effort\';\n', []));
+  assert.ok(holdsModel('const LINE = `claude -p --model=claude-saga-9-1 -p`;\n', []));
+  assert.ok(holdsModel('const MODEL = \'sonnet\';\n', []));
+  assert.ok(holdsModel('start({ model: "opus[1m]" });\n', []));
+  assert.ok(holdsModel('const READER_MODEL = \'saga\';\n', ['claude-saga-9-1']), 'the family of the home\'s model is a short name whatever it is');
+  assert.ok(!holdsModel('const READER_MODEL = \'saga\';\n', []));
+  assert.ok(!holdsModel('const ARGS = [\'--model\', claudeHome().model];\n', ['claude-saga-9-1']));
+  assert.ok(!holdsModel('const USAGE = \'[--model <id>]\';\nconst model = \'none\';\nconst opus = \'a work\';\n', []));
 });
 
 test('an id inside a longer text, a comment line and a read of the home are no value', () => {

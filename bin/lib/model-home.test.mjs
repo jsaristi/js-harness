@@ -55,6 +55,13 @@ test('two ids are the same model with a date at the end or a bracket taken off',
   assert.equal(sameModel(undefined, 'claude-fable-5-2'), false);
 });
 
+test('a short name is the same model as nothing, not even as itself: it names whatever the engine in use gives it', () => {
+  assert.equal(sameModel('opus', 'opus'), false);
+  assert.equal(sameModel('opus[1m]', 'opus'), false);
+  assert.equal(sameModel('fable', 'claude-fable-5-2'), false);
+  assert.equal(sameModel('gpt-6.1-sol', 'gpt-6.1-sol'), false, 'only Claude ids are compared: a Codex id has no shape to know a full one by');
+});
+
 test('the line he is given names the model and the level as his menu shows them', () => {
   assert.equal(
     menuLine({ model: 'claude-fable-5-2', effort: 'high' }),

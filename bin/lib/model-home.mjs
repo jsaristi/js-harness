@@ -1,18 +1,16 @@
-// The one module that knows which rules are the two homes of a model and an effort (odd/tasks/one-model-home.md,
-// spec 2). Everything Claude the harness starts runs on the Claude home, `session-model` at `session-effort`; a Codex
-// review runs on the Codex home, `review-model` at `review-effort`. On 2026-11-10 the user changed model and effort
-// twice in a day, and each change was carried by hand through seven rules, three constants and an agent file; a
-// launcher, a guard or a check that needs a model or an effort reads it here, so the next change is one place.
-// It prints nothing and reads no file: a caller that holds a project's rules file passes its text in.
+// The one module that reads the two homes of a model and an effort (odd/tasks/one-model-home.md, spec 2).
+// Everything Claude the harness starts runs on the Claude home, `session-model` at `session-effort`; a Codex review
+// runs on the Codex home, `review-model` at `review-effort`. On 2026-11-10 the user changed model and effort twice in
+// a day, and each change was carried by hand through seven rules, three constants and an agent file; a launcher, a
+// guard or a check that needs a model or an effort reads it here, so the next change is one place. Which rules the
+// homes are and what shape their values have is `model-shape.mjs`, which the rules list reads too; this module gives
+// those names on, so a reader imports this one alone. It prints nothing and reads no file: a caller that holds a
+// project's rules file passes its text in.
+import { CLAUDE_ID } from './model-shape.mjs';
 import { RULES } from './rules-data.mjs';
 import { guardHeld, ruleHere, ruleOf } from './rules.mjs';
 
-/** The ids of the rules of each home, which `js-harness rules switch` changes together. */
-export const CLAUDE_HOME = Object.freeze({ model: 'session-model', effort: 'session-effort' });
-export const CODEX_HOME = Object.freeze({ model: 'review-model', effort: 'review-effort' });
-
-/** The effort levels a host takes, lowest first: the order that says one level is above another. */
-export const EFFORTS = Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']);
+export { CLAUDE_HOME, CODEX_HOME, EFFORTS } from './model-shape.mjs';
 
 /** Each level as the app's model menu names it. Medio, Alto and Extra alto are the user's own words for it
  * (2026-11-10); the two ends are assumed, and his to correct. */
@@ -41,27 +39,6 @@ export function claudeHeld(projectData) {
   };
 }
 
-const CLAUDE_ID = /^claude-([a-z]+)-(\d+(?:-\d{1,2})*)(?:-\d{8})?$/;
-
-/** The faults of shape of the declaration `rule` when it is one of a home and holds a text, for `readRules`; none
- * for any other rule. The Claude model is a full id, since a short name is whatever the engine in use gives it (on
- * 2026-11-10 `fable` gave claude-fable-5-1 while the rule read 5.2). An effort is one of `EFFORTS`. Codex's id has
- * no shape to hold it to, so only what cannot be one is refused, and the probe of `rules switch` is its check. */
-export function homeFaults(rule) {
-  const { id, value } = rule;
-  if (typeof value !== 'string' || value === '') return [];
-  if (id === CLAUDE_HOME.model && !CLAUDE_ID.test(value)) {
-    return ['the value is not a full Claude id, claude-<family>-<version>: a short name gives whatever model the engine in use has for it'];
-  }
-  if ((id === CLAUDE_HOME.effort || id === CODEX_HOME.effort) && !EFFORTS.includes(value)) {
-    return [`the value is not an effort level: ${EFFORTS.slice(0, -1).join(', ')} or ${EFFORTS.at(-1)}`];
-  }
-  if (id === CODEX_HOME.model && (/\s/.test(value) || /^claude\b/i.test(value) || EFFORTS.includes(value))) {
-    return ['the value is not the id of a Codex model: it holds a space, is a Claude id or is an effort level'];
-  }
-  return [];
-}
-
 /** A model as a person reads it: `claude-fable-5-2` is "Fable 5.2", from its family and its version. An id of
  * another shape is given as it is, because a name made up for it would be a guess. */
 export function displayName(id) {
@@ -73,11 +50,13 @@ export function displayName(id) {
 /** `id` without what a record adds to it: a bracket (`[1m]`) and the date at its end. */
 const bare = (id) => String(id).replace(/\[[^\]]*\]$/, '').replace(/-\d{8}$/, '');
 
-/** True when the two ids name one model, a date at the end or a bracket aside. A short name is no id: it names
- * whatever the engine in use gives it (on 2026-11-10 `fable` gave claude-fable-5-1), so it is the same as nothing. */
+/** True when the two are full Claude ids that name one model, a date at the end or a bracket aside. A short name is
+ * no id: it names whatever the engine in use gives it (on 2026-11-10 `fable` gave claude-fable-5-1), so it is the
+ * same model as nothing, not even as itself. Only Claude ids are compared, since no other has a shape to know a full
+ * one by. */
 export function sameModel(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || a === '' || b === '') return false;
-  return bare(a) === bare(b);
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  return CLAUDE_ID.test(bare(a)) && bare(a) === bare(b);
 }
 
 /** The line a session gives the user when its own model or effort is not the home's `{ model, effort }`: a session
