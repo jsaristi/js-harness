@@ -150,6 +150,21 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
 - L7 T3, test first: the new test of evals/configs.test.mjs spawns a child under `sandboxEnv`, which reads and
   writes a file outside its home by an absolute path, then holds the header to that fact. Before the change it
   failed on the header alone (the child had read and written); after, it passes. docs/SPEC.md:555 says the same.
-- State (for a session that resumes): T1 to T3 are committed; what is left is the reviews of the slice from
-  7525a4e5 (Codex, then the lenses, security among them), T4's independent verifier on T2, the push, the pull
-  request, the ready notice, the notice of L4 to the lead, and the summary with the closed notice.
+- L8 Reviews of the slice 7525a4e5..53bf1d2 (T2 and T3). Codex (gpt-6.1-sol, medium, 80,962 input tokens, 72 s):
+  "the patch is correct (confidence 0.9)", no finding. The Claude lenses risk, readability and reliability: four
+  findings, all taken. (1) risk: a base64url key that hyphens or underscores cut into pieces of letters alone or
+  digits alone is sent, and the help did not list it, though the depth pass had measured it (73.7 % of 22 refused):
+  the help, the README and the function's comment now say it, and a test sends one. (2) readability and (3)
+  reliability, the same: the comment said "a slug of any length passes", and a slug whose letter-and-digit words add
+  up to 20 is refused: the comment and the help say so, and two refused public pages are pinned as cases. The rule
+  stays, by the depth pass's reason: a refused page has a rung. (4) reliability, a suggestion: one malformed escape
+  made `decodeURIComponent` throw, the segment was judged as written and a key written in escapes passed behind it.
+  Each escape of an ASCII character is now decoded on its own and any other escape is a cut; two cases hold it
+  (read as red before the change, not run: the old code leaves `%61` as the digits-only piece `61`).
+- L9 The lead answered the notice of L4 (2026-11-11T06:14Z, a notice of the channel, the lead's claim): the
+  recommended option is taken by his words of line 6905, and the check over query values is this session's to build
+  as its own small unit with its own measure, in a second pull request after this one is ready, never mixed into it.
+- State (for a session that resumes): T1 to T3 and the lens fixes are committed; what is left is T4's independent
+  verifier on T2, a confirming review of the fix (Codex and the three lenses, from 53bf1d2), the push, the pull
+  request, the ready notice, then the second unit of L9 on a branch of its own from this one, and the summary with
+  the closed notice.

@@ -192,7 +192,13 @@ test('a URL whose path holds a segment that reads as a key is refused with exit 
     [`https://example.com/app;jsessionid=${HEX_KEY.slice(0, 32)}/home`, 1],
     // Percent-encoding hides no key: the segment is read as the site will read it.
     [`https://example.com/share/%${HEX_KEY.charCodeAt(0).toString(16)}${HEX_KEY.slice(1)}`, 2],
+    // Nor does one escape that encodes nothing, or a byte that is no text, beside a key written in escapes.
+    [`https://example.com/share/%zz${[...HEX_KEY.slice(0, 32)].map((char) => `%${char.charCodeAt(0).toString(16)}`).join('')}`, 2],
+    [`https://example.com/share/%FF${[...HEX_KEY.slice(0, 32)].map((char) => `%${char.charCodeAt(0).toString(16)}`).join('')}`, 2],
     [`https://example.com/a/b/c/d/${URL_KEY}?page=2`, 5],
+    // The price of reading a shape, pinned: a public slug whose letter-and-digit words add up to 20 is refused too.
+    ['https://medium.com/@someone/gpt4-vs-llama3-in-practice-1a2b3c4d5e6f', 2],
+    ['https://github.com/nodejs/node/commit/4f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c', 4],
   ];
   for (const [url, place] of cases) {
     const fake = fakeFetch(200, PAGE);
@@ -230,13 +236,15 @@ test('a public page whose path holds a long slug, numbers and short ids is sent'
   }
 });
 
-test('the limit the help states holds: a key of letters alone, of digits alone, under 20 characters, or in a query value under an ordinary name is not seen, and is sent', async () => {
+test('the limit the help states holds: a key of letters alone, of digits alone, under 20 characters, cut into pieces that do not mix, or in a query value under an ordinary name is not seen, and is sent', async () => {
   const letters = HEX_KEY.replace(/[0-9]/g, '').padEnd(32, 'q').slice(0, 32);
   const digits = HEX_KEY.replace(/[a-f]/g, '').padEnd(18, '7').slice(0, 18);
   const unseen = [
     `https://example.com/share/${letters}`,
     `https://example.com/share/${digits}`,
     `https://example.com/share/${ID_KEY.slice(0, 19)}`,
+    // 22 characters of the base64url alphabet, as a key is, with no piece that mixes letters and digits.
+    `https://example.com/share/${letters.slice(0, 10)}-${digits.slice(0, 11)}`,
     `https://example.com/callback?code=${HEX_KEY}`,
   ];
   for (const url of unseen) {
@@ -247,8 +255,8 @@ test('the limit the help states holds: a key of letters alone, of digits alone, 
   const help = (await run(['--help'], fakeFetch(200, PAGE).fn)).stdout.replace(/\s+/g, ' ');
   for (const said of [
     'one whose path holds a segment that reads as a key (its pieces that mix letters and digits add up to 20 characters or more) is refused with exit 1',
-    "a key of letters alone or of digits alone, one shorter than 20 characters, one in a query value under an ordinary name or in the host's name goes out with the URL",
-    'A public page whose path holds an id of that shape (a commit hash, a UUID) is refused as well: read it in the built-in browser',
+    "These go out with the URL: a key of letters alone or of digits alone; one shorter than 20 characters; one that hyphens or underscores cut into pieces too few of which mix letters and digits (about one random 22-character base64url key in four); one in a query value under an ordinary name; one in the host's name.",
+    'these public pages are refused as well: one whose path holds an id of that shape (a commit hash, a UUID), and a slug whose words that mix letters and digits (gpt4, llama3, a 12-character id) add up to 20 characters. Read them in the built-in browser',
   ]) assert.ok(help.includes(said), said);
 });
 

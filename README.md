@@ -1841,11 +1841,14 @@ named like a secret, or a path segment that reads as a key is refused with exit 
 is sent. A segment reads as a key when its pieces that mix letters and digits add up to 20
 characters or more: a random token, a UUID, the id of a page that is private by its link.
 
-Those checks read names and shapes, and know no secret. A key of letters alone or of digits alone,
-one shorter than 20 characters, one in a query value under an ordinary name or in the host's name
-goes out with the URL: do not hand this command a URL that holds one. The other way round, a
-public page whose path holds an id of that shape (a commit hash, a UUID) is refused as well, and
-the built-in browser reads it, sending it to no third party.
+Those checks read names and shapes, and know no secret, so they err both ways. These go out with
+the URL: a key of letters alone or of digits alone; one shorter than 20 characters; one that
+hyphens or underscores cut into pieces too few of which mix letters and digits (about one random
+22-character base64url key in four); one in a query value under an ordinary name; one in the
+host's name. Do not hand this command a URL that holds a key. The other way round, a public page
+is refused as well when its path holds an id of that shape (a commit hash, a UUID) or a slug whose
+words that mix letters and digits (`gpt4`, `llama3`, a 12-character id) add up to 20 characters;
+the built-in browser reads it, sending the URL to no third party.
 
 ```console
 $ js-harness fetch https://www.npmjs.com/package/react

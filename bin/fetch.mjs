@@ -22,10 +22,13 @@ const USAGE = [
   '    loopback, a private address), a URL with a user or a password, one whose query names a secret, or one whose',
   `    path holds a segment that reads as a key (its pieces that mix letters and digits add up to ${KEY_LIKE_LENGTH}`,
   '    characters or more) is refused with exit 1 and nothing is sent. Exit 2: a usage error.',
-  '  Those checks read names and shapes, and know no secret: a key of letters alone or of digits alone, one shorter',
-  `    than ${KEY_LIKE_LENGTH} characters, one in a query value under an ordinary name or in the host's name goes out with the URL.`,
-  '    A public page whose path holds an id of that shape (a commit hash, a UUID) is refused as well: read it in the',
-  '    built-in browser, which sends it to no third party.',
+  '  Those checks read names and shapes, and know no secret. These go out with the URL: a key of letters alone or of',
+  `    digits alone; one shorter than ${KEY_LIKE_LENGTH} characters; one that hyphens or underscores cut into pieces too few of which`,
+  '    mix letters and digits (about one random 22-character base64url key in four); one in a query value under an',
+  "    ordinary name; one in the host's name.",
+  '  And these public pages are refused as well: one whose path holds an id of that shape (a commit hash, a UUID), and',
+  `    a slug whose words that mix letters and digits (gpt4, llama3, a 12-character id) add up to ${KEY_LIKE_LENGTH} characters. Read`,
+  '    them in the built-in browser, which sends the URL to no third party.',
 ].join('\n');
 
 const READER = 'https://r.jina.ai/';
@@ -57,20 +60,23 @@ export function notPublic(text) {
 }
 
 /** The place, counted from 1, of the first segment of `pathname` that reads as a key, or 0 when none does. A segment
- * is read as the site will read it, percent-decoded, and cut at every character that is no ASCII letter or digit;
- * the pieces that hold both a letter and a digit are added up, and `KEY_LIKE_LENGTH` of them or more is a key: a
- * random token in hex, base62 or base64url, a UUID, a session id written beside its name. A word, a number and a
- * short id (`a64152b37c35`, `256GB`) are no key, so a slug of any length passes. It reads a shape and knows no
- * secret: a key of letters alone or of digits alone has no such piece and passes, and a commit hash is refused. */
+ * is cut at every character that is no ASCII letter or digit; the pieces that hold both a letter and a digit are
+ * added up, and `KEY_LIKE_LENGTH` characters of them or more is a key: a random token in hex or base62, a UUID, a
+ * session id written beside its name, and most tokens in base64url. A word, a number and one short id
+ * (`a64152b37c35`, `256GB`) are no key, so a slug of plain words passes at any length.
+ *
+ * It reads a shape and knows no secret, so it errs both ways, and the help says each. Sent: a key of letters alone
+ * or of digits alone, and a base64url key whose hyphens and underscores leave too few pieces that mix the two (about
+ * one of 22 characters in four, one of 32 in twenty). Refused: a public id of the same shape (a commit hash), and a
+ * slug whose letter-and-digit words add up to the limit (`gpt4`, `llama3` and a 12-character id).
+ *
+ * Each escape of an ASCII character is decoded on its own, as the site will read it, and any other escape is a cut:
+ * a segment decoded whole would be judged as written the moment one escape in it is malformed, and a key written in
+ * escapes would pass behind it. */
 function keyLikeSegment(pathname) {
   const segments = pathname.split('/').slice(1);
   for (const [index, raw] of segments.entries()) {
-    let segment = raw;
-    try {
-      segment = decodeURIComponent(raw);
-    } catch {
-      // A percent sign that encodes nothing: the segment is judged as it is written.
-    }
+    const segment = raw.replace(/%([0-9A-Fa-f]{2})/g, (escape, hex) => (parseInt(hex, 16) < 0x80 ? String.fromCharCode(parseInt(hex, 16)) : ' '));
     const mixed = segment.split(/[^A-Za-z0-9]+/).filter((piece) => /[A-Za-z]/.test(piece) && /[0-9]/.test(piece));
     if (mixed.reduce((sum, piece) => sum + piece.length, 0) >= KEY_LIKE_LENGTH) return index + 1;
   }
