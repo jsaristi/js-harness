@@ -650,8 +650,12 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-11-10",
-    "value": "medium",
+    "value": "high",
     "was": [
+      {
+        "value": "medium",
+        "until": "2026-11-10"
+      },
       {
         "value": "high",
         "until": "2026-11-10"

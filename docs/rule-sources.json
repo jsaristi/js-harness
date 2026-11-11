@@ -1091,13 +1091,13 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "de ahora en adelante el orquestador estara en Fable 5.2 Extra Altro y las sesiones en Fable 5.2 Medio cambia inclusive de una vez todas las sesiones que tengamos tanto actualmente como las de aqui al futuro",
+        "quote": "Por que me equivoque, no podemos utilizar Fable 5.2 en Medio sino en Alto y este orquestador en Alto",
         "date": "2026-11-10",
         "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
-        "line": 3422
+        "line": 4744
       }
     ],
-    "reading": "A work session of this repository runs at medium effort: his \"Medio\" beside \"las sesiones\", for those open on 2026-11-10 and every one opened after. The lead's level, his \"Extra Altro\" beside \"el orquestador\", is rule:lead-effort: a start titled as a new lead is held to that rule, and every other start to this one. The effort of sub-agents and of reviews is not named by these words and stays as it is.",
+    "reading": "A work session of this repository runs at high effort: his \"no podemos utilizar Fable 5.2 en Medio sino en Alto\", typed four minutes after the change to medium landed (pull request 812) and correcting it, for the sessions open on 2026-11-10 and every one opened after. The lead's level, his \"este orquestador en Alto\", is rule:lead-effort: a start titled as a new lead is held to that rule, and every other start to this one. The effort of sub-agents is rule:subagent-effort, already high; the effort of a Codex review is not named by these words and stays as it is.",
     "accepted": "Typed by him in the lead's chat on 2026-11-10. Not put to him as a reading: it is this session's, and his to correct.",
     "checked": {
       "date": "2026-11-10",
