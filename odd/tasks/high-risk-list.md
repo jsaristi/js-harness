@@ -15,9 +15,10 @@ apart cannot tell which change that is.
 - `npm run check` exits 0
 
 ## In scope / Out of scope
-- In: `AGENTS.md` (the list, and one sentence that says where its other copy is); line 21 of `CLAUDE.md`; one test in
+- In: `AGENTS.md` (the list, and nothing else: L6); line 21 of `CLAUDE.md`; one test in
   bin/lib/rules-block.test.mjs; the doc comments of the two constants of bin/lib/rules-block.mjs, which still say the
-  root `CLAUDE.md` keeps these lines; this document.
+  root `CLAUDE.md` keeps these lines; the two entries the list's spans need in the coverage register,
+  bin/lib/rules-coverage-data.mjs (L6); this document.
 - Out: any word of the six items (his yes covers copying them as they are, not changing them); any other line of
   `CLAUDE.md` (JH 172 changes nine rules in that file tonight); the block `install` writes and its hash; the template
   other projects get from `init`; declaring the list as a rule of `js-harness rules` (it is none today, L3, and
@@ -67,11 +68,11 @@ apart cannot tell which change that is.
   tokens today, 1246 with the line and its one sentence, of 1500. It fits with 254 to spare.
   Verdict: supports
 - 5. Request: copy the line "**High risk**: … (6) no test would catch a regression in what changes." whole into
-  `AGENTS.md`, wrapped as the file wraps and changed in nothing else, with one sentence that says its other copy is
-  the block `install` writes and that a test holds the two together; in `CLAUDE.md:21` put `AGENTS.md` where "below"
-  is; hold both by one test that reads the line from `KEPT_GROUPS`. What it costs: 236 estimated tokens more in
+  `AGENTS.md`, wrapped as the file wraps and changed in nothing else; in `CLAUDE.md:21` put `AGENTS.md` where "below"
+  is; hold both by one test that reads the line from `KEPT_GROUPS`. What it costs: 200 estimated tokens more in
   `AGENTS.md` on every turn of every session and in every review, and a session of Claude on his machine now loads
-  the list twice, once from his global file and once from here.
+  the list twice, once from his global file and once from here. (As first written this item added one sentence that
+  named the other copy, and counted 236; the sentence left before any code was committed, L6.)
   Adds: none
 
 ## Specs
@@ -99,8 +100,8 @@ in the lead's chat (transcript ea85ec35-82e1-4aa9-abe3-98bd153a50b0), on 2026-11
 
 ## Tasks
 - [x] T1 (kind: docs) this document: the contract, the depth pass, the specs. Specs 1 and 2; inline; this commit.
-- [ ] T2 (kind: build) specs 1 and 2: the test first and red, then the line in `AGENTS.md`, `AGENTS.md` named in
-  `CLAUDE.md:21`, and the two doc comments of bin/lib/rules-block.mjs; inline; one commit.
+- [x] T2 (kind: build) specs 1 and 2: the test first and red, then the line in `AGENTS.md`, `AGENTS.md` named in
+  `CLAUDE.md:21`, the two doc comments of bin/lib/rules-block.mjs and the register's two entries; inline; one commit.
 - [ ] T3 (kind: verify) an independent verifier reads T2 against the request (high risk, item 3 in part: instructions
   others consume); one read-only sub-agent.
 - [ ] T4 (kind: verify) the gate, then Codex and the pertinent lenses on the slice, one at a time; findings fixed or
@@ -129,3 +130,20 @@ in the lead's chat (transcript ea85ec35-82e1-4aa9-abe3-98bd153a50b0), on 2026-11
   commit, so they are corrected in T2.
 - L5 The plan had no double read of its own: it is the option of question 4, whose reviewed text is named by path
   above, and it proposes nothing beyond it (`Adds: none`).
+- L6 T2, test first: `node --test bin/lib/rules-block.test.mjs` gave 23 pass, 1 fail and 3 skipped before the change
+  (the new test, on "the line whole"), and 24 pass, 3 skipped after it. The line was written into `AGENTS.md` by a
+  script that reads it from `KEPT_GROUPS` and wraps it at 100 columns, never typed. Then `js-harness rules check`,
+  which passed before, failed with three findings: each new span of `AGENTS.md` "is declared nowhere" and either
+  names its rule or is listed as context with its reason in bin/lib/rules-coverage-data.mjs. The depth pass missed
+  this: it searched for the list and not for what holds every sentence of `AGENTS.md`. What the register says of
+  the same words in their home: the source `rules-block` holds them as owed since the baseline of 2026-10-28, an
+  obligation no rule carries yet; a span written after the baseline cannot be owed. Two ways were open. Taken, and
+  mine: the list's two spans are context, since they define a term and oblige nothing by themselves (the sentences
+  that act on it do: the sizing sentence of `CLAUDE.md`, the kept Delegation lines), and the test holds the copy to
+  the line the register already counts. Not taken, his and not put to him: declaring the list a rule of his with
+  `js-harness rules change`, which needs his words; the lead was told in one note (05:56 local) and nothing here
+  waits on it. The third finding was the sentence this session had added to say where the other copy is: it was not
+  among the six items his yes covers, it cost 36 estimated tokens a turn, and the test's message and the constant's
+  comment say the same, so it left. `AGENTS.md` measures 1210 of 1500. The sizing sentence of `CLAUDE.md` is an owed
+  span edited in place, so `rules coverage --refresh` renamed its hash; the debt did not grow (`rules coverage`
+  counted 454 owed with the three findings open and 454 with them settled). `js-harness rules check` passes again.
