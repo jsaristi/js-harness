@@ -142,20 +142,26 @@ the lead with `js-harness notify --to orchestrator --kind waiting`.
   `bin/merge-queue.mjs`, `bin/lib/background.mjs`, `bin/sessions.mjs`, `bin/doctor.mjs` · `7b92d493` (L9, L10,
   L12, L13)
 - [x] T3 (kind: build) spec 3: a resume removes the job it resumed when that job holds no worktree; tests first ·
-  inline · `bin/sessions-background.mjs` · `7b92d493` (L11)
+  inline · `bin/sessions-background.mjs` · `7b92d493` (L11), taken back in T7: the job goes with its session (L16)
 - [x] T4 (kind: docs) specs 2 to 4, 7: the orchestrator skill, `README.md`, `docs/SPEC.md`, `docs/FAILURES.md` ·
   inline · the documents commit after `7b92d493`
 - [x] T5 (kind: docs) spec 6: the cleanup file for the lead, outside the repository · inline · no commit, it is
   not in the repository (L14)
+- [x] T7 (kind: build) specs 2, 3, 5: what the independent verifier and Codex found in `d77b3315..5ac20ed2`: claude's
+  own lock, a job of another session in the worktree, the listing read again after the wait, a record line that cannot
+  be read, the removal's bound in the command, the resume; tests with the code · inline ·
+  `bin/lib/background-close.mjs`, `bin/lib/worktrees.mjs`, `bin/sessions-background.mjs`, `bin/lib/background.mjs` ·
+  the commit after `5ac20ed2` (L15, L16)
 - [ ] T6 (kind: verify) Codex and the Claude lenses on each slice, an independent verifier on what deletes, the pull
   request
 
 ## Next step
-T1's slice `8cee9278..d77b3315` is reviewed (L9). T2 and T3 are in `7b92d493`, T4 in the documents commit after it,
-and T5 is written (L14). What is left is T6: the slice whose base is `d77b3315` goes through Codex and the four
-lenses, one at a time, with the worktree untouched while either runs; the independent verifier on what deletes gives
-its verdict, which goes in the Log; then the push, the pull request, `notify --kind ready --pr`, the summary and
-`notify --kind closed --summary`.
+T1's slice `8cee9278..d77b3315` is reviewed (L9). Codex read `d77b3315..5ac20ed2` and the independent verifier read
+what deletes; what both found is fixed in T7, the commit after `5ac20ed2` (L15, L16). What is left of T6: Codex on
+T7's slice, base `5ac20ed2`; the four lenses on `d77b3315..HEAD`, which no lens has read yet; one at a time, with the
+worktree untouched while either runs; then the push, the pull request, `notify --kind ready --pr`, the summary and
+`notify --kind closed --summary`. The cleanup file of L14 is written again after T7, since what the close keeps
+changed.
 
 ## Log
 - L1 (2026-11-10 22:44 local, the owner, typed in the lead's chat; transcript `ea85ec35`, line 5421): "y entonces por
@@ -273,3 +279,40 @@ its verdict, which goes in the Log; then the push, the pull request, `notify --k
   whose newest state notice is not `closed`, 6 at work, and JH 137, left out as the brief says. Three of the four not
   closed said `ready` last and their pull request merged (JH 127, 159, 165): the harness takes only `closed` as
   finished, so a session that never sends it stays a hand's work. That is a limit of this change, not built here.
+- L15 The independent verifier on what deletes (2026-11-11, a fresh sub-agent given the request and the code, read
+  only): `Verdict: does not hold`. No path deletes a file inside a worktree and nothing is forced; what it found is
+  elsewhere, and each was checked here before it was built on.
+  (F1) claude locks the worktree of every job it runs there, `claude session <name> (pid N)`: 8 of 50 registered
+  worktrees were locked, each by a process that ran, two of them under sessions that had said `closed` and idled
+  (JH 174, JH 175; `locks.mjs` in the scratch). The rule kept every locked worktree, so the close would have fired for
+  no freshly landed session until the machine restarted, which is the request itself failing; the 7 the dry run of
+  L5 closed had all ended before the restart of 2026-11-10 22:13 local. Fixed: the lock of the session's own listed
+  job, or of a process that no longer runs, does not keep the worktree at the first look; after `claude stop` and the
+  wait, only a lock whose process has ended does not, and it is released with `git worktree unlock` before the plain
+  `git worktree remove`. A lock anyone else put, or claude's for a process that runs, keeps it, and the kept line now
+  names the close tried again instead of `--remove-worktree`. Not known: whether `claude stop` releases the lock by
+  itself; the code holds either way.
+  (F2) claude rm deletes the job's folder `~/.claude/jobs/<id>` with its scratch `tmp`: none of the 83 removed jobs
+  has a folder among the 48 there (no row of the survey of L14 is a removed job). For a finished session this is
+  accepted and said: the host gives that folder to a background session as temporary, cleaned when the job is deleted,
+  and the closed line and the help now say it goes. It is why the cleanup file of L14 is not kept only there.
+  (F4) `sessions stop --finished` ran the removal under the 30 s its runner forced over every call; the runner now
+  keeps a bound the call names (`runText`, with a test). (F5) A job that is not the session's own standing in its
+  worktree, at work or with a process that runs, keeps the session; claude's listing is read again after the wait for
+  the jobs, and a session that went back to work is kept. (F6) A line of either record that cannot be read closes
+  nothing: it may be a newer word than `closed`, or a resume; both records read 0 such lines today (`skipped.mjs`).
+  Tests added for those and for three refusals that had none: git saying it removed a folder that still holds files,
+  a folder that cannot be read, a land whose close throws. Left without a test: `git could not read origin/<name>`.
+  Not built: a look at the worktree's head when its folder is already gone (the verifier's suspicion, the behaviour
+  `sessions stop` always had), and files git is told to skip (`skip-worktree`), which `git status` does not show.
+- L16 Spec 3 is met another way than T3 built it, a decision of this session on the verifier's F2 and F3 and on
+  Codex's two findings (2026-11-11). A resume no longer removes the job it resumed. claude rm deletes that job's
+  scratch folder (F2) while its conversation goes on in the new job and may read it; the guard of L13 was not on that
+  path (F3); the brief of the removed job was left behind when the session was undone (Codex, P2); and a resume that
+  kept the job's id dropped the job it had resumed from its past (Codex, P2, fixed: the id's own `resumedFrom` is
+  kept). The job a resume replaced now goes with its session, at the close, where `undoSession` already takes the
+  whole chain; the resume says so and why. What this costs: the jobs a long-lived session leaves by its resumes stay
+  until that session is stopped, a lead's included. `retireResumed` is gone; `readRecord`'s `removed` stays, for a
+  session undone in two tries. Codex on `d77b3315..5ac20ed2`: part 1 correct (0.83), part 2 those two findings,
+  367,642 input tokens. The tests of T7 were written with its code and passed at their first run, so none was seen
+  to fail first.

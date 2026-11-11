@@ -5,11 +5,15 @@
 // work loses its worktree to `git worktree remove`, never forced and only by the rule a land holds its own removals to
 // (`worktreeKept`), and then its jobs to `undoSession`. The order is the guard: claude rm deleted the files of a
 // worktree while it said it had refused (2026-11-04), so claude rm runs for no session until its worktree is gone or
-// holds nothing; only claude stop runs before, which ends the job's process and deletes nothing. What cannot go that
-// way stays, named with why and with the command that settles it.
+// holds nothing; only claude stop runs before, which ends the job's process and deletes nothing. claude locks the
+// worktree of every job it runs there, a finished one that idles included, so the lock of the session's own job does
+// not keep it, and one left for a process that has ended is released; any other lock does. claude rm takes a job with
+// the scratch folder claude keeps for it, which the host gives as temporary. What cannot go that way stays, named with
+// why and with the command that settles it.
 
 import fs from 'node:fs';
-import { CLOSE_FINISHED, LOCK_WAIT_MS, exists, finishedHere, finishedOf, readRecord, saidBy, sleepSync, undoSession, within, workingIn, worktreeHolding, worktreeOf } from './background.mjs';
+import path from 'node:path';
+import { CLOSE_FINISHED, LOCK_WAIT_MS, atWork, exists, finishedHere, finishedOf, readRecord, saidBy, sleepSync, undoSession, within, workingIn, worktreeHolding, worktreeOf } from './background.mjs';
 import { readNotices } from './channel.mjs';
 import { defaultBranchOf } from './default-branch.mjs';
 import { projectSlug } from './sessions.mjs';
@@ -21,15 +25,26 @@ const byHand = (entry) => `once nothing there is needed, js-harness sessions sto
 /** The command that tries the close again, for a session kept by something that passes. */
 const AGAIN = `${CLOSE_FINISHED} tries again`;
 
+/** The pid in the lock claude puts on the worktree `tree` while a job of its runs there, `claude session <folder's name>
+ * (pid N)`, or `null` for a worktree that is not locked or that anything else locked. All 8 locked worktrees of
+ * 2026-11-11 read so, two of them under sessions that had said `closed` and idled (L15): a rule that keeps every locked
+ * worktree closes no session until the machine restarts. */
+function claudeLockPid(tree) {
+  const said = /^claude session (.+) \(pid (\d+)\)$/.exec(tree.lockReason ?? '');
+  return said !== null && tree.path && said[1] === path.basename(tree.path) ? Number(said[2]) : null;
+}
+
 /** The worktree of the finished session `entry` as git lists it, `{ tree }`, when nothing in it would be lost
- * (`worktreeKept`, claude's own files left out); otherwise why it stays, `{ why, settle }`. It changes nothing. */
-function removable(entry, worktree, { root, cwd, base, baseName, listed, gitIn, now }) {
+ * (`worktreeKept`, claude's own files left out); otherwise why it stays, `{ why, settle }`: the close tried again for
+ * what time or an unlock settles, the command by hand for what holds files. `ownLock(tree)` says which lock does not
+ * keep it. It changes nothing. */
+function removable(entry, worktree, { root, cwd, base, baseName, listed, gitIn, now, ownLock }) {
   if (listed === null) return { why: 'git could not list the worktrees, so its worktree was not looked at', settle: AGAIN };
   if (within(cwd, worktree)) return { why: `this command runs from its worktree ${worktree}`, settle: 'run it from the main checkout' };
   const tree = listed.linked.find((item) => item.path && sameFolder(item.path, worktree));
   if (tree === undefined) return { why: `git lists no worktree at ${worktree}, which holds files`, settle: byHand(entry) };
-  const kept = worktreeKept(tree, { cwd: root, base, baseName, gitIn, now, hostFiles: HOST_FILES });
-  return kept === null ? { tree } : { why: `its worktree ${worktree} stays: ${kept}`, settle: byHand(entry) };
+  const kept = worktreeKept(tree, { cwd: root, base, baseName, gitIn, now, hostFiles: HOST_FILES, ownLock });
+  return kept === null ? { tree } : { why: `its worktree ${worktree} stays: ${kept}`, settle: /^(it is locked|its index changed)/.test(kept) ? AGAIN : byHand(entry) };
 }
 
 /** The jobs of `chain` as claude lists them in `agents`: by id, and by session too, as `workingIn` looks, since a job
@@ -74,7 +89,7 @@ function endJobs(chain, agents, { claude, now, alive, pause }) {
 export function closedLines({ closed, kept }) {
   const name = (entry) => `${entry.id} · ${entry.title}`;
   return [
-    ...closed.map(({ entry, worktree, jobs }) => `closed ${name(entry)}: ${worktree === null ? '' : `git removed its worktree ${worktree}, which held nothing to lose, and `}claude removed its ${jobs === 1 ? 'job' : `${jobs} jobs`}; its transcript stays`),
+    ...closed.map(({ entry, worktree, jobs }) => `closed ${name(entry)}: ${worktree === null ? '' : `git removed its worktree ${worktree}, which held nothing to lose, and `}claude removed its ${jobs === 1 ? 'job, with the scratch folder claude keeps for it' : `${jobs} jobs, with the scratch folder claude keeps for each`}; its transcript stays`),
     ...kept.flatMap(({ entry, why, settle, stopped }) => [
       `kept ${name(entry)}: ${why}`,
       ...(stopped ? [`  claude stop was sent to its job before that, which deletes nothing; js-harness sessions start --resume ${entry.id} resumes it`] : []),
@@ -93,8 +108,9 @@ export const REMOVAL_WAIT_MS = 5 * 60_000;
  * that closes it by hand or `null` where there is none to run. `agents` is claude's listing (`listAgents`), `base` the
  * commit a worktree's head must be in and `baseName` its name in words, `cwd` where the command runs, `gitIn(dir,
  * ...args)` answers `{ ok, out, err }`, `claude` runs the Claude CLI (`claudeRunner`). A close waits on processes, so
- * what was seen before it is looked at again: `list()`, when given, reads claude's listing anew after each act, and a
- * worktree is held to the rule a second time after the wait for its jobs. `removeIn` is the `gitIn` of the one call
+ * what was seen before it is looked at again: `list()`, when given, reads claude's listing anew after each act and
+ * after the wait for a session's jobs, and a worktree is held to the rule a second time after that wait, when the only
+ * lock that no longer keeps it is claude's for a process that has ended (`git worktree unlock` releases it). `removeIn` is the `gitIn` of the one call
  * that deletes, which wants a longer bound (`REMOVAL_WAIT_MS`). A kept one whose job got `claude stop` has `stopped`. */
 export function closeFinished({ home, root, cwd = root, base, baseName = base, notices, agents, list = null, gitIn, removeIn = gitIn, claude, now = Date.now, alive = exists, pause = sleepSync }) {
   const finished = finishedOf(readRecord(home), notices, root);
@@ -130,9 +146,25 @@ export function closeFinished({ home, root, cwd = root, base, baseName = base, n
     // The guard `sessions stop` holds: only a worktree that holds something is git's to remove first.
     if (worktree !== null && worktreeHolding(entry) !== null) {
       if (listed === undefined) listed = linkedWorktrees(root, gitIn);
-      const found = removable(entry, worktree, { root, cwd, base, baseName, listed, gitIn, now });
+      const mine = listedOf(chain, seen);
+      // claude's lock for a job of this session, which claude stop ends next, or for a process that no longer runs.
+      const ended = (tree) => {
+        const pid = claudeLockPid(tree);
+        return pid !== null && !alive(pid);
+      };
+      const ownLock = (tree) => {
+        const pid = claudeLockPid(tree);
+        return pid !== null && (!alive(pid) || mine.some((agent) => agent.pid === pid));
+      };
+      const found = removable(entry, worktree, { root, cwd, base, baseName, listed, gitIn, now, ownLock });
       if (found.tree === undefined) {
         kept.push({ entry, ...found });
+        continue;
+      }
+      // A job that is not this session's is not stopped here, and no folder is removed from under one.
+      const guest = seen.find((agent) => !mine.includes(agent) && typeof agent.cwd === 'string' && within(agent.cwd, worktree) && (atWork(agent) || (Number.isInteger(agent.pid) && alive(agent.pid))));
+      if (guest !== undefined) {
+        kept.push({ entry, why: `another job, ${guest.id}${guest.name ? ` · ${guest.name}` : ''}, stands in its worktree ${worktree}`, settle: AGAIN });
         continue;
       }
       acted = true;
@@ -141,11 +173,35 @@ export function closeFinished({ home, root, cwd = root, base, baseName = base, n
         kept.push({ entry, why: `its worktree ${worktree} stays: ${runs}`, settle: AGAIN, stopped: true });
         continue;
       }
-      // The second look: what the wait above let into the worktree is not deleted on the word of the first.
-      const still = removable(entry, worktree, { root, cwd, base, baseName, listed: linkedWorktrees(root, gitIn), gitIn, now });
+      if (list !== null) {
+        // The wait is up to a minute a job: a message may have woken the session in it.
+        let woken;
+        try {
+          seen = list();
+          woken = workingIn(chain, seen);
+        } catch (err) {
+          kept.push({ entry, why: `its worktree ${worktree} stays: whether it went back to work cannot be told (${err.message})`, settle: AGAIN, stopped: true });
+          continue;
+        }
+        if (woken !== undefined) {
+          kept.push({ entry, why: `its worktree ${worktree} stays: it is ${woken.status ?? woken.state} again, after claude stop was sent to its job`, settle: null, stopped: true });
+          continue;
+        }
+      }
+      // The second look: what the wait above let into the worktree is not deleted on the word of the first, and the
+      // only lock that no longer keeps it is claude's for a process that has ended.
+      const still = removable(entry, worktree, { root, cwd, base, baseName, listed: linkedWorktrees(root, gitIn), gitIn, now, ownLock: ended });
       if (still.tree === undefined) {
         kept.push({ entry, ...still, stopped: true });
         continue;
+      }
+      if (still.tree.locked) {
+        // Not a forced removal: the lock of a process that is gone is released, and git still refuses what holds files.
+        const unlocked = gitIn(root, 'worktree', 'unlock', still.tree.path);
+        if (!unlocked.ok) {
+          kept.push({ entry, why: `its worktree ${worktree} stays: git worktree unlock refused: ${unlocked.err.split('\n')[0] || 'git gave no reason'}`, settle: AGAIN, stopped: true });
+          continue;
+        }
       }
       const gone = removeIn(root, 'worktree', 'remove', still.tree.path);
       if (!gone.ok || worktreeHolding(entry) !== null) {
@@ -185,6 +241,10 @@ export function closeFinishedIn({ home, root, cwd = root, base = null, baseName 
   if (background.unavailable !== undefined) return { unavailable: `the record of background sessions could not be read (${background.unavailable})` };
   if (finishedOf(background, record.notices, root).length === 0) return { closed: [], kept: [] };
   if (claude === null) return { unavailable: 'claude is not on PATH' };
+  // A line that cannot be read may be a newer word than `closed`, or the start of a resume: "could not read" is not "none".
+  const lines = (count) => `${count} line${count === 1 ? '' : 's'}`;
+  if (background.skipped > 0) return { unavailable: `${lines(background.skipped)} of the record of background sessions could not be read, and one may be a resume` };
+  if (record.skipped > 0) return { unavailable: `${lines(record.skipped)} of the channel's record ${record.path} could not be read, and one may be a newer notice than closed` };
   let agents;
   try {
     agents = list();

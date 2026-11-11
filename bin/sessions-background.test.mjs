@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sessionsMain } from './sessions.mjs';
-import { sessionsStartMain } from './sessions-background.mjs';
+import { runText, sessionsStartMain } from './sessions-background.mjs';
 import { appendNotice, newNotice } from './lib/channel.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { projectSlug } from './lib/sessions.mjs';
@@ -665,8 +665,24 @@ test('a resumed job replaces the one it resumed: that one is neither resumed nor
   assert.equal(fs.existsSync(first.brief), false);
 }));
 
-// odd/tasks/sessions-close-themselves.md, spec 3: 19 of 19 recorded resumes left the job they resumed on the machine.
-test('a resume retires the job it resumed when the session has no worktree, keeps the brief, and takes a kept id as no second job', withWorld((world) => {
+// The verifier, 2026-11-11: this command's runner forced 30 s over every call, the removal of a worktree included, which
+// asks for five minutes so that git is not killed half-way through a folder.
+test('the runner of these commands bounds a call at 30 s unless the call names its own bound', () => {
+  const calls = [];
+  const run = runText((command, args, options) => { calls.push(options); return { status: 0 }; });
+  run('git', ['status'], { cwd: 'x' });
+  run('git', ['worktree', 'remove', 'x'], { cwd: 'x', timeout: 300000, encoding: 'buffer' });
+  run('git', ['status']);
+  assert.deepEqual(calls, [
+    { cwd: 'x', encoding: 'utf8', windowsHide: true, timeout: 30000 },
+    { cwd: 'x', timeout: 300000, encoding: 'utf8', windowsHide: true },
+    { encoding: 'utf8', windowsHide: true, timeout: 30000 },
+  ]);
+});
+
+// odd/tasks/sessions-close-themselves.md, spec 3 and L15: 19 of 19 recorded resumes left the job they resumed, and a
+// resume still leaves it: claude rm deletes that job's scratch folder, which the conversation that goes on may read.
+test('a resume leaves the job it resumed for the close of its session and says why, and a kept id is no second job and keeps its past', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Read the thing', '--brief', world.brief]).code, 0);
   const [first] = recordLines(world);
   endJob(world, '0db8bc5e');
@@ -674,22 +690,23 @@ test('a resume retires the job it resumed when the session has no worktree, keep
   const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
   assert.equal(resumed.code, 0, resumed.stderr);
   assert.match(resumed.stdout, /resumed 0db8bc5e as c779ed44/);
-  assert.match(resumed.stdout, /0db8bc5e, the job it resumed, was removed: the session has no worktree, and its transcript stays/);
-  assert.doesNotMatch(resumed.stdout, /removes it and 0db8bc5e/);
-  assert.deepEqual(actions(world).slice(-2), [['stop', '0db8bc5e'], ['rm', '0db8bc5e']]);
-  assert.deepEqual(recordLines(world).slice(1).map((line) => [line.event, line.id]), [['started', 'c779ed44'], ['removed', '0db8bc5e']]);
+  assert.match(resumed.stdout, /js-harness sessions stop c779ed44 removes it and 0db8bc5e, the job it resumed/);
+  assert.match(resumed.stdout, /0db8bc5e stays until then: claude rm would delete its scratch folder, which this conversation may still use; it goes with the session, which js-harness sessions stop --finished or a land closes once it said closed/);
+  assert.ok(!actions(world).some(([verb]) => verb === 'rm'), 'no job was removed');
+  assert.deepEqual(recordLines(world).map((line) => [line.event, line.id]), [['started', '0db8bc5e'], ['started', 'c779ed44']]);
   assert.ok(fs.existsSync(first.brief), 'the brief the new job reads stays');
-  // A claude that keeps the job's id on a resume made no second job: nothing is retired, and the job is not its own past.
+  // A claude that keeps the job's id on a resume made no second job: it is not its own past, and it keeps the job it
+  // had resumed, which would otherwise stand as a session of its own (Codex, 2026-11-11).
   endJob(world, 'c779ed44');
   const same = js(world, ['sessions', 'start', '--resume', 'c779ed44']);
   assert.equal(same.code, 0, same.stderr);
-  assert.equal(recordLines(world).at(-1).resumedFrom, undefined);
-  assert.notDeepEqual(actions(world).at(-1), ['rm', 'c779ed44']);
-  // The job that is left stands alone: stopped by its id, with no word to a job already gone, and its brief goes with it.
+  assert.match(same.stdout, /claude kept the job's id/);
+  assert.equal(recordLines(world).at(-1).resumedFrom, '0db8bc5e');
+  // The session goes whole: the job and the one it resumed, and the brief with them.
   const acted = actions(world).length;
   const stopped = js(world, ['sessions', 'stop', 'c779ed44']);
   assert.equal(stopped.code, 0, stopped.stderr);
-  assert.deepEqual(actions(world).slice(acted), [['stop', 'c779ed44'], ['rm', 'c779ed44']]);
+  assert.deepEqual(actions(world).slice(acted), [['stop', 'c779ed44'], ['rm', 'c779ed44'], ['stop', '0db8bc5e'], ['rm', '0db8bc5e']]);
   assert.equal(fs.existsSync(first.brief), false);
 }));
 
@@ -819,7 +836,7 @@ test('sessions stop --finished closes the finished sessions that lose nothing, a
   const acted = actions(world).length;
   const result = js(world, ['sessions', 'stop', '--finished']);
   assert.equal(result.code, 0, result.stderr);
-  assert.ok(result.stdout.includes(`closed 0db8bc5e · Landed: git removed its worktree ${landed}, which held nothing to lose, and claude removed its job; its transcript stays`), result.stdout);
+  assert.ok(result.stdout.includes(`closed 0db8bc5e · Landed: git removed its worktree ${landed}, which held nothing to lose, and claude removed its job, with the scratch folder claude keeps for it; its transcript stays`), result.stdout);
   assert.match(result.stdout, /kept c779ed44 · Dirty: its worktree .*dirty stays: it holds what no branch brings back: \?\? notes\.md\n {2}once nothing there is needed, js-harness sessions stop c779ed44 --remove-worktree removes it with its worktree/);
   assert.match(result.stdout, /^1 closed, 1 kept\.$/m);
   assert.doesNotMatch(result.stdout, /a1b2c3d4/);

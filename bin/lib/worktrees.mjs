@@ -9,8 +9,9 @@ import path from 'node:path';
  * something a moment ago may be about to commit there. */
 const IDLE_MINUTES = 10;
 
-/** `git worktree list --porcelain` as `{ path, head, branch, locked, prunable }` entries, the main worktree first;
- * `branch` is the short name, `null` for a detached head. */
+/** `git worktree list --porcelain` as `{ path, head, branch, locked, lockReason, prunable }` entries, the main worktree
+ * first; `branch` is the short name, `null` for a detached head, `lockReason` what the lock says, `''` when it says
+ * nothing or there is none. */
 function worktreesOf(porcelain) {
   return porcelain.replace(/\r\n/g, '\n').split('\n\n').map((block) => block.split('\n').filter(Boolean)).filter((lines) => lines.length > 0).map((lines) => {
     const value = (key) => lines.find((line) => line === key || line.startsWith(`${key} `))?.slice(key.length + 1) ?? null;
@@ -20,6 +21,7 @@ function worktreesOf(porcelain) {
       head: value('HEAD'),
       branch: branch === null ? null : branch.replace(/^refs\/heads\//, ''),
       locked: lines.some((line) => line === 'locked' || line.startsWith('locked ')),
+      lockReason: value('locked') ?? '',
       prunable: lines.some((line) => line === 'prunable' || line.startsWith('prunable ')),
     };
   });
@@ -54,11 +56,12 @@ export function linkedWorktrees(cwd, gitIn) {
  * can: it is on a branch, not locked, with a head `base` holds, a `git status` clean of ignored files too, and an index
  * unchanged for `idleMinutes`. `hostFiles` names the ignored files that do not count; `baseName` is `base` in words.
  * The cheap questions are asked first: a `git status` in each of a hundred worktrees is what this exists to spare.
+ * `ownLock(tree)` says a lock is the caller's own to release, which then keeps nothing: nobody else's ever is.
  * `gitIn(dir, ...args)` answers `{ ok, out }`. */
-export function worktreeKept(tree, { cwd, base, baseName = 'main', gitIn, now = Date.now, idleMinutes = IDLE_MINUTES, hostFiles = [] }) {
+export function worktreeKept(tree, { cwd, base, baseName = 'main', gitIn, now = Date.now, idleMinutes = IDLE_MINUTES, hostFiles = [], ownLock = () => false }) {
   if (!tree.path || !tree.head) return 'git names no folder or no head for it';
   if (tree.branch === null) return 'it is on no branch';
-  if (tree.locked) return 'it is locked';
+  if (tree.locked && !ownLock(tree)) return `it is locked${tree.lockReason ? `: ${tree.lockReason}` : ''}`;
   if (tree.prunable) return 'git lists it as prunable';
   if (!gitIn(cwd, 'merge-base', '--is-ancestor', tree.head, base).ok) return `its head is not in ${baseName}`;
   const index = gitIn(tree.path, 'rev-parse', '--git-path', 'index');

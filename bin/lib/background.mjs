@@ -454,23 +454,6 @@ export function undoSession(entry, { home, run, now, alive = exists, pause = sle
 /** The jobs the recorded job `entry` resumed that are still to undo (`resumedChain` without those already removed). */
 const liveChain = (record, entry) => resumedChain(record.started ?? [], entry).filter((job) => !record.removed?.has(job.id));
 
-/** Retires the job `old` that a resume replaced, in a session with no worktree (odd/tasks/sessions-close-themselves.md,
- * spec 3): claude stop and claude rm of it and of the jobs it had resumed, each removal recorded as it is done. The
- * brief stays, since the new job reads it. `null` once all are gone, or why one is still there. Not for a session with a
- * worktree: claude holds the worktree under the job that was started with it, so claude rm of that job would delete
- * the folder the new job works in; such a job goes with its session, at the close. */
-export function retireResumed(old, { home, run, now, alive = exists, pause = sleepSync }) {
-  const record = readRecord(home);
-  for (const job of [old, ...liveChain(record, old)]) {
-    const stop = run(['stop', job.id]);
-    if ((stop.error || stop.status !== 0) && !lostSaid(stop)) return `claude stop ${job.id}: ${saidBy(stop)}`;
-    const rm = removeJob(job.id, { run, now, alive, pause });
-    if ((rm.error || rm.status !== 0) && !lostSaid(rm)) return `claude rm ${job.id}: ${saidBy(rm)}`;
-    closeEntry(home, job, now);
-  }
-  return null;
-}
-
 /** A session at work: busy, or waiting on something (a permission prompt). */
 export const atWork = (agent) => agent?.status === 'busy' || agent?.status === 'waiting' || agent?.state === 'working';
 

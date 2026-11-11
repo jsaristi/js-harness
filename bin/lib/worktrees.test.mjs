@@ -78,6 +78,11 @@ test('worktreeKept says why a worktree stays, and leaves out only the host files
     assert.equal(kept({}), null);
     assert.equal(kept({ tree: { branch: null } }), 'it is on no branch');
     assert.equal(kept({ tree: { locked: true } }), 'it is locked');
+    // The lock says who holds it, and only a lock the caller calls its own keeps nothing.
+    const held = { locked: true, lockReason: 'claude session one (pid 7)' };
+    assert.equal(kept({ tree: held }), 'it is locked: claude session one (pid 7)');
+    assert.equal(kept({ tree: held }, { ownLock: (given) => given.lockReason.endsWith('(pid 7)') }), null);
+    assert.equal(kept({ tree: held }, { ownLock: () => false }), 'it is locked: claude session one (pid 7)');
     assert.equal(kept({ inBase: false }), 'its head is not in origin/main');
     const settings = '!! .claude/settings.local.json\n';
     assert.equal(kept({ status: settings }), 'it holds what no branch brings back: !! .claude/settings.local.json');

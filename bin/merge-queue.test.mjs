@@ -1811,6 +1811,9 @@ test('a land closes the finished background session whose work it landed: its wo
   const entry = { event: 'started', at: new Date(Date.now() - 3_600_000).toISOString(), id: 'aaaa1111', sessionId: 'aaaa1111-0000-4000-8000-000000000000', title: 'JH 1 · a', root: main, cwd: main, worktree: 'a', worktreePath: place, brief: null };
   appendRecord(home, entry);
   appendNotice(home, projectSlug(main), { schema: NOTICE_SCHEMA, at: new Date(Date.now() - 60_000).toISOString(), from: { id: entry.sessionId, title: entry.title }, to: { role: 'orchestrator' }, kind: 'closed', text: 'delivered' });
+  // As claude leaves it: the worktree locked for the session's job, whose process has ended by now.
+  const ended = spawnSync(process.execPath, ['-e', '']).pid;
+  git(root, 'worktree', 'lock', '--reason', `claude session a (pid ${ended})`, place);
   const asked = [];
   const claude = (args) => { asked.push(args); return { status: 0, stdout: '', stderr: '' }; };
   const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { env: { ...process.env, JS_HARNESS_HOME: home }, more: { claude, listAgents: () => [] } });
@@ -1821,6 +1824,21 @@ test('a land closes the finished background session whose work it landed: its wo
   assert.deepEqual(landsOf(root).at(-1).closed, [{ id: 'aaaa1111', title: 'JH 1 · a', worktree: place }]);
   assert.ok(out.includes('Finished background sessions: 1 closed, 0 kept.'), out.join('\n'));
   assert.deepEqual(removedOf(root), [], 'the land\'s own rule still leaves what is under .claude/worktrees');
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test('a land whose close of the finished sessions fails says so in a line, and its exit and its record stand', async () => {
+  const { root, heads } = makeQueueRepo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-land-home-'));
+  const main = mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' }), root);
+  const entry = { event: 'started', at: new Date(Date.now() - 3_600_000).toISOString(), id: 'aaaa1111', sessionId: 'aaaa1111-0000-4000-8000-000000000000', title: 'JH 1 · a', root: main, cwd: main, worktree: null, worktreePath: null, brief: null };
+  appendRecord(home, entry);
+  appendNotice(home, projectSlug(main), { schema: NOTICE_SCHEMA, at: new Date(Date.now() - 60_000).toISOString(), from: { id: entry.sessionId, title: entry.title }, to: { role: 'orchestrator' }, kind: 'closed', text: 'delivered' });
+  const claude = () => { throw new Error('claude: made up'); };
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { env: { ...process.env, JS_HARNESS_HOME: home }, more: { claude, listAgents: () => [] } });
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(out.includes('Could not close the finished background sessions (claude: made up): the land\'s exit stands.'), out.join('\n'));
+  assert.deepEqual([landsOf(root).at(-1).closed, landsOf(root).at(-1).landed], [[], [1]]);
   fs.rmSync(home, { recursive: true, force: true });
 });
 
