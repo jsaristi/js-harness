@@ -5,9 +5,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { projectSlug } from '../../bin/lib/sessions.mjs';
 import { TICKS_STALE_HOURS, ticksMain } from './ticks.mjs';
 
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const HOUR = 3600 * 1000;
 // 2026-11-10 at 14:00 UTC: 2026-11-09 settled at 01:00 (two gate-max after midnight), 13 hours before.
 const NOW = Date.parse('2026-11-10T14:00:00Z');
@@ -200,5 +202,16 @@ test('--help prints the usage, and an argument it does not know is a usage error
       assert.deepEqual(bad.out, []);
       assert.match(bad.err.join('\n'), /unknown argument/);
     }
+  });
+});
+
+// His answer to question 245 (odd/tasks/audit-u3-heartbeat-ticks.md, L8) covers this one entry: the project settings
+// hold it alone, so another hook, or another key, enters them only in a change that says why.
+test('this repository runs it at each session start, alone in its project settings, with a timeout of its own', () => {
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude', 'settings.json'), 'utf8'));
+  assert.deepEqual(settings, {
+    hooks: {
+      SessionStart: [{ matcher: 'startup|resume', hooks: [{ type: 'command', command: 'node workshop/js-harness-workshop.mjs ticks --hook', timeout: 15 }] }],
+    },
   });
 });

@@ -110,8 +110,8 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
 ## Tasks
 - [x] T1 (kind: build) spec 1, 3: `workshop/bin/ticks.mjs` and its test, test first; the exports of one home; the
   dispatcher. Route: inline. Commit: `feat(workshop): ticks --hook says when the heartbeat's ticks stopped`
-- [ ] T2 (kind: build) spec 2, 5: `.claude/settings.json`, its test and the `workshop` cell of `HOOK_CEILINGS`, with
-  the measured time. Waits on his word, question 245 (L5). Route: inline. Commit: its own, after T1's
+- [x] T2 (kind: build) spec 2, 5: `.claude/settings.json`, its test and the `workshop` cell of `HOOK_CEILINGS`, with
+  the measured time. His word: question 245 (L8). Route: inline. Commit: its own pull request, after T1's landed
 - [ ] T3 (kind: verify) Codex and the lenses on each code commit; `npm run check`; the pull request; the ready notice.
 
 ## Log
@@ -156,3 +156,15 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
   unrecorded; the lead held them, then asked for them one at a time after JH 167 closed. Codex: correct (0.99), its
   P2 fixed, 33,311 input tokens; the reliability lens: 0 findings, 11,428 input tokens. T1 goes out as its pull
   request; T2 waits on question 245.
+- L8 (2026-11-11): T1 landed as pull request 809 (merged 2026-11-11T02:23:39Z, after his yes to the lead's question
+  252). Question 245 is answered: he tapped "Aceptar el hook (recomendado)" (the lead's transcript
+  `ea85ec35-82e1-4aa9-abe3-98bd153a50b0`, line 5903, 2026-11-11T04:22:56Z, read with `js-harness sessions --quote`).
+  It covers `workshop: { SessionStart: 1 }` in `HOOK_CEILINGS` and the one entry in `.claude/settings.json`; no other
+  hook and no other ceiling. T2 is built on `audit-u3-ticks-hook`, from main at `7525a4e5`, test first: the two new
+  tests failed (25 passed, 2 failed), then with the conventions and the dispatcher's tests 62 of 62 passed;
+  `node workshop/js-harness-workshop.mjs spec`: PASS, 79 capabilities.
+- L9 (2026-11-11): the hook measured again against the real home, five runs through a child `node`, with three other
+  sessions on the machine: exit 0 each, stderr 0 bytes, median 1,418 ms, max 1,514 ms, against the 15 s of its
+  timeout. It still says the three ticks are stale, and names no heartbeat on record: the machine restarted and none
+  runs. The snapshot of the day has not appeared; it will when the lead's heartbeat runs the workshop's loop.
+  Undo: delete `.claude/settings.json`'s entry and the `workshop` cell; the hook wrote nothing to undo.

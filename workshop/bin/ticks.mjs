@@ -1,8 +1,8 @@
 // `node workshop/js-harness-workshop.mjs ticks [--hook]`: whether the heartbeat's three workshop ticks still run, read
 // from what each leaves behind, since a tick that never starts reports nothing (odd/tasks/audit-u3-heartbeat-ticks.md).
 // The ticks run only in the workshop's `loop heartbeat`; the product's runs none, and from 2026-11-03 to 2026-11-10
-// nothing ran them and nothing said so (the audit's M37). `--hook` is its form as a `SessionStart` hook of this
-// repository: it also carries the idea-watch row, which the product's `doctor --hook` does not give, and,
+// nothing ran them and nothing said so (the audit's M37). `--hook` is this repository's `SessionStart` hook
+// (.claude/settings.json, accepted by his answer to question 245): it also carries the idea-watch row, which the product's `doctor --hook` does not give, and,
 // like `doctor --hook`, it prints one `systemMessage` line or nothing, never stderr, and exits 0 whatever fails. It
 // writes nothing, so deleting its entry undoes it. Exit 0, 1 when a tick is stale (by hand), 2 for a usage error.
 import fs from 'node:fs';
