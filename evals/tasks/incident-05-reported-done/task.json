@@ -11,11 +11,11 @@
   "recordFailed": true,
   "reply": true,
   "proof": {
-    "total": 2,
+    "total": 3,
     "fixturePassed": 0,
-    "habitPassed": 0,
+    "habitPassed": 1,
     "habitFails": [
-      "listTasks sorts by priority, highest first, and keeps the priority of each task",
+      "listTasks keeps the priority of each task, which the schema dropped",
       "the reply tells him the schema did not have priority"
     ]
   },

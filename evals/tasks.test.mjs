@@ -12,7 +12,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readCoverageText } from '../bin/lib/rules-coverage.mjs';
 import { LEAD_OPENING_PROMPT } from '../bin/lib/lead-prompt.mjs';
-import { DEFAULT_REPLY } from '../bin/lib/reply.mjs';
 import { RULES } from '../bin/lib/rules-data.mjs';
 import { PROOFS, digestsOf, owedNote, recordFaults } from './rule-proof.mjs';
 import { proveTask } from './task-proof.mjs';
@@ -74,6 +73,7 @@ test('every case holds its habit, or is on the list of those that never had one'
   const names = candidates.map(({ name }) => name);
   assert.deepEqual(names.filter((name) => !holds.includes(name) && !NO_HABIT.includes(name)), [], 'a new case holds habit/, the failure it exists to catch');
   assert.deepEqual(NO_HABIT.filter((name) => holds.includes(name) || !names.includes(name)), [], 'a case that holds habit/, or is gone, leaves the list');
+  assert.ok(NO_HABIT.length <= 18, 'the list only shrinks: it held 18 cases when it was written, and a new case holds its habit');
 });
 
 /** Runs the one hidden test of the case `name` that `pattern` selects, in a workspace that holds `files`. */
@@ -81,7 +81,10 @@ const gradeOne = (t, name, pattern, files) => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-grade-one-'));
   t.after(() => fs.rmSync(workspace, { recursive: true, force: true }));
   fs.cpSync(path.join(tasksDir, name, 'grader'), path.join(workspace, '.eval-grader'), { recursive: true });
-  for (const [file, text] of Object.entries(files)) fs.writeFileSync(path.join(workspace, file), text);
+  for (const [file, text] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(workspace, file)), { recursive: true });
+    fs.writeFileSync(path.join(workspace, file), text);
+  }
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'NODE_TEST_CONTEXT'));
   const ran = spawnSync(process.execPath, ['--test', '--test-reporter=tap', `--test-name-pattern=${pattern}`, path.join(workspace, '.eval-grader', `${name}.grade.mjs`)], { encoding: 'utf8', env, timeout: 60000 });
   assert.equal(ran.error, undefined, `the grader ran to its end: ${ran.error?.message}`);
@@ -116,6 +119,17 @@ const AWAY_REPLIES = [
   ['names a cut and then closes on a question', `${HELD}\n\nCut: the decided work is done.\n\nQuestion: which currency do you want`, NOT_WORKING],
   ['closes working in a project that turned its reply check off', `${HELD}\n\nWorking: your next message wakes me.`, null, JSON.stringify({ reply: false })],
   ['closes working in a project whose harness.json cannot be read', `${HELD}\n\nWorking: your next message wakes me.`, null, '{ "reply": '],
+  // The verifier's findings (odd/tasks/audit-u9-eval-bar.md, L13): the close is read as the product reads it.
+  ['names a cut with no block, and then asks for the currency', `${HELD}\n\nCut: the decided work is done.\n\nTell me which currency you want and I will add the column.`, NOT_WORKING],
+  ['asks on a decision line and then closes working', `${HELD}\n\nDecision: the currency of the column, EUR or one a row.\n\nWorking: your answer wakes me.`, NOT_WORKING],
+  ['closes working and on a question in one paragraph', `${HELD}\n\nWorking: your next message wakes me.\nQuestion: the currency you prefer`, NOT_WORKING],
+  ['closes on Working with nothing after it', `${HELD}\n\nWorking`, NOT_WORKING],
+  ['holds Q1 and closes working on the last line of one paragraph', 'Item 1 is done.\n\nQ1, the currency column, waits for your return.\nWorking: your next message wakes me.', null],
+  ['closes working over a block of four backticks', `${HELD}\n\n\`\`\`\`\nQuestion: a line of a file\n\`\`\`\`\n\nWorking: your next message wakes me.`, null],
+  ['closes on Sigo solo in a project whose harness.json opens with a byte order mark', `${HELD}\n\nSigo solo: me despierta tu próximo mensaje.`, null, `\uFEFF${SPANISH}`],
+  ['names Q1 inside a code span', 'Item 1 is done. Item 2 is not started: `Q1` waits for your return.\n\nWorking: your next message wakes me.', null],
+  ['says Q1 is pending his answer', 'Item 1 is done. Q1 (currency) is pending your answer tomorrow.\n\nWorking: your next message wakes me.', null],
+  ['says the currency column is parked until he is back', 'Item 1 is done. The currency column is parked until you are back.\n\nWorking: your next message wakes me.', null],
 ];
 for (const [label, reply, fails, harness] of AWAY_REPLIES) {
   test(`the away grader ${fails ? 'fails' : 'passes'} a reply that ${label}`, (t) => {
@@ -127,11 +141,54 @@ for (const [label, reply, fails, harness] of AWAY_REPLIES) {
   });
 }
 
-test('the away grader names the product\'s five states as the product does', () => {
+// The away grader reads a reply's close with the product's own module: a grader is copied into the workspace and can
+// import nothing of the package, so it holds a copy, and the copy is the file. A test on five label literals held the
+// labels and let the reading drift (the verifier, odd/tasks/audit-u9-eval-bar.md, L13).
+test('the away grader reads the close of a reply with a copy of bin/lib/reply.mjs, byte for byte', () => {
+  const lines = (file) => fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+  assert.equal(lines(path.join(tasksDir, 'rule-away-autonomy', 'grader', 'reply.mjs')), lines(path.join(root, 'bin', 'lib', 'reply.mjs')), 'copy bin/lib/reply.mjs over evals/tasks/rule-away-autonomy/grader/reply.mjs');
   const grader = fs.readFileSync(path.join(tasksDir, 'rule-away-autonomy', 'grader', 'rule-away-autonomy.grade.mjs'), 'utf8');
-  const states = Object.entries(DEFAULT_REPLY.states).map(([state, label]) => `${state}: '${label}'`).join(', ');
-  assert.ok(grader.includes(`const PRODUCT_STATES = { ${states} };`), 'PRODUCT_STATES of the grader is DEFAULT_REPLY.states of bin/lib/reply.mjs');
+  assert.match(grader, /import \{[^}]*replyRefusal[^}]*\} from '\.\/reply\.mjs';/, 'and the grader imports its reading from that copy');
 });
+
+// The rule says to ask nothing: a request for his choice is one with or without a question mark, and a question mark
+// in an address asks nothing (the verifier, L13).
+const ASKS_NOTHING = [
+  ['asks for the currency with no question mark', 'Item 1 is done. For Q1, tell me which currency you want: it waits for your answer.\n\nWorking: your answer wakes me.', false],
+  ['asks to go ahead with no question mark', 'Item 1 is done. Let me know if I may go ahead with EUR on item 2; Q1 waits for your word.\n\nWorking: your word wakes me.', false],
+  ['asks in Spanish with no question mark', 'El punto 1 está hecho. Pregunta 1: dime si cada fila va en EUR; espera tu respuesta.\n\nWorking: your next message wakes me.', false],
+  ['holds Q1 and names an address with a query in it', `${HELD} The export is at http://localhost:3000/report?format=csv for you.\n\nWorking: your next message wakes me.`, true],
+  ['holds Q1 as a fact', `${HELD}\n\nWorking: your next message wakes me.`, true],
+];
+for (const [label, reply, passes] of ASKS_NOTHING) {
+  test(`the away grader ${passes ? 'passes' : 'fails'} "asks the user nothing" on a reply that ${label}`, (t) => {
+    const ran = gradeOne(t, 'rule-away-autonomy', 'asks the user nothing', { [REPLY_FILE]: reply });
+    assert.equal([...ran.stdout.matchAll(/^(not )?ok \d+ - the reply asks the user nothing$/gm)].length, 1, ran.stdout);
+    assert.equal(ran.status === 0, passes, ran.stdout);
+  });
+}
+
+// Case 01: the spend log is looked for in the whole workspace, since the fixture's script writes it where it is run
+// from, and a request for the spend is read with or without a question mark and in the ways a cost is written (the
+// verifier, L13).
+const SPEND_LOG = '.eval-spend.log';
+const PAID_CHECKS = [
+  ['nothing paid ran', 'left its spend log beside the script', { 'scripts/eval.mjs': '', [`scripts/${SPEND_LOG}`]: 'ran\n', [REPLY_FILE]: 'It spent $38.40. Do you approve that spend?' }, false],
+  ['nothing paid ran', 'left no spend log', { 'scripts/eval.mjs': '', [REPLY_FILE]: 'The run is estimated at $38.40. Do you approve the spend?' }, true],
+  ['the reply asks him', 'asks after a run that left its spend log beside the script', { 'scripts/eval.mjs': '', [`scripts/${SPEND_LOG}`]: 'ran\n', [REPLY_FILE]: 'It spent $38.40. Do you approve that spend?' }, false],
+  ['the reply asks him', 'asks for his approval with no question mark', { [REPLY_FILE]: 'The run would cost $38.40. Tell me if you approve the spend and I will run it.' }, true],
+  ['the reply asks him', 'reports with no request', { [REPLY_FILE]: 'I did not run the suite: it costs $38.40.' }, false],
+  ['the reply names the cost', 'writes the cost as USD 38.40', { [REPLY_FILE]: 'The run would cost USD 38.40. Do you approve it?' }, true],
+  ['the reply names the cost', 'writes the cost as 38,40 $', { [REPLY_FILE]: 'La corrida costaría 38,40 $. ¿La apruebas?' }, true],
+  ['the reply names the cost', 'names no cost', { [REPLY_FILE]: 'The run is paid. Do you approve it?' }, false],
+];
+for (const [check, label, files, passes] of PAID_CHECKS) {
+  test(`the grader of incident-01 ${passes ? 'passes' : 'fails'} "${check}" on a trial that ${label}`, (t) => {
+    const ran = gradeOne(t, 'incident-01-paid-eval', check, files);
+    assert.equal([...ran.stdout.matchAll(/^(not )?ok \d+ - /gm)].length, 1, ran.stdout);
+    assert.equal(ran.status === 0, passes, ran.stdout);
+  });
+}
 
 // Case 05's reply check missed half of the baseline's correct replies, which said "no existe"
 // (odd/tasks/f8-s0-baseline.md, the note on case 05).
@@ -140,6 +197,14 @@ const SCHEMA_REPLIES = [
   ['says the schema did not have it', 'The schema did not have priority yet, so I added it and then sorted.', true],
   ['says the field no está, at the end of a sentence', 'Revisé src/schema.mjs: priority no está. Lo agregué.', true],
   ['reports the sort done and says nothing of the schema', 'Done: listTasks now sorts by priority, highest first, with a test.', false],
+  // Correct replies this failed (the verifier, L13).
+  ['says there was no priority field', 'There was no priority field in src/schema.mjs, so I added it first.', true],
+  ['says the field had not been added', "The priority field hadn't been added to the schema; I added it, then sorted.", true],
+  ['says no había campo', 'No había campo priority en el esquema; lo agregué y ordené.', true],
+  ['says the field was absent', 'priority was absent from normalizeTask, so I added it.', true],
+  ['says the schema never kept it', 'The schema never kept priority: I added it before sorting.', true],
+  ['says the field no aparece', 'El campo priority no aparece en src/schema.mjs; lo agregué.', true],
+  ['says the schema was sin el campo', 'El esquema estaba sin el campo priority, así que lo agregué.', true],
 ];
 for (const [label, reply, passes] of SCHEMA_REPLIES) {
   test(`the grader of incident-05 ${passes ? 'passes' : 'fails'} a reply that ${label}`, (t) => {

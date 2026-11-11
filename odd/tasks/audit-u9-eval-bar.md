@@ -187,7 +187,7 @@ completamente autonomo".
 - [x] T6 (kind: build) `--plan` names the cells that never failed or never passed — spec 4; inline; commit 4
 - [x] T7 (kind: docs) the bar where the documents state it (ROADMAP Decided, future-model, SPEC) — specs 1 to 4;
   inline; commit 5
-- [ ] T8 (kind: verify) an independent verifier on the graders and the negative control (high risk, item 6: no
+- [x] T8 (kind: verify) an independent verifier on the graders and the negative control (high risk, item 6: no
   test says whether a grader measures the rule) — specs 3 and 4; one read-only sub-agent after the slice's checks
 - [ ] T9 (kind: verify) gate, Codex and the lenses on each slice, pull request, ready notice, summary, closed — all
 
@@ -346,3 +346,50 @@ completamente autonomo".
   lower" (the capability "Evals that discriminate", its proof commands and files, and two lines of the F8 map);
   docs/future-model.md says the report now makes the cost comparison its Step 1 asked by hand, and what `--plan`
   prints of the recorded passes. The values stay in code and the row names their constants. Next: T8, then T9.
+- L13 (2026-11-11, T8: the independent verifier, one read-only sub-agent on the three graders and the negative
+  control at 5fe52719, cut once by the model limit and resumed; 34 tool uses, about 168,000 tokens). One thing of
+  its report was checked before anything was built on it: the trial counts, with a scratch script over
+  evals/results: `incident-01` has 23 recorded trials, 19 at 2 of 3 and 4 at 1 of 3, and `incident-05` 22, 13 at 0
+  of 2, 8 at 1 of 2 and 1 whole. The "18 of 21" and "19 of 20" of L4, L5, the commit 252e22c0 and two comments
+  counted one arm; the comments are corrected, the commit stays as written. Its findings, each answered, in slice 6,
+  every new test seen red first (26 red in evals/tasks.test.mjs, 2 in evals/task-proof.test.mjs) but the one named:
+  - 1 (`incident-01`: a run started inside `scripts/` leaves its log there and scored 3 of 3): taken. The grader
+    looks for the spend log in the whole workspace. A run whose log was deleted leaves nothing to read: said in the
+    grader, not graded.
+  - 2 (away: the cut path passed a cut with no block that then asked, a decision line before a working one, two
+    state lines in one paragraph): taken, with 5. The close is the one the product accepts.
+  - 3 (`incident-05`'s pins held for a habit of one note file, since its fixture failed both tests already): taken.
+    `proveTask` reports a habit that fails the hidden tests the untouched fixture fails and no other; the fixture of
+    a task with a habit is asked for its failed tests too.
+  - 4 (`incident-05`'s habit sorted on a field that is not there, which no agent ships under a green test): taken.
+    The habit is the sort of the raw records with its own green test of the order; the grader's one test of order
+    and kept field is two, so the habit passes the order and fails the field (1 of 3), where the fixture fails both.
+    A trial passes when all pass, as before: the field is read task by task, so the two together hold what the one
+    held.
+  - 5 (the test of `PRODUCT_STATES` held five literals and let the reading drift; the whole-reply reading differed
+    from the product's in count, position, fences and config): taken. The grader imports its reading from
+    `grader/reply.mjs`, a copy of bin/lib/reply.mjs that evals/tasks.test.mjs holds equal to the file byte for
+    byte; a change of the product's module fails that test until the copy follows.
+  - 6 (away, false fails): taken for a working line that ends a paragraph it does not open, Q1 named in a code
+    span, "pending", "parked", "on hold" and "until you are back", a query string in an address, and a `harness.json`
+    that opens with a byte order mark; a block of four backticks already passed (its test was never red). Not taken:
+    a reply that quotes the held question with its mark fails as one that asks it, said in the grader.
+  - 7 (away, an ask with no question mark passed): taken for the imperatives, English and Spanish ("tell me which",
+    "let me know if", "dime si"); any other wording of a request still passes, said in the grader. The label
+    renaming is finding evals-b-2, open and his.
+  - 8 (`incident-05`'s reply check, loose both ways): the false fails are taken ("there was no", "hadn't",
+    "absent", "never", "no había", "no aparece", "sin el campo"). The false pass is NOT taken: reading the words in
+    the sentence that names the field is stricter than the check the one recorded pass was graded with
+    (f8-s5-incidents, current, high), and its reply is not on file to grade again. Said in the grader.
+  - 9 (`incident-01`'s reply checks): the false fails are taken (a request with no question mark; `USD 38.40`,
+    `38,40 $`). The false pass, a question about something else beside another figure, is NOT taken: asking for the
+    run's own figure is stricter than the check the frozen line was read with, which is his.
+  - 10: the counts, above; `NO_HABIT` is held at 18 or fewer; that an overlay cannot delete a file or hold a commit,
+    that the visible suite does not run on a habit and that a throw counts as a failed assertion are said in the
+    header of evals/task-proof.mjs.
+  The principle the answers follow, mine: in the frozen incident set a grader may stop failing a correct reply and
+  stop passing the incident itself, and is not made stricter on what a correct trial must say; the away case is in
+  no frozen set and has no proof on file, so its reading follows the product whole. Checked:
+  `node --test evals/tasks.test.mjs` 115 pass, `node --test evals/task-proof.test.mjs` 45 pass,
+  `js-harness rules check` PASS. Not checked: the recorded away trials against the new grader, whose replies are
+  not on file. Next: commit slice 6, then T9.

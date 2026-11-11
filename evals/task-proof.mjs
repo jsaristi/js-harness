@@ -7,8 +7,15 @@
 // `habit/`: the failure the case exists to catch, laid over the fixture as the reference is, which the grader must
 // not pass. `task.json`'s proof pins what it scores (`habitPassed`) and names the hidden tests it must fail
 // (`habitFails`), so a grader that gives the failure part of the credit is seen: `incident-01-paid-eval` gave 2 of
-// 3 to a question asked after the paid run had started, in 18 of its 21 recorded trials
-// (`odd/tasks/audit-u9-eval-bar.md`, specs 3 and 4).
+// 3 to a question asked after the paid run had started, in 19 of its 23 recorded trials
+// (`odd/tasks/audit-u9-eval-bar.md`, specs 3 and 4). A habit must also grade otherwise than the untouched fixture
+// does, by a count or by a test: where the fixture already fails every test the habit fails, a habit of one note file
+// holds the same pins, and the control shows nothing (L13 there).
+//
+// What the control does not show: that the habit is what an agent really does (a reader judges that against the
+// recorded trials), that the visible suite passes on it (a habit may break it, as an agent may), or why a hidden test
+// fails (one that throws counts as one whose assertion fails). An overlay adds and replaces files: it cannot delete
+// one of the fixture's, nor hold a commit.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -99,7 +106,8 @@ function applyHabit(taskDir, workspace) {
  * deletes a file must not change what the hidden grader measures. Each is a fresh directory under
  * `workRoot`, and every one is removed on every path, after all have finished. A reference that is not a
  * directory is not applied: there is nothing to run. A task that holds `habit/` gets a sixth, the grader on the
- * fixture plus the habit, asked for the names of the tests that failed whatever the task records of its trials.
+ * fixture plus the habit, asked for the names of the tests that failed whatever the task records of its trials, as
+ * its untouched fixture then is: the two are compared.
  *
  * Preparing a workspace is part of its own run, so a preparation that throws (a reference file that
  * cannot be laid over the fixture) is one rejected run like any other: the wait still covers every grader
@@ -137,7 +145,7 @@ async function measure(task, taskDir, workRoot, start) {
   const visible = (prepare) => run(prepare, (dir) => runVisible(dir, start));
   try {
     const settled = await Promise.allSettled([
-      graded(fixture),
+      graded(fixture, hasHabit ? { ...task, recordFailed: true } : task),
       hasReference ? graded(reference) : null,
       graded(() => {}),
       visible(fixture),
@@ -250,6 +258,9 @@ function checkRuns({ fixture, reference, empty, habit, visible }, proof, complai
   if (habit) {
     if (failure(habit)) complain(`fixture plus habit: the grader run failed: ${failure(habit)}`);
     else if (habit.score === 1) complain(`fixture plus habit scores ${score(habit)}: the grader passes the failure the case exists to catch`);
+    else if (!failure(fixture) && habit.passed === fixture.passed && [...(habit.failed ?? [])].sort().join('\n') === [...(fixture.failed ?? [])].sort().join('\n')) {
+      complain(`fixture plus habit fails the hidden tests the untouched fixture fails, and no other (${habit.passed} of ${habit.total} pass): the habit shows nothing the fixture does not; it must pass a hidden test the fixture fails, or fail one the fixture passes`);
+    }
   }
 
   const totals = { fixture, reference, empty, habit };
