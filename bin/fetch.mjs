@@ -6,15 +6,30 @@
 // browser). Exit 1: not a public page, and nothing sent. Exit 2: a usage error. Zero dependencies: Node's fetch.
 import { BLOCK_STATUSES } from './lib/web-block.mjs';
 
+/** How many characters the pieces of one path segment that mix letters and digits may add up to before the segment
+ * reads as a key. Measured in odd/tasks/audit-u10-security-claims.md (the depth pass, item 4): at 20 it refuses the
+ * 22-character ids of private pages by link and no other of the 333 URLs this repository cites; at 16 it also
+ * refuses a Medium slug with one word such as `python3` beside its 12-character id; at 24 those ids pass. */
+const KEY_LIKE_LENGTH = 20;
+
 const USAGE = [
   'Usage: js-harness fetch <url>',
   '  Reads a public page through r.jina.ai, the rung after a WebFetch the site refused as AI traffic. It prints the',
   '    page and exits 0 when it read one. It exits 3 when this rung is blocked too (a challenge page, a CAPTCHA, an',
   '    empty page, an error of r.jina.ai, or no answer within 60 s), with the reason and the next rung on stderr: the',
   "    built-in browser's get_page_text.",
-  '  It sends no cookie and no key. The URL goes to a third party, so a host that is not public (no dot, loopback, a',
-  '    private address), a URL with a user or a password, or one whose query names a secret is refused with exit 1',
-  '    and nothing is sent. Exit 2: a usage error.',
+  '  It sends no cookie and no key of its own. The URL goes to a third party, so a host that is not public (no dot,',
+  '    loopback, a private address), a URL with a user or a password, one whose query names a secret, or one whose',
+  `    path holds a segment that reads as a key (its pieces that mix letters and digits add up to ${KEY_LIKE_LENGTH}`,
+  '    characters or more) is refused with exit 1 and nothing is sent. Exit 2: a usage error.',
+  '  Those checks read names and shapes, and know no secret. These go out with the URL: a key of letters alone or of',
+  `    digits alone; one shorter than ${KEY_LIKE_LENGTH} characters; one that other characters (a hyphen, an underscore, a dot, an`,
+  '    escape) cut into pieces too few of which mix letters and digits (about one random 22-character base64url key',
+  '    in four); one spread over several segments; one escaped twice; one in the query, unless its parameter is named',
+  "    like a secret; one in the host's name.",
+  '  And these public pages are refused as well: one whose path holds an id of that shape (a commit hash, a UUID), and',
+  `    a slug whose words that mix letters and digits (gpt4, llama3, a 12-character id) add up to ${KEY_LIKE_LENGTH} characters. Read`,
+  '    them in the built-in browser, which sends the URL to no third party.',
 ].join('\n');
 
 const READER = 'https://r.jina.ai/';
@@ -39,7 +54,35 @@ export function notPublic(text) {
     // `accessToken` is `access_token` in camelCase: a boundary of case counts as a separator.
     if (SECRET_NAME.test(name.replace(/([a-z0-9])([A-Z])/g, '$1_$2'))) return `its query carries a parameter named like a secret (${name})`;
   }
+  const place = keyLikeSegment(url.pathname);
+  // The segment is named by its place and never quoted: a reason is copied into reports.
+  if (place !== 0) return `its path carries a segment that reads as a key (segment ${place})`;
   return null;
+}
+
+/** The place, counted from 1, of the first segment of `pathname` that reads as a key, or 0 when none does. A segment
+ * is cut at every character that is no ASCII letter or digit; the pieces that hold both a letter and a digit are
+ * added up, and `KEY_LIKE_LENGTH` characters of them or more is a key: a random token in hex or base62, a UUID, a
+ * session id written beside its name, and most tokens in base64url. A word, a number and one short id
+ * (`a64152b37c35`, `256GB`) are no key, so a slug of plain words passes at any length.
+ *
+ * It reads a shape and knows no secret, so it errs both ways, and the help says each. Sent: a key of letters alone
+ * or of digits alone, one spread over several segments, one escaped twice, and a key whose other characters (the
+ * hyphens and underscores of base64url, the escapes of standard base64) leave too few pieces that mix the two (about
+ * one of 22 characters in four, one of 32 in twenty). Refused: a public id of the same shape (a commit hash), and a
+ * slug whose letter-and-digit words add up to the limit (`gpt4`, `llama3` and a 12-character id).
+ *
+ * Each escape of an ASCII character is decoded on its own, as the site will read it, and any other escape is a cut:
+ * a segment decoded whole would be judged as written the moment one escape in it is malformed, and a key written in
+ * escapes would pass behind it. */
+function keyLikeSegment(pathname) {
+  const segments = pathname.split('/').slice(1);
+  for (const [index, raw] of segments.entries()) {
+    const segment = raw.replace(/%([0-9A-Fa-f]{2})/g, (escape, hex) => (parseInt(hex, 16) < 0x80 ? String.fromCharCode(parseInt(hex, 16)) : ' '));
+    const mixed = segment.split(/[^A-Za-z0-9]+/).filter((piece) => /[A-Za-z]/.test(piece) && /[0-9]/.test(piece));
+    if (mixed.reduce((sum, piece) => sum + piece.length, 0) >= KEY_LIKE_LENGTH) return index + 1;
+  }
+  return 0;
 }
 
 function publicHost(host) {

@@ -2,10 +2,22 @@
 // plain Node. The runner (`runner.mjs`) knows nothing about Claude: a config is `{ name, command, args,
 // env, prepare }`, and everything specific to the CLI lives here.
 //
-// Both arms run in a sandbox so that a trial can neither read nor write the machine's real Claude Code
-// state (transcripts, memory, engram, gentle-ai), and so the arms differ only in the layers under test.
-// What the sandbox is made of, and why each part is needed, is in `odd/tasks/evals.md` ("T2 map and
-// decisions").
+// Both arms run in a sandbox, so that a trial's own tools find a throwaway home wherever they look for the
+// machine's real Claude Code state (transcripts, memory, engram, gentle-ai), and so the arms differ only in
+// the layers under test. What the sandbox is made of, and why each part is needed, is in `odd/tasks/evals.md`
+// ("T2 map and decisions").
+//
+// The sandbox is redirection, not confinement. It is an environment: an allowlist of what a trial inherits,
+// and the variables that name a home, a config or a scratch folder pointed into the trial's own home
+// (`sandboxEnv`). Nothing holds the agent's process itself. The runs pass `bypassPermissions` to the Claude arms
+// (the decision of 2026-10-02 in that document), the Codex arms always run with
+// `--dangerously-bypass-approvals-and-sandbox` (`codex-configs.mjs`), and a trial is a process of the machine's
+// user: a command that names an absolute path reads and writes whatever that user can, the real home, this
+// repository and its graders among it (the default work root is the repository's sibling, `defaultWorkRoot`).
+// The isolation probes (`isolation-probe.mjs`, `codex-isolation-probe.mjs`) prove the redirection on the real
+// binaries by what changed in the real trees after a trial; a read changes nothing there, so they see none.
+// A trial is a model run on prompts built to provoke mistakes: what keeps it out of the real state is where
+// its tools look by default, and nothing else. `configs.test.mjs` holds this limit as a test.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';

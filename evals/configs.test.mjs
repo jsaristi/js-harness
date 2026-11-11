@@ -160,6 +160,22 @@ for (const platform of PLATFORMS) {
   });
 }
 
+test('the sandbox redirects and does not confine: a child under its env reads and writes a file outside its home by an absolute path, and the header says so', () => {
+  const home = tmp('unconfined-home');
+  const outside = path.join(tmp('unconfined-outside'), 'state-of-the-machine.txt');
+  fs.writeFileSync(outside, 'before');
+  const script = "const fs = require('node:fs'); const file = process.argv[1]; process.stdout.write(fs.readFileSync(file, 'utf8')); fs.writeFileSync(file, 'after');";
+  const result = spawnSync(process.execPath, ['-e', script, outside], { env: childEnv(sandboxEnv({ home, engramPort: PORT })), encoding: 'utf8', windowsHide: true });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'before', 'the child read a file that is not in its home');
+  assert.equal(fs.readFileSync(outside, 'utf8'), 'after', 'and wrote it');
+  // The limit is a fact of the code above, so the header that describes the sandbox is held to it: the day a trial
+  // is confined, this test fails and both change together.
+  const header = fs.readFileSync(path.join(here, 'configs.mjs'), 'utf8').split('\nimport ')[0];
+  assert.match(header, /redirection, not confinement/);
+  assert.doesNotMatch(header, /can neither read nor write/);
+});
+
 test('sandboxEnv refuses a home that is not an absolute path, which a child would resolve against its own cwd', () => {
   for (const home of ['rel', path.join('rel', 'home'), '.', './home']) {
     assert.throws(() => sandboxEnv({ home }), /absolute/, home);
