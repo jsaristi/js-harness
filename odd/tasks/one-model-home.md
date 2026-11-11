@@ -382,6 +382,20 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 16:29, after the host compacted the session at 16:16: unit (c) is `1f28f4b9` (its first try was refused
+by the gate: the new function repeated a line a planted break of `lead-effort` must find once, so it names the same
+test `newLead`), and its texts are in the commit that carries this line: the guard's help, the manifest's line (the
+register refreshed, `rules coverage --strict` passes), `docs/SPEC.md`, the README, and two planted breaks, one in
+`session-model`'s bundle and one in `session-effort`'s, the 14 breaks of both rules seen red. The queue's notice of
+16:13 that pull request 833 conflicted did not hold: GitHub said MERGEABLE and CLEAN at 16:17 and `git merge-tree`
+of each of the five branches with main `18459737` was clean; the lead was told (16:17) and nothing changed on them.
+Unit (d) is designed and its tests are drafted, NOT applied: the job's `tmp/pairs-t5j.json` (`offHome(has, held)` in
+`bin/lib/model-home.mjs`; `rosterOf` takes `home` (`{ model, effort, lead }`) and a row gains `menu`, `held` and
+`off`; the opener line's mark `effort below high` leaves for `OFF THE HOME: its menu holds ..., the home ...`, `NO
+APP RECORD` and both levels where the menu and the last reply disagree; the reading session's row gets `to give
+him:` and `menuLine`). The code after seeing them red: those, and in `bin/sessions.mjs` the home read from the
+root's rules file with `claudeHeld`, handed to `rosterOf` and put in the board as `home`, with a command test.
+Then Codex and the lenses (risk, reliability) on `268991a7` to the head, then T6.
 2026-11-11 16:12, the session at 88 %: unit (b) is `a4f33b41`. Unit (c)'s code and tests are written and are in the
 commit that carries this line: `starterRefusal` in `bin/lib/guard.mjs` and the hook's `readApp` in `bin/guard.mjs`,
 as the paragraph below designed them; both tests seen red first (`bin/lib/guard.test.mjs` 49 pass,
