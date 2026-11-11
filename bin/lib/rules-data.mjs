@@ -559,7 +559,7 @@ export const RULES = [
     "since": "2026-10-08",
     "value": "gpt-6.1-sol",
     "patterns": [
-      "^(?!.*\\bruleValue\\().*\\b(?:codex|review)\\b.{0,60}\\bon `?(?=gpt-){amount}"
+      "^(?!.*\\bruleValue\\().*\\b(?:codex|review)\\b.{0,60}\\bon `?(?!claude-)(?=[a-z]+(?:-[a-z0-9.]+)*-\\d){amount}"
     ]
   },
   {

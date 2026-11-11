@@ -142,6 +142,18 @@ test('on the real list, a narrowed rule no longer finds the line it was narrowed
   }
 });
 
+// The rules of the Codex home name the vendor's model by the shape of its id, not by the prefix its ids had on
+// 2026-11-10: after a switch to an id that begins otherwise, each still finds its restated value
+// (odd/tasks/one-model-home.md, spec 10).
+const NEXT_CODEX = 'codex-7.2-max';
+const SWITCHED = RULES.map((rule) => (rule.id === 'review-model' ? { ...rule, value: NEXT_CODEX } : rule));
+const foundAfterSwitch = (id, line) => scanLines(SWITCHED, inForceLines('docs/ROADMAP.md', `${line}\n`)).filter((finding) => finding.id === id).length;
+
+test('on the real list, review-model finds a restated id that does not begin gpt-', () => {
+  assert.equal(foundAfterSwitch('review-model', `Codex reviews on ${NEXT_CODEX}.`), 1);
+  assert.equal(foundAfterSwitch('review-model', `The review runs on \`${NEXT_CODEX}\`.`), 1);
+});
+
 test('a pattern that is no regular expression is not scanned, so the scan never throws: readRules reports it', () => {
   const broken = { ...WAIT, patterns: ['(', 'wait.{0,40}{amount}'] };
   const files = [{ path: 'docs/ROADMAP.md', text: 'wait 60 minutes\n' }];
