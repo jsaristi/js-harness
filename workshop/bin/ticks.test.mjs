@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { ownerOf } from '../../bin/lib/hook-count.mjs';
+import { mainCheckoutByFiles } from '../../bin/lib/inbox.mjs';
 import { projectSlug } from '../../bin/lib/sessions.mjs';
 import { TICKS_STALE_HOURS, ticksMain } from './ticks.mjs';
 
@@ -230,12 +231,13 @@ function hookCommand() {
 }
 
 /** Run the hook's command as written, through the platform's shell, from `cwd` with `projectDir` as the host's
- * variable (`undefined` for none). It asks for the usage instead of the reading, which needs the network. */
-function runHookCommand(cwd, projectDir) {
+ * variable (`undefined` for none). It asks for the usage instead of the reading, which needs the network, unless
+ * `tail` gives what follows the dispatcher's command. */
+function runHookCommand(cwd, projectDir, tail = '--help') {
   const env = { ...process.env };
   delete env.CLAUDE_PROJECT_DIR;
   if (projectDir !== undefined) env.CLAUDE_PROJECT_DIR = projectDir;
-  const command = hookCommand().replace(/^node /, `"${process.execPath}" `).replace(/--hook$/, '--help');
+  const command = hookCommand().replace(/^node /, `"${process.execPath}" `).replace(/--hook$/, tail);
   const result = spawnSync(command, { cwd, env, shell: true, encoding: 'utf8', timeout: 30_000 });
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
@@ -250,10 +252,44 @@ test('the hook\'s command finds the dispatcher from a folder that is not the roo
     [deep, undefined, 'a subfolder, no variable: the nearest folder above that holds the dispatcher'],
     [deep, '', 'a subfolder, the variable empty, as one shell leaves it'],
     [os.tmpdir(), ROOT, 'a folder outside the repository, the variable set'],
+    [ROOT, os.tmpdir(), 'the root, the variable naming a folder that holds none: the folder it runs in is searched next'],
   ]) {
     const result = runHookCommand(cwd, projectDir);
     assert.deepEqual({ status: result.status, stderr: result.stderr }, { status: 0, stderr: '' }, why);
     assert.match(result.stdout, /^Usage: node workshop\/js-harness-workshop\.mjs ticks/, why);
+  }
+});
+
+// The command as the settings hold it, in hook mode, from a folder that is not the root: it reads this repository's
+// records, not the folder's. The home holds one fresh reading of the Windows run filed under this repository, so
+// that row is missing from the message while the two with nothing kept are said.
+test('the hook itself, run from a subfolder, reads the records of this repository', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ticks-hook-home-'));
+  try {
+    const project = mainCheckoutByFiles(ROOT);
+    const asked = path.join(home, '.js-harness', 'channel', 'windows-daily', projectSlug(project), 'asked');
+    fs.mkdirSync(path.dirname(asked), { recursive: true });
+    fs.writeFileSync(asked, `${new Date().toISOString()}\n`);
+    const result = runHookCommand(path.join(ROOT, 'workshop', 'bin'), undefined, `--hook --home "${home}"`);
+    assert.deepEqual({ status: result.status, stderr: result.stderr }, { status: 0, stderr: '' });
+    const message = messageOf(result.stdout.trim().split('\n'));
+    assert.match(message, /^js-harness workshop: the heartbeat's ticks have not run for \d+ hours: throughput: no snapshot is kept .*; host-watch: never read/);
+    assert.doesNotMatch(message, /windows-daily:/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a dispatcher that is found and does not load is said to the session, never on stderr, and it exits 0', () => {
+  const broken = fs.mkdtempSync(path.join(os.tmpdir(), 'ticks-hook-broken-'));
+  try {
+    fs.mkdirSync(path.join(broken, 'workshop'));
+    fs.writeFileSync(path.join(broken, 'workshop', 'js-harness-workshop.mjs'), 'throw new Error("broken on purpose");\n');
+    const result = runHookCommand(broken, undefined);
+    assert.deepEqual({ status: result.status, stderr: result.stderr }, { status: 0, stderr: '' });
+    assert.match(messageOf(result.stdout.trim().split('\n')), /^js-harness workshop: ticks --hook could not load .*js-harness-workshop\.mjs: broken on purpose$/);
+  } finally {
+    fs.rmSync(broken, { recursive: true, force: true });
   }
 });
 

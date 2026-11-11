@@ -196,11 +196,26 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
   2,196 ms; without it, 2 runs, 2,211 ms at most; PowerShell without it, 3 runs, median 4,788 ms, max 6,883 ms, of
   which PowerShell's own start is most; cmd, 2 runs, 1,965 ms at most. Each time includes the shell's start, which
   L9's runs through a child `node` did not; all are under the 15 s of the timeout.
+- L12 (2026-11-11): reviews of the fix, `7a343c87`. Codex's recheck (35,092 input tokens): "the patch is correct"
+  (0.94), its P2 fixed, 0 not fixed. The reliability lens (7,242 input tokens): 3 warnings, all taken, test first.
+  One: a dispatcher found that does not load ended the hook in silence; it is now said to the session as one
+  `systemMessage` line, still exit 0 and nothing on stderr. Two: the variable naming a folder that holds no
+  dispatcher hid the one in the folder the hook runs in; the search now goes from the variable's folder upwards, then
+  from the folder it runs in upwards. Three: no test ran the command in hook mode; one now runs it as the settings
+  hold it from `workshop/bin` against a home with one fresh reading filed under this repository, and that row is
+  missing from the message while the other two are said. Two of the three new tests failed first (14 passed, 2
+  failed; the hook-mode one passed, being coverage that was missing), then with hook-count's, the conventions' and
+  the dispatcher's 66 of 66. Run by hand again from `workshop/bin` against the real home, other sessions on the
+  machine, each exit 0 and stderr 0 bytes: Git Bash without the variable, 5 runs, median 1,836 ms, max 2,262 ms; cmd
+  without it, 3 runs, median 3,509 ms, max 3,622 ms; PowerShell with it, 3 runs, median 7,514 ms, max 7,737 ms, of
+  which an empty PowerShell took a median of 4,387 ms to start in the same minute (Git Bash, 98 ms). All under the
+  15 s of the timeout; PowerShell is the host's shell only where Git Bash is not installed.
 
 ## Next step
-For a resume (2026-11-11): the fix of L11 is committed after `c6c6cbaa`. Left, in order: the recheck,
-`js-harness codex-review --base 7c962911 --doc odd/tasks/audit-u3-heartbeat-ticks.md --at <head>`, and the
-reliability lens on the fix, one at a time; `js-harness check --push`; push,
+For a resume (2026-11-11): the fix of L11 (`7a343c87`) and the lens's three findings of L12 (the commit after it)
+are committed. Left, in order: Codex over the last commit, `js-harness codex-review --base 7a343c87 --doc
+odd/tasks/audit-u3-heartbeat-ticks.md --at <head>`, and the reliability lens over it, one at a time;
+`js-harness check --push`; push,
 the pull request for T2 as a draft the lead marks ready (never mark it ready here), `js-harness notify --to
 orchestrator --kind ready --pr <n>`, the summary in `docs/sessions/` (`js-harness summary template`), committed and
 pushed, then `notify --kind closed --summary <file>`. The snapshot of the day is the lead's: the heartbeat must run
