@@ -40,9 +40,11 @@ const TIMEOUT_MS = 60_000;
 const CHALLENGE_TITLE = /^Title: (Just a moment\.\.\.|Attention Required! \| Cloudflare|Access to this page has been denied|Access Denied)\s*$/m;
 // The `s` flag: a decoded name can hold a line break, and without it one before the separator hid the name.
 const SECRET_NAME = /^(?:.*[-_])?(?:token|key|apikey|secret|password|passwd|pwd|sig|signature|auth|session|sessionid|credential|credentials)$/is;
-/** A parameter's name that a reason may repeat: a short plain word. Any other is named by its place alone, since a
- * decoded name can hold line breaks, control characters and free text, and a reason is copied into reports. */
+/** A parameter's name that a reason may repeat: a short plain word that does not itself read as a key. Any other is
+ * named by its place alone, since a decoded name can hold line breaks, control characters and free text, or be the
+ * key, and a reason is copied into reports. */
 const PLAIN_NAME = /^[A-Za-z0-9_.[\]-]{1,40}$/;
+const repeatable = (name) => PLAIN_NAME.test(name) && !readsAsKey(name);
 const PRIVATE_SUFFIX = /\.(?:localhost|local|internal|test|lan|home\.arpa)$/i;
 
 /** Why `text` is not a public page to hand a third party, or `null` when it is one. */
@@ -60,7 +62,7 @@ export function notPublic(text) {
   for (const [index, [name]] of parameters.entries()) {
     // `accessToken` is `access_token` in camelCase: a boundary of case counts as a separator.
     if (SECRET_NAME.test(name.replace(/([a-z0-9])([A-Z])/g, '$1_$2'))) {
-      return `its query carries a parameter named like a secret (${PLAIN_NAME.test(name) ? name : `parameter ${index + 1}`})`;
+      return `its query carries a parameter named like a secret (${repeatable(name) ? name : `parameter ${index + 1}`})`;
     }
   }
   const place = keyLikeSegment(url.pathname);
@@ -71,7 +73,7 @@ export function notPublic(text) {
   // plain word, since the page without a click id is the same page; a name that is the key, never.
   for (const [index, [name, value]] of parameters.entries()) {
     if (readsAsKey(name)) return `its query carries a name that reads as a key (parameter ${index + 1})`;
-    if (readsAsKey(value)) return `its query carries a value that reads as a key (parameter ${index + 1}${PLAIN_NAME.test(name) ? `, ${name}` : ''})`;
+    if (readsAsKey(value)) return `its query carries a value that reads as a key (parameter ${index + 1}${repeatable(name) ? `, ${name}` : ''})`;
   }
   return null;
 }

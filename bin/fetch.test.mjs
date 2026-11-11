@@ -298,6 +298,8 @@ test('a URL whose query holds a value or a name that reads as a key is refused w
     // A name like a secret is told the same way, and a line break in it hides it no more.
     ['https://example.com/open?a%1B_token=1', 'its query carries a parameter named like a secret (parameter 1)'],
     ['https://example.com/open?page=2&a%0A_token=1', 'its query carries a parameter named like a secret (parameter 2)'],
+    // A name that is itself the key and ends like a secret is caught by its ending, and is not repeated either.
+    [`https://example.com/open?${HEX_KEY.slice(0, 24)}_token=1`, 'its query carries a parameter named like a secret (parameter 1)'],
   ];
   for (const [url, why] of cases) {
     const fake = fakeFetch(200, PAGE);

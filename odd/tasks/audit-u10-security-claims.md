@@ -238,7 +238,12 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
   it from the check of names like a secret (the pattern's `.` stopped at it), and that reason repeated the name the
   same way. The pattern reads through line breaks now, and that reason names an unplain name by its place; a plain
   name reads as before, so the tests of that check did not change. Two cases hold it.
+- L16 The second round, 724e8cbd..40d24d01. Codex: "the patch is correct (confidence 0.92)", no finding, 77,337
+  input tokens, 108 s. The lenses: of the four earlier findings "fixed" four; one new suggestion, risk, taken: the
+  reason of a name like a secret still repeated a plain name that is itself key-shaped (a key written before
+  `_token`), against the comment beside it. `repeatable` now holds both conditions, a plain word that does not read
+  as a key, for both reasons; one case, red before the change.
 - State (for a session that resumes): unit 10 is in pull request 817, ready. On `feat/fetch-query-values`: T5 is
-  committed (724e8cbd) and its first review round answered; next the confirming review of the fixes from 724e8cbd,
-  the push, the pull request on base `worktree-fetch-path-limit`, the ready notice, then the summary with the
-  closed notice.
+  committed (724e8cbd), two review rounds answered (40d24d01 and the commit of L16); next the third and last
+  review, from 40d24d01, the push, the pull request on base `worktree-fetch-path-limit`, the ready notice, then the
+  summary with the closed notice.
