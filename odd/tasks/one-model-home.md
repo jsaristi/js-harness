@@ -382,6 +382,41 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 17:06, after a compaction by the host at 17:05: the commit the paragraph below names did not land at
+its first try. The gate on GitHub's machines refused it (run 43107839923, the `docs` row): `<*>.jsonl
+(bin/lib/home-sessions-read.mjs) is a record the source writes and no row of the table holds`. The module reads a
+session's transcript, as five others do, so it joined the `files` of the `<*>.jsonl` entry of `NOT_RECORDS` in
+`workshop/lib/docs-records.mjs` (its test, 18 pass), and the commit was made again with that. Still owed from here:
+the `doctor` row, the reviews on `e878d8be` to the head, the push and pull request 3.
+2026-11-11 16:58, after the line below: T6's first part is in the commit that carries this line, the removed jobs
+counted in one line and its tests changed for it (`bin/lib/home-sessions.test.mjs` 5 pass, `bin/rules.test.mjs` 39,
+the conventions and `rules coverage --strict` pass). What the two paragraphs below say is still owed begins at the
+`doctor` row.
+2026-11-11 16:58, at 88 %: of the paragraph below, the change "a removed job is counted, not a row" is applied in
+`bin/lib/home-sessions.mjs` (`removedOff` in the result, one line for it, no `removed` field in a row), NOT yet in
+its tests: `bin/lib/home-sessions.test.mjs` still expects rows for removed jobs (ids `6`, `j2`) and the `removed`
+field, so it is red until changed; the function's comment still names `removed` and `none` and is to be reworded.
+Nothing of T6 is committed. The wait `js-harness wait --notice-to 172` runs in the background.
+2026-11-11 16:56, the session at 86 % of its context. Unit (d) is `e878d8be`. Reviews of `268991a7..e878d8be`:
+Codex correct with no finding (two parts); the risk lens 0 findings; the reliability lens 2 findings, both taken
+(run `acd07b49`, answer recorded) and fixed in `7a63f4f0` (a test that could not fail now counts the read; the
+hook's own reader of the app's records has a test). The recheck of that fix is NOT run yet: it rides in the next
+slice's reviews, whose base is `e878d8be`. Main was not merged: `git diff --name-only 268991a7 origin/main` is empty,
+so the branch holds main's tree plus its own work. T6 first part (spec 6) is written and NOT committed, in the
+tree: `bin/lib/home-sessions.mjs` (`sessionsOffHome`, `offHomeLines`, `homeInForce`),
+`bin/lib/home-sessions-read.mjs` (`readHomeSessions`), their two tests, `heldValues` in `bin/lib/model-home.mjs`
+(`bin/sessions.mjs` reads it), the block in `appliedForm` of `bin/rules.mjs` with `readApp` and `agents` as parts,
+a command test in `bin/rules.test.mjs`, the README and the help. All pass (`bin/rules.test.mjs` 39, the three
+library files 5, 4 and 11). Two decisions of mine in it, to say in the pull request: an archived desktop session is
+counted by what it holds, not listed (this machine holds 123 off the home), and a removed background job is read
+only when started in the last 7 days. One thing to change BEFORE the commit, seen on the real run: 30 removed jobs
+were listed one a line, which buries the 4 sessions that run; in `sessionsOffHome` a removed job off the home is to
+be counted (`removedOff`, one line: "N background jobs the harness removed in the window ran off it"), not a row,
+with its test and the command test changed. Then: conventions and `rules coverage --strict`, commit; then the
+`doctor` row, drafted and NOT applied: the job's `tmp/t6/home-doctor.mjs` and its test (copy to `bin/lib/`) and
+`tmp/pairs-t6d.json` (`node tmp/swap.mjs`: the row `model-home` in `bin/doctor.mjs` and its test); then the README
+and SPEC for that row, commit, Codex and the lenses (risk, reliability) on `e878d8be` to the head, push, pull
+request 3 on main, ready notice; then T7.
 2026-11-11 16:39: pull request 2 is in main (`58c8d324`, pull requests 831 to 835 merged in order; the lead's
 message of 16:36, checked against `origin/main`). The texts of unit (c) are `2df39fb6`. Unit (d) is in the commit
 that carries this line, its tests seen red first: `offHome` in `bin/lib/model-home.mjs`; a new module,

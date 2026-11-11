@@ -20,7 +20,7 @@ export const NOT_RECORDS = [
   { name: '.claude.json', why: "Claude Code's account file, read" },
   { name: '.pnpm-global-bin.lock', why: "pnpm's own lock, deleted when a crash left it stale" },
   { name: '*.jsonl', why: 'a pattern of names a backup looks for, not a name' },
-  { name: '<*>.jsonl', files: ['bin/lib/merge-queue-refresh-now.mjs', 'bin/lib/rules-change-run.mjs', 'bin/lib/sessions.mjs', 'bin/loop.mjs', 'bin/resume.mjs', 'bin/sessions.mjs'], why: "Claude's session transcripts, read" },
+  { name: '<*>.jsonl', files: ['bin/lib/home-sessions-read.mjs', 'bin/lib/merge-queue-refresh-now.mjs', 'bin/lib/rules-change-run.mjs', 'bin/lib/sessions.mjs', 'bin/loop.mjs', 'bin/resume.mjs', 'bin/sessions.mjs'], why: "Claude's session transcripts, read" },
   { name: 'agent-<*>.jsonl', why: "Claude's subagent transcripts, read" },
   { name: 'AGENTS.override.md', why: "Codex's instructions, read to measure the payload" },
   { name: 'installed_plugins.json', why: "Claude's plugin registry, read" },

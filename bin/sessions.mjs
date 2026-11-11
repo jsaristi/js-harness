@@ -59,7 +59,7 @@ import { appendReading, findOpenings, newReading, readNotices, recordPath, recor
 import { dayStartOf, keptByGitLog, keptByRelief, keptEither, localDay, measuresLines, measuresTotal, reliefLines, reliefMeasures, reliefsTotal, reopenCandidates, reopenLines } from './lib/measures.mjs';
 import { configuredWindow, toldBetween } from './lib/pause.mjs';
 import { ruleValue } from './lib/rules.mjs';
-import { claudeHeld } from './lib/model-home.mjs';
+import { heldValues } from './lib/model-home.mjs';
 import { readStalled } from './lib/stall.mjs';
 
 // How long a work session that holds handed work may go with no commit, notice or gate: the declared rule.
@@ -568,8 +568,7 @@ export async function sessionsMain(
     } catch {
       text = null;
     }
-    const held = claudeHeld(text);
-    return { model: held.model?.value ?? null, effort: held.effort?.value ?? null, lead: held.lead?.value ?? null };
+    return heldValues(text);
   };
 
   /** The board's stalled sessions at `at` (ms): `{ limitMinutes, items, unavailable }`, read as the heartbeat reads them. */

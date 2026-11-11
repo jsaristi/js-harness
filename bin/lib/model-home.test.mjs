@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { RULES } from './rules-data.mjs';
 import { writeRules } from './rules.mjs';
-import { CLAUDE_HOME, CODEX_HOME, EFFORTS, MENU_LEVELS, claudeHeld, claudeHome, codexHome, displayName, menuLine, offHome, sameClaudeModel } from './model-home.mjs';
+import { CLAUDE_HOME, CODEX_HOME, EFFORTS, MENU_LEVELS, claudeHeld, claudeHome, codexHome, displayName, heldValues, menuLine, offHome, sameClaudeModel } from './model-home.mjs';
 
 // odd/tasks/one-model-home.md, specs 2 and 7: the one module that knows which rules are the two homes.
 const valueOf = (id, list = RULES) => list.find((rule) => rule.id === id).value;
@@ -41,6 +41,12 @@ test('a guard holds the home where the project declares the rules, and nothing w
   // A project that declares the sessions' level and none for its lead: the guard holds what is declared.
   const without = claudeHeld(writeRules(RULES.filter((rule) => rule.id !== 'lead-effort')));
   assert.deepEqual(without, { model: held('session-model'), effort: held('session-effort'), lead: null });
+});
+
+test('heldValues gives the home a project holds as plain values, null where it declares none', () => {
+  const home = claudeHome();
+  assert.deepEqual(heldValues(writeRules(RULES)), { model: home.model, effort: home.effort, lead: home.lead });
+  assert.deepEqual(heldValues(null), { model: null, effort: null, lead: null });
 });
 
 test('the levels are the five a host takes, lowest first', () => {

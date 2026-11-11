@@ -42,6 +42,13 @@ export function claudeHeld(projectData) {
   };
 }
 
+/** `claudeHeld` as plain values, `{ model, effort, lead }`: what each rule holds in the project, or null where the
+ * project does not declare it. */
+export function heldValues(projectData) {
+  const held = claudeHeld(projectData);
+  return { model: held.model?.value ?? null, effort: held.effort?.value ?? null, lead: held.lead?.value ?? null };
+}
+
 /** A model as a person reads it: `claude-fable-5-2` is "Fable 5.2", from its family and its version. An id of
  * another shape is given as it is, because a name made up for it would be a guess. */
 export function displayName(id) {
