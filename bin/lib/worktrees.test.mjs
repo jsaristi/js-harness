@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { worktreesInMain } from './worktrees.mjs';
+import { HOST_FILES, worktreeKept, worktreesInMain } from './worktrees.mjs';
 
 // `doctor` counts with these git calls: one that hangs in one worktree must not hold the report (T11).
 test('worktreesInMain bounds every git call it makes with a timeout', () => {
@@ -54,6 +54,46 @@ test('worktreesInMain leaves out a worktree whose git call timed out, still coun
     assert.deepEqual(worktreesInMain({ cwd: '/main', run }), [{ path: one, branch: 'feat/one' }]);
     assert.deepEqual(locks.filter((call) => call.startsWith('status=')), ['status=0', 'status=0']);
     assert.deepEqual(locks.filter((call) => !call.endsWith('=0')), []);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// odd/tasks/sessions-close-themselves.md: the rule for one worktree, with why it is kept. claude writes its settings
+// copy into every worktree it makes; only a caller that names it has it left out, and nothing else ignored is.
+test('worktreeKept says why a worktree stays, and leaves out only the host files it is given', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'worktrees-'));
+  fs.writeFileSync(path.join(home, 'index'), '');
+  const old = new Date(Date.now() - 60 * 60_000);
+  fs.utimesSync(path.join(home, 'index'), old, old);
+  const tree = { path: home, head: 'abc', branch: 'feat/one', locked: false, prunable: false };
+  const git = ({ status = '', inBase = true } = {}) => (dir, ...args) => {
+    if (args[0] === 'merge-base') return { ok: inBase, out: '' };
+    if (args[0] === 'rev-parse') return { ok: true, out: 'index\n' };
+    if (args[0] === 'status') return { ok: true, out: status };
+    return { ok: false, out: '' };
+  };
+  const kept = (given, options = {}) => worktreeKept({ ...tree, ...given.tree }, { cwd: '/main', base: 'abc', baseName: 'origin/main', gitIn: git(given), ...options });
+  try {
+    assert.equal(kept({}), null);
+    assert.equal(kept({ tree: { branch: null } }), 'it is on no branch');
+    assert.equal(kept({ tree: { locked: true } }), 'it is locked');
+    assert.equal(kept({ inBase: false }), 'its head is not in origin/main');
+    const settings = '!! .claude/settings.local.json\n';
+    assert.equal(kept({ status: settings }), 'it holds what no branch brings back: !! .claude/settings.local.json');
+    assert.equal(kept({ status: settings }, { hostFiles: HOST_FILES }), null);
+    assert.equal(kept({ status: `${settings}!! evals/runs/\n?? a\n?? b\n?? c\n` }, { hostFiles: HOST_FILES }), 'it holds what no branch brings back: !! evals/runs/, ?? a, ?? b and 1 more');
+    // A folder git reports whole is left out only while the host's file is all it holds.
+    assert.equal(kept({ status: '!! .claude/\n' }, { hostFiles: HOST_FILES }), 'it holds what no branch brings back: !! .claude/');
+    fs.mkdirSync(path.join(home, '.claude'));
+    fs.writeFileSync(path.join(home, '.claude', 'settings.local.json'), '{}');
+    assert.equal(kept({ status: '!! .claude/\n' }, { hostFiles: HOST_FILES }), null);
+    assert.equal(kept({ status: '!! .claude/\n' }), 'it holds what no branch brings back: !! .claude/');
+    fs.mkdirSync(path.join(home, '.claude', 'notes'));
+    fs.writeFileSync(path.join(home, '.claude', 'notes', 'mine.md'), 'x');
+    assert.equal(kept({ status: '!! .claude/\n' }, { hostFiles: HOST_FILES }), 'it holds what no branch brings back: !! .claude/');
+    fs.utimesSync(path.join(home, 'index'), new Date(), new Date());
+    assert.match(kept({}), /^its index changed 0 minutes ago, under the 10 a removal waits for$/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

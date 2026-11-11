@@ -733,6 +733,96 @@ test('sessions start --resume holds to the effort rule, needs a writable record,
   assert.notEqual(first.sessionId, null);
 }, { rules: true }));
 
+/** The folder the fake made for the worktree `name` turned into a real one whose branch main and origin/main hold, at
+ * rest for an hour, with claude's settings copy in it; the session of the fake that works there has ended. */
+function landWorktree(world, name) {
+  const git = (cwd, ...args) => {
+    const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf8' });
+    assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
+    return result.stdout.trim();
+  };
+  const place = path.join(world.project, '.claude', 'worktrees', name);
+  fs.rmSync(place, { recursive: true, force: true });
+  git(world.project, 'worktree', 'add', '-q', '-b', `feat/${name}`, place);
+  fs.mkdirSync(path.join(place, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(place, '.gitignore'), '.claude/settings.local.json\n');
+  fs.writeFileSync(path.join(place, '.claude', 'settings.json'), '{}\n');
+  fs.writeFileSync(path.join(place, `${name}.txt`), 'work\n');
+  git(place, 'add', '.');
+  git(place, 'commit', '-q', '-m', `work of ${name}`);
+  fs.writeFileSync(path.join(place, '.claude', 'settings.local.json'), '{}\n');
+  git(world.project, 'merge', '-q', '--ff-only', `feat/${name}`);
+  git(world.project, 'update-ref', 'refs/remotes/origin/main', 'main');
+  git(world.project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main');
+  const old = new Date(Date.now() - 60 * 60_000);
+  fs.utimesSync(path.resolve(place, git(place, 'rev-parse', '--git-path', 'index')), old, old);
+  const state = readState(world);
+  for (const agent of state.agents.filter((item) => item.worktree && path.basename(item.worktree) === name)) {
+    [agent.status, agent.state] = ['idle', 'done'];
+    // No pid: the wait for a process is held with a made-up one in bin/lib/background-close.test.mjs.
+    delete agent.pid;
+  }
+  writeState(world, state);
+  return place;
+}
+
+/** The session `id` of the record says `kind` in the channel now, after the `opened` row its start wrote. */
+function said(world, id, kind) {
+  const entry = recordLines(world).find((line) => line.id === id);
+  appendNotice(world.home, projectSlug(entry.root), newNotice({ at: new Date().toISOString(), from: { host: 'claude-code', id: entry.sessionId, title: entry.title }, to: 'orchestrator', kind, text: `${kind}: made up`, cwd: world.project }));
+}
+
+// On 2026-11-10 the owner found dozens of finished background sessions still listed by the Claude app: nothing ran
+// sessions stop, and it refuses a worktree that holds files (odd/tasks/sessions-close-themselves.md).
+test('sessions stop --finished closes the finished sessions that lose nothing, and names the ones it keeps with why', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Landed', '--brief', world.brief, '--worktree', 'landed']).code, 0);
+  patchState(world, { nextId: 'c779ed44' });
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Dirty', '--brief', world.brief, '--worktree', 'dirty']).code, 0);
+  patchState(world, { nextId: 'a1b2c3d4' });
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Waiting', '--brief', world.brief, '--worktree', 'waiting']).code, 0);
+  const [landed, dirty, waiting] = ['landed', 'dirty', 'waiting'].map((name) => landWorktree(world, name));
+  fs.writeFileSync(path.join(dirty, 'notes.md'), 'uncommitted\n');
+  said(world, '0db8bc5e', 'closed');
+  said(world, 'c779ed44', 'closed');
+  said(world, 'a1b2c3d4', 'waiting');
+  const acted = actions(world).length;
+  const result = js(world, ['sessions', 'stop', '--finished']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.ok(result.stdout.includes(`closed 0db8bc5e · Landed: git removed its worktree ${landed}, which held nothing to lose, and claude removed its job; its transcript stays`), result.stdout);
+  assert.match(result.stdout, /kept c779ed44 · Dirty: its worktree .*dirty stays: it holds what no branch brings back: \?\? notes\.md\n {2}once nothing there is needed, js-harness sessions stop c779ed44 --remove-worktree removes it with its worktree/);
+  assert.match(result.stdout, /^1 closed, 1 kept\.$/m);
+  assert.doesNotMatch(result.stdout, /a1b2c3d4/);
+  // The stop that ends the job's process before git removes its worktree, then the stop and the rm of the removal.
+  assert.deepEqual(actions(world).slice(acted), [['stop', '0db8bc5e'], ['stop', '0db8bc5e'], ['rm', '0db8bc5e']]);
+  assert.deepEqual([fs.existsSync(landed), fs.readFileSync(path.join(dirty, 'notes.md'), 'utf8'), fs.existsSync(waiting)], [false, 'uncommitted\n', true]);
+  assert.deepEqual(recordLines(world).filter((line) => line.event === 'removed').map((line) => line.id), ['0db8bc5e']);
+  // A second run has nothing to close and says what is still kept.
+  const again = js(world, ['sessions', 'stop', '--finished', '--home', world.home]);
+  assert.equal(again.code, 0, again.stderr);
+  assert.match(again.stdout, /^0 closed, 1 kept\.$/m);
+}));
+
+test('sessions stop --finished takes no id and no --remove-worktree, and closes nothing when it cannot look', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Landed', '--brief', world.brief, '--worktree', 'landed']).code, 0);
+  const landed = landWorktree(world, 'landed');
+  said(world, '0db8bc5e', 'closed');
+  const acted = actions(world).length;
+  for (const args of [['0db8bc5e', '--finished'], ['--finished', '--remove-worktree'], ['--finished', '--finished']]) assert.equal(js(world, ['sessions', 'stop', ...args]).code, 2, args.join(' '));
+  // Whether a session is at work is claude's to say: a listing that fails closes nothing.
+  patchState(world, { agentsFail: 'agents: made up' });
+  const blind = js(world, ['sessions', 'stop', '--finished']);
+  assert.equal(blind.code, 1);
+  assert.match(blind.stderr, /whether a session is at work cannot be told \(.*made up.*\), so nothing was closed/s);
+  patchState(world, { agentsFail: undefined });
+  // With no finished session there is nothing to say but that.
+  fs.rmSync(channelFile(world));
+  const none = js(world, ['sessions', 'stop', '--finished']);
+  assert.equal(none.code, 0, none.stderr);
+  assert.match(none.stdout, /no finished background session of this project is on the machine/);
+  assert.equal(actions(world).length, acted);
+  assert.equal(fs.existsSync(landed), true);
+}));
+
 test('uninstall machine removes the recorded sessions that rest, keeps a working one and fails until it is stopped', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Busy', '--brief', world.brief]).code, 0);
   patchState(world, { nextId: 'c779ed44' });

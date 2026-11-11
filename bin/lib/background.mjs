@@ -258,6 +258,36 @@ export function resumedChain(started, entry) {
   return chain;
 }
 
+/** The kinds of notice that say where a session's work stands: the newest one tells whether it is finished. */
+const STATE_KINDS = new Set(['opened', 'waiting', 'question', 'ready', 'closed']);
+
+/** Whether the channel notice `notice` came from the recorded job `job`: its sender is the job's id or session id, or
+ * the start of that session id, as `recordedNamed` reads an id. */
+const sentBy = (notice, job) => {
+  const sender = notice?.from?.id;
+  if (typeof sender !== 'string' || sender === '') return false;
+  return sender === job.id || (sender.length >= 8 && String(job.sessionId ?? '').startsWith(sender)) || (job.id.length >= 8 && sender.startsWith(job.id));
+};
+
+/** The recorded sessions of the project at `root` that are finished and still on the machine
+ * (odd/tasks/sessions-close-themselves.md): those whose newest notice of `STATE_KINDS`, among the channel's `notices`
+ * and from any job of theirs, is `closed`. Each `{ entry, chain, closedAt }`: `entry` the last job, `chain` it and the
+ * jobs it resumed, which go together. A session that said nothing is not finished: it may be waiting on the user. */
+export function finishedOf(record, notices, root) {
+  const found = [];
+  for (const entry of record.sessions ?? []) {
+    if (entry.root !== root || record.resumedAs?.has(entry.id)) continue;
+    const chain = [entry, ...resumedChain(record.started ?? [], entry)];
+    let last = null;
+    for (const notice of notices) {
+      if (!STATE_KINDS.has(notice?.kind) || typeof notice.at !== 'string' || !chain.some((job) => sentBy(notice, job))) continue;
+      if (last === null || notice.at >= last.at) last = notice;
+    }
+    if (last?.kind === 'closed') found.push({ entry, chain, closedAt: last.at });
+  }
+  return found;
+}
+
 /** Why `id`, a session `resumedAs` (readRecord's) names, is not acted on alone: the job that resumed it, the last one. */
 export function resumedNote(resumedAs, id, act) {
   let last = resumedAs.get(id);
@@ -335,7 +365,7 @@ const LOCK_PID = /lock on the worktree names a process that is still running \(p
 const FILES_BUSY = /\bEBUSY\b/;
 
 /** Whether a process with this pid exists: one this process may not signal does. */
-function exists(pid) {
+export function exists(pid) {
   try {
     process.kill(pid, 0);
     return true;
@@ -344,7 +374,7 @@ function exists(pid) {
   }
 }
 
-const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+export const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
 /** claude rm of the job `id` after its stop: tried again once the process claude's lock names has ended (looked for
  * with `alive` up to LOCK_WAIT_MS), and up to RM_TRIES times while claude says files are busy. Kills nothing: a pid in

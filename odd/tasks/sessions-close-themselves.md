@@ -44,8 +44,10 @@ what was left: 359 lands landed pull requests and none removed a worktree under 
 - One ignored file does not count against a session's worktree, `.claude/settings.local.json` — because claude writes
   it into every worktree it makes (27 of 27 measured), a copy of the checkout's local settings; with it counted the
   rule closes 0 of today's 29 sessions (Depth pass, item 4). It holds only the permissions of a session that ended.
-- `claude stop` and `claude rm` run for a session only after its worktree is gone or holds nothing — because claude rm
-  deleted the files of a worktree while it said it had refused (2026-11-04); `worktreeHolding` stays the guard.
+- `claude rm` runs for a session only after its worktree is gone or holds nothing — because claude rm deleted the files
+  of a worktree while it said it had refused (2026-11-04); `worktreeHolding` stays the guard. `claude stop`, which
+  ends the job's process and deletes nothing, runs before the removal, and only once the worktree passed the rule
+  above — because a finished job idles in its worktree and Windows deletes no folder a process stands in (L7).
 - A session is finished only by its own word: the newest of its `opened`, `waiting`, `question`, `ready` and `closed`
   notices is `closed`, and no job of it is at work — because "could not look" is never "none", and a session that
   rests may be waiting on the owner.
@@ -133,9 +135,9 @@ the lead with `js-harness notify --to orchestrator --kind waiting`.
    brief)
 
 ## Tasks
-- [ ] T1 (kind: build) specs 2, 5: the loss rule named for one worktree, the finished predicate and the closing
+- [x] T1 (kind: build) specs 2, 5: the loss rule named for one worktree, the finished predicate and the closing
   function, `sessions stop --finished`; tests first · inline · `bin/lib/worktrees.mjs`, `bin/lib/background-close.mjs`,
-  `bin/sessions-background.mjs`
+  `bin/sessions-background.mjs` · the commit after `8cee9278` (L8)
 - [ ] T2 (kind: build) specs 2, 4: the land's call, the board's lines and the doctor row; tests first · inline ·
   `bin/merge-queue.mjs`, `bin/lib/background.mjs`, `bin/sessions.mjs`, `bin/doctor.mjs`
 - [ ] T3 (kind: build) spec 3: a resume removes the job it resumed when that job holds no worktree; tests first ·
@@ -144,6 +146,13 @@ the lead with `js-harness notify --to orchestrator --kind waiting`.
 - [ ] T5 (kind: docs) spec 6: the cleanup file for the lead, outside the repository
 - [ ] T6 (kind: verify) Codex and the Claude lenses on each slice, an independent verifier on what deletes, the pull
   request
+
+## Next step
+T2: the land's call after `removeLandedWorktrees` (`closeFinishedIn` with the main it pushed as `base`, the lines of
+`closedLines`, its exit unchanged), the board's lines for finished sessions and the doctor row, tests first. Before it,
+T1's slice goes through Codex and the lenses, base `8cee9278`. JH 175 is at work on the land and may touch
+`bin/merge-queue.mjs`: tell the lead before T2 writes there. Then T3 to T6 as listed. The scratch of the survey and
+the dry run is `~/.claude/jobs/b126e3c8/tmp` (`survey.json`, `dryrun.mjs`); the cleanup file of T5 goes there.
 
 ## Log
 - L1 (2026-11-10 22:44 local, the owner, typed in the lead's chat; transcript `ea85ec35`, line 5421): "y entonces por
@@ -187,3 +196,25 @@ the lead with `js-harness notify --to orchestrator --kind waiting`.
 - L6 Not checked: what claude rm does to a job that owns no worktree while another job runs in that folder (one
   sample, 309cf665, `odd/tasks/stop-keeps-worktree.md` L7); the design does not rest on it. Not known: the one job of
   difference in L4.
+- L7 Decisions of T1 (2026-11-11). The order of a close is: the loss rule (`worktreeKept`, read only), `claude stop`
+  for each job of the session claude lists, a wait of up to `LOCK_WAIT_MS` for its pid, `git worktree remove` with no
+  `--force`, then `undoSession` (stop and rm). Found before the first commit: a finished job is listed `idle`, `done`
+  and with a pid (JH 171 on 2026-11-11), its process stands in the worktree, and on Windows a removal begun under it
+  would stop halfway; the first design removed the worktree before any claude command. A second `claude stop` on a
+  stopped job is safe: the lead's run of 2026-11-10 reached `claude rm` on jobs already `stopped`. A process that
+  outlives the wait, or a stop claude refuses, keeps the session whole, with `js-harness sessions stop --finished`
+  named to try again. The close covers every finished session of the project, not only those of the pull requests one
+  land landed: a land that comes under the 10 minutes an index must stand still would otherwise leave its own sessions
+  to nobody, and the next land now takes them. An ignored folder counts as the host's only when every file in it is one
+  of `HOST_FILES` (git prints `!! .claude/` for a folder whose only file is the settings copy). The same act has a
+  command, `js-harness sessions stop --finished`, which takes only `--home`. A session at work, a record or a listing
+  that cannot be read, and a default branch git cannot name close nothing.
+- L8 T1, tests first. RED: `node --test bin/lib/background-close.test.mjs` failed on the missing module, then 12 of 12
+  passed with the first order; after L7's change one test failed for the fixture's own reason (its git status, run
+  with no `GIT_OPTIONAL_LOCKS=0`, rewrote the index before the second look). GREEN: `node --test
+  bin/lib/background-close.test.mjs bin/lib/worktrees.test.mjs`, 16 of 16. Searched first (`rule:reuse-first`):
+  codegraph for `removableWorktrees`, `undoSession`, `worktreeHolding`, `resumedChain` and `readNotices`, all reused;
+  `removableWorktrees` now reads `worktreeKept`, its own per-worktree test given a name and its reasons; no second
+  loss rule was written. The close is a module of its own, `bin/lib/background-close.mjs` (140 lines), because the land,
+  the command and the listings all call it and it joins three records `bin/lib/background.mjs` (572 lines) does not
+  read: the channel, git's worktrees and the default branch.
