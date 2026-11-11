@@ -244,6 +244,9 @@ function nextOf(home, cwd) {
   return { code, number: nextSessionNumber(home, projectSlug(root), { code }).number };
 }
 
+/** The file that holds when the host watch tick last read the host, which `ticks` reads for the tick's age. */
+export const hostAskedFile = (home, slug) => path.join(channelDir(home), 'host-watch', slug, 'asked');
+
 /** The heartbeat's reading of the host (`js-harness loop heartbeat`): null while the last reading is under `everyMs`
  * old, kept in a file as the daily Windows run's is, so a heartbeat started again still reads once an interval. Else
  * `{ lines, told }`: `told` is the HOST line when an update has no host watch session (the background record and the
@@ -264,7 +267,7 @@ export async function hostWatchTick({
   },
   next = () => nextOf(home, cwd),
 }) {
-  const file = path.join(channelDir(home), 'host-watch', slug, 'asked');
+  const file = hostAskedFile(home, slug);
   let last = -Infinity;
   try {
     last = Date.parse(fs.readFileSync(file, 'utf8').trim());

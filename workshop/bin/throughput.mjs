@@ -337,7 +337,8 @@ function liveFacts(day, ctx) {
   return { day, source: 'live', ...rotating, ...appended, unavailable: { ...rotating.unavailable, ...appended.unavailable } };
 }
 
-const snapshotFolder = (home, slug) => path.join(home, '.js-harness', 'throughput', slug);
+/** The folder of the project `slug`'s snapshots, one `<day>.json` a settled day kept; `ticks` reads it too. */
+export const snapshotFolder = (home, slug) => path.join(home, '.js-harness', 'throughput', slug);
 
 /** The snapshot of `day`: its facts, `null` when there is none, or `{ unreadable }`. */
 function readSnapshot(file, fileSystem) {
@@ -427,7 +428,7 @@ function fuller(next, kept) {
 
 /** When every gate of `day` has its end: a gate's start line is written after its wait and its run is bounded by
  * gate-max, so two gate-max after midnight. */
-const settlesAt = (day) => dayBounds(day).to + 2 * ruleValue('gate-max', 'minutes') * 60000;
+export const settlesAt = (day) => dayBounds(day).to + 2 * ruleValue('gate-max', 'minutes') * 60000;
 
 function snapshot(ctx, flags) {
   const day = flags.day ?? yesterday(ctx.now());

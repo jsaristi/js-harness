@@ -90,7 +90,7 @@ function workshopCommands() {
 
 test('every workshop command module declares its own ArgError, but the legacy ones', () => {
   const modules = workshopCommands();
-  assert.equal(modules.length, 7, `the workshop's COMMANDS table loads ${modules.length} command modules, not 7`);
+  assert.equal(modules.length, 8, `the workshop's COMMANDS table loads ${modules.length} command modules, not 8`);
   const broken = modules.filter((name) => !ARG_ERROR_CLASS.test(code(path.join(WORKSHOP, 'bin', name))));
   const problems = ratchet({ checked: modules, broken, legacy: WORKSHOP_LEGACY });
   assert.deepEqual(problems, [], `${problems.join('\n')}\n\na command throws its own \`class <Name>ArgError extends Error {}\` for a usage error`);
