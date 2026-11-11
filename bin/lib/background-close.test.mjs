@@ -10,6 +10,7 @@ import { appendRecord, backgroundLines, boardBackground, finishedHere, finishedO
 import { REMOVAL_WAIT_MS, closeAfterLand, closeFinished, closeFinishedIn, closedLines, finishedIn } from './background-close.mjs';
 import { NOTICE_SCHEMA, recordPath } from './channel.mjs';
 import { projectSlug } from './sessions.mjs';
+import { sameFolder } from './worktrees.mjs';
 
 const HOUR = 60 * 60_000;
 
@@ -276,6 +277,91 @@ test('closeFinished reads claude\'s listing again after the wait for its job, an
   assert.ok(!world.gitCalls.some((args) => args[0] === 'worktree' && args[1] === 'remove'));
 }));
 
+// The verifier's second reading, 2026-11-11: git has no compare-and-unlock, and the second look runs git for seconds
+// after it listed the lock, so a session a message woke in them had its new lock released and its worktree removed.
+test('closeFinished reads the lock once more right before it releases it: one taken anew is kept, one already gone needs no unlock, and a refusal is said', withWorld((world) => {
+  const woken = startSession(world, 'aaaa1111');
+  const refused = startSession(world, 'bbbb2222');
+  const released = startSession(world, 'cccc3333');
+  const stuck = startSession(world, 'dddd4444');
+  for (const [entry, pid] of [[woken, 4242], [refused, 4343], [released, 4444], [stuck, 4545]]) claudeLock(world, entry, pid);
+  const running = new Set();
+  // What happens right after the listing of that number, the second look's of a session: before its other questions end.
+  const between = {
+    // A message woke the first session: claude runs it anew and locks its worktree again.
+    2: () => {
+      running.add(6666);
+      world.git(world.root, 'worktree', 'unlock', woken.worktreePath);
+      claudeLock(world, woken, 6666);
+    },
+    // claude released the third one's lock by itself, a moment after its process ended.
+    6: () => world.git(world.root, 'worktree', 'unlock', released.worktreePath),
+  };
+  let lists = 0;
+  const result = closeFinished({
+    home: world.home, root: world.root, cwd: world.root, base: 'origin/main', notices: [woken, refused, released, stuck].map((item) => notice(item, 'closed', 30)), agents: [], claude: world.claude,
+    gitIn: (cwd, ...args) => {
+      if (args[0] === 'worktree' && args[1] === 'list') lists += 1;
+      else if (between[lists] !== undefined) {
+        between[lists]();
+        delete between[lists];
+      }
+      if (args[1] === 'unlock' && sameFolder(args[2], refused.worktreePath)) return { ok: false, out: '', err: 'fatal: made up' };
+      return world.gitIn(cwd, ...args);
+    },
+    removeIn: (cwd, ...args) => (sameFolder(args[2], stuck.worktreePath) ? { ok: false, out: '', err: 'fatal: made up too' } : world.gitIn(cwd, ...args)),
+    alive: (pid) => running.has(pid),
+    pause: () => {},
+  });
+  assert.deepEqual(result.closed.map((item) => item.entry.id), ['cccc3333']);
+  assert.deepEqual(result.kept.map((item) => [item.entry.id, item.why, item.stopped]), [
+    ['aaaa1111', `its worktree ${woken.worktreePath} stays: it was locked anew while it was looked at: claude session aaaa1111 (pid 6666)`, true],
+    ['bbbb2222', `its worktree ${refused.worktreePath} stays: git worktree unlock refused: fatal: made up`, true],
+    ['dddd4444', `its worktree ${stuck.worktreePath} stays: git worktree remove refused: fatal: made up too`, true],
+  ]);
+  assert.deepEqual(result.kept.map((item) => /tries again$/.test(item.settle)), [true, true, false]);
+  assert.match(result.kept[2].settle, /js-harness sessions stop dddd4444 --remove-worktree/);
+  // The lock of the session that woke is the one claude took for it, and the one released by itself was not unlocked twice.
+  assert.match(world.git(world.root, 'worktree', 'list', '--porcelain'), /locked claude session aaaa1111 \(pid 6666\)/);
+  assert.deepEqual(world.gitCalls.filter((args) => args[1] === 'unlock').map((args) => path.basename(args[2])), ['dddd4444']);
+  assert.deepEqual([woken, refused, released, stuck].map((entry) => fs.existsSync(entry.worktreePath)), [true, true, false, true]);
+  assert.ok(!world.gitCalls.flat().some((arg) => arg === '--force' || arg === '-f'), 'nothing is forced');
+}));
+
+test('closeFinished looks again, after the wait for its job, for a job that is not its own in the worktree', withWorld((world) => {
+  const entry = startSession(world, 'aaaa1111');
+  const idle = { id: 'aaaa1111', kind: 'background', pid: 4242, status: 'idle', state: 'done' };
+  const result = closeFinished({
+    home: world.home, root: world.root, cwd: world.root, base: 'origin/main', notices: [notice(entry, 'closed', 30)], gitIn: world.gitIn, claude: world.claude,
+    agents: [idle],
+    // A job of another session entered the worktree in the minute the stop and the wait took.
+    list: () => [idle, { id: 'cccc3333', name: 'JH 2 · guest', kind: 'background', cwd: entry.worktreePath, status: 'busy', state: 'working' }],
+    alive: () => false,
+    pause: () => {},
+  });
+  assert.deepEqual(result.closed, []);
+  assert.deepEqual(result.kept.map((item) => [item.entry.id, item.why, item.stopped]), [['aaaa1111', `another job, cccc3333 · JH 2 · guest, stands in its worktree ${entry.worktreePath}`, true]]);
+  assert.deepEqual(world.claudeCalls, [['stop', 'aaaa1111']]);
+  assert.ok(!world.gitCalls.some((args) => args[0] === 'worktree' && args[1] === 'remove'));
+}));
+
+// A job at rest is no guest (`atWork`, a process that runs), so a second recorded session of the same worktree that
+// rests there would find its folder gone: the record says whose worktree it is, whatever claude lists.
+test('closeFinished keeps a worktree another recorded session has that did not say closed, and closes both once it did', withWorld((world) => {
+  const first = startSession(world, 'aaaa1111');
+  const second = startSession(world, 'bbbb2222', { worktree: 'aaaa1111' });
+  const one = close(world, [notice(first, 'closed', 30), notice(second, 'opened', 20)]);
+  assert.deepEqual(one.closed, []);
+  assert.deepEqual(one.kept.map((item) => [item.entry.id, item.why]), [['aaaa1111', `the session bbbb2222 · JH 1 · bbbb2222, which did not say closed, has the same worktree ${first.worktreePath}`]]);
+  assert.match(one.kept[0].settle, /^once that session says closed, js-harness sessions stop --finished closes both$/);
+  assert.deepEqual(world.claudeCalls, []);
+  assert.ok(!world.gitCalls.some((args) => args[0] === 'worktree' && args[1] === 'remove'));
+  const both = close(world, [notice(first, 'closed', 30), notice(second, 'closed', 20)]);
+  assert.deepEqual(both.kept, []);
+  assert.deepEqual(both.closed.map((item) => [item.entry.id, item.worktree]), [['aaaa1111', first.worktreePath], ['bbbb2222', null]]);
+  assert.deepEqual(open(world), []);
+}));
+
 // What odd/tasks/stop-keeps-worktree.md and odd/tasks/land-unattended.md (L23) protect: nothing git would not bring back
 // is deleted, an ignored file included, and no claude command runs while the worktree stands. What time or an unlock
 // settles is tried again; what holds files is looked at by hand.
@@ -485,12 +571,18 @@ test('the removal is the one git call given the long bound, and closeFinishedIn 
   assert.match(closeFinishedIn({ ...given, list: () => { throw new Error('made up'); } }).unavailable, /whether a session is at work cannot be told \(made up\)/);
   assert.match(closeFinishedIn({ ...given, claude: null }).unavailable, /^claude is not on PATH$/);
   // A line of a record that cannot be read may be a newer word than closed, or a resume: nothing is closed over it.
-  for (const [file, named] of [[recordFileOf(world.home), /1 line of the record of background sessions could not be read/], [channel, /1 line of the channel's record .* could not be read/]]) {
+  // A second try reads the same line, so the refusal names the file and what settles it, and is marked as one that stands.
+  for (const [file, named] of [[recordFileOf(world.home), /^1 line of the record of background sessions .*sessions\.jsonl could not be read, and one may be a resume; /], [channel, /^1 line of the channel's record .* could not be read, and one may be a newer notice than closed; /]]) {
     const whole = fs.readFileSync(file, 'utf8');
     fs.appendFileSync(file, '{"cut\n');
-    assert.match(closeFinishedIn({ ...given, base: 'main' }).unavailable, named);
+    const cut = closeFinishedIn({ ...given, base: 'main' });
+    assert.match(cut.unavailable, named);
+    assert.match(cut.unavailable, /; the close stays off until that file reads whole, its damaged line repaired or taken out by hand$/);
+    assert.ok(cut.unavailable.includes(file), cut.unavailable);
+    assert.equal(cut.standing, true);
     fs.writeFileSync(file, whole);
   }
+  assert.equal(closeFinishedIn({ ...given, claude: null }).standing, undefined);
   assert.deepEqual(world.claudeCalls.filter((args) => args[1] === 'bbbb2222'), []);
   // What doctor lists reads the same records: the one left, and a throw where it cannot look.
   assert.deepEqual(finishedIn({ home: world.home, root: world.root, list: () => [] }).map((item) => item.id), ['bbbb2222']);
@@ -523,6 +615,12 @@ test('after a land the finished sessions are closed against the main it pushed, 
     'No finished background session was closed: claude is not on PATH. js-harness sessions stop --finished tries again.',
     'No finished background session was closed: whether a session is at work cannot be told (made up). js-harness sessions stop --finished tries again.',
   ]);
+  // A damaged line of a record is not settled by a second try: the line says what is, and names no command that would refuse again.
+  const whole = fs.readFileSync(channel, 'utf8');
+  fs.appendFileSync(channel, '{"cut\n');
+  assert.deepEqual(closeAfterLand(given), []);
+  assert.match(said[2], /^No finished background session was closed: 1 line of the channel's record .* could not be read, and one may be a newer notice than closed; the close stays off until that file reads whole, its damaged line repaired or taken out by hand\.$/);
+  fs.writeFileSync(channel, whole);
   assert.deepEqual(world.claudeCalls, []);
   said.length = 0;
   assert.deepEqual(closeAfterLand(given), [{ id: 'aaaa1111', title: 'JH 1 · aaaa1111', worktree: done.worktreePath }]);

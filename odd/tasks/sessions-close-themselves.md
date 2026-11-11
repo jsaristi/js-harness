@@ -152,16 +152,22 @@ the lead with `js-harness notify --to orchestrator --kind waiting`.
   be read, the removal's bound in the command, the resume; tests with the code · inline ·
   `bin/lib/background-close.mjs`, `bin/lib/worktrees.mjs`, `bin/sessions-background.mjs`, `bin/lib/background.mjs` ·
   the commit after `5ac20ed2` (L15, L16)
+- [x] T8 (kind: build) specs 2, 5: what the four lenses and the verifier's second reading found in `a9f9f979`: the
+  lock read once more right before it is released, a guest looked for again after the wait, a worktree another
+  recorded session has, a refusal over a damaged record line that says what settles it, comments that still spoke of a
+  resume that retires; tests first · inline · `bin/lib/background-close.mjs`, `bin/lib/background.mjs`,
+  `README.md` · the commit after `a9f9f979` (L17)
 - [ ] T6 (kind: verify) Codex and the Claude lenses on each slice, an independent verifier on what deletes, the pull
   request
 
 ## Next step
-T1's slice `8cee9278..d77b3315` is reviewed (L9). Codex read `d77b3315..5ac20ed2` and the independent verifier read
-what deletes; what both found is fixed in T7, the commit after `5ac20ed2` (L15, L16). What is left of T6: Codex on
-T7's slice, base `5ac20ed2`; the four lenses on `d77b3315..HEAD`, which no lens has read yet; one at a time, with the
+Reviewed up to `a9f9f979`: Codex on every slice, the four lenses on `8cee9278..d77b3315` and on
+`d77b3315..a9f9f979`, the verifier twice (L9, L15 to L17). What they found in `a9f9f979` is fixed in T8, the commit
+after it. What is left of T6: Codex and the four lenses on T8's slice, base `a9f9f979`, one at a time, with the
 worktree untouched while either runs; then the push, the pull request, `notify --kind ready --pr`, the summary and
-`notify --kind closed --summary`. The cleanup file of L14 is written again after T7, since what the close keeps
-changed.
+`notify --kind closed --summary`. Open with the lead (`notify --kind waiting`, L17): whether a resume leaves the job
+it resumed to the close, as built (L16), or removes it at once, as the brief's words say. The cleanup file of L14 was
+written again from a survey of 03:21 local (L17).
 
 ## Log
 - L1 (2026-11-10 22:44 local, the owner, typed in the lead's chat; transcript `ea85ec35`, line 5421): "y entonces por
@@ -316,3 +322,30 @@ changed.
   session undone in two tries. Codex on `d77b3315..5ac20ed2`: part 1 correct (0.83), part 2 those two findings,
   367,642 input tokens. The tests of T7 were written with its code and passed at their first run, so none was seen
   to fail first.
+- L17 The reviews of `a9f9f979`, and T8 (2026-11-11, 03:10 to 03:45 local; the host compacted this session at 03:18).
+  Codex on `5ac20ed2..a9f9f979`: correct (0.9), a recheck that reads both findings of L16 as fixed; 139,608 input
+  tokens. The four lenses on `d77b3315..a9f9f979`, about 51,000 input tokens each: risk none; resilience and
+  reliability the same warning; readability one suggestion; every earlier finding rechecked as fixed.
+  The warning: a damaged line in either record makes the close refuse for good, while the land's line said the command
+  "tries again" and the board and doctor go on naming it. Fixed: the refusal names the file, says the close stays off
+  until it reads whole, and is marked `standing`, so the land names no retry. Answered, not changed: the board and
+  doctor keep the debt, which is true while those sessions are on the machine, and the command they name is the one
+  that says what to repair. The suggestion: three comments still spoke of a resume that retires a job; rewritten.
+  The verifier's second reading (the same sub-agent, read only, no test run): `Verdict: holds`, no path deletes
+  uncommitted files or forces a removal. What it left open, taken in T8, tests first (5 seen to fail, then 29 of 29):
+  (a) git has no compare-and-unlock, and a lock taken anew in the seconds the second look runs was released: the lock
+  is read once more right before the unlock, one taken anew keeps the worktree, one claude released by itself needs
+  no unlock; (b) a job of another session was looked for only in the first listing: it is looked for again after the
+  wait; (c) a second recorded session at rest in the same worktree is no guest (`atWork`, or a process that runs), so
+  the record is asked: a worktree a session that did not say `closed` also has stays; (d) the unlock git refuses and
+  the removal refused after an unlock had no test. Not changed, each said: `atWork` does not count the listing's state
+  `blocked` (four old jobs of resumed chains read so, each resumed since); a lock typed by hand in claude's exact
+  words for a pid that is gone would be released; a reused pid reads as alive and keeps the worktree.
+  Its remark on L16: this document sends a decision that turns up to the lead, and L16 decided alone. Sent as
+  `waiting` at 03:40 local: A, as built; B, the old job removed at the resume as the brief's words say. Evidence for
+  A: in a resumed session the new job's scratch is empty while the old one's holds the files (JH 138: `41821c75`
+  empty, `351bf28f` 36 entries; JH 129 and JH 165 the same).
+  The cleanup file of L14, written again from a survey of 03:21 local: 48 jobs, 9 to close now (JH 175 joined them
+  once PR 816 merged), 8 to look at first, 3 not in main, 4 with a leftover folder, 4 not closed, 6 at work, JH 137
+  left out, 5 outside the record. A third copy is `~/.js-harness/background/cleanup-2026-11-11.md`, one file to
+  delete, since claude rm takes this session's scratch with its job.

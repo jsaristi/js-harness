@@ -241,7 +241,8 @@ export function readRecord(home, { readFile = (file) => fs.readFileSync(file, 'u
     started.push(entry);
   }
   const resumedAs = new Map([...open.values()].filter((entry) => open.has(entry.resumedFrom)).map((entry) => [entry.resumedFrom, entry]));
-  // `removed`, the ids of the jobs already removed: a job a resume retired is in `started` and is no job to undo.
+  // `removed`, the ids of the jobs already removed: one of a chain an undo got only part of is in `started` and is no
+  // job to undo.
   return { sessions: [...open.values()], started, resumedAs, skipped, removed };
 }
 
@@ -284,7 +285,7 @@ export function finishedOf(record, notices, root) {
       if (!STATE_KINDS.has(notice?.kind) || typeof notice.at !== 'string' || !chain.some((job) => sentBy(notice, job))) continue;
       if (last === null || notice.at >= last.at) last = notice;
     }
-    // The notices of a job a resume retired still count; the job itself is no longer one to remove.
+    // The notices of a job already removed still count; the job itself is no longer one to remove.
     if (last?.kind === 'closed') found.push({ entry, chain: chain.filter((job) => job === entry || !record.removed?.has(job.id)), closedAt: last.at });
   }
   return found;

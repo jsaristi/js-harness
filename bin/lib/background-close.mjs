@@ -13,7 +13,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { CLOSE_FINISHED, LOCK_WAIT_MS, atWork, exists, finishedHere, finishedOf, readRecord, saidBy, sleepSync, undoSession, within, workingIn, worktreeHolding, worktreeOf } from './background.mjs';
+import { CLOSE_FINISHED, LOCK_WAIT_MS, atWork, exists, finishedHere, finishedOf, readRecord, recordFileOf, saidBy, sleepSync, undoSession, within, workingIn, worktreeHolding, worktreeOf } from './background.mjs';
 import { readNotices } from './channel.mjs';
 import { defaultBranchOf } from './default-branch.mjs';
 import { projectSlug } from './sessions.mjs';
@@ -110,10 +110,13 @@ export const REMOVAL_WAIT_MS = 5 * 60_000;
  * ...args)` answers `{ ok, out, err }`, `claude` runs the Claude CLI (`claudeRunner`). A close waits on processes, so
  * what was seen before it is looked at again: `list()`, when given, reads claude's listing anew after each act and
  * after the wait for a session's jobs, and a worktree is held to the rule a second time after that wait, when the only
- * lock that no longer keeps it is claude's for a process that has ended (`git worktree unlock` releases it). `removeIn` is the `gitIn` of the one call
- * that deletes, which wants a longer bound (`REMOVAL_WAIT_MS`). A kept one whose job got `claude stop` has `stopped`. */
+ * lock that no longer keeps it is claude's for a process that has ended (`git worktree unlock` releases it, the lock
+ * read once more right before). A worktree another recorded session has that did not say `closed` stays, and so does
+ * one a job of another session stands in, at either listing. `removeIn` is the `gitIn` of the one call that deletes,
+ * which wants a longer bound (`REMOVAL_WAIT_MS`). A kept one whose job got `claude stop` has `stopped`. */
 export function closeFinished({ home, root, cwd = root, base, baseName = base, notices, agents, list = null, gitIn, removeIn = gitIn, claude, now = Date.now, alive = exists, pause = sleepSync }) {
-  const finished = finishedOf(readRecord(home), notices, root);
+  const record = readRecord(home);
+  const finished = finishedOf(record, notices, root);
   const closed = [];
   const kept = [];
   let listed;
@@ -145,6 +148,14 @@ export function closeFinished({ home, root, cwd = root, base, baseName = base, n
     let removed = null;
     // The guard `sessions stop` holds: only a worktree that holds something is git's to remove first.
     if (worktree !== null && worktreeHolding(entry) !== null) {
+      // A job at rest is no guest below, so the record says whose worktree it is: one a session that did not say
+      // closed also has is not removed from under it, whatever claude lists.
+      const sharing = (record.sessions ?? []).find((other) => !chain.some((job) => job.id === other.id) && !record.resumedAs?.has(other.id)
+        && !finished.some((item) => item.entry.id === other.id) && worktreeOf(other) !== null && sameFolder(worktreeOf(other), worktree));
+      if (sharing !== undefined) {
+        kept.push({ entry, why: `the session ${sharing.id}${sharing.title ? ` · ${sharing.title}` : ''}, which did not say closed, has the same worktree ${worktree}`, settle: `once that session says closed, ${CLOSE_FINISHED} closes both` });
+        continue;
+      }
       if (listed === undefined) listed = linkedWorktrees(root, gitIn);
       const mine = listedOf(chain, seen);
       // claude's lock for a job of this session, which claude stop ends next, or for a process that no longer runs.
@@ -162,9 +173,14 @@ export function closeFinished({ home, root, cwd = root, base, baseName = base, n
         continue;
       }
       // A job that is not this session's is not stopped here, and no folder is removed from under one.
-      const guest = seen.find((agent) => !mine.includes(agent) && typeof agent.cwd === 'string' && within(agent.cwd, worktree) && (atWork(agent) || (Number.isInteger(agent.pid) && alive(agent.pid))));
+      const guestIn = (agents) => {
+        const own = listedOf(chain, agents);
+        return agents.find((agent) => !own.includes(agent) && typeof agent.cwd === 'string' && within(agent.cwd, worktree) && (atWork(agent) || (Number.isInteger(agent.pid) && alive(agent.pid))));
+      };
+      const guestWhy = (guest) => `another job, ${guest.id}${guest.name ? ` · ${guest.name}` : ''}, stands in its worktree ${worktree}`;
+      const guest = guestIn(seen);
       if (guest !== undefined) {
-        kept.push({ entry, why: `another job, ${guest.id}${guest.name ? ` · ${guest.name}` : ''}, stands in its worktree ${worktree}`, settle: AGAIN });
+        kept.push({ entry, why: guestWhy(guest), settle: AGAIN });
         continue;
       }
       acted = true;
@@ -187,6 +203,12 @@ export function closeFinished({ home, root, cwd = root, base, baseName = base, n
           kept.push({ entry, why: `its worktree ${worktree} stays: it is ${woken.status ?? woken.state} again, after claude stop was sent to its job`, settle: null, stopped: true });
           continue;
         }
+        // Nor is the first listing's word taken for who else stands there: a job may have entered in that minute.
+        const late = guestIn(seen);
+        if (late !== undefined) {
+          kept.push({ entry, why: guestWhy(late), settle: AGAIN, stopped: true });
+          continue;
+        }
       }
       // The second look: what the wait above let into the worktree is not deleted on the word of the first, and the
       // only lock that no longer keeps it is claude's for a process that has ended.
@@ -196,8 +218,17 @@ export function closeFinished({ home, root, cwd = root, base, baseName = base, n
         continue;
       }
       if (still.tree.locked) {
+        // git has no compare-and-unlock, and the second look ran git for seconds after it listed this lock: it is read
+        // once more right before it is released, so one claude took anew for a session a message woke is not, and one
+        // claude released by itself needs no unlock.
+        const last = linkedWorktrees(root, gitIn)?.linked.find((item) => item.path && sameFolder(item.path, worktree));
+        if (last === undefined || (last.locked && (last.lockReason !== still.tree.lockReason || !ended(last)))) {
+          const said = last === undefined ? 'git could not list it again before its lock was released' : `it was locked anew while it was looked at${last.lockReason ? `: ${last.lockReason}` : ''}`;
+          kept.push({ entry, why: `its worktree ${worktree} stays: ${said}`, settle: AGAIN, stopped: true });
+          continue;
+        }
         // Not a forced removal: the lock of a process that is gone is released, and git still refuses what holds files.
-        const unlocked = gitIn(root, 'worktree', 'unlock', still.tree.path);
+        const unlocked = last.locked ? gitIn(root, 'worktree', 'unlock', still.tree.path) : { ok: true };
         if (!unlocked.ok) {
           kept.push({ entry, why: `its worktree ${worktree} stays: git worktree unlock refused: ${unlocked.err.split('\n')[0] || 'git gave no reason'}`, settle: AGAIN, stopped: true });
           continue;
@@ -233,6 +264,7 @@ export function closeFinished({ home, root, cwd = root, base, baseName = base, n
  * holds it in this clone, with no fetch. `{ closed, kept }`, or `{ unavailable }`, why nothing was looked at: a record
  * or a listing that cannot be read closes nothing, since "could not look" is never "none at work". With no finished
  * session it asks claude and git nothing, so a `claude` that is `null` (not on PATH) is unavailable only when one is.
+ * `standing` marks a refusal a second try does not settle, a record with a damaged line, whose words say what does.
  * `run(command, args, options)` runs a command as `spawnSync` does. */
 export function closeFinishedIn({ home, root, cwd = root, base = null, baseName = base, run, claude, list, now = Date.now }) {
   const record = readNotices(home, projectSlug(root));
@@ -241,10 +273,14 @@ export function closeFinishedIn({ home, root, cwd = root, base = null, baseName 
   if (background.unavailable !== undefined) return { unavailable: `the record of background sessions could not be read (${background.unavailable})` };
   if (finishedOf(background, record.notices, root).length === 0) return { closed: [], kept: [] };
   if (claude === null) return { unavailable: 'claude is not on PATH' };
-  // A line that cannot be read may be a newer word than `closed`, or the start of a resume: "could not read" is not "none".
-  const lines = (count) => `${count} line${count === 1 ? '' : 's'}`;
-  if (background.skipped > 0) return { unavailable: `${lines(background.skipped)} of the record of background sessions could not be read, and one may be a resume` };
-  if (record.skipped > 0) return { unavailable: `${lines(record.skipped)} of the channel's record ${record.path} could not be read, and one may be a newer notice than closed` };
+  // A line that cannot be read may be a newer word than `closed`, or the start of a resume: "could not read" is not
+  // "none". A second try reads the same line, so this refusal stands (`standing`) and says what settles it (two lenses).
+  const damaged = (count, file, may) => ({
+    unavailable: `${count} line${count === 1 ? '' : 's'} of ${file} could not be read, and one may be ${may}; the close stays off until that file reads whole, its damaged line${count === 1 ? '' : 's'} repaired or taken out by hand`,
+    standing: true,
+  });
+  if (background.skipped > 0) return damaged(background.skipped, `the record of background sessions ${recordFileOf(home)}`, 'a resume');
+  if (record.skipped > 0) return damaged(record.skipped, `the channel's record ${record.path}`, 'a newer notice than closed');
   let agents;
   try {
     agents = list();
@@ -286,7 +322,7 @@ export function finishedIn({ home, root, list }) {
 export function closeAfterLand({ home, root, cwd = root, base, run, claude, list, now = Date.now, say }) {
   const done = closeFinishedIn({ home, root, cwd, base, baseName: 'main', run, claude, list, now });
   if (done.unavailable !== undefined) {
-    say(`No finished background session was closed: ${done.unavailable}. ${AGAIN}.`);
+    say(`No finished background session was closed: ${done.unavailable}.${done.standing ? '' : ` ${AGAIN}.`}`);
     return [];
   }
   if (done.closed.length + done.kept.length === 0) return [];

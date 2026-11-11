@@ -148,8 +148,8 @@ const writeState = (world, state) => fs.writeFileSync(world.state, JSON.stringif
 const patchState = (world, patch) => writeState(world, { ...readState(world), ...patch });
 const recordFile = (world) => path.join(world.home, '.js-harness', 'background', 'sessions.jsonl');
 const recordLines = (world) => (fs.existsSync(recordFile(world)) ? fs.readFileSync(recordFile(world), 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line)) : []);
-/** The jobs the record says were started, oldest first: a resume of a session with no worktree also records the removal
- * of the job it resumed, so the last line of the record is not always the last start. */
+/** The jobs the record says were started, oldest first: the record also holds the lines of removals, so its last line
+ * is not always the last start. */
 const startedLines = (world) => recordLines(world).filter((line) => line.event === 'started');
 
 /** The environment of a run: this one's, with the shim folder first on PATH and the world's harness home. */
