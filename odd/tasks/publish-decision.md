@@ -190,6 +190,28 @@ is a setting of his account, so this work only hands him its command.
   before anything ran again: the orchestrator skill's line I edited (L7) is an owed span the coverage register holds
   by its fingerprint, and the command names its fix, `js-harness rules coverage --refresh` (one fingerprint changed
   in bin/lib/rules-coverage-data.mjs). The second gate ran here, GitHub not answering then, and passed.
+- L10 Codex on `c0d570d..2abc371`: "the patch is correct" (0.96), the P1 fixed. The Claude lenses (risk,
+  resilience, readability, reliability) on `c742cbe..2abc371`: risk 0 findings; 5 from the others, three matters.
+  (a) Taken: a visibility `gh` could not read was handled as a decision and left no `ci-fallback` line; now
+  `remoteGateKeeps` answers `{ why, known }`, only a decision (`known`) ends the gate's try, and a failed read goes on
+  to `runCiGate` and falls back as any gate with no answer (test in bin/check-ci-gate.test.mjs; written with its
+  code, not red first). (b) Answered, three lenses: a switch read as off by an unreadable harness.json runs here with
+  no line of this path. `checkFunctions` (`bin/check.mjs:1615`, a static row at `:1848`) fails that gate before any
+  sensor and names the error; said in `ciGateWanted`'s comment, and that row's line, which said "every switch is read
+  as on", now says what is true. (c) Answered: the visibility is read twice under `private`; kept, since the guard
+  must sit in the function that pushes; one read measured 0.62 s (`time gh repo view ... --json visibility`).
+- L11 NEXT STEP (state at the context pause, 87 %, 2026-11-11): the fix of L10 is in the working tree, NOT committed;
+  tests green one file at a time (ci-gate 17, check-ci-gate 7, check-functions 15). Then, in order: (1) commit it
+  (`fix(ci-gate): a visibility that could not be read is a fault, not a decision`); (2) `js-harness codex-review
+  --base 2abc371a --doc odd/tasks/publish-decision.md` and `js-harness lens-review --base 2abc371a --lenses
+  resilience,reliability --reason ... --doc ...` on that commit; (3) T3, one independent verifier (a general-purpose
+  sub-agent, read-only) on the publish path: can any tree reach a non-private destination under `private`, `off` or
+  an unreadable switch; (4) push the branch `worktree-publish-decision`, open the pull request with the body drafted
+  at `C:\Users\Oficina\.claude\jobs\dc1b9411\tmp\pr-body.md` (its "Checked" section still a placeholder: the gates,
+  Codex's two reviews, the lenses, the verifier), title `feat(ci-gate): a project decides whether a commit's tree is
+  pushed for its gate`; (5) the session's summary (`js-harness summary path`), `js-harness notify --to orchestrator
+  --kind ready --pr <n>`, then `--kind closed --summary <file>`; tick T1 to T4 with their commits (T1 `2eec546f`, T2
+  `c0d570d3` and `2abc371a`).
 - L7 The hint of a commit wrapped in `js-harness gate --` and the orchestrator skill's line both said a commit's gate
   goes to GitHub "in a project that holds the workflow"; with the switch that is true only where it lets the tree be
   pushed, so both follow it: the hint claims it only where the switch reads on, the skill's line names the switch.

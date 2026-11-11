@@ -55,7 +55,7 @@ test('a switch that cannot be read fails the gate, with its reason', (t) => {
       name: 'functions',
       pass: false,
       detail: 'harness.json "functions"."codexReview" must be one of "auto", "on", "off"; it is "no"',
-      lines: ['until it is fixed every switch is read as on'],
+      lines: ['until it is fixed every check is read as on, and nothing is pushed unasked or for the remote gate'],
       next: firstStep('fix the switches named above in harness.json "functions"'),
     },
   ]);

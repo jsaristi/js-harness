@@ -233,14 +233,22 @@ test('remoteGateKeeps answers before any push, for the gate that asks it first: 
     assert.equal(asked(on, none), null);
     assert.deepEqual(none.calls, [], 'declared on, gh is not asked');
     assert.equal(asked(silent, fakeGh({ visibility: 'PRIVATE' })), null);
-    assert.match(asked(silent, fakeGh({ visibility: 'PUBLIC' })), /^o\/r reads PUBLIC, not PRIVATE/);
+    // `known` tells a decision (the project's switch and what GitHub says) from a read that failed.
+    const open = asked(silent, fakeGh({ visibility: 'PUBLIC' }));
+    assert.match(open.why, /^o\/r reads PUBLIC, not PRIVATE/);
+    assert.equal(open.known, true);
+    const unread = asked(silent, fakeGh({ visibility: null }));
+    assert.match(unread.why, /^the visibility of o\/r could not be read/);
+    assert.equal(unread.known, false, 'a failure of gh, not a decision of the project');
     // A remote that is not GitHub's has no visibility to read: nothing says it is private.
     git(silent.cwd, 'remote', 'set-url', 'origin', silent.remote);
     const elsewhere = fakeGh({ visibility: 'PRIVATE' });
-    assert.match(asked(silent, elsewhere), /^origin pushes to .*remote\.git, which is not a GitHub repository, so nothing says it is private and the tree being committed was not pushed$/);
+    const local = asked(silent, elsewhere);
+    assert.match(local.why, /^origin pushes to .*remote\.git, which is not a GitHub repository, so nothing says it is private and the tree being committed was not pushed$/);
+    assert.equal(local.known, true);
     assert.deepEqual(elsewhere.calls, []);
     git(silent.cwd, 'remote', 'remove', 'origin');
-    assert.equal(asked(silent, elsewhere), 'git could not say where origin pushes to, so nothing says it is private and the tree being committed was not pushed');
+    assert.deepEqual(asked(silent, elsewhere), { why: 'git could not say where origin pushes to, so nothing says it is private and the tree being committed was not pushed', known: false });
   } finally {
     on.done();
     silent.done();

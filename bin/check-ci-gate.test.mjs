@@ -100,12 +100,24 @@ test('a gate with no answer from CI runs here under the lock, and says why', asy
 test('a gate whose tree the project keeps here (remoteGate) runs here and says why: no push is announced, CI is not asked, no fallback is logged', async () => {
   const KEPT = 'o/r reads PUBLIC, not PRIVATE, and harness.json does not turn remoteGate on (js-harness functions set remoteGate on), so the tree being committed was not pushed';
   let events;
-  const { rows, seen, errors, dir } = await gate({ wanted: FIRST, kept: KEPT, ci: { ran: true, pass: true, url: URL, seconds: 1, output: '' } }, { log: true, look: (home) => { events = readGateLog(home).events; } });
+  const { rows, seen, errors, dir } = await gate({ wanted: FIRST, kept: { why: KEPT, known: true }, ci: { ran: true, pass: true, url: URL, seconds: 1, output: '' } }, { log: true, look: (home) => { events = readGateLog(home).events; } });
   assert.deepEqual({ sensors: seen.sensors, takes: seen.takes, ciRuns: seen.ciRuns }, { sensors: 1, takes: 1, ciRuns: 0 });
   assert.deepEqual(seen.keptWith, { cwd: dir, remote: 'upstream', env: { SOME: 'env' } }, 'asked of the remote the check was given');
   assert.equal(rows.find((row) => row.name === 'tests').pass, true);
   assert.deepEqual(errors.split('\n').filter((line) => /GitHub|pushed/.test(line)), [`check: ${KEPT}; the tests run here`]);
   assert.deepEqual(events.map((event) => event.event), ['start', 'end'], 'the gate that ran here, and no ci-fallback line');
+});
+
+// The Claude lenses, 2026-11-11, on 2abc371a: a visibility nobody could read is a failure, not the project's
+// decision, and before the switch the same state (a `gh` that cannot answer) left its line in the gate log.
+test('a gate whose visibility could not be read is no decision: it goes on to CI\'s own answer, and a fallback is logged as before', async () => {
+  const UNREAD = 'the visibility of o/r could not be read (HTTP 401: Bad credentials), so it is not known to be private and the tree being committed was not pushed';
+  let events;
+  const { seen, errors } = await gate({ wanted: FIRST, kept: { why: UNREAD, known: false }, ci: { ran: false, why: UNREAD } }, { log: true, look: (home) => { events = readGateLog(home).events; } });
+  assert.deepEqual({ sensors: seen.sensors, takes: seen.takes, ciRuns: seen.ciRuns }, { sensors: 1, takes: 1, ciRuns: 1 }, 'the function that pushes is asked, and answers for itself');
+  assert.match(errors, new RegExp(`^check: no answer from GitHub's machines \\(the visibility of o/r could not be read .+\\), so the tests run here$`, 'm'));
+  const fallback = events.find((event) => event.event === 'ci-fallback');
+  assert.equal(fallback?.reason, UNREAD, JSON.stringify(events));
 });
 
 test('a gate CI is not wanted for (no workflow, the switch, a CI machine) runs here and never asks CI', async () => {

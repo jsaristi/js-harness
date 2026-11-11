@@ -61,8 +61,11 @@ function failedLog(stdout, id) {
  * lock is not read: a free one no longer keeps a gate here. A check by hand stays here: CI tests the index
  * (`git write-tree`), and a check by hand tests the working tree, unstaged edits included. A commit's hook is told
  * by `GIT_INDEX_FILE`, which git hands every hook that commits and a check by hand is not given, as
- * ../check.mjs tells it. A project whose `remoteGate` switch reads off keeps its gate here like one with no workflow;
- * one that reads private is asked at the push, where its visibility is read (`remoteGateKeeps`). */
+ * ../check.mjs tells it. A project whose `remoteGate` switch reads off keeps its gate here like one with no workflow,
+ * with no line of its own: a switch declared off is the project's standing choice, and one read as off because
+ * harness.json could not be read fails the gate at its `functions` or `sensors` row, which names the error
+ * (`checkFunctions` of ../check.mjs). One that reads private is asked at the push, where its visibility is read
+ * (`remoteGateKeeps`). */
 export function ciGateWanted({ cwd, env = process.env }) {
   if (env[CI_GATE_ENV] === '0' || onCiMachine(env)) return null;
   if (!Object.keys(env).some((key) => key.toUpperCase() === 'GIT_INDEX_FILE')) return null;
@@ -125,30 +128,35 @@ function pushDestinations(git, remote) {
 /** `url` without the user and password it may carry, for a line that is printed and logged. */
 const withoutCredentials = (url) => url.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@]*@/i, '$1');
 
-/** Why the tree of the commit being made stays on this machine, or null where the project lets it be pushed for its
- * gate: `remoteGate` on, or private with every place the push goes to (`pushDestinations`) a repository GitHub says
- * is `PRIVATE`, asked as ../backup.mjs asks it before its own push. Everything else keeps it: the switch off or
- * unreadable, a destination that is public, internal or not GitHub's, a visibility `gh` could not read. `git` runs
- * git in the project. */
+/** Why the tree of the commit being made stays on this machine, as `{ why, known }`, or null where the project lets
+ * it be pushed for its gate: `remoteGate` on, or private with every place the push goes to (`pushDestinations`) a
+ * repository GitHub says is `PRIVATE`, asked as ../backup.mjs asks it before its own push. Everything else keeps it.
+ * `known` tells the two kinds apart: true for a decision (the switch off, a destination that is public, internal or
+ * not GitHub's), false for a read that failed (git could not name the destinations, `gh` could not read a
+ * visibility), which is a fault to log and not what the project chose. `git` runs git in the project. */
 function keptHere({ cwd, remote, git, gh }) {
   const { value, errors } = remoteGateOf(cwd);
   if (value === 'on') return null;
-  if (value === 'off') return `remoteGate reads off in harness.json${errors.length > 0 ? ` (${errors.join('; ')})` : ''}, so ${KEPT}`;
+  const decided = (why) => ({ why: `${why} ${KEPT}`, known: true });
+  const unread = (why) => ({ why: `${why} ${KEPT}`, known: false });
+  if (value === 'off') return decided(`remoteGate reads off in harness.json${errors.length > 0 ? ` (${errors.join('; ')})` : ''}, so`);
   const urls = pushDestinations(git, remote);
-  if (urls.length === 0) return `git could not say where ${remote} pushes to, so nothing says it is private and ${KEPT}`;
+  if (urls.length === 0) return unread(`git could not say where ${remote} pushes to, so nothing says it is private and`);
   const elsewhere = urls.find((url) => !githubRepository(url));
-  if (elsewhere) return `${remote} pushes to ${withoutCredentials(elsewhere)}, which is not a GitHub repository, so nothing says it is private and ${KEPT}`;
+  if (elsewhere) return decided(`${remote} pushes to ${withoutCredentials(elsewhere)}, which is not a GitHub repository, so nothing says it is private and`);
   for (const repository of new Set(urls.map(githubRepository))) {
     const seen = gh(['repo', 'view', repository, '--json', 'visibility', '-q', '.visibility'], { cwd });
     const visibility = seen.status === 0 ? seen.stdout.trim() : '';
-    if (!visibility) return `the visibility of ${repository} could not be read (${firstLine(seen.stderr) || 'gh said nothing'}), so it is not known to be private and ${KEPT}`;
-    if (visibility !== 'PRIVATE') return `${repository} reads ${visibility}, not PRIVATE, and harness.json does not turn remoteGate on (js-harness functions set remoteGate on), so ${KEPT}`;
+    if (!visibility) return unread(`the visibility of ${repository} could not be read (${firstLine(seen.stderr) || 'gh said nothing'}), so it is not known to be private and`);
+    if (visibility !== 'PRIVATE') return decided(`${repository} reads ${visibility}, not PRIVATE, and harness.json does not turn remoteGate on (js-harness functions set remoteGate on), so`);
   }
   return null;
 }
 
 /** `keptHere` for a caller that runs no git of its own: the gate asks it before it says a push starts (`testsOnCi`).
- * `runCiGate` asks again by itself, so no caller pushes past the switch. `gh` is injectable. */
+ * `runCiGate` asks again by itself, so no caller pushes past the switch: the second question costs one `gh` call
+ * (0.6 s, measured once on 2026-11-11) a destination, only under `private`, on a path that then waits minutes for
+ * the run. `gh` is injectable. */
 export function remoteGateKeeps({ cwd, remote = 'origin', env = process.env, gh }) {
   const runGit = spawner('git', pushEnv(env));
   return keptHere({ cwd, remote, git: (...args) => runGit(['-C', cwd, ...args]), gh: gh ?? spawner('gh', env) });
@@ -184,7 +192,7 @@ export async function runCiGate({ cwd, remote = 'origin', env = process.env, gh,
   const runGh = gh ?? spawner('gh', env);
   // Before anything is written: what the project's switch keeps here leaves no object and no branch behind.
   const kept = keptHere({ cwd, remote, git, gh: runGh });
-  if (kept) return { ran: false, why: kept };
+  if (kept) return { ran: false, why: kept.why };
   const ghIn = ([verb, sub, ...rest]) => runGh([verb, sub, '--repo', repository, ...rest], { cwd });
   // Asked before anything is written or pushed: a `gh` missing, signed out or barred from the repository would
   // otherwise leave a run going that no one reads, after a push every commit pays.
@@ -261,16 +269,19 @@ async function followRun({ sha, gh, now, sleep, startedAt }) {
  * index the run is of, which `filesNow` gives (`filesKey` of ./gate-tree.mjs) or `null`: what lets a failure here
  * stand against a pass of the same files elsewhere (`provenBy` of ./gate-log.mjs). A gate CI gave no answer leaves a
  * `ci-fallback` line under `local`'s id, the record of the gate that then runs here, with what the wait cost.
- * A tree the project's `remoteGate` switch keeps here is said so before any push is announced, and leaves no
- * `ci-fallback` line: CI was never asked. `deps.ciGateWanted`, `deps.remoteGateKeeps` and `deps.runCiGate` stand in
+ * A tree the project's `remoteGate` switch keeps here by decision is said so before any push is announced, and
+ * leaves no `ci-fallback` line: CI was never asked. A visibility that could not be read is no decision and falls
+ * back as any gate with no answer does. `deps.ciGateWanted`, `deps.remoteGateKeeps` and `deps.runCiGate` stand in
  * for the three steps. Moved here from ../check.mjs on 2026-10-30
  * (odd/tasks/gate-narrow-pass.md), which may not grow. */
 export async function testsOnCi(cwd, lock, deps, local = null, filesNow = () => null) {
   const why = (deps.ciGateWanted ?? ciGateWanted)({ cwd, env: lock.env ?? process.env });
   if (!why) return null;
   const kept = (deps.remoteGateKeeps ?? remoteGateKeeps)({ cwd, remote: lock.remote ?? 'origin', env: lock.env ?? process.env });
-  if (kept) {
-    console.error(`check: ${kept}; the tests run here`);
+  // Only a decision ends it here. A read that failed goes on to `runCiGate`, which asks again and, when it fails
+  // again, is a gate with no answer from CI like any other: said so, and logged with what the wait cost.
+  if (kept?.known) {
+    console.error(`check: ${kept.why}; the tests run here`);
     return null;
   }
   console.error(`check: ${why}; the push of the tree being committed starts their run`);
