@@ -175,9 +175,9 @@ line 6905, 2026-11-11T05:30:20Z, "contesta TODAS las preguntas con recomendado T
 completamente autonomo".
 
 ## Tasks
-- [ ] T1 (kind: build) the bar in evals/rule-proof.mjs, test first: five trials, the spread, each trial's score in
+- [x] T1 (kind: build) the bar in evals/rule-proof.mjs, test first: five trials, the spread, each trial's score in
   the record, the earlier shape read and named short — spec 1; inline; commit 1
-- [ ] T2 (kind: build) an owed case says so at its test, with what its record shows — spec 5; inline; commit 1
+- [x] T2 (kind: build) an owed case says so at its test, with what its record shows — spec 5; inline; commit 1
 - [ ] T3 (kind: build) the reports and their headers: the cost check against the list table, the prices header, the
   honesty header and its side-by-side test — spec 2; inline; commit 2
 - [ ] T4 (kind: build) the negative control in evals/task-proof.mjs (`habit/`, `proof.habitPassed`) and its legacy
@@ -299,3 +299,12 @@ completamente autonomo".
   run; until then nothing of the set changes but the two grader faults); (b) the A/B cost verdict calls a false
   "cost" on 23 % to 30 % of equal cells at three trials, his Decided row (recommended: five trials a cell), and a
   proof at five trials errs in at most 9.1 % of cases, 3.8 % at seven (recommended: five, as he answered).
+- L7 (2026-11-11, state after the host compacted the session at 06:09 local, and slice 1). Built, each test seen
+  red first: T1 whole (`MIN_TRIALS = 5`, format 2 with each arm's `scores` and `errors`, `tellsApart` on the one
+  `scoreSpread` of evals/report.mjs, the same count on both arms, one agent, model, permission mode and effort kept in
+  the record, the earlier format named, the fault worded as short of the bar) and T2 (`owedNote`: an owed case's test
+  is titled OWED and prints what its record on file shows). Measured at this commit,
+  `node --test --test-name-pattern="OWED|names its rules" evals/tasks.test.mjs`: 21 of 21 cases are owed, 19 name no
+  rule, and the two records on file are named as of the earlier bar (2 trials an arm, 0.9167 against 0.9167 and
+  0.7143 against 0.7143). Both notices of L6 were sent to the lead before the compaction. Next: T3, then T4 and T5,
+  T6, T7, T8, T9, as L6 orders them.

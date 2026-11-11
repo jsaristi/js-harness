@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { readCoverageText } from '../bin/lib/rules-coverage.mjs';
 import { LEAD_OPENING_PROMPT } from '../bin/lib/lead-prompt.mjs';
 import { RULES } from '../bin/lib/rules-data.mjs';
-import { PROOFS, digestsOf, recordFaults } from './rule-proof.mjs';
+import { PROOFS, digestsOf, owedNote, recordFaults } from './rule-proof.mjs';
 import { proveTask } from './task-proof.mjs';
 import { REPLY_FILE } from './task-script.mjs';
 
@@ -32,12 +32,20 @@ for (const { name } of candidates) {
     assert.deepEqual((await proveTask(path.join(tasksDir, name))).problems, []);
   });
 
-  test(`task ${name} names its rules, and tells them apart by a current record or owes it`, () => {
+  // A case the coverage register owes says so in its title and in a line of the run, with what its record on file
+  // shows: it passed in silence under a title that read as proven, while no rule was proven by an eval (the audit of
+  // 2026-11-09, M2; odd/tasks/audit-u9-eval-bar.md, spec 5).
+  const owed = register.cases.includes(name);
+  test(owed ? `task ${name} is OWED in the coverage register: no record proves that it tells a rule apart` : `task ${name} names its rules, and tells them apart by a current record`, (t) => {
     const { rules } = JSON.parse(fs.readFileSync(path.join(tasksDir, name, 'task.json'), 'utf8'));
     assert.ok(Array.isArray(rules) && rules.every((id) => live.has(id)), `${name}: task.json "rules" is a list of live rule ids (bin/lib/rules-data.mjs)`);
-    if (register.cases.includes(name)) return;
-    assert.ok(rules.length > 0, `${name} names no rule and the coverage register does not owe it`);
     const file = path.join(root, ...PROOFS.split('/'), `${name}.json`);
+    if (owed) {
+      const onFile = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
+      t.diagnostic(owedNote(onFile, { name, rules, digests: onFile === null || rules.length === 0 ? {} : digestsOf(root, name, rules) }));
+      return;
+    }
+    assert.ok(rules.length > 0, `${name} names no rule and the coverage register does not owe it`);
     assert.ok(fs.existsSync(file), `${name} names ${rules.join(', ')} and has no record at ${PROOFS}/${name}.json: run its proof (evals/rule-proof.mjs)`);
     const record = JSON.parse(fs.readFileSync(file, 'utf8'));
     assert.deepEqual(recordFaults(record, { name, rules, digests: digestsOf(root, name, rules) }), []);

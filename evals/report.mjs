@@ -193,6 +193,9 @@ export function buildCells(trials, { agent = 'claude', model } = {}) {
  * standard deviation, whichever is larger: one hidden check in about fifty. Near-ceiling scores have almost no
  * spread, so the pooled deviation alone would call one missed check in nine trials a difference. */
 export const SCORE_TOLERANCE = 0.02;
+/** The spread a gap between two mean scores must exceed to be a difference, from the sample deviation of each side:
+ * the one notion of "equal" of the A/B verdict (`compareCells`) and of a rule proof (`evals/rule-proof.mjs`). */
+export const scoreSpread = (sdA, sdB) => Math.max(SCORE_TOLERANCE, pooledSd(sdA, sdB));
 /** A cell needs this many trials, with a known score and a known cost, to be compared at all. */
 const MIN_TRIALS_TO_COMPARE = 2;
 
@@ -235,7 +238,7 @@ export function compareCells(minimal, current) {
   result.costDiff = current.cost.mean - minimal.cost.mean;
   result.pooledCostSd = pooledSd(minimal.cost.sd, current.cost.sd);
   result.costRatio = minimal.cost.mean === 0 ? null : current.cost.mean / minimal.cost.mean;
-  const equal = round(Math.abs(result.scoreDiff)) <= round(Math.max(SCORE_TOLERANCE, result.pooledScoreSd));
+  const equal = round(Math.abs(result.scoreDiff)) <= round(scoreSpread(minimal.score.sd, current.score.sd));
   if (!equal) {
     result.verdict = 'score';
     result.winner = result.scoreDiff > 0 ? 'current' : 'minimal';
