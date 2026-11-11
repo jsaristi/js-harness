@@ -366,12 +366,30 @@
         "date": "2026-11-10",
         "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
         "line": 4744
+      },
+      {
+        "quote": "Vamos a unificar y todo va a ser con Fable 5.2 Alto y necesito que lo cambies tanto en la documentacion y lo unifiques en un solo lugar",
+        "date": "2026-11-10",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 5167
+      },
+      {
+        "quote": "Va a tocar utilizar Fable 5.2 en Alto solo para el orquestador y para las sesiones solo Fable 5.2 en Medio",
+        "date": "2026-11-11",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 11253
+      },
+      {
+        "quote": "Sí, aplícalo",
+        "date": "2026-11-11",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 11679
       }
     ],
-    "reading": "The model a change passes to when three reviews of it did not settle it is Fable 5.2, claude-fable-5-2: the strongest this machine knows on 2026-11-10, in place of claude-fable-5-1. That his \"todos los modelos\" takes in this one is the lead's reading (JH ORQ, the brief of this change), and his to stop. With every session on this model already (rule:session-model), the step no longer moves the work to a stronger model than the one that wrote it: what is left of it is raising the problem to him, and whether the step keeps a model at all is his to say. The rest stands as approved on 2026-11-01 (question 152, point 4 of the redesign): at most three reviews of one change, then the problem is raised to him.",
-    "accepted": "Typed by him in the lead's chat on 2026-11-10. Not put to him as a reading: it is the lead's, and his to correct.",
+    "reading": "Everything Claude the harness starts reads its model and its effort in one place: his \"todos los modelos de ahora en adelante\" and \"lo unifiques en un solo lugar\" of 2026-11-10. That day it was one model at one effort; on 2026-11-11, after the limit of Fable stopped the sessions, he kept the one model and split the effort in two, high for the orchestrator alone and medium for the sessions and the sub-agents. This rule restated a value of that place for one kind of work, so it retires into rule:session-model, which holds it.",
+    "accepted": "Typed by him in the lead's chat on 2026-11-10 and 2026-11-11. His \"Sí, aplícalo\" answers the lead's scheme of line 11674 of the same transcript, \"Orquestador: Fable 5.2 alto\" and \"Sesiones y subagentes nuevos: Fable 5.2 medio\". The rest of the reading was not put to him: it is the lead's, in the brief of JH 172 and its notices of 2026-11-11, and his to correct.",
     "checked": {
-      "date": "2026-11-10",
+      "date": "2026-11-11",
       "by": "command"
     }
   },
