@@ -15,8 +15,9 @@ const NAME_PATTERN = /`rule:([a-z][a-z0-9-]*)`/g;
 const FENCE_RUN = /^(`{3,}|~{3,})/;
 // The characters that can end a sentence.
 const TERMINATORS = '.?!';
-// The line that ends a feature document's plan: what follows it is history.
-const PROGRESS_LINE = /^## Progress\r?$/;
+// The line that ends a feature document's plan: what follows it is history, what was done (`## Progress`) or what was
+// said (`## Log`), and a Log tells what a rule was called when it was written.
+export const HISTORY_LINE = /^## (?:Progress|Log)\r?$/;
 
 /** `text` with every run of white space read as one space and the ends trimmed. */
 const squash = (text) => text.replace(/\s+/g, ' ').trim();
@@ -144,13 +145,13 @@ export function namedRules(textFiles) {
   return named;
 }
 
-/** `text` cut at its first `## Progress` line outside a fenced block, which is left out with everything after it: the
- * text before that line, byte for byte, or the whole text when there is no such line. That line is exactly
- * `## Progress`, with a trailing `\r` allowed and nothing else. */
-export function beforeProgress(text) {
+/** `text` cut at its first `## Progress` or `## Log` line outside a fenced block, which is left out with everything
+ * after it: the text before that line, byte for byte, or the whole text when there is no such line. That line is
+ * exactly `## Progress` or `## Log`, with a trailing `\r` allowed and nothing else. */
+export function beforeHistory(text) {
   let offset = 0;
   for (const { line, outside } of fenceWalk(text).walked) {
-    if (outside && PROGRESS_LINE.test(line)) return text.slice(0, offset);
+    if (outside && HISTORY_LINE.test(line)) return text.slice(0, offset);
     offset += line.length + 1;
   }
   return text;

@@ -93,12 +93,13 @@ function changedPaths(porcelain) {
 /**
  * Runs the change of the rule `id` in the checkout `top` and gives the exit code: 0 when it is written (or printed,
  * with `dryRun`), 1 when it is refused. `checkSource` checks the stored source of `id` again instead of a change.
+ * `withPaths` are the paths whose changes in the tree are admitted beside the rule's, for the same commit.
  * `packageRoot` is the folder of the code that runs; `readTree(top)` reads the code and the texts the check reads;
  * `git(args)` runs git in `top` and gives `{ status, stdout }`; `stdin()` gives the change as JSON. The relief file is
  * the one of `slug` under `home`, and a transcript is read from `transcripts`. `rename` is fs.renameSync unless a test
  * makes it fail.
  */
-export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree, git, stdin, now, home, slug, transcripts, rename = fs.renameSync }, stdout, stderr) {
+export function changeRule({ id, dryRun, checkSource, withPaths = [], top, packageRoot, readTree, git, stdin, now, home, slug, transcripts, rename = fs.renameSync }, stdout, stderr) {
   try {
     return runChange();
   } catch (err) {
@@ -223,15 +224,24 @@ export function changeRule({ id, dryRun, checkSource, top, packageRoot, readTree
       throw new RuleChangeError('a phrase of AGENTS.md changes only by its approved draft (letter G), which is not built');
     }
 
-    // The tree may differ from the branch only in the home of a text that changes with its declaration.
+    // The tree may differ from the branch only in the home of a text that changes with its declaration, and in the
+    // paths `--with` names: what moves in the same commit as the rule, as the readers of one that retires do. A path
+    // named is one that holds a change, so a misspelled one is not passed over, and never one of the three files
+    // this command writes.
     const homes = new Set([before?.path, rule.path].filter((file) => typeof file === 'string' && change !== null && (Object.hasOwn(change, 'path') || Object.hasOwn(change, 'phrases'))));
+    const named = withPaths.map((file) => path.posix.normalize(String(file).replace(/\\/g, '/')));
+    const own = named.find((file) => [DATA, SOURCES, LIST].includes(file));
+    if (own !== undefined) throw new RuleChangeError(`--with names ${own}, which the command writes itself`);
     // Read untrimmed: the first column of the first line may be a space.
     const status = git(['status', '--porcelain', '-uall']);
     if (status.status !== 0) throw new RuleChangeError('git status failed');
-    const outside = changedPaths(String(status.stdout ?? '')).filter((file) => !homes.has(file));
+    const changedNow = changedPaths(String(status.stdout ?? ''));
+    const unchanged = named.find((file) => !changedNow.includes(file));
+    if (unchanged !== undefined) throw new RuleChangeError(`--with names ${unchanged}, which holds no change in the tree`);
+    const outside = changedNow.filter((file) => !homes.has(file) && !named.includes(file));
     if (outside.length > 0) {
       const written = outside.some((file) => [DATA, SOURCES, LIST].includes(file)) ? '; commit the change already written before the next one' : '';
-      throw new RuleChangeError(`the tree holds changes outside the rule's home: ${outside.join(', ')}${written}`);
+      throw new RuleChangeError(`the tree holds changes outside the rule's home${named.length > 0 ? ' and the paths named' : ''}: ${outside.join(', ')}${written}`);
     }
 
     // The source, read from its transcripts and checked.

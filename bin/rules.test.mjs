@@ -25,7 +25,7 @@ const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
 const IN_FORCE = RULES.filter((rule) => !Object.hasOwn(rule, 'retired'));
 const SCANNED = IN_FORCE.filter((rule) => Array.isArray(rule.patterns)).map((rule) => `${rule.id} 0`);
 const PATTERNS_LINE = `patterns: ${SCANNED.length === 0 ? 'none' : SCANNED.join(', ')}; unscanned: ${IN_FORCE.length - SCANNED.length}`;
-const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] | --hook]';
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] [--with <path>...] | --hook]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
 /** The coverage register `text` (the package's) with every check owed, since a project of these tests holds none of the
@@ -245,6 +245,15 @@ test('a feature document that names an undeclared rule fails check above its Pro
   });
 });
 
+test('a mark inside a feature document\'s Log is history too: a Log tells what a rule was called', async () => {
+  const logged = '# Feature\n\nThe limit is one of the rules.\n\n## Log\n\n- L1. The limit was `rule:no-such-rule` then.\n';
+  await inProject(BASE(), async (dir) => {
+    await run(['render'], dir);
+    write(dir, { 'odd/tasks/feature.md': logged });
+    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE, PATTERNS_LINE], err: [] });
+  });
+});
+
 test('a feature document whose fenced example holds a Progress line is cut at the real one, so a mark after the fence is checked', async () => {
   const feature = [
     '# Feature',
@@ -316,7 +325,7 @@ test('a flag, or a second word, is a usage error: exit 2, with the message and t
 test('the usage names the applied form, and a word after applied is a usage error', async () => {
   await inProject(BASE(), async (dir) => {
     assert.deepEqual(await run(['applied', 'extra'], dir), { code: 2, out: [], err: [`unknown argument: extra\n\n${USAGE}`] });
-    assert.match(USAGE, /\| applied \| coverage [^|]*(?:\| [^|]*)*\| change <id> \[--dry-run \| --check-source\] \| --hook\]$/);
+    assert.match(USAGE, /\| applied \| coverage [^|]*(?:\| [^|]*)*\| change <id> \[--dry-run \| --check-source\] \[--with <path>\.\.\.\] \| --hook\]$/);
   });
 });
 

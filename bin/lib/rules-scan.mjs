@@ -1,14 +1,12 @@
 // The scan of the texts in force for a restated value (odd/tasks/rule-hierarchy.md, "The row `rules` (T16d)"): a
 // line that a rule's pattern matches says the rule's value by its subject, where the cure is the `rule:<id>` mark
 // instead of the value. The texts that show a value, or quote what was said, are not texts in force.
-import { fenceWalk } from './rules-check.mjs';
+import { HISTORY_LINE, fenceWalk } from './rules-check.mjs';
 import { patternOf } from './rules.mjs';
 
 // The homes of the list, which show a value, and the texts that quote what was said or are frozen. The coverage
 // register is data of the list too: rule ids, days and planted breaks, never a value said again in prose.
 const NOT_IN_FORCE = new Set(['bin/lib/rules-data.mjs', 'bin/lib/rules-coverage-data.mjs', 'docs/rule-sources.json', 'docs/RULES.md', 'docs/FAILURES.md', 'docs/origin.md']);
-// Where the history of a feature document starts: what was said and done there is not in force.
-const HISTORY_LINE = /^## (?:Progress|Log)\r?$/;
 const FEATURE_DOCUMENT = /^odd\/tasks\/[^/]+\.md$/;
 // The texts in force by their path, the ones `rules check` reads (bin/rules.mjs, `readAll`): the code under bin/, its
 // tests left out, the roadmap, the spec, the feature documents, AGENTS.md, CLAUDE.md and README.md.
