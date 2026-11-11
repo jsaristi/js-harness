@@ -88,7 +88,7 @@ What the lead does alone and tells him after, and what stays his, asked one at a
 The effort the lead's session runs at: high.
 - Of this repository only: not in force in a project that installs the harness.
 - Was: xhigh until 2026-11-10.
-- Read by: `bin/lib/guard.mjs`, `bin/lib/model-home.mjs`.
+- Read by: `bin/lib/model-home.mjs`.
 - Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
 ### live-board
@@ -182,7 +182,7 @@ A rule he gives is cemented in the harness where something acts on it, never onl
 The effort everything Claude the harness starts runs at but the lead's session: every work session, every sub-agent, the lenses and the double review's Claude reader: medium.
 - Of this repository only: not in force in a project that installs the harness.
 - Was: high until 2026-11-11; medium until 2026-11-10; high until 2026-11-10.
-- Read by: `bin/lib/guard.mjs`, `bin/lib/model-home.mjs`, `bin/rules.mjs`.
+- Read by: `bin/lib/model-home.mjs`, `bin/rules.mjs`.
 - Since 2026-11-11. Row: reports. Source: his words of 2026-11-10, 2026-11-10, 2026-11-11, 2026-11-11, checked by the command on 2026-11-11.
 
 ### session-housekeeping

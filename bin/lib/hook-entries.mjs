@@ -69,7 +69,7 @@ export const GUARD_HOOK_COMMAND = 'js-harness guard --hook || exit 0';
  * memory index it holds to INDEX_LINE_CHARS characters (odd/tasks/memory-hygiene.md, T4), and the four tools that open a session in
  * the app's Routines or in the cloud, refused where the rule `sessions-open-in-sidebar` is declared (layer 3 of
  * odd/tasks/session-channel.md), and the desktop app's `start_session`, whose effort it holds to the rule
- * `session-effort`, or `lead-effort` for a new lead (odd/tasks/harness-review.md, T6c), and the desktop app's `run_in_terminal`, whose command it holds to
+ * `session-effort`, or `lead-effort` for a new lead, and a model it names to the rule `session-model` (odd/tasks/harness-review.md, T6c), and the desktop app's `run_in_terminal`, whose command it holds to
  * a closing note saying what it does where the rule `terminal-note` is declared (odd/tasks/terminal-note.md). Claude Code only: the tool names are Claude Code's. Five
  * seconds: it may ask git for the project's root once.
  * The matcher is anchored, `^(…)$`, because Claude Code's hooks reference (checked 2026-10-15) reads a matcher with a

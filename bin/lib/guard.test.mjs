@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RULES } from './rules-data.mjs';
 import { ruleHere, writeRules } from './rules.mjs';
-import { allowedModels, denial, hourRefusal, openingRefusal, sessionEffortRefusal, stampedHour } from './guard.mjs';
+import { allowedModels, denial, hourRefusal, openingRefusal, sessionStartRefusal, stampedHour } from './guard.mjs';
 import { backtickRefusal, backticksInDoubleQuotes, driveRootRemovalRefusal, modelRefusal, onFirstParentLine, reviewBaseRefusal, terminalNoteRefusal } from './guard.mjs';
 import { RECORD_HANDLES, REVIEW_RECORD_FILES, reviewRecordOf, reviewRecordWriteRefusal } from './guard.mjs';
 import { codexReviewsPath } from './codex-reviews.mjs';
@@ -127,14 +127,15 @@ test('behind a project whose list declares the rule, the guard refuses as here, 
     assert.deepEqual(allowedModels(projectData), allowedModels(HERE));
     assert.equal(terminalNoteRefusal('npm test', projectData), terminalNoteRefusal('npm test', HERE));
     assert.equal(openingRefusal('RemoteTrigger', projectData), openingRefusal('RemoteTrigger', HERE));
-    assert.equal(sessionEffortRefusal(effort, projectData), sessionEffortRefusal(effort, HERE));
+    assert.equal(sessionStartRefusal(effort, projectData), sessionStartRefusal(effort, HERE));
   }
   assert.doesNotMatch(terminalNoteRefusal('npm test', ahead), STALE);
   const cases = [
     ['terminal-note', (data) => terminalNoteRefusal('npm test', data)],
     ['sessions-open-in-sidebar', (data) => openingRefusal('RemoteTrigger', data)],
-    ['session-effort', (data) => sessionEffortRefusal(effort, data)],
-    ['lead-effort', (data) => sessionEffortRefusal({ title: 'JH ORQ · x', prompt: 'p', effort: 'ultra' }, data, { lead: true })],
+    ['session-effort', (data) => sessionStartRefusal(effort, data)],
+    ['lead-effort', (data) => sessionStartRefusal({ title: 'JH ORQ · x', prompt: 'p', effort: 'ultra' }, data, { lead: true })],
+    ['session-model', (data) => sessionStartRefusal({ title: 'JH 1 · x', prompt: 'p', model: 'opus' }, data)],
     ['subagent-writer-model', (data) => modelRefusal({ model: 'sonnet' }, allowedModels(data))],
   ];
   for (const [id, refusal] of cases) {
@@ -195,61 +196,91 @@ test('the tools that do not open a session pass in this repository, whatever the
 // sessions opened so ran at max for two days while the rule says high (odd/tasks/harness-review.md, T6c).
 const BRIEF = { initiation: 'own_initiative', title: 'JH 32 · T9', prompt: 'Do T9.', background: 'x'.repeat(80) };
 // The rule's effort is read from the list and never written here, so a change of his needs no edit of these tests; the
-// order of the levels is the host's, written here apart from the guard's own.
+// levels are the host's, written here apart from the guard's own.
 const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const HELD = RULES.find((rule) => rule.id === 'session-effort').value;
-const ABOVE = LEVELS.slice(LEVELS.indexOf(HELD) + 1);
-const WITHIN = LEVELS.slice(0, LEVELS.indexOf(HELD) + 1);
+const OTHERS = LEVELS.filter((level) => level !== HELD);
 
-test('in this repository a session started with no effort, or above the rule\'s, is refused, and the reason names the rule', () => {
-  const noEffort = sessionEffortRefusal(BRIEF, HERE);
+// odd/tasks/one-model-home.md, spec 5: a start takes the home's level, the one he set, and no other. Until
+// 2026-11-11 a lower one passed, so a session could be started below the level he chose with nothing said.
+test('in this repository a session started with no effort, or at another level than the rule\'s, is refused, and the reason names the rule', () => {
+  const noEffort = sessionStartRefusal(BRIEF, HERE);
   assert.equal(noEffort, 'js-harness guard: start_session names no effort, so the new session would run at this session\'s '
-    + `(rule session-effort: ${HELD}). Pass effort "${HELD}" or lower with context "fresh"; a fork cannot set its own effort.`);
+    + `(rule session-effort: ${HELD}). Pass effort "${HELD}" with context "fresh"; a fork cannot set its own effort.`);
   assert.ok(LEVELS.includes(HELD), `the rule's effort, ${HELD}, is one of the levels`);
-  for (const effort of ABOVE) {
-    assert.equal(sessionEffortRefusal({ ...BRIEF, effort }, HERE), `js-harness guard: start_session asks for effort "${effort}", `
-      + `above the rule session-effort: ${HELD}. Pass effort "${HELD}" or lower; a higher one is his to set.`, effort);
+  for (const effort of OTHERS) {
+    assert.equal(sessionStartRefusal({ ...BRIEF, effort }, HERE), `js-harness guard: start_session asks for effort "${effort}", `
+      + `not the level of the rule session-effort: ${HELD}. Pass effort "${HELD}"; another level is his to set.`, effort);
   }
-  assert.equal(sessionEffortRefusal({ ...BRIEF, context: 'fork' }, HERE), noEffort);
-  assert.equal(sessionEffortRefusal({ ...BRIEF, effort: 'ultra' }, HERE), 'js-harness guard: start_session asks for effort "ultra", '
-    + `which is not one of low, medium, high, xhigh, max. Pass effort "${HELD}" or lower.`);
+  assert.equal(sessionStartRefusal({ ...BRIEF, context: 'fork' }, HERE), noEffort);
+  assert.equal(sessionStartRefusal({ ...BRIEF, effort: 'ultra' }, HERE), 'js-harness guard: start_session asks for effort "ultra", '
+    + `which is not one of low, medium, high, xhigh, max. Pass effort "${HELD}".`);
 });
 
-test('a session started at the rule\'s effort or lower passes, and so do the calls that carry no brief', () => {
-  for (const effort of WITHIN) assert.equal(sessionEffortRefusal({ ...BRIEF, effort }, HERE), null, effort);
-  assert.equal(sessionEffortRefusal({ initiation: 'offer', title: 'T9' }, HERE), null, 'an offer is a title alone');
-  assert.equal(sessionEffortRefusal({ proposal_id: 'task_ab12cd34' }, HERE), null, 'a proposal starts as it was proposed');
+test('a session started at the rule\'s effort passes, and so do the calls that carry no brief', () => {
+  assert.equal(sessionStartRefusal({ ...BRIEF, effort: HELD }, HERE), null);
+  assert.equal(sessionStartRefusal({ initiation: 'offer', title: 'T9' }, HERE), null, 'an offer is a title alone');
+  assert.equal(sessionStartRefusal({ proposal_id: 'task_ab12cd34' }, HERE), null, 'a proposal starts as it was proposed');
 });
 
-// 2026-11-10: his words give the lead a level above the work sessions', and at a cut the old lead starts the new one
-// with this tool (bin/lib/manifest.mjs, "The cut"). Held to session-effort, that start was refused at the lead's level.
+// His decision of 2026-11-11 (odd/tasks/one-model-home.md, S7): the lead's session has a level of its own, and at a
+// cut the old lead starts the new one with this tool (bin/lib/manifest.mjs, "The cut"). Held to session-effort, that
+// start was refused at the lead's level.
 const LEAD = RULES.find((rule) => rule.id === 'lead-effort').value;
 
-test('a start of a new lead is held to the rule lead-effort, and every other start to session-effort', () => {
+test('a start of a new lead is held to the rule lead-effort, and every other start to session-effort, each to that one level', () => {
   assert.ok(LEVELS.includes(LEAD), `the lead's effort, ${LEAD}, is one of the levels`);
-  for (const effort of LEVELS.slice(0, LEVELS.indexOf(LEAD) + 1)) assert.equal(sessionEffortRefusal({ ...BRIEF, effort }, HERE, { lead: true }), null, effort);
-  for (const effort of LEVELS.slice(LEVELS.indexOf(LEAD) + 1)) {
-    assert.equal(sessionEffortRefusal({ ...BRIEF, effort }, HERE, { lead: true }), `js-harness guard: start_session asks for effort "${effort}", `
-      + `above the rule lead-effort: ${LEAD}. Pass effort "${LEAD}" or lower; a higher one is his to set.`, effort);
+  assert.equal(sessionStartRefusal({ ...BRIEF, effort: LEAD }, HERE, { lead: true }), null);
+  for (const effort of LEVELS.filter((level) => level !== LEAD)) {
+    assert.equal(sessionStartRefusal({ ...BRIEF, effort }, HERE, { lead: true }), `js-harness guard: start_session asks for effort "${effort}", `
+      + `not the level of the rule lead-effort: ${LEAD}. Pass effort "${LEAD}"; another level is his to set.`, effort);
   }
-  // A lead started with no effort would run at the old lead's, which may be above the rule's: refused as any start.
-  assert.equal(sessionEffortRefusal(BRIEF, HERE, { lead: true }), "js-harness guard: start_session names no effort, so the new session would run at this session's "
-    + `(rule lead-effort: ${LEAD}). Pass effort "${LEAD}" or lower with context "fresh"; a fork cannot set its own effort.`);
-  assert.equal(sessionEffortRefusal({ ...BRIEF, effort: LEAD }, HERE, { lead: true, cli: true }), null);
-  assert.equal(sessionEffortRefusal({ ...BRIEF, effort: 'ultra' }, HERE, { lead: true, cli: true }), 'js-harness sessions start asks for effort "ultra", '
-    + `which is not one of low, medium, high, xhigh, max. Pass --effort ${LEAD} or lower.`);
-  // A start that is not a lead's is held to the sessions' rule at every level, the lead's included.
-  for (const effort of ABOVE) assert.match(sessionEffortRefusal({ ...BRIEF, effort }, HERE), /above the rule session-effort: /, effort);
+  // A lead started with no effort would run at the old lead's, which may not be the rule's: refused as any start.
+  assert.equal(sessionStartRefusal(BRIEF, HERE, { lead: true }), "js-harness guard: start_session names no effort, so the new session would run at this session's "
+    + `(rule lead-effort: ${LEAD}). Pass effort "${LEAD}" with context "fresh"; a fork cannot set its own effort.`);
+  assert.equal(sessionStartRefusal({ ...BRIEF, effort: LEAD }, HERE, { lead: true, cli: true }), null);
+  assert.equal(sessionStartRefusal({ ...BRIEF, effort: 'ultra' }, HERE, { lead: true, cli: true }), 'js-harness sessions start asks for effort "ultra", '
+    + `which is not one of low, medium, high, xhigh, max. Pass --effort ${LEAD}.`);
+  assert.equal(sessionStartRefusal({ ...BRIEF, effort: OTHERS[0] }, HERE, { cli: true }), `js-harness sessions start asks for effort "${OTHERS[0]}", `
+    + `not the level of the rule session-effort: ${HELD}. Pass --effort ${HELD}; another level is his to set.`);
+  // A start that is not a lead's is held to the sessions' rule at every level, the lead's included where the two differ.
+  for (const effort of OTHERS) assert.match(sessionStartRefusal({ ...BRIEF, effort }, HERE), /not the level of the rule session-effort: /, effort);
   // A project whose list declares no lead-effort holds a lead's start to session-effort, as before the rule.
   const without = writeRules(RULES.filter((rule) => rule.id !== 'lead-effort'));
-  for (const effort of ABOVE) assert.match(sessionEffortRefusal({ ...BRIEF, effort }, without, { lead: true }), /above the rule session-effort: /, effort);
-  for (const effort of WITHIN) assert.equal(sessionEffortRefusal({ ...BRIEF, effort }, without, { lead: true }), null, effort);
+  for (const effort of OTHERS) assert.match(sessionStartRefusal({ ...BRIEF, effort }, without, { lead: true }), /not the level of the rule session-effort: /, effort);
+  assert.equal(sessionStartRefusal({ ...BRIEF, effort: HELD }, without, { lead: true }), null);
 });
 
 test('where the rule session-effort is not declared, a session started with no effort passes', () => {
-  assert.equal(sessionEffortRefusal(BRIEF, null), null);
-  assert.equal(sessionEffortRefusal(BRIEF, writeRules(RULES.filter((rule) => rule.id !== 'session-effort'))), null);
-  assert.equal(sessionEffortRefusal(BRIEF, 'an older list\n'), null);
+  assert.equal(sessionStartRefusal(BRIEF, null), null);
+  assert.equal(sessionStartRefusal(BRIEF, writeRules(RULES.filter((rule) => rule.id !== 'session-effort'))), null);
+  assert.equal(sessionStartRefusal(BRIEF, 'an older list\n'), null);
+});
+
+// odd/tasks/one-model-home.md, spec 5 as L13 amends it: a start that names a model names the home's. The model is not
+// asked for yet: whether start_session takes a full id is not known, since no call of the lead has named one.
+const MODEL = RULES.find((rule) => rule.id === 'session-model').value;
+
+test('a start that names a model other than the home\'s is refused, a lead\'s too, and one that names none or the home\'s passes', () => {
+  const at = { ...BRIEF, effort: HELD };
+  for (const model of [undefined, null, '', MODEL, `${MODEL}[1m]`]) assert.equal(sessionStartRefusal({ ...at, model }, HERE), null, String(model));
+  // A short name is no id: it names whatever the engine in use gives it (on 2026-11-10 `fable` gave claude-fable-5-1).
+  for (const model of ['fable', 'opus', 'claude-opus-5-5', 'gpt-6.1-sol']) {
+    assert.equal(sessionStartRefusal({ ...at, model }, HERE), `js-harness guard: start_session names the model "${model}", `
+      + `not the one of the rule session-model: ${MODEL}. Pass model "${MODEL}", or none; another model is his to set.`, model);
+  }
+  assert.match(sessionStartRefusal({ ...BRIEF, effort: LEAD, model: 'opus' }, HERE, { lead: true }), /not the one of the rule session-model: /);
+  assert.equal(sessionStartRefusal({ ...at, model: 'opus' }, HERE, { cli: true }), 'js-harness sessions start names the model "opus", '
+    + `not the one of the rule session-model: ${MODEL}. Pass --model ${MODEL}, or none; another model is his to set.`);
+  // The model is said before the effort: a start off both is told the first, and the second once it is right.
+  assert.match(sessionStartRefusal({ ...BRIEF, model: 'opus' }, HERE), /names the model "opus"/);
+  // Where the model's rule is not declared no model is refused, and the effort is still held.
+  const without = writeRules(RULES.filter((rule) => rule.id !== 'session-model'));
+  assert.equal(sessionStartRefusal({ ...at, model: 'opus' }, without), null);
+  assert.match(sessionStartRefusal({ ...BRIEF, model: 'opus' }, without), /names no effort/);
+  assert.equal(sessionStartRefusal({ ...at, model: 'opus' }, null), null);
+  // A call with no brief starts as it was offered or proposed.
+  assert.equal(sessionStartRefusal({ initiation: 'offer', title: 'T9', model: 'opus' }, HERE), null);
 });
 
 test('a refusal is the PreToolUse deny of the hooks contract, with its reason', () => {

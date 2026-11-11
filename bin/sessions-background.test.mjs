@@ -730,10 +730,10 @@ test('a session titled as a lead starts and resumes at the rule lead-effort, whi
   // A word that is no level is refused under the rule that holds the title, whatever the two values are.
   const work = js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief, '--effort', 'ultra']);
   assert.equal(work.code, 2);
-  assert.ok(work.stderr.trimEnd().endsWith(`Pass --effort ${SESSION_EFFORT} or lower.`), work.stderr);
+  assert.ok(work.stderr.trimEnd().endsWith(`Pass --effort ${SESSION_EFFORT}.`), work.stderr);
   const none = js(world, ['sessions', 'start', '--title', 'JH ORQ · relevo', '--brief', world.brief, '--effort', 'ultra']);
   assert.equal(none.code, 2);
-  assert.ok(none.stderr.trimEnd().endsWith(`Pass --effort ${lead} or lower.`), none.stderr);
+  assert.ok(none.stderr.trimEnd().endsWith(`Pass --effort ${lead}.`), none.stderr);
   assert.deepEqual(readState(world).calls, []);
   const started = js(world, ['sessions', 'start', '--title', 'JH ORQ · relevo', '--brief', world.brief, '--effort', lead]);
   assert.equal(started.code, 0, started.stderr);
@@ -751,7 +751,14 @@ test('sessions start --resume holds to the effort rule, needs a writable record,
   endJob(world, '0db8bc5e');
   const effort = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--effort', 'max']);
   assert.equal(effort.code, 2);
-  assert.ok(effort.stderr.includes(`--effort ${SESSION_EFFORT} or lower`), effort.stderr);
+  assert.ok(effort.stderr.includes(`Pass --effort ${SESSION_EFFORT};`), effort.stderr);
+  // odd/tasks/one-model-home.md, spec 5: a model other than the home's is refused at a start and at a resume.
+  const model = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--model', 'opus']);
+  assert.equal(model.code, 2);
+  assert.match(model.stderr, /js-harness sessions start names the model "opus", not the one of the rule session-model: /);
+  const started = js(world, ['sessions', 'start', '--title', 'JH 2 · thing', '--brief', world.brief, '--effort', SESSION_EFFORT, '--model', 'opus']);
+  assert.equal(started.code, 2);
+  assert.match(started.stderr, /names the model "opus"/);
   fs.chmodSync(recordFile(world), 0o444);
   const unwritable = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
   fs.chmodSync(recordFile(world), 0o644);

@@ -8,7 +8,7 @@ import { roleOfTitle } from './sessions.mjs';
 import { guardHeld, ruleHere } from './rules.mjs';
 
 /** Whether `title` is the title of a lead, `<code> ORQ · <purpose>`: the start of a session so titled is held to the
- * rule `lead-effort`, and every other to `session-effort` (`sessionEffortRefusal` of ./guard.mjs). Only the shape is
+ * rule `lead-effort`, and every other to `session-effort` (`sessionStartRefusal` of ./guard.mjs). Only the shape is
  * read: a title with another project's code is a lead's here and refused for its code by `sessionTitleRefusal`. */
 export const leadTitle = (title) => roleOfTitle(title)?.role === 'orchestrator';
 
