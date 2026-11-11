@@ -72,6 +72,8 @@ test('in this repository a sub-agent may run on the home\'s model, on its short 
   for (const model of [undefined, null, '', ...SHORT_NAMES, ...MODEL_RULES.map((rule) => rule.value)]) {
     assert.equal(modelRefusal({ model, prompt: 'p', description: 'd' }, allowed), null, String(model));
   }
+  // The same model with a date at its end or a bracket aside is the home's, as a start reads it.
+  for (const more of ['[1m]', '-20261101']) assert.equal(modelRefusal({ model: `${MODEL_RULES[0].value}${more}` }, allowed), null, more);
 });
 
 test('a model the home does not give is refused, and the refusal names the rule and what it gives', () => {

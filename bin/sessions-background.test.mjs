@@ -759,6 +759,28 @@ test('sessions start --resume holds to the effort rule, needs a writable record,
   const started = js(world, ['sessions', 'start', '--title', 'JH 2 · thing', '--brief', world.brief, '--effort', SESSION_EFFORT, '--model', 'opus']);
   assert.equal(started.code, 2);
   assert.match(started.stderr, /names the model "opus"/);
+  // The guard judges nothing of a call with no brief, so a resume refuses an empty one itself, as a start does: with
+  // one, a resume ran at any level and on any model (the verifier's finding of 2026-11-11).
+  const emptyBrief = `${world.brief}.empty`;
+  for (const text of ['', ' \n']) {
+    fs.writeFileSync(emptyBrief, text);
+    const empty = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--brief', emptyBrief, '--effort', 'max', '--model', 'opus']);
+    assert.equal(empty.code, 2, JSON.stringify(text));
+    assert.match(empty.stderr, /the brief .* is empty, so nothing was resumed/);
+  }
+  // A level or a model the call does not name is the record's: the refusal says so, since "or none" takes it again.
+  const recordText = fs.readFileSync(recordFile(world), 'utf8');
+  const offHome = recordText.trimEnd().split('\n').map((line) => JSON.parse(line)).map((line) => (line.id === '0db8bc5e' ? { ...line, effort: 'max', model: 'opus' } : line));
+  fs.writeFileSync(recordFile(world), `${offHome.map((line) => JSON.stringify(line)).join('\n')}\n`);
+  const recorded = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(recorded.code, 2);
+  assert.match(recorded.stderr, /names the model "opus"/);
+  assert.ok(recorded.stderr.includes('The record of 0db8bc5e holds model "opus" and effort "max", which a resume takes again where the call names none: name the rule\'s on the call.'), recorded.stderr);
+  const half = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--model', RULES.find((rule) => rule.id === 'session-model').value]);
+  assert.equal(half.code, 2);
+  assert.ok(half.stderr.includes('The record of 0db8bc5e holds effort "max", which'), half.stderr);
+  fs.writeFileSync(recordFile(world), recordText);
+  assert.equal(actions(world).length, 1, 'nothing ran');
   fs.chmodSync(recordFile(world), 0o444);
   const unwritable = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
   fs.chmodSync(recordFile(world), 0o644);

@@ -23,7 +23,8 @@ export function allowedModels(projectData) {
 /** Why the `Agent` call whose input is `toolInput` is refused, or null when it is not. A call with no `model`
  * passes: it runs on the parent's model, or on the one its agent type declares, which the rules leave out
  * (odd/tasks/rule-hierarchy.md, "the agent types that set their own model"). One that names a model passes when it
- * is a rule's id, or its alias where the rule declares one; any other is refused. A rule declares an alias only while
+ * is a rule's id (a date at its end or a bracket aside, as `sameClaudeModel` reads it, is the same model), or its
+ * alias where the rule declares one; any other is refused. A rule declares an alias only while
  * that short name is known to give its model on the engine in use, so a short name no rule declares is refused like
  * any other model: on 2026-11-10 `fable` gave claude-fable-5-1 on cli 2.1.319 while his words named Fable 5.2, and
  * the refusal then says the way left to a call that takes only short names, no model. Effort is never refused here:
@@ -31,7 +32,7 @@ export function allowedModels(projectData) {
 export function modelRefusal(toolInput, allowed) {
   const model = toolInput?.model;
   if (allowed === null || model === undefined || model === null || model === '') return null;
-  if (allowed.some(({ alias, id }) => (alias !== null && model === alias) || model === id)) return null;
+  if (allowed.some(({ alias, id }) => (alias !== null && model === alias) || model === id || sameClaudeModel(model, id))) return null;
   const rules = allowed
     .map(({ rule, alias, id }) => (alias === null ? `${rule} gives ${id}, which no short name is known to give` : `${rule} gives "${alias}" (${id})`))
     .join(', and ');

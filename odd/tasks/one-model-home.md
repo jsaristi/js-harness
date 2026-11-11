@@ -382,6 +382,21 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+At 14:50: the verifier's report is in (one sub-agent, 29 tool uses, about 152k tokens; one thing of it checked
+here: `bin/lib/guard.mjs` returns null for a call with no prompt, and `resumeStart` had no empty-brief check). Its
+four findings: F1 (high) a resume with an empty brief ran at any level and on any model: fixed, the resume refuses
+an empty brief as a start does. F2 a `start_session` with no prompt passes whatever it names: not changed, it is
+older than this work and `bin/lib/guard.test.mjs` pins it for an offer that names a model; whether the host
+honours a model or an effort on a call with no brief is not known, so it goes in the pull request's body as open.
+F3 `context: "Fork"` is not read as a fork: not changed, the host's spelling is `fork`. F4 the sub-agent call
+compared a model by `===` where the start reads `sameClaudeModel`: fixed. Lens runs so far: U1 risk 0 findings, U1
+reliability 1 (rebutted: S8's two commits supersede it; answered on run `a366912a`), U2 risk 0, U2 reliability 2
+(the resume's refusal named a model the caller did not name and said "or none": taken, the refusal now says what
+the record holds; a resume of a record at another level is refused: by design, spec 5, and the four stopped
+sessions of his scheme are live ones resumed by a message). The fixes are one commit on top, to review as a
+seventh unit. The lead answered the note at 14:20: the cut stands; the first branch carries `session-effort` at
+medium, which JH 184 waits for, so it is pushed and marked ready first; push each branch as soon as its two review
+records let the pre-push hook pass; say in the ready notice whether the stack lands one by one.
 At 14:15: `prove.mjs` saw the 15 breaks of the three bundles red. An independent verifier on the guard runs as a
 sub-agent (read-only; its report is read, one thing of it checked, and its findings fixed or answered before the
 reviews). No review has run yet. The reviews go in six units, because main was merged in between and a range
