@@ -556,6 +556,7 @@ test('heartbeat ends again when a sign-in inside the margin passes its end', asy
 test('heartbeat says once why the sign-in cannot be read, ends nothing for it, and keeps the last date a reading gave', async () => {
   const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
   state.clock = SIGNIN_END - 3 * 86400000;
+  const started = state.clock;
   let readings = 0;
   deps.signinExpiry = () => {
     readings += 1;
@@ -570,7 +571,25 @@ test('heartbeat says once why the sign-in cannot be read, ends nothing for it, a
     'sign-in: when the stored claude.ai sign-in ends could not be read: claude auth status did not answer in 20 seconds',
   ]);
   assert.match(state.out.at(-2), /heartbeat: 20 hours cap reached/);
-  assert.equal(state.out.at(-1), signinLine('2 days'), 'the date read at the start still stands');
+  assert.equal(state.out.at(-1), `${signinLine('2 days')} (read at ${hour(started)}; a reading now could not be made)`, 'the date read at the start still stands, and the line says how old it is');
+});
+
+test('heartbeat that cannot confirm the margin it reached still ends, and its line says when the date was read', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, onSleep: busy });
+  state.clock = SIGNIN_END - 7 * 86400000 - 10 * 60000;
+  const started = state.clock;
+  let readings = 0;
+  deps.signinExpiry = () => {
+    readings += 1;
+    return readings === 1 ? SIGNIN_READ : { expiresAt: null, stored: null, why: 'claude auth status did not answer in 20 seconds' };
+  };
+  assert.equal(await loopMain(['heartbeat', '--every', '120'], {}, deps), 0);
+  assert.equal(state.clock, started + 10 * 60000);
+  assert.equal(readings, 2, 'the confirming reading is made once, not again for the line');
+  assert.deepEqual(state.out.slice(-2), [
+    'sign-in: when the stored claude.ai sign-in ends could not be read: claude auth status did not answer in 20 seconds',
+    `${signinLine('7 days')} (read at ${hour(started)}; a reading now could not be made)`,
+  ]);
 });
 
 test('heartbeat says a sign-in that cannot be read at the start once, and a later reading inside the margin ends it', async () => {

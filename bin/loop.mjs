@@ -489,7 +489,8 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   // ago: news and the line are first confirmed by a reading at that tick, so a sign-in renewed since the last reading
   // ends nothing and is not told. A reading that cannot be made is said once each, and the last date a reading gave
   // still stands. `atStart` is the reading the heartbeat opens with, which ends nothing whatever it finds.
-  const signin = { reading: null, readAt: null, tick: null, level: null, line: null, unread: new Set() };
+  // `readAt` is the last reading tried, `heldAt` the one whose answer stands.
+  const signin = { reading: null, readAt: null, heldAt: null, tick: null, level: null, line: null, unread: new Set() };
   const signinRead = (now, say = ctx.out) => {
     signin.readAt = now;
     let fresh;
@@ -501,7 +502,10 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     const { why } = signinTold(fresh, now);
     if (why !== null && !signin.unread.has(why)) say(`sign-in: when the stored claude.ai sign-in ends could not be read: ${why}`);
     if (why !== null) signin.unread.add(why);
-    if (why === null || signin.reading === null) signin.reading = fresh;
+    if (why === null || signin.reading === null) {
+      signin.reading = fresh;
+      signin.heldAt = now;
+    }
   };
   // What is news: a level that rises, or a date first read inside the margin after a start that could not read one.
   const signinNews = (told, atStart) =>
@@ -520,7 +524,8 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     signin.line = told.line;
     return rose;
   };
-  // The sign-in's line for an ending, from a reading of this tick: one weighed from an older reading is read again.
+  // The sign-in's line for an ending, from a reading of this tick: one weighed from an older reading is read again,
+  // and where that reading cannot be made the line says when its date was read, since it may have been renewed since.
   const signinLines = () => {
     if (signin.line !== null && signin.readAt !== signin.tick) {
       signinRead(signin.tick);
@@ -528,7 +533,8 @@ async function heartbeat(ctx, parsed, { home, slug }) {
       if (told.level !== null) signin.level = told.level;
       signin.line = told.line;
     }
-    return signin.line === null ? [] : [signin.line];
+    if (signin.line === null) return [];
+    return [signin.heldAt === signin.tick ? signin.line : `${signin.line} (read at ${hourOf(signin.heldAt)}; a reading now could not be made)`];
   };
   // The throughput review (odd/tasks/throughput-review.md, S4): each tick keeps the settled days that have no
   // snapshot and reads the reviews due; a due one ends the loop when it falls due and again each time its wait,

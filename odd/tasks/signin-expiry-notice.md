@@ -178,6 +178,9 @@ Worktree `D:\js-harness\.claude\worktrees\signin-expiry-notice`.
   reviewed by Codex and the four lenses (Log, L16); the commit after it is the fix of the lenses' three findings.
 1. If the tree is dirty, the fix is not committed yet: `node --test bin/loop-bodies.test.mjs` (35), then commit (the
    gate) as `fix(loop): the heartbeat confirms the sign-in's end with a reading before it tells it`.
+   Update at 09:02Z: steps 1 and 2 are done (Log, L17); one follow-up was taken in the commit after `8e7a0fd6`,
+   and its review, base `8e7a0fd6`, Codex then the reliability lens, is the third and last of this slice. Then
+   step 3.
 2. Confirming reviews of the fix, base `94d9d5c3`: `js-harness codex-review --base 94d9d5c3 --doc
    odd/tasks/signin-expiry-notice.md`, then `js-harness lens-review --base 94d9d5c3 --lenses reliability,readability
    --reason "<the fix>" --doc odd/tasks/signin-expiry-notice.md`. Read each verdict before the next command. This is
@@ -292,3 +295,16 @@ clock (`date -u`) or is a commit's, never estimated (Log, L15).
   real `claude auth status` (it names an account and takes seconds), and for a fixture home the default reads
   nothing by design, which is what no reader does too. What the default does is proved in `readSigninExpiry`'s own
   test, and on this PC by the run of L14.
+- L17 (the confirming reviews of `94d9d5c..8e7a0fd`, 2026-11-11 before 09:02Z by the clock). Codex: "the patch is
+  correct" (confidence 0.9), no finding, 80,459 input tokens in 50 s. The lenses: readability 0 findings, its
+  earlier one rechecked as fixed; reliability 2 suggestions, none blocking, the warning rechecked as fixed. (1)
+  Reliability SUGGESTION, follow-up, `bin/loop.mjs:501-504`: when the confirming reading fails, the loop still ends
+  and says its line from a date read hours before, with nothing that says so. Taken: such a line ends "(read at
+  HH:MM; a reading now could not be made)"; tests first, red 2 of 36 in `bin/loop-bodies.test.mjs`, green 36 of 36.
+  (2) Reliability SUGGESTION, "not fixed", the default reader's pattern over the source: answered a second time, on
+  evidence. The default was called and worked on this PC after the fix: `node bin/js-harness.mjs loop heartbeat
+  --quiet 1 --every 20 --max 1` printed the clause "every 6 hours, the end of the stored claude.ai sign-in is read",
+  which since L16 is said only when the opening reading was asked, and no "could not be read" line, which a default
+  that failed when called would have printed. That is a run by hand, not a test; a test of it would run the real
+  CLI for the real account at every gate, which the tests of this feature never do (L5, D10). `git fetch` at 09:02Z:
+  `origin/main` holds `9a4318e7`, so a pull request against `main` shows this slice alone.
