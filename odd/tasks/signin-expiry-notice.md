@@ -165,6 +165,34 @@ again while he is at the PC.
   `unknown` at the moment it warns of, and what the CLI prints after the end is not known. A date it still prints
   beside `loggedIn` false is kept, and once past it the note says when the sign-in ended.
 
+## Next step
+State of JH 179 at 2026-11-11 about 08:50Z, read after a compaction. Worktree
+`D:\js-harness\.claude\worktrees\signin-expiry-notice`, branch `worktree-signin-expiry-notice`, nothing pushed yet.
+Commits: `83059554` (this document), `fa682dde` (first slice: reader and `doctor` row; gate passed; Codex and the
+four lenses recorded on `8305955..fa682dd`), `06e24923` (the fix of the lenses' findings; gate passed; NOT reviewed).
+1. Confirming review of `06e24923`: `js-harness codex-review --base fa682dde --doc odd/tasks/signin-expiry-notice.md`,
+   then `js-harness lens-review --base fa682dde --lenses resilience,reliability,readability --reason "<the fix>" --doc
+   odd/tasks/signin-expiry-notice.md`. Read each verdict before the next command; fix or answer findings in the Log.
+2. Push the branch and open the first pull request against `main` (title `feat(doctor): a claude-signin row says when
+   the stored sign-in ends`; body: start, end, what follows, size, why over 400 per D11), then `js-harness notify --to
+   orchestrator --kind ready --pr <n> "<one line>"` with the installed `js-harness`.
+3. Second slice: `git switch -c worktree-signin-expiry-heartbeat` from the first branch. Its files, whole and green
+   before the split, are in `C:\Users\Oficina\.claude\jobs\c825f4a7\tmp\full\` (`bin/loop.mjs`,
+   `bin/loop-bodies.test.mjs`, `README.md`, `bin/lib/signin-expiry.mjs` and its test). Copy `bin/loop.mjs` and
+   `bin/loop-bodies.test.mjs` over the branch's. Do NOT copy the saved `signin-expiry.mjs`, its test or `README.md`
+   over the branch's (they lack the fix of `06e24923`): from the saved copies take only `signinTold` and its three
+   tests, the `signinTold` assertion of the not-asked test, the header's and the margin comment's words about the
+   heartbeat, and the README paragraph that starts "At its start and every six hours". Add to `signinTold`: a
+   `signedOut` reading is level 2 with a line that says the CLI is not signed in (test first). Then one file at a
+   time: `node --test bin/lib/signin-expiry.test.mjs`, `node --test bin/loop-bodies.test.mjs`. Commit (the gate),
+   Codex and lenses with `--base 06e24923` (or the first branch's tip), push, a pull request based on
+   `worktree-signin-expiry-notice` that shows the chain, the ready notice with `--pr`.
+4. Tick T3 and T4, write `docs/sessions/2026-11-11-jh-179-doctor-and-the-heartbeat-warn-before-the-claude-sign.md`
+   (`js-harness summary template --title "JH 179 · doctor and the heartbeat warn before the Claude sign-in expires"`),
+   commit and push it, then `js-harness notify --to orchestrator --kind closed --summary <that file> "<line>"`.
+Keep `js-harness wait --notice-to 179` running in the background while waiting. Report only through `js-harness
+notify --to orchestrator`. Commits carry no AI attribution (his global rule).
+
 ## Log
 - L1 (his request, as written; lead transcript ea85ec35 line 6716, 2026-11-11T05:26:36Z, printed by `js-harness
   sessions --quote ea85ec35 6716 --cwd D:/js-harness`): "une lo que quede listo y tienes autorizacion para poder
