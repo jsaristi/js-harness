@@ -77,8 +77,10 @@ function buildRepository(dir, { branch, list, files }) {
   git(dir, 'config', 'core.autocrlf', 'false');
   for (const [file, text] of Object.entries({ ...FILES, ...files })) write(dir, file, text);
   write(dir, 'bin/lib/rules-data.mjs', writeRules(list));
-  write(dir, 'docs/rule-sources.json', `${JSON.stringify(SOURCES, null, 2)}\n`);
-  write(dir, 'docs/RULES.md', listTextOf(dir, list, SOURCES));
+  // Every rule of the list has the usual design as its source: for the usual list that is `SOURCES`.
+  const sources = Object.fromEntries(list.map((rule) => [rule.id, DESIGN]));
+  write(dir, 'docs/rule-sources.json', `${JSON.stringify(sources, null, 2)}\n`);
+  write(dir, 'docs/RULES.md', listTextOf(dir, list, sources));
   git(dir, 'add', '-A');
   git(dir, 'commit', '-q', '-m', 'the list');
   git(dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
@@ -705,4 +707,91 @@ test('a turn to refuse with a pattern that is no regular expression is refused f
   assert.equal(result.code, 1);
   assert.match(result.err, /the pattern "\(" is not a regular expression/);
   assert.deepEqual(snapshot(repo), before);
+});
+
+// ---- the order of a change that folds several rules into two (odd/tasks/one-model-home.md, L13) -------------------
+// On 2026-11-11 five rules that restated a model or an effort were retired into the two that are the home. A run on an
+// id starts from origin/main's declaration of it, so a second run on a home would undo its first; and `--with` admits
+// the change of a path, never of another declaration. So the order is one run an id: the two homes first, each run
+// carrying its widened subject and every pattern the rules that leave hold, then each retirement with its reader
+// moved in the same tree, then the two rules of the other home. The models and the readers are made up.
+const HOME_LIST = [
+  LIST.find((rule) => rule.id === 'control-phrase-min'),
+  { id: 'escalation-model', subject: 'the model a change passes to after three reviews', owner: 'project', since: '2026-11-10', value: 'claude-saga-9-1' },
+  { id: 'lead-effort', subject: "the effort the lead's session runs at", owner: 'project', since: '2026-11-10', value: 'high' },
+  { id: 'review-effort', subject: 'the effort a Codex review runs at', owner: 'project', since: '2026-10-12', value: 'medium', patterns: ['\\bcodex\\b.{0,60}\\bgpt-[\\w.-]+ at {amount}'] },
+  { id: 'review-model', subject: 'the one model a Codex review runs on', owner: 'project', since: '2026-10-08', value: 'gpt-0.1-fixture', patterns: ['\\bcodex\\b.{0,60}\\bon (?=gpt-){amount}'] },
+  { id: 'session-effort', subject: 'the effort a session runs at', owner: 'project', since: '2026-11-10', value: 'high', patterns: ['\\bsessions?\\b.{0,50}\\bat {amount} effort'] },
+  { id: 'session-model', subject: 'the model a session runs on', owner: 'project', since: '2026-11-10', value: 'claude-saga-9-1', patterns: ['\\bsessions?\\b.{0,50}\\bon (?=claude-){amount}'] },
+  { id: 'subagent-effort', subject: 'the effort every sub-agent is launched with', owner: 'project', since: '2026-10-07', value: 'high', patterns: ['\\bsub-agents?\\b.{0,40}\\bat {amount} effort'] },
+  { id: 'subagent-reader-model', subject: 'the model of a sub-agent that reads', owner: 'project', since: '2026-11-10', value: 'claude-saga-9-1', patterns: ['\\breaders?\\b.{0,50}\\bon (?=claude-){amount}'] },
+  { id: 'subagent-writer-model', subject: 'the model of a sub-agent that writes', owner: 'project', since: '2026-11-10', value: 'claude-saga-9-1', patterns: ['\\bwriters?\\b.{0,50}\\bon (?=claude-){amount}'] },
+];
+const firstOf = (id) => HOME_LIST.find((rule) => rule.id === id);
+const WIDE = {
+  'session-model': { subject: 'the model everything the harness starts runs on', patterns: ['session-model', 'subagent-writer-model', 'subagent-reader-model'].flatMap((id) => firstOf(id).patterns) },
+  'session-effort': { subject: 'the effort everything the harness starts runs at', patterns: ['session-effort', 'subagent-effort'].flatMap((id) => firstOf(id).patterns) },
+};
+// Each rule that leaves, the home it retires into, and the file that reads it until its retirement.
+const LEAVING = [
+  ['lead-effort', 'session-effort', 'bin/start.mjs'],
+  ['subagent-effort', 'session-effort', 'bin/applied.mjs'],
+  ['subagent-writer-model', 'session-model', 'bin/writer.mjs'],
+  ['subagent-reader-model', 'session-model', 'bin/reader.mjs'],
+  ['escalation-model', 'session-model', 'bin/recheck.mjs'],
+];
+const readerOf = (id) => `import { ruleValue } from './lib/rules.mjs';\nexport const held = ruleValue('${id}');\n`;
+// The patterns of the other home, freed of the prefix its ids had on the day they were written.
+const FREED = { 'review-model': ['\\bcodex\\b.{0,60}\\bon (?!claude-)(?=[a-z]+-\\d){amount}'], 'review-effort': ['\\bcodex\\b.{0,60}\\b(?!claude-)[a-z]+-\\d[\\w.-]* at {amount}'] };
+
+/** The repository of the order: the nine rules in force on origin/main, and a reader of each rule that leaves. */
+const homeRepository = () => repository({ branch: 'rule/one-home', list: HOME_LIST, files: Object.fromEntries(LEAVING.map(([id, , file]) => [file, readerOf(id)])) });
+
+/** Runs the whole order in `repo`, a commit a run, and gives the list each of its nine runs left, in order. */
+async function runOrder(repo) {
+  const lists = [];
+  const step = async (argv, given, message) => {
+    const result = await change(repo, argv, { ...given, source: DESIGN });
+    assert.equal(result.code, 0, `${argv[0]}: ${result.err}`);
+    git(repo.dir, 'add', '-A');
+    git(repo.dir, 'commit', '-q', '-m', message);
+    lists.push(rulesOfText(read(repo.dir, 'bin/lib/rules-data.mjs')));
+  };
+  for (const id of ['session-model', 'session-effort']) await step([id], { set: WIDE[id] }, `${id} widened`);
+  for (const [id, home, file] of LEAVING) {
+    write(repo.dir, file, readerOf(home));
+    await step([id, '--with', file], { retire: { successors: [home] } }, `${id} retired`);
+  }
+  for (const id of ['review-model', 'review-effort']) await step([id], { set: { patterns: FREED[id] } }, `${id} freed of its prefix`);
+  return lists;
+}
+
+test('the order of one run an id folds five rules into the two homes, each run keeping what the runs before it wrote, and a second run on a home would undo it', async () => {
+  const repo = homeRepository();
+  const lists = await runOrder(repo);
+  assert.equal(lists.length, 9);
+  const at = (list, id) => list.find((rule) => rule.id === id);
+  // From its own run on, a home holds its widened subject and every carried pattern, through all the later runs.
+  ['session-model', 'session-effort'].forEach((id, index) => {
+    for (const list of lists.slice(index)) assert.deepEqual({ subject: at(list, id).subject, patterns: at(list, id).patterns }, WIDE[id], id);
+  });
+  LEAVING.forEach(([id, home], index) => {
+    // A rule that leaves is in force until its own run,
+    for (const list of lists.slice(0, 2 + index)) assert.equal(at(list, id).value, firstOf(id).value, id);
+    // and stays retired through the runs after it, with its successor and its value kept as history.
+    for (const list of lists.slice(2 + index)) {
+      const { retired, successors, value, was } = at(list, id);
+      assert.deepEqual({ retired, successors, value, was }, { retired: TODAY, successors: [home], value: undefined, was: [{ value: firstOf(id).value, until: TODAY }] }, id);
+    }
+  });
+  const last = lists.at(-1);
+  for (const id of ['review-model', 'review-effort']) assert.deepEqual(at(last, id).patterns, FREED[id], id);
+  assert.deepEqual(last.filter((rule) => rule.value !== undefined).map((rule) => rule.id), ['control-phrase-min', 'review-effort', 'review-model', 'session-effort', 'session-model']);
+
+  // A second run on a home starts again from the declaration of origin/main, so it would undo the widening: that is
+  // why the order is one run an id (asked here of the same repository, since the order takes nine runs to build).
+  const again = await change(repo, ['session-model'], { set: { patterns: [...WIDE['session-model'].patterns, '\\blenses?\\b.{0,50}\\bon (?=claude-){amount}'] }, source: DESIGN });
+  assert.equal(again.code, 0, again.err);
+  assert.equal(ruleOf(repo, 'session-model').subject, firstOf('session-model').subject, 'the subject of origin/main is back');
+  assert.equal(ruleOf(repo, 'subagent-writer-model').retired, TODAY, 'what the runs on the other ids wrote is kept');
 });
