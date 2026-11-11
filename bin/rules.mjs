@@ -381,13 +381,20 @@ function rulesInForce(projectData) {
 
 /** The rules with no short name that the records are held to, and the field of a record each is held to. Each is read
  * here by its id, so that `rules check` lists this file as its reader and refuses an id that is renamed or retired.
- * One that is not in force in the project has no line: `appliedOf` takes only the rules it is passed. */
+ * One that is not in force in the project has no line: `appliedOf` takes only the rules it is passed. The two model
+ * rules of sub-agents join them while they declare no short name: a rule with one is compared by what that name gave,
+ * and one with none (since 2026-11-10, when `fable` gave claude-fable-5-1 and the rules named Fable 5.2) would be
+ * compared with nothing. A launch names no role here, so each launch's model is held to both, as information. They
+ * are of this repository only, which `ruleOf` refuses, so they are found in the list by id. */
+const SUBAGENT_MODEL_RULES = ['subagent-writer-model', 'subagent-reader-model'];
 function heldRules() {
-  return [
+  const held = [
     { rule: ruleOf('session-model'), of: 'sessions', field: 'model' },
     { rule: ruleOf('session-effort'), of: 'sessions', field: 'effort' },
     { rule: ruleOf('subagent-effort'), of: 'launches', field: 'effort' },
   ].map(({ rule, of, field }) => ({ id: rule.id, of, field }));
+  const unnamed = RULES.filter((rule) => SUBAGENT_MODEL_RULES.includes(rule.id) && Object.hasOwn(rule, 'value') && rule.alias === undefined);
+  return [...held, ...unnamed.map((rule) => ({ id: rule.id, of: 'launches', field: 'model' }))];
 }
 
 /** Writes the lines of `js-harness rules applied` for the project `cwd` is in, and gives its exit code: each declared

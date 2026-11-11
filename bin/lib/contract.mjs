@@ -329,7 +329,7 @@ const OFF_TEXT = {
 };
 
 /** One task's mode as `contract modes` prints it:
- * `T3 (kind: build): session high; writers haiku, readers opus; every sub-agent at high`. */
+ * `T3 (kind: build): session high; writers claude-fable-5-2, readers claude-fable-5-2; every sub-agent at high`. */
 export function modeLine(mode) {
   const head = `${mode.id} ${mode.kind ? `(kind: ${mode.kind})` : '(no kind)'}`;
   if (mode.off) return `${head}: ${OFF_TEXT[mode.off]}`;

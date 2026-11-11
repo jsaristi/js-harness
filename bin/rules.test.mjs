@@ -322,7 +322,10 @@ test('the usage names the applied form, and a word after applied is a usage erro
 
 // ── applied: the session records of the project, against the rules in force in it ───────────────
 
-const NOW = Date.parse('2026-10-12T12:00:00Z');
+// Noon of the day after the newest of the rules the records are held to began, so every one of them holds a record
+// written at NOW, whatever day his last change of one fell on.
+const HELD_IDS = ['session-model', 'session-effort', 'subagent-effort', 'subagent-writer-model', 'subagent-reader-model'];
+const NOW = Date.parse(`${RULES.filter((rule) => HELD_IDS.includes(rule.id)).map((rule) => rule.since).sort().at(-1)}T12:00:00Z`) + 24 * 60 * 60 * 1000;
 const RULES_DATA_TEXT = fs.readFileSync(path.join(PACKAGE, 'bin', 'lib', 'rules-data.mjs'), 'utf8');
 const LIST = { 'bin/lib/rules-data.mjs': RULES_DATA_TEXT };
 // A git that finds no repository: the project and its main checkout are then the folder itself.
@@ -341,14 +344,14 @@ async function withHome(files, body) {
 /** The folder of the session records of `project` under `home`, as Claude Code keeps it. */
 const recordsOf = (project, home) => path.join(home, 'projects', projectSlug(project));
 
-/** Writes one sub-agent launch answered by `model` under `records`, modified at NOW, with the meta file of a haiku launch; its answer records `effort` when one is given. */
+/** Writes one sub-agent launch answered by `model` under `records`, modified at NOW, with the meta file of a launch that passed the writer rule's short name, or no model when the rule declares none; its answer records `effort` when one is given. */
 function launch(records, model, effort) {
   const dir = path.join(records, 'session-1', 'subagents');
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, 'agent-x.jsonl');
   const entry = { type: 'assistant', version: '2.1.200', entrypoint: 'cli', timestamp: new Date(NOW).toISOString(), message: { model }, ...(effort === undefined ? {} : { effort }) };
   fs.writeFileSync(file, `${JSON.stringify(entry)}\n`, 'utf8');
-  fs.writeFileSync(path.join(dir, 'agent-x.meta.json'), JSON.stringify({ model: 'haiku', effort: 'high', agentType: 'general-purpose' }), 'utf8');
+  fs.writeFileSync(path.join(dir, 'agent-x.meta.json'), JSON.stringify({ ...(SHORT !== undefined && { model: SHORT }), effort: 'high', agentType: 'general-purpose' }), 'utf8');
   fs.utimesSync(file, NOW / 1000, NOW / 1000);
 }
 
@@ -359,6 +362,15 @@ const declared = (id) => RULES.find((rule) => rule.id === id);
 const heldLine = (id) => `  ${id}: ${declared(id).value}, since ${declared(id).since}`;
 // The efforts a session record can name; one that is not a rule's value is a difference from it.
 const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
+// The writer rule and its short name. While the rule declares one, `applied` compares what the short name gave and
+// fails on another model; while it declares none (since 2026-11-10 no short name gives Fable 5.2), a launch's model is
+// held to the rule as information. The tests below follow whichever the list declares.
+const WRITER = declared('subagent-writer-model');
+const SHORT = WRITER.alias;
+/** Whether `out` says the one launch answered by the writer rule's model agrees with it. */
+const agrees = (out) => (SHORT !== undefined
+  ? out.includes(`subagent-writer-model: ${WRITER.value}, passed as \`${SHORT}\`, since ${WRITER.since}`) && out.includes('PASS  rules applied: each short name gave its model')
+  : out[out.indexOf(heldLine('subagent-writer-model')) + 1] === '    agree: 1 of 1 launch');
 
 /** Runs `js-harness rules applied` on `project` at `now` (NOW by default), with `env` (by default the Claude home is `home`), collecting its output. */
 async function applied(project, home, env = { CLAUDE_CONFIG_DIR: home }, { cwd = project, git = NO_GIT, now = NOW } = {}) {
@@ -377,20 +389,19 @@ async function applied(project, home, env = { CLAUDE_CONFIG_DIR: home }, { cwd =
   return { code, out, err };
 }
 
-test('applied passes when a launch of haiku is answered by the model its rule declares', async () => {
+test('applied passes when a writer launch is answered by the model its rule declares', async () => {
   await withHome(LIST, async (project, home) => {
-    launch(recordsOf(project, home), 'claude-haiku-5-5');
+    launch(recordsOf(project, home), WRITER.value);
     const { code, out, err } = await applied(project, home);
     assert.deepEqual(err, []);
     assert.equal(code, 0, out.join('\n'));
-    assert.ok(out.includes('subagent-writer-model: claude-haiku-5-5, passed as `haiku`, since 2026-10-11'), out.join('\n'));
-    assert.ok(out.includes('PASS  rules applied: each short name gave its model'), out.join('\n'));
+    assert.ok(agrees(out), out.join('\n'));
   });
 });
 
 test('applied holds what a launch ran at to subagent-effort, as information that does not fail', async () => {
   await withHome(LIST, async (project, home) => {
-    launch(recordsOf(project, home), 'claude-haiku-5-5', 'medium');
+    launch(recordsOf(project, home), WRITER.value, 'medium');
     const { code, out } = await applied(project, home);
     const day = new Date(NOW).toISOString().slice(0, 10);
     assert.equal(code, 0, out.join('\n'));
@@ -398,7 +409,7 @@ test('applied holds what a launch ran at to subagent-effort, as information that
     assert.ok(out.includes('  subagent-effort: high, since 2026-10-07'), out.join('\n'));
     assert.ok(out.includes(`    medium: 1 launch of general-purpose, the last on ${day}`), out.join('\n'));
     assert.ok(out.includes('      session-1/subagents/agent-x.jsonl'), out.join('\n'));
-    assert.ok(out.some((line) => line.startsWith('To the lead: 1 launch that passed a declared short name ran at another effort than subagent-effort says (high)')), out.join('\n'));
+    if (SHORT !== undefined) assert.ok(out.some((line) => line.startsWith('To the lead: 1 launch that passed a declared short name ran at another effort than subagent-effort says (high)')), out.join('\n'));
     assert.equal(out.at(-1), 'Information: 1 record ran at another value than a rule of the block above says; this is no failure.');
     // The session rules are in force and no session is in the records: each says so, and neither is a difference.
     assert.equal(out[out.indexOf(heldLine('session-effort')) + 1], '    nothing to compare: no session in the window since that day', out.join('\n'));
@@ -435,7 +446,7 @@ test('applied holds the last answer of a session to session-model and session-ef
 
 test('applied in a project that does not declare the rules holds nothing to them', async () => {
   await withHome({}, async (project, home) => {
-    launch(recordsOf(project, home), 'claude-haiku-5-5', 'medium');
+    launch(recordsOf(project, home), WRITER.value, 'medium');
     const { code, out } = await applied(project, home);
     assert.equal(code, 0, out.join('\n'));
     assert.ok(!out.some((line) => line.startsWith('What ran')), out.join('\n'));
@@ -454,10 +465,17 @@ test('the three rules with no short name are read by the command, so the check l
   }
 });
 
-test('applied fails, with the line to the lead, when a launch of haiku is answered by another model', async () => {
+test('applied fails, with the line to the lead, when a short name is answered by another model, and reports it where the rule has none', async () => {
   await withHome(LIST, async (project, home) => {
     launch(recordsOf(project, home), 'claude-haiku-4-5-20251001');
     const { code, out } = await applied(project, home);
+    if (SHORT === undefined) {
+      const day = new Date(NOW).toISOString().slice(0, 10);
+      const at = out.indexOf(heldLine('subagent-writer-model'));
+      assert.equal(code, 0, out.join('\n'));
+      assert.deepEqual(out.slice(at + 1, at + 3), ['    agree: 0 of 1 launch', `    claude-haiku-4-5: 1 launch of general-purpose, the last on ${day}`], out.join('\n'));
+      return;
+    }
     assert.equal(code, 1, out.join('\n'));
     assert.ok(out.some((line) => line.startsWith('FAIL  subagent-writer-model:')), out.join('\n'));
     assert.ok(out.some((line) => line.startsWith('To the lead:')), out.join('\n'));
@@ -486,10 +504,10 @@ test('applied in a project whose rules-data.mjs is another text leaves the scope
 
 test('applied reads a list with \\r\\n line ends as the same list, so its rules are in force', async () => {
   await withHome({ 'bin/lib/rules-data.mjs': RULES_DATA_TEXT.replace(/\r?\n/g, '\r\n') }, async (project, home) => {
-    launch(recordsOf(project, home), 'claude-haiku-5-5');
+    launch(recordsOf(project, home), WRITER.value);
     const { code, out } = await applied(project, home);
     assert.equal(code, 0, out.join('\n'));
-    assert.ok(out.includes('PASS  rules applied: each short name gave its model'), out.join('\n'));
+    assert.ok(agrees(out), out.join('\n'));
   });
 });
 
@@ -505,32 +523,32 @@ test('applied with no records folder exits 0, says that nothing was read, and pr
 test('applied with CLAUDE_CONFIG_DIR unset looks for the records under the home folder', async () => {
   await withHome(LIST, async (project, home) => {
     const records = path.join(home, '.claude', 'projects', projectSlug(project));
-    launch(records, 'claude-haiku-5-5');
+    launch(records, WRITER.value);
     const { code, out } = await applied(project, home, {});
     assert.equal(code, 0, out.join('\n'));
     assert.ok(out.includes(`  records: ${records} (of ${project})`), out.join('\n'));
-    assert.ok(out.includes('PASS  rules applied: each short name gave its model'), out.join('\n'));
+    assert.ok(agrees(out), out.join('\n'));
   });
 });
 
 test('applied with CLAUDE_CONFIG_DIR set to an empty text looks for the records under the home folder, as when unset', async () => {
   await withHome(LIST, async (project, home) => {
     const records = path.join(home, '.claude', 'projects', projectSlug(project));
-    launch(records, 'claude-haiku-5-5');
+    launch(records, WRITER.value);
     const { code, out } = await applied(project, home, { CLAUDE_CONFIG_DIR: '' });
     assert.equal(code, 0, out.join('\n'));
     assert.ok(out.includes(`  records: ${records} (of ${project})`), out.join('\n'));
-    assert.ok(out.includes('PASS  rules applied: each short name gave its model'), out.join('\n'));
+    assert.ok(agrees(out), out.join('\n'));
   });
 });
 
 test('applied reads no document, so a root with no docs/ still runs and exits 0', async () => {
   await withHome(LIST, async (project, home) => {
     assert.equal(fs.existsSync(path.join(project, 'docs')), false);
-    launch(recordsOf(project, home), 'claude-haiku-5-5');
+    launch(recordsOf(project, home), WRITER.value);
     const { code, out } = await applied(project, home);
     assert.equal(code, 0, out.join('\n'));
-    assert.ok(out.includes('PASS  rules applied: each short name gave its model'), out.join('\n'));
+    assert.ok(agrees(out), out.join('\n'));
   });
 });
 
@@ -552,7 +570,7 @@ test('applied in a linked worktree reads the rules of the worktree and the recor
     fs.mkdirSync(main, { recursive: true });
     write(tree, LIST);
     fs.mkdirSync(path.join(tree, 'sub'), { recursive: true });
-    launch(recordsOf(main, home), 'claude-haiku-5-5');
+    launch(recordsOf(main, home), WRITER.value);
     const { code, out, err } = await applied(tree, home, { CLAUDE_CONFIG_DIR: home }, {
       cwd: path.join(tree, 'sub'),
       git: linkedGit(tree, main),
@@ -561,8 +579,7 @@ test('applied in a linked worktree reads the rules of the worktree and the recor
     assert.equal(code, 0, out.join('\n'));
     assert.ok(out.includes(`  project: ${tree}`), out.join('\n'));
     assert.ok(out.includes(`  records: ${recordsOf(main, home)} (of ${main})`), out.join('\n'));
-    assert.ok(out.includes('subagent-writer-model: claude-haiku-5-5, passed as `haiku`, since 2026-10-11'), out.join('\n'));
-    assert.ok(out.includes('PASS  rules applied: each short name gave its model'), out.join('\n'));
+    assert.ok(agrees(out), out.join('\n'));
   } finally {
     fs.rmSync(base, { recursive: true, force: true });
   }
@@ -570,7 +587,7 @@ test('applied in a linked worktree reads the rules of the worktree and the recor
 
 test('applied with a rules-data.mjs that is a folder writes one line to stderr, no report line, and exits 1', async () => {
   await withHome({ 'bin/lib/rules-data.mjs/keep.txt': 'a folder, not a file\n' }, async (project, home) => {
-    launch(recordsOf(project, home), 'claude-haiku-5-5');
+    launch(recordsOf(project, home), WRITER.value);
     const { code, out, err } = await applied(project, home);
     assert.equal(code, 1, out.join('\n'));
     assert.equal(err.length, 1, err.join('\n'));

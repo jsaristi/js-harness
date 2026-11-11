@@ -7,8 +7,8 @@ import path from 'node:path';
 import { guardHeld, ruleHere, ruleOf, staleNote } from './rules.mjs';
 
 /** The models a sub-agent may be launched on in the project whose rules file has the text `projectData`, as
- * `[{ alias, id, rule }]`, writer first; or null when the rules are not in force there (no rules file, or one that
- * does not declare them), and then no model is refused. Behind a project that declares them the copy's own are held,
+ * `[{ alias, id, rule }]`, writer first, `alias` null for a rule that declares no short name; or null when the rules
+ * are not in force there (no rules file, or one that does not declare them), and then no model is refused. Behind a project that declares them the copy's own are held,
  * each with a `note` where the project declares it otherwise (`guardHeld`). The two model rules are read with
  * `ruleHere`, by their ids written out so that `rules check` lists this file as their reader, because both are of
  * this repository only: a project that installs the harness turns nothing on by default (his answer of 2026-10-14,
@@ -17,22 +17,30 @@ export function allowedModels(projectData) {
   const writer = guardHeld('subagent-writer-model', ruleHere('subagent-writer-model', undefined, projectData));
   const reader = guardHeld('subagent-reader-model', ruleHere('subagent-reader-model', undefined, projectData));
   if (writer === null || reader === null) return null;
-  const entry = (rule, { value, note }) => ({ alias: ruleOf(rule).alias, id: value, rule, ...(note !== '' && { note }) });
+  const entry = (rule, { value, note }) => ({ alias: ruleOf(rule).alias ?? null, id: value, rule, ...(note !== '' && { note }) });
   return [entry('subagent-writer-model', writer), entry('subagent-reader-model', reader)];
 }
 
 /** Why the `Agent` call whose input is `toolInput` is refused, or null when it is not. A call with no `model`
  * passes: it runs on the parent's model, or on the one its agent type declares, which the rules leave out
  * (odd/tasks/rule-hierarchy.md, "the agent types that set their own model"). One that names a model passes when it
- * is a rule's alias or its id; any other is refused, `fable` too: his words allow Fable 5.5, and the alias is not
- * known to give it. Effort is never refused here: it is reported after the fact (`check`, an INFO row). */
+ * is a rule's id, or its alias where the rule declares one; any other is refused. A rule declares an alias only while
+ * that short name is known to give its model on the engine in use, so a short name no rule declares is refused like
+ * any other model: on 2026-11-10 `fable` gave claude-fable-5-1 on cli 2.1.319 while his words named Fable 5.2, and
+ * the refusal then says the way left to a call that takes only short names, no model. Effort is never refused here:
+ * it is reported after the fact (`check`, an INFO row). */
 export function modelRefusal(toolInput, allowed) {
   const model = toolInput?.model;
   if (allowed === null || model === undefined || model === null || model === '') return null;
-  if (allowed.some(({ alias, id }) => model === alias || model === id)) return null;
-  const rules = allowed.map(({ rule, alias, id }) => `${rule} gives "${alias}" (${id})`).join(', and ');
+  if (allowed.some(({ alias, id }) => (alias !== null && model === alias) || model === id)) return null;
+  const rules = allowed
+    .map(({ rule, alias, id }) => (alias === null ? `${rule} gives ${id}, which no short name is known to give` : `${rule} gives "${alias}" (${id})`))
+    .join(', and ');
+  const launch = allowed.some(({ alias }) => alias !== null)
+    ? 'Launch it on one of those, or with no model to run on the parent\'s.'
+    : 'Launch it with no model, to run on the parent\'s, or on that id where the call takes one.';
   return `js-harness guard: the model "${model}" is not one a sub-agent may run on here: ${rules}. `
-    + 'Launch it on one of those, or with no model to run on the parent\'s.' + staleNote(allowed.filter(({ note }) => note).map(({ rule }) => rule));
+    + launch + staleNote(allowed.filter(({ note }) => note).map(({ rule }) => rule));
 }
 
 // The tools that open a session in the app's Routines or in the cloud, where it runs at the effort it inherits and he
@@ -73,9 +81,10 @@ const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
  * `cli` words the reasons for `js-harness sessions start`, which holds the same rule over its `--effort`
  * (odd/tasks/background-sessions.md, S5). `lead` says the call starts a new lead, which the caller reads from its
  * title (`leadTitle` of ./session-title-guard.mjs): it is held to the rule `lead-effort` where that rule gives a
- * value, and to `session-effort` where it gives none. His words of 2026-11-10 give the lead a level above the work
- * sessions', and at a cut the old lead starts the new one with this tool (./manifest.mjs, "The cut"): held to
- * `session-effort`, that start was refused at the lead's own level. */
+ * value, and to `session-effort` where it gives none. His words give the lead a level of its own, which may stand
+ * above the work sessions' (it did for a few hours of 2026-11-10; his correction of that day levels them), and at a
+ * cut the old lead starts the new one with this tool (./manifest.mjs, "The cut"): held to `session-effort`, a start
+ * at a lead's higher level would be refused. */
 export function sessionEffortRefusal(toolInput, projectData, { cli = false, lead = false } = {}) {
   if (typeof toolInput?.prompt !== 'string' || toolInput.prompt === '') return null;
   const ofLead = lead ? guardHeld('lead-effort', ruleHere('lead-effort', undefined, projectData)) : null;

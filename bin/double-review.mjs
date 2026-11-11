@@ -29,7 +29,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { CODEX_WEEKLY_FLOOR, REVIEW_EFFORT, REVIEW_MODEL, childEnv, leanEnv, leanFlags } from './codex-review.mjs';
-import { lensEnv } from './lens-review.mjs';
+import { LENS_EFFORT, lensEnv } from './lens-review.mjs';
 import { runAnswerFindings } from './lib/codex-review-recheck.mjs';
 import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { LENS_NAMES } from './lib/lens-prompts.mjs';
@@ -63,8 +63,9 @@ export const SKIP_PHRASE = 'no quiero la revisión';
 /** `text` in lower case with its accents taken off, "Revisión" read as "revision": how the skip phrase is compared. */
 const folded = (text) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 // The Claude reader runs on `rule:subagent-reader-model`, a rule of this repository: a project that does not declare
-// it reads on that rule's alias.
-const CLAUDE_FALLBACK = 'opus';
+// it reads on the same model, by its full id (no short name gave it on 2026-11-10; until then the fallback was the
+// alias `opus`). It reads at the lenses' effort, named on the call.
+const CLAUDE_FALLBACK = 'claude-fable-5-2';
 // What one read cost when it was measured by this command, on this feature's own document (the feature document,
 // L12): input counted with its cache reads, as the record counts it, and said as measured once, not as a bound.
 const MEASURED_COST = 'about 1.1M tokens of Claude and 0.9M of Codex, most of them cache reads, and 1% of Codex\'s weekly limit';
@@ -179,7 +180,7 @@ export function announceLines({ files, diff, model }) {
 /** The arguments of the Claude reader: a fresh print run with read-only tools, the copy its one folder past the
  * repository, its answer held to the schema. */
 export function claudeReaderArgs(settingsFile, material, model) {
-  return ['-p', '--safe-mode', '--tools', 'Read,Grep,Glob', '--add-dir', material, '--model', model, '--settings', settingsFile, '--output-format', 'json', '--json-schema', JSON.stringify(ANSWER_SCHEMA), '--no-session-persistence'];
+  return ['-p', '--safe-mode', '--tools', 'Read,Grep,Glob', '--add-dir', material, '--model', model, '--effort', LENS_EFFORT, '--settings', settingsFile, '--output-format', 'json', '--json-schema', JSON.stringify(ANSWER_SCHEMA), '--no-session-persistence'];
 }
 
 /** The arguments of the Codex reader: `codex exec` in the lean session of `codex-review`, the prompt on stdin, its

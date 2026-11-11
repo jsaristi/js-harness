@@ -229,8 +229,14 @@ export const RULES = [
     "id": "escalation-model",
     "subject": "the strongest model a change passes to when three reviews of it did not settle it",
     "owner": "sebastian",
-    "since": "2026-11-02",
-    "value": "claude-fable-5-1"
+    "since": "2026-11-10",
+    "value": "claude-fable-5-2",
+    "was": [
+      {
+        "value": "claude-fable-5-1",
+        "until": "2026-11-10"
+      }
+    ]
   },
   {
     "id": "fixed-load-budget",
@@ -317,7 +323,13 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-11-10",
-    "value": "xhigh"
+    "value": "high",
+    "was": [
+      {
+        "value": "xhigh",
+        "until": "2026-11-10"
+      }
+    ]
   },
   {
     "id": "live-board",
@@ -650,8 +662,12 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-11-10",
-    "value": "medium",
+    "value": "high",
     "was": [
+      {
+        "value": "medium",
+        "until": "2026-11-10"
+      },
       {
         "value": "high",
         "until": "2026-11-10"
@@ -755,9 +771,14 @@ export const RULES = [
     "subject": "the model of a sub-agent that explores, reviews or verifies",
     "owner": "sebastian",
     "scope": "repository",
-    "since": "2026-10-10",
-    "value": "claude-opus-5-5",
-    "alias": "opus",
+    "since": "2026-11-10",
+    "value": "claude-fable-5-2",
+    "was": [
+      {
+        "value": "claude-opus-5-5",
+        "until": "2026-11-10"
+      }
+    ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\b(?:readers?|verifiers?|reviewers?)\\b.{0,50}\\bon `?(?=claude-){amount}"
     ]
@@ -767,9 +788,14 @@ export const RULES = [
     "subject": "the model of a sub-agent that writes scoped code, in this repository",
     "owner": "sebastian",
     "scope": "repository",
-    "since": "2026-10-11",
-    "value": "claude-haiku-5-5",
-    "alias": "haiku",
+    "since": "2026-11-10",
+    "value": "claude-fable-5-2",
+    "was": [
+      {
+        "value": "claude-haiku-5-5",
+        "until": "2026-11-10"
+      }
+    ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bwriters?\\b.{0,50}\\bon `?(?=claude-){amount}"
     ]

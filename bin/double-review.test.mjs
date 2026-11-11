@@ -133,7 +133,7 @@ test('--plan says what a read costs and the user\'s words that skip it, and star
   const run = deps(t, root, spawn);
   assert.equal(await doubleReviewMain(['read', 'plan.md', '--plan'], {}, run.deps), 0);
   const said = run.lines.log.join('\n');
-  assert.match(said, /Claude reader on opus and a Codex reader/, 'a project that does not declare the reader model reads on its alias');
+  assert.match(said, /Claude reader on claude-fable-5-2 and a Codex reader/, 'a project that does not declare the reader model reads on the fallback, by its full id');
   assert.match(said, /tokens/);
   assert.ok(said.includes(SKIP_PHRASE));
   assert.equal(calls.length, 0);
@@ -172,6 +172,7 @@ test('read starts both readers at once on one frozen copy outside the repository
   assert.match(claude.prompt, /diff\.patch/);
   assert.equal(claude.options.cwd, root);
   assert.deepEqual(claude.args.slice(0, 4), ['-p', '--safe-mode', '--tools', 'Read,Grep,Glob']);
+  assert.deepEqual(claude.args.slice(claude.args.indexOf('--effort'), claude.args.indexOf('--effort') + 2), ['--effort', 'high'], 'the Claude reader names its effort: with none it takes the saved one of the CLI');
   // Blind by sequence: neither answer is on disk while the readers run, since --add-dir confines no reader.
   assert.ok(!codex.args.includes('-o'), 'Codex writes no answer file: its answer is read from its stdout');
   assert.ok(codex.args.includes('--ephemeral'), 'Codex keeps no session file another reader could open');

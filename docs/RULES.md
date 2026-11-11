@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `24c57294778c`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 4.
+Hash `a1ee0c6e5e08`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -62,9 +62,10 @@ Everything that proposes something passes a blind Claude and Codex read, code pa
 - Since 2026-11-01. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-31, 2026-10-31, 2026-11-01, 2026-11-01, 2026-11-01, checked by the command on 2026-11-01.
 
 ### escalation-model
-The strongest model a change passes to when three reviews of it did not settle it: claude-fable-5-1.
+The strongest model a change passes to when three reviews of it did not settle it: claude-fable-5-2.
+- Was: claude-fable-5-1 until 2026-11-10.
 - Read by: `bin/lib/codex-review-recheck.mjs`.
-- Since 2026-11-02. Row: reports. Source: his words of 2026-11-01, 2026-11-01, checked by the command on 2026-11-02.
+- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
 ### fixed-load-budget
 The fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns: 100,000 tokens.
@@ -84,8 +85,9 @@ What the lead does alone and tells him after, and what stays his, asked one at a
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-09, 2026-10-11, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-10, 2026-10-15, 2026-10-15, 2026-10-24, checked by the command on 2026-10-22.
 
 ### lead-effort
-The effort the lead's session runs at: xhigh.
+The effort the lead's session runs at: high.
 - Of this repository only: not in force in a project that installs the harness.
+- Was: xhigh until 2026-11-10.
 - Read by: `bin/lib/guard.mjs`.
 - Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
@@ -177,9 +179,9 @@ A rule he gives is cemented in the harness where something acts on it, never onl
 - Since 2026-10-29. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, 2026-10-26, 2026-10-26, 2026-10-26, 2026-10-28, 2026-10-28, checked by the command on 2026-10-29.
 
 ### session-effort
-The effort a session runs at: medium.
+The effort a session runs at: high.
 - Of this repository only: not in force in a project that installs the harness.
-- Was: high until 2026-11-10.
+- Was: medium until 2026-11-10; high until 2026-11-10.
 - Read by: `bin/lib/guard.mjs`, `bin/rules.mjs`, `workshop/bin/host-watch.mjs`.
 - Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
@@ -224,18 +226,18 @@ The effort every sub-agent is launched with: high.
 - Since 2026-10-07. Row: reports. Source: his words of 2026-10-07, checked by a session on 2026-10-11.
 
 ### subagent-reader-model
-The model of a sub-agent that explores, reviews or verifies: claude-opus-5-5.
-- Passed on a call as `opus`.
+The model of a sub-agent that explores, reviews or verifies: claude-fable-5-2.
 - Of this repository only: not in force in a project that installs the harness.
+- Was: claude-opus-5-5 until 2026-11-10.
 - Read by: `bin/double-review.mjs`, `bin/lib/guard.mjs`.
-- Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-11.
+- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
 ### subagent-writer-model
-The model of a sub-agent that writes scoped code, in this repository: claude-haiku-5-5.
-- Passed on a call as `haiku`.
+The model of a sub-agent that writes scoped code, in this repository: claude-fable-5-2.
 - Of this repository only: not in force in a project that installs the harness.
+- Was: claude-haiku-5-5 until 2026-11-10.
 - Read by: `bin/lib/guard.mjs`.
-- Since 2026-10-11. Row: reports. Source: his words of 2026-10-10, 2026-10-11, checked by a session on 2026-10-11.
+- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
 ### terminal-note
 The note that ends a command typed into his Terminal panel, saying what it does in everyday words, so he reads it beside the command where it runs: the guard refuses a run_in_terminal command without it: <command>; Write-Host 'NOTE: <what it does>'.

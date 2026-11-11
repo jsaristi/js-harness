@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { claudeArgs, LENS_ANSWER_KEPT, lensEnv, lensReviewMain, runLens } from './lens-review.mjs';
+import { claudeArgs, LENS_ANSWER_KEPT, LENS_EFFORT, LENS_MODEL, lensEnv, lensReviewMain, runLens } from './lens-review.mjs';
 import { admittedLensReviews, appendLensReview, LENS_REVIEW_SCHEMA, readLensReviews, readLensRuns } from './lib/lens-reviews.mjs';
 import { NOT_FIXED } from './lib/codex-review-recheck.mjs';
 import { LENS_ANSWER_SCHEMA } from './lib/lens-result.mjs';
@@ -386,6 +386,10 @@ test('a lens runs tool-less on the CLI login: no eval token, no API key, no cust
   for (const flag of ['-p', '--safe-mode', '--no-session-persistence']) assert.ok(args.includes(flag), flag);
   const valueOf = (flag) => args.slice(args.indexOf(flag), args.indexOf(flag) + 2);
   assert.deepEqual(valueOf('--tools'), ['--tools', '']);
+  // The model and the effort are both named on the call: a run that names no effort takes the CLI's saved one.
+  assert.deepEqual(valueOf('--model'), ['--model', LENS_MODEL]);
+  assert.deepEqual([LENS_MODEL, LENS_EFFORT], ['claude-fable-5-2', 'high']);
+  assert.deepEqual(valueOf('--effort'), ['--effort', LENS_EFFORT]);
   assert.deepEqual(valueOf('--system-prompt-file'), ['--system-prompt-file', 'prompt.txt']);
   assert.deepEqual(valueOf('--output-format'), ['--output-format', 'json']);
   // The host enforces the answer's shape (JH 76, L2), and the user's language setting gives way to English (L3).

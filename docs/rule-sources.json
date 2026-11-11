@@ -362,22 +362,16 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "pasarlo a un modelo mas inteligente aprovechando que esta semana sale Fable 5.5",
-        "date": "2026-11-01",
-        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
-        "line": 49467
-      },
-      {
-        "quote": "Listo, entonces continua solo unas 2 horas",
-        "date": "2026-11-01",
-        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
-        "line": 49690
+        "quote": "haz la correcion completa osea todos los modelos de ahora en adelante va a ser Fable 5.2 Alto",
+        "date": "2026-11-10",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 4744
       }
     ],
-    "reading": "His addition to question 150 (spec 8 of odd/tasks/double-review-alignment.md, point 4 of its redesign): at most three reviews of one change, and where the third still finds a real failure, nothing more is reviewed, the problem is raised to him with what is happening, and the work passes to a more intelligent model. That model is one value: the strongest this machine knows today, claude-fable-5-1. His \"Fable 5.5\" is his word, not a model this machine knows yet; when it ships, it takes this value by a change of it.",
-    "accepted": "He typed \"Listo, entonces continua solo unas 2 horas\" at line 49690 of 0f71b2c6, answering the lead's question at line 49684, which asked whether he approved the redesign of question 152 and said that a written yes lets JH 126 record the rules and build points 2 to 5; point 4 of that redesign is this reading.",
+    "reading": "The model a change passes to when three reviews of it did not settle it is Fable 5.2, claude-fable-5-2: the strongest this machine knows on 2026-11-10, in place of claude-fable-5-1. That his \"todos los modelos\" takes in this one is the lead's reading (JH ORQ, the brief of this change), and his to stop. With every session on this model already (rule:session-model), the step no longer moves the work to a stronger model than the one that wrote it: what is left of it is raising the problem to him, and whether the step keeps a model at all is his to say. The rest stands as approved on 2026-11-01 (question 152, point 4 of the redesign): at most three reviews of one change, then the problem is raised to him.",
+    "accepted": "Typed by him in the lead's chat on 2026-11-10. Not put to him as a reading: it is the lead's, and his to correct.",
     "checked": {
-      "date": "2026-11-02",
+      "date": "2026-11-10",
       "by": "command"
     }
   },
@@ -500,13 +494,13 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "de ahora en adelante el orquestador estara en Fable 5.2 Extra Altro y las sesiones en Fable 5.2 Medio cambia inclusive de una vez todas las sesiones que tengamos tanto actualmente como las de aqui al futuro",
+        "quote": "Por que me equivoque, no podemos utilizar Fable 5.2 en Medio sino en Alto y este orquestador en Alto",
         "date": "2026-11-10",
         "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
-        "line": 3422
+        "line": 4744
       }
     ],
-    "reading": "The lead of this repository, his \"el orquestador\", runs at xhigh effort, his \"Extra Altro\": the lead open on 2026-11-10 and every later one. A new lead is started by the old one with the host's session-start tool under the title of a lead, <code> ORQ · <purpose>, and a start so titled is held to this value, at it or lower; every other start is held to rule:session-effort. That his \"Extra Altro\" is the level the host names xhigh is this session's reading, and his to correct. A lead he opens himself takes the level he picks in the host's menu, which no command holds.",
+    "reading": "The lead of this repository, his \"este orquestador\", runs at high effort, his \"en Alto\": the lead open on 2026-11-10 and every later one. It corrects his \"Extra Altro\" of the same day (line 3422 of the same transcript). A new lead is started by the old one with the host's session-start tool under the title of a lead, <code> ORQ · <purpose>, and a start so titled is held to this value, at it or lower; every other start is held to rule:session-effort, which his same words put at the same level. A lead he opens himself takes the level he picks in the host's menu, which no command holds.",
     "accepted": "Typed by him in the lead's chat on 2026-11-10. Not put to him as a reading: it is this session's, and his to correct.",
     "checked": {
       "date": "2026-11-10",
@@ -1091,13 +1085,13 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "de ahora en adelante el orquestador estara en Fable 5.2 Extra Altro y las sesiones en Fable 5.2 Medio cambia inclusive de una vez todas las sesiones que tengamos tanto actualmente como las de aqui al futuro",
+        "quote": "Por que me equivoque, no podemos utilizar Fable 5.2 en Medio sino en Alto y este orquestador en Alto",
         "date": "2026-11-10",
         "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
-        "line": 3422
+        "line": 4744
       }
     ],
-    "reading": "A work session of this repository runs at medium effort: his \"Medio\" beside \"las sesiones\", for those open on 2026-11-10 and every one opened after. The lead's level, his \"Extra Altro\" beside \"el orquestador\", is rule:lead-effort: a start titled as a new lead is held to that rule, and every other start to this one. The effort of sub-agents and of reviews is not named by these words and stays as it is.",
+    "reading": "A work session of this repository runs at high effort: his \"no podemos utilizar Fable 5.2 en Medio sino en Alto\", typed four minutes after the change to medium landed (pull request 812) and correcting it, for the sessions open on 2026-11-10 and every one opened after. The lead's level, his \"este orquestador en Alto\", is rule:lead-effort: a start titled as a new lead is held to that rule, and every other start to this one. The effort of sub-agents is rule:subagent-effort, already high; the effort of a Codex review is not named by these words and stays as it is.",
     "accepted": "Typed by him in the lead's chat on 2026-11-10. Not put to him as a reading: it is this session's, and his to correct.",
     "checked": {
       "date": "2026-11-10",
@@ -1303,40 +1297,34 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "de resto ahora que estamos diseñando el harness o cuando vayamos a tratar cosas de planificacion debe ser minimo opues 5.5 alto o fable 5.5 alto (que aun no ha salido), ningun otro modelo hasta la fecha",
-        "date": "2026-10-10",
-        "session": "182ad401-252a-4cbe-afcc-929fcd905c6a",
-        "line": 990
+        "quote": "haz la correcion completa osea todos los modelos de ahora en adelante va a ser Fable 5.2 Alto",
+        "date": "2026-11-10",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 4744
       }
     ],
-    "reading": "A sub-agent that explores, reviews or verifies runs on Opus 5.5, which the session records name claude-opus-5-5. His words also allow Fable 5.5 at high once it exists: the rule changes with his words when it does. That \"the rest\" means those sub-agents is the orchestrator's reading (its relief file, line 148). That his \"opus 5.5\" is that id is this session's reading, from the records of its own sub-agents, and his to correct. The alias `opus` is how the project applies the rule where a call takes only a short name: it is this session's, from what the name gave on engine 2.1.295, and changes with a reading, not with his words.",
-    "accepted": "Not put to him as a reading: it is the orchestrator's, and his to correct.",
+    "reading": "A sub-agent that explores, reviews or verifies runs on Fable 5.2, which the session records name claude-fable-5-2. That his \"todos los modelos\" takes in these sub-agents is the lead's reading (JH ORQ, the brief of this change), and his to stop; his words of 2026-10-10 already allowed a Fable at high in place of Opus 5.5 once one existed. His \"Alto\" for them is rule:subagent-effort, already high. The rule declares no short name: measured on 2026-11-10 with one prompt on cli 2.1.319, `fable` is answered by claude-fable-5-1 and the full id claude-fable-5-2 by itself, so such a sub-agent is launched with no model, on its session's (rule:session-model), and the double review's Claude reader passes the id. A short name comes back by a reading, once one is measured to give this model.",
+    "accepted": "Typed by him in the lead's chat on 2026-11-10. Not put to him as a reading: it is the lead's, and his to correct.",
     "checked": {
-      "date": "2026-10-11",
-      "by": "session"
+      "date": "2026-11-10",
+      "by": "command"
     }
   },
   "subagent-writer-model": {
     "kind": "words",
     "quotes": [
       {
-        "quote": "si pero solo para codificar quiero el haiku",
-        "date": "2026-10-10",
-        "session": "182ad401-252a-4cbe-afcc-929fcd905c6a",
-        "line": 990
-      },
-      {
-        "quote": "Listo entonces apliquemos lo que investigaste y siempre dime en que modo de esfuerzo debemos trabajar dependiendo de lo que hagamos",
-        "date": "2026-10-11",
-        "session": "130317af-a818-419c-a3de-3a21335db0a8",
-        "line": 2037
+        "quote": "haz la correcion completa osea todos los modelos de ahora en adelante va a ser Fable 5.2 Alto",
+        "date": "2026-11-10",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 4744
       }
     ],
-    "reading": "In this repository's way of working a sub-agent that writes scoped code is launched on Haiku 5.5, by the model on the call. The second quotation approves the orchestrator's decision that says so (its relief file, line 285, not read by this session); what the harness turns on by default for a project is not decided by it. That his \"haiku\" is the id claude-haiku-5-5 is this session's reading, from the records of its own writers on engine 2.1.295, and his to correct. The alias `haiku` is how the project applies the rule where a call takes only a short name: it is this session's, from what the name gave on engine 2.1.295 (it gave Haiku 4.5 on 2.1.292 and before), and changes with a reading, not with his words.",
-    "accepted": "The orchestrator's message of 2026-10-11 gives his second quotation as the approval of that decision.",
+    "reading": "In this repository's way of working a sub-agent that writes scoped code runs on Fable 5.2, which the session records name claude-fable-5-2. That his \"todos los modelos\" takes in the sub-agents, and so ends his \"solo para codificar quiero el haiku\" of 2026-10-10, is the lead's reading (JH ORQ, the brief of this change), not his sentence about writers: it is his to stop. His \"Alto\" for them is rule:subagent-effort, already high. The rule declares no short name: measured on 2026-11-10 with one prompt on cli 2.1.319, `fable` is answered by claude-fable-5-1 and the full id claude-fable-5-2 by itself, so a writer is launched as the agent type js-harness-writer, whose file names the id, or with no model, on its session's (rule:session-model). A short name comes back by a reading, once one is measured to give this model.",
+    "accepted": "Typed by him in the lead's chat on 2026-11-10. Not put to him as a reading: it is the lead's, and his to correct.",
     "checked": {
-      "date": "2026-10-11",
-      "by": "session"
+      "date": "2026-11-10",
+      "by": "command"
     }
   },
   "terminal-note": {
