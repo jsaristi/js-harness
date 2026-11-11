@@ -184,7 +184,7 @@ completamente autonomo".
   list in evals/tasks.test.mjs — specs 3 and 4; inline; commit 3
 - [x] T5 (kind: build) the away grader on the project's label; incident-01's grader; incident-05's reply check;
   their three `habit/` overlays — specs 3 and 4; inline; commit 3
-- [ ] T6 (kind: build) `--plan` names the cells that never failed or never passed — spec 4; inline; commit 4
+- [x] T6 (kind: build) `--plan` names the cells that never failed or never passed — spec 4; inline; commit 4
 - [ ] T7 (kind: docs) the bar where the documents state it (ROADMAP Decided, future-model, SPEC) — specs 1 to 4;
   inline; commit 5
 - [ ] T8 (kind: verify) an independent verifier on the graders and the negative control (high risk, item 6: no
@@ -328,3 +328,16 @@ completamente autonomo".
 - L10 (2026-11-11, slice 3 seen green and committed with this line: 24 of 24 of the three cases' tests). The habit of
   incident-01 holds `.eval-spend.log`, which an ignore rule covers, so it is added with `git add -f`: without it
   the habit scores 3 of 3 on a fresh clone and its proof fails. Next step: T6, then T7, T8, T9, as L9 says.
+- L11 (2026-11-11, after the host compacted the session a second time, at 06:42 local; T6 built, its two tests seen
+  red first on the missing export). `taskRecord` of evals/plan.mjs counts each task's passes over every results file
+  of the model and agent, and `--plan` prints them under its source line, then names the tasks at an extreme. The
+  rule is the task's whole record within one trial of all passed or all failed, at `EXTREME_TRIALS = 10` or more,
+  and not the cell rule L5 wrote: a task that always passes in one configuration and never in another separates
+  them, which is what a case is for, and a cell of three trials is at an extreme by chance. The count spans the
+  versions a case has had, since a results file pins none, and the line says so. Over the record on file for
+  claude-opus-5-5 (a scratch script on `taskRecord`, every recorded task planned): never failed, commit-no-attribution,
+  doc-goal, false-premise-flag, incident-04, incident-06, incident-07, incident-08, incident-09, lost-updates and
+  resolver; never passed, house-rules, incident-01 (0 of 23), incident-02 (0 of 23) and incident-05 (1 of 22). It
+  names them and removes none: which cases leave the paid set is his (the notice of L6, a). Checked:
+  `node --test evals/plan.test.mjs` 7 pass, `node --test --test-name-pattern="--plan" evals/suite.test.mjs` 5 pass.
+  Next: T7, T8, T9.
