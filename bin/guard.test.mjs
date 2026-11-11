@@ -68,12 +68,12 @@ test('a command typed into the terminal of a project that does not declare the r
   assert.deepEqual(await hook(bare, { rulesText: null }), { code: 0, out: '', err: '' });
 });
 
-test('an Agent call on a model no rule gives is denied in this repository, and one on an alias passes', async () => {
+test('an Agent call on a model no rule gives is denied in this repository, and one on the model of a rule or on none passes', async () => {
   const refused = await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model: 'sonnet' } });
   assert.equal(refused.code, 0);
   assert.equal(denied(refused).permissionDecision, 'deny');
   assert.match(denied(refused).permissionDecisionReason, /"sonnet"/);
-  for (const model of ['haiku', 'opus', undefined]) {
+  for (const model of [...['subagent-writer-model', 'subagent-reader-model'].map((id) => RULES.find((rule) => rule.id === id).value), undefined]) {
     assert.deepEqual(await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model } }), { code: 0, out: '', err: '' }, String(model));
   }
 });
