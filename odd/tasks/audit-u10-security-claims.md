@@ -243,7 +243,13 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
   reason of a name like a secret still repeated a plain name that is itself key-shaped (a key written before
   `_token`), against the comment beside it. `repeatable` now holds both conditions, a plain word that does not read
   as a key, for both reasons; one case, red before the change.
+- L17 The third round, 40d24d01..a7e20700. Codex: "the patch is correct (confidence 0.97)", no finding, 69,519 input
+  tokens, 84 s. The lenses: risk and reliability 0 findings, the second round's finding "fixed"; readability, one
+  suggestion on a comment and no failure of behaviour: the doc comment stood on the pattern `PLAIN_NAME` and stated
+  the rule the helper beside it held. Taken: the pattern lives inside `repeatable`, the one thing a reason asks,
+  under that comment. The bound of three reviews is for a real failure the third still finds; this is none, so the
+  work is not passed on, and the commit of this change gets the review the push asks of every code commit.
 - State (for a session that resumes): unit 10 is in pull request 817, ready. On `feat/fetch-query-values`: T5 is
-  committed (724e8cbd), two review rounds answered (40d24d01 and the commit of L16); next the third and last
-  review, from 40d24d01, the push, the pull request on base `worktree-fetch-path-limit`, the ready notice, then the
-  summary with the closed notice.
+  committed (724e8cbd), three review rounds answered (40d24d01, a7e20700 and the commit of L17); next the covering
+  review of that last commit, the push, the pull request on base `worktree-fetch-path-limit`, the ready notice,
+  then the summary with the closed notice.

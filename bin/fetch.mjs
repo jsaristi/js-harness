@@ -40,11 +40,10 @@ const TIMEOUT_MS = 60_000;
 const CHALLENGE_TITLE = /^Title: (Just a moment\.\.\.|Attention Required! \| Cloudflare|Access to this page has been denied|Access Denied)\s*$/m;
 // The `s` flag: a decoded name can hold a line break, and without it one before the separator hid the name.
 const SECRET_NAME = /^(?:.*[-_])?(?:token|key|apikey|secret|password|passwd|pwd|sig|signature|auth|session|sessionid|credential|credentials)$/is;
-/** A parameter's name that a reason may repeat: a short plain word that does not itself read as a key. Any other is
- * named by its place alone, since a decoded name can hold line breaks, control characters and free text, or be the
- * key, and a reason is copied into reports. */
-const PLAIN_NAME = /^[A-Za-z0-9_.[\]-]{1,40}$/;
-const repeatable = (name) => PLAIN_NAME.test(name) && !readsAsKey(name);
+/** Whether a reason may repeat a parameter's `name`: a short plain word that does not itself read as a key. Any other
+ * is named by its place alone, since a decoded name can hold line breaks, control characters and free text, or be
+ * the key, and a reason is copied into reports. */
+const repeatable = (name) => /^[A-Za-z0-9_.[\]-]{1,40}$/.test(name) && !readsAsKey(name);
 const PRIVATE_SUFFIX = /\.(?:localhost|local|internal|test|lan|home\.arpa)$/i;
 
 /** Why `text` is not a public page to hand a third party, or `null` when it is one. */
