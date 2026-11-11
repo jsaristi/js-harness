@@ -61,6 +61,8 @@ reader who trusts either text takes a risk nobody told them of.
   (`notPublic` answers `null`, run at 7525a4e5); none, new behaviour.
   spec 2: `node --test bin/fetch.test.mjs evals/configs.test.mjs`: today the help names the host, the user and the
   query's names and no limit, and evals/configs.mjs:5 says "can neither read nor write"; no test holds either text.
+  spec 3: `node --test bin/fetch.test.mjs`: at 07cffc8c `https://example.com/callback?code=<64 hex>` is sent (a case
+  of the test says so); none, new behaviour. Added on 2026-11-11 with L13, before any code of spec 3.
 - 4. Refutation: would the refusal turn away the public pages this command exists for?
   `node measure2.mjs repo-urls.txt 20`: 20 of 333 refused, a scratch script that runs the rule over the 333 URLs the
   repository cites, 40 hand-written shapes of public pages, and 5,000 generated keys of each of 16 kinds. Of the
@@ -76,6 +78,13 @@ reader who trusts either text takes a risk nobody told them of.
   of digits-only keys and of keys under 20 characters. At a limit of 16 the three Medium slugs with one such word are
   refused too, for 13 points more of base64url of 22; at 24, base62 of 20 and base64url of 22 fall to 0 %, and the
   repository's own artifact links, 22 characters, would pass. So 20.
+  For spec 3, would the same rule over the query turn away public pages with one?
+  `node measure3.mjs repo-urls.txt`: 0 of 24 refused, the rule over the names and values of the 24 URLs with a query
+  among the 333, and 27 hand-written shapes. Of the 27, 5 are refused: an OAuth `code` of 40 hex, which is the
+  case; the tracking values `fbclid`, `gclid` and Google's `ei` and `ved`; and a YouTube playlist id. Sent: a
+  YouTube video id, searches of plain words and of words such as `h264`, `utm_*`, page and sort parameters, a
+  Wikipedia `oldid`, an Amazon search with its `crid`. Four of the five refused pages are the same page without
+  the parameter, which is why the refusal names it.
   Verdict: supports
 - 5. Request: `notPublic` refuses a URL when one segment of its path, percent-decoded and cut at every character
   that is not an ASCII letter or digit, holds pieces mixing letters and digits that add up to 20 characters or more;
@@ -91,6 +100,10 @@ reader who trusts either text takes a risk nobody told them of.
 1. "que `fetch` rechace una ruta con un segmento largo que parece una clave" (question 3 of the triage, option 1).
 2. "Corregir los dos textos" (the same option): the help of `fetch`, and the text that describes the isolation of
    the evals.
+
+3. "the same key-shape check over fetch's query VALUES, which M16 also names (a key under a name such as code)":
+   this session's notice to the lead of 2026-11-11T06:12Z, taken by the lead by his words of line 6905 below (L9).
+   It is a unit and a pull request of its own, on the branch `feat/fetch-query-values`, stacked on pull request 817.
 
 The question as the triage wrote it, and the option taken:
 
@@ -118,6 +131,10 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
   not confinement, with the test that holds the limit. Commit 53bf1d2.
 - [x] T4 (kind: verify) an independent verifier reads T2, the guard: "holds" at f0e62d7d (L10); the lens fixes are
   commit f0e62d7d.
+- [ ] T5 (kind: build) spec 3: `notPublic` refuses a query name or value that reads as a key, by the function and
+  the limit of the path, test first; a value is named by its parameter's name and a name by its place, never
+  quoted; the help, the README, the dispatcher's line and docs/SPEC.md say it and drop the query from what goes out.
+- [ ] T6 (kind: verify) Codex and the lenses on T5's slice, from 07cffc8c.
 
 ## Log
 - L1 The brief (the lead, 2026-11-11T05:33Z): "You own one feature: two protections say what they really do, and
@@ -188,7 +205,17 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
   bin/fetch.test.mjs` 11 pass, 0 fail, and the new test of evals/configs.test.mjs passes, run alone by its name on
   this machine; the whole of that file ran in each commit's gate on GitHub, not again here (658 s on this machine).
   Item 4: predicted "supports", and the verifier's own count agrees: 20 of 333 refused, all on claude.ai.
-- State (for a session that resumes): T1 to T4, the lens fixes, the verifier's and both review rounds are done;
-  what is left is the push, the pull
+- L13 Pull request 817 is open and its ready notice recorded (2026-11-11T07:02Z). Spec 3 opens here, on
+  `feat/fetch-query-values`, cut from 07cffc8c. Its measure is in the depth pass (item 4), run before its code. Its
+  design: one rule and one constant, so the query is judged by the function the path is judged by, on the names and
+  values `URLSearchParams` already decoded; a refused value is named by its parameter's name, since dropping a
+  tracking parameter gives the same page, and a refused name by its place, since it is itself the key. A document
+  of its own was written first and refused by `check` ("code was committed before the pass's verdict": a stacked
+  branch holds unit 10's code), so the spec lives here. The independent verifier of T4 read `keyLikeSegment` and
+  `notPublic` whole; T5 calls the same judgement, so the reviews of its slice are its check and no second verifier
+  is started.
+- State (for a session that resumes): unit 10 is in pull request 817, ready. On `feat/fetch-query-values`: next
+  T5's red test, the change, the gate, Codex and the lenses from 07cffc8c, the push, the pull request on base
+  `worktree-fetch-path-limit`, the ready notice. Before that state: the push, the pull
   request, the ready notice, then the second unit of L9 on a branch of its own from this one, and the summary with
   the closed notice.
