@@ -382,6 +382,15 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+At 15:10, the session at 88 % of its context: the fixes of the verifier and of the lens are `1a9dc1e5`, a seventh
+unit (U7 `02b6f3d3..1a9dc1e5`). Codex ran on U1, U2, U3 and U4: each "the patch is correct", no finding, recorded
+(U3 as `1765b5a..52824f6`, U4 as `0abb1d2..8f7a2f7`). Lenses run and answered: U1 risk and reliability, U2 risk
+and reliability (run `ceee2438`). Still to run, one command at a time under the gate's lock, HEAD detached at the
+unit's head for Codex and `rule/one-model-home` checked out again after: Codex U5 (`--base bb1e9ea5` at
+`8673a328`), U6 (`--base ce97742a` at `914fc9c6`), U7 (`--base 02b6f3d3` at the head); the lenses of U2
+(readability), U3 (`34bbb538..52824f6e`), U4 (`0abb1d2c..8f7a2f76`), U5, U6 and U7, with `--head`. Then
+`js-harness check --push` to see nothing is owed, the four branches, the push, the pull requests, the ready notices
+(the first carries `session-effort` at medium; say the stack lands one by one).
 At 14:50: the verifier's report is in (one sub-agent, 29 tool uses, about 152k tokens; one thing of it checked
 here: `bin/lib/guard.mjs` returns null for a call with no prompt, and `resumeStart` had no empty-brief check). Its
 four findings: F1 (high) a resume with an empty brief ran at any level and on any model: fixed, the resume refuses
