@@ -4,6 +4,9 @@
 // createHash of node:crypto and RULES of ./rules-data.mjs, so no command can form a cycle.
 import { createHash } from 'node:crypto';
 import { RULES } from './rules-data.mjs';
+// The two modules import each other: `model-home.mjs` reads the rules through this one, and this one asks it what
+// shape a home's value has. Neither uses the other while it loads, only inside a function, so either may load first.
+import { homeFaults } from './model-home.mjs';
 
 /** The owners a rule can have: the person who decides it, or the project itself. */
 export const OWNERS = ['sebastian', 'project'];
@@ -247,7 +250,7 @@ function ruleFaults(rule, { minPhrase, declared, project }) {
   else if (bodies.length > 1) faults.push('more than one body: a rule has a value, or a path with phrases, or is retired');
   const body = bodies.length === 1 ? bodies[0] : null;
 
-  if (body === 'value') faults.push(...valueFaults(rule));
+  if (body === 'value') faults.push(...valueFaults(rule), ...homeFaults(rule));
   if (body === 'text') faults.push(...textFaults(rule, minPhrase));
   if (body === 'retired') faults.push(...retiredFaults(rule, declared));
   // A retired rule whose earlier values are numbers keeps its unit, so that its history says minutes or seconds.

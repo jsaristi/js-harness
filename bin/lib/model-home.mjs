@@ -43,6 +43,25 @@ export function claudeHeld(projectData) {
 
 const CLAUDE_ID = /^claude-([a-z]+)-(\d+(?:-\d{1,2})*)(?:-\d{8})?$/;
 
+/** The faults of shape of the declaration `rule` when it is one of a home and holds a text, for `readRules`; none
+ * for any other rule. The Claude model is a full id, since a short name is whatever the engine in use gives it (on
+ * 2026-11-10 `fable` gave claude-fable-5-1 while the rule read 5.2). An effort is one of `EFFORTS`. Codex's id has
+ * no shape to hold it to, so only what cannot be one is refused, and the probe of `rules switch` is its check. */
+export function homeFaults(rule) {
+  const { id, value } = rule;
+  if (typeof value !== 'string' || value === '') return [];
+  if (id === CLAUDE_HOME.model && !CLAUDE_ID.test(value)) {
+    return ['the value is not a full Claude id, claude-<family>-<version>: a short name gives whatever model the engine in use has for it'];
+  }
+  if ((id === CLAUDE_HOME.effort || id === CODEX_HOME.effort) && !EFFORTS.includes(value)) {
+    return [`the value is not an effort level: ${EFFORTS.slice(0, -1).join(', ')} or ${EFFORTS.at(-1)}`];
+  }
+  if (id === CODEX_HOME.model && (/\s/.test(value) || /^claude\b/i.test(value) || EFFORTS.includes(value))) {
+    return ['the value is not the id of a Codex model: it holds a space, is a Claude id or is an effort level'];
+  }
+  return [];
+}
+
 /** A model as a person reads it: `claude-fable-5-2` is "Fable 5.2", from its family and its version. An id of
  * another shape is given as it is, because a name made up for it would be a guess. */
 export function displayName(id) {

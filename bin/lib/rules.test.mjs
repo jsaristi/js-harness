@@ -223,6 +223,57 @@ test('a good alias on a value rule reads with no fault, and one of 32 characters
   assert.deepEqual(readRules([valueRule('alpha-value', { alias: 'a'.repeat(32) })]), []);
 });
 
+// ── The two homes of a model and an effort (odd/tasks/one-model-home.md, spec 3) ────────────────────────────────
+
+/** A rule of a home, as the list declares one: a text value and no unit. */
+const homeRule = (id, value) => valueRule(id, { value, unit: MISSING });
+
+const NOT_FULL_ID = 'the value is not a full Claude id, claude-<family>-<version>: a short name gives whatever model the engine in use has for it';
+const NOT_A_LEVEL = 'the value is not an effort level: low, medium, high, xhigh or max';
+const NOT_CODEX = 'the value is not the id of a Codex model: it holds a space, is a Claude id or is an effort level';
+
+test('the model of the Claude home is a full id: a short name, a bracket and another shape are refused', () => {
+  for (const value of ['fable', 'opus[1m]', 'claude-fable', 'claude-fable-5-2[1m]', 'Claude-Fable-5-2', 'gpt-6.1-sol']) {
+    assert.deepEqual(readRules([homeRule('session-model', value)]), [`rule "session-model": ${NOT_FULL_ID}`], `model ${value}`);
+  }
+});
+
+test('a full Claude id is the model of the Claude home with no fault, a dated one too', () => {
+  for (const value of ['claude-fable-5-2', 'claude-opus-5', 'claude-haiku-4-5-20251001']) {
+    assert.deepEqual(readRules([homeRule('session-model', value)]), [], `model ${value}`);
+  }
+});
+
+test('the effort of each home is one of the five levels a host takes', () => {
+  for (const id of ['session-effort', 'review-effort']) {
+    for (const value of ['low', 'medium', 'high', 'xhigh', 'max']) {
+      assert.deepEqual(readRules([homeRule(id, value)]), [], `${id} ${value}`);
+    }
+    for (const value of ['alto', 'High', 'highest']) {
+      assert.deepEqual(readRules([homeRule(id, value)]), [`rule "${id}": ${NOT_A_LEVEL}`], `${id} ${value}`);
+    }
+  }
+});
+
+test('the model of the Codex home has no shape of its own: only what cannot be one is refused', () => {
+  assert.deepEqual(readRules([homeRule('review-model', 'gpt-6.1-sol')]), []);
+  assert.deepEqual(readRules([homeRule('review-model', 'astra')]), []);
+  for (const value of ['gpt 6.1', 'claude-fable-5-2', 'high']) {
+    assert.deepEqual(readRules([homeRule('review-model', value)]), [`rule "review-model": ${NOT_CODEX}`], `model ${value}`);
+  }
+});
+
+test('an empty value of a home keeps the one fault every value has, and no second one', () => {
+  for (const id of ['session-model', 'session-effort', 'review-model', 'review-effort']) {
+    assert.deepEqual(readRules([homeRule(id, '')]), [`rule "${id}": the value is not a number or a text`], id);
+  }
+});
+
+test('a rule that is no home keeps any text as its value, and the list in force reads with no fault', () => {
+  assert.deepEqual(readRules([valueRule('alpha-value', { value: 'fable', unit: MISSING })]), []);
+  assert.deepEqual(readRules(RULES), []);
+});
+
 test('a scope that is not repository is refused by its value, and true is refused too', () => {
   assert.deepEqual(readRules([valueRule('alpha-value', { scope: 'project' })]), [
     'rule "alpha-value": the scope is "project": it is repository, or it is absent',
