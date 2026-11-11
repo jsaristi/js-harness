@@ -1,7 +1,7 @@
 # Doctor and the heartbeat say when the stored Claude sign-in ends
 
 Locator: `odd/tasks/signin-expiry-notice.md` · Engram mirror: `odd/signin-expiry-notice/tasks` · Branch: `worktree-signin-expiry-notice`
-Delivery: one pull request · Test runner: `node --test` · Session: JH 179
+Delivery: two stacked pull requests (D11) · Test runner: `node --test` · Session: JH 179
 
 ## Goal
 `js-harness doctor` has a `claude-signin` row that says how many days the claude.ai sign-in stored on the machine has
@@ -108,11 +108,12 @@ again while he is at the PC.
   <n>`. The merge is his."
 
 ## Tasks
-- [ ] T1 (kind: build) the reader and the two pure functions, `bin/lib/signin-expiry.mjs`, with the margin — S1, S4;
-  inline, test first
-- [ ] T2 (kind: build) the `claude-signin` row in the interactive `doctor`, and the notes it prints — S2; inline,
-  test first
-- [ ] T3 (kind: build) the heartbeat's sign-in tick — S3; inline, test first
+- [x] T1 (kind: build) the reader and the row's pure function, `bin/lib/signin-expiry.mjs`, with the margin — S1, S4;
+  inline, test first; first pull request
+- [x] T2 (kind: build) the `claude-signin` row in the interactive `doctor`, and the notes it prints — S2; inline,
+  test first; first pull request
+- [ ] T3 (kind: build) the heartbeat's sign-in tick, with `signinTold` — S3; inline, test first; second pull
+  request, stacked on the first
 - [ ] T4 (kind: verify) `doctor` and the heartbeat run here; Codex and the lenses on the code commits; `npm run
   check`; the pull request, the ready notice, the summary — S5, S6
 
@@ -148,6 +149,16 @@ again while he is at the PC.
   the margin the line is said at the start and after every line that ends the loop, as the reviews due are; the loop
   itself ends only when a reading crosses into the margin or past the end, so a heartbeat started inside the margin is
   not ended by what it just said. A date that cannot be read is said once, with why.
+- D10 The reading is made only for the user's own home: with a `--home` (or `JS_HARNESS_HOME`) that is another
+  folder the CLI is not run, the row is `n/a` and the heartbeat is told nothing. `claude auth status` answers for the
+  OS user's home whatever home the harness was given, so a fixture home would otherwise read the real account, which
+  is what `codexHomeOf` (`bin/lib/stack.mjs`) already refuses for the Codex home. Its cost: a machine whose harness
+  home is deliberately not the user's home gets no row.
+- D11 Two stacked pull requests, landed in order (`js-harness-chained-prs`): the whole change is 727 changed lines,
+  450 of them tests. The first, on `worktree-signin-expiry-notice`, is the reader with `doctor`'s row (T1, T2); the
+  second, on `worktree-signin-expiry-heartbeat` and based on the first, is the heartbeat's tick with `signinTold`
+  (T3). The first stays over 400 (its count is in the Log): about 310 of its lines are the tests of the reader and
+  the row, and a reader split from its one caller would be a module nothing runs, which is no work unit.
 - D9 A CLI that reports no sign-in at all (`loggedIn` false) is `unknown` with that as the reason, not a gap: the
   brief lists what cannot be read and asks no new gap, and by then every session has already failed aloud.
 
@@ -161,3 +172,27 @@ again while he is at the PC.
   the lead as JH 179: `~/.js-harness/background/briefs/2026-11-11T06-14-31-879Z-2075a3fa.md`, quoted in `## Specs`.
 - L2 (evidence, measured 2026-11-11 from 06:25Z, this PC, CLI 2.1.322): the readings of item 2 of the depth pass.
 - L3 (state, 2026-11-11 about 06:50Z): this document written before any code; next T1, test first.
+- L4 (red, then green, T1): with the test first, `node --test bin/lib/signin-expiry.test.mjs` failed (no module); with
+  `bin/lib/signin-expiry.mjs` and `spawnProbeOrThrow` exported with its `timeout`, it passes 20 of 20.
+- L5 (found while writing T2, decision D10): `bin/js-harness.test.mjs:293` runs the real `doctor` with a temp home, and
+  `claude auth status` answers for the user's own home whatever `--home` says, so the reader as first written would
+  have read this machine's account from a test, 5 s a run.
+- L6 (red, then green, T2): `node --test bin/doctor-signin.test.mjs` failed 6 of 7 before `bin/doctor.mjs` changed
+  (the seventh, that the hook never reads, held already); it passes 7 of 7 after.
+- L7 (red, then green, T3, written before the split): `node --test bin/loop-bodies.test.mjs` failed 7 of 33 before
+  `bin/loop.mjs` changed and passes 33 of 33 after; the tick is the `signinExpiry` seam of `loopMain`, read at the
+  start and every `SIGNIN_HOURS`, its line after every ending, the loop ended by a level that rises.
+- L8 (evidence, this PC, 2026-11-11 about 07:55Z, the branch's own copy): `node bin/js-harness.mjs doctor --offline`
+  prints `claude-signin   n/a       ok        n/a       n/a       n/a` and, under `Notes:`, `claude-signin: the
+  claude.ai sign-in stored on this machine ends in 12 days, on 2026-11-23 11:11 (UTC-05:00)`. `node
+  bin/js-harness.mjs loop heartbeat --quiet 1 --every 20 --max 1`, stopped after 45 s, opens with "every 6 hours, the
+  end of the stored claude.ai sign-in is read, and one that comes within 7 days, or passes, ends it" and says no
+  sign-in line, 12 days being outside the margin; `signinTold` given this PC's real reading and a clock 6 days ahead
+  returns "SIGN-IN: the claude.ai sign-in stored on this machine ends in 6 days, on 2026-11-23 11:11 (UTC-05:00):
+  tell the user, who signs in again while at the machine (claude auth login); once it ends, every background session,
+  lens review and remote server fails at once" (a real reading, a moved clock).
+- L9 (state, 2026-11-11 about 08:05Z): the change split as D11 says. The working tree holds the first slice only; the
+  second slice's files, whole and green, are kept outside the repository in `$CLAUDE_JOB_DIR/tmp/full/` (`bin/loop.mjs`,
+  `bin/loop-bodies.test.mjs`, `bin/lib/signin-expiry.mjs` and its test with `signinTold`, `README.md` with the
+  heartbeat's paragraph) until the first slice is committed. Next: the first slice's gate, Codex and the lenses, its
+  push and pull request; then the second branch from it.
