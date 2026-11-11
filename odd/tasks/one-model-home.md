@@ -219,7 +219,13 @@ carry Codex.
   extra y ya te dije, TODO pero TODO va a correr siempre en Fable 5.2 Alto" and "mi pregunta es por que no lo puedes
   hacer tu?"
 
-What they become, numbered as the bar of the depth pass:
+- S6. His words to the lead, 2026-11-11 00:26 local (line 6716, read with `js-harness sessions --quote`): "une lo
+  que quede listo y tienes autorizacion para poder avanzar en todo y escoger siempre la opcion recomendada, no
+  preguntes, avanza y se completamente autonomo." They are the lead's leave, not this session's: what "Ask me
+  before" lists goes to the lead, who decides by them.
+
+What they become, numbered as the bar of the depth pass. L13 of the Log, the answers to the third read, amends
+specs 1, 4, 5, 8 and 10 and the tasks T3 and T4, and wins where it differs from the text below:
 
 1. One home for Claude (S1, S2, S5). `session-model` and `session-effort` are the home: their subjects say that
    every session, the lead included, every sub-agent the harness defines or that inherits, the lenses, the double
@@ -493,7 +499,62 @@ each row was read again. "Reader" means the value comes from a rule; "by hand" m
   - Claude 8, 9, 10, 11 (the line in his menu's words; `npm run check` and the tests that read a leaving rule; a
     half of a home that does not change, and the probe's flags; three wrong figures in Why and the bar): taken.
 - L12. A scratch read for the lead, 2026-11-11 01:00 local, not the command of spec 6: `claude agents --json --all`
-  gave 46 jobs, 16 not done. Six work on `claude-fable-5-2` at high by their start record. Eight are stopped or
-  blocked with a start that named no model at high (JH 126, 130, 134, 137, and two rows each of JH 160 and 166),
-  so they ran on the host's default; two have no start record (JH 65, and the lead's own row). The four open
-  desktop sessions read `claude-fable-5-2` at high in the app's records.
+  gave 46 jobs, 16 not done. The starts of six asked for `claude-fable-5-2` at high. The starts of eight, stopped
+  or blocked, asked for high and named no model (JH 126, 130, 134, 137, and two rows each of JH 160 and 166); what
+  they ran on was not read from their transcripts. Two have no start record (JH 65, and the lead's own row). The
+  four open desktop sessions read `claude-fable-5-2` at high in the app's records. The notice of 01:02 said the
+  eight "ran on the host's default, opus[1m]": that was an inference from his settings, sent as a fact (L13).
+- L13. The third read, `782a1dff-56c5-4425-9bb5-c972ab5359ec`, on the copy of `9033dcf6`: Claude 12 findings
+  (3,175,121 tokens), Codex 5 (2,935,470 tokens), two high. The design did not pass in three reads, so by section 1
+  of the protocols it goes to him as a problem, through the lead (a `waiting` notice of 2026-11-11), and no fourth
+  read runs. No code is written until the lead answers. The answers, which amend the specs:
+  - Claude 1, Codex 1, high (a second run of `rules change` on a home's id starts again from `origin/main`'s
+    declaration and would undo the widening; `--with` does not carry a change of another declaration): taken. The
+    order is one run an id, never two: first `session-model` and `session-effort`, each run carrying the widened
+    subject, the new source and every pattern the rules that leave hold today; then the five retirements, each with
+    `--with` for its readers; then Codex's two. For a few commits a wording is found by two rules, which only
+    counts. `bin/lib/rules-scan.test.mjs`'s `PLANTED` takes several lines a rule. A test runs the whole order in a
+    fixture and holds every step's list and the last one's patterns.
+  - Claude 2, high (the guard would refuse every `start_session` that does not write a full id nobody has tried,
+    and its way out sends starts to the background against `rule:sessions-open-in-sidebar`): taken. The guard asks
+    for the home's effort written out and refuses a named model other than the home's; it does not ask for the
+    model until one `start_session` of the lead that names the home's id is recorded here with the new session's
+    `get_session` answer. A start from a session off the home is refused with who corrects that session (the
+    lead's session tools, or his menu for the lead), and names `sessions start` only as the way where a card is
+    enough.
+  - Claude 3 (the escalation line outside this repository): taken. It reads the home's declared value wherever it
+    runs, as the lenses do, with a test for a project that installs the harness; pull request 2's body says the
+    shipped hash changes, since `escalation-model` is the one rule of the five with no scope.
+  - Claude 4 (refusing the home's own level on a sub-agent call): taken. A call that names the home's level
+    passes; another level, `lower` and `higher` are refused; its break joins `session-effort`'s bundle.
+  - Claude 5 (the count gave nothing below high): taken. By level, every assistant entry parsed, 126 transcripts:
+    high 97,431, medium 16 (two transcripts), low 10 (four), none above high, 22 with no stamp. The stamp varies
+    below the cap and never above it, so it stays in specs 6 and 7 as the recorded effort. The cap was in his
+    settings in October too (`docs/sweep-2026-10-11.md:177`), and his words of `odd/tasks/harness-review.md:100`
+    on the usage spent bear on what the engine worked at, which stays not known.
+  - Claude 6 (the leave to land was not checked): taken, S6. Which merges his words cover is the lead's to read;
+    pull request 2 changes seven rules of his and the guard, and its `ready` notice says so.
+  - Claude 7 (the switch's one commit against `AGENTS.md`'s sentence, with no path for a no): taken. The question
+    is in the `waiting` notice. On a no the switch still is one command and prints one commit a rule, in order;
+    both are tested. The runner's closing line is changed to say a home's rules land in one pull request.
+  - Claude 8 (a third `gpt-` in the pattern carried from `subagent-effort`): taken, its exclusion becomes a line
+    that names codex or the review, with a near miss planted on an id with no `gpt-`.
+  - Claude 9 (no check knows a model's context window; `autoCompactWindow` unread): taken. The window is a
+    reminder the switch always prints; `doctor` and the switch also read `autoCompactWindow`.
+  - Claude 10, Codex 3 (the two isolation probes start real runs on their defaults): taken, they join exception 3
+    and the switch names them when they differ from a home. `evals/` stays outside the convention test: its
+    models are what a measurement was or will be made on, and `docs/future-model.md` owns changing them.
+  - Claude 11 (six small disagreements): taken. The bar's count is over eight texts; the writer's test keeps
+    reading the rules that leave until their commit in T4; the check of marks cuts at `## Progress` or `## Log`;
+    `session-effort-<kind>` of `bin/lib/contract.mjs:288-307`, which no rule declares, stops being looked up in
+    T4; the tests of `bin/lib/subagent-check.test.mjs`, `bin/lib/contract.test.mjs:321-323`,
+    `bin/contract.test.mjs:17-18`, `bin/check.test.mjs:5596`, `:5630` and
+    `bin/lib/session-title-guard.test.mjs:54` are read in T4; the bar's "7 more" is 8 with the testkit.
+  - Claude 12 (lists that "only shrink" with nothing that holds it; the Codex probe's proof): taken. The lists use
+    `bin/lib/ratchet.testkit.mjs`, as the other convention tests do. For Codex the probe proves that the CLI took
+    the id and the level, and names the model only where `codex exec --json` gives it.
+  - Codex 2 (the close allowed sessions still off the home): taken. The second run lists none that can run, or
+    each one left is an exception he accepted or an item the summary leaves open by name.
+  - Codex 4 (L12 turned what a start asked into what ran): taken, L12 is reworded.
+  - Codex 5 (a tool list of `docs/host-updates/` names the wrong CLI build): rebutted for this document, on
+    evidence: the file came with the merge of `origin/main` (`12bd856c`) and is JH 174's; it is passed to the lead.
