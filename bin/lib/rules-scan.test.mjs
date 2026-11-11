@@ -53,6 +53,7 @@ test('a failure that names no register entry, and a switch back with no sighting
 
 // One line for each rule of the real list that carries patterns, restating its value as a text might: a rule gets
 // its patterns and its planted line in the same change, so a pattern that finds nothing in particular never lands.
+// A rule that took the wordings of rules retired into it has a list, one line for each wording it carries.
 const PLANTED = {
   'agents-budget': { line: 'AGENTS.md stays within its budget of 1500 estimated tokens.', marked: 'AGENTS.md stays within its budget (`rule:agents-budget`).' },
   'codex-review-floor': { line: 'A review is never put under its floor of 300,000 input tokens.', marked: 'A review is never put under its floor (`rule:codex-review-floor`).' },
@@ -78,7 +79,11 @@ const PLANTED = {
   'sensor-silence': { line: 'A sensor that stays silent for 20 minutes is stopped.', marked: 'A sensor that stays silent for `rule:sensor-silence` is stopped.' },
   'sensor-timeout': { line: 'A sensor is stopped after 60 minutes.', marked: 'A sensor is stopped at `rule:sensor-timeout`.' },
   'session-effort': { line: 'A work session runs at `high` effort.', marked: 'A work session runs at the effort of `rule:session-effort`.' },
-  'session-model': { line: 'A work session runs on claude-opus-5-5.', marked: 'A work session runs on the model of `rule:session-model`.' },
+  'session-model': [
+    { line: 'A work session runs on claude-opus-5-5.', marked: 'A work session runs on the model of `rule:session-model`.' },
+    { line: 'A narrow writer runs on claude-haiku-5-5.', marked: 'A narrow writer runs on the model of `rule:session-model`.' },
+    { line: 'A verifier runs on claude-opus-5-5.', marked: 'A verifier runs on the model of `rule:session-model`.' },
+  ],
   'subagent-effort': { line: 'Every subagent runs at `high` effort.', marked: 'Every subagent runs at the effort of `rule:subagent-effort`.' },
   'subagent-reader-model': { line: 'A verifier runs on claude-opus-5-5.', marked: 'A verifier runs on the model of `rule:subagent-reader-model`.' },
   'subagent-writer-model': { line: 'A narrow writer runs on claude-haiku-5-5.', marked: 'A narrow writer runs on the model of `rule:subagent-writer-model`.' },
@@ -90,8 +95,10 @@ test('on the real list, every rule with patterns finds its own planted line, and
   const withPatterns = RULES.filter((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.patterns)).map((rule) => rule.id);
   assert.deepEqual(Object.keys(PLANTED).sort(), [...withPatterns].sort(), 'a planted line for each rule with patterns, and for no other');
   for (const id of withPatterns) {
-    const lines = inForceLines('docs/ROADMAP.md', `${PLANTED[id].line}\n${PLANTED[id].marked}\n`);
-    assert.deepEqual(scanLines(RULES, lines).filter((finding) => finding.id === id).map((finding) => finding.line), [1], id);
+    for (const { line, marked } of [PLANTED[id]].flat()) {
+      const lines = inForceLines('docs/ROADMAP.md', `${line}\n${marked}\n`);
+      assert.deepEqual(scanLines(RULES, lines).filter((finding) => finding.id === id).map((finding) => finding.line), [1], `${id}: ${line}`);
+    }
   }
 });
 

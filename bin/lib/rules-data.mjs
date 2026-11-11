@@ -690,7 +690,7 @@ export const RULES = [
   },
   {
     "id": "session-model",
-    "subject": "the model a session runs on",
+    "subject": "the model everything Claude the harness starts runs on: every session, the lead's included, every sub-agent the harness defines or that inherits its session's, the lenses, the double review's Claude reader and the escalation",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-11-10",
@@ -702,7 +702,9 @@ export const RULES = [
       }
     ],
     "patterns": [
-      "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\bon `?(?=claude-){amount}"
+      "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\bon `?(?=claude-){amount}",
+      "^(?!.*\\bruleValue\\().*\\bwriters?\\b.{0,50}\\bon `?(?=claude-){amount}",
+      "^(?!.*\\bruleValue\\().*\\b(?:readers?|verifiers?|reviewers?)\\b.{0,50}\\bon `?(?=claude-){amount}"
     ]
   },
   {

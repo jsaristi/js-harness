@@ -191,11 +191,11 @@ Each recap names the sessions to archive and the stopped ones, and the lead arch
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-11, 2026-10-15, 2026-10-13, checked by the command on 2026-10-22.
 
 ### session-model
-The model a session runs on: claude-fable-5-2.
+The model everything Claude the harness starts runs on: every session, the lead's included, every sub-agent the harness defines or that inherits its session's, the lenses, the double review's Claude reader and the escalation: claude-fable-5-2.
 - Of this repository only: not in force in a project that installs the harness.
 - Was: claude-opus-5-5 until 2026-11-10.
 - Read by: `bin/lib/model-home.mjs`, `bin/rules.mjs`.
-- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
+- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, 2026-11-10, 2026-11-10, checked by the command on 2026-11-11.
 
 ### session-prompts
 Sessions pass notices through the channel, each gives prompts only for itself, and the lead keeps the order: "## A work session - Give prompts only for yourself. A prompt meant for another session names that session in its first line."
