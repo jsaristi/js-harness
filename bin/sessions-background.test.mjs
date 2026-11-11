@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { sessionsMain } from './sessions.mjs';
 import { sessionsStartMain } from './sessions-background.mjs';
 import { appendNotice, newNotice } from './lib/channel.mjs';
+import { RULES } from './lib/rules-data.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 
 // `js-harness sessions start` and `stop`, the board's background sessions and the machine uninstall, through the public
@@ -16,6 +17,8 @@ import { projectSlug } from './lib/sessions.mjs';
 
 const BIN = fileURLToPath(new URL('./js-harness.mjs', import.meta.url));
 const RULES_DATA = fileURLToPath(new URL('./lib/rules-data.mjs', import.meta.url));
+// The effort the rule session-effort gives, read from the list a world with rules copies and never written here.
+const SESSION_EFFORT = RULES.find((rule) => rule.id === 'session-effort').value;
 
 const FAKE = String.raw`
 import fs from 'node:fs';
@@ -417,16 +420,16 @@ test('sessions start says so when claude is not on PATH', withWorld((world) => {
 }));
 
 test('where session-title and session-effort are declared, a free title or no effort is refused with the guard\'s reasons', withWorld((world) => {
-  const free = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--effort', 'high']);
+  const free = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--effort', SESSION_EFFORT]);
   assert.equal(free.code, 2);
   assert.match(free.stderr, /js-harness sessions start titles the session "Build the thing"/);
   assert.match(free.stderr, /Title it "JH 1 · <purpose>"/);
   const noEffort = js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief]);
   assert.equal(noEffort.code, 2);
   assert.match(noEffort.stderr, /js-harness sessions start names no effort/);
-  assert.match(noEffort.stderr, /--effort high/);
+  assert.ok(noEffort.stderr.includes(`--effort ${SESSION_EFFORT}`), noEffort.stderr);
   assert.deepEqual(readState(world).calls, []);
-  assert.equal(js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief, '--effort', 'high']).code, 0);
+  assert.equal(js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief, '--effort', SESSION_EFFORT]).code, 0);
 }, { rules: true }));
 
 test('sessions stop stops and removes a recorded session, drops its brief and records the removal', withWorld((world) => {
@@ -673,14 +676,34 @@ test('sessions start --resume refuses while any job claude lists works the recor
   assert.equal(actions(world).length, 1, 'nothing ran');
 }));
 
+// 2026-11-10: the title of a lead holds the start, and the resume of that session, to rule:lead-effort.
+test('a session titled as a lead starts and resumes at the rule lead-effort, which the title of a work session is refused', withWorld((world) => {
+  const lead = RULES.find((rule) => rule.id === 'lead-effort').value;
+  // A word that is no level is refused under the rule that holds the title, whatever the two values are.
+  const work = js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief, '--effort', 'ultra']);
+  assert.equal(work.code, 2);
+  assert.ok(work.stderr.trimEnd().endsWith(`Pass --effort ${SESSION_EFFORT} or lower.`), work.stderr);
+  const none = js(world, ['sessions', 'start', '--title', 'JH ORQ · relevo', '--brief', world.brief, '--effort', 'ultra']);
+  assert.equal(none.code, 2);
+  assert.ok(none.stderr.trimEnd().endsWith(`Pass --effort ${lead} or lower.`), none.stderr);
+  assert.deepEqual(readState(world).calls, []);
+  const started = js(world, ['sessions', 'start', '--title', 'JH ORQ · relevo', '--brief', world.brief, '--effort', lead]);
+  assert.equal(started.code, 0, started.stderr);
+  endJob(world, '0db8bc5e');
+  patchState(world, { nextId: 'c779ed44' });
+  const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(resumed.code, 0, resumed.stderr);
+  assert.equal(recordLines(world).at(-1).effort, lead);
+}, { rules: true }));
+
 // Codex P2 on 79e3430..318f952: a resume answers to the same rules and the same record as a start.
 test('sessions start --resume holds to the effort rule, needs a writable record, and keeps what it knows when claude says less', withWorld((world) => {
-  assert.equal(js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief, '--effort', 'high']).code, 0);
+  assert.equal(js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief, '--effort', SESSION_EFFORT]).code, 0);
   const [first] = recordLines(world);
   endJob(world, '0db8bc5e');
   const effort = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--effort', 'max']);
   assert.equal(effort.code, 2);
-  assert.match(effort.stderr, /--effort high or lower/);
+  assert.ok(effort.stderr.includes(`--effort ${SESSION_EFFORT} or lower`), effort.stderr);
   fs.chmodSync(recordFile(world), 0o444);
   const unwritable = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
   fs.chmodSync(recordFile(world), 0o644);

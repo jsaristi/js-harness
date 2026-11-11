@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `dedeec1a0e53`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 4.
+Hash `24c57294778c`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -82,6 +82,12 @@ His growth limit: while js-harness progress --pace says the last seven days are 
 What the lead does alone and tells him after, and what stays his, asked one at a time: "Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command."
 - Home: `bin/lib/manifest.mjs`.
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-09, 2026-10-11, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-10, 2026-10-15, 2026-10-15, 2026-10-24, checked by the command on 2026-10-22.
+
+### lead-effort
+The effort the lead's session runs at: xhigh.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: `bin/lib/guard.mjs`.
+- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
 ### live-board
 The harness never works as a black box: work sessions write each event as a notice (a session starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends them to the live board, a page that updates by itself, and points every reply to it: "- Every event of your work reaches the user's live board as a notice: \`js-harness notify --to orchestrator\` with \`opened\` when you start, \`note\` when a step of your plan finishes, a pull request opens or merges, a decision is made or you report spend, and \`ready\` and \`closed\` as below."
@@ -171,10 +177,11 @@ A rule he gives is cemented in the harness where something acts on it, never onl
 - Since 2026-10-29. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, 2026-10-26, 2026-10-26, 2026-10-26, 2026-10-28, 2026-10-28, checked by the command on 2026-10-29.
 
 ### session-effort
-The effort a session runs at: high.
+The effort a session runs at: medium.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: `bin/lib/guard.mjs`, `bin/rules.mjs`.
-- Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-12.
+- Was: high until 2026-11-10.
+- Read by: `bin/lib/guard.mjs`, `bin/rules.mjs`, `workshop/bin/host-watch.mjs`.
+- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
 ### session-housekeeping
 Each recap names the sessions to archive and the stopped ones, and the lead archives finished sessions without asking: "## The recap Each reply that closes a stretch of work carries: - one line a session: its state, the effort mode its kind of work calls for and why; - by title, the sessions to archive and the ones stopped, with what each waits for; a session a scheduled task opened is named as a routine; - the Codex meter, read at that moment, when the project reviews with Codex; - what waits for the user in a session, said only after reading that session at that moment; - when a stretch or a session ends, that it ended and which session to return to."
@@ -182,10 +189,11 @@ Each recap names the sessions to archive and the stopped ones, and the lead arch
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-11, 2026-10-15, 2026-10-13, checked by the command on 2026-10-22.
 
 ### session-model
-The model a session runs on: claude-opus-5-5.
+The model a session runs on: claude-fable-5-2.
 - Of this repository only: not in force in a project that installs the harness.
+- Was: claude-opus-5-5 until 2026-11-10.
 - Read by: `bin/rules.mjs`.
-- Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-12.
+- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
 ### session-prompts
 Sessions pass notices through the channel, each gives prompts only for itself, and the lead keeps the order: "## A work session - Give prompts only for yourself. A prompt meant for another session names that session in its first line."

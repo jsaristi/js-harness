@@ -1874,7 +1874,10 @@ test('after the feature document the hook names the mode its next open task call
   // A project whose rules are this copy's: the effort and the models.
   fs.mkdirSync(path.join(machine.worktree, 'bin', 'lib'), { recursive: true });
   fs.copyFileSync(new URL('./lib/rules-data.mjs', import.meta.url), path.join(machine.worktree, 'bin', 'lib', 'rules-data.mjs'));
-  assert.deepEqual(await modeOf(), ['Mode of the next open task: T6 (kind: build): session high; writers haiku, readers opus; every sub-agent at high. Tell the person: only they set the session\'s effort.']);
+  // The session's effort is read from the rule and never written here, so a change of his needs no edit of this test.
+  const { RULES } = await import('./lib/rules-data.mjs');
+  const sessionEffort = RULES.find((rule) => rule.id === 'session-effort').value;
+  assert.deepEqual(await modeOf(), [`Mode of the next open task: T6 (kind: build): session ${sessionEffort}; writers haiku, readers opus; every sub-agent at high. Tell the person: only they set the session's effort.`]);
   // On Codex the models of the table are Claude's: the kind only.
   const codex = path.join(machine.home, '.codex', 'sessions', `${SESSION}.jsonl`);
   assert.deepEqual(await modeOf({ transcript_path: codex }), ['Mode of the next open task: T6 (kind: build); effort and models are not declared for Codex']);

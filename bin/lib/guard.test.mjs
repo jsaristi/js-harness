@@ -109,6 +109,7 @@ test('behind a project whose list declares the rule, the guard refuses as here, 
     ['terminal-note', (data) => terminalNoteRefusal('npm test', data)],
     ['sessions-open-in-sidebar', (data) => openingRefusal('RemoteTrigger', data)],
     ['session-effort', (data) => sessionEffortRefusal(effort, data)],
+    ['lead-effort', (data) => sessionEffortRefusal({ title: 'JH ORQ · x', prompt: 'p', effort: 'ultra' }, data, { lead: true })],
     ['subagent-writer-model', (data) => modelRefusal({ model: 'sonnet' }, allowedModels(data))],
   ];
   for (const [id, refusal] of cases) {
@@ -168,24 +169,56 @@ test('the tools that do not open a session pass in this repository, whatever the
 // A session started with no effort runs at the effort of the session that started it: on 2026-10-16 two work
 // sessions opened so ran at max for two days while the rule says high (odd/tasks/harness-review.md, T6c).
 const BRIEF = { initiation: 'own_initiative', title: 'JH 32 · T9', prompt: 'Do T9.', background: 'x'.repeat(80) };
+// The rule's effort is read from the list and never written here, so a change of his needs no edit of these tests; the
+// order of the levels is the host's, written here apart from the guard's own.
+const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
+const HELD = RULES.find((rule) => rule.id === 'session-effort').value;
+const ABOVE = LEVELS.slice(LEVELS.indexOf(HELD) + 1);
+const WITHIN = LEVELS.slice(0, LEVELS.indexOf(HELD) + 1);
 
 test('in this repository a session started with no effort, or above the rule\'s, is refused, and the reason names the rule', () => {
   const noEffort = sessionEffortRefusal(BRIEF, HERE);
   assert.equal(noEffort, 'js-harness guard: start_session names no effort, so the new session would run at this session\'s '
-    + '(rule session-effort: high). Pass effort "high" or lower with context "fresh"; a fork cannot set its own effort.');
-  for (const effort of ['xhigh', 'max']) {
+    + `(rule session-effort: ${HELD}). Pass effort "${HELD}" or lower with context "fresh"; a fork cannot set its own effort.`);
+  assert.ok(LEVELS.includes(HELD), `the rule's effort, ${HELD}, is one of the levels`);
+  for (const effort of ABOVE) {
     assert.equal(sessionEffortRefusal({ ...BRIEF, effort }, HERE), `js-harness guard: start_session asks for effort "${effort}", `
-      + 'above the rule session-effort: high. Pass effort "high" or lower; a higher one is his to set.', effort);
+      + `above the rule session-effort: ${HELD}. Pass effort "${HELD}" or lower; a higher one is his to set.`, effort);
   }
   assert.equal(sessionEffortRefusal({ ...BRIEF, context: 'fork' }, HERE), noEffort);
   assert.equal(sessionEffortRefusal({ ...BRIEF, effort: 'ultra' }, HERE), 'js-harness guard: start_session asks for effort "ultra", '
-    + 'which is not one of low, medium, high, xhigh, max. Pass effort "high" or lower.');
+    + `which is not one of low, medium, high, xhigh, max. Pass effort "${HELD}" or lower.`);
 });
 
 test('a session started at the rule\'s effort or lower passes, and so do the calls that carry no brief', () => {
-  for (const effort of ['high', 'medium', 'low']) assert.equal(sessionEffortRefusal({ ...BRIEF, effort }, HERE), null, effort);
+  for (const effort of WITHIN) assert.equal(sessionEffortRefusal({ ...BRIEF, effort }, HERE), null, effort);
   assert.equal(sessionEffortRefusal({ initiation: 'offer', title: 'T9' }, HERE), null, 'an offer is a title alone');
   assert.equal(sessionEffortRefusal({ proposal_id: 'task_ab12cd34' }, HERE), null, 'a proposal starts as it was proposed');
+});
+
+// 2026-11-10: his words give the lead a level above the work sessions', and at a cut the old lead starts the new one
+// with this tool (bin/lib/manifest.mjs, "The cut"). Held to session-effort, that start was refused at the lead's level.
+const LEAD = RULES.find((rule) => rule.id === 'lead-effort').value;
+
+test('a start of a new lead is held to the rule lead-effort, and every other start to session-effort', () => {
+  assert.ok(LEVELS.includes(LEAD), `the lead's effort, ${LEAD}, is one of the levels`);
+  for (const effort of LEVELS.slice(0, LEVELS.indexOf(LEAD) + 1)) assert.equal(sessionEffortRefusal({ ...BRIEF, effort }, HERE, { lead: true }), null, effort);
+  for (const effort of LEVELS.slice(LEVELS.indexOf(LEAD) + 1)) {
+    assert.equal(sessionEffortRefusal({ ...BRIEF, effort }, HERE, { lead: true }), `js-harness guard: start_session asks for effort "${effort}", `
+      + `above the rule lead-effort: ${LEAD}. Pass effort "${LEAD}" or lower; a higher one is his to set.`, effort);
+  }
+  // A lead started with no effort would run at the old lead's, which may be above the rule's: refused as any start.
+  assert.equal(sessionEffortRefusal(BRIEF, HERE, { lead: true }), "js-harness guard: start_session names no effort, so the new session would run at this session's "
+    + `(rule lead-effort: ${LEAD}). Pass effort "${LEAD}" or lower with context "fresh"; a fork cannot set its own effort.`);
+  assert.equal(sessionEffortRefusal({ ...BRIEF, effort: LEAD }, HERE, { lead: true, cli: true }), null);
+  assert.equal(sessionEffortRefusal({ ...BRIEF, effort: 'ultra' }, HERE, { lead: true, cli: true }), 'js-harness sessions start asks for effort "ultra", '
+    + `which is not one of low, medium, high, xhigh, max. Pass --effort ${LEAD} or lower.`);
+  // A start that is not a lead's is held to the sessions' rule at every level, the lead's included.
+  for (const effort of ABOVE) assert.match(sessionEffortRefusal({ ...BRIEF, effort }, HERE), /above the rule session-effort: /, effort);
+  // A project whose list declares no lead-effort holds a lead's start to session-effort, as before the rule.
+  const without = writeRules(RULES.filter((rule) => rule.id !== 'lead-effort'));
+  for (const effort of ABOVE) assert.match(sessionEffortRefusal({ ...BRIEF, effort }, without, { lead: true }), /above the rule session-effort: /, effort);
+  for (const effort of WITHIN) assert.equal(sessionEffortRefusal({ ...BRIEF, effort }, without, { lead: true }), null, effort);
 });
 
 test('where the rule session-effort is not declared, a session started with no effort passes', () => {

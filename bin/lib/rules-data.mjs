@@ -312,6 +312,14 @@ export const RULES = [
     ]
   },
   {
+    "id": "lead-effort",
+    "subject": "the effort the lead's session runs at",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-11-10",
+    "value": "xhigh"
+  },
+  {
     "id": "live-board",
     "subject": "the harness never works as a black box: work sessions write each event as a notice (a session starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends them to the live board, a page that updates by itself, and points every reply to it",
     "owner": "sebastian",
@@ -641,8 +649,14 @@ export const RULES = [
     "subject": "the effort a session runs at",
     "owner": "sebastian",
     "scope": "repository",
-    "since": "2026-10-10",
-    "value": "high",
+    "since": "2026-11-10",
+    "value": "medium",
+    "was": [
+      {
+        "value": "high",
+        "until": "2026-11-10"
+      }
+    ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\b(?:at|on) `?{amount}`? effort"
     ]
@@ -663,8 +677,14 @@ export const RULES = [
     "subject": "the model a session runs on",
     "owner": "sebastian",
     "scope": "repository",
-    "since": "2026-10-10",
-    "value": "claude-opus-5-5",
+    "since": "2026-11-10",
+    "value": "claude-fable-5-2",
+    "was": [
+      {
+        "value": "claude-opus-5-5",
+        "until": "2026-11-10"
+      }
+    ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\bon `?(?=claude-){amount}"
     ]

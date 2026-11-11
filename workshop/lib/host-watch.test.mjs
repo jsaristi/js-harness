@@ -312,10 +312,12 @@ test('a host watch session is titled with its number and the version it reviews,
 });
 
 test('the HOST line names the update, the session to open and both ways to open it', () => {
-  const line = watchLine({ change: 'Claude Desktop 4.4212.0 → 4.5000.0', version: '4.5000.0', title: 'JH 120 · host watch 4.5000.0', brief: 'C:/h/.js-harness/background/host-watch-4.5000.0.md' });
+  const line = watchLine({ change: 'Claude Desktop 4.4212.0 → 4.5000.0', version: '4.5000.0', title: 'JH 120 · host watch 4.5000.0', brief: 'C:/h/.js-harness/background/host-watch-4.5000.0.md', effort: 'low' });
   assert.match(line, /^HOST: Claude Desktop 4\.4212\.0 → 4\.5000\.0 since the last review/);
   assert.match(line, /start_session/);
-  assert.match(line, /js-harness host-watch brief > "C:\/h\/\.js-harness\/background\/host-watch-4\.5000\.0\.md" && js-harness sessions start --title "JH 120 · host watch 4\.5000\.0" --brief "C:\/h\/\.js-harness\/background\/host-watch-4\.5000\.0\.md" --worktree host-watch-4-5000-0 --effort high$/);
+  assert.match(line, /js-harness host-watch brief > "C:\/h\/\.js-harness\/background\/host-watch-4\.5000\.0\.md" && js-harness sessions start --title "JH 120 · host watch 4\.5000\.0" --brief "C:\/h\/\.js-harness\/background\/host-watch-4\.5000\.0\.md" --worktree host-watch-4-5000-0 --effort low$/);
+  // The effort is the caller's, read from the rule session-effort: both ways to open the session name it.
+  assert.ok(line.includes('start_session (fresh, its own worktree, effort low, '), line);
 });
 
 test('the brief freezes the spans and names every step of the review, in order', () => {

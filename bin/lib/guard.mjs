@@ -71,31 +71,37 @@ const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
  * one above the rule's; a call with no brief (an offer's title, a proposal started as proposed) passes. Where the
  * rule is not declared nothing is refused; behind a project that declares it, the copy's value is held (`guardHeld`).
  * `cli` words the reasons for `js-harness sessions start`, which holds the same rule over its `--effort`
- * (odd/tasks/background-sessions.md, S5). */
-export function sessionEffortRefusal(toolInput, projectData, { cli = false } = {}) {
+ * (odd/tasks/background-sessions.md, S5). `lead` says the call starts a new lead, which the caller reads from its
+ * title (`leadTitle` of ./session-title-guard.mjs): it is held to the rule `lead-effort` where that rule gives a
+ * value, and to `session-effort` where it gives none. His words of 2026-11-10 give the lead a level above the work
+ * sessions', and at a cut the old lead starts the new one with this tool (./manifest.mjs, "The cut"): held to
+ * `session-effort`, that start was refused at the lead's own level. */
+export function sessionEffortRefusal(toolInput, projectData, { cli = false, lead = false } = {}) {
   if (typeof toolInput?.prompt !== 'string' || toolInput.prompt === '') return null;
-  const rule = guardHeld('session-effort', ruleHere('session-effort', undefined, projectData));
+  const ofLead = lead ? guardHeld('lead-effort', ruleHere('lead-effort', undefined, projectData)) : null;
+  const id = ofLead === null ? 'session-effort' : 'lead-effort';
+  const rule = ofLead ?? guardHeld('session-effort', ruleHere('session-effort', undefined, projectData));
   if (rule === null) return null;
-  const reason = effortReason(toolInput, rule.value, cli);
+  const reason = effortReason(toolInput, id, rule.value, cli);
   return reason === null ? null : `${reason}${rule.note}`;
 }
 
-/** Why `toolInput` is refused under the rule session-effort of value `value`, or null. */
-function effortReason(toolInput, value, cli) {
+/** Why `toolInput` is refused under the rule `id` (session-effort, or lead-effort) of value `value`, or null. */
+function effortReason(toolInput, id, value, cli) {
   const effort = toolInput.context === 'fork' ? undefined : toolInput.effort;
   const who = cli ? 'js-harness sessions start' : 'js-harness guard: start_session';
   const pass = cli ? `Pass --effort ${value} or lower` : `Pass effort "${value}" or lower`;
   if (effort === undefined || effort === null || effort === '') {
-    if (cli) return `${who} names no effort, so the new session would run at the host's default (rule session-effort: ${value}). ${pass}.`;
+    if (cli) return `${who} names no effort, so the new session would run at the host's default (rule ${id}: ${value}). ${pass}.`;
     return `${who} names no effort, so the new session would run at this session's `
-      + `(rule session-effort: ${value}). ${pass} with context "fresh"; a fork cannot set its own effort.`;
+      + `(rule ${id}: ${value}). ${pass} with context "fresh"; a fork cannot set its own effort.`;
   }
   const asked = EFFORTS.indexOf(effort);
   if (asked === -1) {
     return `${who} asks for effort "${effort}", which is not one of ${EFFORTS.join(', ')}. ${pass}.`;
   }
   if (asked <= EFFORTS.indexOf(value)) return null;
-  return `${who} asks for effort "${effort}", above the rule session-effort: ${value}. ${pass}; a higher one is his to set.`;
+  return `${who} asks for effort "${effort}", above the rule ${id}: ${value}. ${pass}; a higher one is his to set.`;
 }
 
 // The hour a message stamps as the time it is sent: in its opening header, after nothing but the sender's label
