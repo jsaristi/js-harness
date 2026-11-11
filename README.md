@@ -418,9 +418,18 @@ due ends the heartbeat with its `DUE:` line, again an hour, three and seven afte
 that ends it is followed by the `DUE:` lines still open, so the daily review never waits on the
 lead remembering it.
 
+At its start and every six hours it reads when the claude.ai sign-in stored on the machine ends, as
+`doctor`'s `claude-signin` row does, and weighs the clock against that date at every tick. It says
+nothing while more than seven days are left. From then on a `SIGN-IN:` line with the time left and
+the local end date follows every line that ends the heartbeat, and the heartbeat ends when the
+seven days begin and again when the sign-in ends; one started inside those days is not ended by
+them. A reading that finds the CLI not signed in counts as a sign-in that ended, whatever date it
+prints. The user signs in again; the heartbeat only says when. A date that cannot be read is said
+once, with why.
+
 ```console
 $ js-harness loop heartbeat
-js-harness loop heartbeat: ends when 30 minutes pass with no write to the gate log (…) or the channel (…), or a work session holds handed work with no commit, notice or gate for 60 minutes, or after 10 hours; every 60 minutes, the daily Windows run is read, and a red one told now ends it; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it
+js-harness loop heartbeat: ends when 30 minutes pass with no write to the gate log (…) or the channel (…), or a work session holds handed work with no commit, notice or gate for 60 minutes, or after 10 hours; every 60 minutes, the daily Windows run is read, and a red one told now ends it; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it; every 6 hours, the end of the stored claude.ai sign-in is read, and one that comes within 7 days, or passes, ends it
 STALLED: JH 19 · skill del orquestador (T8) — no commit, notice or gate since 11:49, holding a note from JH ORQ · js-harness (350k) of 11:49: 17:00 JH ORQ: first-version T3 moved to JH 25 after 6h without an answer…
 ```
 

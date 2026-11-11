@@ -92,7 +92,7 @@ function loopLine({ home, slug, fileSystem }) {
   const { record } = readRecord(loopRecordPath(home, slug, 'heartbeat'), { readFile: (file) => fileSystem.readFileSync(file, 'utf8') });
   const command = Array.isArray(record?.command) ? record.command : null;
   if (command === null || command.some((part) => WORKSHOP_SCRIPT.test(String(part)))) return null;
-  return `the heartbeat on record (since ${record.startedAt}) runs ${command.join(' ')}, the product's, which runs no tick`;
+  return `the heartbeat on record (since ${record.startedAt}) runs ${command.join(' ')}, the product's, which runs none of these ticks`;
 }
 
 /** The idea-watch reading of `project`, its network read bounded: `{ last, unread }`, or `null` with no record. */

@@ -928,6 +928,11 @@ Hours written in the relief file were not read from a clock.
 - Seen: 2026-10-16 — the record of notices, D--js-harness.jsonl — 73 of the 74 lead notices that
   opened "HH:MM JH ORQ:" (10-15 to 10-16) were more than a minute off the local clock: notify text
   sent through Bash met no hour check (bin/guard.mjs:81 holds only message tools)
+- Seen: 2026-11-11 — odd/tasks/signin-expiry-notice.md, Next step and Log, commits 83059554 to
+  9a4318e7 — JH 179 wrote nine hours as "about HH:MMZ" without reading the clock, up to 100 minutes
+  ahead ("about 09:45Z" in a block committed at 08:04Z); found when a notice printed the clock,
+  corrected with the commits' hours in the commit after 9a4318e7. The documents control reads a line
+  that opens with the date and an hour, and these stood inside a sentence, in UTC
 - Control: check — bin/notify.test.mjs — "a notice whose text stamps an hour more than a minute off
   the clock is refused, with the right hour, and not recorded" — since 2026-10-16
 - Proof: messages to another session: bin/guard.test.mjs:54, "a message to another session, by

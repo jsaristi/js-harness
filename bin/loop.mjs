@@ -28,6 +28,7 @@ import { ruleValue } from './lib/rules.mjs';
 import { readStalled } from './lib/stall.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { SIGNIN_WARN_DAYS, readSigninExpiry, signinTold } from './lib/signin-expiry.mjs';
 
 // The lead's cut (F8 S7, odd/tasks/f8-s7-topology.md, spec 1): the lead is cut at a phase's close or after this many
 // compactions of its session, the diet's starting line (docs/proposals/harness-diet.md, section 6), which S8 measures.
@@ -354,6 +355,11 @@ const WINDOWS_MINUTES = 60;
 // says it again each hour until a host watch session opens for it (odd/tasks/f8-s9-host-watch.md, S4).
 const HOST_MINUTES = 60;
 
+// How often the heartbeat reads when the stored claude.ai sign-in ends, in hours (bin/lib/signin-expiry.mjs): one
+// reading runs the Claude CLI for about five seconds, and a date with a margin of days needs no more. Between two
+// readings the clock is weighed at every tick against the date last read, so the margin is met at the tick it falls.
+const SIGNIN_HOURS = 6;
+
 /** The compactions of the session's own thread in `text`, whole transcript lines: a sub-agent's (a side chain) is not
  * the session's. Only a line that names a compaction is parsed, so a long transcript is read at the speed of a scan. */
 export function compactionsIn(text) {
@@ -476,6 +482,36 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     }
     return result.told;
   };
+  // The stored sign-in's end (odd/tasks/signin-expiry-notice.md, S3): read at the start and every SIGNIN_HOURS, and
+  // weighed against the clock at every tick. Its line is said from the margin on, after whatever ends the loop, as
+  // the reviews due are; the loop itself ends only when the level rises (into the margin, or past the end), so a
+  // heartbeat started inside the margin is not ended by what it already knows. A reading that cannot be made is said
+  // once each, and the last date a reading gave still stands. `atStart` is the reading the heartbeat opens with, which
+  // ends nothing whatever it finds.
+  const signin = { reading: null, readAt: null, level: null, line: null, unread: new Set() };
+  const signinRose = (now, atStart = false) => {
+    if (!ctx.signinExpiry) return false;
+    if (signin.readAt === null || now - signin.readAt >= SIGNIN_HOURS * 3600000) {
+      signin.readAt = now;
+      let fresh;
+      try {
+        fresh = ctx.signinExpiry(home);
+      } catch (err) {
+        fresh = { expiresAt: null, stored: null, why: `the reading failed (${err.message})` };
+      }
+      const { why } = signinTold(fresh, now);
+      if (why !== null && !signin.unread.has(why)) ctx.out(`sign-in: when the stored claude.ai sign-in ends could not be read: ${why}`);
+      if (why !== null) signin.unread.add(why);
+      if (why === null || signin.reading === null) signin.reading = fresh;
+    }
+    const told = signinTold(signin.reading, now);
+    const rose = signin.level !== null && told.level !== null && told.level > signin.level;
+    // A date first read inside the margin after a start that could not read one is news too.
+    const first = !atStart && signin.level === null && told.level !== null && told.level > 0;
+    if (told.level !== null) signin.level = told.level;
+    signin.line = told.line;
+    return rose || first;
+  };
   // The throughput review (odd/tasks/throughput-review.md, S4): each tick keeps the settled days that have no
   // snapshot and reads the reviews due; a due one ends the loop when it falls due and again each time its wait,
   // plus an hour, doubles (due, +1, +3, +7 h). What the tick said is said once each, as `unread` is.
@@ -548,9 +584,10 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     cut.offset = tail.end;
     return cut.count;
   };
-  // Every line that ends the loop is followed by the reviews still due, so whatever wakes the lead names them.
+  // Every line that ends the loop is followed by the sign-in's line, from its margin on, and by the reviews still due,
+  // so whatever wakes the lead names them.
   const ending = (lines, dues, code) => {
-    for (const line of [...lines, ...dues.map((due) => due.line)]) ctx.out(line);
+    for (const line of [...lines, ...(signin.line === null ? [] : [signin.line]), ...dues.map((due) => due.line)]) ctx.out(line);
     return code;
   };
   const started = ctx.now();
@@ -574,8 +611,9 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     }
     return last;
   };
-  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 || !ctx.windowsDaily ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}${ctx.hostWatch ? '; every hour, the host\'s versions are read, and an update no host watch session holds ends it' : ''}${ctx.throughputTick ? '; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it' : ''}${transcript === null ? '' : `; each tick reads this session's compactions, and a compaction that brings them to ${LEAD_CUT_COMPACTIONS} or more ends it: the lead's cut after ${LEAD_CUT_COMPACTIONS} compactions`}`);
+  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 || !ctx.windowsDaily ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}${ctx.hostWatch ? '; every hour, the host\'s versions are read, and an update no host watch session holds ends it' : ''}${ctx.throughputTick ? '; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it' : ''}${ctx.signinExpiry ? `; every ${plural(SIGNIN_HOURS, 'hour')}, the end of the stored claude.ai sign-in is read, and one that comes within ${plural(SIGNIN_WARN_DAYS, 'day')}, or passes, ends it` : ''}${transcript === null ? '' : `; each tick reads this session's compactions, and a compaction that brings them to ${LEAD_CUT_COMPACTIONS} or more ends it: the lead's cut after ${LEAD_CUT_COMPACTIONS} compactions`}`);
   let compactions = compactionsNow();
+  signinRose(started, true);
   for (const item of stalledAt(started)) {
     told.set(identity(item), crossing(item));
     ctx.out(`already stalled: ${item.title ?? `work session ${item.number}`}, quiet ${spanOf(item.quietMs)}`);
@@ -593,6 +631,8 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     const last = lastWrite();
     const now = ctx.now();
     const dues = await duesAt(now);
+    // Weighed before anything ends the loop, so every ending carries the line of this tick.
+    const signinNews = signinRose(now);
     if (now - last >= quiet * 60000) return ending([`STALL: no gate-log or channel write since ${hourOf(last)}`], dues, 0);
     const fresh = stalledAt(now).filter((item) => crossing(item) > (told.get(identity(item)) ?? -1));
     if (fresh.length > 0) return ending(fresh.map(stalledLine), dues, 0);
@@ -605,6 +645,7 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     if (windowsLine !== null) return ending([windowsLine], dues, 0);
     const hostLine = await hostTold();
     if (hostLine !== null) return ending([hostLine], dues, 0);
+    if (signinNews) return ending([], dues, 0);
     if (dues.some((due) => dueCrossing(due, now) > (dueTold.get(due.id) ?? -1))) return ending([], dues, 0);
     if (now >= end) return ending([`js-harness loop heartbeat: ${plural(max, 'hour')} cap reached (${hourOf(now)})`], dues, 1);
     await ctx.sleep(Math.min(every, end - now, last + quiet * 60000 - now));
@@ -710,6 +751,9 @@ export async function loopMain(
     windowsDaily = null,
     throughputTick = null,
     hostWatch = null,
+    // The heartbeat's reading of when the stored claude.ai sign-in ends: the product's own, since a sign-in that ends
+    // stops any project's unattended work. It runs the Claude CLI, only for the user's own home; `null` reads nothing.
+    signinExpiry = (home) => readSigninExpiry({ home }),
   } = {},
 ) {
   let parsed;
@@ -725,7 +769,7 @@ export async function loopMain(
   const slug = projectSlug(mainCheckout(run, cwd));
   // Where Claude Code keeps its session records, as `check`'s sub-agent row reads them (bin/lib/subagent-records.mjs).
   const claudeDir = env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude');
-  const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile, readTail, writeFile, claudeDir, run, windowsDaily, throughputTick, hostWatch };
+  const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile, readTail, writeFile, claudeDir, run, windowsDaily, throughputTick, hostWatch, signinExpiry };
   if (parsed.verb === 'status') return status(ctx, parsed, loopsFolder(home, slug));
   if (parsed.verb === 'heartbeat' || parsed.verb === 'channel-watch') {
     try {

@@ -2,19 +2,20 @@
 // an end date, and when it passes everything that works alone fails at once until the user signs in again: the
 // background sessions, the lens reviews, the remote server a phone uses. From Claude Code 2.1.318 `claude auth status`
 // prints that date (`loginExpiresAt`), and this module is the one place the harness reads it: `doctor` lists it as the
-// `claude-signin` row, a gap from a margin before the end.
+// `claude-signin` row and the heartbeat says it to the lead, both from a margin before the end.
 //
 // It runs `claude auth status` and keeps two things of its answer, the end date and whether a claude.ai sign-in is
 // stored. The same answer names the account (an e-mail, an organisation, a plan), and none of that leaves
 // `signinReading`. It reads no credential file, no token and no keychain, and it never signs in, signs out or
 // refreshes anything: the fix it names is the user's to run. One reading took 4.4 to 6.0 s on 2026-11-11, with the
-// same answer while the network was closed, so only the interactive `doctor` makes one, never the session-start hook.
+// same answer while the network was closed, so only the interactive `doctor` and the heartbeat's own slow tick make
+// one, never the session-start hook.
 import os from 'node:os';
 import { sameFolder } from './backup.mjs';
 import { localMinute, localZone } from './local-time.mjs';
 import { probeTimedOut, spawnProbeOrThrow } from './stack.mjs';
 
-/** How many days before the end the row becomes a gap. A CHOSEN number: the question the
+/** How many days before the end the row becomes a gap and the heartbeat speaks. A CHOSEN number: the question the
  * user was asked proposed a week (question 258 of the channel record, 2026-11-11), long enough to hold a day at the
  * machine and short enough that the row is quiet for most of a sign-in's life. The CLI's own warning starts 10 days
  * before, on `claude -p` text output, which the harness never reads (it asks for JSON). */
@@ -111,8 +112,8 @@ function spanOf(ms) {
 }
 
 /** Where `now` (ms) stands against a reading's end date, or `null` when it holds none: the time left in ms, whether
- * the margin is reached and whether the end has passed, and the words the row says, with the local date and its
- * zone (rule:local-time). */
+ * the margin is reached and whether the end has passed, and the words both the row and the heartbeat say, with the
+ * local date and its zone (rule:local-time). */
 function leftOf(reading, now) {
   const at = typeof reading?.expiresAt === 'string' ? Date.parse(reading.expiresAt) : NaN;
   if (Number.isNaN(at)) return null;
@@ -123,6 +124,10 @@ function leftOf(reading, now) {
 }
 
 const whyOf = (reading) => reading?.why ?? 'the reader gave nothing';
+
+/** What both the row and the heartbeat say of a CLI that is not signed in: its own word, whatever date it prints,
+ * and when the sign-in ended once that date is past (`left` is `leftOf`'s answer for the reading). */
+const signedOutWords = (reading, left) => (left !== null && left.ended ? `${whyOf(reading)}: ${left.words}` : whyOf(reading));
 
 /** The `claude-signin` row of `doctor`, from a reading and the clock (`now`, ms): nothing to install, and the
  * `claude` cell carries the state. `ok` with more than the margin left; `stale`, a gap, from the margin on and past
@@ -142,7 +147,7 @@ export function signinRow(reading, now) {
       ...row,
       claude: 'missing',
       ...(ended ? { expiresAt: reading.expiresAt, daysLeft: Math.floor(left.ms / DAY_MS) } : {}),
-      note: ended ? `${whyOf(reading)}: ${left.words}` : whyOf(reading),
+      note: signedOutWords(reading, left),
       fix: { claude: [SIGNED_OUT_FIX, SIGNIN_COMMAND] },
     };
   }
@@ -155,4 +160,21 @@ export function signinRow(reading, now) {
     note: left.words,
     fix: left.inside ? { claude: [SIGNIN_FIX, SIGNIN_COMMAND] } : {},
   };
+}
+
+/** What the heartbeat is told by a reading at `now` (ms): `{ level, line, why }`. `level` is 0 while the margin is
+ * far, 1 inside it and 2 past the end or when the CLI says it is not signed in, so a heartbeat ends when it rises;
+ * `line` is the one it says from level 1 on, and `null` before. A date that cannot be read for another reason has no
+ * level and no line, and `why` says the reason; a home that was not asked has none of the three. */
+export function signinTold(reading, now) {
+  if (reading?.asked === false) return { level: null, line: null, why: null };
+  const left = leftOf(reading, now);
+  const stopped = `tell the user, who signs in again at the machine (${SIGNIN_COMMAND}); until then no background session, lens review or remote server runs`;
+  if (reading?.signedOut === true) return { level: 2, line: `SIGN-IN: ${signedOutWords(reading, left)}: ${stopped}`, why: null };
+  if (left === null) return { level: null, line: null, why: whyOf(reading) };
+  if (!left.inside) return { level: 0, line: null, why: null };
+  const step = left.ended
+    ? stopped
+    : `tell the user, who signs in again while at the machine (${SIGNIN_COMMAND}); once it ends, every background session, lens review and remote server fails at once`;
+  return { level: left.ended ? 2 : 1, line: `SIGN-IN: ${left.words}: ${step}`, why: null };
 }
