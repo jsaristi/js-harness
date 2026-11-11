@@ -181,7 +181,14 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
   hex letter in an escape, nor that another alphabet's escape cuts: one case each. Not taken: the hook's notice in
   `bin/lib/web-block.mjs:22` ("a public page only: it sends no cookie and no key") lists no refusal and what it says
   of the command is true, so it stays as three tests pin it.
-- State (for a session that resumes): T1 to T4, the lens fixes and the verifier's are committed; what is left is a
-  confirming review of the fixes (Codex and the three lenses, from 53bf1d2), the push, the pull
+- L11 The confirming review of the fixes, 53bf1d2..b472a6c (commits f0e62d7d and b472a6c): Codex, "the patch is
+  correct (confidence 0.94)", no finding, 44,627 input tokens, 54 s; the lenses risk, readability and reliability, 0
+  findings, and of the four earlier ones "fixed" four. Two review rounds in all, within the bound of three.
+- L12 The close against the depth pass. Item 3: predicted 2 of 2 specs, measured 2 of 2: `node --test
+  bin/fetch.test.mjs` 11 pass, 0 fail, and the new test of evals/configs.test.mjs passes, run alone by its name on
+  this machine; the whole of that file ran in each commit's gate on GitHub, not again here (658 s on this machine).
+  Item 4: predicted "supports", and the verifier's own count agrees: 20 of 333 refused, all on claude.ai.
+- State (for a session that resumes): T1 to T4, the lens fixes, the verifier's and both review rounds are done;
+  what is left is the push, the pull
   request, the ready notice, then the second unit of L9 on a branch of its own from this one, and the summary with
   the closed notice.
