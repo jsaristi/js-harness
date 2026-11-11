@@ -17,7 +17,7 @@ const AT_1444 = new Date(2026, 9, 14, 14, 44, 30);
 
 /** Runs the hook on `payload` (an object, or a raw text) in a project whose rules file reads `rulesText` (null for
  * none), with the machine's gate lock held by `held` (null for free), and returns `{ code, out, err }`. */
-async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, timed = {}, index = null, configDir, exists = () => false, baseContains } = {}) {
+async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, timed = {}, index = null, configDir, exists = () => false, baseContains, app } = {}) {
   const out = [];
   const err = [];
   const code = await guardMain(args, {
@@ -41,6 +41,9 @@ async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, arg
     env: {},
     homedir: () => path.join(os.tmpdir(), 'js-harness-guard-test-no-home'),
     exists,
+    // `app` stands in for the desktop app's session records, by session id; without it the real reader finds none
+    // under the home of these tests.
+    readApp: app === undefined ? undefined : () => app,
     // The project of these tests declares its remote gate on, as this repository does.
     remoteGate: () => 'on',
     readIndex: () => {
@@ -122,6 +125,29 @@ test('a session started with no effort, or at another level than the rule sessio
   const passes = { code: 0, out: '', err: '' };
   assert.deepEqual(await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: { ...brief, effort: SESSION_EFFORT } }), passes);
   assert.deepEqual(await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input: brief }, { rulesText: null }), passes, 'no rules');
+});
+
+// odd/tasks/one-model-home.md, spec 5: the tool caps a start at the session that makes it, so the hook reads the
+// app's record of the calling session (the payload's session_id) and refuses a start from one off the home.
+test('a start_session from a session whose own app record is off the home is denied, and one with no record passes', async () => {
+  const model = RULES.find((rule) => rule.id === 'session-model').value;
+  const lead = RULES.find((rule) => rule.id === 'lead-effort').value;
+  const next = model.replace(/\d+$/, (digits) => String(Number(digits) + 1));
+  const call = { tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', session_id: 'c-starter', tool_input: { initiation: 'own_initiative', title: 'JH 32 · T9', prompt: 'Do T9.', background: 'x'.repeat(80), effort: SESSION_EFFORT, context: 'fresh' } };
+  const record = (fields) => new Map([['c-starter', { where: 'sessions', title: 'JH ORQ · orquestador', model, effort: lead, ...fields }]]);
+  const passes = { code: 0, out: '', err: '' };
+  assert.deepEqual(await hook(call, { app: record({}) }), passes, 'a starter on the home');
+  assert.deepEqual(await hook(call, { app: new Map() }), passes, 'no record of the starter');
+  assert.deepEqual(await hook({ ...call, session_id: undefined }, { app: record({ model: next }) }), passes, 'no session id in the payload');
+  assert.deepEqual(await hook(call, { app: record({ model: next }), rulesText: null }), passes, 'no rules here');
+  const off = await hook(call, { app: record({ model: next }) });
+  assert.equal(off.code, 0);
+  assert.match(denied(off).permissionDecisionReason, new RegExp(`^js-harness guard: start_session is called from a session whose own record holds the model "${next}", not the one of the rule session-model: ${model}, and a start is capped at the session that makes it\\. Only the user changes a lead's own: En esta sesión, abre el selector`));
+  // A reader that fails is a record that cannot be read: the start passes, and the board shows the session.
+  assert.deepEqual(await hook(call, { app: { get: () => { throw new Error('locked'); } } }), passes);
+  // A call the start's own rules refuse says that first, and reads no record.
+  const first = await hook({ ...call, tool_input: { ...call.tool_input, effort: undefined } }, { app: { get: () => assert.fail('no record is read') } });
+  assert.match(denied(first).permissionDecisionReason, /names no effort/);
 });
 
 // 2026-11-10: his words give the lead a level of its own, and the old lead starts the new one with this tool.

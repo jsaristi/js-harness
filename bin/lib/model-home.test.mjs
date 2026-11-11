@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { RULES } from './rules-data.mjs';
 import { writeRules } from './rules.mjs';
-import { CLAUDE_HOME, CODEX_HOME, EFFORTS, MENU_LEVELS, claudeHeld, claudeHome, codexHome, displayName, menuLine, sameClaudeModel } from './model-home.mjs';
+import { CLAUDE_HOME, CODEX_HOME, EFFORTS, MENU_LEVELS, claudeHeld, claudeHome, codexHome, displayName, menuLine, offHome, sameClaudeModel } from './model-home.mjs';
 
 // odd/tasks/one-model-home.md, specs 2 and 7: the one module that knows which rules are the two homes.
 const valueOf = (id, list = RULES) => list.find((rule) => rule.id === id).value;
@@ -69,6 +69,20 @@ test('a short name is the same model as nothing, not even as itself: it names wh
   assert.equal(sameClaudeModel('opus[1m]', 'opus'), false);
   assert.equal(sameClaudeModel('fable', 'claude-fable-5-2'), false);
   assert.equal(sameClaudeModel('gpt-6.1-sol', 'gpt-6.1-sol'), false, 'only Claude ids are compared: a Codex id has no shape to know a full one by');
+});
+
+// odd/tasks/one-model-home.md, specs 6 and 7: what the board, doctor and rules applied say of a session off the home.
+test('what a session holds that the home does not is its model, its level or both, and what is not known is not compared', () => {
+  const held = { model: 'claude-fable-5-2', effort: 'medium' };
+  assert.equal(offHome({ model: 'claude-fable-5-2', effort: 'medium' }, held), null);
+  assert.equal(offHome({ model: 'claude-fable-5-2[1m]', effort: 'medium' }, held), null, 'a bracket aside is the same model');
+  assert.deepEqual(offHome({ model: 'claude-opus-5-5', effort: 'medium' }, held), { model: 'claude-opus-5-5', effort: null });
+  assert.deepEqual(offHome({ model: 'claude-fable-5-2', effort: 'high' }, held), { model: null, effort: 'high' }, 'a higher level differs as a lower one does');
+  assert.deepEqual(offHome({ model: 'opus', effort: 'low' }, held), { model: 'opus', effort: 'low' }, 'a short name is the home\'s model for no one');
+  assert.equal(offHome({ model: null, effort: null }, held), null, 'what a record does not say is not compared');
+  assert.equal(offHome(null, held), null);
+  assert.equal(offHome({ model: 'claude-opus-5-5', effort: 'low' }, { model: null, effort: null }), null, 'a home that holds neither');
+  assert.deepEqual(offHome({ model: 'claude-opus-5-5', effort: 'low' }, { model: null, effort: 'medium' }), { model: null, effort: 'low' });
 });
 
 test('the line he is given names the model and the level as his menu shows them', () => {

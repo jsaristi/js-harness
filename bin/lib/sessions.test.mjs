@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import nodePath from 'node:path';
 import * as lib from './sessions.mjs';
+import { menuLine } from './model-home.mjs';
 
 // Every transcript below is synthetic: the entry shapes are the ones odd/tasks/session-board.md records
 // (## Design), the contents are made up for the test.
@@ -2371,7 +2372,7 @@ test('roleNamed reads the role an --address asks for: the orchestrator by either
 const C = 'cccccccc-3333-4333-8333-333333333333';
 const D = 'dddddddd-4444-4444-8444-444444444444';
 const member = (id, title, seconds, more = {}) => ({ id, title, titleSource: 'custom-title', state: 'waiting', lastEntryAt: before(seconds), cwd: 'D:\\proj', gitBranch: 'main', permissionMode: 'bypassPermissions', work: [], tail: [], ...more });
-const row = (title, role, more = {}) => ({ title, titleSource: 'custom-title', code: role === null ? null : 'JH', role, number: null, purpose: null, self: false, lastEntryAt: null, permissionMode: 'bypassPermissions', cwd: 'D:\\proj', gitBranch: 'main', worktree: null, features: [], transcripts: [], host: null, record: null, opened: 'unknown', where: 'unknown', effort: null, ...more });
+const row = (title, role, more = {}) => ({ title, titleSource: 'custom-title', code: role === null ? null : 'JH', role, number: null, purpose: null, self: false, lastEntryAt: null, permissionMode: 'bypassPermissions', cwd: 'D:\\proj', gitBranch: 'main', worktree: null, features: [], transcripts: [], host: null, record: null, opened: 'unknown', where: 'unknown', effort: null, menu: null, held: null, off: null, ...more });
 // The app's records (`appSessions`), by the transcript's id: one in Routines for a scheduled task, one in Sessions.
 const inRoutines = (more = {}) => ({ where: 'routines', effort: null, scheduledTaskId: 'task-1', archived: false, title: null, ...more });
 const inSessions = (more = {}) => ({ where: 'sessions', effort: null, scheduledTaskId: null, archived: false, title: null, ...more });
@@ -2420,18 +2421,63 @@ test('rosterOf effort: the latest member\'s effort that is a string, else the ap
   assert.equal(effort([member(A, 'JH 2 · the board', 60)]), null, 'none says null');
 });
 
-test('the roster line after the mode line says how a row was opened and where it is, marks what is not in his sidebar, and marks an effort below high', () => {
+test('the roster line after the mode line says how a row was opened and where it is, marks what is not in his sidebar, and judges no effort where no home is given', () => {
   // The line is the fourth of a row's: the header, the mode line (unchanged), then this one.
   const opener = (sessions, app) => rosterSection(sessions, { app })[3];
   const mode = 'bypassPermissions';
   assert.equal(rosterSection([member(A, 'JH 2 · the board', 60, { opened: 'his', effort: 'high' })], { app: new Map([[A, inSessions({ effort: 'high' })]]) })[2], `    mode ${mode}  folder D:\\proj  branch main  transcript aaaaaaaa`, 'the mode line is unchanged');
   assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'his', effort: 'high' })], new Map([[A, inSessions({ effort: 'high' })]])), '    opened by him  in Sessions  effort high');
-  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'his', effort: 'low' })], new Map([[A, inSessions({ effort: 'low' })]])), '    opened by him  in Sessions  effort low', 'an effort below high is not marked for his own session');
-  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'unknown' })], new Map([[A, inRoutines({ effort: 'medium' })]])), '    opened by a scheduled task  in Routines  effort medium  NOT IN HIS SIDEBAR  effort below high');
-  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'command', effort: 'low' })]), '    opened by a command  not in the app  effort low  NOT IN HIS SIDEBAR  effort below high');
-  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'session', effort: 'medium' })], new Map([[A, inSessions({ effort: 'medium' })]])), '    opened by a session  in Sessions  effort medium  effort below high');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'his', effort: 'low' })], new Map([[A, inSessions({ effort: 'low' })]])), '    opened by him  in Sessions  effort low');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'unknown' })], new Map([[A, inRoutines({ effort: 'medium' })]])), '    opened by a scheduled task  in Routines  effort medium  NOT IN HIS SIDEBAR');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'command', effort: 'low' })]), '    opened by a command  not in the app  effort low  NOT IN HIS SIDEBAR');
+  assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'session', effort: 'medium' })], new Map([[A, inSessions({ effort: 'medium' })]])), '    opened by a session  in Sessions  effort medium');
   assert.equal(opener([member(A, 'JH 2 · the board', 60, { opened: 'his', effort: 'high' })], new Map([[A, inSessions({ where: 'archived', archived: true, effort: 'high' })]])), '    opened by him  archived  effort high', 'archived is not marked');
   assert.equal(opener([member(A, 'JH 2 · the board', 60)]), '    opened unknown  where unknown  effort unknown');
+});
+
+// odd/tasks/one-model-home.md, spec 7: the level a row is marked for is the home's, not one written by hand, and
+// the app's record (his menu) is what is judged, since the lead's row said `effort high` while its menu said more.
+test('a row whose app record is not the home\'s is marked with what it holds, both levels are said where the menu and the last reply disagree, and the session that reads the board gets the line for him', () => {
+  const HOME = { model: 'claude-fable-5-2', effort: 'medium', lead: 'high' };
+  const section = (sessions, app) => rosterSection(sessions, { app, home: HOME });
+  const opener = (sessions, app) => section(sessions, app)[3];
+  const row = (sessions, app) => lib.rosterOf(sessions, { app, home: HOME }).rows[0];
+  const record = (model, effort) => new Map([[A, inSessions({ model, effort })]]);
+  const work = (more) => [member(A, 'JH 2 · the board', 60, { opened: 'session', effort: 'medium', ...more })];
+  const lead = (more) => [member(A, 'JH ORQ · proj', 60, { opened: 'his', effort: 'high', ...more })];
+  // On the home: nothing is marked, and the row says what it is held to.
+  assert.equal(opener(work(), record('claude-fable-5-2', 'medium')), '    opened by a session  in Sessions  effort medium');
+  assert.deepEqual(row(work(), record('claude-fable-5-2', 'medium')).menu, { model: 'claude-fable-5-2', effort: 'medium' });
+  assert.deepEqual(row(work(), record('claude-fable-5-2', 'medium')).held, { model: 'claude-fable-5-2', effort: 'medium' });
+  assert.equal(row(work(), record('claude-fable-5-2', 'medium')).off, null);
+  // Another level, higher as well as lower, and his own session as any other.
+  assert.equal(opener(work({ opened: 'his', effort: 'high' }), record('claude-fable-5-2[1m]', 'high')), '    opened by him  in Sessions  effort high  OFF THE HOME: its menu holds the level high, the home medium');
+  assert.deepEqual(row(work({ effort: 'high' }), record('claude-fable-5-2', 'high')).off, { source: 'menu', model: null, effort: 'high' });
+  assert.equal(opener(work(), record('claude-opus-5-5', 'medium')), '    opened by a session  in Sessions  effort medium  OFF THE HOME: its menu holds the model claude-opus-5-5, the home claude-fable-5-2');
+  assert.equal(opener(work({ effort: 'low' }), record('claude-opus-5-5', 'low')), '    opened by a session  in Sessions  effort low  OFF THE HOME: its menu holds the model claude-opus-5-5 and the level low, the home claude-fable-5-2 and medium');
+  // The lead is held to its own level.
+  assert.equal(opener(lead(), record('claude-fable-5-2', 'high')), '    opened by him  in Sessions  effort high');
+  assert.deepEqual(row(lead(), record('claude-fable-5-2', 'high')).held, { model: 'claude-fable-5-2', effort: 'high' });
+  assert.equal(opener(lead({ effort: 'medium' }), record('claude-fable-5-2', 'medium')), '    opened by him  in Sessions  effort medium  OFF THE HOME: its menu holds the level medium, the home high');
+  // The menu and the last reply disagree: both are said, and the menu's is the one judged.
+  assert.equal(opener(lead(), record('claude-fable-5-2', 'xhigh')), '    opened by him  in Sessions  effort xhigh in its menu, high in its last reply  OFF THE HOME: its menu holds the level xhigh, the home high');
+  assert.equal(opener(work({ effort: 'high' }), record('claude-fable-5-2', 'medium')), '    opened by a session  in Sessions  effort medium in its menu, high in its last reply');
+  // No record: the row says so, and its last reply is what is judged.
+  const replied = { tokens: 1, model: 'claude-fable-5-2', at: null };
+  assert.equal(opener(work({ opened: 'command', context: replied })), '    opened by a command  not in the app  effort medium  NOT IN HIS SIDEBAR  NO APP RECORD');
+  assert.equal(opener(work({ opened: 'command', effort: 'high', context: { ...replied, model: 'claude-opus-5-5' } })), '    opened by a command  not in the app  effort high  NOT IN HIS SIDEBAR  NO APP RECORD  OFF THE HOME: its last reply holds the model claude-opus-5-5 and the level high, the home claude-fable-5-2 and medium');
+  assert.deepEqual(row(work({ opened: 'command', effort: 'high', context: replied })).off, { source: 'last reply', model: null, effort: 'high' });
+  assert.equal(row(work({ opened: 'command' })).menu, null);
+  // The session that reads the board cannot change its own: it gets the line to give him, with what it is held to.
+  const mine = section(work({ self: true, effort: 'high' }), record('claude-opus-5-5', 'high'));
+  assert.equal(mine[4], `    to give him: ${menuLine({ model: 'claude-fable-5-2', effort: 'medium' })}`);
+  const given = (sessions, app) => section(sessions, app).filter((line) => line.startsWith('    to give him: '));
+  assert.deepEqual(given(work({ self: true }), record('claude-fable-5-2', 'medium')), [], 'no line for a session on the home');
+  assert.deepEqual(given(work({ effort: 'high' }), record('claude-fable-5-2', 'high')), [], 'no line for another session\'s row');
+  assert.deepEqual(given(work({ self: true, opened: 'command', effort: 'high', context: replied })), [], 'no line where there is no menu to pick in');
+  // A home that holds nothing judges nothing, and one with no level for its lead holds the lead to the sessions\'.
+  assert.equal(lib.rosterOf(work({ effort: 'low' }), { app: record('claude-opus-5-5', 'low'), home: { model: null, effort: null, lead: null } }).rows[0].held, null);
+  assert.deepEqual(lib.rosterOf(lead(), { app: record('claude-fable-5-2', 'high'), home: { ...HOME, lead: null } }).rows[0].held, { model: 'claude-fable-5-2', effort: 'medium' });
 });
 
 // The app appends entries with no time to a transcript it opens (`cost-state`, seen on 2026-10-11 in two

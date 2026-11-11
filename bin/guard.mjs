@@ -116,7 +116,7 @@ function noteLeft(tool, input, readNote) {
 const rulesTextOf = (root, readFile) => optionalText(path.join(root, 'bin', 'lib', 'rules-data.mjs'), readFile);
 
 /** Why the call of `payload` is refused, or null. */
-async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, env = {}, homedir = os.homedir }) {
+async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, readApp, env = {}, homedir = os.homedir }) {
   const tool = payload?.tool_name;
   const input = payload?.tool_input ?? {};
   if (Object.hasOwn(PATH_FIELDS, tool)) {
@@ -162,7 +162,22 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     const rules = rulesTextOf(root, readFile);
     // A lead's title holds the start to rule:lead-effort, any other to rule:session-effort; both to rule:session-model.
     const { leadTitle } = await import('./lib/session-title-guard.mjs');
-    return sessionStartRefusal(input, rules, { lead: leadTitle(input.title) }) ?? (await sessionTitleOf(input, rules, root, harnessHome({ env, homedir }), readFile));
+    const lead = leadTitle(input.title);
+    const start = sessionStartRefusal(input, rules, { lead });
+    if (start !== null) return start;
+    // The tool caps a start at the session that makes it: the app's record of the caller is read, for a call with a
+    // brief only. No id, no record or a reader that fails is no record, which refuses nothing.
+    let starter = null;
+    if (typeof input.prompt === 'string' && input.prompt !== '' && typeof payload.session_id === 'string' && payload.session_id !== '') {
+      try {
+        starter = (await readApp()).get(payload.session_id) ?? null;
+      } catch {
+        starter = null;
+      }
+    }
+    const { starterRefusal } = await import('./lib/guard.mjs');
+    return starterRefusal(starter, rules, { lead, starterLead: leadTitle(starter?.title ?? '') })
+      ?? (await sessionTitleOf(input, rules, root, harnessHome({ env, homedir }), readFile));
   }
   if (OPENING_TOOLS.includes(tool)) return openingRefusal(tool, rulesTextOf(rootOf(), readFile));
   if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now());
@@ -296,6 +311,11 @@ export async function guardMain(argv, {
   homedir = os.homedir,
   exists = fs.existsSync,
   remoteGate,
+  // The desktop app's records of its sessions by session id, read only for a start_session.
+  readApp = async () => {
+    const { appRoot, appSessions } = await import('./lib/app-record.mjs');
+    return appSessions(appRoot(env, process.platform, homedir()));
+  },
 } = {}) {
   if (argv[0] === '--memory' && argv.length === 2) return memoryForm(argv[1], { projectRoot, readFile, stdout, stderr });
   if (argv.length !== 1 || (argv[0] !== '--hook' && argv[0] !== '--stop')) {
@@ -316,7 +336,7 @@ export async function guardMain(argv, {
   let hint = null;
   try {
     const payload = JSON.parse(readStdin());
-    reason = await refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, env, homedir });
+    reason = await refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, readApp, env, homedir });
     // A denial wins; a Bash call that runs adds the hint for a wrapped commit beside its result (commit-gates-first S4).
     if (reason === null && payload?.tool_name === 'Bash') hint = await hintOf(payload, { env, projectRoot, exists, remoteGate });
   } catch {

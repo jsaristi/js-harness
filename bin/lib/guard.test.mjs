@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RULES } from './rules-data.mjs';
 import { ruleHere, writeRules } from './rules.mjs';
-import { agentEffortRefusal, allowedModels, denial, hourRefusal, openingRefusal, sessionStartRefusal, stampedHour } from './guard.mjs';
+import { EFFORTS, menuLine } from './model-home.mjs';
+import { agentEffortRefusal, allowedModels, denial, hourRefusal, openingRefusal, sessionStartHome, sessionStartRefusal, stampedHour, starterRefusal } from './guard.mjs';
 import { backtickRefusal, backticksInDoubleQuotes, driveRootRemovalRefusal, modelRefusal, onFirstParentLine, reviewBaseRefusal, terminalNoteRefusal } from './guard.mjs';
 import { RECORD_HANDLES, REVIEW_RECORD_FILES, reviewRecordOf, reviewRecordWriteRefusal } from './guard.mjs';
 import { codexReviewsPath } from './codex-reviews.mjs';
@@ -195,6 +196,45 @@ test('the tools that do not open a session pass in this repository, whatever the
     assert.equal(openingRefusal(tool, HERE), null, tool);
     assert.equal(openingRefusal(tool, null), null, tool);
   }
+});
+
+// odd/tasks/one-model-home.md, spec 5 (L13, Claude 2): the tool caps a start at the session that makes it, so a
+// starter off the home cannot start a session on it, whatever its call names.
+test('a start from a session whose own record holds another model, or a lower level than the start is held to, is refused with who corrects it', () => {
+  const model = MODEL_RULES[0].value;
+  const next = model.replace(/\d+$/, (digits) => String(Number(digits) + 1));
+  const on = { model, effort: LEAD, title: 'JH ORQ · orquestador' };
+  const way = ' Where a card is enough, js-harness sessions start starts one on the rules\' model and level, capped by no session.';
+  assert.equal(starterRefusal(on, HERE), null);
+  assert.equal(starterRefusal(on, HERE, { lead: true }), null);
+  assert.equal(starterRefusal({ ...on, model: `${model}[1m]` }, HERE), null, 'a bracket aside is the same model');
+  assert.equal(starterRefusal({ ...on, effort: 'max' }, HERE, { lead: true }), null, 'a higher level caps nothing');
+  assert.equal(starterRefusal(null, HERE), null, 'no record: the board shows it, the guard refuses nothing');
+  assert.equal(starterRefusal({ model: null, effort: null, title: null }, HERE), null, 'a record that names neither');
+  assert.equal(starterRefusal({ ...on, effort: 'ultra' }, HERE), null, 'a word that is no level is not compared');
+  assert.equal(starterRefusal({ ...on, model: next, effort: 'low' }, null), null, 'no rules here');
+  assert.equal(starterRefusal({ ...on, model: next, title: 'JH 7 · thing' }, HERE),
+    `js-harness guard: start_session is called from a session whose own record holds the model "${next}", not the one of the rule session-model: ${model}, and a start is capped at the session that makes it. The lead sets that session's with its session tools.${way}`);
+  // The level is the one the start is held to: the sessions' for a work session, the lead's for a new lead.
+  const under = EFFORTS[EFFORTS.indexOf(HELD) - 1];
+  if (under !== undefined) {
+    assert.equal(starterRefusal({ ...on, effort: under, title: 'JH 7 · thing' }, HERE),
+      `js-harness guard: start_session is called from a session whose own record holds the level "${under}", under the one this start is held to (rule session-effort: ${HELD}), and a start is capped at the session that makes it. The lead sets that session's with its session tools.${way}`);
+  }
+  if (EFFORTS.indexOf(HELD) < EFFORTS.indexOf(LEAD)) {
+    assert.equal(starterRefusal({ ...on, effort: HELD }, HERE), null, 'a work session is started from the sessions\' level');
+    assert.match(starterRefusal({ ...on, effort: HELD, title: 'JH 7 · thing' }, HERE, { lead: true }), new RegExp(`holds the level "${HELD}", under the one this start is held to \\(rule lead-effort: ${LEAD}\\)`));
+  }
+  // A lead cannot be set by another session: the refusal carries the line for the user, with the lead's level.
+  assert.equal(starterRefusal({ ...on, model: next }, HERE, { starterLead: true }),
+    `js-harness guard: start_session is called from a session whose own record holds the model "${next}", not the one of the rule session-model: ${model}, and a start is capped at the session that makes it. Only the user changes a lead's own: ${menuLine({ model, effort: LEAD })}${way}`);
+});
+
+// odd/tasks/one-model-home.md, spec 5: what a start does not name is the home's, a lead's level for a lead.
+test('sessionStartHome gives the model and the level a start takes: the home\'s where declared, nothing where not', () => {
+  assert.deepEqual(sessionStartHome(HERE), { model: MODEL_RULES[0].value, effort: HELD });
+  assert.deepEqual(sessionStartHome(HERE, { lead: true }), { model: MODEL_RULES[0].value, effort: LEAD });
+  assert.deepEqual(sessionStartHome(null), { model: undefined, effort: undefined });
 });
 
 // A session started with no effort runs at the effort of the session that started it: on 2026-10-16 two work

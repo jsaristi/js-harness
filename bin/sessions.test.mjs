@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lockLibraryBesideScript, sessionsMain } from './sessions.mjs';
+import { claudeHome } from './lib/model-home.mjs';
 import { appendNotice, findOpenings, newNotice, readNotices, reliefStamp, writeOpening } from './lib/channel.mjs';
 import { dayStartOf, localDay, measuresTotal } from './lib/measures.mjs';
 import { statePath } from './lib/pause.mjs';
@@ -1463,13 +1464,32 @@ function writeRoster(machine) {
   writeTitled(machine, SESSION_C, 'JH ORQ · long ago', 13 * 3600);
 }
 
+// odd/tasks/one-model-home.md, spec 7: the home a row is judged by is the one the project's rules file declares.
+test('the board marks a session whose app record is off the home the project\'s rules declare, gives the home in --json, and judges nothing where the project has no rules', withMachine(async (machine) => {
+  writeTitled(machine, SESSION_E, 'JH 3 · the routine', 120);
+  const home = claudeHome();
+  const off = home.effort === 'low' ? 'high' : 'low';
+  const records = new Map([[SESSION_E, { where: 'sessions', model: home.model, effort: off, scheduledTaskId: null, archived: false, title: null }]]);
+  const bare = await runSessions(machine, [], { readApp: () => records });
+  assert.equal(bare.code, 0, bare.stderr);
+  assert.ok(bare.stdout.split('\n').includes(`    opened unknown  in Sessions  effort ${off}`), bare.stdout);
+  fs.mkdirSync(path.join(machine.root, 'bin', 'lib'), { recursive: true });
+  fs.copyFileSync(fileURLToPath(new URL('./lib/rules-data.mjs', import.meta.url)), path.join(machine.root, 'bin', 'lib', 'rules-data.mjs'));
+  const { code, stdout, stderr } = await runSessions(machine, [], { readApp: () => records });
+  assert.equal(code, 0, stderr);
+  assert.ok(stdout.split('\n').includes(`    opened unknown  in Sessions  effort ${off}  OFF THE HOME: its menu holds the level ${off}, the home ${home.effort}`), stdout);
+  const board = JSON.parse((await runSessions(machine, ['--json'], { readApp: () => records })).stdout);
+  assert.deepEqual(board.home, { model: home.model, effort: home.effort, lead: home.lead });
+  assert.deepEqual(board.roster.rows.find((row) => row.title === 'JH 3 · the routine').off, { source: 'menu', model: null, effort: off });
+}));
+
 test('the board says how a scheduled session was opened, where it sits and its effort, and that it is not in his sidebar', withMachine(async (machine) => {
   writeTitled(machine, SESSION_E, 'JH 3 · the routine', 120);
   const routines = new Map([[SESSION_E, { where: 'routines', effort: 'medium', scheduledTaskId: 'task-1', archived: false, title: null }]]);
   const { code, stdout, stderr } = await runSessions(machine, [], { readApp: () => routines });
   assert.equal(code, 0, stderr);
   const lines = stdout.split('\n');
-  const opener = lines.indexOf('    opened by a scheduled task  in Routines  effort medium  NOT IN HIS SIDEBAR  effort below high');
+  const opener = lines.indexOf('    opened by a scheduled task  in Routines  effort medium  NOT IN HIS SIDEBAR');
   assert.notEqual(opener, -1, stdout);
   assert.equal(lines[opener - 1], '    mode bypassPermissions  folder C:\\proj  branch main  transcript eeeeeeee');
 }));

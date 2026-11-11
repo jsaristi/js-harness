@@ -62,6 +62,17 @@ export function sameClaudeModel(a, b) {
   return CLAUDE_ID.test(bare(a)) && bare(a) === bare(b);
 }
 
+/** What a session that holds `has` (`{ model, effort }`, either null where its record does not say) has that the
+ * home it is held to (`held`, the same shape) does not: `{ model, effort }`, each what the session holds where that
+ * differs and null where it does not, or null when nothing differs. A level differs higher as well as lower; what
+ * either side does not say is not compared. */
+export function offHome(has, held) {
+  const known = (value) => typeof value === 'string' && value !== '';
+  const model = known(has?.model) && known(held?.model) && !sameClaudeModel(has.model, held.model) ? has.model : null;
+  const effort = known(has?.effort) && known(held?.effort) && has.effort !== held.effort ? has.effort : null;
+  return model === null && effort === null ? null : { model, effort };
+}
+
 /** The line a session gives the user when its own model or effort is not the home's `{ model, effort }`: a session
  * cannot change its own, so he picks them in the menu. In Spanish, the language he reads, and modelled on the line he
  * acted on within two minutes on 2026-11-10. */

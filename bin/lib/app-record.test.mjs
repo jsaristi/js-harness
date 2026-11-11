@@ -83,9 +83,22 @@ test('appSessions maps each session record by its cliSessionId to where it sits:
     record('local_3.json', { cliSessionId: 'c-plain', isArchived: false, scheduledTaskId: '' }),
   ]));
   const sessions = lib.appSessions(ROOT, root);
-  assert.deepEqual(sessions.get('c-archived'), { where: 'archived', effort: 'high', scheduledTaskId: 'task-1', archived: true, title: 'Old', cwd: null, priorCliSessionIds: [] });
-  assert.deepEqual(sessions.get('c-routine'), { where: 'routines', effort: 'medium', scheduledTaskId: 'task-1', archived: false, title: null, cwd: null, priorCliSessionIds: [] });
+  assert.deepEqual(sessions.get('c-archived'), { where: 'archived', model: null, effort: 'high', scheduledTaskId: 'task-1', archived: true, title: 'Old', cwd: null, priorCliSessionIds: [] });
+  assert.deepEqual(sessions.get('c-routine'), { where: 'routines', model: null, effort: 'medium', scheduledTaskId: 'task-1', archived: false, title: null, cwd: null, priorCliSessionIds: [] });
   assert.equal(sessions.get('c-plain').where, 'sessions', 'an empty scheduledTaskId is no routine');
+});
+
+// odd/tasks/one-model-home.md, specs 5 to 7: the record's model is what the menu of that session shows, read to tell
+// a session off the home. On 2026-11-11 the 142 records of the machine it was measured on all held a full id.
+test('appSessions gives each record\'s model as the record writes it, or null when it has none or it is no text', () => {
+  const root = fakeFs(Object.fromEntries([
+    record('local_1.json', { cliSessionId: 'c-full', model: 'claude-fable-5-2', effort: 'high' }),
+    record('local_2.json', { cliSessionId: 'c-none' }),
+    record('local_3.json', { cliSessionId: 'c-empty', model: '' }),
+    record('local_4.json', { cliSessionId: 'c-object', model: { id: 'claude-fable-5-2' } }),
+  ]));
+  const sessions = lib.appSessions(ROOT, root);
+  assert.deepEqual(['c-full', 'c-none', 'c-empty', 'c-object'].map((id) => sessions.get(id).model), ['claude-fable-5-2', null, null, null]);
 });
 
 test('appSessions carries each record\'s cwd: the folder the session runs in, or null when the record has none', () => {
