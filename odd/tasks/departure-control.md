@@ -136,8 +136,8 @@ the lead with `js-harness notify --to orchestrator`.
 - [x] T3 (kind: build) spec 1, 3: the heartbeat's `AWAY:` line and its mark, tests first; usage, the lead's sentence, SPEC. Route: inline. Commit: `feat(loop): the heartbeat tells the lead when he has been away two hours with no stretch`
 - [x] T4 (kind: docs) spec 4: the sighting of 2026-11-10 and the control in `docs/FAILURES.md`. Route: inline. Commit: with T3
 - [x] T7 (kind: build) spec 4, L10: a held absence is recorded apart, under the existing entry `question-tool-holds-asker`, and the two texts that ask for the sighting name it, tests first. Route: inline. Commit: with T3
-- [ ] T5 (kind: verify) spec 5: Codex and the lenses on the slice, the independent verifier's replay, the pull request, the ready notice. Route: inline, one verifier sub-agent
-- [ ] T6 (kind: docs) the summary under `docs/sessions/` and the closed notice. Route: inline
+- [x] T5 (kind: verify) spec 5: Codex and the lenses on the slice, the independent verifier's replay, the pull request, the ready notice. Route: inline, one verifier sub-agent
+- [x] T6 (kind: docs) the summary under `docs/sessions/` and the closed notice. Route: inline
 
 ## Log
 - L1 (2026-11-11, the lead's brief `C:\Users\Oficina\.js-harness\background\briefs\2026-11-11T05-33-39-385Z-b14f7618.md`):
@@ -305,10 +305,16 @@ the lead with `js-harness notify --to orchestrator`.
   a figure from a scratch script is checked on one case by hand in the record before it is written or sent, and the
   held rule now has a test over the built code. Where it enters: this pull request (`docs/FAILURES.md`,
   `record-states-wrong-fact`, a `- Seen:` line). Proof it has not come back: the verifier's command of L19 prints 8.
+- L21 (2026-11-11, the close): the corrections committed as `1fe3bc4f` (gate PASS). Confirming reviews of it: Codex
+  over `95d80cc..1fe3bc4`, "the patch is correct" (confidence 0.93), no finding; the reliability lens over the same
+  range, 0 findings, its suggestion fixed. `js-harness check --push`: PASS, 5 code commits, all covered by a Codex
+  record and a lens record. Pushed; pull request 820. At the close of the depth pass's request (item 5): built as
+  asked, `Adds: none`; what it could not reach (a held lead, a lead with no heartbeat) is said in the pull request
+  and left to the lead.
 
 ## Next step
-Done: T1 to T4 and T7 in four commits (`55091455`, `916bfccf`, `f910b9d1`, `95d80ccc`), Codex and the lenses with
-their confirming reviews (L17, L18), the verifier's replay (L19), the brief of the question unit sent to the lead. In
-order: commit the verifier's corrections and the lenses' last suggestion (the gate), their confirming reviews, push,
-the pull request, the ready notice, the summary, the closed notice. The wait for notices runs as task `bpelqu9mm` (`js-harness wait --notice-to
+Done: every task. Pull request 820 is ready for the lead to land; the summary is
+`docs/sessions/2026-11-11-jh-176-a-control-that-acts-when-he-leaves-with-no-stretch-op.md`. What is left is the
+lead's: land it, refresh the installed copy, keep a heartbeat running while he is away, and start the question unit
+from its brief (L17). After the closed notice this session stops its wait for notices. The wait for notices runs as task `bpelqu9mm` (`js-harness wait --notice-to
 176`, ends on a notice to 176 or after 8 hours; this session stops it at its close).
