@@ -349,21 +349,13 @@ specs 1, 4, 5, 8 and 10 and the tasks T3 and T4, and wins where it differs from 
 - [ ] T9 (kind: verify) (1-10) Each pull request: gate, Codex and the pertinent lenses, one at a time; ready; `js-harness notify --to orchestrator --kind ready --pr <n>`; the next one starts from main once it lands. Then the summary and the closed notice. Route: inline.
 
 ## Next step
-State at 2026-11-11 01:30 local, written at the context pause (86 percent). Nothing but documents is committed;
-`origin/rule/one-model-home` holds them, `ec737551` and this commit. `js-harness wait --notice-to 172` runs.
+State at 2026-11-11 02:40 local, after the host compacted the session at 01:53. Pull request 1's code is written
+and committed on `feat/model-home-module`, cut from `30a7758c` and not pushed yet: units (a) `c71142a0`,
+(b) `9833fc44`, (e) `a38ac869`, (c) `7f068895`, the cut of marks at a Log `24516c62`, and `--with` in the commit that
+holds this line (L15 to L19). `js-harness wait --notice-to 172` runs.
 Next, in order:
-1. Cut `feat/model-home-module` from this branch's head (`git switch -c`), the branch of pull request 1 (T3).
-2. Tests first, then code, one work unit a commit: (a) `bin/lib/model-home.mjs` with `bin/lib/model-home.test.mjs`:
-   the ids of both homes, `claudeHome()` by `ruleOf`, what a guard holds (`guardHeld(ruleHere(...))`), the list of
-   levels moved from `bin/lib/guard.mjs:73`, the menu's Spanish names and the display name of an id; (b) the faults
-   of the homes in `ruleFaults` of `bin/lib/rules.mjs` (after line 264), tests in `bin/lib/rules.test.mjs`;
-   (c) `LENS_MODEL`, `LENS_EFFORT` (`bin/lens-review.mjs:33`, `:36`) and `CLAUDE_FALLBACK`
-   (`bin/double-review.mjs:68`) read the home, `workshop/bin/host-watch.mjs:288` through the module;
-   (d) `rules change --with <path>...` in `bin/lib/rules-change-run.mjs` (the refusal at `:229-235`), tests beside
-   `bin/lib/rules-change-run.test.mjs:159`, `:172`; the check of marks cuts at `## Progress` or `## Log`
-   (`bin/rules.mjs:133-147`); (e) `bin/conventions-model-home.test.mjs` over code, with `ratchet` and
-   `sourceModules` of `bin/lib/*.testkit.mjs` as `bin/conventions-errors.test.mjs` uses them. The writer's test and
-   every reader of a rule that leaves stay as they are until T4.
+1. Done. The branch of pull request 1 (T3) is `feat/model-home-module`.
+2. Done, one work unit a commit. The writer's test and every reader of a rule that leaves stay as they are until T4.
 3. `npm run check`; then, one at a time and their cost said first, `js-harness codex-review --base <the commit
    before the first code commit> --doc odd/tasks/one-model-home.md` and `js-harness lens-review --base <same>
    --lenses <pertinent> --reason <why> --doc odd/tasks/one-model-home.md`; fix or answer; push; `gh pr create`;
@@ -589,3 +581,4 @@ each row was read again. "Reader" means the value comes from a rule; "by hand" m
 - L16. Pull request 1, unit (b), 2026-11-11: `homeFaults` in `bin/lib/model-home.mjs`, read by `ruleFaults` of `bin/lib/rules.mjs`; seven tests in `bin/lib/rules.test.mjs`, three of them seen to fail first (`fable`, a level that is none, a Claude id as Codex's model). Two things differ from spec 3 as written: an empty value keeps the one fault every value already has ("the value is not a number or a text") and gets no second one; and `rules.mjs` and `model-home.mjs` now import each other, used only inside functions, each loaded first once to prove it (`node -e "import('./bin/lib/model-home.mjs')"`, `node -e "import('./bin/lib/rules.mjs')"`); `bin/` already held five such cycles, all through `bin/lib/manifest.mjs`. The session was compacted by the host at 01:53 local; nothing was lost, unit (a) was committed. Next: units (c) to (e).
 - L17. Pull request 1, unit (e) before (c), 2026-11-11: `bin/conventions-model-home.test.mjs` over the code of `bin/`, `workshop/` and `scripts/` (7 tests). It came before unit (c) so that (c) has a test that is red first: its legacy lists hold `bin/lens-review.mjs` and `bin/double-review.mjs`, and the ratchet refuses a listed file that complies. Measured with it today: four modules write a model id as a value (those two, and `scripts/practice.mjs` and `scripts/rehearsal.mjs`, which stay listed as his to decide) and one writes an effort at a launch (`LENS_EFFORT`). The half over the texts is T8's. Next: units (c) and (d).
 - L18. Pull request 1, unit (c), 2026-11-11: `LENS_MODEL`, `LENS_EFFORT` (`bin/lens-review.mjs`) and `CLAUDE_FALLBACK` (`bin/double-review.mjs`) are reads of `claudeHome()`; `workshop/bin/host-watch.mjs` reads the effort through the module; `bin/lib/guard.mjs` takes `EFFORTS` from it. Seen red first: the convention test, with the two files off its legacy lists, named both. The legacy list of efforts is empty; the one of models holds the two rehearsal scripts. Run one file at a time, all green: `bin/lens-review.test.mjs` 23, `bin/double-review.test.mjs` 22, `bin/rules.test.mjs` 37, `bin/lib/guard.test.mjs` 45, `workshop/bin/host-watch.test.mjs` 13. Next: unit (d), `rules change --with` and the cut of the marks at `## Log`.
+- L19. Pull request 1, unit (d), 2026-11-11, in two commits. First `24516c62`: the check of marks cuts a feature document at `## Progress` or `## Log` (`beforeHistory`, one `HISTORY_LINE` shared with the scan), its test seen red first. Then `rules change <id> --with <path>...`: the changes of the paths named are admitted beside the rule's, the new list is checked against the tree as it is, another change is refused as before, and a path that holds no change or is one of the three files the command writes is refused; six tests in `bin/lib/rules-change-run.test.mjs`, all seen red first, 46 pass. The usage line changed, pinned in `bin/rules.test.mjs`. Decided here, not in the specs: a named path must hold a change, so a misspelled one is not passed over. Next: `npm run check`, then Codex and the lenses on `30a7758c..HEAD`, the push and the pull request.

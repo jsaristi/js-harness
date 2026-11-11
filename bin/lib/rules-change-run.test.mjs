@@ -181,6 +181,82 @@ test('a retirement while code reads the rule is refused, naming the reader', asy
   assert.match(result.err, /bin\/x.mjs: reads rule "gate-wait"/);
 });
 
+/** A repository where `bin/x.mjs` reads `gate-wait` on origin/main, and the tree of rule/gate-wait holds it rewritten
+ * to read nothing, not committed: what a retirement with its reader looks like before the command runs. */
+function repositoryWithReader() {
+  const repo = repository();
+  git(repo.dir, 'switch', '-q', 'main');
+  write(repo.dir, 'bin/x.mjs', "import { ruleValue } from './lib/rules.mjs';\nexport const x = ruleValue(\"gate-wait\", 'minutes');\n");
+  git(repo.dir, 'commit', '-q', '-am', 'a reader');
+  git(repo.dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  git(repo.dir, 'switch', '-q', '-C', 'rule/gate-wait', 'main');
+  write(repo.dir, 'bin/x.mjs', 'export const x = 60;\n');
+  return repo;
+}
+const RETIRE = { retire: { successors: [] }, source: DESIGN };
+
+test('--with admits the change of a path it names, so a retirement is written with its reader moved in the same tree', async () => {
+  const repo = repositoryWithReader();
+  const before = snapshot(repo);
+  const alone = await change(repo, ['gate-wait'], RETIRE);
+  assert.equal(alone.code, 1);
+  assert.match(alone.err, /the tree holds changes outside the rule's home: bin\/x\.mjs/);
+  assert.deepEqual(snapshot(repo), before);
+
+  const result = await change(repo, ['gate-wait', '--with', 'bin/x.mjs'], RETIRE);
+  assert.equal(result.code, 0, result.err);
+  const retired = rulesOfText(read(repo.dir, 'bin/lib/rules-data.mjs')).find((rule) => rule.id === 'gate-wait');
+  assert.equal(retired.retired, TODAY);
+  assert.equal(read(repo.dir, 'bin/x.mjs'), 'export const x = 60;\n', 'the command leaves the named path as it found it');
+});
+
+test('--with checks the new list against the tree as it is: a named reader that still reads the rule is refused', async () => {
+  const repo = repositoryWithReader();
+  write(repo.dir, 'bin/x.mjs', "import { ruleValue } from './lib/rules.mjs';\nexport const x = ruleValue('gate-wait', 'minutes') + 1;\n");
+  const result = await change(repo, ['gate-wait', '--with', 'bin/x.mjs'], RETIRE);
+  assert.equal(result.code, 1);
+  assert.match(result.err, /bin\/x.mjs: reads rule "gate-wait"/);
+});
+
+test('--with admits only what it names: another change in the tree is refused as before', async () => {
+  const repo = repositoryWithReader();
+  write(repo.dir, 'docs/ROADMAP.md', '# Roadmap, changed too\n');
+  const result = await change(repo, ['gate-wait', '--with', 'bin/x.mjs'], RETIRE);
+  assert.equal(result.code, 1);
+  assert.match(result.err, /the tree holds changes outside the rule's home and the paths named: docs\/ROADMAP\.md$/);
+});
+
+test('--with takes several paths, a new file among them, however each is spelled', async () => {
+  const repo = repositoryWithReader();
+  write(repo.dir, 'bin/y.mjs', 'export const y = 1;\n');
+  const result = await change(repo, ['gate-wait', '--with', './bin/x.mjs', 'bin\\y.mjs', '--dry-run'], RETIRE);
+  assert.equal(result.code, 0, result.err);
+  assert.match(result.out, /"retired"/);
+});
+
+test('--with refuses a path that holds no change, and the three files the command writes', async () => {
+  const repo = repositoryWithReader();
+  const before = snapshot(repo);
+  const none = await change(repo, ['gate-wait', '--with', 'bin/x.mjs', 'bin/z.mjs'], RETIRE);
+  assert.equal(none.code, 1);
+  assert.match(none.err, /--with names bin\/z\.mjs, which holds no change in the tree/);
+  for (const file of ['bin/lib/rules-data.mjs', 'docs/rule-sources.json', 'docs/RULES.md']) {
+    const own = await change(repo, ['gate-wait', '--with', 'bin/x.mjs', file], RETIRE);
+    assert.equal(own.code, 1, file);
+    assert.match(own.err, new RegExp(`--with names ${file.replace(/[.]/g, '\\.')}, which the command writes itself`), file);
+  }
+  assert.deepEqual(snapshot(repo), before);
+});
+
+test('--with needs a path, goes with a change and not with --check-source, and is given once', async () => {
+  const repo = repositoryWithReader();
+  for (const argv of [['gate-wait', '--with'], ['gate-wait', '--with', '--dry-run'], ['gate-wait', '--check-source', '--with', 'bin/x.mjs'], ['gate-wait', '--with', 'bin/x.mjs', '--with', 'bin/x.mjs']]) {
+    const result = await change(repo, argv, RETIRE);
+    assert.equal(result.code, 2, argv.join(' '));
+  }
+  assert.match((await change(repo, ['gate-wait', '--with'], RETIRE)).err, /^--with needs at least one path/);
+});
+
 test('a rule whose home is AGENTS.md is refused until its draft exists', async () => {
   const repo = repository();
   const result = await change(repo, ['who-decides'], { set: { subject: 'what he decides' }, source: DESIGN });
