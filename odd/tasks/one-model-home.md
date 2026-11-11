@@ -382,6 +382,11 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+At 13:10: the first retirement is committed, `62efbcca`. Its first try was refused by the convention of structure:
+`bin/check.mjs` is at its ceiling of 1,938 lines, so nothing is added to it (the rule's id is written there, with
+no import). Next, in this order: the lenses at high (S8; read the note on a tapped answer below first), the three
+model retirements, the guard's sub-agent call, Codex's two patterns, `prove.mjs` on the two homes and
+`lead-effort`, `git merge origin/main` (main is `51932db`), the verifier, the gate and both reviews.
 At 12:55: both red tests are answered and the retirement is being committed (`git add -A`, one commit, the gate on
 GitHub's machines); if `git log -1` is not "feat(rules): subagent-effort retires into session-effort", commit it.
 The second red test was this change's: the copy of the project that test makes holds no `.claude/agents/`, so a
