@@ -245,6 +245,15 @@ test('a feature document that names an undeclared rule fails check above its Pro
   });
 });
 
+test('a mark inside a feature document\'s Log is history too: a Log tells what a rule was called', async () => {
+  const logged = '# Feature\n\nThe limit is one of the rules.\n\n## Log\n\n- L1. The limit was `rule:no-such-rule` then.\n';
+  await inProject(BASE(), async (dir) => {
+    await run(['render'], dir);
+    write(dir, { 'odd/tasks/feature.md': logged });
+    assert.deepEqual(await run(['check'], dir), { code: 0, out: [PASS_LINE, PATTERNS_LINE], err: [] });
+  });
+});
+
 test('a feature document whose fenced example holds a Progress line is cut at the real one, so a mark after the fence is checked', async () => {
   const feature = [
     '# Feature',

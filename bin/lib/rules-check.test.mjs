@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { beforeProgress, checkRules, findReads, namedRules, openFence, sentenceOf } from './rules-check.mjs';
+import { beforeHistory, checkRules, findReads, namedRules, openFence, sentenceOf } from './rules-check.mjs';
 import { RULES } from './rules-data.mjs';
 import { renderList, writeRules } from './rules.mjs';
 import { holdsPhrase } from './failures.mjs';
@@ -448,37 +448,44 @@ test('a phrase is found as the failures register finds a control', () => {
   }
 });
 
-test('beforeProgress gives a text with no Progress line whole', () => {
+test('beforeHistory gives a text with no Progress line whole', () => {
   const text = '# Feature\n\nNo plan heading here.\n';
-  assert.equal(beforeProgress(text), text);
+  assert.equal(beforeHistory(text), text);
 });
 
-test('beforeProgress cuts a text at its Progress line, which is left out with everything after it', () => {
-  assert.equal(beforeProgress('Intro.\n\n## Progress\n\n- [x] T1\n'), 'Intro.\n\n');
+test('beforeHistory cuts a text at its Progress line, which is left out with everything after it', () => {
+  assert.equal(beforeHistory('Intro.\n\n## Progress\n\n- [x] T1\n'), 'Intro.\n\n');
 });
 
-test('beforeProgress does not cut at a Progress line inside a backtick fence, and cuts at the real one after the fence', () => {
+test('beforeHistory cuts at a Log line as at a Progress line, at whichever comes first', () => {
+  assert.equal(beforeHistory('Plan.\n\n## Log\n\n- L1. said\n'), 'Plan.\n\n');
+  assert.equal(beforeHistory('Plan.\n\n## Log\n\n- L1.\n\n## Progress\n\n- [x] T1\n'), 'Plan.\n\n');
+  assert.equal(beforeHistory('Plan.\n\n## Progress\n\n- [x] T1\n\n## Log\n\n- L1.\n'), 'Plan.\n\n');
+  assert.equal(beforeHistory('## Logs\n### Log\n## Log of the day\n'), '## Logs\n### Log\n## Log of the day\n');
+});
+
+test('beforeHistory does not cut at a Progress line inside a backtick fence, and cuts at the real one after the fence', () => {
   const text = '# F\n```\n## Progress\n```\nText.\n\n## Progress\n\n- [ ] T2\n';
-  assert.equal(beforeProgress(text), '# F\n```\n## Progress\n```\nText.\n\n');
+  assert.equal(beforeHistory(text), '# F\n```\n## Progress\n```\nText.\n\n');
 });
 
-test('beforeProgress does not cut at a Progress line inside a tilde fence, and cuts at the real one after the fence', () => {
+test('beforeHistory does not cut at a Progress line inside a tilde fence, and cuts at the real one after the fence', () => {
   const text = '# F\n~~~\n## Progress\n~~~\n## Progress\nrest\n';
-  assert.equal(beforeProgress(text), '# F\n~~~\n## Progress\n~~~\n');
+  assert.equal(beforeHistory(text), '# F\n~~~\n## Progress\n~~~\n');
 });
 
-test('beforeProgress keeps a four-mark fence open over a three-mark line, so a Progress line inside it does not cut', () => {
-  assert.equal(beforeProgress('````\n```\n## Progress\n````\n'), '````\n```\n## Progress\n````\n');
-  assert.equal(beforeProgress('````\n```\n## Progress\n````\n## Progress\n'), '````\n```\n## Progress\n````\n');
+test('beforeHistory keeps a four-mark fence open over a three-mark line, so a Progress line inside it does not cut', () => {
+  assert.equal(beforeHistory('````\n```\n## Progress\n````\n'), '````\n```\n## Progress\n````\n');
+  assert.equal(beforeHistory('````\n```\n## Progress\n````\n## Progress\n'), '````\n```\n## Progress\n````\n');
 });
 
-test('beforeProgress does not cut at a heading that only starts with Progress', () => {
+test('beforeHistory does not cut at a heading that only starts with Progress', () => {
   const text = '## Progress notes\n### Progress\n';
-  assert.equal(beforeProgress(text), text);
+  assert.equal(beforeHistory(text), text);
 });
 
-test('beforeProgress cuts a CRLF text at the right byte, after its CRLF line ends', () => {
-  assert.equal(beforeProgress('Intro.\r\n\r\n## Progress\r\n\r\n- [x] T1\r\n'), 'Intro.\r\n\r\n');
+test('beforeHistory cuts a CRLF text at the right byte, after its CRLF line ends', () => {
+  assert.equal(beforeHistory('Intro.\r\n\r\n## Progress\r\n\r\n- [x] T1\r\n'), 'Intro.\r\n\r\n');
 });
 
 test('a words source whose date is not a real calendar day is a finding, in a quote or in its check', () => {

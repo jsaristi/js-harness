@@ -23,7 +23,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { RULES } from './lib/rules-data.mjs';
-import { beforeProgress, checkRules } from './lib/rules-check.mjs';
+import { beforeHistory, checkRules } from './lib/rules-check.mjs';
 import { countFindings, registerFindings } from './lib/rules-scan.mjs';
 import { parseRegister } from './lib/failures.mjs';
 import { renderList, rulesHash, ruleHere, ruleOf, unscoped } from './lib/rules.mjs';
@@ -131,7 +131,7 @@ function codeFilesUnder(root) {
 }
 
 /** The progress records and plans read for the marks of rules: the roadmap and the spec when they exist, then each
- * feature document under `odd/tasks/`, cut at its `## Progress` line, sorted by path. */
+ * feature document under `odd/tasks/`, cut at its `## Progress` or `## Log` line, sorted by path. */
 function textFilesUnder(root) {
   const files = [];
   for (const file of ['docs/ROADMAP.md', 'docs/SPEC.md']) {
@@ -144,7 +144,7 @@ function textFilesUnder(root) {
     .sort();
   for (const file of tasks) {
     const text = readOptional(root, file);
-    if (text !== null) files.push({ path: file, text: beforeProgress(text) });
+    if (text !== null) files.push({ path: file, text: beforeHistory(text) });
   }
   return files;
 }
