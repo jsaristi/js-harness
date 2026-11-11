@@ -557,6 +557,22 @@ test('heartbeat: an absence that starts in the tick of a STALL is told with it, 
   assert.equal(state.out.at(-1), `STALL: no gate-log or channel write since ${hour(T0)}`);
 });
 
+test('heartbeat: an absence in course at a start that a cut already due ends is told with the cut, in one ending', async () => {
+  // The cut's ending comes first at a start: told alone, it would end the loop with his absence unsaid.
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 }, channel: LEADS, onSleep: busy });
+  state.transcript = boundary() + boundary() + his(T0 - 3 * HOUR);
+  deps.readTail = tailOf(state);
+  assert.equal(await loopMain(['heartbeat', '--every', '120'], ENV, deps), 0);
+  assert.equal(state.clock, T0, 'both end the heartbeat at once');
+  assert.match(state.out.at(-2), /^AWAY: /);
+  assert.match(state.out.at(-1), /^CUT: this session has been compacted 2 times since it started: /);
+  assert.equal(JSON.parse(state.marks[AWAY_MARK]).told, iso(T0 - 3 * HOUR));
+
+  state.out = [];
+  assert.equal(await loopMain(['heartbeat', '--max', '1', '--every', '600'], ENV, deps), 1);
+  assert.deepEqual(awayLines(state), [], 'the relaunch tells neither again');
+  assert.equal(state.out.filter((line) => line.startsWith('already due: the lead') || line.startsWith('already told: the user')).length, 2);
+});
 
 test('heartbeat tells no work session, nor a session whose notices cannot be read: only the lead is asked for a stretch', async () => {
   const { state, deps } = world({ files: { [GATE_LOG]: T0 }, channel: notice({ at: T0 - 4 * HOUR, id: OWNER, title: 'JH 5 · canal' }), onSleep: busy });

@@ -643,15 +643,16 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     dueTold.set(due.id, dueCrossing(due, started));
     ctx.out(`already due: ${due.line.replace(/^DUE: /, '').split(':')[0]}, since ${hourOf(Date.parse(due.at))}`);
   }
+  // His absence is read before the cut ends the start, as a tick reads it before what ends the tick: a cut told
+  // alone would end the loop with the absence unsaid.
+  const awayAtStart = awayAt(started);
+  const awayStartLines = awayAtStart !== null && awayAtStart.before !== toldAway() ? [tellAway(awayAtStart, started)] : [];
   if (compactions !== null && compactions >= LEAD_CUT_COMPACTIONS) {
-    if (compactions > toldCut()) return ending([tellCut(compactions)], startDues, 0);
+    if (compactions > toldCut()) return ending([...awayStartLines, tellCut(compactions)], startDues, 0);
     ctx.out(`already due: the lead's cut, ${compactions} compactions in this session, told before`);
   }
-  const awayAtStart = awayAt(started);
-  if (awayAtStart !== null) {
-    if (awayAtStart.before !== toldAway()) return ending([tellAway(awayAtStart, started)], startDues, 0);
-    ctx.out(`already told: the user's absence since ${hourOf(Date.parse(awayAtStart.before))}, with no stretch covering it`);
-  }
+  if (awayStartLines.length > 0) return ending(awayStartLines, startDues, 0);
+  if (awayAtStart !== null) ctx.out(`already told: the user's absence since ${hourOf(Date.parse(awayAtStart.before))}, with no stretch covering it`);
   for (;;) {
     const last = lastWrite();
     const now = ctx.now();

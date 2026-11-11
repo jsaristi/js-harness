@@ -235,6 +235,15 @@ the lead with `js-harness notify --to orchestrator`.
   while its heartbeat runs, or at the heartbeat's next start. Not known: whether one was alive in the 5 idle absences
   of L3. Told to the lead with the ready notice; a heartbeat kept by the host is not this unit's.
 - L16 (2026-11-11 01:29 local): the host compacted this session by itself; the resume was read from this document.
+- L17 (2026-11-11, the commits and Codex): two work units, `55091455` (the return-report slice; gate PASS, 17 rows)
+  and `916bfccf` (the heartbeat slice; gate PASS, 18 rows, the real-loop test of L14 among them). The question unit's
+  brief is `C:\Users\Oficina\.js-harness\background\briefs\draft-jh176-question-stops-holding-lead.md`, its path sent
+  to the lead at 01:38 local. `js-harness codex-review --base 8ff0b26a --doc odd/tasks/departure-control.md`: 2 parts,
+  350,913 input tokens; part 1 "the patch is correct" with no finding; part 2 one finding, P2, taken: a cut already
+  due at a heartbeat's start returned before the absence was read, so the loop ended with `CUT:` alone. Red first,
+  `node --test bin/loop-bodies.test.mjs`: 1 of 32 fails ("an absence in course at a start that a cut already due ends
+  is told with the cut, in one ending"); fixed in `bin/loop.mjs` (the absence is read before the cut's ending, as a
+  tick does); green, 32 of 32.
 
 ## Next step
 Done: the lead gate, T7, the 9 sightings under `question-tool-holds-asker` (L11 to L13). In order: (d) the brief of
