@@ -298,6 +298,41 @@ pregunta. B: lo mismo con Opus en máximo, que es el que tú mediste. C: no corr
 5.2 medio. Diseño: odd/tasks/advisor-cost.md en la rama advisor-cost."
 Options: A, correr la prueba con Opus alto (Recomendado); B, correrla con Opus máximo; C, no correrla.
 
+## State after the third review (for the session that takes this over)
+The third read (`9d0cbfe1`, L10) still found real failures, so by `rule:double-review` this design reaches him as a
+problem, not as the question above, and the work passes to Fable 5.2 at medium (his answer to question 266, L8).
+The question text above is NOT to be asked as it stands. Open, in order of weight:
+1. The premise of the calibration is in doubt (Claude 1, Codex 4): the card read weekly Fable 0 % at 10:16 on
+   2026-11-11 after 50.4 Fable session-hours that week (relief line 2498), then 2 → 32 in six hours. So the meter
+   did not track Fable at one steady rate, or it was reset about 10:00 and its shown reset date is not its own.
+   r_o from D1 may not hold after a reset. Fix: an A-B-A probe in one isolated window (ordinary Fable, advisor,
+   ordinary), q from the concurrent r_o only, and a stop when the ordinary block moves no tick. Before any of it,
+   find out what the 0 % at 10:16 was: a free look at the card's reset time against the lead's readings.
+2. The probe's estimator and table are not exhaustive (Claude 5, Codex 2): 0 or 1 tick undefined; q in 0.4 to 0.8
+   uncovered; precision asserted. Accept by ticks, bounds for 0 and 1 tick, drop P2's second clause.
+3. The completion rule voids a correct run (Claude 2, Codex 5): tests that pass on both are required by the task
+   itself; red by import error passes; the base suite can be edited away. Per-defect assertion failures by a script
+   committed before the dry start, a trusted copy of the base suite, held-out behaviour checks that gate.
+4. A capped run should be censored, not void (Claude 3): its F is a lower bound, enough for B, never for A; size the
+   advisor call from a real 2-hour session's context and state the executor's context window (`opus[1m]`).
+5. One control cannot carry "clearly" (Claude 4): a spread factor fixed before the runs, outcomes "indicative", and
+   his bar of five a side (`odd/tasks/audit-u9-eval-bar.md:148`) named as not met by his choice of 2 to 4 runs.
+6. The maxima are soft (Claude 6, Codex 3): the points cap needs a stated conversion, group caps sum to 238 against
+   200, two concurrent streams double the overshoot; bounded request sizes or a disclosed overshoot.
+7. Containment (Claude 7, 13, Codex 1): PowerShell not denied, `node bin/js-harness.mjs notify` reaches the lead's
+   record, deny rules untested under bypass, hooks at turn end unprobed, the answer reachable in `~/.claude/projects`
+   and through `gh`. A filesystem boundary that keeps the login, or a disclosed residual risk he accepts.
+8. The resume names a Done when the brief forbids (Claude 8): done is D5's outside check, decided by a script.
+9. The question's figures (Claude 9, 10, 11, Codex 6, 7): prices unverified (read the page, free), shares over 163.2
+   (55 %, 21 %, 4 %, reviewers 20 %), the day ran at high; reserve and start window as blanks, what he must not do
+   in the probe, the risk of tripping the unknown limit, no sub-agents, option B priced apart, duration 6 to 17.5 h
+   plus validation, the invocation count behind "four runs", ordinary sessions' own use after the probe.
+10. Smaller: the search for his "50 %" line belongs in `ea85ec35` lines 11253 to 11679 (Claude 12); the lead's
+   heartbeat, wait and quiet --wait stopped and restarted as probe steps, and L9's "S1 whole" reworded (Claude 14).
+A cheaper first step these findings point to, not reviewed: before any trial, explain the 0 % reading of 10:16 from
+records and the card (free); if the weekly Fable meter was reset that morning, the calibration has to be redone
+after the next reset anyway, and the whole trial's premise changes.
+
 ## Runs
 None. Nothing runs before his yes.
 
@@ -348,3 +383,6 @@ None. Nothing runs before his yes.
   the week not found, kept as the lead's paraphrase); the 2026-10-31 readings read (Claude 12); figures (Claude 13);
   this per-finding record (Claude 14); groups bound the invocations and the exception covers them (Codex 5); wall
   clock (Codex 8). Rebutted: none.
+- L10 Third read `9d0cbfe1` of `af629d67` (Claude 14 findings, 1,717,768 tokens; Codex 7, 535,366; cost said
+  before it ran, the same). All 21 accepted and recorded as taken, not fixed: the third review is the last
+  (`rule:double-review`), so they are the state above, for the next writer, and the problem put to him.
