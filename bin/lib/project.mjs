@@ -1935,9 +1935,9 @@ function jsonOr(file, fallback) {
 
 /** What this clone lacks of what its switches ask, read-only, for the gate's `functions` row: one line a
  * difference, in the words of the switch that asks it, which `functions apply` would make good. `[]` where the
- * clone is what they ask, outside a repository, or where the switches cannot be read (that is the row's
- * failure, not a difference). A key that holds another value is apply's to report, never to change, so only a
- * key that is not there counts; a pre-push hook of the project's own counts as there. */
+ * clone is what they ask, outside a repository, or where the switches cannot be read (the row's failure). Only a
+ * key that is not there counts, since one that holds another value is apply's to report; a pre-push hook of the
+ * project's own counts as there, and one a linked worktree leaves to the main checkout names that checkout. */
 export function clonePending(cwd, { spawn = spawnSync } = {}) {
   const root = gitTopLevel(cwd, spawn);
   if (!root) return [];
@@ -1945,10 +1945,8 @@ export function clonePending(cwd, { spawn = spawnSync } = {}) {
   if (!plan) return [];
   const lines = [];
   const say = (name, text) => lines.push(`${name} ${resolved[name].value}: ${text}`);
-  const manifestPath = resolveGitPath(root, 'js-harness/manifest.json', spawn) ?? path.join(root, '.git', 'js-harness', 'manifest.json');
-  const manifest = jsonOr(manifestPath, null);
-  // A clone the harness never set up (no `init`, no `functions apply`) has nothing to drift from.
-  if (manifest === null) return [];
+  const manifest = jsonOr(resolveGitPath(root, 'js-harness/manifest.json', spawn) ?? path.join(root, '.git', 'js-harness', 'manifest.json'), null);
+  if (manifest === null) return []; // a clone the harness never set up (no `init`, no `functions apply`) has nothing to drift from
 
   if (plan.index === 'make') say('codeMap', 'no code map index here (.codegraph)');
   if (plan.index === 'remove' && manifest?.codegraph?.createdDir === true) say('codeMap', 'the code map index js-harness made is still here');
@@ -1969,7 +1967,9 @@ export function clonePending(cwd, { spawn = spawnSync } = {}) {
   const hookPath = resolveGitPath(root, 'hooks/pre-push', spawn);
   const hookThere = Boolean(hookPath) && fs.existsSync(hookPath);
   const recorded = Array.isArray(manifest?.files) && manifest.files.some((f) => typeof f?.path === 'string' && f.path.split('/').pop() === 'pre-push');
-  if (plan.prePush && !hookThere) say('codexReview', 'no push check in the pre-push hook');
+  const bases = plan.prePush && hookPath && !hookThere ? gitDirs(root, spawn) : null;
+  const left = bases && hookElsewhere(resolveHookContainment(root, hookPath, bases), bases, 'add the push check to its pre-push yourself');
+  if (plan.prePush && !hookThere) say('codexReview', `no push check in the pre-push hook${left ? `, ${left}` : ''}`);
   if (!plan.prePush && recorded && hookThere) say('codexReview', 'the push check js-harness wrote is still in the pre-push hook');
   return lines;
 }

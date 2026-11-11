@@ -152,6 +152,32 @@ test('a short copy that a stopped run left is made whole before the file is writ
   }
 });
 
+// The independent verifier on 62bb01f..db26cbd: the copy is named by eight characters of a hash, which two texts can
+// share. A file under that name that is no beginning of this one is another file's copy, not a short copy of this
+// one, and was written over: the first original was then nowhere.
+test('a file under the copy name that is no beginning of this one is left, and nothing is written', () => {
+  const s = scratch();
+  try {
+    fs.mkdirSync(path.dirname(s.file), { recursive: true });
+    fs.writeFileSync(s.file, 'his own text');
+    const copy = `${s.file}.before-js-harness-${sha256('his own text').slice(0, 8)}`;
+    fs.writeFileSync(copy, 'another text, kept earlier');
+    assert.equal(writeComponent(s.file, 'v2', undefined), null);
+    assert.equal(fs.readFileSync(copy, 'utf8'), 'another text, kept earlier');
+    assert.equal(fs.readFileSync(s.file, 'utf8'), 'his own text');
+    // A longer file that begins with this one is no short copy of it either.
+    fs.writeFileSync(copy, 'his own text and more');
+    assert.equal(writeComponent(s.file, 'v2', undefined), null);
+    assert.equal(fs.readFileSync(copy, 'utf8'), 'his own text and more');
+    // An empty one is what a run stopped before its first byte leaves: made whole.
+    fs.writeFileSync(copy, '');
+    assert.equal(writeComponent(s.file, 'v2', undefined)?.replaced, copy);
+    assert.equal(fs.readFileSync(copy, 'utf8'), 'his own text');
+  } finally {
+    s.done();
+  }
+});
+
 test('the file is left as it is when the copy just written does not hold its bytes', () => {
   const s = scratch();
   try {

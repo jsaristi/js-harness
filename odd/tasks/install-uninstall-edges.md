@@ -109,8 +109,8 @@ versions; keep a copy of a file a first install would overwrite."
 - S1 (M29). In a linked worktree, `init` and `sync` (the first of a clone, and a later one that would write a
   recorded hook again) write no hook outside the working tree and no line of the shared `info/exclude`; each is
   reported as skipped with where it is written and recorded: `js-harness sync` in the main checkout; the
-  migration's plan names none of them as a write. A per-worktree manifest then records only what dies with the
-  worktree.
+  migration's plan names no repair of them as a write, and a push check that is missing is told with that
+  checkout. A per-worktree manifest then records only what dies with the worktree.
 - S2 (M30). When the sync after an upgrade fails, `upgrade` prints what that sync wrote to its error stream (and
   the error of a sync that did not run to its end) before "sync after upgrade failed".
 - S3 (M35). `status-line-uninstall.ps1` removes `sessionStatusLine` only when it holds the value the install
@@ -272,6 +272,45 @@ versions; keep a copy of a file a first install would overwrite."
   change the first two never read; `rule:escalation-model` passes a change three reviews did not settle to
   `claude-fable-5-2`, the model this session already runs on, so the work stays here, and the lead is told of
   the count in the summary.
+- L24. Reviews that closed the code, 2026-11-11. Codex, the confirming one, `90f32411..db26cbd2`, 66,964 input
+  tokens (48,512 cached), 60 s: "the patch is correct (confidence 0.98)", "1 fixed, 0 not fixed". The Claude
+  lenses over the three fix commits, `99020c10..db26cbd2`, risk, resilience, reliability, readability, about
+  18,000 input tokens each: 0 findings, and the four earlier ones rechecked as fixed. Every code commit is now
+  inside a Codex record and a lens record. In all: 4 Codex runs (2 that found, 2 that confirmed), 11 lens runs
+  in 3 ranges, 5 pre-commit gates, all green on GitHub's machines.
+- L25. The independent verifier, 2026-11-11: one read-only sub-agent on this session's model at high effort,
+  211,383 tokens, 59 tool uses, about 15 minutes, on `62bb01f6..db26cbd2`, S1, S3 and S6, with scratch
+  repositories outside the worktree and the old code taken from `62bb01f6`. What it reported as holding, by its
+  own runs: new `init`, `sync` and `functions apply` in a linked worktree left the common `hooks/` and
+  `info/exclude` byte-identical, each hook a `skip` and the exclude `kept`, naming the main checkout; an old
+  `init` then the new `uninstallProject` gave the shared files back byte-identical in three variants (straight,
+  a sync between, the hook deleted then a sync); no writer of a hook or of the exclude file beside the two and
+  two behind the guard (its greps: `hooks/|info/exclude|hooksPath|git-common-dir|commonGitDir|git-path` and
+  `HOOKS\b|\.content\b|addExclude\(|chmodSync` over `bin/` without tests). Three findings, each checked here by
+  reading the line and by a test seen red before its fix:
+  (1) S1, did not hold: the plan and the gate's `functions` row said "codexReview on: no push check in the
+  pre-push hook" in a linked worktree, where neither `sync` nor `functions apply` writes it (`clonePending`,
+  which `repairLines` does not cover). The line now ends with the reason and the checkout whose `sync` writes
+  it (`bin/check-functions.test.mjs`, the new linked-worktree case). It stays a line: the push check is missing
+  for the whole repository and the row is where that is seen.
+  (2) S3, not exact: `$found -eq $value` on a value of several strings is true when one of them is the
+  install's. The guard is now `($found -is [string]) -and ($found -eq $value)`. Letter case is left apart on
+  purpose, as the install compares it: a path that differs only in case names the same program, which the undo
+  deletes next. Run by hand again on the scratch key of L5, three ways: several strings with the install's
+  among them, kept ("after run 1, the value has 2 strings"); another's value, kept; the install's, removed with
+  its key; "scratch key left behind: False".
+  (3) S6, a loss in theory: two texts that share the eight characters of the copy's name (it found a pair among
+  fewer than 100,000 generated texts), each written over at one path: the second copy wrote over the first.
+  `keepCopy` now writes over a file under the copy's name only when it is a beginning of this file, which a
+  short copy is; any other is left and nothing is written. `bin/lib/component-write.test.mjs`, 12 of 12.
+  Left, said by the verifier and not changed: the header of the gate's row still reads "js-harness functions
+  apply makes it so" above that line (`bin/check.mjs:1633`), and `migrate` prints it under "would write:", so a
+  linked worktree whose repository has no push check never reads "nothing to migrate" until the main checkout
+  syncs; a custom `-Folder` holding `&` or `'` is written differently by Windows PowerShell 5.1 and PowerShell 7,
+  so an install in one and an undo in the other keeps the value, the safe side; when the copy cannot be made
+  `install` prints nothing and the component is absent, because `bin/lib/manifest.mjs:960-961` drops a `null`,
+  and that file is out of scope. Not checked by the verifier: any path with a symbolic link (no privilege
+  here), either PowerShell script end to end, worktrees of a bare repository, submodules, S2, S4, S5.
 - L22. Seen and left, older than this feature: the plan's line for the `.atl/` exclude record
   (`repairLines`) is printed whenever the manifest holds no record, also where the line is already in the file
   and `sync` then records nothing (`addExclude` gives `null`). It is the same in a main checkout, and the test

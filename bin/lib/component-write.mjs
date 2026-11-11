@@ -19,8 +19,9 @@ function bytesAt(target, readFile) {
 }
 
 /** Where the copy of a file that was at `target` before the harness first wrote there is kept: beside it, named by
- * what it is and by its bytes, so a second copy of the same text lands on the first and one of another text never
- * writes over it. No host reads a file of that name as a skill, an agent or a prompt. */
+ * what it is and by its bytes, so a second copy of the same text lands on the first and one of another text takes
+ * another name, or, where the two share these eight characters, is refused by `keepCopy`. No host reads a file of
+ * that name as a skill, an agent or a prompt. */
 function copyPathOf(target, there) {
   return `${target}.before-js-harness-${sha256(there).slice(0, 8)}`;
 }
@@ -37,9 +38,14 @@ function holds(file, bytes, readFile) {
 /** Keeps `there`, the bytes of the file at a component's path, at `copy`, and throws unless the copy holds them when
  * it returns. A file already under that name is read, never taken as whole: a run that stopped while it wrote the
  * copy leaves a short one, and the next run would write over the original with that as its only copy (Codex on
- * 62bb01f..99020c1). The copy just written is read back for the same reason. */
+ * 62bb01f..99020c1). The copy just written is read back for the same reason. A short copy is a beginning of the
+ * file; one that is not is another file's copy, since eight characters of a hash can be shared, and it is never
+ * written over: it throws, and one that cannot be read throws too (the independent verifier on 62bb01f..db26cbd). */
 function keepCopy(copy, there, writeFile, readFile) {
-  if (holds(copy, there, readFile)) return;
+  const found = bytesAt(copy, readFile);
+  const [whole, part] = [Buffer.from(there), found === null ? null : Buffer.from(found)];
+  if (part?.equals(whole)) return;
+  if (part && !whole.subarray(0, part.length).equals(part)) throw new Error(`${copy} holds another file, so no copy can be kept there`);
   writeFile(copy, there);
   if (!holds(copy, there, readFile)) throw new Error(`the copy at ${copy} does not hold the file it is a copy of`);
 }

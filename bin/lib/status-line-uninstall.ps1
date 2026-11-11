@@ -18,12 +18,14 @@ if (Get-ScheduledTask -TaskName $Task -ErrorAction SilentlyContinue) {
   "task deleted: $Task"
 }
 # The value is removed only while it is the one the install writes for this folder: another is someone else's, as
-# the install itself holds when it refuses to write over one, and is left and said.
+# the install itself holds when it refuses to write over one, and is left and said. It is one string compared as the
+# install compares it, letter case apart, since a path that differs only in case names the same program; a value of
+# several strings is never it, and -eq on a list would say yes when one of them is.
 $installed = Join-Path $Folder 'status-line.ps1'
 $value = @{ command = $installed } | ConvertTo-Json -Compress
 if ((Test-Path $Policy) -and ((Get-Item $Policy).Property -contains 'sessionStatusLine')) {
   $found = (Get-ItemProperty -Path $Policy -Name sessionStatusLine).sessionStatusLine
-  if ($found -eq $value) {
+  if (($found -is [string]) -and ($found -eq $value)) {
     Remove-ItemProperty -Path $Policy -Name sessionStatusLine
     "policy value removed: $Policy sessionStatusLine"
   } else {

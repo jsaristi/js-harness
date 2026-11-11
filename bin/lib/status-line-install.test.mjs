@@ -40,7 +40,9 @@ test('the undo removes the policy value only when it holds what the install writ
   const undo = textOf(UNINSTALL);
   const removal = undo.split(/\r?\n/).findIndex((line) => line.includes('Remove-ItemProperty'));
   const guard = undo.split(/\r?\n/).slice(0, removal).reverse().find((line) => /^\s*(if|elseif)\b/.test(line));
-  assert.match(guard, /\$found -eq \$value/, 'the removal is under the comparison');
+  // One string, compared as the install compares it: a value of several strings that holds it among others is not
+  // it, and `-eq` on a list would have said yes (the independent verifier on 62bb01f..db26cbd).
+  assert.match(guard, /\(\$found -is \[string\]\) -and \(\$found -eq \$value\)/, 'the removal is under the comparison');
   assert.match(undo, /"policy value kept: \$Policy sessionStatusLine = \$found, which the install did not write"/);
 });
 
