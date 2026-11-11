@@ -135,7 +135,8 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
   the limit of the path, test first; a value is named by its parameter's name and a name by its place, never
   quoted; the help, the README, the dispatcher's line and docs/SPEC.md say it and drop the query from what goes out.
   Commit 724e8cbd.
-- [ ] T6 (kind: verify) Codex and the lenses on T5's slice, from 07cffc8c.
+- [x] T6 (kind: verify) Codex and the lenses on T5's slice, from 07cffc8c: three rounds and a covering review,
+  L15 to L18; the fixes are commits 40d24d01, a7e20700 and c9b2ca40.
 
 ## Log
 - L1 The brief (the lead, 2026-11-11T05:33Z): "You own one feature: two protections say what they really do, and
@@ -249,7 +250,13 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
   the rule the helper beside it held. Taken: the pattern lives inside `repeatable`, the one thing a reason asks,
   under that comment. The bound of three reviews is for a real failure the third still finds; this is none, so the
   work is not passed on, and the commit of this change gets the review the push asks of every code commit.
-- State (for a session that resumes): unit 10 is in pull request 817, ready. On `feat/fetch-query-values`: T5 is
-  committed (724e8cbd), three review rounds answered (40d24d01, a7e20700 and the commit of L17); next the covering
-  review of that last commit, the push, the pull request on base `worktree-fetch-path-limit`, the ready notice,
-  then the summary with the closed notice.
+- L18 The covering review of c9b2ca40 (a7e20700..c9b2ca40): Codex, "the patch is correct (confidence 0.99)", 32,990
+  input tokens, 40 s; the readability lens, 0 findings and the suggestion of L17 "fixed". Risk and reliability were
+  not run again on it: no behaviour changed, and both read a7e20700 with 0 findings. The close of spec 3 against
+  the depth pass. Item 3: predicted the two sent cases refused, measured `node --test bin/fetch.test.mjs`: 13 pass,
+  0 fail, both among the refused cases. Item 4: predicted "supports"; the measure run after the change agrees, 0 of
+  the repository's 24 URLs with a query refused. Not checked: the whole of the unit's command on this machine (the
+  gate ran it on GitHub at each commit), and no page was fetched from the network, since the tests stub `fetch`.
+- State (for a session that resumes): unit 10 is in pull request 817, ready. On `feat/fetch-query-values`: T5 and
+  T6 are done, the last code commit is c9b2ca40; next the push, the pull request on base
+  `worktree-fetch-path-limit`, the ready notice, then the summary with the closed notice.
