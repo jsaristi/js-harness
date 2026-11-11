@@ -25,7 +25,7 @@ export const LIVE_USAGE = [
   '         wait; --out writes them as batch files, one document of the board\'s events collection each, and prints the',
   '         ArtifactData set that sends each one; --sent <file> moves the cursor past that file once it was sent.',
   '         --out also writes board-checked.json, the time it read the record and the work then running on the machine',
-  '         (gates, Codex and lens reviews, eval batches), and prints the ArtifactData update that',
+  '         (gates, lands, Codex and lens reviews, eval batches), and prints the ArtifactData update that',
   '         merges it into board/summary once every batch was sent, with no row to send too: the board then tells a',
   '         quiet stretch from a record nobody sent. The check holds 45 minutes, the lead\'s heartbeat; with --resting,',
   '         the run before the lead\'s resting wait, it holds that wait (wait-for) and the board reads as resting.',

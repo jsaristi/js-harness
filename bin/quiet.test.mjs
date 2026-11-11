@@ -198,6 +198,24 @@ test('quiet: a merge-queue land and a Codex review are work; a dry run and other
   assert.doesNotMatch(run.stdout, /pid 12|pid 15/);
 }));
 
+// Audit M34 (2026-11-09): a lens review or an eval batch left running by an idle session did not hold "do not turn
+// the PC off"; the board counted both. One list now (bin/lib/quiet.mjs `WORK_KINDS`).
+test('quiet: a lens review and an eval batch are work; a lens review that only records a skip is not', withWorld(async (world) => {
+  const processes = [
+    proc(31, 'node D:\\js\\bin\\js-harness.mjs lens-review --base abc --lenses risk --reason "a slice"'),
+    proc(32, '"C:\\node.exe" D:\\js\\evals\\suite.mjs --claude claude --tasks all --name run'),
+    proc(33, 'node D:\\js\\bin\\lens-review.mjs --base abc --unavailable "no session"'),
+    proc(34, 'node D:\\js\\bin\\suite.mjs'),
+  ];
+  const run = await quiet(world, ['--json'], { processes });
+  assert.equal(run.code, 1, run.stdout);
+  assert.deepEqual(JSON.parse(run.stdout).work.map((item) => [item.source, item.pid]), [['lens-review', 31], ['evals', 32]]);
+  const text = await quiet(world, [], { processes });
+  assert.match(text.stdout, /^busy: 2 things run/);
+  assert.match(text.stdout, /lens review, pid 31: /);
+  assert.match(text.stdout, /eval batch, pid 32: /);
+}));
+
 test('quiet: a process is work by what it runs, never by an argument that only names a file', withWorld(async (world) => {
   const processes = [
     proc(21, 'node D:\\js\\bin\\wait.mjs --main-file bin/codex-review.mjs --contains marker --for 720'),

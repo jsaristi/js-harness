@@ -7,6 +7,9 @@ import { parseSnapshot } from './process-tree.mjs';
 import { parseFeature, tokenize } from './progress.mjs';
 import { ruleValue } from './rules.mjs';
 import { backgroundLines } from './background.mjs';
+import { howAnswered, isHostNote } from './question-answer.mjs';
+
+export { QUESTION_DISMISSED } from './question-answer.mjs';
 
 const TITLE_LENGTH = 60;
 
@@ -1689,46 +1692,8 @@ function questionCallsNaming(text, id) {
   return questionCallsOf(entries);
 }
 
-/** What the hosts write in the place of an answer when the person closes a question without answering it: how
- * that text begins. Claude Code writes "[User dismissed — do not proceed, wait for next instruction]", in a
- * result it does not mark an error (four lines of this project's transcripts, 2026-10-12). It is data, like the
- * tools' names: another host, or another version of this one, may say it otherwise. */
-export const QUESTION_DISMISSED = ['[User dismissed'];
-
-const SEVERAL = ', ';
 /** What a result is said to be when the person closed the question: `questionsOf` tells it from the other refusals. */
 const QUESTION_CLOSED = 'the result of a question the person closed without answering';
-
-/** Whether `answer` is labels of `options` joined with the separator the host joins several with. A label may
- * hold that separator, so the answer is not split on it: it is matched whole labels at a time, whichever way
- * it divides. Each place of the answer where a label may begin is looked at once: labels that are joins of
- * each other divide an answer in more ways than could be walked, and the labels are what a session wrote. */
-function isLabelsJoined(answer, options) {
-  const labels = options.filter((label) => label !== '');
-  const begun = new Set([0]);
-  const toLook = [0];
-  while (toLook.length > 0) {
-    const from = toLook.pop();
-    for (const label of labels) {
-      if (!answer.startsWith(label, from)) continue;
-      const end = from + label.length;
-      if (end === answer.length) return true;
-      const next = end + SEVERAL.length;
-      if (answer.startsWith(SEVERAL, end) && !begun.has(next)) {
-        begun.add(next);
-        toLook.push(next);
-      }
-    }
-  }
-  return false;
-}
-
-/** How the person gave an answer: `tapped` when it is one of the options the question showed, or, for a question
- * that takes several, when it is options joined; `typed` otherwise, which is his own text. */
-function howAnswered(answer, options, several) {
-  if (options.includes(answer)) return 'tapped';
-  return several && isLabelsJoined(answer, options) ? 'tapped' : 'typed';
-}
 
 /** What an entry that holds the result of a tool call is: the person's answer to a question the session asked
  * with the host's question tool, `{ what: null, at, tool, answers }`, each answer `{ question, options, answer,
@@ -1740,7 +1705,7 @@ function howAnswered(answer, options, several) {
  * transcript); neither may be of a side chain; the entry may carry no mark of the host or of another sender;
  * the host must not have marked the result an error; `toolUseResult.answers` must hold a text for every
  * question the call asked and for no other; and none of those texts may be what the host writes for a question
- * he closed (`QUESTION_DISMISSED`), which has the shape of an answer and is none. */
+ * he closed (`isHostNote` of ./question-answer.mjs), which has the shape of an answer and is none. */
 function answerOf(entry, calls) {
   const blocks = blocksOf(entry);
   const call = blocks.length === 1 && isToolResult(blocks[0]) ? calls.get(blocks[0].tool_use_id) : undefined;
@@ -1755,11 +1720,11 @@ function answerOf(entry, calls) {
   if (blocks[0].is_error === true || given === null) return unanswered;
   if (Object.keys(given).some((question) => !asked.includes(question))) return { what: 'the result of a question whose answers are not for what was asked' };
   if (!asked.every((question) => typeof given[question] === 'string' && given[question].trim() !== '')) return unanswered;
-  // The host's own words in the place of an answer: he closed the question. One closed question closes the call.
-  const closed = (answer) => QUESTION_DISMISSED.some((mark) => answer.trimStart().startsWith(mark));
-  if (asked.some((question) => closed(given[question]))) return { what: QUESTION_CLOSED };
+  // The host's own words in the place of an answer (`isHostNote`): he closed the question. One closed question closes the call.
+  const optionsOf = (question) => (Array.isArray(question.options) ? question.options : []).map((option) => option?.label).filter((label) => typeof label === 'string');
+  if (questions.some((question) => isHostNote(given[question.question], optionsOf(question)))) return { what: QUESTION_CLOSED };
   const answers = questions.map((question) => {
-    const options = (Array.isArray(question.options) ? question.options : []).map((option) => option?.label).filter((label) => typeof label === 'string');
+    const options = optionsOf(question);
     const answer = given[question.question];
     return { question: question.question, options, answer, how: howAnswered(answer, options, question.multiSelect === true) };
   });

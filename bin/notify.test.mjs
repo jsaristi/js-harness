@@ -484,6 +484,19 @@ test('the confirmation stamps the hour on the local clock and the share of its c
   assert.deepEqual(recorded(machine).notices[0].from.context, { tokens: 200000, percent: 40 });
 }));
 
+// Audit M21 (2026-11-09): notify said a share of the default window while the pause said one of the host's, 57% against
+// 87% for one session. The window is the one the pause reads: the environment's, then the settings files.
+test('the share the confirmation says is of the window the host compacts on, as the pause reads it', withMachine(async (machine) => {
+  writeSession(machine, SENDER, SENDER_TITLE, { usage: { input_tokens: 150000, cache_read_input_tokens: 50000, cache_creation_input_tokens: 0, output_tokens: 300 } });
+  fs.mkdirSync(machine.claudeHome, { recursive: true });
+  fs.writeFileSync(path.join(machine.claudeHome, 'settings.json'), JSON.stringify({ autoCompactWindow: 350000 }));
+  const fromSettings = await runNotify(machine, ['--to', '5', '--kind', 'note', 'probe']);
+  assert.match(fromSettings.out[0], /, holding 57% of its context in /);
+  assert.deepEqual(recorded(machine).notices[0].from.context, { tokens: 200000, percent: 57 });
+  const fromEnv = await runNotify(machine, ['--to', '5', '--kind', 'note', 'probe'], { env: { CLAUDE_CODE_SESSION_ID: SENDER, CLAUDE_CODE_AUTO_COMPACT_WINDOW: '250k' } });
+  assert.match(fromEnv.out[0], /, holding 80% of its context in /);
+}));
+
 test('a sender whose context is not known gets no share in the confirmation, and its notice records none', withMachine(async (machine) => {
   writeSession(machine, SENDER, SENDER_TITLE);
   const { code, out } = await runNotify(machine, ['--to', '5', '--kind', 'note', 'probe']);

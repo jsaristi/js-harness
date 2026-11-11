@@ -88,7 +88,8 @@ test('a wait written on several lines does not stop --notify, and every note is 
   fs.appendFileSync(path.join(dir, 'aaaa1111.jsonl'), background('t9', 'b9', 'cd /d/project\njs-harness wait --pr 7', at(4, 31)).join('\n') + '\n');
   assert.equal(await main('--notify'), 0);
   const toFive = readNotices(home, slug).notices.find((one) => one.to.number === 5);
-  assert.ok(toFive.text.includes('cd /d/project ; js-harness wait --pr 7'), toFive.text);
+  // Its steps are the cd and the wait, joined so the wait runs only in that folder (audit M31).
+  assert.ok(toFive.text.includes('cd /d/project && js-harness wait --pr 7'), toFive.text);
 });
 
 test('wake says what it could not read and records nothing, but still lists the sessions: a record or an openings folder that is there and cannot be read', async () => {

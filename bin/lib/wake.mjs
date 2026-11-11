@@ -24,6 +24,74 @@ export function isWaitCommand(command) {
   return typeof command === 'string' && WAIT_COMMAND.test(command);
 }
 
+/** The steps of the shell command `command`, in order, each `{ step }` as it was typed and trimmed, with `{ open }`
+ * and `{ close }` where a group's parentheses start and end: split at `&&`, `||`, `;`, `|`, `&` and a line break,
+ * never inside quotes or a `$(...)`, and not at the `&` of a redirection (`2>&1`, `&>`). The guard's `shellWords`
+ * gives a step's words with their quotes taken off; a step handed back to be run again has to keep them. */
+function stepsOf(command) {
+  const steps = [];
+  let from = 0;
+  let quote = null;
+  let depth = 0;
+  const cut = (at, width, mark = null) => {
+    const step = command.slice(from, at).trim();
+    if (step !== '') steps.push({ step });
+    if (mark !== null) steps.push({ [mark]: true });
+    from = at + width;
+  };
+  for (let i = 0; i < command.length; i += 1) {
+    const c = command[i];
+    if (quote !== null) {
+      if (quote === '"' && c === '\\') i += 1;
+      else if (c === quote) quote = null;
+    } else if (c === '\\') i += 1;
+    else if (c === '"' || c === "'") quote = c;
+    else if (c === '$' && command[i + 1] === '(') {
+      depth += 1;
+      i += 1;
+    } else if (depth > 0) {
+      if (c === ')') depth -= 1;
+    } else if ((c === '&' || c === '|') && command[i + 1] === c) cut(i++, 2);
+    else if (c === '&' && (command[i - 1] === '>' || command[i - 1] === '<' || command[i + 1] === '>')) continue;
+    else if (c === '(' || c === ')') cut(i, 1, c === '(' ? 'open' : 'close');
+    else if (c === ';' || c === '|' || c === '&' || c === '\n' || c === '\r') cut(i, 1);
+  }
+  cut(command.length, 0);
+  return steps;
+}
+
+// The words a shell puts before a command it runs on a condition or in a group: a step that begins with one is that
+// command, handed back without it.
+// A step that runs the wait itself: the dispatcher and its `wait`, or wait.mjs, each as typed or through node, and
+// not a command that only names it in an argument (Codex, on adf0e80: `js-harness install "wait"` is no wait).
+const RUNS_WAIT = /^(?:["']?(?:[^\s"']*[\\/])?node(?:\.exe)?["']?\s+)?["']?(?:[^\s"']*[\\/])?(?:js-harness(?:\.mjs|\.cmd)?["']?\s+wait|wait\.mjs["']?)(?:\s|$)/i;
+const LEADING_KEYWORD = /^(?:(?:then|do|else|elif|if|while|until|!|\{)\s+)+/;
+// What may run a command for it and leave it the same command: an environment assignment, `env`, `nohup`, `time`,
+// `command`, `exec` and `timeout` with its options and duration. The step is handed back with them; the program
+// after them is the one RUNS_WAIT reads (the reliability lens, on 7e2b1cb: a prefixed wait was dropped).
+const RUN_PREFIX = /^(?:(?:[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|\S*)|env|nohup|time|command|exec|timeout(?:\s+-\w+(?:\s+\d\S*)?)*\s+\d\S*)\s+)+/;
+
+/** The commands that re-arm the `js-harness wait` calls of the command line `command`, one for each, in order: the
+ * wait step, without a keyword before it, after the `cd` steps that move it, joined by `&&` so it runs only in that
+ * folder. A `cd` inside a group moves only what is in that group. `[]` when no step is a wait (the words were only
+ * quoted). A chained line was handed back whole, so a push before its wait would have run again after a boot (audit
+ * M31, 2026-11-09); two waits are two commands, since one joined to the other would wait for it (Codex, on 643d57d). */
+export function waitPartsOf(command) {
+  const parts = [];
+  const frames = [[]];
+  for (const { step, open, close } of stepsOf(command)) {
+    if (open) frames.push([]);
+    else if (close) {
+      if (frames.length > 1) frames.pop();
+    } else {
+      const bare = step.replace(LEADING_KEYWORD, '');
+      if (/^cd(\s|$)/.test(bare)) frames.at(-1).push(bare);
+      else if (RUNS_WAIT.test(bare.replace(RUN_PREFIX, ''))) parts.push([...frames.flat(), bare].join(' && '));
+    }
+  }
+  return parts;
+}
+
 const timeOf = (iso) => (typeof iso === 'string' ? Date.parse(iso) : NaN);
 
 /** What the transcript `text` says for a plan: the newest time an entry was written at or before `bootMs`
@@ -72,14 +140,18 @@ export function wakePlan({ bootAt, transcripts, readings = [], openingOf = () =>
       if (!(Number.isFinite(launched) && launched <= bootMs) || work.mode !== 'background') return false;
       return !work.ended || !(timeOf(work.endedAt) <= bootMs);
     });
-    const waits = killedByBoot.map((work) => (work.tool === 'Bash' ? commands.get(work.toolUseId) : undefined)).filter(isWaitCommand);
+    const lines = killedByBoot.map((work) => (work.tool === 'Bash' ? commands.get(work.toolUseId) : undefined)).filter(isWaitCommand);
+    // A line read as a wait with no step to re-arm (one run inside `bash -c "..."`) stays killed work, so the
+    // note never says no wait ran when one did.
+    const parts = lines.map(waitPartsOf);
+    const waits = parts.flat();
     plan.push({
       id,
       title,
       role: shaped === null ? null : { role: shaped.role, number: shaped.number },
       opening: title === null ? null : openingOf(title),
       waits,
-      killed: killedByBoot.length - waits.length,
+      killed: killedByBoot.length - parts.filter((part) => part.length > 0).length,
       lastAt: new Date(lastAt).toISOString(),
     });
   }

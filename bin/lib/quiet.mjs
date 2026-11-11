@@ -6,8 +6,19 @@
 import { splitCommandLine } from './machine-busiest.mjs';
 import { sameSession } from './sessions.mjs';
 
-/** The pattern of the process listing (./process-list.mjs) on Windows: the processes `workOfProcesses` may count. */
-export const QUIET_PROCESSES = String.raw`merge-queue|codex`;
+/** The work a process can be that keeps the machine on, by its kind: the one list `quiet` and the board
+ * (./sessions-running.mjs) both read. Two lists drifted (audit M34, 2026-11-09): a lens review or an eval batch did not
+ * hold "do not turn the PC off", and the board showed no land. Each is told from what runs (`workKindOf`), and its
+ * `text` names it in a look. The gates are the other source both read, from the gate lock or the listing. */
+export const WORK_KINDS = [
+  { kind: 'land', text: 'merge-queue land' },
+  { kind: 'codex-review', text: 'Codex review' },
+  { kind: 'lens-review', text: 'lens review' },
+  { kind: 'evals', text: 'eval batch' },
+];
+
+/** The pattern of the process listing (./process-list.mjs) on Windows: every process `workKindOf` may count. */
+export const QUIET_PROCESSES = String.raw`merge-queue|codex|lens-review|suite\.mjs`;
 
 const sessionName = (agent) => `session ${agent.name ?? '(no title)'} (${agent.id ?? String(agent.sessionId ?? '').slice(0, 8)})`;
 
@@ -57,39 +68,48 @@ export function workOfGateLock(lock) {
 /** The name of the program or script an argument names: its file name, in lower case, with no extension. */
 const nameOf = (argument) => argument.split(/[\\/]/).pop().toLowerCase().replace(/\.(exe|cmd|mjs|cjs|js)$/, '');
 
-/** What the command line of a process runs that is work: `'land'`, `'codex'` or null. It is told by what runs, never
- * by an argument that only names a file: a wait for `bin/codex-review.mjs` on main is not a review (found in review,
- * 2026-10-25). The program is the first argument; for `node`, the first argument that is no flag, its script; for the
- * dispatcher (`js-harness`), the word after it. A land is `merge-queue` with `--land` and no `--dry-run`, which
- * pushes nothing; a review is `codex-review` with no `--unavailable`, which only records a skip, or Codex's `exec`. */
-export function workKindOf(commandLine) {
+/** What the command line of a process runs that is work, `{ kind, script }` of `WORK_KINDS`, or null. `script` is
+ * the path of the program or script that named the kind, `null` when the dispatcher's verb did. It is told by what
+ * runs, never by an argument that only names a file: a wait for `bin/codex-review.mjs` on main is not a review (found
+ * in review, 2026-10-25). The program is the first argument; for `node`, the first argument that is no flag, its
+ * script; for the dispatcher (`js-harness`), the word after it. A land is `merge-queue` with `--land` and no
+ * `--dry-run`, which pushes nothing; a review is `codex-review` or `lens-review` with no `--unavailable`, which only
+ * records a skip, or Codex's `exec`; an eval batch is `evals/suite.mjs`. */
+export function workOf(commandLine) {
   const args = splitCommandLine(commandLine);
   if (args.length === 0) return null;
-  let program = nameOf(args[0]);
+  let script = args[0];
   let rest = args.slice(1);
-  if (program === 'node') {
+  if (nameOf(script) === 'node') {
     const at = rest.findIndex((argument) => !argument.startsWith('-'));
     if (at === -1) return null;
-    program = nameOf(rest[at]);
+    script = rest[at];
     rest = rest.slice(at + 1);
   }
+  let program = nameOf(script);
   if (program === 'js-harness' && rest.length > 0) {
     program = rest[0];
     rest = rest.slice(1);
+    script = null;
   }
-  if (program === 'merge-queue') return rest.includes('--land') && !rest.includes('--dry-run') ? 'land' : null;
-  if (program === 'codex-review') return rest.includes('--unavailable') ? null : 'codex';
-  if (program === 'codex') return rest.includes('exec') ? 'codex' : null;
-  return null;
+  const kind = program === 'merge-queue' ? (rest.includes('--land') && !rest.includes('--dry-run') ? 'land' : null)
+    : program === 'codex-review' || program === 'lens-review' ? (rest.includes('--unavailable') ? null : program)
+      : program === 'codex' ? (rest.includes('exec') ? 'codex-review' : null)
+        : program === 'suite' && /(^|[\\/])evals[\\/]suite\.mjs$/i.test(script ?? '') ? 'evals'
+          : null;
+  return kind === null ? null : { kind, script };
 }
 
-/** The lands and Codex reviews among `processes` (`[{ pid, commandLine }]`), in the order listed. */
+/** The kind of work the command line of a process runs (`workOf`), or null. */
+export const workKindOf = (commandLine) => workOf(commandLine)?.kind ?? null;
+
+/** The work of `WORK_KINDS` among `processes` (`[{ pid, commandLine }]`), in the order listed. */
 export function workOfProcesses(processes) {
   const work = [];
   for (const { pid, commandLine } of processes) {
     const kind = typeof commandLine === 'string' ? workKindOf(commandLine) : null;
-    if (kind === 'land') work.push({ source: 'land', pid, commandLine, text: `merge-queue land, pid ${pid}: ${commandLine}` });
-    else if (kind === 'codex') work.push({ source: 'codex', pid, commandLine, text: `Codex review, pid ${pid}: ${commandLine}` });
+    const named = WORK_KINDS.find((one) => one.kind === kind);
+    if (named !== undefined) work.push({ source: kind, pid, commandLine, text: `${named.text}, pid ${pid}: ${commandLine}` });
   }
   return work;
 }

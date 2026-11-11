@@ -3484,6 +3484,11 @@ test('quoteOf gives his answer to a question the session asked with the host\'s 
   // host that names its tool otherwise, or closes a question in other words, is one more line of them.
   assert.deepEqual(lib.QUESTION_TOOLS, ['AskUserQuestion']);
   assert.deepEqual(lib.QUESTION_DISMISSED, ['[User dismissed']);
+  // A text in brackets is the host's only when it is none of the options: an option so written is tapped, and his
+  // own text that holds brackets, or opens with one and goes on, is typed.
+  const bracketed = { question: QUESTION, options: [{ label: '[A] seguir' }, { label: 'Parar' }] };
+  const howOf = (answer) => lib.quoteOf(transcript(asked('toolu_q6', 1, [bracketed]), answered('toolu_q6', 2, { [QUESTION]: answer })), 2).answered?.answers[0].how;
+  assert.deepEqual(['[A] seguir', 'sigue [con cuidado]', '[nota] y sigue'].map(howOf), ['tapped', 'typed', 'typed']);
 });
 
 test('quoteOf refuses the result of a tool call that is no answer of his, and says which it is', () => {
@@ -3512,6 +3517,10 @@ test('quoteOf refuses the result of a tool call that is no answer of his, and sa
     // mark an error (line 8431 of a transcript of this project, 2026-10-12). One closed question closes the call.
     ['the result of a question the person closed without answering', [asked('toolu_q1', 1), answered('toolu_q1', 2, { [QUESTION]: DISMISSED })]],
     ['the result of a question the person closed without answering', [asked('toolu_q1', 1, [asking(), asking('Pregunta 11: ¿y la otra?')]), answered('toolu_q1', 2, { ...good, 'Pregunta 11: ¿y la otra?': DISMISSED })]],
+    // Audit M22: a host that words it otherwise still writes its own note in square brackets, which no option is;
+    // read by that one string, such a note was stored as his typed answer.
+    ['the result of a question the person closed without answering', [asked('toolu_q1', 1), answered('toolu_q1', 2, { [QUESTION]: '[User closed the question]' })]],
+    ['the result of a question the person closed without answering', [asked('toolu_q1', 1), answered('toolu_q1', 2, { [QUESTION]: '  [Question dismissed by the user — wait]\n' })]],
     // Answers that are not for what was asked: one question of the call has none, or one is for another question.
     ['the result of a question the person did not answer', [asked('toolu_q1', 1, [asking(), asking('Pregunta 11: ¿y la otra?')]), answered('toolu_q1', 2, good)]],
     ['the result of a question whose answers are not for what was asked', [asked('toolu_q1', 1), answered('toolu_q1', 2, { ...good, 'Otra pregunta': 'sí' })]],

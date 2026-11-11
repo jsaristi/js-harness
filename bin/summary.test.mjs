@@ -9,6 +9,10 @@ import { spawnSync } from 'node:child_process';
 import { SUMMARY_HEADINGS, closeProblems, summaryPath, summaryProblems, summaryTemplate } from './lib/summary.mjs';
 import { openingFileName, titleSlug } from './lib/channel.mjs';
 
+// The day a summary is named by is the user's (rule:local-time): a zone set here, so the evening case below reads
+// the same on every machine.
+process.env.TZ = 'America/Bogota';
+
 const NOW = () => Date.parse('2026-10-17T09:30:00Z');
 
 function call(argv) {
@@ -48,6 +52,13 @@ test('the title slug is the readable part of the opening file name, so one title
     assert.ok(openingFileName(title).startsWith(`${titleSlug(title)}-`), title);
   }
   assert.equal(summaryPath('JH 24 · gate más rápido', NOW()), 'docs/sessions/2026-10-17-jh-24-gate-mas-rapido.md');
+});
+
+// Audit L7 (2026-11-09): a session of the local evening of 2026-11-09 was named 2026-11-10, the UTC day.
+test('a summary is named by the local day it is written on, not the UTC one', () => {
+  const evening = Date.parse('2026-11-09T21:30:00-05:00');
+  assert.equal(summaryPath('JH 1 · x', evening), 'docs/sessions/2026-11-09-jh-1-x.md');
+  assert.match(summaryTemplate('JH 1 · x', evening), /File: docs\/sessions\/2026-11-09-jh-1-x\.md\./);
 });
 
 test('the bare template has every section empty, a filled one has no problem, and a missing heading is named', () => {

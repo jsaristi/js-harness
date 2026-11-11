@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { titleSlug } from './channel.mjs';
+import { localMinute } from './local-time.mjs';
 
 /** The folder of the summaries, relative to the repository's root. */
 const SUMMARY_DIR = 'docs/sessions';
@@ -27,8 +28,9 @@ const PLACEHOLDERS = new Set(SECTIONS.map(([, holds]) => `<${holds}>`));
 /** `text` with the line ends git keeps, so a working copy with CRLF reads as the blob it was committed as. */
 const lf = (text) => String(text).replace(/\r\n/g, '\n');
 
-/** The UTC day of `at` (milliseconds), as `YYYY-MM-DD`. */
-const dayOf = (at) => new Date(at).toISOString().slice(0, 10);
+/** The local day of `at` (milliseconds), as `YYYY-MM-DD`: the day the user lives the session on (rule:local-time),
+ * where the UTC day filed an evening's session under the next one (audit L7, 2026-11-09). */
+const dayOf = (at) => localMinute(at).slice(0, 10);
 
 /** The file of the summary of the session titled `title`, written on the day of `at`: `null` for a title with
  * no letter or digit, which gives no name. */

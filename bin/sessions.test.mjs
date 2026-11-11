@@ -542,6 +542,18 @@ test('--context-pause and --context-compaction take tokens or a percentage of --
   assert.ok(text.includes(`  context 12k tokens (62%)  room ${k(small[1] - 12400)} before the host compacts (${k(small[1])})  last task not known: its first task has not ended  at the pause: 50% of the window (10k)`), text.join('\n'));
 }));
 
+// Audit M21 (2026-11-09): the board said a share of 500,000 while the pause said one of the host's window.
+test('with no --context-window the board reads the window the host compacts on, as the pause does; the flag still wins', withMachine(async (machine) => {
+  writeSessions(machine);
+  fs.writeFileSync(path.join(machine.home, 'settings.json'), JSON.stringify({ autoCompactWindow: 350000 }));
+  const facts = (json) => [json.contextWindow, json.contextPause, json.contextCompactionDefault, json.sessions[0].contextPercent];
+  const board = async (argv, deps) => JSON.parse((await runSessions(machine, ['--json', ...argv], deps)).stdout);
+  assert.deepEqual(facts(await board([])), [350000, shareOf(350000, PAUSE_PERCENT), shareOf(350000, COMPACTION_PERCENT), percentOf(12400, 350000)]);
+  assert.deepEqual(facts(await board([], { env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '20k' } })), [20000, shareOf(20000, PAUSE_PERCENT), shareOf(20000, COMPACTION_PERCENT), 62], 'the environment first, as the host reads it');
+  assert.deepEqual(facts(await board(['--context-window', '20000'])), [20000, shareOf(20000, PAUSE_PERCENT), shareOf(20000, COMPACTION_PERCENT), 62]);
+  assert.ok((await runSessions(machine, [])).stdout.includes(`  context 12k tokens (${percentOf(12400, 350000)}%)  room ${k(shareOf(350000, COMPACTION_PERCENT) - 12400)} before the host compacts`), 'the text says the same share');
+}));
+
 // A pause at or past the compaction is one no session reaches: the host compacts it first, and a watch
 // would wake for the pause after the fact. Each mark alone is a valid one, so it is the pair that is
 // refused, whichever of the two a flag gave and in whichever unit.

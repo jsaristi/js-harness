@@ -187,7 +187,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:15px}
       <li><b>Lo que te toca</b>: va primero, justo debajo de la leyenda, y es lo único que espera por ti. Si no aparece, no tienes nada pendiente. Lo que el orquestador te deja lleva su nivel: <b>Urgente</b> en rojo, <b>Prioritario</b> en ámbar y <b>Opciones</b> en azul, en ese orden; él te lo dice una vez en el chat y aquí queda. Al final van todas las preguntas que nadie ha respondido ni retirado, aunque sean viejas, cada una con su número: escribe «hazme la pregunta 56» y el orquestador te la hace. Salen del registro cada vez que el orquestador revisa, así que una que respondes desaparece en la revisión siguiente.</li>
       <li><b>Cómo va</b>: el resumen que deja el orquestador cada vez que despierta, una tarjeta por cosa: verde lo hecho, ámbar lo que está en curso y azul lo que espera.</li>
       <li><b>Lo último que se hizo</b>: las tres últimas cosas terminadas (una sesión que terminó o un PR listo), con hace cuánto, para ubicarte de un vistazo.</li>
-      <li><b>Quién trabaja y en qué</b>: arriba, lo que corría en la máquina cuando el orquestador revisó (un gate, una revisión de Codex o de lentes, un lote de evals), con la hora en que lo vio. Debajo, una tarjeta por sesión, con su último aviso, cuánto lleva en su tarea y su estimado. Arriba van las que te preguntan algo, luego las atrasadas y las quietas, y después las que esperan y las que trabajan. Los avisos del propio js-harness, como un reinicio del equipo o la cola que une los PR, no tienen tarjeta: salen solo en la línea de tiempo.</li>
+      <li><b>Quién trabaja y en qué</b>: arriba, lo que corría en la máquina cuando el orquestador revisó (un gate, un land de la cola, una revisión de Codex o de lentes, un lote de evals), con la hora en que lo vio. Debajo, una tarjeta por sesión, con su último aviso, cuánto lleva en su tarea y su estimado. Arriba van las que te preguntan algo, luego las atrasadas y las quietas, y después las que esperan y las que trabajan. Los avisos del propio js-harness, como un reinicio del equipo o la cola que une los PR, no tienen tarjeta: salen solo en la línea de tiempo.</li>
       <li><b>Línea de tiempo</b>: los últimos 40 avisos, el más nuevo primero. Sirve para ver qué pasó mientras no mirabas.</li>
       <li><b>Dónde vamos</b>: los pasos del plan y el avance del roadmap. Lo actualiza el orquestador.</li>
     </ul>
@@ -409,7 +409,7 @@ function renderStatus(status) {
 
 // The work running on the machine when the lead last checked the record (`running` from `sessions live --out`):
 // gates, reviews and eval batches, said with the time they were seen, since nothing on the board follows them after.
-const RUN_KIND = { gate: 'gate', 'codex-review': 'revisión de Codex', 'lens-review': 'revisión de lentes', evals: 'lote de evals' };
+const RUN_KIND = { gate: 'gate', 'codex-review': 'revisión de Codex', 'lens-review': 'revisión de lentes', evals: 'lote de evals', land: 'land de la cola de merge' };
 // Past its `until` the reading is old: it says when it was seen and when each began, never a "desde hace" that grows.
 function runningText(running, now) {
   if (typeof running?.at !== 'string') return null;

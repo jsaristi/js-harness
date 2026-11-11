@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { findRunning, readRunning, RUNNING_PROCESSES } from './sessions-running.mjs';
+import { QUIET_PROCESSES, workOfProcesses } from './quiet.mjs';
 
 // The running work on the board (odd/tasks/visual-pages.md, spec 4, T5), from a process listing handed in.
 const TREE = 'D:\\js-harness\\.claude\\worktrees\\f8-s5c';
@@ -30,6 +31,26 @@ test('a test file or another command that holds the same words is no running wor
     proc(7, `${NODE} ${TREE}\\evals\\suite.test.mjs`),
     proc(8, 'C:\\tools\\codex.exe review'),
   ], [TREE]), []);
+});
+
+// Audit M34 (2026-11-09): `quiet` and the board kept two lists of the work that runs, so a lens review or an eval batch
+// did not keep the PC on, and the board showed no land. One list now: what one counts, the other counts.
+test('the board and quiet count the same work from one listing: lands, Codex reviews, lens reviews and eval batches', () => {
+  const processes = [
+    proc(11, `${NODE} "D:\\js\\bin\\js-harness.mjs" merge-queue --land --refresh-copy`),
+    proc(12, `${NODE} ${TREE}\\bin\\merge-queue.mjs --dry-run`),
+    proc(13, '"C:\\Users\\me\\codex.exe" exec review --json --base main'),
+    proc(14, `${NODE} ${TREE}\\bin\\lens-review.mjs --base abc --lenses risk`),
+    proc(15, `${NODE} ${TREE}\\bin\\lens-review.mjs --base abc --unavailable "no session"`),
+    proc(16, `${NODE} ${TREE}\\evals\\suite.mjs --paid`),
+    proc(17, `${NODE} ${TREE}\\bin\\codex-review.mjs --base abc`),
+    proc(18, `${NODE} ${TREE}\\bin\\wait.mjs --main-file bin/lens-review.mjs --for 60`),
+  ];
+  for (const { commandLine } of processes) assert.match(commandLine, new RegExp(QUIET_PROCESSES));
+  for (const { commandLine } of processes) assert.match(commandLine, new RegExp(RUNNING_PROCESSES));
+  const board = findRunning(processes, [TREE]).map((one) => [one.kind, one.pid, one.where]);
+  assert.deepEqual(board, [['land', 11, null], ['codex-review', 13, null], ['lens-review', 14, TREE], ['evals', 16, TREE], ['codex-review', 17, TREE]]);
+  assert.deepEqual(workOfProcesses(processes).map((one) => [one.source, one.pid]), board.map(([kind, pid]) => [kind, pid]));
 });
 
 test('the read is held until the next check, and a listing that fails says why', () => {

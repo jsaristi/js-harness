@@ -23,6 +23,7 @@ import { closeProblems } from './lib/summary.mjs';
 import { ChannelInputError, NOTICE_KINDS, NOTICE_TEXT_MAX, OPENING_TEXT_MAX, OPENING_TITLE_MAX, RELIEF_LINE_MAX, appendNotice, appendRelief, channelDir, newNotice, openingCommand, openingTextOf, openingTitleOf, placeOf, questionFieldsOf, readNotices, recordPath, recordedQuestions, reliefLineOf, reliefPath, senderOf, transcriptOf, writeOpening } from './lib/channel.mjs';
 import { askingRule, mainCheckout, projectCode, projectDirsOf, projectSlug, questionPrefix, quoteOf, roleOfTitle, sessionFacts, titleRead, transcriptNamed } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { configuredWindow } from './lib/pause.mjs';
 
 export const USAGE = [
   'Usage: js-harness notify --to orchestrator|<number> --kind <kind> [--transcript <file or session id> --line <n>] [--question <n>] [--pr <n>] [--summary <file>] "<one line>"',
@@ -408,7 +409,9 @@ export async function notifyMain(
   // One sent with --cwd from another project is filed under the folder it runs in, which is searched too.
   const ranIn = parsed.cwd === undefined ? [] : projectDirsOf(run, mainCheckout(run, defaultCwd), claudeHome);
   const projectDirs = [...new Set([...projectDirsOf(run, root, claudeHome), ...ranIn])];
-  const from = senderOf({ self: parsed.self ?? null, env, projectDirs, readdir, readFile });
+  // The share it holds is of the window the host compacts on, read as the pause and the board read it (audit M21).
+  const contextWindow = configuredWindow({ env, claudeHome, projectDir: path.resolve(defaultCwd), fileSystem: { readFileSync: (file) => readFile(file) } })?.window;
+  const from = senderOf({ self: parsed.self ?? null, env, projectDirs, readdir, readFile, contextWindow });
   // A session opened from the phone has no title in its transcript: its title is the one of the opening
   // it read, which `sessions --opening` wrote in the record. A title in the transcript wins.
   // A record that cannot be read gives no title and stops nothing: the notice is written without one,
