@@ -768,7 +768,16 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-07",
-    "value": "high",
+    "was": [
+      {
+        "value": "high",
+        "until": "2026-11-11"
+      }
+    ],
+    "retired": "2026-11-11",
+    "successors": [
+      "session-effort"
+    ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*(?<![\\w/.-])(?:subagents?|sub-agents?|agent calls?|writers?|verifiers?|readers?)\\b(?![\\w-]*\\.\\w).{0,40}\\b(?:runs?|launched|launch(?:es)?|go(?:es)?)\\b.{0,20}\\b(?:at|with) `?{amount}`? effort",
       "^(?!.*\\bruleValue\\()(?!.*\\bgpt-).*\\beffort: \"{amount}\""

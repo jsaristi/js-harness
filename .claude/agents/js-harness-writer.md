@@ -1,9 +1,9 @@
 ---
 name: js-harness-writer
 description: Writes the code of one delegated slice, from a brief that names its S# and its allowed edit surfaces. Use for a writer sub-agent; not for exploring, reviewing or verifying.
-# model is rule:subagent-writer-model and effort is rule:subagent-effort; bin/lib/writer-agent.test.mjs holds both.
+# model is rule:subagent-writer-model and effort is rule:session-effort; bin/lib/writer-agent.test.mjs holds both.
 model: claude-fable-5-2
-effort: high
+effort: medium
 omitClaudeMd: true
 tools: Read, Grep, Glob, Edit, Write, Bash
 ---

@@ -10,12 +10,8 @@ import { CONTRACT_TEMPLATE } from './lib/contract.mjs';
 import { createReaper } from './lib/process-tree.testkit.mjs';
 import { RULES } from './lib/rules-data.mjs';
 
-// The effort the rule session-effort gives, read from the list `modes` reads and never written here.
-const SESSION_EFFORT = RULES.find((rule) => rule.id === 'session-effort').value;
-// A model rule as a mode line names it: its short name where it declares one, else its id. Read from the list too.
-const modelOf = (id) => { const rule = RULES.find((entry) => entry.id === id); return rule.alias ?? rule.value; };
-const WRITERS = modelOf('subagent-writer-model');
-const READERS = modelOf('subagent-reader-model');
+// What a mode line names, the Claude home's model and level, read from the list `modes` reads and never written here.
+const MODE = `the session and every sub-agent on ${RULES.find((rule) => rule.id === 'session-model').value} at ${RULES.find((rule) => rule.id === 'session-effort').value}`;
 
 const GOOD = [
   '# A feature',
@@ -613,19 +609,16 @@ async function modesFor(argv, { rules = true, markdown = WITH_TASKS } = {}) {
   }
 }
 
-test('modes prints one line per open task with its kind, effort and models, and exits 0', async () => {
+test('modes prints one line per open task with its kind, its model and its effort, and exits 0', async () => {
   const { code, stdout, stderr } = await modesFor(['modes']);
   assert.equal(code, 0, stderr);
-  assert.deepEqual(stdout.split('\n'), [
-    `T2 (kind: build): session ${SESSION_EFFORT}; writers ${WRITERS}, readers ${READERS}; every sub-agent at high`,
-    `T3 (no kind): session ${SESSION_EFFORT}; writers ${WRITERS}, readers ${READERS}; every sub-agent at high`,
-  ]);
+  assert.deepEqual(stdout.split('\n'), [`T2 (kind: build): ${MODE}`, `T3 (no kind): ${MODE}`]);
 });
 
 test('modes --task prints that task, done or not; an unknown task exits 1 saying so', async () => {
   const done = await modesFor(['modes', '--task', 'T1']);
   assert.equal(done.code, 0, done.stderr);
-  assert.equal(done.stdout, `T1 (kind: design): session ${SESSION_EFFORT}; readers ${READERS}; every sub-agent at high`);
+  assert.equal(done.stdout, `T1 (kind: design): ${MODE}`);
   const missing = await modesFor(['modes', '--task', 'T9']);
   assert.equal(missing.code, 1);
   assert.match(missing.stderr, /no task T9 in /);
@@ -652,10 +645,7 @@ test('goal keeps its stdout the condition alone and prints the open tasks\' mode
   const { code, stdout, stderr } = await modesFor(['goal']);
   assert.equal(code, 0, stderr);
   assert.ok(!stdout.includes('\n') && !stdout.includes('(kind:'), stdout);
-  assert.deepEqual(stderr.split('\n'), [
-    `T2 (kind: build): session ${SESSION_EFFORT}; writers ${WRITERS}, readers ${READERS}; every sub-agent at high`,
-    `T3 (no kind): session ${SESSION_EFFORT}; writers ${WRITERS}, readers ${READERS}; every sub-agent at high`,
-  ]);
+  assert.deepEqual(stderr.split('\n'), [`T2 (kind: build): ${MODE}`, `T3 (no kind): ${MODE}`]);
 });
 
 test('goal on a contract with no open task prints nothing on stderr', async () => {

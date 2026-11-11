@@ -96,8 +96,8 @@ test('an effort off the rule is counted, and a launch with no effort is unknown,
   assert.equal(result.offModel, 0);
   assert.deepEqual(result.byRole.writer.offEffort, [{ effortRan: 'low', count: 1 }]);
   assert.deepEqual(subagentRowLines(result, RULES), {
-    detail: '3 launches today: 1 at an effort off subagent-effort (high), 1 at an unknown effort',
-    lines: ['writer: 1 of 3 ran at effort low (subagent-effort gives high)'],
+    detail: '3 launches today: 1 at an effort off session-effort (high), 1 at an unknown effort',
+    lines: ['writer: 1 of 3 ran at effort low (session-effort gives high)'],
   });
 });
 

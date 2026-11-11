@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { claudeHome } from './model-home.mjs';
 import { ruleOf } from './rules.mjs';
 
 // F8 S7 (odd/tasks/f8-s7-topology.md, spec 2 and 3): the agent type this repository's writers launch as. It starts a
@@ -30,7 +31,7 @@ const { fields, body } = parse(fs.readFileSync(FILE, 'utf8'));
 test('the writer runs on the model and at the effort the rules give', () => {
   const edit = 'edit .claude/agents/js-harness-writer.md in the same commit as the rule';
   assert.equal(fields.model, ruleOf('subagent-writer-model').value, `rule:subagent-writer-model changed: ${edit}`);
-  assert.equal(fields.effort, ruleOf('subagent-effort').value, `rule:subagent-effort changed: ${edit}`);
+  assert.equal(fields.effort, claudeHome().effort, `rule:session-effort changed: ${edit}`);
 });
 
 test('the writer starts without the instruction files and with six tools', () => {

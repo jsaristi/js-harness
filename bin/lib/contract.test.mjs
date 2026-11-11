@@ -315,12 +315,11 @@ const TASKS = [
   '```',
 ].join('\n');
 
-/** A reader of the rules as a project that declares today's table gives them. */
+/** A reader of the rules as a project that declares the Claude home gives them (odd/tasks/one-model-home.md,
+ * spec 2): one model and one level for the session and for every sub-agent it launches. The values are made up. */
 const DECLARED = {
-  'session-effort': { value: 'high' },
-  'subagent-writer-model': { value: 'claude-haiku-5-5', alias: 'haiku' },
-  'subagent-reader-model': { value: 'claude-opus-5-5', alias: 'opus' },
-  'subagent-effort': { value: 'high' },
+  'session-model': { value: 'claude-saga-9-1' },
+  'session-effort': { value: 'medium' },
 };
 const declared = (extra = {}) => (id) => ({ ...DECLARED, ...extra })[id] ?? null;
 
@@ -360,38 +359,48 @@ test('the task ID is read as the session board reads it', () => {
   }
 });
 
-test('taskModes gives every kind the session effort, writers only to build and to no kind', () => {
+test('taskModes gives every kind the home\'s model and level, whatever its kind', () => {
   const modes = taskModes(TASKS, declared());
-  assert.deepEqual(modes.map(({ id, effort, writerModel, readerModel, subagentEffort, off }) => [id, effort, writerModel, readerModel, subagentEffort, off]), [
-    ['T1', 'high', null, 'opus', 'high', null],
-    ['T2', 'high', 'haiku', 'opus', 'high', null],
-    ['T2a', 'high', null, 'opus', 'high', null],
-    ['T3', 'high', 'haiku', 'opus', 'high', null],
+  assert.deepEqual(modes.map(({ id, model, effort, off }) => [id, model, effort, off]), [
+    ['T1', 'claude-saga-9-1', 'medium', null],
+    ['T2', 'claude-saga-9-1', 'medium', null],
+    ['T2a', 'claude-saga-9-1', 'medium', null],
+    ['T3', 'claude-saga-9-1', 'medium', null],
   ]);
+  // The rules that restated the home for a kind of work are read no more: one that a list still declared changes nothing.
+  const old = { 'subagent-effort': { value: 'max' }, 'subagent-writer-model': { value: 'claude-old-1-0' }, 'subagent-reader-model': { value: 'claude-old-1-0' } };
+  assert.deepEqual(taskModes(TASKS, declared(old)), modes);
 });
 
-test('a kind with its own declared effort row takes it; the others keep the session effort', () => {
-  const modes = taskModes(TASKS, declared({ 'session-effort-build': { value: 'medium' } }));
-  assert.deepEqual(modes.map((m) => [m.id, m.effort]), [['T1', 'high'], ['T2', 'medium'], ['T2a', 'high'], ['T3', 'high']]);
+// A kind had its own row to look up, `session-effort-<kind>`, which no rule ever declared (his answer of 2026-10-14,
+// "Ninguno todavía"). The home is one level for every kind, so the row is looked up no more.
+test('a row named for a kind is not read: every kind keeps the home\'s level', () => {
+  const modes = taskModes(TASKS, declared({ 'session-effort-build': { value: 'max' } }));
+  assert.deepEqual(modes.map((m) => [m.id, m.effort]), [['T1', 'medium'], ['T2', 'medium'], ['T2a', 'medium'], ['T3', 'medium']]);
 });
 
 test('a task with no kind takes the session rule, never the document\'s ## Effort', () => {
-  const doc = withSection('Effort', 'medium') + '\n## Tasks\n- [ ] T1 Something\n';
-  assert.equal(taskModes(doc, declared())[0].effort, 'high');
+  const doc = withSection('Effort', 'high') + '\n## Tasks\n- [ ] T1 Something\n';
+  assert.equal(taskModes(doc, declared())[0].effort, 'medium');
 });
 
 test('a project that declares no rules, or one ahead of this copy, gets off and no values', () => {
   for (const off of ['elsewhere', 'behind']) {
     const [mode] = taskModes('- [ ] T1 (kind: build) x', () => ({ off }));
-    assert.deepEqual(mode, { id: 'T1', kind: 'build', done: false, effort: null, writerModel: null, readerModel: null, subagentEffort: null, off });
+    assert.deepEqual(mode, { id: 'T1', kind: 'build', done: false, model: null, effort: null, off });
   }
 });
 
-test('modeLine prints the mode, the roles a kind launches, and the off reasons', () => {
+test('modeLine prints the mode, one model and one level, and the off reasons', () => {
   const [design, build, , none] = taskModes(TASKS, declared());
-  assert.equal(modeLine(design), 'T1 (kind: design): session high; readers opus; every sub-agent at high');
-  assert.equal(modeLine(build), 'T2 (kind: build): session high; writers haiku, readers opus; every sub-agent at high');
-  assert.equal(modeLine(none), 'T3 (no kind): session high; writers haiku, readers opus; every sub-agent at high');
+  assert.equal(modeLine(design), 'T1 (kind: design): the session and every sub-agent on claude-saga-9-1 at medium');
+  assert.equal(modeLine(build), 'T2 (kind: build): the session and every sub-agent on claude-saga-9-1 at medium');
+  assert.equal(modeLine(none), 'T3 (no kind): the session and every sub-agent on claude-saga-9-1 at medium');
+  // A list that declares one of the two says the other is not declared.
+  const [noModel] = taskModes(TASKS, declared({ 'session-model': null }));
+  assert.equal(modeLine(noModel), 'T1 (kind: design): the session and every sub-agent on a model not declared at medium');
+  const [noEffort] = taskModes(TASKS, declared({ 'session-effort': null }));
+  assert.equal(modeLine(noEffort), 'T1 (kind: design): the session and every sub-agent on claude-saga-9-1 at an effort not declared');
   assert.equal(modeLine({ id: 'T4', kind: 'docs', off: 'elsewhere' }), 'T4 (kind: docs): no effort or model declared in this project');
   assert.equal(modeLine({ id: 'T4', kind: null, off: 'behind' }), "T4 (no kind): this copy of the harness is older than the project's rules");
 });

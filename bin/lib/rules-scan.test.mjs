@@ -88,7 +88,6 @@ const PLANTED = {
     { line: 'A narrow writer runs on claude-haiku-5-5.', marked: 'A narrow writer runs on the model of `rule:session-model`.' },
     { line: 'A verifier runs on claude-opus-5-5.', marked: 'A verifier runs on the model of `rule:session-model`.' },
   ],
-  'subagent-effort': { line: 'Every subagent runs at `high` effort.', marked: 'Every subagent runs at the effort of `rule:subagent-effort`.' },
   'subagent-reader-model': { line: 'A verifier runs on claude-opus-5-5.', marked: 'A verifier runs on the model of `rule:subagent-reader-model`.' },
   'subagent-writer-model': { line: 'A narrow writer runs on claude-haiku-5-5.', marked: 'A narrow writer runs on the model of `rule:subagent-writer-model`.' },
   'wait-every': { line: 'js-harness wait looks again every 120 seconds.', marked: 'js-harness wait looks again as often as `rule:wait-every` says.' },
@@ -132,11 +131,6 @@ const NEAR_MISS = {
   'session-effort': [
     'codexOrchestratorAssignment: { model: "astra", effort: "medium" }',
     'The Codex orchestrator runs on gpt-6.1-sol with effort: "medium".',
-    'Two readers on Opus at high effort read the first version.',
-    'Measured (`odd/tasks/subagent-model-routing.md`): Opus 5.5 at high effort.',
-  ],
-  'subagent-effort': [
-    'The orchestrator runs on gpt-6.1-sol with effort: "medium".',
     'Two readers on Opus at high effort read the first version.',
     'Measured (`odd/tasks/subagent-model-routing.md`): Opus 5.5 at high effort.',
   ],

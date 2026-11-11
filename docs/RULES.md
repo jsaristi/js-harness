@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `517413979f10`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 4.
+Hash `13dfdb334353`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 5.
 
 ## Sebastián's
 
@@ -219,12 +219,6 @@ Asked how the work goes, the lead reports everything since the last report, in d
 - Home: `bin/lib/manifest.mjs`.
 - Since 2026-10-29. Row: reports. Source: his words of 2026-10-20, 2026-10-29, checked by the command on 2026-10-29.
 
-### subagent-effort
-The effort every sub-agent is launched with: high.
-- Of this repository only: not in force in a project that installs the harness.
-- Read by: `bin/rules.mjs`.
-- Since 2026-10-07. Row: reports. Source: his words of 2026-10-07, checked by a session on 2026-10-11.
-
 ### subagent-reader-model
 The model of a sub-agent that explores, reviews or verifies: claude-fable-5-2.
 - Of this repository only: not in force in a project that installs the harness.
@@ -418,6 +412,11 @@ Before he leaves, the lead asks for everything the stretch needs, and while he i
 ### reply-four-states
 A reply ends in one of five states, and a question is his decision alone, explained before it is asked. Retired on 2026-10-24: read `reply-five-states` instead.
 - Source: his words of 2026-10-07, 2026-10-03, 2026-10-03, 2026-10-07, 2026-10-10, 2026-10-08, 2026-10-08, 2026-10-11, 2026-10-20, checked by the command on 2026-10-24.
+
+### subagent-effort
+The effort every sub-agent is launched with. Retired on 2026-11-11: read `session-effort` instead.
+- Was: high until 2026-11-11.
+- Source: his words of 2026-11-10, 2026-11-10, 2026-11-11, 2026-11-11, checked by the command on 2026-11-11.
 
 ### work-sessions
 The most work sessions open at one time. Retired on 2026-10-24: read `work-sessions-public`, `work-sessions-private-wsl`, `work-sessions-private-windows` instead.

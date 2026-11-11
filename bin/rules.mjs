@@ -402,7 +402,7 @@ function heldRules() {
   const held = [
     { rule: ruleOf('session-model'), of: 'sessions', field: 'model' },
     { rule: ruleOf('session-effort'), of: 'sessions', field: 'effort' },
-    { rule: ruleOf('subagent-effort'), of: 'launches', field: 'effort' },
+    { rule: ruleOf('session-effort'), of: 'launches', field: 'effort' },
   ].map(({ rule, of, field }) => ({ id: rule.id, of, field }));
   const unnamed = RULES.filter((rule) => SUBAGENT_MODEL_RULES.includes(rule.id) && Object.hasOwn(rule, 'value') && rule.alias === undefined);
   return [...held, ...unnamed.map((rule) => ({ id: rule.id, of: 'launches', field: 'model' }))];

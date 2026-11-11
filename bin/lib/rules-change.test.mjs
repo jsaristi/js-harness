@@ -144,7 +144,9 @@ test('on the real list, each kind of change gives a list readRules reads with no
   // The real list holds a rule with an alias only while a short name is known to give a rule's model (none gave
   // Fable 5.2 on 2026-11-10). Without one, a rule of the list with a value and no earlier one is given an alias, so its retirement stays tried.
   const live = (rule) => rule.alias !== undefined && !Object.hasOwn(rule, 'retired');
-  const RULES = REAL.some(live) ? REAL : REAL.map((rule) => (rule.id === 'subagent-effort' ? { ...rule, alias: 'fixture' } : rule));
+  // Chosen by what it is and not by its id, so the retirement of the rule this once named changes nothing here.
+  const bare = REAL.find((rule) => typeof rule.value === 'string' && rule.was === undefined && !Object.hasOwn(rule, 'retired'));
+  const RULES = REAL.some(live) ? REAL : REAL.map((rule) => (rule.id === bare.id ? { ...rule, alias: 'fixture' } : rule));
   const withAlias = RULES.find((rule) => rule.alias !== undefined && !Object.hasOwn(rule, 'retired'));
   const withUnit = RULES.find((rule) => typeof rule.value === 'number' && rule.flag !== undefined);
   const changes = [

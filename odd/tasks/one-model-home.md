@@ -371,6 +371,65 @@ session's effort is changed to name the rule, which is under `~/.claude` and so 
 session's. A text of an installed skill or of the manifest that changes needs `rules coverage --refresh` in the
 same commit: the first try of `34bbb538` was refused by the gate for one span of the manifest edited in place.
 
+State at 12:30 local, the session at 83 % of its context. S8, his answer of 2026-11-11 12:24 local to question 260
+(the lead's transcript `f0959bbd-5f7a-4360-b626-048caf21067f`, line 822, read with `js-harness sessions --quote`;
+tapped): "Lentes en alto (Recomendado)", to "¿A qué esfuerzo quieres que revisen las lentes y el lector Claude de la
+doble revisión?". So the lenses and the double review's Claude reader stay at high; sessions and sub-agents are at
+medium. It wins over L27's reading that they go to medium. To build, after the first retirement, as told to the
+lead (note of 12:22) and accepted by it: `LENS_EFFORT = claudeHome().lead` in `bin/lens-review.mjs` (the double
+review imports it), `rules change session-effort` made again whole with a subject that leaves the reviewers out, and
+`rules change lead-effort` with a subject that takes them in ("the effort the lead's session, the lenses and the
+double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
+double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
+only once it holds that and its reviews.
+At 13:10: the first retirement is committed, `62efbcca`. Its first try was refused by the convention of structure:
+`bin/check.mjs` is at its ceiling of 1,938 lines, so nothing is added to it (the rule's id is written there, with
+no import). Next, in this order: the lenses at high (S8; read the note on a tapped answer below first), the three
+model retirements, the guard's sub-agent call, Codex's two patterns, `prove.mjs` on the two homes and
+`lead-effort`, `git merge origin/main` (main is `51932db`), the verifier, the gate and both reviews.
+At 12:55: both red tests are answered and the retirement is being committed (`git add -A`, one commit, the gate on
+GitHub's machines); if `git log -1` is not "feat(rules): subagent-effort retires into session-effort", commit it.
+The second red test was this change's: the copy of the project that test makes holds no `.claude/agents/`, so a
+planted break whose path is the writer's agent file "is not there". That break is dropped from `session-effort`'s
+bundle; the file's copy of the level stays held by `bin/lib/writer-agent.test.mjs` alone, which is open for the
+pull request's body or a break of another form. Not run after these two fixes: `prove.mjs` on the two homes.
+At 12:50, 88 % of the context: the first red test is fixed (`bin/lib/rules-change.test.mjs` chooses its fixture
+rule by what it is, a live text value with no earlier one; its 33 tests pass). Still to read: the red test of
+`bin/rules-coverage.test.mjs` ("a directive planted with no control ..."), run alone first. The resume prompt is
+stored (`js-harness notify --opening`, 12:46).
+Seen at 12:47 in `bin/lib/rules-change.test.mjs` ("a line that is not his, a tapped answer, a missing session and
+a line past the end are refused"): a `words` source refuses a tapped answer as a quotation, and S8's line 822 is
+tapped. Before the two runs for the lenses, read `bin/lib/rules-change.mjs` for what a tapped answer may be (his
+typed lines 11253 and 11679 as the quotations and line 822 named in `accepted`, or a change of the two subjects that
+his typed words already carry); if neither holds, tell the lead in one `waiting` notice. This document's edits
+since `1765b5aa` are in the working tree, not committed: the pre-commit check is red while the retirement is half
+made, so they are committed with it.
+At 12:45 local, 86 % of the context: the run `rules change subagent-effort --with <paths>` is MADE (the three files
+are written, `rules check` and `rules coverage --strict` pass, `docs/RULES.md` rendered, hash `13dfdb334353`) and
+nothing of it is committed. The tests of the changed files ran once under the gate's lock: 619 of 621 pass. The
+two red ones, to read before anything runs again (output in the job's `tmp/tests-3.txt`): "on the real list, each
+kind of change gives a list readRules reads with no fault" (`bin/lib/rules-change.test.mjs`, where the fixture
+alias now goes to `session-effort`, a rule of a home: pick a live rule with a value that is no home's) and "a
+directive planted with no control makes rules check exit 1 and names it" (`bin/rules-coverage.test.mjs`, 25 s:
+read whether it is a timeout under load or this change). Then: the breaks of `session-effort` and `session-model`
+proven with `prove.mjs`, the commit with every changed path, the document's commit. Main moved to `51932db` (pull
+request 828, evals and docs): merge it before the boundary of the reviews.
+The first retirement, `subagent-effort` into `session-effort`, is in the working tree and not committed: the
+contract's modes read the home (`{ model, effort }`, the line "the session and every sub-agent on <model> at
+<effort>", `session-effort-<kind>` looked up no more); `rules applied` holds a launch's effort to `session-effort`;
+the sub-agent row of `check` and `bin/lib/subagent-check.mjs` name the home's effort rule; the writer's agent file
+is at medium and its test reads `claudeHome().effort`; the mark in `bin/lib/protocols-skill.mjs:102` and those of
+`docs/ROADMAP.md`, `odd/tasks/f8-s7-topology.md`, `odd/tasks/fable-5-2-audit.md` and `odd/tasks/memory-notes.md`
+name `rule:session-effort`; the coverage register drops the retired rule's control and the two homes' bundles gain
+breaks (the writer's file, a task's mode, a launch in `rules applied`). Left for that commit: `rules coverage
+--refresh` (the skill's text changed), the header comment of the fixture test (five retirements are four), the run
+`node bin/js-harness.mjs rules change subagent-effort --with <every changed path> < subagent-effort.json` (the
+JSON is written by `make.mjs` of the job's folder), the tests of the changed files under the gate's lock, the
+breaks proven, the commit. Then the three model retirements: `bin/lib/guard.mjs` `allowedModels` reads
+`claudeHeld().model`; `bin/rules.mjs` `SUBAGENT_MODEL_RULES` becomes `session-model` held for launches;
+`bin/check.mjs` `SUBAGENT_RULES` writer and reader become `CLAUDE_HOME.model`; `bin/double-review.mjs`
+`readerModel`; `bin/lib/codex-review-recheck.mjs` `ESCALATION_MODEL`; the tests and marks of each.
+
 What follows is the state at 11:13 local, written by the session that took pull request 2 (JH 172 again, a fresh session
 under the brief `~/.js-harness/background/briefs/2026-11-11T11-09-01-276Z-e93e8864.md`) as it stops. The lead's
 notice of 11:07 gives his decision of S7 and says the lead resumes this session by message when JH 180 or JH 181
