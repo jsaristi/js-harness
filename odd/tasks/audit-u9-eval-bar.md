@@ -189,7 +189,7 @@ completamente autonomo".
   inline; commit 5
 - [x] T8 (kind: verify) an independent verifier on the graders and the negative control (high risk, item 6: no
   test says whether a grader measures the rule) — specs 3 and 4; one read-only sub-agent after the slice's checks
-- [ ] T9 (kind: verify) gate, Codex and the lenses on each slice, pull request, ready notice, summary, closed — all
+- [x] T9 (kind: verify) gate, Codex and the lenses on each slice, pull request, ready notice, summary, closed — all
 
 ## Log
 - L1 (2026-11-11, the brief from JH ORQ, C:\Users\Oficina\.js-harness\background\briefs\2026-11-11T10-36-15-407Z-3134a2df.md):
@@ -426,3 +426,16 @@ completamente autonomo".
   Node that prints the tests a name pattern leaves out as skipped would count three; they count the selected test
   by its name, with no directive after it, as the sibling loops do (8 pass). Next: commit slice 8, Codex over
   9175a3ea..HEAD and the lenses over baeadf7c..HEAD, then the push and the pull request.
+- L16 (2026-11-11, T9; slice 8 is cb401f55, the head). Codex over 9175a3ea..cb401f55: correct (confidence 0.92), no
+  finding, 79,035 input tokens. The reliability lens over baeadf7c..cb401f55: none, and its one earlier finding
+  read as fixed. The four cheap Done-when commands exit 0 at cb401f55, and the gate passed at that commit. The
+  branch is pushed and the pull request is 828 (https://github.com/jsaristi/js-harness/pull/828). Next step: the
+  ready notice (`js-harness notify --to orchestrator --kind ready --pr 828`), then the session summary under
+  docs/sessions/ from `js-harness summary template`, this line and T9 ticked in one documents commit, pushed, and
+  `js-harness notify --to orchestrator --kind closed --summary <file>`.
+- L17 (2026-11-11, the close). The ready notice for pull request 828 was sent at 12:16 local. Against the Depth
+  pass: item 3, each spec has its proof green at cb401f55 (the gate there and the Done-when commands); item 4, the
+  refutation stood: the earlier bar called a proof on noise, and this one does in at most 9.4 % of draws, not the
+  9.1 % first written (L14). Not done and not asked: candidate 14 stays open, and no paid run was made. The
+  summary is docs/sessions/2026-11-11-jh-181-the-bar-of-the-evals-before-the-next-paid-run.md. Next step: the
+  closed notice with that summary, once this commit is pushed; then nothing.
