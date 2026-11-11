@@ -127,9 +127,10 @@ versions; keep a copy of a file a first install would overwrite."
 - [x] T2 (kind: build) S5 `compareSemver` and S2 the sync's error · inline · slice A
 - [x] T3 (kind: build) S6 the kept copy and S4 the prompt · inline · slice A
 - [x] T4 (kind: build) S3 the status-line undo and S1 the linked worktree · inline · slice B
-- [ ] T5 (kind: verify) gate, Codex and the lenses on slice A, then on slice B; the independent verifier on S1, S3
-  and S6
-- [ ] T6 (kind: docs) the session summary, the pull request, the notices
+- [x] T5 (kind: verify) gate, Codex and the lenses on slice A, then on slice B; the independent verifier on S1, S3
+  and S6 · the fixes they asked for: `c36f512a`, `90f32411`, `db26cbd2`, `1637dcde`
+- [x] T6 (kind: docs) the session summary, the pull request, the notices ·
+  `docs/sessions/2026-11-11-jh-178-the-install-and-uninstall-edges.md`
 
 ## Log
 - L1. The request, as the lead's brief wrote it (2026-11-11, brief
@@ -311,6 +312,22 @@ versions; keep a copy of a file a first install would overwrite."
   `install` prints nothing and the component is absent, because `bin/lib/manifest.mjs:960-961` drops a `null`,
   and that file is out of scope. Not checked by the verifier: any path with a symbolic link (no privilege
   here), either PowerShell script end to end, worktrees of a bare repository, submodules, S2, S4, S5.
+- L26. The close, 2026-11-11. The fixes of L25 are `1637dcde`, its gate green. Codex on `db26cbd2..1637dcde`,
+  68,400 input tokens (26,368 cached), 53 s: "the patch is correct (confidence 0.91)", no finding. The Claude
+  lenses on the same range, risk, resilience, reliability, readability, about 10,300 input tokens each: 0
+  findings. In all: 5 Codex runs, 650,370 input tokens; 15 lens runs in 4 ranges; the gate on every commit.
+  The contract's commands, whole, in one run through `js-harness gate` (the eight files of the first line and
+  the three conventions files of the third): 735 tests, 726 pass, 0 fail, 9 skipped (8 for a symbolic link, 1
+  the 8.3 short-name case), 284 s; `node bin/js-harness.mjs contract check odd/tasks/install-uninstall-edges.md`:
+  `PASS`. Against the depth pass's bar: spec 1, `initProject in a linked worktree writes none of what every
+  worktree shares, and says where it is written and recorded` passes, where the suite asserted the opposite;
+  spec 2, `upgradeMain prints what the sync after upgrade said when it fails, and why one did not run to its
+  end` passes, new behaviour; spec 3, `bin/lib/status-line-install.test.mjs` 6 of 6, one holding the comparison;
+  spec 4, the prompt names seven folders and a test holds it to what `uninstallMain` removes; spec 5, the
+  command of the bar prints 0 where it printed -1 (`0 -1 -1` for the three pairs of item 4); spec 6,
+  `bin/lib/component-write.test.mjs` 12 of 12, a first write over a file leaves a whole copy. What the first
+  code had wrong: nine defects, eight found by review (L17 two, L19 two, L23 one, L25 three) and one by the
+  test this session wrote for one of them (L20, its own false claim); all fixed.
 - L22. Seen and left, older than this feature: the plan's line for the `.atl/` exclude record
   (`repairLines`) is printed whenever the manifest holds no record, also where the line is already in the file
   and `sync` then records nothing (`addExclude` gives `null`). It is the same in a main checkout, and the test
