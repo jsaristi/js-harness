@@ -59,7 +59,7 @@ test('a writer on a model the rules do not give is counted and named in its role
   assert.deepEqual(result.byRole.writer.offModel, [{ modelRan: 'claude-sonnet-5-5', count: 2 }]);
   assert.deepEqual(subagentRowLines(result, RULES), {
     detail: '3 launches today: 2 on a model off the rules',
-    lines: ['writer: 2 of 3 ran on claude-sonnet-5-5 (subagent-writer-model gives haiku)'],
+    lines: ['writer: 2 of 3 ran on claude-sonnet-5-5 (session-model gives haiku)'],
   });
 });
 

@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `13dfdb334353`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 5.
+Hash `8e4eea253bf7`. In force: 72 (44 of Sebastián, 28 of the project). Retired: 6.
 
 ## Sebastián's
 
@@ -226,13 +226,6 @@ The model of a sub-agent that explores, reviews or verifies: claude-fable-5-2.
 - Read by: `bin/double-review.mjs`, `bin/lib/guard.mjs`.
 - Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
-### subagent-writer-model
-The model of a sub-agent that writes scoped code, in this repository: claude-fable-5-2.
-- Of this repository only: not in force in a project that installs the harness.
-- Was: claude-haiku-5-5 until 2026-11-10.
-- Read by: `bin/lib/guard.mjs`.
-- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
-
 ### terminal-note
 The note that ends a command typed into his Terminal panel, saying what it does in everyday words, so he reads it beside the command where it runs: the guard refuses a run_in_terminal command without it: <command>; Write-Host 'NOTE: <what it does>'.
 - Of this repository only: not in force in a project that installs the harness.
@@ -416,6 +409,11 @@ A reply ends in one of five states, and a question is his decision alone, explai
 ### subagent-effort
 The effort every sub-agent is launched with. Retired on 2026-11-11: read `session-effort` instead.
 - Was: high until 2026-11-11.
+- Source: his words of 2026-11-10, 2026-11-10, 2026-11-11, 2026-11-11, checked by the command on 2026-11-11.
+
+### subagent-writer-model
+The model of a sub-agent that writes scoped code, in this repository. Retired on 2026-11-11: read `session-model` instead.
+- Was: claude-fable-5-2 until 2026-11-11; claude-haiku-5-5 until 2026-11-10.
 - Source: his words of 2026-11-10, 2026-11-10, 2026-11-11, 2026-11-11, checked by the command on 2026-11-11.
 
 ### work-sessions

@@ -218,7 +218,7 @@ INFO  hook entries  16 entries in this home and project: js-harness 15, codegrap
 INFO  sensors  no sensors declared: add test, lint or typecheck scripts to package.json, or a "sensors" object to harness.json
 ```
 
-`js-harness check --subagents` adds one INFO row, `subagents`, for today's sub-agents of this project, read from the Claude Code records: each writer launch is compared with `subagent-writer-model`, each explorer, reviewer or verifier with `subagent-reader-model`, and every launch's effort with `session-effort`. It says how many ran off those rules and fails nothing. It is opt-in: the commit gate runs plain `check`, which reads no record, and a day of records is about 231 MB.
+`js-harness check --subagents` adds one INFO row, `subagents`, for today's sub-agents of this project, read from the Claude Code records: each writer launch is compared with `session-model`, each explorer, reviewer or verifier with `subagent-reader-model`, and every launch's effort with `session-effort`. It says how many ran off those rules and fails nothing. It is opt-in: the commit gate runs plain `check`, which reads no record, and a day of records is about 231 MB.
 
 Three more forms of `check` share the same command:
 
@@ -1770,7 +1770,7 @@ judged by the file it leaves, read from disk, so a short clause that makes a lin
 line that was already long there is left to the memory hygiene pass rather than blocking the edit.
 
 The hook always exits 0 and writes nothing. A check that cannot read what it checks lets the call run.
-The model rules are the project's `subagent-writer-model` and `subagent-reader-model`. A project
+The model rules are the project's `session-model` and `subagent-reader-model`. A project
 that installs the harness has them off by default, so the model check applies only where the
 project sets them.
 
