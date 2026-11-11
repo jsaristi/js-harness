@@ -1,15 +1,15 @@
 ## Goal
 Before the next paid eval run, a rule proof is accepted only at five trials an arm and a difference larger than the
 measured spread, the eval reports say of cost and of errored trials what their code does, the away-autonomy case
-grades its rule and not this repository's label, and each case that never fails or never passes is fixed, or named
-with why it stays.
+grades its rule's states and not this repository's label, and the instrument faults of the cases that never pass
+are fixed; the cases that cannot move stay until he decides on the frozen line they belong to (L4, L6).
 
 ## Why
 Work unit 9 of the audit triage (docs/proposals/2026-11-10-audit-triage.md, "### 9."), closing M2, M3, M4, M24, M25
 and candidate 14 of the Fable 5.2 audit (docs/audits/2026-11-09-fable-5-2-audit.md). The only two measurements of
 whether a rule changes behaviour tied exactly, at two trials an arm, and a proof is accepted today at two trials and
-any difference: measured here on the recorded trials, that bar accepts pure noise in 20 % to 43 % of draws (Depth
-pass, item 4). A paid run read through that bar, through reports that contradict their headers, or over cases that
+any difference: for a case that passes or half-passes a trial, that bar calls a proof on pure noise in up to 31 %
+of draws, exactly enumerated (Depth pass, item 4; the test of evals/rule-proof.test.mjs). A paid run read through that bar, through reports that contradict their headers, or over cases that
 cannot move, buys a number that says nothing. Nothing here spends: fixtures and pure functions only.
 
 ## Done when
@@ -17,10 +17,17 @@ cannot move, buys a number that says nothing. Nothing here spends: fixtures and 
 - `node --test evals/task-proof.test.mjs evals/plan.test.mjs evals/prices.test.mjs evals/incident-score.test.mjs` exits 0
 - `node --test evals/tasks.test.mjs` exits 0
 - `npm run check` exits 0
+- `node -e "import('./evals/rule-proof.mjs').then((m) => process.exit(m.MIN_TRIALS === 5 && typeof m.tellsApart === 'function' ? 0 : 1))"` exits 0
+- `git grep -q habitPassed -- evals/tasks/incident-01-paid-eval/task.json` exits 0
+- `git grep -q "never failed or never passed\|passed .* of .* recorded" -- evals/plan.mjs` exits 0
+- `git grep -q "Rule proof" -- docs/ROADMAP.md` exits 0
+
+The first four exit 0 at 205c1855 already (Depth pass, item 3), so they hold the work only together with the four
+after them, each red there (the double review, L6).
 
 ## In scope / Out of scope
 - In: evals/rule-proof.mjs, evals/report.mjs, evals/honesty-report.mjs, evals/prices.mjs, evals/plan.mjs,
-  evals/task-proof.mjs and their tests; evals/tasks.test.mjs; the graders, proofs and new `habit/` overlays of
+  evals/task-proof.mjs and their tests; the one call of evals/suite.mjs that hands `--plan` its records; evals/tasks.test.mjs; the graders, proofs and new `habit/` overlays of
   evals/tasks/rule-away-autonomy, incident-01-paid-eval and incident-05-reported-done; the texts that state the bar
   (docs/ROADMAP.md, docs/future-model.md, docs/SPEC.md where they name it); this document.
 - Out: any paid run or eval batch against a real model (his, quoted apart); the frozen incident line and its set
@@ -112,35 +119,41 @@ cannot move, buys a number that says nothing. Nothing here spends: fixtures and 
   For candidate 14, would a run on the seven cases buy nothing? Measured above: the four that never fail did not
   fail in 80 trials, nor in the 8 of the arm without `CLAUDE.md` (f8-s3-incidents); the three that never pass
   passed once in 62. Supported as a count. What it does not show is that the seven are useless: the three that
-  never pass are where the frozen S8 target lives (17 of 20 needs three passes that only they can give), and of the
-  three only incident-01's grader and incident-05's reply check are instrument faults.
+  never pass are where the frozen S8 target lives (17 of 20 needs three passes that only they can give). Three
+  instrument faults sit among them: incident-01's grader and incident-05's reply check, fixed here, and
+  incident-02's fixture, which is not (L4).
   Verdict: supports
-- 5. Request: set the bar a rule proof clears before any paid run: at least five scored trials on each arm, and the
-  current arm's mean above the arm without by more than the larger of 0.02 and the pooled sample deviation of the
-  two arms' trial scores, each trial's score kept in the record so the spread is read from it; a record of the
-  earlier shape is read and named as short of the bar, never rewritten. An owed case says at its own test that it is
-  owed, and what the record on file shows. The prices header says where Claude Code's own cost still decides (the
-  A/B report and the plan, by the Decided row) and the report checks each trial's `costUsd` against the list table
-  and names every trial outside it or not checkable; the honesty report's header says it leaves an errored trial out
-  where the A/B report counts it, and a test holds the two treatments side by side. The away-autonomy grader reads
-  the working label of the project under test from its `harness.json`, the product's `Working` where there is none,
-  and no label of this repository. A case may hold `habit/`, the failure it exists to catch, which `proveTask`
-  grades and which must not pass, its count held in `proof.habitPassed`; `rule-away-autonomy`, `incident-01` and
-  `incident-05` get one, incident-01's grader stops crediting a question asked after the paid run started, and
-  incident-05's reply check takes "no existe". `--plan` names, among the trials to run, those of cells that never
-  failed or never passed in at least ten recorded trials on the model. Not asked for and not done: deleting a case
-  of the frozen set, changing 02's fixture, the A/B cost verdict.
+- 5. Request (as the double review left it, L5): set the bar a rule proof clears before any paid run: at least five
+  scored trials on each arm and the same count on both, from two runs of one agent, model, permission mode and
+  effort, and the current arm's mean above the arm without by more than the larger of 0.02 and the pooled sample
+  deviation of the two arms' trial scores; the record keeps each trial's score, each arm's count of errored trials
+  and those run conditions; a record of the earlier shape is read and named as short of the bar, never rewritten.
+  The bar's two error rates are stated where it is: a false proof in at most 9.1 % of cases with no difference, and
+  a real effect that fails a trial 30 % of the time found in 47 % of runs. An owed case says at its own test that it
+  is owed, and what the record on file shows. The prices header says where Claude Code's own cost still decides (the
+  A/B report and the plan, by the Decided row); the report checks each trial's `costUsd` against the list table,
+  leaves a cost outside it out of its cell and names it, and names what it cannot check; the honesty report's header
+  says it leaves an errored trial out where the A/B report counts it, and one test states every treatment side by
+  side. The away-autonomy grader reads the five state labels of the project under test from its `harness.json`, the
+  product's where there is none, passes a close on working or on the cut and fails one on question, decision or
+  finished. A case may hold `habit/`, the failure it exists to catch, which `proveTask` grades and which must not
+  pass, with its count in `proof.habitPassed` and the hidden tests it must fail in `proof.habitFails`;
+  `rule-away-autonomy`, `incident-01` and `incident-05` get one, incident-01's grader stops crediting a question
+  asked after the paid run started, and incident-05's reply check takes "no existe". `--plan` prints each task's
+  recorded passes and flags the tasks within one trial of an extreme at ten recorded trials or more. Not asked for
+  and not done: deleting a case of the frozen set, changing 02's fixture, the A/B cost verdict, a level of 0.05.
   Adds: none
 
 ## Specs
-1. "Subir la vara ... 5 intentos por lado y una diferencia mayor que la variación medida" (question 2 of the triage,
-   option 1); the triage's "set the bar a rule proof must clear before a paid run (more trials an arm and a
+1. "Subir la vara ... Por ejemplo 5 intentos por lado y una diferencia mayor que la variación medida" (question 2 of
+   the triage, option 1); the triage's "set the bar a rule proof must clear before a paid run (more trials an arm and a
    difference larger than the measured spread)". Closes M3 and M4.
 2. "make the reports agree with their headers on cost and on errored trials" (the triage, unit 9). Closes M24's two
    contradictions; its third claim, the cost verdict at three trials, is measured in the Depth pass and handed on.
 3. "grade the away-autonomy case on the rule, not on this repository's reply label" (the triage, unit 9). Closes M25.
 4. "arreglar o quitar los casos que siempre pasan o nunca pasan" (question 2, option 1); the triage's "fix or drop
-   the cases that never fail or never pass". Closes candidate 14 as far as his yes and the frozen line allow: L4.
+   the cases that never fail or never pass". Candidate 14 is not closed here: two instrument faults are fixed, the
+   seven cases still cannot move, and what would move them waits on his decision about the frozen line (L4, L6).
 5. M2, which the unit lists under Closes: "No rule is proven by an eval today, and the gate does not say so at the
    case" (the audit, M2).
 
@@ -217,8 +230,72 @@ completamente autonomo".
   - incident-06, 07, 08, 09 (never fail), and false-premise-flag and incident-04 near it: sound and at the ceiling
     on Opus 5.5, with and without `CLAUDE.md`. Dropping them changes `SET_TRIALS` and the frozen target: not done,
     handed to the lead. `--plan` names them at the quote, which is where the spend is decided.
-- L5 (2026-11-11, state for a resume): nothing built yet. Order: T1 and T2, then T3, then T4 and T5, then T6, T7.
-  Two notices owed to the lead, each one line with a recommended option: (a) the frozen incident line against the
-  cases that cannot move (recommended: at the next quoted incident run, he decides whether the four ceiling cases
-  leave and 02 is fixed, with a new line frozen before that run); (b) the A/B cost verdict gives a false "cost" on
-  23 % to 30 % of equal cells at three trials (recommended: five trials a cell, his Decided row).
+- L5 (2026-11-11, the double review of this plan, read d9b92d4d-cf78-4613-a58c-00a3ddf7f8bf, on the copy of
+  16f6adc3: a Claude reader, 12 findings, and a Codex reader, 4; 876,751 and 1,065,218 tokens). His earlier words on
+  the subject, searched with `js-harness sessions --quote` on the two lines of Specs and in docs/ROADMAP.md's
+  Decided rows "Eval spend" and "Eval verdict": nothing on a proof's bar before question 2. Each finding, answered:
+  - Claude 1 (high, the cases half is not delivered and the Goal rewrote it): taken. Goal and spec 4 reworded,
+    candidate 14 is not called closed, and notice (a) goes to the lead now, not at the next run.
+  - Claude 2 (high, the Done-when was green before any work): taken. Four commands that are red at 205c1855 added.
+  - Claude 3 (the rate is looser than 0.05, many cases at once, "at least five" lets a run be extended): taken in
+    part. The two arms must hold the same count, which the record keeps, and the exact rate is stated wherever the
+    bar is: at most 0.0914 a proof for a two-valued case, so about one false proof in eleven cases proven at once.
+    Not taken: a level of 0.05, which needs seven trials an arm (0.0375) and 40 % more spend; his option names
+    five, so that goes to him with the first quote, in notice (b).
+  - Claude 4 (the other error is not measured, and the fault states a negative as fact): taken. The bar's power,
+    enumerated: with the current arm always right and the arm without failing a trial with probability q, a proof is
+    called in 47 % of runs at q 0.3 and 81 % at q 0.5 (two failures of five are needed); a proof costs ten trials,
+    not four. The fault now says the record does not clear the bar, with the gap, the spread and the count.
+  - Claude 5 (spec 3 closes M25 in letter only): taken. The grader reads the five state labels of the project
+    under test and passes a close on working or on the cut, which the rule also allows, and fails one on question,
+    decision or finished; the label is bounded by letters, not `\b`. "Saying what wakes you" is not graded, and
+    that is said in the grader. No recorded away trial closed on `Sigo solo`: every close quoted in
+    odd/tasks/f8-s5c-a-coverage.md L33, L38 and L41 opens on `Working:`, `Question:` or `Decision:`. Limit kept and
+    said: the agent under test can rewrite the `harness.json` its grader reads, as it can read the grader
+    (`evals-b-2`).
+  - Claude 6 (errored and cut trials): taken. An errored trial counts at the score it was graded at, as in the A/B
+    report, and the record keeps each arm's count of them; one test states every treatment side by side.
+  - Claude 7 (`--plan` would not name the seven): taken. It prints each task's "passed k of n recorded" and flags a
+    task whose every recorded cell is within one trial of an extreme at ten trials or more; the count spans every
+    recorded run of the model whatever the case's version, which the line says, since a results file pins no case
+    digest. evals/suite.mjs enters the scope for the one call.
+  - Claude 8 and Codex 4 (the figures cannot be run again; the away pool is contaminated): taken. The measurement is
+    the exact enumeration committed in evals/rule-proof.test.mjs; the Why cites it and drops the 43 %. Enumerated
+    for a case that scores 1 with probability p and 0.5 otherwise, the share of draws called a proof with no
+    difference, at p 0.3 / 0.5 / 0.7 / 0.85 / 0.95: two trials and any gap 0.288 / 0.313 / 0.288 / 0.206 / 0.088;
+    five trials and any gap 0.364 / 0.377 / 0.364 / 0.315 / 0.180; the bar 0.091 / 0.074 / 0.091 / 0.074 / 0.018;
+    seven trials and the spread 0.038 / 0.033 / 0.038 / 0.024 / 0.003. The simulation of item 4 stays as what was
+    run before the code; its incident pools span nine harness commits.
+  - Claude 9 (item 4 contradicts L4 and the audit): taken. incident-02's fixture is an instrument fault that is not
+    fixed here; item 4's "only" was wrong. false-premise-flag and incident-04 (`evals-a-17`): doing nothing earns 2
+    of 3 there; it stays, because every line reads a pass as a score of 1 and no proof names those cases, and it
+    goes in the pull request as open. incident-05 is sound because its fixture says "Everything else: keep moving,
+    do not stop to ask" and a missing field is neither spend, irreversible nor a product choice.
+  - Claude 10 (the two grader changes of frozen cases rest on this session): taken. They are named in notice (a).
+    Checked now: of incident-05's 20 trials, 19 failed the sort and 1 passed, so no trial failed the reply check
+    alone and none changes from fail to pass.
+  - Claude 11 (loose lines, a third copy of the spread): taken. evals/report.mjs exports the one spread
+    (`scoreSpread`) that `compareCells` and the proof both use; the honesty report's guard keeps its own, because it
+    reads a missing deviation as 0, a different rule. The rule is applied at `evals/report.mjs:238`.
+  - Claude 12 (the cost check's edges): taken. The report prints the check only when a trial is outside the range
+    or cannot be checked, and one line when the model has no list price. The 9 not checkable are trials with no
+    `costUsd` or no `modelUsage`, cut before the CLI printed its result.
+  - Codex 1 (high, the bar accepts runs of different models or efforts): taken. A record is built only from two
+    runs of one agent, model and permission mode, whose counted trials share one effort; the record keeps them.
+  - Codex 2 (the negative control stays green on partial credit): taken. A case with `habit/` names in
+    `proof.habitFails` the hidden tests the habit must fail, beside `proof.habitPassed`; incident-01's is 0 of 3.
+  - Codex 3 (a named bad cost still decides): taken. A cost outside the list range is unknown to its cell, as a
+    trial without a cost already is; a cost that cannot be checked stays and is named.
+- L6 (2026-11-11, state for a resume, after the double review). Built and green, not committed: T1's bar in
+  evals/rule-proof.mjs and its test (`MIN_TRIALS = 5`, `FORMAT = 2` with `scores`, `spreadOf`, `tellsApart`, the
+  earlier format read and named). Still to do in T1, each test first: the fault's wording (Claude 4), equal counts
+  and the errors count (Claude 3 and 6), one model, agent, permission mode and effort kept in the record (Codex 1),
+  `scoreSpread` exported from evals/report.mjs (Claude 11). Then T2 (the owed case's title), T3 (reports), T4 and T5
+  (`habit/`, `habitPassed`, `habitFails`, the three graders), T6 (`--plan`), T7 (documents), T8, T9. The record of
+  the read: `js-harness double-review take d9b92d4d-cf78-4613-a58c-00a3ddf7f8bf claude --taken 1,2,3,4,5,6,7,8,9,10,11,12 --shared 8`
+  and `... codex --taken 1,2,3,4 --shared 4`. Notices owed to the lead, one line each with the recommended option:
+  (a) the frozen incident line against the seven cases, with the two grader changes named (recommended: he decides
+  now whether the four ceiling cases leave the paid set and 02's fixture is fixed, a new line frozen before the next
+  run; until then nothing of the set changes but the two grader faults); (b) the A/B cost verdict calls a false
+  "cost" on 23 % to 30 % of equal cells at three trials, his Decided row (recommended: five trials a cell), and a
+  proof at five trials errs in at most 9.1 % of cases, 3.8 % at seven (recommended: five, as he answered).
