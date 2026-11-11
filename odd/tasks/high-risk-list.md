@@ -45,7 +45,8 @@ apart cannot tell which change that is.
   and bin/lib/rules-block.mjs:42-45 name "a high-risk item" and do not list them); `js-harness rules` (78 rules, none
   is the list, none names it); the test files that read the root `AGENTS.md` or `CLAUDE.md` (36, of which
   bin/lib/rules-block.test.mjs is the one that holds this text).
-- 2. Raw material: `CLAUDE.md:20-22` (the sizing sentence and its "(below)"); `AGENTS.md:1-61` (61 lines, no mention
+- 2. Raw material (line numbers as at 52925c7b; T2 moved those of bin/lib/rules-block.mjs down by three, so the
+  list is at `:56` since f6a2be08): `CLAUDE.md:20-22` (the sizing sentence and its "(below)"); `AGENTS.md:1-61` (61 lines, no mention
   of risk); bin/lib/rules-block.mjs:50-56 (`KEPT_GROUPS`, the group "Task Size and scratch", whose first line is the
   list) and `:68` (`rulesBody`, what `install` writes); bin/lib/rules-block.test.mjs:33-35 and `:55-69` (the lines
   are held to Appendix A.1 of docs/proposals/harness-diet.md and frozen by a hash, since "that copy left");
@@ -102,8 +103,8 @@ in the lead's chat (transcript ea85ec35-82e1-4aa9-abe3-98bd153a50b0), on 2026-11
 - [x] T1 (kind: docs) this document: the contract, the depth pass, the specs. Specs 1 and 2; inline; this commit.
 - [x] T2 (kind: build) specs 1 and 2: the test first and red, then the line in `AGENTS.md`, `AGENTS.md` named in
   `CLAUDE.md:21`, the two doc comments of bin/lib/rules-block.mjs and the register's two entries; inline; one commit.
-- [ ] T3 (kind: verify) an independent verifier reads T2 against the request (high risk, item 3 in part: instructions
-  others consume); one read-only sub-agent.
+- [x] T3 (kind: verify) an independent verifier reads T2 against the request (high risk, item 3 in part: instructions
+  others consume); one read-only sub-agent: "holds" at f6a2be08, three defects that do not block, answered in L7.
 - [ ] T4 (kind: verify) the gate, then Codex and the pertinent lenses on the slice, one at a time; findings fixed or
   answered.
 - [ ] T5 (kind: docs) main merged in, the pull request ready, the ready notice, the session summary, the closed notice.
@@ -147,3 +148,21 @@ in the lead's chat (transcript ea85ec35-82e1-4aa9-abe3-98bd153a50b0), on 2026-11
   comment say the same, so it left. `AGENTS.md` measures 1210 of 1500. The sizing sentence of `CLAUDE.md` is an owed
   span edited in place, so `rules coverage --refresh` renamed its hash; the debt did not grow (`rules coverage`
   counted 454 owed with the three findings open and 454 with them settled). `js-harness rules check` passes again.
+- L7 T3, the independent verifier (a fresh sub-agent, read-only, given commit f6a2be08, the question and his option,
+  and not this document): "holds". What it checked, each by a command: the paragraph of `AGENTS.md` equals the kept
+  line and the line of his global file, 797 characters, and the diff of `AGENTS.md` adds those nine lines and a
+  blank one alone; `CLAUDE.md` changed in line 21 alone and its pointer is true; `checkBudget` gives 1210 of 1500;
+  the two context entries are honest by the register's own kind (the same words stay owed in their home, hash
+  26d30c169b1b of the source `rules-block`), and `rules check` passes; every statement of the two doc comments is
+  true against `85d17a02^:CLAUDE.md`. One thing of it was checked here before building on it: the list is at
+  bin/lib/rules-block.mjs:56, as it said. Its three defects. First, taken: the test looked for the line anywhere
+  in `AGENTS.md`, so it passed with a seventh item appended, with "No longer in force:" before it, inside an HTML
+  comment and beside a second copy, and only `rules check` caught those; the test now takes the paragraphs of
+  `AGENTS.md` that hold the mark `**High risk**` and wants exactly one, equal to the line. Proven in memory on
+  eight altered copies: those four, a sentence added after it and a changed word are refused, the file as it is
+  passes, and so does another paragraph that only names "a high-risk item". Second, taken: this document cited
+  bin/lib/rules-block.mjs by lines the commit itself moved; item 2 of the depth pass now says at which commit they
+  are read. Third, answered and left: `CLAUDE.md:21` is 102 columns wide; rewrapping it would change lines 22 to 26
+  of a file another session edits tonight, and line 25 is already 115. Not checked by the verifier, by its own
+  list: `npm run check` (the commit hook ran it), the count of 36 test files, the 454 owed and the red-first run,
+  which are this session's own measures above.
