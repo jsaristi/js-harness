@@ -197,6 +197,9 @@ Update, about 09:20Z: `421f994c` holds this section. Codex on `fa682dd..421f994`
 the commit after it; step 1 is now the confirming review of that commit, base `421f994c`, Codex then the lenses over
 `fa682dde..HEAD` (the lenses have not read `06e24923` yet).
 
+Update, about 09:45Z: step 1 is done (Log, L13), both reviews cover the first slice up to `5f35d1a3`. Next is step 2,
+the push and the first pull request, then step 3 with its review base `5f35d1a3`.
+
 ## Log
 - L1 (his request, as written; lead transcript ea85ec35 line 6716, 2026-11-11T05:26:36Z, printed by `js-harness
   sessions --quote ea85ec35 6716 --cwd D:/js-harness`): "une lo que quede listo y tienes autorizacion para poder
@@ -246,3 +249,11 @@ the commit after it; step 1 is now the confirming review of that commit, base `4
   equal to the home, and the test's own `notEqual` fails. Taken: a variant that changes nothing is left out. The
   signed-out handling it read as consistent with what was asked. The first commit of `421f994c` failed its gate once
   and passed on the second try; which test failed was not read (the output was cut), so it is not known.
+- L13 (the confirming reviews of the first slice, 2026-11-11 about 09:45Z). Codex on `421f994..5f35d1a`: "the patch
+  is correct" (confidence 0.99), its P2 rechecked as fixed, 33,819 input tokens in 37 s. The lenses on
+  `fa682dd..5f35d1a`: resilience 0 findings, readability 0, reliability 1; the three earlier findings rechecked as
+  fixed, none blocking. The one finding, reliability SUGGESTION marked follow-up, `bin/lib/signin-expiry.mjs:69-72`:
+  a signed-out reading can carry a date with `signedOut`, and no test feeds that shape to the heartbeat's line.
+  Answered, not fixed here: the heartbeat's code is the second pull request, where `signinTold` gets that case with
+  its test first (step 3 of `## Next step`). Two Codex reviews and two lens reviews on this slice, under the three the
+  protocol allows.
