@@ -230,12 +230,19 @@ export const RULES = [
     "subject": "the strongest model a change passes to when three reviews of it did not settle it",
     "owner": "sebastian",
     "since": "2026-11-10",
-    "value": "claude-fable-5-2",
     "was": [
+      {
+        "value": "claude-fable-5-2",
+        "until": "2026-11-11"
+      },
       {
         "value": "claude-fable-5-1",
         "until": "2026-11-10"
       }
+    ],
+    "retired": "2026-11-11",
+    "successors": [
+      "session-model"
     ]
   },
   {
@@ -542,7 +549,7 @@ export const RULES = [
     "value": "medium",
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bcodex\\b.{0,60}\\bat `?{amount}`? effort",
-      "^(?!.*\\bruleValue\\().*\\b(?:runs?|is run|set to)\\b.{0,30}\\bgpt-[\\w.-]+`?\\s+at\\s+`?{amount}`?"
+      "^(?!.*\\bruleValue\\().*\\b(?:runs?|is run|set to)\\b.{0,30}(?<![\\w.-])(?!claude-)(?=[a-z]+(?:-[a-z0-9.]+)*-\\d)[a-z][\\w.-]+`?\\s+at\\s+`?{amount}`?"
     ]
   },
   {
@@ -552,7 +559,7 @@ export const RULES = [
     "since": "2026-10-08",
     "value": "gpt-6.1-sol",
     "patterns": [
-      "^(?!.*\\bruleValue\\().*\\b(?:codex|review)\\b.{0,60}\\bon `?(?=gpt-){amount}"
+      "^(?!.*\\bruleValue\\().*\\b(?:codex|review)\\b.{0,60}\\bon `?(?!claude-)(?=[a-z]+(?:-[a-z0-9.]+)*-\\d){amount}"
     ]
   },
   {

@@ -216,22 +216,22 @@ test('the refusal of a second recheck says why and what to record instead', () =
 });
 
 test('past three reviews the refusal says the change is not settled, lists what is open and names the strongest model', () => {
-  const model = RULES.find((rule) => rule.id === 'escalation-model').value;
+  const model = RULES.find((rule) => rule.id === 'session-model').value;
   const open = finding('[not fixed] 1 Still drops the last line');
   const said = secondRecheckRefused({ of: D, open: 1, base: C, reviews: 3, findings: [open] });
   assert.match(said, /^Three reviews of this change did not settle it: the third, a second recheck that ended at ddddddd, left 1 finding not fixed or blocking. Nothing more is reviewed, and nothing was started or recorded./);
   assert.ok(said.includes('  1. bin/x.mjs:3-4 P2 [not fixed] 1 Still drops the last line'), said);
-  assert.ok(said.includes(`pass the work to ${model}, the strongest model the rules name (rule:escalation-model)`), said);
+  assert.ok(said.includes(`pass the work to ${model}, the strongest model the rules name (rule:session-model)`), said);
   assert.ok(said.includes('Raise it to the user as a problem'), said);
   assert.ok(!said.includes('follow-up task'), said);
 });
 
 test('a recheck that left findings open names what comes next: a second recheck, or after it the problem raised and the model named', () => {
-  const model = RULES.find((rule) => rule.id === 'escalation-model').value;
+  const model = RULES.find((rule) => rule.id === 'session-model').value;
   assert.equal(openAfterRecheck({ head: C, second: false }), 'A range that starts at ccccccc is a second recheck of what is open, the last of three reviews: fix it in this branch, then run it.');
   const third = openAfterRecheck({ head: D, second: true });
   assert.match(third, /^Three reviews of this change did not settle it. Raise it to the user as a problem/);
-  assert.ok(third.includes(`pass the work to ${model}, the strongest model the rules name (rule:escalation-model)`), third);
+  assert.ok(third.includes(`pass the work to ${model}, the strongest model the rules name (rule:session-model)`), third);
 });
 
 test('the refusal of a range that holds code no record covers names the review that reads it, and no skip', () => {

@@ -882,7 +882,7 @@ queued 6-9 h in 2 lanes; 10 session-hours idle from hour 2
 Task contracts: `template` prints the skeleton a feature document opens with, `check`
 validates every contract, `run` runs a contract's done-when commands, and `goal` prints the
 `/goal` condition that runs them. Each task names its kind of work, `(kind: design | build |
-verify | docs)`; `modes` prints the effort and sub-agent models each open task calls for, from
+verify | docs)`; `modes` prints the model and the effort each open task runs on, from
 the project's rules (`--task <id>` for one), and `goal` prints the same lines on stderr. `check`
 takes files to validate in place of all, `run` takes `--timeout <minutes>`, and every verb but
 `template` takes `--cwd <dir>`.
@@ -1712,7 +1712,8 @@ The hook that checks a tool call before it runs. `install` registers it for Clau
 session, on `Bash`, on `Read`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit` and `Grep`, and on the scheduled-task and cloud tools that open a session
 (`create`, `update` and `run` of a scheduled task, and `RemoteTrigger`), and on the desktop app's
 `run_in_terminal`. `guard --hook` reads the call on
-standard input and refuses these things: a sub-agent launched on a model the project's rules do not give;
+standard input and refuses these things: a sub-agent launched on a model the project's rules do not give,
+or at a named effort other than the level of the rule `session-effort`;
 a scheduled-task or cloud tool that would open a session where he does not see it, in a project that
 declares `sessions-open-in-sidebar`, the reason naming `start_session`, which opens it as a row in his
 sidebar, even when he asked for it; a `start_session` with a brief that names no effort, or another level than the

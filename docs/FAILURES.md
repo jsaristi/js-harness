@@ -971,6 +971,12 @@ Hours written in the relief file were not read from a clock.
   ahead ("about 09:45Z" in a block committed at 08:04Z); found when a notice printed the clock,
   corrected with the commits' hours in the commit after 9a4318e7. The documents control reads a line
   that opens with the date and an hour, and these stood inside a sentence, in UTC
+- Seen: 2026-11-11 — odd/tasks/one-model-home.md, Next step, commits 62efbcca to ed3b2006 — JH 172
+  opened ten state paragraphs "At HH:MM" without reading the clock, up to 50 minutes ahead ("At
+  15:10" in a block committed at 14:37), and once more in the commit that corrected them ("At 15:35
+  by the clock", committed at 15:12: the clock was read after the line was written); the lead found
+  the first when a notice printed the clock. Corrected with the commits' hours in ed3b2006 and the
+  commit after it. These lines open with "At" and no date, which the documents control does not read
 - Control: check — bin/notify.test.mjs — "a notice whose text stamps an hour more than a minute off
   the clock is refused, with the right hour, and not recorded" — since 2026-10-16
 - Proof: messages to another session: bin/guard.test.mjs:54, "a message to another session, by

@@ -321,11 +321,24 @@ function resumeStart(parsed, deps) {
   } catch (err) {
     return refuse(`could not read the brief ${briefPath} (${err.code ?? err.message})${parsed.brief === undefined ? '; --brief gives it another' : ''}`, 2);
   }
+  // The guard judges nothing of a call with no brief, so an empty one is refused here, as a start refuses it.
+  if (text.trim() === '') return refuse(`the brief ${briefPath} is empty, so nothing was resumed`, 2);
   const model = parsed.model ?? entry.model ?? undefined;
   const effort = parsed.effort ?? entry.effort ?? undefined;
   const advisor = parsed.advisor ?? entry.advisor ?? undefined;
-  const refusal = sessionStartRefusal({ prompt: text, effort, model }, rulesText(topLevel(run, folder), readFile), { cli: true, lead: leadTitle(entry.title) });
-  if (refusal !== null) return refuse(refusal, 2);
+  const rules = rulesText(topLevel(run, folder), readFile);
+  const held = { cli: true, lead: leadTitle(entry.title) };
+  const refusal = sessionStartRefusal({ prompt: text, effort, model }, rules, held);
+  if (refusal !== null) {
+    // What the call does not name is the record's, which the refusal's "or none" would take again. The note names
+    // only what is refused: the model is judged first, so the level's own answer is the call's with no model.
+    const ofEffort = sessionStartRefusal({ prompt: text, effort }, rules, held);
+    const kept = [['model', parsed.model, entry.model, refusal !== ofEffort], ['effort', parsed.effort, entry.effort, ofEffort !== null]]
+      .filter(([, named, recorded, refused]) => refused && named === undefined && typeof recorded === 'string')
+      .map(([what, , recorded]) => `${what} ${JSON.stringify(recorded)}`);
+    const record = kept.length === 0 ? '' : ` The record of ${entry.id} holds ${kept.join(' and ')}, which a resume takes again where the call names none: name the rule's on the call.`;
+    return refuse(`${refusal}${record}`, 2);
+  }
   const unwritable = recordUnwritable(home);
   if (unwritable !== null) return refuse(`${unwritable}, so nothing was resumed`);
   let copy = entry.brief;

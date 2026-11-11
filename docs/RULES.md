@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `fe84ba88b915`. In force: 71 (43 of Sebastián, 28 of the project). Retired: 7.
+Hash `c4905cf52447`. In force: 70 (42 of Sebastián, 28 of the project). Retired: 8.
 
 ## Sebastián's
 
@@ -60,12 +60,6 @@ Everything that proposes something passes a blind Claude and Codex read, code pa
 - Home: `bin/lib/protocols-skill.mjs`.
 - Looked at again on 2026-11-16.
 - Since 2026-11-01. Row: reports, against the failure `proposal-unreviewed`. Source: his words of 2026-10-31, 2026-10-31, 2026-11-01, 2026-11-01, 2026-11-01, checked by the command on 2026-11-01.
-
-### escalation-model
-The strongest model a change passes to when three reviews of it did not settle it: claude-fable-5-2.
-- Was: claude-fable-5-1 until 2026-11-10.
-- Read by: `bin/lib/codex-review-recheck.mjs`.
-- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
 ### fixed-load-budget
 The fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns: 100,000 tokens.
@@ -394,6 +388,11 @@ How long js-harness wait waits before it says the time ran out, unless --for say
 ### ask-before-away
 Before he leaves, the lead asks for everything the stretch needs, and while he is away repeats nothing. Retired on 2026-10-27: read `away-autonomy` instead.
 - Source: his words of 2026-10-27, 2026-10-11, checked by the command on 2026-10-27.
+
+### escalation-model
+The strongest model a change passes to when three reviews of it did not settle it. Retired on 2026-11-11: read `session-model` instead.
+- Was: claude-fable-5-2 until 2026-11-11; claude-fable-5-1 until 2026-11-10.
+- Source: his words of 2026-11-10, 2026-11-10, 2026-11-11, 2026-11-11, checked by the command on 2026-11-11.
 
 ### reply-four-states
 A reply ends in one of five states, and a question is his decision alone, explained before it is asked. Retired on 2026-10-24: read `reply-five-states` instead.

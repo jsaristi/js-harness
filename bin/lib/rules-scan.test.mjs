@@ -142,6 +142,33 @@ test('on the real list, a narrowed rule no longer finds the line it was narrowed
   }
 });
 
+// The rules of the Codex home name the vendor's model by the shape of its id, not by the prefix its ids had on
+// 2026-11-10: after a switch to an id that begins otherwise, each still finds its restated value
+// (odd/tasks/one-model-home.md, spec 10).
+const NEXT_CODEX = 'codex-7.2-max';
+const SWITCHED = RULES.map((rule) => (rule.id === 'review-model' ? { ...rule, value: NEXT_CODEX } : rule));
+const foundIn = (rules, id, line) => scanLines(rules, inForceLines('docs/ROADMAP.md', `${line}\n`)).filter((finding) => finding.id === id).length;
+const foundAfterSwitch = (id, line) => foundIn(SWITCHED, id, line);
+
+test('on the real list, review-model finds a restated id that does not begin gpt-, and only a value shaped as Codex\'s', () => {
+  assert.equal(foundAfterSwitch('review-model', `Codex reviews on ${NEXT_CODEX}.`), 1);
+  assert.equal(foundAfterSwitch('review-model', `The review runs on \`${NEXT_CODEX}\`.`), 1);
+  // The pattern's two gates: a value that is a Claude id is the Claude home's to find, and one with no number
+  // after a hyphen is a word of the sentence ("the review runs on main"), not an id.
+  const claude = RULES.find((rule) => rule.id === 'session-model').value;
+  for (const value of [claude, 'main']) {
+    const held = RULES.map((rule) => (rule.id === 'review-model' ? { ...rule, value } : rule));
+    assert.equal(foundIn(held, 'review-model', `Codex reviews on ${value}.`), 0, value);
+  }
+});
+
+test('on the real list, review-effort finds its level beside an id that does not begin gpt-, and leaves a Claude id to the Claude home', () => {
+  const level = RULES.find((rule) => rule.id === 'review-effort').value;
+  assert.equal(foundAfterSwitch('review-effort', `The review runs ${NEXT_CODEX} at ${level}.`), 1);
+  assert.equal(foundAfterSwitch('review-effort', `It is set to \`${NEXT_CODEX}\` at \`${level}\`.`), 1);
+  assert.equal(foundAfterSwitch('review-effort', `A work session runs claude-fable-5-2 at ${level}.`), 0);
+});
+
 test('a pattern that is no regular expression is not scanned, so the scan never throws: readRules reports it', () => {
   const broken = { ...WAIT, patterns: ['(', 'wait.{0,40}{amount}'] };
   const files = [{ path: 'docs/ROADMAP.md', text: 'wait 60 minutes\n' }];

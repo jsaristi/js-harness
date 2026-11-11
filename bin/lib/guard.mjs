@@ -23,7 +23,8 @@ export function allowedModels(projectData) {
 /** Why the `Agent` call whose input is `toolInput` is refused, or null when it is not. A call with no `model`
  * passes: it runs on the parent's model, or on the one its agent type declares, which the rules leave out
  * (odd/tasks/rule-hierarchy.md, "the agent types that set their own model"). One that names a model passes when it
- * is a rule's id, or its alias where the rule declares one; any other is refused. A rule declares an alias only while
+ * is a rule's id (a date at its end or a bracket aside, as `sameClaudeModel` reads it, is the same model), or its
+ * alias where the rule declares one; any other is refused. A rule declares an alias only while
  * that short name is known to give its model on the engine in use, so a short name no rule declares is refused like
  * any other model: on 2026-11-10 `fable` gave claude-fable-5-1 on cli 2.1.319 while his words named Fable 5.2, and
  * the refusal then says the way left to a call that takes only short names, no model. Effort is never refused here:
@@ -31,7 +32,7 @@ export function allowedModels(projectData) {
 export function modelRefusal(toolInput, allowed) {
   const model = toolInput?.model;
   if (allowed === null || model === undefined || model === null || model === '') return null;
-  if (allowed.some(({ alias, id }) => (alias !== null && model === alias) || model === id)) return null;
+  if (allowed.some(({ alias, id }) => (alias !== null && model === alias) || model === id || sameClaudeModel(model, id))) return null;
   const rules = allowed
     .map(({ rule, alias, id }) => (alias === null ? `${rule} gives ${id}, which no short name is known to give` : `${rule} gives "${alias}" (${id})`))
     .join(', and ');
@@ -40,6 +41,21 @@ export function modelRefusal(toolInput, allowed) {
     : 'Launch it with no model, to run on the parent\'s, or on that id where the call takes one.';
   return `js-harness guard: the model "${model}" is not one a sub-agent may run on here: ${rules}. `
     + launch + staleNote(allowed.filter(({ note }) => note).map(({ rule }) => rule));
+}
+
+/** Why the `Agent` call whose input is `toolInput` is refused for the effort it names, or null, in the project whose
+ * rules file has the text `projectData`. A call that names none passes: the sub-agent runs at the level of its agent
+ * type, or at its session's. One that names the sessions' level of the home passes; any other value is refused, a
+ * level or a relative one such as `lower` or `higher`, since every sub-agent runs at the one level (his decision of
+ * 2026-11-11; the answers to Codex 2 and Claude 4 in odd/tasks/one-model-home.md). Nothing is refused where the
+ * project does not declare the rule. */
+export function agentEffortRefusal(toolInput, projectData) {
+  const effort = toolInput?.effort;
+  if (effort === undefined || effort === null || effort === '') return null;
+  const level = claudeHeld(projectData).effort;
+  if (level === null || effort === level.value) return null;
+  return `js-harness guard: the sub-agent call asks for effort "${effort}", not the level of the rule ${CLAUDE_HOME.effort}: ${level.value}. `
+    + `Pass effort "${level.value}", or none; another level is his to set.${level.note}`;
 }
 
 // The tools that open a session in the app's Routines or in the cloud, where it runs at the effort it inherits and he

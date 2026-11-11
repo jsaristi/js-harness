@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RULES } from './rules-data.mjs';
 import { ruleHere, writeRules } from './rules.mjs';
-import { allowedModels, denial, hourRefusal, openingRefusal, sessionStartRefusal, stampedHour } from './guard.mjs';
+import { agentEffortRefusal, allowedModels, denial, hourRefusal, openingRefusal, sessionStartRefusal, stampedHour } from './guard.mjs';
 import { backtickRefusal, backticksInDoubleQuotes, driveRootRemovalRefusal, modelRefusal, onFirstParentLine, reviewBaseRefusal, terminalNoteRefusal } from './guard.mjs';
 import { RECORD_HANDLES, REVIEW_RECORD_FILES, reviewRecordOf, reviewRecordWriteRefusal } from './guard.mjs';
 import { codexReviewsPath } from './codex-reviews.mjs';
@@ -72,6 +72,8 @@ test('in this repository a sub-agent may run on the home\'s model, on its short 
   for (const model of [undefined, null, '', ...SHORT_NAMES, ...MODEL_RULES.map((rule) => rule.value)]) {
     assert.equal(modelRefusal({ model, prompt: 'p', description: 'd' }, allowed), null, String(model));
   }
+  // The same model with a date at its end or a bracket aside is the home's, as a start reads it.
+  for (const more of ['[1m]', '-20261101']) assert.equal(modelRefusal({ model: `${MODEL_RULES[0].value}${more}` }, allowed), null, more);
 });
 
 test('a model the home does not give is refused, and the refusal names the rule and what it gives', () => {
@@ -203,6 +205,24 @@ const BRIEF = { initiation: 'own_initiative', title: 'JH 32 · T9', prompt: 'Do 
 const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const HELD = RULES.find((rule) => rule.id === 'session-effort').value;
 const OTHERS = LEVELS.filter((level) => level !== HELD);
+
+// A sub-agent is held to the sessions' level: a call that names none runs at its session's, and one that names a
+// level names the home's (odd/tasks/one-model-home.md, the answers to Codex 2 and Claude 4 of the double reviews).
+test('a sub-agent call that names an effort is held to the sessions\' level: the home\'s passes, another level and a relative one are refused', () => {
+  for (const effort of [undefined, null, '', HELD]) assert.equal(agentEffortRefusal({ prompt: 'p', effort }, HERE), null, String(effort));
+  for (const effort of [...OTHERS, 'lower', 'higher', 'ultra']) {
+    assert.equal(
+      agentEffortRefusal({ prompt: 'p', effort }, HERE),
+      `js-harness guard: the sub-agent call asks for effort "${effort}", not the level of the rule session-effort: ${HELD}. Pass effort "${HELD}", or none; another level is his to set.`,
+      effort,
+    );
+  }
+  // Where the rule is not in force nothing is refused; behind a project that declares it otherwise, the note says so.
+  assert.equal(agentEffortRefusal({ effort: 'max' }, null), null);
+  assert.equal(agentEffortRefusal({ effort: 'max' }, 'an older list\n'), null);
+  assert.equal(agentEffortRefusal({ effort: HELD }, changed('session-effort')), null);
+  assert.equal(STALE.exec(agentEffortRefusal({ effort: OTHERS[0] }, changed('session-effort')))?.[1], 'session-effort');
+});
 
 // odd/tasks/one-model-home.md, spec 5: a start takes the home's level, the one he set, and no other. Until
 // 2026-11-11 a lower one passed, so a session could be started below the level he chose with nothing said.

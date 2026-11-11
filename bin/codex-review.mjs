@@ -12,7 +12,7 @@
 // the head of a review that found something is a recheck: its prompt lists those findings and asks whether
 // each is fixed, anything new is a follow-up that does not block unless it could make a failing check pass
 // exposes data or is a regression the correction brought, and its record names that head (`recheckOf`). From the head of a recheck that
-// left findings open, a second recheck of them is the third and last review; past it the run is refused (rule:escalation-model). No flag skips it: a run with `--again` from behind such a change is refused too (`againPastThreeReviews`).
+// left findings open, a second recheck of them is the third and last review; past it the run is refused (rule:session-model). No flag skips it: a run with `--again` from behind such a change is refused too (`againPastThreeReviews`).
 //
 // A merge of the default branch at HEAD, after a branch whose other code commits all have a record, is
 // reviewed from its first parent by what was written in it (`mergeStart` in ./lib/codex-review-coverage.mjs):

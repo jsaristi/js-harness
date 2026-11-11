@@ -19,7 +19,7 @@
 //   recheck that left findings open, a second recheck of those findings is the third. Past it nothing more is
 //   reviewed: from the head of a second recheck that left one open, or again from a head already rechecked, the
 //   run is refused before anything runs, with what is open and the strongest model the rules name, which the
-//   work passes to (`rule:escalation-model`); a recheck whose open findings were not kept is refused as one
+//   work passes to (`rule:session-model`); a recheck whose open findings were not kept is refused as one
 //   recheck too many, with a follow-up task (`secondRecheckRefused`). A range whose every code commit has a
 //   record needs nothing more; one that holds code no record covers is reviewed from the nearest commit behind
 //   it that starts a review, with `--again`, so that no skip leaves new code unread. A run with `--again` from
@@ -33,11 +33,12 @@
 import { isDocument } from './codex-review-scope.mjs';
 import { isValidCodexReview } from './codex-reviews.mjs';
 import { EXCUSED_REFUSED_TESTS } from './no-test-outside-turn.mjs';
-import { ruleValue } from './rules.mjs';
+import { claudeHome } from './model-home.mjs';
 
-/** The model a change passes to when three reviews of it did not settle it, and what is done then. */
-export const ESCALATION_MODEL = ruleValue('escalation-model');
-export const ESCALATION_SAID = `Raise it to the user as a problem, with what is happening and what is still open, and pass the work to ${ESCALATION_MODEL}, the strongest model the rules name (rule:escalation-model)`;
+/** The model a change passes to when three reviews of it did not settle it, and what is done then: the one model
+ * of the Claude home, which the escalation's own rule retired into on 2026-11-11. */
+export const ESCALATION_MODEL = claudeHome().model;
+export const ESCALATION_SAID = `Raise it to the user as a problem, with what is happening and what is still open, and pass the work to ${ESCALATION_MODEL}, the strongest model the rules name (rule:session-model)`;
 
 /** What a recheck that left findings open says of what comes after it (spec 8): a range from `head` is a second
  * recheck, the last of three reviews; after a second (`second`), three reviews did not settle the change, so it is

@@ -1,9 +1,13 @@
 // The comparison of today's sub-agent launches with the rules in force (odd/tasks/honesty-audit.md, JH 15 T13):
 // the INFO row of `check --subagents` says whether each writer and reader ran on the model and at the effort
 // the rules give. Pure: the launches are the ones launchesOf returns and the rules are handed in, so a test never
-// reads the project's rules; the one name it takes from elsewhere is the id of the home's effort rule, which its
-// lines name. Nothing here fails a launch: an off value is reported, not refused.
+// reads the project's rules; the names it takes from elsewhere are the ids of the home's rules, which its lines
+// name. Nothing here fails a launch: an off value is reported, not refused.
 import { CLAUDE_HOME } from './model-home.mjs';
+
+/** The rules the sub-agent row reads, by id: a writer and an explorer, reviewer or verifier against the model of
+ * the Claude home, and every launch's effort against its level. One home for the row and the lines that name them. */
+export const SUBAGENT_RULES = { writer: CLAUDE_HOME.model, reader: CLAUDE_HOME.model, effort: CLAUDE_HOME.effort };
 
 /** The roles that a writer rule covers; the others are compared against the reader rule. */
 const READER_ROLES = new Set(['explorer', 'reviewer', 'verifier']);
@@ -162,7 +166,6 @@ export function subagentRowLines(result, expected) {
   }
 
   const lines = [];
-  const ruleNames = { writer: CLAUDE_HOME.model, reader: CLAUDE_HOME.model };
   for (const side of ['writer', 'reader']) {
     const role = result.byRole[side];
     const segments = [];
@@ -170,7 +173,7 @@ export function subagentRowLines(result, expected) {
       const ran = role.offModel.map((entry) => entry.modelRan).join(', ');
       const total = role.offModel.reduce((sum, entry) => sum + entry.count, 0);
       const given = modelRule(rules[`${side}Model`]);
-      segments.push(`${total} of ${role.launches} ran on ${ran} (${ruleNames[side]} gives ${given.alias ?? given.value})`);
+      segments.push(`${total} of ${role.launches} ran on ${ran} (${SUBAGENT_RULES[side]} gives ${given.alias ?? given.value})`);
     }
     if (role.offEffort.length > 0) {
       const ran = role.offEffort.map((entry) => entry.effortRan).join(', ');
