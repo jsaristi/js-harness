@@ -80,6 +80,20 @@ test('an Agent call on a model no rule gives is denied in this repository, and o
   }
 });
 
+test('an Agent call at another effort than the sessions\' level is denied in this repository, and one at that level or at none passes', async () => {
+  const held = RULES.find((rule) => rule.id === 'session-effort').value;
+  const model = RULES.find((rule) => rule.id === 'session-model').value;
+  const refused = await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model, effort: held === 'max' ? 'low' : 'max' } });
+  assert.equal(refused.code, 0);
+  assert.equal(denied(refused).permissionDecision, 'deny');
+  assert.match(denied(refused).permissionDecisionReason, /not the level of the rule session-effort/);
+  // A model off the home is said first: one refusal a call.
+  assert.match(denied(await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model: 'sonnet', effort: 'max' } })).permissionDecisionReason, /"sonnet"/);
+  for (const effort of [held, undefined]) {
+    assert.deepEqual(await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model, effort } }), { code: 0, out: '', err: '' }, String(effort));
+  }
+});
+
 test('in a project without the rules, an Agent call on any model passes', async () => {
   assert.deepEqual(await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { model: 'sonnet' } }, { rulesText: null }), { code: 0, out: '', err: '' });
 });

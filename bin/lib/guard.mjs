@@ -42,6 +42,21 @@ export function modelRefusal(toolInput, allowed) {
     + launch + staleNote(allowed.filter(({ note }) => note).map(({ rule }) => rule));
 }
 
+/** Why the `Agent` call whose input is `toolInput` is refused for the effort it names, or null, in the project whose
+ * rules file has the text `projectData`. A call that names none passes: the sub-agent runs at the level of its agent
+ * type, or at its session's. One that names the sessions' level of the home passes; any other value is refused, a
+ * level or a relative one such as `lower` or `higher`, since every sub-agent runs at the one level (his decision of
+ * 2026-11-11; the answers to Codex 2 and Claude 4 in odd/tasks/one-model-home.md). Nothing is refused where the
+ * project does not declare the rule. */
+export function agentEffortRefusal(toolInput, projectData) {
+  const effort = toolInput?.effort;
+  if (effort === undefined || effort === null || effort === '') return null;
+  const level = claudeHeld(projectData).effort;
+  if (level === null || effort === level.value) return null;
+  return `js-harness guard: the sub-agent call asks for effort "${effort}", not the level of the rule ${CLAUDE_HOME.effort}: ${level.value}. `
+    + `Pass effort "${level.value}", or none; another level is his to set.${level.note}`;
+}
+
 // The tools that open a session in the app's Routines or in the cloud, where it runs at the effort it inherits and he
 // does not see it (odd/tasks/session-channel.md, layer 3). `delete`, `list` and `CronCreate` open nothing and pass.
 export const OPENING_TOOLS = Object.freeze([

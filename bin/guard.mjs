@@ -2,7 +2,8 @@
 // (odd/tasks/honesty-audit.md, T13 and T14). It reads the host's payload on standard input and, to refuse, prints the
 // hooks contract's deny with its reason; to let the call run, it prints nothing. It exits 0 whatever happens, and a
 // failure inside it lets the call run: a check that cannot read what it checks says nothing rather than block work.
-//   - `Agent`: the sub-agent's model against the rules in force in the project (bin/lib/guard.mjs, `modelRefusal`).
+//   - `Agent`: the sub-agent's model against the rules in force in the project (bin/lib/guard.mjs, `modelRefusal`),
+//     then the effort it names, if any, against the sessions' level (`agentEffortRefusal`).
 //   - The four tools that open a session in the app's Routines or in the cloud (`OPENING_TOOLS`): refused where the
 //     rule `sessions-open-in-sidebar` is declared, and the reason names `start_session` (`openingRefusal`;
 //     odd/tasks/session-channel.md, layer 3).
@@ -148,11 +149,14 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     }
     return (await import('./lib/document-hour-guard.mjs')).documentHourRefusal(tool, input, now(), readIndex);
   }
-  const { OPENING_TOOLS, SESSION_TOOL, TERMINAL_TOOL, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal, reviewRecordWriteRefusal, sessionStartRefusal, terminalNoteRefusal } = await import('./lib/guard.mjs');
+  const { OPENING_TOOLS, SESSION_TOOL, TERMINAL_TOOL, agentEffortRefusal, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal, reviewRecordWriteRefusal, sessionStartRefusal, terminalNoteRefusal } = await import('./lib/guard.mjs');
   const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
   if (tool === TERMINAL_TOOL) return terminalNoteRefusal(input.command, rulesTextOf(rootOf(), readFile));
   if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && tool !== SESSION_TOOL && !MESSAGE_TOOLS.has(tool)) return null;
-  if (tool === 'Agent') return modelRefusal(input, allowedModels(rulesTextOf(rootOf(), readFile)));
+  if (tool === 'Agent') {
+    const rules = rulesTextOf(rootOf(), readFile);
+    return modelRefusal(input, allowedModels(rules)) ?? agentEffortRefusal(input, rules);
+  }
   if (tool === SESSION_TOOL) {
     const root = rootOf();
     const rules = rulesTextOf(root, readFile);
