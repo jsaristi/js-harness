@@ -18,8 +18,8 @@ of his: build it as the unit says."
 
 ## Delivered
 The feature document is `odd/tasks/install-uninstall-edges.md` (contract, depth pass, S1 to S6, Log L1 to L26). The
-branch is `worktree-install-uninstall-edges`, seven commits on `fbaa7df5` and the one that adds this file, one pull
-request, ready and not merged. The contract's test commands, whole: 735 tests, 726 pass, 0 fail, 9 skipped (L26).
+branch is `worktree-install-uninstall-edges`, seven commits on `fbaa7df5` and the documents' two, one pull request,
+824, https://github.com/jsaristi/js-harness/pull/824, ready and not merged. The contract's test commands, whole: 735 tests, 726 pass, 0 fail, 9 skipped (L26).
 
 - `62bb01f6` docs: the feature document, before any code.
 - `620f337d` slice A. S2 (M30): `upgrade` prints what its sync said when it fails (`bin/update.mjs`). S4 (M36):

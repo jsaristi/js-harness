@@ -130,7 +130,7 @@ versions; keep a copy of a file a first install would overwrite."
 - [x] T5 (kind: verify) gate, Codex and the lenses on slice A, then on slice B; the independent verifier on S1, S3
   and S6 · the fixes they asked for: `c36f512a`, `90f32411`, `db26cbd2`, `1637dcde`
 - [x] T6 (kind: docs) the session summary, the pull request, the notices ·
-  `docs/sessions/2026-11-11-jh-178-the-install-and-uninstall-edges.md`
+  `docs/sessions/2026-11-11-jh-178-the-install-and-uninstall-edges.md` · pull request 824
 
 ## Log
 - L1. The request, as the lead's brief wrote it (2026-11-11, brief
