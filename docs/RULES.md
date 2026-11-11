@@ -159,12 +159,12 @@ Before adding a command, an option, a function, a protocol, a rule or a document
 
 ### review-effort
 The effort a Codex review runs at: medium.
-- Read by: `bin/codex-review.mjs`.
+- Read by: `bin/codex-review.mjs`, `bin/lib/model-home.mjs`.
 - Since 2026-10-12. Row: reports. Source: his words of 2026-10-08, 2026-10-12, checked by a session on 2026-10-12.
 
 ### review-model
 The one model a Codex review runs on: gpt-6.1-sol.
-- Read by: `bin/codex-review.mjs`.
+- Read by: `bin/codex-review.mjs`, `bin/lib/model-home.mjs`.
 - Since 2026-10-08. Row: reports. Source: his words of 2026-10-06, 2026-10-08, checked by a session on 2026-10-11.
 
 ### reviewed-commit-lines
@@ -182,7 +182,7 @@ A rule he gives is cemented in the harness where something acts on it, never onl
 The effort a session runs at: high.
 - Of this repository only: not in force in a project that installs the harness.
 - Was: medium until 2026-11-10; high until 2026-11-10.
-- Read by: `bin/lib/guard.mjs`, `bin/rules.mjs`, `workshop/bin/host-watch.mjs`.
+- Read by: `bin/lib/guard.mjs`, `bin/lib/model-home.mjs`, `bin/rules.mjs`, `workshop/bin/host-watch.mjs`.
 - Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
 ### session-housekeeping
@@ -194,7 +194,7 @@ Each recap names the sessions to archive and the stopped ones, and the lead arch
 The model a session runs on: claude-fable-5-2.
 - Of this repository only: not in force in a project that installs the harness.
 - Was: claude-opus-5-5 until 2026-11-10.
-- Read by: `bin/rules.mjs`.
+- Read by: `bin/lib/model-home.mjs`, `bin/rules.mjs`.
 - Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
 ### session-prompts
