@@ -154,8 +154,8 @@ is a setting of his account, so this work only hands him its command.
   documentation; Codex and the lenses on the slice. `c0d570d3`, `2abc371a`, `445a43c4`
 - [x] T3 (verify) an independent verifier reads the publish path (high-risk items 2 and 3). `576e0369`, `53c1702f`
   and the commit of L15
-- [ ] T4 (docs) spec 3: the pull request with the three commands; the session's summary; the ready and closed
-  notices.
+- [x] T4 (docs) spec 3: the pull request with the three commands; the session's summary; the ready and closed
+  notices. Pull request 827; the commit of L17
 
 ## Log
 - L1 The brief (2026-11-11T09:27Z), as written: "You own one feature: what a commit publishes, written as a decision
@@ -267,4 +267,9 @@ is a setting of his account, so this work only hands him its command.
   after he applies the rule. What was not red first, said once more: the switch's own cases in
   bin/lib/functions.test.mjs, the ruleset body's test and the `{ why, known }` cases. What the work cost in reviews:
   Codex five runs (140,152 + 45,956 + 81,355 + 71,854 + 39,552 input tokens) and the one of L15's commit; the lenses
-  five runs and that commit's; one verifier.
+  four runs and that commit's; one verifier.
+- L17 `724f8e0b`: gate green; Codex on `53c1702..724f8e0` correct (0.98), 38,023 input tokens; the risk lens 0
+  findings, its suggestion fixed. Pushed, and pull request 827 opened with the three commands of the rule, which wait
+  for his hands. `main` gained 72 commits since the branch was cut: `git merge-tree --write-tree HEAD origin/main`
+  exits 0, and the land's gate tests the merged tree. The session's summary is
+  `docs/sessions/2026-11-11-jh-180-what-a-commit-publishes-written-as-a-decision.md`.
