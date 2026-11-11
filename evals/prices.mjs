@@ -1,10 +1,16 @@
 // The list prices a cost is recomputed from, and the one function that applies them. Zero deps, plain Node.
 //
-// Claude Code prints a cost of its own (`total_cost_usd`, `modelUsage[].costUSD`), and it is kept beside this one, but
-// it decides nothing: the CLI does not know every model, and it prices one it does not know at a rate that is not its
-// own. On 2.1.292 a Haiku 5.5 subagent's 32,765 cache-write tokens were billed $0.163913, which is $5 per million,
-// where the list price is $0.125 (`odd/tasks/subagent-model-routing.md`, E3). So the cost of a trial is its tokens at
-// these prices.
+// Claude Code prints a cost of its own (`total_cost_usd`, `modelUsage[].costUSD`), and the CLI does not know every
+// model: it prices one it does not know at a rate that is not its own. On 2.1.292 a Haiku 5.5 subagent's 32,765
+// cache-write tokens were billed $0.163913, which is $5 per million, where the list price is $0.125
+// (`odd/tasks/subagent-model-routing.md`, E3). So a trial's list cost (`listCost`, `transcript-usage.mjs`) is its
+// tokens at these prices, kept beside the CLI's.
+//
+// The CLI's cost still decides in two places, by the Decided row "Eval verdict" of `docs/ROADMAP.md` ("Cost is Claude
+// Code's `total_cost_usd`"): the A/B report's cells and its cost verdict (`evals/report.mjs`, `buildCells`), and the
+// quote of a run (`evals/plan.mjs`). The report holds each of those costs against this table and leaves out of its
+// cell one that is outside what the trial's tokens cost here (`checkCost`), naming it; the plan quotes them as they
+// were recorded. This header said the CLI's cost "decides nothing" until the audit of 2026-11-09 (M24).
 
 /** Where the table below was read, and when. A price changes without notice, so a cost computed from this table says
  * which table it is: the source travels with every summary that holds one (`transcript-usage.mjs`). */
