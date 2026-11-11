@@ -19,8 +19,8 @@ import path from 'node:path';
 import { readNotices } from './channel.mjs';
 import { harnessHome } from './home.mjs';
 import { localHour, localZone } from './local-time.mjs';
-import { linesHolding, personTimesIn } from './person-times.mjs';
-import { comparable, mainCheckout, projectSlug } from './sessions.mjs';
+import { linesHolding, personLinesIn, personTimesIn, personTimesOf } from './person-times.mjs';
+import { comparable, mainCheckout, parseTranscript, projectSlug, questionCallsOf, quoteEntry } from './sessions.mjs';
 import { isLeadSession } from './stale-board.mjs';
 import { pageTarget } from './template-gate.mjs';
 import { lastLineWith } from './stop-wake.mjs';
@@ -179,9 +179,19 @@ export function returnReportWarning(payload, state, io) {
 export const NO_STRETCH_MARKER = 'no stretch covered his absence';
 export const OPEN_STRETCH_MARKER = 'the stretch of his absence is still open';
 
-/** The stretches of the record of `slug` under `home`, each `{ id, openedAt, closedAt }` (ms; `closedAt` null while
- * open), read as `js-harness stretch status` reads it (`eventsOf`); a record that is there and cannot be read throws. */
-function stretchesOf(home, slug, readFile) {
+/** The stretches a stretch record's `text` holds, each `{ id, openedAt, closedAt }` (ms; `closedAt` null while open),
+ * read as `js-harness stretch status` reads it (`eventsOf`). */
+export function stretchRecordsIn(text) {
+  const events = eventsOf(text);
+  return events.filter((event) => event.event === 'open').map((open) => {
+    const close = events.find((event) => event.event === 'close' && event.id === open.id);
+    return { id: open.id, openedAt: Date.parse(open.at), closedAt: close ? Date.parse(close.at) : null };
+  });
+}
+
+/** The stretches of the record of `slug` under `home` (`stretchRecordsIn`); a record that is there and cannot be read
+ * throws. */
+export function stretchesOf(home, slug, readFile) {
   let text;
   try {
     text = readFile(stretchFile(home, slug));
@@ -189,12 +199,13 @@ function stretchesOf(home, slug, readFile) {
     if (err?.code === 'ENOENT') return [];
     throw new Error(`the stretch record (${stretchFile(home, slug)}): ${err?.code ?? err?.message}`);
   }
-  const events = eventsOf(text);
-  return events.filter((event) => event.event === 'open').map((open) => {
-    const close = events.find((event) => event.event === 'close' && event.id === open.id);
-    return { id: open.id, openedAt: Date.parse(open.at), closedAt: close ? Date.parse(close.at) : null };
-  });
+  return stretchRecordsIn(text);
 }
+
+/** Whether one of `stretches` covers the time from `fromMs` to `toMs`: it was open at some moment of it. The return's
+ * warning and the heartbeat's departure line ask this one question, so what a tick tells is what the return would
+ * turn back. A stretch opened late covers too: it cannot show the departure's forecast, but the return has its measure. */
+const covers = (stretches, fromMs, toMs) => stretches.some((one) => one.openedAt <= toMs && (one.closedAt === null || one.closedAt >= fromMs));
 
 /** The stretch warning for a stop of `payload` (odd/tasks/departure-stretch.md, spec 8), or `null` when none is due:
  * the user's newest return after an absence (`lastReturn`) that no stretch covered (none open at any time between
@@ -216,9 +227,109 @@ export function returnStretchWarning(payload, state, io) {
       + 'Close it with `js-harness stretch close --html <file>` and show its return page in your reply. '
       + `This is said once for this return ${named}.`;
   }
-  if (stretches.some((one) => one.openedAt <= backMs && (one.closedAt === null || one.closedAt >= beforeMs))) return null;
-  return `js-harness reply: he came back at ${localHour(back)} after ${localHour(before)}, local time (${localZone(back)}), and ${NO_STRETCH_MARKER} `
-    + '(rule:away-autonomy), so his return has no estimate to measure against. Tell him so in your report, and add a '
+  if (covers(stretches, beforeMs, backMs)) return null;
+  const head = `js-harness reply: he came back at ${localHour(back)} after ${localHour(before)}, local time (${localZone(back)}), and ${NO_STRETCH_MARKER} `
+    + '(rule:away-autonomy), so his return has no estimate to measure against. ';
+  // A session the question tool held through the absence skipped no duty: that is another failure, recorded apart.
+  const held = heldThrough(text, before, back);
+  if (held !== null) {
+    return `${head}The question tool held this session from ${localHour(held)} until his answer, so it could open none: tell him so in your report, `
+      + `and add a \`- Seen:\` line to \`${HELD_FAILURE}\` in docs/FAILURES.md with those times. This is said once for this return ${named}.`;
+  }
+  return `${head}Tell him so in your report, and add a `
     + '`- Seen:` line to `stretch-not-opened` in docs/FAILURES.md with the times of his absence. '
     + `This is said once for this return ${named}.`;
+}
+
+/** The failure a held absence is recorded as (docs/FAILURES.md): the question tool, not a duty the lead skipped. */
+const HELD_FAILURE = 'question-tool-holds-asker';
+
+/** Since when the question tool held the session through the absence from `before` to `back` (his messages' times,
+ * as the transcript `text` holds them), or `null`: his return is the answer to a question the session asked at or
+ * before the moment the absence started, `before` plus `ABSENCE_MS`, so from then on no turn of its own could open a
+ * stretch. A question asked later held nothing while the absence started. */
+function heldThrough(text, before, back) {
+  const entries = parseTranscript(personLinesIn(text).join('\n')).entries;
+  const calls = questionCallsOf(entries);
+  for (const entry of entries) {
+    const quote = quoteEntry(entry, calls);
+    if (!quote.person || quote.at !== back || quote.answered === undefined) continue;
+    if (Date.parse(quote.answered.askedAt ?? '') <= Date.parse(before) + ABSENCE_MS) return quote.answered.askedAt;
+  }
+  return null;
+}
+
+// ---- the start of his absence (odd/tasks/departure-control.md) ---------------------------------------------------
+//
+// The warning above acts at his return, after the time away it is about: 16 of the 21 sightings of
+// `stretch-not-opened` came after it (the Fable 5.2 audit, M9). The lead's heartbeat (bin/loop.mjs) is alive while he
+// is away and its end wakes the lead, so it asks the same question at each tick and tells the lead when the absence
+// starts. What counts as an absence does not change: his messages by `quoteOf`'s rule, a gap longer than
+// `ABSENCE_MS`, and the cover test of the return (`covers`).
+//
+// What it cannot do is said, not hidden. The question tool holds the session that calls it until he answers, and the
+// host delivers a loop's end only then: of the 23 absences no stretch covered from 2026-10-31 to 2026-11-10, a
+// question held the lead until his return in 9. The line then says since when, so the sighting can.
+
+/** The word the heartbeat's departure line opens with. */
+export const AWAY_MARKER = 'AWAY:';
+
+/** Whether a line of `text` is the result of the tool call `id`. */
+function resultIn(text, id) {
+  return linesHolding(text, [id]).some((written) => {
+    try {
+      const entry = JSON.parse(written);
+      return entry?.type === 'user' && blocksOf(entry).some((block) => block.type === 'tool_result' && block.tool_use_id === id);
+    } catch {
+      return false;
+    }
+  });
+}
+
+/** A watch of his absence for a process that reads the lead's transcript piece by piece. `add(text)` takes the whole
+ * lines a tick read and keeps those that can hold his words or a question call (`personLinesIn`); `read(stretches,
+ * now)` gives the absence in course at `now` (ms) that none of `stretches` (`stretchesOf`) covers, as `{ before, away,
+ * heldSince }`, or `null`: `before` is when he last wrote, `away` the ms since, and `heldSince` when the session
+ * called the question tool, where that call has no result yet, else `null`. A session calls one question at a time,
+ * so the newest call of its own thread is the only one that can hold it; a call older than his last message holds
+ * nothing, which also drops a call the host copied again without its result. */
+export function departureWatch() {
+  const kept = [];
+  let times = null;
+  let pending = null;
+  return {
+    add(text) {
+      if (pending !== null && resultIn(text, pending.id)) pending = null;
+      const lines = personLinesIn(text);
+      if (lines.length === 0) return;
+      kept.push(...lines);
+      times = null;
+      const newest = [...questionCallsOf(parseTranscript(lines.join('\n')).entries)].filter(([, call]) => !call.sidechain).at(-1);
+      if (newest !== undefined && !resultIn(text, newest[0])) pending = { id: newest[0], at: newest[1].at };
+    },
+    read(stretches, now) {
+      times ??= personTimesOf(parseTranscript(kept.join('\n')).entries);
+      const before = times.at(-1);
+      if (before === undefined) return null;
+      const beforeMs = Date.parse(before);
+      const away = now - beforeMs;
+      if (!(away > ABSENCE_MS) || covers(stretches, beforeMs, now)) return null;
+      const held = pending !== null && Date.parse(pending.at ?? '') >= beforeMs;
+      return { before, away, heldSince: held ? pending.at : null };
+    },
+  };
+}
+
+/** The line the heartbeat ends with for the absence `departureWatch` found: when he last wrote, in local time, and
+ * the command that opens the stretch; or, where the question tool holds the session, since when, and what the
+ * sighting must say, since a held session can open none and reads this only once he answers. */
+export function departureLine({ before, away, heldSince }) {
+  const head = `${AWAY_MARKER} the user last wrote to this session at ${localHour(before)}, local time (${localZone(before)}), ${(away / 3600_000).toFixed(1)} hours ago, `
+    + 'and no stretch covers the time since (rule:away-autonomy)';
+  if (heldSince !== null) {
+    return `${head}. The question tool has held this session since ${localHour(heldSince)}, so it could open none and this line reaches you with their answer: `
+      + `record it as a \`- Seen:\` line of \`${HELD_FAILURE}\` in docs/FAILURES.md, as the reply hook asks then. Told once for this absence.`;
+  }
+  return `${head}: open one now for the hours left, \`js-harness stretch open --plan <file> --html <file>\`, so their return has an estimate to measure against. `
+    + 'Told once for this absence.';
 }
