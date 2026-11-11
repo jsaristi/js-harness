@@ -382,6 +382,15 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 16:12, the session at 88 %: unit (b) is `a4f33b41`. Unit (c)'s code and tests are written and are in the
+commit that carries this line: `starterRefusal` in `bin/lib/guard.mjs` and the hook's `readApp` in `bin/guard.mjs`,
+as the paragraph below designed them; both tests seen red first (`bin/lib/guard.test.mjs` 49 pass,
+`bin/guard.test.mjs` 41 pass). Still owed for unit (c), in a commit of its own: the texts that list what the hook
+refuses (the guard's help in `bin/js-harness.mjs`, `bin/lib/manifest.mjs:62` with `rules coverage --refresh`,
+`docs/SPEC.md:636`, README near line 1719) and a planted break in `session-model`'s bundle (find
+`!sameClaudeModel(starter.model, home.model.value)` in `bin/lib/guard.mjs`, test `bin/lib/guard.test.mjs`). Then
+Codex and the lenses (risk, reliability) on `268991a7` to the head, one at a time under the gate's lock; then
+unit (d) and T6.
 2026-11-11 16:07, the session at 86 % of its context. Unit (b) is in the commit that carries this line: `appSessions`
 gives `model` (test seen red; the 685 tests of its readers pass). Unit (c) is designed and its tests are drafted,
 NOT applied: the job's `tmp/pairs-t5g.json`, applied with `node tmp/swap.mjs tmp/pairs-t5g.json` (it adds an `app`
