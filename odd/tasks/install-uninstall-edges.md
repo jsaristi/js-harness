@@ -201,3 +201,29 @@ versions; keep a copy of a file a first install would overwrite."
 - L14. State, 2026-11-11: slice A (S2, S4, S5, S6) is `620f337d`, its pre-commit gate green (17 rows). Slice B
   (S1, S3) is the next commit, with this document and `README.md`. Then Codex and the lenses on each slice, the
   independent verifier on S1, S3 and S6, the session summary and the pull request.
+- L15. Deviation, 2026-11-11: slice B (`99020c10`) was committed before Codex had read slice A alone, and
+  `codex-review` always reads up to HEAD, so one run, `--base 62bb01f6`, read both slices. Nothing was left
+  unread: the run cut the range in two parts of 10 and 9 files and recorded both commits. A guess made on the way
+  was wrong and is withdrawn: that the two parts were the two slices. They are not, since part 1 flagged
+  `bin/lib/component-write.mjs` and part 2 `bin/lib/version.mjs`, both of slice A. The lenses do take `--head`,
+  so they read slice A and slice B apart.
+- L16. Evidence, 2026-11-11: both pre-commit gates passed on GitHub's machines, 236 s for `620f337d` and 201 s for
+  `99020c10` (the gate log, `~/.js-harness/gate-log/log.jsonl`). The suite's main job runs on `ubuntu-24.04`
+  (`.github/workflows/gate.yml`), where a symbolic link needs no privilege, so the ten tests this machine skips
+  ran there; that they did is inferred from the job's system, not read line by line in its output.
+- L17. Review, Codex, 2026-11-11, `62bb01f6..99020c10`, 2 parts, 391,970 input tokens (302,208 cached), 245 s:
+  "the patch is incorrect" for both parts, one P2 each, both real, both fixed test first in the next commit.
+  (1) `bin/lib/component-write.mjs`: a file under the copy's name was taken as a whole copy. A run stopped while
+  it wrote the copy leaves a short one, and the next run wrote over the original with that as its only copy,
+  the loss S6 exists to stop. Now `keepCopy` reads a copy that is there and writes it again unless it holds the
+  file's bytes, reads back the one it wrote, and throws when that does not hold them, so nothing is written over.
+  Two tests, both seen failing first (the short copy stayed `his ow`; a short write gave a record instead of
+  `null`). (2) `bin/lib/version.mjs`: two numeric prerelease identifiers went through `Number`, so
+  `rc.9007199254740992` and `rc.9007199254740993` were each older than the other. Now `compareDigits` orders
+  the digits as written, by length and then by characters, leading zeros apart. Seen failing first. One case
+  was added after the fix and so not seen red: `rc.01` against `rc.1`, which the first code answered -1 in both
+  directions and now answers 0. Left as it was, and said: the three core numbers still go through `Number`, as
+  before this feature (`compareSemver orders by major, then minor, then patch` predates it); a major past 2^53
+  is outside what `TARBALL_RE` and a release tag give this function in practice, and Codex did not flag it.
+  After the fix: `bin/lib/component-write.test.mjs` 11 of 11, `bin/lib/version.test.mjs` 14 of 14,
+  `bin/install.test.mjs` 119 of 119, each run whole.

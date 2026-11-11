@@ -36,6 +36,12 @@ test('compareSemver orders a prerelease before its release, equal to itself, and
   assert.equal(compareSemver('1.2.3-alpha', '1.2.3-alpha.1'), -1, 'the shorter list is older when the rest is equal');
   assert.equal(compareSemver('1.2.3+build.5', '1.2.3'), 0, 'build metadata is no part of the order');
   assert.equal(compareSemver('1.2.3-rc.1+a', '1.2.3-rc.1+b'), 0);
+  // Codex on 62bb01f..99020c1: a numeric identifier has no upper bound, and as a Number two past 2^53 were one.
+  assert.equal(compareSemver('1.0.0-rc.9007199254740992', '1.0.0-rc.9007199254740993'), -1);
+  assert.equal(compareSemver('1.0.0-rc.9007199254740993', '1.0.0-rc.9007199254740992'), 1);
+  assert.equal(compareSemver('1.0.0-rc.9007199254740993', '1.0.0-rc.9007199254740993'), 0);
+  assert.equal(compareSemver('1.0.0-rc.01', '1.0.0-rc.1'), 0, 'two spellings of one number are one, in both directions');
+  assert.equal(compareSemver('1.0.0-rc.1', '1.0.0-rc.01'), 0);
   const tags = ['1.0.0', '1.0.0-rc.1', '1.0.0-alpha', '1.0.0-alpha.1', '1.0.0-beta.11', '1.0.0-beta.2', '1.0.0-alpha.beta', '1.0.0-beta'];
   assert.deepEqual([...tags].sort(compareSemver), ['1.0.0-alpha', '1.0.0-alpha.1', '1.0.0-alpha.beta', '1.0.0-beta', '1.0.0-beta.2', '1.0.0-beta.11', '1.0.0-rc.1', '1.0.0'], "semver.org's own example");
 });

@@ -18,6 +18,15 @@ function orderOf(version) {
   return { numbers: core.split('.').map(Number), pre: pre.length > 0 ? pre.join('-').split('.') : [] };
 }
 
+/** Orders two runs of digits as the numbers they write, with no Number between: a prerelease's numeric identifier
+ * has no upper bound, and past 2^53 two neighbours were one number (Codex on 62bb01f..99020c1). */
+function compareDigits(a, b) {
+  const [da, db] = [a.replace(/^0+(?=\d)/, ''), b.replace(/^0+(?=\d)/, '')];
+  if (da.length !== db.length) return da.length > db.length ? 1 : -1;
+  if (da === db) return 0;
+  return da > db ? 1 : -1;
+}
+
 /** Compares two versions, "x.y.z" with an optional prerelease, by semver's precedence (semver.org, item 11), which
  * `VERSION_TAG_REF` below needs since it accepts a prerelease tag: -1, 0 or 1. The three numbers first; then a
  * prerelease is older than its release, and two prereleases compare identifier by identifier, numbers as numbers
@@ -32,7 +41,11 @@ export function compareSemver(a, b) {
     const [ia, ib] = [va.pre[i], vb.pre[i]];
     if (ia === ib) continue;
     const [na, nb] = [/^\d+$/.test(ia), /^\d+$/.test(ib)];
-    if (na && nb) return Number(ia) > Number(ib) ? 1 : -1;
+    if (na && nb) {
+      const order = compareDigits(ia, ib);
+      if (order !== 0) return order;
+      continue;
+    }
     if (na !== nb) return na ? -1 : 1;
     return ia > ib ? 1 : -1;
   }

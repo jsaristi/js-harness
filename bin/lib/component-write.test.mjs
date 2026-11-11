@@ -135,6 +135,37 @@ test('a file with no record is left as it is when its copy cannot be made, or wh
   }
 });
 
+// Codex on 62bb01f..99020c1: a copy under the right name was taken as whole. A run stopped while it wrote the copy
+// (no space left) leaves a short one, and the next run then wrote over the original with that as its only copy.
+test('a short copy that a stopped run left is made whole before the file is written over', () => {
+  const s = scratch();
+  try {
+    fs.mkdirSync(path.dirname(s.file), { recursive: true });
+    fs.writeFileSync(s.file, 'his own text');
+    const copy = `${s.file}.before-js-harness-${sha256('his own text').slice(0, 8)}`;
+    fs.writeFileSync(copy, 'his ow');
+    assert.deepEqual(writeComponent(s.file, 'v2', undefined), { path: s.file, sha256: sha256('v2'), skipped: false, replaced: copy });
+    assert.equal(fs.readFileSync(copy, 'utf8'), 'his own text');
+    assert.equal(fs.readFileSync(s.file, 'utf8'), 'v2');
+  } finally {
+    s.done();
+  }
+});
+
+test('the file is left as it is when the copy just written does not hold its bytes', () => {
+  const s = scratch();
+  try {
+    fs.mkdirSync(path.dirname(s.file), { recursive: true });
+    fs.writeFileSync(s.file, 'his own text');
+    // A write that ends short and reports no failure, for the copy alone.
+    const short = (target, data, ...rest) => fs.writeFileSync(target, target === s.file ? data : String(data).slice(0, 3), ...rest);
+    assert.equal(writeComponent(s.file, 'v2', undefined, short), null);
+    assert.equal(fs.readFileSync(s.file, 'utf8'), 'his own text');
+  } finally {
+    s.done();
+  }
+});
+
 test('a recorded file is never copied: its record says the harness wrote it', () => {
   const s = scratch();
   try {
