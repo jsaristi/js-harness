@@ -111,9 +111,9 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
   siempre la opcion recomendada, no preguntes, avanza y se completamente autonomo."
 
 ## Tasks
-- [x] T1 (kind: docs) this document: the contract, the depth pass, the specs.
-- [ ] T2 (kind: build) spec 1: `notPublic` refuses a path segment that reads as a key, test first; the help and the
-  README say the refusal and its limit (spec 2, the first text).
+- [x] T1 (kind: docs) this document: the contract, the depth pass, the specs. Commit e0ab4ebf.
+- [x] T2 (kind: build) spec 1: `notPublic` refuses a path segment that reads as a key, test first; the help and the
+  README say the refusal and its limit (spec 2, the first text). Commit 4770eb0a.
 - [ ] T3 (kind: build) spec 2, the second text: the header of evals/configs.mjs and docs/SPEC.md:555 say redirection,
   not confinement, with the test that holds the limit.
 - [ ] T4 (kind: verify) an independent verifier reads T2, the guard.
@@ -142,3 +142,14 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
   `evals-b-4` true as read: evals/codex-home.mjs:361 calls `copyEntry` without `refuseCredentials`, which
   evals/home.mjs:255 passes.
   `evals-b-5` true as read: evals/home.mjs:161 tests `path.basename(source)`, the link's name, not `from`, its target.
+- L6 T2, test first: `node --test bin/fetch.test.mjs` gave 9 pass and 2 fail before the change (the refusal, and
+  the help's limit) and 11 pass after; the six convention tests of `bin/`, 24 pass. The rule is the one measured in
+  the depth pass, `KEY_LIKE_LENGTH = 20`, its only home. The refusal's words did not change shape, so a caller that
+  reads exit 1 reads it as before. Baseline of the unit's command at 7525a4e5,
+  `node --test bin/fetch.test.mjs evals/configs.test.mjs`: 104 pass, 0 fail, 658 s on a loaded machine.
+- L7 T3, test first: the new test of evals/configs.test.mjs spawns a child under `sandboxEnv`, which reads and
+  writes a file outside its home by an absolute path, then holds the header to that fact. Before the change it
+  failed on the header alone (the child had read and written); after, it passes. docs/SPEC.md:555 says the same.
+- State (for a session that resumes): T1 to T3 are committed; what is left is the reviews of the slice from
+  7525a4e5 (Codex, then the lenses, security among them), T4's independent verifier on T2, the push, the pull
+  request, the ready notice, the notice of L4 to the lead, and the summary with the closed notice.
