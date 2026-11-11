@@ -146,6 +146,36 @@ test('installMain and syncMain leave an installed skill he changed and say so, a
   }
 });
 
+// The audit's L3: `uninstall` leaves a skill he changed, with no record of it, and the next install wrote over it
+// with no copy. Now its copy is kept beside it and said once, and neither a later install nor `uninstall` touches it.
+test('installMain keeps a copy of a file already at a component\'s path, says where once, and uninstall leaves it', async () => {
+  const home = makeTmpHome();
+  try {
+    assert.equal(await installMain(['--home', home]), 0);
+    const skill = readManifest(home).files.find((record) => record.path.includes(`${path.sep}skills${path.sep}`)).path;
+    fs.writeFileSync(skill, 'his own skill', 'utf8');
+    assert.equal(await uninstallMain(['--global', '--home', home]), 0);
+    assert.equal(fs.readFileSync(skill, 'utf8'), 'his own skill', 'uninstall left the file he changed');
+
+    const first = await captureConsole(() => installMain(['--home', home]));
+    assert.equal(first.code, 0);
+    const copies = fs.readdirSync(path.dirname(skill)).filter((name) => name.includes('.before-js-harness-'));
+    assert.equal(copies.length, 1, fs.readdirSync(path.dirname(skill)).join(', '));
+    const copy = path.join(path.dirname(skill), copies[0]);
+    assert.equal(fs.readFileSync(copy, 'utf8'), 'his own skill');
+    assert.notEqual(fs.readFileSync(skill, 'utf8'), 'his own skill');
+    assert.ok(first.outLines.includes(`wrote ${skill} over a file that was already there: its copy is ${copy}`), first.outLines.join('\n'));
+
+    const second = await captureConsole(() => installMain(['--home', home]));
+    assert.equal(second.outLines.some((line) => line.includes('.before-js-harness-')), false, second.outLines.join('\n'));
+    assert.equal(await uninstallMain(['--global', '--home', home]), 0);
+    assert.equal(fs.existsSync(skill), false, 'the installed text is the harness\'s and goes');
+    assert.equal(fs.readFileSync(copy, 'utf8'), 'his own skill', 'the copy is his and stays');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 // F8 S10, T4: what install does with the permissions is said, and a settings file it could not hold them in goes to
 // stderr; uninstall says what it took out, and one it could not write fails it with what to do.
 test('installMain and uninstallMain say what they did with the permissions, and a failure goes to stderr', async () => {

@@ -111,6 +111,27 @@ test('a clone that is not what its switches ask is told so, one line a differenc
   ]);
 });
 
+// The independent verifier on 62bb01f..db26cbd (odd/tasks/install-uninstall-edges.md, S1): in a linked worktree
+// `functions apply` and `sync` leave the push check to the main checkout, so the line said a difference that the
+// command the row names does not make good, and the migration's plan printed it as a write.
+test('in a linked worktree a missing push check is told with the checkout that writes it', (t) => {
+  const root = repo(t, { 'bin/a.mjs': '', 'harness.json': '{}\n' });
+  const holder = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-check-functions-linked-'));
+  t.after(() => fs.rmSync(holder, { recursive: true, force: true }));
+  const git = (...args) => assert.equal(spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: root, encoding: 'utf8' }).status, 0, args.join(' '));
+  git('add', '-A');
+  git('commit', '-q', '--no-verify', '-m', 'state');
+  const linked = path.join(holder, 'wt');
+  git('worktree', 'add', '-q', '-b', 'linked', linked);
+  t.after(() => spawnSync('git', ['worktree', 'remove', '--force', linked], { cwd: root }));
+  assert.equal(applyProjectFunctions(linked, '0.1.0', { spawn: fakeCodegraph, platform: 'linux' }).code, 0);
+  assert.equal(fs.existsSync(path.join(root, '.git', 'hooks', 'pre-push')), false, 'the worktree wrote no shared hook');
+  const [row] = checkFunctionsPending(linked);
+  const line = row.lines.find((text) => text.startsWith('codexReview on: '));
+  assert.match(line, /^codexReview on: no push check in the pre-push hook, shared by every worktree of this repository, .*js-harness sync in .* writes and records it/);
+  assert.ok(line.includes(fs.realpathSync(root)), line);
+});
+
 test('a deny list that holds the user\'s own entries and not all of the harness\'s is a difference', (t) => {
   const root = repo(t, { 'bin/a.mjs': '', 'harness.json': '{}\n' });
   applyProjectFunctions(root, '0.1.0', { spawn: fakeCodegraph, platform: 'linux' });

@@ -1,0 +1,334 @@
+# Install and uninstall edges (the audit triage's work unit 7)
+
+Locator: `odd/tasks/install-uninstall-edges.md` · Engram mirror: `odd/install-uninstall-edges/tasks` · Branch:
+`worktree-install-uninstall-edges` · Delivery: one pull request · Base: `origin/main` at `fbaa7df5`
+
+## Goal
+The six install and uninstall edges the Fable 5.2 audit verified (M29, M30, M35, M36, L2, L3) each behave as the
+triage's unit 7 says, with a test that fails on today's code.
+
+## Why
+`AGENTS.md` holds that whatever the harness writes outside this repository is recorded so it can be undone exactly.
+Each of the six is a place where that does not hold, or where the person is not told what happens: a record that
+dies with a worktree while the files it names stay, a registry value removed whatever it holds, a file written over
+with no copy, a prompt that names less than it removes, an upgrade that hides its sync's error, and a version
+comparison that is wrong for the prerelease tags `check` accepts.
+
+## Done when
+- `node --test bin/lib/project.test.mjs bin/update.test.mjs bin/tui.test.mjs bin/lib/version.test.mjs bin/lib/component-write.test.mjs bin/lib/manifest.test.mjs bin/lib/status-line-install.test.mjs bin/install.test.mjs` exits 0
+- `node bin/js-harness.mjs contract check odd/tasks/install-uninstall-edges.md` exits 0
+- `node --test bin/conventions-structure.test.mjs bin/conventions-errors.test.mjs bin/conventions-voice.test.mjs` exits 0
+- each of S1 to S6 has a case in those files that fails on `fbaa7df5`
+- an independent verifier read the high-risk part (S1, S3, S6) against this document
+- the pull request is ready and told to the lead with `js-harness notify --to orchestrator --kind ready --pr <n>`
+
+## In scope / Out of scope
+- In: `bin/lib/project.mjs` (the hook step and the exclude step in a linked worktree), its new neighbour
+  `bin/lib/project-shared.mjs` and the plan of `bin/lib/project-migrate.mjs` that says what `sync` would do,
+  `bin/update.mjs` (the sync's error), `bin/lib/status-line-uninstall.ps1`, `bin/tui.mjs` (one prompt), `bin/lib/version.mjs` (`compareSemver`),
+  `bin/lib/component-write.mjs`, `bin/install.mjs` (one line of the report), their tests, this document, the session
+  summary and the documents that state the changed behaviour.
+- Out: `bin/lib/manifest.mjs`, which is at its size ceiling (1,650 of 1,650, `bin/conventions-structure.test.mjs:72`)
+  and where JH 172 and JH 175 work now: no line of it changes. The land's refresh. The other findings of the audit.
+  A restore of the kept copy by `uninstall` (S6): it would change what `uninstall` removes, inside that file.
+
+## Constraints
+- No edit in `bin/lib/manifest.mjs` — because of its ceiling and the two sessions working in it.
+- Nothing a linked worktree's `init` wrote before this change is orphaned by it — because those per-worktree
+  manifests exist on machines today; their `uninstall` still undoes what they record.
+- No spend outside the plan, no credential, no setting of GitHub or of the machine — the brief.
+- One gate, one Codex review and one lens review a slice, one at a time, nothing heavy beside another session's gate —
+  because the machine is shared and short of memory.
+
+## Ask me before
+Nothing planned is his. The unit is the lead's call in the triage ("Whose call: the lead's"), and the brief gives
+it: "This unit is the lead's call in the triage, no question of his: build it as the unit says." A decision of his
+that the triage did not put to him goes to the lead as one notice with the recommended option.
+
+## Depth pass
+- 1. Method: the discipline is defect repair in an installer, as a maintainer of a package manager does it:
+  reproduce each defect at its source before touching it; write the failing test first; make the smallest change
+  that turns it green; and where the choice is between a larger mechanism and not writing, prefer not writing what
+  cannot be recorded. The standard is exact undo: every byte written outside the working tree has a record that
+  outlives the thing that wrote it, and nothing the person did not write for the harness is removed. The search of
+  `rule:reuse-first`: `writeHookGate` already has a branch for a hooks path this run does not own
+  (`bin/lib/project.mjs:659-669`), which S1 extends; `excludeFile` already returns a reason that keeps the file
+  (`bin/lib/project.mjs:353`); the status-line install already refuses a value it did not write
+  (`bin/lib/status-line-install.ps1:32-35`), which S3 mirrors; `install`'s report already has a line per kept file
+  (`bin/install.mjs:259`), which S6 extends; no semver comparison other than `compareSemver` exists
+  (`git grep -n "prerelease\|semver" bin/lib` names only `version.mjs` and its callers).
+- 2. Raw material: the triage's unit 7 (`docs/proposals/2026-11-10-audit-triage.md:191-201` on
+  `origin/docs/audit-triage`) and its verdict rows (`:89`, `:90`, `:95`, `:96`, `:103`, `:104`); the audit's
+  findings (`docs/audits/2026-11-09-fable-5-2-audit.md:270-275`, `:289-293`, `:300-303`); the code at `fbaa7df5`:
+  `bin/lib/project.mjs:638-689` (the hook step), `:857-864` (the exclude step), `:1028-1029` (the manifest path),
+  `bin/update.mjs:560-572`, `bin/lib/status-line-uninstall.ps1:20-23`, `bin/lib/manifest.mjs:1227-1233`,
+  `bin/tui.mjs:57`, `bin/lib/version.mjs:14-22`, `bin/lib/component-write.mjs:31-48`; and this worktree itself:
+  `git rev-parse --git-path js-harness/manifest.json --git-path info/exclude` prints
+  `D:/js-harness/.git/worktrees/install-uninstall-edges/js-harness/manifest.json` and
+  `D:/js-harness/.git/info/exclude`, the two places of M29.
+- 3. The bar:
+  spec 1: `node --test --test-name-pattern "linked worktree" bin/lib/project.test.mjs`: today `init` in a linked
+  worktree writes the shared hook and records it in the worktree's own manifest (the test at
+  `bin/lib/project.test.mjs:1581` asserts it); after, it writes no shared file and says where
+  spec 2: `node --test --test-name-pattern "sync after upgrade" bin/update.test.mjs`: none, new behaviour
+  spec 3: `node --test bin/lib/status-line-install.test.mjs`: 5 pass today and none compares the value; after, one
+  holds that the undo removes the value only when it is the install's
+  spec 4: `node --test --test-name-pattern "prompt" bin/tui.test.mjs`: today the prompt names no folder
+  spec 5: `node -e "import('./bin/lib/version.mjs').then((v) => console.log(v.compareSemver('1.2.3-rc.1', '1.2.3-rc.1')))"`:
+  -1 today; 0 after
+  spec 6: `node --test bin/lib/component-write.test.mjs`: 5 pass today and a first write over a file leaves no copy
+- 4. Refutation: the cheapest test that the request does not hold is to run each defect. Run 2026-11-11 at
+  `fbaa7df5`: `compareSemver('1.2.3-rc.1', '1.2.3-rc.1')` gave -1, `('1.2.3-rc.1', '1.2.3')` gave -1 by accident of
+  `NaN`, `('1.2.3-rc.2', '1.2.3-rc.10')` gave -1; `writeComponent(file, 'shipped', undefined)` over a file holding
+  "the user own text" returned `skipped: false`, the file then held "shipped" and its folder held that one file;
+  M29 is asserted by the suite itself (`bin/lib/project.test.mjs:1581-1620`); M30, M35 and M36 are read at the
+  lines of item 2. 6 of 6 defects stand.
+  Verdict: supports
+- 5. Request: close the six findings of unit 7, each with its test first: (S1) `init`, and the first `sync` of a
+  clone, in a linked worktree write none of what every worktree shares and say where it is written and recorded;
+  (S2) `upgrade` prints what its sync said when it fails; (S3) the status-line undo removes the policy value only
+  when it holds what the install wrote; (S4) the prompt of `uninstall machine` names the folders it removes;
+  (S5) `compareSemver` orders prerelease versions as semver does; (S6) a first write over a file that is there
+  keeps a copy of it and says so.
+  Adds: none
+
+## Specs
+The source of the authority to build without asking: his words in the lead's chat (transcript
+`ea85ec35-82e1-4aa9-abe3-98bd153a50b0`), read with `js-harness sessions --quote`. Line 6716, 2026-11-11T05:26:36Z:
+"une lo que quede listo y tienes autorizacion para poder avanzar en todo y escoger siempre la opcion recomendada, no
+preguntes, avanza y se completamente autonomo." Line 6905, 2026-11-11T05:30:20Z: "contesta TODAS las preguntas con
+recomendado TODAS y avanza los mas posible eres completamente autonomo". The triage put no question on this unit;
+its line is "**Whose call:** the lead's", and the lead's brief answers it: "This unit is the lead's call in the
+triage, no question of his: build it as the unit says."
+
+The unit as the triage wrote it: "record the shared files of `init` in a linked worktree where the main checkout's
+record keeps them, or refuse `init` there; print the sync's own error after an upgrade; remove the status-line
+policy value only when it holds what install wrote; name the folders in the uninstall prompt; compare prerelease
+versions; keep a copy of a file a first install would overwrite."
+
+- S1 (M29). In a linked worktree, `init` and `sync` (the first of a clone, and a later one that would write a
+  recorded hook again) write no hook outside the working tree and no line of the shared `info/exclude`; each is
+  reported as skipped with where it is written and recorded: `js-harness sync` in the main checkout; the
+  migration's plan names no repair of them as a write, and a push check that is missing is told with that
+  checkout. A per-worktree manifest then records only what dies with the worktree.
+- S2 (M30). When the sync after an upgrade fails, `upgrade` prints what that sync wrote to its error stream (and
+  the error of a sync that did not run to its end) before "sync after upgrade failed".
+- S3 (M35). `status-line-uninstall.ps1` removes `sessionStatusLine` only when it holds the value the install
+  writes for that folder; any other value is left and said.
+- S4 (M36). The prompt of `uninstall machine` names each folder of `.js-harness` it removes, and a test holds the
+  names to the folders `uninstall` removes.
+- S5 (L2). `compareSemver` follows semver's precedence: a prerelease is older than its release, equal to itself,
+  its identifiers compared one by one, build metadata ignored.
+- S6 (L3). With no record of the file, `writeComponent` keeps a copy of a different file already at the target
+  before writing, names the copy in the record, and writes nothing when the copy cannot be made; `install` says it.
+
+## Tasks
+- [x] T1 (kind: docs) this document, with its depth pass, before any code · S1-S6 · inline · `62bb01f6`
+- [x] T2 (kind: build) S5 `compareSemver` and S2 the sync's error · inline · slice A
+- [x] T3 (kind: build) S6 the kept copy and S4 the prompt · inline · slice A
+- [x] T4 (kind: build) S3 the status-line undo and S1 the linked worktree · inline · slice B
+- [x] T5 (kind: verify) gate, Codex and the lenses on slice A, then on slice B; the independent verifier on S1, S3
+  and S6 · the fixes they asked for: `c36f512a`, `90f32411`, `db26cbd2`, `1637dcde`
+- [x] T6 (kind: docs) the session summary, the pull request, the notices ·
+  `docs/sessions/2026-11-11-jh-178-the-install-and-uninstall-edges.md` · pull request 824
+
+## Log
+- L1. The request, as the lead's brief wrote it (2026-11-11, brief
+  `2026-11-11T06-06-47-550Z-9d2b5c87.md`): "You own one feature: the install and uninstall edges (the triage's work
+  unit 7: M29, M30, M35, M36, L2, L3)." and "The decision: This unit is the lead's call in the triage, no question
+  of his: build it as the unit says."
+- L2. Decision, S1: the unit allows two ways, to record the shared files where the main checkout's record keeps
+  them, or to refuse. Chosen: refuse the shared files alone. Why not a refusal of the whole `init`: a session
+  isolated in a worktree is the plausible caller, and the files `init` writes in the working tree (`harness.json`,
+  `AGENTS.md`) are committed from there. Why not a write into the main checkout's manifest from the worktree: that
+  manifest may not exist, and one without `harness.json` is refused by `init` as stale
+  (`bin/lib/project.mjs:1043`), so it would need a new partial format read by `init`, `sync`, `uninstall`,
+  `projectLocation` and `readRecorded`; when it does exist, the hooks and the exclude line already do, and nothing
+  shared is written. So the main checkout is made the only writer, and its record the only one: the next `sync`
+  there writes and records them (`writeProject` with `clone`, `bin/lib/project.mjs:750-753`).
+- L3. Decision, S6: the copy goes beside the file, `<name>.before-js-harness-<8 hex of its sha256>`: found where
+  the person looks, never written over a different earlier copy, and the same on a second run. `uninstall` leaves
+  it, since it is the person's file; putting it back is out of scope (the ceiling of `manifest.mjs`).
+- L4. Decision, S3: no test writes to the registry (`bin/lib/status-line-install.test.mjs:1-4` says why); the test
+  holds the script's text, and the script is run once by hand against a scratch key, recorded here.
+- L5. Evidence, S3, 2026-11-11: the undo run twice against a throwaway key `HKCU:\SOFTWARE\js-harness-scratch-178`,
+  a temp folder and a task name nothing registers. Run 1, the key holding `{"command":"C:\\someone\\else.ps1"}`:
+  "policy value kept: … sessionStatusLine = {"command":"C:\\someone\\else.ps1"}, which the install did not write",
+  and the value was still there. Run 2, the key holding the install's value for that folder: "policy value
+  removed", "policy key removed, it held nothing else". The script's last line: "scratch key left behind: False".
+- L6. Evidence, S4: the new test found a seventh folder the audit had not counted. `uninstall machine` also undoes
+  the background sessions `sessions start` recorded that are idle and hold no files, and removes
+  `.js-harness/background` with their record and briefs (`undoBackground`, `bin/lib/background.mjs:417`, called
+  at `bin/install.mjs:675`). The prompt, `docs/GUIDE.md` and `README.md` now name it and say what it does.
+- L7. Decision, S1: both files that would grow are at their ceilings (`bin/lib/manifest.mjs` 1,650,
+  `bin/lib/project.mjs` 1,978, `bin/conventions-structure.test.mjs:72-74`), so the verdict lives in a new module,
+  `bin/lib/project-shared.mjs`, with its test, and `project.mjs` holds the calls alone: three lines in, the
+  destructuring of `writeHookGate` joined from eight lines to two, 1,977 lines, its ceiling lowered with it.
+  Searched first: `mainCheckoutOf` (`bin/lib/claude-import.mjs:93`) answers a nearby question, but gives `null`
+  both for a main checkout and for a worktree of a bare repository, which S1 must tell apart, and asks git twice
+  for what the caller already holds. The guard covers every writer of a shared file: `writeHookGate` (init, the
+  first sync of a clone, a hook a later sync adds), the two exclude steps of `project.mjs` and the migration's
+  preview. `uninstall` still reads `excludeFile` itself and a manifest's recorded hooks, so a worktree an earlier
+  version initialised is still undone as it recorded. Only where a write would happen is anything said: a hook
+  already there is kept as before, and an exclude file that already holds the line gives no notice.
+- L8. Evidence, S1: the three tests that proved the outside-git-dir machinery through a linked worktree
+  (`T2e item 4`, `T2f item 2`) now use a repository made with `git init --separate-git-dir`, one checkout whose
+  hooks live outside its working tree as a submodule's do; they passed on the old code and pass on the new. The
+  new linked-worktree test failed on the old code (1 of 6) and passes (6 of 6).
+- L9. Decision, S6: a later run's record does not carry `replaced`: the copy's name says what it is, deleting it
+  undoes it, and `install` says it once, in the run that made it. With no record, a file that cannot be read is
+  now left unwritten (`null`), where before a write was tried over it.
+- L10. Red first: S5, S6, S4 and S1 were seen failing before their code. S2's test was written, its code applied,
+  then the test run against the old `bin/update.mjs` (the change reversed with `git apply -R`): it failed with
+  only "sync after upgrade failed: exited 3". S3's test was not run against the old script; it fails there by
+  construction, the old script having no `$value` line.
+- L11. State, 2026-11-11 at 01:58 local: all six specs have code and tests in the working tree, nothing
+  committed after `62bb01f6`. Next: the affected test files through `js-harness gate`, one commit a spec pair,
+  then gate, Codex and the lenses on slice A (S2, S4, S5, S6) and slice B (S1, S3), the verifier, the pull request.
+- L12. Failure, 2026-11-11: the first run of every affected test file gave 797 of 809 passing, 11 skipped and 1
+  failing, `uninstallProject leaves a worktree and its common git dir byte-identical to before init`
+  (`TypeError: Cannot read properties of undefined (reading 'gitDir')`). Not a defect of the change: its sanity
+  line took for granted that `init` in a linked worktree records the shared hook. The runs before the code had
+  been filtered by name ("linked worktree|outside git dir|outside the working tree"), and this test says "a
+  worktree", so it was never seen. The background task reported exit 0 while the log's last line said `exit 1`:
+  the command line ended in an `echo`, whose exit code the task took. Fixed by splitting the test in two (a
+  repository with its git dir apart, which keeps the outside-working-tree undo; a linked worktree, the round trip
+  of S1) and adding the one the constraint needed and nothing held: `uninstall` still takes back a shared hook
+  that an earlier version recorded in a linked worktree's manifest. What stops it: the whole file is run, never
+  a name pattern, before a commit, and a background run ends on the command whose exit code matters.
+- L13. Evidence, 2026-11-11: `node --test bin/lib/project.test.mjs bin/lib/project-shared.test.mjs
+  bin/lib/project-migrate.test.mjs bin/lib/project-exclude.test.mjs`, whole, through `js-harness gate`: 238 tests,
+  227 pass, 0 fail, 11 skipped. The skips are this machine's, none new: 10 say "symlinks need privileges on this
+  machine" and 1 is the 8.3 short-name case. So the tests of a link in the hooks path or the exclude path, the
+  branches S1 sits behind, were not run here; the pre-commit gate runs the suite on GitHub's machines too
+  (`.github/workflows/gate.yml`), where they do run.
+- L14. State, 2026-11-11: slice A (S2, S4, S5, S6) is `620f337d`, its pre-commit gate green (17 rows). Slice B
+  (S1, S3) is the next commit, with this document and `README.md`. Then Codex and the lenses on each slice, the
+  independent verifier on S1, S3 and S6, the session summary and the pull request.
+- L15. Deviation, 2026-11-11: slice B (`99020c10`) was committed before Codex had read slice A alone, and
+  `codex-review` always reads up to HEAD, so one run, `--base 62bb01f6`, read both slices. Nothing was left
+  unread: the run cut the range in two parts of 10 and 9 files and recorded both commits. A guess made on the way
+  was wrong and is withdrawn: that the two parts were the two slices. They are not, since part 1 flagged
+  `bin/lib/component-write.mjs` and part 2 `bin/lib/version.mjs`, both of slice A. The lenses do take `--head`,
+  so they read slice A and slice B apart.
+- L16. Evidence, 2026-11-11: both pre-commit gates passed on GitHub's machines, 236 s for `620f337d` and 201 s for
+  `99020c10` (the gate log, `~/.js-harness/gate-log/log.jsonl`). The suite's main job runs on `ubuntu-24.04`
+  (`.github/workflows/gate.yml`), where a symbolic link needs no privilege, so the ten tests this machine skips
+  ran there; that they did is inferred from the job's system, not read line by line in its output.
+- L17. Review, Codex, 2026-11-11, `62bb01f6..99020c10`, 2 parts, 391,970 input tokens (302,208 cached), 245 s:
+  "the patch is incorrect" for both parts, one P2 each, both real, both fixed test first in the next commit.
+  (1) `bin/lib/component-write.mjs`: a file under the copy's name was taken as a whole copy. A run stopped while
+  it wrote the copy leaves a short one, and the next run wrote over the original with that as its only copy,
+  the loss S6 exists to stop. Now `keepCopy` reads a copy that is there and writes it again unless it holds the
+  file's bytes, reads back the one it wrote, and throws when that does not hold them, so nothing is written over.
+  Two tests, both seen failing first (the short copy stayed `his ow`; a short write gave a record instead of
+  `null`). (2) `bin/lib/version.mjs`: two numeric prerelease identifiers went through `Number`, so
+  `rc.9007199254740992` and `rc.9007199254740993` were each older than the other. Now `compareDigits` orders
+  the digits as written, by length and then by characters, leading zeros apart. Seen failing first. One case
+  was added after the fix and so not seen red: `rc.01` against `rc.1`, which the first code answered -1 in both
+  directions and now answers 0. Left as it was, and said: the three core numbers still go through `Number`, as
+  before this feature (`compareSemver orders by major, then minor, then patch` predates it); a major past 2^53
+  is outside what `TARBALL_RE` and a release tag give this function in practice, and Codex did not flag it.
+  After the fix: `bin/lib/component-write.test.mjs` 11 of 11, `bin/lib/version.test.mjs` 14 of 14,
+  `bin/install.test.mjs` 119 of 119, each run whole. The fix is `c36f512a`, its gate green (18 rows).
+- L18. Review, Codex, the confirming one, 2026-11-11, `99020c10..c36f512a`, 1 part, 50,712 input tokens (28,672
+  cached), 72 s: "the patch is correct (confidence 0.97)", "2 fixed, 0 not fixed". Two Codex reviews in all.
+- L19. Review, the Claude lenses, 2026-11-11, each a fresh run on `claude-fable-5-2` at high effort. Slice A,
+  `62bb01f6..620f337d`, risk, resilience, readability, reliability, about 16,000 input tokens each: three
+  warnings, all the copy taken by its name alone, the defect Codex found and `c36f512a` had already fixed (the
+  range ends before the fix, so the lenses could not see it); one suggestion, new and real: "sync after upgrade
+  failed: it could not start" was printed for any spawn error, and the spawn also gives one for a sync that
+  started and was then stopped (output past the 1 MB buffer; no timeout is set, `bin/update.mjs:560-567`), right
+  under what that sync had said. The line now reads "it did not run to its end (<error>)"; test seen red first.
+  Slice B, `620f337d..99020c10`, risk, reliability, readability, about 22,200 input tokens each: the three of
+  slice A carried as "not fixed", their code being outside the range, and one warning, new and real: the
+  migration's plan (`repairLines`, `bin/lib/project-migrate.mjs`) still said `sync` would write the commit-msg
+  step in a linked worktree, where `sync` now skips it. The plan asks the verdict `sync` acts on, now one
+  function, `hookElsewhere` (`bin/lib/project-shared.mjs`), and names no hook `sync` leaves to the main checkout.
+- L20. Failure of this feature's own, found by the test written for L19, 2026-11-11: L7 says "The guard covers
+  every writer of a shared file". It did not. `restoreRecordedHook` (`bin/lib/project.mjs`), which writes a
+  recorded hook again when it is gone, is a second writer, reached by a worktree an earlier version initialised:
+  `sync` there wrote the shared pre-commit hook again (the test's third assertion: `['pre-commit']` where `[]`
+  was expected). The claim rested on reading `writeHookGate`'s callers, not on a search for every write of a
+  hook's content. Fixed: the same verdict there, a `skip` with the reason; the record stays, so `uninstall` still
+  reports it as gone. The search that closes it: `writeFile(` with `hook.content` in `bin/lib/project.mjs` has two
+  sites, `writeHookGate` and `restoreRecordedHook`, both now behind `hookElsewhere`. What stops it recurring is
+  the test, `in a linked worktree the plan names no hook that sync leaves to the main checkout`
+  (`bin/lib/project-migrate.test.mjs`), which runs the migration's `sync` in a linked worktree whose record names
+  a hook that is gone and reads the shared hooks folder after it. `bin/lib/project.mjs` is 1,975 lines, its
+  ceiling lowered with it.
+- L21. Evidence, 2026-11-11: `node --test bin/lib/project.test.mjs bin/lib/project-shared.test.mjs
+  bin/lib/project-migrate.test.mjs bin/lib/project-exclude.test.mjs bin/lib/project-switches.test.mjs
+  bin/conventions-structure.test.mjs bin/update.test.mjs`, whole, through `js-harness gate`, on the tree of L19
+  and L20: 343 tests, 332 pass, 0 fail, 11 skipped (the same of this machine as in L13, 10 for a symbolic link
+  and the 8.3 short-name case), 214 s.
+- L23. Review, Codex, 2026-11-11, `c36f512a..90f32411` (the commit of L19 and L20), 1 part, 72,324 input tokens
+  (42,752 cached), 82 s: "the patch is incorrect (confidence 0.96)", one P2, real: the plan judged a hook that
+  is written again where git puts hooks today, and `sync` writes it where its record says it was; the two differ
+  once `core.hooksPath` has changed, so the plan was silent on a hook `sync` wrote (recorded under the worktree's
+  own folder) and named one `sync` skipped (the reverse). `repairLines` now judges the recorded place for a hook
+  written again and git's place for a new one. Seen red first: the plan gave the commit-msg line alone where
+  "the pre-commit gate: written again" was expected. `bin/lib/project-migrate.test.mjs` whole after it: 34, none
+  failing. The count of reviews: this is the third Codex run of the feature and the first of this commit, a
+  change the first two never read; `rule:escalation-model` passes a change three reviews did not settle to
+  `claude-fable-5-2`, the model this session already runs on, so the work stays here, and the lead is told of
+  the count in the summary.
+- L24. Reviews that closed the code, 2026-11-11. Codex, the confirming one, `90f32411..db26cbd2`, 66,964 input
+  tokens (48,512 cached), 60 s: "the patch is correct (confidence 0.98)", "1 fixed, 0 not fixed". The Claude
+  lenses over the three fix commits, `99020c10..db26cbd2`, risk, resilience, reliability, readability, about
+  18,000 input tokens each: 0 findings, and the four earlier ones rechecked as fixed. Every code commit is now
+  inside a Codex record and a lens record. In all: 4 Codex runs (2 that found, 2 that confirmed), 11 lens runs
+  in 3 ranges, 5 pre-commit gates, all green on GitHub's machines.
+- L25. The independent verifier, 2026-11-11: one read-only sub-agent on this session's model at high effort,
+  211,383 tokens, 59 tool uses, about 15 minutes, on `62bb01f6..db26cbd2`, S1, S3 and S6, with scratch
+  repositories outside the worktree and the old code taken from `62bb01f6`. What it reported as holding, by its
+  own runs: new `init`, `sync` and `functions apply` in a linked worktree left the common `hooks/` and
+  `info/exclude` byte-identical, each hook a `skip` and the exclude `kept`, naming the main checkout; an old
+  `init` then the new `uninstallProject` gave the shared files back byte-identical in three variants (straight,
+  a sync between, the hook deleted then a sync); no writer of a hook or of the exclude file beside the two and
+  two behind the guard (its greps: `hooks/|info/exclude|hooksPath|git-common-dir|commonGitDir|git-path` and
+  `HOOKS\b|\.content\b|addExclude\(|chmodSync` over `bin/` without tests). Three findings, each checked here by
+  reading the line and by a test seen red before its fix:
+  (1) S1, did not hold: the plan and the gate's `functions` row said "codexReview on: no push check in the
+  pre-push hook" in a linked worktree, where neither `sync` nor `functions apply` writes it (`clonePending`,
+  which `repairLines` does not cover). The line now ends with the reason and the checkout whose `sync` writes
+  it (`bin/check-functions.test.mjs`, the new linked-worktree case). It stays a line: the push check is missing
+  for the whole repository and the row is where that is seen.
+  (2) S3, not exact: `$found -eq $value` on a value of several strings is true when one of them is the
+  install's. The guard is now `($found -is [string]) -and ($found -eq $value)`. Letter case is left apart on
+  purpose, as the install compares it: a path that differs only in case names the same program, which the undo
+  deletes next. Run by hand again on the scratch key of L5, three ways: several strings with the install's
+  among them, kept ("after run 1, the value has 2 strings"); another's value, kept; the install's, removed with
+  its key; "scratch key left behind: False".
+  (3) S6, a loss in theory: two texts that share the eight characters of the copy's name (it found a pair among
+  fewer than 100,000 generated texts), each written over at one path: the second copy wrote over the first.
+  `keepCopy` now writes over a file under the copy's name only when it is a beginning of this file, which a
+  short copy is; any other is left and nothing is written. `bin/lib/component-write.test.mjs`, 12 of 12.
+  Left, said by the verifier and not changed: the header of the gate's row still reads "js-harness functions
+  apply makes it so" above that line (`bin/check.mjs:1633`), and `migrate` prints it under "would write:", so a
+  linked worktree whose repository has no push check never reads "nothing to migrate" until the main checkout
+  syncs; a custom `-Folder` holding `&` or `'` is written differently by Windows PowerShell 5.1 and PowerShell 7,
+  so an install in one and an undo in the other keeps the value, the safe side; when the copy cannot be made
+  `install` prints nothing and the component is absent, because `bin/lib/manifest.mjs:960-961` drops a `null`,
+  and that file is out of scope. Not checked by the verifier: any path with a symbolic link (no privilege
+  here), either PowerShell script end to end, worktrees of a bare repository, submodules, S2, S4, S5.
+- L26. The close, 2026-11-11. The fixes of L25 are `1637dcde`, its gate green. Codex on `db26cbd2..1637dcde`,
+  68,400 input tokens (26,368 cached), 53 s: "the patch is correct (confidence 0.91)", no finding. The Claude
+  lenses on the same range, risk, resilience, reliability, readability, about 10,300 input tokens each: 0
+  findings. In all: 5 Codex runs, 650,370 input tokens; 15 lens runs in 4 ranges; the gate on every commit.
+  The contract's commands, whole, in one run through `js-harness gate` (the eight files of the first line and
+  the three conventions files of the third): 735 tests, 726 pass, 0 fail, 9 skipped (8 for a symbolic link, 1
+  the 8.3 short-name case), 284 s; `node bin/js-harness.mjs contract check odd/tasks/install-uninstall-edges.md`:
+  `PASS`. Against the depth pass's bar: spec 1, `initProject in a linked worktree writes none of what every
+  worktree shares, and says where it is written and recorded` passes, where the suite asserted the opposite;
+  spec 2, `upgradeMain prints what the sync after upgrade said when it fails, and why one did not run to its
+  end` passes, new behaviour; spec 3, `bin/lib/status-line-install.test.mjs` 6 of 6, one holding the comparison;
+  spec 4, the prompt names seven folders and a test holds it to what `uninstallMain` removes; spec 5, the
+  command of the bar prints 0 where it printed -1 (`0 -1 -1` for the three pairs of item 4); spec 6,
+  `bin/lib/component-write.test.mjs` 12 of 12, a first write over a file leaves a whole copy. What the first
+  code had wrong: nine defects, eight found by review (L17 two, L19 two, L23 one, L25 three) and one by the
+  test this session wrote for one of them (L20, its own false claim); all fixed.
+- L22. Seen and left, older than this feature: the plan's line for the `.atl/` exclude record
+  (`repairLines`) is printed whenever the manifest holds no record, also where the line is already in the file
+  and `sync` then records nothing (`addExclude` gives `null`). It is the same in a main checkout, and the test
+  `the plan names what sync would repair` holds it as it is. Not this unit's; named in the session summary.

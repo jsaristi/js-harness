@@ -15,6 +15,7 @@ import { tools } from './stack.mjs';
 import { functionsOf, gitIn, harnessOfTree, workingTree } from './project-functions.mjs';
 import { SETTINGS_FILE, SETTINGS_KEYS, applySettings, isValidSettingsRecord, planFunctions, settingLabel, settingPending, valueAt } from './project-apply.mjs';
 import { EXCLUDED, addExclude, isValidExcludeRecord, undoExclude } from './project-exclude.mjs';
+import { excludeToWrite, hookElsewhere } from './project-shared.mjs';
 import { FAILURES_TEMPLATE, TEMPLATE_BLOCK_MARK, agentsFile, claudeFile, renderBlock } from './project-template.mjs';
 import { HOOKS } from './project-hooks.mjs';
 import { localDay } from './flaky.mjs';
@@ -329,7 +330,7 @@ function absoluteFrom(root, raw) {
  * inside some base, and a symlink in its chain is what sent it outside — as opposed to the
  * configured location itself (`core.hooksPath`, or the default) being outside from the start, with
  * no symlink involved in that verdict (T2e item 7). */
-function resolveHookContainment(root, hookPath, gitBases = {}) {
+export function resolveHookContainment(root, hookPath, gitBases = {}) {
   const realRoot = fs.realpathSync(root);
   const realGitDir = safeRealpath(gitBases.gitDir);
   const realCommonGitDir = safeRealpath(gitBases.commonGitDir);
@@ -648,14 +649,8 @@ function writeHookGate(root, spawn, writeFile, state, hook = HOOKS.preCommit) {
     actions.push({ kind: 'skip', path: `hooks/${hook.name}`, reason: 'could not resolve the git hooks path' });
   } else {
     const gitBases = gitDirs(root, spawn);
-    const {
-      real: realHookPath,
-      outside: hookOutside,
-      occupied: hookOccupied,
-      isWorkingTree: hookIsWorkingTree,
-      viaLink: hookViaLink,
-      base: hookBase,
-    } = resolveHookContainment(root, hookPath, gitBases);
+    const { real: realHookPath, outside: hookOutside, occupied: hookOccupied, isWorkingTree: hookIsWorkingTree, viaLink: hookViaLink, base: hookBase } =
+      resolveHookContainment(root, hookPath, gitBases);
     if (hookOutside) {
       // T2b R3-hookspath-outside-repo-written / Codex P2, T2c Codex P1 symlink, T2d dangling
       // symlink: a `core.hooksPath` outside the repo — directly, through an in-repo symlink, or
@@ -669,8 +664,12 @@ function writeHookGate(root, spawn, writeFile, state, hook = HOOKS.preCommit) {
       actions.push(kept(toForwardSlashes(realHookPath), reason, true));
     } else {
       const hookRel = pathShapeFor(root, hookPath, hookIsWorkingTree);
+      // A hook outside the working tree of a linked worktree is every worktree's: the main checkout writes it (./project-shared.mjs).
+      const elsewhere = hookElsewhere({ occupied: hookOccupied, isWorkingTree: hookIsWorkingTree }, gitBases, `add ${hook.command} to its ${hook.name} yourself`);
       if (hookOccupied) {
         actions.push(kept(hookRel, `exists; add ${hook.command} to it`, false, !hookIsWorkingTree));
+      } else if (elsewhere) {
+        actions.push({ kind: 'skip', path: hookRel, reason: elsewhere });
       } else {
         // T2f item 2: bounded by `hookBase` (the git dir or common git dir, for a worktree or a
         // submodule), not always `root` — otherwise the climb stops before it starts whenever the
@@ -855,7 +854,7 @@ function writeProject(root, version, spawn, platform, writeFile, rm, manifestFil
     }
 
     // `.atl/` left out of what git calls untracked, in this clone's exclude file (./project-exclude.mjs).
-    const target = excludeFile(root, spawn);
+    const target = excludeToWrite(excludeFile(root, spawn), gitDirs(root, spawn));
     if (target.file && target.reason) actions.push(kept(notRemovedLabel(root, target.file), target.reason));
     if (target.file && !target.reason) {
       excludePath = target.file;
@@ -1462,15 +1461,15 @@ function restoreRecordedHook(root, manifest, gitBases, writeFile, createdPaths, 
 
   const { real, outside, occupied, isWorkingTree, viaLink, base } = resolveHookContainment(root, abs, gitBases);
   if (outside) {
-    const reason = viaLink
-      ? 'a link now sends its directory outside the repository; not written again'
-      : 'it is outside the repository; not written again';
+    const reason = viaLink ? 'a link now sends its directory outside the repository; not written again' : 'it is outside the repository; not written again';
     actions.push(kept(toForwardSlashes(real), reason, true));
     return;
   }
   const label = pathShapeFor(root, abs, isWorkingTree);
-  if (occupied) {
-    actions.push(kept(label, 'a link is in its path; not written again', false, !isWorkingTree));
+  // One a linked worktree recorded under an earlier version is every worktree's: not written again from here either.
+  const elsewhere = hookElsewhere({ occupied, isWorkingTree }, gitBases, `add ${hook.command} to its ${hook.name} yourself`);
+  if (occupied || elsewhere) {
+    actions.push(occupied ? kept(label, 'a link is in its path; not written again', false, !isWorkingTree) : { kind: 'skip', path: label, reason: elsewhere });
     return;
   }
 
@@ -1478,9 +1477,7 @@ function restoreRecordedHook(root, manifest, gitBases, writeFile, createdPaths, 
   if (shallow) {
     const dirEntry = manifestEntry(root, shallow, isWorkingTree);
     manifest.dirs = manifest.dirs ?? [];
-    if (!manifest.dirs.some((d) => d.path === dirEntry.path && !!d.gitDir === !!dirEntry.gitDir)) {
-      manifest.dirs.push(dirEntry);
-    }
+    if (!manifest.dirs.some((d) => d.path === dirEntry.path && !!d.gitDir === !!dirEntry.gitDir)) manifest.dirs.push(dirEntry);
   }
   createdPaths.push(abs);
   writeFile(abs, hook.content, 'utf8');
@@ -1583,7 +1580,7 @@ function updateRecorded(root, manifest, gitBases, steps) {
     // A clone `init` set up before it wrote the `.atl/` line gets it here, recorded as `init` records it; a record
     // already there is left alone, so a line somebody took out stays out (odd/tasks/sync-exclude.md).
     if (sync && !next.exclude) {
-      const target = excludeFile(root, spawn);
+      const target = excludeToWrite(excludeFile(root, spawn), gitBases);
       if (target.file && target.reason) actions.push(kept(notRemovedLabel(root, target.file), target.reason));
       const record = target.file && !target.reason ? addExclude(target.file, { writeFile }) : null;
       if (record) {
@@ -1938,9 +1935,9 @@ function jsonOr(file, fallback) {
 
 /** What this clone lacks of what its switches ask, read-only, for the gate's `functions` row: one line a
  * difference, in the words of the switch that asks it, which `functions apply` would make good. `[]` where the
- * clone is what they ask, outside a repository, or where the switches cannot be read (that is the row's
- * failure, not a difference). A key that holds another value is apply's to report, never to change, so only a
- * key that is not there counts; a pre-push hook of the project's own counts as there. */
+ * clone is what they ask, outside a repository, or where the switches cannot be read (the row's failure). Only a
+ * key that is not there counts, since one that holds another value is apply's to report; a pre-push hook of the
+ * project's own counts as there, and one a linked worktree leaves to the main checkout names that checkout. */
 export function clonePending(cwd, { spawn = spawnSync } = {}) {
   const root = gitTopLevel(cwd, spawn);
   if (!root) return [];
@@ -1948,10 +1945,8 @@ export function clonePending(cwd, { spawn = spawnSync } = {}) {
   if (!plan) return [];
   const lines = [];
   const say = (name, text) => lines.push(`${name} ${resolved[name].value}: ${text}`);
-  const manifestPath = resolveGitPath(root, 'js-harness/manifest.json', spawn) ?? path.join(root, '.git', 'js-harness', 'manifest.json');
-  const manifest = jsonOr(manifestPath, null);
-  // A clone the harness never set up (no `init`, no `functions apply`) has nothing to drift from.
-  if (manifest === null) return [];
+  const manifest = jsonOr(resolveGitPath(root, 'js-harness/manifest.json', spawn) ?? path.join(root, '.git', 'js-harness', 'manifest.json'), null);
+  if (manifest === null) return []; // a clone the harness never set up (no `init`, no `functions apply`) has nothing to drift from
 
   if (plan.index === 'make') say('codeMap', 'no code map index here (.codegraph)');
   if (plan.index === 'remove' && manifest?.codegraph?.createdDir === true) say('codeMap', 'the code map index js-harness made is still here');
@@ -1972,7 +1967,9 @@ export function clonePending(cwd, { spawn = spawnSync } = {}) {
   const hookPath = resolveGitPath(root, 'hooks/pre-push', spawn);
   const hookThere = Boolean(hookPath) && fs.existsSync(hookPath);
   const recorded = Array.isArray(manifest?.files) && manifest.files.some((f) => typeof f?.path === 'string' && f.path.split('/').pop() === 'pre-push');
-  if (plan.prePush && !hookThere) say('codexReview', 'no push check in the pre-push hook');
+  const bases = plan.prePush && hookPath && !hookThere ? gitDirs(root, spawn) : null;
+  const left = bases && hookElsewhere(resolveHookContainment(root, hookPath, bases), bases, 'add the push check to its pre-push yourself');
+  if (plan.prePush && !hookThere) say('codexReview', `no push check in the pre-push hook${left ? `, ${left}` : ''}`);
   if (!plan.prePush && recorded && hookThere) say('codexReview', 'the push check js-harness wrote is still in the pre-push hook');
   return lines;
 }

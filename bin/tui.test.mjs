@@ -19,7 +19,7 @@ import {
   computeStackState,
   buildCommands,
 } from './tui.mjs';
-import { currentVersion, installMain } from './install.mjs';
+import { currentVersion, installMain, uninstallMain } from './install.mjs';
 import { manifestPath, recordOptionalFile, recordScheduledTask } from './lib/manifest.mjs';
 import { GAP_STATES } from './lib/digest.mjs';
 import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './lib/remote.mjs';
@@ -201,10 +201,36 @@ test('Back and escape leave the submenu for the menu, on Uninstall; q still quit
   assert.deepEqual(handleKey(state, 'quit').effect, { type: 'quit' });
 });
 
+// The audit's M36: the prompt said "the folders js-harness keeps here" while `uninstall` removed seven of them, the
+// background sessions' among them, which the audit had not counted, and kept the others. The names it gives are held to what `uninstall` does in a home that holds every one.
+test('the prompt of uninstall machine names each folder of .js-harness that uninstall removes, and none it keeps', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-tui-folders-'));
+  try {
+    assert.equal(await installMain(['--home', home]), 0);
+    const kept = ['throughput', 'backups', 'lead', 'memory-backup', 'loops'];
+    const removed = ['gate', 'gate-log', 'gate-first', 'channel', 'remote', 'background', 'memory-hygiene'];
+    for (const name of [...kept, ...removed]) {
+      fs.mkdirSync(path.join(home, '.js-harness', name, 'inside'), { recursive: true });
+      fs.writeFileSync(path.join(home, '.js-harness', name, 'inside', 'file'), 'x');
+    }
+    const { state } = openUninstall(INITIALIZED);
+    const asked = handleKey({ ...state, selected: state.menu.findIndex((entry) => entry.id === 'uninstall-machine') }, 'enter');
+    const [removes, keeps] = render(asked.state).at(-1).split('. It keeps ');
+    assert.equal(await uninstallMain(['--global', '--home', home]), 0);
+    const left = fs.readdirSync(path.join(home, '.js-harness'));
+    assert.deepEqual(left.sort(), [...kept].sort(), 'what uninstall left of the folders made here');
+    for (const name of removed) assert.match(removes, new RegExp(`[ ,]${name}[ ,]`), `${name} is removed and named`);
+    for (const name of kept) assert.doesNotMatch(removes, new RegExp(`[ ,]${name}[ ,]`), `${name} is kept and not named as removed`);
+    assert.match(keeps, /every other folder of \.js-harness/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('each kind asks its own question, saying what it removes and what it keeps; y runs it from the menu, anything else stays in the submenu', () => {
   const prompts = {
     'uninstall-project': /^Undo js-harness in this project\? It removes what init recorded in this clone and keeps the files you edited and the machine install\. \(y\/N\)$/,
-    'uninstall-machine': /^Uninstall js-harness from this home\? It removes what install recorded and the folders js-harness keeps here, and keeps the files you edited, the memory snapshots, the throughput records and the program\. \(y\/N\)$/,
+    'uninstall-machine': /^Uninstall js-harness from this home\? It removes what install recorded, the background sessions it started that are idle and hold no files, and these folders of \.js-harness: gate, gate-log and gate-first \(the gates' lock, log and tickets\), channel \(the sessions' notices\), remote \(the remote server's log\), background \(the record and briefs of those sessions\) and memory-hygiene without its snapshots\. It keeps the files you edited, the memory snapshots, the throughput records, every other folder of \.js-harness and the program\. \(y\/N\)$/,
     'uninstall-snapshots': /^Uninstall js-harness from this home and remove the memory snapshots, the only copy of what a pass changed\? It keeps the files you edited, the throughput records and the program\. \(y\/N\)$/,
     'uninstall-everything': /^Remove everything js-harness keeps on this machine: the whole \.js-harness folder of this home \(the lead's notes, the backups, the memory snapshots\) and the js-harness program itself\? It keeps the projects' files\. This cannot be undone\. \(y\/N\)$/,
   };

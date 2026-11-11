@@ -258,6 +258,8 @@ function logFiles(files) {
     // A file the user changed was left as uninstall leaves it, and is said as uninstall says it (F8 S10, T8).
     if (file.edited) console.log(`kept (modified by you) ${file.path}: this version's text was not written; move the file away and run js-harness sync to take it`);
     else if (file.skipped) logSkip(file);
+    // A file that was there before the harness first wrote at that path is kept beside it (./lib/component-write.mjs).
+    else if (file.replaced) console.log(`wrote ${file.path} over a file that was already there: its copy is ${file.replaced}`);
   }
 }
 

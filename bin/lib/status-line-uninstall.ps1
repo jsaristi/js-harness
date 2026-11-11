@@ -1,8 +1,8 @@
 # The undo of status-line-install.ps1, which copies it under Program Files beside the program (it also ships beside the
 # install in js-harness), with the same parameters: in an elevated Windows PowerShell
-# it stops and deletes the task, removes the sessionStatusLine value (and the policy key when nothing else is left in
-# it), the program and its folder when it is empty, and last the line the writer kept. What is already gone is
-# skipped, so it can run again.
+# it stops and deletes the task, removes the sessionStatusLine value while it is the install's (and the policy key
+# when nothing else is left in it), the program and its folder when it is empty, and last the line the writer kept.
+# What is already gone is skipped, so it can run again.
 param(
   [string]$Folder = (Join-Path $env:ProgramFiles 'js-harness'),
   [string]$Policy = 'HKCU:\SOFTWARE\Policies\Claude',
@@ -17,9 +17,20 @@ if (Get-ScheduledTask -TaskName $Task -ErrorAction SilentlyContinue) {
   Unregister-ScheduledTask -TaskName $Task -Confirm:$false
   "task deleted: $Task"
 }
+# The value is removed only while it is the one the install writes for this folder: another is someone else's, as
+# the install itself holds when it refuses to write over one, and is left and said. It is one string compared as the
+# install compares it, letter case apart, since a path that differs only in case names the same program; a value of
+# several strings is never it, and -eq on a list would say yes when one of them is.
+$installed = Join-Path $Folder 'status-line.ps1'
+$value = @{ command = $installed } | ConvertTo-Json -Compress
 if ((Test-Path $Policy) -and ((Get-Item $Policy).Property -contains 'sessionStatusLine')) {
-  Remove-ItemProperty -Path $Policy -Name sessionStatusLine
-  "policy value removed: $Policy sessionStatusLine"
+  $found = (Get-ItemProperty -Path $Policy -Name sessionStatusLine).sessionStatusLine
+  if (($found -is [string]) -and ($found -eq $value)) {
+    Remove-ItemProperty -Path $Policy -Name sessionStatusLine
+    "policy value removed: $Policy sessionStatusLine"
+  } else {
+    "policy value kept: $Policy sessionStatusLine = $found, which the install did not write"
+  }
 }
 if ((Test-Path $Policy) -and -not (Get-Item $Policy).Property -and -not (Get-ChildItem $Policy)) {
   Remove-Item $Policy

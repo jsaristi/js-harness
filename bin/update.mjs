@@ -567,7 +567,12 @@ export async function upgradeMain(argv, env = process.env, spawn = spawnSync, pl
       });
 
   if (syncResult.status !== 0) {
-    console.error(`sync after upgrade failed: exited ${syncResult.status}`);
+    // The sync ran piped, so what it said is printed here, or the person has only an exit code to go on. A spawn
+    // error is one that never started or one stopped on the way (output past the buffer): the line says neither.
+    const said = [syncResult.stdout, syncResult.stderr].map((text) => String(text ?? '').trimEnd()).filter(Boolean);
+    for (const text of said) console.error(text);
+    if (syncResult.error) console.error(`sync after upgrade failed: it did not run to its end (${syncResult.error.message})`);
+    else console.error(`sync after upgrade failed: exited ${syncResult.status}${said.length === 0 ? ', and it said nothing' : ''}`);
     return syncResult.status ?? 1;
   }
 
