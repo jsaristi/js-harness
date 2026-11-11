@@ -86,9 +86,10 @@ queue that lands one pull request a run spends a whole suite for each.
 ## Design
 - D1 (spec 1). A shim's targets are the paths it runs behind its own folder: `..\global\v11\...` in a `.cmd`,
   `../global/v11/...` in the POSIX shim. A `NODE_PATH` entry is absolute and is never one. A shim that names the
-  store with no such path (a target on another drive, a form not seen yet) is checked by the store folders it names,
-  which is what a prune can remove: so no shim that names the store goes unchecked, and no path that is not a target
-  raises the alarm. The shim is broken when one of its targets is missing. The message and exit 6 stay.
+  store with no such path (a target on another drive, a form not seen yet) is checked by the store paths of its lines
+  that set no `NODE_PATH` (L7), and one that names the store only there by the store folders it names, which is what
+  a prune can remove: so no shim that names the store goes unchecked, and no path that is not a target raises the
+  alarm. The shim is broken when one of its targets is missing. The message and exit 6 stay.
 - D2 (spec 2). A candidate is recognized by what the queue writes: past the trunk, every commit of HEAD's
   first-parent line is a merge whose subject is the queue's, `Merge pull request #<n> from <branch>` (one home:
   `mergeSubject` and `MERGE_SUBJECT` in bin/lib/pull-request.mjs, which the queue now writes it with). Then the
@@ -98,9 +99,10 @@ queue that lands one pull request a run spends a whole suite for each.
   the strict way. No environment variable: GitHub Actions runs the candidate's `check` too.
 
 ## Tasks
-- [ ] T1 (build) spec 1: the check after the prune reads what the shim runs, tests first; an independent verifier
-  reads it.
-- [ ] T2 (build) spec 2: the order control judges each pull request of a candidate by its own commits, tests first.
+- [x] T1 (build) spec 1: the check after the prune reads what the shim runs, tests first; an independent verifier
+  reads it: `e0e2755a`, and the verifier's finding in `d5950864`.
+- [x] T2 (build) spec 2: the order control judges each pull request of a candidate by its own commits, tests first:
+  `adc2978c`.
 - [ ] T3 (docs) the session's summary, the pull request, the ready and closed notices.
 
 ## Log
@@ -123,3 +125,29 @@ queue that lands one pull request a run spends a whole suite for each.
 - L4 Decided here: D2's candidate is recognized by the queue's merge subject, not by shape alone (every first-parent
   commit a merge), since an integration branch built only of `Merge branch` commits is one pull request and stays
   read whole; and not by an environment variable, since GitHub Actions has none.
+- L5 The plan had no double review (`rule:double-review`): the pass supports and adds nothing, nothing is put to the
+  user, and the brief names the reviews of this work (the gate, Codex and the lenses on each slice, a verifier on the
+  refresh). Said here so the absence is not read as a review that ran.
+- L6 T1, red before the fix: `node --test bin/lib/refresh-copy.test.mjs` with the new tests and the old check, 3 of
+  the 4 new prune tests fail (the fourth, a removed store folder, passes on both, as it should); after the fix 29
+  pass, 0 fail. The fixed check on the real pnpm bin folder, with a file system whose `rmSync` refuses
+  (`real-shims.mjs` in the session's scratch): `{"broken":[],"removalsRefused":2,"shims":25}`, where the old check
+  gave `["js-harness"]`. The commit's gate: `PASS check 17 rows passed`.
+- L7 Reviews of ac2a22e1..e0e2755a: Codex, the patch is correct (0.88), no finding, 67,922 input tokens; the risk and
+  reliability lenses, 0 findings each, 18,469 input tokens in all. The independent verifier (Fable 5.2, read-only,
+  90,011 tokens): holds, no blocker. It ran the new and the old check on the real bin folder (new `[]`, old
+  `["js-harness"]`, nothing removed), 15 of 15 breaks built from copies of the real shims named once each (a target
+  file gone, a store folder gone, a dangling link), and the new tests against the old module (4 of 5 fail). One
+  low finding taken, `d5950864`: a shim that names its target whole, with its store folder there and its target gone,
+  was named by the old check and not by the new one; it is now held by that target. Its red was the verifier's
+  script (`new=[] old=["x"]`), not a run of this session's. Kept as they are, low: a `NODE_PATH` entry in a folder
+  that is gone while the target is in another that is there is no broken shim; a POSIX target with a space is cut at
+  the space, as before this change. Not checked: shims a real pnpm writes on Linux or macOS, and a real refresh.
+- L8 T2, red before the fix: `node --test bin/lib/depth-pass.test.mjs` with the new tests and the old reading, 3 of
+  the 4 new tests fail (the fourth pins what must not change: merges that are not the queue's are read whole, and it
+  passes on both); after the fix, with bin/lib/pull-request.test.mjs, 36 pass, 0 fail. The commit's gate: `PASS check
+  17 rows passed`.
+- L9 From the lead (a note to 175, 2026-11-11 00:47 local): JH 173 adds lines to bin/merge-queue.mjs after the
+  `removeLandedWorktrees` block of `mergeQueueMain` and lands first; this branch stays out of that block (its two
+  edits there are the import line and the merge's subject in `mergeThroughDoor`) and merges origin/main before its
+  last gate.
