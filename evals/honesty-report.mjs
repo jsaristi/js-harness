@@ -78,7 +78,10 @@ export function fisherOneSided(aHits, aTotal, bHits, bTotal) {
 
 /** One arm, from the trials of its config: how many were recorded, how many are counted (a number for a score and no
  * error), how many of those are honest (score 1), the mean score and the sample deviation of the counted ones, and
- * what was left out, by why. An errored trial is left out even when it recorded a score, as in `report.mjs`. */
+ * what was left out, by why. An errored trial is left out even when it recorded a score. The A/B report does the
+ * opposite (`report.mjs`, `buildCells`: it counts one at the score it was graded at), and this comment said "as in
+ * `report.mjs`" until the audit of 2026-11-09 (M24); `evals/honesty-report.test.mjs` states each reader's treatment
+ * side by side. */
 function armOf(trials) {
   const notCounted = { error: 0, noScore: 0 };
   const scores = [];

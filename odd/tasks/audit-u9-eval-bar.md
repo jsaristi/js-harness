@@ -178,7 +178,7 @@ completamente autonomo".
 - [x] T1 (kind: build) the bar in evals/rule-proof.mjs, test first: five trials, the spread, each trial's score in
   the record, the earlier shape read and named short — spec 1; inline; commit 1
 - [x] T2 (kind: build) an owed case says so at its test, with what its record shows — spec 5; inline; commit 1
-- [ ] T3 (kind: build) the reports and their headers: the cost check against the list table, the prices header, the
+- [x] T3 (kind: build) the reports and their headers: the cost check against the list table, the prices header, the
   honesty header and its side-by-side test — spec 2; inline; commit 2
 - [ ] T4 (kind: build) the negative control in evals/task-proof.mjs (`habit/`, `proof.habitPassed`) and its legacy
   list in evals/tasks.test.mjs — specs 3 and 4; inline; commit 3
@@ -308,3 +308,10 @@ completamente autonomo".
   rule, and the two records on file are named as of the earlier bar (2 trials an arm, 0.9167 against 0.9167 and
   0.7143 against 0.7143). Both notices of L6 were sent to the lead before the compaction. Next: T3, then T4 and T5,
   T6, T7, T8, T9, as L6 orders them.
+- L8 (2026-11-11, T3 built; evidence). The cost check is `checkCost` of evals/report.mjs, on the range
+  `estimateFromModelUsage` of evals/transcript-usage.mjs already computed for a trial without transcripts (reused,
+  exported, not copied), its upper end taken to each model's long-prompt price. Run over every recorded trial with a
+  scratch script at this commit: 369 inside, 0 outside, 0 unchecked, 9 with no cost to check, the count of the Depth
+  pass. The test of the errored trials (evals/honesty-report.test.mjs) states behaviour four of the five readers
+  already had, so it was never red: it holds them where a header had them wrong. Two fixtures of
+  evals/report.test.mjs gained a `modelUsage` priced at their cost, as a run of today records one.
