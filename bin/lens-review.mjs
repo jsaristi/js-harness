@@ -25,15 +25,18 @@ import { NOTHING_TO_REVIEW } from './lib/codex-reviews.mjs';
 import { lensCandidate } from './lib/lens-candidate.mjs';
 import { LENS_NAMES, LENSES, lensPrompt } from './lib/lens-prompts.mjs';
 import { LENS_ANSWER_SCHEMA, lensResult } from './lib/lens-result.mjs';
+import { claudeHome } from './lib/model-home.mjs';
 import { appendLensReview, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, readLensReviews, startLensRun } from './lib/lens-reviews.mjs';
 
-// The model each lens runs on, by its full id: no short name gave it when it was set (on 2026-11-10 `fable` gave
-// claude-fable-5-1 on cli 2.1.319). Until that day the lenses ran on the alias `sonnet`; his "todos los modelos de
-// ahora en adelante va a ser Fable 5.2 Alto" of that day moved them, by the lead's reading.
-export const LENS_MODEL = 'claude-fable-5-2';
-// The effort each lens runs at, his "Alto" of the same words, named on the call: a run that names none takes the
-// effort the CLI has saved, whatever it is (Codex, on 21fce28..7613e37). The double review's Claude reader runs at it too.
-export const LENS_EFFORT = 'high';
+// The model each lens runs on: the Claude home's (`rule:session-model`), a full id, read from the declared list
+// wherever the lenses run. Until 2026-11-10 the lenses ran on a short name, and a short name gives whatever the engine
+// in use has for it; his "todos los modelos de ahora en adelante" of that day moved them to the one model, by the
+// lead's reading.
+export const LENS_MODEL = claudeHome().model;
+// The effort each lens runs at, the home's (`rule:session-effort`), named on the call: a run that names none takes
+// the effort the CLI has saved, whatever it is (Codex, on 21fce28..7613e37). The double review's Claude reader runs
+// at it too.
+export const LENS_EFFORT = claudeHome().effort;
 // The most a lens is handed, in estimated tokens (four characters a token): a range past it is reviewed in smaller
 // ranges, since a lens that cannot hold the whole block can only answer incomplete.
 export const LENS_INPUT_LIMIT = 150_000;
