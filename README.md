@@ -1835,9 +1835,17 @@ exits 3 and says why and what the next rung is: the built-in browser's `get_page
 `resume --pause` hook names this command after a WebFetch answered 402, 403, 429 or 503, and after one
 that failed as a tool error.
 
-It sends no cookie and no key. The URL goes to a third party, so a host that is not public (no
-dot, loopback, a private address), a URL with a user or a password, or a query parameter named
-like a secret is refused with exit 1 before anything is sent.
+It sends no cookie and no key of its own. The URL goes to a third party, so a host that is not
+public (no dot, loopback, a private address), a URL with a user or a password, a query parameter
+named like a secret, or a path segment that reads as a key is refused with exit 1 before anything
+is sent. A segment reads as a key when its pieces that mix letters and digits add up to 20
+characters or more: a random token, a UUID, the id of a page that is private by its link.
+
+Those checks read names and shapes, and know no secret. A key of letters alone or of digits alone,
+one shorter than 20 characters, one in a query value under an ordinary name or in the host's name
+goes out with the URL: do not hand this command a URL that holds one. The other way round, a
+public page whose path holds an id of that shape (a commit hash, a UUID) is refused as well, and
+the built-in browser reads it, sending it to no third party.
 
 ```console
 $ js-harness fetch https://www.npmjs.com/package/react
