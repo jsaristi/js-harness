@@ -349,29 +349,38 @@ specs 1, 4, 5, 8 and 10 and the tasks T3 and T4, and wins where it differs from 
 - [ ] T9 (kind: verify) (1-10) Each pull request: gate, Codex and the pertinent lenses, one at a time; ready; `js-harness notify --to orchestrator --kind ready --pr <n>`; the next one starts from main once it lands. Then the summary and the closed notice. Route: inline.
 
 ## Next step
-State at 2026-11-11 02:40 local, after the host compacted the session at 01:53. Pull request 1's code is written
-and committed on `feat/model-home-module`, cut from `30a7758c` and not pushed yet: units (a) `c71142a0`,
-(b) `9833fc44`, (e) `a38ac869`, (c) `7f068895`, the cut of marks at a Log `8fa91e0d`, and `--with` in the commit that
-holds this line (L15 to L19). `js-harness wait --notice-to 172` runs.
+State at 2026-11-11 05:55 local, written as JH 172 closes at 88 percent of its context. A fresh session takes
+pull request 2 from the brief `~/.js-harness/background/briefs/one-model-home-pr2.md`.
+Done: T1, T2 and T3. Pull request 1 landed as two slices: 822 (the module, the faults, the readers and the
+convention; merged) and 825 (`rules change --with` and the cut of marks at a Log; ready, the lead lands it). What
+each review found is in L20, L22 and L24.
 Next, in order:
-1. Done. The branch of pull request 1 (T3) is `feat/model-home-module`.
-2. Done, one work unit a commit. The writer's test and every reader of a rule that leaves stay as they are until T4.
-3. The gate passed on the tree of `8bd3c68b` (`js-harness check --verbose`, gate `79e3919a`, 2026-11-11 03:19).
-   Pull request 1 is 558 changed lines of code and tests, over the 400 of `js-harness-chained-prs`, so it is two
-   stacked pull requests to main, each slice able to land on its own, in this order:
-   - 1a, `feat/model-home-module`, `30a7758c..49dac4af`: the module, the faults, the convention and the readers
-     (444 changed lines of code and tests with the fixes of its review; 367 when it was sliced). The feature document rides here, about 600 lines of documents that no
-     slice can shrink.
-   - 1b, `feat/rules-change-with`, `49dac4af..` its head, on 1a: the cut of marks at a Log and `--with` (191).
-   Each slice, one at a time and its cost said first: `js-harness codex-review --base <the slice's start> --doc
-   odd/tasks/one-model-home.md` and `js-harness lens-review --base <same> --lenses <pertinent> --reason <why>
-   --doc odd/tasks/one-model-home.md`, run with the slice's head checked out; fix or answer; push; `gh pr create`
-   (1b with 1a's branch as its base); `js-harness notify --to orchestrator --kind ready --pr <n>`.
-4. The pull request's body says in plain words, for him, that the design did not pass three double reviews, the
-   two high findings of the third (L13: Claude 1 with Codex 1, and Claude 2) and the answer to each; and that the
-   lead said yes to building from L13 (L14).
-Open with the lead, not blocking pull request 1: one `start_session` that names the home's model, and whether
-the switch may write a home's rules in one commit.
+1. Wait for 825 on main. Then `git fetch origin main`, and cut `rule/one-model-home` again from `origin/main`
+   (`git switch -C rule/one-model-home origin/main`; the old branch of that name holds only documents that are
+   on main already, so nothing is lost). `rules change` runs from this checkout as `node bin/js-harness.mjs`.
+2. T4, pull request 2, one `rules change` run an id and never two, a commit each, tests first, in L13's order:
+   `session-model` and `session-effort` first (each run carries the widened subject, the new source with the
+   quotations of lines 4744, 5167 and 5255, and every pattern the rules that leave hold today); then the five
+   retirements (`lead-effort`, `subagent-effort`, `subagent-writer-model`, `subagent-reader-model`,
+   `escalation-model`), each with `--with` for its readers, its tests, its marks and its planted break; then the
+   patterns of `review-model` and `review-effort`. Before each retirement: its dry run, and a grep of its id as a
+   bare word. A fixture test runs the whole order. The guard: a start is held to the home's effort written out
+   and refuses a named model other than the home's, but does not require the model yet; a sub-agent call that
+   names the home's level passes, another level, `lower` and `higher` are refused. Then one independent verifier
+   on the guard.
+3. Each slice: the gate, then `js-harness codex-review` and `js-harness lens-review` with `--doc`, one at a
+   time, each under `js-harness gate --wait 40 --max 15 -- <command>` while the machine is short of memory; on a
+   host stop for memory, one `waiting` notice and stop. Over 400 changed lines of code, slice it
+   (`js-harness-chained-prs`). Then T5 to T9 as the Tasks say.
+4. Each pull request's body says in plain words, for him, that the design did not pass three double reviews, the
+   two high findings of the third (L13: Claude 1 with Codex 1, and Claude 2), the answer to each, and the lead's
+   yes (L14). Pull request 2's body also says that the shipped hash changes, since `escalation-model` has no scope.
+What pull request 1 left that pull request 2 uses: `claudeHome()`, `codexHome()`, `claudeHeld()`,
+`sameClaudeModel()`, `displayName()`, `menuLine()`, `EFFORTS` of `bin/lib/model-home.mjs`; `homeFaults` of
+`bin/lib/model-shape.mjs`; the convention `bin/conventions-model-home.test.mjs`, which will name any reader that
+writes a model or an effort by hand.
+Open with the lead, not blocking pull request 2: one `start_session` that names the home's model, with the new
+session's `get_session` answer, and whether the switch may write a home's rules in one commit.
 
 ## Inventory
 Where a model or an effort is named, read on 2026-11-11 at `7525a4e5`. The table of pull request 813 was the start;
@@ -594,3 +603,4 @@ each row was read again. "Reader" means the value comes from a rule; "by hand" m
 - L22. Slice 1b, 2026-11-11 about 05:00 local. The lead answered the `waiting` notice at 04:41: rerun the lenses only with no gate running and one after another, re-arm the wait first, and on a second stop for memory send one notice and stop. Pull request 822 was merged at 04:28 (main `38fe1b2d`), so slice 1b's pull request goes to main. The wait runs again. The three lenses ran one at a time, each under the machine's gate lock (`js-harness gate --wait 30 --max 15 -- js-harness lens-review --base 49dac4af --lenses <one> ...`): risk nothing, reliability nothing, readability one suggestion, taken in the commit that holds this line: an id typed after `--with` was read as a path and the refusal did not say why; it now says the id goes before `--with`. Its test was seen red first; `bin/lib/rules-change-run.test.mjs` 46 pass. Next: the confirming Codex review and readability lens of that commit, the push, `gh pr create --base main`, the `ready` notice; then pull request 2 on `rule/one-model-home`, cut again from main.
 - L23. 2026-11-11 about 05:10 local: the host stopped, for memory again, the confirming Codex review of `015892b5` (`js-harness gate --wait 30 --max 15 -- js-harness codex-review --base 18ac2d06 --doc odd/tasks/one-model-home.md`); whether it left a record or held the gate lock when it was stopped is not checked. By the lead's word of 04:41 nothing is retried alone: one `waiting` notice, and this session stops. Slice 1b stands so: `feat/rules-change-with` at the commit that holds this line, local and not pushed; `49dac4a..18ac2d0` read by Codex and by the three lenses, one suggestion taken in `015892b5`; that commit not yet read by Codex nor by the readability lens. Left to do, in order, when the machine has room: that Codex review (`--base 18ac2d06`), the readability lens on the same base, the push, `gh pr create --base main --head feat/rules-change-with` with the body drafted in this job's tmp folder (`pr-1b.md`, to be written again from this Log if the folder is gone), the `ready` notice; then pull request 2.
 - L24. Slice 1b, 2026-11-11 about 05:45 local. The lead's go of 05:21 (10.0 GB free). Under the gate lock, one at a time: Codex on `18ac2d0..2f007c7`, nothing found (36,851 input tokens); the readability lens on the same range, nothing found. Every code commit of the slice now has both records. The whole gate was not run on this tree on this machine; the pull request's checks run it. Next: the push of `feat/rules-change-with`, its pull request to main, the `ready` notice; then pull request 2 (T4): `rule/one-model-home` cut again from main once 1b lands, the nine `rules change` runs in L13's order, the guard, and an independent verifier on the guard. This session holds 86 percent of its context, so pull request 2 is for the session that resumes under the stored opening.
+- L25. 2026-11-11 05:55 local, the close of JH 172, asked by the lead: "Next step" rewritten for pull request 2. Left of the close when this line was written, in order: the brief `~/.js-harness/background/briefs/one-model-home-pr2.md` (what to read first, the decisions, the two high findings, the worktree and branch, tonight's memory rule); the session summary under `docs/sessions/` (`js-harness summary template --title "<title>"`), committed and pushed on `feat/rules-change-with`; then ONE `closed` notice with `--summary <file>` that names 825's final head and the brief's path.
