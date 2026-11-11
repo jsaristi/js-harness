@@ -20,8 +20,10 @@ function git(cwd, ...args) {
 
 /** A project with one commit and the gate's workflow, a bare remote it pushes to, and a change staged on top. Its
  * harness.json declares the remote gate `remoteGate` (on, as this repository does), holds `harness` as its text, or
- * is not there for `null`: a project that says nothing. */
-function project({ remoteGate = 'on', harness = remoteGate === null ? null : JSON.stringify({ functions: { remoteGate } }) } = {}) {
+ * is not there for `null`: a project that says nothing. With `ssh`, the remote is written `git@github.com:o/r.git`
+ * and nothing rewrites it: `env` then makes git's ssh a script that serves the bare remote on disk, so a real push
+ * goes through a real transport to a destination git itself calls GitHub's. */
+function project({ remoteGate = 'on', harness = remoteGate === null ? null : JSON.stringify({ functions: { remoteGate } }), ssh = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-gate-'));
   const remote = path.join(root, 'remote.git');
   const cwd = path.join(root, 'work');
@@ -33,14 +35,28 @@ function project({ remoteGate = 'on', harness = remoteGate === null ? null : JSO
   if (harness !== null) fs.writeFileSync(path.join(cwd, 'harness.json'), harness);
   git(cwd, 'add', '-A');
   git(cwd, 'commit', '-q', '-m', 'first');
-  // A GitHub URL, as a real remote is, that git rewrites to the bare remote on disk.
-  git(cwd, 'remote', 'add', 'origin', 'https://github.com/o/r.git');
-  git(cwd, 'config', `url.${remote}.insteadOf`, 'https://github.com/o/r.git');
+  let env = {};
+  if (ssh) {
+    // git runs `<GIT_SSH_COMMAND> git@github.com "git-receive-pack 'o/r.git'"`: the script runs that verb on the bare
+    // remote, whatever repository was named.
+    const shim = path.join(root, 'ssh.mjs');
+    fs.writeFileSync(shim, [
+      "import { spawnSync } from 'node:child_process';",
+      "const verb = process.argv.at(-1).split(' ')[0].replace(/^git-/, '');",
+      "process.exit(spawnSync('git', [verb, process.env.CI_GATE_TEST_REMOTE], { stdio: 'inherit' }).status ?? 1);",
+    ].join('\n'));
+    git(cwd, 'remote', 'add', 'origin', 'git@github.com:o/r.git');
+    env = { GIT_SSH_COMMAND: `node "${shim.replace(/\\/g, '/')}"`, GIT_SSH_VARIANT: 'simple', CI_GATE_TEST_REMOTE: remote };
+  } else {
+    // A GitHub URL, as a real remote is, that git rewrites to the bare remote on disk.
+    git(cwd, 'remote', 'add', 'origin', 'https://github.com/o/r.git');
+    git(cwd, 'config', `url.${remote}.insteadOf`, 'https://github.com/o/r.git');
+  }
   fs.writeFileSync(path.join(cwd, 'a.txt'), 'staged\n');
   git(cwd, 'add', 'a.txt');
   // Not staged: the commit being made does not hold it, so neither does its gate.
   fs.writeFileSync(path.join(cwd, 'a.txt'), 'not staged\n');
-  return { root, cwd, remote, done: () => fs.rmSync(root, { recursive: true, force: true }) };
+  return { root, cwd, remote, env, done: () => fs.rmSync(root, { recursive: true, force: true }) };
 }
 
 /** A clock that moves only when the code sleeps. */
@@ -52,8 +68,8 @@ function clock() {
 /** A stand-in for `gh`: `runs` is what each `run list` of a commit answers, in turn (the last one again once
  * spent), `views` what each `run view` answers (`null` for a view that fails), and a `run list` of no commit, the
  * probe before the push, answers `[]`. `visibility` is what `repo view` says of the repository (`null` for a read
- * that fails). Every call is kept. */
-function fakeGh({ runs = [[]], views = [], log = '', visibility = 'PUBLIC' } = {}) {
+ * that fails), or an object of what it says of each one by its `owner/name`. Every call is kept. */
+function fakeGh({ runs = [[]], views = [], log = '', visibility: said = 'PUBLIC' } = {}) {
   const calls = [];
   let listed = 0;
   let viewed = 0;
@@ -69,7 +85,10 @@ function fakeGh({ runs = [[]], views = [], log = '', visibility = 'PUBLIC' } = {
       return view === null ? { status: 1, stdout: '', stderr: 'HTTP 502: Bad Gateway' } : { status: 0, stdout: JSON.stringify(view), stderr: '' };
     }
     if (args[0] === 'run' && args[1] === 'cancel') return { status: 0, stdout: '', stderr: '' };
-    if (args[0] === 'repo' && args[1] === 'view') return visibility === null ? { status: 1, stdout: '', stderr: 'HTTP 401: Bad credentials' } : { status: 0, stdout: `${visibility}\n`, stderr: '' };
+    if (args[0] === 'repo' && args[1] === 'view') {
+      const visibility = said !== null && typeof said === 'object' ? said[args[2]] : said;
+      return visibility === null ? { status: 1, stdout: '', stderr: 'HTTP 401: Bad credentials' } : { status: 0, stdout: `${visibility}\n`, stderr: '' };
+    }
     return { status: 1, stdout: '', stderr: `unexpected gh ${args.join(' ')}` };
   };
   gh.calls = calls;
@@ -81,7 +100,7 @@ const RUN = { databaseId: 42, status: 'queued', conclusion: '', url: 'https://gi
 const remoteBranches = (remote) => git(remote, 'for-each-ref', '--format=%(refname)', 'refs/heads/');
 // The commit object of a gate is made with the identity of the machine, which a CI runner has none of.
 const identity = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
-const options = (p, gh, c, more = {}) => ({ cwd: p.cwd, env: { ...cleanEnv, ...identity }, gh, ...c, ...more });
+const options = (p, gh, c, more = {}) => ({ cwd: p.cwd, env: { ...cleanEnv, ...identity, ...p.env }, gh, ...c, ...more });
 
 test('a commit\'s gate goes to CI first whenever the project has the workflow and nothing switches it off, whatever the lock says', () => {
   const p = project();
@@ -134,11 +153,11 @@ test('a green run passes the gate: the staged tree went to gate/<sha>, and the b
 // odd/tasks/publish-decision.md: what a commit's gate publishes is the project's written decision (the audit's M1).
 const VISIBILITY = ['repo', 'view', 'o/r', '--json', 'visibility', '-q', '.visibility'];
 const GREEN = () => ({ runs: [[RUN]], views: [{ ...RUN, status: 'completed', conclusion: 'success' }] });
-/** What git was asked beyond reading its configuration: nothing, for a tree that stays here. */
-const written = (calls) => calls.filter((args) => args[0] !== 'config');
+/** What git was asked beyond reading its configuration and where the remote pushes: nothing, for a tree that stays. */
+const written = (calls) => calls.filter((args) => args[0] !== 'config' && args[0] !== 'remote');
 
 test('a public repository that says nothing pushes nothing: the tree of its commit stays here', async () => {
-  const p = project({ remoteGate: null });
+  const p = project({ remoteGate: null, ssh: true });
   try {
     const gh = fakeGh({ ...GREEN(), visibility: 'PUBLIC' });
     const gitCalls = [];
@@ -153,7 +172,7 @@ test('a public repository that says nothing pushes nothing: the tree of its comm
 });
 
 test('a private repository that says nothing sends its gate to CI as before, and one that declares on is not asked its visibility', async () => {
-  const p = project({ remoteGate: null });
+  const p = project({ remoteGate: null, ssh: true });
   try {
     const gh = fakeGh({ ...GREEN(), visibility: 'PRIVATE' });
     let pushed;
@@ -179,9 +198,9 @@ test('a private repository that says nothing sends its gate to CI as before, and
 
 test('whatever does not say the repository is private keeps the tree here: a read that fails, an internal repository, a switch off or unreadable', async () => {
   const cases = [
-    [{ remoteGate: null }, null, 'the visibility of o/r could not be read (HTTP 401: Bad credentials), so it is not known to be private and the tree being committed was not pushed', [VISIBILITY]],
-    [{ remoteGate: 'private' }, 'INTERNAL', 'o/r reads INTERNAL, not PRIVATE, and harness.json does not turn remoteGate on (js-harness functions set remoteGate on), so the tree being committed was not pushed', [VISIBILITY]],
-    [{ remoteGate: 'private' }, '', 'the visibility of o/r could not be read (gh said nothing), so it is not known to be private and the tree being committed was not pushed', [VISIBILITY]],
+    [{ remoteGate: null, ssh: true }, null, 'the visibility of o/r could not be read (HTTP 401: Bad credentials), so it is not known to be private and the tree being committed was not pushed', [VISIBILITY]],
+    [{ remoteGate: 'private', ssh: true }, 'INTERNAL', 'o/r reads INTERNAL, not PRIVATE, and harness.json does not turn remoteGate on (js-harness functions set remoteGate on), so the tree being committed was not pushed', [VISIBILITY]],
+    [{ remoteGate: 'private', ssh: true }, '', 'the visibility of o/r could not be read (gh said nothing), so it is not known to be private and the tree being committed was not pushed', [VISIBILITY]],
     [{ remoteGate: 'off' }, 'PRIVATE', 'remoteGate reads off in harness.json, so the tree being committed was not pushed', []],
     // Read as off, never as on: a switch nobody could read publishes nothing (`strict` of ./functions.mjs), and says why.
     [{ harness: '{ "functions": { "remoteGate": "yes" } }' }, 'PRIVATE', 'remoteGate reads off in harness.json (harness.json "functions"."remoteGate" must be one of "auto", "private", "on", "off"; it is "yes"), so the tree being committed was not pushed', []],
@@ -207,9 +226,9 @@ test('whatever does not say the repository is private keeps the tree here: a rea
 
 test('remoteGateKeeps answers before any push, for the gate that asks it first: null where the tree may go, and why where it stays', () => {
   const on = project();
-  const silent = project({ remoteGate: null });
+  const silent = project({ remoteGate: null, ssh: true });
   try {
-    const asked = (p, gh) => remoteGateKeeps({ cwd: p.cwd, env: { ...cleanEnv, ...identity }, gh });
+    const asked = (p, gh) => remoteGateKeeps({ cwd: p.cwd, env: { ...cleanEnv, ...identity, ...p.env }, gh });
     const none = fakeGh();
     assert.equal(asked(on, none), null);
     assert.deepEqual(none.calls, [], 'declared on, gh is not asked');
@@ -218,11 +237,51 @@ test('remoteGateKeeps answers before any push, for the gate that asks it first: 
     // A remote that is not GitHub's has no visibility to read: nothing says it is private.
     git(silent.cwd, 'remote', 'set-url', 'origin', silent.remote);
     const elsewhere = fakeGh({ visibility: 'PRIVATE' });
-    assert.match(asked(silent, elsewhere), /^origin is not a GitHub repository \(.*remote\.git\), so nothing says it is private and the tree being committed was not pushed$/);
+    assert.match(asked(silent, elsewhere), /^origin pushes to .*remote\.git, which is not a GitHub repository, so nothing says it is private and the tree being committed was not pushed$/);
     assert.deepEqual(elsewhere.calls, []);
+    git(silent.cwd, 'remote', 'remove', 'origin');
+    assert.equal(asked(silent, elsewhere), 'git could not say where origin pushes to, so nothing says it is private and the tree being committed was not pushed');
   } finally {
     on.done();
     silent.done();
+  }
+});
+
+// Codex, 2026-11-11, on c0d570d3: the visibility was asked of the one URL `git config --get` answers, while a push
+// goes to every push URL of the remote, each after git's rewrites. A public destination beside a private one, or
+// behind a rewrite, was published to under the default.
+test('every place the push goes to must be private: a second push URL, or a URL git rewrites, keeps the tree here', async () => {
+  const two = project({ remoteGate: null, ssh: true });
+  try {
+    git(two.cwd, 'config', '--add', 'remote.origin.pushurl', 'git@github.com:o/open.git');
+    git(two.cwd, 'config', '--add', 'remote.origin.pushurl', 'git@github.com:o/r.git');
+    const gh = fakeGh({ ...GREEN(), visibility: { 'o/r': 'PRIVATE', 'o/open': 'PUBLIC' } });
+    const gitCalls = [];
+    const result = await runCiGate(options(two, gh, clock(), { onGit: (args) => gitCalls.push(args) }));
+    assert.deepEqual(result, { ran: false, why: 'o/open reads PUBLIC, not PRIVATE, and harness.json does not turn remoteGate on (js-harness functions set remoteGate on), so the tree being committed was not pushed' });
+    assert.deepEqual(written(gitCalls), []);
+    assert.equal(remoteBranches(two.remote), '');
+    // Both private: each is asked once, and the tree goes.
+    const both = fakeGh({ ...GREEN(), visibility: { 'o/r': 'PRIVATE', 'o/open': 'PRIVATE' } });
+    assert.equal(remoteGateKeeps({ cwd: two.cwd, env: { ...cleanEnv, ...identity, ...two.env }, gh: both }), null);
+    assert.deepEqual(both.calls.map((args) => args[2]), ['o/open', 'o/r']);
+  } finally {
+    two.done();
+  }
+  // The remote is written as a private GitHub repository, and git rewrites it to somewhere else: where the tree
+  // would go is what counts, not what the remote is called. A password in that URL is not printed.
+  const rewritten = project({ remoteGate: null });
+  try {
+    git(rewritten.cwd, 'config', '--unset', `url.${rewritten.remote}.insteadOf`);
+    git(rewritten.cwd, 'config', 'url.https://user:secret@example.com/.insteadOf', 'https://github.com/');
+    const gh = fakeGh({ ...GREEN(), visibility: 'PRIVATE' });
+    const gitCalls = [];
+    const result = await runCiGate(options(rewritten, gh, clock(), { onGit: (args) => gitCalls.push(args) }));
+    assert.deepEqual(result, { ran: false, why: 'origin pushes to https://example.com/o/r.git, which is not a GitHub repository, so nothing says it is private and the tree being committed was not pushed' });
+    assert.deepEqual(gh.calls, []);
+    assert.deepEqual(written(gitCalls), []);
+  } finally {
+    rewritten.done();
   }
 });
 

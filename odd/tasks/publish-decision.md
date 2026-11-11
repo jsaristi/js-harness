@@ -129,9 +129,9 @@ is a setting of his account, so this work only hands him its command.
   declared values. No file of the project decides it, so the resolver stays pure: the visibility is asked where the
   push is made.
 - D2 (spec 1). bin/lib/ci-gate.mjs gains `remoteGateKeeps({ cwd, remote, env, gh })`: why the tree stays here, or
-  null. `on`: null. `off`: kept. `private`: `gh repo view <owner/name> --json visibility -q .visibility`, the form
-  bin/backup.mjs asks it in; anything but `PRIVATE` (public, internal, a read that failed, a remote not on GitHub) is
-  kept. `runCiGate` asks it after it knows the repository and before `write-tree`, so no caller can push past it;
+  null. `on`: null. `off`: kept. `private`: for every place the push goes to (each push URL of the remote, after
+  git's rewrites; L8), `gh repo view <owner/name> --json visibility -q .visibility`, the form bin/backup.mjs asks it
+  in; anything but `PRIVATE` (public, internal, a read that failed, a destination not on GitHub) is kept. `runCiGate` asks it after it knows the repository and before `write-tree`, so no caller can push past it;
   `testsOnCi` asks it first too, so the line "the push of the tree being committed starts their run" is never printed
   for a tree that stays, and a tree kept by the switch leaves no `ci-fallback` line (CI was never asked). The second
   question to `gh` costs about a second and only in a private repository that declares nothing, on a path that then
@@ -178,6 +178,18 @@ is a setting of his account, so this work only hands him its command.
   pipes the same line to a JSON parser, Windows PowerShell puts a byte-order mark before a piped string, which is not
   valid JSON (`SyntaxError: Unexpected token`), while bash does not. So the body is a file (D5), with no mark, and
   the test refuses one.
+- L8 Codex on `2eec546..c0d570d` (one part, 140,152 input tokens): "the patch is incorrect", one finding, P1, taken.
+  The visibility was asked of the one URL `git config --get` answers, while a push goes to every push URL of the
+  remote, each after git's rewrites (`insteadOf`), so a public destination beside a private one, or behind a rewrite,
+  was published to under the default. Fixed: under `private` every place the push goes to (`git remote get-url --push
+  --all`) must be a GitHub repository that reads `PRIVATE`; a destination that is not GitHub's, or that git cannot
+  name, keeps the tree, and a password in its URL is not printed. Tests first, red (2 of 17), then 17 of 17. To push
+  for real to a destination git itself calls GitHub's, the tests of the default make git's ssh a script that serves
+  the bare remote on disk (`GIT_SSH_COMMAND`), with no rewrite.
+- L9 The first gate of `c0d570d3` was red on GitHub's machines: three tests of bin/rules-coverage.test.mjs. Read
+  before anything ran again: the orchestrator skill's line I edited (L7) is an owed span the coverage register holds
+  by its fingerprint, and the command names its fix, `js-harness rules coverage --refresh` (one fingerprint changed
+  in bin/lib/rules-coverage-data.mjs). The second gate ran here, GitHub not answering then, and passed.
 - L7 The hint of a commit wrapped in `js-harness gate --` and the orchestrator skill's line both said a commit's gate
   goes to GitHub "in a project that holds the workflow"; with the switch that is true only where it lets the tree be
   pushed, so both follow it: the hint claims it only where the switch reads on, the skill's line names the switch.

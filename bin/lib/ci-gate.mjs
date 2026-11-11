@@ -113,29 +113,45 @@ const pushUrl = (git, remote) => git('config', '--get', `remote.${remote}.pushur
 
 const KEPT = 'the tree being committed was not pushed';
 
+/** Every URL a push to `remote` goes to, as git resolves them: each of its push URLs, since a remote may hold several
+ * and a push goes to them all, after the rewrites of `url.<base>.insteadOf` and `pushInsteadOf`. None where git
+ * could not say. `pushUrl` above is one of them as written, which is what `gh` is asked the runs of; these are where
+ * the tree would land. */
+function pushDestinations(git, remote) {
+  const listed = git('remote', 'get-url', '--push', '--all', remote);
+  return listed.status === 0 ? listed.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [];
+}
+
+/** `url` without the user and password it may carry, for a line that is printed and logged. */
+const withoutCredentials = (url) => url.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@]*@/i, '$1');
+
 /** Why the tree of the commit being made stays on this machine, or null where the project lets it be pushed for its
- * gate: `remoteGate` on, or private with a repository GitHub says is `PRIVATE`, asked as ../backup.mjs asks it before
- * its own push. Everything else keeps it: the switch off or unreadable, a repository that is public or internal, a
- * visibility `gh` could not read. `repository` is the `owner/name` the push goes to, or null for a remote that is
- * not GitHub's. */
-function keptHere({ cwd, remote, url, repository, gh }) {
+ * gate: `remoteGate` on, or private with every place the push goes to (`pushDestinations`) a repository GitHub says
+ * is `PRIVATE`, asked as ../backup.mjs asks it before its own push. Everything else keeps it: the switch off or
+ * unreadable, a destination that is public, internal or not GitHub's, a visibility `gh` could not read. `git` runs
+ * git in the project. */
+function keptHere({ cwd, remote, git, gh }) {
   const { value, errors } = remoteGateOf(cwd);
   if (value === 'on') return null;
   if (value === 'off') return `remoteGate reads off in harness.json${errors.length > 0 ? ` (${errors.join('; ')})` : ''}, so ${KEPT}`;
-  if (!repository) return `${remote} is not a GitHub repository (${url || 'no URL'}), so nothing says it is private and ${KEPT}`;
-  const seen = gh(['repo', 'view', repository, '--json', 'visibility', '-q', '.visibility'], { cwd });
-  const visibility = seen.status === 0 ? seen.stdout.trim() : '';
-  if (!visibility) return `the visibility of ${repository} could not be read (${firstLine(seen.stderr) || 'gh said nothing'}), so it is not known to be private and ${KEPT}`;
-  if (visibility !== 'PRIVATE') return `${repository} reads ${visibility}, not PRIVATE, and harness.json does not turn remoteGate on (js-harness functions set remoteGate on), so ${KEPT}`;
+  const urls = pushDestinations(git, remote);
+  if (urls.length === 0) return `git could not say where ${remote} pushes to, so nothing says it is private and ${KEPT}`;
+  const elsewhere = urls.find((url) => !githubRepository(url));
+  if (elsewhere) return `${remote} pushes to ${withoutCredentials(elsewhere)}, which is not a GitHub repository, so nothing says it is private and ${KEPT}`;
+  for (const repository of new Set(urls.map(githubRepository))) {
+    const seen = gh(['repo', 'view', repository, '--json', 'visibility', '-q', '.visibility'], { cwd });
+    const visibility = seen.status === 0 ? seen.stdout.trim() : '';
+    if (!visibility) return `the visibility of ${repository} could not be read (${firstLine(seen.stderr) || 'gh said nothing'}), so it is not known to be private and ${KEPT}`;
+    if (visibility !== 'PRIVATE') return `${repository} reads ${visibility}, not PRIVATE, and harness.json does not turn remoteGate on (js-harness functions set remoteGate on), so ${KEPT}`;
+  }
   return null;
 }
 
-/** `keptHere` for a caller that has not read the remote: the gate asks it before it says a push starts
- * (`testsOnCi`). `runCiGate` asks again by itself, so no caller pushes past the switch. `gh` is injectable. */
+/** `keptHere` for a caller that runs no git of its own: the gate asks it before it says a push starts (`testsOnCi`).
+ * `runCiGate` asks again by itself, so no caller pushes past the switch. `gh` is injectable. */
 export function remoteGateKeeps({ cwd, remote = 'origin', env = process.env, gh }) {
   const runGit = spawner('git', pushEnv(env));
-  const url = pushUrl((...args) => runGit(['-C', cwd, ...args]), remote);
-  return keptHere({ cwd, remote, url, repository: githubRepository(url), gh: gh ?? spawner('gh', env) });
+  return keptHere({ cwd, remote, git: (...args) => runGit(['-C', cwd, ...args]), gh: gh ?? spawner('gh', env) });
 }
 
 /** The commits `MERGE_HEAD` names while a merge is being made, one a line (an octopus merge names several), or none. */
@@ -167,7 +183,7 @@ export async function runCiGate({ cwd, remote = 'origin', env = process.env, gh,
   if (!repository) return { ran: false, why: `${remote} is not a GitHub repository (${url || 'no URL'})` };
   const runGh = gh ?? spawner('gh', env);
   // Before anything is written: what the project's switch keeps here leaves no object and no branch behind.
-  const kept = keptHere({ cwd, remote, url, repository, gh: runGh });
+  const kept = keptHere({ cwd, remote, git, gh: runGh });
   if (kept) return { ran: false, why: kept };
   const ghIn = ([verb, sub, ...rest]) => runGh([verb, sub, '--repo', repository, ...rest], { cwd });
   // Asked before anything is written or pushed: a `gh` missing, signed out or barred from the repository would
