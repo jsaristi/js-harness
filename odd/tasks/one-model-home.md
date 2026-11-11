@@ -224,8 +224,16 @@ carry Codex.
   preguntes, avanza y se completamente autonomo." They are the lead's leave, not this session's: what "Ask me
   before" lists goes to the lead, who decides by them.
 
+- S7. His words on the effort, 2026-11-11, after the limit of Fable stopped the work sessions for 3 h 24 min. At
+  10:26 local (line 11253, his typed answer to question 259): "Va a tocar utilizar Fable 5.2 en Alto solo para el
+  orquestador y para las sesiones solo Fable 5.2 en Medio es que tengo una pregunta por favor esta es la respuesta
+  de esta pregunta pero no la tomes ya sino que hablemosla". At 11:06 local (line 11679): "Sí, aplícalo", to the
+  lead's scheme of line 11674, whose first two points read "Orquestador: Fable 5.2 alto" and "Sesiones y
+  subagentes nuevos: Fable 5.2 medio". They undo the one effort of S1, S2 and S5; the one model stands.
+
 What they become, numbered as the bar of the depth pass. L13 of the Log, the answers to the third read, amends
-specs 1, 4, 5, 8 and 10 and the tasks T3 and T4, and wins where it differs from the text below:
+specs 1, 4, 5, 8 and 10 and the tasks T3 and T4, and wins where it differs from the text below; L27, his words of
+S7, amends specs 1, 5, 7 and 8 and the task T4 after it, and wins over both:
 
 1. One home for Claude (S1, S2, S5). `session-model` and `session-effort` are the home: their subjects say that
    every session, the lead included, every sub-agent the harness defines or that inherits, the lenses, the double
@@ -349,38 +357,74 @@ specs 1, 4, 5, 8 and 10 and the tasks T3 and T4, and wins where it differs from 
 - [ ] T9 (kind: verify) (1-10) Each pull request: gate, Codex and the pertinent lenses, one at a time; ready; `js-harness notify --to orchestrator --kind ready --pr <n>`; the next one starts from main once it lands. Then the summary and the closed notice. Route: inline.
 
 ## Next step
-State at 2026-11-11 05:55 local, written as JH 172 closes at 88 percent of its context. A fresh session takes
-pull request 2 from the brief `~/.js-harness/background/briefs/one-model-home-pr2.md`.
-Done: T1, T2 and T3. Pull request 1 landed as two slices: 822 (the module, the faults, the readers and the
-convention; merged) and 825 (`rules change --with` and the cut of marks at a Log; ready, the lead lands it). What
-each review found is in L20, L22 and L24.
-Next, in order:
-1. Wait for 825 on main. Then `git fetch origin main`, and cut `rule/one-model-home` again from `origin/main`
-   (`git switch -C rule/one-model-home origin/main`; the old branch of that name holds only documents that are
-   on main already, so nothing is lost). `rules change` runs from this checkout as `node bin/js-harness.mjs`.
-2. T4, pull request 2, one `rules change` run an id and never two, a commit each, tests first, in L13's order:
-   `session-model` and `session-effort` first (each run carries the widened subject, the new source with the
-   quotations of lines 4744, 5167 and 5255, and every pattern the rules that leave hold today); then the five
-   retirements (`lead-effort`, `subagent-effort`, `subagent-writer-model`, `subagent-reader-model`,
-   `escalation-model`), each with `--with` for its readers, its tests, its marks and its planted break; then the
-   patterns of `review-model` and `review-effort`. Before each retirement: its dry run, and a grep of its id as a
-   bare word. A fixture test runs the whole order. The guard: a start is held to the home's effort written out
-   and refuses a named model other than the home's, but does not require the model yet; a sub-agent call that
-   names the home's level passes, another level, `lower` and `higher` are refused. Then one independent verifier
-   on the guard.
-3. Each slice: the gate, then `js-harness codex-review` and `js-harness lens-review` with `--doc`, one at a
-   time, each under `js-harness gate --wait 40 --max 15 -- <command>` while the machine is short of memory; on a
-   host stop for memory, one `waiting` notice and stop. Over 400 changed lines of code, slice it
-   (`js-harness-chained-prs`). Then T5 to T9 as the Tasks say.
-4. Each pull request's body says in plain words, for him, that the design did not pass three double reviews, the
-   two high findings of the third (L13: Claude 1 with Codex 1, and Claude 2), the answer to each, and the lead's
-   yes (L14). Pull request 2's body also says that the shipped hash changes, since `escalation-model` has no scope.
+State at 2026-11-11 11:13 local, written by the session that took pull request 2 (JH 172 again, a fresh session
+under the brief `~/.js-harness/background/briefs/2026-11-11T11-09-01-276Z-e93e8864.md`) as it stops. The lead's
+notice of 11:07 gives his decision of S7 and says the lead resumes this session by message when JH 180 or JH 181
+closes: he approved resuming the stopped sessions two at a time. Nothing of this work runs until that message.
+
+Done before: T1, T2 and T3. Pull request 1 is on main as 822 and 825 (main `8007f0fe`).
+
+Where pull request 2 stands: the worktree `D:\js-harness\.claude\worktrees\one-model-home` was gone and is made
+again, on `rule/one-model-home` cut from `8007f0fe`. Three commits, local, not pushed and not reviewed (the
+pre-push hook refuses a code commit with no review record):
+- `0e9ac08b`, the fixture test of the order in `bin/lib/rules-change-run.test.mjs`. It stands: its rules are made
+  up, and the order it holds is the runner's. Its header comment says five rules were retired on 2026-11-11; four
+  are (L27), so that sentence is corrected in the commit that retires the first.
+- `a19f59fb`, `rules change session-model`: the widened subject, the three patterns and a control of three breaks,
+  each seen red. The declaration stands. Its stored reading says "this one model at this one effort", which S7
+  undid, so the run is made again, whole, with the reading of L27.
+- `efc0ec97`, `rules change session-effort` at high with "the lead's included" in its subject. S7 undid both. The
+  run is made again, whole: a run on an id starts from `origin/main`'s declaration, so it replaces this one.
+
+Next, in order, when the lead's message comes:
+1. `git merge origin/main` (a merge, never a rebase): pull request 826 changed `bin/lib/rules-coverage-data.mjs`,
+   so one conflict is expected there (the lead's note of 06:31), and `rules change` wants the branch on main.
+2. `session-effort` again, one run: the value `medium`, the subject without the lead's session, the three patterns
+   it carries today, and his words of both days (lines 4744 and 5167 for the one place; 11253 and 11679 for the
+   level). With it, the same commit: the writer's agent file at the new level if its test asks for it, and every
+   test that took the sessions' level and the lead's for one.
+3. `session-model` again, one run: what `a19f59fb` holds, with the reading corrected.
+4. The home module knows the lead's level: `CLAUDE_HOME` of `bin/lib/model-shape.mjs` names `lead-effort`,
+   `homeFaults` holds it to a level, and `claudeHome()` and `claudeHeld()` give it, tests first. `lead-effort` is
+   not retired and gets no run: its value and its source stand.
+5. The guard's start, tests first: a start titled as a lead is held to `lead-effort`, every other to
+   `session-effort`, each to that one level, lower refused as well as higher; a named model other than the home's
+   is refused, and the model is not required yet (L13). `sessions start` goes through the same function. The
+   tests this session wrote for a lead held to `session-effort` were never committed and are discarded.
+6. The four retirements, each with `--with` for its readers, its tests, its marks and its planted break, after its
+   dry run and a grep of its id as a bare word: `subagent-effort` into `session-effort`;
+   `subagent-writer-model`, `subagent-reader-model` and `escalation-model` into `session-model`. The dry runs of
+   06:10 named the readers `rules check` sees: `bin/rules.mjs` (subagent-effort); `bin/lib/guard.mjs` (both model
+   rules); `bin/double-review.mjs` (the reader's); `bin/lib/codex-review-recheck.mjs` (the escalation's); and the
+   marks in `docs/ROADMAP.md`, `odd/tasks/f8-s7-topology.md`, `odd/tasks/fable-5-2-audit.md`,
+   `odd/tasks/memory-notes.md`, `odd/tasks/double-review-alignment.md` and `odd/tasks/onboarding.md`. The readers
+   it does not see are in the Inventory (`bin/check.mjs`, `bin/lib/subagent-check.mjs`, `bin/lib/contract.mjs`,
+   the writer's agent file and its test, the two skills' texts).
+7. The guard's sub-agent call: one that names the home's level passes; another level, `lower` and `higher` are
+   refused; its break joins `session-effort`'s bundle. Then `review-model` and `review-effort`, a form change each.
+8. One independent verifier on the guard. Then each slice through the gate, `js-harness codex-review` and
+   `js-harness lens-review` with `--doc`, one at a time under `js-harness gate --wait 40 --max 15 -- <command>`;
+   over 400 changed lines of code the pull request is sliced (`js-harness-chained-prs`). The merge door refuses a
+   change of `bin/lib/rules-data.mjs` from a branch not named `rule/` (`bin/check.mjs:405`), and `rules change`
+   refuses to run while another `rule/` branch holds a change, so a slice's branch is named `rule/...` and is made
+   only when every run is done.
+9. The pull request's body says in plain words that the design did not pass three double reviews, the two high
+   findings of the third and the answer to each, the lead's yes (L14), that the shipped hash changes, and what S7
+   changed: one model, two levels. Then T5 to T9 as the Tasks say, read against L27.
+
+What the session left outside the repository, in its job's folder `~/.claude/jobs/2953cad6/tmp/changes/`, to be
+written again if that folder is gone: `make.mjs <checkout>` writes the change of each id as JSON, carrying the
+patterns from `origin/main`'s declarations (it still writes the changes as they were before S7); `findings.mjs
+<checkout> <id> [<old id>...]` prints what a change's patterns find in the texts in force beside what today's
+find; `control.mjs <checkout> <id> <file>` sets one rule's control in the coverage register; `prove.mjs
+<checkout> <id>...` proves the planted breaks of those rules alone, as `rules coverage --prove` does for all.
+
 What pull request 1 left that pull request 2 uses: `claudeHome()`, `codexHome()`, `claudeHeld()`,
 `sameClaudeModel()`, `displayName()`, `menuLine()`, `EFFORTS` of `bin/lib/model-home.mjs`; `homeFaults` of
-`bin/lib/model-shape.mjs`; the convention `bin/conventions-model-home.test.mjs`, which will name any reader that
-writes a model or an effort by hand.
-Open with the lead, not blocking pull request 2: one `start_session` that names the home's model, with the new
-session's `get_session` answer, and whether the switch may write a home's rules in one commit.
+`bin/lib/model-shape.mjs`; the convention `bin/conventions-model-home.test.mjs`.
+Open with the lead: whether the lenses and the double review's Claude reader go to medium with the sessions, as
+his "en Alto solo para el orquestador" reads (L27); one `start_session` that names the home's model, with the new
+session's `get_session` answer; and whether the switch may write a home's rules in one commit.
 
 ## Inventory
 Where a model or an effort is named, read on 2026-11-11 at `7525a4e5`. The table of pull request 813 was the start;
@@ -604,3 +648,13 @@ each row was read again. "Reader" means the value comes from a rule; "by hand" m
 - L23. 2026-11-11 about 05:10 local: the host stopped, for memory again, the confirming Codex review of `015892b5` (`js-harness gate --wait 30 --max 15 -- js-harness codex-review --base 18ac2d06 --doc odd/tasks/one-model-home.md`); whether it left a record or held the gate lock when it was stopped is not checked. By the lead's word of 04:41 nothing is retried alone: one `waiting` notice, and this session stops. Slice 1b stands so: `feat/rules-change-with` at the commit that holds this line, local and not pushed; `49dac4a..18ac2d0` read by Codex and by the three lenses, one suggestion taken in `015892b5`; that commit not yet read by Codex nor by the readability lens. Left to do, in order, when the machine has room: that Codex review (`--base 18ac2d06`), the readability lens on the same base, the push, `gh pr create --base main --head feat/rules-change-with` with the body drafted in this job's tmp folder (`pr-1b.md`, to be written again from this Log if the folder is gone), the `ready` notice; then pull request 2.
 - L24. Slice 1b, 2026-11-11 about 05:45 local. The lead's go of 05:21 (10.0 GB free). Under the gate lock, one at a time: Codex on `18ac2d0..2f007c7`, nothing found (36,851 input tokens); the readability lens on the same range, nothing found. Every code commit of the slice now has both records. The whole gate was not run on this tree on this machine; the pull request's checks run it. Next: the push of `feat/rules-change-with`, its pull request to main, the `ready` notice; then pull request 2 (T4): `rule/one-model-home` cut again from main once 1b lands, the nine `rules change` runs in L13's order, the guard, and an independent verifier on the guard. This session holds 86 percent of its context, so pull request 2 is for the session that resumes under the stored opening.
 - L25. 2026-11-11 05:55 local, the close of JH 172, asked by the lead: "Next step" rewritten for pull request 2. Left of the close when this line was written, in order: the brief `~/.js-harness/background/briefs/one-model-home-pr2.md` (what to read first, the decisions, the two high findings, the worktree and branch, tonight's memory rule); the session summary under `docs/sessions/` (`js-harness summary template --title "<title>"`), committed and pushed on `feat/rules-change-with`; then ONE `closed` notice with `--summary <file>` that names 825's final head and the brief's path.
+- L26. Pull request 2, 2026-11-11, a fresh session under the title JH 172 (job `2953cad6`, started by the lead at 06:09 local). The worktree named in the brief was an empty folder no `git worktree list` held; pull request 825 was on main (`8007f0fe`), and the old `rule/one-model-home` was an ancestor of main (`git merge-base --is-ancestor`), so the worktree was made again with `git worktree add -B rule/one-model-home ... origin/main`. Written, tests first where a test could fail first: `0e9ac08b`, the fixture test of the order (it pins what the runner already does, so it was red only for its own fixture, a list with no `control-phrase-min`); `a19f59fb`, `rules change session-model`; `efc0ec97`, `rules change session-effort`. For both homes the planted lines of `bin/lib/rules-scan.test.mjs` were seen red before the run, `PLANTED` taking several lines a rule, and each of the six breaks of the two bundles was seen to turn its test red (a scratch script that proves the breaks of the rules named, under the gate's lock). Measured before each run: the patterns a home carries find on main's texts the same lines the rules that leave find today (session-model 4, session-effort 3). Two patterns were tightened for it: the exclusion carried from `subagent-effort` names `codex` or `review` with no word boundary, since `codexOrchestratorAssignment` of `odd/tasks/stack-v4.md:82` names Codex too; and the id of `review-effort`'s second pattern starts at the start of an id, since `fable-5-2` inside `claude-fable-5-2` (`README.md:1105`) read as an id that is not Claude's. Decided here, against L13's words: that exclusion replaces the `gpt-` and does not keep it, so the old near miss (`The orchestrator runs on gpt-6.1-sol with effort: "medium".`) is planted with the word Codex in it. The limit of Fable stopped this session from about 06:50 to after 10:00 local (the lead's question 259); the edits of that moment, tests of the guard for a lead held to `session-effort`, were not committed.
+- L27. His decision of 2026-11-11, S7, told by the lead's notice of 11:07 local and read in the lead's transcript with `js-harness sessions --quote` (lines 11253 and 11679) and, for the scheme his "Sí, aplícalo" answers, at line 11674: the orchestrator on Fable 5.2 at high, new sessions and sub-agents on Fable 5.2 at medium. The notice asks pull request 2 to carry it: "session-effort and subagent-effort become medium; lead-effort stays high". What it changes, which wins over the specs above and over L13:
+  - Spec 1: Claude's home is one model and two levels. `session-model` stays the model of everything, the lead's session included. `session-effort` is the level of everything but the lead's session, and becomes medium; `lead-effort` is not retired and stays high. Four rules retire, not five: `subagent-effort` into `session-effort`, so a sub-agent's level is medium by its successor; the two sub-agent model rules and `escalation-model` into `session-model`.
+  - The reading of the two home rules says both days: on 2026-11-10 one place and one effort for all; on 2026-11-11 the effort split in two, his "en Alto solo para el orquestador y para las sesiones solo Fable 5.2 en Medio". Both runs made before the notice are made again, whole.
+  - Specs 2 and 3: the home module names `lead-effort` and holds it to a level; a reader of the lead's level reads it there.
+  - Spec 5: a start is held to its one level by its title, a lead's to `lead-effort` and every other to `session-effort`, lower refused as well as higher. A sub-agent call that names a level is held to `session-effort`.
+  - Spec 7 (pull request 3): the line he is given names the level of the session that reads it, the lead's for the lead. Spec 8 (pull request 4): the switch takes the lead's level beside the sessions'.
+  - Read by this session and his to correct, told to the lead in one notice: the lenses and the double review's Claude reader are launched at `session-effort`, so they go to medium. His words put high on the orchestrator "solo"; the scheme he answered names sessions and sub-agents and says nothing of the reviewers.
+  - Not this work's, as before: the level of any open session. The scheme lets the four stopped sessions end at high; this one is one of them.
+  - Exception 8 of "Ask me before" (Codex reviews at medium, not at Alto) no longer differs from Claude's sessions; it stays listed, since the lead's level is high.
