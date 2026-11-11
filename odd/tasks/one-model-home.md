@@ -356,10 +356,17 @@ holds this line (L15 to L19). `js-harness wait --notice-to 172` runs.
 Next, in order:
 1. Done. The branch of pull request 1 (T3) is `feat/model-home-module`.
 2. Done, one work unit a commit. The writer's test and every reader of a rule that leaves stay as they are until T4.
-3. `npm run check`; then, one at a time and their cost said first, `js-harness codex-review --base <the commit
-   before the first code commit> --doc odd/tasks/one-model-home.md` and `js-harness lens-review --base <same>
-   --lenses <pertinent> --reason <why> --doc odd/tasks/one-model-home.md`; fix or answer; push; `gh pr create`;
-   `js-harness notify --to orchestrator --kind ready --pr <n>`.
+3. The gate passed on the tree of `8bd3c68b` (`js-harness check --verbose`, gate `79e3919a`, 2026-11-11 03:19).
+   Pull request 1 is 558 changed lines of code and tests, over the 400 of `js-harness-chained-prs`, so it is two
+   stacked pull requests to main, each slice able to land on its own, in this order:
+   - 1a, `feat/model-home-module`, `30a7758c..7f068895`: the module, the faults, the convention and the readers
+     (367 changed lines of code and tests). The feature document rides here, about 600 lines of documents that no
+     slice can shrink.
+   - 1b, `feat/rules-change-with`, `7f068895..` its head, on 1a: the cut of marks at a Log and `--with` (191).
+   Each slice, one at a time and its cost said first: `js-harness codex-review --base <the slice's start> --doc
+   odd/tasks/one-model-home.md` and `js-harness lens-review --base <same> --lenses <pertinent> --reason <why>
+   --doc odd/tasks/one-model-home.md`, run with the slice's head checked out; fix or answer; push; `gh pr create`
+   (1b with 1a's branch as its base); `js-harness notify --to orchestrator --kind ready --pr <n>`.
 4. The pull request's body says in plain words, for him, that the design did not pass three double reviews, the
    two high findings of the third (L13: Claude 1 with Codex 1, and Claude 2) and the answer to each; and that the
    lead said yes to building from L13 (L14).
