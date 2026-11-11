@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { RULES } from './rules-data.mjs';
 import { writeRules } from './rules.mjs';
-import { CLAUDE_HOME, CODEX_HOME, EFFORTS, MENU_LEVELS, claudeHeld, claudeHome, codexHome, displayName, menuLine, sameModel } from './model-home.mjs';
+import { CLAUDE_HOME, CODEX_HOME, EFFORTS, MENU_LEVELS, claudeHeld, claudeHome, codexHome, displayName, menuLine, sameClaudeModel } from './model-home.mjs';
 
 // odd/tasks/one-model-home.md, specs 2 and 7: the one module that knows which rules are the two homes.
 const valueOf = (id, list = RULES) => list.find((rule) => rule.id === id).value;
@@ -47,19 +47,19 @@ test('a model is shown by its family and version, and an id of another shape as 
 });
 
 test('two ids are the same model with a date at the end or a bracket taken off', () => {
-  assert.equal(sameModel('claude-fable-5-2', 'claude-fable-5-2'), true);
-  assert.equal(sameModel('claude-haiku-4-5-20251001', 'claude-haiku-4-5'), true);
-  assert.equal(sameModel('claude-fable-5-2[1m]', 'claude-fable-5-2'), true);
-  assert.equal(sameModel('claude-fable-5-1', 'claude-fable-5-2'), false);
-  assert.equal(sameModel('opus[1m]', 'claude-opus-5-5'), false);
-  assert.equal(sameModel(undefined, 'claude-fable-5-2'), false);
+  assert.equal(sameClaudeModel('claude-fable-5-2', 'claude-fable-5-2'), true);
+  assert.equal(sameClaudeModel('claude-haiku-4-5-20251001', 'claude-haiku-4-5'), true);
+  assert.equal(sameClaudeModel('claude-fable-5-2[1m]', 'claude-fable-5-2'), true);
+  assert.equal(sameClaudeModel('claude-fable-5-1', 'claude-fable-5-2'), false);
+  assert.equal(sameClaudeModel('opus[1m]', 'claude-opus-5-5'), false);
+  assert.equal(sameClaudeModel(undefined, 'claude-fable-5-2'), false);
 });
 
 test('a short name is the same model as nothing, not even as itself: it names whatever the engine in use gives it', () => {
-  assert.equal(sameModel('opus', 'opus'), false);
-  assert.equal(sameModel('opus[1m]', 'opus'), false);
-  assert.equal(sameModel('fable', 'claude-fable-5-2'), false);
-  assert.equal(sameModel('gpt-6.1-sol', 'gpt-6.1-sol'), false, 'only Claude ids are compared: a Codex id has no shape to know a full one by');
+  assert.equal(sameClaudeModel('opus', 'opus'), false);
+  assert.equal(sameClaudeModel('opus[1m]', 'opus'), false);
+  assert.equal(sameClaudeModel('fable', 'claude-fable-5-2'), false);
+  assert.equal(sameClaudeModel('gpt-6.1-sol', 'gpt-6.1-sol'), false, 'only Claude ids are compared: a Codex id has no shape to know a full one by');
 });
 
 test('the line he is given names the model and the level as his menu shows them', () => {

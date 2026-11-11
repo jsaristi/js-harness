@@ -29,10 +29,10 @@ const ROOT = path.join(import.meta.dirname, '..');
 const FOLDERS = ['bin', 'workshop', 'scripts'];
 // The list that declares the values: the one module that is not read.
 const LIST = 'bin/lib/rules-data.mjs';
-// The fewest modules a walk of the three folders gives. They hold over 270 today, so a count under this says the
-// walk went wrong, a folder moved or the filter of the testkit changed, and every check below would pass on nothing;
-// lower it only if the repository itself shrank that far.
-const FLOOR = 100;
+// The fewest modules a walk of each folder gives, about a tenth under what it held on 2026-11-11 (277, 18 and 23).
+// A count under its floor says the walk went wrong, a subfolder was not entered or the filter of the testkit
+// changed, and every check below would pass on less than the code; lower one only when its folder really shrank.
+const FLOORS = { bin: 250, workshop: 15, scripts: 20 };
 // The short names a host has taken for a Claude model. Each gives whatever model the engine in use has for it.
 const SHORT_NAMES = ['opus', 'sonnet', 'haiku', 'fable'];
 
@@ -82,8 +82,11 @@ const homeModels = () => [claudeHome().model, codexHome().model];
 
 test('the modules of bin, workshop and scripts are read, at any depth, and only the list of rules is left out', () => {
   const read = modules();
-  assert.ok(read.length >= FLOOR, `the walk of ${FOLDERS.join(', ')} read only ${read.length} modules, under its floor of ${FLOOR}: it reads less than it should, so no check below holds`);
-  for (const folder of FOLDERS) assert.ok(read.some((name) => name.startsWith(`${folder}/`)), `no module of ${folder}/ was read`);
+  assert.deepEqual(Object.keys(FLOORS), FOLDERS);
+  for (const folder of FOLDERS) {
+    const count = read.filter((name) => name.startsWith(`${folder}/`)).length;
+    assert.ok(count >= FLOORS[folder], `the walk of ${folder}/ read only ${count} modules, under its floor of ${FLOORS[folder]}: it reads less than the code, so no check below holds`);
+  }
   assert.ok(fs.existsSync(path.join(ROOT, LIST)), `${LIST} is a file of the repository`);
   assert.ok(!read.includes(LIST), `${LIST} is where the values belong`);
   for (const name of ['bin/lib/model-home.mjs', 'bin/lib/model-shape.mjs']) assert.ok(read.includes(name), `${name} is read as any other module`);

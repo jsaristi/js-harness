@@ -54,7 +54,7 @@ const bare = (id) => String(id).replace(/\[[^\]]*\]$/, '').replace(/-\d{8}$/, ''
  * no id: it names whatever the engine in use gives it (on 2026-11-10 `fable` gave claude-fable-5-1), so it is the
  * same model as nothing, not even as itself. Only Claude ids are compared, since no other has a shape to know a full
  * one by. */
-export function sameModel(a, b) {
+export function sameClaudeModel(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   return CLAUDE_ID.test(bare(a)) && bare(a) === bare(b);
 }
