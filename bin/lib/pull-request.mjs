@@ -15,3 +15,11 @@ export function pullRequestProblems(pr, base = 'main') {
   if (pr.baseRefName !== base) said.push(`${name} targets ${pr.baseRefName}, not ${base}.`);
   return said;
 }
+
+/** The subject of the merge commit the queue merges `pr` into its candidate with, GitHub's own for a merged pull
+ * request. One home: the queue writes it (`mergeThroughDoor`, ../merge-queue.mjs) and the control of `rule:depth-pass`
+ * knows a candidate by it (`MERGE_SUBJECT`, read in ../contract.mjs). */
+export const mergeSubject = (pr) => `Merge pull request #${pr.number} from ${pr.headRefName}`;
+
+/** A commit subject `mergeSubject` wrote. */
+export const MERGE_SUBJECT = /^Merge pull request #\d+ from \S/;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { pullRequestProblems } from './pull-request.mjs';
+import { MERGE_SUBJECT, mergeSubject, pullRequestProblems } from './pull-request.mjs';
 
 const pr = (over = {}) => ({ number: 7, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'Risk: none.', ...over });
 
@@ -28,4 +28,13 @@ test('each check of the pull request itself says which, in order', () => {
 
 test('a body that names no review is no problem: the reviews are read from their records (F8 S11, L11)', () => {
   for (const body of ['No checks here.', null]) assert.deepEqual(pullRequestProblems(pr({ body }), 'main'), []);
+});
+
+test('the queue\'s merge subject is GitHub\'s for a merged pull request, and MERGE_SUBJECT knows it from any other merge', () => {
+  const subject = mergeSubject({ number: 807, headRefName: 'audit-u2-stop-hook' });
+  assert.equal(subject, 'Merge pull request #807 from audit-u2-stop-hook');
+  assert.ok(MERGE_SUBJECT.test(subject));
+  for (const other of ["Merge branch 'audit-u2-stop-hook'", 'Merge 4995c9ce into c2153daf', 'Merge pull request from x', 'fix: Merge pull request #807 from x']) {
+    assert.ok(!MERGE_SUBJECT.test(other), other);
+  }
 });
