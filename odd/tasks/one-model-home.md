@@ -357,7 +357,7 @@ S7, amends specs 1, 5, 7 and 8 and the task T4 after it, and wins over both:
 - [ ] T9 (kind: verify) (1-10) Each pull request: gate, Codex and the pertinent lenses, one at a time; ready; `js-harness notify --to orchestrator --kind ready --pr <n>`; the next one starts from main once it lands. Then the summary and the closed notice. Route: inline.
 
 ## Next step
-State at 2026-11-11 11:25 local, written by the session that took pull request 2 (JH 172 again, a fresh session
+State at 2026-11-11 11:13 local, written by the session that took pull request 2 (JH 172 again, a fresh session
 under the brief `~/.js-harness/background/briefs/2026-11-11T11-09-01-276Z-e93e8864.md`) as it stops. The lead's
 notice of 11:07 gives his decision of S7 and says the lead resumes this session by message when JH 180 or JH 181
 closes: he approved resuming the stopped sessions two at a time. Nothing of this work runs until that message.
