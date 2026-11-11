@@ -382,6 +382,18 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+At 15:25 (read from `date`): U9 is reviewed, Codex on `cddbe16..6fe2700` "the patch is correct" and the reliability
+lens on `cddbe16..ed3b200` nothing, its recheck reading U7's finding as fixed; every lens finding is answered. The
+cut changed once more, and this one is the cut that is pushed: `js-harness check --push` refuses a head in the
+middle of a reviewed unit (at `5ebe0e38` and `f6b6176f` it found commits with no record, since a record counts only
+where its head is in the pushed history), so the five branches are cut at the units' heads, at no review cost:
+`rule/one-model-home-1` at `5deec5b6` (136 changed lines of code: the two subjects and the test of the order),
+`-2` at `1765b5aa` (336: `session-effort` at medium, the home names the lead, the guard's start), `-3` at `52824f6e`
+(215: `subagent-effort` retires), `-4` at `8f7a2f76` (244: the reviewers at `lead-effort`, the two sub-agent model
+rules retire) and `rule/one-model-home` at the head (244: the rest and the fixes). `check --push` passes at each of
+the five. So `session-effort` at medium is in the second branch, not the first, and the reviewers run at medium in
+main between the second and the fourth: the stack lands in order in one sitting. Next: the five pushes, the five
+pull requests (bodies in the job's `tmp/body-<n>.md`), one ready notice each.
 At 15:17, read from `date` before this line was written (the paragraph under it said 15:35 when it was committed at
 15:12, the same mistake once more: `docs/FAILURES.md`, `hours-guessed`): U9 is committed, `ed3b2006`.
 By 15:12: every unit is read. Codex on U8 (`4a535e3..cddbe16`): "the patch is correct", no
