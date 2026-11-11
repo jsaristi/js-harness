@@ -242,3 +242,12 @@ is a setting of his account, so this work only hands him its command.
   a fast-forward. Not guarded, and said in the pull request: an ssh alias for `github.com`, `core.sshCommand`, a
   proxy or a hosts file sends a URL that names github.com elsewhere; those are the machine's own settings, and the
   guard reads what git names, not where the network goes.
+- L14 The fix of L13 is `576e0369`, gate green on GitHub's machines. Codex on `445a43c..576e036`: "the patch is
+  correct" (0.9), no finding, 71,854 input tokens. The Claude lenses (risk, resilience, reliability) on it: risk 0;
+  resilience repeats its suggestion of L12 (the order of two lines after a failed read), answered there and not
+  changed; reliability one warning, taken: for a URL whose host stands before a `#`, the line that says why the tree
+  stays named the name after the `@`, not the host git would go to. Writing its test showed two more of the same
+  line, both older than this fix: `runCiGate` printed a remote that is not GitHub's as it is written, its password
+  included, and a password holding such a character was printed in half. `withoutCredentials` now names the host as
+  git reads it and leaves out what could be a password, and both lines go through it. Test first (red: the line read
+  `https://example.invalid#@github.com/o/r`, then `https://user:se`), then 19 of 19.

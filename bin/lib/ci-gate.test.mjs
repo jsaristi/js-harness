@@ -324,10 +324,19 @@ test('a URL is GitHub\'s only where git would go to github.com: a host before an
     const gh = fakeGh({ ...GREEN(), visibility: 'PRIVATE' });
     const gitCalls = [];
     const result = await runCiGate(options(p, gh, clock(), { onGit: (args) => gitCalls.push(args) }));
-    assert.equal(result.ran, false);
-    assert.match(result.why, /is not a GitHub repository/);
+    // Both lines name the host git would go to, not the name after the "@" (the Claude lenses, on 576e0369).
+    const asked = () => remoteGateKeeps({ cwd: p.cwd, env: { ...cleanEnv, ...identity, ...p.env }, gh });
+    assert.deepEqual(result, { ran: false, why: 'origin is not a GitHub repository (https://example.invalid)' });
+    assert.deepEqual(asked(), { why: 'origin pushes to https://example.invalid, which is not a GitHub repository, so nothing says it is private and the tree being committed was not pushed', known: true });
     assert.deepEqual(gh.calls, []);
     assert.deepEqual(written(gitCalls), []);
+    // A password is printed by neither, one that holds such a character included: what follows it is left out.
+    for (const url of ['https://user:secret@example.com/o/r.git', 'https://user:se#cret@example.com/o/r.git']) {
+      git(p.cwd, 'remote', 'set-url', 'origin', url);
+      const said = `${(await runCiGate(options(p, gh, clock()))).why}\n${asked().why}`;
+      assert.match(said, /^origin is not a GitHub repository \(https:\/\/[\w./]+\)\norigin pushes to https:\/\/[\w./]+, which is not a GitHub repository/, url);
+      assert.doesNotMatch(said, /cret|se#/, url);
+    }
   } finally {
     p.done();
   }

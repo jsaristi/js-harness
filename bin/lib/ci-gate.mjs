@@ -129,8 +129,17 @@ function pushDestinations(git, remote) {
   return listed.status === 0 ? listed.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [];
 }
 
-/** `url` without the user and password it may carry, for a line that is printed and logged. */
-const withoutCredentials = (url) => url.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@]*@/i, '$1');
+/** `url` without the user and password it may carry, for a line that is printed and logged. Its host is what stands
+ * before the first `/`, `?`, `#` or `\`, as git reads it, without what precedes an `@` there. A rest that holds an
+ * `@` may be the end of a password that held one of those characters, and what reads as the port its start: both
+ * are left out then, and the line names the host alone. */
+function withoutCredentials(url) {
+  const parts = /^([a-z][a-z0-9+.-]*:\/\/)([^/?#\\]*)(.*)$/i.exec(url);
+  if (!parts) return url;
+  const [, scheme, authority, rest] = parts;
+  const host = authority.slice(authority.lastIndexOf('@') + 1);
+  return rest.includes('@') ? `${scheme}${host.split(':')[0]}` : `${scheme}${host}${rest}`;
+}
 
 /** Why the tree of the commit being made stays on this machine, as `{ why, known }`, or null where the project lets
  * it be pushed for its gate: `remoteGate` on, or private with every place the push goes to (`pushDestinations`) a
@@ -201,7 +210,7 @@ export async function runCiGate({ cwd, remote = 'origin', env = process.env, gh,
   // is asked about that repository and no other, whatever folder `check` was started from.
   const url = pushUrl(git, remote);
   const repository = githubRepository(url);
-  if (!repository) return { ran: false, why: `${remote} is not a GitHub repository (${url || 'no URL'})` };
+  if (!repository) return { ran: false, why: `${remote} is not a GitHub repository (${url ? withoutCredentials(url) : 'no URL'})` };
   const runGh = gh ?? spawner('gh', env);
   // Before anything is written: what the project's switch keeps here leaves no object and no branch behind.
   const kept = keptHere({ cwd, remote, git, gh: runGh });
