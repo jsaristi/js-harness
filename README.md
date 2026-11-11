@@ -1335,8 +1335,8 @@ recorded session that did not say `closed` has it, and it is not locked, but for
 holds on it for the session's own job; `claude stop` ends its jobs before that, a lock left for a
 process that has ended is released (read once more right before, so one taken anew is kept), and
 `claude rm` removes the jobs after, each with the scratch folder `claude` keeps for it. A record with
-a line that cannot be read closes nothing until that line is repaired or taken out by hand: it may
-be a resume, or a newer notice than `closed`. One with no worktree in the record whose job stands
+a line that cannot be read, or a stranded start that cannot, closes nothing until it is repaired or
+taken out by hand, each named by its file: it may be a resume, or a newer notice than `closed`. One with no worktree in the record whose job stands
 in a folder other than the main checkout stays while that folder holds files. One that cannot go that way stays whole, named with
 why and with what settles it, and the board and `doctor` (the `finished` row) list each finished
 session still on the machine. The job a resume replaced stays until its session is closed and goes

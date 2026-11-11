@@ -275,12 +275,14 @@ export function closeFinishedIn({ home, root, cwd = root, base = null, baseName 
   if (claude === null) return { unavailable: 'claude is not on PATH' };
   // A line that cannot be read may be a newer word than `closed`, or the start of a resume: "could not read" is not
   // "none". A second try reads the same line, so this refusal stands (`standing`) and says what settles it (two lenses).
-  const damaged = (count, file, may) => ({
-    unavailable: `${count} line${count === 1 ? '' : 's'} of ${file} could not be read, and one may be ${may}; the close stays off until that file reads whole, its damaged line${count === 1 ? '' : 's'} repaired or taken out by hand`,
-    standing: true,
-  });
-  if (background.skipped > 0) return damaged(background.skipped, `the record of background sessions ${recordFileOf(home)}`, 'a resume');
-  if (record.skipped > 0) return damaged(record.skipped, `the channel's record ${record.path}`, 'a newer notice than closed');
+  // Each thing is named where it is: a stranded start is a file of its own, not a line of the record (Codex P2).
+  const damaged = (what, may) => ({ unavailable: `${what.join(' and ')} could not be read, and one may be ${may}; the close stays off until what could not be read is repaired or taken out by hand`, standing: true });
+  const linesOf = (count, file) => (count > 0 ? [`${count} line${count === 1 ? '' : 's'} of ${file}`] : []);
+  if (background.skipped > 0) {
+    const files = background.strandedUnread ?? [];
+    return damaged([...linesOf(background.skipped - files.length, `the record of background sessions ${recordFileOf(home)}`), ...(files.length > 0 ? [`the stranded start${files.length === 1 ? '' : 's'} ${files.join(', ')}`] : [])], 'a resume');
+  }
+  if (record.skipped > 0) return damaged(linesOf(record.skipped, `the channel's record ${record.path}`), 'a newer notice than closed');
   let agents;
   try {
     agents = list();

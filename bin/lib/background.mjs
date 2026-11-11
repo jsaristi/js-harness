@@ -176,7 +176,8 @@ function closeEntry(home, job, now) {
  * worktree and brief, so the two are undone together (`resumedChain`); `{ none: true }` when there is no record;
  * `{ unavailable }` when it could not be read. A line that is not an entry of this schema is skipped and counted
  * (`skipped`). The stranded starts (`strandEntry`) are read after the lines, each marked with its file (`stranded`),
- * unless a line records its removal; a stranded file that is not such an entry is skipped and counted too. A record
+ * unless a line records its removal; a stranded file that is not such an entry is skipped and counted too, and named
+ * in `strandedUnread`, since what repairs it is that file and not a line of the record. A record
  * that could not be read gives them all the same, as `{ unavailable, stranded }`: each is a session that runs and that
  * the record does not hold, so `sessions stop` and the machine uninstall undo it without the record (Codex P2 on
  * 62315e6..e16b577). */
@@ -190,17 +191,17 @@ export function readRecord(home, { readFile = (file) => fs.readFileSync(file, 'u
   /** The stranded starts whose removal is not in `removed`, and how many files are not such a start. */
   const strandedOf = (removed) => {
     const entries = [];
-    let unread = 0;
+    const unread = [];
     for (const name of strandedNames) {
       const file = path.join(strandedDirOf(home), name);
       let entry;
       try {
         entry = JSON.parse(readFile(file));
       } catch {
-        unread += 1;
+        unread.push(file);
         continue;
       }
-      if (entry?.schema !== BACKGROUND_SCHEMA || entry.event !== 'started' || typeof entry.id !== 'string') unread += 1;
+      if (entry?.schema !== BACKGROUND_SCHEMA || entry.event !== 'started' || typeof entry.id !== 'string') unread.push(file);
       else if (!removed.has(entry.id)) entries.push({ ...entry, stranded: file });
     }
     return { entries, unread };
@@ -235,7 +236,7 @@ export function readRecord(home, { readFile = (file) => fs.readFileSync(file, 'u
     } else skipped += 1;
   }
   const stranded = strandedOf(removed);
-  skipped += stranded.unread;
+  skipped += stranded.unread.length;
   for (const entry of stranded.entries) {
     open.set(entry.id, entry);
     started.push(entry);
@@ -243,7 +244,7 @@ export function readRecord(home, { readFile = (file) => fs.readFileSync(file, 'u
   const resumedAs = new Map([...open.values()].filter((entry) => open.has(entry.resumedFrom)).map((entry) => [entry.resumedFrom, entry]));
   // `removed`, the ids of the jobs already removed: one of a chain an undo got only part of is in `started` and is no
   // job to undo.
-  return { sessions: [...open.values()], started, resumedAs, skipped, removed };
+  return { sessions: [...open.values()], started, resumedAs, skipped, strandedUnread: stranded.unread, removed };
 }
 
 /** The jobs the recorded job `entry` resumed, the last one first, read from `started` (readRecord's). */

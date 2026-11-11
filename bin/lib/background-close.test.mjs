@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { appendRecord, backgroundLines, boardBackground, finishedHere, finishedOf, readRecord, recordFileOf } from './background.mjs';
+import { appendRecord, backgroundLines, boardBackground, finishedHere, finishedOf, readRecord, recordFileOf, strandedDirOf } from './background.mjs';
 import { REMOVAL_WAIT_MS, closeAfterLand, closeFinished, closeFinishedIn, closedLines, finishedIn } from './background-close.mjs';
 import { NOTICE_SCHEMA, recordPath } from './channel.mjs';
 import { projectSlug } from './sessions.mjs';
@@ -577,11 +577,24 @@ test('the removal is the one git call given the long bound, and closeFinishedIn 
     fs.appendFileSync(file, '{"cut\n');
     const cut = closeFinishedIn({ ...given, base: 'main' });
     assert.match(cut.unavailable, named);
-    assert.match(cut.unavailable, /; the close stays off until that file reads whole, its damaged line repaired or taken out by hand$/);
+    assert.match(cut.unavailable, /; the close stays off until what could not be read is repaired or taken out by hand$/);
     assert.ok(cut.unavailable.includes(file), cut.unavailable);
     assert.equal(cut.standing, true);
     fs.writeFileSync(file, whole);
   }
+  // A stranded start that cannot be read is a file of its own: it is named by its path, not as a line of the record
+  // (Codex P2 on a9f9f97..f3754c2), alone and beside a damaged line.
+  const lost = path.join(strandedDirOf(world.home), 'lost.json');
+  fs.mkdirSync(path.dirname(lost), { recursive: true });
+  fs.writeFileSync(lost, '{"cut');
+  const stranded = closeFinishedIn({ ...given, base: 'main' });
+  assert.equal(stranded.unavailable, `the stranded start ${lost} could not be read, and one may be a resume; the close stays off until what could not be read is repaired or taken out by hand`);
+  assert.equal(stranded.standing, true);
+  const sound = fs.readFileSync(recordFileOf(world.home), 'utf8');
+  fs.appendFileSync(recordFileOf(world.home), '{"cut\n');
+  assert.ok(closeFinishedIn({ ...given, base: 'main' }).unavailable.startsWith(`1 line of the record of background sessions ${recordFileOf(world.home)} and the stranded start ${lost} could not be read, `));
+  fs.writeFileSync(recordFileOf(world.home), sound);
+  fs.rmSync(path.dirname(lost), { recursive: true });
   assert.equal(closeFinishedIn({ ...given, claude: null }).standing, undefined);
   assert.deepEqual(world.claudeCalls.filter((args) => args[1] === 'bbbb2222'), []);
   // What doctor lists reads the same records: the one left, and a throw where it cannot look.
@@ -619,7 +632,7 @@ test('after a land the finished sessions are closed against the main it pushed, 
   const whole = fs.readFileSync(channel, 'utf8');
   fs.appendFileSync(channel, '{"cut\n');
   assert.deepEqual(closeAfterLand(given), []);
-  assert.match(said[2], /^No finished background session was closed: 1 line of the channel's record .* could not be read, and one may be a newer notice than closed; the close stays off until that file reads whole, its damaged line repaired or taken out by hand\.$/);
+  assert.match(said[2], /^No finished background session was closed: 1 line of the channel's record .* could not be read, and one may be a newer notice than closed; the close stays off until what could not be read is repaired or taken out by hand\.$/);
   fs.writeFileSync(channel, whole);
   assert.deepEqual(world.claudeCalls, []);
   said.length = 0;

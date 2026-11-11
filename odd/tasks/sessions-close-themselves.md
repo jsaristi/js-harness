@@ -349,3 +349,8 @@ written again from a survey of 03:21 local (L17).
   once PR 816 merged), 8 to look at first, 3 not in main, 4 with a leftover folder, 4 not closed, 6 at work, JH 137
   left out, 5 outside the record. A third copy is `~/.js-harness/background/cleanup-2026-11-11.md`, one file to
   delete, since claude rm takes this session's scratch with its job.
+- L18 Codex on T8's slice `a9f9f979..f3754c2a` (2026-11-11 04:10 local): incorrect (0.96), one finding, P2, 136,847
+  input tokens. `readRecord` counts a stranded start it cannot read in `skipped`, so the new refusal named
+  `sessions.jsonl` and told the reader to repair a file that was whole. Fixed in the commit after `f3754c2a`, test
+  first (seen to fail): `readRecord` names those files (`strandedUnread`), and the refusal names each thing where it
+  is, the lines of the record and the stranded starts by their paths.
