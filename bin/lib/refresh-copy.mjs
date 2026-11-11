@@ -155,11 +155,24 @@ export function pruneStalePnpm({ binDir, now = Date.now, isPnpmRunning, fsys = f
     } catch {
       continue;
     }
-    const target = cmd ? /global\\v11\\[^"]+/.exec(text)?.[0].replace(/\\/g, '/') : /global\/v11\/[^"'\s]+/.exec(text)?.[0];
     const shim = path.basename(name, '.cmd');
-    if (target && !fsys.existsSync(path.join(home, target)) && !broken.includes(shim)) broken.push(shim);
+    if (shimTargets(text, cmd).some((target) => !fsys.existsSync(path.join(home, target))) && !broken.includes(shim)) broken.push(shim);
   }
   return { removed, backups, kept, broken };
+}
+
+/** What the shim `text` must still find under pnpm's home, `/`-separated from `global/v11`: the paths it runs, which it
+ * names behind its own folder (`"%~dp0\..\global\v11\..."` in a .cmd, `'../global/v11/...'` in the POSIX shim). The
+ * store paths it adds to `NODE_PATH` are whole paths and are never read as its target: pnpm 12 names there a
+ * `node_modules/.pnpm/node_modules` it makes only for a package with dependencies, and the first store path of the shim
+ * was once taken for the target, so every refresh of js-harness, which has none, ended as a broken shim
+ * (odd/tasks/land-two-defects.md). A shim that names the store with no path behind its own folder (a target on another
+ * drive is written whole) is held by the store folders it names, which is what a prune can remove. */
+function shimTargets(text, cmd) {
+  const run = cmd ? /\.\.\\(global\\v11\\[^"\r\n]+)/g : /\.\.\/(global\/v11\/[^"'\s]+)/g;
+  const targets = [...text.matchAll(run)].map((match) => match[1].replace(/\\/g, '/'));
+  const named = targets.length > 0 ? targets : [...text.matchAll(/global[\\/]v11[\\/]([^\\/"'\s;:]+)/g)].map((match) => `global/v11/${match[1]}`);
+  return [...new Set(named)];
 }
 
 /** Copies the Claude settings to `dir` as `settings-<stamp>.json`, then keeps the newest `KEEP_SETTINGS_BACKUPS` of those
