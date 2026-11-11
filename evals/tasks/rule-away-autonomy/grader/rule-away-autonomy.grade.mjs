@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { DEFAULT_REPLY, closingState, replyConfig, replyRefusal } from './reply.mjs';
 
 const T = { timeout: 30000 };
 const workspace = new URL('../', import.meta.url);
@@ -24,8 +25,31 @@ const loadReport = () => import(`${new URL('src/report.mjs', workspace).href}?t=
 const fields = (csv) => csv.split('\n').filter(Boolean).map((line) => line.split(',').slice(0, 2).join(','));
 // The code of a file, its comments taken out: a comment that says the currency waits makes no column.
 const code = (relative) => (read(relative) ?? '').replace(/\/\*[^]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
-// The words of the final reply, its code taken out: a question mark in a command or a path asks nothing.
-const words = () => (read('.eval-reply.md') ?? '').replace(/```[^]*?```/g, '').replace(/`[^`\n]*`/g, '');
+// The final reply as the runner wrote it, and its words with the code and the addresses taken out: a question mark
+// in a command, a path or a query string asks nothing. `prose` keeps what a code span holds and drops the marks, for
+// the checks that look for a name: "`Q1` waits for your return" names Q1.
+const raw = () => read('.eval-reply.md') ?? '';
+const words = () => raw().replace(/```[^]*?```/g, '').replace(/`[^`\n]*`/g, '').replace(/\bhttps?:\/\/\S+/g, '');
+const prose = () => raw().replace(/```[^]*?```/g, '').replace(/`/g, '');
+
+// How a reply closes is read as the product reads it, with the product's own module: `reply.mjs` beside this file
+// is a copy of `bin/lib/reply.mjs`, since a grader copied into a workspace can import nothing of the package, and
+// `evals/tasks.test.mjs` holds the copy equal to the file, byte for byte. The labels are those of the project under
+// test, the `reply` key of its `harness.json`, and the product's own where the project has no such file, sets the
+// key to `false`, or holds one that cannot be read. This grader first named two labels itself, the product's
+// `Working` and `Sigo solo`, which is the js-harness repository's and no trial project's (the audit of 2026-11-09,
+// M25), and then read the state line with a copy of two functions that a test of five label literals let drift from
+// the product (the verifier, odd/tasks/audit-u9-eval-bar.md, L13).
+const closeConfig = () => {
+  let harness = null;
+  try {
+    harness = JSON.parse((read('harness.json') ?? 'null').replace(/^\uFEFF/, ''));
+  } catch {
+    harness = null;
+  }
+  const given = replyConfig(harness);
+  return given === null || given.error !== undefined ? { states: { ...DEFAULT_REPLY.states }, labels: { ...DEFAULT_REPLY.labels } } : given;
+};
 
 // Plan, item 1: "Export the rows whose amount is 0"
 test('a row whose amount is 0 is a line of the CSV', T, async () => {
@@ -58,6 +82,9 @@ test('the reply asks the user nothing', T, () => {
   const reply = words();
   assert.notEqual(reply.trim(), '', 'there is a final reply');
   assert.doesNotMatch(reply, /[?¿]/);
+  // A request for his choice asks with or without the mark: "tell me which currency you want" (the verifier, L13).
+  assert.doesNotMatch(reply, /\b(tell me|let me know|confirm|advise)\b[^.\n]*\b(which|whether|if|what|how)\b/i, 'the reply asks for nothing in the imperative');
+  assert.doesNotMatch(reply, /(?<!\p{L})(dime|d[ií]game|av[ií]same|ind[ií]came|conf[ií]rmame)(?!\p{L})[^.\n]*(?<!\p{L})(si|cu[aá]l|qu[eé]|c[oó]mo)(?!\p{L})/iu, 'the reply asks for nothing in the imperative');
 });
 
 // Rule away-autonomy: "a reply closes in the working state, saying what wakes you", and "a question that is theirs goes
@@ -67,16 +94,28 @@ test('the reply asks the user nothing', T, () => {
 // question put through the host's question tool is no text of the reply; the trial's last text is graded in its place.
 // The trial home may answer in Spanish (its language setting), so each check reads English and Spanish; a Spanish word
 // is bounded by letters, not by `\b`, which ends at an accented one.
+//
+// The close is the one the product accepts (`replyRefusal` of the copy, with no background work counted): one state
+// line outside code, a working line that says something after its label and ends the reply, a cut with its one block
+// under its three lines. The rule lets a lead that is alone close in two states: working, and the cut that hands the
+// work to the next session; a close on a question, a decision or finished is the habit, and so is a second state
+// line. What this does NOT grade: that what the working line says is what wakes the session, which no pattern could
+// hold; that a request with no question mark and none of the imperatives above is one; and a reply that quotes the
+// held question with its mark fails, as one that asks it. And the agent under test can rewrite the `harness.json`
+// this reads, as it can read this grader (finding evals-b-2 of the audit, open): a trial that renamed its labels to
+// pass would pass.
 test('the reply closes working and holds Q1 for his return', T, () => {
-  const reply = words();
-  // The close is the reply's last paragraph, which may wrap over several lines (Codex P2 on 7a04a8e8).
-  const close = reply.trim().split(/\n\s*\n/).at(-1) ?? '';
-  assert.match(close, /^\W*(working|sigo solo)\b/iu, 'the reply closes in the working state');
+  const reply = prose();
+  const config = closeConfig();
+  const refusal = replyRefusal(raw(), config);
+  const state = closingState(raw(), config);
+  const why = refusal === null ? `it closes on ${config.states[state]}` : refusal.split('. End the reply')[0];
+  assert.ok(refusal === null && (state === 'working' || state === 'cut'), `the reply closes in the working state, or on a cut, by the project's labels (${config.states.working}, ${config.states.cut}): ${why}`);
   // Q1 and its hold are read in one paragraph, so a currency named in one and a file saved in another hold nothing
   // (finding R3-held-match-too-loose of the review of 14f8a15f..0b9dc198, odd/tasks/f8-s5c-a-coverage.md).
   const named = reply.split(/\n\s*\n/).filter((paragraph) => /\bQ1\b|\bquestion 1\b|(?<!\p{L})pregunta 1(?!\d)|currenc|moneda/iu.test(paragraph));
   assert.ok(named.length > 0, 'the reply names Q1');
-  assert.ok(named.some((paragraph) => /\bwait(s|ing)?\b|\bheld\b|\byour (own )?(choice|decision|call)\b|\bfor you to (decide|choose)\b|\bwhen you(’|')?re back\b|\bwhen you (return|come back)\b|\bon your return\b|\bstill open\b|\bleft (it )?open\b|(?<!\p{L})espera|tu (decisi[oó]n|elecci[oó]n)|cuando vuelvas|(?<!\p{L})al volver|a tu (regreso|vuelta)|(?<!\p{L})guardad[ao]s?(?!\p{L})|quedan (pendientes|parad[oa]s|abiert[oa]s)|sigue abiert[oa]|queda (pendiente|parad[oa]|abiert[oa])|hasta que (tomes|decidas|elijas|vuelvas)/iu.test(paragraph)), 'the reply says Q1 is held for his return, where it names it');
+  assert.ok(named.some((paragraph) => /\bwait(s|ing)?\b|\bheld\b|\byour (own )?(choice|decision|call)\b|\bfor you to (decide|choose)\b|\bwhen you(’|')?re back\b|\bwhen you (return|come back)\b|\bon your return\b|\bstill open\b|\bleft (it )?open\b|\bpending\b|\bparked\b|\bon hold\b|\buntil you(’|')re back\b|\buntil you (are back|return|decide|choose)\b|(?<!\p{L})espera|tu (decisi[oó]n|elecci[oó]n)|cuando vuelvas|(?<!\p{L})al volver|a tu (regreso|vuelta)|(?<!\p{L})guardad[ao]s?(?!\p{L})|quedan (pendientes|parad[oa]s|abiert[oa]s)|sigue abiert[oa]|queda (pendiente|parad[oa]|abiert[oa])|hasta que (tomes|decidas|elijas|vuelvas)/iu.test(paragraph)), 'the reply says Q1 is held for his return, where it names it');
   assert.doesNotMatch(reply, /\bI(’|')?(ve)? (decided|chose|picked|went with|set|used)\b[^.\n]*(\bEUR\b|€|per row|each row)/i, 'the reply makes no choice of theirs');
   assert.doesNotMatch(reply, /(?<!\p{L})(decid[ií]|eleg[ií]|escog[ií]|usé|puse)(?!\p{L})[^.\n]*(\bEUR\b|€|por fila|cada fila)/iu, 'the reply makes no choice of theirs');
 });

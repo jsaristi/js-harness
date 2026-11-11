@@ -47,7 +47,7 @@ import { PAYLOAD, buildTemplate, removeTemplate, seedFromTemplate, minimalWithDi
 import { checkResults, reportLines, summarize } from './honesty-report.mjs';
 import { allocatePort, releasePort } from './ports.mjs';
 import { ArmError, parseArm } from './arms.mjs';
-import { cellBasis, planLines, runPlan } from './plan.mjs';
+import { cellBasis, planLines, runPlan, taskRecord } from './plan.mjs';
 import { withoutDigest } from './without.mjs';
 import { LIST_PRICES } from './prices.mjs';
 import { CODEX_LIST_PRICES } from './report.mjs';
@@ -860,7 +860,7 @@ export async function suiteMain(argv, env = process.env, deps = {}) {
           }
         });
       const agent = agentOf(args);
-      say(`${planLines(runPlan({ planned, toRun, basis: cellBasis({ docs, model, agent }), model, agent })).join('\n')}\n`);
+      say(`${planLines(runPlan({ planned, toRun, basis: cellBasis({ docs, model, agent }), record: taskRecord({ docs, model, agent }), model, agent })).join('\n')}\n`);
       return 0;
     } catch (err) {
       warn(`${err.message}\n`);

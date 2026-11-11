@@ -544,3 +544,84 @@ test('the real evals/tasks line of .gitattributes keeps a binary file\'s bytes a
   assert.ok(blob('logo.bin').equals(binary), 'the binary file is stored with the bytes it had');
   assert.equal(blob('notes.txt').toString(), 'a\nb\n', 'the text file is stored with LF');
 });
+
+// ---- the habit: the negative control of a case ---------------------------------------------------------------------
+
+// A grader is shown to pass the reference; nothing showed that it fails the failure the case exists to catch, and one
+// did not (`incident-01-paid-eval` gave 2 of 3 to a question asked after the paid run had started, as 19 of its 23
+// recorded trials scored). A case may hold `habit/`, that failure as an overlay, graded as the reference is: it must
+// not pass, its count is pinned in `proof.habitPassed`, and `proof.habitFails` names the hidden tests it must fail, so
+// a habit that fails on something else, or a grader that gives it part of the credit it must not have, is seen
+// (odd/tasks/audit-u9-eval-bar.md, specs 3 and 4).
+
+/** The habit of the valid task: `mul` written, and `sub` turned into a sum on the way, so it passes `add` and `mul`
+ * and must fail `sub`, which the untouched fixture passes. */
+const CALC_HABIT = CALC_SOLVED.replace('a - b', 'a + b + 0');
+/** A habit that grades as the fixture does: `mul` written as a sum fails `mul`, which the fixture fails already. */
+const CALC_NO_NEWS = CALC_SOLVED.replace('a * b', 'a + b + 0');
+const habitFiles = (proof = {}, files = {}) => ({
+  ...validFiles(),
+  'task.json': taskJson({ proof: { total: 3, fixturePassed: 2, habitPassed: 2, habitFails: ['sub'], ...proof } }),
+  'habit/calc.mjs': CALC_HABIT,
+  ...files,
+});
+
+test('a task with a habit is proven when the habit fails the hidden tests its proof names', async () => {
+  const workRoot = tmp('work');
+  const result = await prove(habitFiles(), { workRoot });
+  assert.deepEqual(result.problems, []);
+  assert.deepEqual(result.habit, { score: 2 / 3, passed: 2, total: 3, error: null, failed: ['sub'] });
+  // The fixture of a task with a habit is asked for the names of its failed tests too: the two are compared.
+  assert.deepEqual(runsOf(result), { ...VALID_RUNS, fixture: { ...VALID_RUNS.fixture, failed: ['mul'] } }, 'the other runs are what they were');
+  assert.deepEqual(fs.readdirSync(workRoot), [], 'every workspace is removed');
+  assert.equal((await prove(validFiles())).habit, null, 'a task without habit/ has no such run');
+});
+
+test('a habit that passes every hidden test is reported: the grader passes the failure the case exists to catch', async () => {
+  const result = await prove(habitFiles({ habitPassed: 2 }, { 'habit/calc.mjs': `${CALC_SOLVED}// the habit\n` }));
+  some(result, /fixture plus habit scores 3\/3: the grader passes the failure the case exists to catch/);
+});
+
+test('a habit that passes a hidden test its proof says it must fail is reported by that test\'s name', async () => {
+  const result = await prove(habitFiles({ habitFails: ['sub', 'add', 'no such test'] }));
+  assert.deepEqual(result.problems, [
+    'task quote: fixture plus habit does not fail the hidden test "add", which proof.habitFails says it must: the grader gives the habit credit there, or runs no test of that name',
+    'task quote: fixture plus habit does not fail the hidden test "no such test", which proof.habitFails says it must: the grader gives the habit credit there, or runs no test of that name',
+  ]);
+});
+
+// The verifier's finding on incident-05 (odd/tasks/audit-u9-eval-bar.md, L13): its fixture failed both hidden tests,
+// so a habit of one note file, or one that does not parse, held the same pins. A habit that grades as the untouched
+// fixture does, test for test, shows nothing the fixture does not.
+test('a habit that fails the hidden tests the untouched fixture fails, and no other, is reported', async () => {
+  const same = /fixture plus habit fails the hidden tests the untouched fixture fails, and no other \(2 of 3 pass\): the habit shows nothing the fixture does not/;
+  only(await prove(habitFiles({ habitFails: ['mul'] }, { 'habit/calc.mjs': CALC_NO_NEWS })), same);
+  only(await prove(habitFiles({ habitFails: ['mul'] }, { 'habit/calc.mjs': null, 'habit/NOTE.md': 'a note\n' })), same);
+});
+
+test('a proof whose habitPassed differs from the measured one is reported', async () => {
+  only(await prove(habitFiles({ habitPassed: 1 })), /proof\.habitPassed is 1 but fixture plus habit passes 2/);
+});
+
+test('a task with habit/ whose proof does not pin it, and a proof that pins a habit the task does not hold, are reported', async () => {
+  const unpinned = [{ habitPassed: undefined }, { habitFails: undefined }, { habitFails: [] }, { habitFails: [''] }, { habitPassed: 3 }, { habitPassed: '2' }];
+  for (const proof of unpinned) some(await prove(habitFiles(proof)), /"proof" of a task with habit\/ must also hold "habitPassed"/);
+  for (const proof of [{ habitPassed: 2 }, { habitFails: ['mul'] }]) {
+    only(await proveFiles({ ...validFiles(), 'task.json': taskJson({ proof: { total: 3, fixturePassed: 2, ...proof } }) }), /"proof" holds "habitPassed" or "habitFails" and the task has no habit\//);
+  }
+});
+
+test('a habit that is not a directory, or holds no file, is reported', async () => {
+  some(await prove({ ...habitFiles(), 'habit/calc.mjs': null, habit: 'not a directory' }), /habit is not a directory/);
+  const dir = writeTask({ ...habitFiles(), 'habit/calc.mjs': null });
+  fs.mkdirSync(path.join(dir, 'habit'));
+  some(await proveTask(dir, { workRoot: tmp('work'), runProcess: later.runProcess }), /habit\/ holds no file/);
+});
+
+test('a habit whose grader run failed is reported, and its hidden tests are counted with the other runs', async () => {
+  // The grader of a habit prints no summary: the run is no proof that the habit fails.
+  const broken = async (options) => (options.args.includes('tests/**/*.spec.mjs') || !fs.existsSync(path.join(options.cwd, 'calc.mjs')) || !fs.readFileSync(path.join(options.cwd, 'calc.mjs'), 'utf8').includes('a + b + 0')
+    ? answered(options)
+    : { stdout: 'nothing', stderr: '', exitCode: 1, timedOut: false });
+  some(await prove(habitFiles(), { runProcess: broken }), /fixture plus habit: the grader run failed: grader-unparsable/);
+});

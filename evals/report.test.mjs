@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
-  CODEX_LIST_PRICES, ReportError, USAGE, buildCells, buildComparison, buildReport, checkDiscriminating, checkRuns, compareCells, formatReport, estimateCodexCost, incompleteCells, loadRuns, reportMain, trialTokens,
+  CODEX_LIST_PRICES, ReportError, USAGE, buildCells, buildComparison, buildReport, checkCost, checkDiscriminating, checkRuns, compareCells, formatReport, estimateCodexCost, incompleteCells, loadRuns, reportMain, trialTokens,
 } from './report.mjs';
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-report-test-'));
@@ -411,12 +411,16 @@ test('the report has one row per task and effort, tasks in name order, with the 
 
 // ---- the command -------------------------------------------------------------------------------------------------
 
+/** A `modelUsage` of Opus 5.5 whose list price is `costUsd`, all of it output tokens: what a run of today records, so
+ * the report's cost check (`checkCost`) finds the cost inside its range and says nothing. */
+const listed = (costUsd) => ({ 'claude-opus-5-5': { inputTokens: 0, outputTokens: Math.round(costUsd * 5e4), cacheReadInputTokens: 0, cacheCreationInputTokens: 0, costUSD: costUsd } });
+
 /** Two efforts of three tasks: alpha is won on cost by minimal, beta on score by current, gamma is none. */
 const abTrials = (efforts = ['medium', 'high']) => efforts.flatMap((effort) => [
   ...bothConfigs({ task: 'alpha', costs: [1000, 1100, 900] }, { task: 'alpha', costs: [2000, 2100, 1900] }, { effort }),
   ...bothConfigs({ task: 'beta', scores: 0.5 }, { task: 'beta', scores: 1 }, { effort }),
   ...bothConfigs({ task: 'gamma', costs: [1000, 2000, 3000] }, { task: 'gamma', costs: [1500, 2500, 3500] }, { effort }),
-]);
+]).map((entry) => ({ ...entry, modelUsage: listed(entry.costUsd) }));
 
 const run = async (argv, docs) => {
   const dir = resultsDir(docs ?? { ab: docOf('ab', abTrials()) });
@@ -1012,4 +1016,73 @@ test('an arm whose base has no trial in the runs is refused, so neither gate pas
   }
   const alone = [{ name: 'run', file: 'run.json', doc: docOf('run', cellTrials({ config: 'current-without-skills' })) }];
   assert.match(refusal(() => buildReport(alone)), /no trial of its base, current/);
+});
+
+// ---- the cost check ----------------------------------------------------------------------------------------------
+
+// The A/B report's cost is Claude Code's own `costUsd` (the Decided row "Eval verdict" of docs/ROADMAP.md), and the CLI
+// prices a model it does not know at a rate that is not its own (`evals/prices.mjs`). So each cost is held against
+// the list price of the trial's `modelUsage` (odd/tasks/audit-u9-eval-bar.md, spec 2): of the costs recorded when the
+// check was written, 369 of the 369 that can be checked are inside it.
+
+/** A `modelUsage` of Opus 5.5 that costs $11.20 with its cache writes at the 5-minute price and $14.20 at the 1-hour one. */
+const opusUsage = () => ({ 'claude-opus-5-5': { inputTokens: 1e6, outputTokens: 1e5, cacheReadInputTokens: 1e6, cacheCreationInputTokens: 1e6, costUSD: 12 } });
+
+test('checkCost holds a costUsd against the list price of its modelUsage, a range since cache writes have two prices', () => {
+  const at = (costUsd, modelUsage = opusUsage()) => checkCost(trial({ costUsd, modelUsage }));
+  assert.deepEqual(at(12), { verdict: 'inside', low: 11.2, high: 14.2 });
+  assert.equal(at(11.2).verdict, 'inside', 'the ends are inside');
+  assert.equal(at(14.2).verdict, 'inside');
+  assert.equal(at(11.1).verdict, 'outside');
+  assert.equal(at(20).verdict, 'outside');
+  // Haiku 5.5 has a long-prompt price, five times the base, and sums cannot tell which requests paid it: the range
+  // runs from every request at the base price to every one at the long-prompt price.
+  const haiku = { 'claude-haiku-5-5': { inputTokens: 1e6, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0, costUSD: 0 } };
+  assert.deepEqual(at(0.4, haiku), { verdict: 'inside', low: 0.1, high: 0.5 });
+  assert.equal(at(0.6, haiku).verdict, 'outside');
+  // What cannot be checked says why, and a trial without a cost has none to check.
+  assert.deepEqual(at(12, null), { verdict: 'unchecked', reason: 'no modelUsage is recorded' });
+  assert.deepEqual(at(12, { 'model-x': opusUsage()['claude-opus-5-5'] }), { verdict: 'unchecked', reason: 'no list price is recorded for model-x' });
+  assert.deepEqual(at(12, { 'claude-opus-5-5': { inputTokens: 5 } }), { verdict: 'unchecked', reason: 'its modelUsage lacks a count' });
+  assert.deepEqual(at(null), { verdict: 'none' });
+});
+
+test('a cost outside the list price is unknown to its cell and named, and one that cannot be checked stays and is named', () => {
+  const trials = [
+    ...cellTrials({ config: 'minimal', costs: [12, 12.5, 40], modelUsage: opusUsage() }),
+    ...cellTrials({ config: 'current', costs: [12, 12.5, 13], modelUsage: opusUsage() }),
+    ...cellTrials({ config: 'minimal', task: 'beta', costs: 12, modelUsage: opusUsage() }),
+    ...cellTrials({ config: 'current', task: 'beta', costs: 12, modelUsage: null }),
+  ];
+  const cells = buildCells(trials);
+  const cost = (task, config) => cells.find((cell) => cell.task === task && cell.config === config).cost;
+  assert.deepEqual([cost('alpha', 'minimal').known, cost('alpha', 'minimal').mean], [2, 12.25], 'the cost of $40 is left out, as a trial without a cost is');
+  assert.deepEqual([cost('beta', 'current').known, cost('beta', 'current').mean], [3, 12], 'a cost that cannot be checked stays');
+  const report = buildReport(loadRuns({ dir: resultsDir({ run: docOf('run', trials) }) }));
+  assert.deepEqual(report.costCheck, {
+    costs: 12,
+    outside: [{ trial: 'alpha minimal medium #3', costUsd: 40, low: 11.2, high: 14.2 }],
+    unchecked: [1, 2, 3].map((repeat) => ({ trial: `beta current medium #${repeat}`, reason: 'no modelUsage is recorded' })),
+  });
+  const text = formatReport(report);
+  assert.ok(text.includes('cost left out of its cell, outside the list price of its tokens (evals/prices.mjs): alpha minimal medium #3 recorded $40.00, and its modelUsage costs $11.20 to $14.20'), text);
+  assert.ok(text.includes('cost not checked against the list prices for 3 of the 12 trials with a cost, no modelUsage is recorded: beta current medium #1, beta current medium #2, beta current medium #3'), text);
+  // A long list is cut, with its count.
+  const old = buildReport(loadRuns({ dir: resultsDir({ run: docOf('run', bothConfigs({ modelUsage: null }, { modelUsage: null }, { n: 4 })) }) }));
+  assert.ok(formatReport(old).includes('for 8 of the 8 trials with a cost, no modelUsage is recorded: alpha minimal medium #1, alpha minimal medium #2, alpha minimal medium #3, alpha minimal medium #4, alpha current medium #1 and 3 more'), formatReport(old));
+});
+
+test('a report whose every cost is inside the list price says nothing of the check, in its text or in its JSON', async () => {
+  const trials = bothConfigs({ costs: [12, 12.5, 13] }, { costs: [13, 13.5, 14] }, { modelUsage: opusUsage() });
+  const report = buildReport(loadRuns({ dir: resultsDir({ run: docOf('run', trials) }) }));
+  assert.equal(Object.hasOwn(report, 'costCheck'), false);
+  assert.doesNotMatch(formatReport(report), /list price of its tokens|not checked/);
+  const { out } = await run(['--json'], { ab: docOf('ab', trials) });
+  assert.equal(Object.hasOwn(JSON.parse(out), 'costCheck'), false);
+  // A trial without a cost has none to check: it is counted out of its cell, as before, and not named here.
+  const cut = buildReport(loadRuns({ dir: resultsDir({ run: docOf('run', [...trials, trial({ repeat: 4, costUsd: null, modelUsage: null, error: 'timeout' })]) }) }));
+  assert.equal(Object.hasOwn(cut, 'costCheck'), false);
+  // Codex's costs are estimates at a list price already, and have nothing of the CLI's to check.
+  const codex = buildReport(loadRuns({ dir: resultsDir({ a: codexDocOf('a', codexAb()) }) }));
+  assert.equal(Object.hasOwn(codex, 'costCheck'), false);
 });

@@ -292,7 +292,7 @@ function checkModelUsage(summary, modelUsage) {
  * There is no split between the orchestrator and its subagents: the models are the only split `modelUsage` has, and
  * when one model covers both sides it has none. A model without a price is named and leaves the total unknown, and
  * so does one whose counts cannot be read, tokens included: never a partial sum. */
-function estimateFromModelUsage(modelUsage) {
+export function estimateFromModelUsage(modelUsage) {
   if (!isObject(modelUsage) || Object.keys(modelUsage).length === 0) return null;
   const COUNTS = { inputTokens: 'inputTokens', outputTokens: 'outputTokens', cacheReadTokens: 'cacheReadInputTokens', cacheWriteTokens: 'cacheCreationInputTokens' };
   const sum = { ...Object.fromEntries(Object.keys(COUNTS).map((name) => [name, 0])), low: 0, high: 0 };

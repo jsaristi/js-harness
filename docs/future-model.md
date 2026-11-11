@@ -54,8 +54,10 @@ js-harness commit the workspace is initialized from, so for those the freeze is 
   for a Codex model, into `CODEX_LIST_PRICES` of `evals/report.mjs`. The Claude report's cost is
   Claude Code's own `costUsd` (`evals/report.mjs`, `buildCells`), which the CLI computes at a
   wrong rate for a model it does not know (`evals/prices.mjs`, its header). After the smoke trials,
-  price each trial's recorded `modelUsage` at the list table and compare it with its `costUsd`
-  before any verdict rests on cost. The A/B arms keep no `listCost` (only the subagent configs
+  read the report's cost check before any verdict rests on cost: `node evals/report.mjs` prices
+  each trial's recorded `modelUsage` at the list table, names a `costUsd` outside it and leaves
+  that one out of its cell, and names a trial it cannot check, as on a model the table does not
+  list (`checkCost`). The A/B arms keep no `listCost` (only the subagent configs
   do, `evals/runner.mjs`), and pricing `modelUsage` alone gives a range, since the lifetime of a
   cache write is not in it (`evals/transcript-usage.mjs`): a `costUsd` outside that range is
   told to him before the run goes on.
@@ -90,7 +92,10 @@ comparison across models is made by hand, table beside table, and says so.
 Before asking, the same command with `--plan` prints the trials it would run and their agent
 time and list cost, estimated from the recorded runs of the same model, and starts nothing. On a
 new model nothing is recorded yet, so it says "no estimate": the smoke trials are what give the
-first figures, and the plan of each later batch is made from them.
+first figures, and the plan of each later batch is made from them. Under the estimate it prints
+what each task has passed over the recorded runs of the model, and names the tasks that never
+failed or never passed in ten recorded trials or more: a run of those is unlikely to move, and
+whether they run is his.
 
 The five tasks of F5, both arms, on the new model:
 

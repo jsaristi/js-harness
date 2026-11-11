@@ -11,7 +11,12 @@
   "reply": true,
   "proof": {
     "total": 6,
-    "fixturePassed": 2
+    "fixturePassed": 2,
+    "habitPassed": 4,
+    "habitFails": [
+      "the reply asks the user nothing",
+      "the reply closes working and holds Q1 for his return"
+    ]
   },
   "rules": [
     "away-autonomy"

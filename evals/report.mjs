@@ -17,6 +17,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArm } from './arms.mjs';
+import { LIST_PRICES } from './prices.mjs';
+import { estimateFromModelUsage } from './transcript-usage.mjs';
 
 /** A reason the report cannot be made, or a result file it will not read: printed as it is, exit 1. */
 export class ReportError extends Error {}
@@ -141,6 +143,45 @@ export function trialTokens(entry, agent = 'claude') {
   return { input: total('inputTokens', 'cacheReadInputTokens', 'cacheCreationInputTokens'), output: total('outputTokens') };
 }
 
+// ---- the cost check ----------------------------------------------------------------------------------------------
+
+/** How far outside the list range a cost may be and still be inside it, as a share of the end it passes: the CLI
+ * rounds what it prints. */
+const COST_SLACK = 0.001;
+
+/** A Claude trial's `costUsd` held against the list price of its `modelUsage` (`evals/prices.mjs`). The report's cost
+ * is Claude Code's own (the Decided row "Eval verdict" of `docs/ROADMAP.md`), and the CLI prices a model it does not
+ * know at a rate that is not its own, so a cost is believed only inside what its tokens cost at the list prices
+ * (`odd/tasks/audit-u9-eval-bar.md`, spec 2). `verdict` is:
+ *   - `none` for a trial with no `costUsd`: it has no cost to check, and is unknown to its cell already;
+ *   - `inside` or `outside`, with the range `low` to `high` in US dollars. It is a range because `modelUsage` gives one
+ *     count of cache writes and not how long they live (`estimateFromModelUsage`), and because sums cannot tell which
+ *     requests paid a model's long-prompt price: `low` is every cache write at the 5-minute price and every request
+ *     at the base price, `high` every cache write at the 1-hour price and every request at the long-prompt one;
+ *   - `unchecked`, with the `reason`: no `modelUsage`, a count it lacks, or a model the list table does not hold. */
+export function checkCost(entry) {
+  if (!finite(entry.costUsd)) return { verdict: 'none' };
+  const estimate = estimateFromModelUsage(entry.modelUsage);
+  if (estimate === null) return { verdict: 'unchecked', reason: 'no modelUsage is recorded' };
+  if (estimate.unpricedModels.length > 0) return { verdict: 'unchecked', reason: `no list price is recorded for ${[...estimate.unpricedModels].sort().join(', ')}` };
+  if (estimate.total.listCostUsd === null) return { verdict: 'unchecked', reason: 'its modelUsage lacks a count' };
+  const { low } = estimate.total.listCostUsd;
+  const high = Object.entries(estimate.total.models).reduce((sum, [model, usage]) => sum + usage.listCostUsd.high * (LIST_PRICES[model].longPrompt?.times ?? 1), 0);
+  const inside = entry.costUsd >= low * (1 - COST_SLACK) && entry.costUsd <= high * (1 + COST_SLACK);
+  return { verdict: inside ? 'inside' : 'outside', low, high };
+}
+
+/** What the cost check found over the Claude `trials` of a report, or `null` when every cost is inside its range:
+ * `{ costs, outside, unchecked }`, `costs` being how many trials recorded a cost, `outside` the trials whose cost is
+ * left out of its cell (`buildCells`), as `[{ trial, costUsd, low, high }]`, and `unchecked` those whose cost stays
+ * though nothing holds it, as `[{ trial, reason }]`. */
+function claudeCostCheck(trials) {
+  const checks = trials.map((entry) => ({ entry, check: checkCost(entry) })).filter(({ check }) => check.verdict !== 'none');
+  const outside = checks.filter(({ check }) => check.verdict === 'outside').map(({ entry, check }) => ({ trial: trialLabel(entry), costUsd: entry.costUsd, low: check.low, high: check.high }));
+  const unchecked = checks.filter(({ check }) => check.verdict === 'unchecked').map(({ entry, check }) => ({ trial: trialLabel(entry), reason: check.reason }));
+  return outside.length === 0 && unchecked.length === 0 ? null : { costs: checks.length, outside, unchecked };
+}
+
 // ---- cells -------------------------------------------------------------------------------------------------------
 
 /** One cell per task, effort and config that has a trial, in the order they first appear. A cell holds `n` (every
@@ -154,13 +195,14 @@ export function trialTokens(entry, agent = 'claude') {
  * (`evals/runner.mjs`, `runTrial`), so leaving those out would flatter a config that fails. A trial the runner
  * never recorded (a usage cap, an authentication failure) is not in the results at all. The cell counts the errors
  * so the table can show them. A value a trial does not know (no `costUsd`, a `null` score) is left out of its mean and
- * counted out in `known`, never read as 0.
+ * counted out in `known`, never read as 0; so is a Claude trial's cost that is outside the list price of its tokens
+ * (`checkCost`), which the report names.
  *
  * `agent` says whose records these are, Claude Code's when it is not given. For Codex's, on `model`, the cost of a
  * trial is `estimateCodexCost` in place of the `costUsd` Codex does not report, and the tokens are read as Codex
  * records them (`trialTokens`); the cell has the same shape, so the verdict rule is fed the same way. */
 export function buildCells(trials, { agent = 'claude', model } = {}) {
-  const costOf = agent === 'codex' ? (entry) => estimateCodexCost(entry, model).usd : (entry) => entry.costUsd;
+  const costOf = agent === 'codex' ? (entry) => estimateCodexCost(entry, model).usd : (entry) => (checkCost(entry).verdict === 'outside' ? null : entry.costUsd);
   const groups = new Map();
   for (const entry of trials) {
     const key = JSON.stringify([entry.task, entry.effort, entry.config]);
@@ -193,6 +235,9 @@ export function buildCells(trials, { agent = 'claude', model } = {}) {
  * standard deviation, whichever is larger: one hidden check in about fifty. Near-ceiling scores have almost no
  * spread, so the pooled deviation alone would call one missed check in nine trials a difference. */
 export const SCORE_TOLERANCE = 0.02;
+/** The spread a gap between two mean scores must exceed to be a difference, from the sample deviation of each side:
+ * the one notion of "equal" of the A/B verdict (`compareCells`) and of a rule proof (`evals/rule-proof.mjs`). */
+export const scoreSpread = (sdA, sdB) => Math.max(SCORE_TOLERANCE, pooledSd(sdA, sdB));
 /** A cell needs this many trials, with a known score and a known cost, to be compared at all. */
 const MIN_TRIALS_TO_COMPARE = 2;
 
@@ -235,7 +280,7 @@ export function compareCells(minimal, current) {
   result.costDiff = current.cost.mean - minimal.cost.mean;
   result.pooledCostSd = pooledSd(minimal.cost.sd, current.cost.sd);
   result.costRatio = minimal.cost.mean === 0 ? null : current.cost.mean / minimal.cost.mean;
-  const equal = round(Math.abs(result.scoreDiff)) <= round(Math.max(SCORE_TOLERANCE, result.pooledScoreSd));
+  const equal = round(Math.abs(result.scoreDiff)) <= round(scoreSpread(minimal.score.sd, current.score.sd));
   if (!equal) {
     result.verdict = 'score';
     result.winner = result.scoreDiff > 0 ? 'current' : 'minimal';
@@ -385,6 +430,7 @@ export function buildReport(runs) {
   const agent = agentOf(runs[0].doc);
   const { model } = runs[0].doc;
   const cells = buildCells(trials, { agent, model });
+  const costCheck = agent === 'claude' ? claudeCostCheck(trials) : null;
   // The minimal-against-current table reads the cells of its two configs alone, so an arm beside them changes nothing
   // in it (G2 of `odd/tasks/future-model-protocol.md`).
   const bases = cells.filter((cell) => CONFIGS.includes(cell.config));
@@ -404,6 +450,7 @@ export function buildReport(runs) {
     permissionMode: runs[0].doc.permissionMode,
     stack: runs[0].doc.stack,
     ...(agent === 'codex' && { costEstimate: codexCostEstimate(trials, model) }),
+    ...(costCheck !== null && { costCheck }),
     efforts: efforts.map((effort) => {
       const tasks = [...new Set(bases.filter((cell) => cell.effort === effort).map((cell) => cell.task))].sort();
       const rows = tasks.map((task) => compareCells(cellOf(task, effort, 'minimal'), cellOf(task, effort, 'current')));
@@ -490,6 +537,7 @@ export function buildComparison(claude, codex) {
   const sideOf = (report) => ({
     runs: report.runs, model: report.model, permissionMode: report.permissionMode, stack: report.stack,
     ...(report.costEstimate !== undefined && { costEstimate: report.costEstimate }),
+    ...(report.costCheck !== undefined && { costCheck: report.costCheck }),
   });
   const keyOf = (cell) => JSON.stringify([cell.task, cell.config, cell.effort]);
   const sides = { claude: new Map(cellsOf(claude).map((cell) => [keyOf(cell), cell])), codex: new Map(cellsOf(codex).map((cell) => [keyOf(cell), cell])) };
@@ -629,6 +677,22 @@ function estimateText({ model, price }) {
     + `cache writes ${rate(cacheWrite)}, output ${rate(output)} per 1M tokens, in US dollars (${price.source}, read ${price.read}); a lower bound where a request was over that context, which a record cannot tell`;
 }
 const unestimatedLines = (estimate) => (estimate?.unknown ?? []).map(({ trial, reason }) => `cost not estimated for ${trial}: ${reason}`);
+/** How many trials a line of the cost check names before it counts the rest: a run recorded before `modelUsage` was
+ * has every one of its trials unchecked. */
+const LISTED_TRIALS = 5;
+/** What the cost check found (`claudeCostCheck`), as lines: one for each cost left out of its cell, and one for each
+ * reason a cost could not be checked, with the trials it holds. None when there is nothing to say. */
+function costCheckLines(check) {
+  if (check === undefined) return [];
+  const lines = check.outside.map(({ trial, costUsd, low, high }) => `cost left out of its cell, outside the list price of its tokens (evals/prices.mjs): ${trial} recorded ${costText(costUsd)}, and its modelUsage costs ${costText(low)} to ${costText(high)}`);
+  const byReason = new Map();
+  for (const { trial, reason } of check.unchecked) byReason.set(reason, [...(byReason.get(reason) ?? []), trial]);
+  for (const [reason, trials] of byReason) {
+    const more = trials.length - LISTED_TRIALS;
+    lines.push(`cost not checked against the list prices for ${trials.length} of the ${check.costs} trials with a cost, ${reason}: ${trials.slice(0, LISTED_TRIALS).join(', ')}${more > 0 ? ` and ${more} more` : ''}`);
+  }
+  return lines;
+}
 // Decided in T4 (`odd/tasks/codex-parity.md`, Progress): the download happens inside the agent process, and nothing
 // in a record separates it from `wallMs`, so every wall time of a Codex trial is shown with this beside it.
 const CODEX_WALL = "a Codex trial's wall time includes its per-trial setup download (curated plugins and marketplaces, about 60 MB, more in the current arm), "
@@ -666,7 +730,9 @@ function effortLines({ effort, rows }, costLabel = 'cost') {
  *
  * A report of Codex runs names its agent, says in the cost line and in the column labels that its costs are
  * estimates and at what price, says what its wall times include, and names each trial whose cost was not estimated.
- * A report of Claude Code runs is, to the byte, what it was before there was a second agent. */
+ * A report of Claude Code runs whose every cost is inside the list price of its tokens (`checkCost`) is, to the byte,
+ * what it was before there was a second agent; one that holds a cost outside it, or one nothing can check, names
+ * those trials after its tables. */
 export function formatReport(report, { minDiscriminating } = {}) {
   const codex = agentOf(report) === 'codex';
   const lines = [
@@ -678,6 +744,7 @@ export function formatReport(report, { minDiscriminating } = {}) {
   if (codex) lines.push(`wall: ${CODEX_WALL}`);
   for (const entry of report.efforts) lines.push('', ...effortLines(entry, codex ? ESTIMATED_COST : 'cost'));
   if (unestimatedLines(report.costEstimate).length > 0) lines.push('', ...unestimatedLines(report.costEstimate));
+  if (costCheckLines(report.costCheck).length > 0) lines.push('', ...costCheckLines(report.costCheck));
   lines.push('', 'Discriminating tasks per effort (verdict score or cost):');
   for (const { effort, counts } of report.efforts) lines.push(`  ${effort}: ${counts.discriminating} of ${counts.tasks} (score ${counts.score}, cost ${counts.cost}, none ${counts.none}, incomplete ${counts.incomplete})`);
   if (minDiscriminating !== undefined) {
@@ -749,6 +816,7 @@ function formatComparison(comparison) {
     '',
     `cost: ${CLAUDE_COST}, beside a Codex cost that is ${estimateText(comparison.codex.costEstimate)}`,
     ...unestimatedLines(comparison.codex.costEstimate),
+    ...costCheckLines(comparison.claude.costCheck),
     "tokens: input plus output as each host reports them, the cache reads and cache writes counted once in the input and the reasoning in the output; Claude Code's are summed over every model "
       + "of the session, subagents included, Codex's over the turns of the session; that Codex counts its cache writes inside its input and its reasoning inside its output is assumed, "
       + 'and a trial whose record contradicts it has unknown tokens and no estimated cost',

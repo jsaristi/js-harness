@@ -9,6 +9,10 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { checkResults, fisherOneSided, reportLines, summarize } from './honesty-report.mjs';
+import { incidentScore } from './incident-score.mjs';
+import { cellBasis, cellKey } from './plan.mjs';
+import { buildCells } from './report.mjs';
+import { buildRecord } from './rule-proof.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const script = path.join(here, 'honesty-report.mjs');
@@ -175,4 +179,40 @@ test('the command prints the report and exits 0', async () => {
   const { code, stdout } = await run([fileOf(doc(arm(BASE, honest(0, 10)), arm(LINE, honest(5, 10))))]);
   assert.equal(code, 0);
   assert.match(stdout, /\nthe line moves it\n$/);
+});
+
+// The eval readers do not agree on a trial that recorded an error, and each has its reason. This states the five side
+// by side, so that none is changed, or cited by another as its own, without this failing: this report's code said it
+// left such a trial out "as in `report.mjs`", which counts it (the audit of 2026-11-09, M24;
+// odd/tasks/audit-u9-eval-bar.md, spec 2).
+test('each eval reader treats a trial that recorded an error its own way, stated side by side', () => {
+  const cellOf = (over) => ({ task: 't', config: 'minimal', effort: 'high', repeat: 1, score: 0.5, error: null, wallMs: 1000, costUsd: null, ...over });
+  const cut = { repeat: 2, score: 1, error: 'timeout', wallMs: 9000 };
+
+  // The A/B report counts it, at the score it was graded at, and its cell counts the errors.
+  const [cell] = buildCells([cellOf(), cellOf(cut)]);
+  assert.deepEqual([cell.n, cell.errors, cell.score.known, cell.score.mean], [2, 1, 2, 0.75]);
+
+  // The honesty report leaves it out of every figure, and says how many it left out.
+  const { configs } = summarize({ trials: [trial(BASE, 0.5), trial(BASE, 1, { error: 'timeout', repeat: 2 }), trial(LINE, 1)] });
+  assert.deepEqual([configs[BASE].trials, configs[BASE].counted, configs[BASE].honest, configs[BASE].notCounted.error], [2, 1, 0, 1]);
+
+  // The plan leaves it out of what a trial of its cell is estimated to take.
+  const basis = cellBasis({ model: 'm', agent: 'claude', docs: [{ name: 'run', doc: { model: 'm', createdAt: '2026-11-11', trials: [cellOf(), cellOf(cut)] } }] });
+  const estimate = basis.get(cellKey('t', 'minimal', 'high'));
+  assert.deepEqual([estimate.trials, estimate.wallMs], [1, 1000]);
+
+  // The incident score counts it as any trial: a pass when it was graded at 1, a failure below.
+  const incident = (over) => ({ task: 'incident-01-paid-eval', score: 1, error: 'timeout', ...over });
+  assert.deepEqual(incidentScore({ trials: [incident(), incident({ score: 0.5 })] }).cases['incident-01-paid-eval'], { passed: 1, trials: 2 });
+
+  // A rule proof counts it at the score it was graded at, and its record keeps how many each arm held.
+  const commit = 'a'.repeat(40);
+  const without = 'current-without-rule-reuse-first';
+  const runOf = (name, config, score, error) => ({
+    name, model: 'm', permissionMode: 'default', stack: { jsHarness: commit },
+    trials: [1, 2, 3, 4, 5].map((repeat) => ({ task: 't', config, effort: 'high', repeat, score, error: repeat === 1 ? error : null, costUsd: 1 })),
+  });
+  const record = buildRecord({ name: 't', rules: ['reuse-first'], digests: {}, date: '2026-11-11', commit, current: runOf('c', 'current', 1, 'timeout'), without: runOf('w', without, 0, null) });
+  assert.deepEqual([record.current.trials, record.current.errors, record.current.score, record.without.errors], [5, 1, 1, 0]);
 });
