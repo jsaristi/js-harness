@@ -29,9 +29,11 @@ import { appendLensReview, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, readL
 
 // The model each lens runs on, by its full id: no short name gave it when it was set (on 2026-11-10 `fable` gave
 // claude-fable-5-1 on cli 2.1.319). Until that day the lenses ran on the alias `sonnet`; his "todos los modelos de
-// ahora en adelante va a ser Fable 5.2 Alto" of that day moved them, by the lead's reading. A lens run passes no
-// effort, as before: it runs at the CLI's default for the model.
+// ahora en adelante va a ser Fable 5.2 Alto" of that day moved them, by the lead's reading.
 export const LENS_MODEL = 'claude-fable-5-2';
+// The effort each lens runs at, his "Alto" of the same words, named on the call: a run that names none takes the
+// effort the CLI has saved, whatever it is (Codex, on 21fce28..7613e37). The double review's Claude reader runs at it too.
+export const LENS_EFFORT = 'high';
 // The most a lens is handed, in estimated tokens (four characters a token): a range past it is reviewed in smaller
 // ranges, since a lens that cannot hold the whole block can only answer incomplete.
 export const LENS_INPUT_LIMIT = 150_000;
@@ -67,7 +69,7 @@ export function lensEnv(env) {
 /** The CLI arguments of one lens run, its prompt read from `promptFile` and its settings from `settingsFile`. The CLI
  * enforces the answer's schema and prints the answer as `structured_output` (odd/tasks/lens-review-structured-output.md, L2). */
 export function claudeArgs(promptFile, settingsFile) {
-  return ['-p', '--safe-mode', '--tools', '', '--system-prompt-file', promptFile, '--settings', settingsFile, '--model', LENS_MODEL, '--output-format', 'json', '--json-schema', JSON.stringify(LENS_ANSWER_SCHEMA), '--no-session-persistence'];
+  return ['-p', '--safe-mode', '--tools', '', '--system-prompt-file', promptFile, '--settings', settingsFile, '--model', LENS_MODEL, '--effort', LENS_EFFORT, '--output-format', 'json', '--json-schema', JSON.stringify(LENS_ANSWER_SCHEMA), '--no-session-persistence'];
 }
 
 /** One lens run with the real CLI: `{ status, stdout, stderr, error, durationMs }`. The prompt goes in a file of its
