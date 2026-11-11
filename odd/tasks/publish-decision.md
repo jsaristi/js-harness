@@ -148,10 +148,12 @@ is a setting of his account, so this work only hands him its command.
   GitHub, and `scripts/github-ruleset.test.mjs` holds it to those two rules (L6 below says why not standard input).
 
 ## Tasks
-- [ ] T1 (docs) this document: the contract, the depth pass, the specs and the design, committed with documents alone.
-- [ ] T2 (build) specs 1 and 2: the switch, read before the push, declared on here, with its tests first and its
-  documentation; Codex and the lenses on the slice.
-- [ ] T3 (verify) an independent verifier reads the publish path (high-risk items 2 and 3).
+- [x] T1 (docs) this document: the contract, the depth pass, the specs and the design, committed with documents alone.
+  `2eec546f`
+- [x] T2 (build) specs 1 and 2: the switch, read before the push, declared on here, with its tests first and its
+  documentation; Codex and the lenses on the slice. `c0d570d3`, `2abc371a`, `445a43c4`
+- [x] T3 (verify) an independent verifier reads the publish path (high-risk items 2 and 3). `576e0369`, `53c1702f`
+  and the commit of L15
 - [ ] T4 (docs) spec 3: the pull request with the three commands; the session's summary; the ready and closed
   notices.
 
@@ -251,3 +253,18 @@ is a setting of his account, so this work only hands him its command.
   included, and a password holding such a character was printed in half. `withoutCredentials` now names the host as
   git reads it and leaves out what could be a password, and both lines go through it. Test first (red: the line read
   `https://example.invalid#@github.com/o/r`, then `https://user:se`), then 19 of 19.
+- L15 That fix is `53c1702f`, gate green on GitHub's machines. Codex on `576e036..53c1702`: correct (0.93), no
+  finding, 39,552 input tokens. The lenses (risk, reliability) on it: reliability's warning fixed; risk one
+  suggestion, taken: the new pattern did not match a URL that holds a line break, which git's configuration can, and
+  such a URL was printed whole, password included, where the pattern it replaced took the password off. One flag
+  (`s`), test first (red: the line read `https://user:secret@example.com/o/` and the rest), then 19 of 19.
+- L16 Close, against the depth pass. Item 3, the bar: predicted none of 3 (new behaviour), measured 3 of 3: spec 1
+  `node --test bin/lib/ci-gate.test.mjs` 19 of 19; spec 2 the three files, run one at a time since a second session's
+  gate held the machine, 30, 16 and 7, none failing; spec 3 `node --test scripts/github-ruleset.test.mjs` 2 of 2.
+  Item 4, the refutation: the exposure stands as measured (the repository reads `public`, no ruleset, `main` not
+  protected), and the verifier's own reading of the land agrees that its push is a fast-forward; whether GitHub's
+  rule lets `--force-with-lease` on a fast-forward through is still not known, and will be only at his first land
+  after he applies the rule. What was not red first, said once more: the switch's own cases in
+  bin/lib/functions.test.mjs, the ruleset body's test and the `{ why, known }` cases. What the work cost in reviews:
+  Codex five runs (140,152 + 45,956 + 81,355 + 71,854 + 39,552 input tokens) and the one of L15's commit; the lenses
+  five runs and that commit's; one verifier.

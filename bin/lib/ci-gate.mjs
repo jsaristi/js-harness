@@ -134,7 +134,8 @@ function pushDestinations(git, remote) {
  * `@` may be the end of a password that held one of those characters, and what reads as the port its start: both
  * are left out then, and the line names the host alone. */
 function withoutCredentials(url) {
-  const parts = /^([a-z][a-z0-9+.-]*:\/\/)([^/?#\\]*)(.*)$/i.exec(url);
+  // `s`: a URL of git's configuration may hold a line break, and one the pattern did not match would be printed whole.
+  const parts = /^([a-z][a-z0-9+.-]*:\/\/)([^/?#\\]*)(.*)$/is.exec(url);
   if (!parts) return url;
   const [, scheme, authority, rest] = parts;
   const host = authority.slice(authority.lastIndexOf('@') + 1);

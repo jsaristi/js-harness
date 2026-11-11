@@ -331,10 +331,11 @@ test('a URL is GitHub\'s only where git would go to github.com: a host before an
     assert.deepEqual(gh.calls, []);
     assert.deepEqual(written(gitCalls), []);
     // A password is printed by neither, one that holds such a character included: what follows it is left out.
-    for (const url of ['https://user:secret@example.com/o/r.git', 'https://user:se#cret@example.com/o/r.git']) {
+    // Nor one in a URL that holds a line break, which git's configuration can (the Claude lenses, on 53c1702f).
+    for (const url of ['https://user:secret@example.com/o/r.git', 'https://user:se#cret@example.com/o/r.git', 'https://user:secret@example.com/o/\nr.git']) {
       git(p.cwd, 'remote', 'set-url', 'origin', url);
       const said = `${(await runCiGate(options(p, gh, clock()))).why}\n${asked().why}`;
-      assert.match(said, /^origin is not a GitHub repository \(https:\/\/[\w./]+\)\norigin pushes to https:\/\/[\w./]+, which is not a GitHub repository/, url);
+      assert.match(said, /^origin is not a GitHub repository \(https:\/\/[\w./\n]+\)\norigin pushes to https:\/\/[\w./]+, which is not a GitHub repository/, url);
       assert.doesNotMatch(said, /cret|se#/, url);
     }
   } finally {
