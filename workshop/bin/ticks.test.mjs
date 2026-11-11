@@ -225,6 +225,10 @@ test('this repository runs it at each session start, alone in its project settin
   assert.equal(ownerOf({ command }), 'workshop');
 });
 
+// git reaches no network in these runs: its proxy is a local port nothing listens on, so the idea-watch row, the one
+// reading of the hook that asks the network, fails at once and is said after the ticks' part, as offline.
+const NO_NETWORK = { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'http.proxy', GIT_CONFIG_VALUE_0: 'http://127.0.0.1:9' };
+
 /** The command of the one hook this repository's settings hold. */
 function hookCommand() {
   return JSON.parse(fs.readFileSync(path.join(ROOT, '.claude', 'settings.json'), 'utf8')).hooks.SessionStart[0].hooks[0].command;
@@ -234,7 +238,7 @@ function hookCommand() {
  * variable (`undefined` for none). It asks for the usage instead of the reading, which needs the network, unless
  * `tail` gives what follows the dispatcher's command. */
 function runHookCommand(cwd, projectDir, tail = '--help') {
-  const env = { ...process.env };
+  const env = { ...process.env, ...NO_NETWORK };
   delete env.CLAUDE_PROJECT_DIR;
   if (projectDir !== undefined) env.CLAUDE_PROJECT_DIR = projectDir;
   const command = hookCommand().replace(/^node /, `"${process.execPath}" `).replace(/--hook$/, tail);
@@ -275,6 +279,8 @@ test('the hook itself, run from a subfolder, reads the records of this repositor
     const message = messageOf(result.stdout.trim().split('\n'));
     assert.match(message, /^js-harness workshop: the heartbeat's ticks have not run for \d+ hours: throughput: no snapshot is kept .*; host-watch: never read/);
     assert.doesNotMatch(message, /windows-daily:/);
+    // Offline, the row that needs the network is said as not read, after the ticks' part, and nothing fails.
+    assert.match(message, /; and idea-watch: could not be read \(/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

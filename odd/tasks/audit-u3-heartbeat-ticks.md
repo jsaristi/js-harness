@@ -210,12 +210,18 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
   without it, 3 runs, median 3,509 ms, max 3,622 ms; PowerShell with it, 3 runs, median 7,514 ms, max 7,737 ms, of
   which an empty PowerShell took a median of 4,387 ms to start in the same minute (Git Bash, 98 ms). All under the
   15 s of the timeout; PowerShell is the host's shell only where Git Bash is not installed.
+- L13 (2026-11-11): reviews of `5900c32a`. Codex (74,236 input tokens): "the patch is correct" (0.91), no finding.
+  The reliability lens (7,707 input tokens): its three findings fixed, 0 not fixed, and one follow-up, taken: the
+  hook-mode test ran the idea-watch reading, which asks the network. The tests' runs of the command now give git a
+  proxy on a local port nothing listens on, so no run reaches the network, and the test holds what the hook says
+  offline: the ticks' part first, then "idea-watch: could not be read (", exit 0, nothing on stderr. Run by hand
+  with that proxy from `workshop/bin` against the real home: exit 0, stderr 0 bytes, 4,655 and 5,481 ms, most of it
+  git's two refused connections, under the 5 s that bounds each and the 15 s of the timeout. 66 of 66 passed.
 
 ## Next step
-For a resume (2026-11-11): the fix of L11 (`7a343c87`) and the lens's three findings of L12 (the commit after it)
-are committed. Left, in order: Codex over the last commit, `js-harness codex-review --base 7a343c87 --doc
-odd/tasks/audit-u3-heartbeat-ticks.md --at <head>`, and the reliability lens over it, one at a time;
-`js-harness check --push`; push,
+For a resume (2026-11-11): the fix of L11 (`7a343c87`), the lens's three findings of L12 (`5900c32a`) and its
+follow-up of L13 (the commit after it, tests only) are committed. Left, in order: `js-harness check --push`, and
+the review it names over the last commit, one at a time; push,
 the pull request for T2 as a draft the lead marks ready (never mark it ready here), `js-harness notify --to
 orchestrator --kind ready --pr <n>`, the summary in `docs/sessions/` (`js-harness summary template`), committed and
 pushed, then `notify --kind closed --summary <file>`. The snapshot of the day is the lead's: the heartbeat must run
