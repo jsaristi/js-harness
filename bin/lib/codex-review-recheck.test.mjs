@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  againPastThreeReviews,
   BLOCKS,
   classifyRecheck,
   openAfterRecheck,
@@ -249,6 +250,42 @@ test('the refusal of a range that holds code no record covers names the review t
   assert.ok(none.includes('2 code commits no Codex review record covers (1234567, 89abcde)'), none);
   assert.ok(none.includes('ask the user'), none);
   assert.ok(!none.includes('--unavailable '), none);
+});
+
+// M12 of the Fable 5.2 audit: `--again` takes its range as given, so the third-review rule read only its base, and a
+// base behind a change three reviews left open bought a fourth review of it (odd/tasks/audit-u4-refusals.md, spec 2).
+test('--again over a change three reviews left open is refused, unless new code is in the range and it starts where the refusal names', () => {
+  const open = finding('[not fixed] 1 Still drops the last line');
+  const third = { kind: 'refused', of: D, open: 1, reviews: 3, findings: [open] };
+  const states = { [B]: { kind: 'refused', of: B, open: 1 }, [C]: third, [D]: third };
+  const stateOf = (head) => states[head] ?? { kind: 'review' };
+  const asked = [];
+  const reviewFromOf = (head) => {
+    asked.push(head);
+    return A;
+  };
+  // Every code commit of the range has a record: a fourth review of reviewed code alone, refused.
+  const covered = againPastThreeReviews({ heads: [B, C, D], stateOf, uncovered: [], reviewFromOf, startsAtOrAfter: () => true });
+  assert.deepEqual(covered, { head: C, state: third });
+  assert.deepEqual(asked, [], 'no commit is looked for where there is no new code to read');
+  // New code from the commit the refusal names, or after it: the route the refusal itself gives, which reads it.
+  assert.equal(againPastThreeReviews({ heads: [B, C, D], stateOf, uncovered: ['1234567'], reviewFromOf, startsAtOrAfter: (commit) => commit === A }), null);
+  assert.equal(againPastThreeReviews({ heads: [C], stateOf, uncovered: null, reviewFromOf, startsAtOrAfter: () => true }), null);
+  // New code from further back, from a start git cannot place, or with no commit to name: refused.
+  for (const startsAtOrAfter of [() => false, () => null]) {
+    assert.deepEqual(againPastThreeReviews({ heads: [D], stateOf, uncovered: ['1234567'], reviewFromOf, startsAtOrAfter }), { head: D, state: third });
+  }
+  assert.deepEqual(againPastThreeReviews({ heads: [D], stateOf, uncovered: ['1234567'], reviewFromOf: () => null, startsAtOrAfter: () => true }), { head: D, state: third });
+  // A change rechecked once, or reviewed once, is within three reviews: `--again` over it runs.
+  assert.equal(againPastThreeReviews({ heads: [B, A], stateOf, uncovered: [], reviewFromOf, startsAtOrAfter: () => true }), null);
+  assert.equal(againPastThreeReviews({ heads: [], stateOf, uncovered: [], reviewFromOf, startsAtOrAfter: () => true }), null);
+});
+
+test('the refusal of --again past three reviews names the base it was given and what a fourth review would be', () => {
+  const open = finding('[not fixed] 1 Still drops the last line');
+  const said = secondRecheckRefused({ of: D, open: 1, base: A, reviews: 3, findings: [open], again: C, uncovered: [] });
+  assert.match(said, /^Three reviews of this change did not settle it: the third, a second recheck that ended at ddddddd, left 1 finding not fixed or blocking; `--again` from aaaaaaa would review it a fourth time\. Nothing more is reviewed, and nothing was started or recorded\./);
+  assert.ok(said.includes('Every code commit of this range has a record already'), said);
 });
 
 test('runAnswerFindings tells an answer that found nothing from a line that kept none', () => {

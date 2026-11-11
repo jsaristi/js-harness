@@ -149,16 +149,27 @@ const CODE_FLAGS = new Map([['bash', ['-c']], ['sh', ['-c']], ['pwsh', ['-c', '-
 function opensCode(before) {
   const program = /^[\s(@]*(?:"([^"]+)"|(\S+))/.exec(before);
   const name = (program?.[1] ?? program?.[2] ?? '').split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '');
-  const flag = /(\S+)\s+$/.exec(before)?.[1].toLowerCase();
+  // The flag may be written against its quote: `node -e"..."`.
+  const flag = /(\S+)\s*$/.exec(before)?.[1].toLowerCase();
   return CODE_FLAGS.get(name)?.includes(flag) ?? false;
 }
 
+/** Whether the double quote at `at` of `text` is escaped for the program that reads it: an odd run of backslashes
+ * before it, as the C runtime's reading of a command line counts them. */
+function escapedAt(text, at) {
+  let backslashes = 0;
+  while (text[at - 1 - backslashes] === '\\') backslashes += 1;
+  return backslashes % 2 === 1;
+}
+
 /** Why cmd.exe, the shell a goal or done-when command runs in on Windows (`runSensor`, `shell: true`), cannot run
- * `command`, or `null`: a `$( )` outside the double-quoted code of a program with its own (`opensCode`). cmd.exe has
- * none and passes the text on as written, so the command fails, or passes, on a value it never computed (JH 136: a
- * met goal read "not met (exit 2)"). Its parts are cut at `&&`, `||`, `&` and `|` outside double quotes, the only
- * quotes cmd.exe has. */
+ * `command`, or `null`: a `$( )`, a backtick or a `$VAR` outside the double-quoted code of a program with its own
+ * (`opensCode`), or a single quote outside double quotes. cmd.exe has none of them and passes each on as written, so
+ * the command fails, or passes, on a value it never computed (JH 136: a met goal read "not met (exit 2)"; M13 of the
+ * Fable 5.2 audit). Its parts are cut at `&&`, `||`, `&` and `|` outside double quotes, the only quotes cmd.exe has. */
 export function cmdShellGap(command) {
+  const lacks = (what, instead) => `it uses ${what}, which cmd.exe, the shell it runs in on Windows, does not have: it passes the text on as written. ${instead}`;
+  const compute = 'Compute the value inside one program instead, such as node -e "..."';
   let start = 0;
   let quoted = false;
   let code = false;
@@ -166,12 +177,24 @@ export function cmdShellGap(command) {
     const char = command[i];
     if (char === '"') {
       quoted = !quoted;
-      code = quoted && opensCode(command.slice(start, i));
+      // cmd.exe turns its quoting at every double quote, but a program reads one after an odd run of backslashes as a
+      // quote inside its code, which goes on (Codex, 2026-11-10).
+      code = code ? escapedAt(command, i) : quoted && opensCode(command.slice(start, i));
     } else if (!quoted && (char === '&' || char === '|')) {
+      // cmd.exe splits here whatever a program would have read, so the code of the part before it ends too.
       if (command[i + 1] === char) i += 1;
       start = i + 1;
-    } else if (char === '$' && command[i + 1] === '(' && !code) {
-      return 'it uses $( ), which cmd.exe, the shell it runs in on Windows, does not have: it passes the text on as written. Compute the value inside one program instead, such as node -e "..."';
+      code = false;
+    } else if (code) {
+      continue;
+    } else if (char === "'" && !quoted) {
+      return lacks('single quotes', 'Quote with double quotes instead, or pass the text to one program that reads it, such as node -e "..."');
+    } else if (char === '$' && command[i + 1] === '(') {
+      return lacks('$( )', compute);
+    } else if (char === '`') {
+      return lacks('a backtick substitution', compute);
+    } else if (char === '$' && /[A-Za-z_{0-9?@#*!$]/.test(command[i + 1] ?? '')) {
+      return lacks('a $VAR', 'Read the variable inside one program instead, such as node -e "process.env.NAME"');
     }
   }
   return null;

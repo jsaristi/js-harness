@@ -22,7 +22,7 @@ const VALUED = new Set(['--test-name-pattern', '--test-skip-pattern', '--test-re
 
 /** The commands of a command line, each as its words with quotes taken off. A command ends at `&&`, `||`,
  * `;`, `|`, `&`, `(`, `)` or a line break outside quotes: a `|` in a quoted pattern ends nothing (Codex,
- * 2026-10-14). A word keeps whether it held a wildcard outside quotes (`globbed`), which the shell expands. */
+ * 2026-10-14). */
 export function commandsOf(text) {
   const commands = [];
   let words = [];
@@ -42,21 +42,20 @@ export function commandsOf(text) {
     if (char === '"' || char === "'") {
       const close = source.indexOf(char, i + 1);
       const inside = close === -1 ? source.slice(i + 1) : source.slice(i + 1, close);
-      word ??= { text: '', globbed: false };
+      word ??= { text: '' };
       word.text += inside;
       i = close === -1 ? source.length : close;
     } else if (char === '&' && (source[i - 1] === '>' || source[i - 1] === '<' || source[i + 1] === '>')) {
       // `2>&1`, `<&0`, `&>out`: a descriptor redirection ends no command (Codex, 2026-10-14).
-      word ??= { text: '', globbed: false };
+      word ??= { text: '' };
       word.text += char;
     } else if (/[;&|()\n]/.test(char)) {
       endCommand();
     } else if (/\s/.test(char)) {
       endWord();
     } else {
-      word ??= { text: '', globbed: false };
+      word ??= { text: '' };
       word.text += char;
-      if (char === '*' || char === '?') word.globbed = true;
     }
   }
   endCommand();
@@ -82,6 +81,11 @@ function gateWraps(words) {
   return gateCommands(words)?.flat() ?? null;
 }
 
+/** A word a glob expands: a wildcard, a character class, a brace list or an extglob (`@(a|b)`, `+(a)`, `!(a)`). The
+ * shell expands it when it is not quoted, and `node --test` expands it itself when it is, so quoting it hides no file
+ * (M11 of the Fable 5.2 audit). A folder `node --test` is given runs no test, so a plain path stays one file. */
+const GLOB = /[*?[]|[@+!]\(|\{[^}]*,[^}]*\}/;
+
 /** The files the `node --test` of `words` names, as `{ files, names }`: `files` is `0` for none (every test
  * file the runner finds) and `Infinity` when one is a wildcard (several, as a rule), and `names` holds the words
  * that are files. `null` for words that run no `node --test`. */
@@ -91,13 +95,13 @@ function filesOf(words) {
   let files = 0;
   const names = [];
   for (let i = 0; i < rest.length; i += 1) {
-    const { text, globbed } = rest[i];
+    const { text } = rest[i];
     if (VALUED.has(text)) i += 1;
     // A redirection is no file: `2>` (whose `&1` ended the command), `>` and its target, `>out.txt`.
     else if (/^\d*[<>]/.test(text)) {
       if (/^\d*[<>]+$/.test(text)) i += 1;
     } else if (!text.startsWith('-')) {
-      files += globbed || text.includes('$') ? Infinity : 1;
+      files += GLOB.test(text) || text.includes('$') ? Infinity : 1;
       names.push(text);
     }
   }
@@ -147,7 +151,7 @@ export function timedSeconds(events, file, { project, projectOf = repositoryOf }
   for (const { start, end } of gatesOf(events)) {
     if (!start || !end || typeof start.command !== 'string' || !Number.isFinite(end.seconds)) continue;
     if (start.command.length >= GATE_COMMAND_MAX || !sameProject(start.cwd)) continue;
-    const words = gateWraps([{ text: 'js-harness', globbed: false }, ...commandsOf(start.command).flat()]);
+    const words = gateWraps([{ text: 'js-harness' }, ...commandsOf(start.command).flat()]);
     const run = words === null ? null : filesOf(words);
     if (run?.files !== 1 || fileKey(run.names[0], start.cwd) !== file) continue;
     longest = Math.max(longest ?? 0, end.seconds);

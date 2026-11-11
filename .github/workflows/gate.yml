@@ -40,3 +40,26 @@ jobs:
         run: node -e "const os = require('node:os'); console.log(process.version, os.platform(), os.release(), os.availableParallelism() + ' logical processors', Math.round(os.totalmem() / 2 ** 30) + ' GB')"
       - name: The gate
         run: node bin/check.mjs
+  # The tests of `js-harness remote`, a command of Windows alone, which skip themselves on the runner above: 99 of its
+  # 119 ran in no blocking gate (M27 of the Fable 5.2 audit, odd/tasks/audit-u4-refusals.md). This file alone, 38 s on
+  # this machine; the whole suite on Windows, some twenty minutes, stays daily and off the land's path (windows-daily.yml).
+  # A run is green only when both jobs are, so a commit's gate and the merge queue wait for this one too.
+  windows:
+    # The exact image the daily suite runs on.
+    runs-on: windows-2025
+    # The bound of the job above, for the same reason.
+    timeout-minutes: 10
+    steps:
+      # The commits the job above pins. The test file builds its own repositories, so no history is fetched.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.21.0
+      - name: The Windows tests of js-harness remote
+        # The runner's TEMP is an 8.3 short path that git and realpath answer in its long form (windows-daily.yml).
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+        run: node --test bin/remote.test.mjs

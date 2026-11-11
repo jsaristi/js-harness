@@ -9,6 +9,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, runSensor, takeGateTurn, claimOf, main } from './check.mjs';
 import { SENSOR_SILENCE_MS, SENSOR_TIMEOUT_MS, TOKEN_BUDGET, CLAUDE_MD_BUDGET, checkClaudeBudget } from './check.mjs';
+import { harnessHome } from './lib/home.mjs';
 import { killTree } from './lib/process-tree.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
@@ -426,6 +427,33 @@ test('checkSensor drops the variables that bind git to one repository, and keeps
   const bound = Object.keys(env).filter((key) => /^git_(dir|index_file|work_tree|common_dir)$/i.test(key));
   assert.deepEqual(bound, []);
   assert.equal(env.GIT_AUTHOR_NAME, 'Someone');
+});
+
+// M14 of the Fable 5.2 audit: the harness home a command reads is `JS_HARNESS_HOME` before the user's home
+// (./lib/home.mjs), so a sensor that inherits it from a shell that set it writes the real harness home, whatever
+// throwaway `HOME` it was given. Dropped in every case, as the WSL mirror's `env -i` drops it, the home falls back to
+// the throwaway one (odd/tasks/audit-u4-refusals.md, spec 4).
+test('checkSensor drops JS_HARNESS_HOME in every case, so the harness home a sensor reads is its throwaway home', async () => {
+  const saved = { ...process.env };
+  let env;
+  let during;
+  const spawn = (_command, options) => {
+    env = options.env;
+    during = harnessHome({ env: options.env, homedir: () => options.env.USERPROFILE ?? options.env.HOME });
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  try {
+    for (const key of Object.keys(process.env)) if (key.toLowerCase() === 'js_harness_home') delete process.env[key];
+    process.env.JS_HARNESS_HOME = path.join(os.tmpdir(), 'the-real-harness-home');
+    if (process.platform !== 'win32') process.env.Js_Harness_Home = path.join(os.tmpdir(), 'the-real-harness-home');
+    await checkSensor(os.tmpdir(), { name: 'tests', command: 'x' }, { spawn });
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+  assert.deepEqual(Object.keys(env).filter((key) => key.toLowerCase() === 'js_harness_home'), []);
+  assert.equal(during, path.resolve(env.HOME));
+  assert.ok(path.basename(env.HOME).startsWith('js-harness-test-home-'), env.HOME);
 });
 
 let gitConfigDir;

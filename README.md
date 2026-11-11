@@ -166,8 +166,10 @@ given), reads that workflow's run in the GitHub repository the remote names with
 branch, and lets the commit through only on green. The `tests` row then names the run. A gate that
 gets no answer from GitHub (a remote not on GitHub, no push, `gh` not signed in, no run within 3
 minutes, a run cancelled or timed out, or one not done within `rule:ci-gate-bound` of the push,
-which is then cancelled) runs here under the lock, after one `check:` line on stderr that says why. The gate log keeps both: a run's red tests by name, read from its log with gh's prefix taken off, and a `ci-fallback` line with why and what the wait cost, under the id of the gate that then runs here. `JS_HARNESS_GATE_CI=0` keeps every gate here. The runner is Linux, so a test that runs only
-on Windows is left to the daily Windows suite: `.github/workflows/windows-daily.yml` runs the whole suite once a day on
+which is then cancelled) runs here under the lock, after one `check:` line on stderr that says why. The gate log keeps both: a run's red tests by name, read from its log with gh's prefix taken off, and a `ci-fallback` line with why and what the wait cost, under the id of the gate that then runs here. `JS_HARNESS_GATE_CI=0` keeps every gate here. The suite's runner is Linux; a second job of the
+same run tests `bin/remote.test.mjs` on Windows, since `js-harness remote` runs on Windows alone and most of its tests
+skip themselves elsewhere, and the run is green only when both jobs are. Any other test that runs only on Windows is
+left to the daily Windows suite: `.github/workflows/windows-daily.yml` runs the whole suite once a day on
 GitHub's Windows machines, off the land's path, and `js-harness windows-daily` tells the lead the
 failing test names of a red run.
 
@@ -1200,7 +1202,7 @@ brings past the remote's default branch, and the merge door refuses it.
 On a machine whose gate runs its sensors in WSL2 (the switch `~/.js-harness/gate-wsl.json` and
 `"sensorsInWsl": true` in `harness.json`), the land's run on this machine is a run in WSL2 too, so
 the code paths of Windows (process trees, PowerShell, `cmd.exe` quoting) are tested by no commit's
-gate. The daily Windows suite (`js-harness windows-daily`) runs them once a day on GitHub's Windows
+gate here; the gate on GitHub tests `js-harness remote` on Windows alone. The daily Windows suite (`js-harness windows-daily`) runs them once a day on GitHub's Windows
 machines. That run was chosen over one after each landed batch, which would hold the gate lock 15 to
 19 hours a day (docs/ROADMAP.md, "Windows suite"); it cannot see this machine's antivirus, its
 temporary folders or its paths. To reproduce a red daily run here, or to test a change to the
