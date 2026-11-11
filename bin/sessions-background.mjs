@@ -326,11 +326,15 @@ function resumeStart(parsed, deps) {
   const model = parsed.model ?? entry.model ?? undefined;
   const effort = parsed.effort ?? entry.effort ?? undefined;
   const advisor = parsed.advisor ?? entry.advisor ?? undefined;
-  const refusal = sessionStartRefusal({ prompt: text, effort, model }, rulesText(topLevel(run, folder), readFile), { cli: true, lead: leadTitle(entry.title) });
+  const rules = rulesText(topLevel(run, folder), readFile);
+  const held = { cli: true, lead: leadTitle(entry.title) };
+  const refusal = sessionStartRefusal({ prompt: text, effort, model }, rules, held);
   if (refusal !== null) {
-    // What the call does not name is the record's, which the refusal's "or none" would take again.
-    const kept = [['model', parsed.model, entry.model], ['effort', parsed.effort, entry.effort]]
-      .filter(([, named, recorded]) => named === undefined && typeof recorded === 'string')
+    // What the call does not name is the record's, which the refusal's "or none" would take again. The note names
+    // only what is refused: the model is judged first, so the level's own answer is the call's with no model.
+    const ofEffort = sessionStartRefusal({ prompt: text, effort }, rules, held);
+    const kept = [['model', parsed.model, entry.model, refusal !== ofEffort], ['effort', parsed.effort, entry.effort, ofEffort !== null]]
+      .filter(([, named, recorded, refused]) => refused && named === undefined && typeof recorded === 'string')
       .map(([what, , recorded]) => `${what} ${JSON.stringify(recorded)}`);
     const record = kept.length === 0 ? '' : ` The record of ${entry.id} holds ${kept.join(' and ')}, which a resume takes again where the call names none: name the rule's on the call.`;
     return refuse(`${refusal}${record}`, 2);

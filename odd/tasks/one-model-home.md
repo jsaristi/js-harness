@@ -382,7 +382,21 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
-At 16:10, after the host compacted this session a third time (about 15:50): Codex read all seven units, each "the
+At 15:35 by the clock (`date`): every unit is read. Codex on U8 (`4a535e3..cddbe16`): "the patch is correct", no
+finding. Lenses: U5 risk 0 and reliability 0; U6 reliability 2; U7 risk 0 and reliability 1; U8 reliability none of
+its own (it rechecked U7's). Taken, in the commit that carries this paragraph (U9, from `cddbe165`): the note of a
+resume's refusal names only what is refused (a level named on the call is the call's, whatever the record holds),
+its test seen red first; `review-model`'s test holds the pattern's two gates. Answered: Codex's patterns need an id
+with a number after a hyphen, which the pull request's body says. The hours of the paragraphs below were written
+ahead of the clock, by up to 50 minutes (the lead's message of 15:02): each now reads the hour of the commit that
+first carried it (`git log -S`), the latest it can be; the subject of `4a535e32` says 15:10 and it was made at
+14:37. The cut is five stacked branches, not four, since the fixes took the last slice over 400 changed lines of
+code: `rule/one-model-home-1` at `5ebe0e38` (214 lines; it carries `session-effort` at medium), `-2` at `1765b5aa`
+(258), `-3` at `f6b6176f` (236), `-4` at `8f7a2f76` (223) and `rule/one-model-home` at the head (the rest), each a
+pull request on the one before; their bodies are drafted in the job's `tmp/body-<n>.md`. Still to do: Codex and
+the reliability lens on U9; the answers of the lens runs of U6 and U7; `js-harness check --push` at each cut; the
+pushes, the pull requests and the ready notices.
+At 15:00, after the host compacted this session a third time (14:50): Codex read all seven units, each "the
 patch is correct", no finding (U5 `bb1e9ea..8673a32`, U6 `ce97742..914fc9c`, U7 `02b6f3d..4a535e3`). Lenses run
 since: U2 readability 2 findings (run `88c1cdba`), U3 reliability 3 (run `4a445cf6`), U4 risk 0, U4 reliability 1
 (run `6831a33c`). What they found and what was done, in the fix commit that carries this paragraph (U8, from
@@ -392,11 +406,8 @@ sentence of the manifest says "each only where its rule is in force; a fork cann
 row of `check --subagents` reads have one home, `SUBAGENT_RULES` in `bin/lib/subagent-check.mjs`, with a test that
 each is a live rule. Answered as already met: the resume's message (`1a9dc1e5`), the mode line against the two
 sub-agent model rules (retired in `25355026` and `8f7a2f76`), the writer's file (at medium since `62efbcca`, a
-Markdown file a lens is not handed). Still to do: the answers recorded with `js-harness double-review answer <run>
-<lens>`; the lenses of U5 (risk, reliability: `bb1e9ea5..8673a328`), U6 (reliability: `ce97742a..914fc9c6`), U7
-(risk, reliability: `02b6f3d3..4a535e32`) and U8 (Codex and reliability); then `js-harness check --push`, the four
-branches, the push, the pull requests and the ready notices.
-At 15:10, the session at 88 % of its context: the fixes of the verifier and of the lens are `1a9dc1e5`, a seventh
+Markdown file a lens is not handed). Those answers are recorded (`js-harness double-review answer`).
+By 14:37, the session at 88 % of its context: the fixes of the verifier and of the lens are `1a9dc1e5`, a seventh
 unit (U7 `02b6f3d3..1a9dc1e5`). Codex ran on U1, U2, U3 and U4: each "the patch is correct", no finding, recorded
 (U3 as `1765b5a..52824f6`, U4 as `0abb1d2..8f7a2f7`). Lenses run and answered: U1 risk and reliability, U2 risk
 and reliability (run `ceee2438`). Still to run, one command at a time under the gate's lock, HEAD detached at the
@@ -405,7 +416,7 @@ unit's head for Codex and `rule/one-model-home` checked out again after: Codex U
 (readability), U3 (`34bbb538..52824f6e`), U4 (`0abb1d2c..8f7a2f76`), U5, U6 and U7, with `--head`. Then
 `js-harness check --push` to see nothing is owed, the four branches, the push, the pull requests, the ready notices
 (the first carries `session-effort` at medium; say the stack lands one by one).
-At 14:50: the verifier's report is in (one sub-agent, 29 tool uses, about 152k tokens; one thing of it checked
+By 14:27: the verifier's report is in (one sub-agent, 29 tool uses, about 152k tokens; one thing of it checked
 here: `bin/lib/guard.mjs` returns null for a call with no prompt, and `resumeStart` had no empty-brief check). Its
 four findings: F1 (high) a resume with an empty brief ran at any level and on any model: fixed, the resume refuses
 an empty brief as a start does. F2 a `start_session` with no prompt passes whatever it names: not changed, it is
@@ -447,7 +458,7 @@ guard does not hold; the shape Codex's patterns look for is words joined by hyph
 with a digit in its first word is not found. Next: `prove.mjs` on the three bundles, the independent verifier on
 the guard, the local gate, Codex and the lenses a slice (the diff is over 400 lines of code, so slices), the pull
 request, the `ready` notice.
-At 13:15, after the host compacted the session at 12:55: main is merged (`0abb1d2c`, main `51932db`; one conflict
+By 13:11, after the host compacted the session at 12:55: main is merged (`0abb1d2c`, main `51932db`; one conflict
 in `docs/ROADMAP.md`, both rows kept). S8 is built in two commits: `1201bb1a`, `rules change lead-effort` with
 `LENS_EFFORT = claudeHome().lead`, its two tests and the two breaks moved to `lead-effort`'s bundle (135 tests of
 six files pass); then `rules change session-effort` made again whole, its subject without the reviewers. The
@@ -455,18 +466,18 @@ tapped answer is no quotation: the quotations are his typed lines (4744, 5167, 1
 in `accepted`. Next: the three model retirements, the guard's sub-agent call, Codex's two patterns, `prove.mjs` on
 the two homes and `lead-effort`, the verifier, the gate and both reviews (the base of the reviews is `0abb1d2c`'s
 side of the first-parent line; main is in).
-At 13:10: the first retirement is committed, `62efbcca`. Its first try was refused by the convention of structure:
+By 12:52: the first retirement is committed, `62efbcca`. Its first try was refused by the convention of structure:
 `bin/check.mjs` is at its ceiling of 1,938 lines, so nothing is added to it (the rule's id is written there, with
 no import). Next, in this order: the lenses at high (S8; read the note on a tapped answer below first), the three
 model retirements, the guard's sub-agent call, Codex's two patterns, `prove.mjs` on the two homes and
 `lead-effort`, `git merge origin/main` (main is `51932db`), the verifier, the gate and both reviews.
-At 12:55: both red tests are answered and the retirement is being committed (`git add -A`, one commit, the gate on
+By 12:48: both red tests are answered and the retirement is being committed (`git add -A`, one commit, the gate on
 GitHub's machines); if `git log -1` is not "feat(rules): subagent-effort retires into session-effort", commit it.
 The second red test was this change's: the copy of the project that test makes holds no `.claude/agents/`, so a
 planted break whose path is the writer's agent file "is not there". That break is dropped from `session-effort`'s
 bundle; the file's copy of the level stays held by `bin/lib/writer-agent.test.mjs` alone, which is open for the
 pull request's body or a break of another form. Not run after these two fixes: `prove.mjs` on the two homes.
-At 12:50, 88 % of the context: the first red test is fixed (`bin/lib/rules-change.test.mjs` chooses its fixture
+By 12:48, 88 % of the context: the first red test is fixed (`bin/lib/rules-change.test.mjs` chooses its fixture
 rule by what it is, a live text value with no earlier one; its 33 tests pass). Still to read: the red test of
 `bin/rules-coverage.test.mjs` ("a directive planted with no control ..."), run alone first. The resume prompt is
 stored (`js-harness notify --opening`, 12:46).
@@ -477,7 +488,7 @@ typed lines 11253 and 11679 as the quotations and line 822 named in `accepted`, 
 his typed words already carry); if neither holds, tell the lead in one `waiting` notice. This document's edits
 since `1765b5aa` are in the working tree, not committed: the pre-commit check is red while the retirement is half
 made, so they are committed with it.
-At 12:45 local, 86 % of the context: the run `rules change subagent-effort --with <paths>` is MADE (the three files
+By 12:48 local, 86 % of the context: the run `rules change subagent-effort --with <paths>` is MADE (the three files
 are written, `rules check` and `rules coverage --strict` pass, `docs/RULES.md` rendered, hash `13dfdb334353`) and
 nothing of it is committed. The tests of the changed files ran once under the gate's lock: 619 of 621 pass. The
 two red ones, to read before anything runs again (output in the job's `tmp/tests-3.txt`): "on the real list, each

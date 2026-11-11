@@ -779,6 +779,17 @@ test('sessions start --resume holds to the effort rule, needs a writable record,
   const half = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--model', RULES.find((rule) => rule.id === 'session-model').value]);
   assert.equal(half.code, 2);
   assert.ok(half.stderr.includes('The record of 0db8bc5e holds effort "max", which'), half.stderr);
+  // The note names only what is refused: a level named on the call is the call's, whatever the record holds.
+  const homeModel = RULES.find((rule) => rule.id === 'session-model').value;
+  const onHome = offHome.map((line) => (line.id === '0db8bc5e' ? { ...line, model: homeModel } : line));
+  fs.writeFileSync(recordFile(world), `${onHome.map((line) => JSON.stringify(line)).join('\n')}\n`);
+  const named = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--effort', 'max']);
+  assert.equal(named.code, 2);
+  assert.match(named.stderr, /effort "max"/);
+  assert.ok(!named.stderr.includes('The record of'), named.stderr);
+  const level = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(level.code, 2);
+  assert.ok(level.stderr.includes('The record of 0db8bc5e holds effort "max", which'), level.stderr);
   fs.writeFileSync(recordFile(world), recordText);
   assert.equal(actions(world).length, 1, 'nothing ran');
   fs.chmodSync(recordFile(world), 0o444);
