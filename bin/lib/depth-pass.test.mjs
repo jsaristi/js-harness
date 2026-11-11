@@ -434,6 +434,19 @@ test('a refuting verdict in a candidate counts the code of its own pull request,
   assert.deepEqual(errorsOf(withCode), ['the verdict refutes and code is on the branch with no `answered: question <n>` in the pass']);
 });
 
+// The risk lens on e0e2755a..adc2978c: GitHub's merge button writes the queue's subject, so a branch made of such
+// merges alone reads as a candidate while it is checked by itself. The land still reads it whole: there it is one
+// merge of the queue, one pull request, whatever merges it holds.
+test('a pull request that holds merges of pull requests is one pull request in the candidate, read whole', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  twoPullRequests(root);
+  candidate(root, ['code', 'doc']);
+  git(root, 'checkout', '-q', '-b', 'big');
+  candidate(root, ['big']);
+  assert.deepEqual(errorsOf(root), ['code was committed before the pass\'s verdict: bin/b.mjs']);
+});
+
 // Only the queue's merges make a candidate: a branch that merged another branch in is one pull request, read whole.
 test('a branch whose merges are not the queue\'s is one pull request, and code merged in ahead of its verdict counts', (t) => {
   const root = repo();
