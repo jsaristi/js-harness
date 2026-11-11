@@ -233,6 +233,32 @@ the same in every arm; the advisor's effort cannot be set and its text is encryp
 separate model from effort; the runs have no MCP servers, which real sessions have; list dollars stand in for the
 plan's weights where the meter cannot be read.
 
+## State after the third review (for the session that takes this over)
+The third read (`d219135d`, L9) still found real failures, so by `rule:double-review` the design goes to him as a
+problem and passes to the strongest model the rules name (`rule:session-model`, Fable 5.2); this session ran on Opus
+5.5. Open, in order of weight:
+1. His earlier words were not searched (Claude 2): on 2026-11-10 he measured Fable 5.2 at high better than Opus 5.5 at
+   max "tanto en precio como en inteligencia" (`odd/tasks/one-model-home.md` S1), and sessions went to medium only
+   because the Fable limit stopped them for 3 h 24 min (S7). So the binding cost is the weekly Fable limit, not list
+   dollars; Opus runs at high where he compared max; rows 3 and 4 reverse his one-model decision and need a split of
+   `session-model` (S1, S2, S5). Quote them in Why and put the reversal in the question.
+2. D8's "not worse" almost never holds at five runs even for identical arms (Claude 1, Codex 4); its direction is
+   wrong for pass share (Codex 1); attrition and empty cells are undefined (Claude 8, Codex 2). Simulate the whole
+   procedure now, before any question (pure computation), with preregistered error rates and power; replace the
+   rule by a one-sided bound pooled over tasks, or say no affordable size gives usable power.
+3. A run's clock (120 min) is shorter than the estimated run time, mostly arm 2's (Claude 3); the guard and the agent
+   files still hold Fable and medium inside the runs, and FORCE sets the model only (Claude 4, Codex 3); `claude --bg`
+   in the eval sandbox was never run: permission mode, folder trust (Claude 5); the installed harness and the home
+   template change daily and hold the tasks' finished work (Claude 6); the audit cannot observe writes or the
+   network (Codex 6); the budget maximum has no enforcement (Codex 5).
+4. Keys favour the model that did not write the work (Claude 7); the pilot validates no scorer and spends on task B,
+   which is expected to drop (Claude 9); whether runs execute the gate, Codex or lenses is unsaid, and a lens draws on
+   Fable (Claude 10); figures: the Fable subtotal, the Fable cache-read price unverified (Claude 12); Done when 2 and
+   T2 name superseded reads (Claude 11).
+A cheaper first step the readers' findings point to, not reviewed: a cost-only probe of the advisor on the weekly
+Fable limit (arm 1 against arm 2 on one task, meters read with nothing else running), since his own measurement
+already ranks quality and the open unknown is what the advisor spends of the limit.
+
 ## Runs
 None. Nothing runs before his yes.
 
@@ -281,3 +307,7 @@ None. Nothing runs before his yes.
   `--mcp-config`, `claude stop`, `startArgs` at 58-68, Done when 2 reworded, "model default" not proven Opus, the
   request rewritten without additions); `session-model` covers the lead (Codex 1: rows 3 and 4 ask for a split rule);
   reader disagreement (Codex 10: the scoring manual of gate 2). Rebutted: none.
+- L9 Third read `d219135d` of `fba90f5e` (Claude 12 findings, 1,967,723 tokens; Codex 6, 585,029). All 18 accepted
+  and recorded as taken, not yet fixed: the third review is the last (`rule:double-review`), so they are the state
+  above, for the next writer, and the problem put to him. The search of his earlier words, owed since the first read,
+  was made only through Claude 2's citation of `odd/tasks/one-model-home.md` S1, S2, S5 and S7, read in full.
