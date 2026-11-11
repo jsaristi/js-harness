@@ -23,9 +23,10 @@ const USAGE = [
   `    path holds a segment that reads as a key (its pieces that mix letters and digits add up to ${KEY_LIKE_LENGTH}`,
   '    characters or more) is refused with exit 1 and nothing is sent. Exit 2: a usage error.',
   '  Those checks read names and shapes, and know no secret. These go out with the URL: a key of letters alone or of',
-  `    digits alone; one shorter than ${KEY_LIKE_LENGTH} characters; one that hyphens or underscores cut into pieces too few of which`,
-  '    mix letters and digits (about one random 22-character base64url key in four); one in a query value under an',
-  "    ordinary name; one in the host's name.",
+  `    digits alone; one shorter than ${KEY_LIKE_LENGTH} characters; one that other characters (a hyphen, an underscore, a dot, an`,
+  '    escape) cut into pieces too few of which mix letters and digits (about one random 22-character base64url key',
+  '    in four); one spread over several segments; one escaped twice; one in the query, unless its parameter is named',
+  "    like a secret; one in the host's name.",
   '  And these public pages are refused as well: one whose path holds an id of that shape (a commit hash, a UUID), and',
   `    a slug whose words that mix letters and digits (gpt4, llama3, a 12-character id) add up to ${KEY_LIKE_LENGTH} characters. Read`,
   '    them in the built-in browser, which sends the URL to no third party.',
@@ -66,7 +67,8 @@ export function notPublic(text) {
  * (`a64152b37c35`, `256GB`) are no key, so a slug of plain words passes at any length.
  *
  * It reads a shape and knows no secret, so it errs both ways, and the help says each. Sent: a key of letters alone
- * or of digits alone, and a base64url key whose hyphens and underscores leave too few pieces that mix the two (about
+ * or of digits alone, one spread over several segments, one escaped twice, and a key whose other characters (the
+ * hyphens and underscores of base64url, the escapes of standard base64) leave too few pieces that mix the two (about
  * one of 22 characters in four, one of 32 in twenty). Refused: a public id of the same shape (a commit hash), and a
  * slug whose letter-and-digit words add up to the limit (`gpt4`, `llama3` and a 12-character id).
  *

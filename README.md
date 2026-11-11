@@ -1843,9 +1843,10 @@ characters or more: a random token, a UUID, the id of a page that is private by 
 
 Those checks read names and shapes, and know no secret, so they err both ways. These go out with
 the URL: a key of letters alone or of digits alone; one shorter than 20 characters; one that
-hyphens or underscores cut into pieces too few of which mix letters and digits (about one random
-22-character base64url key in four); one in a query value under an ordinary name; one in the
-host's name. Do not hand this command a URL that holds a key. The other way round, a public page
+other characters (a hyphen, an underscore, a dot, an escape) cut into pieces too few of which mix
+letters and digits (about one random 22-character base64url key in four); one spread over several
+segments; one escaped twice; one in the query, unless its parameter is named like a secret; one in
+the host's name. Do not hand this command a URL that holds a key. The other way round, a public page
 is refused as well when its path holds an id of that shape (a commit hash, a UUID) or a slug whose
 words that mix letters and digits (`gpt4`, `llama3`, a 12-character id) add up to 20 characters;
 the built-in browser reads it, sending the URL to no third party.

@@ -195,7 +195,14 @@ test('a URL whose path holds a segment that reads as a key is refused with exit 
     // Nor does one escape that encodes nothing, or a byte that is no text, beside a key written in escapes.
     [`https://example.com/share/%zz${[...HEX_KEY.slice(0, 32)].map((char) => `%${char.charCodeAt(0).toString(16)}`).join('')}`, 2],
     [`https://example.com/share/%FF${[...HEX_KEY.slice(0, 32)].map((char) => `%${char.charCodeAt(0).toString(16)}`).join('')}`, 2],
+    [`https://example.com/share/${[...URL_KEY].map((char) => `%${char.charCodeAt(0).toString(16)}`).join('')}`, 2],
     [`https://example.com/a/b/c/d/${URL_KEY}?page=2`, 5],
+    // The limit is 20 and no more: 19 such characters are sent, in the test of the limit below.
+    [`https://example.com/share/${HEX_KEY.slice(0, 20)}`, 2],
+    // Capital letters mix with digits as small ones do.
+    [`https://example.com/share/${HEX_KEY.slice(0, 32).toUpperCase()}`, 2],
+    // The path judged is the one the URL parser makes, which is the one sent: a backslash is a slash there.
+    [`https://example.com\\share\\${HEX_KEY}`, 2],
     // The price of reading a shape, pinned: a public slug whose letter-and-digit words add up to 20 is refused too.
     ['https://medium.com/@someone/gpt4-vs-llama3-in-practice-1a2b3c4d5e6f', 2],
     ['https://github.com/nodejs/node/commit/4f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c', 4],
@@ -229,6 +236,8 @@ test('a public page whose path holds a long slug, numbers and short ids is sent'
     'https://x.com/someone/status/1845678901234567890',
     // A percent sign that encodes nothing is read as it is written, and refuses nothing.
     'https://example.com/sales/100%-off',
+    // An escaped letter of another alphabet cuts the segment where it stands; it does not join its neighbours.
+    'https://example.com/wiki/abcdefghij%C3%A91234567890x',
   ];
   for (const url of pages) {
     const fake = fakeFetch(200, PAGE);
@@ -245,7 +254,12 @@ test('the limit the help states holds: a key of letters alone, of digits alone, 
     `https://example.com/share/${ID_KEY.slice(0, 19)}`,
     // 22 characters of the base64url alphabet, as a key is, with no piece that mixes letters and digits.
     `https://example.com/share/${letters.slice(0, 10)}-${digits.slice(0, 11)}`,
+    // Any character that is no letter or digit cuts as a hyphen does.
+    `https://example.com/share/${letters.slice(0, 16)}.${digits.slice(0, 16)}`,
+    `https://example.com/share/${HEX_KEY.slice(0, 19)}/${HEX_KEY.slice(19, 38)}`,
+    `https://example.com/share/${[...HEX_KEY.slice(0, 32)].map((char) => `%25${char.charCodeAt(0).toString(16)}`).join('')}`,
     `https://example.com/callback?code=${HEX_KEY}`,
+    `https://example.com/callback?${HEX_KEY}`,
   ];
   for (const url of unseen) {
     const fake = fakeFetch(200, PAGE);
@@ -255,7 +269,7 @@ test('the limit the help states holds: a key of letters alone, of digits alone, 
   const help = (await run(['--help'], fakeFetch(200, PAGE).fn)).stdout.replace(/\s+/g, ' ');
   for (const said of [
     'one whose path holds a segment that reads as a key (its pieces that mix letters and digits add up to 20 characters or more) is refused with exit 1',
-    "These go out with the URL: a key of letters alone or of digits alone; one shorter than 20 characters; one that hyphens or underscores cut into pieces too few of which mix letters and digits (about one random 22-character base64url key in four); one in a query value under an ordinary name; one in the host's name.",
+    "These go out with the URL: a key of letters alone or of digits alone; one shorter than 20 characters; one that other characters (a hyphen, an underscore, a dot, an escape) cut into pieces too few of which mix letters and digits (about one random 22-character base64url key in four); one spread over several segments; one escaped twice; one in the query, unless its parameter is named like a secret; one in the host's name.",
     'these public pages are refused as well: one whose path holds an id of that shape (a commit hash, a UUID), and a slug whose words that mix letters and digits (gpt4, llama3, a 12-character id) add up to 20 characters. Read them in the built-in browser',
   ]) assert.ok(help.includes(said), said);
 });

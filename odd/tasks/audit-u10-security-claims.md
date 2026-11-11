@@ -114,9 +114,10 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
 - [x] T1 (kind: docs) this document: the contract, the depth pass, the specs. Commit e0ab4ebf.
 - [x] T2 (kind: build) spec 1: `notPublic` refuses a path segment that reads as a key, test first; the help and the
   README say the refusal and its limit (spec 2, the first text). Commit 4770eb0a.
-- [ ] T3 (kind: build) spec 2, the second text: the header of evals/configs.mjs and docs/SPEC.md:555 say redirection,
-  not confinement, with the test that holds the limit.
-- [ ] T4 (kind: verify) an independent verifier reads T2, the guard.
+- [x] T3 (kind: build) spec 2, the second text: the header of evals/configs.mjs and docs/SPEC.md:555 say redirection,
+  not confinement, with the test that holds the limit. Commit 53bf1d2.
+- [x] T4 (kind: verify) an independent verifier reads T2, the guard: "holds" at f0e62d7d (L10); the lens fixes are
+  commit f0e62d7d.
 
 ## Log
 - L1 The brief (the lead, 2026-11-11T05:33Z): "You own one feature: two protections say what they really do, and
@@ -164,7 +165,23 @@ His words that answer it, typed in the lead's chat (transcript ea85ec35-82e1-4aa
 - L9 The lead answered the notice of L4 (2026-11-11T06:14Z, a notice of the channel, the lead's claim): the
   recommended option is taken by his words of line 6905, and the check over query values is this session's to build
   as its own small unit with its own measure, in a second pull request after this one is ready, never mixed into it.
-- State (for a session that resumes): T1 to T3 and the lens fixes are committed; what is left is T4's independent
-  verifier on T2, a confirming review of the fix (Codex and the three lenses, from 53bf1d2), the push, the pull
+- L10 T4, the independent verifier (a fresh sub-agent, read-only, given the code and the request and not this
+  session's conclusions; 17 tool uses, 124,725 tokens, 13.5 minutes), at f0e62d7d: "Verdict: holds". What it checked
+  itself and found sound: a refused URL is never sent (exit 1, 0 calls of fetch, no part of the key in the reason);
+  0 throws over 300,000 fuzzed strings, and a throw would reject before the request; no backtracking on 26 shapes
+  of 200,000 characters (worst 899 ms); the path judged is the path sent (a loopback server, dot segments and the
+  fragment included); the figures of the help hold (22-character base64url sent 25.95 %, 32-character 5.66 %); and
+  its own count of the repository's URLs agrees, 20 of 333, all on claude.ai. Its findings were omissions of the
+  texts and gaps of the tests, no defect of the code. Taken: (1) `bin/js-harness.mjs:52` and `docs/SPEC.md:663`
+  listed the refusals in the old words, and now name the path refusal; (2) the help said hyphens and underscores
+  where every character that is no letter or digit cuts (a percent-encoded standard base64 key of 16 bytes is sent
+  27.84 % of the time): the help, the README and the comment say so; (3) a key spread over several segments, (4) a
+  key in the query's name position and (5) a key escaped twice are sent and were not listed: now listed, each with
+  a sent case; (6) the tests pinned neither the limit at exactly 20, nor capital letters, nor the parsed path, nor a
+  hex letter in an escape, nor that another alphabet's escape cuts: one case each. Not taken: the hook's notice in
+  `bin/lib/web-block.mjs:22` ("a public page only: it sends no cookie and no key") lists no refusal and what it says
+  of the command is true, so it stays as three tests pin it.
+- State (for a session that resumes): T1 to T4, the lens fixes and the verifier's are committed; what is left is a
+  confirming review of the fixes (Codex and the three lenses, from 53bf1d2), the push, the pull
   request, the ready notice, then the second unit of L9 on a branch of its own from this one, and the summary with
   the closed notice.
