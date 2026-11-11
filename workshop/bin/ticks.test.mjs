@@ -264,23 +264,54 @@ test('the hook\'s command finds the dispatcher from a folder that is not the roo
   }
 });
 
+// The land's suite of 2026-11-11 (gate f7a95e59) ran in a copy of the tree with no `.git`, where the folder a command
+// runs in is a project of its own: the hook found the dispatcher above the subfolder and read the subfolder's
+// records. The command now runs the dispatcher in the folder that holds it, which this holds with a tree of no git.
+test('the hook\'s command runs the dispatcher in the folder that holds it, whatever folder the hook ran in', () => {
+  const tree = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ticks-hook-tree-')));
+  const outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ticks-hook-outside-')));
+  try {
+    const deep = path.join(tree, 'workshop', 'deep');
+    fs.mkdirSync(deep, { recursive: true });
+    fs.writeFileSync(path.join(tree, 'workshop', 'js-harness-workshop.mjs'), 'console.log(JSON.stringify({ cwd: process.cwd(), argv: process.argv.slice(2) }));\n');
+    for (const [cwd, projectDir, why] of [
+      [tree, undefined, 'the folder that holds it'],
+      [deep, undefined, 'a subfolder, no variable'],
+      [deep, outside, 'a subfolder, the variable naming a folder that holds none'],
+      [outside, tree, 'a folder outside the tree, the variable set'],
+    ]) {
+      const result = runHookCommand(cwd, projectDir);
+      assert.deepEqual({ status: result.status, stderr: result.stderr }, { status: 0, stderr: '' }, why);
+      assert.deepEqual(JSON.parse(result.stdout), { cwd: tree, argv: ['ticks', '--help'] }, why);
+    }
+  } finally {
+    fs.rmSync(tree, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
 // The command as the settings hold it, in hook mode, from a folder that is not the root: it reads this repository's
 // records, not the folder's. The home holds one fresh reading of the Windows run filed under this repository, so
 // that row is missing from the message while the two with nothing kept are said.
-test('the hook itself, run from a subfolder, reads the records of this repository', () => {
+test('the hook itself, run from a subfolder or from outside by the host\'s variable, reads the records of this repository', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ticks-hook-home-'));
   try {
     const project = mainCheckoutByFiles(ROOT);
     const asked = path.join(home, '.js-harness', 'channel', 'windows-daily', projectSlug(project), 'asked');
     fs.mkdirSync(path.dirname(asked), { recursive: true });
     fs.writeFileSync(asked, `${new Date().toISOString()}\n`);
-    const result = runHookCommand(path.join(ROOT, 'workshop', 'bin'), undefined, `--hook --home "${home}"`);
-    assert.deepEqual({ status: result.status, stderr: result.stderr }, { status: 0, stderr: '' });
-    const message = messageOf(result.stdout.trim().split('\n'));
-    assert.match(message, /^js-harness workshop: the heartbeat's ticks have not run for \d+ hours: throughput: no snapshot is kept .*; host-watch: never read/);
-    assert.doesNotMatch(message, /windows-daily:/);
-    // Offline, the row that needs the network is said as not read, after the ticks' part, and nothing fails.
-    assert.match(message, /; and idea-watch: could not be read \(/);
+    for (const [cwd, projectDir, why] of [
+      [path.join(ROOT, 'workshop', 'bin'), undefined, 'a subfolder, no variable'],
+      [home, ROOT, 'a folder outside the repository, the variable set'],
+    ]) {
+      const result = runHookCommand(cwd, projectDir, `--hook --home "${home}"`);
+      assert.deepEqual({ status: result.status, stderr: result.stderr }, { status: 0, stderr: '' }, why);
+      const message = messageOf(result.stdout.trim().split('\n'));
+      assert.match(message, /^js-harness workshop: the heartbeat's ticks have not run for \d+ hours: throughput: no snapshot is kept .*; host-watch: never read/, why);
+      assert.doesNotMatch(message, /windows-daily:/, why);
+      // Offline, the row that needs the network is said as not read, after the ticks' part, and nothing fails.
+      assert.match(message, /; and idea-watch: could not be read \(/, why);
+    }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

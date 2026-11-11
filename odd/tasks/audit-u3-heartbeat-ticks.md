@@ -113,6 +113,9 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
 - [x] T2 (kind: build) spec 2, 5: `.claude/settings.json`, its test and the `workshop` cell of `HOOK_CEILINGS`, with
   the measured time. His word: question 245 (L8). Route: inline. Commit: its own pull request, after T1's landed
 - [x] T3 (kind: verify) Codex and the lenses on each code commit; `npm run check`; the pull request; the ready notice.
+- [ ] T4 (kind: build) spec 2: the land's red test of 2026-11-11 (L15): the hook runs the dispatcher in the folder
+  that holds it, test first, proved in a WSL mirror with no `.git`; its reviews; main merged in. Route: inline.
+  Commit: `fix(workshop): the session start hook reads its repository's records`
 
 ## Log
 - L1 (2026-11-10, the lead's brief `2026-11-10T06-31-36-662Z-8f2df985.md`): "Yours: exactly what the unit lists and
@@ -225,10 +228,35 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
   01:00 local (the lead's claim): "leave PR 815 as it is. The lead marks it ready itself when it lands it [...]
   Finish your summary and send the closed notice; no ready notice is needed." So T3 closes with no ready notice on
   record for 815, by the lead's word.
+- L15 (2026-11-11, the lead's brief `2026-11-11T08-31-47-969Z-0bdf5962.md`): pull request 815 did not land. The
+  land's suite (gate `f7a95e59`, `~/.js-harness/gate-log/failed.jsonl`, "ranIn":"wsl", 559.7 s, no timeout) failed
+  one test, mine: "the hook itself, run from a subfolder, reads the records of this repository". What happened: a
+  gate in WSL runs in a mirror of the tree synced without `.git` (`bin/lib/gate-wsl.mjs:112`). With no `.git` above
+  it, the folder a command runs in is its own project (`mainCheckoutByFiles`, `bin/lib/inbox.mjs:125`), so the hook,
+  run from `workshop/bin`, found the dispatcher above it and read the records of `workshop/bin`:
+  "throughput: no snapshot is kept (.../throughput/-tmp-tmp-8d2hGC2iHi-workshop-bin); windows-daily: never read".
+  The lead's guess (the worktree's `.git` file naming a Windows path) is dropped: the mirror holds no `.git` at all.
+  My own gates never saw it: each commit's tests ran on GitHub's machines, in a clone that holds `.git`. Reproduced
+  with `workshop/bin/ticks.test.mjs` alone in a mirror made as the runner makes it (rsync without `.git`, `env -i`,
+  the gate's node): 1 failed, `doesNotMatch(/windows-daily:/)` at line 281. The fault is the hook's, and wider than
+  the mirror: from a folder outside the repository with `CLAUDE_PROJECT_DIR` set, on Windows too, it found the
+  dispatcher by the variable and read the records of the folder it ran in, so it would say the ticks stopped when
+  they run. The fix now, checked: the command moves to the folder that holds the dispatcher before it runs it
+  (`process.chdir`), so what it reads is that repository's whatever folder the hook ran in. Test first: two tests
+  failed on Windows (15 passed, 2 failed), one with a tree of no git and a dispatcher that prints its folder, one
+  the hook itself from outside the repository by the variable; then 17 of 17 on Windows and 17 of 17 in the WSL
+  mirror with no `.git`. What stops it recurring: the test with a tree of no git runs in every gate, on GitHub and
+  in the mirror alike. Not a register entry: `docs/FAILURES.md` was searched ("mirror", "no .git", "no git", the
+  entries on tests and lands) and holds no such kind, and the land's gate was the control, working. The proof it
+  has not come back: the land's suite passes that test.
 
 ## Next step
-For a resume (2026-11-11): nothing is left to build. Pull request 815 is open as a draft, reviewed at the door
-(L14); the lead marks it ready and lands it, and no ready notice is owed. The summary is
-`docs/sessions/2026-11-11-jh-166-audit-unit-3-the-heartbeat-s-ticks.md`; once it is committed and pushed,
-`js-harness notify --to orchestrator --kind closed --summary <that file>` closes the session. The snapshot of the day
-is the lead's: the heartbeat must run `node workshop/js-harness-workshop.mjs loop heartbeat`.
+For a resume (2026-11-11): T4 is open. The fix of L15 is in `.claude/settings.json` and
+`workshop/bin/ticks.test.mjs`. Left, in order: one commit through the gate; Codex and the reliability lens over it,
+one at a time (`js-harness check --push` names the commands); merge `origin/main` in; `npm run check` once; push;
+`js-harness notify --to orchestrator --kind note` saying it is fixed and how it was proved in WSL (never mark the
+pull request ready here: the lead does, and lands it); the summary
+`docs/sessions/2026-11-11-jh-166-audit-unit-3-the-heartbeat-s-ticks.md` brought up to date, committed and pushed;
+then the closed notice with it. The reproduction is
+`wsl.exe -d Ubuntu --exec bash <job tmp>/repro-wsl.sh /mnt/d/js-harness/.claude/worktrees/audit-u3-heartbeat-ticks`.
+The snapshot of the day is the lead's: the heartbeat must run `node workshop/js-harness-workshop.mjs loop heartbeat`.

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"const fs=require('fs'),path=require('path'),a=process.argv,s=a[1];let f;for(let d of[process.env.CLAUDE_PROJECT_DIR,'.'])for(d=d&&path.resolve(d);d&&f===undefined;){try{f=fs.realpathSync(path.join(d,s))}catch{const p=path.dirname(d);d=p===d?'':p}}if(f){a[1]=f;import(require('url').pathToFileURL(f).href).catch(e=>console.log(JSON.stringify({systemMessage:'js-harness workshop: ticks --hook could not load '+f+': '+e.message})))}\" workshop/js-harness-workshop.mjs ticks --hook",
+            "command": "node -e \"const fs=require('fs'),path=require('path'),a=process.argv,s=a[1];let f,r;for(let d of[process.env.CLAUDE_PROJECT_DIR,'.'])for(d=d&&path.resolve(d);d&&f===undefined;){try{f=fs.realpathSync(path.join(d,s));r=d}catch{const p=path.dirname(d);d=p===d?'':p}}if(f){try{process.chdir(r)}catch{}a[1]=f;import(require('url').pathToFileURL(f).href).catch(e=>console.log(JSON.stringify({systemMessage:'js-harness workshop: ticks --hook could not load '+f+': '+e.message})))}\" workshop/js-harness-workshop.mjs ticks --hook",
             "timeout": 15
           }
         ]
