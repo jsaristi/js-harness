@@ -333,7 +333,7 @@ test('the usage names the applied form, and a word after applied is a usage erro
 
 // Noon of the day after the newest of the rules the records are held to began, so every one of them holds a record
 // written at NOW, whatever day his last change of one fell on.
-const HELD_IDS = ['session-model', 'session-effort', 'subagent-reader-model'];
+const HELD_IDS = ['session-model', 'session-effort'];
 const NOW = Date.parse(`${RULES.filter((rule) => HELD_IDS.includes(rule.id)).map((rule) => rule.since).sort().at(-1)}T12:00:00Z`) + 24 * 60 * 60 * 1000;
 const RULES_DATA_TEXT = fs.readFileSync(path.join(PACKAGE, 'bin', 'lib', 'rules-data.mjs'), 'utf8');
 const LIST = { 'bin/lib/rules-data.mjs': RULES_DATA_TEXT };

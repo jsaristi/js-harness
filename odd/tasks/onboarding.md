@@ -870,7 +870,7 @@ ceiling.
   Codex in plain text, a relaying lead carrying approvals with their verbatim answers quoted, the approval sized for
   a phone, "accepted ADR" defined, stale wording. Unguaranteed: D15 was not read again (no third round), and how well
   the session deduces is for T4's two real trials to show.
-- Profiles round, slice 3a (2026-10-20, S10), two read-only readers on `rule:subagent-reader-model` at high effort
+- Profiles round, slice 3a (2026-10-20, S10), two read-only readers on `rule:session-model` at high effort
   over 86e5e635 and d3b2643e: one on claims and gaps with the sources fetched, one on gaps only, running the command.
   Blockers taken:
   - a target only real users can show was a first-phase step that could never close; now its step is the measure
@@ -894,7 +894,7 @@ ceiling.
 - Slice 3a, Codex (2026-10-20): the same range in 4 parts, recorded. One P2, taken: `B:seo-basics` named only
   Lighthouse, which does not check duplicate titles, canonicals or the sitemap across pages; its command now adds a
   check over the built pages.
-- Profiles round, slice 3b (2026-10-20, S10), two read-only readers on `rule:subagent-reader-model` at high effort
+- Profiles round, slice 3b (2026-10-20, S10), two read-only readers on `rule:session-model` at high effort
   over the uncommitted data-analysis, research and pre-project kinds: one on claims and gaps with the sources
   fetched, one on gaps only, running the command for three imagined users. Blockers taken:
   - `pre-project,platform` mixed a build's whole bar into the plan; a kind may now carry `joins`, and pre-project
@@ -918,7 +918,7 @@ ceiling.
   per-kind override of teaching and pitfalls (the shape has none; global teaching stays generic). Recorded for D12:
   OpenAI announced it would acquire Astral (uv) on 2026-03-19, and dbt Labs and Fivetran merged on 2026-06-01, both
   keeping their tools open source. Unguaranteed: the fixes were not read again (no third round).
-- Profiles round, slice 3c (2026-10-21, S10), two read-only readers on `rule:subagent-reader-model` at high effort
+- Profiles round, slice 3c (2026-10-21, S10), two read-only readers on `rule:session-model` at high effort
   over 37c0fbd2: one on claims and gaps with the sources fetched, one on gaps only, running the command for every
   kind, checklist, new area and four joins. Blockers taken:
   - `B:release-provenance` fit only public npm or PyPI packages: npm adds provenance only from a public repository on

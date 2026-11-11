@@ -5629,7 +5629,7 @@ test('check --subagents prints an INFO subagents row that counts today\'s launch
     const [row] = subagentRows(output);
     assert.ok(row?.startsWith('INFO  subagents  '), output);
     assert.match(row, /2 launches today: 1 on a model off the rules/, output);
-    assert.ok(output.split('\n').some((line) => line.includes('claude-sonnet-5-5') && line.includes('subagent-reader-model')), output);
+    assert.ok(output.split('\n').some((line) => line.includes('claude-sonnet-5-5') && line.includes('session-model')), output);
     assert.notEqual(code, 2, output);
   } finally {
     project.cleanup();

@@ -60,13 +60,13 @@ test('a stamp more than a minute off the clock is refused with the hour the cloc
 // The project's rules file as this copy writes it: the rules of this repository are in force.
 const HERE = writeRules(RULES);
 
-// The model rules a sub-agent call is held to, as the list declares them today: the tests below read them, so his
-// next change of a model needs no edit here. The first is the Claude home's, which the writers' own rule retired into
-// on 2026-11-11. A rule has a short name only while one is known to give its model on the engine in use.
-const MODEL_RULES = ['session-model', 'subagent-reader-model'].map((id) => RULES.find((rule) => rule.id === id));
+// The model rule a sub-agent call is held to, as the list declares it today: the tests below read it, so his next
+// change of a model needs no edit here. It is the Claude home's, which the writers' and the readers' own rules
+// retired into on 2026-11-11. A rule has a short name only while one is known to give its model on the engine in use.
+const MODEL_RULES = ['session-model'].map((id) => RULES.find((rule) => rule.id === id));
 const SHORT_NAMES = MODEL_RULES.map((rule) => rule.alias).filter((alias) => alias !== undefined);
 
-test('in this repository a sub-agent may run on the model of either rule, on its short name where it has one, or on none', () => {
+test('in this repository a sub-agent may run on the home\'s model, on its short name where it has one, or on none', () => {
   const allowed = allowedModels(HERE);
   assert.deepEqual(allowed, MODEL_RULES.map((rule) => ({ alias: rule.alias ?? null, id: rule.value, rule: rule.id })));
   for (const model of [undefined, null, '', ...SHORT_NAMES, ...MODEL_RULES.map((rule) => rule.value)]) {
@@ -74,7 +74,7 @@ test('in this repository a sub-agent may run on the model of either rule, on its
   }
 });
 
-test('a model neither rule gives is refused, and the refusal names both rules and what each gives', () => {
+test('a model the home does not give is refused, and the refusal names the rule and what it gives', () => {
   const allowed = allowedModels(HERE);
   // A short name no rule declares is refused like any other model: on 2026-11-10 `fable` gave claude-fable-5-1 on
   // cli 2.1.319, not the Fable 5.2 the rules name.
@@ -89,19 +89,19 @@ test('a model neither rule gives is refused, and the refusal names both rules an
 test('the refusal says a short name where a rule has one, and that none gives the model where it has none', () => {
   const allowed = [
     { alias: 'haiku', id: 'claude-fixture-1', rule: 'session-model' },
-    { alias: null, id: 'claude-fixture-2', rule: 'subagent-reader-model' },
+    { alias: null, id: 'claude-fixture-2', rule: 'fixture-model' },
   ];
   for (const model of ['haiku', 'claude-fixture-1', 'claude-fixture-2', undefined]) assert.equal(modelRefusal({ model }, allowed), null, String(model));
   assert.equal(
     modelRefusal({ model: 'opus' }, allowed),
     'js-harness guard: the model "opus" is not one a sub-agent may run on here: session-model gives "haiku" (claude-fixture-1), '
-      + 'and subagent-reader-model gives claude-fixture-2, which no short name is known to give. '
+      + 'and fixture-model gives claude-fixture-2, which no short name is known to give. '
       + "Launch it on one of those, or with no model to run on the parent's.",
   );
   // With no short name at all, the one way left to a tool that takes only short names is said.
   assert.equal(
-    modelRefusal({ model: 'opus' }, [{ alias: null, id: 'claude-fixture-2', rule: 'subagent-reader-model' }]),
-    'js-harness guard: the model "opus" is not one a sub-agent may run on here: subagent-reader-model gives claude-fixture-2, which no short name is known to give. '
+    modelRefusal({ model: 'opus' }, [{ alias: null, id: 'claude-fixture-2', rule: 'fixture-model' }]),
+    'js-harness guard: the model "opus" is not one a sub-agent may run on here: fixture-model gives claude-fixture-2, which no short name is known to give. '
       + "Launch it with no model, to run on the parent's, or on that id where the call takes one.",
   );
 });
@@ -145,14 +145,15 @@ test('behind a project whose list declares the rule, the guard refuses as here, 
     assert.match(reason, new RegExp(`rule ${id}`), id);
     assert.equal(STALE.exec(reason)?.[1], id, id);
   }
-  // Both model rules declared otherwise: one note names both.
-  const bothModels = writeRules(RULES.map((rule) => (MODEL_RULES.includes(rule) ? { ...rule, value: `${rule.value}-changed` } : rule)));
-  const both = modelRefusal({ model: 'sonnet' }, allowedModels(bothModels));
+  // Two rules declared otherwise: one note names both. The home's is the one rule a call is held to today, so the
+  // second is a fixture's.
+  const stale = allowedModels(changed('session-model'));
+  const both = modelRefusal({ model: 'sonnet' }, [...stale, { ...stale[0], rule: 'fixture-model' }]);
   assert.equal(both.match(/This copy of js-harness/g)?.length, 1, both);
-  assert.match(both, /declares rules session-model and subagent-reader-model otherwise/);
+  assert.match(both, /declares rules session-model and fixture-model otherwise/);
   // What passes here passes behind too: the note is only ever in a refusal.
   assert.equal(terminalNoteRefusal("npm test; Write-Host 'NOTE: runs the tests of this repository'", changed('terminal-note')), null);
-  assert.equal(modelRefusal({ model: MODEL_RULES[0].value }, allowedModels(changed('subagent-reader-model'))), null);
+  assert.equal(modelRefusal({ model: MODEL_RULES[0].value }, allowedModels(changed('session-model'))), null);
 });
 
 // odd/tasks/session-channel.md, layer 3: a session these tools open lands in the app's Routines or in the cloud, where he

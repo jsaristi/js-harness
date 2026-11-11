@@ -162,7 +162,7 @@ export function subagentRowLines(result, expected) {
   }
 
   const lines = [];
-  const ruleNames = { writer: CLAUDE_HOME.model, reader: 'subagent-reader-model' };
+  const ruleNames = { writer: CLAUDE_HOME.model, reader: CLAUDE_HOME.model };
   for (const side of ['writer', 'reader']) {
     const role = result.byRole[side];
     const segments = [];

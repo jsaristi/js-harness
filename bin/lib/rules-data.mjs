@@ -789,12 +789,19 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-11-10",
-    "value": "claude-fable-5-2",
     "was": [
+      {
+        "value": "claude-fable-5-2",
+        "until": "2026-11-11"
+      },
       {
         "value": "claude-opus-5-5",
         "until": "2026-11-10"
       }
+    ],
+    "retired": "2026-11-11",
+    "successors": [
+      "session-model"
     ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\b(?:readers?|verifiers?|reviewers?)\\b.{0,50}\\bon `?(?=claude-){amount}"

@@ -37,7 +37,7 @@ only brings the evidence.
 - Read-only — because the brief says so and a finding is a proposal he decides through the lead.
 - No spend — because question 239 told him "No gasta dólares; usa tu plan"; a Codex read is spend of his weekly
   limit, so the Codex half of `rule:double-review` cannot run here (L4).
-- Sub-agent readers run on the model and effort the rules give them (`rule:subagent-reader-model`,
+- Sub-agent readers run on the model and effort the rules give them (`rule:session-model`,
   `rule:session-effort`) and
   only map; whatever a finding rests on is read or run by this session before it is written as checked.
 - One slice does not hold the subject (Depth pass, item 4), so coverage is said per area, never assumed.

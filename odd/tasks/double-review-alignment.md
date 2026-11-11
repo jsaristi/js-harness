@@ -316,7 +316,7 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   `codex-meter` and the merge door list until a Codex review pays it, after the reset; never his reset credit; older
   texts 4 and 13; spec 4, 9, 10, 11; route codex-review.
 - [x] T3 (kind: build) bcd2dd4a, 1a7638cf, c59e58b0, aad73210, 09725fbd, 532f4215; `js-harness double-review`: `read` (the frozen copy, both readers started at once, each echoing
-  its read tokens, the Claude reader on `rule:subagent-reader-model`, blind by sequence (L12), the reserve, `--plan`
+  its read tokens, the Claude reader on `rule:session-model`, blind by sequence (L12), the reserve, `--plan`
   announces), `take` (taken and shared), `skip`, `tally`; records under the git common dir, which no review row
   reads, with the test that a read leaves code uncovered; spec 1, 2, 3, 4.
 - [x] T4 (kind: build) 85d8ee7f; `rules change double-review` on his words of questions 145, 146, 150 and 152 (L2, L3, L14,
@@ -393,7 +393,7 @@ $2 to $5, and Codex none. Run only on his word, through the lead.
   `check` print nothing new (b042cddc). In T3 the readers' prompt is a text source of directive coverage
   (`bin/lib/rules-sources.test.mjs` holds every prompt builder to one), with no headings, because each sentence is a
   span the register declares and the register sits under its line ceiling; the Claude reader's model is read with
-  `ruleHere`, since `rule:subagent-reader-model` is of this repository only (bcd2dd4a).
+  `ruleHere`, since its rule of that day, retired into `rule:session-model` on 2026-11-11, is of this repository only (bcd2dd4a).
 - L11 (2026-10-31, a mistake): this document was edited while Codex reviewed `d22f33e..bcd2dd4`, so the run read a
   tree that was not the range and recorded nothing (28,500 input tokens, part 1 of 4); `docs/FAILURES.md`
   `edit-during-review`, its eighth sighting. Fixed by committing the edit and running the review again, touching no

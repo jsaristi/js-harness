@@ -6,13 +6,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
-import { doubleReviewMain, parseArgs, readerModel, SKIP_PHRASE } from './double-review.mjs';
+import { doubleReviewMain, parseArgs, READER_MODEL, SKIP_PHRASE } from './double-review.mjs';
 import { readDoubleReviews } from './lib/double-review-records.mjs';
 import { readCodexReviews } from './lib/codex-reviews.mjs';
 import { appendCodexReviewRun } from './lib/codex-review-runs.mjs';
 import { appendLensReview } from './lib/lens-reviews.mjs';
 import { claudeHome } from './lib/model-home.mjs';
-import { ruleHere } from './lib/rules.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 
 const finding = (claim) => ({ severity: 'high', claim, evidence: 'plan.md:1', fix: 'fix it' });
@@ -141,9 +140,8 @@ test('--plan says what a read costs and the user\'s words that skip it, and star
   assert.deepEqual(readDoubleReviews(root), []);
 });
 
-test('in this repository the Claude reader runs on the model its rule sets', () => {
-  const repo = path.resolve(import.meta.dirname, '..');
-  assert.equal(readerModel(repo), ruleHere('subagent-reader-model', undefined, fs.readFileSync(path.join(repo, 'bin', 'lib', 'rules-data.mjs'), 'utf8')).value);
+test('the Claude reader runs on the home\'s model, in this repository as in a project with no rules', () => {
+  assert.equal(READER_MODEL, claudeHome().model);
 });
 
 test('read starts both readers at once on one frozen copy outside the repository, blind, and records both once both return', async (t) => {
