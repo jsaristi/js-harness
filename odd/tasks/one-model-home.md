@@ -382,6 +382,18 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 17:50: pull request 3 is open as two stacked pull requests on main, not four: 836
+(`feat/model-home-sessions-1`, `268991a7..e878d8be`, T5, 516 changed lines of code and tests) and 837
+(`feat/model-home-sessions`, `e878d8be` to the head, T6 and the fixes, 742). The cut of the 17:35 paragraph did not
+hold: the pre-push check takes a branch only where a reviewed range ends (`2df39fb6 lies in a range reviewed up to
+e878d8b ... push up to e878d8b`), and the two rounds of reviews ended at `e878d8be` and at the head. A cut inside a
+range costs a Codex review and two lens runs each, and one at `6df6a4ba` would part the list from Codex's three
+corrections of it; I spent none, and both bodies say their size and why. The lead may answer with another cut.
+`js-harness check --push` at the head: both reviews cover the 9 code commits. Two faults of mine in the push, no
+harm: four pushes chained through `tail`, which hid three refusals, and three branches pushed from another
+checkout than their own; the local labels `-2` and `-3` are deleted, never pushed. Owed: the ready notices and the
+list of the sessions off the home to the lead; then T7 on `feat/model-home-switch`, cut from main once 836 and 837
+land, since the switch builds on the home's readers of this pull request.
 2026-11-11 17:44: the corrections are `ec8b8829`, and the second round of reviews is whole. The risk lens on
 `e878d8be..ec8b8829`: 0 findings. The reliability lens on the same range: 0 findings, and its two findings of the
 first round rechecked as fixed. Codex's confirming review of `533f8a63..ec8b8829`: correct, its three findings
