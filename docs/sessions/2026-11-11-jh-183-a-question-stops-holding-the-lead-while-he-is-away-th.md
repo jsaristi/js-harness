@@ -21,8 +21,8 @@ L4):
   urgente. prioritario u opciones con un buen color al inicio del tablero"
 
 ## Delivered
-- One documents-only pull request from the branch `worktree-question-holds-lead`, ready, not merged; its number is
-  in this session's `ready` notice in the channel record. It holds:
+- Pull request 829, documents only, from the branch `worktree-question-holds-lead`: ready (the notice recorded at
+  13:23 local), not merged. It holds:
   - `docs/proposals/2026-11-11-question-stops-holding-lead.md`: the measurements, the host's facts, his words, ten
     options, the design the readers were given, what the third read left open, and the question for him. Its status
     line says it: not settled.
@@ -71,6 +71,9 @@ L4):
   read's answer and by the Codex reader. Fixed in the script; 33 notices, 9 of kind `ready`.
 - **The host stopped this session's wait for low memory** (11:13 local). As the brief says, the lead got one waiting
   notice and the session stopped until the new lead's message (L5).
+- **Clock times in the log were guessed.** L9 to L14 of the feature document carried hours this session estimated,
+  up to half an hour ahead of the clock; the `ready` notice's own stamp (13:23 local) showed it. Fixed in a second
+  commit (L15): a time in a log is read from a command's output or left out.
 - **The host compacted this session at 13:15 local**, between the launch of the third read and its return. The state
   was written in the feature document before it (L13) and the resume read it from there.
 
@@ -90,5 +93,4 @@ L4):
 - Reviews: three double reads of documents, 3,568,865 tokens of the Claude reader (1,279,532, 702,980 and 1,586,353)
   and 2,037,218 of the Codex reader (429,839, 797,480 and 809,899). No Codex code review and no lenses: no code.
 - Sub-agents: one claude-code-guide reader of the host's documentation, in two turns.
-- Gate runs: one, the commit's. The summary rides in the same commit as the documents so the gate runs once on a
-  machine short of memory; that is why it names the pull request by its branch.
+- Gate runs: two, one a commit. The second commit corrects the log's clock times and names the pull request.

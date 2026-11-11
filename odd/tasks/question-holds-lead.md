@@ -97,7 +97,7 @@ Nothing is asked by this session: the one decision goes to the lead in the ready
 - [x] T1 (kind: design) spec 1, 2, 3: this document with its depth pass and the replay. Route: inline. Commit: with T2
 - [x] T2 (kind: design) spec 1, 2, 3: the proposal, `docs/proposals/2026-11-11-question-stops-holding-lead.md`. Route: inline. Commit: `docs(proposals): how a question stops holding the lead`
 - [x] T3 (kind: verify) spec 2: the double review (a Claude reader and a Codex reader, blind), every finding answered. Route: `js-harness double-review read`. Three reads ran; the third still found real failures, so the design is not settled (L14)
-- [x] T4 (kind: docs) spec 2: the pull request, the ready notice, the summary under `docs/sessions/`, the closed notice. Route: inline. Commit: `docs(proposals): how a question stops holding the lead, not settled by three reads`; the pull request's number is in this session's `ready` notice
+- [x] T4 (kind: docs) spec 2: the pull request, the ready notice, the summary under `docs/sessions/`, the closed notice. Route: inline. Commit: `docs(proposals): how a question stops holding the lead, not settled by three reads`; pull request 829
 
 ## Log
 - L1 (2026-11-11 06:45 local, the lead's brief
@@ -204,7 +204,7 @@ Nothing is asked by this session: the one decision goes to the lead in the ready
   inside the proposal it asks for. The scratch paths named in items 3 and 4 are the same scripts the replay document
   holds.
 
-- L9 (2026-11-11 13:10 local, the confirming read, `1d820f3b-930d-4d94-bbe4-65d655182d35`; its output is task
+- L9 (2026-11-11, the confirming read, `1d820f3b-930d-4d94-bbe4-65d655182d35`; its output is task
   `br790axqm`'s file): the Claude reader 14 findings, the Codex reader 7. Not yet recorded with `double-review take`.
   The plan for each, to be applied to the proposal before the third and last read:
   - C1 take: his recorded decision "Sí, lista diaria" (`docs/ROADMAP.md:903-907`, 2026-11-02) is missing from his
@@ -238,7 +238,7 @@ Nothing is asked by this session: the one decision goes to the lead in the ready
   - X4 take: the request is used up durably before the tool is allowed; a failed write refuses. X7 take: the
     table's conclusion said per value.
 
-- L10 (2026-11-11 13:25 local, the context pause at 86%): done since L9: his two lines checked
+- L10 (2026-11-11, the context pause at 86%): done since L9: his two lines checked
   (`docs/ROADMAP.md:903-907`, "Sí, lista diaria"; `0f71b2c6:73524`, 2026-11-07T14:31:58Z, "solo quiero que lo
   menciones una vez en el chat y me lo coloques como urgente", sent by the user); `last-word.mjs` now matches his
   whole message as a request and gives 2 requests in the window, which waited 19 and 1 minutes (his second real one,
@@ -246,20 +246,20 @@ Nothing is asked by this session: the one decision goes to the lead in the ready
   replay document is rebuilt from them. NOT done: the proposal still has its text of before L9 (it says 3 requests,
   1, 8 and 19 minutes, and a prefix match); nothing is committed; no `double-review take` for read `1d820f3b`.
 
-- L11 (2026-11-11 13:35 local, at 87% of the context): part 1 of L9 is in the proposal (`fix1.mjs` of the scratch,
+- L11 (2026-11-11, at 87% of the context): part 1 of L9 is in the proposal (`fix1.mjs` of the scratch,
   every replacement applied): C1, C2 in the trial's paragraph, C3, C4, C5, C6, C9, C11, X1, X2, X4, X6 and the 2
   requests of L10.
 
-- L12 (2026-11-11 13:45 local): part 2 of L9 is in the proposal too (`fix2.mjs`, every replacement applied). Left
+- L12 (2026-11-11): part 2 of L9 is in the proposal too (`fix2.mjs`, every replacement applied). Left
   of item 1 below: only this document's L2 (2 requests; "ended by a message he typed") and a read of the proposal
   for sentences the two scripts left rough (its presence-gate conclusion reads awkwardly).
 
-- L13 (2026-11-11 13:50 local): both takes of read `1d820f3b` are recorded (item 2 below is done). The third and
+- L13 (2026-11-11, written at 13:04 local by the file's time): both takes of read `1d820f3b` are recorded (item 2 below is done). The third and
   last read runs as background task `bv2bgj57o` (item 3; its output file is under this session's tasks folder and
   names the read id). When it returns: a real failure it still finds goes to the lead as a problem in a `waiting`
   notice, with no fourth read; otherwise item 4.
 
-- L14 (2026-11-11 13:50 local, after a compaction the host made at 13:15; the third and last read, read
+- L14 (2026-11-11 13:20 local, after a compaction the host made at 13:15; the third and last read, read
   `eb1f6974-f4de-4a18-ab92-db0e2789e568`): the Claude reader 14 findings (1,586,353 tokens), the Codex reader 8
   (809,899 tokens). All 22 accepted, none rebutted; Claude's 1, 2, 4 and 5 are Codex's 1 and 4, 6, 8 and 3. Four are
   marked high: the trial changes his rule in practice on a tapped button and nothing ends it; its measures cannot
@@ -279,6 +279,11 @@ Nothing is asked by this session: the one decision goes to the lead in the ready
     with no decision of his.
   - This session's reading of why three reads did not settle it: each correction added a mechanism and each
     mechanism its own failures, over three host facts nobody has seen and a change to a rule of his.
+
+- L15 (2026-11-11 13:25 local, a correction): the clock times L9 to L14 first carried (13:10 to 13:50) were this
+  session's guesses, not read from a clock, and ran ahead of it: the host's records put the pause notice at 13:02,
+  L13's write at 13:04 and the compaction at 13:15, and the `ready` notice for pull request 829 was recorded at
+  13:23. They are removed above; a time in this log is read from a command's output or left out.
 
 ## Next step
 The design is not settled and this unit ends here: one documents-only pull request with the three documents, one
