@@ -185,7 +185,7 @@ completamente autonomo".
 - [x] T5 (kind: build) the away grader on the project's label; incident-01's grader; incident-05's reply check;
   their three `habit/` overlays — specs 3 and 4; inline; commit 3
 - [x] T6 (kind: build) `--plan` names the cells that never failed or never passed — spec 4; inline; commit 4
-- [ ] T7 (kind: docs) the bar where the documents state it (ROADMAP Decided, future-model, SPEC) — specs 1 to 4;
+- [x] T7 (kind: docs) the bar where the documents state it (ROADMAP Decided, future-model, SPEC) — specs 1 to 4;
   inline; commit 5
 - [ ] T8 (kind: verify) an independent verifier on the graders and the negative control (high risk, item 6: no
   test says whether a grader measures the rule) — specs 3 and 4; one read-only sub-agent after the slice's checks
@@ -341,3 +341,8 @@ completamente autonomo".
   names them and removes none: which cases leave the paid set is his (the notice of L6, a). Checked:
   `node --test evals/plan.test.mjs` 7 pass, `node --test --test-name-pattern="--plan" evals/suite.test.mjs` 5 pass.
   Next: T7, T8, T9.
+- L12 (2026-11-11, slice 4 committed at a44d350a; T7 written). The bar is the Decided row "Rule proof" of
+  docs/ROADMAP.md, with his words and what the bar gets wrong; docs/SPEC.md names that row where it said "scores
+  lower" (the capability "Evals that discriminate", its proof commands and files, and two lines of the F8 map);
+  docs/future-model.md says the report now makes the cost comparison its Step 1 asked by hand, and what `--plan`
+  prints of the recorded passes. The values stay in code and the row names their constants. Next: T8, then T9.

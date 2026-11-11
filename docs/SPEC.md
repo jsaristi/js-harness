@@ -552,11 +552,11 @@ check or an eval case ("After F8", directive coverage).
 ### Evals that discriminate
 
 **Problem:** The predecessor's 32 tasks could not tell configurations apart: the bare configuration scored 94%, 30 of 32 at the maximum, graded by text rubrics (`odd/tasks/evals.md`).
-**Requirement:** Tasks are graded by hidden tests copied in after the agent exits, each trial in a home of its own that its tools are pointed at in place of the owner's memory, projects and review state, with auto-update and auto-memory off; that is redirection by environment variables and no confinement, since a trial runs with permissions bypassed and can reach by an absolute path whatever the machine's user can, the graders included; tokens and time are recorded per trial with a clean stop on a cap; the verdict takes the score as the floor and lets cost decide between equal scores. Any spend is stated and approved first.
+**Requirement:** Tasks are graded by hidden tests copied in after the agent exits, each trial in a home of its own that its tools are pointed at in place of the owner's memory, projects and review state, with auto-update and auto-memory off; that is redirection by environment variables and no confinement, since a trial runs with permissions bypassed and can reach by an absolute path whatever the machine's user can, the graders included; tokens and time are recorded per trial with a clean stop on a cap; the verdict takes the score as the floor and lets cost decide between equal scores. A case that names rules is proven by a recorded run that clears the bar of the roadmap's row "Rule proof", and a case may hold the failure it exists to catch, which its grader must fail. Any spend is stated and approved first.
 **Reason:** "Every component must earn its place" needs data, not opinion. F5 found the current stack 1.68x to 2.54x the minimal one's cost for the same score (`odd/tasks/evals.md`, "F5 result").
-**Proof:** `node --test evals/runner.test.mjs`, `node --test evals/tasks.test.mjs`
+**Proof:** `node --test evals/runner.test.mjs`, `node --test evals/tasks.test.mjs`, `node --test evals/rule-proof.test.mjs`, `node --test evals/task-proof.test.mjs`
 **Discarded:** Text rubrics. A visible grader ("make these tests pass"). Discrimination by score alone.
-**Today:** `evals/runner.mjs`, `evals/suite.mjs`, `evals/report.mjs`, `evals/home.mjs`, `evals/tasks`
+**Today:** `evals/runner.mjs`, `evals/suite.mjs`, `evals/report.mjs`, `evals/home.mjs`, `evals/rule-proof.mjs`, `evals/task-proof.mjs`, `evals/plan.mjs`, `evals/tasks`
 
 ### The future-model protocol
 
@@ -1011,7 +1011,8 @@ is the record of the intent. The register of the owner's decisions is the diet's
   commands that ran them; a skip is a debt the merge door refuses (S1, its records fix).
 - **Every directive tied to its proof.** Every source the harness ships or sends to an agent is
   listed, every obligation in it names a control (a check with a planted break, an eval case whose
-  arm without the rule scores lower, or a dated `owed`), and `owed` is at most 10% at S8 (S5c).
+  arm without the rule scores lower by the bar of the roadmap's row "Rule proof", or a dated
+  `owed`), and `owed` is at most 10% at S8 (S5c).
 - **Every project works the same.** `init` gives a new project, and the migration gives an
   initialized one, the same split, style, denies, complements, gates, reviews and coverage baseline,
   each write recorded (S12, `docs/proposals/gentle-ai-reverse-engineering.md`, section 11).
@@ -1037,7 +1038,7 @@ Only the capabilities F8 changes; every other one stands as written above.
 | Declared rules | S5c | Every rule's obligations carry a control and `rules check` refuses a new gap. |
 | A project's own rules | S5c-a | The `Control` field, optional in `docs/rules.json` until the project's baseline is set, required by `rules check` after it. |
 | The failures register | S5, S8 | Each of the 68 tool, machine and unseen-state entries assigned by id to its class repair or named open; S8 reports each class's closing count (diet section 10, "The failures outside prose"). |
-| Evals that discriminate | S11, S5c, S8 | gentle-ai's block arms kept only as named historical fixtures (S11); each case names its rules in `task.json`, with a recorded run where its arm without them scored lower (S5c); the long-session eval (S8). |
+| Evals that discriminate | S11, S5c, S8 | gentle-ai's block arms kept only as named historical fixtures (S11); each case names its rules in `task.json`, with a recorded run where its arm without them scored lower by the bar of the roadmap's row "Rule proof" (S5c); the long-session eval (S8). |
 | Releases | S8 | Every tag runs `scripts/release-proof.mjs` on the tagged commit before it is announced, and its record names that run (reverse-engineering document, 13.3 row 13). |
 | What a session took from gentle-ai is ours | S2 | After S2, the only style, skills and permissions on the machine are these; the Rules block stays. |
 | The memory survives the machine | S11 | Engram's protocol and its context recovery come from engram alone (its MCP instructions and plugin); js-harness writes no engram text of its own. |
