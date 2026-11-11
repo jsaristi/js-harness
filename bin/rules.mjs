@@ -70,6 +70,7 @@ function parseArgs(argv) {
       } else if (token.startsWith('-') || parsed.id !== undefined) throw new RulesArgError(`unknown argument: ${token}`);
       else parsed.id = token;
     }
+    if (parsed.id === undefined && parsed.withPaths !== null) throw new RulesArgError('rules change needs the id of the rule before --with: every word after --with is a path');
     if (parsed.id === undefined) throw new RulesArgError('rules change needs the id of the rule');
     if (parsed.checkSource && parsed.withPaths !== null) throw new RulesArgError('--with goes with a change: --check-source writes nothing');
     parsed.withPaths ??= [];

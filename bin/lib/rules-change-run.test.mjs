@@ -255,6 +255,10 @@ test('--with needs a path, goes with a change and not with --check-source, and i
     assert.equal(result.code, 2, argv.join(' '));
   }
   assert.match((await change(repo, ['gate-wait', '--with'], RETIRE)).err, /^--with needs at least one path/);
+  // Every word after --with is a path, so an id typed after it is one too: the refusal says where the id goes.
+  const after = await change(repo, ['--with', 'bin/x.mjs', 'gate-wait'], RETIRE);
+  assert.equal(after.code, 2);
+  assert.match(after.err, /^rules change needs the id of the rule before --with: every word after --with is a path/);
 });
 
 test('a rule whose home is AGENTS.md is refused until its draft exists', async () => {
