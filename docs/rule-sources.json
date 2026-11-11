@@ -1303,17 +1303,17 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "de resto ahora que estamos diseñando el harness o cuando vayamos a tratar cosas de planificacion debe ser minimo opues 5.5 alto o fable 5.5 alto (que aun no ha salido), ningun otro modelo hasta la fecha",
-        "date": "2026-10-10",
-        "session": "182ad401-252a-4cbe-afcc-929fcd905c6a",
-        "line": 990
+        "quote": "haz la correcion completa osea todos los modelos de ahora en adelante va a ser Fable 5.2 Alto",
+        "date": "2026-11-10",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 4744
       }
     ],
-    "reading": "A sub-agent that explores, reviews or verifies runs on Opus 5.5, which the session records name claude-opus-5-5. His words also allow Fable 5.5 at high once it exists: the rule changes with his words when it does. That \"the rest\" means those sub-agents is the orchestrator's reading (its relief file, line 148). That his \"opus 5.5\" is that id is this session's reading, from the records of its own sub-agents, and his to correct. The alias `opus` is how the project applies the rule where a call takes only a short name: it is this session's, from what the name gave on engine 2.1.295, and changes with a reading, not with his words.",
-    "accepted": "Not put to him as a reading: it is the orchestrator's, and his to correct.",
+    "reading": "A sub-agent that explores, reviews or verifies runs on Fable 5.2, which the session records name claude-fable-5-2. That his \"todos los modelos\" takes in these sub-agents is the lead's reading (JH ORQ, the brief of this change), and his to stop; his words of 2026-10-10 already allowed a Fable at high in place of Opus 5.5 once one existed. His \"Alto\" for them is rule:subagent-effort, already high. The rule declares no short name: measured on 2026-11-10 with one prompt on cli 2.1.319, `fable` is answered by claude-fable-5-1 and the full id claude-fable-5-2 by itself, so such a sub-agent is launched with no model, on its session's (rule:session-model), and the double review's Claude reader passes the id. A short name comes back by a reading, once one is measured to give this model.",
+    "accepted": "Typed by him in the lead's chat on 2026-11-10. Not put to him as a reading: it is the lead's, and his to correct.",
     "checked": {
-      "date": "2026-10-11",
-      "by": "session"
+      "date": "2026-11-10",
+      "by": "command"
     }
   },
   "subagent-writer-model": {

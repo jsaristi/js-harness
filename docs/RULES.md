@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `3c9a2ddbd64d`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 4.
+Hash `f1782576a74f`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 4.
 
 ## Sebastián's
 
@@ -225,11 +225,11 @@ The effort every sub-agent is launched with: high.
 - Since 2026-10-07. Row: reports. Source: his words of 2026-10-07, checked by a session on 2026-10-11.
 
 ### subagent-reader-model
-The model of a sub-agent that explores, reviews or verifies: claude-opus-5-5.
-- Passed on a call as `opus`.
+The model of a sub-agent that explores, reviews or verifies: claude-fable-5-2.
 - Of this repository only: not in force in a project that installs the harness.
+- Was: claude-opus-5-5 until 2026-11-10.
 - Read by: `bin/double-review.mjs`, `bin/lib/guard.mjs`.
-- Since 2026-10-10. Row: reports. Source: his words of 2026-10-10, checked by a session on 2026-10-11.
+- Since 2026-11-10. Row: reports. Source: his words of 2026-11-10, checked by the command on 2026-11-10.
 
 ### subagent-writer-model
 The model of a sub-agent that writes scoped code, in this repository: claude-fable-5-2.

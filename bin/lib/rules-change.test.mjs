@@ -139,8 +139,12 @@ test('a revert is a new value that is in was, and gives back the value in force'
 // The list a change gives is one readRules reads with no fault, on the real list: a new value, a retirement of a rule
 // with an alias, a change of form, and a new rule.
 test('on the real list, each kind of change gives a list readRules reads with no fault', async () => {
-  const { RULES } = await import('./rules-data.mjs');
+  const { RULES: REAL } = await import('./rules-data.mjs');
   const { readRules } = await import('./rules.mjs');
+  // The real list holds a rule with an alias only while a short name is known to give a rule's model (none gave
+  // Fable 5.2 on 2026-11-10). Without one, a rule of the list with a value and no earlier one is given an alias, so its retirement stays tried.
+  const live = (rule) => rule.alias !== undefined && !Object.hasOwn(rule, 'retired');
+  const RULES = REAL.some(live) ? REAL : REAL.map((rule) => (rule.id === 'subagent-effort' ? { ...rule, alias: 'fixture' } : rule));
   const withAlias = RULES.find((rule) => rule.alias !== undefined && !Object.hasOwn(rule, 'retired'));
   const withUnit = RULES.find((rule) => typeof rule.value === 'number' && rule.flag !== undefined);
   const changes = [
