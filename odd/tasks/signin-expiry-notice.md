@@ -114,7 +114,7 @@ again while he is at the PC.
   test first; first pull request
 - [x] T3 (kind: build) the heartbeat's sign-in tick, with `signinTold` — S3; inline, test first; second pull
   request, stacked on the first
-- [ ] T4 (kind: verify) `doctor` and the heartbeat run here; Codex and the lenses on the code commits; `npm run
+- [x] T4 (kind: verify) `doctor` and the heartbeat run here; Codex and the lenses on the code commits; `npm run
   check`; the pull request, the ready notice, the summary — S5, S6
 
 ## Decisions
@@ -171,33 +171,12 @@ again while he is at the PC.
   beside `loggedIn` false is kept, and once past it the note says when the sign-in ended.
 
 ## Next step
-State of JH 179 on 2026-11-11 at 10:01Z (read from the clock). WAITING for the lead's go on a fifth review.
-Worktree `D:\js-harness\.claude\worktrees\signin-expiry-notice`.
-- First slice: pull request 818, merged at 08:32Z (`gh pr view 818 --json mergedAt`). Nothing is owed on it.
-- Second slice: branch `worktree-signin-expiry-heartbeat`, pull request 823 against `main`, open; pushed up to
-  `f70902d9`. Local, not pushed: `e54847c5` and `52c98450` (the two merges of main, L18 and L19) and the commit after
-  them, `fix(loop): a heartbeat started inside the margin says its sign-in line at once`, which holds this section
-  and the fix of the P2 the fourth review found (L20).
-- The lead has two waiting notices (09:30Z, answered with a go; 10:01Z, the problem past three reviews, not answered
-  when this was written). Its answer comes as a message to this session, or as a notice `js-harness wait --notice-to
-  179` catches.
-1. If the tree is dirty, the fix is not committed: `node --test bin/loop-bodies.test.mjs` (47), then commit it (the
-   gate) with the message in `C:\Users\Oficina\.claude\jobs\c825f4a7\tmp\commit11.txt`.
-2. Only with the lead's go: `js-harness codex-review --base 52c98450 --doc odd/tasks/signin-expiry-notice.md` (the
-   recheck of the P2), then `js-harness lens-review --base 260bc749 --lenses reliability,readability --reason "<the
-   merge's resolution in bin/loop.mjs and the line said at the start>" --doc odd/tasks/signin-expiry-notice.md`. Read
-   each verdict before the next command. A real failure found here goes to the lead as a problem, not to a sixth
-   review.
-3. `git push`, then `gh pr view 823 --json mergeable`, then `js-harness notify --to orchestrator --kind ready --pr 823
-   "<one line>"`. If it is not mergeable, main moved again: merge `origin/main` once more first (the lead's word).
-4. Tick T4, write `docs/sessions/2026-11-11-jh-179-doctor-and-the-heartbeat-warn-before-the-claude-sign.md` (its draft
-   is `C:\Users\Oficina\.claude\jobs\c825f4a7\tmp\summary.md`, to bring up to date with L18 to L20; else `js-harness
-   summary template --title "JH 179 · doctor and the heartbeat warn before the Claude sign-in expires"`), commit it
-   with this document, push, then `js-harness notify --to orchestrator --kind closed --summary <that file> "<line>"`.
-If Claude Code stops a background command for low memory again: one waiting notice to the lead, and stop (the
-lead's word, L19). Report only through `js-harness notify --to orchestrator`, 500 characters a notice at most.
-Commits carry no AI attribution (his global rule). An hour written here is read from the clock (`date -u`) or is a
-commit's, never estimated (Log, L15).
+Closed by JH 179 on 2026-11-11 with the commit that holds this section. Pull request 818 is merged. Pull request 823
+(branch `worktree-signin-expiry-heartbeat`, base `main`) holds the heartbeat's tick, reviewed in five rounds (Log,
+L16 to L21); the merge is his, and the lead lands it on the closed notice. Nothing is owed by this session. Open for
+whoever next touches the tick, none blocking: the default reader's test is a pattern over the source (L16, L17); the
+name `signinNews` is used for a function and for a tick's flag in `bin/loop.mjs` (L21). The session's summary is
+`docs/sessions/2026-11-11-jh-179-doctor-and-the-heartbeat-warn-before-the-claude-sign.md`.
 
 ## Log
 - L1 (his request, as written; lead transcript ea85ec35 line 6716, 2026-11-11T05:26:36Z, printed by `js-harness
@@ -344,3 +323,16 @@ commit's, never estimated (Log, L15).
   that same tick does not say it twice; tests first, red 2 of 46 in `bin/loop-bodies.test.mjs`, green 47 of 47 with
   one more for the ending at the start. What it needs is a fifth review, of this fix, with the lenses' review of the
   merged range the pre-push check still asks for.
+- L21 (the fifth round, on the lead's go, and the close; 2026-11-11, by the records). The fix is `ec517abb`, its gate
+  passed. Codex on `52c9845..ec517ab`: "the patch is correct" (0.97), the P2 rechecked as fixed, 37,634 input
+  tokens. The lens run was stopped once by Claude Code for low memory (waiting notice at 10:12Z) and rerun on the
+  lead's second go: reliability 0 findings; readability 2, both answered, no code changed. (1) WARNING,
+  `bin/loop.mjs:537-538`, "the guard compares two ctx.now() readings": not so for the case the guard is for, an
+  ending in the start section, where `signin.tick` and `signin.saidAt` are both the one value `started`. An ending at
+  a later tick, the first included, says the line again after a confirming reading, which is D8 as written ("after
+  every line that ends the loop"); the frozen test clock makes the first tick equal the start, which a real clock
+  does not. (2) SUGGESTION, `bin/loop.mjs:741`, the tick's flag `signinNews` shadows the function of that name: true
+  and harmless today; a rename is a code change that would need a sixth round, so it is left, named in the pull
+  request, for whoever next touches the tick. Depth pass, at the close: predicted 4 of 4 specs with a proof,
+  measured 4 of 4 (each has its test file green in the gate); the refutation's verdict, supports, held. Not
+  checked: a real heartbeat crossing the margin, and what the CLI prints after the end date.
