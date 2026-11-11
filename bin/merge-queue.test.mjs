@@ -357,6 +357,11 @@ test('--land: the candidate green locally and on GitHub Actions becomes main, by
   for (const head of [heads['feat/a'], heads['feat/b']]) assert.equal(spawnSync('git', ['merge-base', '--is-ancestor', head, landed], { cwd: origin }).status, 0, 'each pull request is in main');
   assert.ok(!remoteBranches(origin).some((name) => name.startsWith('queue/')), 'the queue branch is gone');
   assert.equal(out.at(-1), `Landed: main ${main.slice(0, 7)} is now ${landed.slice(0, 7)}, with PR 1, PR 2.`);
+  // Each merge is the queue's by its message: GitHub's subject, and the trailer the order control knows a candidate by.
+  assert.deepEqual(
+    git(origin, 'log', '--first-parent', '--format=%s|%(trailers:key=Merged-by,valueonly,separator=%x2C)', `${main}..main`).split('\n'),
+    ['Merge pull request #2 from feat/b|js-harness merge-queue', 'Merge pull request #1 from feat/a|js-harness merge-queue'],
+  );
 });
 
 test('--land: a candidate red locally pushes no main, and the queue branch that started its GitHub Actions run is removed', async () => {
