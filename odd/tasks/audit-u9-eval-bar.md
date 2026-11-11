@@ -393,3 +393,29 @@ completamente autonomo".
   `node --test evals/tasks.test.mjs` 115 pass, `node --test evals/task-proof.test.mjs` 45 pass,
   `js-harness rules check` PASS. Not checked: the recorded away trials against the new grader, whose replies are
   not on file. Next: commit slice 6, then T9.
+- L14 (2026-11-11, T9, the reviews; slice 6 is 9175a3ea). Codex over 9bea5422..9175a3ea, in 4 parts: correct in
+  each (confidence 0.86 to 0.87), no finding; 514,051 input tokens in 209 s. The Claude lenses over slice 1
+  (9bea5422..61dfd09d; reliability, readability, risk): risk none; the other two, five findings between them, each
+  taken, in slice 7. Over slice 2 (61dfd09d..03af34e0; reliability, readability): nothing new, the same five read
+  again as not fixed, their fix not being in that range.
+  - A mistake of mine, in five parts. What happened: "a false proof in at most 9.1 %" was the worst of the eleven
+    values of p a test read, and I wrote it as the largest into the header of evals/rule-proof.mjs, the roadmap's
+    row, the Depth pass (item 5), L5 and the notice to the lead of L6; the largest is 9.37 %, near one pass in four,
+    found by the reliability lens and confirmed with a scratch script over every thousandth of p. The same holds
+    for the "3.8 % at seven" of L6, read on that grid and not searched. The fix now, checked: the header and the
+    roadmap say 9.4 %, and the test reads every hundredth of p and holds the worst at 0.094
+    (`node --test evals/rule-proof.test.mjs`, 15 pass). What stops it recurring: that test, which fails when the
+    stated figure and the enumerated one part. Where it enters: slice 7 of this branch. The proof later:
+    `node --test evals/rule-proof.test.mjs` exits 0. The decision does not move: under one in ten, as the test
+    held, and about one in eleven still. It is a `- Seen:` line of `estimate-passed-as-fact` in docs/FAILURES.md.
+  - The test of the earlier format pinned the two records on file to it, so the next paid proof of either would
+    turn a Done-when command red: it reads whatever records on file are of that format, and none other.
+  - `buildRecord` refused run conditions that differ and not ones that are missing: with no model or permission
+    mode it wrote a record `recordFaults` would not read, and with no effort it kept the word "undefined". It
+    refuses each (test seen red). The results files on record carry all three, Claude's and Codex's.
+  - The owed test's title said "no record proves that it tells a rule apart" without reading the record: it says
+    that its line of the run tells what the record shows.
+  - The 47 % and 81 % of the header were pinned by no test: one enumerates them, for a failed trial scored 0 or 0.5
+    (never red: it states what the code did).
+  Next: commit slice 7; the lenses over 03af34e0..HEAD, which then holds the graders as slice 6 left them and
+  these fixes; Codex over 9175a3ea..HEAD; then the push and the pull request.

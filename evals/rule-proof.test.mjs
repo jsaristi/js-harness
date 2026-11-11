@@ -117,10 +117,34 @@ test('with no difference between the arms, the bar calls a proof in fewer than o
     return share;
   };
   assert.equal(MIN_TRIALS, 5);
-  // The worst of them is 0.0914, at p 0.3 and 0.7; two trials and any gap gave 0.29 there, and five trials and any gap 0.36.
-  for (const p of [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95]) assert.ok(falseProofs(p, MIN_TRIALS) < 0.1, `p ${p}: ${falseProofs(p, MIN_TRIALS)}`);
+  // Every p of a hundredth: the worst is 0.0937, near p 0.25 and 0.75 (0.0914 at 0.3, where two trials and any gap gave
+  // 0.29, and five trials and any gap 0.36). The header of rule-proof.mjs first said 0.091, the worst of eleven values
+  // of p this read, which is not the largest (the lens review of 9bea5422..61dfd09d, odd/tasks/audit-u9-eval-bar.md, L14).
+  const shares = Array.from({ length: 99 }, (_, i) => falseProofs((i + 1) / 100, MIN_TRIALS));
+  for (const [i, share] of shares.entries()) assert.ok(share < 0.1, `p ${(i + 1) / 100}: ${share}`);
+  assert.equal(Math.round(Math.max(...shares) * 1000) / 1000, 0.094, 'the worst share, which the header of rule-proof.mjs and the roadmap state');
   // A real difference of the size the cases are built for is still seen: every trial right against every trial half right.
   assert.equal(tellsApart([1, 1, 1, 1, 1], [0.5, 0.5, 0.5, 0.5, 0.5]), true);
+});
+
+// What the bar misses when there is something to find, which the header of rule-proof.mjs and a fault's comment
+// state: the current arm right in every trial, and the arm without the rule failing a trial with probability q,
+// whatever a failed trial scores. One failed trial of five is inside the spread it makes, so two are needed.
+test('a rule whose absence fails three trials in ten clears the bar in 47 runs of a hundred, and 81 at five in ten', () => {
+  const choose = (n, k) => {
+    let c = 1;
+    for (let i = 1; i <= k; i += 1) c = (c * (n - i + 1)) / i;
+    return c;
+  };
+  const found = (q, failed) => {
+    let share = 0;
+    for (let k = 0; k <= MIN_TRIALS; k += 1) {
+      const without = [...Array(k).fill(failed), ...Array(MIN_TRIALS - k).fill(1)];
+      if (tellsApart(Array(MIN_TRIALS).fill(1), without)) share += choose(MIN_TRIALS, k) * q ** k * (1 - q) ** (MIN_TRIALS - k);
+    }
+    return Math.round(share * 100);
+  };
+  for (const failed of [0, 0.5]) assert.deepEqual([found(0.3, failed), found(0.5, failed)], [47, 81], `a failed trial scored ${failed}`);
 });
 
 test('a trial cut by its timeout, which has no cost of the CLI, counts at the list cost of its transcripts', () => {
@@ -178,9 +202,13 @@ test('a record of the earlier bar is read and named short of this one, with what
   assert.deepEqual(recordFaults(earlier, { name: 'a-case', rules: [RULE], digests: { case: 'c1', rules: 'r1' } }), [
     `the proof of a-case of 2026-10-29 is of the earlier bar: 2 trials on the current arm (0.9167) and 2 without ${RULE} (0.9167), with no trial's score kept, where a proof takes ${MIN_TRIALS} an arm and a gap above their spread: it is run again`,
   ]);
-  // The two on file are such records: read as they are, each faults for that and nothing else.
-  for (const name of ['rule-away-autonomy', 'rule-reuse-first']) {
-    const onFile = JSON.parse(fs.readFileSync(new URL(`./proofs/rules/${name}.json`, import.meta.url), 'utf8'));
+  // The records on file of that shape, read as they are: each faults for that and nothing else. A proof written
+  // since is of this bar and none of this test's, so the next paid proof does not turn it red (the lens review, L14).
+  const dir = new URL('./proofs/rules/', import.meta.url);
+  for (const file of fs.readdirSync(dir).filter((entry) => entry.endsWith('.json'))) {
+    const onFile = JSON.parse(fs.readFileSync(new URL(file, dir), 'utf8'));
+    if (onFile.format !== 1) continue;
+    const name = file.slice(0, -'.json'.length);
     const faults = recordFaults(onFile, { name, rules: onFile.rules, digests: onFile.digests });
     assert.equal(faults.length, 1);
     assert.match(faults[0], /is of the earlier bar: 2 trials on the current arm/);
@@ -239,6 +267,12 @@ test('a record is built only from two runs of one agent, model and permission mo
   assert.throws(() => build(cur, { ...wo, permissionMode: 'default' }), /run-current ran on permission mode bypassPermissions and run-without on default/);
   const high = { ...wo, trials: wo.trials.map((item) => (item.config === ARM ? { ...item, effort: 'high' } : item)) };
   assert.throws(() => build(cur, high), /the trials of a-case ran at efforts high, medium: a proof compares two arms at one effort/);
+  // A run that records none of them is refused before a record is written that `recordFaults` would not read, and
+  // no effort is not an effort named "undefined" (the lens review, L14).
+  assert.throws(() => build({ ...cur, model: undefined }, { ...wo, model: undefined }), /run-current records no model: a proof keeps the model both arms ran on/);
+  assert.throws(() => build({ ...cur, permissionMode: '' }, { ...wo, permissionMode: '' }), /run-current records no permission mode/);
+  const bare = (run) => ({ ...run, trials: run.trials.map(({ effort, ...item }) => item) });
+  assert.throws(() => build(bare(cur), bare(wo)), /a trial of a-case records no effort: a proof compares two arms at one effort/);
   // A minimal trial at another effort, or another task's, is none of the proof's trials.
   const beside = { ...wo, trials: [...wo.trials, { ...trial('minimal', 0), effort: 'high' }] };
   assert.equal(build(cur, beside).effort, 'medium');

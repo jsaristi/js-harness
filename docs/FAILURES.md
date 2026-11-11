@@ -628,6 +628,10 @@ on it.
   start that named no model, so they ran on the host's default, opus[1m]": the starts named no
   model and his settings name that default, but no transcript of the eight was read; corrected in
   a note at 01:22 and in odd/tasks/one-model-home.md, L12
+- Seen: 2026-11-11 — odd/tasks/audit-u9-eval-bar.md, L14 — "a false proof in at most 9.1 %" (JH 181):
+  the worst of the eleven values of p a test read, written as the largest into the header of
+  evals/rule-proof.mjs and the roadmap's row "Rule proof", and sent to the lead in a notice; the
+  largest is 9.4 %, near one pass in four, found by the lens review of 9bea5422..61dfd09d
 - Control: check — bin/guard.test.mjs — "a reply whose stated own share is more than 2 points off
   the recorded one is blocked from stopping, with the reason" — since 2026-10-15
 

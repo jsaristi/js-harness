@@ -12,10 +12,11 @@
 // (`tellsApart`). The bar before it, two trials and any gap, called a proof on pure noise in 20 to 43 percent of draws
 // from the recorded scores, and more trials alone made that worse, not better: the spread carries it.
 //
-// What this bar gets wrong, enumerated exactly for a case that scores a trial 1 or 0.5 (`evals/rule-proof.test.mjs`):
-// with no difference between the arms it calls a proof in at most 9.1 % of draws, so about one false proof in eleven
-// cases proven at once; and with the current arm always right, a rule whose absence fails a trial three times in ten
-// clears it in 47 % of runs, 81 % at five in ten. A record that does not clear it shows that, not that the rule
+// What this bar gets wrong, both enumerated exactly in `evals/rule-proof.test.mjs`: with no difference between the
+// arms of a case that scores a trial 1 or 0.5, it calls a proof in at most 9.4 % of draws (the worst is where a
+// trial passes one time in four, or three), so about one false proof in eleven cases proven at once; and with the
+// current arm always right, a rule whose absence fails a trial three times in ten clears it in 47 % of runs, 81 % at
+// five in ten. A record that does not clear it shows that, not that the rule
 // changes nothing. A proof costs ten trials.
 //
 //   node evals/rule-proof.mjs <case> <current results.json> <without results.json>
@@ -137,12 +138,16 @@ export function buildRecord({ name, rules, digests, date, commit, current, witho
     if (ran !== commit) throw new Error(`${results.name} ran on js-harness ${ran ?? 'unknown'}, and the checkout is at ${commit}: write the proof from the clean commit both runs ran on`);
   }
   for (const [what, of] of CONDITIONS) {
+    for (const results of [current, without]) {
+      if (typeof of(results) !== 'string' || of(results) === '') throw new Error(`${results.name} records no ${what}: a proof keeps the ${what} both arms ran on`);
+    }
     if (of(current) !== of(without)) throw new Error(`${current.name} ran on ${what} ${of(current)} and ${without.name} on ${of(without)}: a proof compares two arms of one ${what}`);
   }
   const held = armScore(current, name, 'current');
   const out = armScore(without, name, armOf(rules));
   if (held.line.trials !== out.line.trials) throw new Error(`${held.line.trials} trials of ${name} on current and ${out.line.trials} on ${armOf(rules)}: a proof takes the same count on both arms`);
-  const efforts = [...new Set([...held.efforts, ...out.efforts].map(String))].sort();
+  if ([...held.efforts, ...out.efforts].some((effort) => typeof effort !== 'string' || effort === '')) throw new Error(`a trial of ${name} records no effort: a proof compares two arms at one effort`);
+  const efforts = [...new Set([...held.efforts, ...out.efforts])].sort();
   if (efforts.length !== 1) throw new Error(`the trials of ${name} ran at efforts ${efforts.join(', ')}: a proof compares two arms at one effort`);
   return {
     format: FORMAT, case: name, rules: [...rules].sort(), digests, date, commit,
