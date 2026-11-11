@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn as spawnChild, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { estimateTokens, measurePayload } from './lib/payload.mjs';
+import { estimateTokens, measurePayload, tildePath } from './lib/payload.mjs';
 import { VERSION_TAG_REF } from './lib/version.mjs';
 import { fixedLoadRow, hookEntriesRow } from './lib/fixed-load.mjs';
 import { depthPassFor, discoverContracts, validateEntries } from './contract.mjs';
@@ -37,6 +37,7 @@ import { functionsOf, harnessOfTree } from './lib/project-functions.mjs';
 import { clonePending } from './lib/project.mjs';
 import { readProjectRules as readRulesData } from './lib/codex-review-allowance.mjs';
 import { CLAUDE_MD_BUDGET, checkClaudeBudget } from './lib/claude-md-budget.mjs';
+import { checkReadSurface } from './lib/read-surface.mjs';
 import { compareLaunches, subagentRowLines, SUBAGENT_RULES } from './lib/subagent-check.mjs';
 import { dayOf, launchesOf } from './lib/subagent-count.mjs';
 import { readRecords, recordFolders } from './lib/subagent-records.mjs';
@@ -83,13 +84,6 @@ export function checkContracts(cwd) {
   }
   const lines = failed.flatMap(({ label, errors }) => [label, ...errors.map((reason) => `  ${reason}`)]);
   return { name, pass: false, detail: `${failed.length} of ${plural(results.length)} fail`, lines, next: firstStep('fix the contracts named above in odd/tasks/') };
-}
-
-/** Shortens `filePath` to start with `~` when it lies under `home`, so rows stay readable. */
-function tildePath(filePath, home) {
-  if (!filePath) return 'built-in or plugin';
-  const relative = path.relative(home, filePath);
-  return relative.startsWith('..') || path.isAbsolute(relative) ? filePath : path.join('~', relative);
 }
 
 /** One INFO row per host with every file that loads on each turn and the hooks whose stdout
@@ -1841,7 +1835,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote }), checkLensReviews(cwd, head, { ...deps, remote }), ...checkPushRules(cwd, { rules: deps.rules, spawn: deps.git, head, remote }), ...checkTagRow(cwd, { ref, head, spawn: deps.git })]
-    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), ...checkClaudeBudget(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home), hookEntriesRow(cwd, home, { declared: readHarness(cwd).declared })];
+    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), ...checkClaudeBudget(cwd), ...checkReadSurface(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home), hookEntriesRow(cwd, home, { declared: readHarness(cwd).declared })];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
   if (!push) rows.push(...checkLedger(cwd));

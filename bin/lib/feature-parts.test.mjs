@@ -60,11 +60,14 @@ test('a resume title matches ignoring case, with a parenthesis or a colon after 
     '## Next step, history', 'e', //         9-10
     '## Next steps for him', 'f', //         11-12
     '```', '## Next step', '```', //         13-15
+    '## State', 'g', //                      16-17
+    '## State of the art', 'h', //           18-19
   ].join('\n');
   assert.deepEqual(featureParts(md).sections.map(({ title, start, end }) => [title, start, end]), [
     ['Resume here (2026-10-16)', 1, 2],
     ['next', 3, 4],
     ['Next step: T3', 5, 6],
+    ['State', 16, 17],
   ]);
 });
 

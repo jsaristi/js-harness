@@ -6,6 +6,13 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { mainCheckout } from './sessions.mjs';
 
+/** Shortens `filePath` to start with `~` when it lies under `home`, so rows stay readable. */
+export function tildePath(filePath, home) {
+  if (!filePath) return 'built-in or plugin';
+  const relative = path.relative(home, filePath);
+  return relative.startsWith('..') || path.isAbsolute(relative) ? filePath : path.join('~', relative);
+}
+
 /** Rough token estimate: ~4 chars per token. */
 export function estimateTokens(text) {
   return Math.ceil(text.length / 4);
