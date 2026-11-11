@@ -382,7 +382,9 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
-At 15:35 by the clock (`date`): every unit is read. Codex on U8 (`4a535e3..cddbe16`): "the patch is correct", no
+At 15:17, read from `date` before this line was written (the paragraph under it said 15:35 when it was committed at
+15:12, the same mistake once more: `docs/FAILURES.md`, `hours-guessed`): U9 is committed, `ed3b2006`.
+By 15:12: every unit is read. Codex on U8 (`4a535e3..cddbe16`): "the patch is correct", no
 finding. Lenses: U5 risk 0 and reliability 0; U6 reliability 2; U7 risk 0 and reliability 1; U8 reliability none of
 its own (it rechecked U7's). Taken, in the commit that carries this paragraph (U9, from `cddbe165`): the note of a
 resume's refusal names only what is refused (a level named on the call is the call's, whatever the record holds),
