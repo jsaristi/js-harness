@@ -168,3 +168,20 @@ decision that is his goes to the lead with `js-harness notify --to orchestrator 
   timeout. It still says the three ticks are stale, and names no heartbeat on record: the machine restarted and none
   runs. The snapshot of the day has not appeared; it will when the lead's heartbeat runs the workshop's loop.
   Undo: delete `.claude/settings.json`'s entry and the `workshop` cell; the hook wrote nothing to undo.
+- L10 (2026-11-11): reviews of T2, `7c962911`. The lenses (risk, reliability): 0 findings, 17,478 input tokens.
+  Codex (104,751 input tokens): one P2, answered and not taken: the relative script path fails when the hook runs
+  from a subdirectory, and it asks for `"$CLAUDE_PROJECT_DIR"`. By Claude Code's documentation (settings and hooks
+  pages, read through the guide sub-agent on 2026-11-11, whose fetch summarizes; not checked by a run): the project's
+  `.claude/settings.json` is read from the session's primary working directory, so a session started in a
+  subdirectory does not load this hook at all, and where it loads, the handler runs in that directory, the root.
+  `$CLAUDE_PROJECT_DIR` expands in Git Bash and is null in PowerShell, the shell of a Windows with no Git Bash, where
+  it would break a hook that works today; and `ownerOf` (`bin/lib/hook-count.mjs:76`) would read it as a new owner,
+  so the product would change too. What stays open: a resumed session whose directory moved, not documented; there
+  the hook fails without blocking the session, and its notice is missing.
+
+## Next step
+For a resume (2026-11-11): T2 is committed (`7c962911`) on `audit-u3-ticks-hook`, reviewed by both (L10). Left: push,
+the pull request for T2 as a draft the lead marks ready (never mark it ready here), `js-harness notify --to
+orchestrator --kind ready --pr <n>`, the summary in `docs/sessions/` (`js-harness summary template`), committed and
+pushed, then `notify --kind closed --summary <file>`. The snapshot of the day is the lead's: the heartbeat must run
+`node workshop/js-harness-workshop.mjs loop heartbeat`.
