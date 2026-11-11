@@ -144,11 +144,15 @@ export function claudeProbeArgs({ model, effort, promptFile, settingsFile }) {
 }
 
 /** The CLI arguments of the Codex probe: one `codex exec` that keeps no session, reads none of the user's
- * configuration and may write nothing, with the question on standard input. */
+ * configuration and may write nothing, with the question on standard input. Beside what Codex loads (plugins, apps,
+ * hooks), the two tools it gives a model by itself that turn a question into work are off, its shell and its
+ * sub-agents: a read-only sandbox refuses a write, not a call. Codex CLI 0.167.1 takes both names and lists them off
+ * (`codex --disable shell_tool --disable multi_agent features list`); it refuses a name it does not know, and the
+ * probe then fails with that line. It keeps `unified_exec` on whatever it is asked. */
 export function codexProbeArgs({ model, effort }) {
   return [
     'exec', '--json', '--ephemeral', '--skip-git-repo-check', '--ignore-user-config', '--ignore-rules',
-    '--disable', 'plugins', '--disable', 'apps', '--disable', 'hooks',
+    '--disable', 'plugins', '--disable', 'apps', '--disable', 'hooks', '--disable', 'shell_tool', '--disable', 'multi_agent',
     '-m', model, '-c', `model_reasoning_effort="${effort}"`, '-c', 'sandbox_mode=read-only', '-c', 'approval_policy=never', '-',
   ];
 }
@@ -384,7 +388,8 @@ export async function switchRules(parsed, deps, stdout, stderr) {
   for (const { id } of changes) {
     const written = dry.written.find((one) => one.id === id);
     const skipped = dry.skipped.find((one) => one.id === id);
-    if (written !== undefined) stdout(`  ${id}: ${written.from} to ${written.to}`);
+    if (written?.back) stdout(`  ${id}: back to ${written.to}, the value in force on origin/main, from ${written.from} on this branch`);
+    else if (written !== undefined) stdout(`  ${id}: ${written.from} to ${written.to}`);
     else if (skipped !== undefined) stdout(`  ${id}: stays ${skipped.value}, not written`);
     else stdout(`  ${id}: ${dry.already.includes(id) ? 'on the branch already' : 'written by a later run'}`);
   }
@@ -392,7 +397,7 @@ export async function switchRules(parsed, deps, stdout, stderr) {
   if (owed.length === 0) stdout('probe: none is owed, since every model and level this writes is in force already');
   else {
     const floorSaid = probes.codex.length > 0 ? '; Codex\'s is not asked at or under rule:codex-weekly-floor' : '';
-    stdout(`probe: ${owed.length} short ${owed.length === 1 ? 'question' : 'questions'} through the installed CLI, one cheap call each, with no tools and no session kept: ${listed(owed.map((probe) => `${probe.model} at ${probe.effort}`))}${floorSaid}; nothing is written unless each answers`);
+    stdout(`probe: ${owed.length} short ${owed.length === 1 ? 'question' : 'questions'} through the installed CLI, one cheap call each with no session kept, Claude's with no tools and Codex's with its shell and its sub-agents off: ${listed(owed.map((probe) => `${probe.model} at ${probe.effort}`))}${floorSaid}; nothing is written unless each answers`);
   }
 
   /** What follows the rules, for a real run and a dry one: what is outside the repository, and what may be stale. */

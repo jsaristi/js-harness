@@ -90,7 +90,10 @@ test('the Codex probe asks once with no session kept, and proves the CLI took th
   assert.deepEqual(args.slice(0, 4), ['exec', '--json', '--ephemeral', '--skip-git-repo-check']);
   assert.deepEqual(args.slice(args.indexOf('-m'), args.indexOf('-m') + 4), ['-m', 'astra', '-c', `model_reasoning_effort="${LOW}"`]);
   assert.ok(args.includes('--ignore-user-config') && args.includes('sandbox_mode=read-only') && args.at(-1) === '-');
-  const lines = (...events) => ({ status: 0, stdout: events.map((event) => JSON.stringify(event)).join('\n'), stderr: '' });
+  // One question, not a turn that works: the tools Codex gives a model by itself are off, beside what it loads.
+  const off = args.flatMap((arg, index) => (arg === '--disable' ? [args[index + 1]] : []));
+  assert.deepEqual(off, ['plugins', 'apps', 'hooks', 'shell_tool', 'multi_agent']);
+  const lines =(...events) => ({ status: 0, stdout: events.map((event) => JSON.stringify(event)).join('\n'), stderr: '' });
   const answer = { type: 'item.completed', item: { type: 'agent_message', text: 'ready' } };
   const done = { type: 'turn.completed', usage: { input_tokens: 10 } };
   const asked = { model: 'astra', effort: LOW };
@@ -269,7 +272,7 @@ test('a switch says the probe\'s cost, probes, writes the rules and the agent fi
     assert.notEqual(index, -1, `${pattern} in:\n${result.out}`);
     return index;
   };
-  assert.ok(at(/probe: 2 short questions through the installed CLI, one cheap call each, with no tools and no session kept/) < at(/^probed: /m), 'the cost is said before the probe');
+  assert.ok(at(/probe: 2 short questions through the installed CLI, one cheap call each with no session kept, Claude's with no tools and Codex's with its shell and its sub-agents off: /) < at(/^probed: /m), 'the cost is said before the probe');
   at(new RegExp(`${CLAUDE_HOME.model}: ${OLD} to ${NEW}`));
   at(new RegExp(`${CLAUDE_HOME.effort}: stays ${MEDIUM}, not written`));
   at(new RegExp(`^probed: ${NEW} answered through claude 9\\.9\\.9 at ${MEDIUM} on 2026-11-12$`, 'm'));

@@ -122,7 +122,9 @@ export function changeRule(options, stdout, stderr) {
  * so they are checked together and written together, the declarations, their sources, docs/RULES.md and a relief line
  * a rule. `changes` is `[{ id, change }]` in the order they are written, each `change` what `rules change` takes on
  * standard input. A change that gives the value in force on origin/main is skipped and named, so the half of a home
- * that does not change is not written; a pass that changes nothing is refused.
+ * that does not change is not written; a pass that changes nothing is refused. Where the branch holds another value
+ * for such a rule, from an earlier run on it, the rule is not skipped: its declaration and its source go back to
+ * origin/main's, so the home written is the one asked for and not what the earlier run proposed.
  *
  * It has two ways (odd/tasks/one-model-home.md, L13, "Claude 7"). By default every rule is written now, for one
  * commit. With `oneAtATime`, his no to one commit for several rules, a run writes the first rule the branch does not
@@ -132,8 +134,9 @@ export function changeRule(options, stdout, stderr) {
  * the ids it writes now: a copy a foreign reader needs. They are written, and put back, with the three files. `command`
  * is the sub-command a refusal names and `branchName` the branch it proposes. The rest is `changeRule`'s.
  *
- * It gives `{ code }`, and with code 0 also `{ branch, today, written: [{ id, what, from, to }], skipped: [{ id,
- * value }], already: [id], left: [id], files, baseList, list }`: the lists are origin/main's and the one written.
+ * It gives `{ code }`, and with code 0 also `{ branch, today, written: [{ id, what, from, to, back }], skipped: [{ id,
+ * value }], already: [id], left: [id], files, baseList, list }`: the lists are origin/main's and the one written, and
+ * `back` is true for a rule put back, whose `from` is the value the branch held.
  */
 export function changeRules(options, stdout, stderr) {
   return runPass({ ...options, id: undefined, checkSource: false, withPaths: [] }, stdout, stderr);
@@ -225,7 +228,8 @@ function runPass({ id: oneId, changes, oneAtATime = false, also = () => [], comm
     const headSources = JSON.parse(out(['show', `HEAD:${SOURCES}`]));
 
     // Which rules this pass writes. One rule: the id given. Several: every change but one that gives the value in
-    // force, which is skipped and named; and, a rule at a time, only the first the branch does not hold yet.
+    // force, which is skipped and named, unless this branch holds another value for it, which is put back (`back`,
+    // the value the branch held); and, a rule at a time, only the first the branch does not hold yet.
     let items = several ? [] : [{ id: oneId, change: null }];
     const skipped = [];
     let already = [];
@@ -234,8 +238,10 @@ function runPass({ id: oneId, changes, oneAtATime = false, also = () => [], comm
       const changing = [];
       for (const item of changes) {
         const before = inBase(item.id);
-        if (before !== undefined && Object.hasOwn(before, 'value') && before.value === item.change.value) skipped.push({ id: item.id, value: before.value });
-        else changing.push({ id: item.id, change: item.change });
+        const inForce = before !== undefined && Object.hasOwn(before, 'value') && before.value === item.change.value;
+        const held = head.find((rule) => rule.id === item.id)?.value;
+        if (inForce && held === before.value) skipped.push({ id: item.id, value: before.value });
+        else changing.push({ id: item.id, change: item.change, ...(inForce ? { back: held } : {}) });
       }
       if (changing.length === 0) throw new RuleChangeError(`nothing changes: ${skipped.map((one) => `${one.id} is ${one.value}`).join(' and ')} on ${BASE} already`);
       items = changing;
@@ -294,6 +300,12 @@ function runPass({ id: oneId, changes, oneAtATime = false, also = () => [], comm
           item.what = 'source checked';
           continue;
         }
+        // Put back: the list this pass starts from holds origin/main's declaration of it already.
+        if (Object.hasOwn(item, 'back')) {
+          item.rule = item.before;
+          item.what = `put back to ${item.before.value}, the value in force on ${BASE}, from ${item.back} on this branch`;
+          continue;
+        }
         const changed = changedList(list, item.id, item.change, { today, failures, countOf });
         list = changed.list;
         item.rule = changed.rule;
@@ -340,6 +352,13 @@ function runPass({ id: oneId, changes, oneAtATime = false, also = () => [], comm
     let sources = { ...startSources };
     for (const item of items) {
       const { id, before, rule, change, what } = item;
+      // A rule put back keeps the source origin/main holds for it: nothing of his is read for a value already in force.
+      if (Object.hasOwn(item, 'back')) {
+        item.formOnly = false;
+        item.stored = startSources[id];
+        item.sourceSaid = `the rule's own on ${BASE} kept`;
+        continue;
+      }
       let given;
       if (checkSource) {
         const stored = headSources[id];
@@ -387,7 +406,7 @@ function runPass({ id: oneId, changes, oneAtATime = false, also = () => [], comm
         throw new RuleChangeError(err.message);
       }
       const { id, before, rule, what } = item;
-      item.memory = before !== undefined && Object.hasOwn(before, 'value') && what !== 'form' && what !== 'source checked'
+      item.memory = before !== undefined && Object.hasOwn(before, 'value') && what !== 'form' && what !== 'source checked' && !Object.hasOwn(item, 'back')
         ? `memory: a memory note or engram observation that states ${before.unit === undefined ? before.value : `${before.value} ${before.unit}`} for ${before.subject} is changed to point to rule:${id}; the command reads no memory`
         : `memory: a memory note that restates "${id}" points to rule:${id}; the command reads no memory`;
       // A rule with patterns says how many findings they have on origin/main, so a first pattern is tried by its dry run.
@@ -398,7 +417,7 @@ function runPass({ id: oneId, changes, oneAtATime = false, also = () => [], comm
     const writes = [[DATA, dataText], [SOURCES, sourcesText], [LIST, listText], ...copies];
     const result = {
       code: 0, branch, today, skipped, already, left, files: writes.map(([file]) => file), baseList: base, list,
-      written: items.map(({ id, what, before, rule }) => ({ id, what, from: before?.value, to: rule.value })),
+      written: items.map((item) => ({ id: item.id, what: item.what, from: Object.hasOwn(item, 'back') ? item.back : item.before?.value, to: item.rule.value, back: Object.hasOwn(item, 'back') })),
     };
 
     if (dryRun) {

@@ -870,6 +870,35 @@ test('rules switch writes the rules of a home in one pass for one commit: each w
   assert.match(result.out, new RegExp(`git add bin/lib/rules-data\\.mjs docs/rule-sources\\.json docs/RULES\\.md ${AGENT_FILE.replace(/\./g, '\\.')}$`, 'm'));
 });
 
+test('rules switch run again on its branch for the value in force puts the rule back, where the branch holds another', async () => {
+  const repo = switchRepository();
+  const first = await switchRun(repo, ['--claude', 'claude-nova-1-0@high', ...HIS_WORDS]);
+  assert.equal(first.code, 0, first.err);
+  git(repo.dir, 'add', '-A');
+  git(repo.dir, 'commit', '-q', '-m', 'the first proposal');
+
+  // The model in force on origin/main is asked for again, at the new level: the branch holds the first proposal's.
+  const again = await switchRun(repo, ['--claude', 'claude-saga-9-1@high', ...HIS_WORDS]);
+  assert.equal(again.code, 0, again.err);
+  assert.deepEqual(again.asked, [], 'the model at high is the lead\'s pair, in force already');
+  assert.deepEqual(ruleOf(repo, 'session-model'), SWITCH_LIST.find((rule) => rule.id === 'session-model'), 'the declaration of origin/main is back');
+  assert.deepEqual(sourcesOf(repo)['session-model'], DESIGN, 'with its own source');
+  assert.equal(ruleOf(repo, 'session-effort').value, 'high');
+  assert.equal(read(repo.dir, AGENT_FILE), agentOf('claude-saga-9-1', 'high'), 'the agent file follows the rule put back');
+  assert.match(again.out, /^ {2}session-model: back to claude-saga-9-1, the value in force on origin\/main, from claude-nova-1-0 on this branch$/m);
+  assert.doesNotMatch(again.out, /session-model: stays|skipped: session-model/);
+  const relief = fs.readFileSync(reliefFile(repo), 'utf8').trimEnd().split('\n');
+  assert.match(relief.findLast((line) => line.includes('rule:session-model proposed ')), /not landed: put back to claude-saga-9-1, the value in force on origin\/main, from claude-nova-1-0 on this branch; source the rule's own on origin\/main kept; supersedes relief line 1;/);
+
+  // The whole home in force asked for, on a branch that holds none of it changed: nothing changes, as before.
+  git(repo.dir, 'add', '-A');
+  git(repo.dir, 'commit', '-q', '-m', 'the second proposal');
+  const back = await switchRun(repo, ['--claude', 'claude-saga-9-1@medium', ...HIS_WORDS]);
+  assert.equal(back.code, 0, back.err);
+  assert.equal(ruleOf(repo, 'session-effort').value, 'medium');
+  assert.match(back.out, /^skipped: session-model stays claude-saga-9-1, the value in force on origin\/main$/m);
+});
+
 test('rules switch writes nothing when a probe fails, when it runs dry, off a rule/ branch, or when nothing changes', async () => {
   const repo = switchRepository();
   const before = [...snapshot(repo), read(repo.dir, AGENT_FILE)];

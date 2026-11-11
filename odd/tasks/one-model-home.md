@@ -382,6 +382,18 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 18:58, after the host compacted this session at 18:52 (the lead was told): both T7 commits landed
+(`d37308a2`, `94e25d35`). Codex's review of `4d020cf..94e25d3` is recorded, 5 parts, two P2, both taken:
+(1) `bin/lib/rules-change-run.mjs`: a switch run again on its branch for the value in force on origin/main skipped
+the rule while the branch held the earlier run's value, so the home written was not the one asked. Fixed: such a rule
+is put back (`back`), its declaration and its source origin/main's, a relief line of its own; test seen red first
+("puts the rule back", the second run probed the first proposal's model). (2) `bin/lib/rules-switch.mjs`: the Codex
+probe left Codex's own tools on. Fixed: `--disable shell_tool --disable multi_agent`; checked with no model call
+that Codex CLI 0.167.1 takes both names and lists them off, refuses a name it does not know, and keeps
+`unified_exec` on whatever it is asked, so whether a way to run a command is left is NOT known without a real
+launch; the cost line now says "Claude's with no tools and Codex's with its shell and its sub-agents off". Not
+committed yet when this was written. Next, in order: commit the fix; Codex's confirming review on `94e25d35` to the
+head; the risk, reliability and readability lenses on `4d020cfb` to the head, one at a time; the dry run; T8.
 2026-11-11 18:40: commit 1 of the paragraph below landed, `d37308a2`. Commit 2 (the command's own tests, the
 README, the SPEC and this document) carries this line. Next, in order: Codex on `4d020cfb` to the head, then the
 risk, reliability and readability lenses, one at a time under the gate; fix or answer; the dry run; T8.

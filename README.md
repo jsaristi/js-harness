@@ -1005,7 +1005,8 @@ fetches nothing either: a turn to refuse counts on the `origin/main` this clone 
 [--lead <effort>] [--codex <model>@<effort>]` moves a home of a model and an effort, with his words (`--quote
 <session>:<line>`, `--reading`, `--accepted`): it says what its probe costs, asks each new model one short question
 through the installed CLI, and writes nothing when the CLI refuses the id or the level, another model answers or
-Codex is at its weekly floor; then it writes the rules of the homes named in one pass with the writer's agent file,
+Codex is at its weekly floor; then it writes the rules of the homes named in one pass with the writer's agent file
+(a rule asked at the value in force is not written, or is put back where an earlier run left the branch another),
 and prints the commit to make, what is left outside the repository and what the new model may make stale.
 `--rule-by-rule` writes one rule a run, for a commit a rule, and `--dry-run` probes nothing and writes nothing;
 `rules change` refuses a new value for a rule of a home and names the switch. In a project that installs
