@@ -103,7 +103,7 @@ queue that lands one pull request a run spends a whole suite for each.
   reads it: `e0e2755a`, and the verifier's finding in `d5950864`.
 - [x] T2 (build) spec 2: the order control judges each pull request of a candidate by its own commits, tests first:
   `adc2978c`.
-- [ ] T3 (docs) the session's summary, the pull request, the ready and closed notices.
+- [x] T3 (docs) the session's summary, the pull request, the ready and closed notices.
 
 ## Log
 - L1 The brief (2026-11-11T05:20Z), as written: "You own one feature: two defects of the land (`js-harness
@@ -168,6 +168,11 @@ queue that lands one pull request a run spends a whole suite for each.
   check`; (3) the summary in docs/sessions/2026-11-11-jh-175-the-land-the-false-prune-alarm-and-the-order-control.md
   (`js-harness summary template`), commit, push, a ready pull request, `js-harness notify --to orchestrator --kind
   ready --pr <n>`, then `--kind closed --summary <file>`; (4) stop the background `js-harness wait --notice-to 175`.
+- L13 Third round, 8a3476af..300ab00a: Codex, the patch is correct (0.96), the finding fixed, 40,652 input tokens;
+  the risk and reliability lenses, 0 findings each, the earlier one fixed. origin/main merged in (`811087d7`), its
+  gate green. Against the pass: item 3 predicted 2 of 2 specs red before and green after, measured 2 of 2; item 4's
+  verdict held. A third defect the lead named at 01:52 local (a suite that times out is called red) is left as a
+  follow-up, in the session's summary.
 - L9 From the lead (a note to 175, 2026-11-11 00:47 local): JH 173 adds lines to bin/merge-queue.mjs after the
   `removeLandedWorktrees` block of `mergeQueueMain` and lands first; this branch stays out of that block (its two
   edits there are the import line and the merge's subject in `mergeThroughDoor`) and merges origin/main before its
