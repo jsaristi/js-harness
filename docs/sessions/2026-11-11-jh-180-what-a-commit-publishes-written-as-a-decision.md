@@ -60,9 +60,11 @@ His answer to the triage's question 1 is its recommended option, by two lines of
 - Not guarded: ssh aliases, `core.sshCommand`, proxies (settings of the machine; said in the body).
 
 ## Cost
-- Time: brief at 09:27Z, pull request at about 11:45Z on 2026-11-11. One compaction by the host at 11:13Z, resumed
-  from the feature document.
-- Context at the end: about a third of the window after that compaction.
+- Time: brief at 09:27Z, pull request at about 11:45Z on 2026-11-11, ready notice at 16:08Z. One compaction by the
+  host at 11:13Z, resumed from the feature document. The session stood still from 11:50Z, cut by the plan's usage
+  limit with only this file's commit left to push, until the lead resumed it; nothing was half written
+  (`git status` showed the branch one commit ahead and a clean tree).
+- Context at the end: 49 % of the window, by the ready notice's own line.
 - Codex: six runs, 416,892 input tokens (140,152; 45,956; 81,355; 71,854; 39,552; 38,023).
 - The Claude lenses: five runs over the same slices. One independent verifier (a read-only sub-agent).
 - Gate runs: nine commit gates, this file's commit included (one red, the coverage fingerprint), and the checks of
