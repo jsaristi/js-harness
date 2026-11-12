@@ -6,16 +6,16 @@ brief `~/.js-harness/background/briefs/2026-11-12T06-58-20-202Z-f6e42350.md`. De
 `rule/advisor-home`, in four work-unit commits. Runner: `node --test`.
 
 ## State
-Done: T1, T2 (read `f01e6567`, L3), T3 `3e943f2f`, T4 `3b932275` and `07e94c23` (verifier PASS, L4). Slice
-`2458fcd3..07e94c23` reviewed: Codex correct (0.89, no finding); lenses risk 0, reliability 0, readability 1 (spec 3's
-order), answered in the commit after `07e94c23`. Next, T5: `rules switch --advisor <model>` in `bin/lib/rules-switch.mjs`
-(parse, `changesOf`, `homesOf`, `probesOf` with the advisor, `claudeProbeArgs` adding `--advisor`, `readClaudeProbe`
-requiring a `usage.iterations` entry of type `advisor_message` of that id, a refusal of an advisor equal to the model),
-`HOME_FLAGS` gains `--advisor <model>` and the test exception in `bin/lib/rules-change-run.test.mjs:1000` goes, usage in
-`SWITCH_USAGE`; probe question when an advisor is set: "Call your advisor tool once, then answer with the single word:
-ready". Build facts (L5): an unknown advisor id exits 1 with "The model \"claude-nope-9-9\" cannot be used as an
-advisor."; with `--tools ""` and `--advisor claude-fable-5-2` the JSON output's `usage.iterations` held an
-`advisor_message` of `claude-fable-5-2` (5,648 in, 456 out) and `modelUsage` both ids, 0.086 USD. Then T6, T7.
+Done: T1, T2 (read `f01e6567`, L3), T3 `3e943f2f`, T4 `3b932275` and `07e94c23` (verifier PASS, L4), T5 (this
+commit). Slice `2458fcd3..07e94c23` reviewed: Codex correct (0.89, no finding); lenses risk 0, reliability 0,
+readability 1 (spec 3's order), answered in `0bbc768b`, which goes with T5's slice (base `07e94c23`). T5: `rules switch
+--advisor <model>` parses, writes `advisor-model`, probes each pair of the home with `--advisor` and the question "Call
+your advisor tool once, then answer with the single word: ready", passes only on an `advisor_message` of that id in
+`usage.iterations`, refuses an advisor equal to the home's model (exit 2, nothing probed); `HOME_FLAGS` names
+`--advisor <model>` and its test exception is gone. Build facts (L5): an unknown advisor id exits 1 with "The model
+\"claude-nope-9-9\" cannot be used as an advisor."; with `--tools ""` and `--advisor claude-fable-5-2` the JSON
+output's `usage.iterations` held an `advisor_message` of `claude-fable-5-2` (5,648 in, 456 out) and `modelUsage` both
+ids, 0.086 USD. Next: T5's slice reviews, then T6, T7.
 Open, his: everything under "Ask me before". Replies of this session run on `claude-opus-5-5` at medium with
 a `claude-fable-5-2` advisor.
 
@@ -185,7 +185,7 @@ Nothing of this plan needs him before it lands; the merge does. Written down as 
   Route: inline. Commit: pending.
 - [ ] T4 (kind: build) (4) The refusal of another advisor in `sessionStartRefusal`, tests first, then an independent
   verifier. Route: inline, then one verifier. Commit: pending.
-- [ ] T5 (kind: build) (5) `rules switch --advisor <model>` and its probe. Route: inline. Commit: pending.
+- [x] T5 (kind: build) (5) `rules switch --advisor <model>` and its probe. Route: inline. Commit: the one after `0bbc768b`.
 - [ ] T6 (kind: build) (6, 8) `rules applied` reads the advisor; the texts. Route: inline. Commit: pending.
 - [ ] T7 (kind: verify) Codex and the lenses on each slice, the gate, the pull request, the `ready` notice with the
   advisor tokens measured so far.

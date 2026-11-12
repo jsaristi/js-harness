@@ -980,7 +980,7 @@ test('on his no to one commit, rules switch --rule-by-rule writes one rule a run
 test('rules change refuses a new value for a rule of a home and names the switch; a change of its form or its subject still passes', async () => {
   const repo = switchRepository();
   const before = snapshot(repo);
-  for (const [id, value, flag] of [['session-model', 'claude-nova-1-0', '--claude <model>@<effort>'], ['session-effort', 'high', '--claude <model>@<effort>'], ['lead-effort', 'xhigh', '--lead <effort>'], ['review-model', 'astra', '--codex <model>@<effort>'], ['review-effort', 'high', '--codex <model>@<effort>']]) {
+  for (const [id, value, flag] of [['session-model', 'claude-nova-1-0', '--claude <model>@<effort>'], ['session-effort', 'high', '--claude <model>@<effort>'], ['lead-effort', 'xhigh', '--lead <effort>'], ['advisor-model', 'claude-nova-1-0', '--advisor <model>'], ['review-model', 'astra', '--codex <model>@<effort>'], ['review-effort', 'high', '--codex <model>@<effort>']]) {
     for (const dry of [[], ['--dry-run']]) {
       const refused = await change(repo, [id, ...dry], { value, source: DESIGN });
       assert.equal(refused.code, 1, id);
@@ -997,8 +997,7 @@ test('rules change refuses a new value for a rule of a home and names the switch
 
 test('every flag the refusal of rules change names is one rules switch takes, for the rule it is named for', () => {
   // The refusal restates the switch's flags; this fails the day the switch stops taking one of them.
-  // The advisor's flag comes with rules switch --advisor (odd/tasks/advisor-home.md, T5), which drops this exception.
-  const homes = [...Object.values(CLAUDE_HOME), ...Object.values(CODEX_HOME)].filter((id) => id !== CLAUDE_HOME.advisor);
+  const homes = [...Object.values(CLAUDE_HOME), ...Object.values(CODEX_HOME)];
   assert.deepEqual(Object.keys(HOME_FLAGS).sort(), homes.sort(), 'every rule of the two homes has its flag');
   for (const [id, flag] of Object.entries(HOME_FLAGS)) {
     const [name, shape, ...more] = flag.split(' ');

@@ -21,7 +21,7 @@ import { DEFAULT_CONTEXT_WINDOW } from './sessions.mjs';
 class NotTaken extends Error {}
 
 /** The switch in the usage line of `js-harness rules`. */
-export const SWITCH_USAGE = 'switch [--claude <model>@<effort>] [--lead <effort>] [--codex <model>@<effort>] --quote <session>:<line>... --reading <text> --accepted <text> [--rule-by-rule] [--dry-run]';
+export const SWITCH_USAGE = 'switch [--claude <model>@<effort>] [--lead <effort>] [--advisor <model>] [--codex <model>@<effort>] --quote <session>:<line>... --reading <text> --accepted <text> [--rule-by-rule] [--dry-run]';
 
 /** The writer's agent file: the host reads only the file, so it holds a copy of the home's model and effort, which
  * the switch writes and bin/lib/writer-agent.test.mjs compares. */
@@ -63,8 +63,8 @@ export function parseSwitch(tokens) {
 
 /** `parseSwitch`'s options, or a `NotTaken` thrown at the first word that cannot be taken. */
 function parsedSwitch(tokens) {
-  const parsed = { command: 'switch', claude: null, lead: null, codex: null, quotes: [], reading: null, accepted: null, dryRun: false, ruleByRule: false };
-  const valued = { '--claude': 'claude', '--lead': 'lead', '--codex': 'codex', '--reading': 'reading', '--accepted': 'accepted' };
+  const parsed = { command: 'switch', claude: null, lead: null, advisor: null, codex: null, quotes: [], reading: null, accepted: null, dryRun: false, ruleByRule: false };
+  const valued = { '--claude': 'claude', '--lead': 'lead', '--advisor': 'advisor', '--codex': 'codex', '--reading': 'reading', '--accepted': 'accepted' };
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
     if (token === '--dry-run') parsed.dryRun = true;
@@ -84,10 +84,14 @@ function parsedSwitch(tokens) {
       else if (token === '--lead') {
         refuseValue(token, CLAUDE_HOME.lead, value);
         parsed.lead = value;
+      } else if (token === '--advisor') {
+        // The advisor's model, a full Claude id (odd/tasks/advisor-home.md, spec 5).
+        refuseValue(token, CLAUDE_HOME.advisor, value);
+        parsed.advisor = value;
       } else parsed[valued[token]] = value;
     } else throw new NotTaken(`unknown argument: ${token}`);
   }
-  if (parsed.claude === null && parsed.lead === null && parsed.codex === null) throw new NotTaken('rules switch names no home: give --claude <model>@<effort>, --lead <effort> or --codex <model>@<effort>');
+  if (parsed.claude === null && parsed.lead === null && parsed.advisor === null && parsed.codex === null) throw new NotTaken('rules switch names no home: give --claude <model>@<effort>, --lead <effort>, --advisor <model> or --codex <model>@<effort>');
   if (parsed.quotes.length === 0) throw new NotTaken('rules switch needs his words: --quote <session>:<line>, once for each line of the transcript that holds them');
   if (parsed.reading === null) throw new NotTaken('rules switch needs --reading "<what his words mean>"');
   if (parsed.accepted === null) throw new NotTaken('rules switch needs --accepted "<where he accepted it>"');
@@ -101,6 +105,7 @@ export function changesOf(parsed) {
   const named = [
     ...(parsed.claude === null ? [] : [[CLAUDE_HOME.model, parsed.claude.model], [CLAUDE_HOME.effort, parsed.claude.effort]]),
     ...(parsed.lead === null ? [] : [[CLAUDE_HOME.lead, parsed.lead]]),
+    ...(parsed.advisor === null ? [] : [[CLAUDE_HOME.advisor, parsed.advisor]]),
     ...(parsed.codex === null ? [] : [[CODEX_HOME.model, parsed.codex.model], [CODEX_HOME.effort, parsed.codex.effort]]),
   ];
   return named.map(([id, value]) => ({ id, change: { value, source: source() } }));
@@ -111,7 +116,7 @@ export function changesOf(parsed) {
 function homesOf(list) {
   const value = (id) => list.find((rule) => rule.id === id)?.value ?? null;
   return {
-    claude: { model: value(CLAUDE_HOME.model), effort: value(CLAUDE_HOME.effort), lead: value(CLAUDE_HOME.lead) },
+    claude: { model: value(CLAUDE_HOME.model), effort: value(CLAUDE_HOME.effort), lead: value(CLAUDE_HOME.lead), advisor: value(CLAUDE_HOME.advisor) },
     codex: { model: value(CODEX_HOME.model), effort: value(CODEX_HOME.effort) },
   };
 }
@@ -120,6 +125,8 @@ function homesOf(list) {
 
 /** What a probe asks, and the system prompt it asks under: one word back, so a call costs as little as one can. */
 export const PROBE_QUESTION = 'Answer with the single word: ready';
+/** The question of a probe with an advisor: one call of the advisor proves it answers (odd/tasks/advisor-home.md, L5). */
+export const ADVISOR_QUESTION = 'Call your advisor tool once, then answer with the single word: ready';
 export const PROBE_PROMPT = 'This is a one-line check that a model can be reached. Answer in one word and do nothing else.';
 
 /** The probes a switch owes, `{ claude, codex }`, each a list of `{ model, effort }`: every model and level a home
@@ -127,8 +134,10 @@ export const PROBE_PROMPT = 'This is a one-line check that a model can be reache
  * levels, the sessions' and the lead's, so a new model is tried at each; a pair in force today is launched every
  * day and is not asked again. */
 export function probesOf(before, after) {
-  const pairs = (home) => [{ model: home.model, effort: home.effort }, { model: home.model, effort: home.lead }];
-  const same = (one, other) => one.model === other.model && one.effort === other.effort;
+  // The advisor goes with each pair, where the home declares one: the host refuses some pairings, so the model and
+  // its advisor are tried together whenever either changes (odd/tasks/advisor-home.md, spec 5).
+  const pairs = (home) => [{ model: home.model, effort: home.effort }, { model: home.model, effort: home.lead }].map((pair) => (typeof home.advisor === 'string' ? { ...pair, advisor: home.advisor } : pair));
+  const same = (one, other) => one.model === other.model && one.effort === other.effort && one.advisor === other.advisor;
   const claude = [];
   for (const pair of pairs(after.claude)) {
     if (!pairs(before.claude).some((held) => same(held, pair)) && !claude.some((asked) => same(asked, pair))) claude.push(pair);
@@ -139,8 +148,8 @@ export function probesOf(before, after) {
 /** The CLI arguments of the Claude probe, asked as a lens asks (bin/lens-review.mjs): no tools, none of the user's
  * customizations, no session kept, so it leaves no record a listing would count. The caller runs it in a temporary
  * folder with the question on standard input. */
-export function claudeProbeArgs({ model, effort, promptFile, settingsFile }) {
-  return ['-p', '--safe-mode', '--tools', '', '--system-prompt-file', promptFile, '--settings', settingsFile, '--model', model, '--effort', effort, '--output-format', 'json', '--no-session-persistence'];
+export function claudeProbeArgs({ model, effort, advisor, promptFile, settingsFile }) {
+  return ['-p', '--safe-mode', '--tools', '', '--system-prompt-file', promptFile, '--settings', settingsFile, '--model', model, '--effort', effort, ...(advisor === undefined ? [] : ['--advisor', advisor]), '--output-format', 'json', '--no-session-persistence'];
 }
 
 // The features of Codex that give a model a tool of Codex's own, each listed off by Codex CLI 0.167.1 when it is
@@ -176,7 +185,7 @@ const firstLine = (...texts) => texts.flatMap((text) => String(text ?? '').split
  * answered, beside, costUsd }`, `answered` the id the CLI billed that is the model asked and `beside` any other it
  * billed, or `{ ok: false, why }` when the CLI could not run, refused the id or the level, gave nothing to read, or
  * another model answered. That the CLI ran with the level is all it says of the effort. */
-export function readClaudeProbe(ran, { model, effort }) {
+export function readClaudeProbe(ran, { model, effort, advisor }) {
   if (ran?.error) return { ok: false, why: `the claude CLI could not run: ${ran.error.message}` };
   let out = null;
   try {
@@ -193,7 +202,10 @@ export function readClaudeProbe(ran, { model, effort }) {
   if (billed.length === 0) return { ok: false, why: 'the claude CLI\'s answer names no model, so which model answered is not proven' };
   const answered = billed.find((id) => id === model || sameClaudeModel(id, model));
   if (answered === undefined) return { ok: false, why: `another model answered: ${billed.join(', ')}, not ${model}` };
-  return { ok: true, answered, beside: billed.filter((id) => id !== answered), costUsd: typeof out.total_cost_usd === 'number' ? out.total_cost_usd : null };
+  // With an advisor, only a call of it proves it answers: the CLI refuses an unknown id, not a pairing that drops it.
+  const advised = advisor === undefined ? null : (out.usage?.iterations ?? []).find((step) => step?.type === 'advisor_message' && sameClaudeModel(step.model, advisor));
+  if (advisor !== undefined && advised === undefined) return { ok: false, why: `the advisor ${advisor} did not answer: the reply of ${model} holds no advisor_message of it` };
+  return { ok: true, answered, advised: advised?.model ?? null, beside: billed.filter((id) => id !== answered && (advised == null || !sameClaudeModel(id, advisor))), costUsd: typeof out.total_cost_usd === 'number' ? out.total_cost_usd : null };
 }
 
 /** The first text under a key `model` in `value`, three levels deep at most, or null. */
@@ -394,9 +406,15 @@ export async function switchRules(parsed, deps, stdout, stderr) {
   const after = homesOf(dry.list);
   // The homes once every rule named is written: a run that writes one rule at a time leaves less than that.
   const target = {
-    claude: { model: parsed.claude?.model ?? after.claude.model, effort: parsed.claude?.effort ?? after.claude.effort, lead: parsed.lead ?? after.claude.lead },
+    claude: { model: parsed.claude?.model ?? after.claude.model, effort: parsed.claude?.effort ?? after.claude.effort, lead: parsed.lead ?? after.claude.lead, advisor: parsed.advisor ?? after.claude.advisor },
     codex: { model: parsed.codex?.model ?? after.codex.model, effort: parsed.codex?.effort ?? after.codex.effort },
   };
+  // An advisor that is the model itself is refused: a transcript could not tell it from none (odd/tasks/advisor-home.md,
+  // spec 6), and it adds nothing a session does not have.
+  if (typeof target.claude.advisor === 'string' && sameClaudeModel(target.claude.advisor, target.claude.model)) {
+    stderr(`not switched: the advisor ${target.claude.advisor} is the model of the home itself, ${target.claude.model}; give --advisor another model, or --claude another model; nothing was probed and nothing was written`);
+    return 2;
+  }
   const probes = probesOf(before, after);
   const sequence = changes.map(({ id }) => id).filter((id) => !dry.skipped.some((one) => one.id === id));
 
@@ -413,7 +431,7 @@ export async function switchRules(parsed, deps, stdout, stderr) {
   if (owed.length === 0) stdout('probe: none is owed, since every model and level this writes is in force already');
   else {
     const floorSaid = probes.codex.length > 0 ? '; Codex\'s is not asked at or under rule:codex-weekly-floor' : '';
-    stdout(`probe: ${owed.length} short ${owed.length === 1 ? 'question' : 'questions'} through the installed CLI, one cheap call each with no session kept, Claude's with no tools and Codex's with every tool a flag turns off off, refused if it does more than answer: ${listed(owed.map((probe) => `${probe.model} at ${probe.effort}`))}${floorSaid}; nothing is written unless each answers`);
+    stdout(`probe: ${owed.length} short ${owed.length === 1 ? 'question' : 'questions'} through the installed CLI, one cheap call each with no session kept, Claude's with no tools and Codex's with every tool a flag turns off off, refused if it does more than answer: ${listed(owed.map((probe) => `${probe.model} at ${probe.effort}${probe.advisor === undefined ? '' : ` with the advisor ${probe.advisor}, asked to consult it once`}`))}${floorSaid}; nothing is written unless each answers`);
   }
 
   /** What follows the rules, for a real run and a dry one: what is outside the repository, and what may be stale. */
@@ -471,7 +489,7 @@ export async function switchRules(parsed, deps, stdout, stderr) {
     answers.push({ answered: read.answered, effort: probe.effort });
     // What the CLI itself put the call at, where its answer holds a number: said as the CLI's figure, not a bill.
     const cost = read.costUsd === null ? '' : `; the CLI put the call at ${Math.round(read.costUsd * 10000) / 10000} USD`;
-    stdout(`probed: ${read.answered} answered through ${claudeSaid} at ${probe.effort} on ${day}${read.beside.length > 0 ? `, with ${listed(read.beside)} billed beside it` : ''}${cost}`);
+    stdout(`probed: ${read.answered} answered through ${claudeSaid} at ${probe.effort}${read.advised ? `, and its advisor ${read.advised} answered` : ''} on ${day}${read.beside.length > 0 ? `, with ${listed(read.beside)} billed beside it` : ''}${cost}`);
   }
   for (const answered of new Set(answers.map((one) => one.answered))) {
     proven.push(`${answered} answered through ${claudeSaid} at ${answers.filter((one) => one.answered === answered).map((one) => one.effort).join(' and at ')}`);
