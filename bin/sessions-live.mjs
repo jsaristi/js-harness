@@ -30,8 +30,8 @@ export const LIVE_USAGE = [
   '         quiet stretch from a record nobody sent. The check holds 45 minutes, the lead\'s heartbeat; with --resting,',
   '         the run before the lead\'s resting wait, it holds that wait (wait-for) and the board reads as resting.',
   '         --url records the board\'s link with the cursor, and every run prints it back. Only a Claude session sends',
-  '         a batch: no command reaches an artifact\'s database. Exit 1 when the record or a batch file cannot be read,',
-  '         2 for a usage error.',
+  '         a batch: no command reaches an artifact\'s database. Exit 1 when the folder has no sessions folder (it holds',
+  '         no project) or the record or a batch file cannot be read, 2 for a usage error.',
 ].join('\n');
 
 class LiveArgError extends Error {}
@@ -135,6 +135,15 @@ export async function sessionsLiveMain(argv, {
   }
   const root = mainCheckout(run, path.resolve(parsed.cwd ?? defaultCwd));
   const slug = projectSlug(root);
+  // A folder with no sessions folder holds no project, as `sessions` says: its record is empty, and "0 rows wait" would
+  // read as a board that is current (the lead's scratch folder, 2026-11-12, while eight rows waited).
+  const sessionsFolder = path.join(env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'), 'projects', slug);
+  try {
+    fs.readdirSync(sessionsFolder);
+  } catch (err) {
+    stderr(`js-harness sessions live: no sessions folder for ${root}: ${sessionsFolder} (${err.code ?? err.message}): this folder holds no project, so no row is counted; run it from the project's folder, or give --cwd <it>`);
+    return 1;
+  }
   const home = harnessHome({ given: parsed.home, env, cwd: defaultCwd, homedir });
   const cursorFile = liveCursorPath(home, slug);
   let saved;

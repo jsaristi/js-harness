@@ -11,7 +11,8 @@ import { WAIT_FOR_MINUTES } from './wait.mjs';
 
 // odd/tasks/live-board.md, S3: `js-harness sessions live` turns the channel record into the live board's batches and
 // moves its cursor once a batch was sent. Every test has a home, a project folder and an output folder of its own in
-// the temp folder; git is never run (the fake answers nothing, so the folder is the project).
+// the temp folder, and a Claude home whose sessions folder for that project is there; git is never run (the fake answers
+// nothing, so the folder is the project).
 
 const NOW = Date.parse('2026-10-27T06:00:00.000Z');
 const FROM = { host: 'claude-code', id: 'aaaaaaaa-1111-4111-8111-111111111111', source: 'environment', title: 'JH 58 · live board' };
@@ -23,9 +24,11 @@ function withFolders(body) {
     const home = path.join(root, 'home');
     const project = path.join(root, 'project');
     const out = path.join(root, 'out');
+    const claude = path.join(root, 'claude');
     fs.mkdirSync(project, { recursive: true });
+    fs.mkdirSync(path.join(claude, 'projects', projectSlug(project)), { recursive: true });
     try {
-      await body({ home, project, out, slug: projectSlug(project) });
+      await body({ home, project, out, claude, slug: projectSlug(project) });
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -37,10 +40,10 @@ const batchFiles = (out) => fs.readdirSync(out).filter((name) => name.startsWith
 
 const note = (home, slug, at, text, kind = 'note') => appendNotice(home, slug, newNotice({ at, from: FROM, to: 'orchestrator', kind, text }));
 
-async function live(args, { home, project }, { listProcesses = () => [] } = {}) {
+async function live(args, { home, project, claude }, { listProcesses = () => [] } = {}) {
   const out = [];
   const err = [];
-  const code = await sessionsLiveMain(args, { cwd: project, stdout: (text) => out.push(text), stderr: (text) => err.push(text), now: () => NOW, run: noGit, env: { JS_HARNESS_HOME: home }, listProcesses });
+  const code = await sessionsLiveMain(args, { cwd: project, stdout: (text) => out.push(text), stderr: (text) => err.push(text), now: () => NOW, run: noGit, env: { JS_HARNESS_HOME: home, CLAUDE_CONFIG_DIR: claude }, listProcesses });
   return { code, out: out.join('\n'), err: err.join('\n') };
 }
 
@@ -53,6 +56,25 @@ test('with no --out it says how many rows wait, from the last --hours when nothi
   assert.match(counted.out, /^2 rows wait for the live board/m);
   assert.match((await live(['--hours', '48'], dirs)).out, /^3 rows wait/m);
   assert.equal(fs.existsSync(liveCursorPath(dirs.home, dirs.slug)), false, 'counting writes nothing');
+}));
+
+// On 2026-11-12 the lead ran `sessions live --out` from its scratch folder, read "0 rows wait for the live board" and told
+// the user the board was current while eight rows waited: the folder was no project's, and the command counted its empty
+// record. Like `sessions`, it now says the folder has no sessions folder and exits 1, writing nothing.
+test('a folder that holds no project, with no sessions folder, is said and exits 1: no row is counted and nothing is written', withFolders(async (dirs) => {
+  note(dirs.home, dirs.slug, '2026-10-27T05:00:00.000Z', 'step 2 done');
+  const scratch = path.join(path.dirname(dirs.project), 'scratch');
+  fs.mkdirSync(scratch);
+  const sessionsFolder = path.join(dirs.claude, 'projects', projectSlug(scratch));
+  const said = `js-harness sessions live: no sessions folder for ${scratch}: ${sessionsFolder} (ENOENT): this folder holds no project, so no row is counted; run it from the project's folder, or give --cwd <it>`;
+  for (const args of [[], ['--out', dirs.out], ['--out', dirs.out, '--resting'], ['--sent', path.join(dirs.out, 'live-x.json')]]) {
+    const result = await live([...args, '--cwd', scratch], dirs);
+    assert.deepEqual([result.code, result.out, result.err], [1, '', said], args.join(' '));
+  }
+  assert.equal(fs.existsSync(dirs.out), false, 'no batch and no board-checked.json');
+  assert.equal(fs.existsSync(liveCursorPath(dirs.home, projectSlug(scratch))), false, 'no cursor');
+  // The project's own folder still counts its rows.
+  assert.match((await live([], dirs)).out, /^1 row waits/m);
 }));
 
 test('--out writes one batch file a document, prints the ArtifactData call and --sent moves the cursor', withFolders(async (dirs) => {
