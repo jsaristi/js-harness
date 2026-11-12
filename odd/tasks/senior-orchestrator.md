@@ -5,9 +5,16 @@ JH 192, slice 3 of the lead's brief. Delivery: this design, then one pull reques
 (`rules change` runs only on a `rule/` branch, `bin/lib/rules-change-run.mjs:170`). Runner: `node --test`.
 
 ## State
-Design rewritten after its double review (read 134b8277: Claude 15 findings, Codex 4, all taken). Next: T2 on
-`rule/senior-orchestrator`. The build is no longer small: the title contract, the start, the resume and every
-reporter of the home change, and the guard is high risk.
+BLOCKED until `rule/lead-effort-split` lands or is dropped: `rules change` allows one open rule change at a time.
+The work below is saved as `jh192-senior-wip.patch` and `jh192-senior-model-change.json` in the shared notes folder
+(local_fcef3509...); apply the patch with `git apply`, then `js-harness rules change senior-model --with <changed
+files>` with that JSON on stdin. Design rewritten after its double review (read 134b8277: Claude 15 findings, Codex
+4, all taken). In the tree, not committed: the title contract (`TITLE_SHAPE` takes `SR`, `roleOfTitle` gives role `senior`, `roleNamed` takes
+`senior`/`SR`, `projectCode` refuses `SR`), with its tests; 678 tests pass. It is not committed alone because an SR
+title would then pass the title guard on the home's model; it lands with T3's guard. Next: the two rules
+(`rules change senior-model --with ...`, value `claude-fable-5-2`; `senior-effort` high, in its own commit after) with
+their first reader, the start and the resume (`sessionStartHome` by role in `bin/lib/guard.mjs:149`,
+`bin/sessions-background.mjs:174-181` and `:343-351`), then the guard's starter and start_session refusals.
 
 ## Goal
 The lead starts a senior session, titled `<code> SR · <purpose>`, with `js-harness sessions start`, and every start
