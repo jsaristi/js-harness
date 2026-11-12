@@ -35,7 +35,7 @@ import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { changeRule, changeRules } from './lib/rules-change-run.mjs';
-import { PROBE_PROMPT, PROBE_QUESTION, SWITCH_USAGE, claudeProbeArgs, codexProbeArgs, parseSwitch, switchRules } from './lib/rules-switch.mjs';
+import { PROBE_PROMPT, PROBE_QUESTION, SWITCH_USAGE, claudeProbeArgs, codexFeaturesOf, codexProbeArgs, parseSwitch, switchRules } from './lib/rules-switch.mjs';
 import { proofSaid, proveBreaks, readCoverage, REGISTER_PATH } from './lib/rules-coverage-read.mjs';
 import { OWED_CAP, OWED_CAP_FROM, refreshRegister, writeCoverage } from './lib/rules-coverage.mjs';
 import { harnessHome } from './lib/home.mjs';
@@ -488,7 +488,10 @@ async function machineProbes(env) {
       return claude(claudeProbeArgs({ ...probe, promptFile, settingsFile }), { cwd: folder, input: PROBE_QUESTION });
     }),
     probeCodex: (probe) => inFolder((folder) => {
-      const ran = launchCodex(spawnSync, process.platform, codexProbeArgs(probe), { cwd: folder, env, input: PROBE_QUESTION, encoding: 'utf8', windowsHide: true, timeout: PROBE_TIMEOUT_MS });
+      // The features the installed CLI knows, read with no model call: it refuses one it does not know.
+      const list = launchCodex(spawnSync, process.platform, ['features', 'list'], { cwd: folder, env, encoding: 'utf8', windowsHide: true, timeout: PROBE_TIMEOUT_MS });
+      const features = list.status === 0 && !list.error ? codexFeaturesOf(list.stdout) : null;
+      const ran = launchCodex(spawnSync, process.platform, codexProbeArgs({ ...probe, features }), { cwd: folder, env, input: PROBE_QUESTION, encoding: 'utf8', windowsHide: true, timeout: PROBE_TIMEOUT_MS });
       return { status: ran.status, stdout: String(ran.stdout ?? ''), stderr: String(ran.stderr ?? ''), error: ran.error };
     }),
     claudeVersion: () => {

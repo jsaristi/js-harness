@@ -143,16 +143,28 @@ export function claudeProbeArgs({ model, effort, promptFile, settingsFile }) {
   return ['-p', '--safe-mode', '--tools', '', '--system-prompt-file', promptFile, '--settings', settingsFile, '--model', model, '--effort', effort, '--output-format', 'json', '--no-session-persistence'];
 }
 
+// The features of Codex that give a model a tool of Codex's own, each listed off by Codex CLI 0.167.1 when it is
+// disabled (`codex --disable <name> features list`, which asks no model). Two tools no flag turns off there: the plan
+// tool has no feature, and `unified_exec` stays on whatever it is asked.
+export const CODEX_TOOL_FEATURES = ['shell_tool', 'multi_agent', 'view_image', 'image_generation', 'sleep_tool', 'tool_suggest', 'skill_search', 'browser_use', 'computer_use'];
+
+/** The names of the features `codex features list` printed in `text`: the first word of each line that gives a name,
+ * a stage and a state. */
+export function codexFeaturesOf(text) {
+  return String(text ?? '').split(/\r?\n/).flatMap((line) => /^([a-z][\w.]*)\s+\S.*\s(?:true|false)\s*$/.exec(line)?.slice(1) ?? []);
+}
+
 /** The CLI arguments of the Codex probe: one `codex exec` that keeps no session, reads none of the user's
  * configuration and may write nothing, with the question on standard input. Beside what Codex loads (plugins, apps,
- * hooks), the two tools it gives a model by itself that turn a question into work are off, its shell and its
- * sub-agents: a read-only sandbox refuses a write, not a call. Codex CLI 0.167.1 takes both names and lists them off
- * (`codex --disable shell_tool --disable multi_agent features list`); it refuses a name it does not know, and the
- * probe then fails with that line. It keeps `unified_exec` on whatever it is asked. */
-export function codexProbeArgs({ model, effort }) {
+ * hooks), every tool of its own that a feature turns off is off (`CODEX_TOOL_FEATURES`): a read-only sandbox refuses
+ * a write, not a call. The CLI refuses a feature it does not know, so with `features`, the names the installed CLI
+ * lists (`codexFeaturesOf`), only the ones it lists are named; without it, all are. No flag reaches every tool, so
+ * `readCodexProbe` refuses a probe that did more than answer. */
+export function codexProbeArgs({ model, effort, features = null }) {
+  const off = features === null ? CODEX_TOOL_FEATURES : CODEX_TOOL_FEATURES.filter((name) => features.includes(name));
   return [
     'exec', '--json', '--ephemeral', '--skip-git-repo-check', '--ignore-user-config', '--ignore-rules',
-    '--disable', 'plugins', '--disable', 'apps', '--disable', 'hooks', '--disable', 'shell_tool', '--disable', 'multi_agent',
+    '--disable', 'plugins', '--disable', 'apps', '--disable', 'hooks', ...off.flatMap((name) => ['--disable', name]),
     '-m', model, '-c', `model_reasoning_effort="${effort}"`, '-c', 'sandbox_mode=read-only', '-c', 'approval_policy=never', '-',
   ];
 }
@@ -215,6 +227,9 @@ export function readCodexProbe(ran, { model, effort }) {
   }
   const ended = events.some((event) => event.type === 'turn.completed' || (event.type === 'item.completed' && event.item?.type === 'agent_message'));
   if (!ended) return { ok: false, why: `the codex CLI gave no answer to ${model} at ${effort}` };
+  // What a turn did beside thinking and answering: a tool no flag turns off (`codexProbeArgs`), each a call more.
+  const did = events.filter((event) => event.type === 'item.completed' && !['agent_message', 'reasoning'].includes(event.item?.type)).map((event) => String(event.item?.type));
+  if (did.length > 0) return { ok: false, why: `${model} at ${effort} did more than answer the one question: ${did.join(', ')}; a probe is one call with no tool` };
   const answered = events.map((event) => modelIn(event)).find((id) => id !== null) ?? null;
   if (answered !== null && answered !== model) return { ok: false, why: `another model answered: ${answered}, not ${model}` };
   return { ok: true, answered };
@@ -397,7 +412,7 @@ export async function switchRules(parsed, deps, stdout, stderr) {
   if (owed.length === 0) stdout('probe: none is owed, since every model and level this writes is in force already');
   else {
     const floorSaid = probes.codex.length > 0 ? '; Codex\'s is not asked at or under rule:codex-weekly-floor' : '';
-    stdout(`probe: ${owed.length} short ${owed.length === 1 ? 'question' : 'questions'} through the installed CLI, one cheap call each with no session kept, Claude's with no tools and Codex's with its shell and its sub-agents off: ${listed(owed.map((probe) => `${probe.model} at ${probe.effort}`))}${floorSaid}; nothing is written unless each answers`);
+    stdout(`probe: ${owed.length} short ${owed.length === 1 ? 'question' : 'questions'} through the installed CLI, one cheap call each with no session kept, Claude's with no tools and Codex's with every tool a flag turns off off, refused if it does more than answer: ${listed(owed.map((probe) => `${probe.model} at ${probe.effort}`))}${floorSaid}; nothing is written unless each answers`);
   }
 
   /** What follows the rules, for a real run and a dry one: what is outside the repository, and what may be stale. */

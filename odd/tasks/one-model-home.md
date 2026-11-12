@@ -382,6 +382,22 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 19:28, at 88 %: T8 landed, `8a2da3c0`, tree clean, nothing pushed. Codex's review of `94e25d3..8a2da3c`
+is RECORDED (1 part, 344 lines; output in the job's `tmp/codex-t8.txt`): T8 has no finding; finding 1 fixed;
+finding 2 NOT fixed, P2, `bin/lib/rules-switch.mjs:154-156`: disabling `shell_tool` and `multi_agent` leaves other
+built-in tools (`update_plan`, `view_image`), so the probe may be more than one call. The next Codex review, from
+`8a2da3c`, is the LAST of three. The plan for it, not written yet: (a) `codexProbeArgs` disables every tool feature
+the CLI lists and lets off, checked with no model call on Codex CLI 0.167.1 to list off: `shell_tool`,
+`multi_agent`, `view_image`, `image_generation`, `sleep_tool`, `tool_suggest`, `skill_search`, `browser_use`,
+`computer_use`; an unknown name makes the CLI exit 1 ("Unknown feature flag"), so `machineProbes` first reads
+`codex features list` (no model call) and only the names it lists are disabled; (b) what no flag turns off, by the
+same listing: the plan tool has no feature and `unified_exec` stays on; so `readCodexProbe` refuses a probe whose
+events hold a completed item that is neither `agent_message` nor `reasoning` (`item.completed`, `item.type`, the
+shapes `bin/codex-review.mjs:552-553` reads every day; `reasoning` as a type is assumed), saying which, and nothing
+is written; (c) the cost line and the comment say exactly that; tests red first; then the answer to Codex: taken,
+with the part no flag reaches rebutted on the listing. Then, with NOTHING edited while a review runs: commit;
+Codex from `8a2da3c`; the three lenses on `4d020cfb` to the head; the dry run; `check --push`; push; pull request 4
+from the job's `tmp/b4.md`; ready; the summary; closed.
 2026-11-11 19:20: the fix of Codex's two findings landed, `e3cc2ee4`. Codex's confirming review of
 `94e25d3..e3cc2ee` said correct, both fixed, and recorded NOTHING: this session edited `bin/lib/manifest.mjs` and its
 test for T8 while it ran (L28; `docs/FAILURES.md`, `edit-during-review`). T8 is written and carries this line: the

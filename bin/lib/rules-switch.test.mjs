@@ -8,7 +8,7 @@ import { RuleChangeError } from './rules-change.mjs';
 import { CLAUDE_HOME, CODEX_HOME, EFFORTS, menuLine } from './model-home.mjs';
 import { DEFAULT_CONTEXT_WINDOW } from './sessions.mjs';
 import {
-  WRITER_AGENT, agentCopy, changesOf, claudeProbeArgs, codexProbeArgs, outsideLines, parseSwitch, probesOf,
+  CODEX_TOOL_FEATURES, WRITER_AGENT, agentCopy, changesOf, claudeProbeArgs, codexFeaturesOf, codexProbeArgs, outsideLines, parseSwitch, probesOf,
   readClaudeProbe, readCodexProbe, staleLines, switchRules,
 } from './rules-switch.mjs';
 
@@ -92,7 +92,15 @@ test('the Codex probe asks once with no session kept, and proves the CLI took th
   assert.ok(args.includes('--ignore-user-config') && args.includes('sandbox_mode=read-only') && args.at(-1) === '-');
   // One question, not a turn that works: the tools Codex gives a model by itself are off, beside what it loads.
   const off = args.flatMap((arg, index) => (arg === '--disable' ? [args[index + 1]] : []));
-  assert.deepEqual(off, ['plugins', 'apps', 'hooks', 'shell_tool', 'multi_agent']);
+  assert.deepEqual(off, ['plugins', 'apps', 'hooks', ...CODEX_TOOL_FEATURES]);
+  assert.deepEqual(CODEX_TOOL_FEATURES, ['shell_tool', 'multi_agent', 'view_image', 'image_generation', 'sleep_tool', 'tool_suggest', 'skill_search', 'browser_use', 'computer_use']);
+  // The CLI refuses a feature it does not know, so only the ones the installed CLI lists are named.
+  const listed = codexProbeArgs({ model: 'astra', effort: LOW, features: ['shell_tool', 'view_image', 'goals'] });
+  assert.deepEqual(listed.flatMap((arg, index) => (arg === '--disable' ? [listed[index + 1]] : [])), ['plugins', 'apps', 'hooks', 'shell_tool', 'view_image']);
+  assert.deepEqual(codexFeaturesOf('shell_tool   stable   true\nold_one   removed   false\n\nError: x\n'), ['shell_tool', 'old_one']);
+  // A tool no flag turns off may still run: a probe that did more than answer is refused, and says what it did.
+  const worked = readCodexProbe({ status: 0, stderr: '', stdout: [{ type: 'item.completed', item: { type: 'reasoning' } }, { type: 'item.completed', item: { type: 'todo_list' } }, { type: 'item.completed', item: { type: 'command_execution' } }, { type: 'item.completed', item: { type: 'agent_message', text: 'ready' } }, { type: 'turn.completed' }].map((event) => JSON.stringify(event)).join('\n') }, { model: 'astra', effort: LOW });
+  assert.deepEqual(worked, { ok: false, why: 'astra at low did more than answer the one question: todo_list, command_execution; a probe is one call with no tool' });
   const lines =(...events) => ({ status: 0, stdout: events.map((event) => JSON.stringify(event)).join('\n'), stderr: '' });
   const answer = { type: 'item.completed', item: { type: 'agent_message', text: 'ready' } };
   const done = { type: 'turn.completed', usage: { input_tokens: 10 } };
@@ -272,7 +280,7 @@ test('a switch says the probe\'s cost, probes, writes the rules and the agent fi
     assert.notEqual(index, -1, `${pattern} in:\n${result.out}`);
     return index;
   };
-  assert.ok(at(/probe: 2 short questions through the installed CLI, one cheap call each with no session kept, Claude's with no tools and Codex's with its shell and its sub-agents off: /) < at(/^probed: /m), 'the cost is said before the probe');
+  assert.ok(at(/probe: 2 short questions through the installed CLI, one cheap call each with no session kept, Claude's with no tools and Codex's with every tool a flag turns off off, refused if it does more than answer: /) < at(/^probed: /m), 'the cost is said before the probe');
   at(new RegExp(`${CLAUDE_HOME.model}: ${OLD} to ${NEW}`));
   at(new RegExp(`${CLAUDE_HOME.effort}: stays ${MEDIUM}, not written`));
   at(new RegExp(`^probed: ${NEW} answered through claude 9\\.9\\.9 at ${MEDIUM} on 2026-11-12$`, 'm'));
