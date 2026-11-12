@@ -6,16 +6,13 @@ brief `~/.js-harness/background/briefs/2026-11-12T06-58-20-202Z-f6e42350.md`. De
 `rule/advisor-home`, in four work-unit commits. Runner: `node --test`.
 
 ## State
-Done: T1, T2 (read `f01e6567`, L3), T3 `3e943f2f`, T4 `3b932275` and `07e94c23` (verifier PASS, L4), T5 (this
-commit). Slice `2458fcd3..07e94c23` reviewed: Codex correct (0.89, no finding); lenses risk 0, reliability 0,
-readability 1 (spec 3's order), answered in `0bbc768b`, which goes with T5's slice (base `07e94c23`). T5: `rules switch
---advisor <model>` parses, writes `advisor-model`, probes each pair of the home with `--advisor` and the question "Call
-your advisor tool once, then answer with the single word: ready", passes only on an `advisor_message` of that id in
-`usage.iterations`, refuses an advisor equal to the home's model (exit 2, nothing probed); `HOME_FLAGS` names
-`--advisor <model>` and its test exception is gone. Build facts (L5): an unknown advisor id exits 1 with "The model
-\"claude-nope-9-9\" cannot be used as an advisor."; with `--tools ""` and `--advisor claude-fable-5-2` the JSON
-output's `usage.iterations` held an `advisor_message` of `claude-fable-5-2` (5,648 in, 456 out) and `modelUsage` both
-ids, 0.086 USD. Next: T5's slice reviews, then T6, T7.
+Done: T1 to T6. T5 is `e3a491ab`; its slice `07e94c23..e3a491ab` (with `0bbc768b`) reviewed: Codex correct (0.87, no
+finding, 201,281 input tokens of which 150,400 cached); lenses risk 0, reliability 0, readability 0, and the earlier
+readability finding rechecked fixed. T6 (this commit): `sessionFacts` gives the `advisorModel` of the last reply of the
+session's own; `readHomeSessions` carries it in `replied.advisor`; `sessionsOffHome` holds a background session to the
+home's advisor where one is declared, as spec 6 says, and names one whose advisor is not known on a `not read:` line;
+`docs/RECORDS.md` and the orchestrator skill's "A new model" name `rule:advisor-model`. Next: T6's slice reviews
+(base `e3a491ab`), then T7: the gate, the push, the pull request, the `ready` notice with the advisor tokens.
 Open, his: everything under "Ask me before". Replies of this session run on `claude-opus-5-5` at medium with
 a `claude-fable-5-2` advisor.
 
@@ -178,15 +175,15 @@ Nothing of this plan needs him before it lands; the merge does. Written down as 
    `docs/RECORDS.md`) name the advisor's rule and do not restate its value.
 
 ## Tasks
-- [ ] T1 (kind: design) (1-7) This document. Route: inline. Commit: pending.
-- [ ] T2 (kind: design) (1-7) Its double review (`js-harness double-review read`), each finding answered. Route: inline.
-- [ ] T3 (kind: build) (1, 2, 3) `rules change advisor-model --with` the readers: the rule, `CLAUDE_HOME.advisor`,
+- [x] T1 (kind: design) (1-7) This document. Route: inline. Commit: `1cc4db71`.
+- [x] T2 (kind: design) (1-7) Its double review (`js-harness double-review read`), each finding answered. Route: inline. Commit: `2458fcd3`.
+- [x] T3 (kind: build) (1, 2, 3) `rules change advisor-model --with` the readers: the rule, `CLAUDE_HOME.advisor`,
   `claudeHome`/`claudeHeld`/`sessionStartHome` with the advisor, the start and the resume taking it; tests first.
-  Route: inline. Commit: pending.
-- [ ] T4 (kind: build) (4) The refusal of another advisor in `sessionStartRefusal`, tests first, then an independent
-  verifier. Route: inline, then one verifier. Commit: pending.
-- [x] T5 (kind: build) (5) `rules switch --advisor <model>` and its probe. Route: inline. Commit: the one after `0bbc768b`.
-- [ ] T6 (kind: build) (6, 8) `rules applied` reads the advisor; the texts. Route: inline. Commit: pending.
+  Route: inline. Commit: `3e943f2f`.
+- [x] T4 (kind: build) (4) The refusal of another advisor in `sessionStartRefusal`, tests first, then an independent
+  verifier. Route: inline, then one verifier. Commit: `3b932275`, `07e94c23`.
+- [x] T5 (kind: build) (5) `rules switch --advisor <model>` and its probe. Route: inline. Commit: `e3a491ab`.
+- [x] T6 (kind: build) (6, 8) `rules applied` reads the advisor; the texts. Route: inline. Commit: the one after `e3a491ab`.
 - [ ] T7 (kind: verify) Codex and the lenses on each slice, the gate, the pull request, the `ready` notice with the
   advisor tokens measured so far.
 - [ ] T8 (kind: verify) After the land: the first start and the first resume with no `--advisor`, checked in their

@@ -523,7 +523,7 @@ export function personAtOf(entries) {
  * the transcript, so a typed message, a queued one and a tapped answer count; `null` when none has a time.
  *
  * `opened` is how the session was opened (`openerOf`, read from its first prompt, `'unknown'` when there is none);
- * `effort` is the effort of its last reply that records one, `null` when none does. */
+ * `effort` and `advisor` are the effort and the `advisorModel` of its last reply that records each, `null` where none does. */
 export function sessionFacts(
   text,
   {
@@ -559,7 +559,7 @@ export function sessionFacts(
   let lastReply = null;
   let context = null;
   let opened = null; // how the session was opened, by its first prompt (`openerOf`)
-  let effort = null; // the effort of the session's last reply that records one
+  let [effort, advisor] = [null, null]; // of the session's last reply that records each; the host writes its own model as the advisor where none was asked
 
   for (const [index, entry] of entries.entries()) {
     context = contextOf(entry) ?? context;
@@ -623,7 +623,7 @@ export function sessionFacts(
     const compacted = entry.isCompactSummary === true || (entry.type === 'system' && entry.subtype === 'compact_boundary');
     if (opened === null && compacted) opened = 'unknown';
     if (opened === null && entry.type === 'user' && !entry.isMeta && !isToolResultCarrier(entry)) opened = openerOf(entry);
-    if (isOwnReply(entry) && typeof entry.effort === 'string') effort = entry.effort;
+    if (isOwnReply(entry)) [effort, advisor] = [typeof entry.effort === 'string' ? entry.effort : effort, typeof entry.advisorModel === 'string' ? entry.advisorModel : advisor];
     const said = turnOf(entry);
     if (said !== null) {
       turn = said;
@@ -739,7 +739,7 @@ export function sessionFacts(
     gitBranch,
     permissionMode,
     opened: opened ?? 'unknown',
-    effort,
+    effort, advisor,
     received: [...received.values()],
     sent: [...sentByCall.values()],
     context: context ?? { unavailable: 'no reply of the transcript records its token usage' },
