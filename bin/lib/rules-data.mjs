@@ -334,12 +334,16 @@ export const RULES = [
   },
   {
     "id": "lead-effort",
-    "subject": "the effort the lead's session runs at",
+    "subject": "the effort the lead's session, the lenses and the double review's Claude reader run at",
     "owner": "sebastian",
     "scope": "repository",
-    "since": "2026-11-10",
-    "value": "high",
+    "since": "2026-11-12",
+    "value": "xhigh",
     "was": [
+      {
+        "value": "high",
+        "until": "2026-11-12"
+      },
       {
         "value": "xhigh",
         "until": "2026-11-10"
