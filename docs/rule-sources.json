@@ -1185,34 +1185,28 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "haz la correcion completa osea todos los modelos de ahora en adelante va a ser Fable 5.2 Alto",
-        "date": "2026-11-10",
-        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
-        "line": 4744
-      },
-      {
-        "quote": "Vamos a unificar y todo va a ser con Fable 5.2 Alto y necesito que lo cambies tanto en la documentacion y lo unifiques en un solo lugar",
-        "date": "2026-11-10",
-        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
-        "line": 5167
-      },
-      {
-        "quote": "Va a tocar utilizar Fable 5.2 en Alto solo para el orquestador y para las sesiones solo Fable 5.2 en Medio",
+        "quote": "Yo creo que nos va a tocar que seguir como antes Opus 5.5 Extra para orquestador y Opus 5.5 Medio para sesiones y subagentes pero todos con Advisor de Fable 5.2 Alto y lo que podemos hacer es depronto tener una sesion de Orquestador Senior que tenga Fable 5.2 Alto para cosas especiales que le coloque el orquestador Opus 5.5 Extra Alto, que te parece así?",
         "date": "2026-11-11",
-        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
-        "line": 11253
+        "session": "812b728f-2f18-43f6-b405-396080689c65",
+        "line": 1444
       },
       {
-        "quote": "Sí, aplícalo",
+        "quote": "Entonces vamos a trabajar como quedamos? con Opus y advisor de fable?",
         "date": "2026-11-11",
-        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
-        "line": 11679
+        "session": "812b728f-2f18-43f6-b405-396080689c65",
+        "line": 2544
+      },
+      {
+        "quote": "Te autorizo todo pero necesito que me pases todo lo que puedas a Opus como habiamos quedado con el advisor de Fable por que o sino nos vamos a comer todo el uso ahora",
+        "date": "2026-11-12",
+        "session": "812b728f-2f18-43f6-b405-396080689c65",
+        "line": 3271
       }
     ],
-    "reading": "Everything Claude the harness starts reads its model and its effort in one place: his \"todos los modelos de ahora en adelante\" and \"lo unifiques en un solo lugar\" of 2026-11-10. That day it was one model at one effort; on 2026-11-11, after the limit of Fable stopped the sessions, he kept the one model and split the effort in two, high for the orchestrator alone and medium for the sessions and the sub-agents. This rule is that one model, which the session records name claude-fable-5-2, for the lead's session as for every other. That the lenses, the double review's reader and the escalation are part of his \"todos los modelos\" is the lead's reading. A host's agent type that sets its own model is not the harness's to set. The model of a Codex review is another vendor's and keeps its own home, rule:review-model.",
-    "accepted": "Typed by him in the lead's chat on 2026-11-10 and 2026-11-11. His \"Sí, aplícalo\" answers the lead's scheme of line 11674 of the same transcript, \"Orquestador: Fable 5.2 alto\" and \"Sesiones y subagentes nuevos: Fable 5.2 medio\". The rest of the reading was not put to him: it is the lead's, in the brief of JH 172 and its notices of 2026-11-11, and his to correct.",
+    "reading": "The home of everything Claude the harness starts moves to claude-opus-5-5, and the effort of the sessions and the sub-agents stays medium. The lead's effort is not moved here: rule:lead-effort also sets the effort of the lenses and of the double review's Claude reader, which he chose at high on 2026-11-11 (question 260), so his Extra for the orchestrator waits for a rule that tells the lead from those reviewers. The Fable 5.2 high advisor and the senior orchestrator on Fable 5.2 high are no rule of the home and this switch does not write them",
+    "accepted": "He states the scheme himself at line 1444, asks at line 2544 to work as agreed with Opus and the Fable advisor, and at line 3271 authorizes it and asks that everything that can be is passed to Opus now",
     "checked": {
-      "date": "2026-11-11",
+      "date": "2026-11-12",
       "by": "command"
     }
   },
