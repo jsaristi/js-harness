@@ -147,12 +147,14 @@ test('sessionFacts gives the effort of the last assistant entry that has one, an
 
 // odd/tasks/advisor-home.md, spec 6: the host writes `advisorModel` on each reply, the session's own model where no
 // advisor was asked; `rules applied` reads it beside the reply's model.
-test('sessionFacts gives the advisorModel of the last reply of its own that has one, and null when none has', () => {
+test('sessionFacts gives the advisorModel of the last reply of its own, and null when that reply names none', () => {
   const advised = { ...reply('a', 2), advisorModel: 'claude-fable-5-2' };
   const plain = { ...reply('b', 3), advisorModel: 'claude-opus-5-5' };
   const agent = { ...reply('c', 4), advisorModel: 'claude-nope-9-9', isSidechain: true };
-  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), advised, plain, reply('d', 5))).advisor, 'claude-opus-5-5');
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), advised, plain)).advisor, 'claude-opus-5-5');
   assert.equal(lib.sessionFacts(transcript(prompt('go', 1), advised, agent)).advisor, 'claude-fable-5-2', 'a sub-agent\'s reply is not the session\'s');
+  // Codex on e3a491a..b985227: an earlier reply's advisor is no evidence of the last one's, which spec 6 calls not known.
+  assert.equal(lib.sessionFacts(transcript(prompt('go', 1), advised, reply('d', 5))).advisor, null);
   assert.equal(lib.sessionFacts(transcript(prompt('go', 1), reply('no advisor here', 2))).advisor, null);
 });
 
