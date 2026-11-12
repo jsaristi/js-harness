@@ -4,22 +4,17 @@ Locator: `odd/tasks/f8-s6-read-surface.md` · Branch: `feat/f8-s6-read-surface` 
 Delivery: chained pull requests of work-unit slices · Test runner: `node --test`
 
 ## State
-Rewritten 2026-11-11 19:38 local, JH 186 (job `d95aafd1`, `claude-fable-5-2` at medium), worktree
-`.claude/worktrees/f8-s6-read-surface`, branch `feat/f8-s6-read-surface`, pushed; pull request 838 is open and
-the lead was told `ready` at 19:36.
-- Done: T1 (`e8b22bb7`), T2 and T2b (`1929fe56`), T3 and T6's documentation (`704495a7`), T5 (`28d64c64`: cases 9
-  and 10 passed 2 of 2 each, L6), the reviews' fixes (`3ea7b35a`, `c7282225`). Three review rounds, each by Codex
-  (correct) and the lenses, answered in L7 and L8. The `read surface` row reads 13,526 of 15,000: Next 1,796 and
-  Decided 7,158 of 10,000, the largest resume head 4,572 (`odd/tasks/templates.md`) of 5,000.
-- Next: wait for the answer to question 268 (`js-harness wait`, in the background, ends on a notice to this
-  session). On "take it out of S6" or "leave it": write the answer in the Log, tick T4 as left out with its
-  reason, set the roadmap's S6 State line, commit, push, then the close: `js-harness summary template --title "JH
-  186 · F8 S6: the read surface"`, `js-harness notify --to orchestrator --kind closed --summary <file>`. On "build
-  it in two steps": T4 as its line says, readers first, with an independent verifier. Every notice says the model.
-- Open: question 268 (the relief by month), recorded for him through the lead; T4 waits on it and no code of T4
-  is written. A known limit, answered in L7: the board's `nextStep` holds the whole State head. Decided's history
-  tails stay where they are (L5). `CLAUDE.md`'s sentence on a feature document's order does not name `## State`,
-  and that file is his to change: the lead was told in the `ready` notice.
+Rewritten 2026-11-11 23:50 local, JH 186 (`claude-fable-5-2` at medium; resumed as `9bdc0205` after the machine
+restarted at 23:24), worktree `.claude/worktrees/f8-s6-read-surface`.
+- Done: all of it. Pull request 838 merged (main `80a0b5ee`) with T1 to T3, T5 and T6; T4, the relief by month,
+  left the step by his answer A to question 268 (L9) and is the roadmap's Later item "The lead's relief file,
+  bounded". The closing documentation (this head, the roadmap's S6 State line, the summary
+  `docs/sessions/2026-11-11-jh-186-f8-s6-the-read-surface.md`) is the branch `docs/f8-s6-close`.
+- Next: nothing of this feature. The session closes with `notify --kind closed` once that branch's pull request
+  is open.
+- Open, none of it this session's: the roadmap's two sections stand at 9,058 of 10,000, over the 90% line, so the
+  row warns: the next cut is Decided's history tails, a reading of his decisions (L5). The board's `nextStep`
+  holds the whole State head (L7). `CLAUDE.md`'s sentence on a feature document's order does not name `## State`.
 
 ## Goal
 What a session reads to start is bounded and held by a check: the roadmap's Next and Decided at most 10k estimated
@@ -152,9 +147,9 @@ orchestrator skill's wording or of `CLAUDE.md`, were one needed, would be asked 
 - [x] T2 (kind: build) the read-surface measure and its row in `check`, test first; Next's settled paragraphs moved to `docs/roadmap-history.md` — S1, S5; inline
 - [x] T2b (kind: build) the measure as the double read corrected it (L4): every resume section counted, a legacy list that only shrinks, a warning from 90%, the history file's links; Decided's history tails left where they are (L5) — S1, S2, S5; inline; `1929fe56`
 - [x] T3 (kind: build) the `## State` head: the template, the resume titles, the hook's and the pause's wording, its bound in the row — S2, S4; inline
-- [ ] T4 (kind: build) the relief by month — S3; held on question 268 (L4), no code written; if it is built: readers first and landed, then the writer, the undo a tested command, an independent verifier
+- [x] T4 (kind: build) the relief by month — S3; not built: taken out of S6 by his answer A to question 268 (L9), no code written, now the roadmap's Later item "The lead's relief file, bounded"; inline
 - [x] T5 (kind: verify) incident cases 9 and 10, two trials each, after the eval bar is read; the measure recorded — S5; inline
-- [ ] T6 (kind: docs) the roadmap's S6 state, the S5 and S7 lines, SPEC's row; reviews, pull requests, the summary — S6; inline
+- [x] T6 (kind: docs) the roadmap's S6 state, the S5 and S7 lines, SPEC's row; reviews, pull requests, the summary — S6; inline
 
 ## Log
 - L1 (2026-11-11, the brief from JH ORQ, `~/.js-harness/background/briefs/2026-11-11T23-35-51-122Z-9eba72ee.md`):
@@ -289,3 +284,16 @@ orchestrator skill's wording or of `CLAUDE.md`, were one needed, would be asked 
   said "that budget" where no head budget was named; it now says "the head's budget of 5000". With it, a folder
   `odd/tasks` that is there and cannot be listed fails the row as an unreadable file does. This is the third
   review round of the slice, the last the protocol allows; nothing real stays open in it.
+- L9 (2026-11-11 23:42 local, his answer to question 268, carried by the lead and read with `js-harness sessions
+  --quote 812b728f-2f18-43f6-b405-396080689c65 2517`): answer (tapped) "A: sacarlo de S6 (Recomendada)". It covers
+  closing S6 with the other three changes and writing the relief down as work of its own, its design reviewed
+  before any code; it does not authorize building it or touching the lead's relief file. Done here: T4 is ticked as
+  not built, the roadmap's S6 State line says done with three of four changes, and Later gains "The lead's relief
+  file, bounded". That entry takes the roadmap's two sections to 9,058 of 10,000, past the row's 90% line: the row
+  passes and warns (`checkReadSurface`), as it was built to.
+  - The close, against the depth pass: item 3's specs 1, 2, 4, 5 and 6 are met (L5, L6); spec 3 left the step by
+    his answer. Item 4's verdict "supports" held for those five and was refuted for spec 3 by the double read
+    (L4), which is what question 268 put to him. Pull request 838 merged at 2026-11-12T00:45:53Z, main `80a0b5ee`
+    (`gh pr view 838`).
+  - The machine restarted at 23:24 local and ended the job and its wait; the lead resumed the session, and the
+    worktree was checked against this document and git before anything was written: clean, at `bff77615`, pushed.

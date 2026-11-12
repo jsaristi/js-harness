@@ -711,10 +711,11 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **Probe and pass:** the read-surface measure at most 15k (13,413 at S0); incident cases 9 and 10 no
   worse.
 - **Cost:** about $3, two cases.
-- **State (2026-11-11):** in progress (JH 186, `odd/tasks/f8-s6-read-surface.md`). Built: the `read surface`
-  row of `check` with its two budgets, Next cut from 7,494 to 1,712 estimated tokens (the settled paragraphs
-  moved to `docs/roadmap-history.md`), the `## State` head in the contract template and in what the resume
-  hook, the pause and the board read. Open: the two incident cases; the relief by month waits on question 268.
+- **State (2026-11-12):** done, PR 838 (JH 186, `odd/tasks/f8-s6-read-surface.md`), with three of its four
+  changes: the `read surface` row of `check` reads 13,526 of 15,000, Next went from 7,494 to 1,796 estimated
+  tokens, and the `## State` head is in the contract template and in what the resume hook, the pause and
+  the board read; cases 9 and 10 passed 2 of 2 each. The relief by month left the step by his answer A to
+  question 268 (2026-11-11) and is its own work under Later.
 
 ### S7 Topology and routing
 - **Changes:** the lead cut at a phase's close or after two compactions; Haiku 5.5 helpers with
@@ -930,6 +931,10 @@ of the first version.
 - [ ] Stalled-session detection: the board, the lead's watch and its heartbeat name a work session that holds
   handed work and has made no commit, notice or gate for an hour. On 2026-10-16 three sessions sat five to six
   hours before anyone noticed. Tracked in `odd/tasks/stalled-sessions.md`.
+- [ ] The lead's relief file, bounded (1.72 MB on 2026-11-11; November alone 235 KB in 11 days, so a file a
+  month does not give a head the lead reads at once). Taken out of F8's S6 by his answer A to question 268:
+  its design is reviewed before any code, with readers landed before the writer, an undo that is a tested
+  command and an independent verifier. Source: `odd/tasks/f8-s6-read-surface.md`, L4 and L9.
 - [ ] Shorter resume sections in feature documents. The "Next step" and "State for a resume" sections
   have grown into history: 381 lines in `rule-hierarchy.md` and 1,036 lines in `session-channel.md`
   at 64933f6. Since `#332` a resumed session reads them through named ranges, but nothing bounds
