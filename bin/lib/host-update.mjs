@@ -223,7 +223,7 @@ export function hostUpdateRow(versions, reviewed, now = () => new Date(), projec
     read.change = change;
     read.fix.claude = [
       // The review is the host watch session's (F8's S9): any other session that reads this row tells the lead.
-      `${change} since the last review; a host watch session reviews it and the steps below are that session's (js-harness host-watch brief prints its brief, and js-harness loop heartbeat names it to the lead): any other session tells the lead and records no review:`,
+      `${change} since the last review; a host watch session reviews it and the steps below are that session's (in the harness's own repository, node workshop/js-harness-workshop.mjs host-watch brief prints its brief, and the workshop's heartbeat, node workshop/js-harness-workshop.mjs loop heartbeat, names it to the lead): any other session tells the lead and records no review:`,
       ...(reviewed.desktop !== versions.desktop ? [`read ${DESKTOP_CHANGELOG} from ${reviewed.desktop} to ${versions.desktop}`] : []),
       ...(versions.code && reviewed.code && reviewed.code !== versions.code ? [`read the Claude Code CHANGELOG (${CODE_CHANGELOG}) from ${reviewed.code} to ${versions.code}`] : []),
       'check that the harness hooks in ~/.claude/settings.json still run',
@@ -258,7 +258,7 @@ export function hostUnreadableRow(versions, now = () => new Date()) {
       ...row.fix,
       claude: [
         `${UNREADABLE_RECORD}; with no version before it a host watch session does not see it, so the session that reads this tells the lead, who has ${read} reviewed:`,
-        `read ${DESKTOP_CHANGELOG} and the Claude Code CHANGELOG (${CODE_CHANGELOG}) since the versions the harness was last planned on (js-harness host-watch draft --from-desktop <that version> --from-code <that version> drafts their spans)`,
+        `read ${DESKTOP_CHANGELOG} and the Claude Code CHANGELOG (${CODE_CHANGELOG}) since the versions the harness was last planned on (in the harness's own repository, node workshop/js-harness-workshop.mjs host-watch draft --from-desktop <that version> --from-code <that version> drafts their spans)`,
         'check that the harness hooks in ~/.claude/settings.json still run',
         'then record the review: js-harness doctor --host-reviewed',
       ],

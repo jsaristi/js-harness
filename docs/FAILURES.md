@@ -1089,6 +1089,16 @@ thread's name, so a listener was left alone as "not engram".
   named right is not known. It can be reproduced only on Linux: a run there in which the probe
   names a Node listener and the engram binary by what they are would prove a fix
 
+### live-board-read-off-project
+`sessions live` run from a folder that holds no project counted that folder's empty record and answered "0 rows wait
+for the live board", exit 0, so a board that was behind read as current.
+- Class: tool
+- Seen: 2026-11-12 — relief file, line 2611 (the lead's own) — at 00:19 the lead ran `sessions live` from its
+  scratchpad folder, got 0 rows and told him the board was current while eight rows (2769 to 2776 of the record)
+  waited since 23:37; sent from D:/js-harness at 01:19
+- Control: check — bin/sessions-live.test.mjs — "a folder that holds no project, with no sessions folder, is said and
+  exits 1: no row is counted and nothing is written" — since 2026-11-12
+
 ### lock-folder-left
 The gate lock left an empty folder under his home after every run, and `uninstall` did not remove
 it.
@@ -1797,6 +1807,17 @@ already stale.
 - Was: line — AGENTS.md — "End each reply with one state" — since 2026-10-09; replaced when PR 510
   (2026-10-23) moved the states into protocol 2 of js-harness-protocols, and PR 560 (8b525bce) left
   AGENTS.md only the pointer "End each reply in one of the five states of `js-harness-protocols`"
+
+### start-took-host-model
+A work session started with no model named ran on the host's default, not on the model the home gave, and nobody saw
+it: `sessions start` passed the claude CLI a model only when the call named one.
+- Class: rule-not-acting
+- Seen: 2026-11-11 — `~/.js-harness/background/sessions.jsonl`, the `started` records of 21:39Z and 22:38Z — the lead
+  started JH 185 and JH 187 with `"model": null` while `session-model` gave claude-fable-5-2; their transcripts
+  (8126fdd7, bba8341f) hold `claude-opus-5-5` on every reply (253 and 224 lines), read on 2026-11-12. The fix,
+  1bef0243, reached main 61 minutes after the first start (pull request 837, 22:55Z)
+- Control: check — bin/sessions-background.test.mjs — "a start that names no model or effort takes the home" — since
+  2026-11-11
 
 ### status-report-without-facts
 The status report reached him without the migration's share or whether the last stretch met its goals, and with

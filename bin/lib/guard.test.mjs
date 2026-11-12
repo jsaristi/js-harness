@@ -84,8 +84,9 @@ test('in this repository a sub-agent may run on the home\'s model, on its short 
 test('a model the home does not give is refused, and the refusal names the rule and what it gives', () => {
   const allowed = allowedModels(HERE);
   // A short name no rule declares is refused like any other model: on 2026-11-10 `fable` gave claude-fable-5-1 on
-  // cli 2.1.319, not the Fable 5.2 the rules name.
-  for (const model of ['sonnet', OFF_MODEL, 'inherit', 'null', 'undefined', ...['haiku', 'opus', 'fable'].filter((name) => !SHORT_NAMES.includes(name))]) {
+  // cli 2.1.319, not the Fable 5.2 the rules name. Each short name is tried only where no rule declares it, `sonnet`
+  // too: a switch may give the home any of them (the reliability lens on 6371924c).
+  for (const model of [OFF_MODEL, 'inherit', 'null', 'undefined', ...['sonnet', 'haiku', 'opus', 'fable'].filter((name) => !SHORT_NAMES.includes(name))]) {
     const reason = modelRefusal({ model }, allowed);
     assert.match(reason, new RegExp(`"${model}"`), model);
     for (const rule of MODEL_RULES) assert.ok(reason.includes(`${rule.id} gives `) && reason.includes(rule.value), `${model}: ${reason}`);

@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { recordedFolders } from './lib/background.mjs';
 import { readNotices, recordedQuestions } from './lib/channel.mjs';
 import { batchesOf, CHECK_MINUTES, CURSOR_SCHEMA, cursorAfter, cursorFrom, cursorOf, liveCursorPath, pendingRows, positionOf, rowOf } from './lib/live-rows.mjs';
 import { listCommandLines } from './lib/process-list.mjs';
@@ -30,8 +31,8 @@ export const LIVE_USAGE = [
   '         quiet stretch from a record nobody sent. The check holds 45 minutes, the lead\'s heartbeat; with --resting,',
   '         the run before the lead\'s resting wait, it holds that wait (wait-for) and the board reads as resting.',
   '         --url records the board\'s link with the cursor, and every run prints it back. Only a Claude session sends',
-  '         a batch: no command reaches an artifact\'s database. Exit 1 when the record or a batch file cannot be read,',
-  '         2 for a usage error.',
+  '         a batch: no command reaches an artifact\'s database. Exit 1 when the folder has no sessions folder (it holds',
+  '         no project) or the record or a batch file cannot be read, 2 for a usage error.',
 ].join('\n');
 
 class LiveArgError extends Error {}
@@ -136,6 +137,18 @@ export async function sessionsLiveMain(argv, {
   const root = mainCheckout(run, path.resolve(parsed.cwd ?? defaultCwd));
   const slug = projectSlug(root);
   const home = harnessHome({ given: parsed.home, env, cwd: defaultCwd, homedir });
+  // A folder with no sessions folder, and no session `sessions start` recorded for it, holds no project, as `sessions`
+  // says: its record is empty, and "0 rows wait" would read as a board that is current (the lead's scratch folder,
+  // 2026-11-12, while eight rows waited). A project whose sessions all ran in worktrees has its recorded ones.
+  const sessionsFolder = path.join(env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'), 'projects', slug);
+  try {
+    fs.readdirSync(sessionsFolder);
+  } catch (err) {
+    if (recordedFolders(home, root).held === 0) {
+      stderr(`js-harness sessions live: no sessions folder for ${root}: ${sessionsFolder} (${err.code ?? err.message}): this folder holds no project, so no row is counted; run it from the project's folder, or give --cwd <it>`);
+      return 1;
+    }
+  }
   const cursorFile = liveCursorPath(home, slug);
   let saved;
   try {

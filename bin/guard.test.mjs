@@ -17,6 +17,10 @@ import { wrappedCommitHint } from './lib/wrapped-commit.mjs';
 
 const AT_1444 = new Date(2026, 9, 14, 14, 44, 30);
 
+// A short name the home does not declare, picked and never written alone: a switch may give the home's model any of
+// them as its alias, and a test that took `sonnet` as off the home would then fail (the reliability lens on 6371924c).
+const OFF_ALIAS = ['sonnet', 'haiku', 'opus', 'fable'].find((name) => !RULES.some((rule) => rule.alias === name));
+
 /** Runs the hook on `payload` (an object, or a raw text) in a project whose rules file reads `rulesText` (null for
  * none), with the machine's gate lock held by `held` (null for free), and returns `{ code, out, err }`. */
 async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, timed = {}, index = null, configDir, exists = () => false, baseContains, app, env = {}, home = path.join(os.tmpdir(), 'js-harness-guard-test-no-home') } = {}) {
@@ -76,10 +80,10 @@ test('a command typed into the terminal of a project that does not declare the r
 });
 
 test('an Agent call on a model no rule gives is denied in this repository, and one on the model of a rule or on none passes', async () => {
-  const refused = await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model: 'sonnet' } });
+  const refused = await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model: OFF_ALIAS } });
   assert.equal(refused.code, 0);
   assert.equal(denied(refused).permissionDecision, 'deny');
-  assert.match(denied(refused).permissionDecisionReason, /"sonnet"/);
+  assert.match(denied(refused).permissionDecisionReason, new RegExp(`"${OFF_ALIAS}"`));
   for (const model of [RULES.find((rule) => rule.id === 'session-model').value, undefined]) {
     assert.deepEqual(await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model } }), { code: 0, out: '', err: '' }, String(model));
   }
@@ -93,7 +97,7 @@ test('an Agent call at another effort than the sessions\' level is denied in thi
   assert.equal(denied(refused).permissionDecision, 'deny');
   assert.match(denied(refused).permissionDecisionReason, /not the level of the rule session-effort/);
   // A model off the home is said first: one refusal a call.
-  assert.match(denied(await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model: 'sonnet', effort: 'max' } })).permissionDecisionReason, /"sonnet"/);
+  assert.match(denied(await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model: OFF_ALIAS, effort: 'max' } })).permissionDecisionReason, new RegExp(`"${OFF_ALIAS}"`));
   for (const effort of [held, undefined]) {
     assert.deepEqual(await hook({ tool_name: 'Agent', cwd: 'D:/project', tool_input: { prompt: 'p', model, effort } }), { code: 0, out: '', err: '' }, String(effort));
   }
