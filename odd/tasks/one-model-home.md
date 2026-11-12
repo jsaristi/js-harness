@@ -354,11 +354,21 @@ S7, amends specs 1, 5, 7 and 8 and the task T4 after it, and wins over both:
 - [x] T6 (kind: build) (6, 7) Pull request 3: `rules applied` lists the sessions off the home from the app's records, the record of starts, the last replies and the jobs; the `doctor` row with his settings read. Then the list goes to the lead in one notice. Route: inline. Commits: 6df6a4ba, and the `doctor` row in the commit that carries this line.
 - [x] T7 (kind: build) (8, 10) Pull request 4, branch `feat/model-home-switch`: the runner of `rules change` writes several rules in one pass and refuses a home's value alone; `rules switch` with its probe, the agent file, `--dry-run` and its printout. Route: one writer sub-agent (the context backstop), checked inline. Commits: d37308a2, 94e25d35, and e3cc2ee4 for Codex's two findings.
 - [x] T8 (kind: docs) (4, 9, 10) Pull request 4: the section "A new model" of the orchestrator skill and its test; the convention test over the texts; README, `docs/ROADMAP.md`'s Decided rows, `docs/future-model.md`'s pointer, the help texts and the lead's start line name the rule. Route: inline. Commit: 8a2da3c0.
-- [ ] T9 (kind: verify) (1-10) Each pull request: gate, Codex and the pertinent lenses, one at a time; ready; `js-harness notify --to orchestrator --kind ready --pr <n>`; the next one starts from main once it lands. Then the summary and the closed notice. Route: inline.
-- [ ] T10 (kind: build) (8, 9) Pull request 5, branch `feat/model-home-fixes` stacked on pull request 4's: the fixes of the lenses' findings on pull request 4 (L30), with what his answer to question 269 asks of the Codex probe, and the question to him on the lead's never-commit exception. Its own Codex review and lenses. Route: one writer sub-agent (the context backstop), checked inline. Commit: c386c2e5, the five code fixes, and 7ebf02e8, his answer to question 270; 269 asked nothing of the code.
-- [ ] T11 (kind: build) (8) The tests hold for any value of the home: the first real switch's commit was refused by three tests whose fixtures take `claude-opus-5-5` as a model off the home. Branch `fix/home-tests-any-home`. Route: one writer sub-agent (the context backstop), checked inline. Commit: the one that carries this line.
+- [x] T9 (kind: verify) (1-10) Each pull request: gate, Codex and the pertinent lenses, one at a time; ready; `js-harness notify --to orchestrator --kind ready --pr <n>`; the next one starts from main once it lands. Then the summary and the closed notice. Route: inline.
+- [x] T10 (kind: build) (8, 9) Pull request 5, branch `feat/model-home-fixes` stacked on pull request 4's: the fixes of the lenses' findings on pull request 4 (L30), with what his answer to question 269 asks of the Codex probe, and the question to him on the lead's never-commit exception. Its own Codex review and lenses. Route: one writer sub-agent (the context backstop), checked inline. Commit: c386c2e5, the five code fixes, and 7ebf02e8, his answer to question 270; 269 asked nothing of the code.
+- [x] T11 (kind: build) (8) The tests hold for any value of the home: the first real switch's commit was refused by three tests whose fixtures take `claude-opus-5-5` as a model off the home. Branch `fix/home-tests-any-home`. Route: one writer sub-agent (the context backstop), checked inline. Commit: 6371924c (pull request 842).
 
 ## Next step
+2026-11-12 01:44, after the host compacted this session at 01:43: **the feature is closed.** Everything it built is
+in main: 842 (T11, merge `a754c3a2`) after 840 (`7fdcdc46`), and the lead's first real switch landed over it as 843
+(`ad9fd2f0`: `session-model` is `claude-opus-5-5`). T9 to T11 are ticked. The session summary is
+`docs/sessions/2026-11-11-jh-172-one-home-for-the-model-and-the-effort-and-the-easy-sw.md`, on the branch
+`docs/one-model-home-close` with this paragraph; its "Left" lists what stays open, each with the lead: Codex's home is
+not safe to switch (three tests), the lens's suggestion on `bin/lib/guard.test.mjs:88`, the advisor's missing home,
+the eight exceptions that are the user's. What remains of this session: the pull request of that branch, `ready`,
+and `notify --kind closed --summary` once main holds the file. The wait `js-harness wait --notice-to 172` runs in
+the background and ends by itself.
+
 State at 2026-11-11 12:15 local, after the lead's message resumed this session (11:20) and the host compacted it
 (11:24): points 1 to 5 of the list below are done, each a commit on `rule/one-model-home`, local, not pushed and not
 reviewed. Main was merged twice (`275b707b` for pull request 826, `5deec5b6` for 827, main `9b2de655`), with no
