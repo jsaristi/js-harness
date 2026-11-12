@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { recordedFolders } from './lib/background.mjs';
 import { readNotices, recordedQuestions } from './lib/channel.mjs';
 import { batchesOf, CHECK_MINUTES, CURSOR_SCHEMA, cursorAfter, cursorFrom, cursorOf, liveCursorPath, pendingRows, positionOf, rowOf } from './lib/live-rows.mjs';
 import { listCommandLines } from './lib/process-list.mjs';
@@ -135,16 +136,19 @@ export async function sessionsLiveMain(argv, {
   }
   const root = mainCheckout(run, path.resolve(parsed.cwd ?? defaultCwd));
   const slug = projectSlug(root);
-  // A folder with no sessions folder holds no project, as `sessions` says: its record is empty, and "0 rows wait" would
-  // read as a board that is current (the lead's scratch folder, 2026-11-12, while eight rows waited).
+  const home = harnessHome({ given: parsed.home, env, cwd: defaultCwd, homedir });
+  // A folder with no sessions folder, and no session `sessions start` recorded for it, holds no project, as `sessions`
+  // says: its record is empty, and "0 rows wait" would read as a board that is current (the lead's scratch folder,
+  // 2026-11-12, while eight rows waited). A project whose sessions all ran in worktrees has its recorded ones.
   const sessionsFolder = path.join(env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'), 'projects', slug);
   try {
     fs.readdirSync(sessionsFolder);
   } catch (err) {
-    stderr(`js-harness sessions live: no sessions folder for ${root}: ${sessionsFolder} (${err.code ?? err.message}): this folder holds no project, so no row is counted; run it from the project's folder, or give --cwd <it>`);
-    return 1;
+    if (recordedFolders(home, root).held === 0) {
+      stderr(`js-harness sessions live: no sessions folder for ${root}: ${sessionsFolder} (${err.code ?? err.message}): this folder holds no project, so no row is counted; run it from the project's folder, or give --cwd <it>`);
+      return 1;
+    }
   }
-  const home = harnessHome({ given: parsed.home, env, cwd: defaultCwd, homedir });
   const cursorFile = liveCursorPath(home, slug);
   let saved;
   try {

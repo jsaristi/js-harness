@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { appendRecord } from './lib/background.mjs';
 import { appendNotice, newNotice, recordPath } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { liveCursorPath, sessionsLiveMain } from './sessions-live.mjs';
@@ -75,6 +76,17 @@ test('a folder that holds no project, with no sessions folder, is said and exits
   assert.equal(fs.existsSync(liveCursorPath(dirs.home, projectSlug(scratch))), false, 'no cursor');
   // The project's own folder still counts its rows.
   assert.match((await live([], dirs)).out, /^1 row waits/m);
+}));
+
+// Codex on fcdf728..df3462a: a project whose sessions all ran in worktrees has no sessions folder for its main
+// checkout, and `sessions` reads it all the same from the sessions `sessions start` recorded for it.
+test('a project with no sessions folder whose sessions start recorded a session still counts its rows', withFolders(async (dirs) => {
+  note(dirs.home, dirs.slug, '2026-10-27T05:00:00.000Z', 'step 2 done');
+  fs.rmSync(path.join(dirs.claude, 'projects', dirs.slug), { recursive: true });
+  appendRecord(dirs.home, { event: 'started', at: '2026-10-27T04:00:00.000Z', id: 'dddddddd', sessionId: 'dddddddd-1111-4111-8111-111111111111', title: 'JH 70 · docs', root: dirs.project, cwd: dirs.project, worktree: 'docs', worktreePath: path.join(dirs.project, '.claude', 'worktrees', 'docs') });
+  const counted = await live([], dirs);
+  assert.equal(counted.code, 0, counted.err);
+  assert.match(counted.out, /^1 row waits/m);
 }));
 
 test('--out writes one batch file a document, prints the ArtifactData call and --sent moves the cursor', withFolders(async (dirs) => {
