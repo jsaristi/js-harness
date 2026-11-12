@@ -355,6 +355,29 @@ test('a start that names a model other than the home\'s is refused, a lead\'s to
   assert.equal(sessionStartRefusal({ initiation: 'offer', title: 'T9', model: 'opus' }, HERE), null);
 });
 
+// odd/tasks/advisor-home.md, spec 4: an advisor is held as the model is, where the project declares its rule.
+const ADVISOR = RULES.find((rule) => rule.id === 'advisor-model').value;
+
+test('a start that names an advisor other than the home\'s is refused, and one that names none or the home\'s passes', () => {
+  const at = { ...BRIEF, effort: HELD };
+  for (const advisor of [undefined, null, '', ADVISOR, `${ADVISOR}[1m]`]) assert.equal(sessionStartRefusal({ ...at, advisor }, HERE, { cli: true }), null, String(advisor));
+  // A short name is no id (on 2026-10-31 `--advisor fable` gave claude-fable-5-1), and another full id is not the home's.
+  for (const advisor of ['fable', 'opus', OFF_MODEL, MODEL === ADVISOR ? 'claude-opus-5-5' : MODEL]) {
+    assert.equal(sessionStartRefusal({ ...at, advisor }, HERE, { cli: true }), `js-harness sessions start names the advisor "${advisor}", `
+      + `not the one of the rule advisor-model: ${ADVISOR}. Pass --advisor ${ADVISOR}, or none; another advisor is his to set.`, advisor);
+  }
+  // A lead's start is held to it too, and the model is said before the advisor.
+  assert.match(sessionStartRefusal({ ...BRIEF, effort: LEAD, advisor: 'fable' }, HERE, { lead: true, cli: true }), /names the advisor "fable"/);
+  assert.match(sessionStartRefusal({ ...at, model: 'opus', advisor: 'fable' }, HERE, { cli: true }), /names the model "opus"/);
+  // The advisor is said before the effort.
+  assert.match(sessionStartRefusal({ ...BRIEF, advisor: 'fable' }, HERE, { cli: true }), /names the advisor "fable"/);
+  // Where the advisor's rule is not declared no advisor is refused, and the rest is still held.
+  const without = writeRules(RULES.filter((rule) => rule.id !== 'advisor-model'));
+  assert.equal(sessionStartRefusal({ ...at, advisor: 'fable' }, without, { cli: true }), null);
+  assert.match(sessionStartRefusal({ ...BRIEF, advisor: 'fable' }, without, { cli: true }), /names no effort/);
+  assert.equal(sessionStartRefusal({ ...at, advisor: 'fable' }, null, { cli: true }), null);
+});
+
 test('a refusal is the PreToolUse deny of the hooks contract, with its reason', () => {
   assert.deepEqual(denial('why'), {
     hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'why' },

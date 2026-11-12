@@ -767,6 +767,13 @@ test('sessions start --resume holds to the effort rule, needs a writable record,
   const started = js(world, ['sessions', 'start', '--title', 'JH 2 · thing', '--brief', world.brief, '--effort', SESSION_EFFORT, '--model', 'opus']);
   assert.equal(started.code, 2);
   assert.match(started.stderr, /names the model "opus"/);
+  // odd/tasks/advisor-home.md, spec 4: and so is an advisor other than the home's, a short name included.
+  const advisor = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--advisor', 'fable']);
+  assert.equal(advisor.code, 2);
+  assert.ok(advisor.stderr.includes(`names the advisor "fable", not the one of the rule advisor-model: ${SESSION_ADVISOR}. Pass --advisor ${SESSION_ADVISOR}, or none;`), advisor.stderr);
+  const startedAdvisor = js(world, ['sessions', 'start', '--title', 'JH 2 · thing', '--brief', world.brief, '--advisor', 'fable']);
+  assert.equal(startedAdvisor.code, 2);
+  assert.match(startedAdvisor.stderr, /names the advisor "fable"/);
   // The guard judges nothing of a call with no brief, so a resume refuses an empty one itself, as a start does: with
   // one, a resume ran at any level and on any model (the verifier's finding of 2026-11-11).
   const emptyBrief = `${world.brief}.empty`;

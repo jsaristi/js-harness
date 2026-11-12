@@ -37,7 +37,8 @@ export const START_USAGE = [
   '         A start that names no --model or no --effort takes those rules\', and so does a resume, whatever its record holds.',
   '         A run of claude that does not finish (a timeout) is looked for in claude agents and recorded when it started.',
   '         --advisor passes claude --advisor <model> (a stronger model the session consults); a start that names none takes the',
-  '         rule advisor-model\'s, where it is declared, and so does a resume before its record\'s; it is recorded with the start.',
+  '         rule advisor-model\'s, where it is declared, and so does a resume before its record\'s, and one that is named is',
+  '         that rule\'s, as a model is; it is recorded with the start.',
   '         --resume resumes a recorded session whose job stopped (a restart ends every one) with claude --bg --resume, in a',
   '         new job in its folder, under its title (its model, effort and advisor too, where the rules declare none), and',
   '         records the new job; one that still runs is refused.',
@@ -175,7 +176,7 @@ export function sessionsStartMain(argv, given = {}) {
   const model = parsed.model ?? taken.model;
   const effort = parsed.effort ?? taken.effort;
   const advisor = parsed.advisor ?? taken.advisor;
-  const refusal = sessionStartRefusal({ prompt: brief, effort, model }, rules, { cli: true, lead })
+  const refusal = sessionStartRefusal({ prompt: brief, effort, model, advisor }, rules, { cli: true, lead })
     ?? sessionTitleRefusal({ title: parsed.title }, rules, project, 'js-harness sessions start');
   if (refusal !== null) {
     stderr(refusal);
@@ -344,7 +345,7 @@ function resumeStart(parsed, deps) {
   // The advisor as the model: the home's before the record's (odd/tasks/advisor-home.md, spec 3), so a session started
   // with none before the rule is resumed with the home's.
   const advisor = parsed.advisor ?? taken.advisor ?? entry.advisor ?? undefined;
-  const refusal = sessionStartRefusal({ prompt: text, effort, model }, rules, { cli: true, lead });
+  const refusal = sessionStartRefusal({ prompt: text, effort, model, advisor }, rules, { cli: true, lead });
   if (refusal !== null) return refuse(refusal, 2);
   const unwritable = recordUnwritable(home);
   if (unwritable !== null) return refuse(`${unwritable}, so nothing was resumed`);
