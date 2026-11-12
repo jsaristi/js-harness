@@ -161,7 +161,12 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     const root = rootOf();
     const rules = rulesTextOf(root, readFile);
     // A lead's title holds the start to rule:lead-effort, any other to rule:session-effort; both to rule:session-model.
-    const { leadTitle } = await import('./lib/session-title-guard.mjs');
+    const { leadTitle, seniorTitle } = await import('./lib/session-title-guard.mjs');
+    // A senior (odd/tasks/senior-orchestrator.md) starts only by the command, which holds it to its own model with no
+    // advisor; this tool would hold it to the home's.
+    if (seniorTitle(input.title)) {
+      return `js-harness guard: start_session does not start a senior ("${input.title}"): start it with js-harness sessions start --title "${input.title}", which holds it to rule:senior-model with no advisor.`;
+    }
     const lead = leadTitle(input.title);
     const start = sessionStartRefusal(input, rules, { lead });
     if (start !== null) return start;

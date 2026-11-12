@@ -83,13 +83,15 @@ function parseArgs(argv) {
 
 /** How a session of the plan is named in a list: its title, or the start of its id when it has none. */
 const nameOf = (one) => one.title ?? `session ${one.id.slice(0, 8)}`;
+// A senior (odd/tasks/senior-orchestrator.md, D6) takes no notice: the lead wakes it by a message, so it is unreached.
+const reached = (one) => one.role !== null && one.role.role !== 'senior';
 
 /** The orchestrator's note: the sessions open before the boot, whom to wake, and those no note reaches. A list
  * too long for a notice names as many as fit and says how many it left out; the command that prints them all
  * always ends it, since a session left out of the list stays idle until someone messages it. */
 function listText(plan, bootAt) {
-  const noted = plan.filter((one) => one.role !== null).map(nameOf);
-  const unreached = plan.filter((one) => one.role === null).map(nameOf);
+  const noted = plan.filter(reached).map(nameOf);
+  const unreached = plan.filter((one) => !reached(one)).map(nameOf);
   const head = `The machine booted at ${bootAt}: ${plan.length} session${plan.length === 1 ? ' was' : 's were'} open before it.`;
   const tail = ` js-harness wake --boot-time ${bootAt} prints what to tell each.`;
   const text = (notedCount, unreachedCount) => {
@@ -97,7 +99,7 @@ function listText(plan, bootAt) {
     return [
       head,
       notedCount === 0 ? '' : ` Each of these has its note, told on its next tool call; wake each with send_message: ${noted.slice(0, notedCount).join('; ')}.`,
-      unreachedCount === 0 ? '' : ` No note reaches (no role in the title): ${unreached.slice(0, unreachedCount).join('; ')}.`,
+      unreachedCount === 0 ? '' : ` No note reaches (no role in the title, or a senior's): ${unreached.slice(0, unreachedCount).join('; ')}.`,
       left === 0 ? '' : ` And ${left} more.`,
       tail,
     ].join('');
@@ -248,7 +250,7 @@ export async function wakeMain(
   }
   const from = { host: hostname(), id: null, source: 'wake', title: 'js-harness wake' };
   const notes = [
-    ...plan.filter((one) => one.role !== null).map((one) => ({ to: one.role.role === 'orchestrator' ? 'orchestrator' : String(one.role.number), text: wakeText(one, bootAt) })),
+    ...plan.filter(reached).map((one) => ({ to: one.role.role === 'orchestrator' ? 'orchestrator' : String(one.role.number), text: wakeText(one, bootAt) })),
     { to: 'orchestrator', text: listText(plan, bootAt) },
   ];
   // Every notice is made before the first is written: one the record would refuse must not leave the boot

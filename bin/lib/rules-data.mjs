@@ -652,6 +652,14 @@ export const RULES = [
     ]
   },
   {
+    "id": "senior-model",
+    "subject": "the model a senior session runs on, titled <code> SR · <purpose>, which the lead starts with js-harness sessions start and sends tasks needing more intelligence or complexity",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-11-12",
+    "value": "claude-fable-5-2"
+  },
+  {
     "id": "sensor-silence",
     "subject": "how long one sensor of the gate may write nothing before it is stopped and the commit refused",
     "owner": "project",

@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `dd5fb6b7da4e`. In force: 72 (44 of Sebastián, 28 of the project). Retired: 8.
+Hash `f2f0c19d8e7f`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 8.
 
 ## Sebastián's
 
@@ -183,6 +183,12 @@ About how many changed lines a commit that will be reviewed stays under, a file 
 A rule he gives is cemented in the harness where something acts on it, never only in memory; an output he sees again and again, as a template of five parts: "- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`CLAUDE.md\` or \`AGENTS.md\`, a protocol."
 - Home: `bin/lib/protocols-skill.mjs`.
 - Since 2026-10-29. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, 2026-10-26, 2026-10-26, 2026-10-26, 2026-10-28, 2026-10-28, checked by the command on 2026-10-29.
+
+### senior-model
+The model a senior session runs on, titled <code> SR · <purpose>, which the lead starts with js-harness sessions start and sends tasks needing more intelligence or complexity: claude-fable-5-2.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: `bin/lib/model-home.mjs`.
+- Since 2026-11-12. Row: reports. Source: his words of 2026-11-11, 2026-11-12, checked by the command on 2026-11-12.
 
 ### session-effort
 The effort every work session and every sub-agent the harness starts runs at; the lead's session runs at rule:lead-effort, and the lenses and the double review's Claude reader at rule:lens-effort: medium.

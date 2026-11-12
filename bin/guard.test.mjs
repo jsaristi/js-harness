@@ -693,3 +693,10 @@ test('a configured window is the one a stated share is checked against, ahead of
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// odd/tasks/senior-orchestrator.md: a senior starts only by js-harness sessions start, never by the app's tool.
+test('a start_session titled as a senior is denied, naming js-harness sessions start, whatever it asks', async () => {
+  const tool_input = { initiation: 'user_asked', title: 'JH SR · a design', prompt: 'Design it.', background: 'x'.repeat(80), effort: SESSION_EFFORT };
+  const refused = await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input });
+  assert.match(denied(refused).permissionDecisionReason, /does not start a senior.*js-harness sessions start --title "JH SR · a design"/s);
+});

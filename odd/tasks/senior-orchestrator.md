@@ -5,16 +5,21 @@ JH 192, slice 3 of the lead's brief. Delivery: this design, then one pull reques
 (`rules change` runs only on a `rule/` branch, `bin/lib/rules-change-run.mjs:170`). Runner: `node --test`.
 
 ## State
-BLOCKED until `rule/lead-effort-split` lands or is dropped: `rules change` allows one open rule change at a time.
-The work below is saved as `jh192-senior-wip.patch` and `jh192-senior-model-change.json` in the shared notes folder
-(local_fcef3509...); apply the patch with `git apply`, then `js-harness rules change senior-model --with <changed
-files>` with that JSON on stdin. Design rewritten after its double review (read 134b8277: Claude 15 findings, Codex
-4, all taken). In the tree, not committed: the title contract (`TITLE_SHAPE` takes `SR`, `roleOfTitle` gives role `senior`, `roleNamed` takes
-`senior`/`SR`, `projectCode` refuses `SR`), with its tests; 678 tests pass. It is not committed alone because an SR
-title would then pass the title guard on the home's model; it lands with T3's guard. Next: the two rules
-(`rules change senior-model --with ...`, value `claude-fable-5-2`; `senior-effort` high, in its own commit after) with
-their first reader, the start and the resume (`sessionStartHome` by role in `bin/lib/guard.mjs:149`,
-`bin/sessions-background.mjs:174-181` and `:343-351`), then the guard's starter and start_session refusals.
+UNBLOCKED: PR 851 landed (main a647c954), merged here. The WIP patch is applied and staged, not committed (the hook's
+check refuses it until senior-model is declared). The role sweep (explorer, 2026-11-12 ~14:05) found 13 functional and
+7 wording faults for an SR title; D6 cuts most: `roleNamed` does NOT take SR, so `notify --to SR` and
+`sessions --address SR` stay refused and `isNotice`, inbox, wait, notify/board/loop wording need nothing. Done, uncommitted, tested: roleNamed without SR; wake skips a senior (bin/wake.test.mjs); codeOfName refuses SR; guard.mjs refuses start_session with an SR title (bin/guard.test.mjs, last test). The guard suite fails until senior-model is declared (claudeHeld throws), rules change senior-model applied (14:02, not committed): rules check PASS 81 rules, coverage --prove PASS 63 breaks (a senior-model break in guard.mjs; the advisor-model and session-model breaks follow the new guard lines). The first commit was refused (sessions.mjs over its line ceiling, folded to one line; a flag test that wants every CLAUDE_HOME rule switchable): D7 moves senior-model into SENIOR_HOME. Next: prove and suites, commit, then senior-effort (also in SENIOR_HOME).
+Left to fix,
+each with a test: `bin/wake.mjs:251` (a senior row makes `to` "null" and `newNotice` throws, killing every note of
+the boot: skip seniors); `bin/guard.mjs:165-179` + `session-title-guard.mjs:51` (start_session with SR refused,
+naming sessions start, in the TITLE_SHAPE commit); the hold by role: `sessions.mjs:1453`/`roster-home.mjs:19-22`,
+`home-doctor.mjs:100`, `rules.mjs:456,529` -> `home-sessions.mjs:51,63`, `rules-switch.mjs:353-359` (a senior held
+to senior-model/senior-effort); `project.mjs:433` codeOfName refuses SR; wording `sessions.mjs:3082` "no role" and
+`wait.mjs:208`. Then the starter-is-lead check and one-live-senior in `sessions-background.mjs:174,345`. Advisor's
+other points: senior-effort plumbing (home key, homeFaults, claudeHeld, both guard functions, doctor's top cap, a test
+of --effort high on start and resume); "no advisor" claimed only after the first senior's transcript; rules change
+--with dry-run first, a planted break for senior-model, then conventions-model-home and rules-switch tests; the
+verifier gets the guard code.
 
 ## Goal
 The lead starts a senior session, titled `<code> SR · <purpose>`, with `js-harness sessions start`, and every start
@@ -118,5 +123,10 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   senior's session, which a resume holds to its rules; the senior does not start sessions.
 - D4 Cost: the weekly Fable meter is not read per call, so at most one live senior, and each start is a channel
   notice naming why and the meter before it.
+- D6 Scope cut after the role sweep: the lead talks to its senior by the host's messages, and the senior reports to
+  the orchestrator, so `roleNamed` does not take SR and no notice is addressed to a senior; this drops `notify --to`
+  and `sessions --address` from In scope.
+- D7 The senior's rules sit in SENIOR_HOME, apart from CLAUDE_HOME: a switch of the home leaves the senior on its own
+  model (his Fable 5.2), so `rules switch` takes no flag for it and `rules change` alone moves it.
 - D5 When: the lead's judgment that the task needs more intelligence or complexity is the condition; a design, a
   depth pass of high-risk work or a failure seen twice are examples, not triggers.

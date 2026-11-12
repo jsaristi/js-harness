@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { CLOSE_FINISHED, appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, strandedWords, undoSession, within, worktreeHolding, worktreeOf } from './lib/background.mjs';
 import { closeFinishedIn, closedLines } from './lib/background-close.mjs';
 import { sessionStartHome, sessionStartRefusal } from './lib/guard.mjs';
-import { leadTitle, sessionTitleRefusal } from './lib/session-title-guard.mjs';
+import { leadTitle, seniorTitle, sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { appendNotice, newNotice, nextSessionNumber, placeOf, readNotices } from './lib/channel.mjs';
 import { mainCheckout, projectCode, projectSlug, sameSession } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
@@ -172,13 +172,15 @@ export function sessionsStartMain(argv, given = {}) {
   const project = { codeOf: () => projectCode(root, readFile), next: (code) => nextSessionNumber(home, projectSlug(root), { code }) };
   // What the call does not name is the home's, where this project declares it (odd/tasks/one-model-home.md, spec 5).
   const lead = leadTitle(parsed.title);
-  const taken = sessionStartHome(rules, { lead });
+  const senior = seniorTitle(parsed.title);
+  const taken = sessionStartHome(rules, { lead, senior });
   const model = parsed.model ?? taken.model;
   const effort = parsed.effort ?? taken.effort;
   // Where the home declares an advisor, the one passed is its exact id: a call may only name the same model, with a
   // date or a bracket the refusal lets through (the verifier's note of 2026-11-12), which claude is not given.
-  const advisor = taken.advisor ?? parsed.advisor;
-  const refusal = sessionStartRefusal({ prompt: brief, effort, model, advisor: parsed.advisor ?? taken.advisor }, rules, { cli: true, lead })
+  // A senior's home holds no advisor (null), which a named one does not replace: the refusal below names it.
+  const advisor = taken.advisor === null ? undefined : taken.advisor ?? parsed.advisor;
+  const refusal = sessionStartRefusal({ prompt: brief, effort, model, advisor: parsed.advisor ?? taken.advisor }, rules, { cli: true, lead, senior })
     ?? sessionTitleRefusal({ title: parsed.title }, rules, project, 'js-harness sessions start');
   if (refusal !== null) {
     stderr(refusal);
@@ -341,14 +343,16 @@ function resumeStart(parsed, deps) {
   // declares none, the record's stands, as before.
   const rules = rulesText(topLevel(run, folder), readFile);
   const lead = leadTitle(entry.title);
-  const taken = sessionStartHome(rules, { lead });
+  const senior = seniorTitle(entry.title);
+  const taken = sessionStartHome(rules, { lead, senior });
   const model = parsed.model ?? taken.model ?? entry.model ?? undefined;
   const effort = parsed.effort ?? taken.effort ?? entry.effort ?? undefined;
   // The advisor: the home's exact id where declared, before the call's and the record's (odd/tasks/advisor-home.md,
   // spec 3), so a session started with none before the rule is resumed with the home's; a call that names another is
   // refused below.
-  const advisor = taken.advisor ?? parsed.advisor ?? entry.advisor ?? undefined;
-  const refusal = sessionStartRefusal({ prompt: text, effort, model, advisor: parsed.advisor ?? advisor }, rules, { cli: true, lead });
+  // A senior's home holds no advisor (null): neither the call's nor the record's is taken.
+  const advisor = taken.advisor === null ? undefined : taken.advisor ?? parsed.advisor ?? entry.advisor ?? undefined;
+  const refusal = sessionStartRefusal({ prompt: text, effort, model, advisor: parsed.advisor ?? advisor }, rules, { cli: true, lead, senior });
   if (refusal !== null) return refuse(refusal, 2);
   const unwritable = recordUnwritable(home);
   if (unwritable !== null) return refuse(`${unwritable}, so nothing was resumed`);

@@ -323,6 +323,20 @@ test('a start of a new lead is held to the rule lead-effort, and every other sta
   assert.equal(sessionStartRefusal({ ...BRIEF, effort: HELD }, without, { lead: true }), null);
 });
 
+// odd/tasks/senior-orchestrator.md: a senior's start is held to rule:senior-model, with no advisor (D2).
+test('a start of a senior is held to the rule senior-model and names no advisor, and a work session on that model is refused', () => {
+  const SENIOR = RULES.find((rule) => rule.id === 'senior-model').value;
+  assert.equal(sessionStartRefusal({ ...BRIEF, model: SENIOR, effort: HELD }, HERE, { senior: true, cli: true }), null);
+  assert.match(sessionStartRefusal({ ...BRIEF, model: RULES.find((rule) => rule.id === 'session-model').value, effort: HELD }, HERE, { senior: true, cli: true }), /not the one of the rule senior-model: /);
+  assert.match(sessionStartRefusal({ ...BRIEF, model: SENIOR, effort: HELD, advisor: SENIOR }, HERE, { senior: true, cli: true }), /a senior runs with no advisor/);
+  assert.match(sessionStartRefusal({ ...BRIEF, model: SENIOR, effort: HELD }, HERE, { cli: true }), /not the one of the rule session-model: /);
+  const home = sessionStartHome(HERE, { senior: true });
+  assert.deepEqual([home.model, home.advisor], [SENIOR, null], 'a senior takes its model and no advisor where the call names none');
+  // A project that declares no senior-model holds a senior's start to the home, as any start.
+  const without = writeRules(RULES.filter((rule) => rule.id !== 'senior-model'));
+  assert.equal(sessionStartHome(without, { senior: true }).model, sessionStartHome(without).model);
+});
+
 test('where the rule session-effort is not declared, a session started with no effort passes', () => {
   assert.equal(sessionStartRefusal(BRIEF, null), null);
   assert.equal(sessionStartRefusal(BRIEF, writeRules(RULES.filter((rule) => rule.id !== 'session-effort'))), null);

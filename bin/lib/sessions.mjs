@@ -1245,7 +1245,7 @@ export function readPullRequests(run, root) {
 // One token for the code, one for the role, the dot between two spaces, and something after it. A title
 // with a word more before the dot is another title: a handover names the orchestrator that arrives `ORQ
 // nueva` and the one that leaves `ORQ relevada`, so that neither holds the role by its title.
-const TITLE_SHAPE = /^(\S+) (ORQ|\d+) · (.*\S.*)$/;
+const TITLE_SHAPE = /^(\S+) (ORQ|SR|\d+) · (.*\S.*)$/;
 const TITLE_WORDS = '<code> <role> · <what it does>';
 
 /** What a title of the agreed shape says: `{ code, role, number, purpose }`, `role` being `'orchestrator'`
@@ -1255,7 +1255,7 @@ export function roleOfTitle(title) {
   const shaped = typeof title === 'string' ? TITLE_SHAPE.exec(title) : null;
   if (!shaped) return null;
   const [, code, role, purpose] = shaped;
-  if (role === 'ORQ') return { code, role: 'orchestrator', number: null, purpose: purpose.trim() };
+  if (role === 'ORQ' || role === 'SR') return { code, role: role === 'ORQ' ? 'orchestrator' : 'senior', number: null, purpose: purpose.trim() };
   const number = Number(role);
   return Number.isSafeInteger(number) ? { code, role: 'work', number, purpose: purpose.trim() } : null;
 }
@@ -1286,8 +1286,8 @@ export function projectCode(root, readFile) {
   if (!isObject(harness)) throw new Error(`${file} is not a JSON object`);
   if (!Object.hasOwn(harness, 'code')) return { code: null };
   const { code } = harness;
-  if (typeof code !== 'string' || !CODE_SHAPE.test(code) || code === 'ORQ' || roleOfTitle(`${code} 1 · x`)?.code !== code) {
-    throw new Error(`${file} "code" must be capitals and digits, the project's identifier such as "JH", and not ORQ`);
+  if (typeof code !== 'string' || !CODE_SHAPE.test(code) || code === 'ORQ' || code === 'SR' || roleOfTitle(`${code} 1 · x`)?.code !== code) {
+    throw new Error(`${file} "code" must be capitals and digits, the project's identifier such as "JH", and not ORQ or SR`);
   }
   return { code };
 }

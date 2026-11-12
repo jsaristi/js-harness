@@ -10,7 +10,7 @@ const valueOf = (id, list = RULES) => list.find((rule) => rule.id === id).value;
 // His decision of 2026-11-11 (S7): one model and two levels, the lead's session at its own.
 // odd/tasks/advisor-home.md, spec 1: the advisor's model joined Claude's home on 2026-11-12.
 // odd/tasks/lead-effort-split.md, spec 1: the reviewers' level left the lead's on 2026-11-12.
-test('the two homes are seven live rules that hold a value, the lead\'s and the reviewers\' levels and the advisor among Claude\'s, and no rule is in both', () => {
+test('the two homes are eight live rules that hold a value, the lead\'s and the reviewers\' levels, the advisor and the senior\'s model among Claude\'s, and no rule is in both', () => {
   assert.deepEqual(CLAUDE_HOME, { model: 'session-model', effort: 'session-effort', lead: 'lead-effort', lenses: 'lens-effort', advisor: 'advisor-model' });
   const ids = [...Object.values(CLAUDE_HOME), ...Object.values(CODEX_HOME)];
   assert.equal(new Set(ids).size, 7);
@@ -40,12 +40,12 @@ test('a list given to claudeHome is the one read, so a switch is seen by every r
 test('a guard holds the home where the project declares the rules, and nothing where it does not', () => {
   const here = claudeHeld(writeRules(RULES));
   const held = (id) => ({ value: valueOf(id), note: '' });
-  assert.deepEqual(here, { model: held('session-model'), effort: held('session-effort'), lead: held('lead-effort'), lenses: held('lens-effort'), advisor: held('advisor-model') });
-  assert.deepEqual(claudeHeld(undefined), { model: null, effort: null, lead: null, lenses: null, advisor: null });
-  assert.deepEqual(claudeHeld('export const RULES = [];\n'), { model: null, effort: null, lead: null, lenses: null, advisor: null });
+  assert.deepEqual(here, { model: held('session-model'), effort: held('session-effort'), lead: held('lead-effort'), lenses: held('lens-effort'), advisor: held('advisor-model'), senior: held('senior-model') });
+  assert.deepEqual(claudeHeld(undefined), { model: null, effort: null, lead: null, lenses: null, advisor: null, senior: null });
+  assert.deepEqual(claudeHeld('export const RULES = [];\n'), { model: null, effort: null, lead: null, lenses: null, advisor: null, senior: null });
   // A project that declares the sessions' level and none for its lead: the guard holds what is declared.
   const without = claudeHeld(writeRules(RULES.filter((rule) => rule.id !== 'lead-effort')));
-  assert.deepEqual(without, { model: held('session-model'), effort: held('session-effort'), lead: null, lenses: held('lens-effort'), advisor: held('advisor-model') });
+  assert.deepEqual(without, { model: held('session-model'), effort: held('session-effort'), lead: null, lenses: held('lens-effort'), advisor: held('advisor-model'), senior: held('senior-model') });
   // A project that declares no advisor: a start passes none of its own, as before the rule.
   assert.equal(claudeHeld(writeRules(RULES.filter((rule) => rule.id !== 'advisor-model'))).advisor, null);
 });

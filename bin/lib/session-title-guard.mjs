@@ -12,6 +12,10 @@ import { guardHeld, ruleHere } from './rules.mjs';
  * read: a title with another project's code is a lead's here and refused for its code by `sessionTitleRefusal`. */
 export const leadTitle = (title) => roleOfTitle(title)?.role === 'orchestrator';
 
+/** Whether `title` is the title of a senior, `<code> SR · <purpose>`: its start and its resume are held to the rule
+ * `senior-model`, with no advisor (odd/tasks/senior-orchestrator.md). */
+export const seniorTitle = (title) => roleOfTitle(title)?.role === 'senior';
+
 /** Why the `start_session` call whose input is `toolInput` is refused, or null. Where the rule `session-title` is
  * declared (`projectData`, the text of the project's rules file), a call that carries a `title` is refused when that
  * title is not of the agreed shape (`roleOfTitle`) with the project's own code: a work session's `<code> <n> ·

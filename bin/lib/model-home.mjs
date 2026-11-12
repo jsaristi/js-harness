@@ -11,7 +11,7 @@ import { CLAUDE_ID } from './model-shape.mjs';
 import { RULES } from './rules-data.mjs';
 import { guardHeld, ruleHere, ruleOf } from './rules.mjs';
 
-export { CLAUDE_HOME, CODEX_HOME, EFFORTS, homeFaults } from './model-shape.mjs';
+export { CLAUDE_HOME, CODEX_HOME, EFFORTS, SENIOR_HOME, homeFaults } from './model-shape.mjs';
 
 /** Each level as the app's model menu names it. Medio, Alto and Extra alto are the user's own words for it
  * (2026-11-10); the two ends are assumed, and his to correct. */
@@ -49,6 +49,8 @@ export function claudeHeld(projectData) {
     lead: guardHeld('lead-effort', ruleHere('lead-effort', undefined, projectData)),
     lenses: guardHeld('lens-effort', ruleHere('lens-effort', undefined, projectData)),
     advisor: guardHeld('advisor-model', ruleHere('advisor-model', undefined, projectData)),
+    // The senior's model (odd/tasks/senior-orchestrator.md): held only where the project declares it.
+    senior: guardHeld('senior-model', ruleHere('senior-model', undefined, projectData)),
   };
 }
 
