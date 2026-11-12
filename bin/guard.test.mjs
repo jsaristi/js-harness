@@ -19,7 +19,7 @@ const AT_1444 = new Date(2026, 9, 14, 14, 44, 30);
 
 // A short name the home does not declare, picked and never written alone: a switch may give the home's model any of
 // them as its alias, and a test that took `sonnet` as off the home would then fail (the reliability lens on 6371924c).
-const OFF_ALIAS = ['sonnet', 'haiku', 'opus', 'fable'].find((name) => name !== RULES.find((rule) => rule.id === 'session-model').alias);
+const OFF_ALIAS = ['sonnet', 'haiku', 'opus', 'fable'].find((name) => !RULES.some((rule) => rule.alias === name));
 
 /** Runs the hook on `payload` (an object, or a raw text) in a project whose rules file reads `rulesText` (null for
  * none), with the machine's gate lock held by `held` (null for free), and returns `{ code, out, err }`. */

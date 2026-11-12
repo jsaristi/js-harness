@@ -121,8 +121,8 @@ test('five runs on the model and at the effort of the review stand alone, and th
   assert.deepEqual([alone.runs, alone.samePair, alone.atPair], [5, true, 5]);
   assert.equal(alone.estimate(200), 30000);
   // Held to both: the model alone is not the pair, and neither is a session that named no effort.
-  const astra = same.map((line) => ({ ...line, sessionModel: 'gpt-fixture-other' }));
-  assert.equal(inputEstimator(astra, PAIR).samePair, false);
+  const otherModel = same.map((line) => ({ ...line, sessionModel: 'gpt-fixture-other' }));
+  assert.equal(inputEstimator(otherModel, PAIR).samePair, false);
   assert.equal(inputEstimator(same.map((line) => ({ ...line, sessionEffort: null })), PAIR).samePair, false);
 });
 
