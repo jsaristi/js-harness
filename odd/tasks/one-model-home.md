@@ -383,6 +383,16 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 20:11: **pull request 839** is pull request 4, open on main from `feat/model-home-switch`, pushed, NOT
+marked ready: its land waits on his answer to question 269, which the lead carries here with its transcript line.
+The merge of main, `4f0f19d5`, counted as a code commit (it resolved a conflict), so it got its own reviews, each
+run with the merge as the head: Codex on `2f7f7ad..4f0f19d`, what the merge wrote, 6 lines, correct (84,629 input
+tokens; a merge of main is its own review, not a fourth of the open finding), and the risk lens, nothing (25,446).
+`check --push` passes: 6 code commits, all covered by both records. Next: T10's fixes on a local branch over this
+head, `feat/model-home-fixes`, not pushed, moved onto main once 839 lands and reviewed there; then, on his answer:
+the `ready` notice of 839 (`js-harness notify --to orchestrator --kind ready --pr 839`), pull request 5, the
+summary and the closed notice. In flight: `js-harness wait --notice-to 172` (task `ba3pr3kcg`).
+
 2026-11-11 20:05: the three lenses ran on `4d020cf..2f7f7ad`, each recorded, about 77,600 input tokens a lens: risk
 nothing; reliability one WARNING; readability two WARNINGs and three SUGGESTIONs. All six were checked in the code
 and are true, all six ask for code, and no Codex review can cover new code on this branch, so, with the lead's word
