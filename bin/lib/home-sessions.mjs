@@ -23,7 +23,7 @@ function advisorOf(replied, advisor) {
 }
 
 /** True when `home` (`{ model, effort, lead, advisor }`, each a value or null) holds something a session can be off. */
-export const homeInForce = (home) => home !== null && typeof home === 'object' && [home.model, home.effort, home.lead, home.advisor].some((value) => typeof value === 'string');
+export const homeInForce = (home) => home !== null && typeof home === 'object' && [home.model, home.effort, home.lead, home.lenses, home.advisor].some((value) => typeof value === 'string');
 
 /** The act that puts the background job `job` on the home: a resume, which waits for a job at work to end. */
 const resumeOf = (job) => `a resume${job.working === true ? ' once its job is no longer at work, which a resume refuses until then:' : ','} js-harness sessions start --resume ${job.id}`;
@@ -96,7 +96,9 @@ function backgroundSays(row) {
 /** The lines of the block `rules applied` prints for `result` (`sessionsOffHome`'s), after an empty line. `unread`
  * lists what could not be read, as words, each on a line of its own: a source that failed is never "none". */
 export function offHomeLines(result, home, { unread = [] } = {}) {
-  const lead = typeof home.lead === 'string' ? `, and the lead to ${home.lead}` : '';
+  // The reviewers' level, where the home declares it, is said apart from the lead's (odd/tasks/lead-effort-split.md).
+  const lenses = typeof home.lenses === 'string' ? `, and the lenses and the double review's Claude reader to ${home.lenses}` : '';
+  const lead = typeof home.lead === 'string' ? `${lenses === '' ? ', and' : ','} the lead to ${home.lead}${lenses}` : lenses;
   const advisor = typeof home.advisor === 'string' ? `; a background session to the advisor ${home.advisor}` : '';
   const lines = ['', `Sessions off the home: a session is held to ${said({ model: home.model, effort: home.effort })}${lead}${advisor}`];
   for (const row of result.rows) {

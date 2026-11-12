@@ -26,17 +26,21 @@ const FLOOR = 3;
 test('the arguments name a home or both, the lead\'s level beside the sessions\', and his words', () => {
   const parsed = parseSwitch(['--claude', `${NEW}@${MEDIUM}`, '--lead', HIGH, '--codex', `astra@${LOW}`, '--quote', `${SESSION}:7`, '--quote', `${SESSION}:12`, '--reading', 'r', '--accepted', 'a', '--dry-run']);
   assert.deepEqual(parsed, {
-    command: 'switch', claude: { model: NEW, effort: MEDIUM }, lead: HIGH, advisor: null, codex: { model: 'astra', effort: LOW },
+    command: 'switch', claude: { model: NEW, effort: MEDIUM }, lead: HIGH, lenses: null, advisor: null, codex: { model: 'astra', effort: LOW },
     quotes: [{ session: SESSION, line: 7 }, { session: SESSION, line: 12 }], reading: 'r', accepted: 'a', dryRun: true, ruleByRule: false,
   });
   assert.equal(parseSwitch(['--lead', XHIGH, '--rule-by-rule', ...WORDS]).ruleByRule, true);
   assert.equal(parseSwitch(['--lead', XHIGH, ...WORDS]).claude, null);
   assert.equal(parseSwitch(['--advisor', NEW, ...WORDS]).advisor, NEW, 'the advisor alone names a home');
+  // odd/tasks/lead-effort-split.md: the reviewers' level alone names a home too, apart from the lead's.
+  assert.deepEqual([parseSwitch(['--lenses', HIGH, ...WORDS]).lenses, parseSwitch(['--lenses', HIGH, ...WORDS]).lead], [HIGH, null]);
 });
 
 test('an argument that cannot be a home\'s value gives the usage error, which names what one is', () => {
   const refused = (argv, pattern) => assert.match(parseSwitch(argv).error ?? 'taken', pattern, argv.join(' '));
-  refused(WORDS, /names no home: give --claude <model>@<effort>, --lead <effort>, --advisor <model> or --codex <model>@<effort>/);
+  refused(WORDS, /names no home: give --claude <model>@<effort>, --lead <effort>, --lenses <effort>, --advisor <model> or --codex <model>@<effort>/);
+  refused(['--lenses', 'top', ...WORDS], /not an effort level/);
+  refused(['--lenses', HIGH, '--lenses', LOW, ...WORDS], /--lenses is given once/);
   refused(['--advisor', 'fable', ...WORDS], /not a full Claude id, claude-<family>-<version>/);
   refused(['--advisor', NEW, '--advisor', OLD, ...WORDS], /--advisor is given once/);
   refused(['--claude', NEW, ...WORDS], /--claude takes <model>@<effort>/);
@@ -61,6 +65,7 @@ test('each rule of the homes named gets its value and his words as its source, i
   assert.deepEqual(changesOf(parseSwitch(['--lead', HIGH, '--advisor', NEW, ...WORDS])).map(({ id, change }) => [id, change.value]), [[CLAUDE_HOME.lead, HIGH], [CLAUDE_HOME.advisor, NEW]]);
   for (const { change } of changes) assert.deepEqual(change.source, { kind: 'words', quotes: [{ session: SESSION, line: 7 }], reading: 'everything runs on it', accepted: 'he typed it' });
   assert.deepEqual(changesOf(parseSwitch(['--lead', XHIGH, ...WORDS])).map(({ id }) => id), [CLAUDE_HOME.lead]);
+  assert.deepEqual(changesOf(parseSwitch(['--lead', XHIGH, '--lenses', HIGH, ...WORDS])).map(({ id, change }) => [id, change.value]), [[CLAUDE_HOME.lead, XHIGH], [CLAUDE_HOME.lenses, HIGH]]);
 });
 
 // ── the probes ──────────────────────────────────────────────────────────────────────────────────
@@ -134,6 +139,10 @@ test('a probe is owed for each model and level a home will hold that it does not
   assert.deepEqual(of({ claude: { ...claude, model: NEW } }).claude, [{ model: NEW, effort: MEDIUM }, { model: NEW, effort: HIGH }], 'a new model is tried at each level the home holds');
   assert.deepEqual(of({ claude: { ...claude, model: NEW, lead: MEDIUM } }).claude, [{ model: NEW, effort: MEDIUM }]);
   assert.deepEqual(of({ claude: { ...claude, lead: XHIGH } }).claude, [{ model: OLD, effort: XHIGH }]);
+  // The reviewers' level is tried as the lead's is, where the home declares one (odd/tasks/lead-effort-split.md).
+  const reviewed = { ...claude, lenses: HIGH };
+  assert.deepEqual(probesOf({ claude: reviewed, codex }, { claude: { ...reviewed, lenses: LOW }, codex }).claude, [{ model: OLD, effort: LOW }]);
+  assert.deepEqual(probesOf({ claude: reviewed, codex }, { claude: { ...reviewed, model: NEW, lead: XHIGH }, codex }).claude, [{ model: NEW, effort: MEDIUM }, { model: NEW, effort: XHIGH }, { model: NEW, effort: HIGH }], 'a new model is tried at the reviewers\' level too');
   assert.deepEqual(of({ claude: { ...claude, effort: HIGH } }).claude, [], 'a level the home already holds with this model was in force');
   assert.deepEqual(of({ codex: { model: CODEX_OLD, effort: HIGH } }).codex, [{ model: CODEX_OLD, effort: HIGH }]);
   // The advisor goes with each pair where the home declares one, and a new advisor alone owes a probe of each pair.

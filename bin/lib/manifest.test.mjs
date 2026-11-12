@@ -3266,7 +3266,7 @@ test('the orchestrator skill says how a model or an effort is switched, beside t
   assert.ok(at('\n## A new model\n') > at('\n## Before a reinstall\n') && at('\n## A new model\n') < at('\n## A work session\n'));
   const steps = [
     '1. Take the user\'s sentence as the source:',
-    '2. In a checkout of the harness, on a branch `rule/<name>` cut from `origin/main`, run `node bin/js-harness.mjs rules switch [--claude <model>@<effort>] [--lead <effort>] [--advisor <model>] [--codex <model>@<effort>] --quote <session>:<line> --reading "<reading>" --accepted "<where>" --dry-run`:',
+    '2. In a checkout of the harness, on a branch `rule/<name>` cut from `origin/main`, run `node bin/js-harness.mjs rules switch [--claude <model>@<effort>] [--lead <effort>] [--lenses <effort>] [--advisor <model>] [--codex <model>@<effort>] --quote <session>:<line> --reading "<reading>" --accepted "<where>" --dry-run`:',
     '3. Run it again without `--dry-run`.',
     '4. Make the commit it prints:',
     '5. Run the gate and both reviews from the branch\'s copy (`node bin/js-harness.mjs codex-review`, `node bin/js-harness.mjs lens-review`), so the slice is reviewed on the new model; read `js-harness codex-meter` before the Codex review.',

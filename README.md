@@ -1005,7 +1005,7 @@ on a `rule/` branch, it takes the change as JSON on standard input and writes th
 source and `docs/RULES.md`, and appends a relief line; `--dry-run` prints them and writes nothing (it
 fetches nothing either: a turn to refuse counts on the `origin/main` this clone holds, and says so), and
 `--check-source` checks a stored source against its transcript again. `rules switch [--claude <model>@<effort>]
-[--lead <effort>] [--advisor <model>] [--codex <model>@<effort>]` moves a home of a model and an effort, or the advisor, with his words (`--quote
+[--lead <effort>] [--lenses <effort>] [--advisor <model>] [--codex <model>@<effort>]` moves a home of a model and an effort, or the advisor, with his words (`--quote
 <session>:<line>`, `--reading`, `--accepted`): it says what its probe costs, asks each new model one short question
 through the installed CLI, and writes nothing when the CLI refuses the id or the level, another model answers or
 Codex is at its weekly floor; then it writes the rules of the homes named in one pass with the writer's agent file

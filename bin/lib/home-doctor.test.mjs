@@ -20,6 +20,8 @@ test('settingsNotes says what his settings hold that the home does not: the defa
     'the project\'s .claude/settings.local.json holds effortLevel high, not the home\'s medium: a new session takes it',
   ]);
   assert.deepEqual(settingsNotes(HOME, { user: his }).filter((note) => note.includes('cap')), [], 'a cap at the highest level the home gives caps nothing');
+  // The reviewers' level counts too: a lens is launched with --effort, which his cap holds as it holds a session.
+  assert.deepEqual(settingsNotes({ ...HOME, lenses: 'max' }, { user: his }).filter((note) => note.includes('cap')), ['his settings cap the effort at high, under the home\'s max']);
   const agreeing = { model: 'claude-fable-5-2[1m]', maxEffortLevel: 'high', effortLevel: 'medium', modelSettings: { 'claude-fable-5-2': { effortLevel: 'medium' } } };
   assert.deepEqual(settingsNotes(HOME, { user: agreeing, project: { effortLevel: 'medium' } }), []);
   assert.deepEqual(settingsNotes(HOME, { user: { effortLevel: 'low', modelSettings: { 'claude-fable-5-2': { effortLevel: 'max' } } } }), [

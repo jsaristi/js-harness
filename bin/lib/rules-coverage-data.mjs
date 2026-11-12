@@ -30,7 +30,8 @@ export const COVERAGE = {
     "gate-wait": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/lib/gate-lock.mjs","find":"('gate-wait', 'minutes')","replace":"('gate-wait', 'minutes') + 1"}},
     "growth-limit": [{"of":"the week is red when its open steps grew","level":"check","test":"bin/lib/progress-pace.test.mjs","break":{"path":"bin/lib/progress-pace.mjs","find":"red: grew > 0 };","replace":"red: grew < 0 };"}},{"of":"the lead opens no new work but what it names while the week is red","level":"protocol","path":"bin/lib/manifest.mjs","phrase":"while it says red, open only what it names, and write anything else in the roadmap's Later list"}],
     "lead-charter": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"merge pull requests by the rules below"},
-    "lead-effort": [{"of":"a lead's session is started at it (the guard's start_session, and sessions start)","level":"check","test":"bin/lib/guard.test.mjs","break":{"path":"bin/lib/guard.mjs","find":"const ofLead = lead && home.lead !== null;","replace":"const ofLead = false;"}},{"of":"a lens is launched at it","level":"check","test":"bin/lens-review.test.mjs","break":{"path":"bin/lens-review.mjs","find":"export const LENS_EFFORT = claudeHome().lead;","replace":"export const LENS_EFFORT = claudeHome().model;"}},{"of":"the double review's Claude reader is launched at it","level":"check","test":"bin/double-review.test.mjs","break":{"path":"bin/double-review.mjs","find":"'--effort', LENS_EFFORT, '--settings'","replace":"'--effort', model, '--settings'"}}],
+    "lead-effort": [{"of":"a lead's session is started at it (the guard's start_session, and sessions start)","level":"check","test":"bin/lib/guard.test.mjs","break":{"path":"bin/lib/guard.mjs","find":"const ofLead = lead && home.lead !== null;","replace":"const ofLead = false;"}}],
+    "lens-effort": [{"of":"a lens is launched at it","level":"check","test":"bin/lens-review.test.mjs","break":{"path":"bin/lens-review.mjs","find":"export const LENS_EFFORT = claudeHome().lenses;","replace":"export const LENS_EFFORT = claudeHome().model;"}},{"of":"the double review's Claude reader is launched at it","level":"check","test":"bin/double-review.test.mjs","break":{"path":"bin/double-review.mjs","find":"'--effort', LENS_EFFORT, '--settings'","replace":"'--effort', model, '--settings'"}}],
     "live-board": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"Every event of your work reaches the user's live board as a notice"},
     "local-time": {"level":"check","test":"bin/lib/reply-time.test.mjs","break":{"path":"bin/lib/reply-time.mjs","find":"if (times.length === 0) return null;","replace":"if (times.length >= 0) return null;"}},
     "memory-feedback-home": {"level":"check","test":"bin/guard-feedback.test.mjs","break":{"path":"bin/lib/memory-feedback-guard.mjs","find":"('memory-feedback-home', undefined, rulesText)","replace":"('memory-feedback-home', undefined, null)"}},
@@ -432,7 +433,7 @@ export const COVERAGE = {
         "context": "a step of the protocol of a switch (odd/tasks/one-model-home.md, spec 9): rules switch refuses a source that is not the owner's words at a transcript line (bin/lib/rules-change-run.test.mjs); bin/lib/manifest.test.mjs holds its wording"
       },
       {
-        "hash": "e7850c52d740",
+        "hash": "e0bfbcaab5d1",
         "context": "a step of the protocol of a switch (odd/tasks/one-model-home.md, spec 9): rules switch refuses off a rule/ branch based on origin/main, and its dry run asks no model (bin/lib/rules-change-run.test.mjs); bin/lib/manifest.test.mjs holds its wording"
       },
       {

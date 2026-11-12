@@ -334,7 +334,7 @@ export const RULES = [
   },
   {
     "id": "lead-effort",
-    "subject": "the effort the lead's session, the lenses and the double review's Claude reader run at",
+    "subject": "the effort the lead's session runs at",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-11-10",
@@ -345,6 +345,14 @@ export const RULES = [
         "until": "2026-11-10"
       }
     ]
+  },
+  {
+    "id": "lens-effort",
+    "subject": "the effort the Claude lenses and the double review's Claude reader run at",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-11-12",
+    "value": "high"
   },
   {
     "id": "live-board",
@@ -673,7 +681,7 @@ export const RULES = [
   },
   {
     "id": "session-effort",
-    "subject": "the effort every work session and every sub-agent the harness starts runs at; the lead's session, the lenses and the double review's Claude reader run at rule:lead-effort",
+    "subject": "the effort every work session and every sub-agent the harness starts runs at; the lead's session runs at rule:lead-effort, and the lenses and the double review's Claude reader at rule:lens-effort",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-11-11",

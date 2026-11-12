@@ -104,7 +104,7 @@ const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 // `parseSwitch` takes.
 const CLAUDE_FLAG = '--claude <model>@<effort>';
 const CODEX_FLAG = '--codex <model>@<effort>';
-export const HOME_FLAGS = { [CLAUDE_HOME.model]: CLAUDE_FLAG, [CLAUDE_HOME.effort]: CLAUDE_FLAG, [CLAUDE_HOME.lead]: '--lead <effort>', [CLAUDE_HOME.advisor]: '--advisor <model>', [CODEX_HOME.model]: CODEX_FLAG, [CODEX_HOME.effort]: CODEX_FLAG };
+export const HOME_FLAGS = { [CLAUDE_HOME.model]: CLAUDE_FLAG, [CLAUDE_HOME.effort]: CLAUDE_FLAG, [CLAUDE_HOME.lead]: '--lead <effort>', [CLAUDE_HOME.lenses]: '--lenses <effort>', [CLAUDE_HOME.advisor]: '--advisor <model>', [CODEX_HOME.model]: CODEX_FLAG, [CODEX_HOME.effort]: CODEX_FLAG };
 
 /**
  * Runs the change of the rule `id` in the checkout `top` and gives the exit code: 0 when it is written (or printed,
