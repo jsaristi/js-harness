@@ -6,13 +6,9 @@ brief `~/.js-harness/background/briefs/2026-11-12T06-58-20-202Z-f6e42350.md`. De
 `rule/advisor-home`, in four work-unit commits. Runner: `node --test`.
 
 ## State
-Done: T1 to T6. T5 is `e3a491ab`; its slice `07e94c23..e3a491ab` (with `0bbc768b`) reviewed: Codex correct (0.87, no
-finding, 201,281 input tokens of which 150,400 cached); lenses risk 0, reliability 0, readability 0, and the earlier
-readability finding rechecked fixed. T6 (this commit): `sessionFacts` gives the `advisorModel` of the last reply of the
-session's own; `readHomeSessions` carries it in `replied.advisor`; `sessionsOffHome` holds a background session to the
-home's advisor where one is declared, as spec 6 says, and names one whose advisor is not known on a `not read:` line;
-`docs/RECORDS.md` and the orchestrator skill's "A new model" name `rule:advisor-model`. Next: T6's slice reviews
-(base `e3a491ab`), then T7: the gate, the push, the pull request, the `ready` notice with the advisor tokens.
+Done: T1 to T6, every code slice reviewed by Codex and the lenses (L6). Now T7: the push, whose run on GitHub is the
+gate, the pull request and the `ready` notice, which says it lands only on his yes and gives the advisor tokens (L6).
+Then T8 is the lead's, after the land.
 Open, his: everything under "Ask me before". Replies of this session run on `claude-opus-5-5` at medium with
 a `claude-fable-5-2` advisor.
 
@@ -213,3 +209,13 @@ Nothing of this plan needs him before it lands; the merge does. Written down as 
   another advisor, and claude is given the home's exact id. The readability lens then found spec 3's text behind that
   order; spec 3 and the usage text now say it.
 - L5 2026-11-12, T5's negative control and probe, run from a scratch folder: the facts in State. Cost about 0.1 USD.
+- L6 2026-11-12, T5 `e3a491ab`, T6 `b985227b` and its fix `1d29d7d4`. T5's slice `07e94c2..e3a491a` (with `0bbc768b`):
+  Codex correct (0.87), lenses risk, reliability and readability 0, the earlier readability finding rechecked fixed.
+  T6's slice `e3a491a..b985227`: lenses 0, 0, 0; Codex P2, "Clear the advisor when the latest reply omits it", taken:
+  `sessionFacts` kept an earlier reply's `advisorModel` when the last named none, which spec 6 calls not known; fixed
+  in `1d29d7d4` with the mixed transcript in the test, confirmed by Codex (0.99, 1 of 1 fixed) and the reliability lens
+  (0). T5's first commit was refused by the run on GitHub: `bin/rules.test.mjs` holds the usage line word for word, and
+  only the changed module's own tests had run here; the usage of `bin/js-harness.mjs` and `README.md` went in the same
+  commit. Advisor tokens since 2026-11-10, read from the `advisor_message` iterations of the transcripts of
+  `~/.claude/projects/D--js-harness*` (sub-agents' transcripts not read): this session 1 call, 145,437 input (none
+  cached) and 8,412 output; JH 190 1 call, 118,939 and 6,257; no other session called it.
