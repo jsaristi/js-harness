@@ -3253,6 +3253,46 @@ test('the orchestrator skill says how a reinstall is prepared: backup ready, the
   ]) assert.ok(text.includes(line), line);
 });
 
+// odd/tasks/one-model-home.md, specs 9 and 10. On 2026-11-10 he changed the model and the effort twice in a day, each
+// time carried by hand; a switch is made the same way each time: his sentence, the branch, the probe, the commit, the
+// reviews from the branch's copy, his yes, the land, then the sessions.
+test('the orchestrator skill says how a model or an effort is switched, beside the reinstall, and what a Codex switch owes', () => {
+  const text = components[1].content('0.1.0');
+  const at = (needle) => {
+    const index = text.indexOf(needle);
+    assert.ok(index !== -1, needle);
+    return index;
+  };
+  assert.ok(at('\n## A new model\n') > at('\n## Before a reinstall\n') && at('\n## A new model\n') < at('\n## A work session\n'));
+  const steps = [
+    '1. Take the user\'s sentence as the source:',
+    '2. In a checkout of the harness, on a branch `rule/<name>` cut from `origin/main`, run `node bin/js-harness.mjs rules switch [--claude <model>@<effort>] [--lead <effort>] [--codex <model>@<effort>] --quote <session>:<line> --reading "<reading>" --accepted "<where>" --dry-run`:',
+    '3. Run it again without `--dry-run`.',
+    '4. Make the commit it prints:',
+    '5. Run the gate and both reviews from the branch\'s copy (`node bin/js-harness.mjs codex-review`, `node bin/js-harness.mjs lens-review`), so the slice is reviewed on the new model; read `js-harness codex-meter` before the Codex review.',
+    '6. The pull request waits for the user\'s yes (`rule:owner-decisions`). Land it with `js-harness merge-queue --land --refresh-copy`:',
+    '7. Then the sessions. `js-harness rules applied` lists each one off the home with the act that corrects it,',
+    '8. Give the user, as it is printed, what the switch leaves outside the repository',
+  ];
+  steps.reduce((before, step) => {
+    assert.ok(at(step) > before, `out of order: ${step}`);
+    return at(step);
+  }, at('\n## A new model\n'));
+  for (const line of [
+    'Switch nothing their words do not name, and never guess a model\'s id.',
+    'A probe proves the id and that the CLI took the level, never the effort the model then works at.',
+    'The day before a switch of Codex\'s home lands, check three things: the id the installed `codex` takes (the probe of step 3, one cheap call, said before it runs); that `js-harness codex-meter` still reads its limits; and that a review of one small slice runs end to end from the branch\'s copy.',
+    'so its first estimates come from the model that leaves, and `rule:codex-review-rate`, `rule:codex-review-floor` and the double review\'s measured cost were measured on that model.',
+    '`docs/future-model.md` is the measuring of what the harness is worth on a new model',
+  ]) at(line);
+  // The two protocols come from a module of their own (./lead-protocols.mjs); the manifest writes their last full
+  // stop, so the text ends them once and the next section follows as it did.
+  at('were measured on that model.\n\n## A work session\n');
+  // The lead's start line names no level: a start takes the home (spec 5), and a level typed there is one more copy.
+  assert.ok(!text.includes('--brief <file> --effort'), 'the start line shows no --effort');
+  at('`js-harness sessions start --title "<title>" --brief <file>` instead, which takes the model and the effort the rules give (`rule:session-model`, `rule:session-effort`) and refuses another,');
+});
+
 // rule:restart-announce. On 2026-10-20 he asked to be told in capitals when to restart, with everything paused first
 // to give him time; the lead pauses every session at a safe point, and only then says it.
 test('the orchestrator skill says how the lead pauses everything before it tells the user to restart', () => {

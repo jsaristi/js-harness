@@ -1075,7 +1075,7 @@ a merge whose review owes a correction stops the run before the commits after it
 
 ```console
 $ js-harness codex-review --base b36ab7b^1 --plan --again
-Plan of the Codex review of b42a30b..c670cff: gpt-6.1-sol at medium effort, 2 parts, 727 changed lines in 7 files.
+Plan of the Codex review of b42a30b..c670cff: <model> at <effort> effort, 2 parts, 727 changed lines in 7 files.
   part 1 of 2: 4 files, 356 changed lines, about 230,000 input tokens
   part 2 of 2: 3 files, 371 changed lines, about 240,000 input tokens
 Left out of the review: 5 Markdown documents, 818 changed lines.
@@ -1130,7 +1130,8 @@ only the user's own words skip it, "no quiero la revisión", recorded with js-ha
 The Claude half of the two reviews every slice gets; Codex is the other. The session picks one to four
 lenses (risk, resilience, readability, reliability) by the consequence of what `<base>..HEAD` touched
 (`--head <rev>` names another head) and says why with `--reason`. Each lens is a fresh `claude -p`
-run on `claude-fable-5-2` at `high` effort with no tools and none of your customizations, on your own CLI login,
+run on the model of `rule:session-model` at the effort of `rule:lead-effort`, with no tools and none of
+your customizations, on your own CLI login,
 never on the eval token or an API key, and it reads only the range as a block: its two commits, its
 subject hash, the paths a review reads and each path's patch. Markdown files and the paths a
 `.gitattributes` marks `-codex-review` are left out, as Codex leaves them out.

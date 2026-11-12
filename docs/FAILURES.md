@@ -581,6 +581,10 @@ not the committed range, wrote no record and had to be run again.
 - Seen: 2026-11-11 — `odd/tasks/land-two-defects.md` L10 (JH 175) — the feature document itself edited, to
   record the first slice's reviews, during the Codex review of `e0e2755..adc2978`; 160,698 input tokens spent,
   nothing recorded, the review run again after the commit
+- Seen: 2026-11-11 — `odd/tasks/one-model-home.md` L28 (JH 172) — `bin/lib/manifest.test.mjs` and `bin/lib/manifest.mjs`
+  edited, to start T8, during Codex's confirming review of `94e25d3..e3cc2ee`; 88,091 input tokens spent, its
+  verdict read (correct, both findings fixed) and nothing recorded; the session judged the edit safe because it
+  touched other files than the range, which the check does not weigh, and the review ran again after T8's commit
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
   leaves no record: the tree is no longer the committed range" — since 2026-10-12
 
