@@ -334,7 +334,7 @@ export const RULES = [
   },
   {
     "id": "lead-effort",
-    "subject": "the effort the lead's session, the lenses and the double review's Claude reader run at",
+    "subject": "the effort the lead's session runs at",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-11-10",

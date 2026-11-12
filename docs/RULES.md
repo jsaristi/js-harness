@@ -85,7 +85,7 @@ What the lead does alone and tells him after, and what stays his, asked one at a
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-09, 2026-10-11, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-10, 2026-10-15, 2026-10-15, 2026-10-24, checked by the command on 2026-10-22.
 
 ### lead-effort
-The effort the lead's session, the lenses and the double review's Claude reader run at: high.
+The effort the lead's session runs at: high.
 - Of this repository only: not in force in a project that installs the harness.
 - Was: xhigh until 2026-11-10.
 - Read by: `bin/lib/model-home.mjs`.
