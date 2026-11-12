@@ -237,10 +237,12 @@ test('a start from a session whose own record holds another model, or a lower le
 });
 
 // odd/tasks/one-model-home.md, spec 5: what a start does not name is the home's, a lead's level for a lead.
-test('sessionStartHome gives the model and the level a start takes: the home\'s where declared, nothing where not', () => {
-  assert.deepEqual(sessionStartHome(HERE), { model: MODEL_RULES[0].value, effort: HELD });
-  assert.deepEqual(sessionStartHome(HERE, { lead: true }), { model: MODEL_RULES[0].value, effort: LEAD });
-  assert.deepEqual(sessionStartHome(null), { model: undefined, effort: undefined });
+// odd/tasks/advisor-home.md, specs 2 and 3: and the home's advisor, for a lead too.
+test('sessionStartHome gives the model, the level and the advisor a start takes: the home\'s where declared, nothing where not', () => {
+  const advisor = RULES.find((rule) => rule.id === 'advisor-model').value;
+  assert.deepEqual(sessionStartHome(HERE), { model: MODEL_RULES[0].value, effort: HELD, advisor });
+  assert.deepEqual(sessionStartHome(HERE, { lead: true }), { model: MODEL_RULES[0].value, effort: LEAD, advisor });
+  assert.deepEqual(sessionStartHome(null), { model: undefined, effort: undefined, advisor: undefined });
 });
 
 // A session started with no effort runs at the effort of the session that started it: on 2026-10-16 two work

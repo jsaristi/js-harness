@@ -16,12 +16,18 @@ export { CLAUDE_HOME, CODEX_HOME, EFFORTS, homeFaults } from './model-shape.mjs'
  * (2026-11-10); the two ends are assumed, and his to correct. */
 export const MENU_LEVELS = Object.freeze({ low: 'Bajo', medium: 'Medio', high: 'Alto', xhigh: 'Extra alto', max: 'Máximo' });
 
-/** The Claude home as `{ model, effort, lead }`, the declared values whatever project the caller runs in: the
- * harness's own launches (a lens, the double review's reader) run on `model` at `effort` everywhere. `lead` is the
- * level of the lead's session alone, which runs on the same model. A guard, which holds a project to the home only
- * where that project declares the rules, reads `claudeHeld` instead. */
+/** The Claude home as `{ model, effort, lead, advisor }`, the declared values whatever project the caller runs in:
+ * the harness's own launches (a lens, the double review's reader) run on `model` at `effort` everywhere. `lead` is the
+ * level of the lead's session alone, which runs on the same model; `advisor` the model of the advisor a session it
+ * starts consults (odd/tasks/advisor-home.md). A guard, which holds a project to the home only where that project
+ * declares the rules, reads `claudeHeld` instead. */
 export function claudeHome(list = RULES) {
-  return { model: ruleOf('session-model', list).value, effort: ruleOf('session-effort', list).value, lead: ruleOf('lead-effort', list).value };
+  return {
+    model: ruleOf('session-model', list).value,
+    effort: ruleOf('session-effort', list).value,
+    lead: ruleOf('lead-effort', list).value,
+    advisor: ruleOf('advisor-model', list).value,
+  };
 }
 
 /** The Codex home as `{ model, effort }`. `bin/codex-review.mjs` keeps the read its launches use; this one is for
@@ -31,22 +37,23 @@ export function codexHome(list = RULES) {
 }
 
 /** What a guard holds of the Claude home in the project whose rules file has the text `projectData`, as
- * `{ model, effort, lead }`, each `{ value, note }` as `guardHeld` gives it, or null where the project does not
- * declare that rule: a project that installs the harness is held to nothing, and one that declares no level for its
- * lead holds a lead to none of its own. */
+ * `{ model, effort, lead, advisor }`, each `{ value, note }` as `guardHeld` gives it, or null where the project does
+ * not declare that rule: a project that installs the harness is held to nothing, one that declares no level for its
+ * lead holds a lead to none of its own, and one that declares no advisor starts its sessions with none. */
 export function claudeHeld(projectData) {
   return {
     model: guardHeld('session-model', ruleHere('session-model', undefined, projectData)),
     effort: guardHeld('session-effort', ruleHere('session-effort', undefined, projectData)),
     lead: guardHeld('lead-effort', ruleHere('lead-effort', undefined, projectData)),
+    advisor: guardHeld('advisor-model', ruleHere('advisor-model', undefined, projectData)),
   };
 }
 
-/** `claudeHeld` as plain values, `{ model, effort, lead }`: what each rule holds in the project, or null where the
- * project does not declare it. */
+/** `claudeHeld` as plain values, `{ model, effort, lead, advisor }`: what each rule holds in the project, or null
+ * where the project does not declare it. */
 export function heldValues(projectData) {
   const held = claudeHeld(projectData);
-  return { model: held.model?.value ?? null, effort: held.effort?.value ?? null, lead: held.lead?.value ?? null };
+  return { model: held.model?.value ?? null, effort: held.effort?.value ?? null, lead: held.lead?.value ?? null, advisor: held.advisor?.value ?? null };
 }
 
 /** A model as a person reads it: `claude-fable-5-2` is "Fable 5.2", from its family and its version. An id of

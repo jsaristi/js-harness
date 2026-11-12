@@ -6,11 +6,14 @@ import path from 'node:path';
 import { RULES } from './rules-data.mjs';
 import { rulesHash, shippedRulesHash, unscoped, writeRules } from './rules.mjs';
 import { harnessRulesRow, MAIN_LIST_URL } from './rules-installed.mjs';
+import { CLAUDE_HOME, CODEX_HOME } from './model-home.mjs';
 import { DEFAULT_REPO, INSTALL_NEWEST } from './version.mjs';
 
 // The design: odd/tasks/rule-hierarchy.md, "Reach: the hash of the installed command (T16f, second part)".
 
-const scoped = RULES.find((rule) => rule.scope !== undefined && Object.hasOwn(rule, 'value'));
+// A rule of a home is left out: its value has a shape (`homeFaults`), so "changed" would make main's list unreadable.
+const HOMES = new Set([...Object.values(CLAUDE_HOME), ...Object.values(CODEX_HOME)]);
+const scoped = RULES.find((rule) => rule.scope !== undefined && Object.hasOwn(rule, 'value') && !HOMES.has(rule.id));
 const plain = RULES.find((rule) => rule.scope === undefined && typeof rule.value === 'number' && rule.retired === undefined);
 const withValue = (list, id, value) => list.map((rule) => (rule.id === id ? { ...rule, value } : rule));
 

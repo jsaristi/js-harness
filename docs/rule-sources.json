@@ -1,4 +1,33 @@
 {
+  "advisor-model": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Yo creo que nos va a tocar que seguir como antes Opus 5.5 Extra para orquestador y Opus 5.5 Medio para sesiones y subagentes pero todos con Advisor de Fable 5.2 Alto y lo que podemos hacer es depronto tener una sesion de Orquestador Senior que tenga Fable 5.2 Alto para cosas especiales que le coloque el orquestador Opus 5.5 Extra Alto, que te parece así?",
+        "date": "2026-11-11",
+        "session": "812b728f-2f18-43f6-b405-396080689c65",
+        "line": 1444
+      },
+      {
+        "quote": "Entonces vamos a trabajar como quedamos? con Opus y advisor de fable?",
+        "date": "2026-11-11",
+        "session": "812b728f-2f18-43f6-b405-396080689c65",
+        "line": 2544
+      },
+      {
+        "quote": "Te autorizo todo pero necesito que me pases todo lo que puedas a Opus como habiamos quedado con el advisor de Fable por que o sino nos vamos a comer todo el uso ahora",
+        "date": "2026-11-12",
+        "session": "812b728f-2f18-43f6-b405-396080689c65",
+        "line": 3271
+      }
+    ],
+    "reading": "Everything the harness starts runs on rule:session-model with an advisor on Fable 5.2, his \"todos con Advisor de Fable 5.2 Alto\": this rule is that advisor's model, which sessions start and its resume pass to claude --advisor when the call names none. His \"Alto\" cannot be set: the CLI gives the advisor no level of its own (claude 2.1.322: --advisor and the advisorModel setting take a model, and no flag or key of its changelog gives the advisor an effort), so no level is written, and this reading was not put to him. The sessions it reaches are the background ones sessions start launches and resumes; the lenses, the double review's Claude reader, start_session and the sessions of the app read it nowhere yet, each his to decide, and his Extra for the orchestrator and the senior orchestrator on Fable stay out.",
+    "accepted": "He states the scheme himself at line 1444, asks at line 2544 to work as agreed with Opus and the Fable advisor, and at line 3271 authorizes it and asks that everything that can be is passed to Opus with the Fable advisor now",
+    "checked": {
+      "date": "2026-11-12",
+      "by": "command"
+    }
+  },
   "agents-budget": {
     "kind": "design",
     "path": "docs/ROADMAP.md"

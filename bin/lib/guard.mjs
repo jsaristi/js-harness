@@ -139,13 +139,14 @@ export function starterRefusal(starter, projectData, { lead = false, starterLead
   return `js-harness guard: start_session is called from a session whose own record holds ${off}, and a start is capped at the session that makes it. ${who} Where a card is enough, js-harness sessions start starts one on the rules' model and level, capped by no session.`;
 }
 
-/** The model and the level a start takes where its call names none, as `{ model, effort }`: the home's values in the
- * project whose rules file has the text `projectData`, a lead's level for a lead as `sessionStartRefusal` holds it,
- * each undefined where the project does not declare its rule (odd/tasks/one-model-home.md, spec 5). */
+/** The model, the level and the advisor a start takes where its call names none, as `{ model, effort, advisor }`:
+ * the home's values in the project whose rules file has the text `projectData`, a lead's level for a lead as
+ * `sessionStartRefusal` holds it, each undefined where the project does not declare its rule
+ * (odd/tasks/one-model-home.md, spec 5; odd/tasks/advisor-home.md, specs 2 and 3). */
 export function sessionStartHome(projectData, { lead = false } = {}) {
   const home = claudeHeld(projectData);
   const level = lead && home.lead !== null ? home.lead : home.effort;
-  return { model: home.model?.value, effort: level?.value };
+  return { model: home.model?.value, effort: level?.value, advisor: home.advisor?.value };
 }
 
 /** Why the model `toolInput` names is refused under the home's model `value`, or null: none named, or the home's,

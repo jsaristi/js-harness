@@ -5,6 +5,7 @@
 export const COVERAGE = {
   "baseline": "2026-10-28",
   "controls": {
+    "advisor-model": {"level":"check","test":"bin/lib/guard.test.mjs","break":{"path":"bin/lib/guard.mjs","find":"advisor: home.advisor?.value };","replace":"advisor: undefined };"}},
     "agents-budget": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/check.mjs","find":"('agents-budget', 'estimated tokens')","replace":"('agents-budget', 'estimated tokens') + 1"}},
     "announce-finished": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"when a stretch or a session ends, that it ended and which session to return to."},
     "away-autonomy": {"level":"line","path":"bin/lib/manifest.mjs","phrase":"the share of the planned that was met, the map by phase before and after, the timeline"},

@@ -997,7 +997,9 @@ test('rules change refuses a new value for a rule of a home and names the switch
 
 test('every flag the refusal of rules change names is one rules switch takes, for the rule it is named for', () => {
   // The refusal restates the switch's flags; this fails the day the switch stops taking one of them.
-  assert.deepEqual(Object.keys(HOME_FLAGS).sort(), [...Object.values(CLAUDE_HOME), ...Object.values(CODEX_HOME)].sort(), 'every rule of the two homes has its flag');
+  // The advisor's flag comes with rules switch --advisor (odd/tasks/advisor-home.md, T5), which drops this exception.
+  const homes = [...Object.values(CLAUDE_HOME), ...Object.values(CODEX_HOME)].filter((id) => id !== CLAUDE_HOME.advisor);
+  assert.deepEqual(Object.keys(HOME_FLAGS).sort(), homes.sort(), 'every rule of the two homes has its flag');
   for (const [id, flag] of Object.entries(HOME_FLAGS)) {
     const [name, shape, ...more] = flag.split(' ');
     assert.deepEqual(more, [], flag);
