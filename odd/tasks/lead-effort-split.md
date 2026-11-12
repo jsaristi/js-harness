@@ -8,8 +8,8 @@ branch `rule/lead-effort-split`, in work-unit commits. Runner: `node --test`.
 Slice 1 (T1-T5) committed on `rule/lead-effort-split`. He answered question 273 on 2026-11-12: split it and keep
 the lead at high, so b8def321 (`lead-effort` to xhigh) is reverted by 8f907c12 and both levels stand at high.
 Next: the done commands at HEAD; Codex and lens reviews with base 535509b6 (one set); push; PR; notify ready in its
-own call. It lands with no further question (Ask me before). `lead-effort`'s subject narrows in a later pull
-request (L6). Slice 2 is PR 850; slice 3 (`odd/tasks/senior-orchestrator.md`) waits for this one to land.
+own call. It lands with no further question (Ask me before). `lead-effort`'s subject is narrowed again by
+77e01fa7 (L8). Slice 2 is PR 850; slice 3 (`odd/tasks/senior-orchestrator.md`) waits for this one to land.
 
 ## Goal
 `rule:lead-effort` holds the lead's session, and a new rule `lens-effort` holds the Claude lenses and the double
@@ -110,3 +110,4 @@ Nothing: his answer to question 273 ("Separar y dejar en alto", 2026-11-12) and 
 - L5 2026-11-12, his "aplica todos los cambios ya" (93b72703:896); the lead reads it as yes to land each slice once the gate and both reviews pass.
 - L6 2026-11-12, mistake: `rules change lead-effort` for its subject computed from origin/main's declaration and put the value back to high (fd2b9eb3); seen by `rules applied` at HEAD, fixed by the revert 913ec9af (value xhigh again, checked with `rules lead-effort`). A rule changes once per pull request; lead-effort's subject narrows in a later one.
 - L7 2026-11-12, his answer to question 273, tapped (93b72703:1509): "Separar y dejar en alto (Recomendado)"; b8def321 reverted by 8f907c12, `rules applied` checked at high for both.
+- L8 2026-11-12, with the value back at main's high, the subject change no longer moves the value: 77e01fa7 reapplies fd2b9eb3 (`rules lead-effort`: subject "the effort the lead's session runs at", value high).
