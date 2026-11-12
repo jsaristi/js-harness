@@ -78,11 +78,13 @@ test('every command the host-update row and the heartbeat\'s usage name is one i
   const { USAGE } = await import('../bin/loop.mjs');
   const versions = { found: true, desktop: '2.42304.0', code: '2.1.299' };
   const stale = hostUpdateRow(versions, { desktop: '2.37337.1', code: '2.1.295' }).row;
-  const texts = [...stale.fix.claude, ...hostUnreadableRow(versions).fix.claude, ...USAGE].join('\n');
+  // USAGE is one text, its lines joined: it is added whole (the reliability lens on fcdf728..df3462a).
+  const texts = [...stale.fix.claude, ...hostUnreadableRow(versions).fix.claude, USAGE].join('\n');
   const named = (pattern) => [...texts.matchAll(pattern)].map((match) => match[1]);
   const workshop = named(/node workshop\/js-harness-workshop\.mjs ([a-z][\w-]*)/g);
   const productNames = named(/(?<![\w./-])js-harness ([a-z][\w-]*)/g);
   assert.ok(workshop.includes('host-watch'), `the row names the workshop's host-watch: ${texts}`);
+  assert.ok(workshop.includes('windows-daily'), 'the heartbeat\'s usage is read: it names the workshop\'s windows-daily');
   for (const name of workshop) assert.ok(Object.hasOwn(COMMANDS, name), `node workshop/js-harness-workshop.mjs ${name} is no workshop command`);
   for (const name of productNames) assert.ok(Object.hasOwn(product.COMMANDS, name), `js-harness ${name} is no command of the product`);
 });
