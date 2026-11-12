@@ -326,15 +326,21 @@ test('a start of a new lead is held to the rule lead-effort, and every other sta
 // odd/tasks/senior-orchestrator.md: a senior's start is held to rule:senior-model, with no advisor (D2).
 test('a start of a senior is held to the rule senior-model and names no advisor, and a work session on that model is refused', () => {
   const SENIOR = RULES.find((rule) => rule.id === 'senior-model').value;
-  assert.equal(sessionStartRefusal({ ...BRIEF, model: SENIOR, effort: HELD }, HERE, { senior: true, cli: true }), null);
-  assert.match(sessionStartRefusal({ ...BRIEF, model: RULES.find((rule) => rule.id === 'session-model').value, effort: HELD }, HERE, { senior: true, cli: true }), /not the one of the rule senior-model: /);
-  assert.match(sessionStartRefusal({ ...BRIEF, model: SENIOR, effort: HELD, advisor: SENIOR }, HERE, { senior: true, cli: true }), /a senior runs with no advisor/);
+  assert.equal(sessionStartRefusal({ ...BRIEF, model: SENIOR, effort: RULES.find((rule) => rule.id === 'senior-effort').value }, HERE, { senior: true, cli: true }), null);
+  assert.match(sessionStartRefusal({ ...BRIEF, model: RULES.find((rule) => rule.id === 'session-model').value, effort: RULES.find((rule) => rule.id === 'senior-effort').value }, HERE, { senior: true, cli: true }), /not the one of the rule senior-model: /);
+  assert.match(sessionStartRefusal({ ...BRIEF, model: SENIOR, effort: RULES.find((rule) => rule.id === 'senior-effort').value, advisor: SENIOR }, HERE, { senior: true, cli: true }), /a senior runs with no advisor/);
   assert.match(sessionStartRefusal({ ...BRIEF, model: SENIOR, effort: HELD }, HERE, { cli: true }), /not the one of the rule session-model: /);
   const home = sessionStartHome(HERE, { senior: true });
   assert.deepEqual([home.model, home.advisor], [SENIOR, null], 'a senior takes its model and no advisor where the call names none');
   // A project that declares no senior-model holds a senior's start to the home, as any start.
   const without = writeRules(RULES.filter((rule) => rule.id !== 'senior-model'));
   assert.equal(sessionStartHome(without, { senior: true }).model, sessionStartHome(without).model);
+  // Its level is rule:senior-effort, apart from the sessions' and the lead's.
+  const LEVEL = RULES.find((rule) => rule.id === 'senior-effort').value;
+  assert.equal(sessionStartHome(HERE, { senior: true }).effort, LEVEL);
+  assert.equal(sessionStartRefusal({ ...BRIEF, model: SENIOR, effort: LEVEL }, HERE, { senior: true, cli: true }), null);
+  const other = ['low', 'medium', 'high', 'xhigh'].find((level) => level !== LEVEL);
+  assert.match(sessionStartRefusal({ ...BRIEF, model: SENIOR, effort: other }, HERE, { senior: true, cli: true }), /senior-effort/);
 });
 
 test('where the rule session-effort is not declared, a session started with no effort passes', () => {

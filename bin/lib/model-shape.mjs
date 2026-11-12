@@ -12,7 +12,7 @@
 export const CLAUDE_HOME = Object.freeze({ model: 'session-model', effort: 'session-effort', lead: 'lead-effort', lenses: 'lens-effort', advisor: 'advisor-model' });
 /** The senior's model (odd/tasks/senior-orchestrator.md): apart from the Claude home, since a switch of the home leaves it
  * on its own model; `rules change` alone moves it. */
-export const SENIOR_HOME = Object.freeze({ model: 'senior-model' });
+export const SENIOR_HOME = Object.freeze({ model: 'senior-model', effort: 'senior-effort' });
 export const CODEX_HOME = Object.freeze({ model: 'review-model', effort: 'review-effort' });
 
 /** The effort levels a host takes, lowest first: the order that says one level is above another. */
@@ -34,7 +34,7 @@ export function homeFaults(rule) {
   if ((id === CLAUDE_HOME.model || id === CLAUDE_HOME.advisor || id === SENIOR_HOME.model) && !(text && CLAUDE_ID.test(value))) {
     return ['the value is not a full Claude id, claude-<family>-<version>: a short name gives whatever model the engine in use has for it'];
   }
-  if ((id === CLAUDE_HOME.effort || id === CLAUDE_HOME.lead || id === CLAUDE_HOME.lenses || id === CODEX_HOME.effort) && !EFFORTS.includes(value)) {
+  if ((id === CLAUDE_HOME.effort || id === CLAUDE_HOME.lead || id === CLAUDE_HOME.lenses || id === SENIOR_HOME.effort || id === CODEX_HOME.effort) && !EFFORTS.includes(value)) {
     return [`the value is not an effort level: ${EFFORTS.slice(0, -1).join(', ')} or ${EFFORTS.at(-1)}`];
   }
   if (id === CODEX_HOME.model && (!text || /\s/.test(value) || /^claude\b/i.test(value) || EFFORTS.includes(value))) {

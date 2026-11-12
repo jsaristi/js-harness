@@ -51,6 +51,7 @@ export function claudeHeld(projectData) {
     advisor: guardHeld('advisor-model', ruleHere('advisor-model', undefined, projectData)),
     // The senior's model (odd/tasks/senior-orchestrator.md): held only where the project declares it.
     senior: guardHeld('senior-model', ruleHere('senior-model', undefined, projectData)),
+    seniorEffort: guardHeld('senior-effort', ruleHere('senior-effort', undefined, projectData)),
   };
 }
 

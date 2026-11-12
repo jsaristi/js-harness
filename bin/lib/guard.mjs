@@ -116,10 +116,12 @@ export function sessionStartRefusal(toolInput, projectData, { cli = false, lead 
   }
   const advisor = home.advisor === null || ofSenior ? null : advisorReason(toolInput, home.advisor.value, who, cli);
   if (advisor !== null) return `${advisor}${home.advisor.note}`;
-  const ofLead = lead && home.lead !== null;
-  const rule = ofLead ? home.lead : home.effort;
+  // A senior's level is rule:senior-effort where declared; a lead's, rule:lead-effort; any other, the sessions'.
+  const ofLevel = ofSenior && home.seniorEffort !== null;
+  const ofLead = !ofLevel && lead && home.lead !== null;
+  const rule = ofLevel ? home.seniorEffort : ofLead ? home.lead : home.effort;
   if (rule === null) return null;
-  const reason = effortReason(toolInput, ofLead ? CLAUDE_HOME.lead : CLAUDE_HOME.effort, rule.value, who, cli);
+  const reason = effortReason(toolInput, ofLevel ? SENIOR_HOME.effort : ofLead ? CLAUDE_HOME.lead : CLAUDE_HOME.effort, rule.value, who, cli);
   return reason === null ? null : `${reason}${rule.note}`;
 }
 
@@ -155,7 +157,7 @@ export function starterRefusal(starter, projectData, { lead = false, starterLead
 export function sessionStartHome(projectData, { lead = false, senior = false } = {}) {
   const home = claudeHeld(projectData);
   const level = lead && home.lead !== null ? home.lead : home.effort;
-  if (senior && home.senior !== null) return { model: home.senior.value, effort: level?.value, advisor: null };
+  if (senior && home.senior !== null) return { model: home.senior.value, effort: (home.seniorEffort ?? level)?.value, advisor: null };
   return { model: home.model?.value, effort: level?.value, advisor: home.advisor?.value };
 }
 

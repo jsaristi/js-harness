@@ -5,21 +5,16 @@ JH 192, slice 3 of the lead's brief. Delivery: this design, then one pull reques
 (`rules change` runs only on a `rule/` branch, `bin/lib/rules-change-run.mjs:170`). Runner: `node --test`.
 
 ## State
-UNBLOCKED: PR 851 landed (main a647c954), merged here. The WIP patch is applied and staged, not committed (the hook's
-check refuses it until senior-model is declared). The role sweep (explorer, 2026-11-12 ~14:05) found 13 functional and
-7 wording faults for an SR title; D6 cuts most: `roleNamed` does NOT take SR, so `notify --to SR` and
-`sessions --address SR` stay refused and `isNotice`, inbox, wait, notify/board/loop wording need nothing. Done, uncommitted, tested: roleNamed without SR; wake skips a senior (bin/wake.test.mjs); codeOfName refuses SR; guard.mjs refuses start_session with an SR title (bin/guard.test.mjs, last test). The guard suite fails until senior-model is declared (claudeHeld throws), rules change senior-model applied (14:02, not committed): rules check PASS 81 rules, coverage --prove PASS 63 breaks (a senior-model break in guard.mjs; the advisor-model and session-model breaks follow the new guard lines). The first commit was refused (sessions.mjs over its line ceiling, folded to one line; a flag test that wants every CLAUDE_HOME rule switchable): D7 moves senior-model into SENIOR_HOME. Next: prove and suites, commit, then senior-effort (also in SENIOR_HOME).
-Left to fix,
-each with a test: `bin/wake.mjs:251` (a senior row makes `to` "null" and `newNotice` throws, killing every note of
-the boot: skip seniors); `bin/guard.mjs:165-179` + `session-title-guard.mjs:51` (start_session with SR refused,
-naming sessions start, in the TITLE_SHAPE commit); the hold by role: `sessions.mjs:1453`/`roster-home.mjs:19-22`,
-`home-doctor.mjs:100`, `rules.mjs:456,529` -> `home-sessions.mjs:51,63`, `rules-switch.mjs:353-359` (a senior held
-to senior-model/senior-effort); `project.mjs:433` codeOfName refuses SR; wording `sessions.mjs:3082` "no role" and
-`wait.mjs:208`. Then the starter-is-lead check and one-live-senior in `sessions-background.mjs:174,345`. Advisor's
-other points: senior-effort plumbing (home key, homeFaults, claudeHeld, both guard functions, doctor's top cap, a test
-of --effort high on start and resume); "no advisor" claimed only after the first senior's transcript; rules change
---with dry-run first, a planted break for senior-model, then conventions-model-home and rules-switch tests; the
-verifier gets the guard code.
+Committed: fd309617 senior-model (SENIOR_HOME, D7), the title contract, the guard's start_session refusal, sessions
+start and resume on the senior's model with no advisor, roleNamed without SR (D6), wake and codeOfName. In the tree,
+not committed: senior-effort (rules change applied at 14:5x, value high; claudeHeld.seniorEffort; the guard's level
+by ofLevel; sessionStartHome; tests in bin/lib/guard.test.mjs; its planted break; the session-effort and lead-effort
+breaks follow the new guard lines). rules check PASS, 82 rules; coverage --prove running. Next: commit senior-effort;
+then the reporters' hold by role (sessions.mjs rowHome via roster-home.mjs:19-22, home-doctor.mjs:100, rules.mjs
+456/529 -> home-sessions.mjs:51,63, rules-switch.mjs:353-359), wording sessions.mjs:3082 and wait.mjs:208; the
+starter-is-lead check and one live senior in sessions-background.mjs:174,345; texts (session-model, session-effort,
+advisor-model "every session but a senior"; lead-protocols); the verifier on the guard; reviews (base 1a5061d2); PR;
+ready. "No advisor" is claimed only after the first senior's transcript shows it (his advisorModel setting may reach it).
 
 ## Goal
 The lead starts a senior session, titled `<code> SR · <purpose>`, with `js-harness sessions start`, and every start

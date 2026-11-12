@@ -103,10 +103,7 @@ export const RULES = [
     "value": 3200,
     "unit": "estimated tokens",
     "was": [
-      {
-        "value": 2500,
-        "until": "2026-10-27"
-      }
+      { "value": 2500, "until": "2026-10-27" }
     ]
   },
   {
@@ -239,14 +236,8 @@ export const RULES = [
     "owner": "sebastian",
     "since": "2026-11-10",
     "was": [
-      {
-        "value": "claude-fable-5-2",
-        "until": "2026-11-11"
-      },
-      {
-        "value": "claude-fable-5-1",
-        "until": "2026-11-10"
-      }
+      { "value": "claude-fable-5-2", "until": "2026-11-11" },
+      { "value": "claude-fable-5-1", "until": "2026-11-10" }
     ],
     "retired": "2026-11-11",
     "successors": [
@@ -340,10 +331,7 @@ export const RULES = [
     "since": "2026-11-10",
     "value": "high",
     "was": [
-      {
-        "value": "xhigh",
-        "until": "2026-11-10"
-      }
+      { "value": "xhigh", "until": "2026-11-10" }
     ]
   },
   {
@@ -394,10 +382,7 @@ export const RULES = [
     "value": 2000,
     "unit": "bytes",
     "was": [
-      {
-        "value": 4000,
-        "until": "2026-11-08"
-      }
+      { "value": 4000, "until": "2026-11-08" }
     ]
   },
   {
@@ -652,6 +637,14 @@ export const RULES = [
     ]
   },
   {
+    "id": "senior-effort",
+    "subject": "the effort a senior session runs at, titled <code> SR · <purpose>; its model is rule:senior-model",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-11-12",
+    "value": "high"
+  },
+  {
     "id": "senior-model",
     "subject": "the model a senior session runs on, titled <code> SR · <purpose>, which the lead starts with js-harness sessions start and sends tasks needing more intelligence or complexity",
     "owner": "sebastian",
@@ -678,10 +671,7 @@ export const RULES = [
     "value": 60,
     "unit": "minutes",
     "was": [
-      {
-        "value": 20,
-        "until": "2026-10-16"
-      }
+      { "value": 20, "until": "2026-10-16" }
     ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bsensors?\\b.{0,50}\\b(?:stopped|timeout|times? out|after|at most)\\b.{0,30}{amount}"
@@ -695,18 +685,9 @@ export const RULES = [
     "since": "2026-11-11",
     "value": "medium",
     "was": [
-      {
-        "value": "high",
-        "until": "2026-11-11"
-      },
-      {
-        "value": "medium",
-        "until": "2026-11-10"
-      },
-      {
-        "value": "high",
-        "until": "2026-11-10"
-      }
+      { "value": "high", "until": "2026-11-11" },
+      { "value": "medium", "until": "2026-11-10" },
+      { "value": "high", "until": "2026-11-10" }
     ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\b(?:at|on) `?{amount}`? effort",
@@ -733,14 +714,8 @@ export const RULES = [
     "since": "2026-11-12",
     "value": "claude-opus-5-5",
     "was": [
-      {
-        "value": "claude-fable-5-2",
-        "until": "2026-11-12"
-      },
-      {
-        "value": "claude-opus-5-5",
-        "until": "2026-11-10"
-      }
+      { "value": "claude-fable-5-2", "until": "2026-11-12" },
+      { "value": "claude-opus-5-5", "until": "2026-11-10" }
     ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bsessions?\\b.{0,50}\\bon `?(?=claude-){amount}",
@@ -804,10 +779,7 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-10-07",
     "was": [
-      {
-        "value": "high",
-        "until": "2026-11-11"
-      }
+      { "value": "high", "until": "2026-11-11" }
     ],
     "retired": "2026-11-11",
     "successors": [
@@ -825,14 +797,8 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-11-10",
     "was": [
-      {
-        "value": "claude-fable-5-2",
-        "until": "2026-11-11"
-      },
-      {
-        "value": "claude-opus-5-5",
-        "until": "2026-11-10"
-      }
+      { "value": "claude-fable-5-2", "until": "2026-11-11" },
+      { "value": "claude-opus-5-5", "until": "2026-11-10" }
     ],
     "retired": "2026-11-11",
     "successors": [
@@ -849,14 +815,8 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-11-10",
     "was": [
-      {
-        "value": "claude-fable-5-2",
-        "until": "2026-11-11"
-      },
-      {
-        "value": "claude-haiku-5-5",
-        "until": "2026-11-10"
-      }
+      { "value": "claude-fable-5-2", "until": "2026-11-11" },
+      { "value": "claude-haiku-5-5", "until": "2026-11-10" }
     ],
     "retired": "2026-11-11",
     "successors": [
@@ -951,10 +911,7 @@ export const RULES = [
     "since": "2026-10-09",
     "unit": "sessions",
     "was": [
-      {
-        "value": 3,
-        "until": "2026-10-24"
-      }
+      { "value": 3, "until": "2026-10-24" }
     ],
     "retired": "2026-10-24",
     "successors": [
@@ -971,10 +928,7 @@ export const RULES = [
     "since": "2026-10-24",
     "unit": "sessions",
     "was": [
-      {
-        "value": 3,
-        "until": "2026-10-30"
-      }
+      { "value": 3, "until": "2026-10-30" }
     ],
     "retired": "2026-10-30",
     "successors": []

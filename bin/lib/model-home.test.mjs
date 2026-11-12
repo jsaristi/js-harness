@@ -40,12 +40,12 @@ test('a list given to claudeHome is the one read, so a switch is seen by every r
 test('a guard holds the home where the project declares the rules, and nothing where it does not', () => {
   const here = claudeHeld(writeRules(RULES));
   const held = (id) => ({ value: valueOf(id), note: '' });
-  assert.deepEqual(here, { model: held('session-model'), effort: held('session-effort'), lead: held('lead-effort'), lenses: held('lens-effort'), advisor: held('advisor-model'), senior: held('senior-model') });
-  assert.deepEqual(claudeHeld(undefined), { model: null, effort: null, lead: null, lenses: null, advisor: null, senior: null });
-  assert.deepEqual(claudeHeld('export const RULES = [];\n'), { model: null, effort: null, lead: null, lenses: null, advisor: null, senior: null });
+  assert.deepEqual(here, { model: held('session-model'), effort: held('session-effort'), lead: held('lead-effort'), lenses: held('lens-effort'), advisor: held('advisor-model'), senior: held('senior-model'), seniorEffort: held('senior-effort') });
+  assert.deepEqual(claudeHeld(undefined), { model: null, effort: null, lead: null, lenses: null, advisor: null, senior: null, seniorEffort: null });
+  assert.deepEqual(claudeHeld('export const RULES = [];\n'), { model: null, effort: null, lead: null, lenses: null, advisor: null, senior: null, seniorEffort: null });
   // A project that declares the sessions' level and none for its lead: the guard holds what is declared.
   const without = claudeHeld(writeRules(RULES.filter((rule) => rule.id !== 'lead-effort')));
-  assert.deepEqual(without, { model: held('session-model'), effort: held('session-effort'), lead: null, lenses: held('lens-effort'), advisor: held('advisor-model'), senior: held('senior-model') });
+  assert.deepEqual(without, { model: held('session-model'), effort: held('session-effort'), lead: null, lenses: held('lens-effort'), advisor: held('advisor-model'), senior: held('senior-model'), seniorEffort: held('senior-effort') });
   // A project that declares no advisor: a start passes none of its own, as before the rule.
   assert.equal(claudeHeld(writeRules(RULES.filter((rule) => rule.id !== 'advisor-model'))).advisor, null);
 });
