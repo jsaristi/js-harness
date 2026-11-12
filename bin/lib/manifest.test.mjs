@@ -3285,7 +3285,7 @@ test('the orchestrator skill says how a model or an effort is switched, beside t
     'so its first estimates come from the model that leaves, and `rule:codex-review-rate`, `rule:codex-review-floor` and the double review\'s measured cost were measured on that model.',
     '`docs/future-model.md` is the measuring of what the harness is worth on a new model',
     // odd/tasks/advisor-home.md, spec 8: the advisor is a rule of the Claude home, named and never restated.
-    '`rule:advisor-model` the advisor each of them consults',
+    '`rule:advisor-model` the advisor of each session `js-harness sessions start` starts or resumes',
     'With an advisor, each pair is asked to consult it once, and nothing is written unless it answers.',
   ]) at(line);
   // The two protocols come from a module of their own (./lead-protocols.mjs); the manifest writes their last full
