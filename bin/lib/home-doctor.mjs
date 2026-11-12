@@ -33,6 +33,15 @@ export function settingsNotes(home, { user = null, project = null } = {}) {
       notes.push(`his settings hold ${entry.effortLevel} for ${home.model} under modelSettings, not the home's ${home.effort}`);
     }
   }
+  // The advisor of a session of the app, the lead's included, and of its sub-agents is his advisorModel, which his
+  // /advisor writes (2026-11-12); it is held to the home's advisor and never written here.
+  if (typeof home.advisor === 'string' && isObject(user)) {
+    if (typeof user.advisorModel !== 'string') {
+      notes.push(`his settings hold no advisorModel, while the home's advisor is ${home.advisor}: a session of the app, the lead's included, and its sub-agents start with none (/advisor ${home.advisor} in a session sets it)`);
+    } else if (!sameClaudeModel(user.advisorModel, home.advisor)) {
+      notes.push(`his settings' advisorModel is ${user.advisorModel}, not the home's advisor ${home.advisor}: a session of the app, the lead's included, and its sub-agents consult it`);
+    }
+  }
   for (const [whose, settings] of [['his settings hold', user], ['the project\'s .claude/settings.local.json holds', project]]) {
     if (typeof home.effort === 'string' && typeof settings?.effortLevel === 'string' && settings.effortLevel !== home.effort) {
       notes.push(`${whose} effortLevel ${settings.effortLevel}, not the home's ${home.effort}: a new session takes it`);
