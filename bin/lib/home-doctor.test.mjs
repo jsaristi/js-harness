@@ -86,7 +86,9 @@ test('the note carries what his settings and the project\'s say that the home do
   });
   // The advisor the note holds his setting to is the rules text's, read through the row and not built by hand.
   const otherAdvisor = { 'D:/home/.claude/settings.json': JSON.stringify({ advisorModel: 'claude-nova-1-0' }) };
-  assert.match(ask({ readApp: () => record('JH 7 · work', home.model, home.effort), readFile: files(otherAdvisor) }).note, new RegExp(`advisorModel is claude-nova-1-0, not the home's advisor ${home.advisor}`));
+  const declared = RULES.find((rule) => rule.id === 'advisor-model').value;
+  assert.match(declared, /^claude-/, 'the rules text declares the advisor the note is held to');
+  assert.match(ask({ readApp: () => record('JH 7 · work', home.model, home.effort), readFile: files(otherAdvisor) }).note, new RegExp(`advisorModel is claude-nova-1-0, not the home's advisor ${declared}:`));
   const broken = { 'D:/home/.claude/settings.json': '{ not json', 'D:/proj/.claude/settings.local.json': '[]' };
   assert.deepEqual(ask({ readApp: () => record('JH 7 · work', home.model, home.effort), readFile: files(broken) }), { state: 'ok', note: '', fix: [] });
 });
