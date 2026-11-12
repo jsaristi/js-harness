@@ -6,11 +6,9 @@ brief `~/.js-harness/background/briefs/2026-11-12T06-58-20-202Z-f6e42350.md`. De
 `rule/advisor-home`, in four work-unit commits. Runner: `node --test`.
 
 ## State
-Done: T1 to T6, every code slice reviewed (L6), the advisor's checks before the push (L7). Next, T7: the Codex review of
-`501b1566..` (the skill line), the push, whose run on GitHub is the gate, the pull request (body in
-`$CLAUDE_JOB_DIR/tmp/pr-body.md`, with no AI footer, his rule), the session summary
-`docs/sessions/2026-11-12-jh-189-the-advisor-s-home.md` committed and pushed, then `notify --kind ready --pr` (lands
-only on his yes, the advisor tokens of L7), then `closed --summary`. T8 is the lead's, after the land.
+Done: T1 to T7's pull request: #846, every code commit covered by Codex and the lenses (the push's own check), the
+session summary `docs/sessions/2026-11-12-jh-189-the-advisor-s-home.md`. Left: the `ready` notice with `--pr 846`
+(lands only on his yes, the advisor tokens of L7), then `closed --summary`. T8 is the lead's, after the land.
 Open, his: everything under "Ask me before". Replies of this session run on `claude-opus-5-5` at medium with
 a `claude-fable-5-2` advisor.
 
@@ -182,7 +180,7 @@ Nothing of this plan needs him before it lands; the merge does. Written down as 
   verifier. Route: inline, then one verifier. Commit: `3b932275`, `07e94c23`.
 - [x] T5 (kind: build) (5) `rules switch --advisor <model>` and its probe. Route: inline. Commit: `e3a491ab`.
 - [x] T6 (kind: build) (6, 8) `rules applied` reads the advisor; the texts. Route: inline. Commit: the one after `e3a491ab`.
-- [ ] T7 (kind: verify) Codex and the lenses on each slice, the gate, the pull request, the `ready` notice with the
+- [x] T7 (kind: verify) Codex and the lenses on each slice, the gate, the pull request, the `ready` notice with the
   advisor tokens measured so far.
 - [ ] T8 (kind: verify) After the land: the first start and the first resume with no `--advisor`, checked in their
   transcripts and by `rules applied`. The lead's act; recorded here if this session still runs.
