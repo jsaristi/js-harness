@@ -389,8 +389,8 @@ test('a lens runs tool-less on the CLI login: no eval token, no API key, no cust
   assert.deepEqual(valueOf('--tools'), ['--tools', '']);
   // The model and the effort are both named on the call: a run that names no effort takes the CLI's saved one.
   assert.deepEqual(valueOf('--model'), ['--model', LENS_MODEL]);
-  // His answer of 2026-11-11 keeps the reviewers at the lead's level, which is not the sessions' while the two differ.
-  assert.deepEqual([LENS_MODEL, LENS_EFFORT], [claudeHome().model, claudeHome().lead], 'a lens runs on the home\'s model at the lead\'s level, read and not written again');
+  // His answer of 2026-11-11 keeps the reviewers at high, and his of 2026-11-12 at a rule of their own, not the lead's.
+  assert.deepEqual([LENS_MODEL, LENS_EFFORT], [claudeHome().model, claudeHome().lenses], 'a lens runs on the home\'s model at the reviewers\' level, read and not written again');
   assert.deepEqual(valueOf('--effort'), ['--effort', LENS_EFFORT]);
   assert.deepEqual(valueOf('--system-prompt-file'), ['--system-prompt-file', 'prompt.txt']);
   assert.deepEqual(valueOf('--output-format'), ['--output-format', 'json']);

@@ -347,6 +347,14 @@ export const RULES = [
     ]
   },
   {
+    "id": "lens-effort",
+    "subject": "the effort the Claude lenses and the double review's Claude reader run at",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-11-12",
+    "value": "high"
+  },
+  {
     "id": "live-board",
     "subject": "the harness never works as a black box: work sessions write each event as a notice (a session starts or ends, a step finishes, a pull request opens or merges, a decision is made, spend is reported), the lead sends them to the live board, a page that updates by itself, and points every reply to it",
     "owner": "sebastian",

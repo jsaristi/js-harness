@@ -22,7 +22,7 @@ export function settingsNotes(home, { user = null, project = null } = {}) {
   if (typeof home.model === 'string' && typeof user?.model === 'string' && !sameClaudeModel(user.model, home.model)) {
     notes.push(`his settings' default model is ${user.model}, not the home's ${home.model}: a session started outside the harness runs on it`);
   }
-  const top = [home.effort, home.lead].filter((level) => EFFORTS.includes(level)).sort((one, other) => EFFORTS.indexOf(other) - EFFORTS.indexOf(one))[0];
+  const top = [home.effort, home.lead, home.lenses].filter((level) => EFFORTS.includes(level)).sort((one, other) => EFFORTS.indexOf(other) - EFFORTS.indexOf(one))[0];
   if (top !== undefined && EFFORTS.includes(user?.maxEffortLevel) && EFFORTS.indexOf(user.maxEffortLevel) < EFFORTS.indexOf(top)) {
     notes.push(`his settings cap the effort at ${user.maxEffortLevel}, under the home's ${top}`);
   }

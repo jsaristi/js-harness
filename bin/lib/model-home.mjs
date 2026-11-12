@@ -1,6 +1,7 @@
 // The one module that reads the two homes of a model and an effort (odd/tasks/one-model-home.md, spec 2).
 // Everything Claude the harness starts runs on the Claude home, `session-model` at `session-effort`, the lead's
-// session at `lead-effort` since his decision of 2026-11-11; a Codex review runs on the Codex home, `review-model`
+// session at `lead-effort` since his decision of 2026-11-11, the lenses and the double review's Claude reader at
+// `lens-effort` since his of 2026-11-12; a Codex review runs on the Codex home, `review-model`
 // at `review-effort`. On 2026-11-10 the user changed model and effort twice in a day, and each change was carried by
 // hand through seven rules, three constants and an agent file; a launcher, a guard or a check that needs a model or
 // an effort reads it here, so the next change is one place. Which rules the homes are and what shape their values
@@ -16,9 +17,9 @@ export { CLAUDE_HOME, CODEX_HOME, EFFORTS, homeFaults } from './model-shape.mjs'
  * (2026-11-10); the two ends are assumed, and his to correct. */
 export const MENU_LEVELS = Object.freeze({ low: 'Bajo', medium: 'Medio', high: 'Alto', xhigh: 'Extra alto', max: 'Máximo' });
 
-/** The Claude home as `{ model, effort, lead, advisor }`, the declared values whatever project the caller runs in:
- * the harness's own launches (a lens, the double review's reader) run on `model` at `effort` everywhere. `lead` is the
- * level of the lead's session alone, which runs on the same model; `advisor` the model of the advisor a session it
+/** The Claude home as `{ model, effort, lead, lenses, advisor }`, the declared values whatever project the caller runs
+ * in: the harness's own launches run on `model` everywhere. `effort` is the level of a session and a sub-agent, `lead`
+ * the level of the lead's session alone, `lenses` the level of a lens and of the double review's reader; `advisor` the model of the advisor a session it
  * starts consults (odd/tasks/advisor-home.md). A guard, which holds a project to the home only where that project
  * declares the rules, reads `claudeHeld` instead. */
 export function claudeHome(list = RULES) {
@@ -26,6 +27,7 @@ export function claudeHome(list = RULES) {
     model: ruleOf('session-model', list).value,
     effort: ruleOf('session-effort', list).value,
     lead: ruleOf('lead-effort', list).value,
+    lenses: ruleOf('lens-effort', list).value,
     advisor: ruleOf('advisor-model', list).value,
   };
 }
@@ -37,7 +39,7 @@ export function codexHome(list = RULES) {
 }
 
 /** What a guard holds of the Claude home in the project whose rules file has the text `projectData`, as
- * `{ model, effort, lead, advisor }`, each `{ value, note }` as `guardHeld` gives it, or null where the project does
+ * `{ model, effort, lead, lenses, advisor }`, each `{ value, note }` as `guardHeld` gives it, or null where the project does
  * not declare that rule: a project that installs the harness is held to nothing, one that declares no level for its
  * lead holds a lead to none of its own, and one that declares no advisor starts its sessions with none. */
 export function claudeHeld(projectData) {
@@ -45,15 +47,16 @@ export function claudeHeld(projectData) {
     model: guardHeld('session-model', ruleHere('session-model', undefined, projectData)),
     effort: guardHeld('session-effort', ruleHere('session-effort', undefined, projectData)),
     lead: guardHeld('lead-effort', ruleHere('lead-effort', undefined, projectData)),
+    lenses: guardHeld('lens-effort', ruleHere('lens-effort', undefined, projectData)),
     advisor: guardHeld('advisor-model', ruleHere('advisor-model', undefined, projectData)),
   };
 }
 
-/** `claudeHeld` as plain values, `{ model, effort, lead, advisor }`: what each rule holds in the project, or null
+/** `claudeHeld` as plain values, `{ model, effort, lead, lenses, advisor }`: what each rule holds in the project, or null
  * where the project does not declare it. */
 export function heldValues(projectData) {
   const held = claudeHeld(projectData);
-  return { model: held.model?.value ?? null, effort: held.effort?.value ?? null, lead: held.lead?.value ?? null, advisor: held.advisor?.value ?? null };
+  return { model: held.model?.value ?? null, effort: held.effort?.value ?? null, lead: held.lead?.value ?? null, lenses: held.lenses?.value ?? null, advisor: held.advisor?.value ?? null };
 }
 
 /** A model as a person reads it: `claude-fable-5-2` is "Fable 5.2", from its family and its version. An id of

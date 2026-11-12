@@ -1479,7 +1479,7 @@ test('the board marks a session whose app record is off the home the project\'s 
   assert.equal(code, 0, stderr);
   assert.ok(stdout.split('\n').includes(`    opened unknown  in Sessions  effort ${off}  OFF THE HOME: its menu holds the level ${off}, the home ${home.effort}`), stdout);
   const board = JSON.parse((await runSessions(machine, ['--json'], { readApp: () => records })).stdout);
-  assert.deepEqual(board.home, { model: home.model, effort: home.effort, lead: home.lead, advisor: home.advisor });
+  assert.deepEqual(board.home, { model: home.model, effort: home.effort, lead: home.lead, lenses: home.lenses, advisor: home.advisor });
   assert.deepEqual(board.roster.rows.find((row) => row.title === 'JH 3 · the routine').off, { source: 'menu', model: null, effort: off });
 }));
 

@@ -572,6 +572,35 @@
       "by": "command"
     }
   },
+  "lens-effort": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Va a tocar utilizar Fable 5.2 en Alto solo para el orquestador y para las sesiones solo Fable 5.2 en Medio es que tengo una pregunta por favor esta es la respuesta de esta pregunta pero no la tomes ya sino que hablemosla osea dejame que tengamos la conversacion en el chat y hazme decidir mejor para poderte enviar imagenes y estadisticas",
+        "date": "2026-11-11",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 11253
+      },
+      {
+        "quote": "Sí, aplícalo",
+        "date": "2026-11-11",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 11679
+      },
+      {
+        "quote": "Yo creo que nos va a tocar que seguir como antes Opus 5.5 Extra para orquestador y Opus 5.5 Medio para sesiones y subagentes pero todos con Advisor de Fable 5.2 Alto y lo que podemos hacer es depronto tener una sesion de Orquestador Senior que tenga Fable 5.2 Alto para cosas especiales que le coloque el orquestador Opus 5.5 Extra Alto, que te parece así?",
+        "date": "2026-11-11",
+        "session": "812b728f-2f18-43f6-b405-396080689c65",
+        "line": 1444
+      }
+    ],
+    "reading": "On 2026-11-11 he split the effort of the one model in two, his \"Alto\" for the orchestrator and \"Medio\" for the sessions and the sub-agents; asked that day (question 260) at which effort the Claude lenses and the double review's Claude reader review, he chose high, so the two read rule:lead-effort, the lead's level. The same night he asked for \"Opus 5.5 Extra para orquestador\", which the lead's level could not take without raising the reviewers. On 2026-11-12 (question 272) he answered that the rule be split: the orchestrator at his Extra, the reviewers staying at high. This rule is the reviewers' level, his \"Alto\", which the host names high; their model is rule:session-model, as everything's, and the lead's level is rule:lead-effort.",
+    "accepted": "Typed by him in the lead's chat on 2026-11-11 (the three lines); his \"Sí, aplícalo\" accepts the scheme of line 11253. The reviewers' level and the split are his answers to the lead's questions, tapped and so not quoted: \"Lentes en alto (Recomendado)\" to question 260 on 2026-11-11 (transcript f0959bbd-5f7a-4360-b626-048caf21067f, line 822) and \"Sí, sepárala\" to question 272 on 2026-11-12 (transcript 93b72703-ce16-4f96-a7f6-d5fddb1b4a80, line 674). Which rule is the new one is the session's reading (odd/tasks/lead-effort-split.md, Depth pass 1), and his to correct.",
+    "checked": {
+      "date": "2026-11-12",
+      "by": "command"
+    }
+  },
   "live-board": {
     "kind": "words",
     "quotes": [

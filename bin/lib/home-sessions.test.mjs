@@ -143,4 +143,6 @@ test('the block says the advisor a session is held to, what its last reply named
   assert.equal(lines[3], '  background  "JH j3 · job" (j3)  its last reply ran on claude-opus-5-5 at high with an advisor not known (its last reply holds no advisorModel); its start named no model and no level; its job: idle; held to claude-opus-5-5 at medium with the advisor claude-fable-5-2; corrected by a resume, js-harness sessions start --resume j3');
   assert.ok(lines.includes('  not read: the advisor of "JH j2 · job" (j2): its last reply holds no advisorModel, so it is not counted on the home'), lines.join('\n'));
   assert.ok(lines.includes('  on the home: 0 desktop, not archived, and 0 background'), lines.join('\n'));
+  // odd/tasks/lead-effort-split.md: the reviewers' level is said apart from the lead's where the home declares it.
+  assert.equal(offHomeLines(result, { ...ADVISED, lead: 'xhigh', lenses: 'high' })[1], 'Sessions off the home: a session is held to claude-opus-5-5 at medium, the lead to xhigh, and the lenses and the double review\'s Claude reader to high; a background session to the advisor claude-fable-5-2');
 });
