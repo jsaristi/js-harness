@@ -4,23 +4,22 @@ Locator: `odd/tasks/f8-s6-read-surface.md` · Branch: `feat/f8-s6-read-surface` 
 Delivery: chained pull requests of work-unit slices · Test runner: `node --test`
 
 ## State
-Rewritten 2026-11-11 19:40 local, JH 186 (job `d95aafd1`, `claude-fable-5-2` at medium), worktree
-`.claude/worktrees/f8-s6-read-surface`, branch `feat/f8-s6-read-surface`.
-- Done: T1 (`e8b22bb7`), T2 and T2b (`1929fe56`), T3 and T6's documentation (`704495a7`), T5 (the commit after it:
-  cases 9 and 10 passed 2 of 2 each, L6). The `read surface` row reads 13,526 of 15,000: Next 1,796 and Decided
-  7,158 of 10,000, the largest resume head 4,572 (`odd/tasks/templates.md`) of 5,000.
-- Reviewed: `e8b22bb7..28d64c64` by Codex (correct) and the lenses (8 findings, answered in L7; their fix is the
-  commit after `28d64c64`).
-  The fix was confirmed (`28d64c64..3ea7b35a`, L8); its one suggestion is the commit after `3ea7b35a`.
-- Next, in order: (1) the third and last review, of that commit alone: `js-harness codex-review --base 3ea7b35a
-  --doc odd/tasks/f8-s6-read-surface.md` and `js-harness lens-review --base 3ea7b35a --lenses readability
-  --reason <why> --doc odd/tasks/f8-s6-read-surface.md`; (2) push, the pull request, `js-harness
-  notify --to orchestrator --kind ready --pr <n>`; (3) the close: the summary, `notify --kind closed --summary
-  <file>`. Every notice says the model.
-- Open: question 268 (the relief by month: take it out of S6, build it in two steps, or leave it) is recorded for
-  him through the lead; T4 waits on it, nothing else does, and no code of T4 is written. Decided's history tails
-  stay where they are (L5). The lead is owed one line: `CLAUDE.md`'s sentence on a feature document's order does
-  not name `## State`, and that file is his to change.
+Rewritten 2026-11-11 19:38 local, JH 186 (job `d95aafd1`, `claude-fable-5-2` at medium), worktree
+`.claude/worktrees/f8-s6-read-surface`, branch `feat/f8-s6-read-surface`, pushed; pull request 838 is open and
+the lead was told `ready` at 19:36.
+- Done: T1 (`e8b22bb7`), T2 and T2b (`1929fe56`), T3 and T6's documentation (`704495a7`), T5 (`28d64c64`: cases 9
+  and 10 passed 2 of 2 each, L6), the reviews' fixes (`3ea7b35a`, `c7282225`). Three review rounds, each by Codex
+  (correct) and the lenses, answered in L7 and L8. The `read surface` row reads 13,526 of 15,000: Next 1,796 and
+  Decided 7,158 of 10,000, the largest resume head 4,572 (`odd/tasks/templates.md`) of 5,000.
+- Next: wait for the answer to question 268 (`js-harness wait`, in the background, ends on a notice to this
+  session). On "take it out of S6" or "leave it": write the answer in the Log, tick T4 as left out with its
+  reason, set the roadmap's S6 State line, commit, push, then the close: `js-harness summary template --title "JH
+  186 · F8 S6: the read surface"`, `js-harness notify --to orchestrator --kind closed --summary <file>`. On "build
+  it in two steps": T4 as its line says, readers first, with an independent verifier. Every notice says the model.
+- Open: question 268 (the relief by month), recorded for him through the lead; T4 waits on it and no code of T4
+  is written. A known limit, answered in L7: the board's `nextStep` holds the whole State head. Decided's history
+  tails stay where they are (L5). `CLAUDE.md`'s sentence on a feature document's order does not name `## State`,
+  and that file is his to change: the lead was told in the `ready` notice.
 
 ## Goal
 What a session reads to start is bounded and held by a check: the roadmap's Next and Decided at most 10k estimated
