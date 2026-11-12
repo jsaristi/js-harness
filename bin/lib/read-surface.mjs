@@ -91,12 +91,13 @@ const textOf = (file, unread) => {
  * names each one it left out. */
 export function checkReadSurface(cwd, { legacy = isHarnessRepository(cwd) ? RESUME_LEGACY : [] } = {}) {
   let names = [];
+  const unread = [];
   try {
     names = fs.readdirSync(path.join(cwd, TASKS)).filter((name) => name.endsWith('.md')).sort();
-  } catch {
-    // No folder of feature documents is no head.
+  } catch (error) {
+    // No folder of feature documents is no head; one that is there and cannot be listed is not measured.
+    if (error.code !== 'ENOENT') unread.push(path.join(cwd, TASKS));
   }
-  const unread = [];
   const documents = names.map((name) => ({ name, text: textOf(path.join(cwd, TASKS, name), unread) })).filter(({ text }) => text !== null);
   const { next, decided, state, total, legacy: leftOut } = readSurface(textOf(path.join(cwd, ROADMAP), unread), documents, legacy);
   if (unread.length > 0) {
@@ -106,7 +107,7 @@ export function checkReadSurface(cwd, { legacy = isHarnessRepository(cwd) ? RESU
   if (total === 0 && leftOut.length === 0) return [];
   const roadmap = next + decided;
   const head = state === null ? 'no resume head' : `the largest resume head ${state.tokens} in ${TASKS}/${state.name} (budget ${STATE_HEAD_BUDGET})`;
-  const out = leftOut.length === 0 ? '' : `; not counted, the legacy documents whose resume sections are over that budget: ${leftOut.join(', ')}`;
+  const out = leftOut.length === 0 ? '' : `; not counted, the legacy documents whose resume sections are over the head's budget of ${STATE_HEAD_BUDGET}: ${leftOut.join(', ')}`;
   const detail = `${total} estimated tokens (budget ${READ_SURFACE_BUDGET}): the roadmap's Next ${next} and Decided ${decided} (budget ${ROADMAP_READ_BUDGET}), ${head}${out}`;
   if (roadmap > ROADMAP_READ_BUDGET) {
     return [{ name: 'read surface', pass: false, detail, next: firstStep(`move settled paragraphs of the Next or Decided of ${ROADMAP}, word for word, to ${HISTORY}, from ${roadmap} to ${ROADMAP_READ_BUDGET} estimated tokens or fewer`) }];

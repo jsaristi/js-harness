@@ -11,8 +11,9 @@ Rewritten 2026-11-11 19:40 local, JH 186 (job `d95aafd1`, `claude-fable-5-2` at 
   7,158 of 10,000, the largest resume head 4,572 (`odd/tasks/templates.md`) of 5,000.
 - Reviewed: `e8b22bb7..28d64c64` by Codex (correct) and the lenses (8 findings, answered in L7; their fix is the
   commit after `28d64c64`).
-- Next, in order: (1) the confirming reviews of the fix alone, `js-harness codex-review --base 28d64c64 --doc
-  odd/tasks/f8-s6-read-surface.md` and `js-harness lens-review --base 28d64c64 --lenses readability,reliability
+  The fix was confirmed (`28d64c64..3ea7b35a`, L8); its one suggestion is the commit after `3ea7b35a`.
+- Next, in order: (1) the third and last review, of that commit alone: `js-harness codex-review --base 3ea7b35a
+  --doc odd/tasks/f8-s6-read-surface.md` and `js-harness lens-review --base 3ea7b35a --lenses readability
   --reason <why> --doc odd/tasks/f8-s6-read-surface.md`; (2) push, the pull request, `js-harness
   notify --to orchestrator --kind ready --pr <n>`; (3) the close: the summary, `notify --kind closed --summary
   <file>`. Every notice says the model.
@@ -283,3 +284,9 @@ orchestrator skill's wording or of `CLAUDE.md`, were one needed, would be asked 
     section before; a State head is short by the template and bounded by the row. Renaming the field touches the
     board's and the watch's code in a file at its line ceiling, outside this step. It stays a known limit: the
     board's first lines of a State head say what is done before what is next.
+- L8 (2026-11-11, the confirming reviews of `28d64c64..3ea7b35a`). Codex: correct (confidence 0.9, 110,694 input
+  tokens). The lenses (21,718 input tokens): 6 of the 8 fixed, 0 blocking; the 2 "not fixed" are the two L7
+  answers without a change (`planOf`'s field, the renamed heading). One new suggestion, taken: the legacy suffix
+  said "that budget" where no head budget was named; it now says "the head's budget of 5000". With it, a folder
+  `odd/tasks` that is there and cannot be listed fails the row as an unreadable file does. This is the third
+  review round of the slice, the last the protocol allows; nothing real stays open in it.

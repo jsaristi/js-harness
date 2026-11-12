@@ -117,7 +117,7 @@ test('checkReadSurface names each legacy document it leaves out, and leaves none
     assert.equal(other.pass, false, 'a project that is not the harness has no legacy list: a document of the same name counts');
     const [own] = checkReadSurface(dir, { legacy: RESUME_LEGACY });
     assert.equal(own.pass, true);
-    assert.equal(own.detail, `0 estimated tokens (budget 15000): the roadmap's Next 0 and Decided 0 (budget 10000), no resume head; not counted, the legacy documents whose resume sections are over that budget: ${RESUME_LEGACY[0]}`);
+    assert.equal(own.detail, `0 estimated tokens (budget 15000): the roadmap's Next 0 and Decided 0 (budget 10000), no resume head; not counted, the legacy documents whose resume sections are over the head's budget of 5000: ${RESUME_LEGACY[0]}`);
   });
 });
 
@@ -131,6 +131,11 @@ test('checkReadSurface fails for a roadmap that is there and cannot be read, ins
       next: firstStep('make docs/ROADMAP.md readable, then run this again'),
     }]);
   });
+  withProject((dir) => {
+    fs.rmdirSync(path.join(dir, 'odd', 'tasks'));
+    fs.writeFileSync(path.join(dir, 'odd', 'tasks'), 'a file where the folder of feature documents goes');
+    assert.equal(checkReadSurface(dir)[0].detail, 'could not read odd/tasks, so what a session reads to start is not measured');
+  });
 });
 
 test('check runs the row: its list of rows holds checkReadSurface, and this repository passes it with its legacy named', () => {
@@ -138,7 +143,7 @@ test('check runs the row: its list of rows holds checkReadSurface, and this repo
   assert.ok(fs.readFileSync(path.join(root, 'bin', 'check.mjs'), 'utf8').includes('...checkReadSurface(cwd)'), 'bin/check.mjs no longer lists the row');
   const [row] = checkReadSurface(root);
   assert.equal(row.pass, true, row.detail);
-  assert.match(row.detail, new RegExp(`not counted, the legacy documents whose resume sections are over that budget: ${RESUME_LEGACY.join(', ')}$`));
+  assert.match(row.detail, new RegExp(`not counted, the legacy documents whose resume sections are over the head's budget of 5000: ${RESUME_LEGACY.join(', ')}$`));
 });
 
 test('the legacy list names only documents this repository still holds over the budget, so it only shrinks', () => {
