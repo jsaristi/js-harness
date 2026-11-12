@@ -771,6 +771,87 @@ test('a session titled as a lead starts and resumes at the rule lead-effort, whi
   assert.equal(startedLines(world).at(-1).effort, lead);
 }, { rules: true }));
 
+/** A start run in this process from the session `caller` names, whose app record `readApp` gives: `{ code, said }`.
+ * The app's records are the given map, so the machine's own are never read. */
+function startFrom(world, argv, { caller, records = new Map(), asked = [] } = {}) {
+  const said = [];
+  const env = { ...envOf(world), ...(caller === undefined ? {} : { CLAUDE_CODE_SESSION_ID: caller }) };
+  const readApp = () => {
+    asked.push(caller);
+    if (records instanceof Error) throw records;
+    return records;
+  };
+  const code = sessionsStartMain(argv, { cwd: world.project, env, readApp, stdout: (line) => said.push(line), stderr: (line) => said.push(line) });
+  return { code, said: said.join('\n') };
+}
+
+const SENIOR_MODEL = RULES.find((rule) => rule.id === 'senior-model').value;
+const SENIOR_EFFORT = RULES.find((rule) => rule.id === 'senior-effort').value;
+const LEAD_RECORD = new Map([['lead-1', { title: 'JH ORQ · relevo' }]]);
+
+// odd/tasks/senior-orchestrator.md, Done when: an SR start from a session not titled as the lead is refused.
+test('a senior is started only from the lead\'s session, and a work session\'s start asks nothing of the caller', withWorld((world) => {
+  const senior = ['--title', 'JH SR · a design', '--brief', world.brief];
+  const refusals = [
+    ['no session id', {}],
+    ['no app record', { caller: 'lead-1', records: new Map() }],
+    ['a work session', { caller: 'work-1', records: new Map([['work-1', { title: 'JH 4 · thing' }]]) }],
+    ['a senior', { caller: 'sr-1', records: new Map([['sr-1', { title: 'JH SR · other' }]]) }],
+    ['no title', { caller: 'x-1', records: new Map([['x-1', { title: null }]]) }],
+    ['an unreadable app record', { caller: 'lead-1', records: new Error('EACCES') }],
+  ];
+  for (const [why, from] of refusals) {
+    const result = startFrom(world, senior, from);
+    assert.equal(result.code, 2, `${why}: ${result.said}`);
+    assert.match(result.said, /a senior is started by the lead \(the orchestrator, titled "<code> ORQ · <purpose>"\)/, why);
+    assert.match(result.said, /the user asks the lead to start it/, why);
+  }
+  assert.deepEqual(actions(world), [], 'nothing ran');
+  // The lead starts it on the senior's model and level, with no advisor.
+  const started = startFrom(world, senior, { caller: 'lead-1', records: LEAD_RECORD });
+  assert.equal(started.code, 0, started.said);
+  const call = actions(world).at(-1);
+  assert.deepEqual([call[call.indexOf('--model') + 1], call[call.indexOf('--effort') + 1], call.includes('--advisor')], [SENIOR_MODEL, SENIOR_EFFORT, false]);
+  // A work session's start does not read the caller's record.
+  const asked = [];
+  patchState(world, { nextId: 'c779ed44' });
+  const work = startFrom(world, ['--title', 'JH 1 · thing', '--brief', world.brief], { asked });
+  assert.equal(work.code, 0, work.said);
+  assert.deepEqual(asked, []);
+}, { rules: true }));
+
+// odd/tasks/senior-orchestrator.md, D4 and Done when: a second live senior is refused.
+test('a second senior of the project is refused while the first is recorded, finished turn or not, and starts once it is stopped', withWorld((world) => {
+  const senior = (purpose) => ['--title', `JH SR · ${purpose}`, '--brief', world.brief];
+  assert.equal(startFrom(world, senior('a design'), { caller: 'lead-1', records: LEAD_RECORD }).code, 0);
+  patchState(world, { nextId: 'c779ed44' });
+  const second = startFrom(world, senior('another'), { caller: 'lead-1', records: LEAD_RECORD });
+  assert.equal(second.code, 2, second.said);
+  assert.match(second.said, /0db8bc5e · JH SR · a design/);
+  assert.match(second.said, /send it the task with a message, or close it first/);
+  assert.equal(actions(world).length, 1, 'nothing ran');
+  // Its job ending a turn does not end a senior.
+  endJob(world, '0db8bc5e');
+  assert.equal(startFrom(world, senior('another'), { caller: 'lead-1', records: LEAD_RECORD }).code, 2);
+  // Its resume is no new start: it asks nothing of the caller nor of the live senior, which it is; a start after it
+  // names the job that resumed it.
+  const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(resumed.code, 0, resumed.stderr);
+  const third = startFrom(world, senior('another'), { caller: 'lead-1', records: LEAD_RECORD });
+  assert.equal(third.code, 2, third.said);
+  assert.match(third.said, /c779ed44 · JH SR · a design/);
+  // A work session, and a senior of another project, are no live senior of this one.
+  const lines = fs.readFileSync(recordFile(world), 'utf8');
+  const other = { ...JSON.parse(lines.trim().split('\n')[0]), id: 'ffff0000', root: path.join(world.dir, 'elsewhere') };
+  assert.equal(js(world, ['sessions', 'stop', 'c779ed44']).code, 0);
+  fs.appendFileSync(recordFile(world), `${JSON.stringify(other)}\n`);
+  patchState(world, { nextId: 'b2c3d4e5' });
+  assert.equal(js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief]).code, 0);
+  patchState(world, { nextId: 'a1b2c3d4' });
+  const again = startFrom(world, senior('another'), { caller: 'lead-1', records: LEAD_RECORD });
+  assert.equal(again.code, 0, again.said);
+}, { rules: true }));
+
 // Codex P2 on 79e3430..318f952: a resume answers to the same rules and the same record as a start.
 test('sessions start --resume holds to the effort rule, needs a writable record, and keeps what it knows when claude says less', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief, '--effort', SESSION_EFFORT]).code, 0);

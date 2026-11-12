@@ -18,6 +18,7 @@ import { leadTitle, seniorTitle, sessionTitleRefusal } from './lib/session-title
 import { appendNotice, newNotice, nextSessionNumber, placeOf, readNotices } from './lib/channel.mjs';
 import { mainCheckout, projectCode, projectSlug, sameSession } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { appRoot, appSessions } from './lib/app-record.mjs';
 // bin/sessions.mjs is at its size ceiling, so the live verb reaches it through the import it has of this module.
 export { LIVE_USAGE, sessionsLiveMain } from './sessions-live.mjs';
 
@@ -139,8 +140,44 @@ function recordUnwritable(home) {
   }
 }
 
+/** Why the session `env.CLAUDE_CODE_SESSION_ID` names may not start a senior, or null: only the lead starts one
+ * (odd/tasks/senior-orchestrator.md, D3, D6), told by the title of its app record (`leadTitle`), read by `readApp` as
+ * the doctor reads it (`modelHomeHealth`). No session id, no record that can be read, or another title refuses. */
+function seniorStarterRefusal(title, env, readApp) {
+  const id = env.CLAUDE_CODE_SESSION_ID;
+  let record = null;
+  if (typeof id === 'string' && id !== '') {
+    try {
+      record = readApp().get(id) ?? null;
+    } catch {
+      record = null;
+    }
+  }
+  if (record !== null && leadTitle(record.title ?? '')) return null;
+  const caller = typeof id !== 'string' || id === '' ? 'this command is not run from a session'
+    : record === null ? `the session ${id} that runs it has no app record that can be read`
+      : `the session that runs it is titled ${JSON.stringify(record.title ?? '')}`;
+  return `js-harness sessions start: a senior is started by the lead (the orchestrator, titled "<code> ORQ · <purpose>"), and ${caller}, so ${JSON.stringify(title)} was not started: the user asks the lead to start it.`;
+}
+
+/** Why a new senior of the project at `root` is refused while the record under `home` holds one, or null: at most one
+ * live senior (odd/tasks/senior-orchestrator.md, D4). It counts the open `started` lines of the record,
+ * <home>/.js-harness/background/sessions.jsonl (stranded starts included, `readRecord`), whose title is a senior's and
+ * whose root is this project's, the last job of each: a senior is live until the harness removes it (`sessions stop`,
+ * `stop --finished`), and its job ending a turn does not end it. Nothing locks the record between this read and the
+ * start's own line, so two starts at the same instant can both pass; D4 accepts that. */
+function liveSeniorRefusal(home, root) {
+  const record = readRecord(home);
+  if (record.unavailable !== undefined) return { code: 1, line: `js-harness sessions start: the record of background sessions could not be read (${record.unavailable}), so whether a senior is live cannot be told and none was started` };
+  const live = (record.sessions ?? []).find((entry) => seniorTitle(entry.title ?? '') && !record.resumedAs?.has(entry.id)
+    && typeof entry.root === 'string' && within(entry.root, root) && within(root, entry.root));
+  if (live === undefined) return null;
+  return { code: 2, line: `js-harness sessions start: the senior ${live.id} · ${live.title} is live, and a project has one at most: send it the task with a message, or close it first (js-harness sessions stop ${live.id}).` };
+}
+
 /** `sessions start`: exit 0 once the session runs and is recorded, 1 when claude is missing or refused (nothing is
- * recorded), 2 for a usage error or a rule that refuses the title or the effort (nothing runs). */
+ * recorded), 2 for a usage error or a rule that refuses the title or the effort (nothing runs), and for a senior that
+ * the lead does not start or that a live senior of the project already holds (1 when the record cannot be read). */
 export function sessionsStartMain(argv, given = {}) {
   const deps = { ...defaults(), ...given };
   const { stdout, stderr, env, now, run, readFile } = deps;
@@ -185,6 +222,22 @@ export function sessionsStartMain(argv, given = {}) {
   if (refusal !== null) {
     stderr(refusal);
     return 2;
+  }
+  if (senior) {
+    const readApp = deps.readApp ?? (() => {
+      const app = appRoot(env, process.platform, deps.homedir());
+      return app === null ? new Map() : appSessions(app);
+    });
+    const starter = seniorStarterRefusal(parsed.title, env, readApp);
+    if (starter !== null) {
+      stderr(starter);
+      return 2;
+    }
+    const second = liveSeniorRefusal(home, root);
+    if (second !== null) {
+      stderr(second.line);
+      return second.code;
+    }
   }
   const claude = deps.claude === undefined ? claudeRunner({ env }) : deps.claude;
   if (claude === null) {
