@@ -16,7 +16,7 @@ import { parseDayArgs, shiftDay, zone } from '../../bin/lib/record-days.mjs';
 class AuditArgError extends Error {}
 import { recordFolders } from '../../bin/lib/subagent-records.mjs';
 
-export const USAGE = 'Usage: js-harness audit [--day YYYY-MM-DD] [--days <n>] [--json] [--cwd <dir>]';
+export const USAGE = 'Usage: node workshop/js-harness-workshop.mjs audit [--day YYYY-MM-DD] [--days <n>] [--json] [--cwd <dir>]';
 
 /** The audit of the transcript `file`: its title and what `auditEntries` counts in its entries inside the window.
  * Streamed, and only the lines that can hold a reply or the title are parsed: a transcript runs to hundreds of

@@ -122,7 +122,7 @@ test('a bad flag is a usage error (exit 2), and a project with no records folder
     for (const argv of [['--days', '8'], ['--days', '0'], ['--day', '14-10-2026'], ['--day', '2026-02-30'], ['--day'], ['--what']]) {
       const { code, stderr } = await subagents(argv, records);
       assert.equal(code, 2, argv.join(' '));
-      assert.match(stderr, /Usage: js-harness subagents/);
+      assert.match(stderr, /Usage: node workshop\/js-harness-workshop\.mjs subagents/);
     }
     fs.rmSync(path.join(records.config, 'projects'), { recursive: true, force: true });
     const none = await subagents([], records);

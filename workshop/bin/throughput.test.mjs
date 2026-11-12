@@ -174,7 +174,7 @@ test('status names each day since the first one kept that has none, and exits 1'
   // No snapshot at all: a project whose heartbeat never ran is flagged, not passed.
   const none = await run(['status'], { home });
   assert.equal(none.code, 1);
-  assert.match(none.stdout, /^MISSING: no day is kept for this project .*js-harness throughput snapshot --day 2026-10-16/m);
+  assert.match(none.stdout, /^MISSING: no day is kept for this project .*node workshop\/js-harness-workshop\.mjs throughput snapshot --day 2026-10-16/m);
   await run(['snapshot', '--day', '2026-10-14'], { home });
   await run(['snapshot', '--day', '2026-10-16'], { home });
   const { code, stdout } = await run(['status'], { home });
@@ -465,7 +465,7 @@ test('reviewed and shipped record the outcomes, and status prints the reviews th
   await run(['snapshot', '--day', '2026-10-16'], { home });
   let status = await run(['status'], { home });
   assert.equal(status.code, 0, status.stdout);
-  assert.match(status.stdout, /^DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16 --until 2026-10-17; js-harness-protocols section 7; then js-harness throughput reviewed --day 2026-10-16 --found nothing\|candidates$/m);
+  assert.match(status.stdout, /^DUE: throughput review of 2026-10-16: node workshop\/js-harness-workshop\.mjs throughput --since 2026-10-16 --until 2026-10-17; js-harness-protocols section 7; then node workshop\/js-harness-workshop\.mjs throughput reviewed --day 2026-10-16 --found nothing\|candidates$/m);
 
   const reviewed = await run(['reviewed', '--day', '2026-10-16', '--found', 'nothing'], { home });
   assert.equal(reviewed.code, 0, reviewed.stderr);
@@ -475,7 +475,7 @@ test('reviewed and shipped record the outcomes, and status prints the reviews th
   assert.equal((await run(['shipped', 'the faster gate', '--day', '2026-10-05'], { home })).code, 0);
   assert.equal((await run(['shipped', 'the lean session'], { home, now: Date.parse('2026-10-05T18:00:00Z') })).code, 0);
   status = await run(['status'], { home });
-  assert.match(status.stdout, /^DUE: throughput re-measure of the faster gate, the lean session, shipped 2026-10-05: js-harness throughput --since 2026-10-06 --until 2026-10-13 --against 2026-09-29\.\.2026-10-06; then js-harness throughput reviewed --shipped 2026-10-05 --found nothing\|candidates$/m);
+  assert.match(status.stdout, /^DUE: throughput re-measure of the faster gate, the lean session, shipped 2026-10-05: node workshop\/js-harness-workshop\.mjs throughput --since 2026-10-06 --until 2026-10-13 --against 2026-09-29\.\.2026-10-06; then node workshop\/js-harness-workshop\.mjs throughput reviewed --shipped 2026-10-05 --found nothing\|candidates$/m);
 
   assert.equal((await run(['reviewed', '--shipped', '2026-10-05', '--found', 'candidates'], { home })).code, 0);
   assert.doesNotMatch((await run(['status'], { home })).stdout, /DUE/);

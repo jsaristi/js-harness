@@ -9,7 +9,7 @@ import { sessionTitleRefusal } from '../../bin/lib/session-title-guard.mjs';
 import { appendReading, newReading } from '../../bin/lib/channel.mjs';
 import { ruleOf } from '../../bin/lib/rules.mjs';
 
-// `js-harness host-watch` (odd/tasks/f8-s9-host-watch.md) through its main: `draft` over changelog files, `check` over
+// `node workshop/js-harness-workshop.mjs host-watch` (odd/tasks/f8-s9-host-watch.md) through its main: `draft` over changelog files, `check` over
 // a review file and the excerpts beside it, `tools` against the list recorded in a project. Everything lives in a
 // temp folder; the host versions and the reviewed record are handed in, never read from this machine.
 
@@ -237,7 +237,7 @@ test('the tick names an update no host watch session holds, once an hour, with a
     assert.match(told.told, /^HOST: Claude Desktop 4\.4212\.0 → 4\.5000\.0 and its Code tab CLI 2\.1\.318 → 2\.1\.320 since the last review/);
     const brief = path.join(w.dir, '.js-harness', 'background', 'host-watch-4.5000.0.md');
     // Codex on 34562cc: both commands carry the home the heartbeat read, and the brief's folder is there to write in.
-    assert.ok(told.told.endsWith(`js-harness host-watch brief --home "${w.dir}" > "${brief}" && js-harness sessions start --home "${w.dir}" --title "JH 120 · host watch 4.5000.0" --brief "${brief}" --worktree host-watch-4-5000-0 --effort ${SESSION_EFFORT}`));
+    assert.ok(told.told.endsWith(`node workshop/js-harness-workshop.mjs host-watch brief --home "${w.dir}" > "${brief}" && js-harness sessions start --home "${w.dir}" --title "JH 120 · host watch 4.5000.0" --brief "${brief}" --worktree host-watch-4-5000-0 --effort ${SESSION_EFFORT}`));
     assert.ok(fs.statSync(path.dirname(brief)).isDirectory());
     const title = /--title "([^"]+)"/.exec(told.told)[1];
     const effort = /--effort (\S+)$/.exec(told.told)[1];

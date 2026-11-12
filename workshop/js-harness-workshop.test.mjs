@@ -88,3 +88,28 @@ test('every command the host-update row and the heartbeat\'s usage name is one i
   for (const name of workshop) assert.ok(Object.hasOwn(COMMANDS, name), `node workshop/js-harness-workshop.mjs ${name} is no workshop command`);
   for (const name of productNames) assert.ok(Object.hasOwn(product.COMMANDS, name), `js-harness ${name} is no command of the product`);
 });
+
+// The workshop's own texts (its usage, the HOST, DUE and MISSING lines its ticks print, its comments) and the documents
+// that teach its commands still wrote `js-harness host-watch`, `js-harness windows-daily` and the rest, which the
+// installed CLI answers "Unknown command" (the audit's core-03-16; JH 190's summary, section Left). A workshop command is
+// named as `node workshop/js-harness-workshop.mjs <name>`. A name followed by `:` is the prefix of a message the command
+// prints about itself, not a command to run, and is left as it is.
+test('no text of the workshop, nor a document that teaches its commands, names one as `js-harness <name>`', () => {
+  const only = Object.keys(COMMANDS).filter((name) => !Object.hasOwn(product.COMMANDS, name));
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) return walk(full);
+    return entry.name.endsWith('.mjs') && !entry.name.endsWith('.test.mjs') ? [full] : [];
+  });
+  const files = [...walk(path.join(ROOT, 'workshop')), path.join(ROOT, 'docs', 'workshop.md'), path.join(ROOT, 'README.md')];
+  const found = [];
+  for (const file of files) {
+    fs.readFileSync(file, 'utf8').split('\n').forEach((line, index) => {
+      for (const match of line.matchAll(/(?<![\w./-])js-harness ([a-z][\w-]*)(?![\w-]*:)/g)) {
+        if (only.includes(match[1])) found.push(`${path.relative(ROOT, file)}:${index + 1}: js-harness ${match[1]}`);
+      }
+    });
+  }
+  assert.ok(only.includes('host-watch') && only.includes('windows-daily'), `the workshop's own commands: ${only}`);
+  assert.deepEqual(found, []);
+});

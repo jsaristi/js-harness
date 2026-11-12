@@ -447,7 +447,7 @@ test('the reviews due: the last settled day unless reviewed, weekly once the las
   const reviewed = (day, found) => ({ v: 1, kind: 'reviewed', day, found, at: `${day}T12:00:00.000Z` });
   // Nothing recorded: the review of the last settled day.
   assert.deepEqual(throughputDues([], { now, settlesAt }).map((due) => [due.id, due.at]), [['review 2026-10-16', '2026-10-17T01:00:00.000Z']]);
-  assert.match(throughputDues([], { now, settlesAt })[0].line, /^DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16 --until 2026-10-17; js-harness-protocols section 7; then js-harness throughput reviewed --day 2026-10-16 --found nothing\|candidates$/);
+  assert.match(throughputDues([], { now, settlesAt })[0].line, /^DUE: throughput review of 2026-10-16: node workshop\/js-harness-workshop\.mjs throughput --since 2026-10-16 --until 2026-10-17; js-harness-protocols section 7; then node workshop\/js-harness-workshop\.mjs throughput reviewed --day 2026-10-16 --found nothing\|candidates$/);
   // Reviewed: nothing due.
   assert.deepEqual(throughputDues([reviewed('2026-10-16', 'candidates')], { now, settlesAt }), []);
   // Two quiet reviews in a row: weekly, due seven days after the last one.
@@ -466,7 +466,7 @@ test('the reviews due: the last settled day unless reviewed, weekly once the las
   const ships = [reviewed('2026-10-16', 'nothing'), shipped('a', '2026-10-05'), shipped('b', '2026-10-05'), shipped('c', '2026-10-14')];
   const dues = throughputDues(ships, { now, settlesAt });
   assert.deepEqual(dues.map((due) => due.id), ['re-measure 2026-10-05']);
-  assert.equal(dues[0].line, 'DUE: throughput re-measure of a, b, shipped 2026-10-05: js-harness throughput --since 2026-10-06 --until 2026-10-13 --against 2026-09-29..2026-10-06; then js-harness throughput reviewed --shipped 2026-10-05 --found nothing|candidates');
+  assert.equal(dues[0].line, 'DUE: throughput re-measure of a, b, shipped 2026-10-05: node workshop/js-harness-workshop.mjs throughput --since 2026-10-06 --until 2026-10-13 --against 2026-09-29..2026-10-06; then node workshop/js-harness-workshop.mjs throughput reviewed --shipped 2026-10-05 --found nothing|candidates');
   assert.equal(dues[0].at, '2026-10-13T01:00:00.000Z');
   assert.deepEqual(throughputDues([...ships, { v: 1, kind: 'reviewed', shipped: '2026-10-05', found: 'nothing', at: '2026-10-16T13:00:00.000Z' }], { now, settlesAt }), []);
 });

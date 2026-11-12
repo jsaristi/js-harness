@@ -7,7 +7,7 @@ import { ideaWatchMain } from './idea-watch.mjs';
 import { RECORD, UPSTREAM } from '../lib/idea-watch.mjs';
 import { readManifest } from '../../bin/lib/manifest.mjs';
 
-// `js-harness idea-watch` (odd/tasks/idea-watch.md) through its main, in a temp home and project. git is handed in:
+// `node workshop/js-harness-workshop.mjs idea-watch` (odd/tasks/idea-watch.md) through its main, in a temp home and project. git is handed in:
 // no test fetches anything, and each records the calls it was given, in order, with what the manifest said then.
 
 const TAGS = ['a\trefs/tags/v4.3.0', 'b\trefs/tags/v4.3.1', 'c\trefs/tags/v4.3.2', 'd\trefs/tags/v4.4.0', 'e\trefs/tags/v4.4.0-rc.1'].join('\n');
@@ -178,7 +178,7 @@ test('a usage error exits 2 with the usage: no verb, an unknown flag, a bad vers
     for (const argv of [[], ['status', '--nope'], ['draft', '--to', 'latest']]) {
       const { code, err } = await run(w, argv, { git: fakeGit(w).git });
       assert.equal(code, 2, argv.join(' '));
-      assert.match(err, /Usage: js-harness idea-watch/);
+      assert.match(err, /Usage: node workshop\/js-harness-workshop\.mjs idea-watch/);
     }
   } finally {
     w.remove();

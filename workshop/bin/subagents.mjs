@@ -11,7 +11,7 @@ import { parseDayArgs, shiftDay, zone } from '../../bin/lib/record-days.mjs';
 
 class SubagentsArgError extends Error {}
 
-export const USAGE = 'Usage: js-harness subagents [--day YYYY-MM-DD] [--days <n>] [--json] [--cwd <dir>]';
+export const USAGE = 'Usage: node workshop/js-harness-workshop.mjs subagents [--day YYYY-MM-DD] [--days <n>] [--json] [--cwd <dir>]';
 
 const percent = (share) => (share === null ? '-' : `${Math.round(share * 100)}%`);
 

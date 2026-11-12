@@ -177,7 +177,7 @@ switch keeps runs its tests here, after one `check:` line that says why. The gat
 same run tests `bin/remote.test.mjs` on Windows, since `js-harness remote` runs on Windows alone and most of its tests
 skip themselves elsewhere, and the run is green only when both jobs are. Any other test that runs only on Windows is
 left to the daily Windows suite: `.github/workflows/windows-daily.yml` runs the whole suite once a day on
-GitHub's Windows machines, off the land's path, and `js-harness windows-daily` tells the lead the
+GitHub's Windows machines, off the land's path, and `node workshop/js-harness-workshop.mjs windows-daily` tells the lead the
 failing test names of a red run.
 
 The `fixed load` row says how many tokens a Claude session of the project sends at its first turn,
@@ -414,7 +414,7 @@ and says it again each time that quiet doubles. `js-harness sessions` lists the 
 its `Stalled` section, and its `--watch` says each one as it crosses.
 
 Every `--windows` minutes (an hour; `0` for never) it also reads the daily Windows run, as
-`js-harness windows-daily` does, and ends with a `WINDOWS:` line when that run is red and was not
+`node workshop/js-harness-workshop.mjs windows-daily` does, and ends with a `WINDOWS:` line when that run is red and was not
 told before. The time of the last reading is kept in a file, so a heartbeat started again after a
 `STALL` still reads it once an hour. With nothing else, it ends after `--max` hours (10, exit 1).
 
@@ -428,7 +428,7 @@ absence, and a heartbeat started again names it on an `already told:` line.
 
 Each tick also keeps the throughput snapshot of every settled day of the last
 `throughput-backfill-days` that the gate log holds and that has none, never while a gate holds
-the lock, and reads the throughput reviews due (`js-harness throughput status`). One that falls
+the lock, and reads the throughput reviews due (`node workshop/js-harness-workshop.mjs throughput status`). One that falls
 due ends the heartbeat with its `DUE:` line, again an hour, three and seven after; and every line
 that ends it is followed by the `DUE:` lines still open, so the daily review never waits on the
 lead remembering it.
@@ -625,7 +625,7 @@ identifier is printed) and whether the remote server of each recorded login laun
 Its `unseen` row counts what `js-harness unseen` would clear, and an interactive run adds a
 `worktrees` row for the worktrees on branches main already holds and a `review-skips` row for the
 skips of both reviews that still owe one (a pull request holding a lens skip does not land), and,
-online, an `idea-watch` row for the upstream releases `js-harness idea-watch` has not read yet. `--json` prints the rows.
+online, an `idea-watch` row for the upstream releases `node workshop/js-harness-workshop.mjs idea-watch` has not read yet. `--json` prints the rows.
 `--hook` is the session-start hook `install` registers: it computes the same report and prints one
 line only when there are gaps and they differ from the last ones it told, and it exits 0 (2, with
 the usage, for an argument it does not know).
@@ -1269,7 +1269,7 @@ brings past the remote's default branch, and the merge door refuses it.
 On a machine whose gate runs its sensors in WSL2 (the switch `~/.js-harness/gate-wsl.json` and
 `"sensorsInWsl": true` in `harness.json`), the land's run on this machine is a run in WSL2 too, so
 the code paths of Windows (process trees, PowerShell, `cmd.exe` quoting) are tested by no commit's
-gate here; the gate on GitHub tests `js-harness remote` on Windows alone. The daily Windows suite (`js-harness windows-daily`) runs them once a day on GitHub's Windows
+gate here; the gate on GitHub tests `js-harness remote` on Windows alone. The daily Windows suite (`node workshop/js-harness-workshop.mjs windows-daily`) runs them once a day on GitHub's Windows
 machines. That run was chosen over one after each landed batch, which would hold the gate lock 15 to
 19 hours a day (docs/ROADMAP.md, "Windows suite"); it cannot see this machine's antivirus, its
 temporary folders or its paths. To reproduce a red daily run here, or to test a change to the
@@ -1833,7 +1833,7 @@ share its transcript records is turned back with the hooks contract's `decision:
 session corrects it in one line from `get_usage`. The share is of the window the host is configured with when
 a setting gives one (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, else `autoCompactWindow`, as the pause notice
 reads it), else the window the session's last `get_usage` read reports, else the default 500,000 tokens; which clauses count as the session's
-own share is `js-harness audit`'s reading. A reply is already shown when a `Stop` hook runs, so
+own share is `node workshop/js-harness-workshop.mjs audit`'s reading. A reply is already shown when a `Stop` hook runs, so
 the check cannot hold it back, only make the session correct it before the turn ends. It never
 turns back a stop it already turned back (`stop_hook_active`), and always exits 0. When the host
 sends the reply's text (`last_assistant_message`) and it names no share, the transcript is not

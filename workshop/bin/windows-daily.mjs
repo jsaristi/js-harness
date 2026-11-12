@@ -1,4 +1,4 @@
-// `js-harness windows-daily`: the newest run of the daily Windows suite (.github/workflows/windows-daily.yml), read
+// `node workshop/js-harness-workshop.mjs windows-daily`: the newest run of the daily Windows suite (.github/workflows/windows-daily.yml), read
 // by hand. It prints what the run says and, for a red run not told before, writes the notice to the orchestrator
 // that the lead's heartbeat would write (workshop/lib/windows-daily.mjs says what is told and when). Exit 0, 1 when the
 // notice could not be written, 2 for a usage error.
@@ -11,7 +11,7 @@ import { windowsDaily } from '../lib/windows-daily.mjs';
 import { harnessHome } from '../../bin/lib/home.mjs';
 
 const USAGE = [
-  'Usage: js-harness windows-daily [--cwd <path>] [--home <path>]',
+  'Usage: node workshop/js-harness-workshop.mjs windows-daily [--cwd <path>] [--home <path>]',
   '',
   '  Reads the newest completed run of .github/workflows/windows-daily.yml on the default branch of the GitHub',
   '  repository origin names, and prints whether it passed. A red run (failure, timed_out or cancelled) not told',

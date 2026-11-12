@@ -506,7 +506,7 @@ export function throughputDues(outcomes, { now, settlesAt }) {
     dues.push({
       id: `review ${settled}`,
       at: new Date(settlesAt(dueDay)).toISOString(),
-      line: `DUE: throughput review of ${since === settled ? settled : `${since}..${settled}`}: js-harness throughput --since ${since} --until ${addDays(settled, 1)}; js-harness-protocols section 7; then js-harness throughput reviewed --day ${settled} --found nothing|candidates`,
+      line: `DUE: throughput review of ${since === settled ? settled : `${since}..${settled}`}: node workshop/js-harness-workshop.mjs throughput --since ${since} --until ${addDays(settled, 1)}; js-harness-protocols section 7; then node workshop/js-harness-workshop.mjs throughput reviewed --day ${settled} --found nothing|candidates`,
     });
   }
   const remeasured = new Set(outcomes.filter((one) => one?.kind === 'reviewed' && isDayText(one.shipped)).map((one) => one.shipped));
@@ -524,7 +524,7 @@ export function throughputDues(outcomes, { now, settlesAt }) {
     dues.push({
       id: `re-measure ${day}`,
       at: new Date(at).toISOString(),
-      line: `DUE: throughput re-measure of ${items.join(', ')}, shipped ${day}: js-harness throughput --since ${since} --until ${until} --against ${addDays(since, -COMPARE_DAYS)}..${since}; then js-harness throughput reviewed --shipped ${day} --found nothing|candidates`,
+      line: `DUE: throughput re-measure of ${items.join(', ')}, shipped ${day}: node workshop/js-harness-workshop.mjs throughput --since ${since} --until ${until} --against ${addDays(since, -COMPARE_DAYS)}..${since}; then node workshop/js-harness-workshop.mjs throughput reviewed --shipped ${day} --found nothing|candidates`,
     });
   }
   return dues;
