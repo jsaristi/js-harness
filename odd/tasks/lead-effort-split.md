@@ -5,17 +5,15 @@ The lead's session at its own level, apart from the reviewers'. Session JH 192, 
 branch `rule/lead-effort-split`, in work-unit commits. Runner: `node --test`.
 
 ## State
-Slice 1 (T1-T5) committed on `rule/lead-effort-split`: 9891aa9c, ba01a55e, b8def321, fd2b9eb3, fbc443bd, b36241b8.
-Next: run the done commands at HEAD; Codex and lens reviews with base 535509b6 (one set); push; PR; notify ready
-in its own call. Bad news for the notice: his `maxEffortLevel` is high in ~/.claude/settings.json, so the lead
-cannot run at xhigh until he lifts it; a lead's ORQ start may be refused or clamped (not checked). Then slices 2
-(advisor setting held to rule:advisor-model, read-only row; he set advisorModel claude-fable-5-2 at ~11:01) and 3
-(senior orchestrator, lean design), on their own branch and document. Landing: his "aplica todos los cambios ya"
-(93b72703:896), read by the lead as yes once gate and both reviews pass.
+Slice 1 (T1-T5) committed on `rule/lead-effort-split`. He answered question 273 on 2026-11-12: split it and keep
+the lead at high, so b8def321 (`lead-effort` to xhigh) is reverted by 8f907c12 and both levels stand at high.
+Next: the done commands at HEAD; Codex and lens reviews with base 535509b6 (one set); push; PR; notify ready in its
+own call. It lands with no further question (Ask me before). `lead-effort`'s subject narrows in a later pull
+request (L6). Slice 2 is PR 850; slice 3 (`odd/tasks/senior-orchestrator.md`) waits for this one to land.
 
 ## Goal
-`rule:lead-effort` holds the lead's session alone, at xhigh, and a new rule `lens-effort` holds the Claude lenses
-and the double review's Claude reader at high, so each level moves without the other.
+`rule:lead-effort` holds the lead's session, and a new rule `lens-effort` holds the Claude lenses and the double
+review's Claude reader, both at high for now (his answer to question 273), so each level moves without the other.
 
 ## Why
 Since 2026-11-11 (question 260) the lenses and the double review's reader read `lead-effort`
@@ -31,13 +29,12 @@ waits for a rule that tells the two apart. He answered question 272 on 2026-11-1
 - `node --test bin/lib/rules-switch.test.mjs bin/lib/rules-change-run.test.mjs bin/lib/home-sessions.test.mjs bin/rules.test.mjs` exits 0
 - `node --test bin/conventions-model-home.test.mjs` exits 0
 - `npm run check` exits 0
-- `node bin/js-harness.mjs rules applied` says the lead is held to xhigh and the lenses and the reader to high.
-- Each code slice reviewed by Codex and the Claude lenses; the lead holds the `ready` notice; the land waits for his
-  yes, which the lead asks.
+- `node bin/js-harness.mjs rules applied` names the lead's level and, apart, the lenses' and the reader's, both high.
+- Each code slice reviewed by Codex and the Claude lenses, then the `ready` notice to the lead.
 
 ## In scope / Out of scope
-- In: the new rule `lens-effort` (`js-harness rules change`, his words as its source); `lead-effort`'s value
-  (`js-harness rules switch --lead xhigh`) and the subjects and readings of `lead-effort` and `session-effort`;
+- In: the new rule `lens-effort` (`js-harness rules change`, his words as its source); the subject and reading of
+  `session-effort`;
   `bin/lib/model-shape.mjs`, `bin/lib/model-home.mjs`, `bin/lens-review.mjs`, `bin/lib/rules-coverage-data.mjs`,
   `bin/lib/rules-switch.mjs`, `HOME_FLAGS` of `bin/lib/rules-change-run.mjs`, `bin/lib/home-sessions.mjs`,
   `bin/lib/home-doctor.mjs`; the tests beside each; the texts that name the home (`docs/ROADMAP.md`,
@@ -55,7 +52,8 @@ waits for a rule that tells the two apart. He answered question 272 on 2026-11-1
 - Nothing heavy beside another session's gate; a whole test run goes through `js-harness gate --`.
 
 ## Ask me before
-The land: it changes a rule of his; the lead asks.
+Nothing: his answer to question 273 ("Separar y dejar en alto", 2026-11-12) and his "aplica todos los cambios ya"
+(93b72703:896) cover the land once the gate and both reviews pass, as the lead read them in its note of 13:06 local.
 
 ## Depth pass
 - 1. Method: configuration management as JH 172 set it (`odd/tasks/one-model-home.md`): one declared value a
@@ -84,13 +82,14 @@ The land: it changes a rule of his; the lead asks.
   Verdict: supports
 - 5. Request: "Give the lenses and the double review's Claude reader a rule of their own at high, a rule of the
   Claude home that `rules switch --lenses` changes and `rules applied` names as it does the rest of the home, and
-  raise `lead-effort` to xhigh for the lead's session alone."
+  leave `lead-effort` to the lead's session alone, at high for now."
   Adds: none
 
 ## Specs
 1. "Sí, sepárala" (2026-11-12, question 272: the orchestrator in Extra, the reviewers stay in Alto).
 2. "Opus 5.5 Extra para orquestador" (2026-11-11).
 3. "Lentes en alto (Recomendado)" (2026-11-11, question 260, tapped).
+4. "Separar y dejar en alto (Recomendado)" (2026-11-12, question 273, tapped).
 
 ## Tasks
 - [x] T1 (kind: design) (1, 2, 3) This document. Route: inline.
@@ -98,8 +97,8 @@ The land: it changes a rule of his; the lead asks.
   `claudeHeld`, `heldValues`, the lens and the reader, the planted breaks moved. Route: inline.
 - [x] T3 (kind: build) (1) `rules switch --lenses <effort>`, `HOME_FLAGS`, the probe at the lenses' level, and
   `rules applied` naming the reviewers' level. Route: inline.
-- [x] T4 (kind: build) (1, 2) `lead-effort` to xhigh by `rules switch --lead xhigh`, and the subjects of
-  `lead-effort` and `session-effort` narrowed. Route: inline.
+- [x] T4 (kind: build) (1, 2, 4) `session-effort`'s subject narrowed; `lead-effort` raised to xhigh, then reverted at
+  high by his answer to question 273. Route: inline.
 - [x] T5 (kind: docs) (1) The texts that name the home. Route: inline.
 
 ## Log
@@ -110,3 +109,4 @@ The land: it changes a rule of his; the lead asks.
 - L4 2026-11-12, rules switch --lead xhigh probed claude-opus-5-5 at xhigh with the Fable advisor, 0.0751 USD; it found his maxEffortLevel at high, which caps the lead under xhigh: his to change.
 - L5 2026-11-12, his "aplica todos los cambios ya" (93b72703:896); the lead reads it as yes to land each slice once the gate and both reviews pass.
 - L6 2026-11-12, mistake: `rules change lead-effort` for its subject computed from origin/main's declaration and put the value back to high (fd2b9eb3); seen by `rules applied` at HEAD, fixed by the revert 913ec9af (value xhigh again, checked with `rules lead-effort`). A rule changes once per pull request; lead-effort's subject narrows in a later one.
+- L7 2026-11-12, his answer to question 273, tapped (93b72703:1509): "Separar y dejar en alto (Recomendado)"; b8def321 reverted by 8f907c12, `rules applied` checked at high for both.
