@@ -9,10 +9,11 @@ Rewritten 2026-11-11 19:40 local, JH 186 (job `d95aafd1`, `claude-fable-5-2` at 
 - Done: T1 (`e8b22bb7`), T2 and T2b (`1929fe56`), T3 and T6's documentation (`704495a7`), T5 (the commit after it:
   cases 9 and 10 passed 2 of 2 each, L6). The `read surface` row reads 13,526 of 15,000: Next 1,796 and Decided
   7,158 of 10,000, the largest resume head 4,572 (`odd/tasks/templates.md`) of 5,000.
-- Next, in order: (1) the reviews of the slice `e8b22bb7..HEAD`, cost said first: `js-harness codex-review --base
-  e8b22bb7 --doc odd/tasks/f8-s6-read-surface.md` (its plan: 1 part, 309 changed lines, about 220,000 input tokens),
-  then `js-harness lens-review --base e8b22bb7 --lenses readability,reliability --reason <why> --doc
-  odd/tasks/f8-s6-read-surface.md`; findings fixed or answered in the Log; (2) push, the pull request, `js-harness
+- Reviewed: `e8b22bb7..28d64c64` by Codex (correct) and the lenses (8 findings, answered in L7; their fix is the
+  commit after `28d64c64`).
+- Next, in order: (1) the confirming reviews of the fix alone, `js-harness codex-review --base 28d64c64 --doc
+  odd/tasks/f8-s6-read-surface.md` and `js-harness lens-review --base 28d64c64 --lenses readability,reliability
+  --reason <why> --doc odd/tasks/f8-s6-read-surface.md`; (2) push, the pull request, `js-harness
   notify --to orchestrator --kind ready --pr <n>`; (3) the close: the summary, `notify --kind closed --summary
   <file>`. Every notice says the model.
 - Open: question 268 (the relief by month: take it out of S6, build it in two steps, or leave it) is recorded for
@@ -263,3 +264,22 @@ orchestrator skill's wording or of `CLAUDE.md`, were one needed, would be asked 
   22 before, do not separate this step from chance.
   - Against the depth pass: item 3's specs 1, 2, 4, 5 and 6 are met as measured in L5 and here; spec 3 (the relief by
     month) is not built and waits on question 268. Item 4's verdict stands for those five.
+- L7 (2026-11-11, the reviews of the slice `e8b22bb7..28d64c64`). Codex: "the patch is correct" (confidence 0.88,
+  137,401 input tokens), nothing to answer. The Claude lenses, readability and reliability, 4 findings each
+  (43,259 input tokens), answered here:
+  - The legacy documents left out in silence, and by bare name in any project (readability 1 and 3, reliability
+    3), taken: the row's detail names each legacy document it leaves out, and the list holds in the harness's own
+    repository alone (`isHarnessRepository`); elsewhere a document of the same name counts. Two tests.
+  - The header's "12.8k at S0" against spec 5's 13,413 (readability 4), taken: the comment says 12.8k is the
+    roadmap's two sections and 13,413 the measure with the one head S0 counted.
+  - No test that `check` runs the row (reliability 1), taken: a test holds `...checkReadSurface(cwd)` in
+    `bin/check.mjs` and that this repository passes the row with its legacy named.
+  - The pause's wording asserted nowhere (reliability 2), taken: the crossing's test asserts it.
+  - The row fails open on a read error (reliability 4), taken in part: a roadmap or a document that is there and
+    cannot be read fails the row instead of counting as nothing. Not taken: a heading renamed to `## Next (...)`
+    counts 0, as it does for `progress`, which reads the same exact titles; the roadmap's shape is held elsewhere.
+  - `planOf`'s `nextStep` now holds the whole State head (readability 2), answered, not changed: the field is
+    what the board prints the first lines of and what the watch compares, and it was the whole `Next step`
+    section before; a State head is short by the template and bounded by the row. Renaming the field touches the
+    board's and the watch's code in a file at its line ceiling, outside this step. It stays a known limit: the
+    board's first lines of a State head say what is done before what is next.

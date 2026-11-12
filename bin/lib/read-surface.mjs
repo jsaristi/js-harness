@@ -1,7 +1,8 @@
 // What a session reads to start, counted and held to a budget (F8 S6, odd/tasks/f8-s6-read-surface.md; the diet's
 // section 7, C5 "what a session reads to start"): a session starts from the roadmap's Next and Decided and from the
 // resume sections of its feature document (its `## State` head, or the older titles), and none of the three had a
-// bound, so they grew from 12.8k estimated tokens at S0 to 15.5k in fifteen days. The `read surface` row of `check`
+// bound: the roadmap's two sections alone grew from 12.8k estimated tokens at S0 to 15.5k in fifteen days (with the
+// one head S0 counted, 647, its measure was 13,413). The `read surface` row of `check`
 // counts them, characters of the LF text over four, and refuses a roadmap or a head over its share. The budgets are
 // the plan's figures, constants here because the messages and the tests read them: 15k in all, 10k of it for the
 // roadmap's two sections, which leaves 5k for a head. It reads the roadmap and the feature documents, nothing else.
@@ -11,6 +12,7 @@ import { firstStep } from './next-step.mjs';
 import { estimateTokens } from './payload.mjs';
 import { tokenize } from './progress.mjs';
 import { featureParts } from './feature-parts.mjs';
+import { isHarnessRepository } from './spec.mjs';
 
 /** The most the roadmap's Next and Decided hold together, in estimated tokens. */
 export const ROADMAP_READ_BUDGET = 10000;
@@ -19,8 +21,9 @@ export const STATE_HEAD_BUDGET = 5000;
 /** The most a session reads to start: the roadmap's two sections and one head. */
 export const READ_SURFACE_BUDGET = ROADMAP_READ_BUDGET + STATE_HEAD_BUDGET;
 
-/** The feature documents whose resume head was over the budget when the row arrived (2026-11-11), by file name:
- * history kept under a resume title. The list only shrinks: its test fails for a name at or under the budget. */
+/** The feature documents of this repository whose resume head was over the budget when the row arrived
+ * (2026-11-11), by file name: history kept under a resume title. The list only shrinks: its test fails for a name
+ * at or under the budget. It holds in the harness's own repository alone, and the row names what it leaves out. */
 export const RESUME_LEGACY = ['one-model-home.md', 'rule-hierarchy.md', 'session-channel.md'];
 /** The share of the roadmap's budget from which the row says, while it still passes, that the budget is near. */
 export const NEAR_SHARE = 0.9;
@@ -55,45 +58,56 @@ export function resumeHead(markdown) {
   return featureParts(markdown).sections.reduce((sum, { start, end }) => sum + estimateTokens(`${lines.slice(start - 1, end).join('\n')}\n`), 0);
 }
 
-/** The read surface of a project: `{ next, decided, state, total }` in estimated tokens. `roadmap` is the roadmap's
- * text, or `null` where there is none; `documents` are the feature documents, `{ name, text }`. `state` is the
- * largest resume head (`resumeHead`) outside `RESUME_LEGACY`, `{ tokens, name }`, or `null` when no document has
- * one. */
-export function readSurface(roadmap, documents) {
+/** The read surface of a project: `{ next, decided, state, total, legacy }` in estimated tokens. `roadmap` is the
+ * roadmap's text, or `null` where there is none; `documents` are the feature documents, `{ name, text }`. `state`
+ * is the largest resume head (`resumeHead`) of a document not named in `legacy`, `{ tokens, name }`, or `null` when
+ * no document has one; `legacy` gives back the names of that list the project holds, which no figure counts. */
+export function readSurface(roadmap, documents, legacy = []) {
   const next = tokensOf(roadmap, 'Next');
   const decided = tokensOf(roadmap, 'Decided');
   const state = documents
-    .filter(({ name }) => !RESUME_LEGACY.includes(name))
+    .filter(({ name }) => !legacy.includes(name))
     .map(({ name, text }) => ({ tokens: resumeHead(text), name }))
     .filter(({ tokens }) => tokens > 0)
     .sort((a, b) => b.tokens - a.tokens)[0] ?? null;
-  return { next, decided, state, total: next + decided + (state?.tokens ?? 0) };
+  return { next, decided, state, total: next + decided + (state?.tokens ?? 0), legacy: documents.map(({ name }) => name).filter((name) => legacy.includes(name)) };
 }
 
-const textOf = (file) => {
+/** The text of `file`, `null` where there is none. A file that is there and cannot be read is no absence: its path
+ * goes to `unread`, and the row fails on it instead of counting it as nothing. */
+const textOf = (file, unread) => {
   try {
     return fs.readFileSync(file, 'utf8');
-  } catch {
+  } catch (error) {
+    if (error.code !== 'ENOENT') unread.push(file);
     return null;
   }
 };
 
 /** The `read surface` row of `check` at `cwd`, as a list: none where the project has no Next or Decided in its
  * roadmap and no State head in a feature document. It fails for a roadmap or a head over its budget, and its next
- * step names the one to cut. */
-export function checkReadSurface(cwd) {
+ * step names the one to cut; it fails too for a roadmap or a document it could not read. `legacy` is the list of
+ * documents left out of the head, `RESUME_LEGACY` in the harness's own repository and none elsewhere: the row
+ * names each one it left out. */
+export function checkReadSurface(cwd, { legacy = isHarnessRepository(cwd) ? RESUME_LEGACY : [] } = {}) {
   let names = [];
   try {
     names = fs.readdirSync(path.join(cwd, TASKS)).filter((name) => name.endsWith('.md')).sort();
   } catch {
     // No folder of feature documents is no head.
   }
-  const documents = names.map((name) => ({ name, text: textOf(path.join(cwd, TASKS, name)) })).filter(({ text }) => text !== null);
-  const { next, decided, state, total } = readSurface(textOf(path.join(cwd, ROADMAP)), documents);
-  if (total === 0) return [];
+  const unread = [];
+  const documents = names.map((name) => ({ name, text: textOf(path.join(cwd, TASKS, name), unread) })).filter(({ text }) => text !== null);
+  const { next, decided, state, total, legacy: leftOut } = readSurface(textOf(path.join(cwd, ROADMAP), unread), documents, legacy);
+  if (unread.length > 0) {
+    const files = unread.map((file) => path.relative(cwd, file).replaceAll('\\', '/')).join(', ');
+    return [{ name: 'read surface', pass: false, detail: `could not read ${files}, so what a session reads to start is not measured`, next: firstStep(`make ${files} readable, then run this again`) }];
+  }
+  if (total === 0 && leftOut.length === 0) return [];
   const roadmap = next + decided;
   const head = state === null ? 'no resume head' : `the largest resume head ${state.tokens} in ${TASKS}/${state.name} (budget ${STATE_HEAD_BUDGET})`;
-  const detail = `${total} estimated tokens (budget ${READ_SURFACE_BUDGET}): the roadmap's Next ${next} and Decided ${decided} (budget ${ROADMAP_READ_BUDGET}), ${head}`;
+  const out = leftOut.length === 0 ? '' : `; not counted, the legacy documents whose resume sections are over that budget: ${leftOut.join(', ')}`;
+  const detail = `${total} estimated tokens (budget ${READ_SURFACE_BUDGET}): the roadmap's Next ${next} and Decided ${decided} (budget ${ROADMAP_READ_BUDGET}), ${head}${out}`;
   if (roadmap > ROADMAP_READ_BUDGET) {
     return [{ name: 'read surface', pass: false, detail, next: firstStep(`move settled paragraphs of the Next or Decided of ${ROADMAP}, word for word, to ${HISTORY}, from ${roadmap} to ${ROADMAP_READ_BUDGET} estimated tokens or fewer`) }];
   }

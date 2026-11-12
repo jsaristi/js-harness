@@ -51,8 +51,9 @@ test('readSurface counts Next, Decided and the largest resume head, and leaves t
     { name: 'c.md', text: `## Goal\nx\n## Next step\n${'s'.repeat(786)}\n` },
     { name: RESUME_LEGACY[0], text: `## State\n${'s'.repeat(99990)}\n` },
   ];
-  assert.deepEqual(readSurface(roadmapOf(300, 200), documents), { next: 300, decided: 200, state: { tokens: 200, name: 'c.md' }, total: 700 });
-  assert.deepEqual(readSurface(null, []), { next: 0, decided: 0, state: null, total: 0 });
+  assert.deepEqual(readSurface(roadmapOf(300, 200), documents, RESUME_LEGACY), { next: 300, decided: 200, state: { tokens: 200, name: 'c.md' }, total: 700, legacy: [RESUME_LEGACY[0]] });
+  assert.equal(readSurface(roadmapOf(300, 200), documents).state.name, RESUME_LEGACY[0], 'with no legacy list given, every document counts');
+  assert.deepEqual(readSurface(null, []), { next: 0, decided: 0, state: null, total: 0, legacy: [] });
 });
 
 test('checkReadSurface gives no row where the project has no roadmap section and no resume head', () => {
@@ -99,15 +100,45 @@ test('checkReadSurface refuses a roadmap one token over, with the step that cuts
   });
 });
 
-test('checkReadSurface refuses a resume head one token over, under an older title too, and never a legacy document', () => {
+test('checkReadSurface refuses a resume head one token over, under an older title too', () => {
   withProject((dir) => {
-    fs.writeFileSync(path.join(dir, 'odd', 'tasks', RESUME_LEGACY[0]), `## Next step\n${'s'.repeat(99990)}\n`);
-    assert.deepEqual(checkReadSurface(dir), []);
     fs.writeFileSync(path.join(dir, 'odd', 'tasks', 'a.md'), `## Next step\n${'s'.repeat(STATE_HEAD_BUDGET * 4 - 10)}\n## Goal\nx\n`);
     const [row] = checkReadSurface(dir);
     assert.equal(row.pass, false);
     assert.deepEqual(row.next, firstStep('rewrite the resume sections of odd/tasks/a.md from 5001 to 5000 estimated tokens or fewer: its State says what is done, what is next and what is open, and its history goes to the Log'));
   });
+});
+
+// The lenses' finding on the first slice (L7): a document left out in silence makes the row's total false.
+test('checkReadSurface names each legacy document it leaves out, and leaves none out in another project', () => {
+  withProject((dir) => {
+    fs.writeFileSync(path.join(dir, 'odd', 'tasks', RESUME_LEGACY[0]), `## Next step\n${'s'.repeat(99990)}\n`);
+    const [other] = checkReadSurface(dir);
+    assert.equal(other.pass, false, 'a project that is not the harness has no legacy list: a document of the same name counts');
+    const [own] = checkReadSurface(dir, { legacy: RESUME_LEGACY });
+    assert.equal(own.pass, true);
+    assert.equal(own.detail, `0 estimated tokens (budget 15000): the roadmap's Next 0 and Decided 0 (budget 10000), no resume head; not counted, the legacy documents whose resume sections are over that budget: ${RESUME_LEGACY[0]}`);
+  });
+});
+
+test('checkReadSurface fails for a roadmap that is there and cannot be read, instead of counting it as nothing', () => {
+  withProject((dir) => {
+    fs.mkdirSync(path.join(dir, 'docs', 'ROADMAP.md'));
+    assert.deepEqual(checkReadSurface(dir), [{
+      name: 'read surface',
+      pass: false,
+      detail: 'could not read docs/ROADMAP.md, so what a session reads to start is not measured',
+      next: firstStep('make docs/ROADMAP.md readable, then run this again'),
+    }]);
+  });
+});
+
+test('check runs the row: its list of rows holds checkReadSurface, and this repository passes it with its legacy named', () => {
+  const root = path.join(import.meta.dirname, '..', '..');
+  assert.ok(fs.readFileSync(path.join(root, 'bin', 'check.mjs'), 'utf8').includes('...checkReadSurface(cwd)'), 'bin/check.mjs no longer lists the row');
+  const [row] = checkReadSurface(root);
+  assert.equal(row.pass, true, row.detail);
+  assert.match(row.detail, new RegExp(`not counted, the legacy documents whose resume sections are over that budget: ${RESUME_LEGACY.join(', ')}$`));
 });
 
 test('the legacy list names only documents this repository still holds over the budget, so it only shrinks', () => {
