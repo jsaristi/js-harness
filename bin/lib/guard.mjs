@@ -96,7 +96,8 @@ export const SESSION_TOOL = 'mcp__ccd_session__start_session';
  * (an offer's title, a proposal started as proposed) passes. Where a rule is not declared nothing is refused under
  * it; behind a project that declares it, the copy's value is held (`guardHeld`). `cli` words the reasons for
  * `js-harness sessions start`, which holds the same rules over its `--effort` and its `--model`
- * (odd/tasks/background-sessions.md, S5). `lead` says the call starts a new lead, which the caller reads from its
+ * (odd/tasks/background-sessions.md, S5), and the rule `advisor-model` over its `--advisor`, after the model and
+ * before the effort (odd/tasks/advisor-home.md, spec 4). `lead` says the call starts a new lead, which the caller reads from its
  * title (`leadTitle` of ./session-title-guard.mjs): it is held to the home's level for the lead, the rule
  * `lead-effort`, where that rule gives a value, and to the sessions' where it gives none. His decision of 2026-11-11
  * gives the lead a level of its own, and at a cut the old lead starts the new one with this tool (./manifest.mjs,
@@ -107,6 +108,8 @@ export function sessionStartRefusal(toolInput, projectData, { cli = false, lead 
   const who = cli ? 'js-harness sessions start' : 'js-harness guard: start_session';
   const model = home.model === null ? null : modelReason(toolInput, home.model.value, who, cli);
   if (model !== null) return `${model}${home.model.note}`;
+  const advisor = home.advisor === null ? null : advisorReason(toolInput, home.advisor.value, who, cli);
+  if (advisor !== null) return `${advisor}${home.advisor.note}`;
   const ofLead = lead && home.lead !== null;
   const rule = ofLead ? home.lead : home.effort;
   if (rule === null) return null;
@@ -139,13 +142,14 @@ export function starterRefusal(starter, projectData, { lead = false, starterLead
   return `js-harness guard: start_session is called from a session whose own record holds ${off}, and a start is capped at the session that makes it. ${who} Where a card is enough, js-harness sessions start starts one on the rules' model and level, capped by no session.`;
 }
 
-/** The model and the level a start takes where its call names none, as `{ model, effort }`: the home's values in the
- * project whose rules file has the text `projectData`, a lead's level for a lead as `sessionStartRefusal` holds it,
- * each undefined where the project does not declare its rule (odd/tasks/one-model-home.md, spec 5). */
+/** The model, the level and the advisor a start takes where its call names none, as `{ model, effort, advisor }`:
+ * the home's values in the project whose rules file has the text `projectData`, a lead's level for a lead as
+ * `sessionStartRefusal` holds it, each undefined where the project does not declare its rule
+ * (odd/tasks/one-model-home.md, spec 5; odd/tasks/advisor-home.md, specs 2 and 3). */
 export function sessionStartHome(projectData, { lead = false } = {}) {
   const home = claudeHeld(projectData);
   const level = lead && home.lead !== null ? home.lead : home.effort;
-  return { model: home.model?.value, effort: level?.value };
+  return { model: home.model?.value, effort: level?.value, advisor: home.advisor?.value };
 }
 
 /** Why the model `toolInput` names is refused under the home's model `value`, or null: none named, or the home's,
@@ -156,6 +160,16 @@ function modelReason(toolInput, value, who, cli) {
   if (model === undefined || model === null || model === '' || sameClaudeModel(model, value)) return null;
   const pass = cli ? `Pass --model ${value}, or none` : `Pass model "${value}", or none`;
   return `${who} names the model "${model}", not the one of the rule ${CLAUDE_HOME.model}: ${value}. ${pass}; another model is his to set.`;
+}
+
+/** Why the advisor `toolInput` names is refused under the home's advisor `value`, or null: none named, or the home's,
+ * as `modelReason` holds a model (odd/tasks/advisor-home.md, spec 4). Only `sessions start` names one today:
+ * `start_session` takes no advisor, so its calls carry none and pass. */
+function advisorReason(toolInput, value, who, cli) {
+  const { advisor } = toolInput;
+  if (advisor === undefined || advisor === null || advisor === '' || sameClaudeModel(advisor, value)) return null;
+  const pass = cli ? `Pass --advisor ${value}, or none` : `Pass advisor "${value}", or none`;
+  return `${who} names the advisor "${advisor}", not the one of the rule ${CLAUDE_HOME.advisor}: ${value}. ${pass}; another advisor is his to set.`;
 }
 
 /** Why `toolInput` is refused under the rule `id` (the sessions' level, or the lead's) of value `value`, or null. */

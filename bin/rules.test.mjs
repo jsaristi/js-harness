@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { machineProbes, rulesMain } from './rules.mjs';
 import { lensEnv } from './lens-review.mjs';
 import { launchCodex } from './lib/codex-launch.mjs';
-import { CODEX_TOOL_FEATURES, PROBE_PROMPT, PROBE_QUESTION, claudeProbeArgs, codexProbeArgs } from './lib/rules-switch.mjs';
+import { ADVISOR_QUESTION, CODEX_TOOL_FEATURES, PROBE_PROMPT, PROBE_QUESTION, claudeProbeArgs, codexProbeArgs } from './lib/rules-switch.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { rulesHash, writeRules } from './lib/rules.mjs';
 import { controlFaults, readCoverageText, writeCoverage } from './lib/rules-coverage.mjs';
@@ -29,7 +29,7 @@ const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
 const IN_FORCE = RULES.filter((rule) => !Object.hasOwn(rule, 'retired'));
 const SCANNED = IN_FORCE.filter((rule) => Array.isArray(rule.patterns)).map((rule) => `${rule.id} 0`);
 const PATTERNS_LINE = `patterns: ${SCANNED.length === 0 ? 'none' : SCANNED.join(', ')}; unscanned: ${IN_FORCE.length - SCANNED.length}`;
-const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] [--with <path>...] | switch [--claude <model>@<effort>] [--lead <effort>] [--codex <model>@<effort>] --quote <session>:<line>... --reading <text> --accepted <text> [--rule-by-rule] [--dry-run] | --hook]';
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] [--with <path>...] | switch [--claude <model>@<effort>] [--lead <effort>] [--advisor <model>] [--codex <model>@<effort>] --quote <session>:<line>... --reading <text> --accepted <text> [--rule-by-rule] [--dry-run] | --hook]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
 /** The coverage register `text` (the package's) with every check owed, since a project of these tests holds none of the
@@ -336,7 +336,7 @@ test('the usage names the applied form, and a word after applied is a usage erro
 
 test('the switch of a home is a form of its own: no home named, or a value that cannot be one, is a usage error', async () => {
   await inProject(BASE(), async (dir) => {
-    assert.deepEqual(await run(['switch'], dir), { code: 2, out: [], err: [`rules switch names no home: give --claude <model>@<effort>, --lead <effort> or --codex <model>@<effort>\n\n${USAGE}`] });
+    assert.deepEqual(await run(['switch'], dir), { code: 2, out: [], err: [`rules switch names no home: give --claude <model>@<effort>, --lead <effort>, --advisor <model> or --codex <model>@<effort>\n\n${USAGE}`] });
     const short = await run(['switch', '--claude', 'saga@high', '--quote', 'abc:1', '--reading', 'r', '--accepted', 'a'], dir);
     assert.equal(short.code, 2);
     assert.match(short.err[0], /not a full Claude id, claude-<family>-<version>/);
@@ -399,6 +399,12 @@ test('the Claude probe of the switch runs in a temporary folder that is removed,
     assert.deepEqual(options.env, lensEnv(env));
     for (const name of Object.keys(SECRETS)) assert.equal(Object.hasOwn(options.env, name), false, name);
     assert.equal(fs.existsSync(folder), false, 'the folder is removed after the call');
+
+    // A probe with an advisor asks the model to consult it once, and names it on the call.
+    const advised = fakeSpawn(() => answered);
+    (await machineProbes(env, { spawn: advised.spawn })).probeClaude({ ...PROBE, advisor: 'claude-astra-2-0' });
+    assert.equal(advised.calls[0].options.input, ADVISOR_QUESTION);
+    assert.deepEqual(advised.calls[0].args.slice(advised.calls[0].args.indexOf('--advisor'), advised.calls[0].args.indexOf('--advisor') + 2), ['--advisor', 'claude-astra-2-0']);
 
     // A launch that throws leaves no folder either, and the switch reads the throw as a probe that failed.
     const thrown = fakeSpawn(() => { throw new Error('spawn EPERM'); });
@@ -569,6 +575,7 @@ test('applied lists the sessions off the home, desktop and background, with what
     const model = declared('session-model').value;
     const effort = declared('session-effort').value;
     const lead = declared('lead-effort').value;
+    const advisor = declared('advisor-model').value;
     const other = LEVELS.find((level) => level !== effort && level !== lead);
     const app = new Map([
       ['c1', { where: 'sessions', model, effort: other, archived: false, title: 'JH 7 · work', cwd: project }],
@@ -579,12 +586,12 @@ test('applied lists the sessions off the home, desktop and background, with what
     appendRecord(home, { event: 'started', at: new Date(NOW).toISOString(), id: 'job-1', sessionId: null, title: 'JH 8 · job', root: project, cwd: project, worktree: null, worktreePath: null, model, effort: other });
     const { code, out } = await applied(project, home, undefined, { readApp: () => app, agents: () => [{ id: 'job-1', status: 'busy' }] });
     assert.equal(code, 0, out.join('\n'));
-    const at = out.indexOf(`Sessions off the home: a session is held to ${model} at ${effort}, and the lead to ${lead}`);
+    const at = out.indexOf(`Sessions off the home: a session is held to ${model} at ${effort}, and the lead to ${lead}; a background session to the advisor ${advisor}`);
     assert.notEqual(at, -1, out.join('\n'));
     assert.equal(out[at - 1], '');
     assert.deepEqual(out.slice(at + 1), [
       `  desktop  "JH 7 · work"  its menu holds ${model} at ${other}; held to ${model} at ${effort}; corrected by the lead's session tools`,
-      `  background  "JH 8 · job" (job-1)  no reply of it was read; its start asked for ${model} at ${other}; its job: busy; held to ${model} at ${effort}; corrected by a resume once its job is no longer at work, which a resume refuses until then: js-harness sessions start --resume job-1`,
+      `  background  "JH 8 · job" (job-1)  no reply of it was read; its start asked for ${model} at ${other}; its job: busy; held to ${model} at ${effort} with the advisor ${advisor}; corrected by a resume once its job is no longer at work, which a resume refuses until then: js-harness sessions start --resume job-1`,
       `  1 archived desktop session is off it too (1 at ${OFF_MODEL} at ${effort}): nothing corrects one while it is archived; he can unarchive it, and it is then listed`,
       '  on the home: 1 desktop, not archived, and 0 background',
       '  The app\'s record does not say whether a session that is not archived is running. Nothing was written.',

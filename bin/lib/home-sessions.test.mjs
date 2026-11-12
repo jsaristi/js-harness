@@ -10,6 +10,7 @@ const on = { model: 'claude-fable-5-2', effort: 'medium' };
 test('a home is in force when it holds a model, a level or a lead\'s level', () => {
   assert.equal(homeInForce(HOME), true);
   assert.equal(homeInForce({ model: null, effort: null, lead: 'high' }), true);
+  assert.equal(homeInForce({ model: null, effort: null, lead: null, advisor: 'claude-fable-5-2' }), true);
   for (const none of [null, undefined, 'claude-fable-5-2', { model: null, effort: null, lead: null }, {}]) assert.equal(homeInForce(none), false, JSON.stringify(none));
 });
 
@@ -92,4 +93,54 @@ test('the block says of each session what its source gives, what it is held to a
   ]);
   const none = offHomeLines(sessionsOffHome({ model: 'claude-fable-5-2', effort: null, lead: null }, {}), { model: 'claude-fable-5-2', effort: null, lead: null });
   assert.deepEqual(none.slice(1, 4), ['Sessions off the home: a session is held to claude-fable-5-2 at no level', '  none that is open or runs', '  on the home: 0 desktop, not archived, and 0 background']);
+});
+
+// odd/tasks/advisor-home.md, spec 6: a background session's advisor, judged from the advisorModel of its last reply.
+const ADVISED = { ...HOME, model: 'claude-opus-5-5', advisor: 'claude-fable-5-2' };
+const opus = { model: 'claude-opus-5-5', effort: 'medium' };
+const job = (id, replied, more = {}) => ({ id, title: `JH ${id} · job`, asked: { model: null, effort: null }, replied, state: 'idle', working: false, removed: false, ...more });
+
+test('where the home declares an advisor, a background session is on it only when its last reply names that advisor, not its own model', () => {
+  const background = [
+    job('1', { ...opus, advisor: 'claude-fable-5-2' }),
+    job('2', { ...opus, advisor: 'claude-fable-5-2[1m]' }),
+    // The host repeats the session's own model where no advisor was asked.
+    job('3', { ...opus, advisor: 'claude-opus-5-5' }),
+    job('4', { ...opus, advisor: 'claude-fable-5-1' }),
+    // Not known: no advisorModel on the reply, no reply read, or a reply on the home's advisor itself.
+    job('5', opus),
+    job('6', null),
+    job('7', { model: 'claude-fable-5-2', effort: 'medium', advisor: 'claude-fable-5-2' }),
+    job('8', { ...opus, advisor: 'claude-opus-5-5' }, { removed: true, state: null }),
+  ];
+  const result = sessionsOffHome(ADVISED, { background, isLead });
+  assert.deepEqual(result.rows.map((row) => [row.id, row.off]), [
+    ['3', { model: null, effort: null, advisor: 'none' }],
+    ['4', { model: null, effort: null, advisor: 'claude-fable-5-1' }],
+    ['7', { model: 'claude-fable-5-2', effort: null, advisor: null }],
+  ]);
+  assert.deepEqual(result.rows[0].held, { ...opus, advisor: 'claude-fable-5-2' });
+  assert.equal(result.rows[0].corrects, 'a resume, js-harness sessions start --resume 3');
+  assert.deepEqual(result.on, { desktop: 0, background: 2 });
+  assert.equal(result.removedOff, 1);
+  assert.deepEqual(result.unknownAdvisor, [
+    { id: '5', title: 'JH 5 · job', why: 'its last reply holds no advisorModel' },
+    { id: '6', title: 'JH 6 · job', why: 'no reply of it was read' },
+  ], 'a session whose advisor is not known is named, never counted on the home; one off the home already is its row');
+  // A home with no advisor judges none, and adds nothing to a row.
+  const plain = sessionsOffHome(HOME, { background: [job('3', { ...on, advisor: 'claude-opus-5-5' })], isLead });
+  assert.deepEqual([plain.rows, plain.unknownAdvisor, plain.on.background], [[], [], 1]);
+});
+
+test('the block says the advisor a session is held to, what its last reply named, and each session whose advisor was not read', () => {
+  const result = sessionsOffHome(ADVISED, {
+    background: [job('j1', { ...opus, advisor: 'claude-opus-5-5' }), job('j2', opus), job('j3', { ...opus, effort: 'high' })],
+    isLead,
+  });
+  const lines = offHomeLines(result, ADVISED);
+  assert.equal(lines[1], 'Sessions off the home: a session is held to claude-opus-5-5 at medium, and the lead to high; a background session to the advisor claude-fable-5-2');
+  assert.equal(lines[2], '  background  "JH j1 · job" (j1)  its last reply ran on claude-opus-5-5 at medium with no advisor; its start named no model and no level; its job: idle; held to claude-opus-5-5 at medium with the advisor claude-fable-5-2; corrected by a resume, js-harness sessions start --resume j1');
+  assert.equal(lines[3], '  background  "JH j3 · job" (j3)  its last reply ran on claude-opus-5-5 at high with an advisor not known (its last reply holds no advisorModel); its start named no model and no level; its job: idle; held to claude-opus-5-5 at medium with the advisor claude-fable-5-2; corrected by a resume, js-harness sessions start --resume j3');
+  assert.ok(lines.includes('  not read: the advisor of "JH j2 · job" (j2): its last reply holds no advisorModel, so it is not counted on the home'), lines.join('\n'));
+  assert.ok(lines.includes('  on the home: 0 desktop, not archived, and 0 background'), lines.join('\n'));
 });

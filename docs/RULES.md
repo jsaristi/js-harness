@@ -3,9 +3,15 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `d8202cccafd7`. In force: 70 (42 of Sebastián, 28 of the project). Retired: 8.
+Hash `9b276e80b58d`. In force: 71 (43 of Sebastián, 28 of the project). Retired: 8.
 
 ## Sebastián's
+
+### advisor-model
+The advisor every session the harness starts or resumes in the background consults: the stronger model the host's advisor tool forwards the session's transcript to: claude-fable-5-2.
+- Of this repository only: not in force in a project that installs the harness.
+- Read by: `bin/lib/model-home.mjs`.
+- Since 2026-11-12. Row: reports. Source: his words of 2026-11-11, 2026-11-11, 2026-11-12, checked by the command on 2026-11-12.
 
 ### announce-finished
 A session says when it finished and where to return, watches its context, and a rule has one home: "## The recap Each reply that closes a stretch of work carries: - one line a session: its state, the effort mode its kind of work calls for and why; - by title, the sessions to archive and the ones stopped, with what each waits for; a session a scheduled task opened is named as a routine; - the Codex meter, read at that moment, when the project reviews with Codex; - what waits for the user in a session, said only after reading that session at that moment; - when a stretch or a session ends, that it ended and which session to return to."

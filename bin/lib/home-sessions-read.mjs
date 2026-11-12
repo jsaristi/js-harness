@@ -61,7 +61,8 @@ export function readHomeSessions({
     try {
       const folder = worktreeOf(entry, platform) ?? entry.cwd ?? entry.root;
       const facts = sessionFacts(readFile(path.join(claudeDir, 'projects', projectSlug(folder), `${entry.sessionId}.jsonl`)), { tail: 0 });
-      const replied = { model: facts.context?.model ?? null, effort: facts.effort ?? null };
+      // The advisor goes with the model it was named beside, only where the reply names one (advisor-home.md, spec 6).
+      const replied = { model: facts.context?.model ?? null, effort: facts.effort ?? null, ...(typeof facts.advisor === 'string' && { advisor: facts.advisor }) };
       return replied.model === null && replied.effort === null ? null : replied;
     } catch {
       return null;

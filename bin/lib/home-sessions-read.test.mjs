@@ -34,10 +34,10 @@ const started = (machine, id, hoursAgo, more = {}) => appendRecord(machine.home,
 const removed = (machine, id) => appendRecord(machine.home, { event: 'removed', at: new Date(NOW).toISOString(), id });
 
 /** A transcript whose one reply ran on `model` at `effort`, where a session that runs in `folder` keeps it. */
-function writeReply(machine, folder, sessionId, model, effort) {
+function writeReply(machine, folder, sessionId, model, effort, more = {}) {
   const dir = path.join(machine.claudeDir, 'projects', projectSlug(folder));
   fs.mkdirSync(dir, { recursive: true });
-  const reply = { type: 'assistant', timestamp: new Date(NOW - HOUR).toISOString(), sessionId, effort, message: { role: 'assistant', model, content: [{ type: 'text', text: 'done' }], usage: { input_tokens: 10, output_tokens: 1 } } };
+  const reply = { type: 'assistant', timestamp: new Date(NOW - HOUR).toISOString(), sessionId, effort, ...more, message: { role: 'assistant', model, content: [{ type: 'text', text: 'done' }], usage: { input_tokens: 10, output_tokens: 1 } } };
   fs.writeFileSync(path.join(dir, `${sessionId}.jsonl`), `${JSON.stringify(reply)}\n`);
 }
 
@@ -110,6 +110,13 @@ test('the last reply of a job whose record holds the main checkout as its worktr
   started(machine, 'job-old', 1, { sessionId: 's-old', worktree: 'a', worktreePath: machine.main, effort: 'medium' });
   writeReply(machine, machine.tree, 's-old', MODEL, 'high');
   assert.deepEqual(read(machine).background[0].replied, { model: MODEL, effort: 'high' });
+}));
+
+// odd/tasks/advisor-home.md, spec 6: the advisor a reply names goes with its model, and a reply that names none adds no key.
+test('the last reply of a job carries the advisorModel it names beside its model and level', withMachine((machine) => {
+  started(machine, 'job-a', 1, { sessionId: 's-a' });
+  writeReply(machine, machine.main, 's-a', MODEL, 'medium', { advisorModel: 'claude-fable-5-2' });
+  assert.deepEqual(read(machine).background[0].replied, { model: MODEL, effort: 'medium', advisor: 'claude-fable-5-2' });
 }));
 
 test('with no record and no app record there is nothing, and nothing is unread', withMachine((machine) => {

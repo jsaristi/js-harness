@@ -26,16 +26,19 @@ const FLOOR = 3;
 test('the arguments name a home or both, the lead\'s level beside the sessions\', and his words', () => {
   const parsed = parseSwitch(['--claude', `${NEW}@${MEDIUM}`, '--lead', HIGH, '--codex', `astra@${LOW}`, '--quote', `${SESSION}:7`, '--quote', `${SESSION}:12`, '--reading', 'r', '--accepted', 'a', '--dry-run']);
   assert.deepEqual(parsed, {
-    command: 'switch', claude: { model: NEW, effort: MEDIUM }, lead: HIGH, codex: { model: 'astra', effort: LOW },
+    command: 'switch', claude: { model: NEW, effort: MEDIUM }, lead: HIGH, advisor: null, codex: { model: 'astra', effort: LOW },
     quotes: [{ session: SESSION, line: 7 }, { session: SESSION, line: 12 }], reading: 'r', accepted: 'a', dryRun: true, ruleByRule: false,
   });
   assert.equal(parseSwitch(['--lead', XHIGH, '--rule-by-rule', ...WORDS]).ruleByRule, true);
   assert.equal(parseSwitch(['--lead', XHIGH, ...WORDS]).claude, null);
+  assert.equal(parseSwitch(['--advisor', NEW, ...WORDS]).advisor, NEW, 'the advisor alone names a home');
 });
 
 test('an argument that cannot be a home\'s value gives the usage error, which names what one is', () => {
   const refused = (argv, pattern) => assert.match(parseSwitch(argv).error ?? 'taken', pattern, argv.join(' '));
-  refused(WORDS, /names no home: give --claude <model>@<effort>, --lead <effort> or --codex <model>@<effort>/);
+  refused(WORDS, /names no home: give --claude <model>@<effort>, --lead <effort>, --advisor <model> or --codex <model>@<effort>/);
+  refused(['--advisor', 'fable', ...WORDS], /not a full Claude id, claude-<family>-<version>/);
+  refused(['--advisor', NEW, '--advisor', OLD, ...WORDS], /--advisor is given once/);
   refused(['--claude', NEW, ...WORDS], /--claude takes <model>@<effort>/);
   refused(['--claude', `nova@${MEDIUM}`, ...WORDS], /not a full Claude id, claude-<family>-<version>/);
   refused(['--claude', `${NEW}@highest`, ...WORDS], /not an effort level/);
@@ -55,6 +58,7 @@ test('each rule of the homes named gets its value and his words as its source, i
   assert.deepEqual(changes.map(({ id, change }) => [id, change.value]), [
     [CLAUDE_HOME.model, NEW], [CLAUDE_HOME.effort, MEDIUM], [CLAUDE_HOME.lead, HIGH], [CODEX_HOME.model, 'astra'], [CODEX_HOME.effort, LOW],
   ]);
+  assert.deepEqual(changesOf(parseSwitch(['--lead', HIGH, '--advisor', NEW, ...WORDS])).map(({ id, change }) => [id, change.value]), [[CLAUDE_HOME.lead, HIGH], [CLAUDE_HOME.advisor, NEW]]);
   for (const { change } of changes) assert.deepEqual(change.source, { kind: 'words', quotes: [{ session: SESSION, line: 7 }], reading: 'everything runs on it', accepted: 'he typed it' });
   assert.deepEqual(changesOf(parseSwitch(['--lead', XHIGH, ...WORDS])).map(({ id }) => id), [CLAUDE_HOME.lead]);
 });
@@ -64,13 +68,15 @@ test('each rule of the homes named gets its value and his words as its source, i
 test('the Claude probe asks as a lens does: no tools, no session kept, the model and the level named', () => {
   const args = claudeProbeArgs({ model: NEW, effort: MEDIUM, promptFile: 'p.md', settingsFile: 's.json' });
   assert.deepEqual(args, ['-p', '--safe-mode', '--tools', '', '--system-prompt-file', 'p.md', '--settings', 's.json', '--model', NEW, '--effort', MEDIUM, '--output-format', 'json', '--no-session-persistence']);
+  const advised = claudeProbeArgs({ model: NEW, effort: MEDIUM, advisor: OLD, promptFile: 'p.md', settingsFile: 's.json' });
+  assert.deepEqual(advised.slice(advised.indexOf('--effort'), advised.indexOf('--output-format')), ['--effort', MEDIUM, '--advisor', OLD]);
 });
 
 const claudeAnswer = (models, more = {}) => ({ status: 0, stdout: JSON.stringify({ result: 'ready', is_error: false, total_cost_usd: 0.004, modelUsage: Object.fromEntries(models.map((model) => [model, {}])), ...more }), stderr: '' });
 
 test('the Claude probe proves which model answered, and fails when the CLI refuses the id or the level or another model answers', () => {
   const asked = { model: NEW, effort: MEDIUM };
-  assert.deepEqual(readClaudeProbe(claudeAnswer([`${NEW}-20261101`]), asked), { ok: true, answered: `${NEW}-20261101`, beside: [], costUsd: 0.004 });
+  assert.deepEqual(readClaudeProbe(claudeAnswer([`${NEW}-20261101`]), asked), { ok: true, answered: `${NEW}-20261101`, advised: null, beside: [], costUsd: 0.004 });
   assert.deepEqual(readClaudeProbe(claudeAnswer([NEW, 'claude-small-1-0']), asked).beside, ['claude-small-1-0']);
   const failed = (ran, pattern) => {
     const read = readClaudeProbe(ran, asked);
@@ -130,6 +136,24 @@ test('a probe is owed for each model and level a home will hold that it does not
   assert.deepEqual(of({ claude: { ...claude, lead: XHIGH } }).claude, [{ model: OLD, effort: XHIGH }]);
   assert.deepEqual(of({ claude: { ...claude, effort: HIGH } }).claude, [], 'a level the home already holds with this model was in force');
   assert.deepEqual(of({ codex: { model: CODEX_OLD, effort: HIGH } }).codex, [{ model: CODEX_OLD, effort: HIGH }]);
+  // The advisor goes with each pair where the home declares one, and a new advisor alone owes a probe of each pair.
+  const advised = { ...claude, advisor: NEW };
+  assert.deepEqual(probesOf({ claude, codex }, { claude: advised, codex }).claude, [{ model: OLD, effort: MEDIUM, advisor: NEW }, { model: OLD, effort: HIGH, advisor: NEW }]);
+  assert.deepEqual(probesOf({ claude: advised, codex }, { claude: advised, codex }).claude, [], 'an advisor in force with these pairs is not asked again');
+  assert.deepEqual(probesOf({ claude: advised, codex }, { claude: { ...advised, lead: XHIGH }, codex }).claude, [{ model: OLD, effort: XHIGH, advisor: NEW }]);
+});
+
+test('with an advisor, the Claude probe passes only when the reply holds a call of that advisor', () => {
+  const asked = { model: OLD, effort: MEDIUM, advisor: NEW };
+  const called = (model) => ({ usage: { iterations: [{ type: 'message' }, { type: 'advisor_message', model }] } });
+  const read = readClaudeProbe(claudeAnswer([OLD, NEW], called(`${NEW}-20261101`)), asked);
+  assert.deepEqual(read, { ok: true, answered: OLD, advised: `${NEW}-20261101`, beside: [], costUsd: 0.004 }, 'the advisor billed is not a model beside');
+  assert.deepEqual(readClaudeProbe(claudeAnswer([OLD, NEW, 'claude-small-1-0'], called(NEW)), asked).beside, ['claude-small-1-0']);
+  for (const more of [{}, called('claude-small-1-0'), { usage: { iterations: [{ type: 'message', model: NEW }] } }]) {
+    const failed = readClaudeProbe(claudeAnswer([OLD, NEW], more), asked);
+    assert.equal(failed.ok, false);
+    assert.equal(failed.why, `the advisor ${NEW} did not answer: the reply of ${OLD} holds no advisor_message of it`);
+  }
 });
 
 // ── the writer's agent file ─────────────────────────────────────────────────────────────────────
@@ -214,7 +238,7 @@ const BEFORE = [rule(CLAUDE_HOME.lead, HIGH), rule(CODEX_HOME.effort, MEDIUM), r
 /** A runner of the pass that writes nothing: it gives what `changeRules` gives for `changes` over BEFORE, and keeps
  * each call and what a real pass would have written. `refuse` is why it refuses, when it does; `fail` is the line a
  * pass that writes ends on when its dry run passed and it does not finish. */
-function fakeRunner({ refuse = null, fail = null } = {}) {
+function fakeRunner({ refuse = null, fail = null, base = BEFORE } = {}) {
   const calls = [];
   const wrote = [];
   const pass = (options, out, err) => {
@@ -227,10 +251,10 @@ function fakeRunner({ refuse = null, fail = null } = {}) {
       err(fail);
       return { code: 1 };
     }
-    const skipped = options.changes.filter(({ id, change }) => BEFORE.find((one) => one.id === id).value === change.value).map(({ id, change }) => ({ id, value: change.value }));
+    const skipped = options.changes.filter(({ id, change }) => base.find((one) => one.id === id).value === change.value).map(({ id, change }) => ({ id, value: change.value }));
     const changing = options.changes.filter(({ id }) => !skipped.some((one) => one.id === id));
     const now = options.oneAtATime ? changing.slice(0, 1) : changing;
-    const list = BEFORE.map((one) => ({ ...one, value: now.find(({ id }) => id === one.id)?.change.value ?? one.value }));
+    const list = base.map((one) => ({ ...one, value: now.find(({ id }) => id === one.id)?.change.value ?? one.value }));
     let extra;
     try {
       extra = options.also(list, now.map(({ id }) => id));
@@ -243,8 +267,8 @@ function fakeRunner({ refuse = null, fail = null } = {}) {
     out(options.dryRun ? 'Relief line: made up' : `changed: ${now.map(({ id }) => id).join(', ')}`);
     if (!options.dryRun) wrote.push({ files, extra });
     return {
-      code: 0, branch: 'rule/new-model', today: '2026-11-12', baseList: BEFORE, list, files, skipped, already: [],
-      written: now.map(({ id, change }) => ({ id, what: 'value', from: BEFORE.find((one) => one.id === id).value, to: change.value })),
+      code: 0, branch: 'rule/new-model', today: '2026-11-12', baseList: base, list, files, skipped, already: [],
+      written: now.map(({ id, change }) => ({ id, what: 'value', from: base.find((one) => one.id === id).value, to: change.value })),
       left: options.oneAtATime ? changing.slice(1).map(({ id }) => id) : [],
     };
   };
@@ -382,6 +406,35 @@ test('--dry-run probes nothing and writes nothing, and prints what a run would d
   assert.match(result.out, /What the new model may make stale/);
   assert.match(result.out, /^dry run: nothing was probed and nothing was written$/m);
   assert.doesNotMatch(result.out, /commit to make|^probed:/m);
+});
+
+test('an advisor switch probes each pair with the advisor, asks it once, and says that it answered', async () => {
+  const base = [...BEFORE, rule(CLAUDE_HOME.advisor, NEW)];
+  const fresh = 'claude-astra-2-0';
+  const advisors = [];
+  const result = await run(['--advisor', fresh, ...WORDS], { runner: fakeRunner({ base }), claude: (probe) => (advisors.push(probe.advisor), claudeAnswer([probe.model, probe.advisor], { usage: { iterations: [{ type: 'advisor_message', model: probe.advisor }] } })) });
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(result.asked, [['claude', OLD, MEDIUM], ['claude', OLD, HIGH]]);
+  assert.deepEqual(advisors, [fresh, fresh]);
+  assert.ok(result.out.includes(`${OLD} at ${MEDIUM} with the advisor ${fresh}, asked to consult it once`), result.out);
+  assert.match(result.out, new RegExp(`^probed: ${OLD} answered through claude 9\\.9\\.9 at ${MEDIUM}, and its advisor ${fresh} answered on 2026-11-12; the CLI put the call at 0\\.004 USD$`, 'm'));
+  assert.match(result.out, new RegExp(`${CLAUDE_HOME.advisor}: ${NEW} to ${fresh}`));
+
+  const silent = await run(['--advisor', fresh, ...WORDS], { runner: fakeRunner({ base }) });
+  assert.equal(silent.code, 1);
+  assert.match(silent.err, new RegExp(`not switched: the advisor ${fresh} did not answer`));
+  assert.deepEqual(silent.runner.wrote, []);
+});
+
+test('an advisor that is the home\'s own model is refused before any probe, since a transcript could not tell it from none', async () => {
+  const base = [...BEFORE, rule(CLAUDE_HOME.advisor, NEW)];
+  for (const argv of [['--advisor', OLD, ...WORDS], ['--claude', `${NEW}@${MEDIUM}`, ...WORDS]]) {
+    const result = await run(argv, { runner: fakeRunner({ base }) });
+    assert.equal(result.code, 2, argv.join(' '));
+    assert.match(result.err, /^not switched: the advisor .* is the model of the home itself, .*nothing was probed and nothing was written$/);
+    assert.deepEqual(result.asked, []);
+    assert.deepEqual(result.runner.wrote, []);
+  }
 });
 
 test('a refusal of the runner is said before any probe is spent', async () => {

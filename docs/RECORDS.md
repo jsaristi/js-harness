@@ -666,7 +666,8 @@ The sessions the lead starts with `claude --bg`, which are no row in the user's 
 - `id`: the short job id `claude --bg` printed; `sessionId`: the conversation's id, or `null`.
 - `title`: the session's title; `root`: the project's main checkout; `cwd`: the folder it started in.
 - `worktree`: the worktree name asked for, or `null`; `worktreePath`: its path, or `null`.
-- `model`, `effort`, `advisor`: as given, or `null`; `remoteControl`: boolean.
+- `model`, `effort`: as given, or `null`; `advisor`: the one passed to `claude --advisor`, the home's where the project
+  declares `rule:advisor-model`, or `null`; `remoteControl`: boolean.
 - `brief`: path of the brief's copy.
 - `resumedFrom`: the job id this one resumed, only on a resumed job.
 

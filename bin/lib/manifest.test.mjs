@@ -3266,7 +3266,7 @@ test('the orchestrator skill says how a model or an effort is switched, beside t
   assert.ok(at('\n## A new model\n') > at('\n## Before a reinstall\n') && at('\n## A new model\n') < at('\n## A work session\n'));
   const steps = [
     '1. Take the user\'s sentence as the source:',
-    '2. In a checkout of the harness, on a branch `rule/<name>` cut from `origin/main`, run `node bin/js-harness.mjs rules switch [--claude <model>@<effort>] [--lead <effort>] [--codex <model>@<effort>] --quote <session>:<line> --reading "<reading>" --accepted "<where>" --dry-run`:',
+    '2. In a checkout of the harness, on a branch `rule/<name>` cut from `origin/main`, run `node bin/js-harness.mjs rules switch [--claude <model>@<effort>] [--lead <effort>] [--advisor <model>] [--codex <model>@<effort>] --quote <session>:<line> --reading "<reading>" --accepted "<where>" --dry-run`:',
     '3. Run it again without `--dry-run`.',
     '4. Make the commit it prints:',
     '5. Run the gate and both reviews from the branch\'s copy (`node bin/js-harness.mjs codex-review`, `node bin/js-harness.mjs lens-review`), so the slice is reviewed on the new model; read `js-harness codex-meter` before the Codex review.',
@@ -3284,6 +3284,9 @@ test('the orchestrator skill says how a model or an effort is switched, beside t
     'The day before a switch of Codex\'s home lands, check three things: the id the installed `codex` takes (the probe of step 3, one cheap call, said before it runs); that `js-harness codex-meter` still reads its limits; and that a review of one small slice runs end to end from the branch\'s copy.',
     'so its first estimates come from the model that leaves, and `rule:codex-review-rate`, `rule:codex-review-floor` and the double review\'s measured cost were measured on that model.',
     '`docs/future-model.md` is the measuring of what the harness is worth on a new model',
+    // odd/tasks/advisor-home.md, spec 8: the advisor is a rule of the Claude home, named and never restated.
+    '`rule:advisor-model` the advisor of each session `js-harness sessions start` starts or resumes',
+    'With an advisor, each pair is asked to consult it once, and nothing is written unless it answers.',
   ]) at(line);
   // The two protocols come from a module of their own (./lead-protocols.mjs); the manifest writes their last full
   // stop, so the text ends them once and the next section follows as it did.

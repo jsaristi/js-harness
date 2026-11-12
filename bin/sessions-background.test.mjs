@@ -20,6 +20,7 @@ const RULES_DATA = fileURLToPath(new URL('./lib/rules-data.mjs', import.meta.url
 // The effort the rule session-effort gives, read from the list a world with rules copies and never written here.
 const SESSION_EFFORT = RULES.find((rule) => rule.id === 'session-effort').value;
 const SESSION_MODEL = RULES.find((rule) => rule.id === 'session-model').value;
+const SESSION_ADVISOR = RULES.find((rule) => rule.id === 'advisor-model').value;
 
 const FAKE = String.raw`
 import fs from 'node:fs';
@@ -431,12 +432,32 @@ test('where the rules are declared, a free title is refused with the guard\'s re
   assert.deepEqual(readState(world).calls, []);
   // odd/tasks/one-model-home.md, spec 5: a start that names neither takes the home's model and level, on the call
   // to claude and in the record.
+  // odd/tasks/advisor-home.md, spec 2: and the home's advisor, where it names none.
   const noEffort = js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief]);
   assert.equal(noEffort.code, 0, noEffort.stderr);
   const call = actions(world).at(-1);
-  assert.deepEqual([call[call.indexOf('--model') + 1], call[call.indexOf('--effort') + 1]], [SESSION_MODEL, SESSION_EFFORT]);
+  assert.deepEqual([call[call.indexOf('--model') + 1], call[call.indexOf('--effort') + 1], call[call.indexOf('--advisor') + 1]], [SESSION_MODEL, SESSION_EFFORT, SESSION_ADVISOR]);
   const [line] = startedLines(world);
-  assert.deepEqual([line.model, line.effort], [SESSION_MODEL, SESSION_EFFORT]);
+  assert.deepEqual([line.model, line.effort, line.advisor], [SESSION_MODEL, SESSION_EFFORT, SESSION_ADVISOR]);
+}, { rules: true }));
+
+// The verifier's notes of 2026-11-12 on odd/tasks/advisor-home.md, specs 3 and 4: a record that holds another advisor is
+// resumed with the home's, and a call that names the home's with a bracket or a date gives claude the home's exact id.
+test('where the advisor is declared, claude is given the home\'s exact advisor, whatever the record or a same-model call holds', withWorld((world) => {
+  const started = js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief, '--advisor', `${SESSION_ADVISOR}-20990101`]);
+  assert.equal(started.code, 0, started.stderr);
+  const call = actions(world).at(-1);
+  assert.equal(call[call.indexOf('--advisor') + 1], SESSION_ADVISOR);
+  assert.equal(startedLines(world).at(-1).advisor, SESSION_ADVISOR);
+  endJob(world, '0db8bc5e');
+  const lines = fs.readFileSync(recordFile(world), 'utf8').trimEnd().split('\n').map((line) => JSON.parse(line)).map((line) => (line.id === '0db8bc5e' ? { ...line, advisor: 'claude-fable-5-1' } : line));
+  fs.writeFileSync(recordFile(world), `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`);
+  patchState(world, { nextId: 'c779ed44' });
+  const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--advisor', `${SESSION_ADVISOR}[1m]`]);
+  assert.equal(resumed.code, 0, resumed.stderr);
+  const again = actions(world).at(-1);
+  assert.equal(again[again.indexOf('--advisor') + 1], SESSION_ADVISOR, 'the home\'s exact id, not the call\'s bracket nor the record\'s 5-1');
+  assert.equal(startedLines(world).at(-1).advisor, SESSION_ADVISOR);
 }, { rules: true }));
 
 test('sessions stop stops and removes a recorded session, drops its brief and records the removal', withWorld((world) => {
@@ -765,6 +786,13 @@ test('sessions start --resume holds to the effort rule, needs a writable record,
   const started = js(world, ['sessions', 'start', '--title', 'JH 2 · thing', '--brief', world.brief, '--effort', SESSION_EFFORT, '--model', 'opus']);
   assert.equal(started.code, 2);
   assert.match(started.stderr, /names the model "opus"/);
+  // odd/tasks/advisor-home.md, spec 4: and so is an advisor other than the home's, a short name included.
+  const advisor = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--advisor', 'fable']);
+  assert.equal(advisor.code, 2);
+  assert.ok(advisor.stderr.includes(`names the advisor "fable", not the one of the rule advisor-model: ${SESSION_ADVISOR}. Pass --advisor ${SESSION_ADVISOR}, or none;`), advisor.stderr);
+  const startedAdvisor = js(world, ['sessions', 'start', '--title', 'JH 2 · thing', '--brief', world.brief, '--advisor', 'fable']);
+  assert.equal(startedAdvisor.code, 2);
+  assert.match(startedAdvisor.stderr, /names the advisor "fable"/);
   // The guard judges nothing of a call with no brief, so a resume refuses an empty one itself, as a start does: with
   // one, a resume ran at any level and on any model (the verifier's finding of 2026-11-11).
   const emptyBrief = `${world.brief}.empty`;
@@ -778,7 +806,8 @@ test('sessions start --resume holds to the effort rule, needs a writable record,
   // the home (a session started before the rule, or by hand) stays off it through the steps below, and the resume
   // that runs takes the home's model and level.
   const recordText = fs.readFileSync(recordFile(world), 'utf8');
-  const offHome = recordText.trimEnd().split('\n').map((line) => JSON.parse(line)).map((line) => (line.id === '0db8bc5e' ? { ...line, effort: 'max', model: 'opus' } : line));
+  // odd/tasks/advisor-home.md, spec 3: a record that holds no advisor, as the 23 of 25 starts before the rule did.
+  const offHome = recordText.trimEnd().split('\n').map((line) => JSON.parse(line)).map((line) => (line.id === '0db8bc5e' ? { ...line, effort: 'max', model: 'opus', advisor: null } : line));
   fs.writeFileSync(recordFile(world), `${offHome.map((line) => JSON.stringify(line)).join('\n')}\n`);
   // A level named on the call is the call's, and is refused when it is not the home's.
   const named = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--effort', 'max']);
@@ -798,6 +827,8 @@ test('sessions start --resume holds to the effort rule, needs a writable record,
   assert.equal(startedLines(world).at(-1).id, 'c779ed44');
   const taken = actions(world).at(-1);
   assert.deepEqual([taken[taken.indexOf('--model') + 1], taken[taken.indexOf('--effort') + 1]], [SESSION_MODEL, SESSION_EFFORT], 'the home\'s, not the record\'s opus at max');
+  assert.equal(taken[taken.indexOf('--advisor') + 1], SESSION_ADVISOR, 'the home\'s advisor, not the record\'s none');
+  assert.equal(startedLines(world).at(-1).advisor, SESSION_ADVISOR);
   assert.deepEqual([startedLines(world).at(-1).model, startedLines(world).at(-1).effort], [SESSION_MODEL, SESSION_EFFORT]);
   // claude agents fails once the job runs: the conversation the resume named is recorded.
   endJob(world, 'c779ed44');

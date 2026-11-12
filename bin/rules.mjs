@@ -35,7 +35,7 @@ import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
 import { changeRule, changeRules } from './lib/rules-change-run.mjs';
-import { PROBE_PROMPT, PROBE_QUESTION, SWITCH_USAGE, claudeProbeArgs, codexFeaturesOf, codexProbeArgs, parseSwitch, switchRules } from './lib/rules-switch.mjs';
+import { ADVISOR_QUESTION, PROBE_PROMPT, PROBE_QUESTION, SWITCH_USAGE, claudeProbeArgs, codexFeaturesOf, codexProbeArgs, parseSwitch, switchRules } from './lib/rules-switch.mjs';
 import { proofSaid, proveBreaks, readCoverage, REGISTER_PATH } from './lib/rules-coverage-read.mjs';
 import { OWED_CAP, OWED_CAP_FROM, refreshRegister, writeCoverage } from './lib/rules-coverage.mjs';
 import { harnessHome } from './lib/home.mjs';
@@ -488,7 +488,7 @@ export async function machineProbes(env, { spawn = spawnSync, platform = process
       const [promptFile, settingsFile] = [path.join(folder, 'prompt.md'), path.join(folder, 'settings.json')];
       fs.writeFileSync(promptFile, PROBE_PROMPT, 'utf8');
       fs.writeFileSync(settingsFile, '{}', 'utf8');
-      return claude(claudeProbeArgs({ ...probe, promptFile, settingsFile }), { cwd: folder, input: PROBE_QUESTION });
+      return claude(claudeProbeArgs({ ...probe, promptFile, settingsFile }), { cwd: folder, input: probe.advisor === undefined ? PROBE_QUESTION : ADVISOR_QUESTION });
     }),
     probeCodex: (probe) => inFolder((folder) => {
       // The features the installed CLI knows, read with no model call: it refuses one it does not know.

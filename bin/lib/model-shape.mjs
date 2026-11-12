@@ -6,8 +6,9 @@
 
 /** The ids of the rules of each home, which `js-harness rules switch` changes together. Claude's is one model and
  * two levels since his decision of 2026-11-11 (odd/tasks/one-model-home.md, S7): `effort` is the level of everything
- * but the lead's session, and `lead` the level of that one. */
-export const CLAUDE_HOME = Object.freeze({ model: 'session-model', effort: 'session-effort', lead: 'lead-effort' });
+ * but the lead's session, and `lead` the level of that one. `advisor` is the model of the advisor a session the harness
+ * starts consults, his of 2026-11-12 (odd/tasks/advisor-home.md, spec 1); the host gives it no level of its own. */
+export const CLAUDE_HOME = Object.freeze({ model: 'session-model', effort: 'session-effort', lead: 'lead-effort', advisor: 'advisor-model' });
 export const CODEX_HOME = Object.freeze({ model: 'review-model', effort: 'review-effort' });
 
 /** The effort levels a host takes, lowest first: the order that says one level is above another. */
@@ -26,7 +27,7 @@ export function homeFaults(rule) {
   const { id, value } = rule;
   const text = typeof value === 'string';
   if (value === '' || !(text || typeof value === 'number')) return [];
-  if (id === CLAUDE_HOME.model && !(text && CLAUDE_ID.test(value))) {
+  if ((id === CLAUDE_HOME.model || id === CLAUDE_HOME.advisor) && !(text && CLAUDE_ID.test(value))) {
     return ['the value is not a full Claude id, claude-<family>-<version>: a short name gives whatever model the engine in use has for it'];
   }
   if ((id === CLAUDE_HOME.effort || id === CLAUDE_HOME.lead || id === CODEX_HOME.effort) && !EFFORTS.includes(value)) {

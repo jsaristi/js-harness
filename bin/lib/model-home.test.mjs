@@ -8,10 +8,11 @@ import { CLAUDE_HOME, CODEX_HOME, EFFORTS, MENU_LEVELS, claudeHeld, claudeHome, 
 const valueOf = (id, list = RULES) => list.find((rule) => rule.id === id).value;
 
 // His decision of 2026-11-11 (S7): one model and two levels, the lead's session at its own.
-test('the two homes are five live rules that hold a value, the lead\'s level among Claude\'s, and no rule is in both', () => {
-  assert.deepEqual(CLAUDE_HOME, { model: 'session-model', effort: 'session-effort', lead: 'lead-effort' });
+// odd/tasks/advisor-home.md, spec 1: the advisor's model joined Claude's home on 2026-11-12.
+test('the two homes are six live rules that hold a value, the lead\'s level and the advisor among Claude\'s, and no rule is in both', () => {
+  assert.deepEqual(CLAUDE_HOME, { model: 'session-model', effort: 'session-effort', lead: 'lead-effort', advisor: 'advisor-model' });
   const ids = [...Object.values(CLAUDE_HOME), ...Object.values(CODEX_HOME)];
-  assert.equal(new Set(ids).size, 5);
+  assert.equal(new Set(ids).size, 6);
   for (const id of ids) {
     const rule = RULES.find((item) => item.id === id);
     assert.ok(rule && Object.hasOwn(rule, 'value') && !Object.hasOwn(rule, 'retired'), `${id} is a live rule with a value`);
@@ -19,7 +20,7 @@ test('the two homes are five live rules that hold a value, the lead\'s level amo
 });
 
 test('claudeHome and codexHome give what the rules declare, wherever they are read', () => {
-  assert.deepEqual(claudeHome(), { model: valueOf('session-model'), effort: valueOf('session-effort'), lead: valueOf('lead-effort') });
+  assert.deepEqual(claudeHome(), { model: valueOf('session-model'), effort: valueOf('session-effort'), lead: valueOf('lead-effort'), advisor: valueOf('advisor-model') });
   assert.deepEqual(codexHome(), { model: valueOf('review-model'), effort: valueOf('review-effort') });
 });
 
@@ -35,18 +36,20 @@ test('a list given to claudeHome is the one read, so a switch is seen by every r
 test('a guard holds the home where the project declares the rules, and nothing where it does not', () => {
   const here = claudeHeld(writeRules(RULES));
   const held = (id) => ({ value: valueOf(id), note: '' });
-  assert.deepEqual(here, { model: held('session-model'), effort: held('session-effort'), lead: held('lead-effort') });
-  assert.deepEqual(claudeHeld(undefined), { model: null, effort: null, lead: null });
-  assert.deepEqual(claudeHeld('export const RULES = [];\n'), { model: null, effort: null, lead: null });
+  assert.deepEqual(here, { model: held('session-model'), effort: held('session-effort'), lead: held('lead-effort'), advisor: held('advisor-model') });
+  assert.deepEqual(claudeHeld(undefined), { model: null, effort: null, lead: null, advisor: null });
+  assert.deepEqual(claudeHeld('export const RULES = [];\n'), { model: null, effort: null, lead: null, advisor: null });
   // A project that declares the sessions' level and none for its lead: the guard holds what is declared.
   const without = claudeHeld(writeRules(RULES.filter((rule) => rule.id !== 'lead-effort')));
-  assert.deepEqual(without, { model: held('session-model'), effort: held('session-effort'), lead: null });
+  assert.deepEqual(without, { model: held('session-model'), effort: held('session-effort'), lead: null, advisor: held('advisor-model') });
+  // A project that declares no advisor: a start passes none of its own, as before the rule.
+  assert.equal(claudeHeld(writeRules(RULES.filter((rule) => rule.id !== 'advisor-model'))).advisor, null);
 });
 
 test('heldValues gives the home a project holds as plain values, null where it declares none', () => {
   const home = claudeHome();
-  assert.deepEqual(heldValues(writeRules(RULES)), { model: home.model, effort: home.effort, lead: home.lead });
-  assert.deepEqual(heldValues(null), { model: null, effort: null, lead: null });
+  assert.deepEqual(heldValues(writeRules(RULES)), { model: home.model, effort: home.effort, lead: home.lead, advisor: home.advisor });
+  assert.deepEqual(heldValues(null), { model: null, effort: null, lead: null, advisor: null });
 });
 
 test('the levels are the five a host takes, lowest first', () => {

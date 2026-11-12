@@ -5,6 +5,14 @@
 // gives for the list, and a test holds it to that: a rule is changed there, never in another shape.
 export const RULES = [
   {
+    "id": "advisor-model",
+    "subject": "the advisor every session the harness starts or resumes in the background consults: the stronger model the host's advisor tool forwards the session's transcript to",
+    "owner": "sebastian",
+    "scope": "repository",
+    "since": "2026-11-12",
+    "value": "claude-fable-5-2"
+  },
+  {
     "id": "agents-budget",
     "subject": "the most estimated tokens AGENTS.md may hold, since every session pays it on every turn",
     "owner": "project",

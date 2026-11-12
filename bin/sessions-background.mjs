@@ -36,9 +36,11 @@ export const START_USAGE = [
   '         refuse, where they are declared: the effort is that rule\'s one level, and a model that is named is that rule\'s.',
   '         A start that names no --model or no --effort takes those rules\', and so does a resume, whatever its record holds.',
   '         A run of claude that does not finish (a timeout) is looked for in claude agents and recorded when it started.',
-  '         --advisor passes claude --advisor <model> (a stronger model the session consults); it is recorded with the start.',
+  '         --advisor passes claude --advisor <model> (a stronger model the session consults); a start that names none takes the',
+  '         rule advisor-model\'s, where it is declared, and so does a resume before its record\'s; one that is named must be',
+  '         that rule\'s, as a model must, and claude is given the rule\'s exact id; it is recorded with the start.',
   '         --resume resumes a recorded session whose job stopped (a restart ends every one) with claude --bg --resume, in a',
-  '         new job in its folder, under its title and advisor (its model and effort too, where the rules declare none), and',
+  '         new job in its folder, under its title (its model, effort and advisor too, where the rules declare none), and',
   '         records the new job; one that still runs is refused.',
   '         The lead uses it only on a turn the user did not type, where start_session would leave a card: a background session',
   '         is not a row in the desktop sidebar. The board lists the project\'s background sessions, what each waits for',
@@ -173,7 +175,10 @@ export function sessionsStartMain(argv, given = {}) {
   const taken = sessionStartHome(rules, { lead });
   const model = parsed.model ?? taken.model;
   const effort = parsed.effort ?? taken.effort;
-  const refusal = sessionStartRefusal({ prompt: brief, effort, model }, rules, { cli: true, lead })
+  // Where the home declares an advisor, the one passed is its exact id: a call may only name the same model, with a
+  // date or a bracket the refusal lets through (the verifier's note of 2026-11-12), which claude is not given.
+  const advisor = taken.advisor ?? parsed.advisor;
+  const refusal = sessionStartRefusal({ prompt: brief, effort, model, advisor: parsed.advisor ?? taken.advisor }, rules, { cli: true, lead })
     ?? sessionTitleRefusal({ title: parsed.title }, rules, project, 'js-harness sessions start');
   if (refusal !== null) {
     stderr(refusal);
@@ -205,7 +210,7 @@ export function sessionsStartMain(argv, given = {}) {
   const launchedAt = new Date(now()).toISOString();
   let result;
   try {
-    result = claude(startArgs({ ...parsed, model, effort, briefs, prompt: startPrompt(copy) }), { cwd });
+    result = claude(startArgs({ ...parsed, model, effort, advisor, briefs, prompt: startPrompt(copy) }), { cwd });
   } catch (err) {
     // A character cmd.exe would act on, in the title or a path: nothing ran.
     fs.rmSync(copy, { force: true });
@@ -242,7 +247,7 @@ export function sessionsStartMain(argv, given = {}) {
   }
   const entry = {
     event: 'started', at: new Date(now()).toISOString(), id, sessionId: agent?.sessionId ?? null, title: parsed.title, root, cwd,
-    worktree: parsed.worktree ?? null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: model ?? null, effort: effort ?? null, advisor: parsed.advisor ?? null, remoteControl: parsed.remoteControl, brief: copy,
+    worktree: parsed.worktree ?? null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: model ?? null, effort: effort ?? null, advisor: advisor ?? null, remoteControl: parsed.remoteControl, brief: copy,
   };
   try {
     appendRecord(home, entry);
@@ -285,8 +290,8 @@ export function sessionsStartMain(argv, given = {}) {
 
 /** `sessions start --resume <id>`: the recorded session `id` names, whose job stopped (a restart of the machine ends every
  * one), resumed with `claude --bg --resume` in a new job, in the folder it worked in, under its title, model, effort and
- * advisor (`--model`, `--effort`, `--advisor` and `--brief` replace the record's, and the home's model and level do where the
- * project declares them), held to the rules as a start is. The new job is
+ * advisor (`--model`, `--effort`, `--advisor` and `--brief` replace the record's, and the home's model, level and advisor do
+ * where the project declares them), held to the rules as a start is. The new job is
  * recorded with `resumedFrom`, and replaces the stopped one, which stays recorded: the two share a worktree and a brief,
  * so they are undone together (`undoSession`). Exit 0 once the new job runs and is recorded; 1 when the record holds no
  * such session or cannot be written, a job works its conversation or that cannot be told, its folder is gone, or claude
@@ -339,8 +344,11 @@ function resumeStart(parsed, deps) {
   const taken = sessionStartHome(rules, { lead });
   const model = parsed.model ?? taken.model ?? entry.model ?? undefined;
   const effort = parsed.effort ?? taken.effort ?? entry.effort ?? undefined;
-  const advisor = parsed.advisor ?? entry.advisor ?? undefined;
-  const refusal = sessionStartRefusal({ prompt: text, effort, model }, rules, { cli: true, lead });
+  // The advisor: the home's exact id where declared, before the call's and the record's (odd/tasks/advisor-home.md,
+  // spec 3), so a session started with none before the rule is resumed with the home's; a call that names another is
+  // refused below.
+  const advisor = taken.advisor ?? parsed.advisor ?? entry.advisor ?? undefined;
+  const refusal = sessionStartRefusal({ prompt: text, effort, model, advisor: parsed.advisor ?? advisor }, rules, { cli: true, lead });
   if (refusal !== null) return refuse(refusal, 2);
   const unwritable = recordUnwritable(home);
   if (unwritable !== null) return refuse(`${unwritable}, so nothing was resumed`);

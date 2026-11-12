@@ -5,6 +5,7 @@
 export const COVERAGE = {
   "baseline": "2026-10-28",
   "controls": {
+    "advisor-model": [{"of":"a start or a resume that names no advisor takes it (sessions start)","level":"check","test":"bin/lib/guard.test.mjs","break":{"path":"bin/lib/guard.mjs","find":"advisor: home.advisor?.value };","replace":"advisor: undefined };"}},{"of":"a start or a resume that names another advisor is refused (sessions start)","level":"check","test":"bin/lib/guard.test.mjs","break":{"path":"bin/lib/guard.mjs","find":"const advisor = home.advisor === null ? null : advisorReason(toolInput, home.advisor.value, who, cli);","replace":"const advisor = null;"}}],
     "agents-budget": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/check.mjs","find":"('agents-budget', 'estimated tokens')","replace":"('agents-budget', 'estimated tokens') + 1"}},
     "announce-finished": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"when a stretch or a session ends, that it ended and which session to return to."},
     "away-autonomy": {"level":"line","path":"bin/lib/manifest.mjs","phrase":"the share of the planned that was met, the map by phase before and after, the timeline"},
@@ -431,7 +432,7 @@ export const COVERAGE = {
         "context": "a step of the protocol of a switch (odd/tasks/one-model-home.md, spec 9): rules switch refuses a source that is not the owner's words at a transcript line (bin/lib/rules-change-run.test.mjs); bin/lib/manifest.test.mjs holds its wording"
       },
       {
-        "hash": "e76a031fe3a8",
+        "hash": "e7850c52d740",
         "context": "a step of the protocol of a switch (odd/tasks/one-model-home.md, spec 9): rules switch refuses off a rule/ branch based on origin/main, and its dry run asks no model (bin/lib/rules-change-run.test.mjs); bin/lib/manifest.test.mjs holds its wording"
       },
       {

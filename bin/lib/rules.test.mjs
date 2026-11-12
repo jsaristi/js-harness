@@ -233,15 +233,21 @@ const NOT_FULL_ID = 'the value is not a full Claude id, claude-<family>-<version
 const NOT_A_LEVEL = 'the value is not an effort level: low, medium, high, xhigh or max';
 const NOT_CODEX = 'the value is not the id of a Codex model: it is no text, holds a space, is a Claude id or is an effort level';
 
-test('the model of the Claude home is a full id: a short name, a bracket and another shape are refused', () => {
-  for (const value of ['fable', 'opus[1m]', 'claude-fable', 'claude-fable-5-2[1m]', 'Claude-Fable-5-2', 'gpt-6.1-sol']) {
-    assert.deepEqual(readRules([homeRule('session-model', value)]), [`rule "session-model": ${NOT_FULL_ID}`], `model ${value}`);
+// The advisor's model is held as the session's is (odd/tasks/advisor-home.md, spec 1): `--advisor fable` gave
+// claude-fable-5-1 on 2026-10-31.
+test('the model of the Claude home and its advisor\'s are full ids: a short name, a bracket and another shape are refused', () => {
+  for (const id of ['session-model', 'advisor-model']) {
+    for (const value of ['fable', 'opus[1m]', 'claude-fable', 'claude-fable-5-2[1m]', 'Claude-Fable-5-2', 'gpt-6.1-sol']) {
+      assert.deepEqual(readRules([homeRule(id, value)]), [`rule "${id}": ${NOT_FULL_ID}`], `${id} ${value}`);
+    }
   }
 });
 
-test('a full Claude id is the model of the Claude home with no fault, a dated one too', () => {
-  for (const value of ['claude-fable-5-2', 'claude-opus-5', 'claude-haiku-4-5-20251001']) {
-    assert.deepEqual(readRules([homeRule('session-model', value)]), [], `model ${value}`);
+test('a full Claude id is the model of the Claude home or its advisor\'s with no fault, a dated one too', () => {
+  for (const id of ['session-model', 'advisor-model']) {
+    for (const value of ['claude-fable-5-2', 'claude-opus-5', 'claude-haiku-4-5-20251001']) {
+      assert.deepEqual(readRules([homeRule(id, value)]), [], `${id} ${value}`);
+    }
   }
 });
 
