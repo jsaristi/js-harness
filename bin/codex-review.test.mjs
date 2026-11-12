@@ -23,8 +23,17 @@ import * as reviewRuns from './lib/codex-review-runs.mjs';
 import { runFindings, runPart, runPrompt } from './lib/codex-review-runs.mjs';
 import * as reviewRecords from './lib/codex-reviews.mjs';
 import { isValidCodexReview } from './lib/codex-reviews.mjs';
+import { EFFORTS } from './lib/model-home.mjs';
 import { gitDirs } from './lib/project.mjs';
 import { autoMaintenanceOff, withoutAutoMaintenance } from './lib/git-fixture.testkit.mjs';
+
+// Two levels that are not the review's, picked from the levels a host takes and never written as words: a switch of
+// Codex's home may write any level, and the tests that took a written one as another failed once the home moved to it
+// (JH 172, 2026-11-12).
+const [OTHER_EFFORT, ANOTHER_EFFORT] = EFFORTS.filter((level) => level !== REVIEW_EFFORT);
+// A Codex model that is not the review's, for the same reason: the first of two made-up ids the home does not hold,
+// built from their parts so that neither is written whole where the rules' bindings look for the home's value.
+const OFF_REVIEW_MODEL = ['astra', 'nova'].map((name) => `gpt-fixture-${name}`).find((id) => id !== REVIEW_MODEL);
 
 // What a review given `timeoutMs: 30` says: the bound it ran past, not the declared one.
 const RAN_PAST_AT_30_MS = `ran past ${30 / 60000} minutes`;
@@ -1565,7 +1574,9 @@ test(`the usage names no session: its flags are those of a review, and its secon
   ]);
   assert.ok(loads.includes(`on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`), loads);
   // Nothing in it names a session to choose, nor says that a review can run on a model of the user's choosing.
-  assert.doesNotMatch(result.err, /--session|current|high|own model|your own Codex configuration loaded/);
+  assert.doesNotMatch(result.err, /--session|current|own model|your own Codex configuration loaded/);
+  // Nor a level other than the review's, as a word: `--max-parts` names no level.
+  for (const level of EFFORTS.filter((one) => one !== REVIEW_EFFORT)) assert.doesNotMatch(result.err, new RegExp(`(?<![\\w-])${level}(?![\\w-])`), level);
 });
 
 test('a `--session` that is not `lean` exits 2 with usage and does nothing', async () => {
@@ -3001,8 +3012,8 @@ test('what a review spent and ran on is read from the home of the run and from n
   fs.mkdirSync(named);
   fs.writeFileSync(path.join(named, 'auth.json'), LOGIN, 'utf8');
   // Both hold rollout files with counts and a model, as a real home does, of sessions that are not this review.
-  writeRollouts(mine.codexHome, [turnContext('gpt-another-session', 'low'), ...reviewThread]);
-  writeRollouts(named, [turnContext('gpt-another-session', 'low'), ...reviewThread]);
+  writeRollouts(mine.codexHome, [turnContext('gpt-another-session', ANOTHER_EFFORT), ...reviewThread]);
+  writeRollouts(named, [turnContext('gpt-another-session', ANOTHER_EFFORT), ...reviewThread]);
   for (const env of [{}, { CODEX_HOME: named }]) {
     // The home of this run holds the answer of one request and no total: nothing is known of what it spent,
     // and that is what is said.
@@ -3022,18 +3033,18 @@ test('a run line says which model and effort its session really ran with, read f
   const lean = (...threads) => run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewed(root, base)), ...threads), homedir: mine.homedir });
   // The command asked for one model at one effort, and the session's own file says it ran with another:
   // the line keeps both, and neither is written over the other. (Such an attempt does not stand: see below.)
-  await lean(parentThread, [turnContext('gpt-first-turn', REVIEW_EFFORT), ...reviewThread, turnContext('gpt-it-ran', 'low')]);
+  await lean(parentThread, [turnContext('gpt-first-turn', REVIEW_EFFORT), ...reviewThread, turnContext('gpt-it-ran', ANOTHER_EFFORT)]);
   const differs = readCodexReviewRuns(root).at(-1);
   assert.deepEqual([differs.model, differs.effort], [REVIEW_MODEL, REVIEW_EFFORT], 'what the command passed');
-  assert.deepEqual(sessionRan(differs), ['gpt-it-ran', 'low'], 'what the last turn of the session ran with');
+  assert.deepEqual(sessionRan(differs), ['gpt-it-ran', ANOTHER_EFFORT], 'what the last turn of the session ran with');
   // The parent thread asks the model nothing, so what it names is not what the review ran with.
   await lean([turnContext('gpt-parent', REVIEW_EFFORT), ...parentThread], reviewThread);
   assert.deepEqual(sessionRan(readCodexReviewRuns(root).at(-1)), [null, null], 'a review thread that names none');
   // A model with no effort beside it, and a value that is no name: each is known or not on its own.
   await lean([turnContext('gpt-it-ran', undefined), ...reviewThread]);
   assert.deepEqual(sessionRan(readCodexReviewRuns(root).at(-1)), ['gpt-it-ran', null]);
-  await lean([turnContext(7, 'low'), ...reviewThread]);
-  assert.deepEqual(sessionRan(readCodexReviewRuns(root).at(-1)), [null, 'low']);
+  await lean([turnContext(7, ANOTHER_EFFORT), ...reviewThread]);
+  assert.deepEqual(sessionRan(readCodexReviewRuns(root).at(-1)), [null, ANOTHER_EFFORT]);
   // It is read on a way out that is no review too, as the tokens are.
   await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...spending(fakeCodex(reviewedWith(cmd('git status'))), [turnContext(REVIEW_MODEL, REVIEW_EFFORT), ...reviewThread]), homedir: mine.homedir });
   const fell = readCodexReviewRuns(root).at(-1);
@@ -3058,9 +3069,9 @@ const leanReviewThatRan = (root, base, ran, mine, extra = {}) => run(
 test('a lean review whose session ran on another model does not stand: no record, nothing of its answer shown, exit 1, and a failed run line that names what was asked and what ran', async () => {
   const { root, base } = makeRepo();
   const mine = fakeHome();
-  const result = await leanReviewThatRan(root, base, turnContext('gpt-6-astra', REVIEW_EFFORT), mine);
+  const result = await leanReviewThatRan(root, base, turnContext(OFF_REVIEW_MODEL, REVIEW_EFFORT), mine);
   assert.equal(result.code, 1);
-  const why = `its session ran on gpt-6-astra at ${REVIEW_EFFORT} effort, and the command passed ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`;
+  const why = `its session ran on ${OFF_REVIEW_MODEL} at ${REVIEW_EFFORT} effort, and the command passed ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`;
   assert.equal(result.err.replace(RERUN_LAST, ''), `Codex's turn completed, but ${why}${RAN_ON_ANOTHER}`);
   assert.match(result.err, RERUN_LAST);
   // Nothing of the answer: not the review as Codex rendered it, not a finding, not the verdict.
@@ -3073,7 +3084,7 @@ test('a lean review whose session ran on another model does not stand: no record
   // The run line: a failed attempt, with the reason, both pairs, and what it measured all the same.
   const logged = onlyRun(root);
   assert.deepEqual([logged.outcome, logged.reason], ['failed', why]);
-  assert.deepEqual([logged.model, logged.effort, ...sessionRan(logged)], [REVIEW_MODEL, REVIEW_EFFORT, 'gpt-6-astra', REVIEW_EFFORT]);
+  assert.deepEqual([logged.model, logged.effort, ...sessionRan(logged)], [REVIEW_MODEL, REVIEW_EFFORT, OFF_REVIEW_MODEL, REVIEW_EFFORT]);
   assert.deepEqual([logged.usage, logged.findings, logged.coverage], [REVIEW_SPENT, THREE_FOUND, { seen: 2, total: 2 }]);
   assert.deepEqual(listed(mine.homes), []);
   assert.equal(fs.statSync(mine.auth).nlink, 1);
@@ -3084,12 +3095,12 @@ test('a lean review whose session ran at another effort does not stand either, a
   const mine = fakeHome();
   const asked = `and the command passed ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`;
   const refusals = [
-    // The effort the command passed until 2026-10-08, on the right model.
-    [turnContext(REVIEW_MODEL, 'high'), `its session ran on ${REVIEW_MODEL} at high effort`],
-    [turnContext('gpt-6-astra', 'low'), 'its session ran on gpt-6-astra at low effort'],
+    // Another level on the right model, as the command passed until 2026-10-08.
+    [turnContext(REVIEW_MODEL, OTHER_EFFORT), `its session ran on ${REVIEW_MODEL} at ${OTHER_EFFORT} effort`],
+    [turnContext(OFF_REVIEW_MODEL, ANOTHER_EFFORT), `its session ran on ${OFF_REVIEW_MODEL} at ${ANOTHER_EFFORT} effort`],
     // One of the two is not known and the other differs: what is known is enough.
-    [turnContext('gpt-6-astra', undefined), 'its session ran on gpt-6-astra at an effort its rollout file does not name'],
-    [turnContext(7, 'low'), 'its session ran on a model its rollout file does not name at low effort'],
+    [turnContext(OFF_REVIEW_MODEL, undefined), `its session ran on ${OFF_REVIEW_MODEL} at an effort its rollout file does not name`],
+    [turnContext(7, ANOTHER_EFFORT), `its session ran on a model its rollout file does not name at ${ANOTHER_EFFORT} effort`],
   ];
   for (const [ran, said] of refusals) {
     const result = await leanReviewThatRan(root, base, ran, mine);
@@ -3160,12 +3171,12 @@ test('the effort keeps its rule: a lean review whose session names the model and
 test('when the turn did not complete, that is what is said, whatever the session ran on: the model is asked of a review that completed', async () => {
   const { root, base } = makeRepo();
   const mine = fakeHome();
-  const fake = spending(fakeCodex(reviewed(root, base), { status: 7 }, PROBE_OK, answerWith(root)), parentThread, [turnContext('gpt-6-astra', 'low'), ...reviewThread]);
+  const fake = spending(fakeCodex(reviewed(root, base), { status: 7 }, PROBE_OK, answerWith(root)), parentThread, [turnContext(OFF_REVIEW_MODEL, ANOTHER_EFFORT), ...reviewThread]);
   const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, homedir: mine.homedir, platform: process.platform });
   assert.equal(result.code, 7);
   assert.match(result.err, /The Codex review did not complete \(it exited 7\)/);
   assert.doesNotMatch(result.err, /its session ran on/);
-  assert.deepEqual([onlyRun(root).outcome, onlyRun(root).reason, ...sessionRan(onlyRun(root))], ['failed', 'it exited 7', 'gpt-6-astra', 'low']);
+  assert.deepEqual([onlyRun(root).outcome, onlyRun(root).reason, ...sessionRan(onlyRun(root))], ['failed', 'it exited 7', OFF_REVIEW_MODEL, ANOTHER_EFFORT]);
   // Nor is what it rendered shown: it is the review of a model the command did not ask for.
   assert.equal(result.shown, '');
 });
@@ -3681,12 +3692,12 @@ test('a part whose session ran on another model fails the range: the parts after
   // Three parts. The first passes, with findings, on the model the command passed; the second ran another.
   const fake = fakeCodexInParts(
     { stdout: partSaid(RENDERED[0], root, base, head, 'a.txt'), said: answerWith(root), threads: [parentThread, [turnContext(REVIEW_MODEL, REVIEW_EFFORT), ...reviewThread]] },
-    { stdout: partSaid(RENDERED[1], root, base, head, 'b.txt'), said: answerWith(root), threads: [parentThread, [turnContext('gpt-6-astra', 'low'), ...reviewThread]] },
+    { stdout: partSaid(RENDERED[1], root, base, head, 'b.txt'), said: answerWith(root), threads: [parentThread, [turnContext(OFF_REVIEW_MODEL, ANOTHER_EFFORT), ...reviewThread]] },
   );
   const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, homedir: mine.homedir, platform: process.platform, randomUUID: runIds() });
   assert.equal(result.code, 1);
   assert.equal(fake.calls.length, 2, 'the third part was never started');
-  const why = `its session ran on gpt-6-astra at low effort, and the command passed ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`;
+  const why = `its session ran on ${OFF_REVIEW_MODEL} at ${ANOTHER_EFFORT} effort, and the command passed ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort`;
   assert.ok(result.err.includes(`Codex's turn completed, but ${why}; a review that ran on anything else does not stand`), result.err);
   assert.match(result.err, /^Part 2 of 3 \(b\.txt\) did not pass, so the part after it was not started and no review of [0-9a-f]{7}\.\.[0-9a-f]{7} was recorded\.\nThe part before it passed, and what it answered is not shown: without every part it is no review of [0-9a-f]{7}\.\.[0-9a-f]{7}\.$/m);
   // Nothing of what either part answered, in either form.
@@ -3695,7 +3706,7 @@ test('a part whose session ran on another model fails the range: the parts after
   assert.doesNotMatch(`${result.out}\n${result.err}`, /Rendered of|Recorded|All \d parts/);
   assert.deepEqual(readCodexReviewRuns(root).map((line) => [line.part.index, line.outcome, line.reason ?? null, ...sessionRan(line)]), [
     [1, 'reviewed', null, REVIEW_MODEL, REVIEW_EFFORT],
-    [2, 'failed', why, 'gpt-6-astra', 'low'],
+    [2, 'failed', why, OFF_REVIEW_MODEL, ANOTHER_EFFORT],
   ]);
   assert.equal(wrote(root), false);
   assert.deepEqual(listed(mine.homes), []);
@@ -4156,7 +4167,7 @@ test('a run at another effort reuses no part: what passed at one effort is asked
   const ids = runIds();
   await thirdPartFailed(root, base, head, ids);
   const fake = threePassingParts(root, base, head);
-  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, effort: 'high', platform: process.platform, randomUUID: ids });
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, effort: OTHER_EFFORT, platform: process.platform, randomUUID: ids });
   assert.equal(result.code, 0, result.err);
   assert.equal(fake.calls.length, 3);
 });
@@ -4822,7 +4833,7 @@ test('each run line records what its part was planned at, with the version of th
   assert.equal(whole.code, 0, whole.err);
   const [line] = readCodexReviewRuns(root).slice(-1);
   assert.equal('part' in line, false);
-  assert.deepEqual(Object.keys(line.plan), ['estimate', 'high', 'method']);
+  assert.deepEqual(Object.keys(line.plan), Object.keys(second[0].plan));
   assert.equal(line.plan.method, PLAN_METHOD);
   assert.ok(line.plan.high >= line.plan.estimate, JSON.stringify(line.plan));
 });
@@ -6559,8 +6570,8 @@ test('codexArgs: the effort and the extra configuration are options, and without
   const base = 'a'.repeat(40);
   assert.deepEqual(codexArgs(base, 'linux', 'codex', {}), leanArgv(base));
   // The effort is the one the command passes: the same token, in its place.
-  assert.deepEqual(codexArgs(base, 'linux', 'codex', { effort: 'high' }), atEffort(leanArgv(base), 'high'));
-  assert.equal(atEffort(leanArgv(base), 'high').includes('model_reasoning_effort="high"'), true, 'the fixture does change the token');
+  assert.deepEqual(codexArgs(base, 'linux', 'codex', { effort: OTHER_EFFORT }), atEffort(leanArgv(base), OTHER_EFFORT));
+  assert.equal(atEffort(leanArgv(base), OTHER_EFFORT).includes(`model_reasoning_effort="${OTHER_EFFORT}"`), true, 'the fixture does change the token');
   // The extra settings come after the session's own and before what is reviewed, where every `-c` is.
   assert.deepEqual(codexArgs(base, 'linux', 'codex', { extraConfig: CODEGRAPH_CONFIG }), [...leanArgv(base).slice(0, -2), ...asFlags(CODEGRAPH_CONFIG), '--base', base]);
   assert.deepEqual(codexArgs(base, 'linux', 'own', { extraConfig: CODEGRAPH_CONFIG }), [...ownArgv().slice(0, -1), ...asFlags(CODEGRAPH_CONFIG), '-']);
@@ -6575,25 +6586,25 @@ test('an injected effort is the effort the command passes: in the argv, in the r
   const { root, base, head } = makeRepo();
   const range = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
   const fake = fakeCodex(reviewed(root, base));
-  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, effort: 'high' });
+  const result = await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, effort: OTHER_EFFORT });
   assert.equal(result.code, 0, result.err);
-  assert.deepEqual(fake.calls[0].args, atEffort(leanArgv(base), 'high'));
-  assert.deepEqual([onlyRun(root).model, onlyRun(root).effort], [REVIEW_MODEL, 'high']);
-  assert.equal(afterPlan(result.out)[0], `Codex is reviewing ${range} with the lean session (${REVIEW_MODEL}, high); this can take several minutes.`);
+  assert.deepEqual(fake.calls[0].args, atEffort(leanArgv(base), OTHER_EFFORT));
+  assert.deepEqual([onlyRun(root).model, onlyRun(root).effort], [REVIEW_MODEL, OTHER_EFFORT]);
+  assert.equal(afterPlan(result.out)[0], `Codex is reviewing ${range} with the lean session (${REVIEW_MODEL}, ${OTHER_EFFORT}); this can take several minutes.`);
 });
 
 test('an injected effort is what the session is held to: a review that ran at it stands, and one that ran at the command\'s own does not', async () => {
   const mine = fakeHome();
-  // The comparison asks a lean session for `high`, and the session's own file says it ran at `high`.
+  // The comparison asks a lean session for a level other than the review's, and the session's own file says it ran at that level.
   const kept = makeRepo();
-  const stands = await leanReviewThatRan(kept.root, kept.base, turnContext(REVIEW_MODEL, 'high'), mine, { effort: 'high' });
+  const stands = await leanReviewThatRan(kept.root, kept.base, turnContext(REVIEW_MODEL, OTHER_EFFORT), mine, { effort: OTHER_EFFORT });
   assert.deepEqual([stands.code, stands.err], [0, '']);
-  assert.deepEqual([onlyRun(kept.root).outcome, onlyRun(kept.root).effort, ...sessionRan(onlyRun(kept.root))], ['reviewed', 'high', REVIEW_MODEL, 'high']);
-  // Asked for `high` and ran at the effort of a review nobody varies: not what was asked, so it falls.
+  assert.deepEqual([onlyRun(kept.root).outcome, onlyRun(kept.root).effort, ...sessionRan(onlyRun(kept.root))], ['reviewed', OTHER_EFFORT, REVIEW_MODEL, OTHER_EFFORT]);
+  // Asked for that level and ran at the effort of a review nobody varies: not what was asked, so it falls.
   const other = makeRepo();
-  const falls = await leanReviewThatRan(other.root, other.base, turnContext(REVIEW_MODEL, REVIEW_EFFORT), mine, { effort: 'high' });
+  const falls = await leanReviewThatRan(other.root, other.base, turnContext(REVIEW_MODEL, REVIEW_EFFORT), mine, { effort: OTHER_EFFORT });
   assert.equal(falls.code, 1);
-  assert.equal(falls.err.replace(RERUN_LAST, ''), `Codex's turn completed, but its session ran on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, and the command passed ${REVIEW_MODEL} at high effort${RAN_ON_ANOTHER}`);
+  assert.equal(falls.err.replace(RERUN_LAST, ''), `Codex's turn completed, but its session ran on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, and the command passed ${REVIEW_MODEL} at ${OTHER_EFFORT} effort${RAN_ON_ANOTHER}`);
   assert.match(falls.err, RERUN_LAST);
   assert.equal(wrote(other.root), false);
 });
@@ -6632,7 +6643,7 @@ test('no flag reaches what is injected: the usage names none of the seams, and a
     'A merge below HEAD, after code commits that each have a record, is cut in two turns where two cost less than one review: the merge, then the commits after it.',
     '`--at <commit>` names the head a printed command was computed at (check --push and the merge door print it): the run is refused, not started, when HEAD is another commit.',
   ]);
-  const seams = ['--effort', 'low', '--extra-codex-config', 'a=b', '--codex-config', 'a=b', '--measured-current', '--measured', '--on-result', 'x', '--every-file'];
+  const seams = ['--effort', ANOTHER_EFFORT, '--extra-codex-config', 'a=b', '--codex-config', 'a=b', '--measured-current', '--measured', '--on-result', 'x', '--every-file'];
   // Since T1 of odd/tasks/commands-and-doctor.md a flag named after a seam is refused before anything starts,
   // where it was taken and dropped.
   for (const flags of [[], ['--session', 'lean']]) {
@@ -6664,9 +6675,9 @@ test('nothing on the command line selects another model or effort: the usage nam
   assert.doesNotMatch(usage.err.split('\n').find((line) => line.startsWith('Usage: ')), /model|effort|-m\b|-c\b/);
   // Every way a person might try, as this command's flags are spelled and as Codex's are.
   const tries = [
-    ['--model', 'gpt-6-astra'], ['-m', 'gpt-6-astra'], ['--effort', 'low'], ['--reasoning-effort', 'low'],
-    ['-c', 'model="gpt-6-astra"'], ['-c', 'model_reasoning_effort="low"'], ['--config', 'model_reasoning_effort="low"'],
-    ['--model=gpt-6-astra'], ['--effort=low'],
+    ['--model', OFF_REVIEW_MODEL], ['-m', OFF_REVIEW_MODEL], ['--effort', ANOTHER_EFFORT], ['--reasoning-effort', ANOTHER_EFFORT],
+    ['-c', `model="${OFF_REVIEW_MODEL}"`], ['-c', `model_reasoning_effort="${ANOTHER_EFFORT}"`], ['--config', `model_reasoning_effort="${ANOTHER_EFFORT}"`],
+    [`--model=${OFF_REVIEW_MODEL}`], [`--effort=${ANOTHER_EFFORT}`],
   ];
   for (const session of [[], ['--session', 'lean']]) {
     for (const flags of [...tries, tries.flat()]) {

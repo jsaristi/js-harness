@@ -75,15 +75,37 @@ test('the time he counts as present is the declared person-present in millisecon
 
 // The command's test file held both values in its expected output, 67 and 58 times: his change of the
 // effort on 2026-10-12 was a change of every one of those lines. It reads the two constants now, and this
-// holds it there. A value is looked for as a word, so that `gpt-6.1-sol-next` or `mediumish` would not count.
-/** The lines of `file` (a path under `bin/`) that hold `value` as a word, or as a regex escapes it. */
-function linesStating(file, value) {
-  const lines = fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8').split('\n');
+// holds it there. A value is looked for as a word, so that `gpt-6.1-sol-next` or `mediumish` would not count;
+// nor does the name of a property (`plan.high`, `{ high: n }`), which states no level: an effort is an
+// everyday word, and the plan's `high` made the test fail once the home moved to that level (JH 190).
+/** The lines of `text` that hold `value` as a word, or as a regex escapes it, and not as a property's name. */
+function linesOf(text, value) {
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const written = [value, escaped].map((form) => form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const asWord = new RegExp(`(?<![\\w-])(?:${written.join('|')})(?![\\w-])`);
-  return lines.flatMap((line, at) => (asWord.test(line) ? [at + 1] : []));
+  const asWord = new RegExp(`(?<![\\w.-])(?:${written.join('|')})(?![\\w-]|\\s*:)`);
+  return text.split('\n').flatMap((line, at) => (asWord.test(line) ? [at + 1] : []));
 }
+
+/** The lines of `file` (a path under `bin/`) that hold `value`, as `linesOf` finds it. */
+function linesStating(file, value) {
+  return linesOf(fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), value);
+}
+
+test('a value is found quoted, in prose and in a regex, and not as a property\'s name nor inside a longer word', () => {
+  const text = [
+    "run({ effort: 'high' })", // 1
+    '`at high effort`', // 2
+    '/--session|high|own/', // 3
+    'line.plan.high >= 0', // 4
+    '{ estimate: 1, high: 2 }', // 5
+    "'--max-parts', 'xhigh', 'highest'", // 6
+    'on gpt-6.1-sol at medium', // 7
+    'gpt-6.1-sol-next or gpt-6\\.1-sol', // 8
+  ].join('\n');
+  assert.deepEqual(linesOf(text, 'high'), [1, 2, 3]);
+  assert.deepEqual(linesOf(text, 'max'), []);
+  assert.deepEqual(linesOf(text, 'gpt-6.1-sol'), [7, 8]);
+});
 
 test('the test file of the review command states neither the model nor the effort of a review: it reads both', () => {
   for (const value of [ruleValue('review-model'), ruleValue('review-effort')]) {
