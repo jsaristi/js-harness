@@ -6,9 +6,11 @@ brief `~/.js-harness/background/briefs/2026-11-12T06-58-20-202Z-f6e42350.md`. De
 `rule/advisor-home`, in four work-unit commits. Runner: `node --test`.
 
 ## State
-Done: T1 to T6, every code slice reviewed by Codex and the lenses (L6). Now T7: the push, whose run on GitHub is the
-gate, the pull request and the `ready` notice, which says it lands only on his yes and gives the advisor tokens (L6).
-Then T8 is the lead's, after the land.
+Done: T1 to T6, every code slice reviewed (L6), the advisor's checks before the push (L7). Next, T7: the Codex review of
+`501b1566..` (the skill line), the push, whose run on GitHub is the gate, the pull request (body in
+`$CLAUDE_JOB_DIR/tmp/pr-body.md`, with no AI footer, his rule), the session summary
+`docs/sessions/2026-11-12-jh-189-the-advisor-s-home.md` committed and pushed, then `notify --kind ready --pr` (lands
+only on his yes, the advisor tokens of L7), then `closed --summary`. T8 is the lead's, after the land.
 Open, his: everything under "Ask me before". Replies of this session run on `claude-opus-5-5` at medium with
 a `claude-fable-5-2` advisor.
 
@@ -219,3 +221,12 @@ Nothing of this plan needs him before it lands; the merge does. Written down as 
   commit. Advisor tokens since 2026-11-10, read from the `advisor_message` iterations of the transcripts of
   `~/.claude/projects/D--js-harness*` (sub-agents' transcripts not read): this session 1 call, 145,437 input (none
   cached) and 8,412 output; JH 190 1 call, 118,939 and 6,257; no other session called it.
+- L7 2026-11-12 ~09:00Z, this session's advisor before the push: prove the shipped probe on a real run, read `rules
+  applied` on the real sessions, recount the tokens, narrow the skill line. (1) `machineProbes(process.env).probeClaude`
+  of `bin/rules.mjs` with the home's `claude-opus-5-5`, `medium`, `claude-fable-5-2` (`--safe-mode`, the probe prompt,
+  the advisor question): `readClaudeProbe` gave `ok: true`, `advised: claude-fable-5-2`; iterations message,
+  advisor_message (3,960 in, 457 out), message; 0.071 USD. (2) `node bin/js-harness.mjs rules applied`: 2 background
+  sessions on the home (JH 189 and JH 190), no "with no advisor" and no `not read: the advisor of` line; JH 186 off by
+  its model, its advisor not known since it runs on Fable itself. (3) Recount: this session 2 calls, 373,981 input
+  (none cached) and 23,012 output; JH 190 1 call, 118,939 and 6,257. (4) The skill line named every Claude the harness
+  starts; it now names the sessions `sessions start` starts or resumes (`3168609a`), readability lens 0.
