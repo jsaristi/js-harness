@@ -5575,7 +5575,12 @@ function gitOf(dir) {
   };
 }
 
-/** A project of today's sub-agents: a writer on its rule's model, read from the list, and an explorer on sonnet, off the reader's
+// A model that is not the home's: the first of two made-up ids the rule does not hold. It is picked and never written
+// as the id of a real model, because a switch makes any real model the home's, and the explorer below would then be
+// on the rule's model.
+const SUBAGENT_OFF_MODEL = ['claude-fixture-1', 'claude-fixture-2'].find((id) => id !== RULES.find((rule) => rule.id === 'session-model').value);
+
+/** A project of today's sub-agents: a writer on its rule's model, read from the list, and an explorer on another model, off the
  * rule. `rules` gives the project the harness's rules file, the one the rules are read from; `records`
  * gives it a config folder with the records. */
 function subagentProject({ rules = true, records = true } = {}) {
@@ -5596,7 +5601,7 @@ function subagentProject({ rules = true, records = true } = {}) {
       fs.writeFileSync(path.join(agents, `agent-${id}.meta.json`), JSON.stringify(meta));
     };
     agent('w1', { agentType: 'general-purpose', description: 'Write the change' }, RULES.find((rule) => rule.id === 'session-model').value, '2026-10-14T14:02:00Z');
-    agent('e1', { agentType: 'Explore', description: 'Map things' }, 'claude-sonnet-5-5', '2026-10-14T14:03:00Z');
+    agent('e1', { agentType: 'Explore', description: 'Map things' }, SUBAGENT_OFF_MODEL, '2026-10-14T14:03:00Z');
   }
   return { dir, config, cleanup: () => { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(config, { recursive: true, force: true }); } };
 }
@@ -5629,7 +5634,7 @@ test('check --subagents prints an INFO subagents row that counts today\'s launch
     const [row] = subagentRows(output);
     assert.ok(row?.startsWith('INFO  subagents  '), output);
     assert.match(row, /2 launches today: 1 on a model off the rules/, output);
-    assert.ok(output.split('\n').some((line) => line.includes('claude-sonnet-5-5') && line.includes('session-model')), output);
+    assert.ok(output.split('\n').some((line) => line.includes(SUBAGENT_OFF_MODEL) && line.includes('session-model')), output);
     assert.notEqual(code, 2, output);
   } finally {
     project.cleanup();

@@ -32,6 +32,10 @@ test('settingsNotes says what his settings hold that the home does not: the defa
 const rulesText = writeRules(RULES);
 const home = claudeHome();
 const other = EFFORTS.find((level) => level !== home.effort && level !== home.lead);
+// A model that is not the home's: the first of two made-up ids the home does not hold. It is picked and never written
+// as the id of a real model, because a switch makes any real model the home's (on 2026-11-11 the first switch moved
+// the home to the model this test took as another, and its commit was refused).
+const offModel = ['claude-fixture-1', 'claude-fixture-2'].find((id) => id !== home.model);
 const files = (held) => (file) => {
   const name = file.replace(/\\/g, '/');
   if (!Object.hasOwn(held, name)) throw Object.assign(new Error('no file'), { code: 'ENOENT' });
@@ -56,8 +60,8 @@ test('a session whose app record is on the home is ok, a lead at the lead\'s lev
     note: '',
     fix: [`this session's menu holds ${home.model} at ${other} and it is held to ${home.model} at ${home.lead}; a session cannot change its own: only the user changes a lead's. To give him: ${menuLine({ model: home.model, effort: home.lead })}`],
   });
-  assert.deepEqual(ask({ readApp: () => record('JH 7 · work', 'claude-opus-5-5', home.effort) }).fix, [
-    `this session's menu holds claude-opus-5-5 at ${home.effort} and it is held to ${home.model} at ${home.effort}; a session cannot change its own: the lead sets it with its session tools, or the user in the menu. To give him: ${menuLine({ model: home.model, effort: home.effort })}`,
+  assert.deepEqual(ask({ readApp: () => record('JH 7 · work', offModel, home.effort) }).fix, [
+    `this session's menu holds ${offModel} at ${home.effort} and it is held to ${home.model} at ${home.effort}; a session cannot change its own: the lead sets it with its session tools, or the user in the menu. To give him: ${menuLine({ model: home.model, effort: home.effort })}`,
   ]);
 });
 

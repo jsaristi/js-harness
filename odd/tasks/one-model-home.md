@@ -355,7 +355,8 @@ S7, amends specs 1, 5, 7 and 8 and the task T4 after it, and wins over both:
 - [x] T7 (kind: build) (8, 10) Pull request 4, branch `feat/model-home-switch`: the runner of `rules change` writes several rules in one pass and refuses a home's value alone; `rules switch` with its probe, the agent file, `--dry-run` and its printout. Route: one writer sub-agent (the context backstop), checked inline. Commits: d37308a2, 94e25d35, and e3cc2ee4 for Codex's two findings.
 - [x] T8 (kind: docs) (4, 9, 10) Pull request 4: the section "A new model" of the orchestrator skill and its test; the convention test over the texts; README, `docs/ROADMAP.md`'s Decided rows, `docs/future-model.md`'s pointer, the help texts and the lead's start line name the rule. Route: inline. Commit: 8a2da3c0.
 - [ ] T9 (kind: verify) (1-10) Each pull request: gate, Codex and the pertinent lenses, one at a time; ready; `js-harness notify --to orchestrator --kind ready --pr <n>`; the next one starts from main once it lands. Then the summary and the closed notice. Route: inline.
-- [ ] T10 (kind: build) (8, 9) Pull request 5, branch `feat/model-home-fixes` stacked on pull request 4's: the fixes of the lenses' findings on pull request 4 (L30), with what his answer to question 269 asks of the Codex probe, and the question to him on the lead's never-commit exception. Its own Codex review and lenses. Route: one writer sub-agent (the context backstop), checked inline. Commit: c386c2e5, the five code fixes, reviewed; open: the question, and what 269 asks.
+- [ ] T10 (kind: build) (8, 9) Pull request 5, branch `feat/model-home-fixes` stacked on pull request 4's: the fixes of the lenses' findings on pull request 4 (L30), with what his answer to question 269 asks of the Codex probe, and the question to him on the lead's never-commit exception. Its own Codex review and lenses. Route: one writer sub-agent (the context backstop), checked inline. Commit: c386c2e5, the five code fixes, and 7ebf02e8, his answer to question 270; 269 asked nothing of the code.
+- [ ] T11 (kind: build) (8) The tests hold for any value of the home: the first real switch's commit was refused by three tests whose fixtures take `claude-opus-5-5` as a model off the home. Branch `fix/home-tests-any-home`. Route: one writer sub-agent (the context backstop), checked inline. Commit: the one that carries this line.
 
 ## Next step
 State at 2026-11-11 12:15 local, after the lead's message resumed this session (11:20) and the host compacted it
@@ -383,6 +384,29 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-12 01:06, at 87 %: 840 is in main (`7fdcdc46`). T11's fix is written by the writer (`Covered: S1`) and is
+in the commit that carries this line, on `fix/home-tests-any-home`: five test files, 41 lines added, 15 removed,
+no other code; a model off the home is the first of `claude-fixture-1` and `claude-fixture-2` the home does not
+hold, and a starter's level the higher of the sessions' and the lead's. Checked here: the files changed and one
+diff. The writer's word: with the home moved in a scratch edit it restored to four values of Claude's home, the
+refused switch's among them, only controls a real switch satisfies still fail. LEFT OPEN, for the lead: Codex's
+home is not safe to switch: `review-effort` at `high` or `low` fails `bin/codex-review.test.mjs:1542` and `:3082`
+and `bin/lib/rules-bindings.test.mjs:88`, not fixed here. Next: Codex on this commit, the reliability lens (run
+without the gate wrapper if it asks for a push first), the push, a pull request on main, `ready --pr`; then the
+close as the 23:57 paragraph says. His yes to land the switch without him: transcript `812b728f`, line 3271.
+
+2026-11-11 23:57: 839 is in main (`c0e84d5f`); 840 (base main, head `07ddc87e`, the exception `7ebf02e8` reviewed
+by Codex, correct, and the readability lens, nothing) has its `ready` notice (23:50) and waits for the lead's land.
+NEW, T11, the lead's message of 23:55: the first real switch (the lead's, on `rule/model-opus-advisor` in
+`D:/js-harness-worktrees/rule-model-opus-advisor`, NOT this session's to touch) wrote its four files and its commit
+was refused by the gate: three tests take `claude-opus-5-5` as a model off the home, which it no longer is once the
+home is that model: `bin/lib/guard.test.mjs:327`, `bin/lib/home-doctor.test.mjs:51`, `bin/rules.test.mjs:416` (the
+gate's output: `D:/js-harness-worktrees/commit-out.txt`). The fix: tests that hold for any value of the home, on
+the branch `fix/home-tests-any-home`, cut from 840's head; one writer sub-agent, checked here; then the commit,
+Codex, one lens (reliability), the push, a pull request on main, `ready`; the lead reruns its commit after it
+lands. Then the close: the job's `tmp/summary.md` (drafted; fill STATE_840, CLOSE_AT, add T11) to `docs/sessions/`,
+T9 to T11 ticked, on this same branch or one of documents, pushed, and the `closed` notice once main holds it.
+
 2026-11-11 23:40, after the machine restarted at 23:24 and the lead resumed this session (the worktree was as the
 20:33 paragraph left it, head `586071fc`, both pull requests open): both questions are answered, each read at its
 line. 269, `812b728f-2f18-43f6-b405-396080689c65:2592`: "Aceptarlo así (Recomendado)", so the Codex probe stays
