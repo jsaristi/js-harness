@@ -433,7 +433,7 @@ export const COVERAGE = {
         "context": "a step of the protocol of a switch (odd/tasks/one-model-home.md, spec 9): rules switch refuses a source that is not the owner's words at a transcript line (bin/lib/rules-change-run.test.mjs); bin/lib/manifest.test.mjs holds its wording"
       },
       {
-        "hash": "e7850c52d740",
+        "hash": "e0bfbcaab5d1",
         "context": "a step of the protocol of a switch (odd/tasks/one-model-home.md, spec 9): rules switch refuses off a rule/ branch based on origin/main, and its dry run asks no model (bin/lib/rules-change-run.test.mjs); bin/lib/manifest.test.mjs holds its wording"
       },
       {
