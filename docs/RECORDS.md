@@ -3,7 +3,7 @@
 The fields of each record the harness writes. Where each one lives, who writes it and who reads it is the table
 "Where state lives" in `docs/SPEC.md`, the one map of records; this file holds only the fields, one section per row
 of that table, named as its row, with a subsection for each variant of a record that holds several (each file of a
-folder, each kind of line). `js-harness docs check` fails where a row has no section here or a section names no row,
+folder, each kind of line). `node workshop/js-harness-workshop.mjs docs check` fails where a row has no section here or a section names no row,
 and where the table drifts from the source (`workshop/lib/docs-records.mjs`).
 
 The fields were written from each writer's code, which each section names by file and function: that function is
@@ -227,7 +227,7 @@ Rendered by `renderList`; not to be edited.
 
 ## This specification
 
-`docs/SPEC.md` is the harness's specification, written by hand. `bin/lib/spec.mjs` `parseSpec` and `specFindings` hold it to its shape for `check`'s `spec` row, and the `docs` row and `js-harness docs` read its capabilities and its record table.
+`docs/SPEC.md` is the harness's specification, written by hand. `bin/lib/spec.mjs` `parseSpec` and `specFindings` hold it to its shape for `check`'s `spec` row, and the `docs` row and `node workshop/js-harness-workshop.mjs docs` read its capabilities and its record table.
 
 ### Capabilities
 
@@ -252,7 +252,7 @@ The table under the `### Where state lives` heading, with the columns `Record`, 
 
 ## The audit entry
 
-`docs/README.md` and `docs/RECORDS.md` are the documents an auditor starting cold reads first; sessions write both by hand. `js-harness docs` and `check`'s `docs` row read them.
+`docs/README.md` and `docs/RECORDS.md` are the documents an auditor starting cold reads first; sessions write both by hand. `node workshop/js-harness-workshop.mjs docs` and `check`'s `docs` row read them.
 
 ### docs/README.md
 
@@ -319,7 +319,7 @@ The brief of the background session that reviews an update. `brief` prints it fr
 
 ## The idea watch's record
 
-`odd/tasks/gentle-ai-update-check.md`, under its `## Releases read` heading, holds what the idea watch read of each stable gentle-ai release (`odd/tasks/idea-watch.md`). A session writes it by hand from what `js-harness idea-watch draft` prints (`workshop/lib/idea-watch.mjs` `draftRelease`); `lastRead` reads it for `idea-watch status` and `doctor`'s `idea-watch` row.
+`odd/tasks/gentle-ai-update-check.md`, under its `## Releases read` heading, holds what the idea watch read of each stable gentle-ai release (`odd/tasks/idea-watch.md`). A session writes it by hand from what `node workshop/js-harness-workshop.mjs idea-watch draft` prints (`workshop/lib/idea-watch.mjs` `draftRelease`); `lastRead` reads it for `idea-watch status` and `doctor`'s `idea-watch` row.
 
 - A batched line `- v<version> (from v<version>, read <YYYY-MM-DD>): ignore; <n> paths, all in ignored areas, +<added> -<deleted>`, for a release whose paths all fall in ignored areas; the first line, `- v4.3.1 (read 2026-10-28): …`, is the baseline the full review read.
 - Any other release is a section `### v<version> (from v<version>, read <YYYY-MM-DD>)`: a table `| Area | What we look for | Paths | Lines | Verdict | Evidence |` with one row an area (the reader splits a row into one a change), the verdict `adopt`, `adapt`, `ignore`, or `?` until decided; `To classify by hand:` with one `- <path> (+a -d)` line a path no area matches, or `(none)`; `Paths by area:` with one `- <area>: <path> (+a -d)` line a changed path.
