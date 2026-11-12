@@ -6,8 +6,17 @@ brief `~/.js-harness/background/briefs/2026-11-12T06-58-20-202Z-f6e42350.md`. De
 `rule/advisor-home`, in four work-unit commits. Runner: `node --test`.
 
 ## State
-T1 written; T2's read `f01e6567` answered (L3). T3 was built while the read ran (the readers saw its files move) and
-is committed after the answers. Next: T4, the refusal, then T5 and T6. Open, his: everything under "Ask me before". Replies of this session run on `claude-opus-5-5` at medium with
+Done: T1, T2 (read `f01e6567`, L3), T3 `3e943f2f`, T4 `3b932275` and `07e94c23` (verifier PASS, L4). Slice
+`2458fcd3..07e94c23` reviewed: Codex correct (0.89, no finding); lenses risk 0, reliability 0, readability 1 (spec 3's
+order), answered in the commit after `07e94c23`. Next, T5: `rules switch --advisor <model>` in `bin/lib/rules-switch.mjs`
+(parse, `changesOf`, `homesOf`, `probesOf` with the advisor, `claudeProbeArgs` adding `--advisor`, `readClaudeProbe`
+requiring a `usage.iterations` entry of type `advisor_message` of that id, a refusal of an advisor equal to the model),
+`HOME_FLAGS` gains `--advisor <model>` and the test exception in `bin/lib/rules-change-run.test.mjs:1000` goes, usage in
+`SWITCH_USAGE`; probe question when an advisor is set: "Call your advisor tool once, then answer with the single word:
+ready". Build facts (L5): an unknown advisor id exits 1 with "The model \"claude-nope-9-9\" cannot be used as an
+advisor."; with `--tools ""` and `--advisor claude-fable-5-2` the JSON output's `usage.iterations` held an
+`advisor_message` of `claude-fable-5-2` (5,648 in, 456 out) and `modelUsage` both ids, 0.086 USD. Then T6, T7.
+Open, his: everything under "Ask me before". Replies of this session run on `claude-opus-5-5` at medium with
 a `claude-fable-5-2` advisor.
 
 ## Goal
@@ -148,7 +157,9 @@ Nothing of this plan needs him before it lands; the merge does. Written down as 
    `js-harness sessions --quote` reads as his words (line 2536 is a `queue-operation` entry).
 2. A `sessions start` that names no `--advisor` passes the home's to `claude --advisor` and records it. "todos": no
    start opts out where the rule is declared (Ask me before 6).
-3. A resume takes the call's advisor, then the home's, then the record's, as it takes the model.
+3. A resume takes the home's advisor where the project declares it, else the call's, else the record's. A call may
+   name only the home's (spec 4), so where declared claude is given the home's exact id, never a bracket or a date
+   the call added (the verifier's note, L4).
 4. A call's `--advisor` that is not the home's, or a short name, is refused with the line that says what to pass,
    where the project declares the rule; a project that declares none passes what it is given, as today.
 5. `rules switch --advisor <model>` writes the rule with his words. Whenever the switch moves the home's model or its
@@ -200,3 +211,8 @@ Nothing of this plan needs him before it lands; the merge does. Written down as 
   said; no opt-out written as his (Ask me before 6); State says T3 was built during the read. Not passed again: the
   corrections change no scope but add checks, and a second read is spend; the lenses and Codex read the code of each
   slice.
+- L4 2026-11-12, the independent verifier of the guard (T4): PASS, no fail-open path; replacing the `advisorReason`
+  call with null fails `bin/lib/guard.test.mjs`. Its two notes taken in `07e94c23`: a test resumes a record holding
+  another advisor, and claude is given the home's exact id. The readability lens then found spec 3's text behind that
+  order; spec 3 and the usage text now say it.
+- L5 2026-11-12, T5's negative control and probe, run from a scratch folder: the facts in State. Cost about 0.1 USD.
