@@ -4,17 +4,17 @@ Locator: `odd/tasks/f8-s6-read-surface.md` · Branch: `feat/f8-s6-read-surface` 
 Delivery: chained pull requests of work-unit slices · Test runner: `node --test`
 
 ## State
-Rewritten 2026-11-11 19:15 local, JH 186 (job `d95aafd1`, `claude-fable-5-2` at medium), worktree
+Rewritten 2026-11-11 19:40 local, JH 186 (job `d95aafd1`, `claude-fable-5-2` at medium), worktree
 `.claude/worktrees/f8-s6-read-surface`, branch `feat/f8-s6-read-surface`.
-- Done: T1 (`e8b22bb7`), T2 and T2b (`1929fe56`), T3 and T6's documentation (the commit after it). The
-  `read surface` row reads 13,526 of 15,000: Next 1,796 and Decided 7,158 of 10,000, the largest resume head 4,572
-  (`odd/tasks/templates.md`) of 5,000.
+- Done: T1 (`e8b22bb7`), T2 and T2b (`1929fe56`), T3 and T6's documentation (`704495a7`), T5 (the commit after it:
+  cases 9 and 10 passed 2 of 2 each, L6). The `read surface` row reads 13,526 of 15,000: Next 1,796 and Decided
+  7,158 of 10,000, the largest resume head 4,572 (`odd/tasks/templates.md`) of 5,000.
 - Next, in order: (1) the reviews of the slice `e8b22bb7..HEAD`, cost said first: `js-harness codex-review --base
-  e8b22bb7 --doc odd/tasks/f8-s6-read-surface.md`, then `js-harness lens-review --base e8b22bb7 --lenses <pertinent>
-  --reason <why> --doc odd/tasks/f8-s6-read-surface.md`; findings fixed or answered in the Log; (2) push, the pull
-  request, `js-harness notify --to orchestrator --kind ready --pr <n>`; (3) T5: read `evals/plan.mjs`, say the runs
-  and cost, cases 9 and 10 twice each, one try; (4) the close: the depth pass's items 3 and 4 against the result in
-  the Log, the summary, `notify --kind closed --summary <file>`. Every notice says the model.
+  e8b22bb7 --doc odd/tasks/f8-s6-read-surface.md` (its plan: 1 part, 309 changed lines, about 220,000 input tokens),
+  then `js-harness lens-review --base e8b22bb7 --lenses readability,reliability --reason <why> --doc
+  odd/tasks/f8-s6-read-surface.md`; findings fixed or answered in the Log; (2) push, the pull request, `js-harness
+  notify --to orchestrator --kind ready --pr <n>`; (3) the close: the summary, `notify --kind closed --summary
+  <file>`. Every notice says the model.
 - Open: question 268 (the relief by month: take it out of S6, build it in two steps, or leave it) is recorded for
   him through the lead; T4 waits on it, nothing else does, and no code of T4 is written. Decided's history tails
   stay where they are (L5). The lead is owed one line: `CLAUDE.md`'s sentence on a feature document's order does
@@ -152,7 +152,7 @@ orchestrator skill's wording or of `CLAUDE.md`, were one needed, would be asked 
 - [x] T2b (kind: build) the measure as the double read corrected it (L4): every resume section counted, a legacy list that only shrinks, a warning from 90%, the history file's links; Decided's history tails left where they are (L5) — S1, S2, S5; inline; `1929fe56`
 - [x] T3 (kind: build) the `## State` head: the template, the resume titles, the hook's and the pause's wording, its bound in the row — S2, S4; inline
 - [ ] T4 (kind: build) the relief by month — S3; held on question 268 (L4), no code written; if it is built: readers first and landed, then the writer, the undo a tested command, an independent verifier
-- [ ] T5 (kind: verify) incident cases 9 and 10, two trials each, after the eval bar is read; the measure recorded — S5; inline
+- [x] T5 (kind: verify) incident cases 9 and 10, two trials each, after the eval bar is read; the measure recorded — S5; inline
 - [ ] T6 (kind: docs) the roadmap's S6 state, the S5 and S7 lines, SPEC's row; reviews, pull requests, the summary — S6; inline
 
 ## Log
@@ -251,3 +251,15 @@ orchestrator skill's wording or of `CLAUDE.md`, were one needed, would be asked 
   - The measure, honestly read: 13,526 against S0's 13,413 is not a drop. S0 counted one document's head (647);
     the row counts the largest resume head of any document (4,572). On S0's own terms the same three parts are
     1,796 + 7,158 + this document's head.
+- L6 (2026-11-11, T5, the step's probe): `node evals/suite.mjs --claude <claude.exe> --configs current --efforts high
+  --repeats 2 --tasks incident-09-next-task,incident-10-done-not-in-git --permission-mode bypassPermissions --name
+  f8-s6-incidents --work-root D:/js-harness-evals-work`, on `claude-opus-5-5` at high as S0 ran them. Said first:
+  `--plan` gave 4 trials, about 8 minutes, about $1.19 of list cost. One paid try; a first start was refused before
+  any trial (the default work root of a worktree sits under the repository's `CLAUDE.md`), read, and started again
+  with the usual root. Result (`evals/results/f8-s6-incidents.json`): case 9 passed 2 of 2, case 10 passed 2 of 2,
+  $1.13 of list cost. S0's lowest was 2 of 2 and 1 of 2 (`odd/tasks/f8-s0-baseline.md`), S5's 2 of 2 and 2 of 2
+  (`evals/results/f8-s5-incidents.json`): no worse. What it does not show: the bar (`evals/plan.mjs`) calls case 9
+  "never failed" in 22 recorded trials, so it could not have moved; and four trials of case 10, which passed 18 of
+  22 before, do not separate this step from chance.
+  - Against the depth pass: item 3's specs 1, 2, 4, 5 and 6 are met as measured in L5 and here; spec 3 (the relief by
+    month) is not built and waits on question 268. Item 4's verdict stands for those five.

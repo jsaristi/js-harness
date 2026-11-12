@@ -506,6 +506,166 @@
           }
         }
       }
+    },
+    {
+      "task": "incident-10-done-not-in-git",
+      "config": "current",
+      "effort": "high",
+      "repeat": 2,
+      "score": 1,
+      "passed": 2,
+      "total": 2,
+      "failed": [],
+      "inputTokens": 373532,
+      "outputTokens": 5924,
+      "turns": 14,
+      "usage": {
+        "input_tokens": 24,
+        "cache_creation_input_tokens": 23295,
+        "cache_read_input_tokens": 350213,
+        "output_tokens": 5924,
+        "output_tokens_details": {
+          "thinking_tokens": 2447
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 23295,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "costUsd": 0.3749786,
+      "modelUsage": {
+        "claude-opus-5-5": {
+          "inputTokens": 24,
+          "outputTokens": 5924,
+          "cacheReadInputTokens": 350213,
+          "cacheCreationInputTokens": 23295,
+          "webSearchRequests": 0,
+          "costUSD": 0.3749786,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 2447,
+          "cacheCreationEphemeral5mInputTokens": 0,
+          "cacheCreationEphemeral1hInputTokens": 23295,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "subagents": 0,
+      "subagentStats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "wallMs": 146700,
+      "cliVersion": "2.1.322 (Claude Code)",
+      "error": null,
+      "startedAt": "2026-11-12T00:06:05.636Z",
+      "transcripts": {
+        "files": 1,
+        "errors": []
+      },
+      "listCost": {
+        "source": "transcripts",
+        "prices": {
+          "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+          "readOn": "2026-10-08",
+          "unit": "USD per million tokens"
+        },
+        "orchestrator": {
+          "requests": 12,
+          "inputTokens": 24,
+          "outputTokens": 5924,
+          "cacheReadTokens": 350213,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 23295,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.3749786,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 12,
+              "inputTokens": 24,
+              "outputTokens": 5924,
+              "cacheReadTokens": 350213,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 23295,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.3749786
+            }
+          }
+        },
+        "subagents": {
+          "requests": 0,
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 0,
+          "longPromptRequests": 0,
+          "listCostUsd": 0,
+          "models": {},
+          "agents": []
+        },
+        "total": {
+          "requests": 12,
+          "inputTokens": 24,
+          "outputTokens": 5924,
+          "cacheReadTokens": 350213,
+          "cacheWrite5mTokens": 0,
+          "cacheWrite1hTokens": 23295,
+          "longPromptRequests": 0,
+          "listCostUsd": 0.3749786,
+          "models": {
+            "claude-opus-5-5": {
+              "requests": 12,
+              "inputTokens": 24,
+              "outputTokens": 5924,
+              "cacheReadTokens": 350213,
+              "cacheWrite5mTokens": 0,
+              "cacheWrite1hTokens": 23295,
+              "longPromptRequests": 0,
+              "listCostUsd": 0.3749786
+            }
+          }
+        },
+        "unpricedModels": [],
+        "unsplitCacheWriteTokens": 0,
+        "unreadableLines": 0,
+        "modelUsageCheck": {
+          "matches": true,
+          "models": {
+            "claude-opus-5-5": true
+          }
+        }
+      }
     }
   ],
   "setup": {
