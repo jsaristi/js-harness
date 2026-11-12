@@ -155,8 +155,11 @@ test('a senior on its own model and level is on the home, and one on the session
     { id: 'a', title: 'JH SR · a design', model: 'claude-fable-5-2', effort: 'high' },
     { id: 'b', title: 'JH SR · a review', ...opus },
   ];
-  const background = [{ id: 'c', title: 'JH SR · bg', asked: { model: 'claude-fable-5-2', effort: 'high' }, replied: { model: 'claude-fable-5-2', effort: 'high', advisor: null }, state: 'done' }];
+  const background = [{ id: 'c', title: 'JH SR · bg', asked: { model: 'claude-fable-5-2', effort: 'high' }, replied: { model: 'claude-fable-5-2', effort: 'high', advisor: 'claude-fable-5-2' }, state: 'done' }];
   const read = sessionsOffHome(home, { desktop, background, isLead, isSenior });
   assert.deepEqual(read.rows.map((row) => row.id), ['b']);
   assert.deepEqual(read.rows[0].held, { model: 'claude-fable-5-2', effort: 'high' });
+  // A background senior is held to no advisor: a reply that names no advisor of its own is on the home, not off it.
+  assert.deepEqual(read.on, { desktop: 1, background: 1 });
+  assert.deepEqual(read.unknownAdvisor, []);
 });

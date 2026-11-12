@@ -5,17 +5,14 @@ JH 192, slice 3 of the lead's brief. Delivery: this design, then one pull reques
 (`rules change` runs only on a `rule/` branch, `bin/lib/rules-change-run.mjs:170`). Runner: `node --test`.
 
 ## State
-Committed: fd309617 senior-model (SENIOR_HOME, D7; title contract; start_session refusal; start and resume on the
-senior's model, no advisor; roleNamed without SR, D6; wake; codeOfName); 8fc7a92b senior-effort (high) with writeRules
-writing each history entry on one line (rules-data.mjs was 1008 lines, over the module limit; now 954, hash same).
-In the tree, being committed: heldOfRole in model-home.mjs and the reporters' hold by role (home-sessions,
-roster-home/sessions.mjs rowHome, home-doctor, rules.mjs, rules-switch's outsideLines), the board's "senior" label,
-each with a test. Known gap: rules switch's target home carries no senior, so its outside lines hold a senior to the
-new Claude home. Next: the starter-is-lead check and one live senior in sessions-background.mjs:174,345; the rule
-texts of session-model, session-effort and advisor-model ("every session but a senior") by rules change, each its own
-PR is not possible (one open change): fold them into this PR's last commit only if rules change allows a change of
-form here, else a follow-up; lead-protocols (T5); the verifier on the guard; reviews (base 1a5061d2); PR; ready.
-"No advisor" is claimed only after the first senior's transcript shows it.
+Committed: fd309617 senior-model; 8fc7a92b senior-effort; e25ab304 the reporters hold a senior by role (heldOfRole);
+a258b450 only the lead starts a senior, one at a time. Reviewed 1a5061d..a258b45 (Codex 2 parts, lenses risk and
+reliability). Their findings, fixed in the next commit, each with a test: a background senior was judged against the
+home's advisor (home-sessions.mjs); rules switch's target home carried no senior (rules-switch.mjs homesOf); projectCode
+refused the code SR, valid before (back to valid: its titles still parse); the default app-record reader was untested.
+Next: review that commit (base a258b450), push, PR, ready. Follow-ups: the lead-protocols "A senior" section (T5, its
+spans need coverage), the rule texts of session-model, session-effort and advisor-model ("every session but a
+senior"). "No advisor" is claimed only after the first senior's transcript shows it.
 
 ## Goal
 The lead starts a senior session, titled `<code> SR · <purpose>`, with `js-harness sessions start`, and every start

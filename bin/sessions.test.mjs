@@ -1780,12 +1780,16 @@ test('--next-number prints the next free work number of the code the project dec
   assert.match(none.stderr, /harness\.json declares no "code"/);
   // A code that is no single word, or a harness.json that is not JSON, is exit 2: it cannot be read.
   // A code is capitals and digits, as init offers it, so a title of the agreed shape gives it back (a review, R3/R4).
-  for (const text of [JSON.stringify({ code: 'J H' }), JSON.stringify({ code: 'ORQ' }), JSON.stringify({ code: 'SR' }), JSON.stringify({ code: 'jh' }), JSON.stringify({ code: 'J-H' }), JSON.stringify({ code: 7 }), '{ not json']) {
+  for (const text of [JSON.stringify({ code: 'J H' }), JSON.stringify({ code: 'ORQ' }), JSON.stringify({ code: 'jh' }), JSON.stringify({ code: 'J-H' }), JSON.stringify({ code: 7 }), '{ not json']) {
     fs.writeFileSync(path.join(machine.root, 'harness.json'), text, 'utf8');
     const broken = await runSessions(machine, ['--next-number']);
     assert.deepEqual([broken.code, broken.stdout], [2, ''], text);
     assert.match(broken.stderr, /could not read the project's code/, text);
   }
+  // A project whose code is SR, valid before a senior's title took SR, stays valid: its titles still parse (a review).
+  fs.writeFileSync(path.join(machine.root, 'harness.json'), JSON.stringify({ code: 'SR' }), 'utf8');
+  const sr = await runSessions(machine, ['--next-number']);
+  assert.deepEqual([sr.code, sr.stdout, sr.stderr], [0, 'SR 1', '']);
   fs.writeFileSync(path.join(machine.root, 'harness.json'), JSON.stringify({ code: 'JH' }), 'utf8');
   // One that could not be read may hold them: exit 2, never the "none" of exit 1.
   const blind = await runSessions(machine, ['--next-number'], {

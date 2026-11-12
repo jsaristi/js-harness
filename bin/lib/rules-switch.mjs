@@ -12,7 +12,7 @@
 import { weeklyFloor } from './codex-meter.mjs';
 import { settingsNotes } from './home-doctor.mjs';
 import { offHomeLines, sessionsOffHome } from './home-sessions.mjs';
-import { CLAUDE_HOME, CODEX_HOME, displayName, homeFaults, menuLine, sameClaudeModel } from './model-home.mjs';
+import { CLAUDE_HOME, CODEX_HOME, SENIOR_HOME, displayName, homeFaults, menuLine, sameClaudeModel } from './model-home.mjs';
 import { RuleChangeError } from './rules-change.mjs';
 import { DEFAULT_CONTEXT_WINDOW } from './sessions.mjs';
 
@@ -118,7 +118,7 @@ export function changesOf(parsed) {
 function homesOf(list) {
   const value = (id) => list.find((rule) => rule.id === id)?.value ?? null;
   return {
-    claude: { model: value(CLAUDE_HOME.model), effort: value(CLAUDE_HOME.effort), lead: value(CLAUDE_HOME.lead), lenses: value(CLAUDE_HOME.lenses), advisor: value(CLAUDE_HOME.advisor) },
+    claude: { model: value(CLAUDE_HOME.model), effort: value(CLAUDE_HOME.effort), lead: value(CLAUDE_HOME.lead), lenses: value(CLAUDE_HOME.lenses), advisor: value(CLAUDE_HOME.advisor), senior: value(SENIOR_HOME.model), seniorEffort: value(SENIOR_HOME.effort) },
     codex: { model: value(CODEX_HOME.model), effort: value(CODEX_HOME.effort) },
   };
 }
@@ -409,7 +409,7 @@ export async function switchRules(parsed, deps, stdout, stderr) {
   const after = homesOf(dry.list);
   // The homes once every rule named is written: a run that writes one rule at a time leaves less than that.
   const target = {
-    claude: { model: parsed.claude?.model ?? after.claude.model, effort: parsed.claude?.effort ?? after.claude.effort, lead: parsed.lead ?? after.claude.lead, lenses: parsed.lenses ?? after.claude.lenses, advisor: parsed.advisor ?? after.claude.advisor },
+    claude: { model: parsed.claude?.model ?? after.claude.model, effort: parsed.claude?.effort ?? after.claude.effort, lead: parsed.lead ?? after.claude.lead, lenses: parsed.lenses ?? after.claude.lenses, advisor: parsed.advisor ?? after.claude.advisor, senior: after.claude.senior, seniorEffort: after.claude.seniorEffort },
     codex: { model: parsed.codex?.model ?? after.codex.model, effort: parsed.codex?.effort ?? after.codex.effort },
   };
   // An advisor that is the model itself is refused: a transcript could not tell it from none (odd/tasks/advisor-home.md,

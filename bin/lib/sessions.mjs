@@ -1286,8 +1286,8 @@ export function projectCode(root, readFile) {
   if (!isObject(harness)) throw new Error(`${file} is not a JSON object`);
   if (!Object.hasOwn(harness, 'code')) return { code: null };
   const { code } = harness;
-  if (typeof code !== 'string' || !CODE_SHAPE.test(code) || code === 'ORQ' || code === 'SR' || roleOfTitle(`${code} 1 · x`)?.code !== code) {
-    throw new Error(`${file} "code" must be capitals and digits, the project's identifier such as "JH", and not ORQ or SR`);
+  if (typeof code !== 'string' || !CODE_SHAPE.test(code) || code === 'ORQ' || roleOfTitle(`${code} 1 · x`)?.code !== code) {
+    throw new Error(`${file} "code" must be capitals and digits, the project's identifier such as "JH", and not ORQ`);
   }
   return { code };
 }

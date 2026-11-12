@@ -820,6 +820,36 @@ test('a senior is started only from the lead\'s session, and a work session\'s s
   assert.deepEqual(asked, []);
 }, { rules: true }));
 
+// A review of slice 3: the starter's check reads the app's own record when no reader is handed in.
+test('a senior\'s start reads the caller\'s title from the app\'s record on disk', withWorld((world) => {
+  const machine = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-app-'));
+  try {
+    // The record where appRoot looks on each platform: %APPDATA%/Claude, ~/.config/Claude and the macOS folder.
+    const roots = [path.join(machine, 'appdata', 'Claude'), path.join(machine, 'home', '.config', 'Claude'), path.join(machine, 'home', 'Library', 'Application Support', 'Claude')];
+    for (const root of roots) {
+      const org = path.join(root, 'claude-code-sessions', 'account', 'org');
+      fs.mkdirSync(org, { recursive: true });
+      fs.writeFileSync(path.join(org, 'local_lead.json'), JSON.stringify({ cliSessionId: 'lead-1', title: 'JH ORQ · relevo' }));
+      fs.writeFileSync(path.join(org, 'local_work.json'), JSON.stringify({ cliSessionId: 'work-1', title: 'JH 4 · thing' }));
+    }
+    const from = (caller) => {
+      const said = [];
+      const env = { ...envOf(world), APPDATA: path.join(machine, 'appdata'), LOCALAPPDATA: path.join(machine, 'local'), CLAUDE_CODE_SESSION_ID: caller };
+      const code = sessionsStartMain(['--title', 'JH SR · a design', '--brief', world.brief], { cwd: world.project, env, homedir: () => path.join(machine, 'home'), stdout: (line) => said.push(line), stderr: (line) => said.push(line) });
+      return { code, said: said.join('\n') };
+    };
+    const work = from('work-1');
+    assert.equal(work.code, 2, work.said);
+    assert.match(work.said, /a senior is started by the lead/);
+    assert.deepEqual(actions(world), [], 'nothing ran');
+    const lead = from('lead-1');
+    assert.equal(lead.code, 0, lead.said);
+    assert.equal(actions(world).length, 1);
+  } finally {
+    fs.rmSync(machine, { recursive: true, force: true });
+  }
+}, { rules: true }));
+
 // odd/tasks/senior-orchestrator.md, D4 and Done when: a second live senior is refused.
 test('a second senior of the project is refused while the first is recorded, finished turn or not, and starts once it is stopped', withWorld((world) => {
   const senior = (purpose) => ['--title', `JH SR · ${purpose}`, '--brief', world.brief];

@@ -71,15 +71,17 @@ export function sessionsOffHome(home, { desktop = [], background = [], isLead = 
   const advised = typeof home.advisor === 'string';
   const unknownAdvisor = [];
   for (const job of background) {
-    const held = advised && heldOfRole(home, { senior: isSenior(job.title) }).advisor !== null ? { ...heldOf(job.title), advisor: home.advisor } : heldOf(job.title);
+    // A senior is held to no advisor, so its advisor is not judged against the home's.
+    const ofAdvisor = advised && heldOfRole(home, { senior: isSenior(job.title) }).advisor !== null;
+    const held = ofAdvisor ? { ...heldOf(job.title), advisor: home.advisor } : heldOf(job.title);
     const found = offHome(job.replied ?? job.asked, held);
-    const advisor = advised ? advisorOf(job.replied, home.advisor) : { off: null, unknown: null };
-    const off = found === null && advisor.off === null ? null : { ...(found ?? { model: null, effort: null }), ...(advised && { advisor: advisor.off }) };
+    const advisor = ofAdvisor ? advisorOf(job.replied, home.advisor) : { off: null, unknown: null };
+    const off = found === null && advisor.off === null ? null : { ...(found ?? { model: null, effort: null }), ...(ofAdvisor && { advisor: advisor.off }) };
     if (job.removed === true) {
       if (off !== null) removedOff += 1;
     } else if (off === null && advisor.unknown !== null) unknownAdvisor.push({ id: job.id, title: job.title ?? null, why: advisor.unknown });
     else if (off === null) on.background += 1;
-    else rows.push({ kind: 'background', id: job.id, title: job.title ?? null, asked: job.asked, replied: job.replied ?? null, state: job.state ?? null, held, off, ...(advised && { advisorUnknown: advisor.unknown }), corrects: resumeOf(job) });
+    else rows.push({ kind: 'background', id: job.id, title: job.title ?? null, asked: job.asked, replied: job.replied ?? null, state: job.state ?? null, held, off, ...(ofAdvisor && { advisorUnknown: advisor.unknown }), corrects: resumeOf(job) });
   }
   return { rows, archived: [...archived].map(([holds, count]) => ({ holds, count })).sort((one, other) => other.count - one.count), removedOff, on, unknownAdvisor };
 }
