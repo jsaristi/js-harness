@@ -6,8 +6,8 @@ brief `~/.js-harness/background/briefs/2026-11-12T06-58-20-202Z-f6e42350.md`. De
 `rule/advisor-home`, in four work-unit commits. Runner: `node --test`.
 
 ## State
-T1 (this document) written. Next: its double review (T2), then T3 builds the rule and its first readers in one
-commit. Open, his: everything under "Ask me before". Replies of this session run on `claude-opus-5-5` at medium with
+T1 written; T2's read `f01e6567` answered (L3). T3 was built while the read ran (the readers saw its files move) and
+is committed after the answers. Next: T4, the refusal, then T5 and T6. Open, his: everything under "Ask me before". Replies of this session run on `claude-opus-5-5` at medium with
 a `claude-fable-5-2` advisor.
 
 ## Goal
@@ -27,16 +27,22 @@ resumed today, would take the home's Opus with no advisor (`sessions-background.
 - `node bin/js-harness.mjs rules check` exits 0
 - `node bin/js-harness.mjs rules coverage` exits 0
 - `node --test bin/lib/model-home.test.mjs bin/lib/guard.test.mjs bin/sessions-background.test.mjs` exits 0
-- `node --test bin/lib/rules-switch.test.mjs bin/lib/home-sessions.test.mjs bin/lib/home-sessions-read.test.mjs` exits 0
+- `node --test bin/lib/rules-switch.test.mjs bin/lib/rules-change-run.test.mjs bin/lib/home-sessions.test.mjs bin/lib/home-sessions-read.test.mjs bin/lib/sessions.test.mjs` exits 0
 - `node --test bin/conventions-model-home.test.mjs` exits 0
 - `npm run check` exits 0
 - The pull request is reviewed by Codex and the lenses on each slice of code, an independent verifier passed on the
-  guard's change, and the lead holds its `ready` notice, which says it lands only on his yes.
+  guard's change, and the lead holds its `ready` notice, which says it lands only on his yes and gives the advisor
+  tokens of each session that ran with it so far (the `advisor_message` iterations of its transcript).
+- After the land (T8, the lead's act, checked here only if this session still runs): the first start that names no
+  `--advisor` and the first `--resume` each show, in their transcript, an Opus reply with `advisorModel:
+  claude-fable-5-2`; `js-harness rules applied` lists neither as off the home. Unit tests prove the argv; only a
+  live run proves the host took it on a resume, which no session has done yet.
 
 ## In scope / Out of scope
 - In: the new rule `advisor-model` (`js-harness rules change`, his words as its source); `bin/lib/model-home.mjs`;
   `bin/lib/guard.mjs` (`sessionStartRefusal`, `sessionStartHome`); `bin/sessions-background.mjs` and
-  `bin/lib/background.mjs`; `bin/lib/rules-switch.mjs` and its runner's flags; `bin/lib/home-sessions.mjs`,
+  `bin/lib/background.mjs`; `bin/lib/rules-switch.mjs` and `HOME_FLAGS` of `bin/lib/rules-change-run.mjs`;
+  `sessionFacts` of `bin/lib/sessions.mjs`, which reads the transcript; `bin/lib/home-sessions.mjs`,
   `bin/lib/home-sessions-read.mjs` and the transcript fact they read; the tests beside each; the usage texts, the
   orchestrator skill's "A new model" and `docs/RECORDS.md` where they say what a start takes.
 - Out: the lenses and the double review's Claude reader (an advisor there is spend he has not named); `start_session`
@@ -46,11 +52,13 @@ resumed today, would take the home's Opus with no advisor (`sessions-background.
 
 ## Constraints
 - The rule and its first reader land in one commit through `rules change --with`, because a live rule nothing reads
-  fails `rules coverage`, and `rules change` refuses a new value for a rule of a home: the id joins the home's list
-  (`CLAUDE_HOME`) in that same commit, after the runner has written it.
+  fails `rules coverage`. `rules change` refuses a new value only for an id of `HOME_FLAGS`
+  (`bin/lib/rules-change-run.mjs:107`, `:278-280`), whose test holds each entry to a flag `parseSwitch` takes; so
+  `advisor-model` enters `HOME_FLAGS` in T5, in the commit that gives `rules switch` its `--advisor`, with a test that
+  `rules change advisor-model` with a value is refused from then on (Claude 3).
 - A call's `--advisor` is held as `--model` is: a full Claude id, compared with `sameClaudeModel`, and only where the
   project declares the rule, because a short name resolves to whatever the engine gives (`--advisor fable` gave
-  `claude-fable-5-1` on 2026-10-31, `odd/tasks/advisor-cost.md` L6) and a project that installs the harness is held to
+  `claude-fable-5-1` on 2026-10-31, `odd/tasks/advisor-trial.md` L4) and a project that installs the harness is held to
   nothing by default.
 - The guard's change is high risk (a guard): its tests first, and an independent verifier after its own checks.
 - Nothing heavy beside another session's gate; a whole test run goes through `js-harness gate --`.
@@ -64,7 +72,11 @@ Nothing of this plan needs him before it lands; the merge does. Written down as 
    `advisorModel` setting, both his; the lead's session already shows `claude-fable-5-2` in its transcript.
 4. His "Extra" (xhigh) for the orchestrator, which `rule:lead-effort` cannot take without moving the lenses' level
    (question 260); and the senior orchestrator on Fable 5.2.
-5. What an advisor call costs on the weekly Fable meter: not known (item 2).
+5. What an advisor call costs on the weekly Fable meter: not known (item 2). He moves to Opus so as not to eat the
+   Fable use (3271), and this makes a Fable advisor the default of every start: the ready notice gives the advisor
+   tokens measured so far, and the meter's reading before and after is the lead's to take (Claude 6).
+6. No start opts out of the advisor where the rule is declared: his "todos" reads as every session. A start without
+   one would need `--advisor none`, not built (Claude 11).
 
 ## Depth pass
 - 1. Method: configuration management, as JH 172 applied it (`odd/tasks/one-model-home.md`, Depth pass 1): one
@@ -92,17 +104,19 @@ Nothing of this plan needs him before it lands; the merge does. Written down as 
   - An advisor call, in this session's transcript at 07:03:57Z: one `usage.iterations` entry of type
     `advisor_message`, model `claude-fable-5-2`, 145,437 input tokens, none cached, and 8,412 output tokens. Its price:
     `evals/prices.mjs` has no Fable 5.2 row, so not known; JH 187 assumed 8 USD a million input and 40 output
-    (`origin/advisor-cost` `c4385fcd`, `odd/tasks/advisor-cost.md` D7), at which this call is about 1.5 USD, an
+    (`origin/advisor-cost:odd/tasks/advisor-cost.md` at `c4385fcd`, D7), at which this call is about 1.5 USD, an
     estimate on an assumed price. The advisor reads the whole transcript uncached, so a call grows with the
     session's context. The weekly Fable meter: not known; it read
     0 % on 2026-10-31 after about 530,000 advisor tokens of `claude-fable-5-1` (same document, L6).
   - The advisor's level: `claude --help` (2.1.322) does not list `--advisor`; the changelog cache
-    (`~/.claude/cache/changelog.md`) names the advisor 21 times, `--advisor <model>`, `/advisor <model>` and the
-    `advisorModel` setting, and no flag or key that gives it an effort (line 1187: "no advisor runs until you pick one
-    with `/advisor`, `advisorModel` or `--advisor`"). JH 185 quoted the advisor page the same way
-    (`odd/tasks/advisor-cost.md`, D2).
-  - Sub-agents: 21 sub-agent transcripts hold `advisorModel: claude-fable-5-2`, all of Fable sessions, where the field
-    repeats the model; whether a sub-agent of an Opus session with the advisor gets one is not known.
+    (`~/.claude/cache/changelog.md`) has 19 lines on the advisor (`grep -i advisor`, less the 3 on "advisory"): they
+    name `--advisor <model>`, `/advisor <model>` (line 3971) and the `advisorModel` setting (line 1187, in an entry
+    scoped to Claude Platform on AWS), and none names a flag or key that gives the advisor an effort. JH 185 read the
+    advisor page the same way (`origin/advisor-cost:odd/tasks/advisor-cost.md` at `c4385fcd`, D2).
+  - Sub-agents: a sub-agent this session launched with no model (agent `ad6aa73f`, 2026-11-12 07:2xZ, one line asked
+    of it) ran on `claude-opus-5-5`, said it has a tool named `advisor`, and its transcript stamps `advisorModel:
+    claude-fable-5-2` on each reply. So a sub-agent of a session started with the advisor inherits it, and needs no
+    reader of its own; one sample, of the catch-all agent type.
   - The rule's dry run: `js-harness rules change advisor-model --dry-run` took the new id with his three quotes on
     2026-11-12 (relief line hash `d8d81bb50060`).
 - 3. The bar:
@@ -112,11 +126,12 @@ Nothing of this plan needs him before it lands; the merge does. Written down as 
   spec 4: `node --test bin/lib/guard.test.mjs bin/sessions-background.test.mjs`: none, new behaviour (any `--advisor` passes today).
   spec 5: `node --test bin/lib/rules-switch.test.mjs`: none, new behaviour (`rules switch --advisor` is an unknown argument today).
   spec 6: `node --test bin/lib/home-sessions.test.mjs bin/lib/home-sessions-read.test.mjs`: none, new behaviour (`rules applied` compares model and effort only).
-  spec 7: `node --test bin/conventions-model-home.test.mjs`: passes today; it must still pass with the new id.
+  spec 7: left out because it builds nothing: the sub-agent probe of item 2 is its proof.
+  spec 8: `node --test bin/conventions-model-home.test.mjs`: passes today; it must still pass with the new id and the texts.
 - 4. Refutation: the request fails if the advisor cannot be held by the home, that is if a session started without
   `--advisor` already gets one (nothing to fix), or if the transcript cannot show which advisor ran (no check after).
-  Run: the `advisorModel` of the five transcripts above, `grep -o '"advisorModel":"[^"]*"' <file> | sort | uniq -c`.
-  Result: 5 of 5 show the session's own model where no advisor was asked, and the Fable advisor where it was; so a
+  Run: the `advisorModel` of the six transcripts above, `grep -o '"advisorModel":"[^"]*"' <file> | sort | uniq -c`.
+  Result: 6 of 6 show the session's own model where no advisor was asked, and the Fable advisor where it was; so a
   start without the flag gets none, and the field tells the two apart for an Opus session.
   Verdict: supports
 - 5. Request: "Declare the Fable 5.2 advisor as a rule of the home, so that `sessions start` and its resume pass it
@@ -128,16 +143,27 @@ Nothing of this plan needs him before it lands; the merge does. Written down as 
 1. "pero todos con Advisor de Fable 5.2 Alto" (1444, 2026-11-11), "con Opus y advisor de fable?" (2544,
    2026-11-11), "necesito que me pases todo lo que puedas a Opus como habiamos quedado con el advisor de Fable" (3271,
    2026-11-12): a rule `advisor-model`, value `claude-fable-5-2`, owner sebastian, his three lines as its source, in
-   the Claude home of `bin/lib/model-home.mjs`.
-2. A `sessions start` that names no `--advisor` passes the home's to `claude --advisor` and records it.
+   the Claude home of `bin/lib/model-home.mjs`. The dates are local days, as `rules change` stores them: line 2544
+   is stamped 2026-11-12T04:33Z, 2026-11-11 23:33 local; it is the host's wrapper of his queued message, which
+   `js-harness sessions --quote` reads as his words (line 2536 is a `queue-operation` entry).
+2. A `sessions start` that names no `--advisor` passes the home's to `claude --advisor` and records it. "todos": no
+   start opts out where the rule is declared (Ask me before 6).
 3. A resume takes the call's advisor, then the home's, then the record's, as it takes the model.
 4. A call's `--advisor` that is not the home's, or a short name, is refused with the line that says what to pass,
    where the project declares the rule; a project that declares none passes what it is given, as today.
-5. `rules switch --advisor <model>` writes the rule with his words, after a probe that one short call with that
-   advisor runs through the installed CLI; it says the probe proves the CLI took the id, not that the advisor answered.
-6. `rules applied` lists a background session whose last reply ran with another advisor than the home's, or with
-   none, read from the transcript's `advisorModel`, with the resume that corrects it.
-7. The texts that say what a start takes (the usage of `sessions start`, the orchestrator skill's "A new model",
+5. `rules switch --advisor <model>` writes the rule with his words. Whenever the switch moves the home's model or its
+   advisor, it probes the pair (the home's model with the home's advisor, as the switch would leave them) in one
+   short call through the installed CLI that asks the model to consult its advisor once, and writes only when the
+   output's usage holds an `advisor_message` iteration of that advisor's id; otherwise nothing is written and it says
+   why. An advisor equal to the home's model is refused: the transcript could not tell it from none (spec 6). A
+   negative control, an advisor id that does not exist, is run once while building to learn how the CLI refuses one.
+6. `rules applied` judges a background session's advisor from its last reply: on the home's advisor when that reply's
+   `advisorModel` is the home's advisor and differs from its own model; with none when `advisorModel` equals its own
+   model (the host repeats the model when no advisor was asked); not known when the field is missing, the transcript
+   cannot be read, or the home's advisor is the session's own model. A session with none or another advisor is
+   listed with the resume that corrects it; one not known is named as not read, never as on the home.
+7. Sub-agents inherit their session's advisor (Depth pass 2): no reader of their own.
+8. The texts that say what a start takes (the usage of `sessions start`, the orchestrator skill's "A new model",
    `docs/RECORDS.md`) name the advisor's rule and do not restate its value.
 
 ## Tasks
@@ -149,8 +175,11 @@ Nothing of this plan needs him before it lands; the merge does. Written down as 
 - [ ] T4 (kind: build) (4) The refusal of another advisor in `sessionStartRefusal`, tests first, then an independent
   verifier. Route: inline, then one verifier. Commit: pending.
 - [ ] T5 (kind: build) (5) `rules switch --advisor <model>` and its probe. Route: inline. Commit: pending.
-- [ ] T6 (kind: build) (6, 7) `rules applied` reads the advisor; the texts. Route: inline. Commit: pending.
-- [ ] T7 (kind: verify) Codex and the lenses on each slice, the gate, the pull request, the `ready` notice.
+- [ ] T6 (kind: build) (6, 8) `rules applied` reads the advisor; the texts. Route: inline. Commit: pending.
+- [ ] T7 (kind: verify) Codex and the lenses on each slice, the gate, the pull request, the `ready` notice with the
+  advisor tokens measured so far.
+- [ ] T8 (kind: verify) After the land: the first start and the first resume with no `--advisor`, checked in their
+  transcripts and by `rules applied`. The lead's act; recorded here if this session still runs.
 
 ## Log
 - L1 2026-11-12 06:58Z, the brief, as written: "Your work is that home: the advisor's model (and its effort, if the
@@ -160,3 +189,14 @@ Nothing of this plan needs him before it lands; the merge does. Written down as 
 - L2 2026-11-12 07:03Z, this session's advisor, before the design: settle what `advisorModel` proves, what a call
   costs and whether `rules change` takes the new id; hold `--advisor` as `--model` is held; leave the lenses,
   `start_session` and the app's sessions open. All three settled in the Depth pass, item 2.
+- L3 2026-11-12 07:25Z, the double review `f01e6567` of `1cc4db71` (Claude 12 findings, 2,520,477 tokens; Codex 3,
+  609,943; 1 % of Codex's weekly limit said before it ran). Taken: Claude 1 to 12, Codex 1 to 3; Claude 1 and Codex 3,
+  Claude 4 and Codex 1, Claude 5 and Codex 2 are the same finding. Answers: sub-agents probed and found to inherit
+  (spec 7, Depth pass 2); the live proof is T8, after the land, since no resume can be run before it without
+  resuming a session of another's work; `HOME_FLAGS` in T5 (Constraints); spec 6's three states written; spec 5
+  probes the pair and requires an `advisor_message`, refuses an advisor equal to the model, and runs a negative control
+  once; the cost goes in the ready notice (Ask me before 5); six of six; the dates said local and line 2544 kept, with
+  why; the branch named on each citation of `advisor-cost.md`; the changelog's 19 lines counted and line 1187's scope
+  said; no opt-out written as his (Ask me before 6); State says T3 was built during the read. Not passed again: the
+  corrections change no scope but add checks, and a second read is spend; the lenses and Codex read the code of each
+  slice.
