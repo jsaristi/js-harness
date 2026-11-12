@@ -49,7 +49,7 @@ export const USAGE = [
   '    creation time, the start, the purpose and the end condition); removes the record when the command ends and exits',
   '    with its code. Start it as a background task, so its end wakes the session. The owner is --owner, else',
   '    CLAUDE_CODE_SESSION_ID. A loop of that name that is alive is refused (exit 2); --restart stops it first, under',
-  '    the rule of stop. A record whose processes are gone is stale and is replaced. The command it runs is this',
+  '    the rule of stop. A record whose processes are gone is stale and is replaced. The command `js-harness` is run as this',
   '    copy of the dispatcher with node, so no shell or PATH lookup is needed.',
   '  status: every record of the project: name, alive or stale, owner, pid, start, purpose and end condition. Read-only.',
   '  stop: kills the loop and every process it started, by pid and creation time, then looks again and exits 0 only',
