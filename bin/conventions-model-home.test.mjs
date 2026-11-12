@@ -179,7 +179,6 @@ const DATED = {
   'docs/future-model.md: Codex: F6 on `gpt-6.1-sol`,': '2026-10-14: the conclusion of a past measurement, the model F6\'s trials ran on',
   'docs/ROADMAP.md: or after two compactions; Haiku 5.5 helpers with': '2026-10-28: what a past design of F8 proposed, kept as it was written',
   'docs/ROADMAP.md: scores the same on Haiku 5.5 as on Opus 5.5 at 58% less session cost': '2026-10-11: the conclusion of a past measurement, the models its arms ran on',
-  'docs/ROADMAP.md: two readers on Opus 5.5 at high then found most of it built or mismeasured': '2026-10-30: the record of a past review, the model its readers ran on',
   'docs/ROADMAP.md: decided (2026-10-11): the writing sub-agent on Haiku 5.5.': '2026-10-11: a closed decision of the list, superseded by the home and kept as it was answered',
   'docs/ROADMAP.md: - Opus 5.5 defaults may shift after launch.': '2026-09-27: a risk written of one model by its name',
 };

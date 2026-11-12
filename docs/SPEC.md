@@ -324,6 +324,15 @@ check or an eval case ("After F8", directive coverage).
 **Discarded:** Running the hosts' hooks from the gate to measure their output: some write files, and the gate stays read-only. An estimate from files alone: it misses tools, servers and the system prompt (63.5k measured against about 110k). Editing files outside the repository: a hand edit of gentle-ai's block is overwritten by its next sync.
 **Today:** `bin/lib/payload.mjs`, `bin/lib/fixed-load.mjs`, `bin/lib/hook-count.mjs`, `scripts/diet-measure.mjs`, `bin/check.mjs`
 
+### The read surface
+
+**Problem:** A session that starts or resumes reads the roadmap's Next and Decided and its feature document's resume head before it works, and nothing bounded them: the three stood at 13,413 estimated tokens at F8's S0 (`odd/tasks/f8-s0-baseline.md`) and the roadmap's two sections alone at 15,508 on 2026-11-11, while three feature documents carried resume sections of 8k to 23k (`odd/tasks/f8-s6-read-surface.md`).
+**Requirement:** Every gate reports the read surface, the roadmap's Next and Decided plus the largest resume head of a feature document, and fails when the roadmap's two sections exceed 10,000 estimated tokens or a resume head exceeds 5,000, naming the file and the first step; it warns from 90% of a budget. Documents of the harness's own repository over the head's budget when the row arrived are a legacy list that only shrinks, each named by the row; a file that is there and cannot be read fails it. A feature document written from the contract template opens on a `## State` head, rewritten at each step and never appended to, which the resume hook, the pause and the board read as the next step.
+**Reason:** What every session reads first is paid by every session, and history a reader does not need to act belongs where it is read on demand (`docs/roadmap-history.md`, a document's Log).
+**Proof:** `node --test bin/lib/read-surface.test.mjs`, `node --test bin/lib/feature-parts.test.mjs`, `node --test bin/lib/contract.test.mjs`
+**Discarded:** Deleting settled paragraphs: they are moved word for word. Failing on the 15,000 total itself: the two budgets under it are the ones a commit can act on. Splitting the lead's relief file by month inside this step: copies already installed read only the one file (question 268).
+**Today:** `bin/lib/read-surface.mjs`, `bin/check.mjs`, `bin/lib/feature-parts.mjs`, `bin/lib/contract.mjs`, `docs/roadmap-history.md`
+
 ### Whether a change is due a review
 
 **Problem:** Whether a change was due a review was known only if the agent remembered to ask gentle-ai (`odd/tasks/sensors.md`); since every slice gets two reviews (`odd/tasks/f8-s1-reviews.md`), what matters is which code still waits for them.

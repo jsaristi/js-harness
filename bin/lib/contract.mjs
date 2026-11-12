@@ -6,7 +6,10 @@ import { tokenize } from './progress.mjs';
 import { taskId } from './sessions.mjs';
 import { CLAUDE_HOME } from './model-home.mjs';
 
-export const CONTRACT_TEMPLATE = `## Goal
+export const CONTRACT_TEMPLATE = `## State
+<what is done, what is next, what is open: a few lines, rewritten at each step and never appended to; history goes to the Log>
+
+## Goal
 <one sentence: the outcome, not the steps>
 
 ## Why

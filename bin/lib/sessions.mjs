@@ -899,7 +899,7 @@ export const taskId = (text) => /^([A-Za-z]{1,6}\d+[a-z]?)(?=[\s:]|$)/.exec(text
  * counts. `pending` names each unchecked step by the id that starts it (`T5`, `T3b`), or by the start of
  * its text when it has none. `tasks` is the text of every step, ticked or not, as its checkbox line has
  * it: what a watch compares to tell a plan that changed from one that advanced (`taskDifferences`).
- * `nextStep` is every non-blank line of the `## Next step` section, all of them, because a watch compares
+ * `nextStep` is every non-blank line of the first `## State` or `## Next step` section, because a watch compares
  * the whole text; the text board prints the first few. */
 export function planOf(markdown, docPath) {
   const id = docPath.split('/').at(-1).replace(/\.md$/, '');
@@ -912,7 +912,7 @@ export function planOf(markdown, docPath) {
   for (const token of tokenize(markdown)) {
     if (token.heading && token.heading.level <= 2) {
       if (inSection) break;
-      inSection = token.heading.level === 2 && token.heading.title.toLowerCase() === 'next step';
+      inSection = token.heading.level === 2 && ['state', 'next step'].includes(token.heading.title.toLowerCase());
     } else if (inSection && token.line.trim() !== '') {
       nextStep.push(token.line.trim());
     }

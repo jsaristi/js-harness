@@ -177,6 +177,8 @@ test('the crossing: the first call at the pause says the share, the room and the
   assert.ok(notice.text.includes(`holds ${notice.share}% of its context window`), notice.text);
   assert.ok(notice.text.includes(`compacts it at about ${DEFAULT_CONTEXT_COMPACTION_PERCENT}%`), notice.text);
   assert.ok(notice.text.includes(`about ${SAID(notice.room)} tokens are left`), notice.text);
+  // F8 S6: the state goes to the document's State head, and an older document keeps its "Next step".
+  assert.ok(notice.text.includes('the "State" head of the session\'s feature document ("Next step" where it has that instead)'), notice.text);
   assert.doesNotMatch(notice.text, /two blocks of a cut|\b(he|his|him)\b/);
   assert.equal(pauseNotice({ transcript, sessionId: SESSION, home, now: () => NOW, tmpdir: path.join(home, 'tmp') }), null);
   assert.equal(stateOf(home).armed, false);

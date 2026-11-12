@@ -60,11 +60,14 @@ test('a resume title matches ignoring case, with a parenthesis or a colon after 
     '## Next step, history', 'e', //         9-10
     '## Next steps for him', 'f', //         11-12
     '```', '## Next step', '```', //         13-15
+    '## State', 'g', //                      16-17
+    '## State of the art', 'h', //           18-19
   ].join('\n');
   assert.deepEqual(featureParts(md).sections.map(({ title, start, end }) => [title, start, end]), [
     ['Resume here (2026-10-16)', 1, 2],
     ['next', 3, 4],
     ['Next step: T3', 5, 6],
+    ['State', 16, 17],
   ]);
 });
 
@@ -114,6 +117,22 @@ test('only the last five entries are kept, and an L<n> paragraph is an entry', (
   const { entries } = featureParts(md);
   assert.equal(entries.length, 5);
   assert.deepEqual(entries.map(({ start }) => start), [19, 20, 21, 22, 23]);
+});
+
+// F8 S6: a document written from the contract template opens on its State head, and the head names the task.
+test('a document that opens on its State head gives that head, and the open task the head names first', () => {
+  const md = [
+    '# A feature', '', //                                  1-2
+    '## State', '- Done: T1.', '- Next: T3, then T2.', '', // 3-6
+    '## Goal', 'Ship.', '', //                             7-9
+    '## Tasks', //                                         10
+    '- [x] T1 (kind: docs) the plan', //                   11
+    '- [ ] T2 (kind: build) the second', //                12
+    '- [ ] T3 (kind: build) the third', //                 13
+  ].join('\n');
+  const parts = featureParts(md);
+  assert.deepEqual(parts.sections, [{ title: 'State', start: 3, end: 5 }]);
+  assert.deepEqual(parts.task, { id: 'T3', start: 13, end: 13 });
 });
 
 test('a document with nothing to name gives no parts', () => {
