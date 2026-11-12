@@ -53,9 +53,11 @@ test('the template fails validation: it is all placeholders', () => {
 });
 
 // Rule 1 puts the depth pass after the contract (odd/tasks/double-review-alignment.md, older text 8).
-test('the template is a contract with every section, in order, then the depth pass and a task line that names its kind', () => {
+// F8 S6 opens it on the State head, what a resumed session reads first (odd/tasks/f8-s6-read-surface.md, spec 4).
+test('the template opens on its State head, then is a contract with every section, in order, then the depth pass and a task line that names its kind', () => {
   assert.equal(isContract(CONTRACT_TEMPLATE), true);
-  assert.deepEqual([...parseContract(CONTRACT_TEMPLATE).keys()], [...SECTIONS, 'Depth pass', 'Tasks']);
+  assert.deepEqual([...parseContract(CONTRACT_TEMPLATE).keys()], ['State', ...SECTIONS, 'Depth pass', 'Tasks']);
+  assert.match(parseContract(CONTRACT_TEMPLATE).get('State'), /rewritten at each step and never appended to/);
   assert.match(parseContract(CONTRACT_TEMPLATE).get('Depth pass'), /- 1\. Method:[\s\S]*- 5\. Request:[\s\S]*Adds: none/);
   assert.match(parseContract(CONTRACT_TEMPLATE).get('Tasks'), /^- \[ \] T1 \(kind: design \| build \| verify \| docs\)/);
 });

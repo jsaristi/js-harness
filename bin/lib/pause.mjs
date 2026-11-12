@@ -302,7 +302,7 @@ function noticeOf(tokens, compaction, stage, configured = null) {
   const head = `js-harness: this session holds ${share}% of its context window, and the host compacts it at about ${compactionShare}%: about ${thousands(room)} tokens are left.${assumed}`;
   // A project that only installs the harness defines no orchestrator in its AGENTS.md: the first mention says
   // what one is and where that is taught (odd/tasks/first-version.md, T3a).
-  const where = `the "Next step" of the session's feature document; for the orchestrator (${ORCHESTRATOR_IS}), its relief file instead`;
+  const where = `the "State" head of the session's feature document ("Next step" where it has that instead); for the orchestrator (${ORCHESTRATOR_IS}), its relief file instead`;
   const opening = 'js-harness notify --opening "<this session\'s title>" (its text on standard input: the feature document, the task, the branch and worktree, any question still open; it is what a new session under that title reads too)';
   // Two sessions near their compaction ended their turn waiting and were never woken (odd/tasks/pause-no-idle.md).
   const noIdle = 'Never end your turn idle: the host compacts only inside a turn, and a turn that ends with nothing running to wake it is never woken. When the work waits on something, write your state, then keep a declared wait running in the background (js-harness wait, which says what it waits for and when it ends, and wakes you when it holds), so the compaction happens inside a turn.';

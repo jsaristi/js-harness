@@ -74,6 +74,7 @@ nothing there.
 | `docs/todo.md` | live | | the inbox of what is not a task yet |
 | `docs/live-board.html` | live | | the source of the live board's published page, whose rows `js-harness sessions live` gives |
 | `docs/origin.md` | frozen | | the reasoning the plan came from |
+| `docs/roadmap-history.md` | historical | `docs/ROADMAP.md`, which holds the plan and points here | paragraphs moved word for word out of the roadmap's Next once their work closed, each under the day it left |
 | `docs/model-effort.md` | frozen | | the owner's decision on model and effort by kind of work, as of 2026-10-11 |
 | `docs/sweep-2026-10-11.md` | historical | `docs/ROADMAP.md` and `docs/todo.md` hold what is open now; 47 of its items were left unchecked, not reconciled | the places where old information stood beside new on 2026-10-11 |
 | `docs/research/` | frozen | | research the owner asked to keep for later use |

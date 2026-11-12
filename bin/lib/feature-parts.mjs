@@ -5,9 +5,10 @@
 import { tasksOf } from './contract.mjs';
 import { tokenize } from './progress.mjs';
 
-// A resume section's title: one of these, then nothing, a parenthesis or a colon. `Next step, earlier` and
+// A resume section's title: one of these, then nothing, a parenthesis or a colon. `State` is the head the contract
+// template opens on (F8 S6); the others are the titles the documents written before it use. `Next step, earlier` and
 // `Next step, history` are history, and no title of that shape matches.
-const RESUME_TITLE = /^(?:next step|next|state for a resume|resume here)(?:\s*\(.*\)|\s*:.*)?$/i;
+const RESUME_TITLE = /^(?:state|next step|next|state for a resume|resume here)(?:\s*\(.*\)|\s*:.*)?$/i;
 const SPECS_TITLE = /^specs(?:\s*\(.*\))?$/i;
 const LOG_TITLE = /^(?:log|progress)(?:\s*\(.*\))?$/i;
 // A spec item opens at the margin with `- S1`, `- **S1**` or `S1.`.

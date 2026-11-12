@@ -32,6 +32,7 @@ const ROW_FILES = [
   'bin/lib/hook-count.mjs',
   'bin/lib/lens-review-rows.mjs',
   'bin/lib/merge-queue-reviews.mjs',
+  'bin/lib/read-surface.mjs',
   'bin/lib/sensor-rows.mjs',
   'bin/lib/spec.mjs',
 ];

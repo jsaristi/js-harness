@@ -900,6 +900,9 @@ takes files to validate in place of all, `run` takes `--timeout <minutes>`, and 
 
 ```console
 $ js-harness contract template
+## State
+<what is done, what is next, what is open: a few lines, rewritten at each step and never appended to; history goes to the Log>
+
 ## Goal
 <one sentence: the outcome, not the steps>
 

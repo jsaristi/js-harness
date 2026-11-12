@@ -1106,6 +1106,13 @@ test('planOf reads a feature document: title, steps done and total, what is pend
   });
 });
 
+// F8 S6: the contract template opens on `## State`, the head a session rewrites; the board reads it as the next step.
+test('planOf reads the State head as the next step, and the first of State and Next step where a document has both', () => {
+  assert.deepEqual(lib.planOf('# Board\n\n## State\n- Done: T1.\n- Next: T2.\n\n## Goal\nShip.\n', 'odd/tasks/board.md').nextStep, ['- Done: T1.', '- Next: T2.']);
+  assert.deepEqual(lib.planOf('# Board\n\n## State\nT2 now.\n\n## Next step\nOlder.\n', 'odd/tasks/board.md').nextStep, ['T2 now.']);
+  assert.deepEqual(lib.planOf('# Board\n\n## State of the art\nNo.\n', 'odd/tasks/board.md').nextStep, []);
+});
+
 test('planOf of a document with no title, no checkbox and no next step says so with empty facts', () => {
   assert.deepEqual(lib.planOf('some notes\n', 'odd/tasks/loose-notes.md'), { path: 'odd/tasks/loose-notes.md', title: 'loose-notes', done: 0, total: 0, pending: [], tasks: [], nextStep: [] });
 });
