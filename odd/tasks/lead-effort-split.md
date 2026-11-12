@@ -5,7 +5,13 @@ The lead's session at its own level, apart from the reviewers'. Session JH 192, 
 branch `rule/lead-effort-split`, in work-unit commits. Runner: `node --test`.
 
 ## State
-Next: T2, the new rule `lens-effort` with its readers. Open, his: the land (Ask me before).
+Slice 1 (T1-T5) committed on `rule/lead-effort-split`: 9891aa9c, ba01a55e, b8def321, fd2b9eb3, fbc443bd, b36241b8.
+Next: run the done commands at HEAD; Codex and lens reviews with base 535509b6 (one set); push; PR; notify ready
+in its own call. Bad news for the notice: his `maxEffortLevel` is high in ~/.claude/settings.json, so the lead
+cannot run at xhigh until he lifts it; a lead's ORQ start may be refused or clamped (not checked). Then slices 2
+(advisor setting held to rule:advisor-model, read-only row; he set advisorModel claude-fable-5-2 at ~11:01) and 3
+(senior orchestrator, lean design), on their own branch and document. Landing: his "aplica todos los cambios ya"
+(93b72703:896), read by the lead as yes once gate and both reviews pass.
 
 ## Goal
 `rule:lead-effort` holds the lead's session alone, at xhigh, and a new rule `lens-effort` holds the Claude lenses
@@ -88,15 +94,18 @@ The land: it changes a rule of his; the lead asks.
 
 ## Tasks
 - [x] T1 (kind: design) (1, 2, 3) This document. Route: inline.
-- [ ] T2 (kind: build) (1, 3) `lens-effort` at high with its readers: `CLAUDE_HOME.lenses`, `claudeHome`,
+- [x] T2 (kind: build) (1, 3) `lens-effort` at high with its readers: `CLAUDE_HOME.lenses`, `claudeHome`,
   `claudeHeld`, `heldValues`, the lens and the reader, the planted breaks moved. Route: inline.
-- [ ] T3 (kind: build) (1) `rules switch --lenses <effort>`, `HOME_FLAGS`, the probe at the lenses' level, and
+- [x] T3 (kind: build) (1) `rules switch --lenses <effort>`, `HOME_FLAGS`, the probe at the lenses' level, and
   `rules applied` naming the reviewers' level. Route: inline.
-- [ ] T4 (kind: build) (1, 2) `lead-effort` to xhigh by `rules switch --lead xhigh`, and the subjects of
+- [x] T4 (kind: build) (1, 2) `lead-effort` to xhigh by `rules switch --lead xhigh`, and the subjects of
   `lead-effort` and `session-effort` narrowed. Route: inline.
-- [ ] T5 (kind: docs) (1) The texts that name the home. Route: inline.
+- [x] T5 (kind: docs) (1) The texts that name the home. Route: inline.
 
 ## Log
 - L1 2026-11-12, his answer to question 272, tapped: "Sí, sepárala".
 - L2 2026-11-12, decision of this session: the new rule is the reviewers' (`lens-effort`); `lead-effort` stays the
   lead's (Depth pass 1).
+- L3 2026-11-12, rules change refused his tapped answers (questions 260, 272) as quotes; the sources quote his typed lines and name the taps in accepted.
+- L4 2026-11-12, rules switch --lead xhigh probed claude-opus-5-5 at xhigh with the Fable advisor, 0.0751 USD; it found his maxEffortLevel at high, which caps the lead under xhigh: his to change.
+- L5 2026-11-12, his "aplica todos los cambios ya" (93b72703:896); the lead reads it as yes to land each slice once the gate and both reviews pass.
