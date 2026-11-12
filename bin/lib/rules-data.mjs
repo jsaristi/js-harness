@@ -706,9 +706,13 @@ export const RULES = [
     "subject": "the model everything Claude the harness starts runs on: every session, the lead's included, every sub-agent the harness defines or that inherits its session's, the lenses, the double review's Claude reader and the escalation",
     "owner": "sebastian",
     "scope": "repository",
-    "since": "2026-11-10",
-    "value": "claude-fable-5-2",
+    "since": "2026-11-12",
+    "value": "claude-opus-5-5",
     "was": [
+      {
+        "value": "claude-fable-5-2",
+        "until": "2026-11-12"
+      },
       {
         "value": "claude-opus-5-5",
         "until": "2026-11-10"
