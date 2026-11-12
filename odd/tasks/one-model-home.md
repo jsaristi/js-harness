@@ -383,6 +383,18 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 20:22, on the local branch `feat/model-home-fixes` (over 839's head `7bddda61`, not pushed): T10's five
+code fixes are written by one writer sub-agent (`Covered: S1`) and are in the commit that carries this line. Checked
+here: only its six allowed files changed (252 lines added, 21 removed); the code diff read; `bin/rules.test.mjs` and
+`bin/lib/rules-switch.test.mjs` run, 64 pass. The writer's own word, not rerun here: the three files together 119
+pass, the eight convention tests 41 pass, `rules check` PASS. Not red on an assertion first: the tests of
+`machineProbes` and of `HOME_FLAGS` failed first on a missing export, then on a fault planted and taken out. Not
+tested: a relief line appended before a later failure of the writing pass; the Claude launch through a `.cmd`
+shim. His to turn: the cost is rounded to four decimals. Not reviewed yet: Codex and the lenses read this commit
+once it sits on main, after 839 lands (cherry-pick it onto a branch cut from main, then review from that branch's
+base). The question on the lead's never-commit exception is drafted in the job's `tmp/q-commit.json`, to record
+with `notify --kind question` when pull request 5 exists and 269 is answered (one question at a time).
+
 2026-11-11 20:11: **pull request 839** is pull request 4, open on main from `feat/model-home-switch`, pushed, NOT
 marked ready: its land waits on his answer to question 269, which the lead carries here with its transcript line.
 The merge of main, `4f0f19d5`, counted as a code commit (it resolved a conflict), so it got its own reviews, each

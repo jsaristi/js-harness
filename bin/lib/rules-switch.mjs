@@ -368,7 +368,8 @@ function tried(run) {
 /**
  * Runs the switch `parsed` (`parseSwitch`'s) and gives its exit code: 0 when the rules are written, or with
  * `--dry-run` when they would be; 1 when the runner refuses, a probe fails or Codex is at its weekly floor, and then
- * nothing is written.
+ * nothing is written; and the runner's own code when the pass that writes does not finish after the probes, where the
+ * runner's line says what was written and the switch's closing line defers to it.
  *
  * `deps` is everything it reads or runs: `pass(options, stdout, stderr)` is `changeRules` of the runner bound to the
  * checkout; `readFile(path)` a file of the checkout or null; `probeClaude({ model, effort })` and `probeCodex(...)`
@@ -468,7 +469,9 @@ export async function switchRules(parsed, deps, stdout, stderr) {
       return 1;
     }
     answers.push({ answered: read.answered, effort: probe.effort });
-    stdout(`probed: ${read.answered} answered through ${claudeSaid} at ${probe.effort} on ${day}${read.beside.length > 0 ? `, with ${listed(read.beside)} billed beside it` : ''}`);
+    // What the CLI itself put the call at, where its answer holds a number: said as the CLI's figure, not a bill.
+    const cost = read.costUsd === null ? '' : `; the CLI put the call at ${Math.round(read.costUsd * 10000) / 10000} USD`;
+    stdout(`probed: ${read.answered} answered through ${claudeSaid} at ${probe.effort} on ${day}${read.beside.length > 0 ? `, with ${listed(read.beside)} billed beside it` : ''}${cost}`);
   }
   for (const answered of new Set(answers.map((one) => one.answered))) {
     proven.push(`${answered} answered through ${claudeSaid} at ${answers.filter((one) => one.answered === answered).map((one) => one.effort).join(' and at ')}`);
@@ -487,7 +490,9 @@ export async function switchRules(parsed, deps, stdout, stderr) {
 
   const done = deps.pass({ ...options, dryRun: false }, stdout, stderr);
   if (done.code !== 0) {
-    stderr('not switched: the pass that writes was refused after its dry run passed, so the probes were spent and nothing was written; run it again once what it names is put right');
+    // The runner has said why on the line before, and only it knows what it left: a refusal wrote nothing, a failed
+    // write put the files back or names the command that does, and a relief line appended before the failure stays.
+    stderr('not switched: the pass that writes did not finish after its dry run passed, and the probes were spent; its own line, above, says what was and was not written, and a relief line it appended before it failed stays until the next run supersedes it; put right what that line names and run the switch again, which probes again');
     return done.code;
   }
   stdout('not proven: the effort the model then works at; a probe shows which model answered and that the CLI took the level, and no more');

@@ -99,10 +99,12 @@ const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 // The rules of the two homes of a model and an effort, each with the flag of `js-harness rules switch` that names it.
 // `rules change` refuses a new value for one: a home's value is tried on the installed CLI before it is written, and
-// the switch is the command that tries it (odd/tasks/one-model-home.md, spec 8).
+// the switch is the command that tries it (odd/tasks/one-model-home.md, spec 8). The flags are restated here and
+// not read from ./rules-switch.mjs, which this module does not import; exported so its test holds each one to what
+// `parseSwitch` takes.
 const CLAUDE_FLAG = '--claude <model>@<effort>';
 const CODEX_FLAG = '--codex <model>@<effort>';
-const HOME_FLAGS = { [CLAUDE_HOME.model]: CLAUDE_FLAG, [CLAUDE_HOME.effort]: CLAUDE_FLAG, [CLAUDE_HOME.lead]: '--lead <effort>', [CODEX_HOME.model]: CODEX_FLAG, [CODEX_HOME.effort]: CODEX_FLAG };
+export const HOME_FLAGS = { [CLAUDE_HOME.model]: CLAUDE_FLAG, [CLAUDE_HOME.effort]: CLAUDE_FLAG, [CLAUDE_HOME.lead]: '--lead <effort>', [CODEX_HOME.model]: CODEX_FLAG, [CODEX_HOME.effort]: CODEX_FLAG };
 
 /**
  * Runs the change of the rule `id` in the checkout `top` and gives the exit code: 0 when it is written (or printed,

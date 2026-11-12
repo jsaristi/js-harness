@@ -212,14 +212,19 @@ const rule = (id, value) => ({ id, subject: id, owner: 'project', since: '2026-1
 const BEFORE = [rule(CLAUDE_HOME.lead, HIGH), rule(CODEX_HOME.effort, MEDIUM), rule(CODEX_HOME.model, CODEX_OLD), rule(CLAUDE_HOME.effort, MEDIUM), rule(CLAUDE_HOME.model, OLD)];
 
 /** A runner of the pass that writes nothing: it gives what `changeRules` gives for `changes` over BEFORE, and keeps
- * each call and what a real pass would have written. `refuse` is why it refuses, when it does. */
-function fakeRunner({ refuse = null } = {}) {
+ * each call and what a real pass would have written. `refuse` is why it refuses, when it does; `fail` is the line a
+ * pass that writes ends on when its dry run passed and it does not finish. */
+function fakeRunner({ refuse = null, fail = null } = {}) {
   const calls = [];
   const wrote = [];
   const pass = (options, out, err) => {
     calls.push(options);
     if (refuse !== null) {
       err(`not changed: ${refuse}`);
+      return { code: 1 };
+    }
+    if (fail !== null && !options.dryRun) {
+      err(fail);
       return { code: 1 };
     }
     const skipped = options.changes.filter(({ id, change }) => BEFORE.find((one) => one.id === id).value === change.value).map(({ id, change }) => ({ id, value: change.value }));
@@ -283,7 +288,7 @@ test('a switch says the probe\'s cost, probes, writes the rules and the agent fi
   assert.ok(at(/probe: 2 short questions through the installed CLI, one cheap call each with no session kept, Claude's with no tools and Codex's with every tool a flag turns off off, refused if it does more than answer: /) < at(/^probed: /m), 'the cost is said before the probe');
   at(new RegExp(`${CLAUDE_HOME.model}: ${OLD} to ${NEW}`));
   at(new RegExp(`${CLAUDE_HOME.effort}: stays ${MEDIUM}, not written`));
-  at(new RegExp(`^probed: ${NEW} answered through claude 9\\.9\\.9 at ${MEDIUM} on 2026-11-12$`, 'm'));
+  at(new RegExp(`^probed: ${NEW} answered through claude 9\\.9\\.9 at ${MEDIUM} on 2026-11-12; the CLI put the call at 0\\.004 USD$`, 'm'));
   at(/not proven: the effort the model then works at/);
   at(/^commit to make on rule\/new-model, one commit for the rules of the home:$/m);
   at(new RegExp(`git add bin/lib/rules-data\\.mjs docs/rule-sources\\.json docs/RULES\\.md ${WRITER_AGENT.replace(/\./g, '\\.')}$`, 'm'));
@@ -292,6 +297,40 @@ test('a switch says the probe\'s cost, probes, writes the rules and the agent fi
   at(/^What the new model may make stale, that no rule holds:$/m);
   at(new RegExp(`evals/prices\\.mjs holds no row for ${NEW}`));
   at(new RegExp(`not tried by any command: that the app's start_session and set_session_model take ${NEW}`));
+});
+
+test('a Claude probe says what the CLI put the call at when it gave a number, after any model billed beside, and nothing of it when it gave none', async () => {
+  const lineOf = async (claude) => {
+    const result = await run(['--lead', XHIGH, ...WORDS], { claude });
+    assert.equal(result.code, 0, result.err);
+    return result.out.split('\n').find((line) => line.startsWith('probed: '));
+  };
+  const said = `probed: ${OLD} answered through claude 9.9.9 at ${XHIGH} on 2026-11-12`;
+  assert.equal(await lineOf((asked) => claudeAnswer([asked.model], { total_cost_usd: 0.01234567 })), `${said}; the CLI put the call at 0.0123 USD`);
+  assert.equal(await lineOf((asked) => claudeAnswer([asked.model, 'claude-small-1-0'], { total_cost_usd: 0 })), `${said}, with claude-small-1-0 billed beside it; the CLI put the call at 0 USD`);
+  assert.equal(await lineOf((asked) => claudeAnswer([asked.model], { total_cost_usd: undefined })), said);
+  assert.equal(await lineOf((asked) => claudeAnswer([asked.model], { total_cost_usd: '0.01' })), said);
+});
+
+test('a pass that writes and does not finish after the probes is not said to have written nothing: the closing line defers to the runner\'s own', async () => {
+  const files = 'bin/lib/rules-data.mjs, docs/rule-sources.json, docs/RULES.md';
+  for (const fail of [
+    // Each as bin/lib/rules-change-run.mjs says it: a refusal, a failed write put back (a relief line appended before
+    // it stays, and the runner's line does not name it), and one whose files could not be put back.
+    'not changed: the tree holds changes outside the rule\'s home: notes.txt',
+    `not changed: a file could not be written (EPERM); ${files} are as they were`,
+    `not changed: a file could not be written (EPERM), and putting ${files} back failed too: git checkout HEAD -- ${files.replace(/,/g, '')}`,
+  ]) {
+    const result = await run(['--claude', `${NEW}@${MEDIUM}`, ...WORDS], { runner: fakeRunner({ fail }) });
+    assert.equal(result.code, 1);
+    assert.deepEqual(result.asked, [['claude', NEW, MEDIUM], ['claude', NEW, HIGH]], 'the probes were spent');
+    assert.deepEqual(result.runner.calls.map((call) => call.dryRun), [true, false]);
+    assert.deepEqual(result.err.split('\n'), [
+      fail,
+      'not switched: the pass that writes did not finish after its dry run passed, and the probes were spent; its own line, above, says what was and was not written, and a relief line it appended before it failed stays until the next run supersedes it; put right what that line names and run the switch again, which probes again',
+    ]);
+    assert.doesNotMatch(result.out, /commit to make|^not proven:/m);
+  }
 });
 
 test('nothing is written when the CLI refuses the id or the level, or another model answers', async () => {

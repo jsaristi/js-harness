@@ -462,13 +462,16 @@ function appliedForm({ cwd, env, homedir, now, run, readApp, agents }, stdout) {
 const PROBE_TIMEOUT_MS = 2 * 60 * 1000;
 
 /** What `rules switch` asks the machine, as `switchRules` takes it: the two probes, each in a temporary folder that
- * is removed, with the question on standard input; the version of each CLI; and Codex's limits with their floor. A probe runs on the
- * user's own CLI login, as a lens does, so the eval token and any API key are taken out of its environment
- * (`lensEnv`). Nothing here runs until the switch calls it. */
-async function machineProbes(env) {
+ * is removed, with the question on standard input; the version of each CLI; and Codex's limits with their floor.
+ * Claude's probe and the read of its version run on the user's own CLI login, as a lens does, so the eval token and
+ * any API key are taken out of their environment (`lensEnv`). Codex's probe, its `features list` and the read of its
+ * version get `env` as it is, nothing taken out. Nothing here runs until the switch calls it. `spawn` and
+ * `platform` are what every launch goes through, so a test gives a spawn that starts no CLI. */
+export async function machineProbes(env, { spawn = spawnSync, platform = process.platform } = {}) {
   const [{ claudeRunner }, { codexVersion, launchCodex }, { readRateLimits }, { lensEnv }, { CODEX_WEEKLY_FLOOR }] = await Promise.all([
     import('./lib/background.mjs'), import('./lib/codex-launch.mjs'), import('./lib/codex-meter.mjs'), import('./lens-review.mjs'), import('./codex-review.mjs'),
   ]);
+  // Claude's environment only: Codex is launched with `env`.
   const own = lensEnv(env);
   const inFolder = (work) => {
     const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-switch-'));
@@ -480,7 +483,7 @@ async function machineProbes(env) {
   };
   return {
     probeClaude: (probe) => inFolder((folder) => {
-      const claude = claudeRunner({ env: own, timeout: PROBE_TIMEOUT_MS });
+      const claude = claudeRunner({ env: own, platform, spawn, timeout: PROBE_TIMEOUT_MS });
       if (!claude) return { error: new Error('the Claude CLI was not found on the PATH') };
       const [promptFile, settingsFile] = [path.join(folder, 'prompt.md'), path.join(folder, 'settings.json')];
       fs.writeFileSync(promptFile, PROBE_PROMPT, 'utf8');
@@ -489,17 +492,17 @@ async function machineProbes(env) {
     }),
     probeCodex: (probe) => inFolder((folder) => {
       // The features the installed CLI knows, read with no model call: it refuses one it does not know.
-      const list = launchCodex(spawnSync, process.platform, ['features', 'list'], { cwd: folder, env, encoding: 'utf8', windowsHide: true, timeout: PROBE_TIMEOUT_MS });
+      const list = launchCodex(spawn, platform, ['features', 'list'], { cwd: folder, env, encoding: 'utf8', windowsHide: true, timeout: PROBE_TIMEOUT_MS });
       const features = list.status === 0 && !list.error ? codexFeaturesOf(list.stdout) : null;
-      const ran = launchCodex(spawnSync, process.platform, codexProbeArgs({ ...probe, features }), { cwd: folder, env, input: PROBE_QUESTION, encoding: 'utf8', windowsHide: true, timeout: PROBE_TIMEOUT_MS });
+      const ran = launchCodex(spawn, platform, codexProbeArgs({ ...probe, features }), { cwd: folder, env, input: PROBE_QUESTION, encoding: 'utf8', windowsHide: true, timeout: PROBE_TIMEOUT_MS });
       return { status: ran.status, stdout: String(ran.stdout ?? ''), stderr: String(ran.stderr ?? ''), error: ran.error };
     }),
     claudeVersion: () => {
-      const claude = claudeRunner({ env: own });
+      const claude = claudeRunner({ env: own, platform, spawn });
       const ran = claude ? claude(['--version']) : null;
       return ran !== null && ran.status === 0 ? /\d+\.\d+\.\d+[\w.+-]*/.exec(ran.stdout)?.[0] ?? null : null;
     },
-    codexVersion: () => codexVersion(spawnSync, process.platform, env),
+    codexVersion: () => codexVersion(spawn, platform, env),
     readMeter: () => readRateLimits(),
     weeklyFloor: CODEX_WEEKLY_FLOOR,
   };
