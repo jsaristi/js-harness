@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { guardMain } from './guard.mjs';
 import { appRoot } from './lib/app-record.mjs';
+import { EFFORTS } from './lib/model-home.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { ruleValue, writeRules } from './lib/rules.mjs';
 import { testRunWarning } from './lib/test-run-warning.mjs';
@@ -135,7 +136,10 @@ test('a start_session from a session whose own app record is off the home is den
   const lead = RULES.find((rule) => rule.id === 'lead-effort').value;
   const next = model.replace(/\d+$/, (digits) => String(Number(digits) + 1));
   const call = { tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', session_id: 'c-starter', tool_input: { initiation: 'own_initiative', title: 'JH 32 · T9', prompt: 'Do T9.', background: 'x'.repeat(80), effort: SESSION_EFFORT, context: 'fresh' } };
-  const record = (fields) => new Map([['c-starter', { where: 'sessions', title: 'JH ORQ · orquestador', model, effort: lead, ...fields }]]);
+  // The starter's own level is the higher of the two the home gives, so it is under neither whichever is above: a
+  // switch may put the lead's level below the sessions', and a starter at the lead's would then be capped.
+  const top = EFFORTS[Math.max(EFFORTS.indexOf(SESSION_EFFORT), EFFORTS.indexOf(lead))];
+  const record = (fields) => new Map([['c-starter', { where: 'sessions', title: 'JH ORQ · orquestador', model, effort: top, ...fields }]]);
   const passes = { code: 0, out: '', err: '' };
   assert.deepEqual(await hook(call, { app: record({}) }), passes, 'a starter on the home');
   assert.deepEqual(await hook(call, { app: new Map() }), passes, 'no record of the starter');

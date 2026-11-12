@@ -295,7 +295,8 @@ test('rules prints one line per rule, with its value and unit, then the count li
     assert.deepEqual(out.slice(0, -1).map((line) => line.split('  ')[0]), RULES.map((rule) => rule.id));
     assert.ok(out.includes('control-phrase-min  12 characters  project'));
     assert.ok(out.includes('gate-wait  60 minutes  project'));
-    assert.ok(out.includes('review-effort  medium  sebastian'));
+    // A home's value is read from the list and never written here: a switch of Codex's home changes it.
+    assert.ok(out.includes(`review-effort  ${declared('review-effort').value}  sebastian`));
     assert.equal(out.at(-1), COUNT_LINE);
   });
 });
@@ -525,6 +526,10 @@ function launch(records, model, effort) {
 const declared = (id) => RULES.find((rule) => rule.id === id);
 /** The line `applied` opens the block of the rule `id` with, among the rules with no short name. */
 const heldLine = (id) => `  ${id}: ${declared(id).value}, since ${declared(id).since}`;
+// A model that is not the home's: the first of two made-up ids the rule does not hold. It is picked and never written
+// as the id of a real model, because a switch makes any real model the home's (on 2026-11-11 the first switch moved
+// the home to the model a test below took as another, and its commit was refused).
+const OFF_MODEL = ['claude-fixture-1', 'claude-fixture-2'].find((id) => id !== declared('session-model').value);
 // The efforts a session record can name; one that is not a rule's value is a difference from it.
 const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
 // The writer rule and its short name. While the rule declares one, `applied` compares what the short name gave and
@@ -568,8 +573,8 @@ test('applied lists the sessions off the home, desktop and background, with what
     const app = new Map([
       ['c1', { where: 'sessions', model, effort: other, archived: false, title: 'JH 7 · work', cwd: project }],
       ['c2', { where: 'sessions', model, effort: lead, archived: false, title: 'JH ORQ · lead', cwd: project }],
-      ['c3', { where: 'archived', model: 'claude-opus-5-5', effort, archived: true, title: 'JH 1 · old', cwd: project }],
-      ['c4', { where: 'sessions', model: 'claude-opus-5-5', effort: other, archived: false, title: 'JH 9 · elsewhere', cwd: home }],
+      ['c3', { where: 'archived', model: OFF_MODEL, effort, archived: true, title: 'JH 1 · old', cwd: project }],
+      ['c4', { where: 'sessions', model: OFF_MODEL, effort: other, archived: false, title: 'JH 9 · elsewhere', cwd: home }],
     ]);
     appendRecord(home, { event: 'started', at: new Date(NOW).toISOString(), id: 'job-1', sessionId: null, title: 'JH 8 · job', root: project, cwd: project, worktree: null, worktreePath: null, model, effort: other });
     const { code, out } = await applied(project, home, undefined, { readApp: () => app, agents: () => [{ id: 'job-1', status: 'busy' }] });
@@ -580,7 +585,7 @@ test('applied lists the sessions off the home, desktop and background, with what
     assert.deepEqual(out.slice(at + 1), [
       `  desktop  "JH 7 · work"  its menu holds ${model} at ${other}; held to ${model} at ${effort}; corrected by the lead's session tools`,
       `  background  "JH 8 · job" (job-1)  no reply of it was read; its start asked for ${model} at ${other}; its job: busy; held to ${model} at ${effort}; corrected by a resume once its job is no longer at work, which a resume refuses until then: js-harness sessions start --resume job-1`,
-      `  1 archived desktop session is off it too (1 at claude-opus-5-5 at ${effort}): nothing corrects one while it is archived; he can unarchive it, and it is then listed`,
+      `  1 archived desktop session is off it too (1 at ${OFF_MODEL} at ${effort}): nothing corrects one while it is archived; he can unarchive it, and it is then listed`,
       '  on the home: 1 desktop, not archived, and 0 background',
       '  The app\'s record does not say whether a session that is not archived is running. Nothing was written.',
     ]);
@@ -678,13 +683,14 @@ test('the two rules of the Claude home are read by the command, so the check lis
 
 test('applied fails, with the line to the lead, when a short name is answered by another model, and reports it where the rule has none', async () => {
   await withHome(LIST, async (project, home) => {
-    launch(recordsOf(project, home), 'claude-haiku-4-5-20251001');
+    // A record names a model with a date at its end; the model is one the home does not hold, whatever the home is.
+    launch(recordsOf(project, home), `${OFF_MODEL}-20251001`);
     const { code, out } = await applied(project, home);
     if (SHORT === undefined) {
       const day = new Date(NOW).toISOString().slice(0, 10);
       const at = out.lastIndexOf(heldLine('session-model'));
       assert.equal(code, 0, out.join('\n'));
-      assert.deepEqual(out.slice(at + 1, at + 3), ['    agree: 0 of 1 launch', `    claude-haiku-4-5: 1 launch of general-purpose, the last on ${day}`], out.join('\n'));
+      assert.deepEqual(out.slice(at + 1, at + 3), ['    agree: 0 of 1 launch', `    ${OFF_MODEL}: 1 launch of general-purpose, the last on ${day}`], out.join('\n'));
       return;
     }
     assert.equal(code, 1, out.join('\n'));

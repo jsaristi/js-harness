@@ -66,6 +66,10 @@ const HERE = writeRules(RULES);
 // retired into on 2026-11-11. A rule has a short name only while one is known to give its model on the engine in use.
 const MODEL_RULES = ['session-model'].map((id) => RULES.find((rule) => rule.id === id));
 const SHORT_NAMES = MODEL_RULES.map((rule) => rule.alias).filter((alias) => alias !== undefined);
+// A full Claude id that is not the home's: the first of two made-up ones that no rule above gives. It is picked and
+// never written as the id of a real model, because a switch makes any real model the home's: on 2026-11-11 the first
+// switch moved the home to the model a test here took as another, and its commit was refused.
+const OFF_MODEL = ['claude-fixture-1', 'claude-fixture-2'].find((id) => !MODEL_RULES.some((rule) => rule.value === id));
 
 test('in this repository a sub-agent may run on the home\'s model, on its short name where it has one, or on none', () => {
   const allowed = allowedModels(HERE);
@@ -81,7 +85,7 @@ test('a model the home does not give is refused, and the refusal names the rule 
   const allowed = allowedModels(HERE);
   // A short name no rule declares is refused like any other model: on 2026-11-10 `fable` gave claude-fable-5-1 on
   // cli 2.1.319, not the Fable 5.2 the rules name.
-  for (const model of ['sonnet', 'claude-sonnet-5-5', 'inherit', 'null', 'undefined', ...['haiku', 'opus', 'fable'].filter((name) => !SHORT_NAMES.includes(name))]) {
+  for (const model of ['sonnet', OFF_MODEL, 'inherit', 'null', 'undefined', ...['haiku', 'opus', 'fable'].filter((name) => !SHORT_NAMES.includes(name))]) {
     const reason = modelRefusal({ model }, allowed);
     assert.match(reason, new RegExp(`"${model}"`), model);
     for (const rule of MODEL_RULES) assert.ok(reason.includes(`${rule.id} gives `) && reason.includes(rule.value), `${model}: ${reason}`);
@@ -203,7 +207,9 @@ test('the tools that do not open a session pass in this repository, whatever the
 test('a start from a session whose own record holds another model, or a lower level than the start is held to, is refused with who corrects it', () => {
   const model = MODEL_RULES[0].value;
   const next = model.replace(/\d+$/, (digits) => String(Number(digits) + 1));
-  const on = { model, effort: LEAD, title: 'JH ORQ · orquestador' };
+  // The starter's own level is the higher of the two the home gives, so it is under neither whichever is above: a
+  // switch may put the lead's level below the sessions', and a starter at the lead's would then be capped.
+  const on = { model, effort: EFFORTS[Math.max(EFFORTS.indexOf(HELD), EFFORTS.indexOf(LEAD))], title: 'JH ORQ · orquestador' };
   const way = ' Where a card is enough, js-harness sessions start starts one on the rules\' model and level, capped by no session.';
   assert.equal(starterRefusal(on, HERE), null);
   assert.equal(starterRefusal(on, HERE, { lead: true }), null);
@@ -328,7 +334,8 @@ test('a start that names a model other than the home\'s is refused, a lead\'s to
   const at = { ...BRIEF, effort: HELD };
   for (const model of [undefined, null, '', MODEL, `${MODEL}[1m]`]) assert.equal(sessionStartRefusal({ ...at, model }, HERE), null, String(model));
   // A short name is no id: it names whatever the engine in use gives it (on 2026-11-10 `fable` gave claude-fable-5-1).
-  for (const model of ['fable', 'opus', 'claude-opus-5-5', 'gpt-6.1-sol']) {
+  // A full id is refused when it is not the home's (OFF_MODEL), and so is an id of another vendor.
+  for (const model of ['fable', 'opus', OFF_MODEL, 'gpt-6.1-sol']) {
     assert.equal(sessionStartRefusal({ ...at, model }, HERE), `js-harness guard: start_session names the model "${model}", `
       + `not the one of the rule session-model: ${MODEL}. Pass model "${MODEL}", or none; another model is his to set.`, model);
   }
