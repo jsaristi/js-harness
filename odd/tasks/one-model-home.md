@@ -383,6 +383,19 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 23:40, after the machine restarted at 23:24 and the lead resumed this session (the worktree was as the
+20:33 paragraph left it, head `586071fc`, both pull requests open): both questions are answered, each read at its
+line. 269, `812b728f-2f18-43f6-b405-396080689c65:2592`: "Aceptarlo así (Recomendado)", so the Codex probe stays
+as built and the `ready` notice of 839 is sent (23:36). 270, the same transcript, line 2645: "Sí, ampliarla
+(Recomendado)", so the one exception to the lead's "never commit" names `js-harness rules switch` beside
+`rules change`, on the same conditions; it is in the commit that carries this line, on `feat/model-home-fixes`
+(pull request 840), with the skill's test and the coverage register refreshed. That test was written after the
+sentence, not seen red. Left: Codex and the readability lens on this commit, the push, then `ready` for 840 once
+839 is in main and 840's base is main; the summary; closed. Also told to the lead, who runs it, not this session:
+the switch his new scheme needs is `rules switch --claude claude-opus-5-5@medium --lead xhigh` with his words at
+lines 1444 and 2544 of that transcript, dry run first, and the advisor has no home in the rules, so a home for it
+is a new rule and a question to him. In flight: `js-harness wait --notice-to 172` (task `blw4xfb5g`).
+
 2026-11-11 20:33: **pull request 840** is pull request 5, open from `feat/model-home-fixes` on the base
 `feat/model-home-switch` (stacked on 839), pushed, NOT marked ready; its push's check passed, 7 code commits
 covered by both records. **Question 270** is recorded for him through the lead: whether the lead's never-commit
