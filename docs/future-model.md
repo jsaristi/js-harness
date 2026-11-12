@@ -5,6 +5,11 @@ needs a smaller harness" (`AGENTS.md`, `docs/ROADMAP.md` principle 2): measure w
 costs on every turn, measure what it buys on the eval tasks, change one component at a time, and
 keep only what still earns its place. It is read when it is needed, never on every turn.
 
+It is the measuring, not the switch. Moving the sessions or the reviews to another model or effort
+is one command, `js-harness rules switch`, run as the orchestrator skill's "A new model" says: it
+tries the new id on the installed CLI and writes the rules that hold it. Neither waits for the
+other; the models an eval runs on are this protocol's to change, never the switch's.
+
 Version 2, 2026-10-14, F7 (`odd/tasks/future-model-protocol.md`; what its reader changed is in
 that document's Log). Each step names the command that does it today, or the gap where none
 exists. A gap is a task of that feature, not a step an agent improvises: until the gaps of a

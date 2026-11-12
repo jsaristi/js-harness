@@ -13,7 +13,9 @@
 // writes the declaration, its source and docs/RULES.md and appends a relief line (bin/lib/rules-change-run.mjs); a
 // change of patterns or failure alone keeps the rule's source and names its own in the relief line, and takes a
 // design even on a rule of his. It is refused in a project that installs the harness, whose own list is edited by
-// hand. In the harness's own checkout
+// hand. `rules switch` moves a home of a model and an effort to a new value: it asks each new model one question
+// through the installed CLI, then writes the rules of the homes named in one pass (bin/lib/rules-switch.mjs); the
+// probes it runs with are made here, and a test hands it others. In the harness's own checkout
 // `rules check` also counts each rule's patterns in the texts in force and checks each rule's failure against the
 // register (bin/lib/rules-scan.mjs); the gate's row `rules` reads the same patterns in what a commit adds.
 // Zero dependencies.
@@ -32,7 +34,8 @@ import { readRecords } from './lib/rules-applied-read.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
-import { changeRule } from './lib/rules-change-run.mjs';
+import { changeRule, changeRules } from './lib/rules-change-run.mjs';
+import { PROBE_PROMPT, PROBE_QUESTION, SWITCH_USAGE, claudeProbeArgs, codexFeaturesOf, codexProbeArgs, parseSwitch, switchRules } from './lib/rules-switch.mjs';
 import { proofSaid, proveBreaks, readCoverage, REGISTER_PATH } from './lib/rules-coverage-read.mjs';
 import { OWED_CAP, OWED_CAP_FROM, refreshRegister, writeCoverage } from './lib/rules-coverage.mjs';
 import { harnessHome } from './lib/home.mjs';
@@ -42,7 +45,7 @@ import { readHomeSessions } from './lib/home-sessions-read.mjs';
 import { leadTitle } from './lib/session-title-guard.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] [--with <path>...] | --hook]';
+export const USAGE = `Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] [--with <path>...] | ${SWITCH_USAGE} | --hook]`;
 const SOURCES = 'docs/rule-sources.json';
 const LIST = 'docs/RULES.md';
 // The two findings a render writes over: the list is missing, or it is not what the declarations give.
@@ -78,6 +81,12 @@ function parseArgs(argv) {
     if (parsed.id === undefined) throw new RulesArgError('rules change needs the id of the rule');
     if (parsed.checkSource && parsed.withPaths !== null) throw new RulesArgError('--with goes with a change: --check-source writes nothing');
     parsed.withPaths ??= [];
+    return parsed;
+  }
+  // `switch` has its own words (bin/lib/rules-switch.mjs): the homes, his quoted words, and its two ways to write.
+  if (argv[0] === 'switch') {
+    const parsed = parseSwitch(argv.slice(1));
+    if (parsed.error !== undefined) throw new RulesArgError(parsed.error);
     return parsed;
   }
   // `coverage` takes its flags, each once at most; `--refresh` writes the register and goes alone.
@@ -449,6 +458,77 @@ function appliedForm({ cwd, env, homedir, now, run, readApp, agents }, stdout) {
   return records.exists ? result.exit : 0;
 }
 
+// How long one probe of `switch` may take: a model answers one word in seconds, and a run past this has stalled.
+const PROBE_TIMEOUT_MS = 2 * 60 * 1000;
+
+/** What `rules switch` asks the machine, as `switchRules` takes it: the two probes, each in a temporary folder that
+ * is removed, with the question on standard input; the version of each CLI; and Codex's limits with their floor. A probe runs on the
+ * user's own CLI login, as a lens does, so the eval token and any API key are taken out of its environment
+ * (`lensEnv`). Nothing here runs until the switch calls it. */
+async function machineProbes(env) {
+  const [{ claudeRunner }, { codexVersion, launchCodex }, { readRateLimits }, { lensEnv }, { CODEX_WEEKLY_FLOOR }] = await Promise.all([
+    import('./lib/background.mjs'), import('./lib/codex-launch.mjs'), import('./lib/codex-meter.mjs'), import('./lens-review.mjs'), import('./codex-review.mjs'),
+  ]);
+  const own = lensEnv(env);
+  const inFolder = (work) => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-switch-'));
+    try {
+      return work(folder);
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true });
+    }
+  };
+  return {
+    probeClaude: (probe) => inFolder((folder) => {
+      const claude = claudeRunner({ env: own, timeout: PROBE_TIMEOUT_MS });
+      if (!claude) return { error: new Error('the Claude CLI was not found on the PATH') };
+      const [promptFile, settingsFile] = [path.join(folder, 'prompt.md'), path.join(folder, 'settings.json')];
+      fs.writeFileSync(promptFile, PROBE_PROMPT, 'utf8');
+      fs.writeFileSync(settingsFile, '{}', 'utf8');
+      return claude(claudeProbeArgs({ ...probe, promptFile, settingsFile }), { cwd: folder, input: PROBE_QUESTION });
+    }),
+    probeCodex: (probe) => inFolder((folder) => {
+      // The features the installed CLI knows, read with no model call: it refuses one it does not know.
+      const list = launchCodex(spawnSync, process.platform, ['features', 'list'], { cwd: folder, env, encoding: 'utf8', windowsHide: true, timeout: PROBE_TIMEOUT_MS });
+      const features = list.status === 0 && !list.error ? codexFeaturesOf(list.stdout) : null;
+      const ran = launchCodex(spawnSync, process.platform, codexProbeArgs({ ...probe, features }), { cwd: folder, env, input: PROBE_QUESTION, encoding: 'utf8', windowsHide: true, timeout: PROBE_TIMEOUT_MS });
+      return { status: ran.status, stdout: String(ran.stdout ?? ''), stderr: String(ran.stderr ?? ''), error: ran.error };
+    }),
+    claudeVersion: () => {
+      const claude = claudeRunner({ env: own });
+      const ran = claude ? claude(['--version']) : null;
+      return ran !== null && ran.status === 0 ? /\d+\.\d+\.\d+[\w.+-]*/.exec(ran.stdout)?.[0] ?? null : null;
+    },
+    codexVersion: () => codexVersion(spawnSync, process.platform, env),
+    readMeter: () => readRateLimits(),
+    weeklyFloor: CODEX_WEEKLY_FLOOR,
+  };
+}
+
+/** `js-harness rules switch` in the harness's checkout `top`: the runner's pass bound to that checkout, what is read
+ * outside the repository and never written (the sessions as `applied` reads them, his settings, the window the host
+ * compacts on), and the probes, `switchDeps` in place of the machine's where a test gives them. */
+async function switchForm(parsed, { top, root, cwd, env, homedir, now, run, rename, readApp, agents, switchDeps }, stdout, stderr) {
+  const main = mainCheckout(run, cwd);
+  const slug = projectSlug(main);
+  const claudeDir = env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude');
+  const home = harnessHome({ env, homedir });
+  const [{ readSettings }, { configuredWindow }] = await Promise.all([import('./lib/home-doctor.mjs'), import('./lib/pause.mjs')]);
+  return switchRules(parsed, {
+    pass: (options, out, err) => changeRules({
+      ...options, command: 'switch', branchName: 'model-home', top, packageRoot: root, readTree: readAll, git: (args) => run('git', args, { cwd: top }),
+      now, home, slug, transcripts: path.join(claudeDir, 'projects', slug), rename,
+    }, out, err),
+    readFile: (file) => readOptional(top, file),
+    readSessions: () => readHomeSessions({ main, home, claudeDir, now: now(), days: APPLIED_DAYS, env, homedir, ...(readApp && { readApp }), ...(agents && { agents }) }),
+    readSettings: () => readSettings({ claudeDir, project: top }),
+    configuredWindow: () => configuredWindow({ env, claudeHome: claudeDir, projectDir: top }),
+    isLead: leadTitle,
+    ...(await machineProbes(env)),
+    ...switchDeps,
+  }, stdout, stderr);
+}
+
 /** A share as a whole percent. */
 const percent = (part, whole) => `${whole === 0 ? 0 : Math.round((part / whole) * 100)}%`;
 
@@ -548,6 +628,9 @@ export async function rulesMain(argv, {
   // What `applied` reads of the sessions, each the real one when not given: the app's records and `claude agents`.
   readApp,
   agents,
+  // What `switch` asks the machine, each the real one when not given: `probeClaude`, `probeCodex`, `claudeVersion`,
+  // `codexVersion` and `readMeter`. A test gives all five, so it asks no model.
+  switchDeps = {},
 } = {}) {
   // Letter F's turn-start hook is a module of its own (bin/lib/rules-reach.mjs); run on its own, this sends it there.
   if (argv[0] === '--hook') return (await import('./lib/rules-reach.mjs')).rulesHookMain(argv.slice(1));
@@ -569,6 +652,10 @@ export async function rulesMain(argv, {
       harnessRepository = readOptional(top, 'bin/lib/rules-data.mjs') !== null;
     } catch (err) {
       stderr(err.message);
+      return 1;
+    }
+    if (!harnessRepository && parsed.command === 'switch') {
+      stderr("not switched: rules switch moves the homes of the harness's own rules, in its own checkout; a project that installs the harness declares no home of its own");
       return 1;
     }
     if (!harnessRepository && parsed.command === 'change') {
@@ -603,6 +690,8 @@ export async function rulesMain(argv, {
       rename,
     }, stdout, stderr);
   }
+
+  if (parsed.command === 'switch') return switchForm(parsed, { top, root, cwd, env, homedir, now, run, rename, readApp, agents, switchDeps }, stdout, stderr);
 
   // The plain listing needs only the declarations, so a file it does not read cannot stop it.
   if (parsed.command === 'list') return listRules(stdout);

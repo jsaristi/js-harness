@@ -12,7 +12,7 @@
 // a whole Claude or Codex model id, or one of the homes' values as it is written today; a model after `--model` or
 // given to a name of model, by its id or by a short name (SHORT_NAMES, and the family of the home's model); and a
 // level after `--effort` or given to a name of effort. An id inside a longer text that is no launch, a usage line or
-// a message, is prose, which the convention over the texts reads. Every module under `bin/`, `workshop/` and
+// a message, is prose, which the convention over the texts reads (below, with its own header). Every module under `bin/`, `workshop/` and
 // `scripts/` is read, at any depth (bin/lib/source.testkit.mjs), the two modules of the home among them; `evals/` is
 // not, since its models are what a measurement was or will be made on and `docs/future-model.md` owns changing them.
 // LIST is the one file where the values belong. LEGACY lists the modules that still write one, each with why; it
@@ -21,8 +21,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { EFFORTS, claudeHome, codexHome } from './lib/model-home.mjs';
+import { CLAUDE_HOME, CODEX_HOME, EFFORTS, claudeHome, codexHome } from './lib/model-home.mjs';
 import { ratchet } from './lib/ratchet.testkit.mjs';
+import { RULES } from './lib/rules-data.mjs';
+import { inForceLines } from './lib/rules-scan.mjs';
 import { sourceModules, withoutComments } from './lib/source.testkit.mjs';
 
 const ROOT = path.join(import.meta.dirname, '..');
@@ -148,4 +150,133 @@ test('an effort read from the home, a level that is no launch and a word that is
   assert.ok(!holdsEffort('const { effort } = claudeHome();\nstart({ effort });\n'));
   assert.ok(!holdsEffort('const priority = \'high\';\n'));
   assert.ok(!holdsEffort('const effort = \'highest\';\n'));
+});
+
+// ── the texts (odd/tasks/one-model-home.md, spec 4) ─────────────────────────────────────────────
+//
+// Convention: a text in force that states a model or an effort names the rule and does not repeat its value, so a
+// switch of a home changes no document. On 2026-11-10 the roadmap's Decided row still gave the model of a month
+// before, a writer on a cheaper one, while the rules it marked said another.
+//
+// How to comply: where the value would go, write `rule:session-model`, `rule:session-effort`, `rule:lead-effort`,
+// `rule:review-model` or `rule:review-effort`; a sample of output shows `<model>` and `<effort>`; a help text that
+// must show the value prints it from the home.
+//
+// What is read, fences included, since a sample restates a value as prose does: the eight texts of TEXTS, for a
+// Claude model id, a value Codex's home holds or held (its `was`), a model's family with its version ("Saga 9.1")
+// and a level beside the word effort; and each feature document above its Log, for a value Codex's home holds or
+// held alone, since the patterns of its rules find only an id with a hyphen and a digit. DATED lists the lines that
+// stay, by a piece of each that names it, with its day and why: the conclusion of a past measurement, the sample of
+// a host's attribution line. DATED_DOCUMENTS lists the feature documents that say what Codex ran on when they were
+// written. Both only shrink.
+const TEXTS = ['README.md', 'AGENTS.md', 'CLAUDE.md', 'docs/SPEC.md', 'docs/GUIDE.md', 'docs/README.md', 'docs/future-model.md', 'docs/ROADMAP.md'];
+const ATTRIBUTION = 'the sample of a host\'s attribution line that the commit-msg hook removes: the name a host signs with, not a pick';
+const DATED = {
+  'README.md: alone or with a model: `Claude Opus 5.5`,': `2026-10-20: ${ATTRIBUTION}`,
+  'README.md: $ git commit -m "fix: a change" -m "Co-Authored-By: Claude Opus 5.5': `2026-10-20: ${ATTRIBUTION}`,
+  'README.md: js-harness commit-msg: removed the host\'s attribution lines: Co-Authored-By: Claude Opus 5.5': `2026-10-20: ${ATTRIBUTION}`,
+  'docs/future-model.md: Claude: F5 on Opus 5.5, at `medium` its 30 trials cost': '2026-10-14: the conclusion of a past measurement, the model F5\'s trials ran on',
+  'docs/future-model.md: Codex: F6 on `gpt-6.1-sol`,': '2026-10-14: the conclusion of a past measurement, the model F6\'s trials ran on',
+  'docs/ROADMAP.md: or after two compactions; Haiku 5.5 helpers with': '2026-10-28: what a past design of F8 proposed, kept as it was written',
+  'docs/ROADMAP.md: scores the same on Haiku 5.5 as on Opus 5.5 at 58% less session cost': '2026-10-11: the conclusion of a past measurement, the models its arms ran on',
+  'docs/ROADMAP.md: decided (2026-10-11): the writing sub-agent on Haiku 5.5.': '2026-10-11: a closed decision of the list, superseded by the home and kept as it was answered',
+  'docs/ROADMAP.md: - Opus 5.5 defaults may shift after launch.': '2026-09-27: a risk written of one model by its name',
+};
+const THEN = 'a closed feature\'s record of the model Codex ran on when it was written';
+const DATED_DOCUMENTS = {
+  'odd/tasks/codex-exec-review.md': `2026-09-29: ${THEN}`,
+  'odd/tasks/codex-parity.md': `2026-10-01: ${THEN}`,
+  'odd/tasks/codex-review-cost.md': `2026-10-08: ${THEN}`,
+  'odd/tasks/codex-review-lean.md': `2026-10-06: ${THEN}`,
+  'odd/tasks/faster-check.md': `2026-10-14: ${THEN}`,
+  'odd/tasks/stack-v4.md': `2026-10-04: ${THEN}`,
+  'odd/tasks/one-model-home.md': '2026-11-11: this convention\'s own design, whose inventory says what the rules held that day',
+};
+
+// A Claude id in prose: a version follows its family, and no dot and digit follow it, which a file's version does
+// (`docs/host-updates/claude-desktop-4.4212.0.md`).
+const CLAUDE_ID_IN_PROSE = /(?<![\w-])claude-[a-z]+-\d+(?:-\d{1,2})*(?:-\d{8})?(?![\w-]|\.\d)/;
+
+/** The values the rule `id` holds and held, as they are written. */
+const valuesOf = (id) => {
+  const rule = RULES.find((one) => one.id === id);
+  return [rule.value, ...(rule.was ?? []).map((one) => one.value)];
+};
+
+/** What the line `line` states of a model or an effort, in words, or null. `codex` are the values Codex's home holds
+ * or held and `families` the families of the Claude ids the home holds or held, beside the short names. */
+function statedIn(line, { codex = [], families = [] } = {}) {
+  if (CLAUDE_ID_IN_PROSE.test(line)) return 'a Claude model id';
+  if (codex.length > 0 && new RegExp(`(?<![\\w.-])(?:${codex.map(escaped).join('|')})(?![\\w-])`).test(line)) return 'a value of Codex\'s home';
+  const names = [...new Set([...SHORT_NAMES, ...families])].join('|');
+  if (new RegExp(`\\b(?:${names})[ -]\\d+(?:\\.\\d+)?\\b`, 'i').test(line)) return 'a model\'s name with its version';
+  if (new RegExp(`\\b${LEVEL}\`?\\s+effort\\b|\\beffort\\b\`?(?:\\s+(?:of|at|is|to|level))?:?\\s+\`?${LEVEL}\\b`, 'i').test(line)) return 'a level beside the word effort';
+  return null;
+}
+
+const homesThen = () => ({ codex: valuesOf(CODEX_HOME.model), families: valuesOf(CLAUDE_HOME.model).flatMap(familyOf) });
+
+test('no text in force states a model or an effort, but the dated lines', () => {
+  const home = homesThen();
+  const checked = [];
+  const broken = [];
+  for (const file of TEXTS) {
+    assert.ok(fs.existsSync(path.join(ROOT, file)), `${file} is a text of the repository`);
+    const pieces = Object.keys(DATED).filter((name) => name.startsWith(`${file}: `));
+    fs.readFileSync(path.join(ROOT, file), 'utf8').split(/\r?\n/).forEach((line, index) => {
+      const listed = pieces.filter((name) => line.includes(name.slice(file.length + 2)));
+      checked.push(...listed);
+      const what = statedIn(line, home);
+      if (what === null) return;
+      if (listed.length > 0) broken.push(...listed);
+      else {
+        const name = `${file}:${index + 1} states ${what} (${line.trim().slice(0, 100)})`;
+        checked.push(name);
+        broken.push(name);
+      }
+    });
+  }
+  const problems = ratchet({ checked, broken, legacy: DATED });
+  assert.deepEqual(problems, [], `${problems.join('\n')}\n\nname the rule where the value would go: rule:session-model, rule:session-effort, rule:lead-effort, rule:review-model, rule:review-effort`);
+});
+
+test('no feature document states above its Log a value Codex\'s home holds or held, but the dated ones', () => {
+  const { codex } = homesThen();
+  const folder = path.join(ROOT, 'odd', 'tasks');
+  const read = fs.readdirSync(folder).filter((name) => name.endsWith('.md')).map((name) => `odd/tasks/${name}`);
+  assert.ok(read.length >= 100, `the walk of odd/tasks read only ${read.length} documents`);
+  const broken = read.filter((name) => inForceLines(name, fs.readFileSync(path.join(ROOT, name), 'utf8')).some((line) => statedIn(line.text, { codex }) === 'a value of Codex\'s home'));
+  const problems = ratchet({ checked: read, broken, legacy: DATED_DOCUMENTS });
+  assert.deepEqual(problems, [], `${problems.join('\n')}\n\nname rule:review-model where the value would go`);
+});
+
+test('a line of prose states a model by its id, by a value of Codex\'s home or by its family and version', () => {
+  assert.equal(statedIn('Each lens runs on `claude-saga-9-1`, one at a time.'), 'a Claude model id');
+  assert.equal(statedIn('a record of claude-haiku-4-5-20251001.'), 'a Claude model id');
+  assert.equal(statedIn('The review runs on `gpt-7.2-nova`.', { codex: ['gpt-7.2-nova'] }), 'a value of Codex\'s home');
+  // An id with no hyphen and no digit has no shape to know it by: it is found because the home holds or held it.
+  assert.equal(statedIn('The review runs on astra.'), null);
+  assert.equal(statedIn('The review runs on astra.', { codex: ['gpt-7.2-nova', 'astra'] }), 'a value of Codex\'s home');
+  assert.equal(statedIn('an astral plane', { codex: ['astra'] }), null);
+  assert.equal(statedIn('designing runs on Opus 5.5 at least'), 'a model\'s name with its version');
+  assert.equal(statedIn('everything moves to Saga 9.1', { families: ['saga'] }), 'a model\'s name with its version');
+  assert.equal(statedIn('everything moves to Saga 9.1'), null);
+});
+
+test('a line of prose states an effort by a level beside the word', () => {
+  assert.equal(statedIn('a sub-agent runs at `high` effort'), 'a level beside the word effort');
+  assert.equal(statedIn('the effort is xhigh for a lead'), 'a level beside the word effort');
+  assert.equal(statedIn('the effort level max'), 'a level beside the word effort');
+  assert.equal(statedIn('launched with effort: "medium"'), null, 'a launch in code is the convention over code\'s');
+});
+
+test('a rule named, a sample\'s placeholder, a file\'s version and a level that is no effort state nothing', () => {
+  for (const line of [
+    'Each lens runs on the model of `rule:session-model` at the effort of `rule:lead-effort`.',
+    'Plan of the Codex review: <model> at <effort> effort, 2 parts',
+    '`docs/host-updates/claude-desktop-4.4212.0.md`, passes `host-watch check`',
+    'The cap of the effort in his user settings (`maxEffortLevel`) is his.',
+    'a high risk item, at low cost, with medium confidence',
+    'the claude-code CLI and the opus of a composer',
+  ]) assert.equal(statedIn(line, { codex: ['gpt-7.2-nova'], families: ['saga'] }), null, line);
 });

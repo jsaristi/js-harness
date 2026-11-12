@@ -418,6 +418,42 @@ export const COVERAGE = {
       "423c5d400baf",
       "fb084fdd0f56",
       "6dd55dd9b615",
+      {
+        "hash": "ed19cd8af45e",
+        "context": "the heading of the protocol of a switch of a model or an effort; a title, no obligation"
+      },
+      {
+        "hash": "6df3b3fc63f6",
+        "context": "points to docs/future-model.md, the measuring, and says neither waits for the other; a pointer, no obligation"
+      },
+      {
+        "hash": "3c3e8ae2bb11",
+        "context": "a step of the protocol of a switch (odd/tasks/one-model-home.md, spec 9): rules switch refuses a source that is not the owner's words at a transcript line (bin/lib/rules-change-run.test.mjs); bin/lib/manifest.test.mjs holds its wording"
+      },
+      {
+        "hash": "e76a031fe3a8",
+        "context": "a step of the protocol of a switch (odd/tasks/one-model-home.md, spec 9): rules switch refuses off a rule/ branch based on origin/main, and its dry run asks no model (bin/lib/rules-change-run.test.mjs); bin/lib/manifest.test.mjs holds its wording"
+      },
+      {
+        "hash": "d8ee2ebdba29",
+        "context": "a step of the protocol of a switch (odd/tasks/one-model-home.md, spec 9): the command prints the commit to make, one for the home or one a rule (bin/lib/rules-switch.test.mjs); bin/lib/manifest.test.mjs holds its wording"
+      },
+      {
+        "hash": "221a675752d8",
+        "context": "a step of the protocol of a switch (odd/tasks/one-model-home.md, spec 9): the push and the merge door refuse a code commit no review covers, and codex-review starts nothing at the weekly floor; that the reviews run from the branch's copy is the lead's to do, and bin/lib/manifest.test.mjs holds its wording"
+      },
+      {
+        "hash": "f75278eaed1d",
+        "context": "a step of the protocol of a switch (odd/tasks/one-model-home.md, spec 9): rules applied prints each session off the home with the act that corrects it (bin/lib/home-sessions.test.mjs); running it until none is listed is the lead's to do, and bin/lib/manifest.test.mjs holds its wording"
+      },
+      {
+        "hash": "6968d68e7e74",
+        "context": "a step of the protocol of a switch (odd/tasks/one-model-home.md, spec 9): the command prints what it leaves outside the repository and what may be stale (bin/lib/rules-switch.test.mjs); passing it on is the lead's to do, and bin/lib/manifest.test.mjs holds its wording"
+      },
+      {
+        "hash": "726952419d52",
+        "context": "the three checks of the day before a switch of Codex's home (odd/tasks/one-model-home.md, spec 10): the lead's to do, no command holds them; bin/lib/manifest.test.mjs holds its wording"
+      },
       "6b400741e66a",
       "0c22c1e055da",
       "d8b56d3a7d5b",

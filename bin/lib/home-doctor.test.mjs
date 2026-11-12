@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { RULES } from './rules-data.mjs';
 import { writeRules } from './rules.mjs';
 import { EFFORTS, claudeHome, menuLine } from './model-home.mjs';
-import { modelHomeHealth, settingsNotes } from './home-doctor.mjs';
+import { modelHomeHealth, readSettings, settingsNotes } from './home-doctor.mjs';
 
 // odd/tasks/one-model-home.md, spec 7: the doctor row of the session that asks, and what his settings say that the
 // home does not, read and never written.
@@ -70,4 +70,10 @@ test('the note carries what his settings and the project\'s say that the home do
   });
   const broken = { 'D:/home/.claude/settings.json': '{ not json', 'D:/proj/.claude/settings.local.json': '[]' };
   assert.deepEqual(ask({ readApp: () => record('JH 7 · work', home.model, home.effort), readFile: files(broken) }), { state: 'ok', note: '', fix: [] });
+});
+
+test('readSettings gives his settings and the project\'s as objects, and null for one that is missing or is no object', () => {
+  const held = { 'D:/home/.claude/settings.json': JSON.stringify({ model: 'opus[1m]' }), 'D:/proj/.claude/settings.local.json': '[]' };
+  assert.deepEqual(readSettings({ claudeDir: 'D:/home/.claude', project: 'D:/proj', readFile: files(held) }), { user: { model: 'opus[1m]' }, project: null });
+  assert.deepEqual(readSettings({ claudeDir: 'D:/home/.claude', project: 'D:/proj', readFile: files({}) }), { user: null, project: null });
 });

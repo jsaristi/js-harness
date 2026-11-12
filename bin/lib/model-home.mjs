@@ -10,7 +10,7 @@ import { CLAUDE_ID } from './model-shape.mjs';
 import { RULES } from './rules-data.mjs';
 import { guardHeld, ruleHere, ruleOf } from './rules.mjs';
 
-export { CLAUDE_HOME, CODEX_HOME, EFFORTS } from './model-shape.mjs';
+export { CLAUDE_HOME, CODEX_HOME, EFFORTS, homeFaults } from './model-shape.mjs';
 
 /** Each level as the app's model menu names it. Medio, Alto and Extra alto are the user's own words for it
  * (2026-11-10); the two ends are assumed, and his to correct. */
