@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { RULES } from './rules-data.mjs';
 import { writeRules } from './rules.mjs';
-import { CLAUDE_HOME, CODEX_HOME, EFFORTS, MENU_LEVELS, claudeHeld, claudeHome, codexHome, displayName, heldValues, menuLine, offHome, sameClaudeModel } from './model-home.mjs';
+import { CLAUDE_HOME, CODEX_HOME, EFFORTS, MENU_LEVELS, claudeHeld, claudeHome, codexHome, displayName, heldOfRole, heldValues, menuLine, offHome, sameClaudeModel } from './model-home.mjs';
 
 // odd/tasks/one-model-home.md, specs 2 and 7: the one module that knows which rules are the two homes.
 const valueOf = (id, list = RULES) => list.find((rule) => rule.id === id).value;
@@ -52,8 +52,8 @@ test('a guard holds the home where the project declares the rules, and nothing w
 
 test('heldValues gives the home a project holds as plain values, null where it declares none', () => {
   const home = claudeHome();
-  assert.deepEqual(heldValues(writeRules(RULES)), { model: home.model, effort: home.effort, lead: home.lead, lenses: home.lenses, advisor: home.advisor });
-  assert.deepEqual(heldValues(null), { model: null, effort: null, lead: null, lenses: null, advisor: null });
+  assert.deepEqual(heldValues(writeRules(RULES)), { model: home.model, effort: home.effort, lead: home.lead, lenses: home.lenses, advisor: home.advisor, senior: RULES.find((rule) => rule.id === 'senior-model').value, seniorEffort: RULES.find((rule) => rule.id === 'senior-effort').value });
+  assert.deepEqual(heldValues(null), { model: null, effort: null, lead: null, lenses: null, advisor: null, senior: null, seniorEffort: null });
 });
 
 test('the levels are the five a host takes, lowest first', () => {
@@ -104,4 +104,14 @@ test('the line he is given names the model and the level as his menu shows them'
     'En esta sesión, abre el selector de modelo que está junto a la caja donde escribes y elige Fable 5.2 con esfuerzo Alto.',
   );
   assert.match(menuLine({ model: 'claude-fable-5-2', effort: 'xhigh' }), /con esfuerzo Extra alto\.$/);
+});
+
+// odd/tasks/senior-orchestrator.md: every reporter holds a session to the home by the role its title gives.
+test('heldOfRole holds a senior to its model and level with no advisor, a lead to its level, any other to the sessions\'', () => {
+  const home = heldValues(writeRules(RULES));
+  assert.deepEqual(heldOfRole(home, { senior: true }), { model: home.senior, effort: home.seniorEffort, advisor: null });
+  assert.deepEqual(heldOfRole(home, { lead: true }), { model: home.model, effort: home.lead, advisor: home.advisor });
+  assert.deepEqual(heldOfRole(home), { model: home.model, effort: home.effort, advisor: home.advisor });
+  // A project that declares no senior holds a senior to the home, as any session.
+  assert.deepEqual(heldOfRole({ ...home, senior: null, seniorEffort: null }, { senior: true }), heldOfRole(home));
 });

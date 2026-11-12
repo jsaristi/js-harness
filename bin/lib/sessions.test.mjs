@@ -4953,3 +4953,8 @@ test('peakContextBefore reads no side chain, no reply the harness wrote, no repl
   ).split('\n');
   assert.deepEqual(lib.peakContextBefore(lines, Date.parse(at(6))), { tokens: 300000, preTokens: null });
 });
+
+test('renderBoard: a senior\'s row is labelled senior, not no role (odd/tasks/senior-orchestrator.md)', () => {
+  const section = rosterSection([member(A, 'JH SR · a design', 60)], { record: recordOf([]) });
+  assert.match(section.join('\n'), /^ {2}senior {2}JH SR · a design/m);
+});

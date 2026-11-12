@@ -6,8 +6,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { appRoot, appSessions } from './app-record.mjs';
-import { EFFORTS, heldValues, menuLine, offHome, sameClaudeModel } from './model-home.mjs';
-import { leadTitle } from './session-title-guard.mjs';
+import { EFFORTS, heldOfRole, heldValues, menuLine, offHome, sameClaudeModel } from './model-home.mjs';
+import { leadTitle, seniorTitle } from './session-title-guard.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const said = ({ model, effort }) => `${model ?? 'no model'} at ${effort ?? 'no level'}`;
@@ -98,7 +98,8 @@ export function modelHomeHealth({
   }
   if (record !== null) {
     const lead = leadTitle(record.title ?? '');
-    const held = { model: home.model, effort: (lead ? home.lead ?? home.effort : home.effort) ?? null };
+    const { model, effort } = heldOfRole(home, { lead, senior: seniorTitle(record.title ?? '') });
+    const held = { model, effort };
     if (offHome(record, held) !== null) {
       const who = lead ? 'only the user changes a lead\'s' : 'the lead sets it with its session tools, or the user in the menu';
       const line = typeof held.model === 'string' && typeof held.effort === 'string' ? ` To give him: ${menuLine(held)}` : '';

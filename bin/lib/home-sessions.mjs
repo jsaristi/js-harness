@@ -4,7 +4,7 @@
 // app's record of it holds (his menu), a background one by its last reply beside what its start asked, and each gets
 // the act that corrects it, since no session changes its own. This module is the judgment alone: it reads no file and
 // prints nothing, and ./home-sessions-read.mjs hands it the records.
-import { offHome, sameClaudeModel } from './model-home.mjs';
+import { heldOfRole, offHome, sameClaudeModel } from './model-home.mjs';
 
 /** `{ model, effort }` as a line says it, with the advisor where `advisor` is a key of it. */
 const said = ({ model, effort, ...more }) => `${model ?? 'no model'} at ${effort ?? 'no level'}${Object.hasOwn(more, 'advisor') ? ` with the advisor ${more.advisor}` : ''}`;
@@ -47,8 +47,12 @@ const resumeOf = (job) => `a resume${job.working === true ? ' once its job is no
  * An archived desktop session is in no row: nothing corrects one while it is archived, and this machine held 124 of
  * them on 2026-11-11. `archived` counts them by what they hold, `[{ holds, count }]`, the most first. `on` counts the
  * sessions on the home, `{ desktop, background }`, archived ones left out. */
-export function sessionsOffHome(home, { desktop = [], background = [], isLead = () => false } = {}) {
-  const heldOf = (title) => ({ model: home.model ?? null, effort: (isLead(title) ? home.lead ?? home.effort : home.effort) ?? null });
+export function sessionsOffHome(home, { desktop = [], background = [], isLead = () => false, isSenior = () => false } = {}) {
+  // A senior's title holds it to the senior's model and level, with no advisor (odd/tasks/senior-orchestrator.md).
+  const heldOf = (title) => {
+    const { model, effort } = heldOfRole(home, { lead: isLead(title), senior: isSenior(title) });
+    return { model, effort };
+  };
   const rows = [];
   const archived = new Map();
   const on = { desktop: 0, background: 0 };
@@ -67,7 +71,7 @@ export function sessionsOffHome(home, { desktop = [], background = [], isLead = 
   const advised = typeof home.advisor === 'string';
   const unknownAdvisor = [];
   for (const job of background) {
-    const held = advised ? { ...heldOf(job.title), advisor: home.advisor } : heldOf(job.title);
+    const held = advised && heldOfRole(home, { senior: isSenior(job.title) }).advisor !== null ? { ...heldOf(job.title), advisor: home.advisor } : heldOf(job.title);
     const found = offHome(job.replied ?? job.asked, held);
     const advisor = advised ? advisorOf(job.replied, home.advisor) : { off: null, unknown: null };
     const off = found === null && advisor.off === null ? null : { ...(found ?? { model: null, effort: null }), ...(advised && { advisor: advisor.off }) };

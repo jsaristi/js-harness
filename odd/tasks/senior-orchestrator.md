@@ -5,16 +5,17 @@ JH 192, slice 3 of the lead's brief. Delivery: this design, then one pull reques
 (`rules change` runs only on a `rule/` branch, `bin/lib/rules-change-run.mjs:170`). Runner: `node --test`.
 
 ## State
-Committed: fd309617 senior-model (SENIOR_HOME, D7), the title contract, the guard's start_session refusal, sessions
-start and resume on the senior's model with no advisor, roleNamed without SR (D6), wake and codeOfName. In the tree,
-not committed: senior-effort (rules change applied at 14:5x, value high; claudeHeld.seniorEffort; the guard's level
-by ofLevel; sessionStartHome; tests in bin/lib/guard.test.mjs; its planted break; the session-effort and lead-effort
-breaks follow the new guard lines). rules check PASS, 82 rules; coverage --prove running. Next: commit senior-effort;
-then the reporters' hold by role (sessions.mjs rowHome via roster-home.mjs:19-22, home-doctor.mjs:100, rules.mjs
-456/529 -> home-sessions.mjs:51,63, rules-switch.mjs:353-359), wording sessions.mjs:3082 and wait.mjs:208; the
-starter-is-lead check and one live senior in sessions-background.mjs:174,345; texts (session-model, session-effort,
-advisor-model "every session but a senior"; lead-protocols); the verifier on the guard; reviews (base 1a5061d2); PR;
-ready. "No advisor" is claimed only after the first senior's transcript shows it (his advisorModel setting may reach it).
+Committed: fd309617 senior-model (SENIOR_HOME, D7; title contract; start_session refusal; start and resume on the
+senior's model, no advisor; roleNamed without SR, D6; wake; codeOfName); 8fc7a92b senior-effort (high) with writeRules
+writing each history entry on one line (rules-data.mjs was 1008 lines, over the module limit; now 954, hash same).
+In the tree, being committed: heldOfRole in model-home.mjs and the reporters' hold by role (home-sessions,
+roster-home/sessions.mjs rowHome, home-doctor, rules.mjs, rules-switch's outsideLines), the board's "senior" label,
+each with a test. Known gap: rules switch's target home carries no senior, so its outside lines hold a senior to the
+new Claude home. Next: the starter-is-lead check and one live senior in sessions-background.mjs:174,345; the rule
+texts of session-model, session-effort and advisor-model ("every session but a senior") by rules change, each its own
+PR is not possible (one open change): fold them into this PR's last commit only if rules change allows a change of
+form here, else a follow-up; lead-protocols (T5); the verifier on the guard; reviews (base 1a5061d2); PR; ready.
+"No advisor" is claimed only after the first senior's transcript shows it.
 
 ## Goal
 The lead starts a senior session, titled `<code> SR · <purpose>`, with `js-harness sessions start`, and every start

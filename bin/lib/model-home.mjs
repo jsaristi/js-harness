@@ -59,7 +59,15 @@ export function claudeHeld(projectData) {
  * where the project does not declare it. */
 export function heldValues(projectData) {
   const held = claudeHeld(projectData);
-  return { model: held.model?.value ?? null, effort: held.effort?.value ?? null, lead: held.lead?.value ?? null, lenses: held.lenses?.value ?? null, advisor: held.advisor?.value ?? null };
+  return { model: held.model?.value ?? null, effort: held.effort?.value ?? null, lead: held.lead?.value ?? null, lenses: held.lenses?.value ?? null, advisor: held.advisor?.value ?? null, senior: held.senior?.value ?? null, seniorEffort: held.seniorEffort?.value ?? null };
+}
+
+/** What a session is held to of `home` (`heldValues`' shape) by the role its title gives, `{ model, effort, advisor }`:
+ * a senior to rule:senior-model and rule:senior-effort with no advisor where the project declares senior-model
+ * (odd/tasks/senior-orchestrator.md), a lead to rule:lead-effort, any other session to the sessions' level. */
+export function heldOfRole(home, { lead = false, senior = false } = {}) {
+  if (senior && typeof home.senior === 'string') return { model: home.senior, effort: home.seniorEffort ?? home.effort ?? null, advisor: null };
+  return { model: home.model ?? null, effort: (lead ? home.lead ?? home.effort : home.effort) ?? null, advisor: home.advisor ?? null };
 }
 
 /** A model as a person reads it: `claude-fable-5-2` is "Fable 5.2", from its family and its version. An id of
