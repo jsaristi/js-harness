@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `js-harness throughput`: the measure of the throughput review (odd/tasks/throughput-review.md, unit 1). It prints
+// `node workshop/js-harness-workshop.mjs throughput`: the measure of the throughput review (odd/tasks/throughput-review.md, unit 1). It prints
 // a fixed table over whole UTC days, each row naming its source, from each day's snapshot when there is one and from
 // the live records otherwise. `snapshot` keeps the facts of a closed day under the harness home, once, so a
 // before/after reads what the day was and not what a rotating log still holds; `status` names the days with none
@@ -49,11 +49,11 @@ export const SNAPSHOT_SCHEMA = 'js-harness.throughput-day/v1';
 const QUIET_DAYS = ruleValue('throughput-quiet-days', 'days');
 
 export const USAGE = [
-  'Usage: js-harness throughput [--since <YYYY-MM-DD>] [--until <YYYY-MM-DD>] [--against <since>..<until>] [--json]',
-  '       js-harness throughput snapshot [--day <YYYY-MM-DD>] [--gate-log <file>]... [--copied-at <YYYY-MM-DDTHH:MMZ>]',
-  '       js-harness throughput status',
-  '       js-harness throughput reviewed (--day <YYYY-MM-DD> | --shipped <YYYY-MM-DD>) --found nothing|candidates',
-  '       js-harness throughput shipped <item> [--day <YYYY-MM-DD>]',
+  'Usage: node workshop/js-harness-workshop.mjs throughput [--since <YYYY-MM-DD>] [--until <YYYY-MM-DD>] [--against <since>..<until>] [--json]',
+  '       node workshop/js-harness-workshop.mjs throughput snapshot [--day <YYYY-MM-DD>] [--gate-log <file>]... [--copied-at <YYYY-MM-DDTHH:MMZ>]',
+  '       node workshop/js-harness-workshop.mjs throughput status',
+  '       node workshop/js-harness-workshop.mjs throughput reviewed (--day <YYYY-MM-DD> | --shipped <YYYY-MM-DD>) --found nothing|candidates',
+  '       node workshop/js-harness-workshop.mjs throughput shipped <item> [--day <YYYY-MM-DD>]',
   '       (each also takes --cwd <path> and --home <path>)',
   '  The table: the UTC days [since, until), by default the day before today. The gates of a day are read from its',
   '    snapshot when there is one, else from the live gate log; main and the Codex runs are always read live. Every row',
@@ -139,7 +139,7 @@ function parseArgs(argv) {
   if (flags['copied-at'] !== undefined && !flags['gate-log']) throw new ThroughputArgError('--copied-at says when the --gate-log copies were made, and needs them');
   if (verb === 'reviewed' && (flags.day === undefined) === (flags.shipped === undefined)) throw new ThroughputArgError('throughput reviewed takes one of --day <day> (a review) and --shipped <day> (a re-measure)');
   if (verb === 'reviewed' && flags.found === undefined) throw new ThroughputArgError(`throughput reviewed says what the review found: --found ${FOUND.join('|')}`);
-  if (verb === 'shipped' && flags.item === undefined) throw new ThroughputArgError('throughput shipped names what shipped: js-harness throughput shipped <item> [--day <day>]');
+  if (verb === 'shipped' && flags.item === undefined) throw new ThroughputArgError('throughput shipped names what shipped: node workshop/js-harness-workshop.mjs throughput shipped <item> [--day <day>]');
   return { verb, flags };
 }
 
@@ -547,7 +547,7 @@ function status(ctx) {
 
 /** No snapshot at all: a project whose heartbeat never ran, flagged rather than passed (A8). */
 function noneKept(ctx) {
-  ctx.out(`MISSING: no day is kept for this project (${ctx.folder}); js-harness throughput snapshot --day ${lastSettledDay(ctx.now(), settlesAt)}`);
+  ctx.out(`MISSING: no day is kept for this project (${ctx.folder}); node workshop/js-harness-workshop.mjs throughput snapshot --day ${lastSettledDay(ctx.now(), settlesAt)}`);
   return 1;
 }
 
@@ -559,7 +559,7 @@ function keptDays(ctx, kept) {
   }
   // A day that has not settled cannot be kept yet, so it is not missing.
   const missing = daysBetween(kept[0], utcDay(ctx.now())).filter((day) => !kept.includes(day) && settlesAt(day) <= ctx.now());
-  for (const day of missing) ctx.out(`${day}  MISSING: no snapshot (js-harness throughput snapshot --day ${day})`);
+  for (const day of missing) ctx.out(`${day}  MISSING: no snapshot (node workshop/js-harness-workshop.mjs throughput snapshot --day ${day})`);
   return missing.length > 0 ? 1 : 0;
 }
 

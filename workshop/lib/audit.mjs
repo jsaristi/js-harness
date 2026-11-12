@@ -1,4 +1,4 @@
-// What `js-harness audit` counts in a session's transcript (odd/tasks/honesty-audit.md, T14, version 4): the
+// What `node workshop/js-harness-workshop.mjs audit` counts in a session's transcript (odd/tasks/honesty-audit.md, T14, version 4): the
 // claims a session makes that the transcript itself can check, with no reader to label them. Two of them:
 // - the hour a message to another session stamps as its time of sending, against the entry's own timestamp;
 // - the share of its context a session states of itself, against the usage its own reply records.

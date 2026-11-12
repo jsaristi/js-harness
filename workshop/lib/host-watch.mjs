@@ -324,8 +324,8 @@ export function watchOpened(titles, version) {
 export function watchLine({ change, version, title, brief, effort, home = null }) {
   const at = home === null ? '' : ` --home "${home}"`;
   return `HOST: ${change} since the last review, and no host watch session holds it: open "${title}". On his typed turn, `
-    + `start_session (fresh, its own worktree, effort ${effort}, that title, the brief js-harness host-watch brief prints); `
-    + `otherwise: js-harness host-watch brief${at} > "${brief}" && js-harness sessions start${at} --title "${title}" --brief "${brief}" `
+    + `start_session (fresh, its own worktree, effort ${effort}, that title, the brief node workshop/js-harness-workshop.mjs host-watch brief prints); `
+    + `otherwise: node workshop/js-harness-workshop.mjs host-watch brief${at} > "${brief}" && js-harness sessions start${at} --title "${title}" --brief "${brief}" `
     + `--worktree host-watch-${version.replace(/\./g, '-')} --effort ${effort}`;
 }
 
@@ -345,18 +345,18 @@ export function renderBrief({ versions, reviewed, title }) {
     '## Steps',
     '',
     `1. Fetch both changelogs as published (${DESKTOP_CHANGELOG}.md and ${CODE_CHANGELOG}.md), then`,
-    `   js-harness host-watch draft --desktop <file> --code <file> ${span} --sources docs/host-updates/sources`,
+    `   node workshop/js-harness-workshop.mjs host-watch draft --desktop <file> --code <file> ${span} --sources docs/host-updates/sources`,
     `   > docs/host-updates/claude-desktop-${v}.md`,
     '2. Read every entry in its changelog, not only the draft\'s words, and decide each row: adopt, adapt or ignore, the',
     '   Reason in a sentence, the Map row of the proposal\'s map (step 5) it touches, its Evidence, and',
     '   Windows and Phone "checked: <how>" where you checked them. Empty the list "To classify by hand".',
     '   An entry of the 3P section may be read only where the app runs on third-party inference: adopt or adapt it',
     '   only with evidence (its docs or a probe of the app) that a claude.ai install reads it.',
-    '3. The tool list: js-harness host-watch tools --surface background --list <your tools, one a line> --record; a',
+    '3. The tool list: node workshop/js-harness-workshop.mjs host-watch tools --surface background --list <your tools, one a line> --record; a',
     '   desktop list comes only from a session the app started (ask the lead for one), else the line says "owed".',
     '4. Where an entry moves what a mod can build, read the plugin-authoring skill\'s types against it.',
     '5. Update the map of docs/proposals/claude-app-native-sessions.md (section 4) in the same pull request.',
-    `6. js-harness host-watch check docs/host-updates/claude-desktop-${v}.md exits 0.`,
+    `6. node workshop/js-harness-workshop.mjs host-watch check docs/host-updates/claude-desktop-${v}.md exits 0.`,
     '7. A page in Spanish for him, as rule:reports-spanish-visual says: one row a novelty, the decision and why.',
     '8. One question for each adopt or adapt row: js-harness notify --to orchestrator --kind question with the JSON on',
     '   stdin and the text in Spanish; never wait on the answer. None when no row is adopt or adapt.',

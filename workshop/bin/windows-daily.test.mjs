@@ -1,4 +1,4 @@
-// `js-harness windows-daily`, the hand run of the daily Windows suite's reader (workshop/lib/windows-daily.mjs): its
+// `node workshop/js-harness-workshop.mjs windows-daily`, the hand run of the daily Windows suite's reader (workshop/lib/windows-daily.mjs): its
 // arguments, what it prints and its exit code.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -54,7 +54,7 @@ test('a notice that could not be written exits 1 and says so', async () => {
 test('--help prints the usage, and a flag it does not know is refused', async () => {
   const help = world(null);
   assert.equal(await windowsDailyMain(['--help'], help.deps), 0);
-  assert.match(help.out.join('\n'), /^Usage: js-harness windows-daily/);
+  assert.match(help.out.join('\n'), /^Usage: node workshop\/js-harness-workshop\.mjs windows-daily/);
   assert.equal(help.asked.length, 0);
   const bad = world(null);
   assert.equal(await windowsDailyMain(['--hours', '3'], bad.deps), 2);

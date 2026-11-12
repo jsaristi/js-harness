@@ -18,7 +18,7 @@ import { parseRegister } from '../../bin/lib/failures.mjs';
 import { gitTopLevel } from '../../bin/lib/project.mjs';
 import { parseFeature } from '../../bin/lib/progress.mjs';
 
-export const USAGE = 'Usage: js-harness docs plan [--budget <n>] [--json] | docs index [--json] | docs check';
+export const USAGE = 'Usage: node workshop/js-harness-workshop.mjs docs plan [--budget <n>] [--json] | docs index [--json] | docs check';
 
 class DocsArgError extends Error {}
 
@@ -206,12 +206,12 @@ export function checkDocs(cwd, { spawn = spawnSync, readFile = (file) => fs.read
   const records = readRecords(corpus);
   const findings = [...corpus.unreadable, ...indexFindings(index, entries, corpus.listed), ...oversizedFindings(plan), ...planFindings(plan, corpus.files), ...records.findings, ...crossFindings];
   if (findings.length > 0) return [{ name, pass: false, detail: `${count(findings.length, 'finding')} in the index of ${ENTRY_PATH}, the reading plan, the records or the cross index`, lines: findings }];
-  const detail = `${count(entries.length, 'entry', 'entries')} of docs/ indexed; ${figure(plan.files)} tracked files in ${count(sliceCount(plan), 'slice')} of at most ${figure(plan.budget)} estimated tokens (js-harness docs plan); ${count(records.rows, 'record')} of ${SPEC_PATH} held to the source and to ${RECORDS_PATH}${crossDetail(cross.index)}`;
+  const detail = `${count(entries.length, 'entry', 'entries')} of docs/ indexed; ${figure(plan.files)} tracked files in ${count(sliceCount(plan), 'slice')} of at most ${figure(plan.budget)} estimated tokens (node workshop/js-harness-workshop.mjs docs plan); ${count(records.rows, 'record')} of ${SPEC_PATH} held to the source and to ${RECORDS_PATH}${crossDetail(cross.index)}`;
   return [{ name, pass: true, detail }];
 }
 
 /** What the row says of the cross index when it passes: its inferred links and its unreached records, counted. */
-const crossDetail = (index) => (index === undefined ? '' : `; every explicit link of the cross index resolves, ${count(inferredCount(index), 'link')} inferred, ${unreachedCount(index)} reached by no capability (js-harness docs index)`);
+const crossDetail = (index) => (index === undefined ? '' : `; every explicit link of the cross index resolves, ${count(inferredCount(index), 'link')} inferred, ${unreachedCount(index)} reached by no capability (node workshop/js-harness-workshop.mjs docs index)`);
 
 /** The lines of `docs plan`: the totals, then each tier and its slices, each group of a slice with its files. */
 function renderPlan(plan) {
@@ -253,7 +253,7 @@ function parseArgs(argv) {
   return parsed;
 }
 
-/** `js-harness docs plan` prints the reading plan of the repository `cwd` is in and exits 0; `docs index` prints its
+/** `node workshop/js-harness-workshop.mjs docs plan` prints the reading plan of the repository `cwd` is in and exits 0; `docs index` prints its
  * cross index and exits 0, or 1 where an explicit link does not resolve or an input is missing; `docs check` runs the
  * `docs` row alone and exits 1 when it fails. Exit 1 too where git cannot list the files, and from `plan` where a
  * tracked file cannot be read, after the plan; 2, with the usage on stderr, for an argument it does not know. */

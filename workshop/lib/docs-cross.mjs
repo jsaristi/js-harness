@@ -1,4 +1,4 @@
-// The cross index of `js-harness docs index` (odd/tasks/audit-pack.md, spec 3): why each capability of docs/SPEC.md is
+// The cross index of `node workshop/js-harness-workshop.mjs docs index` (odd/tasks/audit-pack.md, spec 3): why each capability of docs/SPEC.md is
 // there, joined to the rules, the failure entries and the documents that say it. Explicit links are what a capability's
 // own text cites and what the records declare; inferred links, from a file a capability and a rule or a failure both
 // name, are kept apart with the file that made each, and a file too many name infers nothing. What no capability reaches

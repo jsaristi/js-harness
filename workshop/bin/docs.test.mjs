@@ -250,7 +250,7 @@ test('the docs row fails on an explicit link of a capability that does not resol
   await withRepo(CROSS, (dir) => {
     const [row] = checkDocs(dir, { own: true });
     assert.equal(row.pass, true);
-    assert.match(row.detail, /; 0 records of docs\/SPEC\.md held to the source and to docs\/RECORDS\.md; every explicit link of the cross index resolves, 2 links inferred, 3 reached by no capability \(js-harness docs index\)$/);
+    assert.match(row.detail, /; 0 records of docs\/SPEC\.md held to the source and to docs\/RECORDS\.md; every explicit link of the cross index resolves, 2 links inferred, 3 reached by no capability \(node workshop\/js-harness-workshop\.mjs docs index\)$/);
   });
 });
 

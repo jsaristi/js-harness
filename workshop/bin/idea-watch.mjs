@@ -1,4 +1,4 @@
-// `js-harness idea-watch`: the idea watch's commands (odd/tasks/idea-watch.md; the reverse-engineering document's
+// `node workshop/js-harness-workshop.mjs idea-watch`: the idea watch's commands (odd/tasks/idea-watch.md; the reverse-engineering document's
 // section 5). `status` says how many stable releases of the upstream repository the record has not read yet; `draft`
 // fetches the upstream repository into a bare clone under ~/.js-harness, recorded in the machine manifest first so
 // `uninstall machine` removes it, and prints the record's entry for the next release, its changed paths placed by
@@ -15,8 +15,8 @@ import { resolveProjectRoot } from '../../bin/lib/stack.mjs';
 import { compareSemver } from '../../bin/lib/version.mjs';
 
 export const USAGE = [
-  'Usage: js-harness idea-watch status [--project <dir>] [--home <path>]',
-  '       js-harness idea-watch draft [--from <version>] [--to <version>] [--project <dir>] [--home <path>]',
+  'Usage: node workshop/js-harness-workshop.mjs idea-watch status [--project <dir>] [--home <path>]',
+  '       node workshop/js-harness-workshop.mjs idea-watch draft [--from <version>] [--to <version>] [--project <dir>] [--home <path>]',
   '',
   'status lists the stable tags of the upstream repository (git ls-remote, nothing fetched) and prints how many',
   `releases are above the last one ${RECORD} holds as read under "## Releases read", and which.`,

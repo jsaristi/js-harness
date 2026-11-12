@@ -146,7 +146,7 @@ test('audit refuses an unknown argument or a bad day with exit 2 and its usage',
   for (const argv of [['--nope'], ['--day', '2026-02-30'], ['--days', '9']]) {
     const { code, err } = await run(argv, where);
     assert.equal(code, 2, argv.join(' '));
-    assert.match(err, /Usage: js-harness audit/);
+    assert.match(err, /Usage: node workshop\/js-harness-workshop\.mjs audit/);
   }
 });
 

@@ -213,7 +213,7 @@ export function unreadLine({ last, unread }) {
 }
 
 /** The fix lines of doctor's `idea-watch` row while a release is owed. */
-export const ideaFix = (state) => [unreadLine(state), 'js-harness idea-watch draft prints the next one\'s entry; paste it into the record and decide it'];
+export const ideaFix = (state) => [unreadLine(state), 'node workshop/js-harness-workshop.mjs idea-watch draft prints the next one\'s entry; paste it into the record and decide it'];
 
 const VERDICT = /^(adopt|adapt|ignore)\b/i;
 

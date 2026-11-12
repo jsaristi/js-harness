@@ -1,7 +1,7 @@
 // The reader of the daily Windows suite (.github/workflows/windows-daily.yml; odd/tasks/commit-gates-first.md, S5
 // and "R1, version 3"). The gates run on Linux, so the whole suite runs once a day on GitHub's Windows machines,
 // off the land's path; this reads the newest run of it and tells the lead a red one, with the failing test names,
-// once. `js-harness windows-daily` runs it by hand and the lead's `loop heartbeat` runs it every hour.
+// once. `node workshop/js-harness-workshop.mjs windows-daily` runs it by hand and the lead's `loop heartbeat` runs it every hour.
 import fs from 'node:fs';
 import path from 'node:path';
 import { notifyMain } from '../../bin/notify.mjs';

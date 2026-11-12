@@ -1,4 +1,4 @@
-// `js-harness host-watch`: the commands of the host watch session (F8's S9, odd/tasks/f8-s9-host-watch.md), which
+// `node workshop/js-harness-workshop.mjs host-watch`: the commands of the host watch session (F8's S9, odd/tasks/f8-s9-host-watch.md), which
 // reviews each Claude Desktop update in depth instead of a check that nothing broke. `draft` cuts the update's span of
 // both changelogs and prints the review file with one row an entry; `check` holds a finished review file to its span,
 // read from the excerpts committed beside it; `tools` diffs the app's tool list against the one recorded for that
@@ -19,10 +19,10 @@ import { mainCheckout, projectCode, projectSlug } from '../../bin/lib/sessions.m
 import { resolveProjectRoot } from '../../bin/lib/stack.mjs';
 
 export const USAGE = [
-  'Usage: js-harness host-watch draft --desktop <file> --code <file> [--from-desktop <v>] [--to-desktop <v>] [--from-code <v>] [--to-code <v>] [--sources <dir>] [--home <path>]',
-  '       js-harness host-watch check <review file>',
-  '       js-harness host-watch tools --surface desktop|background --list <file> [--record] [--project <dir>] [--home <path>]',
-  '       js-harness host-watch brief [--title <title>] [--home <path>]',
+  'Usage: node workshop/js-harness-workshop.mjs host-watch draft --desktop <file> --code <file> [--from-desktop <v>] [--to-desktop <v>] [--from-code <v>] [--to-code <v>] [--sources <dir>] [--home <path>]',
+  '       node workshop/js-harness-workshop.mjs host-watch check <review file>',
+  '       node workshop/js-harness-workshop.mjs host-watch tools --surface desktop|background --list <file> [--record] [--project <dir>] [--home <path>]',
+  '       node workshop/js-harness-workshop.mjs host-watch brief [--title <title>] [--home <path>]',
   '',
   'draft prints the review file of a Claude Desktop update: the Code tab CLI line, a "Desktop tool list: owed" line,',
   'one row an entry of the two changelogs over the update\'s span (Change, Decision, Reason, Map row, Evidence, Windows,',

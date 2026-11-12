@@ -6,10 +6,11 @@ this checkout as `node workshop/js-harness-workshop.mjs <command>`, which also r
 three heartbeat ticks, the product's `doctor` with the idea-watch row, and `spec`, which holds the claims of
 docs/SPEC.md on `js-harness-workshop <command>` to the workshop's dispatcher.
 
-The sections below are the README's sections of those commands, moved as they were; each command's own usage still
-names it `js-harness <command>`, and the shipped texts are rewritten in slice 4 of the feature document.
+The sections below are the README's sections of those commands. Each names a command as it runs, `node
+workshop/js-harness-workshop.mjs <command>`, as each command's own usage does: the installed `js-harness` answers
+"Unknown command" to them (`workshop/js-harness-workshop.test.mjs` holds it).
 
-### js-harness throughput
+### throughput
 
 The throughput review's measure: a fixed table of a window of UTC days, by default yesterday,
 where every row names the record it was read from and a fact no record holds yet says which
@@ -30,7 +31,7 @@ board numbers them: how long an answer took to be relayed, and, from answer noti
 question was shown and answered.
 
 ```console
-$ js-harness throughput --since 2026-10-16 --until 2026-10-17
+$ node workshop/js-harness-workshop.mjs throughput --since 2026-10-16 --until 2026-10-17
 Throughput  2026-10-16 to 2026-10-17 (UTC, until excluded; local UTC-05:00: 2026-10-15 19:00 to 2026-10-16 19:00)  D:\js-harness
   gates: every project of this machine, as the gate lock is; the other rows: this project
   2026-10-16  snapshot
@@ -65,10 +66,10 @@ against as many before, everything shipped that day compared together, until `th
 reviewed --shipped <day>` records it. The outcomes go to `outcomes.jsonl` beside the snapshots.
 
 ```console
-$ js-harness throughput status
+$ node workshop/js-harness-workshop.mjs throughput status
 2026-10-15  kept
 2026-10-16  kept
-DUE: throughput review of 2026-10-16: js-harness throughput --since 2026-10-16 --until 2026-10-17; js-harness-protocols section 7; then js-harness throughput reviewed --day 2026-10-16 --found nothing|candidates
+DUE: throughput review of 2026-10-16: node workshop/js-harness-workshop.mjs throughput --since 2026-10-16 --until 2026-10-17; js-harness-protocols section 7; then node workshop/js-harness-workshop.mjs throughput reviewed --day 2026-10-16 --found nothing|candidates
 ```
 
 `--against <since>..<until>` compares the window with an equal window before a change, row by
@@ -79,14 +80,14 @@ row moved only when the after window's median lies outside the before range, whi
 window of that length does 7% of the time. The window before must end by the one compared.
 
 ```console
-$ js-harness throughput --since 2026-10-16 --until 2026-10-17 --against 2026-10-15..2026-10-16
+$ node workshop/js-harness-workshop.mjs throughput --since 2026-10-16 --until 2026-10-17 --against 2026-10-15..2026-10-16
 Throughput compared  before 2026-10-15 to 2026-10-16, after 2026-10-16 to 2026-10-17 (UTC days, until excluded)  D:\js-harness
 pull requests merged                     before 80      after 94      not judged: 1 days a side, under 7; with nothing changed, the after median falls outside the before range 100% of the time
 lock busy, h                             before 14.3    after 16.8    not judged: 1 days a side, under 7; with nothing changed, the after median falls outside the before range 100% of the time
 …
 ```
 
-### js-harness docs
+### docs
 
 What a model or a person starting cold reads to audit the harness whole; `docs/README.md` is its entry.
 `docs plan` prints every file git tracks in exactly one slice of at most 400,000 estimated tokens
@@ -116,25 +117,25 @@ cannot be read, named on stderr after the plan, and from `index` on a link that 
 input it lacks or a tracked file it cannot read, named on stderr; 2 on a usage error.
 
 ```console
-$ js-harness docs plan
+$ node workshop/js-harness-workshop.mjs docs plan
 Reading plan of 1,434 tracked files, 5,773,980 estimated tokens (characters over four), in 18 slices of at most 400,000
 Read the tiers in order, one slice a context: the core first, then the tests, the feature documents and the rest. --json gives the plan whole.
 
 core: 4 slices, 1,371,082 estimated tokens
   slice 1, 374,950 tokens
     orientation (255,703): docs/README.md, docs/SPEC.md, AGENTS.md, CLAUDE.md, docs/ROADMAP.md, ...
-$ js-harness docs index
+$ node workshop/js-harness-workshop.mjs docs index
 Cross index of 76 capabilities: 64 cites a document, 0 name a rule, 5 a failure entry; 34 reaches a rule and 41 a failure entry by inference
 ...
 Too shared to infer from:
   bin/check.mjs: 4 rules, 15 Today lines
   bin/lib/manifest.mjs: 18 rules, 3 Today lines
   bin/lib/protocols-skill.mjs: 9 rules, 1 Today line
-$ js-harness docs check
-PASS  docs  20 entries of docs/ indexed; 1,445 tracked files in 18 slices of at most 400,000 estimated tokens (js-harness docs plan); 44 records of docs/SPEC.md held to the source and to docs/RECORDS.md; every explicit link of the cross index resolves, 264 links inferred, 184 reached by no capability (js-harness docs index)
+$ node workshop/js-harness-workshop.mjs docs check
+PASS  docs  20 entries of docs/ indexed; 1,445 tracked files in 18 slices of at most 400,000 estimated tokens (node workshop/js-harness-workshop.mjs docs plan); 44 records of docs/SPEC.md held to the source and to docs/RECORDS.md; every explicit link of the cross index resolves, 264 links inferred, 184 reached by no capability (node workshop/js-harness-workshop.mjs docs index)
 ```
 
-### js-harness windows-daily
+### windows-daily
 
 The gates run on Linux, so the whole suite also runs once a day on GitHub's Windows machines
 (`.github/workflows/windows-daily.yml`: at 07:23 UTC and by hand with `gh workflow run
@@ -150,12 +151,12 @@ its marker under `.js-harness/channel/windows-daily/` in the home, so the heartb
 never both tell it. The lead's `js-harness loop heartbeat` reads it every hour.
 
 ```console
-$ js-harness windows-daily
+$ node workshop/js-harness-workshop.mjs windows-daily
 windows-daily: the newest run, https://github.com/jsaristi/js-harness/actions/runs/39007607383, failed (failure, ended 1 h ago), 168 failing: in shadow the gate traces its suite under the git dir and its end line keeps the counts; …
 WINDOWS: https://github.com/jsaristi/js-harness/actions/runs/39007607383 failure, 168 failing: in shadow the gate traces its suite under the git dir and its end line keeps the counts; …
 ```
 
-### js-harness subagents
+### subagents
 
 Counts a day's sub-agents of the project by role (writer, explorer, reviewer, verifier), model
 and effort, with their tokens and the share of the day's tokens they took, so that what to
@@ -165,7 +166,7 @@ YYYY-MM-DD` names the day (today by default), `--days <n>` reads up to 7, `--jso
 and `--cwd <dir>` names another project.
 
 ```console
-$ js-harness subagents --day 2026-10-14
+$ node workshop/js-harness-workshop.mjs subagents --day 2026-10-14
 Sub-agents, local day 2026-10-14 (UTC-05:00), 2 record folders; Claude records only, Codex not counted
 role      model             effort asked/ran  launches  input  cache write  cache read   output
 explorer  claude-opus-5-5   high/high               23    932      2197153    37928674   274820
@@ -177,7 +178,7 @@ Read as other: 5; effort or model inherited from the session: 14; call not found
 Read in 8.2 s
 ```
 
-### js-harness audit
+### audit
 
 Counts, per session of a day, the two claims a transcript can check by itself, and prints each
 wrong one at its transcript and line: the hour a message to another session stamps in its
@@ -189,7 +190,7 @@ the main checkout and each worktree and prints no text of any message. It takes 
 `--days` (up to 7), `--json` and `--cwd` as `subagents`.
 
 ```console
-$ js-harness audit
+$ node workshop/js-harness-workshop.mjs audit
 Audit, local day 2026-10-15 (UTC-05:00), 4 record folders: the hours messages stamp and the context shares sessions state, each against its transcript
 session   title                                    messages  stamped  wrong hour  shares  wrong share
 2ec5f55e  JH 15 · auditoría de honestidad                 7        1           0       8            4
@@ -202,7 +203,7 @@ Wrong shares, more than 2 points from the share the reply records (transcript:li
 Read in 13.7 s
 ```
 
-### js-harness host-watch
+### host-watch
 
 The commands of the host watch session (F8's S9, `odd/tasks/f8-s9-host-watch.md`), which reviews
 each Claude Desktop update in depth instead of checking only that nothing broke. `draft` cuts the
@@ -216,7 +217,7 @@ tool list, as a session transcribes it, with the one the project recorded for th
 first capture is a baseline, and only the host's own servers are kept:
 
 ```console
-$ js-harness host-watch tools --surface desktop --list tools-desktop-lead.txt
+$ node workshop/js-harness-workshop.mjs host-watch tools --surface desktop --list tools-desktop-lead.txt
 baseline: 169 host tools on the desktop surface; no list was recorded at D:\js-harness\docs\host-updates\tools-desktop.txt
 other MCP servers left out: 1a59c906-04da-521d-bda7-7f71b9f9e01c (8), codegraph (1), engram (23)
 ```
@@ -232,7 +233,7 @@ while an update has no session titled for its version, ends with a `HOST:` line 
 session and the command that opens it; the `host-update` row and the hook's notice say the review
 is that session's.
 
-### js-harness idea-watch
+### idea-watch
 
 The idea watch (`odd/tasks/idea-watch.md`) reads each stable release of the upstream harness
 js-harness was built from, for what it adds or removes that could improve this one; nothing of it is
@@ -241,7 +242,7 @@ many stand above the last release the record (`odd/tasks/gentle-ai-update-check.
 `## Releases read`) holds as read.
 
 ```console
-$ js-harness idea-watch status
+$ node workshop/js-harness-workshop.mjs idea-watch status
 0 releases not yet read (the last read is v4.3.1)
 ```
 
