@@ -44,6 +44,18 @@ const files = (held) => (file) => {
 const record = (title, model, effort) => new Map([['s1', { where: 'sessions', title, model, effort, archived: false, cwd: 'D:/proj' }]]);
 const ask = (more = {}) => modelHomeHealth({ project: 'D:/proj', rulesText, claudeDir: 'D:/home/.claude', env: { CLAUDE_CODE_SESSION_ID: 's1' }, homedir: () => 'D:/home', readApp: () => new Map(), readFile: files({}), ...more });
 
+// His /advisor of 2026-11-12 (lead transcript 93b72703, line 775: the orchestrator and the sub-agents with the Fable
+// advisor too) writes advisorModel to his user settings; the harness reads it against rule:advisor-model, never writes it.
+test("settingsNotes says when his advisorModel is missing or is not the home's advisor, and nothing where the home has none", () => {
+  const advised = { ...HOME, advisor: 'claude-fable-5-2' };
+  const notes = (user) => settingsNotes(advised, { user }).filter((note) => note.includes('advisor'));
+  assert.deepEqual(notes({ advisorModel: 'claude-fable-5-2' }), []);
+  assert.deepEqual(notes({ advisorModel: 'claude-opus-5-5' }), ["his settings' advisorModel is claude-opus-5-5, not the home's advisor claude-fable-5-2: a session of the app, the lead's included, and its sub-agents consult it"]);
+  assert.deepEqual(notes({}), ["his settings hold no advisorModel, while the home's advisor is claude-fable-5-2: a session of the app, the lead's included, and its sub-agents start with none (/advisor claude-fable-5-2 in a session sets it)"]);
+  assert.deepEqual(notes(null), [], 'settings not read, nothing said');
+  assert.deepEqual(settingsNotes(HOME, { user: { advisorModel: 'claude-opus-5-5' } }).filter((note) => note.includes('advisor')), [], 'a home with no advisor holds his setting to nothing');
+});
+
 test('the row is n/a where the project declares no home, and ok with a note where no session could be checked', () => {
   assert.deepEqual(ask({ rulesText: null, readApp: () => assert.fail('no home, so no record is read') }), { state: 'n/a', note: '', fix: [] });
   assert.deepEqual(ask({ env: {}, readApp: () => assert.fail('no session, so no record is read') }), { state: 'ok', note: 'not asked from a session, so no session was checked', fix: [] });
@@ -66,12 +78,17 @@ test('a session whose app record is on the home is ok, a lead at the lead\'s lev
 });
 
 test('the note carries what his settings and the project\'s say that the home does not, and a settings file that does not parse says nothing', () => {
-  const settings = { 'D:/home/.claude/settings.json': JSON.stringify({ model: 'opus[1m]', modelSettings: { [home.model]: { effortLevel: home.effort } } }), 'D:/proj/.claude/settings.local.json': JSON.stringify({ effortLevel: other }) };
+  const settings = { 'D:/home/.claude/settings.json': JSON.stringify({ model: 'opus[1m]', advisorModel: home.advisor, modelSettings: { [home.model]: { effortLevel: home.effort } } }), 'D:/proj/.claude/settings.local.json': JSON.stringify({ effortLevel: other }) };
   assert.deepEqual(ask({ readApp: () => record('JH 7 · work', home.model, home.effort), readFile: files(settings) }), {
     state: 'ok',
     note: `his settings' default model is opus[1m], not the home's ${home.model}: a session started outside the harness runs on it; the project's .claude/settings.local.json holds effortLevel ${other}, not the home's ${home.effort}: a new session takes it`,
     fix: [],
   });
+  // The advisor the note holds his setting to is the rules text's, read through the row and not built by hand.
+  const otherAdvisor = { 'D:/home/.claude/settings.json': JSON.stringify({ advisorModel: 'claude-nova-1-0' }) };
+  const declared = RULES.find((rule) => rule.id === 'advisor-model').value;
+  assert.match(declared, /^claude-/, 'the rules text declares the advisor the note is held to');
+  assert.match(ask({ readApp: () => record('JH 7 · work', home.model, home.effort), readFile: files(otherAdvisor) }).note, new RegExp(`advisorModel is claude-nova-1-0, not the home's advisor ${declared}:`));
   const broken = { 'D:/home/.claude/settings.json': '{ not json', 'D:/proj/.claude/settings.local.json': '[]' };
   assert.deepEqual(ask({ readApp: () => record('JH 7 · work', home.model, home.effort), readFile: files(broken) }), { state: 'ok', note: '', fix: [] });
 });
