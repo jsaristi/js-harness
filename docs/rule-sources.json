@@ -541,22 +541,34 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "Yo creo que nos va a tocar que seguir como antes Opus 5.5 Extra para orquestador y Opus 5.5 Medio para sesiones y subagentes pero todos con Advisor de Fable 5.2 Alto y lo que podemos hacer es depronto tener una sesion de Orquestador Senior que tenga Fable 5.2 Alto para cosas especiales que le coloque el orquestador Opus 5.5 Extra Alto, que te parece así?",
-        "date": "2026-11-11",
-        "session": "812b728f-2f18-43f6-b405-396080689c65",
-        "line": 1444
+        "quote": "haz la correcion completa osea todos los modelos de ahora en adelante va a ser Fable 5.2 Alto",
+        "date": "2026-11-10",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 4744
       },
       {
-        "quote": "ponme el advisor de Fable a ti ya y si puedes en alto para que quede con mas inteligencia y por favor aplica todos los cambios ya y si quieres despues los documentas, te voy a dejar solo unas horas despues de que hagas esto",
-        "date": "2026-11-12",
-        "session": "93b72703-ce16-4f96-a7f6-d5fddb1b4a80",
-        "line": 896
+        "quote": "Vamos a unificar y todo va a ser con Fable 5.2 Alto y necesito que lo cambies tanto en la documentacion y lo unifiques en un solo lugar",
+        "date": "2026-11-10",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 5167
+      },
+      {
+        "quote": "Va a tocar utilizar Fable 5.2 en Alto solo para el orquestador y para las sesiones solo Fable 5.2 en Medio",
+        "date": "2026-11-11",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 11253
+      },
+      {
+        "quote": "Sí, aplícalo",
+        "date": "2026-11-11",
+        "session": "ea85ec35-82e1-4aa9-abe3-98bd153a50b0",
+        "line": 11679
       }
     ],
-    "reading": "His \"Opus 5.5 Extra para orquestador\" of 2026-11-11: the lead's session runs at his Extra, which the host names xhigh. Until 2026-11-12 this rule also set the level of the Claude lenses and the double review's Claude reader, which he chose at high (question 260), so the Extra waited; on 2026-11-12 he answered question 272 that the rule be split, and the reviewers moved to rule:lens-effort at high. This rule is the lead's session alone; its model is rule:session-model, as everything's, and the sessions and sub-agents run at rule:session-effort.",
-    "accepted": "Typed by him: line 1444 of 812b728f states the scheme; line 896 of 93b72703, on 2026-11-12, asks that all the changes be applied now. The split is his answer \"Sí, sepárala\" to question 272 on 2026-11-12 (transcript 93b72703-ce16-4f96-a7f6-d5fddb1b4a80, line 674), tapped and so not quoted.",
+    "reading": "Everything Claude the harness starts reads its model and its effort in one place: his \"todos los modelos de ahora en adelante\" and \"lo unifiques en un solo lugar\" of 2026-11-10. That day it was one model at one effort; on 2026-11-11, after the limit of Fable stopped the sessions, he kept the one model and split the effort in two, high for the orchestrator alone and medium for the sessions and the sub-agents. This rule is the higher of the two levels, his \"Alto\", which the host names high. It was the lead's session alone; asked on 2026-11-11 at which effort the lenses and the double review's Claude reader review, he chose high, so the two read this rule and not rule:session-effort. Their model is rule:session-model, as everything's.",
+    "accepted": "Typed by him in the lead's chat on 2026-11-10 and 2026-11-11. His \"Sí, aplícalo\" answers the lead's scheme of line 11674 of the same transcript, \"Orquestador: Fable 5.2 alto\" and \"Sesiones y subagentes nuevos: Fable 5.2 medio\". The rest of the reading was not put to him: it is the lead's, in the brief of JH 172 and its notices of 2026-11-11, and his to correct. The reviewers at high: his answer of 2026-11-11 12:24 local to the lead's question 260, \"¿A qué esfuerzo quieres que revisen las lentes y el lector Claude de la doble revisión?\", the option \"Lentes en alto (Recomendado)\", tapped and so not quoted (transcript f0959bbd-5f7a-4360-b626-048caf21067f, line 822).",
     "checked": {
-      "date": "2026-11-12",
+      "date": "2026-11-11",
       "by": "command"
     }
   },
