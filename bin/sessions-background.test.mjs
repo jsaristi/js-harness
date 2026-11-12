@@ -441,6 +441,25 @@ test('where the rules are declared, a free title is refused with the guard\'s re
   assert.deepEqual([line.model, line.effort, line.advisor], [SESSION_MODEL, SESSION_EFFORT, SESSION_ADVISOR]);
 }, { rules: true }));
 
+// The verifier's notes of 2026-11-12 on odd/tasks/advisor-home.md, specs 3 and 4: a record that holds another advisor is
+// resumed with the home's, and a call that names the home's with a bracket or a date gives claude the home's exact id.
+test('where the advisor is declared, claude is given the home\'s exact advisor, whatever the record or a same-model call holds', withWorld((world) => {
+  const started = js(world, ['sessions', 'start', '--title', 'JH 1 · thing', '--brief', world.brief, '--advisor', `${SESSION_ADVISOR}-20990101`]);
+  assert.equal(started.code, 0, started.stderr);
+  const call = actions(world).at(-1);
+  assert.equal(call[call.indexOf('--advisor') + 1], SESSION_ADVISOR);
+  assert.equal(startedLines(world).at(-1).advisor, SESSION_ADVISOR);
+  endJob(world, '0db8bc5e');
+  const lines = fs.readFileSync(recordFile(world), 'utf8').trimEnd().split('\n').map((line) => JSON.parse(line)).map((line) => (line.id === '0db8bc5e' ? { ...line, advisor: 'claude-fable-5-1' } : line));
+  fs.writeFileSync(recordFile(world), `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`);
+  patchState(world, { nextId: 'c779ed44' });
+  const resumed = js(world, ['sessions', 'start', '--resume', '0db8bc5e', '--advisor', `${SESSION_ADVISOR}[1m]`]);
+  assert.equal(resumed.code, 0, resumed.stderr);
+  const again = actions(world).at(-1);
+  assert.equal(again[again.indexOf('--advisor') + 1], SESSION_ADVISOR, 'the home\'s exact id, not the call\'s bracket nor the record\'s 5-1');
+  assert.equal(startedLines(world).at(-1).advisor, SESSION_ADVISOR);
+}, { rules: true }));
+
 test('sessions stop stops and removes a recorded session, drops its brief and records the removal', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
   const { brief } = recordLines(world)[0];

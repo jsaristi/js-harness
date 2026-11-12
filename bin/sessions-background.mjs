@@ -175,8 +175,10 @@ export function sessionsStartMain(argv, given = {}) {
   const taken = sessionStartHome(rules, { lead });
   const model = parsed.model ?? taken.model;
   const effort = parsed.effort ?? taken.effort;
-  const advisor = parsed.advisor ?? taken.advisor;
-  const refusal = sessionStartRefusal({ prompt: brief, effort, model, advisor }, rules, { cli: true, lead })
+  // Where the home declares an advisor, the one passed is its exact id: a call may only name the same model, with a
+  // date or a bracket the refusal lets through (the verifier's note of 2026-11-12), which claude is not given.
+  const advisor = taken.advisor ?? parsed.advisor;
+  const refusal = sessionStartRefusal({ prompt: brief, effort, model, advisor: parsed.advisor ?? taken.advisor }, rules, { cli: true, lead })
     ?? sessionTitleRefusal({ title: parsed.title }, rules, project, 'js-harness sessions start');
   if (refusal !== null) {
     stderr(refusal);
@@ -342,10 +344,11 @@ function resumeStart(parsed, deps) {
   const taken = sessionStartHome(rules, { lead });
   const model = parsed.model ?? taken.model ?? entry.model ?? undefined;
   const effort = parsed.effort ?? taken.effort ?? entry.effort ?? undefined;
-  // The advisor as the model: the home's before the record's (odd/tasks/advisor-home.md, spec 3), so a session started
-  // with none before the rule is resumed with the home's.
-  const advisor = parsed.advisor ?? taken.advisor ?? entry.advisor ?? undefined;
-  const refusal = sessionStartRefusal({ prompt: text, effort, model, advisor }, rules, { cli: true, lead });
+  // The advisor: the home's exact id where declared, before the call's and the record's (odd/tasks/advisor-home.md,
+  // spec 3), so a session started with none before the rule is resumed with the home's; a call that names another is
+  // refused below.
+  const advisor = taken.advisor ?? parsed.advisor ?? entry.advisor ?? undefined;
+  const refusal = sessionStartRefusal({ prompt: text, effort, model, advisor: parsed.advisor ?? advisor }, rules, { cli: true, lead });
   if (refusal !== null) return refuse(refusal, 2);
   const unwritable = recordUnwritable(home);
   if (unwritable !== null) return refuse(`${unwritable}, so nothing was resumed`);
