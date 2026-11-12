@@ -9,7 +9,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { rulesMain } from './rules.mjs';
+import { machineProbes, rulesMain } from './rules.mjs';
+import { lensEnv } from './lens-review.mjs';
+import { launchCodex } from './lib/codex-launch.mjs';
+import { CODEX_TOOL_FEATURES, PROBE_PROMPT, PROBE_QUESTION, claudeProbeArgs, codexProbeArgs } from './lib/rules-switch.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { rulesHash, writeRules } from './lib/rules.mjs';
 import { controlFaults, readCoverageText, writeCoverage } from './lib/rules-coverage.mjs';
@@ -336,6 +339,149 @@ test('the switch of a home is a form of its own: no home named, or a value that 
     const short = await run(['switch', '--claude', 'saga@high', '--quote', 'abc:1', '--reading', 'r', '--accepted', 'a'], dir);
     assert.equal(short.code, 2);
     assert.match(short.err[0], /not a full Claude id, claude-<family>-<version>/);
+  });
+});
+
+// ── switch: what it asks the machine, with the launch made up ────────────────────────────────────
+//
+// `machineProbes` is handed the spawn it launches with, so these tests start no `claude` and no `codex`: the fake
+// keeps each call with what its folder held while it ran, and answers what the test gives it. The meter is never read.
+
+const PROBE = { model: 'claude-nova-1-0', effort: 'medium' };
+const CODEX_PROBE = { model: 'astra', effort: 'low' };
+// What a lens's environment loses (`lensEnv`), beside the PATH a probe finds its CLI on.
+const SECRETS = { JS_HARNESS_EVAL_OAUTH_TOKEN: 'e', CLAUDE_CODE_OAUTH_TOKEN: 'o', ANTHROPIC_API_KEY: 'k' };
+
+/** A spawn that starts nothing: `{ spawn, calls }`, each call kept as `{ command, args, options, folder, held }`,
+ * `held` the files of its folder while it ran, by name. `answer(call, index)` gives what the launch gives, or throws. */
+function fakeSpawn(answer = () => ({ status: 0, stdout: '', stderr: '' })) {
+  const calls = [];
+  const spawn = (command, args, options) => {
+    const folder = options.cwd;
+    const held = folder !== undefined && fs.existsSync(folder) ? Object.fromEntries(fs.readdirSync(folder).map((name) => [name, fs.readFileSync(path.join(folder, name), 'utf8')])) : null;
+    calls.push({ command, args, options, folder, held });
+    return answer(calls.at(-1), calls.length - 1);
+  };
+  return { spawn, calls };
+}
+
+/** Runs `work(env, claude)` with a PATH that holds an empty file named as the Claude CLI, `claude` its path, or
+ * with a PATH that holds nothing when `planted` is false; the folder is removed after. */
+async function withPath(work, { planted = true } = {}) {
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-switch-bin-'));
+  try {
+    const claude = path.join(bin, process.platform === 'win32' ? 'claude.exe' : 'claude');
+    if (planted) fs.writeFileSync(claude, '');
+    return await work({ PATH: bin, ...SECRETS }, claude);
+  } finally {
+    fs.rmSync(bin, { recursive: true, force: true });
+  }
+}
+
+/** How `launchCodex` starts `codex <argv>` on this platform, `{ command, args }`: the fake is held to the same launch. */
+const codexLaunch = (argv, platform = process.platform) => launchCodex((command, args) => ({ command, args }), platform, argv, {});
+const disabled = (args) => args.flatMap((arg, index) => (arg === '--disable' ? [args[index + 1]] : []));
+
+test('the Claude probe of the switch runs in a temporary folder that is removed, on the lens\'s environment, with the question on standard input', async () => {
+  await withPath(async (env, claude) => {
+    const answered = { status: 0, stdout: '{"result":"ready"}', stderr: '' };
+    const { spawn, calls } = fakeSpawn(() => answered);
+    const probes = await machineProbes(env, { spawn });
+    assert.deepEqual(probes.probeClaude(PROBE), { ...answered, error: undefined });
+    assert.equal(calls.length, 1);
+    const [{ command, args, options, folder, held }] = calls;
+    assert.equal(command, claude);
+    assert.match(path.basename(folder), /^js-harness-switch-/);
+    assert.deepEqual(held, { 'prompt.md': PROBE_PROMPT, 'settings.json': '{}' }, 'the folder and its two files are there during the call');
+    assert.deepEqual(args, claudeProbeArgs({ ...PROBE, promptFile: path.join(folder, 'prompt.md'), settingsFile: path.join(folder, 'settings.json') }));
+    assert.equal(options.input, PROBE_QUESTION);
+    assert.deepEqual(options.env, lensEnv(env));
+    for (const name of Object.keys(SECRETS)) assert.equal(Object.hasOwn(options.env, name), false, name);
+    assert.equal(fs.existsSync(folder), false, 'the folder is removed after the call');
+
+    // A launch that throws leaves no folder either, and the switch reads the throw as a probe that failed.
+    const thrown = fakeSpawn(() => { throw new Error('spawn EPERM'); });
+    const throwing = await machineProbes(env, { spawn: thrown.spawn });
+    assert.throws(() => throwing.probeClaude(PROBE), /spawn EPERM/);
+    assert.deepEqual(Object.keys(thrown.calls[0].held), ['prompt.md', 'settings.json']);
+    assert.equal(fs.existsSync(thrown.calls[0].folder), false, 'the folder is removed when the launch throws');
+  });
+});
+
+test('with no claude on the PATH the Claude probe answers the error and launches nothing, and no version is read', async () => {
+  await withPath(async (env) => {
+    const { spawn, calls } = fakeSpawn();
+    const probes = await machineProbes(env, { spawn });
+    const ran = probes.probeClaude(PROBE);
+    assert.deepEqual(Object.keys(ran), ['error']);
+    assert.equal(ran.error.message, 'the Claude CLI was not found on the PATH');
+    assert.equal(probes.claudeVersion(), null);
+    assert.deepEqual(calls, []);
+  }, { planted: false });
+});
+
+test('the Codex probe of the switch reads the features the CLI lists first, and turns off only the tools that list holds, or all of them when it fails', async () => {
+  await withPath(async (env) => {
+    const listing = 'shell_tool   stable   true\nview_image   stable   true\ngoals   experimental   false\n';
+    // What a launch gives is not always text: the probe's result is `{ status, stdout, stderr, error }` with strings.
+    const { spawn, calls } = fakeSpawn((call, index) => (index === 0 ? { status: 0, stdout: listing, stderr: '' } : { status: 0, stdout: Buffer.from('{"type":"turn.completed"}\n'), stderr: null }));
+    const probes = await machineProbes(env, { spawn });
+    assert.deepEqual(probes.probeCodex(CODEX_PROBE), { status: 0, stdout: '{"type":"turn.completed"}\n', stderr: '', error: undefined });
+    assert.equal(calls.length, 2);
+    const [list, asked] = calls;
+    assert.deepEqual({ command: list.command, args: list.args }, codexLaunch(['features', 'list']));
+    assert.equal(list.options.input, undefined, 'the list asks no model');
+    const expected = codexProbeArgs({ ...CODEX_PROBE, features: ['shell_tool', 'view_image', 'goals'] });
+    assert.deepEqual(disabled(expected), ['plugins', 'apps', 'hooks', 'shell_tool', 'view_image']);
+    assert.deepEqual({ command: asked.command, args: asked.args }, codexLaunch(expected));
+    assert.equal(asked.options.input, PROBE_QUESTION);
+    for (const call of calls) {
+      assert.match(path.basename(call.folder), /^js-harness-switch-/);
+      assert.deepEqual(call.held, {}, 'the folder is there during the call, and empty');
+      assert.equal(fs.existsSync(call.folder), false, 'the folder is removed after the call');
+      // Codex runs on the environment as it is: only Claude's probe loses the eval token and the keys.
+      assert.equal(call.options.env, env);
+    }
+    assert.equal(list.folder, asked.folder);
+
+    // A list that fails, by its exit or by not starting, names every tool feature; the probe's own failure is handed on.
+    const refusal = new Error('spawn codex ENOENT');
+    for (const failed of [{ status: 1, stdout: listing, stderr: 'error' }, { status: null, error: new Error('spawn codex ENOENT') }]) {
+      const all = fakeSpawn((call, index) => (index === 0 ? failed : { status: null, error: refusal }));
+      const ran = (await machineProbes(env, { spawn: all.spawn })).probeCodex(CODEX_PROBE);
+      assert.deepEqual(ran, { status: null, stdout: '', stderr: '', error: refusal });
+      const whole = codexProbeArgs({ ...CODEX_PROBE, features: null });
+      assert.deepEqual(disabled(whole), ['plugins', 'apps', 'hooks', ...CODEX_TOOL_FEATURES]);
+      assert.deepEqual({ command: all.calls[1].command, args: all.calls[1].args }, codexLaunch(whole));
+    }
+
+    const thrown = fakeSpawn((call, index) => { if (index === 1) throw new Error('spawn EPERM'); return { status: 0, stdout: listing, stderr: '' }; });
+    const throwing = await machineProbes(env, { spawn: thrown.spawn });
+    assert.throws(() => throwing.probeCodex(CODEX_PROBE), /spawn EPERM/);
+    assert.equal(fs.existsSync(thrown.calls[1].folder), false, 'the folder is removed when the launch throws');
+  });
+});
+
+test('the switch launches Codex as the platform it is given launches it, and reads each CLI\'s version or null', async () => {
+  await withPath(async (env, claude) => {
+    for (const platform of ['linux', 'win32']) {
+      const { spawn, calls } = fakeSpawn((call, index) => (index === 0 ? { status: 1, stdout: '', stderr: '' } : { status: 0, stdout: 'codex-cli 0.167.1\n', stderr: '' }));
+      const probes = await machineProbes(env, { spawn, platform });
+      probes.probeCodex(CODEX_PROBE);
+      assert.equal(probes.codexVersion(), '0.167.1');
+      assert.deepEqual(calls.map((call) => ({ command: call.command, args: call.args })), [['features', 'list'], codexProbeArgs({ ...CODEX_PROBE, features: null }), ['--version']].map((argv) => codexLaunch(argv, platform)));
+      assert.deepEqual(calls.map((call) => call.options.shell === true), [platform === 'win32', platform === 'win32', platform === 'win32']);
+      assert.equal(calls[2].options.env, env);
+    }
+    assert.equal((await machineProbes(env, { spawn: fakeSpawn(() => ({ status: 1, stdout: 'codex-cli 0.167.1\n', stderr: '' })).spawn })).codexVersion(), null);
+
+    const version = fakeSpawn(() => ({ status: 0, stdout: '2.1.9 (Claude Code)\n', stderr: '' }));
+    assert.equal((await machineProbes(env, { spawn: version.spawn })).claudeVersion(), '2.1.9');
+    assert.deepEqual(version.calls.map((call) => [call.command, call.args]), [[claude, ['--version']]]);
+    assert.deepEqual(version.calls[0].options.env, lensEnv(env));
+    for (const answer of [{ status: 1, stdout: '2.1.9\n', stderr: '' }, { status: 0, stdout: 'no number here\n', stderr: '' }]) {
+      assert.equal((await machineProbes(env, { spawn: fakeSpawn(() => answer).spawn })).claudeVersion(), null);
+    }
   });
 });
 

@@ -9,7 +9,9 @@ import { spawnSync } from 'node:child_process';
 import { rulesMain } from '../rules.mjs';
 import { checkRules } from './rules-check.mjs';
 import { renderList, writeRules } from './rules.mjs';
-import { declarationOf, rulesOfText } from './rules-change-run.mjs';
+import { HOME_FLAGS, declarationOf, rulesOfText } from './rules-change-run.mjs';
+import { CLAUDE_HOME, CODEX_HOME } from './model-home.mjs';
+import { changesOf, parseSwitch } from './rules-switch.mjs';
 import { projectSlug } from './sessions.mjs';
 import { repoTemplate } from './git-fixture.testkit.mjs';
 
@@ -817,8 +819,8 @@ function switchRepository(branch = 'rule/new-model') {
 }
 
 /** Runs `rules switch` in `repo` with made-up probes that answer as the model asked: `{ code, out, err, asked }`.
- * `probes` replaces any of them. */
-async function switchRun(repo, argv, probes = {}) {
+ * `probes` replaces any of them, and `options` are more of what the command takes from outside. */
+async function switchRun(repo, argv, probes = {}, options = {}) {
   const out = [];
   const err = [];
   const asked = [];
@@ -839,6 +841,7 @@ async function switchRun(repo, argv, probes = {}) {
       readMeter: async () => ({ ok: false, reason: 'missing' }),
       ...probes,
     },
+    ...options,
   });
   return { code, out: out.join('\n'), err: err.join('\n'), asked };
 }
@@ -990,6 +993,39 @@ test('rules change refuses a new value for a rule of a home and names the switch
   const subject = await change(repo, ['session-effort'], { set: { subject: 'the effort everything but the lead runs at' }, source: DESIGN });
   assert.equal(subject.code, 0, subject.err);
   assert.equal(ruleOf(repo, 'session-effort').subject, 'the effort everything but the lead runs at');
+});
+
+test('every flag the refusal of rules change names is one rules switch takes, for the rule it is named for', () => {
+  // The refusal restates the switch's flags; this fails the day the switch stops taking one of them.
+  assert.deepEqual(Object.keys(HOME_FLAGS).sort(), [...Object.values(CLAUDE_HOME), ...Object.values(CODEX_HOME)].sort(), 'every rule of the two homes has its flag');
+  for (const [id, flag] of Object.entries(HOME_FLAGS)) {
+    const [name, shape, ...more] = flag.split(' ');
+    assert.deepEqual(more, [], flag);
+    const model = Object.values(CODEX_HOME).includes(id) ? 'astra' : 'claude-nova-1-0';
+    const parsed = parseSwitch([name, shape.replace('<model>', model).replace('<effort>', 'high'), ...HIS_WORDS]);
+    assert.equal(parsed.error, undefined, `${flag}: ${parsed.error}`);
+    assert.ok(changesOf(parsed).some((one) => one.id === id), `${flag} writes ${id}`);
+  }
+});
+
+test('rules switch whose write fails after the probes says the runner\'s line, and its closing line does not say what was written', async () => {
+  const repo = switchRepository();
+  const before = [...snapshot(repo), read(repo.dir, AGENT_FILE)];
+  let calls = 0;
+  const rename = (from, to) => {
+    calls += 1;
+    if (calls === 2) throw Object.assign(new Error('busy'), { code: 'EPERM' });
+    fs.renameSync(from, to);
+  };
+  const result = await switchRun(repo, ['--claude', 'claude-nova-1-0@medium', ...HIS_WORDS], {}, { rename });
+  assert.equal(result.code, 1);
+  assert.deepEqual(result.asked, ['claude-nova-1-0@medium', 'claude-nova-1-0@high'], 'the probes were spent');
+  const [runner, closing, ...rest] = result.err.split('\n');
+  assert.equal(runner, `not changed: a file could not be written (EPERM); bin/lib/rules-data.mjs, docs/rule-sources.json, docs/RULES.md, ${AGENT_FILE} are as they were`);
+  assert.match(closing, /^not switched: the pass that writes did not finish after its dry run passed, and the probes were spent; its own line, above, says what was and was not written/);
+  assert.deepEqual(rest, []);
+  assert.deepEqual([...snapshot(repo), read(repo.dir, AGENT_FILE)], before);
+  assert.deepEqual(changedFiles(repo), []);
 });
 
 test('the closing line of rules change says a rule lands in its own pull request and the rules of a home in one', async () => {

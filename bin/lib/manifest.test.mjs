@@ -3290,6 +3290,9 @@ test('the orchestrator skill says how a model or an effort is switched, beside t
   at('were measured on that model.\n\n## A work session\n');
   // The lead's start line names no level: a start takes the home (spec 5), and a level typed there is one more copy.
   assert.ok(!text.includes('--brief <file> --effort'), 'the start line shows no --effort');
+  // Step 4 has the lead make the commit the switch prints, so the one exception to "never commit" names the switch
+  // beside `rules change` (his answer to question 270, 2026-11-11).
+  assert.ok(text.includes("you may run `js-harness rules change`, or `js-harness rules switch` for a home's model and effort, from a checkout of a `rule/` branch and commit what it writes."), 'the exception names rules switch');
   at('`js-harness sessions start --title "<title>" --brief <file>` instead, which takes the model and the effort the rules give (`rule:session-model`, `rule:session-effort`) and refuses another,');
 });
 

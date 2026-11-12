@@ -355,7 +355,7 @@ S7, amends specs 1, 5, 7 and 8 and the task T4 after it, and wins over both:
 - [x] T7 (kind: build) (8, 10) Pull request 4, branch `feat/model-home-switch`: the runner of `rules change` writes several rules in one pass and refuses a home's value alone; `rules switch` with its probe, the agent file, `--dry-run` and its printout. Route: one writer sub-agent (the context backstop), checked inline. Commits: d37308a2, 94e25d35, and e3cc2ee4 for Codex's two findings.
 - [x] T8 (kind: docs) (4, 9, 10) Pull request 4: the section "A new model" of the orchestrator skill and its test; the convention test over the texts; README, `docs/ROADMAP.md`'s Decided rows, `docs/future-model.md`'s pointer, the help texts and the lead's start line name the rule. Route: inline. Commit: 8a2da3c0.
 - [ ] T9 (kind: verify) (1-10) Each pull request: gate, Codex and the pertinent lenses, one at a time; ready; `js-harness notify --to orchestrator --kind ready --pr <n>`; the next one starts from main once it lands. Then the summary and the closed notice. Route: inline.
-- [ ] T10 (kind: build) (8, 9) Pull request 5, cut from main once pull request 4 lands: the fixes of the lenses' findings on pull request 4 (L30), with what his answer to question 269 asks of the Codex probe, and the question to him on the lead's never-commit exception. Its own Codex review and lenses. Route: inline. Commit: not yet.
+- [ ] T10 (kind: build) (8, 9) Pull request 5, branch `feat/model-home-fixes` stacked on pull request 4's: the fixes of the lenses' findings on pull request 4 (L30), with what his answer to question 269 asks of the Codex probe, and the question to him on the lead's never-commit exception. Its own Codex review and lenses. Route: one writer sub-agent (the context backstop), checked inline. Commit: c386c2e5, the five code fixes, reviewed; open: the question, and what 269 asks.
 
 ## Next step
 State at 2026-11-11 12:15 local, after the lead's message resumed this session (11:20) and the host compacted it
@@ -383,6 +383,53 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 23:40, after the machine restarted at 23:24 and the lead resumed this session (the worktree was as the
+20:33 paragraph left it, head `586071fc`, both pull requests open): both questions are answered, each read at its
+line. 269, `812b728f-2f18-43f6-b405-396080689c65:2592`: "Aceptarlo así (Recomendado)", so the Codex probe stays
+as built and the `ready` notice of 839 is sent (23:36). 270, the same transcript, line 2645: "Sí, ampliarla
+(Recomendado)", so the one exception to the lead's "never commit" names `js-harness rules switch` beside
+`rules change`, on the same conditions; it is in the commit that carries this line, on `feat/model-home-fixes`
+(pull request 840), with the skill's test and the coverage register refreshed. That test was written after the
+sentence, not seen red. Left: Codex and the readability lens on this commit, the push, then `ready` for 840 once
+839 is in main and 840's base is main; the summary; closed. Also told to the lead, who runs it, not this session:
+the switch his new scheme needs is `rules switch --claude claude-opus-5-5@medium --lead xhigh` with his words at
+lines 1444 and 2544 of that transcript, dry run first, and the advisor has no home in the rules, so a home for it
+is a new rule and a question to him. In flight: `js-harness wait --notice-to 172` (task `blw4xfb5g`).
+
+2026-11-11 20:33: **pull request 840** is pull request 5, open from `feat/model-home-fixes` on the base
+`feat/model-home-switch` (stacked on 839), pushed, NOT marked ready; its push's check passed, 7 code commits
+covered by both records. **Question 270** is recorded for him through the lead: whether the lead's never-commit
+exception also names `rules switch` (advised: yes, on the conditions `rules change` has). The lead asks 269 first,
+then 270, and carries each answer here with its transcript line. On 269: if he takes the probe as built, `ready`
+for 839 when the lead says, then for 840 once 839 is in main and 840's base is main; if he asks for a change of the
+Codex probe, it is a new commit on `feat/model-home-fixes` with its own reviews. On 270: a yes is one sentence of
+the skill's "What you may do" (`bin/lib/manifest.mjs`), with its coverage entry and `rules check`, on
+`feat/model-home-fixes`, quoting his words with their date; a no rewrites step 4 of "A new model"
+(`bin/lib/lead-protocols.mjs`). Then the summary under `docs/sessions/` and the closed notice. Nothing runs but
+`js-harness wait --notice-to 172` (task `ba3pr3kcg`). L31 holds a slip of this hour.
+
+2026-11-11 20:30: the fixes' commit `c386c2e5` landed with the gate green and has both reviews, each recorded and
+with nothing found: Codex on `7bddda6..c386c2e` (correct, 88,573 input tokens), then the reliability lens (18,665)
+and the readability lens (18,668). A correction of the 20:05 paragraph: "no Codex review can cover new code on
+this branch" stopped being true when main was merged in; a range that starts after the merge's own review is a
+review as any other, which the plan showed before the run, and the lead was told (20:27). So the fixes did not wait
+for 839 to land: pull request 5 is `feat/model-home-fixes` stacked on `feat/model-home-switch`, to land after 839
+(or to move into it, if the lead says). Left: the push; pull request 5 with its chain; the question on the lead's
+never-commit exception (the job's `tmp/q-commit.json`), recorded once pull request 5 is open; then his answer to
+269, the `ready` notices in order (839, then 5), the summary and the closed notice.
+
+2026-11-11 20:22, on the local branch `feat/model-home-fixes` (over 839's head `7bddda61`, not pushed): T10's five
+code fixes are written by one writer sub-agent (`Covered: S1`) and are in the commit that carries this line. Checked
+here: only its six allowed files changed (252 lines added, 21 removed); the code diff read; `bin/rules.test.mjs` and
+`bin/lib/rules-switch.test.mjs` run, 64 pass. The writer's own word, not rerun here: the three files together 119
+pass, the eight convention tests 41 pass, `rules check` PASS. Not red on an assertion first: the tests of
+`machineProbes` and of `HOME_FLAGS` failed first on a missing export, then on a fault planted and taken out. Not
+tested: a relief line appended before a later failure of the writing pass; the Claude launch through a `.cmd`
+shim. His to turn: the cost is rounded to four decimals. Not reviewed yet: Codex and the lenses read this commit
+once it sits on main, after 839 lands (cherry-pick it onto a branch cut from main, then review from that branch's
+base). The question on the lead's never-commit exception is drafted in the job's `tmp/q-commit.json`, to record
+with `notify --kind question` when pull request 5 exists and 269 is answered (one question at a time).
+
 2026-11-11 20:11: **pull request 839** is pull request 4, open on main from `feat/model-home-switch`, pushed, NOT
 marked ready: its land waits on his answer to question 269, which the lead carries here with its transcript line.
 The merge of main, `4f0f19d5`, counted as a code commit (it resolved a conflict), so it got its own reviews, each
@@ -1145,3 +1192,4 @@ each row was read again. "Reader" means the value comes from a rule; "by hand" m
 - L28. A mistake of this session, 2026-11-11 19:07 local. What happened: Codex's confirming review of `94e25d3..e3cc2ee` ran while this session started T8 and edited `bin/lib/manifest.test.mjs` and `bin/lib/manifest.mjs`; the command saw tracked files change, printed its verdict (correct, both findings fixed) and wrote no record, so 88,091 input tokens and 57 seconds bought nothing the push can use. The session knew the rule and judged the edit safe because it touched other files than the range; the check does not weigh that, and the judgment was not this session's to make. The fix now: T8 is committed first and one Codex review covers `94e25d35` to the head, the fix again and T8, with nothing edited while it or a lens runs; checked when its record is written. What stops it: the check exists (`bin/codex-review.test.mjs`, "an edit of a tracked file made while Codex reviews leaves no record") and did its work; what failed is the session, so nothing new is added beyond the sighting. Where it enters: `docs/FAILURES.md`, `edit-during-review`, a `- Seen:` line in T8's commit. The proof it has not come back: `js-harness failures` counts the sightings of `edit-during-review`, and this feature's later reviews each write their record.
 - L29. 2026-11-11 19:39 local: Codex's three reviews of T7's finding 2 did not settle it. The first (`4d020cf..94e25d3`) asked that the Codex probe run with every built-in tool off; `e3cc2ee4` turned off its shell and its sub-agents, and the recheck (`94e25d3..8a2da3c`) said not fixed; `8e30e718` turned off the nine features a flag reaches, read from `codex features list`, and made the reader refuse a probe that did more than answer, and the second recheck (`8a2da3c..8e30e71`, 40,062 input tokens) said not fixed again: a refusal after the tool ran does not stop the extra calls, and spec 8 says "with no tools". Evidence that no flag does it on Codex CLI 0.167.1: `codex exec --help` (no such option), `codex features list` (202 names, none for the plan tool), `codex --disable unified_exec features list` (still `true`). Decision asked of him, not taken: question 269, through the lead, recorded at 19:38 (take it as built; Codex with no probe; look for another way). The rest of pull request 4 goes on; its land waits on his answer.
 - L30. 2026-11-11 20:05 local: the lenses' findings on pull request 4 (`4d020cf..2f7f7ad`), each checked in the code, all taken, none fixed on this branch (no Codex review can cover new code here, L29), their fixes in T10. (1) WARNING, reliability, `bin/rules.mjs` `machineProbes`: no test runs the real wiring of the probes (the temporary folder and its removal, the environment, the call on the Claude runner, the fallback of `codex features list`, the mapping of the launch's result); it fails closed. Fix: `machineProbes` takes the spawn, and a test gives it one. (2) WARNING, readability, `bin/lib/rules-switch.mjs:488-491`: the closing line when the writing pass fails always says it "was refused ... and nothing was written", which misstates a failure while writing, the one where the restore failed too and the one where a relief line stays. Fix: the line defers to the runner's own. (3) WARNING, readability, `bin/lib/lead-protocols.mjs:20-22` against the skill's "What you may do": the lead is told to make the commit the switch prints and that it never commits but for `rules change`. Not a fix: a question to him, since the exception is his protocol text (the lead's word, 19:58). (4) SUGGESTION, the comment of `machineProbes` says a probe's environment is stripped; only Claude's is. (5) SUGGESTION, `HOME_FLAGS` of `bin/lib/rules-change-run.mjs` restates the switch's flags as literals. (6) SUGGESTION, `readClaudeProbe` returns `costUsd` and the switch never prints it. Also here: main `80a0b5ee` merged in as `4f0f19d5`; its conflict and the dated line it removed are in that commit's message.
+- L31. A mistake of this session, 2026-11-11 20:32 local. What happened: the question on the lead's never-commit exception was recorded with `js-harness notify --to orchestrator --kind question` in a command that had first changed into the job's scratch folder to edit the question's file, so the notice went to that folder's own record (`~/.js-harness/channel/C--Users-Oficina--claude-jobs-2953cad6-tmp.jsonl`) as its question 1, where no orchestrator would ever show it. The fix now, checked: withdrawn there (`--kind withdrawn --question 1`) and recorded from the worktree as question 270 of js-harness's record, which printed the lead's address; the lead was told in the same note. What stops it recurring: `notify` already says which record it wrote and that no orchestrator was found, which is how it was caught in one minute; a refusal of a notice from a folder that is no project would be a check, and is proposed to the lead, not built here. Where it enters: `docs/FAILURES.md`, `message-to-wrong-session`, a `- Seen:` line in the commit that carries this entry. The proof it has not come back: `js-harness failures` counts the sightings of `message-to-wrong-session`, and the stray record holds one question, withdrawn.

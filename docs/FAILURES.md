@@ -1163,6 +1163,10 @@ that no longer held the role.
   one addressed to a session that never existed
 - Seen: 2026-10-10 — relief file, line 72 — a session answered to the reply address of the relieved
   orchestrator; his words about it at line 78
+- Seen: 2026-11-11 — odd/tasks/one-model-home.md, L31 — JH 172 recorded a question for him with `notify --kind
+  question` from a scratch folder it had changed into in the same command, so it went to that folder's own
+  record as its question 1, with no orchestrator to show it; withdrawn there and recorded again from the
+  worktree as question 270, one minute later
 - Control: check — bin/sessions.test.mjs — "--address prints the title of the one session that holds
   a role and exits 0, and reads nothing but the transcripts" — since 2026-10-11
 
