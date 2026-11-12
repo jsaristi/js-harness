@@ -22,7 +22,7 @@ const NOW = Date.parse('2026-01-01T12:00:00.000Z');
 const writtenAt = (file, minutes) => fs.utimesSync(file, new Date(NOW - minutes * 60000), new Date(NOW - minutes * 60000));
 const FIRST = 'js-harness resume: this session was just compacted. What follows is read from files; the summary of the compaction is not the record.';
 const CLEARED = 'js-harness resume: this session was just cleared: the host started it again with a new transcript. What follows is read from files; the conversation before the clear is not in it.';
-const READ = 'Read "Next step" in that document, and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.';
+const READ = 'Read "State" in that document, or "Next step" and "State for a resume" where it has those instead, and trust them over the summary. Then repeat to the user any question that is still open.';
 const PARTS_TRUST = 'Trust them over the summary. Then repeat to the user any question that is still open.';
 // The parts of the machine's default feature document (`makeMachine`), as the hook names them (odd/tasks/resume-open-task.md, S6).
 const PARTS = ['Read these parts of it (6 lines in all), not the whole file:', '  "Next step": lines 5-6 (2 lines)', '  the task T6: line 3 (1 line)', PARTS_TRUST];
@@ -289,7 +289,7 @@ test('the command that prints the opening is written only for a title every shel
 test('the feature document is not known without a notice that names a worktree, and then the hook lists where they are', withMachine(async (machine) => {
   // The folders, the one a document was written in last first: a session writes its state there before it is compacted.
   const where = ['Feature documents are in these folders, the one written last first:', `  ${path.join(machine.worktree, 'odd', 'tasks')}  (branch feat/channel, last written 12m ago)`, `  ${path.join(machine.root, 'odd', 'tasks')}  (branch main, no document)`];
-  const find = 'Find there the document of the feature this session was working on, read its "Next step", and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.';
+  const find = 'Find there the document of the feature this session was working on, read its "State", or "Next step" and "State for a resume" where it has those instead, and trust them over the summary. Then repeat to the user any question that is still open.';
   const tail = async (git) => (await runHook(machine, hookInput(machine, { session_title: TITLE }), { git })).lines.slice(3, -1);
   assert.deepEqual(await tail(), ['Feature document: not known (no notice of this session in the channel\'s record names a worktree)', ...where, find]);
   // A notice of another session, and one written outside a worktree, say nothing of this one's.
@@ -304,7 +304,7 @@ test('the feature document is not known without a notice that names a worktree, 
     'Feature documents: the branch feat/channel changed 2, in the worktree this session\'s last notice was written from; this session works on one of them',
     `  ${path.join(machine.worktree, 'odd', 'tasks', 'rule-hierarchy.md')}`,
     `  ${path.join(machine.worktree, 'odd', 'tasks', 'session-channel.md')}`,
-    'Read "Next step" in the one this session was working on, and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.',
+    'Read "State" in the one this session was working on, or "Next step" and "State for a resume" where it has those instead, and trust them over the summary. Then repeat to the user any question that is still open.',
   ]);
   assert.equal((await tail(fakeGit(machine, { plans: [] })))[0], `Feature document: not known (the branch feat/channel of ${machine.worktree} changed no feature document)`);
   // The worktree has another branch checked out now: its documents are the ones it has now, and the line says both branches.
@@ -611,7 +611,7 @@ test('when the disk cannot be read the hook prints what it still knows, and says
     'Feature documents are in these folders, the one written last first:',
     `  ${path.join(machine.worktree, 'odd', 'tasks')}  (branch feat/channel, last written 12m ago)`,
     `  ${path.join(machine.root, 'odd', 'tasks')}  (branch main, no document)`,
-    'Find there the document of the feature this session was working on, read its "Next step", and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.',
+    'Find there the document of the feature this session was working on, read its "State", or "Next step" and "State for a resume" where it has those instead, and trust them over the summary. Then repeat to the user any question that is still open.',
     `Questions: not read (the channel's record ${RECORD_PATH(machine)} could not be read: made up)`,
   ];
   assert.deepEqual(await printed({ session_title: TITLE }, { readFile: boom }), [FIRST, `Session: "${TITLE}" (the title the host gave the hook)`, `Opening: none stored for that title (the openings of this project are in ${dir})`, ...unread, NOTIFY]);

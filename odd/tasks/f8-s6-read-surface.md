@@ -4,32 +4,21 @@ Locator: `odd/tasks/f8-s6-read-surface.md` · Branch: `feat/f8-s6-read-surface` 
 Delivery: chained pull requests of work-unit slices · Test runner: `node --test`
 
 ## State
-Rewritten 2026-11-11 19:05 local at the context pause (86%), JH 186 (job `d95aafd1`), worktree
-`.claude/worktrees/f8-s6-read-surface`, branch `feat/f8-s6-read-surface`, nothing pushed yet.
-- Done: T1 (commit `e8b22bb7`). T2 and most of T2b are written and their tests pass (`node --test
-  bin/lib/read-surface.test.mjs`, 10 of 10): the `read surface` row counts every resume section, has the legacy
-  list `RESUME_LEGACY` and warns from 90%; Next is cut to 1,712 tokens. Its commit was refused once by the gate
-  (`docs check`: no row for `docs/roadmap-history.md` in `docs/README.md`; the row is added). Check `git log
-  --oneline -3`: if the head is still `e8b22bb7`, stage and commit T2 (`git add` everything but `README.md` and
-  `bin/lib/contract.mjs`, which are T3's; `bin/lib/feature-parts.mjs` and its test go with T2, since the measure
-  reads its titles; the message is `C:/Users/Oficina/.claude/jobs/d95aafd1/tmp/msg-t2.txt`, or L3's words).
-- In the working tree for T3, not committed: `## State` first in `CONTRACT_TEMPLATE` (`bin/lib/contract.mjs`) and
-  in `README.md`'s console block.
-- Next, in order: (1) the rest of T2b: point every in-page link `](#` of `docs/roadmap-history.md` at
-  `ROADMAP.md#`; add to Next's "Still open" list defect f's "Codex is still not proven"; move the history tails of
-  Decided's rows word for word to the history file (Decided is 7,158 of the 10,000; the row already warns at
-  8,870); (2) the rest of T3: the hook's and the pause's wording (`bin/resume.mjs:398,417,930,940`,
-  `bin/lib/pause.mjs:305`, both edited without adding lines: `resume.mjs` is at its ceiling of 1,111) with their
-  tests (`bin/resume.test.mjs:25,292,307,614`), `planOf` in `bin/lib/sessions.mjs:913` reading `State` first (also
-  at its ceiling), a fixture test where a document opens on `## State`; (3) T6: the roadmap's S6 state, S5's line
-  (prove PRs 802 and 803 from `gh pr view`), S7's line (6 of 7, T1 docs open), SPEC's row, re-pin this document's
-  `docs/ROADMAP.md` line citations; (4) per slice `js-harness codex-review --base <hash> --doc
-  odd/tasks/f8-s6-read-surface.md` and `js-harness lens-review --base <hash> --lenses <pertinent> --reason <why>
-  --doc ...`, cost said first, then push and a pull request, `notify --kind ready --pr <n>`; (5) T5: read
-  `evals/plan.mjs`, say the runs and cost, run cases 9 and 10 twice each, one try; (6) the summary and `closed`.
-  Every notice says the model: `claude-fable-5-2`, medium.
-- Open: question 268 (the relief by month: take it out of S6, build it by month in two steps, or leave it) is
-  recorded for him through the lead; T4 waits on it and nothing else does. No code of T4 is written.
+Rewritten 2026-11-11 19:15 local, JH 186 (job `d95aafd1`, `claude-fable-5-2` at medium), worktree
+`.claude/worktrees/f8-s6-read-surface`, branch `feat/f8-s6-read-surface`.
+- Done: T1 (`e8b22bb7`), T2 and T2b (`1929fe56`), T3 and T6's documentation (the commit after it). The
+  `read surface` row reads 13,526 of 15,000: Next 1,796 and Decided 7,158 of 10,000, the largest resume head 4,572
+  (`odd/tasks/templates.md`) of 5,000.
+- Next, in order: (1) the reviews of the slice `e8b22bb7..HEAD`, cost said first: `js-harness codex-review --base
+  e8b22bb7 --doc odd/tasks/f8-s6-read-surface.md`, then `js-harness lens-review --base e8b22bb7 --lenses <pertinent>
+  --reason <why> --doc odd/tasks/f8-s6-read-surface.md`; findings fixed or answered in the Log; (2) push, the pull
+  request, `js-harness notify --to orchestrator --kind ready --pr <n>`; (3) T5: read `evals/plan.mjs`, say the runs
+  and cost, cases 9 and 10 twice each, one try; (4) the close: the depth pass's items 3 and 4 against the result in
+  the Log, the summary, `notify --kind closed --summary <file>`. Every notice says the model.
+- Open: question 268 (the relief by month: take it out of S6, build it in two steps, or leave it) is recorded for
+  him through the lead; T4 waits on it, nothing else does, and no code of T4 is written. Decided's history tails
+  stay where they are (L5). The lead is owed one line: `CLAUDE.md`'s sentence on a feature document's order does
+  not name `## State`, and that file is his to change.
 
 ## Goal
 What a session reads to start is bounded and held by a check: the roadmap's Next and Decided at most 10k estimated
@@ -107,7 +96,7 @@ orchestrator skill's wording or of `CLAUDE.md`, were one needed, would be asked 
     stamped inside a stretch); `bin/merge-queue.mjs:403` and `:470` (the proposal a land confirms, by line number);
     `bin/lib/rules-change-run.mjs:284-287` (the line a change supersedes, by line number); `bin/notify.mjs:392`.
   - the resume sections: `bin/lib/feature-parts.mjs:10`, `bin/resume.mjs:398-417`, `bin/lib/pause.mjs:305`; the
-    roadmap's Later item "Shorter resume sections in feature documents" (`docs/ROADMAP.md:1053-1056`): 381 and 1,036
+    roadmap's Later item "Shorter resume sections in feature documents" (`docs/ROADMAP.md:933-938`): 381 and 1,036
     lines, "nothing bounds their size".
   - his words, through the brief: the lead's transcript `f0959bbd`, line 2835 and line 3075 (L1).
 - 3. The bar:
@@ -160,8 +149,8 @@ orchestrator skill's wording or of `CLAUDE.md`, were one needed, would be asked 
 ## Tasks
 - [x] T1 (kind: docs) this document with its depth pass, committed before any code — S1 to S6; inline
 - [x] T2 (kind: build) the read-surface measure and its row in `check`, test first; Next's settled paragraphs moved to `docs/roadmap-history.md` — S1, S5; inline
-- [ ] T2b (kind: build) the measure as the double read corrected it (L4): every resume section counted, a legacy list that only shrinks, a warning from 90%, Decided's history tails and the history file's links — S1, S2, S5; inline
-- [ ] T3 (kind: build) the `## State` head: the template, the resume titles, the hook's and the pause's wording, its bound in the row — S2, S4; inline
+- [x] T2b (kind: build) the measure as the double read corrected it (L4): every resume section counted, a legacy list that only shrinks, a warning from 90%, the history file's links; Decided's history tails left where they are (L5) — S1, S2, S5; inline; `1929fe56`
+- [x] T3 (kind: build) the `## State` head: the template, the resume titles, the hook's and the pause's wording, its bound in the row — S2, S4; inline
 - [ ] T4 (kind: build) the relief by month — S3; held on question 268 (L4), no code written; if it is built: readers first and landed, then the writer, the undo a tested command, an independent verifier
 - [ ] T5 (kind: verify) incident cases 9 and 10, two trials each, after the eval bar is read; the measure recorded — S5; inline
 - [ ] T6 (kind: docs) the roadmap's S6 state, the S5 and S7 lines, SPEC's row; reviews, pull requests, the summary — S6; inline
@@ -241,3 +230,24 @@ orchestrator skill's wording or of `CLAUDE.md`, were one needed, would be asked 
     contract; ..." reads true only if the head is part of what `contract template` prints: that phrase is his, and
     is told to the lead with the pull request.
   - Not guaranteed by either reader: that 5,000 is the right bound for a head, and how fast Decided will grow.
+- L5 (2026-11-11 19:15 local, T2b's rest, T3 and T6, after the host compacted the session; its state was written
+  before it):
+  - T3: `CONTRACT_TEMPLATE` and the README's console block open on `## State`; the resume hook, the pause's notice
+    and the board's `planOf` name and read `State` first and keep the older titles for documents that have them.
+    Checked one file at a time: `node --test bin/lib/feature-parts.test.mjs` 13 of 13, `bin/lib/contract.test.mjs`
+    43, `bin/resume.test.mjs` 103, `bin/lib/sessions.test.mjs` 313, the pause's 58. No line was added to
+    `bin/resume.mjs` (1,111) or `bin/lib/sessions.mjs` (3,387), both at their ceiling.
+  - A mistake in that check: the 43 were `bin/contract.test.mjs`, the command's tests, not `bin/lib/contract.test.mjs`,
+    whose test of the template's sections was never run and failed in the gate (run 43124225254, 1 of 9,392). Fixed:
+    that test now asks for `State` first; `node --test bin/lib/contract.test.mjs` 45 of 45. What stops it: the gate did.
+  - T2b, decided: Decided's history tails are not moved. The roadmap's two sections stand at 8,954 of 10,000
+    without it, and Decided is the text of his decisions: which words of a row are history is a reading of them,
+    so a cut there is proposed to the lead, not made here. Not checked: how soon the 90% warning (9,000) is met.
+  - T6: S5's State line said PR 802 and PR 803 "wait for his yes"; `gh pr view 802` and `gh pr view 803` both
+    print `MERGED` at 2026-11-10T15:01:43Z, and `odd/tasks/f8-s5-rules.md` has 8 of 8 tasks ticked. S7's said "in
+    progress"; `odd/tasks/f8-s7-topology.md` has 6 of 7 ticked, only T1 (documentation) open. Spec 6's probe prints
+    nothing: `rg -n "PR 802 .*wait for his yes|in progress \(JH 159" docs/ROADMAP.md`. SPEC gains "The read
+    surface"; the Later item on resume sections says what the row now bounds.
+  - The measure, honestly read: 13,526 against S0's 13,413 is not a drop. S0 counted one document's head (647);
+    the row counts the largest resume head of any document (4,572). On S0's own terms the same three parts are
+    1,796 + 7,158 + this document's head.

@@ -395,7 +395,7 @@ function openingLines(found, title) {
   ];
 }
 
-const TRUST = 'and "State for a resume" if it has one, and trust them over the summary. Then repeat to the user any question that is still open.';
+const TRUST = 'or "Next step" and "State for a resume" where it has those instead, and trust them over the summary. Then repeat to the user any question that is still open.';
 const WRITTEN_FROM = 'in the worktree this session\'s last notice was written from';
 // After the parts of one feature document (odd/tasks/resume-open-task.md, S6): the rest of `TRUST`, as a sentence.
 const PARTS_TRUST = 'Trust them over the summary. Then repeat to the user any question that is still open.';
@@ -414,7 +414,7 @@ function documentText(file, readFile) {
  * S6), or today's line when the document cannot be read or gives no part. `parts` is `featureParts(text)`. */
 function readLinesOf(text, parts) {
   const named = parts === null ? [] : partLines(parts);
-  if (named.length === 0) return [`Read "Next step" in that document, ${TRUST}`];
+  if (named.length === 0) return [`Read "State" in that document, ${TRUST}`];
   return [`Read these parts of it (${countSaid(parts.lines)} lines in all), not the whole file:`, ...named.map((line) => `  ${line}`), PARTS_TRUST];
 }
 
@@ -927,7 +927,7 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
       if (late()) left.push(STEP.folders);
       else {
         try {
-          lines.push(...documentFolders(run, root, { readdir, stat, now }), `Find there the document of the feature this session was working on, read its "Next step", ${TRUST}`);
+          lines.push(...documentFolders(run, root, { readdir, stat, now }), `Find there the document of the feature this session was working on, read its "State", ${TRUST}`);
         } catch (err) {
           lines.push(`Feature documents: not read (${reasonOf(err)})`);
         }
@@ -937,7 +937,7 @@ function resumeLines(input, { defaultCwd, env, homedir, run: git, readFile, read
       lines.push(`Feature document: ${feature.documents[0]}  (branch ${feature.branch}, ${placeOfFeature(feature)})`, ...readLinesOf(subject.text, subject.parts));
     } else {
       lines.push(`Feature documents: the branch ${feature.branch} changed ${feature.documents.length}, ${placeOfFeature(feature)}; this session works on one of them`);
-      lines.push(...feature.documents.map((document) => `  ${document}`), `Read "Next step" in the one this session was working on, ${TRUST}`);
+      lines.push(...feature.documents.map((document) => `  ${document}`), `Read "State" in the one this session was working on, ${TRUST}`);
     }
   }
   if (subject !== null && !orchestrator) lines.push(...nextModeLines(subject, input));

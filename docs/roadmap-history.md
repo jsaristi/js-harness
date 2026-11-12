@@ -4,7 +4,7 @@ Paragraphs that left [the roadmap](ROADMAP.md)'s `## Next` once the work they or
 elsewhere. They were moved here word for word on 2026-11-11 (F8 S6, `odd/tasks/f8-s6-read-surface.md`), from the
 roadmap at `ba06e01f`, so that what a session reads to start stays within the `read surface` row of `check`.
 Nothing here is the plan: the plan is the roadmap. "Above", "below" and a section named in quotation marks mean
-the roadmap's, as it stood that day; one in-page link was pointed at the roadmap. This file only grows, by the
+the roadmap's, as it stood that day; the in-page links were pointed at the roadmap. This file only grows, by the
 paragraphs that leave the roadmap, each under the day it left.
 
 ## Moved on 2026-11-11
@@ -46,7 +46,7 @@ roadmap.
    their spread. The credentials guard lands first, inside `evals/home.mjs`, because an eval broke
    his login. The long-session eval is built in parallel and confirms at the end.
 5. **Migration (step 4).** One step at a time, in the diet's section 10 order; each step's change,
-   files, probe, cost, dependencies and his decisions are under [F8 plan](#f8-plan):
+   files, probe, cost, dependencies and his decisions are under [F8 plan](ROADMAP.md#f8-plan):
    - S3, the split, with an interim exclusion of gentle-ai's global file in this repo, so the
      30.7k saving lands first; S2 reverts it.
    - S1, the two reviews, with the Claude lens runner built whole (the candidate as a commit range,

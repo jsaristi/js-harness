@@ -676,8 +676,8 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   control classified; a headless lens run with a planted user hook shows the hook did not fire; the
   incident set no worse.
 - **Cost:** about $13, the incident rerun [i].
-- **State (2026-11-10):** PRs 797, 798 and 799 on main (`6ee974d`); PR 802 (the last, JH 160,
-  `odd/tasks/f8-s5-rules.md`) and PR 803 (the eval's reply, below) wait for his yes. Skill bodies at most 3k, the skill
+- **State (2026-11-11):** done. PRs 797, 798 and 799 on main (`6ee974d`); PR 802 (the last, JH 160,
+  `odd/tasks/f8-s5-rules.md`, 8 of 8 tasks) and PR 803 (the eval's reply, below) merged on 2026-11-10. Skill bodies at most 3k, the skill
   lint and the protocols-load probe move to `odd/tasks/workshop-product-split.md` (spec 7, question 190). What stays here:
   - The incident set, run once on his answer to question 243 ("Arreglar la prueba y correr una vez (recomendado)",
     transcript `ea85ec35`, line 1247) after the grader was fixed to read every text of the turn (PR 803,
@@ -711,7 +711,10 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **Probe and pass:** the read-surface measure at most 15k (13,413 at S0); incident cases 9 and 10 no
   worse.
 - **Cost:** about $3, two cases.
-- **State:** to do.
+- **State (2026-11-11):** in progress (JH 186, `odd/tasks/f8-s6-read-surface.md`). Built: the `read surface`
+  row of `check` with its two budgets, Next cut from 7,494 to 1,712 estimated tokens (the settled paragraphs
+  moved to `docs/roadmap-history.md`), the `## State` head in the contract template and in what the resume
+  hook, the pause and the board read. Open: the two incident cases; the relief by month waits on question 268.
 
 ### S7 Topology and routing
 - **Changes:** the lead cut at a phase's close or after two compactions; Haiku 5.5 helpers with
@@ -720,7 +723,7 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **Probe and pass:** the first turn of five Haiku sub-agents at most 30k; at most one unrequested
   file in five Sonnet writer slices, each naming its `S#`.
 - **Cost:** no eval beyond those runs [i].
-- **State (2026-11-08):** in progress (JH 159, `odd/tasks/f8-s7-topology.md`). Writers launch as the project agent
+- **State (2026-11-11):** built (JH 159, `odd/tasks/f8-s7-topology.md`, 6 of 7 tasks; only T1, a documentation task, is unticked). Writers launch as the project agent
   type `.claude/agents/js-harness-writer.md` (the model of `rule:session-model`, `omitClaudeMd`, six tools),
   whose first turn measured 6,881 to 6,998 tokens in five headless runs, against 21,468 for a headless
   `general-purpose` Haiku launch (already under 30k there; 35,683 and 49,602 in app sessions, where the type is owed); the protocols skill asks a writer's brief for its `S#` and its return for `Covered: S<n>`; the heartbeat ends
@@ -930,7 +933,9 @@ of the first version.
 - [ ] Shorter resume sections in feature documents. The "Next step" and "State for a resume" sections
   have grown into history: 381 lines in `rule-hierarchy.md` and 1,036 lines in `session-channel.md`
   at 64933f6. Since `#332` a resumed session reads them through named ranges, but nothing bounds
-  their size. Not tracked yet; it waits for him. Source: `odd/tasks/resume-open-task.md`, "In scope / Out of scope".
+  their size. Since F8's S6 `check` bounds a resume head at 5,000 estimated tokens and new documents
+  open on a short `## State`; the three documents over it are that row's legacy list, still to
+  shorten. Not tracked yet; it waits for him. Source: `odd/tasks/resume-open-task.md`, "In scope / Out of scope".
 - [ ] A TUI as capable as gentle-ai's, its slice 1 in review and the rest awaiting his priority (G3). He asked for it on 2026-10-26
   ("el de nosotros es muy sencillo y no funciona como el de gentle-ai"). The proposal ports gentle-ai's
   design to zero-dependency Node in `bin/tui.mjs` (the item that opened gentle-ai's own TUI is gone
@@ -957,6 +962,8 @@ Still open from those paragraphs:
 - F6: what is kept of the raw trial output that lives only on this machine (`evals/runs/` in the old worktree, and
   `D:\js-harness-worktrees\codex-parity-t3-raw`) is his; until he says, the old branch and its worktree stay as
   they are.
+- Defect f: the practice run's `host-loads` step is proven for Claude Code; Codex is still not proven
+  (`odd/tasks/practice-project.md`, T5).
 - F4's follow-ups (`odd/tasks/sensors.md`), when one earns a slice.
 - F2's last step, when gentle-ai ships #4036; open decision 4 (the codegraph hook) can be taken at any time.
 
