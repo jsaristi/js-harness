@@ -84,6 +84,9 @@ test('the note carries what his settings and the project\'s say that the home do
     note: `his settings' default model is opus[1m], not the home's ${home.model}: a session started outside the harness runs on it; the project's .claude/settings.local.json holds effortLevel ${other}, not the home's ${home.effort}: a new session takes it`,
     fix: [],
   });
+  // The advisor the note holds his setting to is the rules text's, read through the row and not built by hand.
+  const otherAdvisor = { 'D:/home/.claude/settings.json': JSON.stringify({ advisorModel: 'claude-nova-1-0' }) };
+  assert.match(ask({ readApp: () => record('JH 7 · work', home.model, home.effort), readFile: files(otherAdvisor) }).note, new RegExp(`advisorModel is claude-nova-1-0, not the home's advisor ${home.advisor}`));
   const broken = { 'D:/home/.claude/settings.json': '{ not json', 'D:/proj/.claude/settings.local.json': '[]' };
   assert.deepEqual(ask({ readApp: () => record('JH 7 · work', home.model, home.effort), readFile: files(broken) }), { state: 'ok', note: '', fix: [] });
 });
