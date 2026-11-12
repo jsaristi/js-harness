@@ -33,10 +33,10 @@ import { appendLensReview, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, readL
 // in use has for it; his "todos los modelos de ahora en adelante" of that day moved them to the one model, by the
 // lead's reading.
 export const LENS_MODEL = claudeHome().model;
-// The effort each lens runs at, the lead's level of the home (`rule:lead-effort`), named on the call: a run that
+// The effort each lens runs at, the reviewers' level of the home (`rule:lens-effort`), named on the call: a run that
 // names none takes the effort the CLI has saved, whatever it is (Codex, on 21fce28..7613e37). The double review's
-// Claude reader runs at it too. His answer of 2026-11-11 keeps both at the lead's level, not the sessions'.
-export const LENS_EFFORT = claudeHome().lead;
+// Claude reader runs at it too. His answers of 2026-11-11 and 2026-11-12 keep both apart from the sessions' and the lead's.
+export const LENS_EFFORT = claudeHome().lenses;
 // The most a lens is handed, in estimated tokens (four characters a token): a range past it is reviewed in smaller
 // ranges, since a lens that cannot hold the whole block can only answer incomplete.
 export const LENS_INPUT_LIMIT = 150_000;

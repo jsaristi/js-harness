@@ -21,7 +21,7 @@ import { DEFAULT_CONTEXT_WINDOW } from './sessions.mjs';
 class NotTaken extends Error {}
 
 /** The switch in the usage line of `js-harness rules`. */
-export const SWITCH_USAGE = 'switch [--claude <model>@<effort>] [--lead <effort>] [--advisor <model>] [--codex <model>@<effort>] --quote <session>:<line>... --reading <text> --accepted <text> [--rule-by-rule] [--dry-run]';
+export const SWITCH_USAGE = 'switch [--claude <model>@<effort>] [--lead <effort>] [--lenses <effort>] [--advisor <model>] [--codex <model>@<effort>] --quote <session>:<line>... --reading <text> --accepted <text> [--rule-by-rule] [--dry-run]';
 
 /** The writer's agent file: the host reads only the file, so it holds a copy of the home's model and effort, which
  * the switch writes and bin/lib/writer-agent.test.mjs compares. */
@@ -47,10 +47,11 @@ function pairOf(flag, text, ids) {
   return { model, effort };
 }
 
-/** The switch's options from the words after `switch`: `{ command, claude, lead, codex, quotes, reading, accepted,
- * dryRun, ruleByRule }`. `claude` and `codex` are `{ model, effort }` or null, `lead` the lead's level or null: the
- * Claude home is one model and two levels since 2026-11-11, and `--claude` gives the level of everything but the
- * lead's session. `--rule-by-rule` is his no to one commit for several rules. Words that cannot be taken give
+/** The switch's options from the words after `switch`: `{ command, claude, lead, lenses, advisor, codex, quotes,
+ * reading, accepted, dryRun, ruleByRule }`. `claude` and `codex` are `{ model, effort }` or null, `lead` the lead's
+ * level or null, `lenses` the level of the lenses and the double review's reader or null: the Claude home is one model
+ * and three levels since 2026-11-12, and `--claude` gives the level of everything but the lead's session and those
+ * reviewers. `--rule-by-rule` is his no to one commit for several rules. Words that cannot be taken give
  * `{ error }`, the sentence of the usage error. */
 export function parseSwitch(tokens) {
   try {
@@ -63,8 +64,8 @@ export function parseSwitch(tokens) {
 
 /** `parseSwitch`'s options, or a `NotTaken` thrown at the first word that cannot be taken. */
 function parsedSwitch(tokens) {
-  const parsed = { command: 'switch', claude: null, lead: null, advisor: null, codex: null, quotes: [], reading: null, accepted: null, dryRun: false, ruleByRule: false };
-  const valued = { '--claude': 'claude', '--lead': 'lead', '--advisor': 'advisor', '--codex': 'codex', '--reading': 'reading', '--accepted': 'accepted' };
+  const parsed = { command: 'switch', claude: null, lead: null, lenses: null, advisor: null, codex: null, quotes: [], reading: null, accepted: null, dryRun: false, ruleByRule: false };
+  const valued = { '--claude': 'claude', '--lead': 'lead', '--lenses': 'lenses', '--advisor': 'advisor', '--codex': 'codex', '--reading': 'reading', '--accepted': 'accepted' };
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
     if (token === '--dry-run') parsed.dryRun = true;
@@ -81,9 +82,9 @@ function parsedSwitch(tokens) {
       if (parsed[valued[token]] !== null) throw new NotTaken(`${token} is given once`);
       if (token === '--claude') parsed.claude = pairOf(token, value, CLAUDE_HOME);
       else if (token === '--codex') parsed.codex = pairOf(token, value, CODEX_HOME);
-      else if (token === '--lead') {
-        refuseValue(token, CLAUDE_HOME.lead, value);
-        parsed.lead = value;
+      else if (token === '--lead' || token === '--lenses') {
+        refuseValue(token, CLAUDE_HOME[valued[token]], value);
+        parsed[valued[token]] = value;
       } else if (token === '--advisor') {
         // The advisor's model, a full Claude id (odd/tasks/advisor-home.md, spec 5).
         refuseValue(token, CLAUDE_HOME.advisor, value);
@@ -91,7 +92,7 @@ function parsedSwitch(tokens) {
       } else parsed[valued[token]] = value;
     } else throw new NotTaken(`unknown argument: ${token}`);
   }
-  if (parsed.claude === null && parsed.lead === null && parsed.advisor === null && parsed.codex === null) throw new NotTaken('rules switch names no home: give --claude <model>@<effort>, --lead <effort>, --advisor <model> or --codex <model>@<effort>');
+  if (parsed.claude === null && parsed.lead === null && parsed.lenses === null && parsed.advisor === null && parsed.codex === null) throw new NotTaken('rules switch names no home: give --claude <model>@<effort>, --lead <effort>, --lenses <effort>, --advisor <model> or --codex <model>@<effort>');
   if (parsed.quotes.length === 0) throw new NotTaken('rules switch needs his words: --quote <session>:<line>, once for each line of the transcript that holds them');
   if (parsed.reading === null) throw new NotTaken('rules switch needs --reading "<what his words mean>"');
   if (parsed.accepted === null) throw new NotTaken('rules switch needs --accepted "<where he accepted it>"');
@@ -105,18 +106,19 @@ export function changesOf(parsed) {
   const named = [
     ...(parsed.claude === null ? [] : [[CLAUDE_HOME.model, parsed.claude.model], [CLAUDE_HOME.effort, parsed.claude.effort]]),
     ...(parsed.lead === null ? [] : [[CLAUDE_HOME.lead, parsed.lead]]),
+    ...(parsed.lenses === null ? [] : [[CLAUDE_HOME.lenses, parsed.lenses]]),
     ...(parsed.advisor === null ? [] : [[CLAUDE_HOME.advisor, parsed.advisor]]),
     ...(parsed.codex === null ? [] : [[CODEX_HOME.model, parsed.codex.model], [CODEX_HOME.effort, parsed.codex.effort]]),
   ];
   return named.map(([id, value]) => ({ id, change: { value, source: source() } }));
 }
 
-/** The two homes as the list `list` declares them, `{ claude: { model, effort, lead }, codex: { model, effort } }`,
+/** The two homes as the list `list` declares them, `{ claude: { model, effort, lead, lenses, advisor }, codex: { model, effort } }`,
  * a value null where the list declares none. */
 function homesOf(list) {
   const value = (id) => list.find((rule) => rule.id === id)?.value ?? null;
   return {
-    claude: { model: value(CLAUDE_HOME.model), effort: value(CLAUDE_HOME.effort), lead: value(CLAUDE_HOME.lead), advisor: value(CLAUDE_HOME.advisor) },
+    claude: { model: value(CLAUDE_HOME.model), effort: value(CLAUDE_HOME.effort), lead: value(CLAUDE_HOME.lead), lenses: value(CLAUDE_HOME.lenses), advisor: value(CLAUDE_HOME.advisor) },
     codex: { model: value(CODEX_HOME.model), effort: value(CODEX_HOME.effort) },
   };
 }
@@ -130,13 +132,14 @@ export const ADVISOR_QUESTION = 'Call your advisor tool once, then answer with t
 export const PROBE_PROMPT = 'This is a one-line check that a model can be reached. Answer in one word and do nothing else.';
 
 /** The probes a switch owes, `{ claude, codex }`, each a list of `{ model, effort }`: every model and level a home
- * holds `after` the write that it does not hold `before` it (both `homesOf`'s). Claude's home holds its model at two
- * levels, the sessions' and the lead's, so a new model is tried at each; a pair in force today is launched every
+ * holds `after` the write that it does not hold `before` it (both `homesOf`'s). Claude's home holds its model at three
+ * levels, the sessions', the lead's and the reviewers' (where the home declares that one), so a new model is tried at
+ * each; a pair in force today is launched every
  * day and is not asked again. */
 export function probesOf(before, after) {
   // The advisor goes with each pair, where the home declares one: the host refuses some pairings, so the model and
   // its advisor are tried together whenever either changes (odd/tasks/advisor-home.md, spec 5).
-  const pairs = (home) => [{ model: home.model, effort: home.effort }, { model: home.model, effort: home.lead }].map((pair) => (typeof home.advisor === 'string' ? { ...pair, advisor: home.advisor } : pair));
+  const pairs = (home) => [{ model: home.model, effort: home.effort }, { model: home.model, effort: home.lead }, ...(home.lenses == null ? [] : [{ model: home.model, effort: home.lenses }])].map((pair) => (typeof home.advisor === 'string' ? { ...pair, advisor: home.advisor } : pair));
   const same = (one, other) => one.model === other.model && one.effort === other.effort && one.advisor === other.advisor;
   const claude = [];
   for (const pair of pairs(after.claude)) {
@@ -406,7 +409,7 @@ export async function switchRules(parsed, deps, stdout, stderr) {
   const after = homesOf(dry.list);
   // The homes once every rule named is written: a run that writes one rule at a time leaves less than that.
   const target = {
-    claude: { model: parsed.claude?.model ?? after.claude.model, effort: parsed.claude?.effort ?? after.claude.effort, lead: parsed.lead ?? after.claude.lead, advisor: parsed.advisor ?? after.claude.advisor },
+    claude: { model: parsed.claude?.model ?? after.claude.model, effort: parsed.claude?.effort ?? after.claude.effort, lead: parsed.lead ?? after.claude.lead, lenses: parsed.lenses ?? after.claude.lenses, advisor: parsed.advisor ?? after.claude.advisor },
     codex: { model: parsed.codex?.model ?? after.codex.model, effort: parsed.codex?.effort ?? after.codex.effort },
   };
   // An advisor that is the model itself is refused: a transcript could not tell it from none (odd/tasks/advisor-home.md,

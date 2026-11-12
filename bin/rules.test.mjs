@@ -29,7 +29,7 @@ const PASS_LINE = `PASS  rules  ${COUNT_LINE}`;
 const IN_FORCE = RULES.filter((rule) => !Object.hasOwn(rule, 'retired'));
 const SCANNED = IN_FORCE.filter((rule) => Array.isArray(rule.patterns)).map((rule) => `${rule.id} 0`);
 const PATTERNS_LINE = `patterns: ${SCANNED.length === 0 ? 'none' : SCANNED.join(', ')}; unscanned: ${IN_FORCE.length - SCANNED.length}`;
-const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] [--with <path>...] | switch [--claude <model>@<effort>] [--lead <effort>] [--advisor <model>] [--codex <model>@<effort>] --quote <session>:<line>... --reading <text> --accepted <text> [--rule-by-rule] [--dry-run] | --hook]';
+const USAGE = 'Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] [--with <path>...] | switch [--claude <model>@<effort>] [--lead <effort>] [--lenses <effort>] [--advisor <model>] [--codex <model>@<effort>] --quote <session>:<line>... --reading <text> --accepted <text> [--rule-by-rule] [--dry-run] | --hook]';
 const READS_UNDECLARED = "import { ruleValue } from './lib/rules.mjs';\n\nexport const limit = ruleValue('no-such-rule');\n";
 
 /** The coverage register `text` (the package's) with every check owed, since a project of these tests holds none of the
@@ -336,7 +336,7 @@ test('the usage names the applied form, and a word after applied is a usage erro
 
 test('the switch of a home is a form of its own: no home named, or a value that cannot be one, is a usage error', async () => {
   await inProject(BASE(), async (dir) => {
-    assert.deepEqual(await run(['switch'], dir), { code: 2, out: [], err: [`rules switch names no home: give --claude <model>@<effort>, --lead <effort>, --advisor <model> or --codex <model>@<effort>\n\n${USAGE}`] });
+    assert.deepEqual(await run(['switch'], dir), { code: 2, out: [], err: [`rules switch names no home: give --claude <model>@<effort>, --lead <effort>, --lenses <effort>, --advisor <model> or --codex <model>@<effort>\n\n${USAGE}`] });
     const short = await run(['switch', '--claude', 'saga@high', '--quote', 'abc:1', '--reading', 'r', '--accepted', 'a'], dir);
     assert.equal(short.code, 2);
     assert.match(short.err[0], /not a full Claude id, claude-<family>-<version>/);
@@ -575,6 +575,7 @@ test('applied lists the sessions off the home, desktop and background, with what
     const model = declared('session-model').value;
     const effort = declared('session-effort').value;
     const lead = declared('lead-effort').value;
+    const lenses = declared('lens-effort').value;
     const advisor = declared('advisor-model').value;
     const other = LEVELS.find((level) => level !== effort && level !== lead);
     const app = new Map([
@@ -586,7 +587,7 @@ test('applied lists the sessions off the home, desktop and background, with what
     appendRecord(home, { event: 'started', at: new Date(NOW).toISOString(), id: 'job-1', sessionId: null, title: 'JH 8 · job', root: project, cwd: project, worktree: null, worktreePath: null, model, effort: other });
     const { code, out } = await applied(project, home, undefined, { readApp: () => app, agents: () => [{ id: 'job-1', status: 'busy' }] });
     assert.equal(code, 0, out.join('\n'));
-    const at = out.indexOf(`Sessions off the home: a session is held to ${model} at ${effort}, and the lead to ${lead}; a background session to the advisor ${advisor}`);
+    const at = out.indexOf(`Sessions off the home: a session is held to ${model} at ${effort}, the lead to ${lead}, and the lenses and the double review's Claude reader to ${lenses}; a background session to the advisor ${advisor}`);
     assert.notEqual(at, -1, out.join('\n'));
     assert.equal(out[at - 1], '');
     assert.deepEqual(out.slice(at + 1), [
