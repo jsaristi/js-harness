@@ -355,7 +355,7 @@ S7, amends specs 1, 5, 7 and 8 and the task T4 after it, and wins over both:
 - [x] T7 (kind: build) (8, 10) Pull request 4, branch `feat/model-home-switch`: the runner of `rules change` writes several rules in one pass and refuses a home's value alone; `rules switch` with its probe, the agent file, `--dry-run` and its printout. Route: one writer sub-agent (the context backstop), checked inline. Commits: d37308a2, 94e25d35, and e3cc2ee4 for Codex's two findings.
 - [x] T8 (kind: docs) (4, 9, 10) Pull request 4: the section "A new model" of the orchestrator skill and its test; the convention test over the texts; README, `docs/ROADMAP.md`'s Decided rows, `docs/future-model.md`'s pointer, the help texts and the lead's start line name the rule. Route: inline. Commit: 8a2da3c0.
 - [ ] T9 (kind: verify) (1-10) Each pull request: gate, Codex and the pertinent lenses, one at a time; ready; `js-harness notify --to orchestrator --kind ready --pr <n>`; the next one starts from main once it lands. Then the summary and the closed notice. Route: inline.
-- [ ] T10 (kind: build) (8, 9) Pull request 5, cut from main once pull request 4 lands: the fixes of the lenses' findings on pull request 4 (L30), with what his answer to question 269 asks of the Codex probe, and the question to him on the lead's never-commit exception. Its own Codex review and lenses. Route: inline. Commit: not yet.
+- [ ] T10 (kind: build) (8, 9) Pull request 5, branch `feat/model-home-fixes` stacked on pull request 4's: the fixes of the lenses' findings on pull request 4 (L30), with what his answer to question 269 asks of the Codex probe, and the question to him on the lead's never-commit exception. Its own Codex review and lenses. Route: one writer sub-agent (the context backstop), checked inline. Commit: c386c2e5, the five code fixes, reviewed; open: the question, and what 269 asks.
 
 ## Next step
 State at 2026-11-11 12:15 local, after the lead's message resumed this session (11:20) and the host compacted it
@@ -383,6 +383,16 @@ review imports it), `rules change session-effort` made again whole with a subjec
 double review's Claude reader run at"), both with line 822 as a quotation; the two breaks of the lens and of the
 double review's reader move from `session-effort`'s bundle to `lead-effort`'s. Pull request 2 is marked `ready`
 only once it holds that and its reviews.
+2026-11-11 20:30: the fixes' commit `c386c2e5` landed with the gate green and has both reviews, each recorded and
+with nothing found: Codex on `7bddda6..c386c2e` (correct, 88,573 input tokens), then the reliability lens (18,665)
+and the readability lens (18,668). A correction of the 20:05 paragraph: "no Codex review can cover new code on
+this branch" stopped being true when main was merged in; a range that starts after the merge's own review is a
+review as any other, which the plan showed before the run, and the lead was told (20:27). So the fixes did not wait
+for 839 to land: pull request 5 is `feat/model-home-fixes` stacked on `feat/model-home-switch`, to land after 839
+(or to move into it, if the lead says). Left: the push; pull request 5 with its chain; the question on the lead's
+never-commit exception (the job's `tmp/q-commit.json`), recorded once pull request 5 is open; then his answer to
+269, the `ready` notices in order (839, then 5), the summary and the closed notice.
+
 2026-11-11 20:22, on the local branch `feat/model-home-fixes` (over 839's head `7bddda61`, not pushed): T10's five
 code fixes are written by one writer sub-agent (`Covered: S1`) and are in the commit that carries this line. Checked
 here: only its six allowed files changed (252 lines added, 21 removed); the code diff read; `bin/rules.test.mjs` and
