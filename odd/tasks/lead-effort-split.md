@@ -109,3 +109,4 @@ The land: it changes a rule of his; the lead asks.
 - L3 2026-11-12, rules change refused his tapped answers (questions 260, 272) as quotes; the sources quote his typed lines and name the taps in accepted.
 - L4 2026-11-12, rules switch --lead xhigh probed claude-opus-5-5 at xhigh with the Fable advisor, 0.0751 USD; it found his maxEffortLevel at high, which caps the lead under xhigh: his to change.
 - L5 2026-11-12, his "aplica todos los cambios ya" (93b72703:896); the lead reads it as yes to land each slice once the gate and both reviews pass.
+- L6 2026-11-12, mistake: `rules change lead-effort` for its subject computed from origin/main's declaration and put the value back to high (fd2b9eb3); seen by `rules applied` at HEAD, fixed by the revert 913ec9af (value xhigh again, checked with `rules lead-effort`). A rule changes once per pull request; lead-effort's subject narrows in a later one.
