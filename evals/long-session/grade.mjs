@@ -448,12 +448,15 @@ function sedEdits(args, at) {
         if (!word.includes('=')) i += 1;
       }
     } else {
-      // A flag group: `i` edits in place (what follows it is the backup suffix), a last `e` or `f` takes the next word.
-      const suffix = word.indexOf('i');
-      if (suffix !== -1) inPlace = true;
-      if (/[ef]$/.test(suffix === -1 ? word : word.slice(0, suffix))) {
-        scripted = true;
-        i += 1;
+      // A flag group, letter by letter: `i` edits in place and the rest of the word is its backup suffix; `e` and `f`
+      // take the rest of the word as the script (`-es/a/b/`), or the next word when nothing is left.
+      for (let at = 1; at < word.length; at += 1) {
+        if (word[at] === 'i') inPlace = true;
+        if (word[at] === 'e' || word[at] === 'f') {
+          scripted = true;
+          if (at === word.length - 1) i += 1;
+        }
+        if ('ief'.includes(word[at])) break;
       }
     }
   }
@@ -466,7 +469,7 @@ function copies(args, at) {
   let folder = null;
   const words = wordsAfter(args, at);
   for (let i = 0; i < words.length; i += 1) {
-    if (words[i] === '-t' || words[i] === '--target-directory') folder = words[i += 1] ?? null;
+    if (/^-[A-Za-z]*t$/.test(words[i]) || words[i] === '--target-directory') folder = words[i += 1] ?? null;
     else if (words[i].startsWith('--target-directory=')) folder = words[i].slice('--target-directory='.length);
     else if (!isFlag(words[i])) plain.push(words[i]);
   }

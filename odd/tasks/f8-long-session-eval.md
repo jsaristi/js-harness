@@ -14,10 +14,11 @@ review still found one real failure, the grader's shell parsing, which went to t
 session; that session replaced the parsing with one shell reader (L7), which states what it does not read. Then Q2
 (the arms, the turns, the baseline that replaces gentle-ai) on the measured figures. No other paid run is authorized.
 Senior session's state (2026-11-13, brief `~/.js-harness/background/briefs/2026-11-13T08-18-51-863Z-a7ba6dcb.md`): the
-reader and its tests are one commit on this branch (L7). Left to it, in order: `codex-review --base 36121dbb` and
-`lens-review --base 36121dbb --lenses risk,resilience,reliability` once each, their `--plan` first; a finding fixed or
-answered, a real failure reported and not looped on; push; `js-harness notify --to orchestrator` with the note, then
-`--kind closed`. What the reviews say is in that note, and JH 193 writes it here when it takes the branch back.
+reader and its tests are commit a707bc46 (L7), reviewed once by Codex and the lenses (L8), and Codex's one finding
+is fixed in the commit after it. Left to it, in order: one pass of both reviews over that fix (`codex-review --base
+a707bc46`, `lens-review --base a707bc46 --lenses risk,resilience,reliability`), and no round after it whatever it
+finds; push; `js-harness notify --to orchestrator` with the note, then `--kind closed`. What that pass says is in the
+note, and JH 193 writes it here when it takes the branch back.
 
 ## Goal
 `node evals/long-session/run.mjs` drives a scripted Spanish conversation through real resumed Claude Code turns in the
@@ -220,3 +221,11 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   only the transcript, so a source written first by an inline program, or a release run after the compaction through
   one, is not seen. Left to the feature's owner: whether the driver keeps `.release.log`'s own timestamps, which would
   date a release against the compaction without reading any command.
+- L8 (2026-11-13, the reviews of a707bc46): the lenses (risk, resilience, reliability over 36121db..a707bc4) found
+  nothing, and resilience and reliability each read their earlier finding as fixed. `codex-review --base 36121dbb`
+  was refused as a fourth review of the change ("Three reviews of this change did not settle it") and named the way
+  on, a whole review from the commit before the first one: `codex-review --base 8d828dbe --again`, run once
+  (299,966 input tokens, 2 parts). Its part over the driver is correct; its part over the grader has one finding, P2:
+  `sed -i -es/a/b/ src/list.mjs` and `-fscripts/fix.sed`, a script glued to its flag, lost the file. Fixed with the
+  test first: a `sed` flag group is read letter by letter, which also stops an `i` inside a glued script from reading
+  as in place; `cp -rt <folder>` is read too. Over the same 46,267 real commands the fix changes no reading.
