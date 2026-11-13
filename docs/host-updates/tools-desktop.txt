@@ -1,6 +1,6 @@
 # surface: desktop
-# Claude Desktop 4.4212.0, Code tab CLI 2.1.309
-# recorded: 2026-10-30
+# Claude Desktop 5.11492.2, Code tab CLI 2.1.321
+# recorded: 2026-11-13
 # provenance: transcribed by the model from its tool definitions and its deferred-tool list; a removal is confirmed with ToolSearch select:<name> before a review claims it
 Agent
 Artifact
@@ -22,12 +22,15 @@ Glob
 Grep
 LSP
 ListAgents
+ListMcpResourcesTool
 ListPlugins
 ListSkills
 Monitor
 NotebookEdit
 PushNotification
 Read
+ReadMcpResourceDirTool
+ReadMcpResourceTool
 ReadNotifications
 RemoteTrigger
 ReportFindings
@@ -35,16 +38,18 @@ ScheduleWakeup
 SearchPlugins
 SearchSkills
 SendMessage
+SendToProject
+SendToProjectContext
 SendUserFile
 Skill
 SuggestPluginInstall
 SuggestSkills
 TaskStop
 ToolSearch
-WebFetch
 WebSearch
 Workflow
 Write
+advisor
 mcp__Claude_Browser__browser_batch
 mcp__Claude_Browser__computer
 mcp__Claude_Browser__find
@@ -75,7 +80,6 @@ mcp__ccd_host__get_storage_usage
 mcp__ccd_host__open_in_editor
 mcp__ccd_host__request_keep_awake
 mcp__ccd_host__reveal_path
-mcp__ccd_host__sync_with_base_branch
 mcp__ccd_pr__bind_pr
 mcp__ccd_pr__get_status
 mcp__ccd_pr__set_auto_merge
@@ -148,8 +152,6 @@ mcp__claude-in-chrome__read_network_requests
 mcp__claude-in-chrome__read_page
 mcp__claude-in-chrome__resize_window
 mcp__claude-in-chrome__select_browser
-mcp__claude-in-chrome__shortcuts_execute
-mcp__claude-in-chrome__shortcuts_list
 mcp__claude-in-chrome__switch_browser
 mcp__claude-in-chrome__tabs_close_mcp
 mcp__claude-in-chrome__tabs_context_mcp
