@@ -7,10 +7,9 @@ proposal, through the double review and then the lead as a question; nothing is 
 `node --test`.
 
 ## State
-Reads a229de6b and baa660cd answered; the advisor's nine fixes before the last read applied (L7), with the
-measurement re-frozen and a SubagentStop probe run. Next: the third and last read, its findings answered by edit,
-then the question to him through the lead, one decision a question. Open: a way to start a senior with no advisor
-(two tried, M5); his choices (Ask me before).
+Three reads done (a229de6b, baa660cd, 95b51156), the last the rule allows; the third's 15 findings answered here by
+edit (L8). What they leave open goes to him as such (Unguaranteed). Next: the question to him through the lead, one
+decision a question. Evidence is in the repository: `odd/tasks/advisor-use-evidence/`.
 
 ## Goal
 Each of the lead, the work sessions and the sub-agents that has the advisor consults it (a call with a result, made
@@ -73,11 +72,11 @@ sub-agents). (4) P4b, a rule change. (5) P6, a stricter question check. (6) P4a'
   alone (with the tool on since 2026-11-12, the relieved lead made 3 calls in 594 tool calls, and the host's prompt
   already asks); a Stop hook on every reply (it gates every turn, the cost above).
 - 2. Raw material: the transcripts under `~/.claude/projects/D--js-harness*` begun since 2026-11-12, read by
-  `jh196-advisor-measure.mjs` in the lead's notes folder, its output frozen beside it
-  (`jh196-advisor-measure-output.txt`, every figure below is from it); the tool list in the `api-request-shape` lines
+  `odd/tasks/advisor-use-evidence/measure-script.md`, its output frozen beside it (`measure-output.md`, every figure
+  below is from it); the tool list in the `api-request-shape` lines
   (type `advisor_20260301`, model `claude-fable-5-2`); `~/.claude/settings.json:281`; the background record
   `~/.js-harness/background/sessions.jsonl:288` to `:290`; the template gate, `bin/template.mjs:289`; the probes'
-  records `jh196-t1-probe-hook-seen.txt` and `jh196-t1-probe2-retry-seen.txt`; his words at lines 662, 757 and 771 of
+  records `probe1-hook-seen.md`, `probe2-retry-seen.md` and `probe3-subagentstop-seen.md` in the same folder; his words at lines 662, 757 and 771 of
   69918425; question 279 at line 354 of 69918425.
 - 3. The bar:
   spec 1: `node jh196-advisor-measure.mjs 2026-11-12T00:00:00Z`: lead questions covered 6 of 20 and sessions opened 3 of 9 (policy R); work sessions on Opus ready or closed 15 of 35 under R, 7 under E; sub-agents on Opus 3 of 5 ends. Target: every gated act covered, exempt, or recorded unchecked.
@@ -130,10 +129,12 @@ at the size of the request before the act it covers.
   `~/.claude/settings.json:281`, sub-agents included. A shape line is written rarely (one in the senior's 122 tool
   calls), while every assistant entry carries `advisorModel` (`odd/tasks/advisor-home.md:102`, read by
   `bin/lib/home-sessions.mjs:19`): the hook decides "had the advisor" from the `advisorModel` of the caller's last
-  assistant entry when it differs from that entry's own model; where it is equal (the host repeats the session's own
-  model when no advisor was asked, `odd/tasks/advisor-home.md:102-105`), it reads the latest shape line instead.
+  assistant entry when it differs from that entry's own model; equality decides nothing (JH 172 `483dbb12`, on Fable, carries the
+  tool in its shape lines though `odd/tasks/advisor-home.md:103` lists it as "no advisor"), so it reads the latest
+  shape line instead, and with no shape line it lets the act through recorded unchecked.
 - M2. The lead: the brief's "0 until he said so" holds for the lead begun 2026-11-10 (0 calls, before the tool was on).
-  The relieved lead made 3 calls in 594 tool calls; the current one 6, most after line 662. Its questions are the
+  The relieved lead made 3 calls in 594 tool calls; the current one 7, all after his line 660 (S1's first record),
+  so his "ni una sola vez" was true of the lead he spoke to. Its questions are the
   largest gap: 14 of 20 went with no call in their stretch. It stored 6 briefs (`notify --opening`) and sent 26 `SendMessage` calls in the window. A brief is followed by
   the gated `sessions start` of its session, in the same stretch; the messages, not sampled, are left out of the gate,
   a gap the report counts (P1).
@@ -148,8 +149,10 @@ at the size of the request before the act it covers.
   advisor" bin odd/tasks/senior-orchestrator.md`): behaviour, `bin/lib/guard.mjs:109-115` (refuses an advisor named for
   a senior), `bin/sessions-background.mjs:218,406` (passes none), `bin/lib/home-sessions.mjs:51,74` (does not judge a
   senior's advisor), `bin/guard.mjs:168` (refuses `start_session` for a senior, giving "no advisor" as the reason);
-  text and tests, `bin/lib/model-home.mjs:66`, `bin/lib/session-title-guard.mjs:16`, `bin/lib/guard.test.mjs:326-334`,
-  `bin/sessions-background.test.mjs:810`, `odd/tasks/senior-orchestrator.md:20,59,113`. Tried to turn it off, one run
+  `bin/lib/guard.mjs:117` (skips the advisor check for a senior); text and tests, `bin/lib/model-home.mjs:66`,
+  `bin/lib/session-title-guard.mjs:16`, `bin/lib/guard.test.mjs:326-334`, `bin/lib/home-sessions.test.mjs:150,162`,
+  `bin/lib/model-home.test.mjs:110`, `bin/lib/rules-coverage-data.mjs:8`, `bin/sessions-background.test.mjs:810`,
+  `odd/tasks/senior-orchestrator.md:20,59,113` (113 reads "No advisor"; `git grep -n -i`). Tried to turn it off, one run
   each on Fable at low: `claude -p --settings` with `{"advisorModel":""}` still carried the tool; `--advisor none` is
   refused ("The model \"none\" cannot be used as an advisor"). `claude --help` (2.1.322) lists no advisor flag.
 - M6. The probes. First (`jh196-t1-probe-hook-seen.txt`): a PreToolUse hook on Bash saw each advisor block before the
@@ -161,8 +164,8 @@ at the size of the request before the act it covers.
   `<dirname(transcript_path)>/<session_id>/subagents/agent-<agent_id>.jsonl`. Third (`jh196-subagentstop-probe-seen.txt`): a `SubagentStop` hook that blocks once: the sub-agent called the advisor
   (1 result in its transcript), stopped again with `stop_hook_active: true`, and the payload carries
   `agent_transcript_path` and `last_assistant_message`.
-- M7. Size of a call, from the `advisor_message` usage entries (input plus cache reads; the measurement does not
-  separate cached from uncached): lead 215,544 tokens (10 calls), senior 214,301 (3), work 153,525 (14), sub-agent 80,791
+- M7. Size of a call, from the `advisor_message` usage entries, all uncached (every one of the 189 entries on this
+  machine shows `cache_read_input_tokens: 0`), so each is full-price Fable input: lead 215,544 tokens (10 calls), senior 214,301 (3), work 153,525 (14), sub-agent 80,791
   (4).
 - M8. Why he does not see the senior (S3): the first senior 2da14d6d lived from 08:18Z to 09:21Z and was removed
   (`sessions.jsonl:288`, `:289`), against D3's "long-lived" (`odd/tasks/senior-orchestrator.md:116`); at his line 771
@@ -173,18 +176,21 @@ at the size of the request before the act it covers.
 
 ## Proposal
 P1. A hook, `js-harness advisor-gate --hook`, on PreToolUse for `AskUserQuestion`, `mcp__ccd_session__start_session`,
-`ExitPlanMode`, `Write` and `Edit` creating a new `odd/tasks/*.md`, and the `Bash` calls whose command runs
+`ExitPlanMode`, `Write` creating a new `odd/tasks/*.md`, and the `Bash` calls whose command runs
 `js-harness` or `js-harness.mjs` with `notify --kind question|ready|closed`, `merge-queue --land` (not a dry run) or
 `sessions start`, matched wherever `js-harness` appears, with tests for `node bin/js-harness.mjs notify ...`, an env
-prefix and a `gate --` wrapper. A task document created by a shell command is not gated: the report lists it as an
-escape. `SendMessage` is left out (26 in the window, not sampled): the report counts them, so the gap is seen. A caller on
+prefix and a `gate --` wrapper. A task document created by a shell command is not gated: the report finds every new task
+document from `git log --diff-filter=A -- odd/tasks` on the session's branch, so a creation with no hook decision (by
+shell, or a second one the hook missed) is counted as an escape. `SendMessage` is left out (26 in the window, not sampled): the report counts them, so the gap is seen. A caller on
 Haiku is gated like one on Opus. The hook reads the caller's transcript
 (`transcript_path`, or the sub-agent's path of M6). It refuses the act when the caller had the advisor (M1) and no
 advisor call with a result came in the stretch: since his last message (typed or queued), the last session event, and
 within the last 60 tool calls (policy R). An `AskUserQuestion` reuses its `notify` question's consultation while the
 stretch holds, and is checked again when the stretch was broken between them. The refusal says: call the advisor
 alone, in a response of its own, read its answer, then repeat the act (M6). It lets the act through, and records why:
-the transcript cannot be read; the caller is the senior (by role, `seniorTitle`); an outage, meaning two advisor calls
+the transcript cannot be read; the caller is the senior: its title, looked up from the payload's `session_id` in
+`~/.js-harness/background/sessions.jsonl` (the latest `started` with no later `removed`) or the app's record, read by
+`seniorTitle`; an unknown title is not exempt, and the senior's own sub-agents fall under choice (3); an outage, meaning two advisor calls
 made alone in the stretch came back with an error. A call made beside a tool call (no result) is not an outage: the
 refusal repeats its instruction. Choice (3): gate callers whose model is the advisor's, or not. Each decision goes to a
 record under the harness home; `js-harness advisor-gate report` reconciles it with the acts found by scanning the
@@ -196,9 +202,10 @@ act's request size, an estimate; policy E would add 65, about 7.0 million a day;
 (about 1.0 million). Under R, one call covers every gated act for up to 60 tool calls until news arrives: a session
 can plan, consult once and send ready 50 calls later on that one call. Recommended: R.
 P2. Sub-agents: the same hook covers their acts by `agent_id`; their end is a `SubagentStop` hook that blocks once when
-the sub-agent had the tool and made no call with a result in its last 60 tool calls (the bound of policy R; M6's third
-probe shows the block, the call and the second stop); at a second stop (`stop_hook_active`) it lets
-the end through, records it unchecked, and the lead's next `wait` names it. Its cost is in P1's "sub-agents 2". Cheaper
+the sub-agent had the tool and no call with a result in its stretch, computed exactly as P1's policy R (M6's third
+probe shows the block, the call and the second stop); at a second stop (`stop_hook_active`) it records the end covered
+when a fresh call is there, and otherwise lets it through recorded unchecked, named by the lead's next `wait`. Its
+cost is in P1's "sub-agents 3" (Opus 2, Haiku 1). Cheaper
 alternative: only the writer and verifier kinds.
 P3. Choice (2): flag first (a week where the hook records and adds a notice, then the report, then refusal), or refuse
 from the start. Recommended: flag first.
@@ -210,16 +217,31 @@ the rules name (rule:session-model)" names Opus, while his `senior-model` names 
 `session-model` as successor (`bin/lib/rules-data.mjs:233-246`): pointing it at the senior is a `rules change` on a
 `rule/` branch with his words, which this proposal asks him for; spec 3's lines change with it. (c) The orchestrator
 skill's "A senior" section, held as `lead-protocols-senior.diff` in JH 192's notes folder, lands with its coverage
-entries, corrected per (a). (d) He sees the senior: since the guard's reason is void (M8), `start_session` may start a
-senior on `rule:senior-model` at `rule:senior-effort`, so it opens in the app's sidebar (his choice; otherwise the
-board and the lead's status line name the live senior); the lead keeps it live per D3 and says when and why it ends one.
+entries, corrected per (a). (d) He sees the senior: the board and the lead's status line name the live senior, and the lead keeps it live per D3
+and says when and why it ends one. Starting it by `start_session` so it opens in the sidebar is not offered: the
+guard has a second reason (`bin/guard.mjs:165-171`, a start there is held to the home's model), the tool is capped at
+its caller's model (`bin/lib/guard.mjs:128-150`), his `senior-model` subject names `sessions start` as the starter, and
+no probe shows an Opus lead opening a Fable session that way; it would need that probe and a rules change.
 P5. One protocols line, beside the double review's: the gated acts and that the hook holds them.
 P6. A proposing question carries its double review. In `checkedQuestion` (`bin/lib/channel.mjs:208`), a `question`
-notice takes `"review": "<read id>"`, `"skip": "<skip record id>"` (his words that skip it, `double-review skip`) or
-`"fact": "<why it proposes nothing>"`. A `review` must name a read whose `files` hold the document the question names,
-whose hash matches that file at HEAD, whose readers both answered, and whose findings all have a `take`; anything
-else, and a question with none of the three, is refused. The board lists every `fact` question, so they are audited.
-A stricter check on what `notify --kind question` accepts is high risk (item 3): his to approve.
+notice takes `"document": "<path>"` and `"review": "<read id>"`, or `"skip": "<skip record id>"` (his words that skip
+it, `double-review skip`), or `"fact": "<why it proposes nothing>"`. A `review` must name a read whose `files` hold that
+path, whose readers both answered, and whose findings all have a `take`. The read's hash bundles every file and diff
+(`bin/double-review.mjs:312-327`) and the last read is answered by edit, so no byte match is required: what changed
+after the read is the answers to its findings, said in the question. Anything else, and a question with none of the
+three, is refused. The board lists every `fact` question, so they are audited. A stricter check on what `notify
+--kind question` accepts is high risk (item 3): his to approve.
+
+## Unguaranteed
+What the three reads left that this proposal does not settle, for him to weigh:
+- P6 cannot prove the text shown is the one reviewed: it checks that the document was read and every finding taken,
+  and trusts the question to say what changed after; a byte check would refuse every question after a last read.
+- The cost against his allowance: 2.4 million uncached Fable input tokens a day under R is an estimate, and his weekly
+  Fable allowance in tokens is not known; the benefit is not measured, and the advisor trial's criterion was not met
+  (`odd/tasks/advisor-trial.md`, Result).
+- The lead's 26 messages to sessions are neither gated nor sampled; P5's protocols line could land before the hook,
+  his call.
+- The report finds escapes by shell from git, after the fact.
 
 ## Tasks
 - [x] T1 (kind: verify) probes: a hook reads an advisor call; refuse, consult alone, retry; the sub-agent's payload (spec 2) — route: here — commit: this document, M6
@@ -259,3 +281,9 @@ A stricter check on what `notify --kind question` accepts is high risk (item 3):
   expiring after 60 tool calls (24 calls, not 21); M1's `advisorModel` reading made to work for Fable callers; P2 bound to
   60 tool calls; Haiku gated; `SubagentStop` probed; L6's partial items finished here (R's consequence in Ask me
   before and P1, the sub-agent probe in M6, the Haiku row, the Adds line).
+- L8 (2026-11-13) Read 95b51156, the last: Claude 10 findings, Codex 5, all taken, some as Unguaranteed. P6 no longer
+  matches bytes and names the document (C1, X2); M2's lead calls 3 and 7 (C2, X5); P4d's start_session route withdrawn
+  with its reasons (C3, X1); the senior looked up by session id, its sub-agents under choice (3) (C4); the messages and
+  P5 as unguaranteed (C5); cost uncached, its weighing unguaranteed (C6); P2's "sub-agents 3" and its stretch as R's, a
+  second stop covered when a fresh call is there (C7, X4); M5's full list (C8); M1's equality premise (C9); the evidence
+  copied into `odd/tasks/advisor-use-evidence/`, Edit dropped from P1 (C10); escapes found from git (X3).
