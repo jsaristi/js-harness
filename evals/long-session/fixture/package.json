@@ -1,0 +1,13 @@
+{
+  "name": "tk",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "tk": "bin/tk.mjs"
+  },
+  "scripts": {
+    "test": "node --test \"tests/**/*.spec.mjs\"",
+    "release": "node scripts/release.mjs"
+  }
+}
