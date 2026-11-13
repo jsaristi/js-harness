@@ -7,17 +7,9 @@ branch `claude/f8-long-session-eval-30463b`. Runner: `node --test`. Plan: `odd/t
 from `docs/proposals/harness-diet.md` section 7.2.
 
 ## State
-Question 277 was answered yes (calibration only) and the calibration ran as `calib-1` (L5): about $1.06 really spent,
-`/compact` compacts under `--print --resume` in both arms, the cache holds across processes, and `costUsd` is cumulative
-per session, so a batch runs with `--cost-reading cumulative`. Committed and reviewed three times (L6): the third
-review still found one real failure, the grader's shell parsing, which went to the lead and from there to a senior
-session; that session replaced the parsing with one shell reader (L7), which states what it does not read. Then Q2
-(the arms, the turns, the baseline that replaces gentle-ai) on the measured figures. No other paid run is authorized.
-Senior session's state (2026-11-13, brief `~/.js-harness/background/briefs/2026-11-13T08-18-51-863Z-a7ba6dcb.md`): the
-reader and its tests are commit a707bc46 (L7), reviewed by Codex and the lenses (L8); Codex's one finding is fixed in
-cb741e12, which both read once more and found clean (L9). Both are pushed. That session's work is done and nothing of
-it is owed: no review is to be run again. Open, for the feature's owner and the lead: what L7 lists as not read, and
-the short `tail` of L9.
+The eval is built, calibrated (L5) and reviewed; the shell reader's last failure was fixed by the senior session
+(L7-L9), whose commits and review records this session checked (L10). PR 855 is ready for the lead's land. Open: T8,
+the batch, which is a new question to the owner through the lead (the draft is in L10); nothing paid runs before it.
 
 ## Goal
 `node evals/long-session/run.mjs` drives a scripted Spanish conversation through real resumed Claude Code turns in the
@@ -146,7 +138,7 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   the regrade sample and agreement, the pooled score — S3; inline
 - [x] T6 (kind: build) the driver: sandbox, resumed turns, release conditions, the compaction check, dollar stops,
   `--plan`, `--calibrate` — S2, S4; inline
-- [ ] T7 (kind: verify) commit on Q1's answer, `npm run check`, Codex and the lenses, push, PR, notify ready — S5; inline
+- [x] T7 (kind: verify) commit on Q1's answer, `npm run check`, Codex and the lenses, push, PR, notify ready — S5; inline
 - [ ] T8 (kind: design) Q2 to the lead, after the calibration: the arms and the turn count on measured figures — S4; inline
 
 ## Log
@@ -239,3 +231,11 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   would show neither `✖` nor `ℹ fail 1` and end with no error; moment 4 would then fail a run that did run its test
   red. It is a false fail, never a false pass. The line that survives any tail there is the last one,
   `[ELIFECYCLE] Test failed. See above for more details.`
+- L10 (2026-11-13, this session again): checked the senior's work before building on it: a707bc46, cb741e12 and
+  a3ad4a04 are on the branch, even with origin; both review records name them; `node --test
+  evals/long-session/*.test.mjs` passes 60 of 60. L7-L9 kept as written. calib-1 against the model at mid: current
+  measured about $0.17 a turn (model $0.18), minimal-commands $0.07 (model $0.10), the cache never missed, so the mid
+  column holds. `--plan` for 2 arms x 5 runs x 30 turns plus the smoke gives $29.52 / $50.88 / $72.33, over $50 at
+  mid. The draft for T8: current and minimal-commands (minimal-commands as the baseline that replaces gentle-ai's),
+  3 runs each of 30 turns plus the desktop smoke, $34 at mid and $48 high, `--cost-reading cumulative`, a run cap of
+  $10 and a batch cap of $50.
