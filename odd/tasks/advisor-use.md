@@ -8,7 +8,8 @@ proposal, through the double review and then the lead as a question; nothing is 
 
 ## State
 Three reads done and answered (L4, L6, L8); evidence in `odd/tasks/advisor-use-evidence/`; branch pushed. Question 282
-(the hook, flags first, policy R) sent to the lead at 19:09Z; open. The others follow one at a time after its answer:
+(the hook, flags first, policy R) sent to the lead at 19:09Z; held by the lead at 20:05Z until the directive audit
+(JH SR) reaches him, which takes this document's open choices as rows; a `waiting` notice is recorded. The others follow one at a time after its answer:
 (3) Fable callers gated, (4) P4b escalation to the senior by `rules change`, (5) P6 the question check, (6) P4a fallback
 and P5 before the hook. Nothing in `bin/` before his yes.
 
