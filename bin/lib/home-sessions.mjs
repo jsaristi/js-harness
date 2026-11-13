@@ -48,7 +48,8 @@ const resumeOf = (job) => `a resume${job.working === true ? ' once its job is no
  * them on 2026-11-11. `archived` counts them by what they hold, `[{ holds, count }]`, the most first. `on` counts the
  * sessions on the home, `{ desktop, background }`, archived ones left out. */
 export function sessionsOffHome(home, { desktop = [], background = [], isLead = () => false, isSenior = () => false } = {}) {
-  // A senior's title holds it to the senior's model and level, with no advisor (odd/tasks/senior-orchestrator.md).
+  // A senior's title holds it to the senior's model and level, its start naming no advisor; his settings' advisorModel
+  // still gives it one (odd/tasks/senior-orchestrator.md; odd/tasks/audit-cement.md, spec 7).
   const heldOf = (title) => {
     const { model, effort } = heldOfRole(home, { lead: isLead(title), senior: isSenior(title) });
     return { model, effort };

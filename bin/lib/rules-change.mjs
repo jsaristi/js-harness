@@ -182,6 +182,12 @@ export function changedList(list, id, change, { today, failures = new Set(), cou
   if (body === 'value') {
     what = newValue(rule, change, today);
     rule.since = today;
+    // A short name gives one model: kept over a new value, the guard would pass it for the model it no longer names
+    // (odd/tasks/audit-cement.md, spec 11). The change keeps it only by naming it in `set`.
+    if (rule.alias !== undefined && !Object.hasOwn(change.set ?? {}, 'alias')) {
+      what = `${what}; alias ${rule.alias} dropped`;
+      delete rule.alias;
+    }
   } else if (body === 'text') {
     if (Object.hasOwn(rule, 'value')) {
       throw new RuleChangeError(`"${id}" has a value: it becomes prose only by a retirement and a new id`);

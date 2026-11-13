@@ -24,13 +24,22 @@ test('a new value moves the one in force into was, newest first, and since becom
   assert.equal(what, '60 minutes to 30 minutes');
 });
 
-test('a string value changes the same way, with no unit', () => {
+test('a string value changes the same way, with no unit, and drops an alias the change does not name', () => {
+  // A short name gives one model: kept over a new value, it would let the guard pass that name for the old model
+  // (odd/tasks/audit-cement.md, spec 11).
   const { list, what } = changedList(LIST, 'review-model', { value: 'gpt-other' }, { today: TODAY });
   assert.deepEqual(ruleOf(list, 'review-model'), {
-    id: 'review-model', subject: 'the model of a review', owner: 'sebastian', since: TODAY, value: 'gpt-other', alias: 'model',
+    id: 'review-model', subject: 'the model of a review', owner: 'sebastian', since: TODAY, value: 'gpt-other',
     was: [{ value: 'gpt-fixture', until: TODAY }],
   });
-  assert.equal(what, 'gpt-fixture to gpt-other');
+  assert.equal(what, 'gpt-fixture to gpt-other; alias model dropped');
+});
+
+test('a new value keeps the alias only when the change names it again', () => {
+  const { list } = changedList(LIST, 'review-model', { value: 'gpt-other', set: { alias: 'other' } }, { today: TODAY });
+  assert.equal(ruleOf(list, 'review-model').alias, 'other');
+  const { list: same } = changedList(LIST, 'review-model', { value: 'gpt-other', set: { alias: 'model' } }, { today: TODAY });
+  assert.equal(ruleOf(same, 'review-model').alias, 'model');
 });
 
 test('a value equal to the one in force is refused', () => {

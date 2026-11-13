@@ -4,8 +4,8 @@ Branch: worktree-audit-cement (the document), then one branch per slice from ori
 Delivery: ask-on-risk. Tests: `node --test`. Opened 2026-11-13 by JH 198 (Opus 5.5, medium) from the lead's brief.
 
 ## State
-Document written; waiting for the lead's OK (a `note` naming this file) before the first source write. Nothing
-built. Open: the five points under "For the lead's OK" below. Next: S1 (the `opus` alias), then S2.
+The lead's OK is in (L3). T1 done: PR 863, ready, waiting for the land and the copy refresh. T2 in progress on
+`fix/audit-cement-guard`. Next: T3 to T6, then T8; T7 waits for the lead's word that JH 196 landed.
 
 ## Goal
 Every correction the audit and its two blind reviews found is fixed where a check can hold it, and each of the
@@ -113,6 +113,8 @@ volatile**. The audit's subtotals 46 = 25/21 hold as counts of the rules registr
   spec 7: `js-harness throughput`: "Unknown command: throughput" (audit, checked by the lead)
   spec 8: `grep -c "Seen: 2026-11-13" docs/FAILURES.md`: 0
   spec 9: left out because `bin/lib/manifest.mjs` waits for JH 196
+  spec 10: `js-harness progress --pace`: tasks closed and added by day; no share of a baseline's plan, new behaviour
+  spec 11: `node --test bin/lib/rules-change.test.mjs`: passes; no case for a value change that keeps an alias, new behaviour
 - 4. Refutation: if `opus` gave another model the alias would be wrong; run above, it gives `claude-opus-5-5`.
   Verdict: supports
 - 5. Request: as the specs below, with A9 widened per point 1 and C4 on the surfaces of point 2 if cleared.
@@ -138,18 +140,39 @@ jamas vuelva a suceder" (69918425:2679).
    nine audit sub-agents inheriting Fable.
 9. After JH 196 lands: the orchestrator skill gets a senior section (A2b) and puts the closing steps before `ready`
    (A4).
+10. His words, 2026-11-13 (lead transcript 69918425 line 3312, typed): "dime si de la forma como planeamos las cosas
+   que tanto porcentaje de implementacion pudimos hacer quiero que agregues esta nueva funcionalidad para ver que tanto
+   cambio nuestro plan". `js-harness progress` reports, for a baseline date, how many of the steps open then are closed
+   now, how many were added since, and the plan's growth (the audit's C3).
+11. A new value on a rule with an alias drops the alias unless the change names it again, so `opus` never points at
+   another model (T1's verifier, medium finding). Dropped rather than refused, so `rules switch`, which names no
+   alias, still works: the guard then refuses the short name until it is declared again.
 
 ## Tasks
-- [ ] T1 (kind: build) spec 1 — `js-harness rules change session-model` on `rule/opus-alias`, alias `opus`, quoting 2679 — commit `chore(rules): declare opus as the session model's short name`
-- [ ] T2 (kind: build) spec 2, 7 (advisor texts) — `bin/lib/guard.mjs`, `bin/guard.mjs`, `bin/lib/home-sessions.mjs` + tests — commit `fix(guard): refuse cd into another session's worktree`
+- [x] T1 (kind: build) spec 1 — `js-harness rules change session-model` on `rule/opus-alias`, alias `opus`, quoting 2679 — commit 85fa628c, PR 863
+- [ ] T2 (kind: build) specs 2, 7 (advisor texts), 11 — `bin/lib/guard.mjs`, `bin/guard.mjs`, `bin/lib/home-sessions.mjs`, `bin/lib/rules-change.mjs`, `bin/lib/worktrees.mjs` (the cd check: `guard.mjs` is at its 1,000-line limit) + tests — commit `fix(guard): refuse cd into another session's worktree`
 - [ ] T3 (kind: build) specs 3, 4 — `bin/lib/stall.mjs`, `bin/wait.mjs` + tests — commit `fix(stall): no stall for a batch or an open question; wait ignores own notices`
 - [ ] T4 (kind: build) spec 5 — `bin/sessions-background.mjs`, `bin/lib/background-close.mjs` + tests — commit `fix(sessions): remove-worktree copies or refuses`
 - [ ] T5 (kind: build) spec 6 — template gate/record + tests, if cleared — commit `fix(template): yours drops only with a reason`
 - [ ] T6 (kind: docs) specs 7 (texts), 8 — `CLAUDE.md`, `bin/lib/protocols-skill.mjs`, `docs/FAILURES.md` — commit `docs: throughput command, senior strongest, 2026-11-13 failures`
 - [ ] T7 (kind: build) spec 9 — `bin/lib/manifest.mjs` after JH 196 — commit `docs(skill): senior section; close before ready`
+- [ ] T8 (kind: build) spec 10 — `bin/progress.mjs`, `bin/lib/progress-pace.mjs` + tests, its own PR last — commit `feat(progress): share of the plan done since a baseline`
 
 ## Log
 - L1 2026-11-13T20:59:59Z, his words (69918425:2679, typed): "Ok implementa todas las correciones y cementalas en el
   harness para que esto nunca jamas vuelva a suceder".
 - L2 2026-11-13 21:26Z, JH 198: brief read; `opus` checked on cli 2.1.322 (`claude -p --model opus`, $0.25):
   `claude-opus-5-5`. Document written for the lead's OK; no source written.
+- L3 2026-11-13 21:4xZ, the lead (cross-session message): "OK on odd/tasks/audit-cement.md (7b31144a); build." The five
+  points: (1) A9, any linked worktree other than the session's own, the reason naming `git show` and `git -C`; (2) C4,
+  `bin/lib/template-gate.mjs` and `bin/lib/template-record.mjs` with their tests cleared for the `yoursDropped` check;
+  (3) `bin/lib/protocols-skill.mjs` cleared for §1 and §7, with the wording for projects; (4) the no-advisor texts are
+  mine: keep the refusal, reword the four texts, the lead tells JH 196 to drop P4a; (5) sequential PRs off main in
+  Tasks order, T7 after the lead's word on JH 196. Ready with `--pr` for each PR.
+- L4 the lead added T8: his words at 69918425:3312 (checked with `sessions --quote`, typed, 2026-11-13T22:01:59Z);
+  cleared surface `bin/progress.mjs`, `bin/lib/progress-pace.mjs` and their tests; its own PR after the others.
+- L5 T1: the first `rules change` replaced the rule's three earlier quotations with the new one; restored, and the
+  change re-run with all four. The suite failed once on `rules-change.test.mjs:141` (the retirement case retired the
+  first aliased rule on a fixed past day); fixed in the same commit. Reviews: Codex correct 0.97; lenses risk and
+  reliability 0 findings; verifier (Opus, inherited: the installed guard refuses `opus` until the copy refresh) held
+  3 of 3, one medium finding, spec 11. PR 863, ready at 22:28Z.

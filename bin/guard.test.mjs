@@ -23,7 +23,7 @@ const OFF_ALIAS = ['sonnet', 'haiku', 'opus', 'fable'].find((name) => !RULES.som
 
 /** Runs the hook on `payload` (an object, or a raw text) in a project whose rules file reads `rulesText` (null for
  * none), with the machine's gate lock held by `held` (null for free), and returns `{ code, out, err }`. */
-async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, timed = {}, index = null, configDir, exists = () => false, baseContains, app, env = {}, home = path.join(os.tmpdir(), 'js-harness-guard-test-no-home') } = {}) {
+async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, args = ['--hook'], held = null, timed = {}, index = null, configDir, exists = () => false, baseContains, app, env = {}, home = path.join(os.tmpdir(), 'js-harness-guard-test-no-home'), worktrees = () => null } = {}) {
   const out = [];
   const err = [];
   const code = await guardMain(args, {
@@ -52,6 +52,8 @@ async function hook(payload, { rulesText = writeRules(RULES), now = AT_1444, arg
     readApp: app === undefined ? undefined : () => app,
     // The project of these tests declares its remote gate on, as this repository does.
     remoteGate: () => 'on',
+    // The linked worktrees a cd is checked against: none listed unless a test gives them.
+    listWorktrees: worktrees,
     readIndex: () => {
       if (index === null) throw Object.assign(new Error('no file'), { code: 'ENOENT' });
       return index;
@@ -351,6 +353,15 @@ test('an Edit of a Markdown file is judged by the lines it leaves, read from dis
   const ahead = '**2026-10-14, about 15:30: written ahead before the check.\n';
   const kept = await hook({ tool_name: 'Edit', tool_input: { file_path: 'D:/proj/odd/tasks/a.md', old_string: 'x', new_string: 'y' } }, { index: `${ahead}x\n` });
   assert.deepEqual(kept, { code: 0, out: '', err: '' }, 'a line already on disk is not the call\'s');
+});
+
+test('a Bash cd into another linked worktree is denied from the hook; into its own it passes (odd/tasks/audit-cement.md, spec 2)', async () => {
+  const worktrees = () => ({ linked: ['D:/project/.claude/worktrees/mine', 'D:/project/.claude/worktrees/other'], here: 'D:/project/.claude/worktrees/mine' });
+  const cwd = 'D:/project/.claude/worktrees/mine';
+  const refused = await hook({ tool_name: 'Bash', cwd, tool_input: { command: 'cd ../other && git log -1' } }, { worktrees });
+  assert.equal(denied(refused).permissionDecision, 'deny');
+  assert.match(denied(refused).permissionDecisionReason, /another session's worktree.*git show/s);
+  assert.deepEqual(await hook({ tool_name: 'Bash', cwd, tool_input: { command: 'cd bin' } }, { worktrees }), { code: 0, out: '', err: '' });
 });
 
 test('a Bash command with backticks inside double quotes is denied; in single quotes or as $(...) it passes', async () => {

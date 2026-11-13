@@ -4,6 +4,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { COMMAND_KEYWORDS, shellWords } from './guard.mjs';
 
 /** The minutes a worktree's index must have stood still before the worktree is removed: a session that staged
  * something a moment ago may be about to commit there. */
@@ -139,3 +140,66 @@ export function worktreesInMain({ cwd, run = spawnSync, now = Date.now }) {
   const base = gitIn(cwd, 'rev-parse', '--verify', '--quiet', 'origin/main').out.trim();
   return base ? removableWorktrees({ cwd, base, gitIn, now }) : null;
 }
+// The commands that move the shell to another folder, and the options they take before it.
+const CD_COMMANDS = new Set(['cd', 'pushd', 'chdir', 'Set-Location', 'sl']);
+const CD_OPTIONS = /^-(?:[LPe@]+|Path|LiteralPath)$/i;
+
+/** A folder as a forward-slash path, a Git Bash drive (`/d/x`) as Windows writes it (`D:/x`), `..` and `.` resolved
+ * against `cwd` for a relative one; lower case, so two spellings of one Windows folder compare equal. The platform's
+ * own `path` is not used: the gate's tests run on Linux with Windows paths. `null` for `~` and `-`, which name no
+ * folder a command can tell. */
+function folderOf(target, cwd) {
+  if (target === '' || target.startsWith('~') || target === '-') return null;
+  const slashed = (dir) => dir.replace(/\\/g, '/').replace(/^\/([A-Za-z])(?=\/|$)/, '$1:');
+  let full = slashed(target);
+  if (!/^[A-Za-z]:/.test(full) && !full.startsWith('/')) full = `${slashed(cwd)}/${full}`;
+  const parts = [];
+  for (const part of full.split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') parts.pop();
+    else parts.push(part);
+  }
+  return `${full.startsWith('/') ? '/' : ''}${parts.join('/')}`.toLowerCase();
+}
+
+/** Whether the folder `dir` is `tree` or inside it, both as `folderOf` gives them. */
+const within = (dir, tree) => dir === tree || dir.startsWith(`${tree}/`);
+
+/** Why the Bash command `command`, run in `cwd`, is refused for moving into another session's worktree, or null: a
+ * `cd`, `pushd` or `Set-Location` that starts a command and names a folder inside a linked worktree of the repository
+ * other than the one `cwd` is in. On 2026-11-13 the lead did this twice (relief file, lines 2654 and 2695): the next
+ * commands of a session then run on another session's branch. A hook cannot list the app's sessions, so every other
+ * linked worktree counts, the lead's choice of 2026-11-13 (odd/tasks/audit-cement.md, L3). `worktrees()` gives
+ * `{ linked, here }` as `linkedWorktrees` of ./worktrees.mjs does, or null when git cannot say; it is asked only
+ * when the command moves, and a null refuses nothing. */
+export function worktreeCdRefusal(command, { cwd, worktrees }) {
+  const words = shellWords(command, { groups: true });
+  const { operators } = words;
+  const targets = [];
+  let place = cwd;
+  for (let i = 0; i < words.length; i += 1) {
+    const atStart = i === 0 || operators.has(i - 1) || (!operators.has(i - 1) && COMMAND_KEYWORDS.has(words[i - 1]) && (i === 1 || operators.has(i - 2)));
+    if (!atStart || operators.has(i) || !CD_COMMANDS.has(words[i])) continue;
+    let at = i + 1;
+    while (at < words.length && !operators.has(at) && CD_OPTIONS.test(words[at])) at += 1;
+    const target = at < words.length && !operators.has(at) ? folderOf(words[at], place) : null;
+    if (target === null) continue;
+    targets.push(target);
+    // A later relative cd starts where this one went.
+    place = target;
+  }
+  if (targets.length === 0) return null;
+  const listed = worktrees();
+  if (listed === null || listed === undefined) return null;
+  const here = listed.here ? folderOf(listed.here, cwd) : null;
+  for (const target of targets) {
+    const tree = listed.linked.map((dir) => folderOf(dir, cwd)).find((dir) => dir !== null && within(target, dir) && dir !== here);
+    if (tree === undefined) continue;
+    return `js-harness guard: this command moves into ${tree}, another session's worktree: the commands after it would `
+      + 'run on that session\'s branch, and its files are its own. Read it from where you are instead: '
+      + '`git show <branch>:<path>` for a file of its branch, `git -C <worktree> <command>` for a git question, or the '
+      + 'file\'s absolute path to Read.';
+  }
+  return null;
+}
+
