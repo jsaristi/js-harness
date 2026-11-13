@@ -155,13 +155,13 @@ at the size of the request before the act it covers.
   `odd/tasks/senior-orchestrator.md:20,59,113` (113 reads "No advisor"; `git grep -n -i`). Tried to turn it off, one run
   each on Fable at low: `claude -p --settings` with `{"advisorModel":""}` still carried the tool; `--advisor none` is
   refused ("The model \"none\" cannot be used as an advisor"). `claude --help` (2.1.322) lists no advisor flag.
-- M6. The probes. First (`jh196-t1-probe-hook-seen.txt`): a PreToolUse hook on Bash saw each advisor block before the
+- M6. The probes. First (`probe1-hook-seen.md`): a PreToolUse hook on Bash saw each advisor block before the
   call it preceded, but an advisor call made in the same response as the Bash call got no result, three times, and
-  the model said it had not consulted it. Second (`jh196-t1-probe2-retry-seen.txt`): a hook that refuses until the
+  the model said it had not consulted it. Second (`probe2-retry-seen.md`): a hook that refuses until the
   transcript holds an advisor result: in the main session and inside an `Agent` sub-agent, the first try was refused,
   the model called the advisor alone, and the retry's hook saw the result (0, then 1) and let it through. The
   sub-agent's payload carries `agent_id` and `agent_type`, and its transcript resolves at
-  `<dirname(transcript_path)>/<session_id>/subagents/agent-<agent_id>.jsonl`. Third (`jh196-subagentstop-probe-seen.txt`): a `SubagentStop` hook that blocks once: the sub-agent called the advisor
+  `<dirname(transcript_path)>/<session_id>/subagents/agent-<agent_id>.jsonl`. Third (`probe3-subagentstop-seen.md`): a `SubagentStop` hook that blocks once: the sub-agent called the advisor
   (1 result in its transcript), stopped again with `stop_hook_active: true`, and the payload carries
   `agent_transcript_path` and `last_assistant_message`.
 - M7. Size of a call, from the `advisor_message` usage entries, all uncached (every one of the 189 entries on this
