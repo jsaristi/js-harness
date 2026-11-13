@@ -7,9 +7,10 @@ branch `claude/f8-long-session-eval-30463b`. Runner: `node --test`. Plan: `odd/t
 from `docs/proposals/harness-diet.md` section 7.2.
 
 ## State
-The eval is built, calibrated (L5) and reviewed; the shell reader's last failure was fixed by the senior session
-(L7-L9), whose commits and review records this session checked (L10). PR 855 is ready for the lead's land. Open: T8,
-the batch, which is a new question to the owner through the lead (the draft is in L10); nothing paid runs before it.
+The eval landed in PR 855 (main ad60b83). batch-1 ran on question 278's yes (L11): 6 runs, all 30 of 30 turns,
+$16.15. Paused for the owner's Claude Desktop restart on the lead's word. Open, not started: grading batch-1
+(`grade.mjs --name batch-1`, a few cents of Sonnet regrade) and the desktop smoke, which runs by hand; nothing else
+paid is authorized. The results PR from `claude/f8-long-session-batch` is the lead's to land.
 
 ## Goal
 `node evals/long-session/run.mjs` drives a scripted Spanish conversation through real resumed Claude Code turns in the
@@ -139,7 +140,8 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
 - [x] T6 (kind: build) the driver: sandbox, resumed turns, release conditions, the compaction check, dollar stops,
   `--plan`, `--calibrate` — S2, S4; inline
 - [x] T7 (kind: verify) commit on Q1's answer, `npm run check`, Codex and the lenses, push, PR, notify ready — S5; inline
-- [ ] T8 (kind: design) Q2 to the lead, after the calibration: the arms and the turn count on measured figures — S4; inline
+- [x] T8 (kind: design) Q2 to the lead, after the calibration: the arms and the turn count on measured figures — S4; inline
+- [ ] T9 (kind: verify) grade batch-1 and report each arm's moment scores; the desktop smoke by hand — S4; inline
 
 ## Log
 - L1 (2026-11-12, the lead's brief for JH 193, relaying his yes to question 276): "You are JH 193, a work session of
@@ -239,3 +241,10 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   mid. The draft for T8: current and minimal-commands (minimal-commands as the baseline that replaces gentle-ai's),
   3 runs each of 30 turns plus the desktop smoke, $34 at mid and $48 high, `--cost-reading cumulative`, a run cap of
   $10 and a batch cap of $50.
+- L11 (2026-11-13): the owner answered question 278 "Sí, correr el lote (recomendado)" (transcript 93b72703 line
+  5615). batch-1 ran from ad60b83 with the work root `D:\js-harness-evals-work`, `--cost-reading cumulative`, run cap
+  $10 and batch cap $41 (the rest of the $50 left for the smoke, which the driver does not run). It ended at 12:29
+  local (UTC-05:00), exit 0: "spent $16.15 on 6 run(s)". current-1 $4.07, current-2 $3.58, current-3 $3.06;
+  minimal-commands-1 $1.78, -2 $1.82, -3 $1.84; every run reached 30 of 30 turns and none stopped. The lead then
+  asked to pause for a Claude Desktop restart, which the owner answered (question 280, "Sí, esperar el lote"): the
+  results are committed ungraded, and grading and the smoke wait (T9).
