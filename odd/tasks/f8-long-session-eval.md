@@ -8,7 +8,17 @@ from `docs/proposals/harness-diet.md` section 7.2.
 
 ## State
 The eval landed in PR 855 (main ad60b83). batch-1 ran on question 278's yes (L11): 6 runs, all 30 of 30 turns,
-$16.15. Paused for the owner's Claude Desktop restart on the lead's word. Open, not started: grading batch-1
+$16.15. After the restart the lead asked (2026-11-13): (1) grade batch-1 and add it to PR 858, notify ready; (2) then,
+on his words "Haz las mejoras que no hechan a perder calidad y luego pedimos" (transcript 69918425 line 1025), a
+faster eval at equal quality and no spend, on a NEW branch cut from 858's head. Grading ran (the codex exe at
+pnpm store 0.167.2 vendor/x86_64-pc-windows-msvc/bin/codex.exe; the pnpm shim gave ENOENT); its log is
+scratchpad/grade-1.log. Measured so far: turn 25 reports duration_api_ms 0 (the counter does not restart), so
+outside-the-model time is about 13.3/15.0/9.6 min a run for current against 2.9/3.3/2.4 for minimal (the lead's
+figure holds); batch wall 117 min against 115.9 of turn walls, so the driver adds nothing; current's turn-1 cacheWrite
+falls from 31693 (run 1) to about 16790 (runs 2, 3), so cross-run cache already lowers later runs. The next step: key
+tool time by the real command (strip the `cd "<workspace>" &&` prefix), median and max per tool, to tell per-call hook
+cost from a few slow commands; then the proposal (concurrency as the only free build: reserved caps, fixed record
+order, sweep isolation, pairing arms within a round; high-risk item 4). Open, not started: grading batch-1
 (`grade.mjs --name batch-1`, a few cents of Sonnet regrade) and the desktop smoke, which runs by hand; nothing else
 paid is authorized. The results PR from `claude/f8-long-session-batch` is the lead's to land.
 
@@ -248,3 +258,9 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   minimal-commands-1 $1.78, -2 $1.82, -3 $1.84; every run reached 30 of 30 turns and none stopped. The lead then
   asked to pause for a Claude Desktop restart, which the owner answered (question 280, "Sí, esperar el lote"): the
   results are committed ungraded, and grading and the smoke wait (T9).
+- L12 (2026-11-13, after the restart): graded batch-1 (`grade.mjs --name batch-1`, Codex judge from the pnpm store's
+  0.167.2 codex.exe, since the pnpm shim gave ENOENT and nothing was spent on that try). current 9 of 15 moments
+  (60.0%), minimal-commands 8 of 15 (53.3%), both under the 90% line; Sonnet regrade of current-1 and
+  minimal-commands-3 agreed on 3 of 4 moments. Per run: current 3/2/4, minimal 3/3/2. Lost most: tdd (every run) and
+  compact (minimal 3 of 3, current 1 of 3). Not checked: current-1's "0 of 29 replies in Spanish", far from the other
+  runs (23 and 24 of 29); it may be the agent or the grader's reading, and stays open.
