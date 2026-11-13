@@ -19,20 +19,25 @@ const OWN_ROWS = ['memory-rules', 'session-classes', 'remote-server', 'hook-comm
 // Every state a row reports in, so a row whose state is not one of these is a failure of the run, not a pass.
 const STATES = new Set([...GAP_STATES, 'ok', 'n/a', 'unknown']);
 
-/** A folder on PATH whose `js-harness` runs this checkout's command line, and whose `node` runs this Node: the
- * folder of the machine's Node may hold a tool of the stack too (codegraph does, under nvm), so it is not on PATH. */
+/** A folder first on PATH whose `js-harness` runs this checkout's command line and whose `node` is this Node, an
+ * executable of its own and no script, so a spawn without a shell finds it too: the folder of the machine's Node
+ * may hold a tool of the stack (codegraph does, under nvm), and then it is not on PATH. */
 function shimFolder(root) {
   const folder = path.join(root, 'shim');
   fs.mkdirSync(folder);
-  const shims = { 'js-harness': [process.execPath, BIN], node: [process.execPath] };
-  for (const [name, words] of Object.entries(shims)) {
-    if (process.platform === 'win32') {
-      fs.writeFileSync(path.join(folder, `${name}.cmd`), `@${words.map((word) => `"${word}"`).join(' ')} %*\r\n`);
-    } else {
-      const shim = path.join(folder, name);
-      fs.writeFileSync(shim, `#!/bin/sh\nexec ${words.map((word) => `'${word}'`).join(' ')} "$@"\n`);
-      fs.chmodSync(shim, 0o755);
+  if (process.platform === 'win32') {
+    fs.writeFileSync(path.join(folder, 'js-harness.cmd'), `@"${process.execPath}" "${BIN}" %*\r\n`);
+    const node = path.join(folder, 'node.exe');
+    try {
+      fs.linkSync(process.execPath, node);
+    } catch {
+      fs.copyFileSync(process.execPath, node);
     }
+  } else {
+    const shim = path.join(folder, 'js-harness');
+    fs.writeFileSync(shim, `#!/bin/sh\nexec '${process.execPath}' '${BIN}' "$@"\n`);
+    fs.chmodSync(shim, 0o755);
+    fs.symlinkSync(process.execPath, path.join(folder, 'node'));
   }
   return folder;
 }
@@ -46,10 +51,18 @@ const EXTENSIONS = process.platform === 'win32' ? ['.exe', '.cmd', '.bat', '.ps1
 /** Whether `folder` holds a command named `name`. */
 const holds = (folder, name) => EXTENSIONS.some((extension) => fs.existsSync(path.join(folder, `${name}${extension}`)));
 
-/** The machine's PATH without each folder that holds a tool of the stack: git, the shell and the system's commands
- * stay, so the cycle runs as on a machine where none of those tools is installed yet. */
-function pathWithoutStack(value) {
-  return value.split(path.delimiter).filter((folder) => folder !== '' && !STACK_TOOLS.some((name) => holds(folder, name)));
+/** The machine's PATH, each folder unquoted, without each folder that holds a tool of the stack, so the cycle runs as
+ * on a machine where none of them is installed yet. git, which the release repository and the package manager
+ * stand-in run, is linked into `shim` from a folder that is dropped (Homebrew's bin can hold git and claude), where
+ * a link of it works: on POSIX. The test then asserts that git still runs. */
+function pathWithoutStack(value, shim) {
+  const folders = value.split(path.delimiter).map((folder) => folder.replace(/^"(.*)"$/, '$1')).filter((folder) => folder !== '');
+  const kept = folders.filter((folder) => !STACK_TOOLS.some((name) => holds(folder, name)));
+  const gitFolder = folders.find((folder) => holds(folder, 'git'));
+  if (process.platform !== 'win32' && gitFolder !== undefined && !kept.includes(gitFolder)) {
+    fs.symlinkSync(fs.realpathSync(path.join(gitFolder, 'git')), path.join(shim, 'git'));
+  }
+  return [shim, ...kept];
 }
 
 /** A local git repository holding what the package ships (`bin/` without its tests, and `package.json`) at
@@ -114,7 +127,7 @@ test('a clean home installs the harness, reports no gap of its own, runs its ses
     const project = path.join(root, 'project');
     fs.mkdirSync(home);
     fs.mkdirSync(project);
-    const PATH = [shimFolder(root), ...pathWithoutStack(process.env.PATH ?? process.env.Path ?? '')];
+    const PATH = pathWithoutStack(process.env.PATH ?? process.env.Path ?? '', shimFolder(root));
     // The run finds no tool of the stack by name, whatever this machine has installed.
     assert.deepEqual(STACK_TOOLS.filter((name) => PATH.some((folder) => holds(folder, name))), []);
     const env = {
@@ -126,7 +139,10 @@ test('a clean home installs the harness, reports no gap of its own, runs its ses
       // A clean machine's pnpm keeps nothing yet: the machine's own global bin lock is not this run's.
       PNPM_HOME: path.join(home, 'pnpm'),
     };
-    const run = (args, options = {}) => spawnSync(process.execPath, [BIN, ...args], { cwd: project, env, encoding: 'utf8', timeout: 60_000, ...options });
+    // git, which the release repository and the package manager stand-in need, still runs by name.
+    const git = spawnSync('git', ['--version'], { env, encoding: 'utf8' });
+    assert.equal(git.status, 0, `git does not run with the tools of the stack off PATH: ${git.error?.message ?? git.stderr}`);
+    const run =(args, options = {}) => spawnSync(process.execPath, [BIN, ...args], { cwd: project, env, encoding: 'utf8', timeout: 60_000, ...options });
 
     const installed = run(['install', '--home', home]);
     assert.equal(installed.status, 0, installed.stderr);
