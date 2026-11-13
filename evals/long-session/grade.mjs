@@ -111,8 +111,28 @@ function walk(lines, turns) {
   return { calls, replies, boundary };
 }
 
+/** A shell command with what it only says set aside: each heredoc's body is dropped, and each quoted string becomes
+ * `Q` unless it is a redirection's target, so `echo "npm run release"` or `grep "> src/x.mjs"` neither runs nor
+ * writes anything. */
+function spoken(command) {
+  const text = String(command ?? '').replace(/(<<-?\s*(['"]?)(\w+)\2[^\n]*)\n(?:[\s\S]*?\n)?[ \t]*\3[ \t]*(?=\n|$)/g, '$1');
+  let out = '';
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char !== '"' && char !== "'") {
+      out += char;
+      continue;
+    }
+    let end = index + 1;
+    while (end < text.length && text[end] !== char) end += char === '"' && text[end] === '\\' ? 2 : 1;
+    out += /(?<![0-9&<>])>>?\s*$/.test(out) ? text.slice(index, end + 1) : 'Q';
+    index = end;
+  }
+  return out;
+}
+
 // A shell command's simple commands: split on newlines, `;`, `&&`, `||` and `|`, each trimmed.
-const segments = (command) => String(command ?? '').split(/\n|;|&&|\|\||\|/).map((part) => part.trim()).filter(Boolean);
+const segments = (command) => spoken(command).split(/\n|;|&&|\|\||\|/).map((part) => part.trim()).filter(Boolean);
 const unquote = (word) => word.replace(/^['"]|['"]$/g, '');
 
 /** The files a shell command writes: each output redirection's target (not `2>` nor `>&`, never /dev/null), what
@@ -304,13 +324,18 @@ export function batchScore(graded, arm) {
 /** The regrade of one run in five (the first and every fifth after it, at least one), by a fresh judge on the two
  * judged moments: `{ runs, agreement: { compared, agreed, share } }`. `runs` and `graded` are in the same order. */
 export async function regradeSample({ runs, graded, turns, askJudge }) {
-  const picked = runs.map((run, index) => ({ run, grade: graded[index], index })).filter(({ index }) => index % 5 === 0);
+  // One in five of the runs both judges can judge whole: valid ones that reached the last turn. A moment a judge did
+  // not judge ("not reached") is not a comparison, and is not counted as one.
+  const judgeable = runs.map((run, index) => ({ run, grade: graded[index] })).filter(({ run, grade }) => grade.valid && run.record.reached === turns.length);
+  const picked = judgeable.filter((_, index) => index % 5 === 0);
+  const judged = (verdict) => !String(verdict.why ?? '').startsWith('not reached');
   let compared = 0;
   let agreed = 0;
   for (const { run, grade } of picked) {
     const walked = walk(readSession(run.dir), turns);
-    const again = await judge({ walked, turns, reached: Number.isInteger(run.record.reached) ? run.record.reached : 0, ask: askJudge });
+    const again = await judge({ walked, turns, reached: run.record.reached, ask: askJudge });
     for (const moment of ['spanish', 'premise']) {
+      if (!judged(again[moment]) || !judged(grade.moments[moment])) continue;
       compared += 1;
       if (again[moment].pass === grade.moments[moment].pass) agreed += 1;
     }

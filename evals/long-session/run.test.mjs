@@ -223,3 +223,25 @@ test('runMain refuses an arm named twice', async () => {
   assert.equal(code, 2);
   assert.match(err, /twice/);
 });
+
+test('a turn that answers in another session still has its cost counted', async (t) => {
+  const forked = await driveRun({ ...base(t), runProcess: fakeAgent({ sessionOf: (turn) => (turn < 2 ? 'sess-1' : 'sess-2'), cost: () => 0.5, act: featureFiles }).runProcess });
+  assert.equal(forked.stop.reason, 'session');
+  assert.equal(forked.spendUsd, 1);
+});
+
+test('a turn that runs out of the run\'s budget stops the run as cap, and the batch goes on', async (t) => {
+  const out = (turn) => JSON.stringify({ type: 'result', subtype: turn === 2 ? 'error_max_budget_usd' : 'success', is_error: turn === 2, session_id: 'sess-1', total_cost_usd: 0.5 });
+  let calls = 0;
+  const runProcess = async (call) => {
+    calls += 1;
+    const turn = ((calls - 1) % 2) + 1;
+    fs.mkdirSync(path.join(call.env.HOME, '.claude', 'projects', 'p'), { recursive: true });
+    featureFiles({ cwd: call.cwd });
+    return { stdout: out(turn), stderr: '', exitCode: turn === 2 ? 1 : 0 };
+  };
+  const batch = await driveBatch({ ...base(t), configs: [fakeConfig('current'), fakeConfig('minimal-commands')], runs: 1, runCapUsd: 5, batchCapUsd: 20, runProcess });
+  assert.equal(batch.records.length, 2);
+  assert.equal(batch.records[0].stop.reason, 'cap');
+  assert.equal(batch.stop, null);
+});

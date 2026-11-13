@@ -322,3 +322,21 @@ test('a judge whose process fails throws instead of answering, and gradeMain rep
   assert.match(err, /judge failed/);
   assert.equal(fs.existsSync(path.join(dir, 'b.grade.json')), false);
 });
+
+test('quoted text and heredoc bodies are neither writes nor releases', () => {
+  const bash = (command) => ({ name: 'Bash', input: { command }, isError: false, out: '' });
+  assert.equal(releases(bash('echo "npm run release"')), false);
+  assert.equal(releases(bash("grep -n 'node scripts/release.mjs; x' README.md")), false);
+  assert.equal(writes(bash('grep "> src/list.mjs" notes.md'), 'src/list.mjs'), false);
+  assert.equal(writes(bash("cat > notes.md <<'EOT'\nrun: echo x > src/list.mjs\nEOT"), 'src/list.mjs'), false);
+  assert.equal(writes(bash('cat > "src/list.mjs" <<EOT\nEOT'), 'src/list.mjs'), true);
+});
+
+test('the regrade samples valid runs that reached the end, and compares only moments both judges judged', async (t) => {
+  const dir = kept(t, session());
+  const runs = Array.from({ length: 6 }, (_, index) => ({ record: record({ id: `run-${index + 1}`, ...(index === 0 ? { reached: 3, stop: { reason: 'agent' } } : {}) }), dir }));
+  const graded = await Promise.all(runs.map((run) => gradeRun({ ...run, turns: TURNS, askCodex: fakeCodex().ask })));
+  const sample = await regradeSample({ runs, graded, turns: TURNS, askJudge: fakeCodex().ask });
+  assert.deepEqual(sample.runs, ['run-2']);
+  assert.equal(sample.agreement.compared, 2);
+});

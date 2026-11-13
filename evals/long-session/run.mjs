@@ -169,7 +169,8 @@ export async function driveRun({ config, turns, effort, workRoot, runsDir, runId
   let prepared;
   let isPrepared = false;
   const costs = [];
-  const spend = () => (costs.length === 0 ? 0 : costReading === 'per-turn' ? costs.reduce((sum, cost) => sum + cost, 0) : costs.at(-1));
+  let foreign = 0;
+  const spend = () => foreign + (costs.length === 0 ? 0 : costReading === 'per-turn' ? costs.reduce((sum, cost) => sum + cost, 0) : costs.at(-1));
   try {
     fs.cpSync(FIXTURE, workspace, { recursive: true });
     if (config.prepare) {
@@ -203,12 +204,15 @@ export async function driveRun({ config, turns, effort, workRoot, runsDir, runId
         record.stop = { reason: 'agent', turn: turn.n, message: run.spawnError?.message ?? (String(run.stderr ?? '').trim().slice(0, 300) || 'no result on stdout') };
         break;
       }
+      const cost = Number.isFinite(output.total_cost_usd) && output.total_cost_usd >= 0 ? output.total_cost_usd : null;
       if (record.sessionId !== null && output.session_id !== record.sessionId) {
+        // Another session's cost is its own total, whichever the reading: it is added beside this session's.
+        if (cost !== null) foreign += cost;
+        record.spendUsd = round2(spend());
         record.stop = { reason: 'session', turn: turn.n, message: `answered in session ${output.session_id}, not ${record.sessionId}` };
         break;
       }
       record.sessionId = output.session_id;
-      const cost = Number.isFinite(output.total_cost_usd) && output.total_cost_usd >= 0 ? output.total_cost_usd : null;
       if (cost !== null) costs.push(cost);
       // What the calibration measures: the cache a turn writes (the fixed load again, if the cache did not survive the new
       // process) and what it re-reads (the history it carries).
@@ -219,6 +223,11 @@ export async function driveRun({ config, turns, effort, workRoot, runsDir, runId
       // login, a rate limit) is the eval's failure, not a moment the agent failed, and is not counted as reached.
       if (cost === null) {
         record.stop = { reason: 'cost', turn: turn.n, message: 'the result gave no total_cost_usd, so the caps cannot be kept' };
+        break;
+      }
+      // The turn's own --max-budget-usd is the run's cap: it ends this run, not the batch.
+      if (output.subtype === 'error_max_budget_usd') {
+        record.stop = { reason: 'cap', turn: turn.n, message: `the turn ran out of the run's remaining budget (${usd(record.spendUsd)} spent)` };
         break;
       }
       if (output.is_error === true || (Number.isInteger(run.exitCode) && run.exitCode !== 0)) {
