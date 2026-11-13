@@ -284,11 +284,16 @@ test('with --jobs 2 the two arms run side by side, never two runs of one arm, an
   assert.equal(batch.stop, null);
 });
 
-test('with --jobs the caps in flight never sum past the batch cap: a run starts with what is left after the others reserve theirs', async (t) => {
+test('with --jobs the caps in flight never sum past the batch cap, and a run starts beside another only with a whole run cap', async (t) => {
+  // 15 left: the second run would get 5 beside the first, less than one job gives it, and a smaller cap would stop it
+  // sooner and leave its arm fewer valid runs. It waits, and starts alone with what one job would give it.
   const agent = concurrentAgent();
   const batch = await driveBatch({ ...base(t), configs: twoArms(), runs: 1, jobs: 2, runCapUsd: 10, batchCapUsd: 15, costReading: 'cumulative', runProcess: agent.runProcess });
-  assert.deepEqual(agent.budgets.map(({ arm, budget }) => [arm, budget]), [['current', 10], ['minimal-commands', 5]]);
+  assert.deepEqual(agent.budgets.map(({ arm, budget, inFlight }) => [arm, budget, inFlight]), [['current', 10, 0], ['minimal-commands', 10, 0]]);
   assert.equal(batch.records.length, 2);
+  const room = concurrentAgent();
+  await driveBatch({ ...base(t), configs: twoArms(), runs: 1, jobs: 2, runCapUsd: 10, batchCapUsd: 20, costReading: 'cumulative', runProcess: room.runProcess });
+  assert.deepEqual(room.budgets.map(({ budget, inFlight }) => [budget, inFlight]), [[10, 0], [10, 1]]);
   // A run cap as large as the batch's leaves nothing to reserve for a second run: it waits, as one job would.
   const whole = concurrentAgent();
   await driveBatch({ ...base(t), configs: twoArms(), runs: 1, jobs: 2, runCapUsd: 15, batchCapUsd: 15, costReading: 'cumulative', runProcess: whole.runProcess });

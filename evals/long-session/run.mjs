@@ -325,6 +325,9 @@ export async function driveBatch({ configs, runs, jobs = 1, runCapUsd, batchCapU
       // The next run in order starts only while its round is the earliest not finished: a round holds one run of each
       // arm, so the rounds stay balanced and no two runs of an arm overlap.
       if (flying.size > 0 && queue[0].round > Math.min(...[...flying.values()].map((entry) => entry.round))) break;
+      // Beside another run, a run starts only with a whole run cap: a smaller one would stop it sooner than one job
+      // would and leave its arm fewer valid runs. It waits, and starts alone with what one job gives it.
+      if (flying.size > 0 && left < runCapUsd) break;
       launch(queue.shift(), Math.min(runCapUsd, left));
     }
     if (flying.size === 0) break;

@@ -314,3 +314,8 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   now a run is in flight until its record is stored or its failure kept, and a failure starts nothing more and is
   thrown once the runs in flight end. With the round as the pace, each round takes its slowest run, so the estimate
   of about 116 → 78 min for 2 jobs stands (current's runs took 22 to 28 min).
+- L17 (2026-11-13): the confirming reviews of fd889376: Codex correct at 0.87, no findings; two lenses found that with a
+  tight batch cap the run in flight reserves its whole cap, so the later arm started with a smaller cap than one job
+  gives it, more likely to stop on the cap and be left out of its arm's score. Fixed test first: beside another run, a
+  run starts only with a whole run cap; otherwise it waits and starts alone with what one job would give it. The
+  third review of this slice is the last one (protocol section 1).
