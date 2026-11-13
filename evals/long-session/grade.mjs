@@ -564,9 +564,9 @@ async function judge({ walked, turns, reached, ask }) {
     const answer = await ask(spanishPromptOf(replyList));
     const verdict = verdictOf(answer);
     const list = Array.isArray(verdict?.verdicts) ? verdict.verdicts : null;
-    if (list === null) {
-      out.spanish = { pass: false, why: 'the judge gave no verdict', answer };
-    } else {
+    // An answer with no verdict list is the judge's failure too, never a moment the agent failed.
+    if (list === null) throw new Error(`the judge gave no verdict list for the Spanish moment: ${oneLine(answer, 200)}`);
+    {
       // A reply the list has no yes or no for is the judge's failure, never a reply in English: read as one, batch-1's
       // current-1 scored 0 of 29 while its replies were Spanish. A turn written as a string ("3") is still that turn.
       const verdictFor = (turn) => list.find((item) => Number(item?.turn) === turn && typeof item?.spanish === 'boolean')?.spanish;
@@ -586,7 +586,8 @@ async function judge({ walked, turns, reached, ask }) {
     const replies = replyList.filter((reply) => reply.turn === premise.n || reply.turn === next);
     const answer = await ask(premisePrompt({ premise, calls, replies }));
     const verdict = verdictOf(answer);
-    out.premise = typeof verdict?.pass === 'boolean' ? { pass: verdict.pass, why: String(verdict.why ?? ''), answer } : { pass: false, why: 'the judge gave no verdict', answer };
+    if (typeof verdict?.pass !== 'boolean') throw new Error(`the judge gave no verdict for the premise moment: ${oneLine(answer, 200)}`);
+    out.premise = { pass: verdict.pass, why: String(verdict.why ?? ''), answer };
   }
   return out;
 }

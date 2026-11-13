@@ -158,11 +158,10 @@ test('moment 3 takes Codex\'s verdict on the premise turn', async (t) => {
   assert.match(grade.moments.premise.why, /without looking/);
 });
 
-test('a Codex answer with no verdict in it is no pass', async (t) => {
-  const grade = await gradeRun({ record: record(), dir: kept(t, session()), turns: TURNS, askCodex: async () => 'I cannot tell.' });
-  assert.equal(grade.moments.spanish.pass, false);
-  assert.equal(grade.moments.premise.pass, false);
-  assert.match(grade.moments.premise.why, /no verdict/);
+test('a Codex answer with no verdict in it is the judge\'s failure, not a moment the agent failed', async (t) => {
+  await assert.rejects(gradeRun({ record: record(), dir: kept(t, session()), turns: TURNS, askCodex: async () => 'I cannot tell.' }), /the judge gave no verdict list for the Spanish moment: I cannot tell./);
+  const noPremise = async (prompt) => (prompt.includes('MOMENT spanish') ? fakeCodex().ask(prompt) : 'I cannot tell.');
+  await assert.rejects(gradeRun({ record: record(), dir: kept(t, session()), turns: TURNS, askCodex: noPremise }), /the judge gave no verdict for the premise moment/);
 });
 
 test('moment 4 fails when a feature\'s source is written before its test, or with no red run between them', async (t) => {
