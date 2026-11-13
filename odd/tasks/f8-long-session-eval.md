@@ -7,20 +7,11 @@ branch `claude/f8-long-session-eval-30463b`. Runner: `node --test`. Plan: `odd/t
 from `docs/proposals/harness-diet.md` section 7.2.
 
 ## State
-The eval landed in PR 855 (main ad60b83). batch-1 ran on question 278's yes (L11): 6 runs, all 30 of 30 turns,
-$16.15. After the restart the lead asked (2026-11-13): (1) grade batch-1 and add it to PR 858, notify ready; (2) then,
-on his words "Haz las mejoras que no hechan a perder calidad y luego pedimos" (transcript 69918425 line 1025), a
-faster eval at equal quality and no spend, on a NEW branch cut from 858's head. Grading ran (the codex exe at
-pnpm store 0.167.2 vendor/x86_64-pc-windows-msvc/bin/codex.exe; the pnpm shim gave ENOENT); its log is
-scratchpad/grade-1.log. Measured so far: turn 25 reports duration_api_ms 0 (the counter does not restart), so
-outside-the-model time is about 13.3/15.0/9.6 min a run for current against 2.9/3.3/2.4 for minimal (the lead's
-figure holds); batch wall 117 min against 115.9 of turn walls, so the driver adds nothing; current's turn-1 cacheWrite
-falls from 31693 (run 1) to about 16790 (runs 2, 3), so cross-run cache already lowers later runs. The next step: key
-tool time by the real command (strip the `cd "<workspace>" &&` prefix), median and max per tool, to tell per-call hook
-cost from a few slow commands; then the proposal (concurrency as the only free build: reserved caps, fixed record
-order, sweep isolation, pairing arms within a round; high-risk item 4). Open, not started: grading batch-1
-(`grade.mjs --name batch-1`, a few cents of Sonnet regrade) and the desktop smoke, which runs by hand; nothing else
-paid is authorized. The results PR from `claude/f8-long-session-batch` is the lead's to land.
+batch-1 (L11) and its grade (L12) landed in PR 858. The grader fix and batch-1's regrade, whose scores hold (current
+9 of 15, minimal-commands 8 of 15), are PR 861, ready for the lead's land (L13). `--jobs` (L14-L17) is PR 862,
+stacked on 861, reviewed in three rounds, the last clean: when 861 lands, retarget 862 to main and send ready. Open:
+the paid comparison of `--jobs 2` against batch-1, drafted to the lead as a question (about $16; nothing paid runs
+before his yes); the desktop smoke, whose hands is open; T11 closes on the comparison.
 
 ## Goal
 `node evals/long-session/run.mjs` drives a scripted Spanish conversation through real resumed Claude Code turns in the
@@ -151,7 +142,9 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   `--plan`, `--calibrate` — S2, S4; inline
 - [x] T7 (kind: verify) commit on Q1's answer, `npm run check`, Codex and the lenses, push, PR, notify ready — S5; inline
 - [x] T8 (kind: design) Q2 to the lead, after the calibration: the arms and the turn count on measured figures — S4; inline
-- [ ] T9 (kind: verify) grade batch-1 and report each arm's moment scores; the desktop smoke by hand — S4; inline
+- [ ] T9 (kind: verify) grade batch-1 and report each arm's moment scores (done, L12); the desktop smoke by hand, whose hands is open — S4; inline
+- [x] T10 (kind: build) `--jobs <n>` in `run.mjs`: up to n runs at once, sequential by default, caps reserved at launch, records in run order, the jobs count in the results; tests first; high-risk item 4 (concurrency) — L14; inline
+- [ ] T11 (kind: verify) both reviews on T10, PR, notify the lead with the paid comparison as a question — L14; inline
 
 ## Log
 - L1 (2026-11-12, the lead's brief for JH 193, relaying his yes to question 276): "You are JH 193, a work session of
@@ -274,3 +267,46 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   answer. Regraded with 8fa0c9fc: the scores do not change, current 9 of 15 (60.0%) and minimal-commands 8 of 15
   (53.3%); current-1 now reads 25 of 29 and still fails the moment. The regrade met no unreadable answer, so 0a217ce2
   would give the same. Codex approved 8fa0c9fc; the lenses' one finding on it is 0a217ce2.
+- L14 (2026-11-13): the speed proposal, on his words "Haz las mejoras que no hechan a perder calidad y luego pedimos"
+  (transcript 69918425 line 1025, verified with `sessions --quote`). Measured from batch-1's logs, free:
+  - The batch took about 117 min against 115.9 min of turn walls, so the driver adds nothing between turns.
+  - Outside the model, current spends about 13.3 / 15.0 / 9.6 min a run against 2.9 / 3.3 / 2.4 for minimal-commands
+    (turn wall minus the per-turn step of `duration_api_ms`, which is cumulative and reads 0 on the `/compact` turn).
+  - Where it goes, from tool_use to tool_result in the transcripts: about 7 min a run of tools in current against 1.5.
+    Every Bash call costs 2.5 to 3 s more there (`git status` median 4.5 s against 1.6, `git log` 4.2 against 2.2):
+    the arm's PreToolUse/PostToolUse hooks. `git add ... && git commit` takes 11.8 s against 1.3: the workspace's
+    pre-commit gate. The rest, about 6 min, is the SessionStart hooks (engram about 4.4 s, doctor about 5 s) and Stop
+    hooks of the process each turn starts, 30 times.
+  - The cache across runs: current's first turn writes 31,693 tokens in run 1 and about 16,790 in runs 2 and 3, so
+    later runs of an arm already reuse the cache of earlier ones.
+  What keeps the measure: the hooks and the gate are what the current arm is, on the desktop too, so cutting them would
+  measure another harness. One process per turn is the eval's own: on the desktop the resume hooks fire once, not 30
+  times, and what they inject each turn is part of what the model sees, so changing it changes the measure and needs a
+  paid comparison; it is proposed, not built. Running runs at once changes nothing a run sees: each has its own
+  workspace, home, engram store and port (`sandboxPaths`, `allocatePort`), and its sweep is bounded to its own roots.
+  So T10 builds `--jobs <n>`, sequential by default. With 2 jobs, one run of each arm side by side, the batch would take
+  about 116 → 78 min (an estimate: the slower arm sets each round). Not checkable for free and put in the question: the
+  eval token's rate limits under two sessions, the machine's load stretching turn walls toward the 10-minute turn
+  timeout, the parallel-start failures on Windows that `evals/task-proof.test.mjs:456` records, and whether two runs of
+  one arm at once share a cache write and lower the second's cost; pairing the arms within a round avoids that last one.
+- L15 (2026-11-13): T10 built test first: four tests red, then `driveBatch` with `jobs` (`node --test
+  evals/long-session/*.test.mjs`: 64 of 64). A run reserves its cap at launch and only what the batch has left after
+  the runs in flight is given to the next, so a run cap as large as the batch cap runs one at a time whatever
+  `--jobs` says (a test holds it). The first queued run whose arm has none in flight starts next; records are stored in
+  run order; an eval stop starts nothing more and keeps the runs in flight. The sweep needs no change: each run sweeps
+  only its own roots, and `evals/runner.test.mjs:1717` proves a sibling directory is spared. Not built: a run whose
+  driver throws rejects the batch while the other run in flight goes on alone and cleans up after itself, as one job
+  would leave it unrecorded.
+
+- L16 (2026-11-13): the reviews of T10 (Codex: incorrect at 0.98; the lenses: one critical, one warning) found the
+  same two failures, both fixed test first. A fast arm could start rounds ahead of a slow one, so a cut left the arms
+  unbalanced: now no run of a round starts before the round before has finished, which also keeps two runs of an arm
+  apart. A run left `flying` before its `onRecord` returned, and a run that threw left the others running unwatched:
+  now a run is in flight until its record is stored or its failure kept, and a failure starts nothing more and is
+  thrown once the runs in flight end. With the round as the pace, each round takes its slowest run, so the estimate
+  of about 116 → 78 min for 2 jobs stands (current's runs took 22 to 28 min).
+- L17 (2026-11-13): the confirming reviews of fd889376: Codex correct at 0.87, no findings; two lenses found that with a
+  tight batch cap the run in flight reserves its whole cap, so the later arm started with a smaller cap than one job
+  gives it, more likely to stop on the cap and be left out of its arm's score. Fixed test first: beside another run, a
+  run starts only with a whole run cap; otherwise it waits and starts alone with what one job would give it. The
+  third review of this slice is the last one (protocol section 1).

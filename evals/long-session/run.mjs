@@ -268,31 +268,81 @@ export async function driveRun({ config, turns, effort, workRoot, runsDir, runId
   }
 }
 
+// The stops that are the eval's own doing: each would stop every later run the same way, so none starts after one.
+const BATCH_STOPS = ['agent', 'session', 'compaction', 'cost'];
+
 /** A batch: `runs` rounds, each running every config once in order, so a batch cut short stays balanced between the
- * arms. Each run's cap is the smaller of `runCapUsd` and what is left of `batchCapUsd`; the batch stops before the next
- * run once its spend reaches its cap, and after a run the eval itself stopped (`agent`, `session`, `compaction`), which
- * would stop every run the same way. `onRecord(record)` is called after each run, to store it. */
-export async function driveBatch({ configs, runs, runCapUsd, batchCapUsd, onRecord = () => {}, signal, ...run }) {
-  const records = [];
+ * arms. Up to `jobs` runs go at once (1, the default, runs them one after another), in that order and within one round:
+ * no run of a round starts before every run of the round before has finished, so a fast arm never runs ahead of a slow
+ * one, and two runs of one arm never overlap, which could share a cache write and lower the second's cost the eval
+ * measures. A run starts with a cap that is the smaller of `runCapUsd` and what is left of `batchCapUsd`
+ * once the runs in flight have reserved theirs, so the caps in flight never sum past the batch's. No run starts once
+ * the batch's spend reaches its cap, or after a run the eval itself stopped (`BATCH_STOPS`); the runs in flight then
+ * finish and are kept. `onRecord(record, records)` is called after each run with every record so far, in run order,
+ * to store them; a run is in flight until it returns. A run that throws starts nothing more, and the batch throws its
+ * error once the runs in flight have finished, so none is left running unwatched. */
+export async function driveBatch({ configs, runs, jobs = 1, runCapUsd, batchCapUsd, onRecord = () => {}, signal, ...run }) {
+  if (!Number.isInteger(jobs) || jobs < 1) throw new Error(`a batch runs a whole number of jobs from 1, got ${JSON.stringify(jobs)}`);
+  const queue = [];
+  for (let round = 1; round <= runs; round += 1) for (const config of configs) queue.push({ index: queue.length, round, config });
+  const done = [];
+  const flying = new Map();
   let spent = 0;
-  for (let round = 1; round <= runs; round += 1) {
-    for (const config of configs) {
-      if (signal?.aborted) return { records, spent, stop: { reason: 'interrupted' } };
-      if (spent >= batchCapUsd) return { records, spent, stop: { reason: 'cap', message: `the batch spent ${usd(spent)} of its ${usd(batchCapUsd)}` } };
-      const record = await driveRun({ ...run, signal, config, runId: `${config.name}-${round}`, capUsd: Math.min(runCapUsd, batchCapUsd - spent) });
-      records.push(record);
+  let reserved = 0;
+  let stop = null;
+  let failure = null;
+  const capStop = () => ({ reason: 'cap', message: `the batch spent ${usd(spent)} of its ${usd(batchCapUsd)}` });
+  const inOrder = () => done.filter(Boolean);
+  const launch = (item, capUsd) => {
+    reserved = round2(reserved + capUsd);
+    const settle = async () => {
+      const record = await driveRun({ ...run, signal, config: item.config, runId: `${item.config.name}-${item.round}`, capUsd });
+      reserved = round2(reserved - capUsd);
       spent = round2(spent + record.spendUsd);
-      await onRecord(record);
-      if (['agent', 'session', 'compaction', 'cost'].includes(record.stop?.reason)) return { records, spent, stop: { reason: record.stop.reason, message: record.stop.message } };
+      done[item.index] = record;
+      if (stop === null && BATCH_STOPS.includes(record.stop?.reason)) stop = { reason: record.stop.reason, message: record.stop.message };
+      await onRecord(record, inOrder());
+    };
+    // The entry leaves `flying` only once its record is stored or its failure kept: nothing escapes the loop's watch.
+    const promise = settle()
+      .catch((err) => {
+        if (failure === null) failure = err;
+      })
+      .finally(() => flying.delete(item.index));
+    flying.set(item.index, { round: item.round, promise });
+  };
+  while (queue.length > 0 || flying.size > 0) {
+    while (stop === null && failure === null && flying.size < jobs && queue.length > 0) {
+      if (signal?.aborted) {
+        stop = { reason: 'interrupted' };
+        break;
+      }
+      const left = round2(batchCapUsd - spent - reserved);
+      if (spent >= batchCapUsd || left <= 0) {
+        if (flying.size === 0) stop = capStop();
+        break;
+      }
+      // The next run in order starts only while its round is the earliest not finished: a round holds one run of each
+      // arm, so the rounds stay balanced and no two runs of an arm overlap.
+      if (flying.size > 0 && queue[0].round > Math.min(...[...flying.values()].map((entry) => entry.round))) break;
+      // Beside another run, a run starts only with a whole run cap: a smaller one would stop it sooner than one job
+      // would and leave its arm fewer valid runs. It waits, and starts alone with what one job gives it.
+      if (flying.size > 0 && left < runCapUsd) break;
+      launch(queue.shift(), Math.min(runCapUsd, left));
     }
+    if (flying.size === 0) break;
+    await Promise.race([...flying.values()].map((entry) => entry.promise));
   }
-  return { records, spent, stop: spent >= batchCapUsd ? { reason: 'cap', message: `the batch spent ${usd(spent)} of its ${usd(batchCapUsd)}` } : null };
+  if (failure !== null) throw failure;
+  if (stop === null && spent >= batchCapUsd) stop = capStop();
+  return { records: inOrder(), spent, stop };
 }
 
 export const USAGE = [
   'usage: node evals/long-session/run.mjs --arms <current,minimal-commands> --runs <n> --turns <30-40> [--effort high] --plan',
   '       node evals/long-session/run.mjs --arms <...> --runs <n> (--turns <30-40> | --calibrate) --name <name> --claude <absolute path>',
   '         --cost-reading <per-turn|cumulative> --run-cap <usd> --batch-cap <usd> [--effort high] [--model <id>] [--work-root <dir>]',
+  '         [--jobs <n>]: up to n runs at once, never two of one arm; 1, the default, runs them one after another',
   `A run is paid: it needs the eval's token in ${TOKEN_VARIABLE}, and each turn is bounded by what is left of the run's cap.`,
 ].join('\n');
 
@@ -311,7 +361,7 @@ function parseArgs(argv) {
       values.calibrate = true;
       continue;
     }
-    const names = ['--arms', '--runs', '--turns', '--effort', '--name', '--claude', '--cost-reading', '--run-cap', '--batch-cap', '--model', '--work-root'];
+    const names = ['--arms', '--runs', '--turns', '--effort', '--name', '--claude', '--cost-reading', '--run-cap', '--batch-cap', '--model', '--work-root', '--jobs'];
     if (!names.includes(flag)) throw new UsageError(`unknown flag ${flag}`);
     const value = argv[index + 1];
     if (value === undefined) throw new UsageError(`${flag} needs a value`);
@@ -326,8 +376,10 @@ function parseArgs(argv) {
   const runs = Number(values.runs ?? 5);
   const turns = Number(values.turns ?? MIN_TURNS);
   if (!Number.isInteger(runs) || runs < 1) throw new UsageError(`--runs takes a whole number from 1, got ${values.runs}`);
+  const jobs = Number(values.jobs ?? 1);
+  if (!Number.isInteger(jobs) || jobs < 1) throw new UsageError(`--jobs takes a whole number from 1, got ${values.jobs}`);
   if (!Number.isInteger(turns) || turns < MIN_TURNS || turns > MAX_TURNS) throw new UsageError(`--turns takes ${MIN_TURNS} to ${MAX_TURNS}, got ${values.turns}`);
-  return { plan, calibrate: values.calibrate === true, arms, runs, turns, effort: values.effort ?? 'high', model: values.model ?? EVAL_MODEL, name: values.name, claude: values.claude, costReading: values['cost-reading'], runCap: Number(values['run-cap']), batchCap: Number(values['batch-cap']), workRoot: values['work-root'] };
+  return { plan, calibrate: values.calibrate === true, arms, runs, jobs, turns, effort: values.effort ?? 'high', model: values.model ?? EVAL_MODEL, name: values.name, claude: values.claude, costReading: values['cost-reading'], runCap: Number(values['run-cap']), batchCap: Number(values['batch-cap']), workRoot: values['work-root'] };
 }
 
 /** The results files of the suite at the top of `dir`, as `[{ name, doc }]`; one that does not parse is left out. */
@@ -390,14 +442,14 @@ export async function runMain(argv, env = process.env, deps = {}) {
     const options = { command: args.claude, model: args.model, permissionMode: PERMISSION_MODE };
     const configs = args.arms.map((arm) => withToken(arm === 'current' ? currentConfig({ ...options, seed: seedFromTemplate(templateDir) }) : minimalCommandsConfig(options), token));
     const turns = args.calibrate ? calibrationScript() : scriptOf(args.turns);
-    const doc = { format: 1, kind: KIND, name: args.name, createdAt: new Date().toISOString(), calibration: args.calibrate, model: args.model, effort: args.effort, turns: turns.length, costReading: args.costReading, runCapUsd: args.runCap, batchCapUsd: args.batchCap, setup: built.fingerprint, runs: [] };
+    const doc = { format: 1, kind: KIND, name: args.name, createdAt: new Date().toISOString(), calibration: args.calibrate, model: args.model, effort: args.effort, turns: turns.length, costReading: args.costReading, runCapUsd: args.runCap, batchCapUsd: args.batchCap, jobs: args.jobs, setup: built.fingerprint, runs: [] };
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    const store = (record) => {
-      doc.runs.push(record);
+    const store = (record, records) => {
+      doc.runs = records;
       fs.writeFileSync(file, `${JSON.stringify(doc, null, 2)}\n`);
     };
     const batch = await driveBatch({
-      configs, runs: args.runs, runCapUsd: args.runCap, batchCapUsd: args.batchCap, onRecord: store, signal: interrupted.signal,
+      configs, runs: args.runs, jobs: args.jobs, runCapUsd: args.runCap, batchCapUsd: args.batchCap, onRecord: store, signal: interrupted.signal,
       turns, effort: args.effort, workRoot, runsDir: path.join(runsRoot, KIND, args.name), costReading: args.costReading, runProcess,
       log: (message) => stderr.write(`${message}\n`),
     });
