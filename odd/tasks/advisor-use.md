@@ -7,11 +7,7 @@ proposal, through the double review and then the lead as a question; nothing is 
 `node --test`.
 
 ## State
-Three reads done and answered (L4, L6, L8); evidence in `odd/tasks/advisor-use-evidence/`; branch pushed. Question 282
-(the hook, flags first, policy R) sent to the lead at 19:09Z; held by the lead at 20:05Z until the directive audit
-(JH SR) reaches him, which takes this document's open choices as rows; a `waiting` notice is recorded. The others follow one at a time after its answer:
-(3) Fable callers gated, (4) P4b escalation to the senior by `rules change`, (5) P6 the question check, (6) P4a fallback
-and P5 before the hook. Nothing in `bin/` before his yes.
+Question 282 answered yes (lead 20:2xZ): build T3 only: the hook, its test, the report; a week of warnings, then refuse; policy R. Not covered: P4b, P6, P4. Constraints: report measures added Fable tokens a day against 2.4M; send the lead the edit surface before the first source write; stay out of bin/lib/guard.mjs. Next: send edit surface (bin/advisor-gate.mjs, bin/advisor-gate.test.mjs, hook entries in install), then test first.
 
 ## Goal
 Each of the lead, the work sessions and the sub-agents that has the advisor consults it (a call with a result, made
