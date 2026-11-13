@@ -3201,12 +3201,24 @@ test('the orchestrator skill names the context pause and keeps the fixed prompt 
 
 // The rotation of 2026-10-15 (the lead's relief file, 04:26 to 04:57): a fork could not be detached, killed the old
 // lead's loops, and archiving a lead would have archived the new one with it.
-test('the orchestrator skill says how a lead is rotated: started and detached, never forked, children detached before an archive', () => {
+test('the orchestrator skill says how a lead is rotated: started and detached, never forked, nested children detached before an archive', () => {
   const text = components[1].content('0.1.0');
   assert.ok(text.includes('- A new lead is started with the host\'s session-start tool in a turn the user\'s own message starts, and detached from the old lead at once'));
   assert.ok(text.includes('- Never by a fork: an agent cannot detach a fork, and a fork inherits the old lead\'s context and stops its background work.'));
-  assert.ok(text.includes('- Before a lead is archived, detach every session it started: archiving a session archives its idle side sessions.'));
+  assert.ok(text.includes('- Before a lead is archived, detach any session still nested under it (`list_sessions` linked): archiving a session archives its idle side sessions.'));
   assert.ok(text.includes('- Before the user leaves, open the reserve sessions the stretch will need'));
+});
+
+// His answer to question 279, 2026-11-13 ("Sí, separarlas al abrir", transcript 69918425, line 392): a work session
+// left nested under the lead woke it on every turn it ended and would be archived with it, so the lead detaches each
+// one it opens in the same turn, and a session that stops without a notice is seen by the heartbeat's STALLED line.
+test('the orchestrator skill has the lead detach each work session it opens, in the same turn', () => {
+  const text = components[1].content('0.1.0');
+  assert.ok(text.includes('detach it to top level in that same turn with the host\'s tool to detach sessions (`detach_session`)'));
+  assert.ok(text.includes('a nested session wakes you on every turn it ends, which spends your context, and is archived with you while idle'));
+  assert.ok(text.includes('a session that stops without a notice is then seen by the heartbeat\'s `STALLED:` line after 60 minutes, not at once.'));
+  assert.doesNotMatch(text, /Before a lead is archived, detach every session it started:/);
+  assert.ok(text.includes('- Before a lead is archived, detach any session still nested under it'));
 });
 
 // rule:question-context: on 2026-10-22 he answered a question by asking what it was for: he had taken an
