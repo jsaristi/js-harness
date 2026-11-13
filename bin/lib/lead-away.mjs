@@ -10,7 +10,7 @@ import path from 'node:path';
 import { readNotices } from './channel.mjs';
 import { loopsFolder } from './loops.mjs';
 import { departureLine, departureWatch, stretchesOf } from './return-report.mjs';
-import { projectSlug } from './sessions.mjs';
+import { projectDirsOf, projectSlug } from './sessions.mjs';
 import { isLeadSession } from './stale-board.mjs';
 
 /** The whole lines of `file` from the byte `start` to its last line break, as `{ text, end }` with `end` the byte after
@@ -33,11 +33,13 @@ export function readTailOf(file, start) {
 }
 
 /** The transcript of `session`, or `null` without one. The host keeps a session opened in a worktree under that
- * worktree's folder, so the folder of `cwd` is tried before the main checkout's (`slug`); when neither holds the file,
- * the first is named, so what fails to read it says where it looked. */
-export function sessionTranscript({ cwd, slug, claudeDir, session, mtime }) {
+ * worktree's folder, so the folder of `cwd` is tried first, then the main checkout's (`root`) and those of its other
+ * worktrees as git lists them (`projectDirsOf`, through `run`): a lead opened in a worktree may run its command with
+ * the main checkout as its folder. When none holds the file, the first is named, so what fails to read it says where
+ * it looked. */
+export function sessionTranscript({ cwd, root, claudeDir, session, mtime, run }) {
   if (!session) return null;
-  const folders = [...new Set([projectSlug(path.resolve(cwd)), slug])].map((name) => path.join(claudeDir, 'projects', name));
+  const folders = [...new Set([path.join(claudeDir, 'projects', projectSlug(path.resolve(cwd))), ...projectDirsOf(run, root, claudeDir)])];
   return folders.map((folder) => path.join(folder, `${session}.jsonl`)).find((file) => {
     try {
       mtime(file);

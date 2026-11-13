@@ -503,8 +503,8 @@ const leadStart = (minutes = WAIT_FOR_MINUTES) => `js-harness wait: waits for a 
 
 /** The world of a lead's wait: the record holds `record`, the transcript `transcript`, and the marks and the stretch
  * record live in `state.marks`, which the wait reads and writes. */
-function leadWorld({ record = LEADS, transcript, marks = {} }) {
-  const made = world({ record });
+function leadWorld({ record = LEADS, transcript, marks = {}, at = LEAD_TRANSCRIPT, answer }) {
+  const made = world({ record, answer });
   const { state, deps } = made;
   state.transcript = transcript;
   state.marks = { ...marks };
@@ -514,11 +514,12 @@ function leadWorld({ record = LEADS, transcript, marks = {} }) {
     state.marks[file] = text;
   };
   deps.mtime = (file) => {
+    if (file === at && at !== LEAD_TRANSCRIPT) return T0;
     throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
   };
   deps.readTail = (file, from) => {
     state.tails = (state.tails ?? 0) + 1;
-    if (file !== LEAD_TRANSCRIPT || state.transcript === undefined) throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
+    if (file !== at || state.transcript === undefined) throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
     const rest = state.transcript.slice(from);
     const whole = rest.slice(0, rest.lastIndexOf('\n') + 1);
     return { text: whole, end: from + whole.length, restarted: false };
@@ -537,6 +538,27 @@ test("the lead's wait ends with the heartbeat's AWAY line when he last wrote ove
   assert.equal(state.out.length, 3);
   assert.deepEqual(state.err, []);
   assert.deepEqual(JSON.parse(state.marks[AWAY_MARK]), { told: iso(T0 - 3 * HOUR), at: iso(T0), heldSince: null });
+});
+
+test("a lead opened in a worktree is read from that worktree's sessions folder, though its wait's --cwd is the main checkout", async () => {
+  // Codex's review of the slice: the host files a session under the folder it was opened in, as `ownNumber` reads it.
+  const tree = path.resolve('wait-test-project-worktree');
+  const at = path.join(CLAUDE_HOME, 'projects', projectSlug(tree), `${SELF_ID}.jsonl`);
+  const answer = (command, commandArgs) => (command === 'git' && commandArgs[0] === 'worktree'
+    ? ok(`worktree ${CWD}\0HEAD abc\0branch refs/heads/main\0\0worktree ${tree}\0HEAD def\0branch refs/heads/x\0\0`)
+    : ok());
+  const { state, deps } = leadWorld({ transcript: his(T0 - 3 * HOUR), at, answer });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator'), LEAD_ENV, deps), 4);
+  assert.equal(awayOf(state).length, 1);
+  assert.deepEqual(state.err, []);
+});
+
+test("an absence found at the check where the time runs out ends the lead's wait for the absence, exit 4", async () => {
+  // The reliability lens's question on the slice: the absence is told before the time is weighed.
+  const { state, deps } = leadWorld({ transcript: his(T0 - HOUR - MIN) });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--every', '3600', '--for', '60'), LEAD_ENV, deps), 4);
+  assert.equal(state.clock, T0 + HOUR);
+  assert.match(state.out.at(-1), /^js-harness wait: the wait ends for the AWAY line above/);
 });
 
 test("the lead's wait ends at the first check after his silence passes two hours", async () => {

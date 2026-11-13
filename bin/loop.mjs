@@ -554,7 +554,7 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   // folder, so the folder of the working directory is tried before the main checkout's (bin/lib/sessions.mjs,
   // `projectSlug`). What could not be read is said once, as `unread` is.
   const session = ctx.env.CLAUDE_CODE_SESSION_ID || null;
-  const transcript = sessionTranscript({ cwd: ctx.cwd, slug, claudeDir: ctx.claudeDir, session, mtime: ctx.mtime });
+  const transcript = sessionTranscript({ cwd: ctx.cwd, root: mainCheckout(ctx.run, path.resolve(ctx.cwd)), claudeDir: ctx.claudeDir, session, mtime: ctx.mtime, run: ctx.run });
   // The count a CUT line last told for this session, kept in a folder of its own under the loop records (loop status
   // reads every .json entry of that folder as a loop): a cut due when a heartbeat starts wakes the lead once, and a
   // relaunch after it is not woken again until another compaction.

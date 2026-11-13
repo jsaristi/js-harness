@@ -300,7 +300,8 @@ export async function waitMain(
   const number = ownNumber({ env, cwd, run: bounded, readdir, readFile, homedir, defaultCwd });
   const own = number === null ? null : { role: 'work', number };
   const watched = own !== null && !(parsed.condition.kind === 'notice' && parsed.condition.role.role === 'work' && parsed.condition.role.number === number);
-  const ends = watched ? `ends when it holds, on a notice to ${number}, or after ${minutes} minutes` : `ends when it holds, or after ${minutes} minutes`;
+  // What else ends the wait, before its time runs out, each said in its opening line.
+  const endings = watched ? [`on a notice to ${number}`] : [];
 
   // A notice wait for the orchestrator renews the relay lease its session holds, on every check (odd/tasks/harness-review.md,
   // T3, S5a), so the lease outlasts the wait. The opening line says so only when the first renewal holds the lease.
@@ -327,17 +328,19 @@ export async function waitMain(
   let away = null;
   if (leaseSession !== undefined && leaseSession !== '') {
     try {
-      const slug = projectSlug(mainCheckout(bounded, cwd));
+      const root = mainCheckout(bounded, cwd);
+      const slug = projectSlug(root);
       const claudeDir = path.resolve(defaultCwd, env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'));
       const reading = leadAbsence({ home, slug, session: leaseSession, readFile, writeFile, say: (line) => stderr(`js-harness wait: ${line}`) });
-      const transcript = sessionTranscript({ cwd, slug, claudeDir, session: leaseSession, mtime });
+      const transcript = sessionTranscript({ cwd, root, claudeDir, session: leaseSession, mtime, run: bounded });
       away = { reading, transcript, offset: 0, lead: reading.leads(), unreadSaid: false };
     } catch (err) {
       stderr(`js-harness wait: the user's absence is not read (${err.message})`);
     }
   }
-  const absent = away?.lead ? `, when the user has not written to this session for ${ABSENCE_MS / 3600000} hours and no stretch covers them` : '';
-  stdout(`js-harness wait: waits for ${phrase}; ${ends.replace(/, or after /, `${absent}, or after `)}${renews ? '; renews the relay lease while it waits' : ''}; stop it with TaskStop when it is no longer needed`);
+  if (away?.lead) endings.push(`when the user has not written to this session for ${ABSENCE_MS / 3600000} hours and no stretch covers them`);
+  const ends = `ends when it holds, ${endings.map((ending) => `${ending}, `).join('')}or after ${minutes} minutes`;
+  stdout(`js-harness wait: waits for ${phrase}; ${ends}${renews ? '; renews the relay lease while it waits' : ''}; stop it with TaskStop when it is no longer needed`);
   /** The AWAY line of an absence not told before, in the lead's session, or `[]`. */
   const awayLines = () => {
     if (away === null) return [];
