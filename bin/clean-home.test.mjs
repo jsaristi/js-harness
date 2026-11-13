@@ -53,14 +53,15 @@ const holds = (folder, name) => EXTENSIONS.some((extension) => fs.existsSync(pat
 
 /** The machine's PATH, each folder unquoted, without each folder that holds a tool of the stack, so the cycle runs as
  * on a machine where none of them is installed yet. git, which the release repository and the package manager
- * stand-in run, is linked into `shim` from a folder that is dropped (Homebrew's bin can hold git and claude), where
- * a link of it works: on POSIX. The test then asserts that git still runs. */
+ * stand-in run, may share a dropped folder (Homebrew's bin can hold git and claude): then git's own folder of
+ * programs (`git --exec-path`, which holds a git that runs where it is, on Windows and POSIX) is put last. The other
+ * commands of a dropped folder (npm, npx) the cycle does not run: its package manager is a stand-in run by `node`. */
 function pathWithoutStack(value, shim) {
   const folders = value.split(path.delimiter).map((folder) => folder.replace(/^"(.*)"$/, '$1')).filter((folder) => folder !== '');
   const kept = folders.filter((folder) => !STACK_TOOLS.some((name) => holds(folder, name)));
-  const gitFolder = folders.find((folder) => holds(folder, 'git'));
-  if (process.platform !== 'win32' && gitFolder !== undefined && !kept.includes(gitFolder)) {
-    fs.symlinkSync(fs.realpathSync(path.join(gitFolder, 'git')), path.join(shim, 'git'));
+  if (!kept.some((folder) => holds(folder, 'git'))) {
+    const exec = spawnSync('git', ['--exec-path'], { encoding: 'utf8' });
+    if (exec.status === 0) kept.push(path.normalize(exec.stdout.trim()));
   }
   return [shim, ...kept];
 }
