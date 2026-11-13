@@ -307,3 +307,10 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   driver throws rejects the batch while the other run in flight goes on alone and cleans up after itself, as one job
   would leave it unrecorded.
 
+- L16 (2026-11-13): the reviews of T10 (Codex: incorrect at 0.98; the lenses: one critical, one warning) found the
+  same two failures, both fixed test first. A fast arm could start rounds ahead of a slow one, so a cut left the arms
+  unbalanced: now no run of a round starts before the round before has finished, which also keeps two runs of an arm
+  apart. A run left `flying` before its `onRecord` returned, and a run that threw left the others running unwatched:
+  now a run is in flight until its record is stored or its failure kept, and a failure starts nothing more and is
+  thrown once the runs in flight end. With the round as the pace, each round takes its slowest run, so the estimate
+  of about 116 → 78 min for 2 jobs stands (current's runs took 22 to 28 min).

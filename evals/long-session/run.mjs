@@ -272,13 +272,15 @@ export async function driveRun({ config, turns, effort, workRoot, runsDir, runId
 const BATCH_STOPS = ['agent', 'session', 'compaction', 'cost'];
 
 /** A batch: `runs` rounds, each running every config once in order, so a batch cut short stays balanced between the
- * arms. Up to `jobs` runs go at once (1, the default, runs them one after another), taken in that order, and never two
- * runs of one arm at once: two runs of an arm side by side could share a cache write and lower the second's cost,
- * which the eval measures. A run starts with a cap that is the smaller of `runCapUsd` and what is left of `batchCapUsd`
+ * arms. Up to `jobs` runs go at once (1, the default, runs them one after another), in that order and within one round:
+ * no run of a round starts before every run of the round before has finished, so a fast arm never runs ahead of a slow
+ * one, and two runs of one arm never overlap, which could share a cache write and lower the second's cost the eval
+ * measures. A run starts with a cap that is the smaller of `runCapUsd` and what is left of `batchCapUsd`
  * once the runs in flight have reserved theirs, so the caps in flight never sum past the batch's. No run starts once
  * the batch's spend reaches its cap, or after a run the eval itself stopped (`BATCH_STOPS`); the runs in flight then
  * finish and are kept. `onRecord(record, records)` is called after each run with every record so far, in run order,
- * to store them. */
+ * to store them; a run is in flight until it returns. A run that throws starts nothing more, and the batch throws its
+ * error once the runs in flight have finished, so none is left running unwatched. */
 export async function driveBatch({ configs, runs, jobs = 1, runCapUsd, batchCapUsd, onRecord = () => {}, signal, ...run }) {
   if (!Number.isInteger(jobs) || jobs < 1) throw new Error(`a batch runs a whole number of jobs from 1, got ${JSON.stringify(jobs)}`);
   const queue = [];
@@ -288,22 +290,29 @@ export async function driveBatch({ configs, runs, jobs = 1, runCapUsd, batchCapU
   let spent = 0;
   let reserved = 0;
   let stop = null;
+  let failure = null;
   const capStop = () => ({ reason: 'cap', message: `the batch spent ${usd(spent)} of its ${usd(batchCapUsd)}` });
   const inOrder = () => done.filter(Boolean);
   const launch = (item, capUsd) => {
     reserved = round2(reserved + capUsd);
-    const promise = driveRun({ ...run, signal, config: item.config, runId: `${item.config.name}-${item.round}`, capUsd }).then(async (record) => {
-      flying.delete(item.index);
+    const settle = async () => {
+      const record = await driveRun({ ...run, signal, config: item.config, runId: `${item.config.name}-${item.round}`, capUsd });
       reserved = round2(reserved - capUsd);
       spent = round2(spent + record.spendUsd);
       done[item.index] = record;
-      await onRecord(record, inOrder());
       if (stop === null && BATCH_STOPS.includes(record.stop?.reason)) stop = { reason: record.stop.reason, message: record.stop.message };
-    });
-    flying.set(item.index, { arm: item.config.name, promise });
+      await onRecord(record, inOrder());
+    };
+    // The entry leaves `flying` only once its record is stored or its failure kept: nothing escapes the loop's watch.
+    const promise = settle()
+      .catch((err) => {
+        if (failure === null) failure = err;
+      })
+      .finally(() => flying.delete(item.index));
+    flying.set(item.index, { round: item.round, promise });
   };
   while (queue.length > 0 || flying.size > 0) {
-    while (stop === null && flying.size < jobs && queue.length > 0) {
+    while (stop === null && failure === null && flying.size < jobs && queue.length > 0) {
       if (signal?.aborted) {
         stop = { reason: 'interrupted' };
         break;
@@ -313,15 +322,15 @@ export async function driveBatch({ configs, runs, jobs = 1, runCapUsd, batchCapU
         if (flying.size === 0) stop = capStop();
         break;
       }
-      // The first run in order whose arm has none in flight; a later one waits, so the rounds stay balanced.
-      const busy = new Set([...flying.values()].map((entry) => entry.arm));
-      const at = queue.findIndex((item) => !busy.has(item.config.name));
-      if (at === -1) break;
-      launch(queue.splice(at, 1)[0], Math.min(runCapUsd, left));
+      // The next run in order starts only while its round is the earliest not finished: a round holds one run of each
+      // arm, so the rounds stay balanced and no two runs of an arm overlap.
+      if (flying.size > 0 && queue[0].round > Math.min(...[...flying.values()].map((entry) => entry.round))) break;
+      launch(queue.shift(), Math.min(runCapUsd, left));
     }
     if (flying.size === 0) break;
     await Promise.race([...flying.values()].map((entry) => entry.promise));
   }
+  if (failure !== null) throw failure;
   if (stop === null && spent >= batchCapUsd) stop = capStop();
   return { records: inOrder(), spent, stop };
 }

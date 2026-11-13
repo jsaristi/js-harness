@@ -311,3 +311,36 @@ test('runMain refuses --jobs that is not a whole number from 1', async () => {
     assert.match(err, /--jobs takes a whole number from 1/);
   }
 });
+
+test('with --jobs no run of the next round starts before every run of the round before has finished', async (t) => {
+  const events = [];
+  const agent = concurrentAgent({ delay: (arm) => (arm === 'current' ? 4 : 0) });
+  const runProcess = async (call) => {
+    if (!call.args.includes('--resume')) events.push(`start ${call.env.ARM}`);
+    return agent.runProcess(call);
+  };
+  await driveBatch({ ...base(t), configs: twoArms(), runs: 2, jobs: 2, runCapUsd: 10, batchCapUsd: 100, costReading: 'cumulative', runProcess, onRecord: (record) => events.push(`end ${record.id}`) });
+  const secondRound = events.findIndex((event, index) => event.startsWith('start') && events.slice(0, index).filter((e) => e.startsWith('start')).length === 2);
+  assert.ok(events.slice(0, secondRound).includes('end current-1') && events.slice(0, secondRound).includes('end minimal-commands-1'), events.join(', '));
+});
+
+test('with --jobs a run is in flight until its record is stored, and a run that throws waits for the others before the batch throws', async (t) => {
+  const stored = [];
+  const slowStore = async (record) => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    stored.push(record.id);
+  };
+  const agent = concurrentAgent();
+  const batch = await driveBatch({ ...base(t), configs: twoArms(), runs: 1, jobs: 2, runCapUsd: 10, batchCapUsd: 100, costReading: 'cumulative', runProcess: agent.runProcess, onRecord: slowStore });
+  assert.deepEqual(stored.sort(), ['current-1', 'minimal-commands-1']);
+  assert.equal(batch.records.length, 2);
+  const turns = new Map();
+  const throwing = concurrentAgent({ delay: (arm) => (arm === 'current' ? 2 : 0) });
+  const runProcess = async (call) => {
+    turns.set(call.env.ARM, (turns.get(call.env.ARM) ?? 0) + 1);
+    if (call.env.ARM === 'minimal-commands' && turns.get(call.env.ARM) === 3) throw new Error('the runner broke');
+    return throwing.runProcess(call);
+  };
+  await assert.rejects(driveBatch({ ...base(t), configs: twoArms(), runs: 2, jobs: 2, runCapUsd: 10, batchCapUsd: 100, costReading: 'cumulative', runProcess }), /the runner broke/);
+  assert.equal(turns.get('current'), 30, 'the run in flight was left running when the batch threw');
+});
