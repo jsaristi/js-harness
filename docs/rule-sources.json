@@ -1305,12 +1305,18 @@
         "date": "2026-11-12",
         "session": "812b728f-2f18-43f6-b405-396080689c65",
         "line": 3271
+      },
+      {
+        "quote": "Ok implementa todas las correciones y cementalas en el harness para que esto nunca jamas vuelva a suceder",
+        "date": "2026-11-13",
+        "session": "69918425-3b43-430f-9f50-62b6422422ce",
+        "line": 2679
       }
     ],
-    "reading": "The home of everything Claude the harness starts moves to claude-opus-5-5, and the effort of the sessions and the sub-agents stays medium. The lead's effort is not moved here: rule:lead-effort also sets the effort of the lenses and of the double review's Claude reader, which he chose at high on 2026-11-11 (question 260), so his Extra for the orchestrator waits for a rule that tells the lead from those reviewers. The Fable 5.2 high advisor and the senior orchestrator on Fable 5.2 high are no rule of the home and this switch does not write them",
-    "accepted": "He states the scheme himself at line 1444, asks at line 2544 to work as agreed with Opus and the Fable advisor, and at line 3271 authorizes it and asks that everything that can be is passed to Opus now",
+    "reading": "The home of everything Claude the harness starts moves to claude-opus-5-5, and the effort of the sessions and the sub-agents stays medium. The lead's effort is not moved here: rule:lead-effort also sets the effort of the lenses and of the double review's Claude reader, which he chose at high on 2026-11-11 (question 260), so his Extra for the orchestrator waits for a rule that tells the lead from those reviewers. The Fable 5.2 high advisor and the senior orchestrator on Fable 5.2 high are no rule of the home and this switch does not write them. On 2026-11-13 (line 2679) he ordered every correction of the directives audit implemented and cemented, among them that a sub-agent may run on Opus by its short name: the alias opus is declared once checked to give this model (claude -p --model opus gave claude-opus-5-5 on cli 2.1.322, 2026-11-13).",
+    "accepted": "He states the scheme himself at line 1444, asks at line 2544 to work as agreed with Opus and the Fable advisor, and at line 3271 authorizes it and asks that everything that can be is passed to Opus now; the alias follows his order at line 2679 of 69918425, with the lead's OK of 2026-11-13 on odd/tasks/audit-cement.md (task T1)",
     "checked": {
-      "date": "2026-11-12",
+      "date": "2026-11-13",
       "by": "command"
     }
   },
