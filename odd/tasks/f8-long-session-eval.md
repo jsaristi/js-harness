@@ -7,20 +7,11 @@ branch `claude/f8-long-session-eval-30463b`. Runner: `node --test`. Plan: `odd/t
 from `docs/proposals/harness-diet.md` section 7.2.
 
 ## State
-The eval landed in PR 855 (main ad60b83). batch-1 ran on question 278's yes (L11): 6 runs, all 30 of 30 turns,
-$16.15. After the restart the lead asked (2026-11-13): (1) grade batch-1 and add it to PR 858, notify ready; (2) then,
-on his words "Haz las mejoras que no hechan a perder calidad y luego pedimos" (transcript 69918425 line 1025), a
-faster eval at equal quality and no spend, on a NEW branch cut from 858's head. Grading ran (the codex exe at
-pnpm store 0.167.2 vendor/x86_64-pc-windows-msvc/bin/codex.exe; the pnpm shim gave ENOENT); its log is
-scratchpad/grade-1.log. Measured so far: turn 25 reports duration_api_ms 0 (the counter does not restart), so
-outside-the-model time is about 13.3/15.0/9.6 min a run for current against 2.9/3.3/2.4 for minimal (the lead's
-figure holds); batch wall 117 min against 115.9 of turn walls, so the driver adds nothing; current's turn-1 cacheWrite
-falls from 31693 (run 1) to about 16790 (runs 2, 3), so cross-run cache already lowers later runs. The next step: key
-tool time by the real command (strip the `cd "<workspace>" &&` prefix), median and max per tool, to tell per-call hook
-cost from a few slow commands; then the proposal (concurrency as the only free build: reserved caps, fixed record
-order, sweep isolation, pairing arms within a round; high-risk item 4). Open, not started: grading batch-1
-(`grade.mjs --name batch-1`, a few cents of Sonnet regrade) and the desktop smoke, which runs by hand; nothing else
-paid is authorized. The results PR from `claude/f8-long-session-batch` is the lead's to land.
+batch-1 (L11) and its grade (L12) landed in PR 858. The grader fix and batch-1's regrade, whose scores hold (current
+9 of 15, minimal-commands 8 of 15), are PR 861, ready for the lead's land (L13). `--jobs` (L14-L17) is PR 862,
+stacked on 861, reviewed in three rounds, the last clean: when 861 lands, retarget 862 to main and send ready. Open:
+the paid comparison of `--jobs 2` against batch-1, drafted to the lead as a question (about $16; nothing paid runs
+before his yes); the desktop smoke, whose hands is open; T11 closes on the comparison.
 
 ## Goal
 `node evals/long-session/run.mjs` drives a scripted Spanish conversation through real resumed Claude Code turns in the
