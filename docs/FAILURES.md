@@ -1352,6 +1352,9 @@ read it, and he found its holes, or was asked to approve a version its next roun
 - Seen: 2026-10-16 — the lead's transcript e152c9d8, line 14210 — the lead's improvement plan
   reached him with no reader: "siempre tenemos que hacer una doble revision a todo para que salga
   sin errores por favor cementa esto"
+- Seen: 2026-11-13 — the lead's transcript 69918425, line 354 — question 279, a change to how the lead opens work
+  sessions, reached him with no double review: `.git/js-harness/double-reviews.jsonl` holds no read between 01:45Z
+  and 18:12Z; the control owed is `notify` refusing a question with no read id (odd/tasks/advisor-use.md, P6, L5)
 - Control: check — bin/lib/protocols-skill.test.mjs — "a proposal reaches the user only after two readers, and a handoff
   names the rule" — since 2026-10-16
 
