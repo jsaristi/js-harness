@@ -7,9 +7,10 @@ proposal, through the double review and then the lead as a question; nothing is 
 `node --test`.
 
 ## State
-Three reads done (a229de6b, baa660cd, 95b51156), the last the rule allows; the third's 15 findings answered here by
-edit (L8). What they leave open goes to him as such (Unguaranteed). Next: the question to him through the lead, one
-decision a question. Evidence is in the repository: `odd/tasks/advisor-use-evidence/`.
+Three reads done and answered (L4, L6, L8); evidence in `odd/tasks/advisor-use-evidence/`; branch pushed. Question 282
+(the hook, flags first, policy R) sent to the lead at 19:09Z; open. The others follow one at a time after its answer:
+(3) Fable callers gated, (4) P4b escalation to the senior by `rules change`, (5) P6 the question check, (6) P4a fallback
+and P5 before the hook. Nothing in `bin/` before his yes.
 
 ## Goal
 Each of the lead, the work sessions and the sub-agents that has the advisor consults it (a call with a result, made
