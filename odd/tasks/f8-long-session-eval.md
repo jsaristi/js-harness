@@ -9,9 +9,10 @@ from `docs/proposals/harness-diet.md` section 7.2.
 ## State
 Question 277 was answered yes (calibration only) and the calibration ran as `calib-1` (L5): about $1.06 really spent,
 `/compact` compacts under `--print --resume` in both arms, the cache holds across processes, and `costUsd` is cumulative
-per session, so a batch runs with `--cost-reading cumulative`. Next: commit, `npm run check`, Codex and the lenses, push,
-PR, notify ready with these figures; then Q2 (the arms, the turns, the baseline that replaces gentle-ai) on them. No
-other paid run is authorized.
+per session, so a batch runs with `--cost-reading cumulative`. Committed and reviewed three times (L6): the third review still finds one real failure, the grader's
+shell parsing (`spoken()` in `grade.mjs` hides quoted operands that do run or write), so by the protocol it goes to
+the lead as a problem and to the strongest model the rules name, not to a fourth round here. Then Q2 (the arms, the
+turns, the baseline that replaces gentle-ai) on the measured figures. No other paid run is authorized.
 
 ## Goal
 `node evals/long-session/run.mjs` drives a scripted Spanish conversation through real resumed Claude Code turns in the
@@ -177,3 +178,13 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   turn's usage. The cache holds across processes: current's turn 2 read 120882 tokens from cache and wrote 3137;
   its turn 1 wrote 38870, half the 77000 the model assumed as the fixed load. Minimal's turn 5, after the
   compaction, wrote 10304.
+- L6 (2026-11-13, the reviews): Codex 5f3919f8..930224f7 found 8 defects (shell writes and releases read from
+  mentions, Bash-written tests unseen, the Spanish reply cut at 1500 characters, judge failures scored against the
+  agent, error turns and unknown costs not stopping, an arm named twice), all fixed in 30091421. The confirming Codex
+  review and the lenses (risk, resilience, reliability) over 5f3919f8..30091421 found 5 (quoted mentions still read,
+  a forked turn's cost dropped, the run's own budget stopping the batch, the regrade counting unjudged moments), fixed
+  in 36121dbb. The third review (Codex, resilience, reliability over 30091421..36121dbb) found that fix's masking
+  hides quoted operands that do run or write (`tee "src/list.mjs"`, `sh -c 'npm run release'`, `npm run "release"`),
+  so moment 1 or 4 could pass a run that broke it. Open: the shell reading needs real word splitting with quotes
+  removed, `sh -c`/`bash -c` strings read as commands, and only the arguments of commands that do not run them
+  (echo, printf, grep, cat without a redirection) set aside.
