@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `a9064b6ac01d`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 8.
+Hash `86f92c535e02`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 8.
 
 ## Sebastián's
 
@@ -210,10 +210,11 @@ Each recap names the sessions to archive and the stopped ones, and the lead arch
 
 ### session-model
 The model everything Claude the harness starts runs on: every session, the lead's included, every sub-agent the harness defines or that inherits its session's, the lenses, the double review's Claude reader and the escalation: claude-opus-5-5.
+- Passed on a call as `opus`.
 - Of this repository only: not in force in a project that installs the harness.
 - Was: claude-fable-5-2 until 2026-11-12; claude-opus-5-5 until 2026-11-10.
 - Read by: `bin/lib/model-home.mjs`, `bin/rules.mjs`.
-- Since 2026-11-12. Row: reports. Source: his words of 2026-11-11, 2026-11-11, 2026-11-12, checked by the command on 2026-11-12.
+- Since 2026-11-12. Row: reports. Source: his words of 2026-11-11, 2026-11-11, 2026-11-12, 2026-11-13, checked by the command on 2026-11-13.
 
 ### session-prompts
 Sessions pass notices through the channel, each gives prompts only for itself, and the lead keeps the order: "## A work session - Give prompts only for yourself. A prompt meant for another session names that session in its first line."
