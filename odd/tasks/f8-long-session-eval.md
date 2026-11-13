@@ -264,3 +264,13 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   minimal-commands-3 agreed on 3 of 4 moments. Per run: current 3/2/4, minimal 3/3/2. Lost most: tdd (every run) and
   compact (minimal 3 of 3, current 1 of 3). Not checked: current-1's "0 of 29 replies in Spanish", far from the other
   runs (23 and 24 of 29); it may be the agent or the grader's reading, and stays open.
+- L13 (2026-11-13, on the lead's request): current-1's "0 of 29 replies in Spanish" was the grader's. Its Spanish
+  prompt, rebuilt with the grader's own functions and a fake judge, held all 29 replies whole; asked again, the Codex
+  judge gave 25 of 29 (replies 4, 6, 10 and 12 mix English fragments such as "The test falla"). The first answer was
+  not kept, so its exact misreading is not known; three readings could turn a judge's slip into a score against the
+  agent, and each is fixed test first (8fa0c9fc, 0a217ce2): a reply with no boolean verdict, or an answer with no
+  readable verdict at all, is the judge's failure and stops the grading; a turn written as a string is read; a Codex
+  that writes no answer file has failed, instead of its printed log being read. Each judged moment keeps its raw
+  answer. Regraded with 8fa0c9fc: the scores do not change, current 9 of 15 (60.0%) and minimal-commands 8 of 15
+  (53.3%); current-1 now reads 25 of 29 and still fails the moment. The regrade met no unreadable answer, so 0a217ce2
+  would give the same. Codex approved 8fa0c9fc; the lenses' one finding on it is 0a217ce2.
