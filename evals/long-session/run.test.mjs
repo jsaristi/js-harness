@@ -202,3 +202,24 @@ test('runMain --plan prints the plan and starts nothing; a run without the eval 
   const usage = await runMain(['--arms', 'gentle', '--plan'], {}, { ...io, resultsDir });
   assert.equal(usage, 2);
 });
+
+test('a turn the agent reports as an error, or whose cost is unknown, ends the run as invalid and stops the batch', async (t) => {
+  const errored = await driveRun({ ...base(t), runProcess: fakeAgent({ act: featureFiles, stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: true, session_id: 'sess-1', total_cost_usd: 0.2, result: 'API Error: 401' }) }).runProcess });
+  assert.equal(errored.reached, 0);
+  assert.equal(errored.stop.reason, 'agent');
+  assert.equal(errored.spendUsd, 0.2, 'the cost of the failed turn is kept');
+  const unpriced = await driveRun({ ...base(t), runProcess: fakeAgent({ act: featureFiles, cost: (turn) => (turn < 2 ? 0.5 : undefined) }).runProcess });
+  assert.equal(unpriced.reached, 1);
+  assert.equal(unpriced.stop.reason, 'cost');
+  const { runProcess } = fakeAgent({ act: featureFiles, cost: () => undefined });
+  const batch = await driveBatch({ ...base(t), configs: [fakeConfig('current'), fakeConfig('minimal-commands')], runs: 2, runCapUsd: 5, batchCapUsd: 20, runProcess });
+  assert.equal(batch.records.length, 1);
+  assert.equal(batch.stop.reason, 'cost');
+});
+
+test('runMain refuses an arm named twice', async () => {
+  let err = '';
+  const code = await runMain(['--arms', 'current,current', '--runs', '1', '--turns', '30', '--plan'], {}, { stdout: { write: () => {} }, stderr: { write: (text) => { err += text; } }, runProcess: () => assert.fail('nothing runs') });
+  assert.equal(code, 2);
+  assert.match(err, /twice/);
+});

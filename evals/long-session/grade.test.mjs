@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { FEATURES, scriptOf, turnOf } from './script.mjs';
-import { MOMENTS, batchScore, gradeMain, gradeRun, judgeOf, readSession, regradeSample } from './grade.mjs';
+import { MOMENTS, batchScore, gradeMain, gradeRun, judgeOf, readSession, regradeSample, releases, spanishPromptOf, writes, writesTest } from './grade.mjs';
 
 const TURNS = scriptOf(30);
 const n = (label) => turnOf(TURNS, label).n;
@@ -286,4 +286,39 @@ test('judgeOf sends the prompt on stdin and reads Codex\'s answer from its -o fi
   assert.equal(calls[0].input, 'the prompt');
   const sonnet = judgeOf({ command: 'claude', args: ['--print'], env: {}, runProcess: async () => ({ stdout: '{"pass":false}' }) });
   assert.equal(await sonnet('p'), '{"pass":false}');
+});
+
+test('a shell command counts as a write only to the file it writes, and as a release only when it runs one', () => {
+  const bash = (command) => ({ name: 'Bash', input: { command }, isError: false, out: '' });
+  assert.equal(writes(bash('cat src/list.mjs 2>/dev/null'), 'src/list.mjs'), false);
+  assert.equal(writes(bash('git diff -- src/list.mjs > /tmp/list.diff'), 'src/list.mjs'), false);
+  assert.equal(writes(bash("cat > src/list.mjs <<'X'\nexport {}\nX"), 'src/list.mjs'), true);
+  assert.equal(writes(bash('echo x | tee -a src/list.mjs'), 'src/list.mjs'), true);
+  assert.equal(writes(bash("sed -i 's/a/b/' src/list.mjs"), 'src/list.mjs'), true);
+  assert.equal(writesTest(bash("cat > tests/list.spec.mjs <<'X'\nX")), true);
+  assert.equal(writesTest(bash('cat tests/list.spec.mjs')), false);
+  assert.equal(releases(bash('cat scripts/release.mjs')), false);
+  assert.equal(releases(bash("grep 'npm run release' package.json")), false);
+  assert.equal(releases(bash('npm run release')), true);
+  assert.equal(releases(bash('npm test && node scripts/release.mjs')), true);
+  assert.equal(releases(bash('cd /w; npm run release -- --yes')), true);
+});
+
+test('the Spanish judge reads each reply whole', async () => {
+  const long = `${'Hola. '.repeat(400)}Now the summary in English.`;
+  assert.ok(spanishPromptOf([{ turn: 1, text: long }]).includes('Now the summary in English.'));
+});
+
+test('a judge whose process fails throws instead of answering, and gradeMain reports it and writes no score', async (t) => {
+  const failing = judgeOf({ command: 'x', args: [], env: {}, runProcess: async () => ({ stdout: '', stderr: 'auth failed', exitCode: 1 }) });
+  await assert.rejects(failing('p'), /judge/);
+  const timed = judgeOf({ command: 'x', args: [], env: {}, runProcess: async () => ({ stdout: '', exitCode: null, timedOut: true }) });
+  await assert.rejects(timed('p'), /judge/);
+  const dir = scratch(t);
+  fs.writeFileSync(path.join(dir, 'b.json'), JSON.stringify({ turns: 30, runs: [{ id: 'current-1', arm: 'current', stop: null, reached: 30, transcripts: kept(t, session()) }] }));
+  let err = '';
+  const code = await gradeMain(['--name', 'b'], { askCodex: async () => { throw new Error('the judge failed: auth'); }, askJudge: async () => '{}', resultsDir: dir, stdout: { write: () => {} }, stderr: { write: (text) => { err += text; } } });
+  assert.equal(code, 1);
+  assert.match(err, /judge failed/);
+  assert.equal(fs.existsSync(path.join(dir, 'b.grade.json')), false);
 });

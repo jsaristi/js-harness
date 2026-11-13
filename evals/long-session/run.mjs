@@ -214,8 +214,18 @@ export async function driveRun({ config, turns, effort, workRoot, runsDir, runId
       // process) and what it re-reads (the history it carries).
       const count = (field) => (Number.isFinite(output.usage?.[field]) ? output.usage[field] : null);
       record.turnResults.push({ n: turn.n, costUsd: cost, requests: Number.isFinite(output.num_turns) ? output.num_turns : null, cacheWrite: count('cache_creation_input_tokens'), cacheRead: count('cache_read_input_tokens'), output: count('output_tokens'), isError: output.is_error === true, subtype: output.subtype ?? null, wallMs: Date.now() - began });
-      record.reached = turn.n;
       record.spendUsd = round2(spend());
+      // The caps rest on a known cost, so a turn without one stops the batch; a turn the agent reports as an error (a
+      // login, a rate limit) is the eval's failure, not a moment the agent failed, and is not counted as reached.
+      if (cost === null) {
+        record.stop = { reason: 'cost', turn: turn.n, message: 'the result gave no total_cost_usd, so the caps cannot be kept' };
+        break;
+      }
+      if (output.is_error === true || (Number.isInteger(run.exitCode) && run.exitCode !== 0)) {
+        record.stop = { reason: 'agent', turn: turn.n, message: `the agent reported an error: ${String(output.result ?? output.subtype ?? '').slice(0, 300)}` };
+        break;
+      }
+      record.reached = turn.n;
       if (before !== null && manualBoundaries(projectsDir, record.sessionId) <= before) {
         record.stop = { reason: 'compaction', turn: turn.n, message: '/compact left no compact_boundary line in the session' };
         break;
@@ -264,7 +274,7 @@ export async function driveBatch({ configs, runs, runCapUsd, batchCapUsd, onReco
       records.push(record);
       spent = round2(spent + record.spendUsd);
       await onRecord(record);
-      if (['agent', 'session', 'compaction'].includes(record.stop?.reason)) return { records, spent, stop: { reason: record.stop.reason, message: record.stop.message } };
+      if (['agent', 'session', 'compaction', 'cost'].includes(record.stop?.reason)) return { records, spent, stop: { reason: record.stop.reason, message: record.stop.message } };
     }
   }
   return { records, spent, stop: spent >= batchCapUsd ? { reason: 'cap', message: `the batch spent ${usd(spent)} of its ${usd(batchCapUsd)}` } : null };
@@ -301,6 +311,9 @@ function parseArgs(argv) {
   }
   const arms = String(values.arms ?? '').split(',').filter(Boolean);
   if (arms.length === 0 || arms.some((arm) => !Object.hasOwn(ARMS, arm))) throw new UsageError(`--arms takes ${Object.keys(ARMS).join(' and ')}, got ${JSON.stringify(values.arms ?? '')}`);
+  // Two runs of one arm in a round would share a run id, and with it their logs and transcripts.
+  const twice = arms.find((arm, index) => arms.indexOf(arm) !== index);
+  if (twice !== undefined) throw new UsageError(`--arms names ${twice} twice`);
   const runs = Number(values.runs ?? 5);
   const turns = Number(values.turns ?? MIN_TURNS);
   if (!Number.isInteger(runs) || runs < 1) throw new UsageError(`--runs takes a whole number from 1, got ${values.runs}`);
