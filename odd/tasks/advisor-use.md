@@ -7,7 +7,7 @@ proposal, through the double review and then the lead as a question; nothing is 
 `node --test`.
 
 ## State
-Question 282 answered yes (lead 20:2xZ): build T3 only: the hook, its test, the report; a week of warnings, then refuse; policy R. Not covered: P4b, P6, P4. Constraints: report measures added Fable tokens a day against 2.4M; send the lead the edit surface before the first source write; stay out of bin/lib/guard.mjs. Next: send edit surface (bin/advisor-gate.mjs, bin/advisor-gate.test.mjs, hook entries in install), then test first.
+Question 282 answered yes: build T3 only (the hook, its test, the report), a week of warnings then refusal, policy R. Not covered: P4b, P6, P4, choice (3). Lead clears: bin/advisor-gate.mjs and its test, one dispatch line in bin/js-harness.mjs, this document, the hook entries; not bin/lib/guard.mjs; manifest.mjs only its hook list, and tell the lead when that commit lands. Full surface asked of the lead at 21:2xZ: also bin/lib/hook-entries.mjs, bin/lib/manifest.test.mjs, scripts/practice-lib.mjs (HARNESS_HOOKS), docs/SPEC.md (hook table), docs/RECORDS.md (hooks list), README.md (one paragraph). Choices taken under the yes (advisor, L9): Fable callers recorded exempt, never flagged (choice 3 unanswered); SubagentStop during the week records and notifies, never blocks; the week counts from the first recorded decision, the flip to refuse is a one-line change after the report; the hook prints {} outside a js-harness project and before reading any transcript when the act is not gated, reads only the tail; the report labels added Fable tokens as calls the warnings prompted. Next: probe whether a PreToolUse notice without deny reaches the model; then slice 1 (decision, test, entries, dispatch), slice 2 (report).
 
 ## Goal
 Each of the lead, the work sessions and the sub-agents that has the advisor consults it (a call with a result, made
@@ -285,3 +285,4 @@ What the three reads left that this proposal does not settle, for him to weigh:
   P5 as unguaranteed (C5); cost uncached, its weighing unguaranteed (C6); P2's "sub-agents 3" and its stretch as R's, a
   second stop covered when a fresh call is there (C7, X4); M5's full list (C8); M1's equality premise (C9); the evidence
   copied into `odd/tasks/advisor-use-evidence/`, Edit dropped from P1 (C10); escapes found from git (X3).
+- L9 (2026-11-13) His yes to question 282 ("Sí, avisos primero (Recomendada)"), relayed by the lead with two constraints: the report measures added Fable tokens a day against 2.4M, and the edit surface goes to the lead first. Advisor before the build: the choices in State.
