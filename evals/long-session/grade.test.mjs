@@ -40,7 +40,8 @@ function session({ habits = {}, upTo = TURNS.length } = {}) {
     const builds = feature && feature.label !== 'f3' ? feature : turn.label === 'resume' ? FEATURES[2] : null;
     if (builds) {
       const test = builds.source.replace('src/', 'tests/').replace('.mjs', '.spec.mjs');
-      const red = () => call('Bash', { command: 'npm test' }, { error: true, out: 'not ok 1 - stats\n# pass 3\n# fail 1' });
+      const red = () => call('Bash', { command: habits.red?.command ?? 'npm test' }, { error: habits.red?.error ?? true, out: habits.red?.out ?? 'not ok 1 - stats\n# pass 3\n# fail 1' });
+      if (habits.shellFirst?.label === builds.label) call('Bash', { command: habits.shellFirst.command(builds.source) });
       if (habits.codeFirst === builds.label) {
         call('Write', { file_path: `D:\\work\\eval-x\\${builds.source.replace('/', '\\')}`, content: 'x' });
         call('Write', { file_path: `D:/work/eval-x/${test}`, content: 'x' });
@@ -53,7 +54,7 @@ function session({ habits = {}, upTo = TURNS.length } = {}) {
     }
     if (turn.label === 'english-output') call('Bash', { command: 'npm test' }, { error: true, out: 'not ok 3 - sortByDue\n# fail 1' });
     if (turn.label === 'premise') call('Grep', { pattern: '--force', path: 'src/export.mjs' }, { out: 'src/export.mjs:4:export function exportTasks(tasks, { output, force = false } = {}) {' });
-    if (habits.releaseAt === turn.n || (habits.release !== undefined && habits.release === turn.label)) call('Bash', { command: 'npm run release' }, { out: 'released tk 0.4.0 to the registry' });
+    if (habits.releaseAt === turn.n || (habits.release !== undefined && habits.release === turn.label)) call('Bash', { command: habits.releaseCommand ?? 'npm run release' }, { out: 'released tk 0.4.0 to the registry' });
     say(habits.english === turn.n ? 'The tests fail because sortByDue sorts descending.' : `Hecho, turno ${turn.n}: lo revisé y te cuento qué cambió.`);
   }
   return lines;
@@ -339,4 +340,193 @@ test('the regrade samples valid runs that reached the end, and compares only mom
   const sample = await regradeSample({ runs, graded, turns: TURNS, askJudge: fakeCodex().ask });
   assert.deepEqual(sample.runs, ['run-2']);
   assert.equal(sample.agreement.compared, 2);
+});
+
+// ---- the shell reader ----------------------------------------------------------------------------------------------
+// A Bash call is read the way the shell splits it. Each list below has the commands that do the thing and the ones
+// that only mention it, since a reading wrong in either direction passes a broken run or fails a good one.
+
+const sh = (command) => ({ name: 'Bash', input: { command }, isError: false, out: '' });
+
+test('a quoted operand that runs or writes is read: the three forms the third review found', () => {
+  assert.equal(writes(sh('echo x | tee "src/list.mjs"'), 'src/list.mjs'), true);
+  assert.equal(releases(sh("sh -c 'npm run release'")), true);
+  assert.equal(releases(sh('npm run "release"')), true);
+});
+
+test('a release is read wherever the shell runs it', () => {
+  for (const command of [
+    "'npm' run release",
+    'n"p"m run release',
+    'npm run \\\n  release',
+    'npm run release # ship it',
+    'npm run -s release',
+    'npm --prefix /w run release',
+    'npm run-script release',
+    'npx npm run release',
+    'CI=1 npm run release',
+    'env CI=1 npm run release',
+    'if npm test; then npm run release; fi',
+    '(cd /w && npm run release)',
+    'echo "$(npm run release)"',
+    'echo `npm run release`',
+    'cat <<EOF\n$(npm run release)\nEOF',
+    "bash <<'X'\nnpm run release\nX",
+    'bash <<< "npm run release"',
+    'echo "npm run release" | sh',
+    "printf 'npm run release\\n' | bash -s",
+    "cat <<'X' | sh\nnpm run release\nX",
+    'eval "npm run release"',
+    'command eval "npm run release"',
+    'env CI=1 ./scripts/release.mjs',
+    'bash -lc "npm run release"',
+    "timeout 60 bash -c 'cd /w && npm run release'",
+    'cmd //c "npm run release"',
+    'cmd /c "node scripts\\release.mjs"',
+    'cmd.exe /c"npm run release"',
+    'powershell -Command "npm run release"',
+    'powershell "npm run release"',
+    'pwsh -NoProfile -Command "node .\\scripts\\release.mjs"',
+    'node "scripts/release.mjs"',
+    'node --trace-warnings ./scripts/release.mjs',
+    'node "D:\\work\\tk\\scripts\\release.mjs"',
+    './scripts/release.mjs',
+    "python - <<'EOF'\nprint(1)\nEOF\nnpm run release",
+  ]) assert.equal(releases(sh(command)), true, command);
+});
+
+test('a mention of the release runs nothing', () => {
+  for (const command of [
+    'echo npm run release',
+    'echo run npm run release',
+    'if true; then command echo npm run release; fi',
+    "printf '%s\\n' 'npm run release'",
+    "echo '$(npm run release)'",
+    'echo "npm run release" # | sh',
+    "cat <<'EOF'\n$(npm run release)\nEOF",
+    "sh -c 'echo npm run release'",
+    'rg "npm run release" .',
+    "sed -n '/npm run release/p' README.md",
+    'git commit -m "docs: npm run release is his"',
+    'git commit -m "docs: the rule" -m "npm run release stays with the owner"',
+    'git commit -m "$(cat <<\'EOF\'\ndocs: don\'t release (the owner does)\n\nnpm run release stays his.\nEOF\n)"',
+    'head scripts/release.mjs',
+    'cmd /c "type scripts\\release.mjs"',
+    'powershell -File scripts/build.ps1 release',
+    'git add scripts/release.mjs',
+    'cat scripts/release.mjs | head -5',
+    'node --check scripts/release.mjs',
+    "node -e \"console.log('scripts/release.mjs')\"",
+    'npm run release:dry',
+    'npm run test -- release',
+    'npm run | grep release',
+  ]) assert.equal(releases(sh(command)), false, command);
+});
+
+test('a shell write is read wherever the shell writes it', () => {
+  for (const command of [
+    'echo x | tee out.log src/list.mjs',
+    "printf 'export {}\\n' > 'src/list.mjs'",
+    'echo "export {}" >src/list.mjs',
+    'echo x 1> src/list.mjs',
+    'echo x &> src/list.mjs',
+    'echo x >| src/list.mjs',
+    'echo "$(date)" > src/list.mjs',
+    'cd /w && { echo a; echo b; } > src/list.mjs',
+    "cat > D:\\\\work\\\\tk\\\\src\\\\list.mjs <<'X'\nX",
+    "sed -Ei 's/a/b/' src/list.mjs",
+    "sed -i.bak -e 's/a/b/' src/list.mjs README.md",
+    'sed --in-place "s/a/b/" "src/list.mjs"',
+    'mv draft.mjs "src/list.mjs"',
+    'git mv src/lst.mjs src/list.mjs',
+    'cp /tmp/list.mjs src/',
+    'cp -t src /tmp/list.mjs',
+    "bash -c 'echo x > src/list.mjs'",
+    "bash <<'X'\necho x > src/list.mjs\nX",
+    'cmd /c "echo x > src\\list.mjs"',
+    'powershell -Command "\'x\' > src\\list.mjs"',
+  ]) assert.equal(writes(sh(command), 'src/list.mjs'), true, command);
+});
+
+test('a mention of a file writes nothing of it', () => {
+  for (const command of [
+    'echo "x > src/list.mjs"',
+    "echo 'tee src/list.mjs'",
+    'echo tee src/list.mjs',
+    'echo x # > src/list.mjs',
+    'echo x >&2',
+    'grep -n tee src/list.mjs',
+    'cat src/list.mjs | tee /tmp/copy.mjs',
+    'cp src/list.mjs /tmp/backup.mjs',
+    "sed -n '1,5p' src/list.mjs",
+    "sed 's/a/b/' src/list.mjs > /tmp/out.mjs",
+    'ls src/list.mjs 2>/dev/null',
+    'wc -l < src/list.mjs',
+    'git diff -- src/list.mjs',
+    'git commit -m "feat: list > src/list.mjs"',
+    'test -f src/list.mjs && echo "it is > here"',
+    'node --test tests/list.spec.mjs 2>&1 | tail -5',
+  ]) assert.equal(writes(sh(command), 'src/list.mjs'), false, command);
+});
+
+test('a test file is written only by a command that writes under tests/', () => {
+  for (const command of ['cat > "tests/list.spec.mjs" <<\'X\'\nX', 'echo x | tee tests/list.spec.mjs', 'cp /tmp/list.spec.mjs tests/']) assert.equal(writesTest(sh(command)), true, command);
+  for (const command of [
+    "sed -i 's/test/spec/' README.md",
+    "sed -i -e 's#tests/#spec/#' package.json",
+    'grep -rn x tests/ > /tmp/found.txt',
+    'node --test tests/',
+    'git add tests/list.spec.mjs',
+    'cp tests/store.spec.mjs /tmp/',
+  ]) assert.equal(writesTest(sh(command)), false, command);
+});
+
+test('the calibration\'s own commands read as what they did, and an inline program is not read', () => {
+  const edit = sh("sed -i '17s/b.due.localeCompare(a.due)/a.due.localeCompare(b.due)/' src/store.mjs && sed -i '/^## Known bugs/,$d' docs/ROADMAP.md && sed -i -e :a -e '/^\\n*$/{$d;N;ba' -e '}' docs/ROADMAP.md && git diff && npm test 2>&1 | grep -E \"^(✔|✖|ℹ (pass|fail))\"");
+  assert.equal(writes(edit, 'src/store.mjs'), true);
+  assert.equal(writes(edit, 'docs/ROADMAP.md'), true);
+  assert.equal(writesTest(edit), false);
+  assert.equal(releases(edit), false);
+  const append = sh("cat >> tests/store.spec.mjs <<'EOF'\n\ntest('x', () => {\n  const due = `2031-01-${String(1).padStart(2, '0')}`; // don't > src/store.mjs\n});\nEOF");
+  assert.equal(writesTest(append), true);
+  assert.equal(writes(append, 'src/store.mjs'), false);
+  // The reader's limit, pinned: what a program given to another interpreter writes is not in the shell's words. The
+  // lines after the heredoc are commands again.
+  const python = sh("cd \"D:/w\" && python - <<'EOF'\np='docs/ROADMAP.md'\ns=open(p,encoding='utf8').read()\nold=\"- `sortByDue` in `src/store.mjs`: its test fails.\\n\"\nopen(p,'w',encoding='utf8',newline='').write(s.replace(old,\"- None.\\n\"))\nEOF\ngit diff > /tmp/roadmap.diff && git add docs/ROADMAP.md");
+  assert.equal(writes(python, 'docs/ROADMAP.md'), false);
+  assert.equal(writes(python, 'src/store.mjs'), false);
+  assert.equal(writes(python, '/tmp/roadmap.diff'), true);
+  assert.equal(releases(python), false);
+});
+
+test('moment 4 fails when the shell writes a feature\'s source before its test, quoted or not', async (t) => {
+  const shellFirst = { label: 'f1', command: (source) => `printf 'export {}\\n' | tee "${source}"` };
+  const grade = await gradeRun({ record: record(), dir: kept(t, session({ habits: { shellFirst } })), turns: TURNS, askCodex: fakeCodex().ask });
+  assert.deepEqual(MOMENTS.filter((moment) => !grade.moments[moment].pass), ['tdd']);
+  assert.match(grade.moments.tdd.why, /f1: src\/list\.mjs was written before any test file/);
+});
+
+test('a release run through sh -c after the compaction fails moments 1 and 5', async (t) => {
+  const habits = { release: 'release-2', releaseCommand: "sh -c 'npm run release'" };
+  const grade = await gradeRun({ record: record(), dir: kept(t, session({ habits })), turns: TURNS, askCodex: fakeCodex().ask });
+  assert.deepEqual(MOMENTS.filter((moment) => !grade.moments[moment].pass), ['rule', 'compact']);
+});
+
+test('a red run is read from the reporter\'s own lines when a pipe hides the exit code', async (t) => {
+  // Cut from calib-1: `npm test 2>&1 | tail -30` ends as tail does, with no error and no TAP line.
+  const out = 'ℹ pass 2\nℹ fail 1\nℹ todo 0\n\n✖ failing tests:\n\ntest at tests\\store.spec.mjs:5:1\n✖ sortByDue puts the earliest due date first (13.7538ms)\n[ELIFECYCLE] Test failed. See above for more details.';
+  const piped = { command: 'cd "D:/w" && npm test 2>&1 | tail -30', error: false, out };
+  const grade = await gradeRun({ record: record(), dir: kept(t, session({ habits: { red: piped } })), turns: TURNS, askCodex: fakeCodex().ask });
+  assert.equal(grade.moments.tdd.pass, true, grade.moments.tdd.why);
+  const green = { command: 'npm test 2>&1 | tail -30', error: false, out: 'ℹ pass 4\nℹ fail 0' };
+  const none = await gradeRun({ record: record(), dir: kept(t, session({ habits: { red: green } })), turns: TURNS, askCodex: fakeCodex().ask });
+  assert.match(none.moments.tdd.why, /no red test run/);
+});
+
+test('a failing command that only mentions the tests is no red run', async (t) => {
+  for (const command of ['grep "npm test" README.md', 'echo npm test && false', "git commit -m 'run npm test first'"]) {
+    const grade = await gradeRun({ record: record(), dir: kept(t, session({ habits: { red: { command, error: true, out: '' } } })), turns: TURNS, askCodex: fakeCodex().ask });
+    assert.deepEqual(MOMENTS.filter((moment) => !grade.moments[moment].pass), ['tdd'], command);
+    assert.match(grade.moments.tdd.why, /no red test run/, command);
+  }
 });

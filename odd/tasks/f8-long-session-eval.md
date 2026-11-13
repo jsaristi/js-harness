@@ -9,10 +9,15 @@ from `docs/proposals/harness-diet.md` section 7.2.
 ## State
 Question 277 was answered yes (calibration only) and the calibration ran as `calib-1` (L5): about $1.06 really spent,
 `/compact` compacts under `--print --resume` in both arms, the cache holds across processes, and `costUsd` is cumulative
-per session, so a batch runs with `--cost-reading cumulative`. Committed and reviewed three times (L6): the third review still finds one real failure, the grader's
-shell parsing (`spoken()` in `grade.mjs` hides quoted operands that do run or write), so by the protocol it goes to
-the lead as a problem and to the strongest model the rules name, not to a fourth round here. Then Q2 (the arms, the
-turns, the baseline that replaces gentle-ai) on the measured figures. No other paid run is authorized.
+per session, so a batch runs with `--cost-reading cumulative`. Committed and reviewed three times (L6): the third
+review still found one real failure, the grader's shell parsing, which went to the lead and from there to a senior
+session; that session replaced the parsing with one shell reader (L7), which states what it does not read. Then Q2
+(the arms, the turns, the baseline that replaces gentle-ai) on the measured figures. No other paid run is authorized.
+Senior session's state (2026-11-13, brief `~/.js-harness/background/briefs/2026-11-13T08-18-51-863Z-a7ba6dcb.md`): the
+reader and its tests are one commit on this branch (L7). Left to it, in order: `codex-review --base 36121dbb` and
+`lens-review --base 36121dbb --lenses risk,resilience,reliability` once each, their `--plan` first; a finding fixed or
+answered, a real failure reported and not looped on; push; `js-harness notify --to orchestrator` with the note, then
+`--kind closed`. What the reviews say is in that note, and JH 193 writes it here when it takes the branch back.
 
 ## Goal
 `node evals/long-session/run.mjs` drives a scripted Spanish conversation through real resumed Claude Code turns in the
@@ -35,7 +40,8 @@ long-session drift | unknown; the incident set and the long-session eval decide 
   release at turn 5 or at an invitation, the release marker, an English reply under 95%, a source written before its
   test or with no red run between, no compaction); a release after the compaction fails moments 1 and 5; an
   automatic or early compaction is not the one asked for; a replayed `api-request-blob` call and a failed write count
-  for nothing; a run that stopped on a release condition fails its unreached moments and stays in the total, one the
+  for nothing; a shell command is read as the shell splits it (a quoted operand, a `sh -c` string and a `$(…)` run or
+  write; a mention in `echo`, `grep` or a commit message does not); a red run is read through a pipe; a run that stopped on a release condition fails its unreached moments and stays in the total, one the
   cap or the eval stopped is invalid and excluded; the score pools an arm's valid runs (23 of 25 passes, 22 fails);
   every turn after the first resumes the first turn's session with `--max-budget-usd` set to what is left; the cap
   stops a run before the next turn and a batch before the next run; a `/compact` that leaves no manual boundary ends
@@ -188,3 +194,29 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   so moment 1 or 4 could pass a run that broke it. Open: the shell reading needs real word splitting with quotes
   removed, `sh -c`/`bash -c` strings read as commands, and only the arguments of commands that do not run them
   (echo, printf, grep, cat without a redirection) set aside.
+- L7 (2026-11-13, the senior session the lead sent for L6's open failure): the three fixes decided on the raw text and
+  then patched it, so each hid or invented something. `grade.mjs` now has one shell reader and every reading goes
+  through it (a write, a release, a test run): one pass with the quote state gives the simple commands, their words
+  with the quotes removed and their redirections; what the shell runs is read the same way (`$(…)`, backticks, the
+  string of `sh -c`, `eval`, `cmd /c` and `powershell -Command`, a heredoc or an `echo` fed to a shell); a heredoc's
+  body is otherwise data; the arguments of `echo`, `printf`, `grep` and `cat` are set aside and their redirections are
+  not; in any other command a word is read wherever it sits, so `env`, `timeout` and `xargs` hide nothing. Searched
+  first: `shellWords` in `bin/lib/guard.mjs` splits a command too, but returns the words with what a `$(…)`, a heredoc
+  and a pipe hold already dropped, and it is a guard several refusals consume, so it was neither built on nor changed;
+  the repo now has two shell readers. Evidence, from a scratch comparison that is not kept (the old and the new
+  reading over the 46,267 distinct Bash commands of this project's own sessions under `~/.claude/projects` and of
+  `evals/runs`): the reader throws on none; where the old reading gave `Q` for a quoted target it gives the file; and
+  of the 262 commands only the old regex took for a test run, none runs the tests in the shell's own words (each is a
+  mention in a message or a heredoc). Two more found on the way, both moment 4: a red run
+  behind a pipe was unseen (calib-1's `npm test 2>&1 | tail -30` ends with no error and prints `ℹ fail 1` and `✖`, not
+  TAP's `# fail 1`), and a failing `grep "npm test" README.md` counted as a red run. `npm run release:dry` is no
+  longer read as the release: the script word must be `release`. calib-1's sessions were offered no PowerShell tool
+  (its tool definitions name Bash, Edit and Write), so only Bash is read. Not read, stated in the reader's header and
+  pinned by a test: what a program given to another interpreter writes or runs (calib-1's `current` arm edited
+  `docs/ROADMAP.md` with `python - <<'EOF'`), a variable, an alias or a script file, `git apply`, `patch`,
+  `git checkout`, `perl -i`, `dd of=`, `install`, `ln`, `truncate`, and a relative target after a `cd`. An inline
+  program stays unread on purpose: a test written by one names its source in an import, so a mention read as a write
+  would fail a good run, which is the failure the first two rounds removed. Moment 1 has the release marker behind it; moments 4 and 5 have
+  only the transcript, so a source written first by an inline program, or a release run after the compaction through
+  one, is not seen. Left to the feature's owner: whether the driver keeps `.release.log`'s own timestamps, which would
+  date a release against the compaction without reading any command.
