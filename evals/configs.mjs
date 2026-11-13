@@ -280,6 +280,13 @@ export function minimalConfig(options) {
   return buildConfig('minimal', options, MINIMAL_FLAGS);
 }
 
+/** The minimal arm with the built-in commands left on: the long-session eval (`evals/long-session/`) sends `/compact` as
+ * a turn, and `--disable-slash-commands` disables all skills and commands (code.claude.com/docs/en/cli-reference.md).
+ * The trial home is as bare as the minimal arm's, so the flag it drops holds nothing else back. */
+export function minimalCommandsConfig(options) {
+  return buildConfig('minimal-commands', options, MINIMAL_FLAGS.filter((flag) => flag !== '--disable-slash-commands'));
+}
+
 /** Where a minimal-with arm's trial home holds the one MCP server it puts in, for `--mcp-config`. */
 export const minimalWithMcpFile = (home) => path.join(home, '.claude', 'mcp-with.json');
 
