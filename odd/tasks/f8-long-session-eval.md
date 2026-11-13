@@ -152,7 +152,7 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
 - [x] T7 (kind: verify) commit on Q1's answer, `npm run check`, Codex and the lenses, push, PR, notify ready — S5; inline
 - [x] T8 (kind: design) Q2 to the lead, after the calibration: the arms and the turn count on measured figures — S4; inline
 - [ ] T9 (kind: verify) grade batch-1 and report each arm's moment scores (done, L12); the desktop smoke by hand, whose hands is open — S4; inline
-- [ ] T10 (kind: build) `--jobs <n>` in `run.mjs`: up to n runs at once, sequential by default, caps reserved at launch, records in run order, the jobs count in the results; tests first; high-risk item 4 (concurrency) — L14; inline
+- [x] T10 (kind: build) `--jobs <n>` in `run.mjs`: up to n runs at once, sequential by default, caps reserved at launch, records in run order, the jobs count in the results; tests first; high-risk item 4 (concurrency) — L14; inline
 - [ ] T11 (kind: verify) both reviews on T10, PR, notify the lead with the paid comparison as a question — L14; inline
 
 ## Log
@@ -298,4 +298,12 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   eval token's rate limits under two sessions, the machine's load stretching turn walls toward the 10-minute turn
   timeout, the parallel-start failures on Windows that `evals/task-proof.test.mjs:456` records, and whether two runs of
   one arm at once share a cache write and lower the second's cost; pairing the arms within a round avoids that last one.
+- L15 (2026-11-13): T10 built test first: four tests red, then `driveBatch` with `jobs` (`node --test
+  evals/long-session/*.test.mjs`: 64 of 64). A run reserves its cap at launch and only what the batch has left after
+  the runs in flight is given to the next, so a run cap as large as the batch cap runs one at a time whatever
+  `--jobs` says (a test holds it). The first queued run whose arm has none in flight starts next; records are stored in
+  run order; an eval stop starts nothing more and keeps the runs in flight. The sweep needs no change: each run sweeps
+  only its own roots, and `evals/runner.test.mjs:1717` proves a sibling directory is spared. Not built: a run whose
+  driver throws rejects the batch while the other run in flight goes on alone and cleans up after itself, as one job
+  would leave it unrecorded.
 

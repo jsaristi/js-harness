@@ -245,3 +245,69 @@ test('a turn that runs out of the run\'s budget stops the run as cap, and the ba
   assert.equal(batch.records[0].stop.reason, 'cap');
   assert.equal(batch.stop, null);
 });
+
+/** Two arms whose turns take `delay(arm, turn)` milliseconds, recording which arms have a turn in flight at once. */
+function concurrentAgent({ delay = () => 1, cost = () => 0.1, stopArm } = {}) {
+  const active = [];
+  const overlaps = [];
+  const budgets = [];
+  const turnOf = new Map();
+  const runProcess = async (call) => {
+    const arm = call.env.ARM;
+    const session = `sess-${path.basename(call.env.HOME)}`;
+    const turn = (turnOf.get(call.env.HOME) ?? 0) + 1;
+    turnOf.set(call.env.HOME, turn);
+    if (turn === 1) budgets.push({ arm, budget: Number(call.args[call.args.indexOf('--max-budget-usd') + 1]), inFlight: active.length });
+    active.push(arm);
+    overlaps.push([...active]);
+    featureFiles({ cwd: call.cwd });
+    const projects = path.join(call.env.HOME, '.claude', 'projects', 'p');
+    fs.mkdirSync(projects, { recursive: true });
+    if (call.input === '/compact') fs.appendFileSync(path.join(projects, `${session}.jsonl`), `${JSON.stringify({ type: 'system', subtype: 'compact_boundary', compactMetadata: { trigger: 'manual' } })}\n`);
+    await new Promise((resolve) => setTimeout(resolve, delay(arm, turn)));
+    active.splice(active.indexOf(arm), 1);
+    const failed = stopArm === arm && turn === 2;
+    return { stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: failed, session_id: session, total_cost_usd: cost(turn), num_turns: 1, result: 'Listo.' }), stderr: '', exitCode: 0 };
+  };
+  return { runProcess, overlaps, budgets };
+}
+
+const twoArms = () => ['current', 'minimal-commands'].map((name) => ({ ...fakeConfig(name), env: ({ home }) => ({ HOME: home, ARM: name }) }));
+
+test('with --jobs 2 the two arms run side by side, never two runs of one arm, and the records keep the run order', async (t) => {
+  // minimal-commands is ten times faster, so it would start its next run beside its own if nothing held it.
+  const agent = concurrentAgent({ delay: (arm) => (arm === 'current' ? 5 : 0) });
+  const batch = await driveBatch({ ...base(t), configs: twoArms(), runs: 2, jobs: 2, runCapUsd: 10, batchCapUsd: 100, costReading: 'cumulative', runProcess: agent.runProcess });
+  assert.ok(agent.overlaps.some((arms) => arms.length === 2), 'the two arms never ran at once');
+  assert.ok(agent.overlaps.every((arms) => new Set(arms).size === arms.length), 'two runs of one arm ran at once');
+  assert.deepEqual(batch.records.map((record) => record.id), ['current-1', 'minimal-commands-1', 'current-2', 'minimal-commands-2']);
+  assert.equal(batch.stop, null);
+});
+
+test('with --jobs the caps in flight never sum past the batch cap: a run starts with what is left after the others reserve theirs', async (t) => {
+  const agent = concurrentAgent();
+  const batch = await driveBatch({ ...base(t), configs: twoArms(), runs: 1, jobs: 2, runCapUsd: 10, batchCapUsd: 15, costReading: 'cumulative', runProcess: agent.runProcess });
+  assert.deepEqual(agent.budgets.map(({ arm, budget }) => [arm, budget]), [['current', 10], ['minimal-commands', 5]]);
+  assert.equal(batch.records.length, 2);
+  // A run cap as large as the batch's leaves nothing to reserve for a second run: it waits, as one job would.
+  const whole = concurrentAgent();
+  await driveBatch({ ...base(t), configs: twoArms(), runs: 1, jobs: 2, runCapUsd: 15, batchCapUsd: 15, costReading: 'cumulative', runProcess: whole.runProcess });
+  assert.deepEqual(whole.budgets.map(({ inFlight }) => inFlight), [0, 0]);
+});
+
+test('with --jobs a run that stops for the eval\'s own reason starts nothing more, and the run in flight is kept', async (t) => {
+  const agent = concurrentAgent({ stopArm: 'minimal-commands', delay: (arm) => (arm === 'current' ? 3 : 1) });
+  const batch = await driveBatch({ ...base(t), configs: twoArms(), runs: 3, jobs: 2, runCapUsd: 10, batchCapUsd: 100, costReading: 'cumulative', runProcess: agent.runProcess });
+  assert.equal(batch.stop.reason, 'agent');
+  assert.deepEqual(batch.records.map((record) => record.id), ['current-1', 'minimal-commands-1']);
+  assert.equal(batch.records[0].reached, 30);
+});
+
+test('runMain refuses --jobs that is not a whole number from 1', async () => {
+  for (const jobs of ['0', '1.5', 'two']) {
+    let err = '';
+    const code = await runMain(['--arms', 'current', '--runs', '1', '--turns', '30', '--jobs', jobs, '--plan'], {}, { stderr: { write: (text) => { err += text; } }, stdout: { write: () => {} } });
+    assert.equal(code, 2);
+    assert.match(err, /--jobs takes a whole number from 1/);
+  }
+});
