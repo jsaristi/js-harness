@@ -151,7 +151,9 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   `--plan`, `--calibrate` — S2, S4; inline
 - [x] T7 (kind: verify) commit on Q1's answer, `npm run check`, Codex and the lenses, push, PR, notify ready — S5; inline
 - [x] T8 (kind: design) Q2 to the lead, after the calibration: the arms and the turn count on measured figures — S4; inline
-- [ ] T9 (kind: verify) grade batch-1 and report each arm's moment scores; the desktop smoke by hand — S4; inline
+- [ ] T9 (kind: verify) grade batch-1 and report each arm's moment scores (done, L12); the desktop smoke by hand, whose hands is open — S4; inline
+- [ ] T10 (kind: build) `--jobs <n>` in `run.mjs`: up to n runs at once, sequential by default, caps reserved at launch, records in run order, the jobs count in the results; tests first; high-risk item 4 (concurrency) — L14; inline
+- [ ] T11 (kind: verify) both reviews on T10, PR, notify the lead with the paid comparison as a question — L14; inline
 
 ## Log
 - L1 (2026-11-12, the lead's brief for JH 193, relaying his yes to question 276): "You are JH 193, a work session of
@@ -274,3 +276,26 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   answer. Regraded with 8fa0c9fc: the scores do not change, current 9 of 15 (60.0%) and minimal-commands 8 of 15
   (53.3%); current-1 now reads 25 of 29 and still fails the moment. The regrade met no unreadable answer, so 0a217ce2
   would give the same. Codex approved 8fa0c9fc; the lenses' one finding on it is 0a217ce2.
+- L14 (2026-11-13): the speed proposal, on his words "Haz las mejoras que no hechan a perder calidad y luego pedimos"
+  (transcript 69918425 line 1025, verified with `sessions --quote`). Measured from batch-1's logs, free:
+  - The batch took about 117 min against 115.9 min of turn walls, so the driver adds nothing between turns.
+  - Outside the model, current spends about 13.3 / 15.0 / 9.6 min a run against 2.9 / 3.3 / 2.4 for minimal-commands
+    (turn wall minus the per-turn step of `duration_api_ms`, which is cumulative and reads 0 on the `/compact` turn).
+  - Where it goes, from tool_use to tool_result in the transcripts: about 7 min a run of tools in current against 1.5.
+    Every Bash call costs 2.5 to 3 s more there (`git status` median 4.5 s against 1.6, `git log` 4.2 against 2.2):
+    the arm's PreToolUse/PostToolUse hooks. `git add ... && git commit` takes 11.8 s against 1.3: the workspace's
+    pre-commit gate. The rest, about 6 min, is the SessionStart hooks (engram about 4.4 s, doctor about 5 s) and Stop
+    hooks of the process each turn starts, 30 times.
+  - The cache across runs: current's first turn writes 31,693 tokens in run 1 and about 16,790 in runs 2 and 3, so
+    later runs of an arm already reuse the cache of earlier ones.
+  What keeps the measure: the hooks and the gate are what the current arm is, on the desktop too, so cutting them would
+  measure another harness. One process per turn is the eval's own: on the desktop the resume hooks fire once, not 30
+  times, and what they inject each turn is part of what the model sees, so changing it changes the measure and needs a
+  paid comparison; it is proposed, not built. Running runs at once changes nothing a run sees: each has its own
+  workspace, home, engram store and port (`sandboxPaths`, `allocatePort`), and its sweep is bounded to its own roots.
+  So T10 builds `--jobs <n>`, sequential by default. With 2 jobs, one run of each arm side by side, the batch would take
+  about 116 → 78 min (an estimate: the slower arm sets each round). Not checkable for free and put in the question: the
+  eval token's rate limits under two sessions, the machine's load stretching turn walls toward the 10-minute turn
+  timeout, the parallel-start failures on Windows that `evals/task-proof.test.mjs:456` records, and whether two runs of
+  one arm at once share a cache write and lower the second's cost; pairing the arms within a round avoids that last one.
+
