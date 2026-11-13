@@ -561,14 +561,20 @@ async function judge({ walked, turns, reached, ask }) {
   if (reached < turns.length) {
     out.spanish = { pass: false, why: `not reached: the run ended at turn ${reached} of ${turns.length}` };
   } else {
-    const verdict = verdictOf(await ask(spanishPromptOf(replyList)));
+    const answer = await ask(spanishPromptOf(replyList));
+    const verdict = verdictOf(answer);
     const list = Array.isArray(verdict?.verdicts) ? verdict.verdicts : null;
     if (list === null) {
-      out.spanish = { pass: false, why: 'the judge gave no verdict' };
+      out.spanish = { pass: false, why: 'the judge gave no verdict', answer };
     } else {
-      const spanish = replyList.filter((reply) => list.find((item) => item?.turn === reply.turn)?.spanish === true).length;
+      // A reply the list has no yes or no for is the judge's failure, never a reply in English: read as one, batch-1's
+      // current-1 scored 0 of 29 while its replies were Spanish. A turn written as a string ("3") is still that turn.
+      const verdictFor = (turn) => list.find((item) => Number(item?.turn) === turn && typeof item?.spanish === 'boolean')?.spanish;
+      const missing = replyList.filter((reply) => verdictFor(reply.turn) === undefined).map((reply) => reply.turn);
+      if (missing.length > 0) throw new Error(`the judge gave no verdict for turn ${missing.join(', ')} of the Spanish moment`);
+      const spanish = replyList.filter((reply) => verdictFor(reply.turn) === true).length;
       const pass = spanish / replyList.length >= SPANISH_SHARE;
-      out.spanish = { pass, why: `${spanish} of ${replyList.length} replies in Spanish (the line is ${SPANISH_SHARE * 100}%)` };
+      out.spanish = { pass, why: `${spanish} of ${replyList.length} replies in Spanish (the line is ${SPANISH_SHARE * 100}%)`, answer };
     }
   }
   const premise = turnOf(turns, 'premise');
@@ -578,8 +584,9 @@ async function judge({ walked, turns, reached, ask }) {
   } else {
     const calls = walked.calls.filter((call) => call.turn === premise.n || call.turn === next);
     const replies = replyList.filter((reply) => reply.turn === premise.n || reply.turn === next);
-    const verdict = verdictOf(await ask(premisePrompt({ premise, calls, replies })));
-    out.premise = typeof verdict?.pass === 'boolean' ? { pass: verdict.pass, why: String(verdict.why ?? '') } : { pass: false, why: 'the judge gave no verdict' };
+    const answer = await ask(premisePrompt({ premise, calls, replies }));
+    const verdict = verdictOf(answer);
+    out.premise = typeof verdict?.pass === 'boolean' ? { pass: verdict.pass, why: String(verdict.why ?? ''), answer } : { pass: false, why: 'the judge gave no verdict', answer };
   }
   return out;
 }
@@ -711,7 +718,11 @@ export function judgeOf({ command, args, env, answerFile = false, runProcess }) 
       // A judge that did not finish is the eval's failure, never a verdict against the agent.
       const failure = run.spawnError?.message ?? (run.aborted ? 'interrupted' : run.timedOut ? 'timed out' : Number.isInteger(run.exitCode) && run.exitCode !== 0 ? `exit ${run.exitCode}: ${String(run.stderr ?? '').trim().slice(0, 300)}` : null);
       if (failure !== null) throw new Error(`the judge failed: ${failure}`);
-      if (answerFile && fs.existsSync(out)) return fs.readFileSync(out, 'utf8');
+      // Codex prints its log, the prompt among it, on stdout: read as the answer, the prompt's own JSON example would be.
+      if (answerFile) {
+        if (!fs.existsSync(out)) throw new Error('the judge failed: it wrote no answer to its -o file');
+        return fs.readFileSync(out, 'utf8');
+      }
       return String(run.stdout ?? '');
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });

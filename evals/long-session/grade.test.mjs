@@ -537,3 +537,33 @@ test('a failing command that only mentions the tests is no red run', async (t) =
     assert.match(grade.moments.tdd.why, /no red test run/, command);
   }
 });
+
+// batch-1's current-1 was graded "0 of 29 replies in Spanish" while its replies were Spanish, and a second ask of the
+// same prompt gave 25 of 29; the first answer was not kept, so it could not be read. These hold the three ways an
+// answer could be misread in silence.
+test('a Spanish verdict list read in silence: string turns are read, a reply without a verdict stops the grading', async (t) => {
+  const stringTurns = async (prompt) => {
+    if (!prompt.includes('MOMENT spanish')) return fakeCodex().ask(prompt);
+    const verdicts = [...prompt.matchAll(/^REPLY (\d+): /gm)].map(([, turn]) => ({ turn: String(turn), spanish: true }));
+    return JSON.stringify({ verdicts });
+  };
+  const read = await gradeRun({ record: record(), dir: kept(t, session()), turns: TURNS, askCodex: stringTurns });
+  assert.equal(read.moments.spanish.pass, true);
+  assert.match(read.moments.spanish.why, /29 of 29/);
+  for (const answer of [{ verdicts: [{ turn: 1, spanish: true }] }, { verdicts: [{ turn: 1, spanish: 'yes' }] }]) {
+    const partial = async (prompt) => (prompt.includes('MOMENT spanish') ? JSON.stringify(answer) : fakeCodex().ask(prompt));
+    await assert.rejects(gradeRun({ record: record(), dir: kept(t, session()), turns: TURNS, askCodex: partial }), /the judge gave no verdict for turn/);
+  }
+});
+
+test('the judge\'s raw answer is kept with the moments it judged', async (t) => {
+  const codex = fakeCodex();
+  const grade = await gradeRun({ record: record(), dir: kept(t, session()), turns: TURNS, askCodex: codex.ask });
+  assert.match(grade.moments.spanish.answer, /^Here is the grade\.\n\{"verdicts":/);
+  assert.match(grade.moments.premise.answer, /"why":"read src\/export\.mjs first"/);
+});
+
+test('a Codex judge that exits 0 without writing its answer file has failed, and its printed log is not read as the answer', async () => {
+  const codex = judgeOf({ command: 'codex', args: ['exec'], env: {}, answerFile: true, runProcess: async () => ({ stdout: 'MOMENT spanish ... {"verdicts":[{"turn":<n>,"spanish":true|false}]}', exitCode: 0 }) });
+  await assert.rejects(codex('p'), /the judge failed: it wrote no answer/);
+});
