@@ -7,9 +7,18 @@ proposal, through the double review and then the lead as a question; nothing is 
 `node --test`.
 
 ## State
-Measured, probed and proposed. Double review: read a229de6b (23 findings) and read baa660cd (22), all answered in this
-version (Log L4, L6); a third read is the last the rule allows. Next: that read, then a `question` notice to the lead.
-Open: a way to start a senior with no advisor (two tried, M5); his choices (Ask me before).
+Reads a229de6b and baa660cd answered (31ce02e8). Before the third and last read, the advisor (2026-11-13) asked for:
+(1) "all 29 transcripts" is 24 in the output; (2) the `notify --opening` count is a regex bug in measure4.mjs line 99
+(`s+` lost its backslash): fix, re-freeze; (3) "SendMessage mostly relays" unsampled: sample 10 or drop; (4) R's cost
+is a lower bound: a call expires after 60 tool calls, so count a new forced call per bare act after expiry, restate
+21 calls, 2.1M a day; (5) M1: `advisorModel` equal to the entry's own model means unknown, use the shape line; (6) P2
+takes any call in a sub-agent's run: bound it or say it is looser; (7) say whether Haiku callers are gated; (8) probe
+SubagentStop (block once, read the second payload) or make P2 conditional; (9) L6 says all taken, but C2 (R's consequence
+in Ask me before), C3c, C8 and C10 are partial: finish or write "taken in part"; and "Beyond his words" sits above
+"Adds: none". Then: announce the third read at its measured cost (2.68M Claude + 0.74M Codex last time); answer its
+findings by Edit; no fourth read, a real failure left goes to him as unguaranteed. Then the question through the lead,
+one decision a question: (1) the proposal with R and flag-first stated, the others one at a time, with a short Spanish
+summary of what a yes covers. Scripts: scratchpad measure4.mjs, frozen copy in the lead's notes folder.
 
 ## Goal
 Each of the lead, the work sessions and the sub-agents that has the advisor consults it (a call with a result, made
