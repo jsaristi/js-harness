@@ -19,18 +19,37 @@ const OWN_ROWS = ['memory-rules', 'session-classes', 'remote-server', 'hook-comm
 // Every state a row reports in, so a row whose state is not one of these is a failure of the run, not a pass.
 const STATES = new Set([...GAP_STATES, 'ok', 'n/a', 'unknown']);
 
-/** A folder on PATH whose `js-harness` runs this checkout's command line. */
+/** A folder on PATH whose `js-harness` runs this checkout's command line, and whose `node` runs this Node: the
+ * folder of the machine's Node may hold a tool of the stack too (codegraph does, under nvm), so it is not on PATH. */
 function shimFolder(root) {
   const folder = path.join(root, 'shim');
   fs.mkdirSync(folder);
-  if (process.platform === 'win32') {
-    fs.writeFileSync(path.join(folder, 'js-harness.cmd'), `@"${process.execPath}" "${BIN}" %*\r\n`);
-  } else {
-    const shim = path.join(folder, 'js-harness');
-    fs.writeFileSync(shim, `#!/bin/sh\nexec '${process.execPath}' '${BIN}' "$@"\n`);
-    fs.chmodSync(shim, 0o755);
+  const shims = { 'js-harness': [process.execPath, BIN], node: [process.execPath] };
+  for (const [name, words] of Object.entries(shims)) {
+    if (process.platform === 'win32') {
+      fs.writeFileSync(path.join(folder, `${name}.cmd`), `@${words.map((word) => `"${word}"`).join(' ')} %*\r\n`);
+    } else {
+      const shim = path.join(folder, name);
+      fs.writeFileSync(shim, `#!/bin/sh\nexec ${words.map((word) => `'${word}'`).join(' ')} "$@"\n`);
+      fs.chmodSync(shim, 0o755);
+    }
   }
   return folder;
+}
+
+// The tools of the stack the cycle would find by name (doctor, stack upgrade). A clean machine has none: with the
+// machine's own on PATH, `upgrade` found them behind their latest release and refused without a terminal, and the
+// real `claude`, run with HOME set to the throwaway home, wrote its .claude.json there (2026-11-12).
+const STACK_TOOLS = ['claude', 'codex', 'engram', 'codegraph'];
+const EXTENSIONS = process.platform === 'win32' ? ['.exe', '.cmd', '.bat', '.ps1', ''] : [''];
+
+/** Whether `folder` holds a command named `name`. */
+const holds = (folder, name) => EXTENSIONS.some((extension) => fs.existsSync(path.join(folder, `${name}${extension}`)));
+
+/** The machine's PATH without each folder that holds a tool of the stack: git, the shell and the system's commands
+ * stay, so the cycle runs as on a machine where none of those tools is installed yet. */
+function pathWithoutStack(value) {
+  return value.split(path.delimiter).filter((folder) => folder !== '' && !STACK_TOOLS.some((name) => holds(folder, name)));
 }
 
 /** A local git repository holding what the package ships (`bin/` without its tests, and `package.json`) at
@@ -95,9 +114,12 @@ test('a clean home installs the harness, reports no gap of its own, runs its ses
     const project = path.join(root, 'project');
     fs.mkdirSync(home);
     fs.mkdirSync(project);
+    const PATH = [shimFolder(root), ...pathWithoutStack(process.env.PATH ?? process.env.Path ?? '')];
+    // The run finds no tool of the stack by name, whatever this machine has installed.
+    assert.deepEqual(STACK_TOOLS.filter((name) => PATH.some((folder) => holds(folder, name))), []);
     const env = {
-      ...process.env,
-      PATH: [shimFolder(root), path.dirname(process.execPath), process.env.PATH].join(path.delimiter),
+      ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^path$/i.test(key))),
+      PATH: PATH.join(path.delimiter),
       HOME: home,
       USERPROFILE: home,
       JS_HARNESS_HOME: home,
