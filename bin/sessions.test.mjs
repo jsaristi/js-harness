@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lockLibraryBesideScript, sessionsMain } from './sessions.mjs';
 import { claudeHome } from './lib/model-home.mjs';
+import { RULES } from './lib/rules-data.mjs';
 import { appendNotice, findOpenings, newNotice, readNotices, reliefStamp, writeOpening } from './lib/channel.mjs';
 import { dayStartOf, localDay, measuresTotal } from './lib/measures.mjs';
 import { statePath } from './lib/pause.mjs';
@@ -1479,7 +1480,7 @@ test('the board marks a session whose app record is off the home the project\'s 
   assert.equal(code, 0, stderr);
   assert.ok(stdout.split('\n').includes(`    opened unknown  in Sessions  effort ${off}  OFF THE HOME: its menu holds the level ${off}, the home ${home.effort}`), stdout);
   const board = JSON.parse((await runSessions(machine, ['--json'], { readApp: () => records })).stdout);
-  assert.deepEqual(board.home, { model: home.model, effort: home.effort, lead: home.lead, lenses: home.lenses, advisor: home.advisor });
+  assert.deepEqual(board.home, { model: home.model, effort: home.effort, lead: home.lead, lenses: home.lenses, advisor: home.advisor, senior: RULES.find((rule) => rule.id === 'senior-model').value, seniorEffort: RULES.find((rule) => rule.id === 'senior-effort').value });
   assert.deepEqual(board.roster.rows.find((row) => row.title === 'JH 3 · the routine').off, { source: 'menu', model: null, effort: off });
 }));
 
@@ -1785,6 +1786,10 @@ test('--next-number prints the next free work number of the code the project dec
     assert.deepEqual([broken.code, broken.stdout], [2, ''], text);
     assert.match(broken.stderr, /could not read the project's code/, text);
   }
+  // A project whose code is SR, valid before a senior's title took SR, stays valid: its titles still parse (a review).
+  fs.writeFileSync(path.join(machine.root, 'harness.json'), JSON.stringify({ code: 'SR' }), 'utf8');
+  const sr = await runSessions(machine, ['--next-number']);
+  assert.deepEqual([sr.code, sr.stdout, sr.stderr], [0, 'SR 1', '']);
   fs.writeFileSync(path.join(machine.root, 'harness.json'), JSON.stringify({ code: 'JH' }), 'utf8');
   // One that could not be read may hold them: exit 2, never the "none" of exit 1.
   const blind = await runSessions(machine, ['--next-number'], {

@@ -12,7 +12,7 @@
 import { weeklyFloor } from './codex-meter.mjs';
 import { settingsNotes } from './home-doctor.mjs';
 import { offHomeLines, sessionsOffHome } from './home-sessions.mjs';
-import { CLAUDE_HOME, CODEX_HOME, displayName, homeFaults, menuLine, sameClaudeModel } from './model-home.mjs';
+import { CLAUDE_HOME, CODEX_HOME, SENIOR_HOME, displayName, homeFaults, menuLine, sameClaudeModel } from './model-home.mjs';
 import { RuleChangeError } from './rules-change.mjs';
 import { DEFAULT_CONTEXT_WINDOW } from './sessions.mjs';
 
@@ -118,7 +118,7 @@ export function changesOf(parsed) {
 function homesOf(list) {
   const value = (id) => list.find((rule) => rule.id === id)?.value ?? null;
   return {
-    claude: { model: value(CLAUDE_HOME.model), effort: value(CLAUDE_HOME.effort), lead: value(CLAUDE_HOME.lead), lenses: value(CLAUDE_HOME.lenses), advisor: value(CLAUDE_HOME.advisor) },
+    claude: { model: value(CLAUDE_HOME.model), effort: value(CLAUDE_HOME.effort), lead: value(CLAUDE_HOME.lead), lenses: value(CLAUDE_HOME.lenses), advisor: value(CLAUDE_HOME.advisor), senior: value(SENIOR_HOME.model), seniorEffort: value(SENIOR_HOME.effort) },
     codex: { model: value(CODEX_HOME.model), effort: value(CODEX_HOME.effort) },
   };
 }
@@ -350,13 +350,13 @@ export function staleLines({ claude, codex, readFile, window }) {
  * his settings as read, `{ user, project }`. Each open session off the new home gets the act that sets it, as
  * `rules applied` says it, then who does each act; then what his settings hold that the new home does not. The
  * installed copy comes first: until it is refreshed, a start and the guard hold the home that leaves. */
-export function outsideLines({ home, sessions, settings, isLead = () => false }) {
+export function outsideLines({ home, sessions, settings, isLead = () => false, isSenior = () => false }) {
   const lines = [
     'Left outside the repository, for after the land (this command changed none of it):',
     '  the installed copy still holds the home that leaves: refresh it at the land (js-harness merge-queue --land --refresh-copy), since a start, the guard and the reviews read the home from the copy that runs',
   ];
   if (sessions === null) return lines;
-  lines.push(...offHomeLines(sessionsOffHome(home, { desktop: sessions.desktop, background: sessions.background, isLead }), home, { unread: sessions.unread }).slice(1));
+  lines.push(...offHomeLines(sessionsOffHome(home, { desktop: sessions.desktop, background: sessions.background, isLead, isSenior }), home, { unread: sessions.unread }).slice(1));
   lines.push('  the lead\'s session tools are set_session_model and set_session_effort, called by the lead on another open session: a session changes neither of its own');
   if (typeof home.model === 'string' && typeof (home.lead ?? home.effort) === 'string') lines.push(`  only he changes the lead's own session. To give him: ${menuLine({ model: home.model, effort: home.lead ?? home.effort })}`);
   lines.push('  a resume starts a background session again on the home\'s model and level, whatever its record holds, and refuses a job at work');
@@ -409,7 +409,7 @@ export async function switchRules(parsed, deps, stdout, stderr) {
   const after = homesOf(dry.list);
   // The homes once every rule named is written: a run that writes one rule at a time leaves less than that.
   const target = {
-    claude: { model: parsed.claude?.model ?? after.claude.model, effort: parsed.claude?.effort ?? after.claude.effort, lead: parsed.lead ?? after.claude.lead, lenses: parsed.lenses ?? after.claude.lenses, advisor: parsed.advisor ?? after.claude.advisor },
+    claude: { model: parsed.claude?.model ?? after.claude.model, effort: parsed.claude?.effort ?? after.claude.effort, lead: parsed.lead ?? after.claude.lead, lenses: parsed.lenses ?? after.claude.lenses, advisor: parsed.advisor ?? after.claude.advisor, senior: after.claude.senior, seniorEffort: after.claude.seniorEffort },
     codex: { model: parsed.codex?.model ?? after.codex.model, effort: parsed.codex?.effort ?? after.codex.effort },
   };
   // An advisor that is the model itself is refused: a transcript could not tell it from none (odd/tasks/advisor-home.md,
@@ -446,7 +446,7 @@ export async function switchRules(parsed, deps, stdout, stderr) {
       sessions = read.error ? { desktop: [], background: [], unread: [`the sessions (${read.error.message})`] } : read;
     }
     const settings = tried(() => deps.readSettings());
-    for (const line of outsideLines({ home: target.claude, sessions, settings: settings.error ? {} : settings, isLead: deps.isLead })) stdout(line);
+    for (const line of outsideLines({ home: target.claude, sessions, settings: settings.error ? {} : settings, isLead: deps.isLead, isSenior: deps.isSenior })) stdout(line);
     const newClaude = target.claude.model !== before.claude.model ? target.claude.model : null;
     const newCodex = target.codex.model !== before.codex.model ? target.codex.model : null;
     if (newClaude === null && newCodex === null) return;

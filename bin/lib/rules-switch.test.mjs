@@ -285,7 +285,7 @@ function fakeRunner({ refuse = null, fail = null, base = BEFORE } = {}) {
 }
 
 /** Runs the switch with `argv` and made-up surroundings: `{ code, out, err, asked, runner }`, `asked` the probes made. */
-async function run(argv, { runner = fakeRunner(), claude = (asked) => claudeAnswer([asked.model]), codex = () => ({ status: 0, stdout: `${JSON.stringify({ type: 'turn.completed' })}\n`, stderr: '' }), meter = { ok: true, result: { rateLimits: { secondary: { usedPercent: 40, windowDurationMins: 10080 } } } }, files = { ...CHECKOUT, [WRITER_AGENT]: AGENT } } = {}) {
+async function run(argv, { runner = fakeRunner(), claude = (asked) => claudeAnswer([asked.model]), codex = () => ({ status: 0, stdout: `${JSON.stringify({ type: 'turn.completed' })}\n`, stderr: '' }), meter = { ok: true, result: { rateLimits: { secondary: { usedPercent: 40, windowDurationMins: 10080 } } } }, files = { ...CHECKOUT, [WRITER_AGENT]: AGENT }, sessions = { desktop: [{ id: 'b', title: 'JH 7 · work', model: OLD, effort: MEDIUM, archived: false }], background: [], unread: [] }, isSenior = () => false } = {}) {
   const out = [];
   const err = [];
   const asked = [];
@@ -298,10 +298,11 @@ async function run(argv, { runner = fakeRunner(), claude = (asked) => claudeAnsw
     codexVersion: () => '0.200.0',
     readMeter: async () => (asked.push(['meter']), meter),
     weeklyFloor: FLOOR,
-    readSessions: () => ({ desktop: [{ id: 'b', title: 'JH 7 · work', model: OLD, effort: MEDIUM, archived: false }], background: [], unread: [] }),
+    readSessions: () => sessions,
     readSettings: () => ({ user: { model: 'opus[1m]' }, project: null }),
     configuredWindow: () => null,
     isLead: () => false,
+    isSenior,
   }, (line) => out.push(line), (line) => err.push(line));
   return { code, out: out.join('\n'), err: err.join('\n'), asked, runner };
 }
@@ -330,6 +331,15 @@ test('a switch says the probe\'s cost, probes, writes the rules and the agent fi
   at(/^What the new model may make stale, that no rule holds:$/m);
   at(new RegExp(`evals/prices\\.mjs holds no row for ${NEW}`));
   at(new RegExp(`not tried by any command: that the app's start_session and set_session_model take ${NEW}`));
+});
+
+// odd/tasks/senior-orchestrator.md: a switch of the sessions' home leaves the senior on its own rules.
+test('a switch of the sessions\' model holds a senior to its own model and level in what it leaves outside', async () => {
+  const runner = fakeRunner({ base: [...BEFORE, rule('senior-model', 'claude-fable-5-2'), rule('senior-effort', HIGH)] });
+  const sessions = { desktop: [{ id: 's', title: 'JH SR · a design', model: 'claude-fable-5-2', effort: HIGH, archived: false }], background: [], unread: [] };
+  const result = await run(['--claude', `${NEW}@${MEDIUM}`, ...WORDS], { runner, sessions, isSenior: (title) => / SR · /.test(title) });
+  assert.equal(result.code, 0, result.err);
+  assert.doesNotMatch(result.out, /JH SR · a design/);
 });
 
 test('a Claude probe says what the CLI put the call at when it gave a number, after any model billed beside, and nothing of it when it gave none', async () => {

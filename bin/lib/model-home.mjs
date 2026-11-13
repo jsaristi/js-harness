@@ -11,7 +11,7 @@ import { CLAUDE_ID } from './model-shape.mjs';
 import { RULES } from './rules-data.mjs';
 import { guardHeld, ruleHere, ruleOf } from './rules.mjs';
 
-export { CLAUDE_HOME, CODEX_HOME, EFFORTS, homeFaults } from './model-shape.mjs';
+export { CLAUDE_HOME, CODEX_HOME, EFFORTS, SENIOR_HOME, homeFaults } from './model-shape.mjs';
 
 /** Each level as the app's model menu names it. Medio, Alto and Extra alto are the user's own words for it
  * (2026-11-10); the two ends are assumed, and his to correct. */
@@ -49,6 +49,9 @@ export function claudeHeld(projectData) {
     lead: guardHeld('lead-effort', ruleHere('lead-effort', undefined, projectData)),
     lenses: guardHeld('lens-effort', ruleHere('lens-effort', undefined, projectData)),
     advisor: guardHeld('advisor-model', ruleHere('advisor-model', undefined, projectData)),
+    // The senior's model (odd/tasks/senior-orchestrator.md): held only where the project declares it.
+    senior: guardHeld('senior-model', ruleHere('senior-model', undefined, projectData)),
+    seniorEffort: guardHeld('senior-effort', ruleHere('senior-effort', undefined, projectData)),
   };
 }
 
@@ -56,7 +59,15 @@ export function claudeHeld(projectData) {
  * where the project does not declare it. */
 export function heldValues(projectData) {
   const held = claudeHeld(projectData);
-  return { model: held.model?.value ?? null, effort: held.effort?.value ?? null, lead: held.lead?.value ?? null, lenses: held.lenses?.value ?? null, advisor: held.advisor?.value ?? null };
+  return { model: held.model?.value ?? null, effort: held.effort?.value ?? null, lead: held.lead?.value ?? null, lenses: held.lenses?.value ?? null, advisor: held.advisor?.value ?? null, senior: held.senior?.value ?? null, seniorEffort: held.seniorEffort?.value ?? null };
+}
+
+/** What a session is held to of `home` (`heldValues`' shape) by the role its title gives, `{ model, effort, advisor }`:
+ * a senior to rule:senior-model and rule:senior-effort with no advisor where the project declares senior-model
+ * (odd/tasks/senior-orchestrator.md), a lead to rule:lead-effort, any other session to the sessions' level. */
+export function heldOfRole(home, { lead = false, senior = false } = {}) {
+  if (senior && typeof home.senior === 'string') return { model: home.senior, effort: home.seniorEffort ?? home.effort ?? null, advisor: null };
+  return { model: home.model ?? null, effort: (lead ? home.lead ?? home.effort : home.effort) ?? null, advisor: home.advisor ?? null };
 }
 
 /** A model as a person reads it: `claude-fable-5-2` is "Fable 5.2", from its family and its version. An id of

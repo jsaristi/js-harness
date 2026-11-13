@@ -1142,3 +1142,14 @@ test('the head of the list says it holds no engine version and no date of a chec
   ]);
   assert.ok(head[2].startsWith('Rendered by `js-harness rules render`'), head[2]);
 });
+
+// bin/lib/rules-data.mjs sits at the size limit of a module (bin/conventions-structure.test.mjs) and its path is fixed,
+// so each entry of a rule's history takes one line; the readers parse the JSON, which spaces do not change.
+test('writeRules writes each entry of a rule\'s history on one line, and the list reads back the same', () => {
+  const text = writeRules(RULES);
+  const history = RULES.reduce((count, rule) => count + (rule.was?.length ?? 0), 0);
+  assert.equal((text.match(/^\s+\{ "value": .+, "until": "[^"]+" \},?$/gm) ?? []).length, history);
+  const start = text.indexOf('export const RULES = ') + 'export const RULES = '.length;
+  const read = JSON.parse(text.slice(start, text.lastIndexOf(';')));
+  for (const rule of RULES) assert.deepEqual(read.find((item) => item.id === rule.id).was, rule.was, rule.id);
+});

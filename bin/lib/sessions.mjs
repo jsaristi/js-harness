@@ -1245,7 +1245,7 @@ export function readPullRequests(run, root) {
 // One token for the code, one for the role, the dot between two spaces, and something after it. A title
 // with a word more before the dot is another title: a handover names the orchestrator that arrives `ORQ
 // nueva` and the one that leaves `ORQ relevada`, so that neither holds the role by its title.
-const TITLE_SHAPE = /^(\S+) (ORQ|\d+) · (.*\S.*)$/;
+const TITLE_SHAPE = /^(\S+) (ORQ|SR|\d+) · (.*\S.*)$/;
 const TITLE_WORDS = '<code> <role> · <what it does>';
 
 /** What a title of the agreed shape says: `{ code, role, number, purpose }`, `role` being `'orchestrator'`
@@ -1255,7 +1255,7 @@ export function roleOfTitle(title) {
   const shaped = typeof title === 'string' ? TITLE_SHAPE.exec(title) : null;
   if (!shaped) return null;
   const [, code, role, purpose] = shaped;
-  if (role === 'ORQ') return { code, role: 'orchestrator', number: null, purpose: purpose.trim() };
+  if (role === 'ORQ' || role === 'SR') return { code, role: role === 'ORQ' ? 'orchestrator' : 'senior', number: null, purpose: purpose.trim() };
   const number = Number(role);
   return Number.isSafeInteger(number) ? { code, role: 'work', number, purpose: purpose.trim() } : null;
 }
@@ -1447,7 +1447,7 @@ export function rosterOf(sessions, { worktrees, since, record, app, hosts, home 
     const opened = earliestOpener ?? (scheduled ? 'scheduled' : 'unknown');
     // What the row holds of the home and what it is held to (`rowHome`), judged by the app's record, else by its last reply.
     const ofHome = rowHome(home, {
-      lead: said?.role === 'orchestrator',
+      lead: said?.role === 'orchestrator', senior: said?.role === 'senior',
       record: latestRecord,
       replied: { model: members.find((member) => typeof member.context?.model === 'string')?.context.model ?? null, effort: members.find((member) => typeof member.effort === 'string')?.effort ?? null },
     });
@@ -3076,7 +3076,7 @@ function rosterLines(roster, now) {
   const short = (id) => id.slice(0, 8);
   const lines = ['Roster'];
   for (const row of roster.rows) {
-    const role = row.role === 'orchestrator' ? 'orchestrator' : row.role === 'work' ? `work ${row.number}` : 'no role';
+    const role = row.role === 'orchestrator' ? 'orchestrator' : row.role === 'work' ? `work ${row.number}` : row.role === 'senior' ? 'senior' : 'no role';
     const last = row.lastEntryAt === null ? null : ago(row.lastEntryAt, now);
     const lastEntry = last === null ? '' : `, last entry ${last}`;
     // A row that closed or was relieved says that, and not for how long it has been silent.

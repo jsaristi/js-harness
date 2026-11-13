@@ -513,7 +513,10 @@ function canonicalRule(rule) {
 /** The whole text of rules-data.mjs for `list`: the header, then the rules as JSON in the one shape the
  * file has, so that the command which changes a rule and a hand that seeds one write the same bytes. */
 export function writeRules(list) {
-  return `${HEADER}export const RULES = ${JSON.stringify(byId(list).map(canonicalRule), null, 2)};\n`;
+  // Each entry of a history on one line: rules-data.mjs is at a module's size limit and its path is fixed, and its
+  // readers parse the JSON, which spaces do not change.
+  const text = JSON.stringify(byId(list).map(canonicalRule), null, 2).replace(/\{\n\s+"value": (.+),\n\s+"until": ("[^"\n]+")\n\s+\}/g, '{ "value": $1, "until": $2 }');
+  return `${HEADER}export const RULES = ${text};\n`;
 }
 
 /** A short name for what the rules say: the first 12 hexadecimal characters of the SHA-256 of the list

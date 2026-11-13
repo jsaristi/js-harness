@@ -14,10 +14,11 @@ import { spawnSync } from 'node:child_process';
 import { CLOSE_FINISHED, appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, strandedWords, undoSession, within, worktreeHolding, worktreeOf } from './lib/background.mjs';
 import { closeFinishedIn, closedLines } from './lib/background-close.mjs';
 import { sessionStartHome, sessionStartRefusal } from './lib/guard.mjs';
-import { leadTitle, sessionTitleRefusal } from './lib/session-title-guard.mjs';
+import { leadTitle, seniorTitle, sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { appendNotice, newNotice, nextSessionNumber, placeOf, readNotices } from './lib/channel.mjs';
 import { mainCheckout, projectCode, projectSlug, sameSession } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { appRoot, appSessions } from './lib/app-record.mjs';
 // bin/sessions.mjs is at its size ceiling, so the live verb reaches it through the import it has of this module.
 export { LIVE_USAGE, sessionsLiveMain } from './sessions-live.mjs';
 
@@ -139,8 +140,44 @@ function recordUnwritable(home) {
   }
 }
 
+/** Why the session `env.CLAUDE_CODE_SESSION_ID` names may not start a senior, or null: only the lead starts one
+ * (odd/tasks/senior-orchestrator.md, D3, D6), told by the title of its app record (`leadTitle`), read by `readApp` as
+ * the doctor reads it (`modelHomeHealth`). No session id, no record that can be read, or another title refuses. */
+function seniorStarterRefusal(title, env, readApp) {
+  const id = env.CLAUDE_CODE_SESSION_ID;
+  let record = null;
+  if (typeof id === 'string' && id !== '') {
+    try {
+      record = readApp().get(id) ?? null;
+    } catch {
+      record = null;
+    }
+  }
+  if (record !== null && leadTitle(record.title ?? '')) return null;
+  const caller = typeof id !== 'string' || id === '' ? 'this command is not run from a session'
+    : record === null ? `the session ${id} that runs it has no app record that can be read`
+      : `the session that runs it is titled ${JSON.stringify(record.title ?? '')}`;
+  return `js-harness sessions start: a senior is started by the lead (the orchestrator, titled "<code> ORQ · <purpose>"), and ${caller}, so ${JSON.stringify(title)} was not started: the user asks the lead to start it.`;
+}
+
+/** Why a new senior of the project at `root` is refused while the record under `home` holds one, or null: at most one
+ * live senior (odd/tasks/senior-orchestrator.md, D4). It counts the open `started` lines of the record,
+ * <home>/.js-harness/background/sessions.jsonl (stranded starts included, `readRecord`), whose title is a senior's and
+ * whose root is this project's, the last job of each: a senior is live until the harness removes it (`sessions stop`,
+ * `stop --finished`), and its job ending a turn does not end it. Nothing locks the record between this read and the
+ * start's own line, so two starts at the same instant can both pass; D4 accepts that. */
+function liveSeniorRefusal(home, root) {
+  const record = readRecord(home);
+  if (record.unavailable !== undefined) return { code: 1, line: `js-harness sessions start: the record of background sessions could not be read (${record.unavailable}), so whether a senior is live cannot be told and none was started` };
+  const live = (record.sessions ?? []).find((entry) => seniorTitle(entry.title ?? '') && !record.resumedAs?.has(entry.id)
+    && typeof entry.root === 'string' && within(entry.root, root) && within(root, entry.root));
+  if (live === undefined) return null;
+  return { code: 2, line: `js-harness sessions start: the senior ${live.id} · ${live.title} is live, and a project has one at most: send it the task with a message, or close it first (js-harness sessions stop ${live.id}).` };
+}
+
 /** `sessions start`: exit 0 once the session runs and is recorded, 1 when claude is missing or refused (nothing is
- * recorded), 2 for a usage error or a rule that refuses the title or the effort (nothing runs). */
+ * recorded), 2 for a usage error or a rule that refuses the title or the effort (nothing runs), and for a senior that
+ * the lead does not start or that a live senior of the project already holds (1 when the record cannot be read). */
 export function sessionsStartMain(argv, given = {}) {
   const deps = { ...defaults(), ...given };
   const { stdout, stderr, env, now, run, readFile } = deps;
@@ -172,17 +209,35 @@ export function sessionsStartMain(argv, given = {}) {
   const project = { codeOf: () => projectCode(root, readFile), next: (code) => nextSessionNumber(home, projectSlug(root), { code }) };
   // What the call does not name is the home's, where this project declares it (odd/tasks/one-model-home.md, spec 5).
   const lead = leadTitle(parsed.title);
-  const taken = sessionStartHome(rules, { lead });
+  const senior = seniorTitle(parsed.title);
+  const taken = sessionStartHome(rules, { lead, senior });
   const model = parsed.model ?? taken.model;
   const effort = parsed.effort ?? taken.effort;
   // Where the home declares an advisor, the one passed is its exact id: a call may only name the same model, with a
   // date or a bracket the refusal lets through (the verifier's note of 2026-11-12), which claude is not given.
-  const advisor = taken.advisor ?? parsed.advisor;
-  const refusal = sessionStartRefusal({ prompt: brief, effort, model, advisor: parsed.advisor ?? taken.advisor }, rules, { cli: true, lead })
+  // A senior's home holds no advisor (null), which a named one does not replace: the refusal below names it.
+  const advisor = taken.advisor === null ? undefined : taken.advisor ?? parsed.advisor;
+  const refusal = sessionStartRefusal({ prompt: brief, effort, model, advisor: parsed.advisor ?? taken.advisor }, rules, { cli: true, lead, senior })
     ?? sessionTitleRefusal({ title: parsed.title }, rules, project, 'js-harness sessions start');
   if (refusal !== null) {
     stderr(refusal);
     return 2;
+  }
+  if (senior) {
+    const readApp = deps.readApp ?? (() => {
+      const app = appRoot(env, process.platform, deps.homedir());
+      return app === null ? new Map() : appSessions(app);
+    });
+    const starter = seniorStarterRefusal(parsed.title, env, readApp);
+    if (starter !== null) {
+      stderr(starter);
+      return 2;
+    }
+    const second = liveSeniorRefusal(home, root);
+    if (second !== null) {
+      stderr(second.line);
+      return second.code;
+    }
   }
   const claude = deps.claude === undefined ? claudeRunner({ env }) : deps.claude;
   if (claude === null) {
@@ -341,14 +396,16 @@ function resumeStart(parsed, deps) {
   // declares none, the record's stands, as before.
   const rules = rulesText(topLevel(run, folder), readFile);
   const lead = leadTitle(entry.title);
-  const taken = sessionStartHome(rules, { lead });
+  const senior = seniorTitle(entry.title);
+  const taken = sessionStartHome(rules, { lead, senior });
   const model = parsed.model ?? taken.model ?? entry.model ?? undefined;
   const effort = parsed.effort ?? taken.effort ?? entry.effort ?? undefined;
   // The advisor: the home's exact id where declared, before the call's and the record's (odd/tasks/advisor-home.md,
   // spec 3), so a session started with none before the rule is resumed with the home's; a call that names another is
   // refused below.
-  const advisor = taken.advisor ?? parsed.advisor ?? entry.advisor ?? undefined;
-  const refusal = sessionStartRefusal({ prompt: text, effort, model, advisor: parsed.advisor ?? advisor }, rules, { cli: true, lead });
+  // A senior's home holds no advisor (null): neither the call's nor the record's is taken.
+  const advisor = taken.advisor === null ? undefined : taken.advisor ?? parsed.advisor ?? entry.advisor ?? undefined;
+  const refusal = sessionStartRefusal({ prompt: text, effort, model, advisor: parsed.advisor ?? advisor }, rules, { cli: true, lead, senior });
   if (refusal !== null) return refuse(refusal, 2);
   const unwritable = recordUnwritable(home);
   if (unwritable !== null) return refuse(`${unwritable}, so nothing was resumed`);

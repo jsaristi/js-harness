@@ -100,3 +100,11 @@ test('readSettings gives his settings and the project\'s as objects, and null fo
   assert.deepEqual(readSettings({ claudeDir: 'D:/home/.claude', project: 'D:/proj', readFile: files(held) }), { user: { model: 'opus[1m]' }, project: null });
   assert.deepEqual(readSettings({ claudeDir: 'D:/home/.claude', project: 'D:/proj', readFile: files({}) }), { user: null, project: null });
 });
+
+// odd/tasks/senior-orchestrator.md: the doctor holds a senior's own record to the senior's model and level.
+test('a senior on the senior\'s model and level is ok for the doctor, and one on the sessions\' model is stale', () => {
+  const SENIOR = RULES.find((rule) => rule.id === 'senior-model').value;
+  const LEVEL = RULES.find((rule) => rule.id === 'senior-effort').value;
+  assert.equal(ask({ readApp: () => record('JH SR · a design', SENIOR, LEVEL) }).state, 'ok');
+  assert.equal(ask({ readApp: () => record('JH SR · a design', home.model, home.effort) }).state, 'stale');
+});

@@ -4,7 +4,7 @@
 // entry ends in `|| exit 0` (bin/lib/manifest.mjs), and a refusal by exit code would be swallowed. Zero deps.
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { CLAUDE_HOME, EFFORTS, claudeHeld, menuLine, sameClaudeModel } from './model-home.mjs';
+import { CLAUDE_HOME, EFFORTS, SENIOR_HOME, claudeHeld, menuLine, sameClaudeModel } from './model-home.mjs';
 import { guardHeld, ruleHere, ruleOf, staleNote } from './rules.mjs';
 
 /** The models a sub-agent may be launched on in the project whose rules file has the text `projectData`, as
@@ -102,18 +102,26 @@ export const SESSION_TOOL = 'mcp__ccd_session__start_session';
  * `lead-effort`, where that rule gives a value, and to the sessions' where it gives none. His decision of 2026-11-11
  * gives the lead a level of its own, and at a cut the old lead starts the new one with this tool (./manifest.mjs,
  * "The cut"): held to the sessions' level, that start would be refused at the lead's. */
-export function sessionStartRefusal(toolInput, projectData, { cli = false, lead = false } = {}) {
+export function sessionStartRefusal(toolInput, projectData, { cli = false, lead = false, senior = false } = {}) {
   if (typeof toolInput?.prompt !== 'string' || toolInput.prompt === '') return null;
   const home = claudeHeld(projectData);
   const who = cli ? 'js-harness sessions start' : 'js-harness guard: start_session';
-  const model = home.model === null ? null : modelReason(toolInput, home.model.value, who, cli);
-  if (model !== null) return `${model}${home.model.note}`;
-  const advisor = home.advisor === null ? null : advisorReason(toolInput, home.advisor.value, who, cli);
+  // A senior (odd/tasks/senior-orchestrator.md) runs on its own model with no advisor, where its rule is declared.
+  const ofSenior = senior && home.senior !== null;
+  const held = ofSenior ? home.senior : home.model;
+  const model = held === null ? null : modelReason(toolInput, held.value, who, cli, ofSenior ? SENIOR_HOME.model : CLAUDE_HOME.model);
+  if (model !== null) return `${model}${held.note}`;
+  if (ofSenior && typeof toolInput.advisor === 'string' && toolInput.advisor !== '') {
+    return `${who} names the advisor "${toolInput.advisor}", and a senior runs with no advisor: its model is the advisor's (rule ${SENIOR_HOME.model}: ${home.senior.value}). Pass none.`;
+  }
+  const advisor = home.advisor === null || ofSenior ? null : advisorReason(toolInput, home.advisor.value, who, cli);
   if (advisor !== null) return `${advisor}${home.advisor.note}`;
-  const ofLead = lead && home.lead !== null;
-  const rule = ofLead ? home.lead : home.effort;
+  // A senior's level is rule:senior-effort where declared; a lead's, rule:lead-effort; any other, the sessions'.
+  const ofLevel = ofSenior && home.seniorEffort !== null;
+  const ofLead = !ofLevel && lead && home.lead !== null;
+  const rule = ofLevel ? home.seniorEffort : ofLead ? home.lead : home.effort;
   if (rule === null) return null;
-  const reason = effortReason(toolInput, ofLead ? CLAUDE_HOME.lead : CLAUDE_HOME.effort, rule.value, who, cli);
+  const reason = effortReason(toolInput, ofLevel ? SENIOR_HOME.effort : ofLead ? CLAUDE_HOME.lead : CLAUDE_HOME.effort, rule.value, who, cli);
   return reason === null ? null : `${reason}${rule.note}`;
 }
 
@@ -146,20 +154,21 @@ export function starterRefusal(starter, projectData, { lead = false, starterLead
  * the home's values in the project whose rules file has the text `projectData`, a lead's level for a lead as
  * `sessionStartRefusal` holds it, each undefined where the project does not declare its rule
  * (odd/tasks/one-model-home.md, spec 5; odd/tasks/advisor-home.md, specs 2 and 3). */
-export function sessionStartHome(projectData, { lead = false } = {}) {
+export function sessionStartHome(projectData, { lead = false, senior = false } = {}) {
   const home = claudeHeld(projectData);
   const level = lead && home.lead !== null ? home.lead : home.effort;
+  if (senior && home.senior !== null) return { model: home.senior.value, effort: (home.seniorEffort ?? level)?.value, advisor: null };
   return { model: home.model?.value, effort: level?.value, advisor: home.advisor?.value };
 }
 
 /** Why the model `toolInput` names is refused under the home's model `value`, or null: none named, or the home's,
  * a date at its end or a bracket aside (`sameClaudeModel`). A short name is refused too, since it names whatever
  * the engine in use gives it. */
-function modelReason(toolInput, value, who, cli) {
+function modelReason(toolInput, value, who, cli, id = CLAUDE_HOME.model) {
   const { model } = toolInput;
   if (model === undefined || model === null || model === '' || sameClaudeModel(model, value)) return null;
   const pass = cli ? `Pass --model ${value}, or none` : `Pass model "${value}", or none`;
-  return `${who} names the model "${model}", not the one of the rule ${CLAUDE_HOME.model}: ${value}. ${pass}; another model is his to set.`;
+  return `${who} names the model "${model}", not the one of the rule ${id}: ${value}. ${pass}; another model is his to set.`;
 }
 
 /** Why the advisor `toolInput` names is refused under the home's advisor `value`, or null: none named, or the home's,

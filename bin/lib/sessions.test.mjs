@@ -2381,6 +2381,13 @@ test('roleOfTitle reads the project code, the role and what the session is for f
   // A handover renames the two orchestrators on purpose, so that neither holds the role by its title.
   const others = ['JH ORQ nueva · js-harness', 'JH ORQ relevada · js-harness', 'Board feature', 'JH orq · x', 'JH ORQ - x', 'JH ORQ ·x', 'JH ORQ· x', 'JH 5 · ', 'JH 5.5 · x', 'JH -5 · x', 'ORQ · x', ' JH ORQ · x', '', null, undefined, 7];
   for (const title of others) assert.equal(lib.roleOfTitle(title), null, JSON.stringify(title));
+  // odd/tasks/senior-orchestrator.md, D1: the senior's title is SR beside ORQ, and only in capitals, as ORQ.
+  assert.deepEqual(lib.roleOfTitle('JH SR · a design'), { code: 'JH', role: 'senior', number: null, purpose: 'a design' });
+  for (const title of ['JH sr · x', 'JH SR nuevo · x', 'SR · x']) assert.equal(lib.roleOfTitle(title), null, title);
+});
+
+test("roleNamed takes no senior: no notice is addressed to one (odd/tasks/senior-orchestrator.md, D6)", () => {
+  for (const text of ["senior", "SR", "sr"]) assert.equal(lib.roleNamed(text), null, text);
 });
 
 test('roleNamed reads the role an --address asks for: the orchestrator by either of its names, a work session by its number', () => {
@@ -4945,4 +4952,9 @@ test('peakContextBefore reads no side chain, no reply the harness wrote, no repl
     spoke(8, usage(0, 777000, 0)),
   ).split('\n');
   assert.deepEqual(lib.peakContextBefore(lines, Date.parse(at(6))), { tokens: 300000, preTokens: null });
+});
+
+test('renderBoard: a senior\'s row is labelled senior, not no role (odd/tasks/senior-orchestrator.md)', () => {
+  const section = rosterSection([member(A, 'JH SR · a design', 60)], { record: recordOf([]) });
+  assert.match(section.join('\n'), /^ {2}senior {2}JH SR · a design/m);
 });

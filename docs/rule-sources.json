@@ -1167,6 +1167,52 @@
       "by": "command"
     }
   },
+  "senior-effort": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Yo creo que nos va a tocar que seguir como antes Opus 5.5 Extra para orquestador y Opus 5.5 Medio para sesiones y subagentes pero todos con Advisor de Fable 5.2 Alto y lo que podemos hacer es depronto tener una sesion de Orquestador Senior que tenga Fable 5.2 Alto para cosas especiales que le coloque el orquestador Opus 5.5 Extra Alto, que te parece así?",
+        "date": "2026-11-11",
+        "session": "812b728f-2f18-43f6-b405-396080689c65",
+        "line": 1444
+      },
+      {
+        "quote": "pero tanto los sub agentes como el orquestador deben tener el advisor fable 5.2 alto tambien y ademas debe haber un orquestador senior fable 5.2 alto que le manden tareas de ciertas cosas especificas que se requiera mas inteligencia o complejidad",
+        "date": "2026-11-12",
+        "session": "93b72703-ce16-4f96-a7f6-d5fddb1b4a80",
+        "line": 775
+      }
+    ],
+    "reading": "He asked on 2026-11-11 and 2026-11-12 for a senior orchestrator on Fable 5.2 Alto: this rule is its level, his \"Alto\", high; its model is rule:senior-model, and a start or resume of a senior is held to both. The rest is the session's reading (odd/tasks/senior-orchestrator.md), his to correct.",
+    "accepted": "Typed by him: line 1444 of 812b728f on 2026-11-11 and line 775 of 93b72703 on 2026-11-12; his \"aplica todos los cambios ya\" at line 896 of 93b72703 asks that the changes be applied now.",
+    "checked": {
+      "date": "2026-11-12",
+      "by": "command"
+    }
+  },
+  "senior-model": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Yo creo que nos va a tocar que seguir como antes Opus 5.5 Extra para orquestador y Opus 5.5 Medio para sesiones y subagentes pero todos con Advisor de Fable 5.2 Alto y lo que podemos hacer es depronto tener una sesion de Orquestador Senior que tenga Fable 5.2 Alto para cosas especiales que le coloque el orquestador Opus 5.5 Extra Alto, que te parece así?",
+        "date": "2026-11-11",
+        "session": "812b728f-2f18-43f6-b405-396080689c65",
+        "line": 1444
+      },
+      {
+        "quote": "pero tanto los sub agentes como el orquestador deben tener el advisor fable 5.2 alto tambien y ademas debe haber un orquestador senior fable 5.2 alto que le manden tareas de ciertas cosas especificas que se requiera mas inteligencia o complejidad",
+        "date": "2026-11-12",
+        "session": "93b72703-ce16-4f96-a7f6-d5fddb1b4a80",
+        "line": 775
+      }
+    ],
+    "reading": "He asked on 2026-11-11 for a senior orchestrator on Fable 5.2 high for special tasks the orchestrator gives it, and on 2026-11-12 that there be one the orchestrator sends specific tasks needing more intelligence or complexity. This rule is its model, his \"Fable 5.2\"; its level is a rule of its own, and it runs with no advisor, since the home's advisor is this model itself. The title SR, the starter and the rest of the design are the session's reading (odd/tasks/senior-orchestrator.md, D1 to D5), his to correct.",
+    "accepted": "Typed by him: line 1444 of 812b728f on 2026-11-11 and line 775 of 93b72703 on 2026-11-12; his \"aplica todos los cambios ya\" at line 896 of 93b72703 asks that the changes be applied now.",
+    "checked": {
+      "date": "2026-11-12",
+      "by": "command"
+    }
+  },
   "sensor-silence": {
     "kind": "design",
     "path": "odd/tasks/first-version.md"

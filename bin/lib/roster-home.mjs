@@ -4,7 +4,7 @@
 // board said `effort high` of the lead while its menu said more, and its one mark compared with a level written by
 // hand. It is apart from ./sessions.mjs, which builds the rows and renders the board, because that module is at its
 // ceiling (bin/conventions-structure.test.mjs). It reads no file and prints nothing: a row comes in, lines come out.
-import { menuLine, offHome } from './model-home.mjs';
+import { heldOfRole, menuLine, offHome } from './model-home.mjs';
 
 const OPENED_WORDS = { his: 'opened by him', session: 'opened by a session', command: 'opened by a command', scheduled: 'opened by a scheduled task', unknown: 'opened unknown' };
 const WHERE_WORDS = { sessions: 'in Sessions', routines: 'in Routines', archived: 'archived', 'not-in-app': 'not in the app', unknown: 'where unknown' };
@@ -16,10 +16,11 @@ const WHERE_WORDS = { sessions: 'in Sessions', routines: 'in Routines', archived
  * holds nothing, since a project that declares none of those rules marks nothing. `off` is what the menu, or with no
  * record the last reply (`replied`, the same shape), holds that `held` does not (`offHome`), with its `source`
  * (`menu` or `last reply`), else null. */
-export function rowHome(home, { lead = false, record = null, replied = null } = {}) {
+export function rowHome(home, { lead = false, senior = false, record = null, replied = null } = {}) {
   const inForce = home !== null && typeof home === 'object' && [home.model, home.effort, home.lead].some((value) => typeof value === 'string');
   const menu = record === null ? null : { model: record.model ?? null, effort: record.effort ?? null };
-  const held = inForce ? { model: home.model ?? null, effort: (lead ? home.lead ?? home.effort : home.effort) ?? null } : null;
+  const role = inForce ? heldOfRole(home, { lead, senior }) : null;
+  const held = role === null ? null : { model: role.model, effort: role.effort };
   const differs = held === null ? null : offHome(menu ?? replied, held);
   return { menu, held, off: differs === null ? null : { source: menu === null ? 'last reply' : 'menu', ...differs } };
 }

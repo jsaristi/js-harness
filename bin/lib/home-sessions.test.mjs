@@ -146,3 +146,20 @@ test('the block says the advisor a session is held to, what its last reply named
   // odd/tasks/lead-effort-split.md: the reviewers' level is said apart from the lead's where the home declares it.
   assert.equal(offHomeLines(result, { ...ADVISED, lead: 'xhigh', lenses: 'high' })[1], 'Sessions off the home: a session is held to claude-opus-5-5 at medium, the lead to xhigh, and the lenses and the double review\'s Claude reader to high; a background session to the advisor claude-fable-5-2');
 });
+
+// odd/tasks/senior-orchestrator.md: a senior is held to the senior's model and level, and to no advisor.
+test('a senior on its own model and level is on the home, and one on the sessions\' model is off it', () => {
+  const home = { ...ADVISED, senior: 'claude-fable-5-2', seniorEffort: 'high' };
+  const isSenior = (title) => String(title).startsWith('JH SR');
+  const desktop = [
+    { id: 'a', title: 'JH SR · a design', model: 'claude-fable-5-2', effort: 'high' },
+    { id: 'b', title: 'JH SR · a review', ...opus },
+  ];
+  const background = [{ id: 'c', title: 'JH SR · bg', asked: { model: 'claude-fable-5-2', effort: 'high' }, replied: { model: 'claude-fable-5-2', effort: 'high', advisor: 'claude-fable-5-2' }, state: 'done' }];
+  const read = sessionsOffHome(home, { desktop, background, isLead, isSenior });
+  assert.deepEqual(read.rows.map((row) => row.id), ['b']);
+  assert.deepEqual(read.rows[0].held, { model: 'claude-fable-5-2', effort: 'high' });
+  // A background senior is held to no advisor: a reply that names no advisor of its own is on the home, not off it.
+  assert.deepEqual(read.on, { desktop: 1, background: 1 });
+  assert.deepEqual(read.unknownAdvisor, []);
+});

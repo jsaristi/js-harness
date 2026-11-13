@@ -41,7 +41,7 @@ function fixture() {
   const err = [];
   const options = { cwd, stdout: (text) => out.push(text), stderr: (text) => err.push(text), env: { JS_HARNESS_HOME: home }, homedir: () => home, run: () => ({ status: 1, stdout: '', stderr: '' }), now: () => Date.parse(at(5, 0)) };
   const main = (...argv) => wakeMain(['--claude-home', claudeHome, '--boot-time', BOOT, ...argv], options);
-  return { main, out, err, home, slug };
+  return { main, out, err, home, slug, write };
 }
 
 test('wake prints each session open before the boot, its opening and the waits the boot killed, and records nothing without --notify', async () => {
@@ -225,4 +225,15 @@ test('--remove without --at-login, or --at-login with --notify, is a usage error
   assert.equal(await main('--remove'), 2);
   assert.equal(await main('--at-login', '--notify'), 2);
   assert.equal(fs.existsSync(file), false);
+});
+
+test('a senior open before the boot takes no note and does not stop the others: it is listed as unreached', async () => {
+  // odd/tasks/senior-orchestrator.md, D6: no notice is addressed to a senior, so wake must not try to make one.
+  const { main, home, slug, write } = fixture();
+  write('dddd4444', [titled('JH SR · a design'), prompt('senior', at(4, 40))]);
+  assert.equal(await main('--notify'), 0);
+  const notices = readNotices(home, slug).notices;
+  assert.equal(notices.filter((one) => one.to.role === 'work' && one.to.number === 5).length, 1);
+  const list = notices.find((one) => one.to.role === 'orchestrator' && /No note reaches/.test(one.text));
+  assert.match(list.text, /JH SR · a design/);
 });

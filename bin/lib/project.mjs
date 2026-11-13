@@ -429,8 +429,8 @@ export function codeOfName(name) {
   if (words.length === 0) return null;
   const code = words.length === 1 ? words[0].slice(0, 2) : words.slice(0, 4).map((word) => word[0]).join('');
   const upper = code.toUpperCase();
-  // ORQ is the role of a lead, never a code.
-  return upper === 'ORQ' ? null : upper;
+  // ORQ and SR are roles of a title (a lead's, a senior's), never a code.
+  return upper === 'ORQ' || upper === 'SR' ? null : upper;
 }
 
 /** A semver version (semver.org's grammar, without a leading `v`): what `harness.json` may pin. */

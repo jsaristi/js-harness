@@ -156,6 +156,7 @@ test('codeOfName offers the initials of a project\'s name as its code', () => {
   assert.equal(codeOfName('órale'), 'RA');
   assert.equal(codeOfName('…'), null);
   assert.equal(codeOfName('or-ra-qu'), null, 'ORQ is a lead\'s role, never a code');
+  assert.equal(codeOfName('some-repo'), null, 'SR is a senior\'s role, never a code (odd/tasks/senior-orchestrator.md)');
 });
 
 // --- fresh repo: all four actions ---
