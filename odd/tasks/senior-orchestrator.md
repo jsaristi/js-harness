@@ -10,7 +10,8 @@ a258b450 only the lead starts a senior, one at a time. Reviewed 1a5061d..a258b45
 reliability). Their findings, fixed in the next commit, each with a test: a background senior was judged against the
 home's advisor (home-sessions.mjs); rules switch's target home carried no senior (rules-switch.mjs homesOf); projectCode
 refused the code SR, valid before (back to valid: its titles still parse); the default app-record reader was untested.
-Next: review that commit (base a258b450), push, PR, ready. Follow-ups: the lead-protocols "A senior" section (T5, its
+40089ace fixed them; its recheck was clean (Codex 0.95, lenses 0). Merged in PR 852, after PR 853 made
+bin/clean-home.test.mjs independent of the machine's tools. Follow-ups: the lead-protocols "A senior" section (T5, its
 spans need coverage), the rule texts of session-model, session-effort and advisor-model ("every session but a
 senior"). "No advisor" is claimed only after the first senior's transcript shows it.
 
