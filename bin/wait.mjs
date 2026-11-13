@@ -4,7 +4,8 @@
 // channel record (bin/lib/channel.mjs). It says what it waits for and when it ends, checks at once and then every
 // `--every` seconds, and ends: exit 0 when the condition holds; exit 1 when the time runs out, or when the pull
 // request is closed without merging; exit 2 for a usage error, with nothing checked; exit 3 when a notice to the
-// waiting work session's own number comes first. Zero dependencies.
+// waiting work session's own number comes first; exit 4 when, in the lead's session, the user's absence that the
+// heartbeat tells with its AWAY line comes first (bin/lib/lead-away.mjs). Zero dependencies.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,6 +15,8 @@ import { mainCheckout, projectDirsOf, projectSlug, roleNamed, roleOfTitle } from
 import { ruleValue } from './lib/rules.mjs';
 import { renewOwnLease } from './permit.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { leadAbsence, readTailOf, sessionTranscript } from './lib/lead-away.mjs';
+import { ABSENCE_MS } from './lib/return-report.mjs';
 
 /** How often a wait checks, and how long it waits, when --every and --for do not say: the declared rules
  * `wait-every` and `wait-for` (bin/lib/rules-data.mjs). */
@@ -35,13 +38,17 @@ export const USAGE = [
   '  --notice-to orchestrator (or ORQ) run by a session that holds the relay lease (js-harness permit lease): every check',
   '    renews that lease to now plus the longer of the default minutes of a lease (js-harness permit lease) and --every plus 5 minutes, so it outlasts the wait; another',
   '    session\'s lease, an expired one, or none is left as it is, and a failure to renew is said once on stderr.',
+  "  --notice-to orchestrator run by the lead's session (the newest notice it sent carries the lead's title) also ends",
+  `    when the user has not written to that session for ${ABSENCE_MS / 3600000} hours and no stretch covers them (exit 4): it prints the`,
+  '    AWAY line of js-harness loop heartbeat, which names the command that opens the stretch, and the same wait to run',
+  '    again. An absence is told once, by this wait or the heartbeat, which keep one mark of it.',
   "  Every wait run by a work session (its title's number, read from the transcript CLAUDE_CODE_SESSION_ID names) also",
   '    ends on a notice to that number written after it started (exit 3): it prints the notice and the same wait to',
   '    run again. A session with no number keeps its one condition.',
   '  --cwd <path> is the folder the checks run from (the repository); --home <path> is the harness home whose channel record',
   '    is read (JS_HARNESS_HOME, else the user\'s home).',
   '  Exit codes: 0 the condition holds; 1 the time ran out, or the pull request closed without merging; 2 a usage error, with',
-  '    nothing checked; 3 a notice to this work session\'s number ended the wait.',
+  '    nothing checked; 3 a notice to this work session\'s number ended the wait; 4 the user\'s absence ended the lead\'s wait.',
 ].join('\n');
 
 /** A mistake in the arguments: answered with the usage and exit 2, before anything is checked. */
@@ -260,6 +267,14 @@ export async function waitMain(
     readdir = (dir) => fs.readdirSync(dir),
     homedir = os.homedir,
     renew = renewOwnLease,
+    // The lead's reading of the user's absence (bin/lib/lead-away.mjs): the transcript's whole lines from a byte on,
+    // whether a file is there, and the mark of the absence told last.
+    readTail = readTailOf,
+    mtime = (file) => fs.statSync(file).mtimeMs,
+    writeFile = (file, text) => {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, text);
+    },
   } = {},
 ) {
   let parsed;
@@ -285,7 +300,8 @@ export async function waitMain(
   const number = ownNumber({ env, cwd, run: bounded, readdir, readFile, homedir, defaultCwd });
   const own = number === null ? null : { role: 'work', number };
   const watched = own !== null && !(parsed.condition.kind === 'notice' && parsed.condition.role.role === 'work' && parsed.condition.role.number === number);
-  const ends = watched ? `ends when it holds, on a notice to ${number}, or after ${minutes} minutes` : `ends when it holds, or after ${minutes} minutes`;
+  // What else ends the wait, before its time runs out, each said in its opening line.
+  const endings = watched ? [`on a notice to ${number}`] : [];
 
   // A notice wait for the orchestrator renews the relay lease its session holds, on every check (odd/tasks/harness-review.md,
   // T3, S5a), so the lease outlasts the wait. The opening line says so only when the first renewal holds the lease.
@@ -305,12 +321,52 @@ export async function waitMain(
     }
   };
   const renews = leaseSession !== undefined && leaseSession !== '' && renewLease();
+
+  // The lead's wait for its notices ends on the user's absence as the heartbeat does (JH 194, docs/FAILURES.md
+  // `stretch-not-opened`): the same reading and the same mark, so the control holds while the lead runs only this wait.
+  // Only the lead's session reads it, from the first check that finds it the lead; another never reads its transcript.
+  let away = null;
+  if (leaseSession !== undefined && leaseSession !== '') {
+    try {
+      const root = mainCheckout(bounded, cwd);
+      const slug = projectSlug(root);
+      const claudeDir = path.resolve(defaultCwd, env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'));
+      const reading = leadAbsence({ home, slug, session: leaseSession, readFile, writeFile, say: (line) => stderr(`js-harness wait: ${line}`) });
+      const transcript = sessionTranscript({ cwd, root, claudeDir, session: leaseSession, mtime, run: bounded });
+      away = { reading, transcript, offset: 0, lead: reading.leads(), unreadSaid: false };
+    } catch (err) {
+      stderr(`js-harness wait: the user's absence is not read (${err.message})`);
+    }
+  }
+  if (away?.lead) endings.push(`when the user has not written to this session for ${ABSENCE_MS / 3600000} hours and no stretch covers them`);
+  const ends = `ends when it holds, ${endings.map((ending) => `${ending}, `).join('')}or after ${minutes} minutes`;
   stdout(`js-harness wait: waits for ${phrase}; ${ends}${renews ? '; renews the relay lease while it waits' : ''}; stop it with TaskStop when it is no longer needed`);
+  /** The AWAY line of an absence not told before, in the lead's session, or `[]`. */
+  const awayLines = () => {
+    if (away === null) return [];
+    if (!away.lead) away.lead = away.reading.leads();
+    if (!away.lead) return [];
+    try {
+      const tail = readTail(away.transcript, away.offset);
+      away.offset = tail.end;
+      away.reading.feed(tail);
+    } catch (err) {
+      if (!away.unreadSaid) stderr(`js-harness wait: the user's absence could not be read from ${away.transcript} (${err.code ?? err.message}); it is read again at the next tick`);
+      away.unreadSaid = true;
+      away.reading.unread();
+    }
+    const at = now();
+    const found = away.reading.at(at);
+    return found !== null && found.before !== away.reading.told() ? [away.reading.tell(found, at)] : [];
+  };
 
   let lastReason = null;
   let lastWatchReason = null;
   for (;;) {
     if (leaseSession !== undefined && leaseSession !== '') renewLease();
+    // Read before what else ends the wait, so an absence that starts in the tick of a notice is told with it.
+    const told = awayLines();
+    for (const line of told) stdout(line);
     if (watched) {
       let looked;
       try {
@@ -342,6 +398,10 @@ export async function waitMain(
     if (outcome.state === 'ended') {
       stdout(outcome.line);
       return 1;
+    }
+    if (told.length > 0) {
+      stdout(`js-harness wait: the wait ends for the AWAY line above, before ${phrase} held (${hourOf(now())}); to wait again, run: js-harness wait ${shellLine(argv)}`);
+      return 4;
     }
     if (outcome.state === 'failed' && outcome.reason !== lastReason) {
       lastReason = outcome.reason;
