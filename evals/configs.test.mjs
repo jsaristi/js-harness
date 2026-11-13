@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   DELEGATION_MODES, HONESTY_CONFIGS, HONESTY_SENTENCES, SANDBOX_ALLOWLIST, SANDBOX_SWITCHES, SUBAGENT_CONFIGS, SUBAGENT_MODELS, assertWorkRoot, currentConfig,
-  defaultWorkRoot, ensureSandboxDirs, honestyConfig, honestyMemory, honestyPin, lastReply, minimalConfig, turnReply, minimalWithConfig, minimalWithMcpFile, prepareSandbox, sandboxEnv, sandboxPaths,
+  defaultWorkRoot, ensureSandboxDirs, honestyConfig, honestyMemory, honestyPin, lastReply, minimalCommandsConfig, minimalConfig, turnReply, minimalWithConfig, minimalWithMcpFile, prepareSandbox, sandboxEnv, sandboxPaths,
   subagentConfig, subagentPin,
 } from './configs.mjs';
 import { REAL_ENGRAM_PORT } from './ports.mjs';
@@ -226,6 +226,14 @@ test('minimal passes the shared flags, then no settings, no MCP and no slash com
     assert.ok(args.includes(''), 'the empty string is its own argv element');
     assert.ok(!args.includes('--bare'));
   }
+});
+
+test('minimal-commands is the minimal arm with its commands on: the same env, the flags but --disable-slash-commands', () => {
+  const config = minimalCommandsConfig(OPTIONS);
+  assert.equal(config.name, 'minimal-commands');
+  assert.deepEqual(config.args({ effort: 'high', home: HOME }), [...sharedArgs('high'), ...MINIMAL_ONLY.filter((flag) => flag !== '--disable-slash-commands')]);
+  assert.ok(MINIMAL_ONLY.includes('--disable-slash-commands'), 'the flag it drops is one the minimal arm passes');
+  assert.deepEqual(config.env({ home: HOME, prepared: { engramPort: PORT } }), minimalConfig(OPTIONS).env({ home: HOME, prepared: { engramPort: PORT } }));
 });
 
 test('a minimal-with arm is the minimal arm under its own name, with the server it puts in passed by --mcp-config from the trial home (G2, C6b)', async () => {
