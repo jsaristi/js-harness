@@ -14,11 +14,10 @@ review still found one real failure, the grader's shell parsing, which went to t
 session; that session replaced the parsing with one shell reader (L7), which states what it does not read. Then Q2
 (the arms, the turns, the baseline that replaces gentle-ai) on the measured figures. No other paid run is authorized.
 Senior session's state (2026-11-13, brief `~/.js-harness/background/briefs/2026-11-13T08-18-51-863Z-a7ba6dcb.md`): the
-reader and its tests are commit a707bc46 (L7), reviewed once by Codex and the lenses (L8), and Codex's one finding
-is fixed in the commit after it. Left to it, in order: one pass of both reviews over that fix (`codex-review --base
-a707bc46`, `lens-review --base a707bc46 --lenses risk,resilience,reliability`), and no round after it whatever it
-finds; push; `js-harness notify --to orchestrator` with the note, then `--kind closed`. What that pass says is in the
-note, and JH 193 writes it here when it takes the branch back.
+reader and its tests are commit a707bc46 (L7), reviewed by Codex and the lenses (L8); Codex's one finding is fixed in
+cb741e12, which both read once more and found clean (L9). Both are pushed. That session's work is done and nothing of
+it is owed: no review is to be run again. Open, for the feature's owner and the lead: what L7 lists as not read, and
+the short `tail` of L9.
 
 ## Goal
 `node evals/long-session/run.mjs` drives a scripted Spanish conversation through real resumed Claude Code turns in the
@@ -229,3 +228,14 @@ Q1, the calibration session's spend; Q2, the arms and the turn count; the batch'
   `sed -i -es/a/b/ src/list.mjs` and `-fscripts/fix.sed`, a script glued to its flag, lost the file. Fixed with the
   test first: a `sed` flag group is read letter by letter, which also stops an `i` inside a glued script from reading
   as in place; `cp -rt <folder>` is read too. Over the same 46,267 real commands the fix changes no reading.
+- L9 (2026-11-13, the one pass over the fix cb741e12, and what stays open): Codex's recheck of a707bc4..cb741e1 says
+  the patch is correct (confidence 0.98; 1 finding fixed, 0 not fixed; 31,799 input tokens), and the three lenses
+  found nothing. No round after it. The push's hook passed with every code commit covered by both records;
+  `gh pr checks 855` reported no checks on the branch. Spent on reviews: Codex about 332,000 input tokens in two
+  runs, the lenses about 83,000 in six. Assumed and not checked: that the refusal's condition, the change raised to
+  him as a problem, was met by the lead's brief. Open, found while closing and not fixed, since a fix would need
+  another review round: a red run behind a short `tail` is still unseen. In calib-1's real red output the last
+  reporter line (`✖`) sits 24 lines from the end, under the assertion's diff and stack, so `npm test 2>&1 | tail -15`
+  would show neither `✖` nor `ℹ fail 1` and end with no error; moment 4 would then fail a run that did run its test
+  red. It is a false fail, never a false pass. The line that survives any tail there is the last one,
+  `[ELIFECYCLE] Test failed. See above for more details.`
