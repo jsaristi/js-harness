@@ -24,6 +24,17 @@ Mods: the CLI is unchanged (2.1.321 at both ends) and no desktop entry touches m
 text for `orgPluginSettings`), so nothing here moves what a mod can build; the plugin-authoring skill's types were not
 re-read.
 
+What helps and what hurts, asked by the lead for him (2026-11-13). Helps: desktop 5.11492.0 #5 fixes brief freezes on
+Windows when a session opens or an approval is answered after its notification left the screen, and #6 the app
+reopening as a blank window on Windows after it was closed minimized; he runs many sessions on this Windows PC, so
+both reach him, but neither was reproduced here (Windows "unknown (named)"). #21, Rewind no longer reports a restore
+failed too early, is minor: the harness goes back by git. Hurts: no entry of this update, each checked against this
+PC above. Open, not placed in this update: #12's caps (5 sessions at once, 10 per message he types) would limit the
+lead if they also hold in bypass, which is [unknown]; and the tool list shows `WebFetch` gone from an app-started
+session's own tools since 4.4212.0 (reached through the `web-fetch` agent instead), while the harness hangs the web
+fallback ladder's hooks on `WebFetch` (`bin/lib/hook-entries.mjs:57`, `bin/lib/web-block.mjs`); whether those hooks
+fire on the agent's call, and what reaches the session that asked, is [unknown] and worth a probe of its own.
+
 The hooks of `~/.claude/settings.json` run under 5.11492.2: this session's SessionStart hook loaded the memory at
 start. Remote Control was not turned back on from here: that is the lead's resume step after a restart, on its own
 sessions, and this session touches no other session.
