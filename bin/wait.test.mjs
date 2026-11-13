@@ -7,6 +7,8 @@ import { WAIT_EVERY_SECONDS, WAIT_FOR_MINUTES, waitMain } from './wait.mjs';
 import { NOTICE_SCHEMA, recordPath } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { permitsDir } from './permit.mjs';
+import { loopsFolder } from './lib/loops.mjs';
+import { RECORD_SCHEMA as STRETCH_SCHEMA, stretchFile } from './lib/stretch.mjs';
 
 // Every seam is fake: the clock, the sleep, git, gh and the channel record. No test runs git or gh or sleeps. The
 // project and the harness home are paths that are only named, except the lease tests, which write a lease in a
@@ -42,11 +44,11 @@ const inOrder = (...answers) => {
 };
 
 /** One line of the record, as `notify` writes a notice: `at` is a time in milliseconds. */
-function noticeLine({ at, to, kind = 'note', text = 'a note', title = 'JH 5 · canal entre sesiones' }) {
+function noticeLine({ at, to, kind = 'note', text = 'a note', title = 'JH 5 · canal entre sesiones', id = 'aaaaaaaa-1111-4111-8111-111111111111' }) {
   const notice = {
     schema: NOTICE_SCHEMA,
     at: new Date(at).toISOString(),
-    from: { host: 'claude-code', id: 'aaaaaaaa-1111-4111-8111-111111111111', source: 'environment', title, permissionMode: 'bypassPermissions', context: null },
+    from: { host: 'claude-code', id, source: 'environment', title, permissionMode: 'bypassPermissions', context: null },
     to,
     kind,
     text,
@@ -480,4 +482,117 @@ test('a notice wait by a session with no lease ends as before: the same lines, e
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// JH 194: the lead's own wait carries the AWAY control of the heartbeat (bin/lib/lead-away.mjs), so it holds while
+// the lead runs only `wait --notice-to orchestrator`. Seen 2026-11-13: he was away 02:17 to 10:18 with no stretch, and
+// the lead ran no heartbeat (docs/FAILURES.md, `stretch-not-opened`).
+const HOUR = 60 * MIN;
+const LEAD_ENV = { CLAUDE_CODE_SESSION_ID: SELF_ID, CLAUDE_CONFIG_DIR: CLAUDE_HOME };
+const LEAD_TRANSCRIPT = path.join(PROJECT_DIR, `${SELF_ID}.jsonl`);
+const AWAY_MARK = path.join(loopsFolder(HOME, projectSlug(CWD)), 'away', `${SELF_ID}.json`);
+const STRETCHES = stretchFile(HOME, projectSlug(CWD));
+const iso = (ms) => new Date(ms).toISOString();
+const his = (at) => `${JSON.stringify({ type: 'user', timestamp: iso(at), origin: { kind: 'human' }, message: { role: 'user', content: 'sigue' } })}\n`;
+const question = (at) => `${JSON.stringify({ type: 'assistant', timestamp: iso(at), message: { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_q', name: 'AskUserQuestion', input: { questions: [{ question: 'Pregunta: ¿uno el PR?', options: [{ label: 'Sí' }, { label: 'No' }] }] } }] } })}\n`;
+const stretchOpened = (at) => `${JSON.stringify({ schema: STRETCH_SCHEMA, event: 'open', id: iso(at), at: iso(at), plan: { hours: 4 } })}\n`;
+// Who the lead is, is the return check's rule: the newest notice the session sent carries the lead's title.
+const LEADS = noticeLine({ at: T0 - 4 * HOUR, to: WORK(4), title: 'JH ORQ · lead', id: SELF_ID });
+const awayOf = (state) => state.out.filter((line) => line.startsWith('AWAY:'));
+const leadStart = (minutes = WAIT_FOR_MINUTES) => `js-harness wait: waits for a notice to orchestrator; ends when it holds, when the user has not written to this session for 2 hours and no stretch covers them, or after ${minutes} minutes; stop it with TaskStop when it is no longer needed`;
+
+/** The world of a lead's wait: the record holds `record`, the transcript `transcript`, and the marks and the stretch
+ * record live in `state.marks`, which the wait reads and writes. */
+function leadWorld({ record = LEADS, transcript, marks = {} }) {
+  const made = world({ record });
+  const { state, deps } = made;
+  state.transcript = transcript;
+  state.marks = { ...marks };
+  const read = deps.readFile;
+  deps.readFile = (file) => (Object.hasOwn(state.marks, file) ? state.marks[file] : read(file));
+  deps.writeFile = (file, text) => {
+    state.marks[file] = text;
+  };
+  deps.mtime = (file) => {
+    throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
+  };
+  deps.readTail = (file, from) => {
+    state.tails = (state.tails ?? 0) + 1;
+    if (file !== LEAD_TRANSCRIPT || state.transcript === undefined) throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
+    const rest = state.transcript.slice(from);
+    const whole = rest.slice(0, rest.lastIndexOf('\n') + 1);
+    return { text: whole, end: from + whole.length, restarted: false };
+  };
+  return made;
+}
+
+test("the lead's wait ends with the heartbeat's AWAY line when he last wrote over two hours ago and no stretch covers the time since", async () => {
+  const { state, deps } = leadWorld({ transcript: his(T0 - 3 * HOUR) });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator'), LEAD_ENV, deps), 4);
+  assert.equal(state.out[0], leadStart());
+  assert.deepEqual(state.sleeps, [], 'an absence in course ends the wait at its first check');
+  assert.match(state.out[1], /^AWAY: the user last wrote to this session at \d\d:\d\d, local time \(UTC[+-]\d\d:\d\d\), 3\.0 hours ago, and no stretch covers the time since/);
+  assert.ok(state.out[1].includes('js-harness stretch open --plan <file> --html <file>'));
+  assert.match(state.out[2], /^js-harness wait: the wait ends for the AWAY line above, before a notice to orchestrator held \(\d\d:\d\d\); to wait again, run: js-harness wait --cwd .* --notice-to orchestrator$/);
+  assert.equal(state.out.length, 3);
+  assert.deepEqual(state.err, []);
+  assert.deepEqual(JSON.parse(state.marks[AWAY_MARK]), { told: iso(T0 - 3 * HOUR), at: iso(T0), heldSince: null });
+});
+
+test("the lead's wait ends at the first check after his silence passes two hours", async () => {
+  const { state, deps } = leadWorld({ transcript: his(T0 - HOUR) });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--every', '600'), LEAD_ENV, deps), 4);
+  assert.equal(state.clock, T0 + HOUR + 10 * MIN);
+  assert.equal(awayOf(state).length, 1);
+});
+
+test("an absence told before, by this wait or the heartbeat, does not end the lead's wait again; his next absence does", async () => {
+  const { state, deps } = leadWorld({ transcript: his(T0 - 3 * HOUR) });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator'), LEAD_ENV, deps), 4);
+  state.out = [];
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--every', '600', '--for', '60'), LEAD_ENV, deps), 1);
+  assert.deepEqual(awayOf(state), [], 'the wait run again is not ended by the absence it told');
+
+  const again = state.clock;
+  state.transcript += his(again);
+  state.out = [];
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--every', '600'), LEAD_ENV, deps), 4);
+  assert.equal(state.clock, again + 2 * HOUR + 10 * MIN);
+  assert.equal(JSON.parse(state.marks[AWAY_MARK]).told, iso(again));
+
+  // The heartbeat's mark is the same file: an absence it told does not end the wait.
+  const told = leadWorld({ transcript: his(T0 - 3 * HOUR), marks: { [AWAY_MARK]: `${JSON.stringify({ told: iso(T0 - 3 * HOUR) })}\n` } });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--for', '10'), LEAD_ENV, told.deps), 1);
+  assert.deepEqual(awayOf(told.state), []);
+});
+
+test("the lead's wait does not end while a stretch covers his absence", async () => {
+  const { state, deps } = leadWorld({ transcript: his(T0 - 3 * HOUR), marks: { [STRETCHES]: stretchOpened(T0 - HOUR) } });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--for', '10'), LEAD_ENV, deps), 1);
+  assert.deepEqual(awayOf(state), []);
+  assert.equal(state.marks[AWAY_MARK], undefined);
+});
+
+test('a wait for the orchestrator run by a session that is not the lead never reads his absence', async () => {
+  const { state, deps } = leadWorld({ record: noticeLine({ at: T0 - 4 * HOUR, to: WORK(4), title: 'JH 7 · otra', id: SELF_ID }), transcript: his(T0 - 3 * HOUR) });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--for', '10'), LEAD_ENV, deps), 1);
+  assert.equal(state.out[0], start('a notice to orchestrator', 10));
+  assert.deepEqual(awayOf(state), []);
+  assert.equal(state.tails, undefined, 'its transcript is not read');
+  assert.deepEqual(state.err, []);
+});
+
+test("an absence that starts in the tick a notice comes is told first, and the lead's wait ends on the notice", async () => {
+  const { state, deps } = leadWorld({ record: LEADS + noticeLine({ at: T0 + 1000, to: ORQ, text: 'listo' }), transcript: his(T0 - 3 * HOUR) });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator'), LEAD_ENV, deps), 0);
+  assert.match(state.out[1], /^AWAY: /);
+  assert.match(state.out[2], /^js-harness wait: a notice to orchestrator holds \(\d\d:\d\d\)$/);
+  assert.equal(state.out[3], 'note from JH 5 · canal entre sesiones: listo');
+  assert.equal(JSON.parse(state.marks[AWAY_MARK]).told, iso(T0 - 3 * HOUR));
+});
+
+test("a question on his screen is said in the lead's wait's AWAY line, as the heartbeat says it", async () => {
+  const { state, deps } = leadWorld({ transcript: his(T0 - 3 * HOUR) + question(T0 - 3 * HOUR + MIN) });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator'), LEAD_ENV, deps), 4);
+  assert.match(state.out[1], /^AWAY: .*The question tool held this session from \d\d:\d\d, through the start of this absence/);
 });
