@@ -25,9 +25,9 @@ import {
 import { readNotices, recordPath } from './lib/channel.mjs';
 import { gateLogDir } from './lib/gate-log.mjs';
 import { ruleValue } from './lib/rules.mjs';
-import { ABSENCE_MS, departureLine, departureWatch, stretchesOf } from './lib/return-report.mjs';
+import { ABSENCE_MS } from './lib/return-report.mjs';
+import { leadAbsence, readTailOf, sessionTranscript } from './lib/lead-away.mjs';
 import { readStalled } from './lib/stall.mjs';
-import { isLeadSession } from './lib/stale-board.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { SIGNIN_WARN_DAYS, readSigninExpiry, signinTold } from './lib/signin-expiry.mjs';
@@ -385,25 +385,6 @@ export function compactionsIn(text) {
   return count;
 }
 
-/** The whole lines of `file` from the byte `start` to its last line break, as `{ text, end }` with `end` the byte after
- * them, so a line the host is still writing waits for the next read and a character is never cut in two. A file
- * shorter than `start` was written again: it is read from its start, with `restarted`. */
-function readTailOf(file, start) {
-  const fd = fs.openSync(file, 'r');
-  try {
-    const size = fs.fstatSync(fd).size;
-    const from = size < start ? 0 : start;
-    if (size === from) return { text: '', end: from, restarted: from !== start };
-    const buffer = Buffer.alloc(size - from);
-    fs.readSync(fd, buffer, 0, buffer.length, from);
-    const last = buffer.lastIndexOf(10);
-    if (last < 0) return { text: '', end: from, restarted: from !== start };
-    return { text: buffer.subarray(0, last + 1).toString('utf8'), end: from + last + 1, restarted: from !== start };
-  } finally {
-    fs.closeSync(fd);
-  }
-}
-
 /** The heartbeat's line when the lead's cut falls due: how many compactions, and what the skill says to do. */
 const cutLine = (count) => `CUT: this session has been compacted ${count} times since it started: the lead is cut now `
   + '(js-harness-orchestrator, "Compaction, and the cut"): write your state to the relief file, then start the new lead '
@@ -573,15 +554,7 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   // folder, so the folder of the working directory is tried before the main checkout's (bin/lib/sessions.mjs,
   // `projectSlug`). What could not be read is said once, as `unread` is.
   const session = ctx.env.CLAUDE_CODE_SESSION_ID || null;
-  const folders = [...new Set([projectSlug(path.resolve(ctx.cwd)), slug])].map((name) => path.join(ctx.claudeDir, 'projects', name));
-  const transcript = session === null ? null : folders.map((folder) => path.join(folder, `${session}.jsonl`)).find((file) => {
-    try {
-      ctx.mtime(file);
-      return true;
-    } catch {
-      return false;
-    }
-  }) ?? path.join(folders[0], `${session}.jsonl`);
+  const transcript = sessionTranscript({ cwd: ctx.cwd, slug, claudeDir: ctx.claudeDir, session, mtime: ctx.mtime });
   // The count a CUT line last told for this session, kept in a folder of its own under the loop records (loop status
   // reads every .json entry of that folder as a loop): a cut due when a heartbeat starts wakes the lead once, and a
   // relaunch after it is not woken again until another compaction.
@@ -603,12 +576,9 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     return cutLine(count);
   };
   const cut = { offset: 0, count: 0, unread: false };
-  // His absence (odd/tasks/departure-control.md): the same pieces of the transcript feed the watch of when he last
-  // wrote, so a tick reads the file once for both. The two flags are about different files and are not each other's
-  // negation: `transcriptRead` is whether this tick's read of the transcript worked, since an absence is never told
-  // from a transcript that could not be read; `failureSaid` is whether the line that the stretch record or the notices
-  // could not be read was printed, which is said once a heartbeat.
-  const away = { watch: departureWatch(), transcriptRead: false, failureSaid: false };
+  // His absence (odd/tasks/departure-control.md): the same pieces of the transcript feed the reading of when he last
+  // wrote (bin/lib/lead-away.mjs, which the lead's wait reads too), so a tick reads the file once for both.
+  const away = session === null ? null : leadAbsence({ home, slug, session, readFile: (file) => ctx.readFile(file), writeFile: ctx.writeFile, say: ctx.out });
   const compactionsNow = () => {
     if (transcript === null) return null;
     let tail;
@@ -617,62 +587,18 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     } catch (err) {
       if (!cut.unread) ctx.out(`the lead's cut could not read ${transcript}: ${err.code ?? err.message}`);
       cut.unread = true;
-      away.transcriptRead = false;
+      away.unread();
       return null;
     }
-    if (tail.restarted) {
-      cut.count = 0;
-      away.watch = departureWatch();
-    }
+    if (tail.restarted) cut.count = 0;
     cut.count += compactionsIn(tail.text);
     cut.offset = tail.end;
-    away.watch.add(tail.text);
-    away.transcriptRead = true;
+    away.feed(tail);
     return cut.count;
   };
-  // The absence told last for this session, kept as the cut's count is, in a folder of its own: an absence in course
-  // when a heartbeat starts wakes the lead once, and a relaunch after it names it and goes on until he writes again.
-  const awayFile = session === null ? null : path.join(loopsFolder(home, slug), 'away', `${session}.json`);
-  const toldAway = () => {
-    try {
-      const told = JSON.parse(ctx.readFile(awayFile)).told;
-      return typeof told === 'string' ? told : null;
-    } catch {
-      return null;
-    }
-  };
-  // Only the lead is told: the user's messages reach the lead's chat, and a work session that runs a heartbeat plans
-  // no stretch. Who the lead is, is the return check's rule (`isLeadSession`). A yes is kept for the absence it was
-  // read in; a no is read again at the next tick, since a lead's first notice may come after the absence started.
-  const leadIn = new Set();
-  const isLead = (before) => {
-    if (leadIn.has(before)) return true;
-    const record = readNotices(home, slug, { readFile: (file) => ctx.readFile(file) });
-    if (record.unavailable !== undefined) throw new Error(`the record of notices (${record.path}): ${record.unavailable}`);
-    if (!isLeadSession(record.notices, session)) return false;
-    leadIn.add(before);
-    return true;
-  };
-  /** The absence in course at `now` that no stretch covers, after this tick's read of the transcript, or `null`. */
-  const awayAt = (now) => {
-    if (!away.transcriptRead) return null;
-    try {
-      const found = away.watch.read(stretchesOf(home, slug, (file) => ctx.readFile(file)), now);
-      return found !== null && isLead(found.before) ? found : null;
-    } catch (err) {
-      if (!away.failureSaid) ctx.out(`the user's absence could not be read: ${err.message}`);
-      away.failureSaid = true;
-      return null;
-    }
-  };
-  const tellAway = (found, now) => {
-    try {
-      ctx.writeFile(awayFile, `${JSON.stringify({ told: found.before, at: new Date(now).toISOString(), heldSince: found.heldSince })}\n`);
-    } catch (err) {
-      ctx.out(`the user's absence could not keep its mark ${awayFile}: ${err.code ?? err.message}`);
-    }
-    return departureLine(found);
-  };
+  const awayAt = (now) => (away === null ? null : away.at(now));
+  const toldAway = () => away.told();
+  const tellAway = (found, now) => away.tell(found, now);
   // Every line that ends the loop is followed by the sign-in's line, from its margin on, and by the reviews still due,
   // so whatever wakes the lead names them. The ending's own lines are said first: the sign-in's may wait on a reading.
   const ending = (lines, dues, code) => {

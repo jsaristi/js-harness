@@ -706,6 +706,14 @@ The count of compactions the heartbeat last told a session's lead with a `CUT:` 
 
 - `told`: integer, the compactions counted in the session's transcript when the last `CUT:` line was told.
 
+### `away/<session>.json`
+
+The absence of the user the lead was last told of with an `AWAY:` line, by the heartbeat or by the lead's `wait --notice-to orchestrator`, which keep this one mark (`bin/lib/lead-away.mjs` `leadAbsence`), so an absence is told once and a relaunch of either is not woken by it again. Written whole on each `AWAY:`; a missing or unreadable file reads as none told.
+
+- `told`: ISO time of the user's last message to the session when the absence was told.
+- `at`: ISO time the line was told.
+- `heldSince`: ISO time of the question call that held the session when the absence started, or `null`.
+
 ## Gates
 
 The machine's record of every gate and of the lock that serializes them: one JSON line per gate event in a rotating log, the lock's holder and waiting files, and the gate-first tickets. `bin/lib/gate-log.mjs` `gateRecord` builds the log lines and `appendGateEvent` appends them; `bin/lib/gate-lock.mjs` `takeGateLock` writes the holder file; `bin/lib/gate-first.mjs` `issueTicket` writes a ticket and `logTicket` its log lines.
