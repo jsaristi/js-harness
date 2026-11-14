@@ -59,6 +59,11 @@ and his words already decide the feature.
 5. Make it a harness protocol that measures the workflow in real time: "quiero que volvamos esto un protocolo del
    arnes y que nos sirva para ir miediendo en tiempo real nuestro flujo de trabajo" (line 8296).
 
+6. Make the departure page say plainly what will advance: "El antes de irte no se ve muy claro en realidad que es lo
+   que va a avanzar por favor arreglalo o mejoralo en mi ausencia por que no se entiende" (session
+   69918425-3b43-430f-9f50-62b6422422ce, line 7461, 2026-11-14). Done when a cold reader given only the page can say
+   what will advance, and that matches the plan; the departure, status and return pages stay consistent; the stretch
+   record's format, the measures and the learned estimates do not change.
 ## Design
 
 ### The command
@@ -159,6 +164,7 @@ itself is not limited to an absence: the skill text names it for any stretch.
 - [x] T5 (kind: build) the open stretch on the live board (`bin/sessions-live.mjs`, `docs/live-board.html`). Spec 5. In 4e6dbdd7. Route: inline.
 - [x] T6 (kind: build) the rule change, on `rule/away-autonomy-stretch`, in 865ec2e7 (PR 634, stacked on PR 633). Spec 1, 3. Route: inline.
 - [ ] T7 (kind: verify) a real stretch opened, checked and closed on this machine; reviews (Codex and the Claude lenses) on each slice. Route: inline.
+- [ ] T8 (kind: build) the departure, status and return pages made plain (spec 6), on `feat/stretch-departure-clear` from main a20aa337, JH 196. Route: inline.
 
 ## Log
 - L1. 2026-10-28, the lead's brief for JH 71: his decision in question 103 ("Próximo cupo", line 8326), his words
@@ -219,6 +225,15 @@ itself is not limited to an absence: the skill text names it for any stretch.
   (6 paths, 76 lines) medium, under_budget, not due; 865ec2e7, gentle-ai not due, is approved by Codex and the lenses (L6).
 
 ## Next step
+NOW (2026-11-14, JH 196, worktree `D:\js-harness\.claude\worktrees\advisor-refuse`, branch
+`feat/stretch-departure-clear` from a20aa337): T8, spec 6. Defects the lead saw on today's departure page (its
+scratchpad `stretch-2026-11-14c.html`): it opens with a 20-row phase table whose now and return columns are equal; "no
+plan item says what it closes" is buried; "covers your 4 h? no, 9 h of session with no work" reads as a contradiction
+beside 7-16 h queued; phase names in English; "escrito / corregido / sin historia aún" is jargon; no item says what he
+will have on return. Plan: read `bin/lib/stretch-render.mjs` and its test; render a page from a real `stretch open
+--json`; test first that the departure page leads with what will advance (each item and what he gets back), a plain
+coverage sentence, Spanish phase names and no jargon; same words on status and return; Codex and lenses; PR; ready.
+Older state below.
 State at 2026-10-28 ~16:00Z (JH 71, worktree `D:\js-harness\.claude\worktrees\stretch`, branch `feat/stretch`):
 - Done and committed: T1 (12e954b6), T2 (838c9fe1, 765baf9a). T3+T4 staged with docs/SPEC.md "The stretch" entry;
   its commit (message in the job tmp `msg-t3.txt`) was running the gate; check `git log` for
