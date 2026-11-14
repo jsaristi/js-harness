@@ -969,7 +969,7 @@ decision; `bin/advisor-gate.mjs` `record` appends it under the home. Nothing pru
 - `act`: string, `question`, `land`, `session`, `plan`, `done` or `end` (a sub-agent's end); `tool`: string or `null`; `cwd`: string.
 - `secondStop`: boolean, on an `end` only, whether the host had already turned that stop back.
 - `decision`: string, `covered`, `flagged`, `outage`, `unchecked`, `exempt-senior` or `exempt-same-model`; `mode`: string, `warn` or `refuse`, on a `flagged` one.
-- `model`, `calls`, `errors`, `toolCalls`, `broken`: what the stretch held, present once the transcript was read.
+- `transcript`: string, the transcript read; `model`, `calls`, `errors`, `toolCalls`, `broken`: what the stretch held, present once the transcript was read. `advisor-gate report` reads the transcript of each flagged decision again for the advisor calls that followed it.
 - `reason`: string, on an `unchecked` one; `title`: string, on an `exempt-senior` one.
 
 ## Session env trims

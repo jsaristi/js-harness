@@ -971,6 +971,7 @@ bytes are not the approved ones, a scaffold body left, a skipped test, a surface
 
 ```bash
 echo '{"tool_name":"ExitPlanMode","cwd":".","transcript_path":"t.jsonl"}' | js-harness advisor-gate --hook
+js-harness advisor-gate report --since 2026-11-14
 ```
 
 `advisor-gate --hook` and `advisor-gate --stop` are the hooks `install` registers: before an act that
@@ -979,7 +980,9 @@ closed) and at a sub-agent's end, they look for an advisor call with a result in
 user's last message or the last session event and within 60 tool calls. In the warning week an act with none goes
 through with a notice; every decision is appended to `~/.js-harness/advisor-gate/decisions.jsonl`. They act only
 in a project with a `harness.json` and let through, recorded unchecked, what they cannot read
-(odd/tasks/advisor-use.md).
+(odd/tasks/advisor-use.md). `advisor-gate report` prints the decisions by day, kind and act, how many flags
+an advisor call followed in their stretch, and the Fable input tokens of those calls, the ones the warnings prompted,
+against the estimate of 2,400,000 a day.
 
 ### js-harness failures
 

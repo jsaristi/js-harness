@@ -17,6 +17,8 @@ import { harnessHome } from './lib/home.mjs';
 
 /** The stretch's bound in tool calls (policy R, P1). */
 export const STRETCH_TOOL_CALLS = 60;
+/** The Fable tokens a day the hook is estimated to add (odd/tasks/advisor-use.md, Depth pass), which the report weighs. */
+export const ESTIMATED_DAILY_TOKENS = 2_400_000;
 /** `warn` lets an uncovered act through with a notice; `refuse` denies it. The week of warnings is his answer to 282. */
 export const MODE = 'warn';
 /** How much of a transcript's end is read: R needs at most STRETCH_TOOL_CALLS tool calls back, and the hook has 5 s. */
@@ -26,10 +28,13 @@ const ADVISOR_TOOL_TYPE = 'advisor_20260301';
 
 const USAGE = `Usage: js-harness advisor-gate --hook    (PreToolUse: the hook payload on standard input)
        js-harness advisor-gate --stop    (SubagentStop: the hook payload on standard input)
+       js-harness advisor-gate report [--since <YYYY-MM-DD>]
   Holds the acts that decide to an advisor call with a result in the caller's stretch (policy R): since his last
   message or the last session event, within ${STRETCH_TOOL_CALLS} tool calls. Mode ${MODE}: an uncovered act gets a notice and goes
   through. Every decision is appended to <home>/.js-harness/advisor-gate/decisions.jsonl. It prints {} outside a
   project with a harness.json, and fails open: what it cannot read lets the act through, recorded unchecked.
+  report: the decisions by day, kind and act, and the Fable input tokens of the advisor calls that followed a flag in
+  its stretch (the calls the warnings prompted), against the estimate of ${ESTIMATED_DAILY_TOKENS} a day.
   Exit 2: a usage error.`;
 
 /** A command runs js-harness (installed or `node bin/js-harness.mjs`) with `verb` somewhere after it. */
@@ -234,7 +239,7 @@ function decide(mode, payload, seams) {
     stderr(`js-harness advisor-gate: ${reason}`);
     return record(home, { ...base, decision: 'unchecked', reason }, stderr), {};
   }
-  const facts = { model: stretch.model, calls: stretch.calls, errors: stretch.errors, toolCalls: stretch.toolCalls, broken: stretch.broken };
+  const facts = { transcript: file, model: stretch.model, calls: stretch.calls, errors: stretch.errors, toolCalls: stretch.toolCalls, broken: stretch.broken };
   if (typeof stretch.model === 'string' && /fable/.test(stretch.model)) return record(home, { ...base, ...facts, decision: 'exempt-same-model' }, stderr), {};
   if (stretch.hadAdvisor !== true) {
     return record(home, { ...base, ...facts, decision: 'unchecked', reason: 'no sign the caller had the advisor tool' }, stderr), {};
@@ -247,10 +252,104 @@ function decide(mode, payload, seams) {
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: NOTICE(act) } };
 }
 
+/** The advisor calls of `entries` that follow the moment `at` within its stretch (policy R: until his message, a
+ * session event or STRETCH_TOOL_CALLS tool calls), as `[messageId, Fable input tokens]`. */
+function callsAfter(entries, at) {
+  const found = [];
+  let toolCalls = 0;
+  for (const entry of entries) {
+    if (typeof entry.timestamp !== 'string' || entry.timestamp <= at) continue;
+    if (breakOf(entry) !== null) break;
+    if (entry.type !== 'assistant' || !Array.isArray(entry.message?.content)) continue;
+    if (entry.message.content.some((b) => b?.type === 'server_tool_use' && b.name === 'advisor')) {
+      const tokens = (entry.message.usage?.iterations ?? []).filter((it) => it?.type === 'advisor_message').reduce((sum, it) => sum + (it.input_tokens ?? 0), 0);
+      found.push([entry.message.id ?? entry.timestamp, tokens]);
+    }
+    toolCalls += entry.message.content.filter((b) => b?.type === 'tool_use').length;
+    if (toolCalls >= STRETCH_TOOL_CALLS) break;
+  }
+  return found;
+}
+
+/** The entries of the transcript `file`, torn lines dropped. Throws when it cannot be read. */
+const entriesOf = (file) => fs.readFileSync(file, 'utf8').split('\n').flatMap((line) => {
+  try {
+    return [JSON.parse(line)];
+  } catch {
+    return [];
+  }
+});
+
+/** The report of the decisions under `home` since `since` (an ISO day, or null): `{ days, unread, estimate }`, each day
+ * with its decisions by kind and by act, how many flags an advisor call followed in their stretch, and the Fable input
+ * tokens of those calls (each call once). A transcript that cannot be read is counted in `unread`, not guessed. */
+export function advisorGateReport({ home, since = null } = {}) {
+  const file = path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl');
+  let text = '';
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch {
+    // No decisions yet: an empty report.
+  }
+  const days = new Map();
+  const transcripts = new Map();
+  const counted = new Set();
+  let unread = 0;
+  for (const line of text.split('\n')) {
+    let d;
+    try {
+      d = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (d?.schema !== SCHEMA || typeof d.at !== 'string') continue;
+    const day = d.at.slice(0, 10);
+    if (since !== null && day < since) continue;
+    if (!days.has(day)) days.set(day, { day, decisions: {}, acts: {}, flagged: 0, followed: 0, addedTokens: 0 });
+    const row = days.get(day);
+    row.decisions[d.decision] = (row.decisions[d.decision] ?? 0) + 1;
+    row.acts[d.act] = (row.acts[d.act] ?? 0) + 1;
+    if (d.decision !== 'flagged') continue;
+    row.flagged++;
+    if (typeof d.transcript !== 'string') continue;
+    if (!transcripts.has(d.transcript)) {
+      try {
+        transcripts.set(d.transcript, entriesOf(d.transcript));
+      } catch {
+        transcripts.set(d.transcript, null);
+        unread++;
+      }
+    }
+    const entries = transcripts.get(d.transcript);
+    if (entries === null) continue;
+    const calls = callsAfter(entries, d.at);
+    if (calls.length > 0) row.followed++;
+    for (const [messageId, tokens] of calls) {
+      if (counted.has(messageId)) continue;
+      counted.add(messageId);
+      row.addedTokens += tokens;
+    }
+  }
+  return { days: [...days.values()].sort((a, b) => a.day.localeCompare(b.day)), unread, estimate: ESTIMATED_DAILY_TOKENS };
+}
+
+/** The report as text, one line a day. */
+function formatReport({ days, unread, estimate }) {
+  const n = (x) => x.toLocaleString('en-US');
+  const counts = (o) => Object.entries(o).map(([k, v]) => k + ' ' + v).join(', ');
+  const lines = ['advisor-gate report: ' + days.length + ' day(s); added tokens are the Fable input tokens of the calls the warnings prompted, against the estimate of ' + n(estimate) + ' a day'];
+  for (const d of days) {
+    const share = Math.round((100 * d.addedTokens) / estimate);
+    lines.push(d.day + '  ' + counts(d.decisions) + '  (acts: ' + counts(d.acts) + ')  flagged then consulted: ' + d.followed + '/' + d.flagged + '  added tokens: ' + n(d.addedTokens) + ' (' + share + '% of the estimate)');
+  }
+  if (unread > 0) lines.push(unread + ' transcript(s) could not be read; their flags count, their tokens do not.');
+  return lines.join('\n') + '\n';
+}
+
 /** A usage error of the argv: its message names the token, the usage follows, exit 2. */
 class AdvisorGateArgError extends Error {}
 
-/** `js-harness advisor-gate --hook | --stop`. Seams for the tests: `readStdin`, `home`, `cwd`, `now`. */
+/** `js-harness advisor-gate --hook | --stop | report`. Seams for the tests: `readStdin`, `home`, `cwd`, `now`. */
 export function advisorGateMain(argv, {
   stdout = (s) => process.stdout.write(s), stderr = console.error, readStdin = () => fs.readFileSync(0, 'utf8'),
   home, env = process.env, cwd = process.cwd(), now = Date.now(),
@@ -258,6 +357,22 @@ export function advisorGateMain(argv, {
   if (argv.length === 1 && (argv[0] === '--help' || argv[0] === '-h')) {
     stdout(`${USAGE}\n`);
     return 0;
+  }
+  if (argv[0] === 'report') {
+    try {
+      let since = null;
+      for (let i = 1; i < argv.length; i++) {
+        if (argv[i] === '--since' && /^\d{4}-\d{2}-\d{2}$/.test(argv[i + 1] ?? '')) since = argv[++i];
+        else if (argv[i] === '--since') throw new AdvisorGateArgError('--since needs a day, YYYY-MM-DD');
+        else throw new AdvisorGateArgError('unknown argument: ' + argv[i]);
+      }
+      stdout(formatReport(advisorGateReport({ home: harnessHome({ given: home, env, cwd }), since })));
+      return 0;
+    } catch (err) {
+      if (!(err instanceof AdvisorGateArgError)) throw err;
+      stderr(err.message + '\n\n' + USAGE);
+      return 2;
+    }
   }
   try {
     if (argv.length === 0) throw new AdvisorGateArgError('advisor-gate needs --hook or --stop');

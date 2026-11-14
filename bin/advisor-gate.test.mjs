@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { advisorGateMain, gatedAct, readStretch, STRETCH_TOOL_CALLS } from './advisor-gate.mjs';
+import { advisorGateMain, advisorGateReport, gatedAct, readStretch, STRETCH_TOOL_CALLS } from './advisor-gate.mjs';
 
 const OPUS = 'claude-opus-5-5';
 const FABLE = 'claude-fable-5-2';
@@ -262,6 +262,9 @@ test('a usage error exits 2', () => {
   assert.equal(advisorGateMain(['--nope'], { stdout: () => {}, stderr: (s) => err.push(s) }), 2);
   assert.match(err.join(''), /unknown argument: --nope/);
   assert.match(err.join(''), /Usage/);
+  assert.equal(advisorGateMain(['report', '--since', 'yesterday'], { stdout: () => {}, stderr: (s) => err.push(s) }), 2);
+  assert.equal(advisorGateMain(['report', '--x'], { stdout: () => {}, stderr: (s) => err.push(s) }), 2);
+  assert.match(err.join(''), /unknown argument: --x/);
 });
 
 test('without a home given, the record goes to JS_HARNESS_HOME, where the background record is read too', () => {
@@ -271,4 +274,26 @@ test('without a home given, the record goes to JS_HARNESS_HOME, where the backgr
   const out = [];
   advisorGateMain(['--hook'], { readStdin: () => JSON.stringify({ tool_name: 'ExitPlanMode', tool_input: {}, cwd: project, session_id: 's', transcript_path: t }), stdout: (x) => out.push(x), stderr: () => {}, env: { JS_HARNESS_HOME: home }, now: 0 });
   assert.equal(decisions(home)[0].decision, 'flagged');
+});
+
+test('report: decisions by day, and the Fable input tokens of the calls that followed a flag in its stretch', () => {
+  const { home } = scratch();
+  const t = path.join(home, 'projects', 'p', 'r.jsonl');
+  const at = (m) => `2026-11-14T10:${String(m).padStart(2, '0')}:00.000Z`;
+  const call = (m, tokens, msg) => ({ ...advisorCall(), timestamp: at(m), message: { ...advisorCall().message, id: msg, usage: { iterations: [{ type: 'advisor_message', input_tokens: tokens }] } } });
+  writeTranscript(t, [call(1, 999, 'before'), call(5, 150000, 'm1'), { ...his(), timestamp: at(6) }, call(7, 70000, 'm2')]);
+  const file = path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const line = (o) => JSON.stringify({ schema: 'js-harness.advisor-gate/v1', ...o });
+  fs.writeFileSync(file, [line({ at: at(2), act: 'done', decision: 'flagged', transcript: t }), line({ at: at(3), act: 'plan', decision: 'covered', transcript: t }), line({ at: '2026-11-13T09:00:00.000Z', act: 'land', decision: 'flagged', transcript: path.join(home, 'gone.jsonl') })].join('\n') + '\n');
+  const r = advisorGateReport({ home });
+  assert.deepEqual(r.days.map((d) => [d.day, d.decisions, d.flagged, d.followed, d.addedTokens]), [
+    ['2026-11-13', { flagged: 1 }, 1, 0, 0],
+    ['2026-11-14', { flagged: 1, covered: 1 }, 1, 1, 150000],
+  ]);
+  assert.equal(r.unread, 1, 'a transcript that cannot be read is counted, not guessed');
+  const out = [];
+  assert.equal(advisorGateMain(['report'], { stdout: (s) => out.push(s), stderr: () => {}, home }), 0);
+  assert.match(out.join(''), /2,400,000/);
+  assert.match(out.join(''), /calls the warnings prompted/);
 });
