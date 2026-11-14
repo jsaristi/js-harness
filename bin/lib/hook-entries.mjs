@@ -233,7 +233,7 @@ export const ADVISOR_STOP_HOOK_COMMAND = 'js-harness advisor-gate --stop || exit
 export const ADVISOR_GATE_MATCHER = '^(AskUserQuestion|mcp__ccd_session__start_session|ExitPlanMode|Write|Bash)$';
 
 /** `advisor-gate --hook` (bin/advisor-gate.mjs) registered as a `PreToolUse` hook: an act that decides with no advisor
- * call in its stretch gets a notice, the warning week of his answer to question 282, and is recorded. It acts only
+ * call in its stretch is refused, his answer to question 285, and recorded. It acts only
  * where a `harness.json` is at or above the cwd and prints `{}` everywhere else, before reading any transcript when the
  * call is no gated act. Claude Code only. Five seconds, as the guard's: it reads the transcript's last 4 MB at most. */
 export function advisorGateEntry() {
@@ -243,8 +243,8 @@ export function advisorGateEntry() {
   };
 }
 
-/** `advisor-gate --stop` registered as a `SubagentStop` hook: a sub-agent's end is recorded covered or flagged (P2); in
- * the warning week it never blocks. A `SubagentStop` entry takes no matcher. Five seconds, as `--hook`'s. */
+/** `advisor-gate --stop` registered as a `SubagentStop` hook: a sub-agent's end is recorded covered or flagged (P2) and
+ * never blocked, which his yes to question 285 left apart. A `SubagentStop` entry takes no matcher. Five seconds, as `--hook`'s. */
 export function advisorStopEntry() {
   return {
     hooks: [{ type: 'command', command: ADVISOR_STOP_HOOK_COMMAND, timeout: 5 }],

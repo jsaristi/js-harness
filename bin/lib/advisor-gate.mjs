@@ -7,7 +7,6 @@
 export const ADVISOR_SAYS = Object.freeze({
   missed: 'js-harness advisor-gate: this <act> came with no advisor call in its stretch (since his last message or the last session event, within <calls> tool calls).',
   how: 'Before the acts that decide, call the advisor alone, in a response of its own, read its answer, then act.',
-  week: 'This is the warning week (odd/tasks/advisor-use.md, P3): the act goes through, and the decision is recorded.',
   refused: 'The act is refused (his answer to question 285, odd/tasks/advisor-use.md): consult the advisor, then retry it; the decision is recorded.',
 });
 

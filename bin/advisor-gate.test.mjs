@@ -334,7 +334,7 @@ test('report: decisions by day, and the Fable input tokens of the calls with a r
   const out = [];
   assert.equal(advisorGateMain(['report'], { stdout: (s) => out.push(s), stderr: () => {}, home }), 0);
   assert.match(out.join(''), /2,400,000/);
-  assert.match(out.join(''), /calls the warnings prompted/);
+  assert.match(out.join(''), /calls the flags prompted/);
   assert.match(out.join(''), /1 flag\(s\) recorded no transcript/);
 });
 
@@ -368,4 +368,30 @@ test('report: reconciles the decisions with the gated acts found in the transcri
   advisorGateMain(['report'], { stdout: (s) => out.push(s), stderr: () => {}, home });
   assert.match(out.join(''), /acts found in the transcripts: 3, with a decision: 2, with none: 1 \(33%\)/);
   assert.match(out.join(''), /let through unchecked: 1 of 4 decisions \(25%\)/);
+});
+
+test('each of the five acts is refused when uncovered, by a session and by a sub-agent (his yes to 285)', () => {
+  const { home, project } = scratch();
+  const acts = [
+    ['land', bash('js-harness merge-queue --land 7')],
+    ['question', { tool_name: 'AskUserQuestion', tool_input: {} }],
+    ['question', bash('js-harness notify --to orchestrator --kind question "q"')],
+    ['done', bash('js-harness notify --to orchestrator --kind ready --pr 1 "r"')],
+    ['done', bash('js-harness notify --to orchestrator --kind closed --summary s.md "c"')],
+    ['session', { tool_name: 'mcp__ccd_session__start_session', tool_input: {} }],
+    ['session', bash('js-harness sessions start --title "x"')],
+    ['plan', { tool_name: 'ExitPlanMode', tool_input: {} }],
+    ['plan', { tool_name: 'Write', tool_input: { file_path: path.join(project, 'odd', 'tasks', 'new.md'), content: '' } }],
+  ];
+  const main = path.join(home, 'projects', 'p', 'main.jsonl');
+  writeTranscript(main, [advisorCall(), his(), toolCall()]);
+  writeTranscript(path.join(home, 'projects', 'p', 'main', 'subagents', 'agent-a3.jsonl'), [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  for (const [act, call] of acts) {
+    for (const agent of [{}, { agent_id: 'a3', agent_type: 'general-purpose' }]) {
+      const r = run(['--hook'], { ...call, cwd: project, session_id: 'main', transcript_path: main, ...agent }, home);
+      assert.equal(r.answer?.hookSpecificOutput?.permissionDecision, 'deny', `${act} by ${agent.agent_id ?? 'the session'}`);
+      assert.match(r.answer.hookSpecificOutput.permissionDecisionReason, new RegExp(`act \\(${act}\\)`));
+    }
+  }
+  assert.equal(decisions(home).filter((d) => d.decision === 'flagged' && d.mode === 'refuse').length, acts.length * 2);
 });
