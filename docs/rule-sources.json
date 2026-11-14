@@ -786,12 +786,18 @@
         "date": "2026-10-19",
         "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
         "line": 201
+      },
+      {
+        "quote": "yo solo me comunico directamente con el orquestador entonces nisiquiera necesito teners a las demas con remote control",
+        "date": "2026-11-14",
+        "session": "69918425-3b43-430f-9f50-62b6422422ce",
+        "line": 7262
       }
     ],
-    "reading": "The protocol he asks to run after each Claude Desktop update is doctor's host-update review, and one of its steps turns Remote Control back on, since a restart of the app turns it off. His yes to doing that without asking is his own, so it holds in this repository only; in a project that installs the harness without this rule the step asks the user first.",
-    "accepted": "Tapped, not quoted: his answer of 2026-10-15 to \"¿Lo vuelvo a prender ahora y lo hago siempre después de cada reinicio sin preguntarte?\", Sí, y siempre (Recomendada), relayed by the lead (odd/tasks/host-update-check.md, L9), and Pregunta 88 (transcript 908805db, line 28470, Atarlo a una regla (Recomendada)), which ties that yes to a rule of this repository (C-shared-5). The quotation is his typed request of 2026-10-19 (line 201) to run the update protocol the step belongs to.",
+    "reading": "The protocol he asks to run after each Claude Desktop update is doctor's host-update review, and one of its steps turns Remote Control back on, since a restart of the app turns it off. On 2026-11-14 he narrowed where: he talks only to the orchestrator, and the sessions it tasks need no Remote Control, so the step turns it back on in the orchestrator session alone. His yes to doing that without asking is his own, so it holds in this repository only; in a project that installs the harness without this rule the step asks the user first.",
+    "accepted": "Tapped, not quoted: his answer of 2026-10-15 to \"¿Lo vuelvo a prender ahora y lo hago siempre después de cada reinicio sin preguntarte?\", Sí, y siempre (Recomendada), relayed by the lead (odd/tasks/host-update-check.md, L9), and Pregunta 88 (transcript 908805db, line 28470, Atarlo a una regla (Recomendada)), which ties that yes to a rule of this repository (C-shared-5). The quotation of 2026-10-19 (line 201) is his request to run the update protocol the step belongs to; the one of 2026-11-14 (transcript 69918425, line 7262) is his own request that the sessions the orchestrator tasks have no Remote Control, carried by JH 200 (odd/tasks/remote-control-lead-only.md, L1).",
     "checked": {
-      "date": "2026-10-24",
+      "date": "2026-11-14",
       "by": "command"
     }
   },

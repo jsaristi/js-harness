@@ -104,10 +104,11 @@ const current = { found: true, desktop: '2.42304.0', staged: null, code: '2.1.29
 const reviewed = { desktop: '2.37337.1', code: '2.1.295', at: '2026-10-15T00:00:00.000Z' };
 const NOW = () => new Date('2026-10-15T23:00:00.000Z');
 // His answer Q88 of 2026-10-23 (C-shared-5): the standing yes to turning Remote Control back on holds only where a rule
-// of this repository declares it.
+// of this repository declares it. Since his words of 2026-11-14 (odd/tasks/remote-control-lead-only.md, spec 3) it is
+// the orchestrator's alone: the sessions it tasks are started with none.
 const YES_HERE = writeRules(RULES);
-const YES_STEP = 'turn Remote Control back on in each work session without asking the user (rule remote-control-yes: a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first';
-const ASK_STEP = 'ask the user whether to turn Remote Control back on in each work session, and turn it on only where they say yes; a session that has run no turn since the restart refuses it, so send it a message first';
+const YES_STEP = 'turn Remote Control back on in the orchestrator session alone, without asking the user (rule remote-control-yes: a standing yes of 2026-10-15): the sessions it tasks have none; an orchestrator that has run no turn since the restart refuses it, so send it a message first';
+const ASK_STEP = 'ask the user whether to turn Remote Control back on in the orchestrator session, and turn it on only if they say yes: the sessions it tasks have none; an orchestrator that has run no turn since the restart refuses it, so send it a message first';
 
 test('the first reading with no record is taken as reviewed: the row is ok and the record to write holds what was read', () => {
   const { row, record } = hostUpdateRow(current, null, NOW);

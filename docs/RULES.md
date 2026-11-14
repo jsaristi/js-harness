@@ -133,10 +133,10 @@ The lead's recap names each session's effort mode for its kind of work, and why:
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-11, 2026-10-11, checked by the command on 2026-10-22.
 
 ### remote-control-yes
-Turning Remote Control back on in each work session after a restart of the Claude app, which turns it off: the review step of a host update (doctor's host-update row) does it without asking only where this rule holds, and asks the user first anywhere else: a standing yes of 2026-10-15.
+Turning Remote Control back on in the orchestrator session after a restart of the Claude app, which turns it off: the review step of a host update (doctor's host-update row) does it without asking only where this rule holds, and asks the user first anywhere else; the sessions the orchestrator tasks get no Remote Control: a standing yes of 2026-10-15.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/lib/host-update.mjs`.
-- Since 2026-10-24. Row: reports. Source: his words of 2026-10-19, checked by the command on 2026-10-24.
+- Since 2026-10-24. Row: reports. Source: his words of 2026-10-19, 2026-11-14, checked by the command on 2026-11-14.
 
 ### reply-five-states
 A reply ends in one of five states, and a question is his decision alone, explained before it is asked: "- A reply ends in one of five states."
