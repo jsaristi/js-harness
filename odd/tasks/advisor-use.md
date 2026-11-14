@@ -7,7 +7,7 @@ proposal, through the double review and then the lead as a question; nothing is 
 `node --test`.
 
 ## State
-NEXT (2026-11-14): the shell options fix is committed (L14); run codex-review --base df028954 and lens-review --base df028954 --lenses reliability, then push, PR, slice 2. A js-harness wait exited 127 once: check `js-harness --version` first.
+NEXT (2026-11-14): slice 1 pushed, PR #866 open (all 6 code commits covered by Codex and lens records). Next: slice 2, `js-harness advisor-gate report [--since <date>]` in bin/advisor-gate.mjs: decisions by day, act and decision; added Fable tokens a day = advisor_message input tokens of the advisor calls that follow a flagged decision in the same transcript and stretch (dedupe by call id), against the 2.4M estimate, labelled as calls the warnings prompted; test first; README/SPEC lines; reviews; push to #866. Then closing steps (docs/sessions summary, closed) before ready --pr 866.
 2026-11-14: slice 1 on the branch (1de6ed65, fixes b3043fb9, 12942c95, and the quoted-path fix in the commit after them); main 236f720 merged (af986f03). Reviews: Codex cc54678..13fba26 and 13fba26..12942c9, lenses cc54678..b3043fb and b3043fb..12942c9, all recorded; every finding fixed or answered (L11, L12). Next: review the quoted-path fix (codex-review --base 12942c95; lens-review --base 12942c95 --lenses reliability), then push, open the PR, slice 2: `advisor-gate report` (decisions by day and act; added Fable tokens a day = advisor_message input tokens of calls after a flag in its stretch, against 2.4M, labelled as calls the warnings prompted), its reviews, then closing steps (summary, closed) before ready with --pr, since the app archives on PR close. Choices under the yes in L9; P4a moved to JH 198 (L10).
 
 ## Goal
