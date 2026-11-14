@@ -150,8 +150,7 @@ export function closeFinished({ home, root, cwd = root, base, baseName = base, n
     if (worktree !== null && worktreeHolding(entry) !== null) {
       // A job at rest is no guest below, so the record says whose worktree it is: one a session that did not say
       // closed also has is not removed from under it, whatever claude lists.
-      const sharing = (record.sessions ?? []).find((other) => !chain.some((job) => job.id === other.id) && !record.resumedAs?.has(other.id)
-        && !finished.some((item) => item.entry.id === other.id) && worktreeOf(other) !== null && sameFolder(worktreeOf(other), worktree));
+      const sharing = sharingSession(record, finished, chain, worktree);
       if (sharing !== undefined) {
         kept.push({ entry, why: `the session ${sharing.id}${sharing.title ? ` · ${sharing.title}` : ''}, which did not say closed, has the same worktree ${worktree}`, settle: `once that session says closed, ${CLOSE_FINISHED} closes both` });
         continue;
@@ -331,4 +330,172 @@ export function closeAfterLand({ home, root, cwd = root, base, run, claude, list
   say(`Finished background sessions: ${done.closed.length} closed, ${done.kept.length} kept.`);
   for (const line of closedLines(done)) say(line);
   return done.closed.map(({ entry, worktree }) => ({ id: entry.id, title: entry.title ?? null, worktree }));
+}
+
+/** The recorded session other than the jobs of `chain` that works in the worktree `worktree` and did not say closed, or
+ * `undefined`: one `finished` (`finishedOf`) does not name, not resumed by a later job, whose own worktree is that one or
+ * which was started or listed in it with no worktree of its own. Its worktree is not removed from under it, by the close or
+ * by `sessions stop --remove-worktree` (A5 of the directives audit; Codex P1 on f71380ea, the folder without a name). */
+export function sharingSession(record, finished, chain, worktree) {
+  const usesIt = (other) => (worktreeOf(other) !== null ? sameFolder(worktreeOf(other), worktree)
+    : [other.cwd, other.worktreePath].some((folder) => typeof folder === 'string' && folder !== '' && within(folder, worktree)));
+  return (record.sessions ?? []).find((other) => !chain.some((job) => job.id === other.id) && !record.resumedAs?.has(other.id)
+    && !finished.some((item) => item.entry.id === other.id) && usesIt(other));
+}
+
+/** Folders no copy takes, by name at any depth, each with why: an install or an index rebuilds them, and one of them
+ * can hold more files than the copy is worth. Only an untracked or ignored folder is left out: a tracked change in one
+ * is copied. A copy names what it left out. */
+export const KEEP_LEFT_OUT = new Map([
+  ['node_modules', 'an install rebuilds it'],
+  ['.codegraph', 'codegraph rebuilds its index'],
+]);
+
+/** The folder a copy of what the worktree of the recorded job `id` held goes into, under the harness home `home`:
+ * beside the record's folder, not in it, since the uninstall deletes that one once no session is left. */
+export const keptDirOf = (home, id, at) => path.join(home, '.js-harness', 'kept', `${id}-${new Date(at).toISOString().replace(/[:.]/g, '-')}`);
+
+/** The refs a worktree keeps in its own git folder, which go with it. */
+const OWN_REFS = /^refs\/(worktree|bisect|rewritten)\//;
+
+/** Whether git keeps nothing of the folder `worktree`'s own: it has no `.git`, or a `.git` file whose gitdir is gone.
+ * A `.git` folder, or one it cannot read, is git's. */
+export function noGitFolder(worktree, io = fs) {
+  const dotGit = path.join(worktree, '.git');
+  let gitdir;
+  try {
+    if (!io.lstatSync(dotGit).isFile()) return false;
+    gitdir = /^gitdir:\s*(.+?)\s*$/m.exec(io.readFileSync(dotGit, 'utf8'));
+    if (gitdir === null) return false;
+  } catch (err) {
+    return err.code === 'ENOENT';
+  }
+  // Only a confirmed absence: existsSync says false too for a folder it may not reach (Codex P1 on 6e243065).
+  try {
+    io.statSync(path.resolve(worktree, gitdir[1]));
+    return false;
+  } catch (err) {
+    return err.code === 'ENOENT';
+  }
+}
+
+const listOf = (out) => out.split('\0').filter((item) => item !== '');
+
+/** What no branch keeps of the worktree `worktree`, as paths relative to it with `/`: `changed`, tracked files changed
+ * since HEAD (staged or not) and those git is told not to look at (skip-worktree, assume-unchanged), which no status
+ * shows; `others`, untracked and ignored ones, a folder git reports whole ending in `/`; `staged`, the index against HEAD
+ * as a binary patch, since a file staged and then changed again holds in the index what its copy lacks; `branch` and
+ * `head`. `{ why: null }` for a folder git does not read as a worktree; `{ why }` when git cannot answer, when HEAD is
+ * detached on commits no branch, tag or remote holds, or when it has submodules, whose own files and commits live in the
+ * worktree's git folder that the removal deletes. */
+function unkeptPaths(worktree, gitIn) {
+  const head = gitIn(worktree, 'rev-parse', '--verify', '--quiet', 'HEAD');
+  const top = gitIn(worktree, 'rev-parse', '--show-toplevel');
+  if (!head.ok || !top.ok || !sameFolder(top.out.trim(), worktree)) {
+    // Copied whole only when git keeps nothing of its own for it; a git folder still there holds its index and its own
+    // refs, which no copy of its files keeps (Codex P1 on 62a71b56).
+    if (noGitFolder(worktree)) return { why: null };
+    const said = !top.ok ? top.err : !head.ok ? head.err : `its top is ${top.out.trim()}`;
+    return { why: `git could not read it as a worktree (${said || 'git gave no reason'}) while its git folder is there, so what only that folder holds could not be checked: repair it with git -C ${worktree} status, then run this again` };
+  }
+  // A ref of the worktree's own (refs/worktree, refs/bisect, refs/rewritten) lives in its git folder, which the removal
+  // deletes: only a shared ref holds a commit (the verifier on 1d982b38).
+  const sharedHolds = (commit) => {
+    const held = gitIn(worktree, 'for-each-ref', '--contains', commit, '--format=%(refname)');
+    return held.ok ? held.out.split(/\r?\n/).some((ref) => ref !== '' && !OWN_REFS.test(ref)) : { err: held.err || 'git gave no reason' };
+  };
+  const branch = gitIn(worktree, 'symbolic-ref', '--quiet', '--short', 'HEAD');
+  const tips = [...(branch.ok ? [] : ['HEAD'])];
+  const own = gitIn(worktree, 'for-each-ref', '--format=%(objectname) %(refname)', 'refs/worktree', 'refs/bisect', 'refs/rewritten');
+  if (!own.ok) return { why: `git could not list the refs of its own (${own.err})` };
+  tips.push(...own.out.split(/\r?\n/).filter((line) => line !== '').map((line) => line.split(' ')[0]));
+  for (const tip of tips) {
+    const shared = sharedHolds(tip);
+    if (shared?.err !== undefined) return { why: `git could not say whether a branch holds ${tip} (${shared.err})` };
+    if (!shared) return { why: `${tip === 'HEAD' ? `its head ${head.out.trim().slice(0, 12)} is detached` : `a ref of its own points at ${tip.slice(0, 12)}`}, on commits no branch holds: git -C ${worktree} branch <name> ${tip === 'HEAD' ? '' : `${tip.slice(0, 12)} `}keeps them, then run this again` };
+  }
+  // A submodule's repository lives in the worktree's git folder even once the index no longer names it.
+  const gitDir = gitIn(worktree, 'rev-parse', '--absolute-git-dir');
+  if (!gitDir.ok) return { why: `git could not name its git folder (${gitDir.err})` };
+  if (fs.existsSync(path.join(gitDir.out.trim(), 'modules'))) return { why: `its git folder holds submodules (${path.join(gitDir.out.trim(), 'modules')}), whose commits no copy here takes: keep them by hand, then run this again` };
+  const asked = {
+    diff: gitIn(worktree, 'diff', '--name-only', '-z', '--no-renames', 'HEAD'),
+    flagged: gitIn(worktree, 'ls-files', '-z', '-v'),
+    untracked: gitIn(worktree, 'ls-files', '-z', '--others', '--exclude-standard'),
+    ignored: gitIn(worktree, 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'),
+    stage: gitIn(worktree, 'ls-files', '-z', '--stage'),
+    // A backup is git's own patch: no external diff, text conversion or color the user's config asks for.
+    staged: gitIn(worktree, 'diff', '--cached', '--binary', '--no-renames', '--no-ext-diff', '--no-textconv', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', 'HEAD'),
+  };
+  const failed = Object.values(asked).find((answer) => !answer.ok);
+  if (failed !== undefined) return { why: `git could not list what it holds (${failed.err})` };
+  const modules = listOf(asked.stage.out).filter((line) => line.startsWith('160000 ')).map((line) => line.split('\t')[1]);
+  if (modules.length > 0) return { why: `it has submodules (${modules.slice(0, 3).join(', ')}), whose files and commits no copy here takes: keep what they hold by hand, then run this again` };
+  // `ls-files -v` tags a skip-worktree file S and an assume-unchanged one in lower case.
+  const flagged = listOf(asked.flagged.out).filter((line) => line[0] === 'S' || /^[a-z]/.test(line)).map((line) => line.slice(2));
+  const changed = [...new Set([...listOf(asked.diff.out), ...flagged])].sort();
+  const others = [...new Set([...listOf(asked.untracked.out), ...listOf(asked.ignored.out)])].sort();
+  return { changed, others, staged: asked.staged.out, branch: branch.ok ? branch.out.trim() : null, head: head.out.trim() };
+}
+
+/** Whether `item` of the worktree `worktree` is there, a link that points nowhere included. */
+const present = (worktree, item, io) => {
+  try {
+    io.lstatSync(path.join(worktree, item));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** Copies what no branch keeps of the worktree `worktree` of the recorded job `entry` (`unkeptPaths`) into
+ * `keptDirOf(home, ...)`: the paths under `files/`, the index as `staged.patch`, and `kept.json`, what the copy is of. A
+ * folder git does not read as a worktree is copied whole, its `.git` included. It first waits for the process claude's lock on
+ * the worktree names, as claude rm does, since claude stop returns while it still ends. `{ dir, count, leftOut }` once it
+ * is copied, `dir` null when there was nothing to copy; `{ why }` when something cannot be copied or told, and then the
+ * worktree is not to be removed (odd/tasks/audit-cement.md, spec 5). Not seen: a change a clean filter hides from git. */
+export function keepUnkept(entry, worktree, { home, gitIn, now = Date.now, alive = exists, pause = sleepSync, fileSystem: io = fs }) {
+  if (!io.existsSync(worktree)) return { dir: null, count: 0, leftOut: [] };
+  const tree = linkedWorktrees(worktree, gitIn)?.linked.find((item) => item.path && sameFolder(item.path, worktree));
+  const pid = tree === undefined ? null : claudeLockPid(tree);
+  if (pid !== null) {
+    const from = now();
+    let running;
+    while ((running = alive(pid)) && now() - from < LOCK_WAIT_MS) pause(500);
+    if (running) return { why: `the process claude's lock on its worktree names, pid ${pid}, still ran ${Math.round((now() - from) / 1000)} s after claude stop` };
+  }
+  let found = unkeptPaths(worktree, gitIn);
+  if (found.why) return { why: found.why };
+  if (found.why === null) {
+    try {
+      found = { changed: [], others: io.readdirSync(worktree), staged: '', branch: null, head: null };
+    } catch (err) {
+      return { why: `its worktree ${worktree} could not be read (${err.code ?? err.message})` };
+    }
+  }
+  const leftOutIn = (item) => item.replace(/\/$/, '').split('/').some((part) => KEEP_LEFT_OUT.has(part));
+  const leftOut = found.others.filter(leftOutIn);
+  const others = found.others.filter((item) => !leftOutIn(item));
+  // git named it and it is not there: a name git's output does not spell as the file system does, which no copy finds.
+  const lost = others.find((item) => !present(worktree, item, io));
+  if (lost !== undefined) return { why: `git names ${JSON.stringify(lost)} in it, which cannot be found there to copy` };
+  // A tracked file changed and then deleted is HEAD's, or the index's in staged.patch.
+  const copied = [...found.changed.filter((item) => present(worktree, item, io)), ...others];
+  if (copied.length === 0 && found.staged === '') return { dir: null, count: 0, leftOut };
+  const dir = keptDirOf(home, entry.id, now());
+  if (within(dir, worktree)) return { why: `the copy would go to ${dir}, inside the worktree it is to outlive` };
+  try {
+    io.mkdirSync(dir, { recursive: true });
+    for (const item of copied) {
+      const source = path.join(worktree, item);
+      // In a folder copied whole, a left-out folder inside it stays out; a tracked file is never left out.
+      const inner = (from) => !(io.lstatSync(from).isDirectory() && KEEP_LEFT_OUT.has(path.basename(from)) && from !== source);
+      io.cpSync(source, path.join(dir, 'files', item), { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true, filter: inner });
+    }
+    if (found.staged !== '') io.writeFileSync(path.join(dir, 'staged.patch'), found.staged);
+    io.writeFileSync(path.join(dir, 'kept.json'), `${JSON.stringify({ id: entry.id, title: entry.title ?? null, worktree, branch: found.branch, head: found.head, at: new Date(now()).toISOString(), paths: copied, staged: found.staged !== '', leftOut }, null, 2)}\n`);
+  } catch (err) {
+    return { why: `what no branch keeps could not be copied to ${dir} (${err.code ?? err.message})` };
+  }
+  return { dir, count: copied.length, leftOut };
 }
