@@ -215,11 +215,19 @@ function readChanges(changes, folder) {
   });
 }
 
+/** What a summary line keeps of a call's writes and `yours` (`yoursAfter`): the list they left and the reasons given for
+ * what left it, nothing when they did not touch it. */
+function yoursRecord(changes) {
+  const { yours, named } = yoursAfter(changes);
+  if (yours === undefined) return {};
+  return named.length === 0 ? { yours } : { yours, dropped: named.map(({ item, reason }) => ({ item, reason })) };
+}
+
 /** Records a call's writes of the board's summary (`readChanges`) as one line with the top-level fields they carried
  * and the `yours` they left (`yoursAfter`); a file not read is said on standard error and adds no field, and when no
  * write gave one the fields are recorded as unknown; a line it cannot write is said on standard error. Neither stops
  * the call, which has already run. */
-function recordSummaryWrite(changes, { file, at, session, call }, stderr) {
+function recordSummaryWrite(changes, { file, at, session, call, board }, stderr) {
   const fields = new Set();
   let unreadable = null;
   for (const change of changes) {
@@ -232,7 +240,7 @@ function recordSummaryWrite(changes, { file, at, session, call }, stderr) {
     if (data !== null && typeof data === 'object' && !Array.isArray(data)) for (const key of Object.keys(data)) fields.add(key);
   }
   try {
-    recordSummary(file, { at, session, call, fields: [...fields], unreadable: fields.size > 0 ? null : unreadable, yours: yoursAfter(changes).yours });
+    recordSummary(file, { at, session, call, fields: [...fields], unreadable: fields.size > 0 ? null : unreadable, board, ...yoursRecord(changes) });
   } catch (err) {
     stderr(`js-harness template gate: cannot append to ${file}: ${err.message}; the board/summary write is not recorded`);
   }
@@ -255,6 +263,7 @@ function runGate(mode, seams, { stdout, stderr }) {
   // A write of the board's summary is decided before the call, by what it takes from yours, and recorded after it
   // succeeded, for the reply hook's stale-board check and the next write's decision.
   const summary = summaryChanges(tool, payload?.tool_input);
+  const board = typeof payload?.tool_input?.url === 'string' ? payload.tool_input.url : null;
   if (target === null && summary === null) return stdout('{}'), 0;
   const folder = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : seams.cwd;
   const on = templatesOn(seams.root ?? nearestHarness(folder));
@@ -263,7 +272,7 @@ function runGate(mode, seams, { stdout, stderr }) {
   const at = new Date(seams.now).toISOString();
   const call = typeof payload.tool_use_id === 'string' ? payload.tool_use_id : null;
   if (summary !== null && mode === '--shown') {
-    recordSummaryWrite(readChanges(summary, folder), { file: places.shown, at, session: payload.session_id ?? null, call }, stderr);
+    recordSummaryWrite(readChanges(summary, folder), { file: places.shown, at, session: payload.session_id ?? null, call, board }, stderr);
     return stdout('{}'), 0;
   }
   const record = (decision) => {
@@ -278,14 +287,14 @@ function runGate(mode, seams, { stdout, stderr }) {
   if (typeof on === 'string' && mode === '--hook') {
     const reason = `${on}; the call goes through unchecked`;
     stderr(`js-harness template gate: ${reason}`);
-    record({ decision: 'unchecked', reason });
+    record({ decision: 'unchecked', reason, ...(summary === null ? {} : { subject: SUMMARY_SUBJECT }) });
     return stdout('{}'), 0;
   }
   if (summary !== null) {
     let previous;
     let previousWhy;
     try {
-      previous = lastYours(readRecord(places.shown, SHOWN_SCHEMA));
+      previous = lastYours(readRecord(places.shown, SHOWN_SCHEMA), board);
     } catch (err) {
       [previous, previousWhy] = [null, `cannot read ${places.shown}: ${err.message}`];
     }

@@ -112,9 +112,19 @@ test('decideSummary refuses a write that drops an item of the last recorded your
   assert.equal(decideSummary({ changes: dropped('done'), previous }).decision, 'refused', 'a reason under the length');
   assert.equal(decideSummary({ changes: [{ action: 'delete' }], previous }).decision, 'refused', 'a delete drops all');
   assert.equal(decideSummary({ changes: [{ action: 'set', data: { now: 'x' } }], previous }).decision, 'refused', 'a set without yours drops all');
+  // Codex P2 on 7c4f91fd: a reason counts only in the write that drops the item, not one a later write of the batch erases.
+  const erased = [{ action: 'update', data: { yoursDropped: [{ item: 'Revisa el PR 867', reason: 'merged as 96ce3c9' }] } }, { action: 'set', data: { yours: ['Elige el nombre'] } }];
+  assert.equal(decideSummary({ changes: erased, previous }).decision, 'refused');
+  const inBatch = [{ action: 'update', data: { yours: ['a'] } }, { action: 'update', data: { yours: [] } }];
+  assert.equal(decideSummary({ changes: inBatch, previous: undefined }).decision, 'refused', 'a list set earlier in the batch is held too');
   const reworded = decideSummary({ changes: update({ yours: ['Revisa el PR 868', 'Elige el nombre'] }), previous });
   assert.equal(reworded.decision, 'refused', 'a reworded item leaves as the old one');
-  for (const [changes, prior] of [[[{ action: 'str_replace', field: 'yours' }], previous], [update({ yours: [] }), null], [[{ action: 'set', unreadable: 'cannot read b.json (ENOENT)' }], previous]]) {
+  // The reliability lens on 7c4f91fd: a str_replace of yours would leave the next write nothing to hold it to.
+  const replaced = decideSummary({ changes: [{ action: 'str_replace', field: 'yours' }], previous });
+  assert.equal(replaced.decision, 'refused');
+  assert.match(replaced.reason, /str_replace cannot change yours/);
+  assert.equal(decideSummary({ changes: [{ action: 'str_replace', field: 'yours' }], previous: undefined }).decision, 'refused', 'with no list before it too');
+  for (const [changes, prior] of [[update({ yours: [] }), null], [[{ action: 'set', unreadable: 'cannot read b.json (ENOENT)' }], previous]]) {
     const unknown = decideSummary({ changes, previous: prior, previousWhy: 'the record could not be read' });
     assert.equal(unknown.decision, 'unchecked', JSON.stringify(changes));
     assert.match(unknown.reason, /goes through unchecked/);
@@ -223,6 +233,7 @@ test('every refusal is sentences of GATE_SAYS with their slots filled, and GATE_
     decideAsk({ asked: { question: '¿Seguimos?', options: [] }, questions: [], recordPath: CHANNEL }).reason,
     decideAsk({ asked: { question: 'Pregunta 4: ¿Seguimos?', options: [] }, questions: [], recordPath: CHANNEL }).reason,
     decideSummary({ changes: [{ action: 'delete' }], previous: ['a', 'b'] }).reason,
+    decideSummary({ changes: [{ action: 'str_replace', field: 'yours' }], previous: ['a'] }).reason,
   ];
   for (const reason of reasons) assert.match(reason, whole);
   assert.deepEqual(cutSpans(GATE_MESSAGES).map((span) => span.text.trim()), Object.values(GATE_SAYS));

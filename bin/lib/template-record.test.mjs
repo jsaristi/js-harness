@@ -117,6 +117,10 @@ test('recordSummary keeps the yours a write left, and lastYours reads the last l
     assert.equal(lastYours(readRecord(file, SHOWN_SCHEMA)), null, 'a list not known');
     recordShown(file, { at: '2026-10-31T04:00:00.000Z', session: 's', tool: 'ArtifactData', subject: SUMMARY_SUBJECT, decision: 'refused', reason: 'x' });
     assert.equal(lastYours(readRecord(file, SHOWN_SCHEMA)), null, 'a refused write is no write');
+    recordSummary(file, { at: '2026-10-31T05:00:00.000Z', session: 's', call: 'c5', board: 'u', yours: ['c'], dropped: [{ item: 'a', reason: 'merged as 96ce3c9' }] });
+    assert.deepEqual(lastYours(readRecord(file, SHOWN_SCHEMA), 'u'), ['c'], 'each board its own');
+    assert.equal(lastYours(readRecord(file, SHOWN_SCHEMA)), null);
+    assert.deepEqual(readRecord(file, SHOWN_SCHEMA).at(-1).dropped, [{ item: 'a', reason: 'merged as 96ce3c9' }]);
   });
 });
 

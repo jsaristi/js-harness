@@ -310,6 +310,23 @@ test('gate --hook refuses a summary write that drops an item of yours with no yo
   assert.deepEqual(shownLines(home).slice(-2).map((line) => [line.decision, line.yours]), [['unchecked', undefined], ['shown', null]]);
   assert.equal(pre('y7', { action: 'update', data: { yours: [] } }).out, '{}');
   assert.match(shownLines(home).at(-1).reason, /not known.*unchecked/);
+  // The verifier on 7c4f91fd: a summary write it could not judge is no page or question unchecked.
+  const report = call(['shown', '--json'], { root, home, slug: 'p', now: GATE_NOW });
+  assert.equal(JSON.parse(report.out).unchecked, 0);
+});
+
+test('gate --hook holds each artifact\'s board/summary to its own yours, and --shown keeps the reasons given', (t) => {
+  const { home, hook, done } = gateScratch();
+  t.after(done);
+  const write = (mode, call, url, data) => hook(mode, { ...summaryUpdate(call, {}), hook_event_name: mode === '--hook' ? 'PreToolUse' : 'PostToolUse', tool_input: { action: 'update', url, collection: 'board', doc_id: 'summary', data } });
+  write('--shown', 'b1', 'https://claude.ai/artifact/board', { yours: ['Revisa el PR 867'] });
+  write('--shown', 'b2', 'https://claude.ai/artifact/test', { yours: [] });
+  assert.equal(write('--hook', 'b3', 'https://claude.ai/artifact/test', { yours: [] }).out, '{}', 'another board is held to its own list');
+  assert.equal(JSON.parse(write('--hook', 'b4', 'https://claude.ai/artifact/board', { yours: [] }).out).hookSpecificOutput.permissionDecision, 'deny');
+  const reasoned = { yours: [], yoursDropped: [{ item: 'Revisa el PR 867', reason: 'merged as 96ce3c9', extra: 'x' }] };
+  write('--shown', 'b5', 'https://claude.ai/artifact/board', reasoned);
+  const line = shownLines(home).at(-1);
+  assert.deepEqual([line.board, line.yours, line.dropped], ['https://claude.ai/artifact/board', [], [{ item: 'Revisa el PR 867', reason: 'merged as 96ce3c9' }]]);
 });
 
 test('gate --hook reads the nearest harness.json at or above the payload\'s folder, and answers {} where it does not turn templates on', (t) => {

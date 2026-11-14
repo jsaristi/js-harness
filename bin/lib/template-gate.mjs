@@ -7,6 +7,7 @@
 import path from 'node:path';
 import { normalText, sha256 } from './template.mjs';
 import { admit } from './template-question.mjs';
+import { SUMMARY_SUBJECT } from './template-record.mjs';
 
 /** How old a rendered line may be and still admit its page: an old page published again as a new moment's is refused. */
 export const RENDERED_FRESH_HOURS = 6;
@@ -78,46 +79,65 @@ export const DROP_REASON_CHARS = 10;
 /** An item of `yours` as the gate tells items apart: its text without the level, trimmed. */
 export const yoursKey = (item) => (YOURS_LEVEL.exec(String(item))?.[2] ?? String(item)).trim();
 
-/** What the summary changes `changes` (`summaryChanges`, each `file` read into `data` or into `unreadable`, why not)
- * leave of `yours`: `{ yours, named }`. `yours` is the list after them, its strings, as the board lists them;
- * `undefined` when none touched it, `null` when it cannot be known (a `str_replace` of it, a file not read). A `set`
- * without it, or a `delete`, empties it. `named` is every `yoursDropped` entry they carry. */
+const givenReason = (entry) => typeof entry?.item === 'string' && typeof entry.reason === 'string' && entry.reason.trim().length >= DROP_REASON_CHARS;
+
+/** What one summary change (`summaryChanges`, its `file` read into `data` or into `unreadable`, why not) does to
+ * `yours`: `{ yours, named, why }`. `yours` is the list it leaves, its strings, as the board lists them; `undefined`
+ * when it does not touch it, `null` when that cannot be known (a `str_replace` of it, a file not read), and then `why`
+ * says why. A `set` without it, or a `delete`, empties it. `named` is its own `yoursDropped` entries whose reason is
+ * `DROP_REASON_CHARS` or more. */
+function yoursOf(change) {
+  if (change.action === 'delete') return { yours: [], named: [] };
+  if (change.action === 'str_replace') return change.field === 'yours' ? { yours: null, named: [], why: 'a str_replace of yours' } : { yours: undefined, named: [] };
+  if (change.unreadable !== undefined) return { yours: null, named: [], why: change.unreadable };
+  const data = change.data !== null && typeof change.data === 'object' ? change.data : {};
+  const named = Array.isArray(data.yoursDropped) ? data.yoursDropped.filter(givenReason) : [];
+  if (Object.hasOwn(data, 'yours')) return { yours: Array.isArray(data.yours) ? data.yours.filter((item) => typeof item === 'string') : [], named };
+  return { yours: change.action === 'set' ? [] : undefined, named };
+}
+
+/** What the summary changes `changes` leave of `yours`, in order: `{ yours, named }`, `yours` the list after the last
+ * that touched it (`yoursOf`), `named` the reasons each of those gave. */
 export function yoursAfter(changes) {
   let yours;
   const named = [];
-  for (const change of changes) {
-    if (change.action === 'delete') yours = [];
-    else if (change.action === 'str_replace') yours = change.field === 'yours' ? null : yours;
-    else if (change.unreadable !== undefined) yours = null;
-    else {
-      const data = change.data !== null && typeof change.data === 'object' ? change.data : {};
-      if (Array.isArray(data.yoursDropped)) named.push(...data.yoursDropped);
-      if (Object.hasOwn(data, 'yours')) yours = Array.isArray(data.yours) ? data.yours.filter((item) => typeof item === 'string') : [];
-      else if (change.action === 'set') yours = [];
-    }
+  for (const step of changes.map(yoursOf)) {
+    if (step.yours === undefined) continue;
+    yours = step.yours;
+    named.push(...step.named);
   }
   return { yours, named };
 }
 
-/** The decision on a call's writes of the summary, `{ decision, yours, reason }`: `admitted` when they leave `yours` as
- * it was or every item of `previous` that leaves is named in their `yoursDropped` with a reason of
- * `DROP_REASON_CHARS` or more; `refused` otherwise, with the text that names each; `unchecked` when the list before or
- * after cannot be known. `previous` is the last list recorded (`lastYours`): `undefined` when none was, `null` when
- * it is not known, and then `previousWhy` says why. */
+/** The decision on a call's writes of the summary, `{ decision, yours, reason }`: `refused` when a write drops an item
+ * of the list before it and does not name it in its own `yoursDropped` (a reason another write of the batch gives is
+ * not its own), with the text that names each; `unchecked` when the list before or after a write cannot be known;
+ * `admitted` otherwise. `previous` is the last list recorded (`lastYours`): `undefined` when none was, `null` when it
+ * is not known, and then `previousWhy` says why. */
 export function decideSummary({ changes, previous, previousWhy = 'the last recorded yours is not known' }) {
-  const { yours, named } = yoursAfter(changes);
-  if (yours === undefined || previous === undefined) return { decision: 'admitted', yours, reason: null };
-  if (previous === null || yours === null) {
-    const why = previous === null ? previousWhy : (changes.find((change) => change.unreadable !== undefined)?.unreadable ?? 'a str_replace of yours');
-    return { decision: 'unchecked', yours, reason: `${why}, so what this write of board/summary takes from yours is not known; the call goes through unchecked` };
+  // A str_replace of yours leaves a list the record cannot know, which the next write would then be held to nothing by.
+  if (changes.some((change) => change.action === 'str_replace' && change.field === 'yours')) {
+    return { decision: 'refused', yours: null, reason: say('whole') };
   }
-  const kept = new Set(yours.map(yoursKey));
-  const given = new Set(named.filter((entry) => typeof entry?.item === 'string' && typeof entry.reason === 'string'
-    && entry.reason.trim().length >= DROP_REASON_CHARS).map((entry) => yoursKey(entry.item)));
-  const dropped = [...new Set(previous.map(yoursKey))].filter((key) => key !== '' && !kept.has(key) && !given.has(key));
-  if (dropped.length === 0) return { decision: 'admitted', yours, reason: null };
-  const reason = [say('dropped', { items: dropped.map((key) => JSON.stringify(key)).join('; ') }), say('reason', { chars: String(DROP_REASON_CHARS) })].join(' ');
-  return { decision: 'refused', yours, reason };
+  let list = previous;
+  let unknown = null;
+  const dropped = new Set();
+  for (const step of changes.map(yoursOf)) {
+    if (step.yours === undefined) continue;
+    if (Array.isArray(list) && Array.isArray(step.yours)) {
+      const kept = new Set(step.yours.map(yoursKey));
+      const given = new Set(step.named.map((entry) => yoursKey(entry.item)));
+      for (const key of list.map(yoursKey)) if (key !== '' && !kept.has(key) && !given.has(key)) dropped.add(key);
+    } else if (list !== undefined) unknown ??= list === null ? previousWhy : step.why;
+    list = step.yours;
+  }
+  const { yours } = yoursAfter(changes);
+  if (dropped.size > 0) {
+    const reason = [say('dropped', { items: [...dropped].map((key) => JSON.stringify(key)).join('; ') }), say('reason', { chars: String(DROP_REASON_CHARS) })].join(' ');
+    return { decision: 'refused', yours, reason };
+  }
+  if (unknown !== null) return { decision: 'unchecked', yours, reason: `${unknown}, so what this write of board/summary takes from yours is not known; the call goes through unchecked` };
+  return { decision: 'admitted', yours, reason: null };
 }
 
 const fresh = (line, now) => now - Date.parse(line.at) <= RENDERED_FRESH_HOURS * 3600 * 1000;
@@ -137,6 +157,7 @@ export const GATE_SAYS = Object.freeze({
   ask: 'Record it with js-harness notify --to orchestrator --kind question, then ask it with the input js-harness template ask <n> prints, unchanged.',
   dropped: 'js-harness template gate: this write of board/summary takes from yours what it gives no reason for: <items>.',
   reason: 'Keep each in yours, or name it in the same write\'s yoursDropped: [{ item, reason }], a reason of <chars> characters or more; an item reworded leaves as the old one.',
+  whole: 'js-harness template gate: a str_replace cannot change yours on board/summary; write it whole, with set or update and yoursDropped for what leaves.',
 });
 
 /** The sentences of `GATE_SAYS` as one text, a paragraph each, as the coverage cuts it. */
@@ -173,7 +194,8 @@ export function shownReport({ rendered, shown, moments }) {
     ...shown.filter((line) => line.decision === 'shown' && line.template !== null && (typeof line.subject !== 'string' || line.subject === ''))
       .map((line) => `a page of ${line.template} shown at ${line.at} names no moment`),
   ];
-  const unchecked = shown.filter((line) => line.decision === 'unchecked').length;
+  // A write of the board's summary the gate could not judge shows no page or question, so it is no call unchecked here.
+  const unchecked = shown.filter((line) => line.decision === 'unchecked' && line.subject !== SUMMARY_SUBJECT).length;
   return { templates, free, escapes, unchecked };
 }
 
