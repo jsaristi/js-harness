@@ -1,8 +1,9 @@
 # codex-spend: no Codex waste, no review weakened
 
 ## State
-v4 after the plan's three reads (L9-L11): every finding taken; the senior-model fold is left (L11). Next: T1;
-then T2, T3, T5, and T4 last, after JH 198's T6 lands. Q1's draft after T1; Q2 goes with it.
+v4 after the plan's three reads (L9-L11), clearances in (L12). T1 written (L14) and committed; next on it:
+verifier (opus), codex-review and lens-review on the slice, PR, ready notice with --pr. Then T2, T3, T5, and T4
+last, after JH 198's T6. Q1+Q2 drafts after T1.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -262,3 +263,18 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   fourth, says what a failed reader is; citations corrected. Left, with the reason: the lead's L7 fold-in (the
   recheck refusal naming `senior-model`): §1 names `rule:session-model` as the strongest and §1 is his
   (`protocols-skill.mjs:43`), so it does not fit T3; it goes back to the lead as a §1 `rules change` with his words.
+- L12 2026-11-14T19:45Z, the lead: cleared `bin/lib/pull-request.mjs` + test, `bin/merge-queue.mjs` at `:902`,
+  `:906-908`, `:942`, `bin/lib/land-records.mjs` + test, and the usage lines of `bin/js-harness.mjs`. Spec 4 limited
+  to questions is right; Q2 goes with Q1 to him, drafts after T1; the senior-model fold-in left is noted. Main is
+  4187cb1. T1 starts.
+- L13 2026-11-14T20:3xZ, the lead: advisor refuse mode is on since main c9160a5 (a ready, a question or a session
+  start with no advisor call in the stretch is refused: consult once, then retry); the app auto-archives a session
+  when its bound PR closes, so each landed PR of this feature is unbound (ccd_pr unbind_pr) before work goes on.
+- L14 2026-11-14T21:30Z, T1 written by a js-harness-writer (opus), Covered: S1. Two choices beyond spec 1, kept:
+  a run that measures (`onResult`, only `evals/review/compare.mjs`, which already reviews in its own clone at the
+  head) makes no snapshot; the sweep runs where Codex's folder is first chosen, not at process start, so a run that
+  starts nothing (covered, refused, `--plan`, `--unavailable`) touches nothing there. Code moved from
+  `bin/codex-review.mjs` to the turns module to hold its 2258-line ceiling (`conventions-structure`), so T2's lines
+  go in `bin/lib`. Directory symlinks skip on this machine (EPERM); junctions are tested.
+- L15 2026-11-14T21:45Z, the lead: PR 874 landed (main dfcb70f), so `docs/rule-sources.json`, the rules data and
+  `bin/lib/protocols-skill.mjs` are free for T4, after T1 to T3 as planned.

@@ -531,20 +531,21 @@ test('how Codex is launched: as `codex`, with the resolved base, stdin ignored, 
     assert.equal(command, 'codex');
     // The resolved id, not the raw `HEAD~1`: the record and the review cover the same range.
     assert.deepEqual(args.slice(args.indexOf('--base'), args.indexOf('--base') + 2), ['--base', base], flags.join(' '));
-    assert.equal(fs.realpathSync(opts.cwd), fs.realpathSync(root));
+    // In the snapshot of the head, under the git folder's area (spec 1 of odd/tasks/codex-spend.md).
+    assert.deepEqual([path.dirname(opts.cwd), /^review-head-\d+-\d+$/.test(path.basename(opts.cwd))], [areaOf(root), true]);
     assert.deepEqual(opts.stdio, ['ignore', 'pipe', 'inherit'], 'Codex would wait on an open stdin');
     assert.equal(opts.detached, true, 'its own process group, so the whole tree can be killed');
     assert.ok(!opts.shell, 'no shell off Windows');
   }
 });
 
-test('Codex runs from the repository root even when --cwd is a subdirectory', async () => {
+test('Codex runs from the top of the snapshot of the head even when --cwd is a subdirectory', async () => {
   const { root, base } = makeRepo();
   fs.mkdirSync(path.join(root, 'sub'));
   const fake = fakeCodex(reviewed(root, base));
   const result = await run(['--base', 'HEAD~1', '--cwd', path.join(root, 'sub')], fake);
   assert.equal(result.code, 0);
-  assert.equal(fs.realpathSync(fake.calls[0].opts.cwd), fs.realpathSync(root));
+  assert.deepEqual([path.dirname(fake.calls[0].opts.cwd), /^review-head-\d+-\d+$/.test(path.basename(fake.calls[0].opts.cwd))], [areaOf(root), true]);
 });
 
 test('on Windows the .cmd shim runs through a shell as one quoted command line, not detached, with or without `--session lean`', async () => {
@@ -1142,56 +1143,97 @@ test('staged but uncommitted changes refuse the review too', async () => {
   assert.equal(fake.calls.length, 0);
 });
 
-test('a commit made while Codex reviews leaves no record: the range it names is not the one that was read', async () => {
-  const { root, base, head } = makeRepo();
-  const fake = fakeCodex(reviewed(root, base));
-  // A commit lands in the worktree during the session: HEAD is no longer the commit the run began with.
+// --- the snapshot of the head a review reads (odd/tasks/codex-spend.md, spec 1) ---
+
+/** `fake` whose Codex, as it is launched, hands `during` the folder it runs in, and keeps that folder, as the
+ * real path it had then (it is gone after the run), in `fake.cwds`. */
+function inSession(fake, during = () => {}) {
   const spawnAsync = fake.spawnAsync;
+  fake.cwds = [];
+  fake.spawnAsync = (command, args, opts) => {
+    const child = spawnAsync(command, args, opts);
+    fake.cwds.push(fs.realpathSync.native(opts.cwd));
+    during(opts.cwd, opts);
+    return child;
+  };
+  return fake;
+}
+
+/** The snapshot area of the repository at `root`: where its turn worktrees and snapshots are made. */
+const areaOf = (root) => path.join(whereOf(root).commonGitDir, 'js-harness');
+/** The snapshots the area of `root` holds now. */
+const snapshotsIn = (root) => listed(areaOf(root)).filter((name) => name.startsWith('review-head-'));
+
+/** The worktrees git lists for `root`, by their folders. */
+const worktreesOf = (root) => git(root, 'worktree', 'list', '--porcelain').split('\n').filter((line) => line.startsWith('worktree '));
+
+test('reads a snapshot of the head: Codex runs in a worktree at the head under the git folder\'s js-harness area, which is gone after the run', async () => {
+  const { root, base, head } = makeRepo();
+  let atHead;
+  const fake = inSession(fakeCodex(reviewed(root, base)), (cwd) => {
+    atHead = git(cwd, 'rev-parse', 'HEAD');
+  });
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
+  assert.equal(result.code, 0, result.err);
+  const [cwd] = fake.cwds;
+  assert.equal(path.dirname(cwd).toLowerCase(), fs.realpathSync.native(areaOf(root)).toLowerCase());
+  assert.match(path.basename(cwd), /^review-head-\d+-\d+$/);
+  assert.equal(atHead, head);
+  assert.equal(fs.existsSync(cwd), false, 'the snapshot is removed after the run');
+  assert.deepEqual([snapshotsIn(root), worktreesOf(root).length], [[], 1]);
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+});
+
+test('reads a snapshot of the head: a commit made in the live folder while Codex reviews leaves the record of the head the run began at', async () => {
+  const { root, base, head } = makeRepo();
+  const fake = inSession(fakeCodex(reviewed(root, base)), () => git(root, 'commit', '--allow-empty', '-m', 'moved'));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
+  assert.equal(result.code, 0, result.err);
+  assert.notEqual(git(root, 'rev-parse', 'HEAD'), head, 'the live folder moved on');
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+});
+
+test('reads a snapshot of the head: an edit of a tracked file in the live folder while Codex reviews leaves the record written', async () => {
+  const { root, base, head } = makeRepo();
+  const fake = inSession(fakeCodex(reviewed(root, base)), () => fs.appendFileSync(path.join(root, 'f.txt'), 'edited while Codex reads\n', 'utf8'));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+});
+
+test('reads a snapshot of the head: a commit made in the review\'s own snapshot while Codex reviews leaves no record, and says the snapshot changed', async () => {
+  const { root, base, head } = makeRepo();
   let moved;
-  fake.spawnAsync = (command, args, opts) => {
-    const child = spawnAsync(command, args, opts);
-    git(root, 'commit', '--allow-empty', '-m', 'moved');
-    moved = git(root, 'rev-parse', 'HEAD');
-    return child;
-  };
+  const fake = inSession(fakeCodex(reviewed(root, base)), (cwd) => {
+    git(cwd, 'commit', '--allow-empty', '-m', 'moved');
+    moved = git(cwd, 'rev-parse', 'HEAD');
+  });
   const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
   assert.equal(result.code, 1, result.err);
-  assert.match(result.err, /^HEAD moved from [0-9a-f]{7} to [0-9a-f]{7} while Codex was reviewing/m);
-  assert.ok(result.err.includes(`from ${head.slice(0, 7)} to ${moved.slice(0, 7)} while`), result.err);
-  // The command it ran is bound to the head that moved away: the step is to ask for the command at the new head.
-  assert.equal(result.err.trimEnd().split('\n').at(-1), 'next: js-harness check --push', result.err);
+  assert.ok(result.err.startsWith(`The review's own snapshot of ${head.slice(0, 7)} changed while Codex was reviewing: its HEAD moved to ${moved.slice(0, 7)}, so what it read is not the range ${base.slice(0, 7)}..${head.slice(0, 7)} alone and no record was written.`), result.err);
+  assert.match(result.err.trimEnd().split('\n').at(-1), /^next: .*js-harness codex-review --base [0-9a-f]+ --at [0-9a-f]+/);
   assert.equal(wrote(root), false);
+  assert.deepEqual(snapshotsIn(root), []);
 });
 
-test('an edit of a tracked file made while Codex reviews leaves no record: the tree is no longer the committed range', async () => {
+test('reads a snapshot of the head: an edit of a tracked file in the review\'s own snapshot while Codex reviews leaves no record, and says the snapshot changed', async () => {
   const { root, base, head } = makeRepo();
-  const fake = fakeCodex(reviewed(root, base));
-  // The file is edited during the session, and nothing is committed: the tracked tree is not the range any more.
-  const spawnAsync = fake.spawnAsync;
-  fake.spawnAsync = (command, args, opts) => {
-    const child = spawnAsync(command, args, opts);
-    fs.appendFileSync(path.join(root, 'f.txt'), 'edited while Codex reads\n', 'utf8');
-    return child;
-  };
+  const fake = inSession(fakeCodex(reviewed(root, base)), (cwd) => fs.appendFileSync(path.join(cwd, 'f.txt'), 'edited while Codex reads\n', 'utf8'));
   const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
   assert.equal(result.code, 1, result.err);
-  assert.match(result.err, /^Tracked files changed while Codex was reviewing, so what it read is not the committed range /m);
-  assert.ok(result.err.includes(`committed range ${base.slice(0, 7)}..${head.slice(0, 7)} alone`), result.err);
+  assert.ok(result.err.startsWith(`The review's own snapshot of ${head.slice(0, 7)} changed while Codex was reviewing: its tracked files differ from its HEAD, so what it read is not the committed range ${base.slice(0, 7)}..${head.slice(0, 7)} alone and no record was written.`), result.err);
   assert.equal(wrote(root), false);
 });
 
-test('a read of HEAD that fails after the review leaves no record: it is not known that Codex read the range alone', async () => {
+test('reads a snapshot of the head: a read of the snapshot\'s HEAD that fails after the review leaves no record: it is not known that Codex read the range alone', async () => {
   const { root, base } = makeRepo();
   const fake = fakeCodex(reviewed(root, base));
   // Codex ends well, and then git cannot say what HEAD is: the tree is as it was, but the range is not known to be the one read.
-  const spawnAsync = fake.spawnAsync;
   const spawn = fake.spawn;
   let codexRan = false;
-  fake.spawnAsync = (command, args, opts) => {
-    const child = spawnAsync(command, args, opts);
+  inSession(fake, () => {
     codexRan = true;
-    return child;
-  };
+  });
   // However the run asks it: as the one question that answers HEAD and the tree together, or as HEAD alone.
   fake.spawn = (command, args, opts) => {
     if (codexRan && command === 'git' && (args.includes('HEAD^{commit}') || args.includes('--porcelain=v2'))) return { status: 128, stdout: '', stderr: 'fatal: bad revision HEAD^{commit}' };
@@ -1199,29 +1241,170 @@ test('a read of HEAD that fails after the review leaves no record: it is not kno
   };
   const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
   assert.equal(result.code, 1, result.err);
-  assert.match(result.err, /Could not read HEAD and the state of the tree again/);
+  assert.match(result.err, /^Could not read HEAD and the state of the review's own snapshot again after the review/m);
   assert.equal(wrote(root), false);
 });
 
-test('a commit made while Codex reviews is said as a HEAD that moved even when git cannot say what the tree is: after the review, the moved HEAD is said first', async () => {
+test('reads a snapshot of the head: a commit made in the snapshot is said as its HEAD that moved even when git cannot say what its tree is', async () => {
   const { root, base, head } = makeRepo();
   const fake = fakeCodex(reviewed(root, base));
-  const spawnAsync = fake.spawnAsync;
   const spawn = fake.spawn;
   let moved;
-  fake.spawnAsync = (command, args, opts) => {
-    const child = spawnAsync(command, args, opts);
-    git(root, 'commit', '--allow-empty', '-m', 'moved');
-    moved = git(root, 'rev-parse', 'HEAD');
-    return child;
-  };
+  inSession(fake, (cwd) => {
+    git(cwd, 'commit', '--allow-empty', '-m', 'moved');
+    moved = git(cwd, 'rev-parse', 'HEAD');
+  });
   // From then on no `git status` answers, in either of the forms the run may ask it in.
   fake.spawn = (command, args, opts) =>
     moved !== undefined && command === 'git' && args[0] === 'status' ? { status: 128, stdout: '', stderr: 'fatal: broken index' } : spawn(command, args, opts);
   const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
   assert.equal(result.code, 1, result.err);
-  assert.ok(result.err.startsWith(`HEAD moved from ${head.slice(0, 7)} to ${moved.slice(0, 7)} while Codex was reviewing`), result.err);
+  assert.ok(result.err.startsWith(`The review's own snapshot of ${head.slice(0, 7)} changed while Codex was reviewing: its HEAD moved to ${moved.slice(0, 7)}`), result.err);
   assert.equal(wrote(root), false);
+});
+
+test('reads a snapshot of the head: the files of the findings come back from the top of the snapshot, else from the top of the live folder', async () => {
+  const { root, base } = makeRepo();
+  const top = git(root, 'rev-parse', '--show-toplevel');
+  const fake = inSession(fakeCodex(reviewed(root, base)), (cwd, opts) => {
+    // The answer names one file in the snapshot Codex ran in, and one in the live folder.
+    const answer = { findings: [found(path.join(cwd, 'f.txt'), 1, 1), found(`${top}/lib/live.mjs`, 2, 3)], overall_correctness: 'patch is incorrect', overall_explanation: 'Two.', overall_confidence_score: 0.5 };
+    const file = path.join(opts.env.CODEX_HOME, ...ANSWER_FILE);
+    const lines = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
+    const said = lines.findLastIndex((line) => line.payload?.role === 'assistant');
+    lines[said].payload.content[0].text = JSON.stringify(answer);
+    fs.writeFileSync(file, jsonl(...lines), 'utf8');
+  });
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, platform: process.platform });
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(onlyRun(root).answer.findings.map((finding) => finding.file), ['f.txt', 'lib/live.mjs']);
+});
+
+test('reads a snapshot of the head: a run whose --cwd is already a turn worktree reads it, and makes no snapshot in it', async () => {
+  const { root, base, head } = makeRepo();
+  const place = path.join(areaOf(root), 'review-turn-1-1');
+  fs.mkdirSync(areaOf(root), { recursive: true });
+  git(root, 'worktree', 'add', '--quiet', '--detach', place, head);
+  const fake = inSession(fakeCodex(reviewed(root, base)));
+  const { deps, asked } = countingGit(fake);
+  const result = await run(['--base', base, '--cwd', place], deps);
+  const real = fs.realpathSync.native(place);
+  git(root, 'worktree', 'remove', '--force', place);
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.cwds[0], real);
+  assert.equal(asked.some(({ args }) => args[0] === 'worktree' && args[1] === 'add'), false, 'no worktree was made');
+});
+
+test('reads a snapshot of the head: a snapshot of a run that is gone is swept when the next run starts', async () => {
+  const { root, base, head } = makeRepo();
+  // The pid of a process that has ended, and a time of now, so its age is not why it goes.
+  const gone = spawnSync(process.execPath, ['-e', '']).pid;
+  const stale = path.join(areaOf(root), `review-head-${gone}-${Date.now()}`);
+  fs.mkdirSync(areaOf(root), { recursive: true });
+  git(root, 'worktree', 'add', '--quiet', '--detach', stale, head);
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fakeCodex(reviewed(root, base)));
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fs.existsSync(stale), false);
+  assert.equal(worktreesOf(root).length, 1);
+});
+
+test('reads a snapshot of the head: a snapshot that cannot be removed after the run is a warning, and the record stands', async () => {
+  const { root, base, head } = makeRepo();
+  const fake = inSession(fakeCodex(reviewed(root, base)));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, removeWorktree: () => 'it is busy' });
+  assert.equal(result.code, 0, result.err);
+  assert.match(result.err, /^Warning: the snapshot of the head this review read was not removed, and the next run's sweep removes it: it is busy\.$/m);
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+  git(root, 'worktree', 'remove', '--force', fake.cwds[0]);
+});
+
+/** A test that a file behind a link of `type` (`junction` or `dir`) Codex left in its snapshot survives the
+ * snapshot's removal, skipped where this OS cannot make such a link. One test a type, each written as a test of
+ * its own, so that the halves of this file count it (see its top). */
+const linkInSnapshotSurvives = (type) => async (t) => {
+  const { root, base } = makeRepo();
+  const outside = tmp('js-harness-codex-review-outside-');
+  fs.writeFileSync(path.join(outside, 'sentinel.txt'), 'keep me\n', 'utf8');
+  let cannot = null;
+  const fake = inSession(fakeCodex(reviewed(root, base)), (cwd) => {
+    try {
+      fs.symlinkSync(outside, path.join(cwd, 'link'), type);
+    } catch (err) {
+      cannot = `${type} links cannot be made here (${err.code})`;
+    }
+  });
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
+  if (cannot !== null) {
+    t.skip(cannot);
+    return;
+  }
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fs.existsSync(fake.cwds[0]), false);
+  assert.equal(fs.readFileSync(path.join(outside, 'sentinel.txt'), 'utf8'), 'keep me\n');
+};
+
+test('reads a snapshot of the head: a file behind a junction Codex left in its snapshot survives the snapshot\'s removal', linkInSnapshotSurvives('junction'));
+
+test('reads a snapshot of the head: a file behind a directory symlink Codex left in its snapshot survives the snapshot\'s removal', linkInSnapshotSurvives('dir'));
+
+/** A repository whose package.json declares `declared`, with `installed` in an untracked node_modules. */
+function installedRepo(declared, installed) {
+  const repo = makeRepoWith({ 'package.json': `${JSON.stringify(declared)}\n`, 'f.txt': 'one' }, { 'f.txt': 'two' });
+  fs.mkdirSync(path.join(repo.root, 'node_modules'));
+  for (const name of installed) fs.mkdirSync(path.join(repo.root, 'node_modules', name));
+  return repo;
+}
+
+test('reads a snapshot of the head: in a turn of the gate lock, a project whose declared dependencies are installed is read in the live folder, which says why and holds the checks', async () => {
+  const { root, base, head } = installedRepo({ devDependencies: { left: '1.0.0' } }, ['left']);
+  // What a killed run left is swept there too.
+  const stale = path.join(areaOf(root), `review-head-${spawnSync(process.execPath, ['-e', '']).pid}-${Date.now()}`);
+  fs.mkdirSync(areaOf(root), { recursive: true });
+  git(root, 'worktree', 'add', '--quiet', '--detach', stale, head);
+  const fake = inSession(fakeCodex(reviewed(root, base)));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fs.existsSync(stale), false, 'the stale snapshot was swept');
+  assert.equal(fake.cwds[0].toLowerCase(), fs.realpathSync.native(root).toLowerCase());
+  assert.equal(result.out.split('\n').filter((line) => line.startsWith('In this turn of the gate lock Codex reads the live folder, not a snapshot')).length, 1, result.out);
+  assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)]);
+  // There the checks are on the live folder, as they were: a commit made in it leaves no record.
+  const live = installedRepo({ dependencies: { left: '1.0.0' } }, ['left']);
+  const moving = inSession(fakeCodex(reviewed(live.root, live.base)), () => git(live.root, 'commit', '--allow-empty', '-m', 'moved'));
+  const refused = await run(['--base', 'HEAD~1', '--cwd', live.root], moving);
+  assert.equal(refused.code, 1, refused.err);
+  assert.match(refused.err, /^HEAD moved from [0-9a-f]{7} to [0-9a-f]{7} while Codex was reviewing/m);
+  assert.equal(wrote(live.root), false);
+});
+
+test('reads a snapshot of the head: out of a turn, or with nothing installed, or nothing declared, a project is read in its snapshot', async () => {
+  const cases = [
+    ['out of a turn', installedRepo({ devDependencies: { left: '1.0.0' } }, ['left']), {}],
+    ['an empty node_modules', installedRepo({ devDependencies: { left: '1.0.0' } }, []), IN_TURN],
+    ['nothing declared', installedRepo({ name: 'x', dependencies: {} }, ['left']), IN_TURN],
+  ];
+  for (const [which, { root, base }, env] of cases) {
+    const fake = inSession(fakeCodex(reviewed(root, base)));
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], fake, env);
+    assert.equal(result.code, 0, `${which}: ${result.err}`);
+    assert.match(path.basename(fake.cwds[0]), /^review-head-/, which);
+    assert.doesNotMatch(result.out, /reads the live folder/, which);
+  }
+});
+
+test('reads a snapshot of the head: a range in parts reads one snapshot for all its parts, and a commit and an edit in the live folder between them leave the record written', async () => {
+  const { root, base, head } = makeThreeFileRepo();
+  const fake = threePassingParts(root, base, head);
+  let at = 0;
+  inSession(fake, () => {
+    at += 1;
+    if (at === 1) fs.appendFileSync(path.join(root, 'c.txt'), 'edited while Codex reads\n', 'utf8');
+    if (at === 2) git(root, 'commit', '-qam', 'moved');
+  });
+  const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(new Set(fake.cwds).size, 1, 'one snapshot for the three parts');
+  assert.deepEqual(readCodexReviews(root).map((record) => [record.base, record.head, record.runs.length]), [[base, head, 3]]);
 });
 
 test('the review asks git about the end of its range by the commit it resolved, never by the word HEAD', async () => {
@@ -1425,7 +1608,7 @@ test('codexArgs: the lean argv, token by token, on Windows and elsewhere', () =>
   for (const platform of ['win32', 'linux']) assert.equal(codexArgs(base, platform).includes('--ephemeral'), false, platform);
 });
 
-test('--session lean spawns Codex with the lean argv, from the repository root, in the same environment but for its home', async () => {
+test('--session lean spawns Codex with the lean argv, from the snapshot of the head, in the same environment but for its home', async () => {
   const { root, base } = makeRepo();
   const fake = fakeCodex(reviewed(root, base));
   const env = { PATH: '/x', HOME: '/home/x', ...IN_TURN };
@@ -1434,7 +1617,7 @@ test('--session lean spawns Codex with the lean argv, from the repository root, 
   assert.equal(fake.calls.length, 1);
   assert.equal(fake.calls[0].command, 'codex');
   assert.deepEqual(fake.calls[0].args, leanArgv(base));
-  assert.equal(fs.realpathSync(fake.calls[0].opts.cwd), fs.realpathSync(root));
+  assert.equal(path.dirname(fake.calls[0].opts.cwd), areaOf(root));
   // A home of its own, named after the run, and nothing else added or taken away.
   assert.deepEqual(fake.calls[0].opts.env, { ...env, CODEX_HOME: path.join(leanHomesDir(osHome), RUN_ID) });
   assert.deepEqual(env, { PATH: '/x', HOME: '/home/x', ...IN_TURN }, 'the caller\'s environment is not mutated');
@@ -3585,7 +3768,7 @@ const partShown = (root, base, head, ...files) => partSaid(FINDINGS, root, base,
 
 /** A fake Codex for a range reviewed in parts: the n-th session launched is `sessions[n]`, each `{ stdout,
  * answer, said }` as `fakeCodex` takes them, with `threads` to leave as rollout files in its home and
- * `during(home)` to look at that home as the session starts. `order` logs each session starting and ending,
+ * `during(home, opts)` to look at that home, or at the folder it runs in (`opts.cwd`), as the session starts. `order` logs each session starting and ending,
  * and a session nobody listed fails to start. */
 function fakeCodexInParts(...sessions) {
   const { spawn, killTree, probes, killed } = fakeCodex('');
@@ -3598,7 +3781,7 @@ function fakeCodexInParts(...sessions) {
     order.push(`start ${at + 1}`);
     const home = opts.env.CODEX_HOME;
     if (session.threads) writeRollouts(home, ...session.threads);
-    session.during?.(home);
+    session.during?.(home, opts);
     const { stdout = '', answer = {}, said = NO_FINDINGS } = session;
     const child = fakeCodex(stdout, answer, PROBE_OK, said).spawnAsync(command, args, opts);
     child.on('close', () => order.push(`end ${at + 1}`));
@@ -4002,24 +4185,23 @@ test('out of a turn, a part whose incorrect was excused and that is kept for the
   assert.equal(readCodexReviews(root).at(-1).excused, 'refused-tests');
 });
 
-test('a part that passed while a tracked file was not as the range is not kept, and the parts after it are not started: the next run of the range asks every part', async () => {
+test('a part that passed while a tracked file of the review\'s own snapshot was not as the range is not kept, and the parts after it are not started: the next run of the range asks every part', async () => {
   const { root, base, head } = makeThreeFileRepo();
   const ids = runIds();
   const short = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
-  // A tracked file is edited while the first session reads, and nothing is committed.
+  // A tracked file of the snapshot Codex reads is edited while the first session reads, and nothing is committed.
   const edited = fakeCodexInParts({
     stdout: partShown(root, base, head, 'a.txt'),
-    during: () => fs.appendFileSync(path.join(root, 'c.txt'), 'edited while Codex reads\n', 'utf8'),
+    during: (home, opts) => fs.appendFileSync(path.join(opts.cwd, 'c.txt'), 'edited while Codex reads\n', 'utf8'),
   });
   const refused = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...edited, platform: process.platform, randomUUID: ids });
   assert.equal(refused.code, 1, refused.err);
   assert.equal(edited.calls.length, 1, 'the parts after the one that read another tree were not started');
-  assert.match(refused.err, /^Tracked files differ from HEAD after part 1 of 3 passed, so what its session read is not the committed range alone; it is not kept and no record was written\./m);
+  assert.match(refused.err, /^The review's own snapshot changed: its tracked files differ from its HEAD after part 1 of 3 passed, so what its session read is not the committed range alone; it is not kept and no record was written\./m);
   assert.equal(wrote(root), false);
   const lines = readCodexReviewRuns(root);
   assert.deepEqual(lines.map((line) => [line.outcome, reviewRuns.runKept(line)]), [['failed', null]]);
-  // The file is as it was committed again, and the same range is asked whole: nothing of the refused run is taken.
-  git(root, 'checkout', '--', 'c.txt');
+  // The snapshot went with the run, and the same range is asked whole: nothing of the refused run is taken.
   const fake = threePassingParts(root, base, head);
   const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: ids });
   assert.equal(result.code, 0, result.err);
@@ -4039,41 +4221,41 @@ const afterFirstPart = (root, result, fake) => ({
   lines: readCodexReviewRuns(root).map((line) => [line.outcome, reviewRuns.runKept(line)]),
 });
 
-/** What `afterFirstPart` gives for a first part that is refused for `why`. */
+/** What `afterFirstPart` gives for a first part that is refused for `why`, a change of the snapshot it read. */
 const firstPartRefused = (why) => ({
   code: 1,
-  said: `${why} after part 1 of 3 passed, so what its session read is not the committed range alone; it is not kept and no record was written. Nothing is edited or committed in a worktree while its review runs; run the review again.`,
+  said: `${why} after part 1 of 3 passed, so what its session read is not the committed range alone; it is not kept and no record was written. Nothing is edited or committed in the snapshot a review reads; run the review again.`,
   sessions: 1,
   wrote: false,
   lines: [['failed', null]],
 });
 
-test('a part that passed while a commit was made is not kept, and the parts after it are not started: HEAD is not where the range ends', async () => {
+test('a part that passed while a commit was made in the review\'s own snapshot is not kept, and the parts after it are not started: its HEAD is not where the range ends', async () => {
   const { root, base, head } = makeThreeFileRepo();
   let moved;
   const fake = fakeCodexInParts({
     stdout: partShown(root, base, head, 'a.txt'),
-    during: () => {
-      git(root, 'commit', '--allow-empty', '-m', 'moved');
-      moved = git(root, 'rev-parse', 'HEAD');
+    during: (home, opts) => {
+      git(opts.cwd, 'commit', '--allow-empty', '-m', 'moved');
+      moved = git(opts.cwd, 'rev-parse', 'HEAD');
     },
   });
   const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, platform: process.platform, randomUUID: runIds() });
-  assert.deepEqual(afterFirstPart(root, result, fake), firstPartRefused(`HEAD moved from ${head.slice(0, 7)} to ${moved.slice(0, 7)}`), result.err);
+  assert.deepEqual(afterFirstPart(root, result, fake), firstPartRefused(`The review's own snapshot changed: its HEAD moved from ${head.slice(0, 7)} to ${moved.slice(0, 7)}`), result.err);
 });
 
-test('a part after which git cannot say what the tree is is not kept, whether or not HEAD moved: after a part, what could not be read is said first', async () => {
+test('a part after which git cannot say what the snapshot\'s tree is is not kept, whether or not its HEAD moved: after a part, what could not be read is said first', async () => {
   for (const commits of [false, true]) {
     const { root, base, head } = makeThreeFileRepo();
     const fake = fakeCodexInParts({
       stdout: partShown(root, base, head, 'a.txt'),
-      during: () => commits && git(root, 'commit', '--allow-empty', '-m', 'moved'),
+      during: (home, opts) => commits && git(opts.cwd, 'commit', '--allow-empty', '-m', 'moved'),
     });
     // Once the first session has started no `git status` answers, in either of the forms the run may ask it in.
     const spawn = (command, args, opts) =>
       fake.order.length > 0 && command === 'git' && args[0] === 'status' ? { status: 128, stdout: '', stderr: 'fatal: broken index' } : fake.spawn(command, args, opts);
     const result = await run(['--base', 'HEAD~1', ...THREE_PARTS, '--cwd', root], { ...fake, spawn, platform: process.platform, randomUUID: runIds() });
-    assert.deepEqual(afterFirstPart(root, result, fake), firstPartRefused('HEAD and the state of the tree could not be read'), `a commit made: ${commits}\n${result.err}`);
+    assert.deepEqual(afterFirstPart(root, result, fake), firstPartRefused('The HEAD and the state of the review\'s own snapshot could not be read'), `a commit made: ${commits}\n${result.err}`);
   }
 });
 
@@ -5854,11 +6036,11 @@ test('a merge of main below HEAD is reviewed in two turns: the merge in a worktr
   const result = await run(['--base', repo.main, '--cwd', root], { ...fake, randomUUID: runIds() });
   assert.equal(result.code, 0, result.err);
   assert.equal(fake.calls.length, 2);
-  // The merge's session ran in a checkout of the merge, which is gone; the second ran here.
+  // The merge's session ran in a checkout of the merge, which is gone; the second in the snapshot of the head, gone too.
   const [atMerge, here] = fake.calls.map((call) => call.opts.cwd);
   assert.match(path.basename(atMerge), /^review-turn-\d+-\d+$/);
-  assert.equal(path.resolve(here), path.resolve(root));
-  assert.deepEqual(turnWorktrees(root), []);
+  assert.deepEqual([path.dirname(here), /^review-head-\d+-\d+$/.test(path.basename(here))], [areaOf(root), true]);
+  assert.deepEqual([turnWorktrees(root), snapshotsIn(root)], [[], []]);
   assert.equal(git(root, 'worktree', 'list', '--porcelain').split('\n').filter((line) => line.startsWith('worktree ')).length, 1);
   const records = readCodexReviews(root).slice(-2).map((record) => [record.base, record.head, record.outcome, record.diff]);
   assert.deepEqual(records, [[mine, merge, 'reviewed', 'remerge'], [merge, after, 'reviewed', undefined]]);
@@ -5936,26 +6118,41 @@ test('a run of two turns with no Codex refuses before it makes the worktree of t
 
 test('a run whose worktree at the merge cannot be made says so and launches nothing (review R3, PR 338)', async () => {
   const repo = mergeBelowHead({ mineLines: 300 });
-  // git refuses to add the worktree.
+  // git refuses to add the worktree at the merge, and makes the snapshot of the head.
   const fake = fakeCodexInParts();
-  const spawn = (command, args, opts) => (command === 'git' && args[0] === 'worktree' && args[1] === 'add' ? { status: 128, stdout: '', stderr: 'fatal: no' } : fake.spawn(command, args, opts));
+  const spawn = (command, args, opts) => (command === 'git' && args[0] === 'worktree' && args[1] === 'add' && args.includes(repo.merge) ? { status: 128, stdout: '', stderr: 'fatal: no' } : fake.spawn(command, args, opts));
   const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, spawn, randomUUID: runIds() });
   assert.equal(result.code, 1, result.out);
   assert.match(result.err, /Could not make a worktree at the merge [0-9a-f]{7}, so nothing was started or recorded/);
   assert.equal(fake.calls.length, 0);
-  assert.deepEqual(turnWorktrees(repo.root), []);
+  assert.deepEqual([turnWorktrees(repo.root), snapshotsIn(repo.root)], [[], []]);
 });
 
-test('a run whose tracked files change during the turn at the merge reviews nothing after it, and says to run it again (review R3, PR 338)', async () => {
+test('a run whose live tracked files change during the turn at the merge still reviews the commits after it, from the snapshot of the head (odd/tasks/codex-spend.md, spec 1)', async () => {
   const repo = mergeBelowHead({ mineLines: 300 });
   const during = () => fs.writeFileSync(path.join(repo.root, 'a.txt'), 'changed during the turn\n', 'utf8');
+  const fake = fakeCodexInParts({ ...mergeTurnSession(repo), during }, { stdout: reviewed(repo.root, repo.merge) });
+  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 2);
+  assert.deepEqual(readCodexReviews(repo.root).slice(-2).map((record) => [record.base, record.head]), [[repo.mine, repo.merge], [repo.merge, repo.after]]);
+  assert.deepEqual([turnWorktrees(repo.root), snapshotsIn(repo.root)], [[], []]);
+});
+
+test('a run whose own snapshot of the head changes during the turn at the merge reviews nothing after it, and says to run it again (review R3, PR 338)', async () => {
+  const repo = mergeBelowHead({ mineLines: 300 });
+  // The snapshot is made before the turn: a tracked file of it is changed while the turn's session reads.
+  const during = () => {
+    const [snapshot] = snapshotsIn(repo.root);
+    fs.writeFileSync(path.join(areaOf(repo.root), snapshot, 'a.txt'), 'changed during the turn\n', 'utf8');
+  };
   // A second session would fail the run: only one is listed.
   const fake = fakeCodexInParts({ ...mergeTurnSession(repo), during });
   const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, randomUUID: runIds() });
   assert.equal(result.code, 1, result.out);
-  assert.match(result.err, /HEAD or the tracked files changed during the turn at the merge, so the commits after it were not reviewed/);
+  assert.match(result.err, /^The review's own snapshot of [0-9a-f]{7} changed during the turn at the merge, so the commits after it were not reviewed/m);
   assert.equal(fake.calls.length, 1);
-  assert.deepEqual(turnWorktrees(repo.root), []);
+  assert.deepEqual([turnWorktrees(repo.root), snapshotsIn(repo.root)], [[], []]);
 });
 
 // Where a mode bit stops a write: not on Windows, and not for root, who writes past it.
