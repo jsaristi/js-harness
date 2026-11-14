@@ -249,3 +249,4 @@ jamas vuelva a suceder" (69918425:2679).
   866 (JH 196) landed, main 96ce3c9, which clears bin/lib/manifest.mjs for T7. T5 starts on a new branch from main
   (no rebase, no force-push), so its rules-coverage-data.mjs entries sit on 866's.
 - L14 Codex over 6ba747e..4977072e: P1 (git unable to read an existing worktree: the whole-folder copy left .git out) and P2 (a copy inside the worktree it outlives), both fixed: the copy takes .git, and refuses a destination inside the worktree.
+- L15 Codex over 4977072e..62a71b56: P2 fixed; P1 open, since a linked worktree's .git is only a pointer and its index and own refs stay in its git folder. Fixed: the whole-folder copy runs only when git keeps nothing of the folder's own (no .git, or a .git file whose gitdir is gone); a worktree git cannot read while its git folder is there is refused. Lenses risk,resilience on 62a71b56: 0 findings. This is the last of Codex's three rechecks.

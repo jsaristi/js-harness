@@ -710,6 +710,22 @@ test('sessions stop --remove-worktree refuses submodules left in its git folder 
   assert.ok(fs.existsSync(worktree));
 }));
 
+// Codex P1 on 62a71b56: a worktree git cannot read, whose git folder is still there, holds in that folder what no copy of
+// its files keeps (its index, its own refs), so it is refused, not copied whole.
+test('sessions stop --remove-worktree refuses a worktree git cannot read while its git folder is there', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const { worktree, git } = realWorktree(world, 'thing');
+  const admin = git('rev-parse', '--absolute-git-dir').trim();
+  fs.writeFileSync(path.join(worktree, 'work.js'), 'uncommitted\n');
+  fs.writeFileSync(path.join(admin, 'HEAD'), 'not a ref\n');
+  const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(result.code, 1, result.stdout);
+  assert.match(result.stderr, /git could not read it as a worktree/);
+  assert.equal(actions(world).some((call) => call[0] === 'rm'), false, 'no claude rm');
+  assert.equal(fs.readFileSync(path.join(worktree, 'work.js'), 'utf8'), 'uncommitted\n');
+  assert.deepEqual(keptCopies(world), []);
+}));
+
 test('sessions stop --remove-worktree refuses a detached head whose commits no ref holds, and removes nothing', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
   const { worktree, git } = realWorktree(world, 'thing');

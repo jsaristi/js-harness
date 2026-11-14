@@ -358,6 +358,19 @@ export const keptDirOf = (home, id, at) => path.join(home, '.js-harness', 'kept'
 /** The refs a worktree keeps in its own git folder, which go with it. */
 const OWN_REFS = /^refs\/(worktree|bisect|rewritten)\//;
 
+/** Whether git keeps nothing of the folder `worktree`'s own: it has no `.git`, or a `.git` file whose gitdir is gone.
+ * A `.git` folder, or one it cannot read, is git's. */
+function noGitFolder(worktree) {
+  const dotGit = path.join(worktree, '.git');
+  try {
+    if (!fs.lstatSync(dotGit).isFile()) return false;
+    const gitdir = /^gitdir:\s*(.+?)\s*$/m.exec(fs.readFileSync(dotGit, 'utf8'));
+    return gitdir !== null && !fs.existsSync(path.resolve(worktree, gitdir[1]));
+  } catch (err) {
+    return err.code === 'ENOENT';
+  }
+}
+
 const listOf = (out) => out.split('\0').filter((item) => item !== '');
 
 /** What no branch keeps of the worktree `worktree`, as paths relative to it with `/`: `changed`, tracked files changed
@@ -370,7 +383,13 @@ const listOf = (out) => out.split('\0').filter((item) => item !== '');
 function unkeptPaths(worktree, gitIn) {
   const head = gitIn(worktree, 'rev-parse', '--verify', '--quiet', 'HEAD');
   const top = gitIn(worktree, 'rev-parse', '--show-toplevel');
-  if (!head.ok || !top.ok || !sameFolder(top.out.trim(), worktree)) return { why: null };
+  if (!head.ok || !top.ok || !sameFolder(top.out.trim(), worktree)) {
+    // Copied whole only when git keeps nothing of its own for it; a git folder still there holds its index and its own
+    // refs, which no copy of its files keeps (Codex P1 on 62a71b56).
+    if (noGitFolder(worktree)) return { why: null };
+    const said = !top.ok ? top.err : !head.ok ? head.err : `its top is ${top.out.trim()}`;
+    return { why: `git could not read it as a worktree (${said || 'git gave no reason'}) while its git folder is there, so what only that folder holds could not be checked: repair it with git -C ${worktree} status, then run this again` };
+  }
   // A ref of the worktree's own (refs/worktree, refs/bisect, refs/rewritten) lives in its git folder, which the removal
   // deletes: only a shared ref holds a commit (the verifier on 1d982b38).
   const sharedHolds = (commit) => {
