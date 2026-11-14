@@ -38,7 +38,7 @@ const runs = (command, verb) => new RegExp(`js-harness(?:\\.mjs)?\\b[^\\n]*?\\s$
  * is not one. Quoted text that the shell runs keeps its text: a value right after `--kind` (`--kind "ready"`), the
  * command of a `-c` (`bash -c "js-harness sessions start ..."`), and a quoted path to js-harness
  * (`node "C:/work/bin/js-harness.mjs" merge-queue --land`). */
-const unquoted = (command) => command.replace(/(--kind\s+|\b(?:bash|sh|zsh|pwsh|powershell)(?:\.exe)?\s+-c\s+)?("[^"]*"|'[^']*')/g, (quoted, before, text) => {
+const unquoted = (command) => command.replace(/(--kind\s+|\b(?:bash|sh|zsh|pwsh|powershell)(?:\.exe)?(?:\s+--?[\w-]+)*?\s+-(?:\w*c|Command)\s+)?("[^"]*"|'[^']*')/g, (quoted, before, text) => {
   const inner = text.slice(1, -1);
   if (before || /(?:^|[\\/])js-harness(?:\.mjs)?$/.test(inner)) return (before ?? '') + inner;
   return '""';
