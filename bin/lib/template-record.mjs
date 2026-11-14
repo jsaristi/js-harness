@@ -88,9 +88,10 @@ export function recordRendered(file, { template, subject, path: page, at, head }
 
 /** Records one decision of the gate, `{ at, session, tool, template, subject, decision, sha256, reason }`, and returns
  * the line. */
-export function recordShown(file, { at, session, tool, template = null, subject = null, decision, sha256: hash = null, reason = null, call = null }, fileSystem = fs) {
+export function recordShown(file, { at, session, tool, template = null, subject = null, decision, sha256: hash = null, reason = null, call = null, board, yours, dropped }, fileSystem = fs) {
   if (!DECISIONS.includes(decision)) throw new Error(`recordShown: the decision "${decision}" is none of ${DECISIONS.join(', ')}`);
-  const line = { schema: SHOWN_SCHEMA, at, session, tool, call, template, subject, decision, sha256: hash, reason };
+  const line = { schema: SHOWN_SCHEMA, at, session, tool, call, template, subject, decision, sha256: hash, reason,
+    ...Object.fromEntries(Object.entries({ board, yours, dropped }).filter(([, value]) => value !== undefined)) };
   appendRecord(file, line, fileSystem);
   return line;
 }
@@ -110,10 +111,36 @@ const FIELDS = 'fields: ';
 const UNKNOWN = 'fields unknown: ';
 
 /** Records a write of the summary at `at`: `fields`, the top-level fields it carried, or `unreadable`, why they are
- * not known. Returns the line. */
-export function recordSummary(file, { at, session, call, fields = [], unreadable = null }, fileSystem = fs) {
+ * not known; `board`, the artifact written to; `yours`, the list it left (`yoursAfter` of ./template-gate.mjs: an
+ * array, or `null` when not known), and `dropped`, the `{ item, reason }` each item that left it was given, both left
+ * off the line when the write did not touch it. Returns the line. */
+export function recordSummary(file, { at, session, call, fields = [], unreadable = null, board = null, yours, dropped }, fileSystem = fs) {
   const reason = unreadable === null ? `${FIELDS}${JSON.stringify(fields)}` : `${UNKNOWN}${unreadable}`;
-  return recordShown(file, { at, session, tool: 'ArtifactData', call, subject: SUMMARY_SUBJECT, decision: 'shown', reason }, fileSystem);
+  return recordShown(file, { at, session, tool: 'ArtifactData', call, subject: SUMMARY_SUBJECT, decision: 'shown', reason, board, yours, dropped }, fileSystem);
+}
+
+/** The board an ArtifactData `url` names, as the summary's record keys it: `artifact:<id>` for a claude.ai artifact
+ * link of either shape (`/artifact/<id>`, `/code/artifact/<id>`), whatever follows the id; any other string without
+ * its query, fragment and trailing slash; `null` for no string. One board spelt two ways is one baseline (the verifier
+ * on 7c4f91fd..86a1becb). */
+export function boardKey(url) {
+  if (typeof url !== 'string') return null;
+  const id = /\/artifact\/([^/?#]+)/.exec(url)?.[1];
+  return id === undefined ? url.replace(/[?#].*$/, '').replace(/\/+$/, '') : `artifact:${id}`;
+}
+
+/** The `yours` of the last summary write to the artifact `board` in `lines` that knew it; `null` when only writes
+ * that left it not known are there, `undefined` when no write said it. A write that left it not known is passed over
+ * for a list known before it, so the next write is held to that list rather than to nothing (the reliability lens on
+ * 36bde347): what that write took from it asks its reason again. A board none of whose lines says it reads the lines
+ * that name no board, as recorded before each line named its board. */
+export function lastYours(lines, board = null) {
+  const said = lines.filter((one) => isSummaryWrite(one) && Object.hasOwn(one, 'yours'));
+  // A line's board read as `boardKey` reads it, so a line written with the link as it came is the same board (Codex on a253097f).
+  const own = said.filter((one) => boardKey(one.board) === board);
+  const these = own.length > 0 || board === null ? own : said.filter((one) => boardKey(one.board) === null);
+  if (these.length === 0) return undefined;
+  return these.findLast((one) => Array.isArray(one.yours))?.yours ?? null;
 }
 
 /** Whether a line of the shown record is a write of the summary, as `recordSummary` writes it. */

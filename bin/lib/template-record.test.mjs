@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  RENDERED_SCHEMA, SHOWN_SCHEMA, SUMMARY_SUBJECT, appendRecord, isSummaryWrite, normalText, readRecord, recordRendered,
+  RENDERED_SCHEMA, SHOWN_SCHEMA, SUMMARY_SUBJECT, appendRecord, boardKey, isSummaryWrite, lastYours, normalText, readRecord, recordRendered,
   recordShown, recordSummary, renderedFile, shownFile, summaryContent,
 } from './template-record.mjs';
 
@@ -98,6 +98,37 @@ test('recordSummary writes a shown line of board/summary with the fields it carr
     assert.equal(summaryContent(recordSummary(file, { at: '2026-10-31T04:00:00.000Z', session: 's', call: 'c4', fields: ['status'] })), true);
     assert.equal(isSummaryWrite({ schema: SHOWN_SCHEMA, tool: 'Artifact', subject: SUMMARY_SUBJECT, template: null, decision: 'shown' }), false);
     assert.equal(summaryContent({ ...content, reason: 'fields: now' }), false, 'a reason recordSummary did not write is no content');
+  });
+});
+
+// The directives audit, C4 (odd/tasks/audit-cement.md, spec 6): the line keeps the yours a write left, which the gate
+// holds the next write to.
+test('recordSummary keeps the yours a write left, and lastYours reads the last line that says it', () => {
+  scratch((dir) => {
+    const file = path.join(dir, 's.jsonl');
+    assert.equal(lastYours([]), undefined, 'no list recorded');
+    const listed = recordSummary(file, { at: '2026-10-31T01:00:00.000Z', session: 's', call: 'c1', fields: ['yours'], yours: ['a', 'b'] });
+    const untouched = recordSummary(file, { at: '2026-10-31T02:00:00.000Z', session: 's', call: 'c2', fields: ['now'] });
+    assert.deepEqual(listed.yours, ['a', 'b']);
+    assert.equal(Object.hasOwn(untouched, 'yours'), false, 'a write that did not touch it says nothing of it');
+    assert.equal(summaryContent(listed), false, 'the reason is unchanged');
+    assert.deepEqual(lastYours(readRecord(file, SHOWN_SCHEMA)), ['a', 'b']);
+    recordSummary(file, { at: '2026-10-31T03:00:00.000Z', session: 's', call: 'c3', fields: ['yours'], yours: null });
+    assert.deepEqual(lastYours(readRecord(file, SHOWN_SCHEMA)), ['a', 'b'], 'a list not known is no baseline: the last known one stands');
+    recordShown(file, { at: '2026-10-31T04:00:00.000Z', session: 's', tool: 'ArtifactData', subject: SUMMARY_SUBJECT, decision: 'refused', reason: 'x', yours: [] });
+    assert.deepEqual(lastYours(readRecord(file, SHOWN_SCHEMA)), ['a', 'b'], 'a refused write is no write');
+    recordSummary(file, { at: '2026-10-31T05:00:00.000Z', session: 's', call: 'c5', board: 'u', yours: ['c'], dropped: [{ item: 'a', reason: 'merged as 96ce3c9' }] });
+    assert.deepEqual(lastYours(readRecord(file, SHOWN_SCHEMA), 'u'), ['c'], 'each board its own');
+    assert.deepEqual(lastYours(readRecord(file, SHOWN_SCHEMA)), ['a', 'b']);
+    // The lenses on b46b65ac: a board none of whose lines says it reads the lines that name none, and a board whose only
+    // write left it not known is not known, not new.
+    assert.deepEqual(lastYours(readRecord(file, SHOWN_SCHEMA), 'w'), ['a', 'b']);
+    recordSummary(file, { at: '2026-10-31T06:00:00.000Z', session: 's', call: 'c6', board: 'v', yours: null });
+    assert.equal(lastYours(readRecord(file, SHOWN_SCHEMA), 'v'), null);
+    // Codex on a253097f: a line that kept the link as it came is the board its key names.
+    recordSummary(file, { at: '2026-10-31T07:00:00.000Z', session: 's', call: 'c7', board: 'https://claude.ai/code/artifact/abc/', yours: ['k'] });
+    assert.deepEqual(lastYours(readRecord(file, SHOWN_SCHEMA), boardKey('https://claude.ai/artifact/abc')), ['k']);
+    assert.deepEqual(readRecord(file, SHOWN_SCHEMA).find((line) => line.call === 'c5').dropped, [{ item: 'a', reason: 'merged as 96ce3c9' }]);
   });
 });
 

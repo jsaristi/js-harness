@@ -279,6 +279,62 @@ test('gate --shown records a summary file it cannot read as fields unknown, and 
   assert.equal(fs.existsSync(shownFile(off.home, 'p')), false);
 });
 
+// The directives audit, C4 (odd/tasks/audit-cement.md, spec 6): an item leaves the board's yours only with a reason.
+test('gate --hook refuses a summary write that drops an item of yours with no yoursDropped reason, and --shown keeps the list it left', (t) => {
+  const { root, home, hook, done } = gateScratch();
+  t.after(done);
+  const pre = (call, input) => hook('--hook', { ...summaryUpdate(call, {}), hook_event_name: 'PreToolUse', tool_input: { url: 'u', collection: 'board', doc_id: 'summary', ...input } });
+  const post = (call, input) => hook('--shown', { ...summaryUpdate(call, {}), tool_input: { url: 'u', collection: 'board', doc_id: 'summary', ...input } });
+  const both = (call, input) => {
+    const answer = pre(call, input);
+    if (answer.out === '{}') post(call, input);
+    return answer;
+  };
+  assert.equal(both('y1', { action: 'update', data: { yours: ['URGENTE · Revisa el PR 867', 'Elige el nombre'] } }).out, '{}', 'no list before it');
+  assert.deepEqual(shownLines(home).at(-1).yours, ['URGENTE · Revisa el PR 867', 'Elige el nombre']);
+  assert.equal(both('y2', { action: 'update', data: { now: 'x' } }).out, '{}', 'yours untouched');
+  assert.equal(Object.hasOwn(shownLines(home).at(-1), 'yours'), false);
+  const refused = JSON.parse(pre('y3', { action: 'update', data: { yours: ['Elige el nombre'] } }).out).hookSpecificOutput;
+  assert.equal(refused.permissionDecision, 'deny');
+  assert.match(refused.permissionDecisionReason, /"Revisa el PR 867"/);
+  assert.match(refused.permissionDecisionReason, /yoursDropped: \[\{ item, reason \}\]/);
+  assert.deepEqual([shownLines(home).at(-1).decision, shownLines(home).at(-1).call], ['refused', 'y3']);
+  fs.writeFileSync(path.join(root, 'summary.json'), JSON.stringify({ yours: ['Elige el nombre'], yoursDropped: [{ item: 'Revisa el PR 867', reason: 'merged as 96ce3c9' }] }));
+  assert.equal(both('y4', { action: 'set', file_path: 'summary.json' }).out, '{}', 'a reason in a file the write sends');
+  assert.deepEqual(shownLines(home).at(-1).yours, ['Elige el nombre']);
+  assert.equal(JSON.parse(pre('y5', { action: 'delete' }).out).hookSpecificOutput.permissionDecision, 'deny', 'a delete drops all');
+  // What cannot be known goes through, recorded unchecked: a file it cannot read, then the list that write left.
+  const unread = both('y6', { action: 'update', file_path: 'gone.json' });
+  assert.equal(unread.out, '{}');
+  assert.match(unread.err, /cannot read gone\.json.*unchecked/);
+  assert.deepEqual(shownLines(home).slice(-2).map((line) => [line.decision, line.yours]), [['unchecked', undefined], ['shown', null]]);
+  // The reliability lens on 36bde347: a list not known is no baseline; the last known one holds the next write.
+  assert.equal(JSON.parse(pre('y7', { action: 'update', data: { yours: [] } }).out).hookSpecificOutput.permissionDecision, 'deny');
+  assert.match(shownLines(home).at(-1).reason, /"Elige el nombre"/);
+  // The verifier on 7c4f91fd: a summary write it could not judge is no page or question unchecked, and is counted apart.
+  const report = JSON.parse(call(['shown', '--json'], { root, home, slug: 'p', now: GATE_NOW }).out);
+  assert.deepEqual([report.unchecked, report.summaryUnchecked], [0, 1]);
+  assert.match(call(['shown'], { root, home, slug: 'p', now: GATE_NOW }).out, /board\/summary: 1 write unchecked/);
+});
+
+test('gate --hook holds each artifact\'s board/summary to its own yours, and --shown keeps the reasons given', (t) => {
+  const { home, hook, done } = gateScratch();
+  t.after(done);
+  const write = (mode, call, url, data) => hook(mode, { ...summaryUpdate(call, {}), hook_event_name: mode === '--hook' ? 'PreToolUse' : 'PostToolUse', tool_input: { action: 'update', url, collection: 'board', doc_id: 'summary', data } });
+  write('--shown', 'b1', 'https://claude.ai/artifact/board', { yours: ['Revisa el PR 867'] });
+  write('--shown', 'b2', 'https://claude.ai/artifact/test', { yours: [] });
+  assert.equal(write('--hook', 'b3', 'https://claude.ai/artifact/test', { yours: [] }).out, '{}', 'another board is held to its own list');
+  assert.equal(JSON.parse(write('--hook', 'b4', 'https://claude.ai/artifact/board', { yours: [] }).out).hookSpecificOutput.permissionDecision, 'deny');
+  // The verifier on 7c4f91fd..86a1becb: another spelling of the same board's link is the same board.
+  for (const url of ['https://claude.ai/artifact/board/', 'https://claude.ai/artifact/board?x=1', 'https://claude.ai/code/artifact/board']) {
+    assert.equal(JSON.parse(write('--hook', 'b4s', url, { yours: [] }).out).hookSpecificOutput?.permissionDecision, 'deny', url);
+  }
+  const reasoned = { yours: [], yoursDropped: [{ item: 'Revisa el PR 867', reason: 'merged as 96ce3c9', extra: 'x' }] };
+  write('--shown', 'b5', 'https://claude.ai/artifact/board', reasoned);
+  const line = shownLines(home).at(-1);
+  assert.deepEqual([line.board, line.yours, line.dropped], ['artifact:board', [], [{ item: 'Revisa el PR 867', reason: 'merged as 96ce3c9' }]]);
+});
+
 test('gate --hook reads the nearest harness.json at or above the payload\'s folder, and answers {} where it does not turn templates on', (t) => {
   const { root, home, done } = gateScratch();
   t.after(done);
