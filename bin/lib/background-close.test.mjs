@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { appendRecord, backgroundLines, boardBackground, finishedHere, finishedOf, readRecord, recordFileOf, strandedDirOf } from './background.mjs';
-import { REMOVAL_WAIT_MS, closeAfterLand, closeFinished, closeFinishedIn, closedLines, finishedIn, keepUnkept, sharingSession } from './background-close.mjs';
+import { REMOVAL_WAIT_MS, closeAfterLand, closeFinished, closeFinishedIn, closedLines, finishedIn, keepUnkept, noGitFolder, sharingSession } from './background-close.mjs';
 import { NOTICE_SCHEMA, recordPath } from './channel.mjs';
 import { projectSlug } from './sessions.mjs';
 import { sameFolder } from './worktrees.mjs';
@@ -675,6 +675,23 @@ test('closeFinished closes nothing when git cannot list the worktrees', withWorl
 }));
 
 // Codex P1 on f71380ea: a session started or listed in the worktree with no worktree of its own also uses it.
+// Codex P1 on 6e243065: existsSync says false for a gitdir it may not reach, so only a confirmed absence counts.
+test('noGitFolder holds a folder with no .git, or a .git file whose gitdir is confirmed gone, and nothing else', () => {
+  const err = (code) => Object.assign(new Error(code), { code });
+  const io = ({ dotGit = 'gitdir: ../admin\n', admin = null } = {}) => ({
+    lstatSync: () => { if (dotGit === null) throw err('ENOENT'); return { isFile: () => dotGit !== 'dir' }; },
+    readFileSync: () => dotGit,
+    statSync: () => { if (admin) throw err(admin); return {}; },
+  });
+  assert.equal(noGitFolder('/w', io({ dotGit: null })), true, 'no .git');
+  assert.equal(noGitFolder('/w', io({ admin: 'ENOENT' })), true, 'its gitdir is gone');
+  assert.equal(noGitFolder('/w', io({ admin: 'EACCES' })), false, 'a gitdir it may not reach is still there');
+  assert.equal(noGitFolder('/w', io({ admin: 'EPERM' })), false);
+  assert.equal(noGitFolder('/w', io()), false, 'its gitdir is there');
+  assert.equal(noGitFolder('/w', io({ dotGit: 'dir' })), false, "a .git folder is git's");
+  assert.equal(noGitFolder('/w', io({ dotGit: 'garbage\n' })), false, 'a .git file with no gitdir');
+});
+
 test('sharingSession names a session that works in the worktree, with a worktree of its own or only a folder in it', () => {
   const root = path.join(os.tmpdir(), 'proj');
   const tree = path.join(root, '.claude', 'worktrees', 'thing');

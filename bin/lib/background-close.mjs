@@ -360,12 +360,20 @@ const OWN_REFS = /^refs\/(worktree|bisect|rewritten)\//;
 
 /** Whether git keeps nothing of the folder `worktree`'s own: it has no `.git`, or a `.git` file whose gitdir is gone.
  * A `.git` folder, or one it cannot read, is git's. */
-function noGitFolder(worktree) {
+export function noGitFolder(worktree, io = fs) {
   const dotGit = path.join(worktree, '.git');
+  let gitdir;
   try {
-    if (!fs.lstatSync(dotGit).isFile()) return false;
-    const gitdir = /^gitdir:\s*(.+?)\s*$/m.exec(fs.readFileSync(dotGit, 'utf8'));
-    return gitdir !== null && !fs.existsSync(path.resolve(worktree, gitdir[1]));
+    if (!io.lstatSync(dotGit).isFile()) return false;
+    gitdir = /^gitdir:\s*(.+?)\s*$/m.exec(io.readFileSync(dotGit, 'utf8'));
+    if (gitdir === null) return false;
+  } catch (err) {
+    return err.code === 'ENOENT';
+  }
+  // Only a confirmed absence: existsSync says false too for a folder it may not reach (Codex P1 on 6e243065).
+  try {
+    io.statSync(path.resolve(worktree, gitdir[1]));
+    return false;
   } catch (err) {
     return err.code === 'ENOENT';
   }
