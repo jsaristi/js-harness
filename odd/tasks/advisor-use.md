@@ -7,7 +7,7 @@ proposal, through the double review and then the lead as a question; nothing is 
 `node --test`.
 
 ## State
-2026-11-14: slice 1 (hook, test, entries, HOOK_ENTRY_LIMIT 15 -> 17, SPEC capability, docs) is staged, not committed: the pre-commit refuses it on two registers, rules-sources.test (the notice must be a cut text source with spans in bin/lib/rules-coverage-data.mjs, as the template gate's GATE_SAYS) and the README section per command (### js-harness advisor-gate after ### js-harness template). Both files asked of the lead at 07:51Z. Then: commit, rebase on main 236f720, tell the lead the manifest change is committed, Codex and lens reviews, slice 2 (the report: added Fable tokens a day against 2.4M, labelled as calls the warnings prompted). Choices under the yes in L9; P4a moved to JH 198 (L10). Closing steps before ready (auto-archive on PR close).
+2026-11-14 08:15Z: slice 1 committed (1de6ed65: hook, tests, entries, HOOK_ENTRY_LIMIT 15 -> 17, the notice as a cut text source in bin/lib/advisor-gate.mjs, its record in RECORDS and SPEC, README section); main 236f720 merged in (af986f03); the lead told. Codex review running (codex-review --base cc546781, 3 parts); next the lenses (lens-review --base cc546781), then push and PR, then slice 2: `advisor-gate report` (decisions by day and act; added Fable tokens a day, the advisor_message input tokens of calls following a flag in its stretch, against 2.4M, labelled as calls the warnings prompted). Choices under the yes in L9; P4a moved to JH 198 (L10). Closing steps before ready (auto-archive on PR close); ready with --pr.
 
 ## Goal
 Each of the lead, the work sessions and the sub-agents that has the advisor consults it (a call with a result, made
