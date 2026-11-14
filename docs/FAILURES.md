@@ -49,11 +49,12 @@ depend on `sessions --quote` exiting 0.
 The Claude app stopped or archived sessions on its own, so a paid run was cut and a worktree lost a file no branch
 kept, with no word to the harness.
 - Class: unseen-state
-- Seen: 2026-11-13 — relief file, line 2747, and the app's log `Claude/logs/main.log`, lines 7747-7935 and 7760
-  (claimed; the lead's reading, odd/tasks/audit-cement.md, spec 8) — from 17:57 to 19:09 local (UTC-05:00) the lead's
-  turns failed and JH 193's batch-2 stopped (current-2 at turn 22 of 30, its third runs never started) on an account
-  subscription error (HTTP 403, "payment is past due"); after it the app's auto-archive (`auto_archive_on_pr_close`)
-  archived sessions with a merged pull request bound, and deleted one untracked 34,069-byte file in
+- Seen: 2026-11-13 — relief file, line 2747, and the app's log `C:\Users\Oficina\AppData\Local\Claude\logs\main.log`,
+  lines 7747-7935 and 7760 (claimed; the lead's reading, odd/tasks/audit-cement.md, spec 8) — from 17:57 to 19:09
+  local (UTC-05:00) the lead's turns failed on an account subscription error (HTTP 403, "payment is past due"); at
+  17:58:16 the app's auto-archive (`auto_archive_on_pr_close`) archived JH 193 "PR merged" while its paid batch-2 ran
+  (current-2 stopped at turn 22 of 30, its third runs never started; the spec named the 403 as the cause, the relief
+  line and the lead's auto-archive draft name the archive); it archived the lead at 20:10:12 the same way, and deleted one untracked 34,069-byte file in
   `rule-lead-effort-split-aac740`. `sessions stop --remove-worktree` now copies what no branch keeps to
   `~/.js-harness/kept/`, which `uninstall everything` removes with the rest of the folder, or refuses (JH 198, T4);
   the app's `archive_session` stays outside it, and whether auto-archive stays on is his decision
@@ -2087,11 +2088,11 @@ Sub-agents launched with no model ran on their session's model, the scarcest one
 sub-agent name no short name for the home's model.
 - Class: rule-not-acting
 - Seen: 2026-11-13 — relief file, line 2731 (the lead's own) — the senior's nine audit readers, launched at 20:13Z with
-  no model, ran on claude-fable-5-2 and spent about 80% of that afternoon's weighted Fable use (cache writes 2.72M,
-  cache reads 11.6M, output 688k); the guard refused `opus`, since `rule:session-model` declared no alias
-  (lead-audit-report.md, "Fuera de regla hoy"). Since JH 198's T1, `opus` is that rule's alias
-- Control: check — bin/lib/guard.test.mjs — "model, on its short name where it has one, or on none" — since
-  2026-11-14
+  no model, ran on claude-fable-5-2 (cache writes 2.72M, cache reads 11.6M, output 688k); with the senior itself they
+  made about 80% of that afternoon's weighted Fable use. The guard refused `opus`, since `rule:session-model` declared
+  no alias (lead-audit-report.md, "Fuera de regla hoy"). Since JH 198's T1, `opus` is that rule's alias, so a senior
+  can name it; nothing yet refuses a sub-agent that names no model in a session on Fable (the relief line's candidate
+  check), so no control holds it
 
 ### taskstop-leaves-work-alive
 Stopping a background task of the host ends its shell and not what that shell started, so the work
@@ -2305,10 +2306,9 @@ names something that does not exist.
 The independent verifier of a high-risk change ran before the change's last fixes, so the head that shipped was
 never verified, and the ready notice named only Codex and the lenses.
 - Class: delivery
-- Seen: 2026-11-14 — odd/tasks/audit-cement.md, L22 (JH 198's own) — pull request 867 (`sessions stop
-  --remove-worktree`): the verifier ran before the round that fixed Codex's last P1, and the lead caught it
-- Seen: 2026-11-14 — odd/tasks/audit-cement.md, L22 (JH 198's own) — pull request 868 (the board's `yours` gate): the
-  same, and the lead held the land until a verifier ran on the range ending at the head that shipped. Since then the
+- Seen: 2026-11-14 — odd/tasks/audit-cement.md, L22 (JH 198's own) — twice: on pull request 867 (`sessions stop
+  --remove-worktree`) the verifier ran before the round that fixed Codex's last P1, and on pull request 868 (the
+  board's `yours` gate) the same; the lead caught both and held 868 until a verifier ran on the range ending at the head that shipped. Since then the
   verifier runs last on that range and the ready line carries its result; its proof is each ready notice of a guard
   naming a verifier range that ends at the pull request's head
 
