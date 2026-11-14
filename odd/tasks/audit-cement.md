@@ -4,7 +4,7 @@ Branch: worktree-audit-cement (the document), then one branch per slice from ori
 Delivery: ask-on-risk. Tests: `node --test`. Opened 2026-11-13 by JH 198 (Opus 5.5, medium) from the lead's brief.
 
 ## State
-T1-T6 landed (PRs 863-865, 867-869; main 4187cb1). NOW: the 867 follow-up is PR 873 (fix/audit-cement-followup, head after 5f0146e6), ready sent; verifier 4187cb1..45143a4a nothing blocking (L29); the head adds docs-only commits. Probe: git prints the real path from a junction cwd. Next: T7 only after 873 lands, from main merged in (manifest.mjs:157 and :202 are JH 200s), then T8, then closed. Wait: one js-harness wait --notice-to 198 armed after the ready.
+T1-T6 and the 867 follow-up landed (PRs 863-865, 867-869, 873; main 83678e0). NOW: T7 on docs/audit-cement-skill from 83678e0: spec 9, bin/lib/manifest.mjs, the orchestrator skill gets a senior section (A2b) and puts the closing steps before ready (A4); lines 157 and 202 stay JH 200s until its slice 2 lands (merge main before T7s commit). T7 is docs in a skill: Codex and lenses (manifest.mjs is code), no verifier unless a guard is touched. Then T8 (progress baseline share, its own PR), then closed (advisor, then notify closed with a docs/sessions summary). Wait: one js-harness wait --notice-to 198 in the background.
 
 ## Goal
 Every correction the audit and its two blind reviews found is fixed where a check can hold it, and each of the
