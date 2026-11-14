@@ -713,6 +713,7 @@ export const RULES = [
     "scope": "repository",
     "since": "2026-11-12",
     "value": "claude-opus-5-5",
+    "alias": "opus",
     "was": [
       { "value": "claude-fable-5-2", "until": "2026-11-12" },
       { "value": "claude-opus-5-5", "until": "2026-11-10" }
