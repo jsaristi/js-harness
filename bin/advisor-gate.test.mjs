@@ -1,5 +1,6 @@
 // Tests of `advisor-gate` (bin/advisor-gate.mjs): which acts it gates, how it reads policy R's stretch from a
-// transcript, what it records, and that the warning week never refuses (odd/tasks/advisor-use.md, P1, P2, T3).
+// transcript, what it records, and that an uncovered act is refused while a sub-agent's end is not (odd/tasks/advisor-use.md, P1, P2, T3,
+// his answer to question 285).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -111,15 +112,19 @@ test('an act with an advisor call in its stretch is covered and gets no notice',
   assert.equal(decisions(home)[0].act, 'question');
 });
 
-test('an act with no call in its stretch is flagged with a notice and let through (the warning week)', () => {
+test('an act with no call in its stretch is flagged and refused, with how to retry (his answer to question 285)', () => {
   const { home, project } = scratch();
   const t = path.join(home, 'projects', 'p', 'lead.jsonl');
   writeTranscript(t, [advisorCall(), his(), toolCall()]);
   const r = run(['--hook'], { ...bash('js-harness merge-queue --land 7'), cwd: project, session_id: 's1', tool_use_id: 'tu-land', transcript_path: t }, home);
   assert.equal(r.answer.hookSpecificOutput.hookEventName, 'PreToolUse');
-  assert.equal(r.answer.hookSpecificOutput.permissionDecision, undefined, 'the warning week never refuses');
-  assert.match(r.answer.hookSpecificOutput.additionalContext, /advisor/);
-  assert.match(r.answer.hookSpecificOutput.additionalContext, /alone, in a response of its own/);
+  assert.equal(r.answer.hookSpecificOutput.permissionDecision, 'deny');
+  assert.equal(r.answer.hookSpecificOutput.additionalContext, undefined, 'the reason carries the notice');
+  assert.match(r.answer.hookSpecificOutput.permissionDecisionReason, /advisor/);
+  assert.match(r.answer.hookSpecificOutput.permissionDecisionReason, /alone, in a response of its own/);
+  assert.match(r.answer.hookSpecificOutput.permissionDecisionReason, /refused/);
+  assert.match(r.answer.hookSpecificOutput.permissionDecisionReason, /retry/);
+  assert.doesNotMatch(r.answer.hookSpecificOutput.permissionDecisionReason, /warning week/);
   assert.equal(decisions(home)[0].decision, 'flagged');
   assert.equal(decisions(home)[0].transcript, t, 'the report reads the flag\'s transcript again');
   assert.equal(decisions(home)[0].toolUseId, 'tu-land', 'the report matches the act by its tool call');
@@ -229,9 +234,12 @@ test('a sub-agent\'s act is read from its own transcript', () => {
   run(['--hook'], { ...bash('js-harness notify --to orchestrator --kind ready --pr 1 "r"'), cwd: project, session_id: 'main', agent_id: 'a1', agent_type: 'general-purpose', transcript_path: main }, home);
   assert.equal(decisions(home)[0].decision, 'covered');
   assert.equal(decisions(home)[0].agent, 'a1');
+  writeTranscript(path.join(home, 'projects', 'p', 'main', 'subagents', 'agent-a1.jsonl'), [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  const r = run(['--hook'], { ...bash('js-harness notify --to orchestrator --kind ready --pr 1 "r"'), cwd: project, session_id: 'main', agent_id: 'a1', agent_type: 'general-purpose', transcript_path: main }, home);
+  assert.equal(r.answer.hookSpecificOutput.permissionDecision, 'deny', 'a sub-agent act is refused as a session act is');
 });
 
-test('SubagentStop never blocks in the warning week; a second stop is recorded as such', () => {
+test('SubagentStop never blocks (outside his yes to 285); a second stop is recorded as such', () => {
   const { home, project } = scratch();
   const t = path.join(home, 'projects', 'p', 'agent.jsonl');
   writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
@@ -326,7 +334,7 @@ test('report: decisions by day, and the Fable input tokens of the calls with a r
   const out = [];
   assert.equal(advisorGateMain(['report'], { stdout: (s) => out.push(s), stderr: () => {}, home }), 0);
   assert.match(out.join(''), /2,400,000/);
-  assert.match(out.join(''), /calls the warnings prompted/);
+  assert.match(out.join(''), /calls the flags prompted/);
   assert.match(out.join(''), /1 flag\(s\) recorded no transcript/);
 });
 
@@ -360,4 +368,32 @@ test('report: reconciles the decisions with the gated acts found in the transcri
   advisorGateMain(['report'], { stdout: (s) => out.push(s), stderr: () => {}, home });
   assert.match(out.join(''), /acts found in the transcripts: 3, with a decision: 2, with none: 1 \(33%\)/);
   assert.match(out.join(''), /let through unchecked: 1 of 4 decisions \(25%\)/);
+});
+
+test('each of the five acts is refused when uncovered, by a session and by a sub-agent (his yes to 285)', () => {
+  const { home, project } = scratch();
+  const acts = [
+    ['land', bash('js-harness merge-queue --land 7')],
+    ['question', { tool_name: 'AskUserQuestion', tool_input: {} }],
+    ['question', bash('js-harness notify --to orchestrator --kind question "q"')],
+    ['done', bash('js-harness notify --to orchestrator --kind ready --pr 1 "r"')],
+    ['done', bash('js-harness notify --to orchestrator --kind closed --summary s.md "c"')],
+    ['session', { tool_name: 'mcp__ccd_session__start_session', tool_input: {} }],
+    ['session', bash('js-harness sessions start --title "x"')],
+    ['plan', { tool_name: 'ExitPlanMode', tool_input: {} }],
+    ['plan', { tool_name: 'Write', tool_input: { file_path: path.join(project, 'odd', 'tasks', 'new.md'), content: '' } }],
+  ];
+  const main = path.join(home, 'projects', 'p', 'main.jsonl');
+  writeTranscript(main, [advisorCall(), his(), toolCall()]);
+  writeTranscript(path.join(home, 'projects', 'p', 'main', 'subagents', 'agent-a3.jsonl'), [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  for (const [act, call] of acts) {
+    for (const agent of [{}, { agent_id: 'a3', agent_type: 'general-purpose' }]) {
+      const r = run(['--hook'], { ...call, cwd: project, session_id: 'main', transcript_path: main, ...agent }, home);
+      assert.equal(r.answer?.hookSpecificOutput?.permissionDecision, 'deny', `${act} by ${agent.agent_id ?? 'the session'}`);
+      assert.match(r.answer.hookSpecificOutput.permissionDecisionReason, new RegExp(`act \\(${act}\\)`));
+    }
+  }
+  const flagged = decisions(home).filter((d) => d.decision === 'flagged' && d.mode === 'refuse');
+  assert.equal(flagged.length, acts.length * 2);
+  assert.equal(flagged.filter((d) => d.agent === 'a3').length, acts.length, 'a sub-agent refusal is recorded as its own');
 });
