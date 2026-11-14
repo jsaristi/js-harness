@@ -194,14 +194,15 @@ function updateWords(reviewed, now) {
 /** The step of a review that turns Remote Control back on: a restart of the app turns it off. Only where the rule
  * remote-control-yes is declared (`projectData`, the text of the project's rules file), his standing yes of 2026-10-15
  * (odd/tasks/host-update-check.md, L9), is it turned on without asking; anywhere else the user is asked first (his
- * answer Q88, C-shared-5). */
+ * answer Q88, C-shared-5). Only the orchestrator gets it back, by his words of 2026-11-14 (odd/tasks/remote-control-lead-only.md,
+ * spec 3): he talks only to the lead, and `sessions start` gives the sessions it tasks none. */
 function remoteControlStep(projectData) {
-  const restart = 'a session that has run no turn since the restart refuses it, so send it a message first';
+  const restart = 'the sessions it tasks have none; an orchestrator that has run no turn since the restart refuses it, so send it a message first';
   const rule = ruleHere('remote-control-yes', undefined, projectData);
   if (Object.hasOwn(rule, 'value')) {
-    return `turn Remote Control back on in each work session without asking the user (rule remote-control-yes: ${rule.value}); ${restart}`;
+    return `turn Remote Control back on in the orchestrator session alone, without asking the user (rule remote-control-yes: ${rule.value}): ${restart}`;
   }
-  return `ask the user whether to turn Remote Control back on in each work session, and turn it on only where they say yes; ${restart}`;
+  return `ask the user whether to turn Remote Control back on in the orchestrator session, and turn it on only if they say yes: ${restart}`;
 }
 
 /** `{ row, record }`: the `host-update` row of `doctor` for the versions read and the reviewed ones (the record's
