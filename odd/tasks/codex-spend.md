@@ -1,9 +1,8 @@
 # codex-spend: no Codex waste, no review weakened
 
 ## State
-v2 after the Claude read (L9): spec 1 keeps every check and runs it in the snapshot, spec 3 reviews only the gap,
-spec 4 became a measure, spec 7 always ends with a Codex read. Next: a confirming Claude read of v2, then Codex on the
-version it passed; then T1, T2, T3, T5, and T4 last, after JH 198's T6 lands. Q1's draft after T1.
+v3 after two Claude reads (L9, L10). Next: the Codex read of v3 (the third read, the cap), its cost told to the
+lead first; then T1, T2, T3, T5, and T4 last, after JH 198's T6 lands. Q1's draft after T1.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -117,16 +116,19 @@ se este gastando por esto" (69918425:6293, queued).
    sweep runs at every run's start. The three checks that compared the live folder with `head` (after a part, after
    a merge turn, after the review) compare the snapshot instead, word for word in their refusals; the dirty-tree
    refusal at the start stays on the live folder. Finding paths are made relative to the snapshot, else to the live
-   root. A run whose `--cwd` is already a turn worktree makes none. In a turn of the gate lock (where Codex runs the
-   tests), when the live root holds a `node_modules` the snapshot lacks, the run reads the live folder as today and
-   says why. Proofs: a commit and an edit made in the live folder during a run leave the record written; a part that
-   passed is kept (existing behaviour, `keptPartFor`); a snapshot whose removal fails is a warning and is swept by
-   the next run.
+   root. What the run reads before Codex starts (the range, the patch, the marks at `head`, the intent of `--doc`
+   or `--request`) is read as today, from git or the live folder at the start; the intent stays in a kept part's
+   key. A run whose `--cwd` is already a turn worktree makes none. In a turn of the gate lock (where Codex runs the
+   tests), when the live root's `package.json` declares dependencies and its `node_modules` is not empty, the run
+   reads the live folder exactly as today, the three checks on the live folder, and says why. Proofs: a commit and
+   an edit made in the live folder during a run leave the record written; a part that passed is kept (existing
+   behaviour, `keptPartFor`); a snapshot whose removal fails is a warning and is swept by the next run.
 2. When the code commits no record covers all lie on the first-parent line below a merge of the default branch at
    HEAD, the run reviews the gap alone, `<oldest uncovered>^..<newest uncovered>`, as a turn in a worktree at the
    newest uncovered commit, with `mergeTurn`'s guards (the gap's start is a review or a recheck the records allow,
-   the marks match at the turn and at HEAD, the review switch is on at the turn), then the merge by `mergeStart`, or
-   nothing for a merge that writes no line. Never the merge's whole diff with main.
+   the marks match at the turn and at HEAD, the review switch is on at the turn) and one more: no merge commit lies
+   inside the gap, else the range is taken as today. Then the merge by `mergeStart`, or nothing for a merge that
+   writes no line. Never the merge's whole diff with main.
 3. Where `merge-queue` leaves a PR out because it conflicts with main itself (GitHub's CONFLICTING answer, or a merge
    into the candidate while it is still main), its line names the fix: merge the default branch into the PR's
    branch. A conflict with an earlier PR of the batch says it waits for that land. `rules-reach`'s line is unchanged.
@@ -134,13 +136,18 @@ se este gastando por esto" (69918425:6293, queued).
    passed, or the version at the cap of three, blind to the Claude reader's answers; a read goes through `js-harness
    double-review read`, so it is recorded. Changed with `js-harness rules change double-review` on a `rule/` branch,
    quoting 6379, after JH 198's T6.
-5. `double-review read` runs the Claude reader; on findings it records the Claude read alone, marked as a sequenced
-   read, and stops; on none, or at the third read of the same material, it runs the Codex reader on the same copy
-   and writes one record of both once both have returned. The tally keeps sequenced reads apart.
+5. `double-review read` takes a required `--subject <key>` (the feature document's path, or the question's draft
+   name), constant across a proposal's versions, and refuses a read without it. It runs the Claude reader; on
+   findings it records the Claude read alone, marked as a sequenced read, and stops; on none, or when the records
+   already hold two reads of that subject, it runs the Codex reader on the same copy and writes one record of both
+   once both have returned. The tally keeps sequenced reads apart.
 6. `land-records` gives, for each landed PR, its Codex runs and input tokens over all its days, and what bought no
-   new reading: failed runs, `reviewed` runs no record names, and runs whose range held a code commit an earlier
-   record covered; plus Codex runs after a clean pass on the same branch (the measure of rounds) and tokens per
-   reviewed line. `codex-meter --per-pr` prints it with PRs 864-868 as the baseline.
+   new reading: failed runs, `reviewed` runs no record names, and re-reads: runs whose range held a code commit a
+   `reviewed` record written before the run covered, by `reviewCoverage` as the push counts it, leaving out remerge
+   runs, skip records and runs marked `--again` (if run lines cannot say `--again`, the report says so), with the
+   run count and the token sum apart, never a whole run's tokens called waste. Plus Codex runs after a clean pass
+   on the same first-parent line (the measure of rounds) and tokens per reviewed line. `codex-meter --per-pr` prints
+   it with PRs 864-868 as the baseline.
 
 ## Tasks
 - [ ] T1 (kind: build) spec 1 — `bin/codex-review.mjs`, `bin/lib/codex-review-turns.mjs` + tests — commit `fix(codex-review): read a snapshot of the head, not the live folder`
@@ -165,7 +172,7 @@ se este gastando por esto" (69918425:6293, queued).
   reviewed run with no record), PR 868 7 / 465,075. 2026-11-14 total 3,053,278 over 5 PRs, 610,656 a PR.
 - L4 2026-11-14, cause of the 435-line review, checked: not the merge alone. 1d982b3's recheck passed (09:32Z,
   215/215 lines, correct) but has no record (`grep '"head":"1d982b3' codex-reviews.jsonl` finds none); JH 198
-  edited its document inside that run (depth pass, item 2). So the push counted 1 of 5 code commits uncovered and
+  committed f983eab9 inside that run (depth pass, item 2; L9). So the push counted 1 of 5 code commits uncovered and
   printed base 6ba747e (main); `mergeStart` needs every commit up to the first parent recorded and returned null;
   `reviewStart` fell back to the given base because 6ba747e is not an ancestor of f71380e
   (`git merge-base --is-ancestor 6ba747e f71380e` exits 1). The merge of main was not needed for the land: PR 867
@@ -204,3 +211,12 @@ se este gastando por esto" (69918425:6293, queued).
   folded into spec 1's proofs; Done-when lists the tests T3 touches and a command that exits 0. Not taken: none.
   What made JH 198 merge main is inferred, not read whole: its state line said "merge origin/main in if 865
   landed", to open its PR on main after its stacked base landed; merge-queue would have retargeted it.
+- L10 2026-11-14T19:13Z, the confirming Claude read of v2 (same reader, sha256 caa752ef…, 229k Claude tokens, 2 min):
+  findings 1, 2, 4, 5, 8-12 fixed; one blocking for T4: reads of "the same material" could not be counted (the hash
+  and the copies' paths change each version), so the cap never fired; taken: spec 5 requires `--subject`. Should-fix
+  taken: the `node_modules` fallback triggers only when `package.json` declares dependencies and `node_modules` is
+  not empty (the main checkout has an empty one and declares none), and keeps today's checks on the live folder;
+  spec 2 refuses a gap holding a merge; spec 6's re-read class leaves out remerge runs, skip records and `--again`,
+  counted by `reviewCoverage` against earlier records, runs and tokens apart; spec 1 says what is read before Codex
+  starts; L4 says HEAD moved. Not taken: none. `double-review read --plan` puts a read at about 0.9M Codex tokens,
+  mostly cache, 1% of the weekly limit, against the 60-90k this document told the lead.
