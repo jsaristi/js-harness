@@ -239,3 +239,8 @@ jamas vuelva a suceder" (69918425:2679).
   ref whose commit no shared ref holds refuses), and `staged.patch` following `diff.external`, textconv or color
   (now `--no-ext-diff --no-textconv --no-color`). `uninstall everything` removes `kept/` with all of
   `~/.js-harness`: an explicit request, left as it is.
+- L12 2026-11-14 T4 round 3 on 4ee5ec61: Codex correct 0.88, no finding; verifier round 3: its three earlier findings
+  held fixed, one new and low, left: a commit made on a detached head and left behind by switching back to the branch
+  is pointed at only by the worktree's HEAD reflog, which goes with it. Git warned "leaving 1 commit behind" at the
+  switch, `git fsck --lost-found` finds it until gc prunes it, and refusing on every reflog entry no shared ref holds
+  would refuse every worktree after a rebase.
