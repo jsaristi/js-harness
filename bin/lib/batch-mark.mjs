@@ -76,16 +76,23 @@ export function markBatch(home, { cwd = process.cwd(), command = '', pid = proce
   };
 }
 
-/** The first living batch mark of `home`, as `{ pid, cwd, command, startedAt, batch: true }`, or `null`: none,
- * only stale ones, or none that can be read. */
-export function readBatch(home, { now = Date.now, fileSystem: io = fs } = {}) {
+/** Every living batch mark of `home`, each as `{ pid, cwd, command, startedAt, batch: true }`: none when there
+ * are only stale ones or none that can be read. Several batches can run at once, each in its own worktree, and
+ * the stall check must see them all (odd/tasks/audit-cement.md, spec 3). */
+export function readBatches(home, { now = Date.now, fileSystem: io = fs } = {}) {
+  const batches = [];
   for (const mark of marksOf(home, now, io)) {
     if (mark.stale) continue;
     try {
-      return { ...JSON.parse(io.readFileSync(mark.file, 'utf8')), batch: true };
+      batches.push({ ...JSON.parse(io.readFileSync(mark.file, 'utf8')), batch: true });
     } catch {
       // Torn, or removed since the look.
     }
   }
-  return null;
+  return batches;
+}
+
+/** The first living batch mark of `home` (`readBatches`), or `null`. */
+export function readBatch(home, options = {}) {
+  return readBatches(home, options)[0] ?? null;
 }

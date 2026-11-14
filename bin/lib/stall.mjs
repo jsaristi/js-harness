@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { OPENING_SCHEMA, openingsDir, readNotices } from './channel.mjs';
-import { readBatch } from './batch-mark.mjs';
+import { readBatches } from './batch-mark.mjs';
 import { readGateLog } from './gate-log.mjs';
 import { roleOfTitle } from './sessions.mjs';
 
@@ -205,6 +205,6 @@ export function readStalled({ home, slug, now, limitMs, windowMs, run = runGit, 
   if (noOpenings) unavailable.push(noOpenings);
   const log = readGateLog(home, { fileSystem: io });
   if (log.unavailable) unavailable.push(`the gate log (${log.dir}): ${log.unavailable.join(', ')}`);
-  const stalled = stalledSessions({ notices: record.notices, openings, readings: record.readings, gates: log.events, questions: record.questions ?? [], batches: [readBatch(home, { fileSystem: io })].filter(Boolean), commitAt: (worktree) => branchCommitAt(worktree, { run }), now, limitMs, windowMs });
+  const stalled = stalledSessions({ notices: record.notices, openings, readings: record.readings, gates: log.events, questions: record.questions ?? [], batches: readBatches(home, { now: () => now, fileSystem: io }), commitAt: (worktree) => branchCommitAt(worktree, { run }), now, limitMs, windowMs });
   return { stalled, unavailable };
 }

@@ -5,17 +5,14 @@ Delivery: ask-on-risk. Tests: `node --test`. Opened 2026-11-13 by JH 198 (Opus 5
 
 ## State
 The lead's OK is in (L3). T1 landed (PR 863, main 236f720); the installed copy still refuses `opus` until a
-`--refresh-copy`. T2 ready: PR 864 (`fix/audit-cement-guard`). T3: spec 4 committed (wait skips its own notices, `bin/wait.mjs`
-`noticeTo` `self`, commit after 0444…: see git log). Spec 3: committed (`fix(stall): …`); next T3's reviews (Codex and lenses over 0444b5de's child..HEAD of
-`fix/audit-cement-stall`, i.e. base c4990e93, and the verifier), push, ready. Its test was at the end of
-`bin/lib/stall.test.mjs`; implement in `stalledSessions` new params `batches` (`[{ cwd }]`, a cwd inside the session's
-`worktree` skips it) and `questions` (`record.questions` `[{ number, notice }]`: a question from the session with no
-`answer`/`withdrawn` notice naming its number skips it), pass `record.questions` and `readBatch(home)` from line ~200,
-then commit and T3's reviews. T3 in progress on `fix/audit-cement-stall`, stacked
-on T2 so the document never conflicts: spec 3 in `bin/lib/stall.mjs` (match a batch mark's cwd to the session's
-notice `worktree`; an open question the session recorded counts as waiting), spec 4 in `bin/wait.mjs` `noticeTo`
-(skip a notice whose `from.id` is the waiting session's own id). Next: T4 to T6, then T8; T7 waits for the lead's word
-that JH 196 landed. Spec 8's FAILURES lines go in T6, with the `stretch-not-opened` line.
+`--refresh-copy`. T2 ready: PR 864 (`fix/audit-cement-guard`). T3 on `fix/audit-cement-stall`, stacked on T2:
+spec 4 (8053d2d6, wait skips its own notices) and spec 3 (16b63f65, stall skips a session with a batch in its
+worktree or an open question it recorded). Codex on 16b63f65: P2, only the first live batch mark was read; lens
+reliability: readStalled's wiring had no test. Fixed in the next commit: `readBatches` in `bin/lib/batch-mark.mjs`
+(searched: `readBatch` returned the first mark only; `readBatch` now takes the first of it) and a readStalled test
+with two marks and a question. Next: Codex and lenses with base 16b63f65, push, PR on `fix/audit-cement-guard`,
+ready. Then T4 to T6, then T8; T7 waits for the lead's word that JH 196 landed. Spec 8's FAILURES lines go in T6,
+with the `stretch-not-opened` line.
 
 ## Goal
 Every correction the audit and its two blind reviews found is fixed where a check can hold it, and each of the

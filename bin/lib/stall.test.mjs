@@ -5,6 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { newNotice } from './channel.mjs';
+import { batchDir } from './batch-mark.mjs';
 import { branchCommitAt, readStalled, stalledSessions } from './stall.mjs';
 
 const NOW = Date.parse('2026-10-16T20:00:00.000Z');
@@ -209,4 +211,30 @@ test('a session running a batch in its worktree, or waiting on a question it rec
   assert.deepEqual(stalled({ notices: [...notices, asked], questions }), []);
   const answered = { at: ago(120), from: LEAD, to: { role: 'work', number: 19 }, kind: 'answer', text: 'main', question: 7 };
   assert.equal(stalled({ notices: [...notices, asked, answered], questions }).length, 1);
+});
+
+test('readStalled reads every live batch mark and the open questions of the record', (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'stall-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const slug = 'D--proj';
+  // Four sessions handed work 150 minutes ago, each quiet since its own note at 140, each in its own worktree.
+  const tree = (number) => `D:/wt/jh-${number}`;
+  const worker = (number) => ({ id: `${number}000000-0000-0000-0000-000000000000`, title: `JH ${number} · work` });
+  const lines = [];
+  for (const number of [19, 21, 22, 23]) {
+    lines.push(newNotice({ at: ago(150), from: LEAD, to: String(number), kind: 'note', text: 'yours' }));
+    lines.push(newNotice({ at: ago(140), from: worker(number), to: 'orchestrator', kind: 'note', text: 'on it', worktree: tree(number), branch: `feat/${number}` }));
+  }
+  // JH 22 asks a question nobody answered.
+  lines.push(newNotice({ at: ago(130), from: worker(22), to: 'orchestrator', kind: 'question', text: 'Which branch?', id: 'q', options: [{ label: 'main' }], waits: 'T2', worktree: tree(22) }));
+  fs.mkdirSync(path.join(home, '.js-harness', 'channel'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.js-harness', 'channel', `${slug}.jsonl`), lines.map((line) => JSON.stringify(line)).join('\n'));
+  // Two batches run at once, in JH 19's and JH 21's worktrees: both marks count, not only the first.
+  fs.mkdirSync(batchDir(home), { recursive: true });
+  for (const number of [19, 21]) fs.writeFileSync(path.join(batchDir(home), `batch-${number}-ab.json`), JSON.stringify({ pid: number, cwd: tree(number), command: 'evals', startedAt: ago(60) }));
+  const found = readStalled({ home, slug, now: Date.now(), limitMs: LIMIT, windowMs: Infinity, run: () => ({ status: 0, stdout: '' }) });
+  assert.deepEqual(found.unavailable, []);
+  // The check runs at the real clock, so the marks just written are live. Only JH 23, with no batch and no open
+  // question, is stalled.
+  assert.deepEqual(found.stalled.map((session) => session.number), [23]);
 });
