@@ -223,6 +223,7 @@ check said or before its answer was read.
   script and the gate's commit were joined by `;` in one command. The script threw on the feature
   document, and the commit ran with the roadmap change alone and a message saying the document closed.
   Commit `1f28794` wrote the document. The next tries were joined by `&&` and stopped where they failed
+- Seen: 2026-11-14 — odd/tasks/audit-cement.md, L30 — JH 198 put `git push` on the line after a `git commit` the pre-commit refused (manifest.mjs over its ceiling), so the push ran and sent only an earlier merge; no harm, the next steps were chained with `&&`
 - Control: check — bin/lib/chained-step-guard.test.mjs — "a push, a commit, a pull request, a land or a notice after a ;, a
   line break, || or & is refused, naming the step and the joiner" — since 2026-10-31
 - Was: protocol — bin/lib/protocols-skill.mjs — "Two steps share one command only when the second is conditional on
@@ -1712,6 +1713,7 @@ path.
 - Class: tool
 - Seen: 2026-10-10 — odd/tasks/practice-project.md:577-579 — `d639bdf` carries
   `D:js-harnesspractice`
+- Seen: 2026-11-14 — odd/tasks/audit-cement.md, L32 — JH 198 wrote two regexes of `bin/progress.mjs` through a shell heredoc and node script, which dropped their backslashes (`/^d{4}-d{2}-d{2}$/`); the new test failed, fixed with Edit
 
 ### scripted-turn-hung-lock
 A scripted measure run in a turn of the gate never returned, and it held the machine's lock while the

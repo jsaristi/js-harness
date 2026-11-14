@@ -456,11 +456,11 @@ check or an eval case ("After F8", directive coverage).
 ### Progress
 
 **Problem:** "Where are we" was answered by a model reading the roadmap and every feature document, which costs tokens and drifts; states written as prose could not be counted (`odd/tasks/progress-view.md`).
-**Requirement:** The plan and each feature document hold their steps as checkboxes, and a read-only command prints each phase and feature with its checked and pending steps and percentages. Its pace reads the default branch's first-parent history and prints, a day, the tasks closed, reopened, added and removed, counted by the same parsers as the map.
+**Requirement:** The plan and each feature document hold their steps as checkboxes, and a read-only command prints each phase and feature with its checked and pending steps and percentages. Its pace reads the default branch's first-parent history and prints, a day, the tasks closed, reopened, added and removed, counted by the same parsers as the map. Its baseline compares the plan at that branch's last commit before a given day with the plan now: the share of the steps open then that are closed, the steps added since and how much the plan grew (`odd/tasks/audit-cement.md`, spec 10).
 **Reason:** Progress is computed by a command, not reinterpreted by a model.
 **Proof:** `node --test bin/progress.test.mjs`, `node --test bin/lib/progress.test.mjs`
 **Discarded:** A published page. Editing checkboxes from the command.
-**Today:** `bin/progress.mjs`, `bin/lib/progress.mjs`, `bin/lib/progress-pace.mjs` (progress --pace), `js-harness progress`
+**Today:** `bin/progress.mjs`, `bin/lib/progress.mjs`, `bin/lib/progress-pace.mjs` (progress --pace and --baseline), `js-harness progress`
 
 ### The status report
 

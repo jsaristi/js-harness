@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compareSteps, dayKey, PACE_DAYS, paceLines, paceLogArgs, paceOf, paceRef, parsePaceLog, stepsOf, WEEK_DAYS, windowStart } from './progress-pace.mjs';
+import { baselineCommitArgs, baselineLines, baselineOf, compareSteps, dayKey, EMPTY_TREE_ARGS, PACE_DAYS, paceLines, paceLogArgs, paceOf, paceRef, parsePaceLog, parseTree, stepsOf, treeArgs, WEEK_DAYS, windowStart } from './progress-pace.mjs';
 
 const step = (text, done = false) => ({ text, done });
 
@@ -242,4 +242,55 @@ test('the week is said after the mean a day, with what waits while it is red whe
   assert.equal(paceLines({ ...quiet, branch: 'main', limit: 'a fix or a step of F8' }).at(-1), 'Last 7 days 2026-10-09 to 2026-10-15: closed 0  reopened 0  added 0  removed 0; the open steps did not grow: green');
   // A window of two days holds no whole week: the heading, two days, the totals and the mean, and no week line.
   assert.equal(paceLines({ ...paceOf({ commits: [], now: NOW, days: 2 }), branch: 'main' }).length, 5);
+});
+
+// --- `--baseline`: spec 10 of odd/tasks/audit-cement.md ---
+
+test('the baseline counts the steps open then that are closed now, still open or gone, and the steps added since', () => {
+  const before = new Map([
+    ['odd/tasks/f.md', feature('- [ ] T1 a', '- [ ] T2 b', '- [x] T3 c', '- [ ] untitled step')],
+    ['odd/tasks/gone.md', feature('- [ ] T1 left')],
+  ]);
+  const after = new Map([
+    // T1 closed under new words, T2 still open, T3 was done already, the untitled step reworded: it left and came back.
+    ['odd/tasks/f.md', feature('- [x] T1 a, done', '- [ ] T2 b', '- [x] T3 c', '- [ ] an untitled step', '- [x] T4 d', '- [ ] T5 e')],
+    ['odd/tasks/new.md', feature('- [ ] T1 new')],
+  ]);
+  assert.deepEqual(baselineOf({ before, after }), {
+    openThen: 4, closed: 1, stillOpen: 1, leftOpen: 2, added: 4, addedClosed: 1, stepsThen: 5, stepsNow: 7, openNow: 4,
+  });
+  // Nothing changed: all open then is still open, nothing added.
+  assert.deepEqual(baselineOf({ before, after: before }), {
+    openThen: 4, closed: 0, stillOpen: 4, leftOpen: 0, added: 0, addedClosed: 0, stepsThen: 5, stepsNow: 5, openNow: 4,
+  });
+});
+
+test('the baseline is said as the share of the steps open then that are closed, what was added, and the growth', () => {
+  const counts = { openThen: 4, closed: 1, stillOpen: 1, leftOpen: 2, added: 4, addedClosed: 1, stepsThen: 5, stepsNow: 7, openNow: 4 };
+  assert.deepEqual(baselineLines({ branch: 'main', date: '2026-11-01', base: '0123456789abcdef', ...counts }), [
+    'Plan of main since 2026-11-01, from 01234567 (its last commit before that day) to now:',
+    'Open then   4 steps',
+    'Done        1 of them closed (25%), 1 still open, 2 left the plan open',
+    'Added       4 steps since (80% of the plan then), 1 of them closed',
+    'The plan    5 steps then, 7 now: it grew by 2; open steps 4 then, 4 now',
+  ]);
+  // A plan with nothing open then has no share to give.
+  const empty = baselineLines({ branch: 'main', date: '2026-11-01', base: 'abc', openThen: 0, closed: 0, stillOpen: 0, leftOpen: 0, added: 0, addedClosed: 0, stepsThen: 0, stepsNow: 0, openNow: 0 });
+  assert.equal(empty[2], 'Done        0 of them closed (—), 0 still open, 0 left the plan open');
+  assert.equal(empty[4], 'The plan    0 steps then, 0 now: it did not grow; open steps 0 then, 0 now');
+});
+
+test('git is asked for the last first-parent commit before the day, the empty tree, and every plan file of a tree whole', () => {
+  assert.deepEqual(baselineCommitArgs({ ref: 'refs/heads/main', before: '2026-11-01T05:00:00Z' }), ['rev-list', '-1', '--first-parent', '--before=2026-11-01T05:00:00Z', 'refs/heads/main']);
+  assert.deepEqual(EMPTY_TREE_ARGS, ['hash-object', '-t', 'tree', '--stdin']);
+  const args = treeArgs({ from: 'e0', to: 'abc' });
+  assert.deepEqual(args.slice(-5), ['e0', 'abc', '--', 'docs/ROADMAP.md', ':(glob)odd/tasks/*.md']);
+  assert.ok(args.includes('-U100000') && args.includes('--no-renames') && args.includes('--relative'));
+  const text = [
+    'diff --git a/odd/tasks/f.md b/odd/tasks/f.md', 'new file mode 100644', 'index 0000000..1111111', '--- /dev/null', '+++ b/odd/tasks/f.md', '@@ -0,0 +1,2 @@', '+# F', '+- [ ] T1 a',
+    'diff --git a/docs/ROADMAP.md b/docs/ROADMAP.md', 'new file mode 100644', 'index 0000000..2222222', '--- /dev/null', '+++ b/docs/ROADMAP.md', '@@ -0,0 +1 @@', '+# R',
+  ].join('\n');
+  assert.deepEqual([...parseTree(text)], [['odd/tasks/f.md', '# F\n- [ ] T1 a'], ['docs/ROADMAP.md', '# R']]);
+  // A tree with no plan file gives git's empty output, which is an empty plan.
+  assert.deepEqual([...parseTree('')], []);
 });
