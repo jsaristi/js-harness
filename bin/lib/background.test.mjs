@@ -204,4 +204,22 @@ test('within reads a first segment like ..foo as inside, and .. itself as outsid
   assert.equal(within('C:\\A\\..foo', 'c:\\a', 'win32'), true);
   assert.equal(within('C:\\A\\..\\b', 'c:\\a', 'win32'), false);
   assert.equal(within('D:\\a', 'C:\\a', 'win32'), false);
+  assert.equal(within('/a', '/a/b', 'linux'), false, 'a parent is not inside its child (the relative path is exactly ..)');
+});
+
+// The verifier on 4187cb1..edbc9df1, M1: sameFolder follows a junction, so within must too, or a session standing in a
+// worktree by its real path is not seen when the record holds the junction's spelling.
+test('within reads a folder reached through a junction or a link by its real path', () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'within-')));
+  try {
+    const real = path.join(dir, 'real');
+    const link = path.join(dir, 'link');
+    fs.mkdirSync(path.join(real, 'sub'), { recursive: true });
+    fs.symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
+    assert.equal(within(path.join(real, 'sub'), link), true);
+    assert.equal(within(path.join(link, 'sub'), real), true);
+    assert.equal(within(dir, link), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

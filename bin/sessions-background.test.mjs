@@ -745,6 +745,23 @@ test('sessions stop --remove-worktree refuses a branch with no commit yet, namin
   assert.deepEqual(keptCopies(world), []);
 }));
 
+// The verifier on 4187cb1..edbc9df1, L1: a branch whose ref was deleted has no HEAD commit either, but its commits live
+// in the HEAD reflog; it is not told to commit, which would hide them.
+test('sessions stop --remove-worktree does not read a deleted branch ref as a branch with no commit yet', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const { worktree, git } = realWorktree(world, 'thing');
+  fs.writeFileSync(path.join(worktree, 'lone.txt'), 'only the reflog holds this\n');
+  git('add', 'lone.txt');
+  git('commit', '-q', '-m', 'lone');
+  git('update-ref', '-d', 'refs/heads/worktree-thing');
+  const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(result.code, 1, result.stdout);
+  assert.doesNotMatch(result.stderr, /has no commit yet/);
+  assert.match(result.stderr, /its HEAD reflog holds [0-9a-f]{12}, which no branch holds: git -C \S+ branch <name> [0-9a-f]{12}/);
+  assert.equal(actions(world).some((call) => call[0] === 'rm'), false, 'no claude rm');
+  assert.ok(fs.existsSync(path.join(worktree, 'lone.txt')));
+}));
+
 test('sessions stop --remove-worktree refuses a detached head whose commits no ref holds, and removes nothing', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
   const { worktree, git } = realWorktree(world, 'thing');
