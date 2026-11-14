@@ -137,9 +137,11 @@ jamas vuelva a suceder" (69918425:2679).
    (A2b).
 8. `docs/FAILURES.md` `- Seen:` lines for 2026-11-13: the relief `printf` date as literal `%Y` three times; the
    lead's `cd` into another session's worktree twice; question 279 reaching him without double review; the senior's
-   nine audit sub-agents inheriting Fable; the app's auto-archive on a merged PR archiving JH 193 mid paid batch at
-   17:58 and the lead at 20:10 local, because PR 859 was bound to it (`Claude/logs/main.log`, AutoArchiveEngine; the
-   lead asks him whether to turn the setting off).
+   nine audit sub-agents inheriting Fable; the batch-2 stop and the lead's failed turns of 2026-11-13 17:57 to 19:09
+   local, caused by an account subscription error (HTTP 403, "payment is past due", `Claude/logs/main.log` lines
+   7747-7935), after which the app's auto-archive deleted one untracked 34,069-byte file in
+   `rule-lead-effort-split-aac740` (main.log:7760); and, under `stretch-not-opened`, his absence of 2026-11-13 17:07
+   to 2026-11-14 02:46 local (UTC-05:00) with no stretch open.
 9. After JH 196 lands: the orchestrator skill gets a senior section (A2b) and puts the closing steps before `ready`
    (A4).
 10. His words, 2026-11-13 (lead transcript 69918425 line 3312, typed): "dime si de la forma como planeamos las cosas
