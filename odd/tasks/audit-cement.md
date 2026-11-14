@@ -4,8 +4,15 @@ Branch: worktree-audit-cement (the document), then one branch per slice from ori
 Delivery: ask-on-risk. Tests: `node --test`. Opened 2026-11-13 by JH 198 (Opus 5.5, medium) from the lead's brief.
 
 ## State
-The lead's OK is in (L3). T1 done: PR 863, ready, waiting for the land and the copy refresh. T2 in progress on
-`fix/audit-cement-guard`. Next: T3 to T6, then T8; T7 waits for the lead's word that JH 196 landed.
+The lead's OK is in (L3). T1 landed (PR 863, main 236f720); the installed copy still refuses `opus` until a
+`--refresh-copy`. T2 ready: PR 864 (`fix/audit-cement-guard`). T3 on `fix/audit-cement-stall`, stacked on T2:
+spec 4 (8053d2d6, wait skips its own notices) and spec 3 (16b63f65, stall skips a session with a batch in its
+worktree or an open question it recorded). Codex on 16b63f65: P2, only the first live batch mark was read; lens
+reliability: readStalled's wiring had no test. Fixed in the next commit: `readBatches` in `bin/lib/batch-mark.mjs`
+(searched: `readBatch` returned the first mark only; `readBatch` now takes the first of it) and a readStalled test
+with two marks and a question. Next: Codex and lenses with base 16b63f65, push, PR on `fix/audit-cement-guard`,
+ready. Then T4 to T6, then T8; T7 waits for the lead's word that JH 196 landed. Spec 8's FAILURES lines go in T6,
+with the `stretch-not-opened` line.
 
 ## Goal
 Every correction the audit and its two blind reviews found is fixed where a check can hold it, and each of the
