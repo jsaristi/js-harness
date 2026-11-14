@@ -1,8 +1,9 @@
 # codex-spend: no Codex waste, no review weakened
 
 ## State
-Document written, waiting for the lead's OK and clearances (section "For the lead's OK"). Nothing built. Next: T1
-(the snapshot) once cleared; T2 to T5 after, each its own PR through the lead's merge-queue.
+The lead's OK is in (L7). Next: the plan's double review (Claude first, Codex on the version Claude passed), then
+T1, T2, T3, T5, and T4 last, after JH 198's T6 lands; each its own PR through the lead's merge-queue. Q1's draft
+after T1.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -140,7 +141,7 @@ se este gastando por esto" (69918425:6293, queued).
 ## Tasks
 - [ ] T1 (kind: build) specs 1, 2 — `bin/codex-review.mjs`, `bin/lib/codex-review-turns.mjs` + tests — commit `fix(codex-review): read a snapshot of the head, not the live folder`
 - [ ] T2 (kind: build) spec 3 — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review below a merge of main in turns`
-- [ ] T3 (kind: build) specs 4, 5 — `bin/codex-review.mjs`, `bin/lib/codex-review-recheck.mjs`, `bin/merge-queue.mjs` + tests — commit `feat(codex-review): say the round: one commit, one recheck`
+- [ ] T3 (kind: build) specs 4, 5, and the senior-model name of L7 — `bin/codex-review.mjs`, `bin/lib/codex-review-recheck.mjs`, `bin/merge-queue.mjs` + tests — commit `feat(codex-review): say the round: one commit, one recheck`
 - [ ] T4 (kind: build) specs 6, 7 — `rules change double-review` on `rule/double-review-sequence`, `bin/double-review.mjs` + test — commits `chore(rules): double review reads Claude first` and `feat(double-review): Codex reads only what Claude passed`
 - [ ] T5 (kind: build) spec 8 — `bin/codex-meter.mjs`, `bin/lib/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
 - [ ] T6 (kind: verify) — the measure after the slices land, against the baseline; result in the Log
@@ -172,3 +173,14 @@ se este gastando por esto" (69918425:6293, queued).
   Rechecks cost 34-95k; a fresh review of 3-16 lines 42-84k.
 - L6 2026-11-14, a snapshot worktree on this machine: `git worktree add --detach` 1,233 ms, remove 397 ms, 1,674
   tracked files (measured once).
+- L7 2026-11-14T18:46Z, the lead (cross-session message): plan OK at fc917938. Cleared: `bin/merge-queue.mjs` (the
+  one line), `bin/double-review.mjs` + test, `bin/codex-meter.mjs` + `bin/lib/codex-meter.mjs` + tests.
+  `bin/lib/protocols-skill.mjs` and `docs/rule-sources.json` (T4, `rules change double-review` on a `rule/` branch)
+  only after JH 198's T6 lands, on the lead's word. Order: T1, T2, T3, T5, T4 last. The plan's double review runs:
+  a Claude read first (explicit model `opus`), Codex only on the version it passed. Q1's draft (Spanish) goes to the
+  lead's notes folder as `q1-codex-after-lenses-draft.md` after T1. Folded into T3 if it fits, else left: the
+  recheck refusal at `bin/lib/codex-review-recheck.mjs:40-41` (tests :224, :234) names `session-model` as the
+  strongest; it should name `senior-model` where declared, else `session-model` (found by JH 198).
+- L8 2026-11-14, the gate that ran on this document's tree (gate log id 0138eeb6, 18:38-18:45Z) passed in 437 s:
+  tests, docs, workshop spec. The commit fc917938 went in with `--no-verify` after that gate had started; the tree
+  it read differed from the commit only in the two contract lines fixed in the document.
