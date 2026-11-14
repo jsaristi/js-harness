@@ -88,9 +88,9 @@ export function recordRendered(file, { template, subject, path: page, at, head }
 
 /** Records one decision of the gate, `{ at, session, tool, template, subject, decision, sha256, reason }`, and returns
  * the line. */
-export function recordShown(file, { at, session, tool, template = null, subject = null, decision, sha256: hash = null, reason = null, call = null }, fileSystem = fs) {
+export function recordShown(file, { at, session, tool, template = null, subject = null, decision, sha256: hash = null, reason = null, call = null, yours }, fileSystem = fs) {
   if (!DECISIONS.includes(decision)) throw new Error(`recordShown: the decision "${decision}" is none of ${DECISIONS.join(', ')}`);
-  const line = { schema: SHOWN_SCHEMA, at, session, tool, call, template, subject, decision, sha256: hash, reason };
+  const line = { schema: SHOWN_SCHEMA, at, session, tool, call, template, subject, decision, sha256: hash, reason, ...(yours === undefined ? {} : { yours }) };
   appendRecord(file, line, fileSystem);
   return line;
 }
@@ -110,10 +110,18 @@ const FIELDS = 'fields: ';
 const UNKNOWN = 'fields unknown: ';
 
 /** Records a write of the summary at `at`: `fields`, the top-level fields it carried, or `unreadable`, why they are
- * not known. Returns the line. */
-export function recordSummary(file, { at, session, call, fields = [], unreadable = null }, fileSystem = fs) {
+ * not known, and `yours`, the list it left (`yoursAfter` of ./template-gate.mjs: an array, or `null` when not known),
+ * left off the line when the write did not touch it. Returns the line. */
+export function recordSummary(file, { at, session, call, fields = [], unreadable = null, yours }, fileSystem = fs) {
   const reason = unreadable === null ? `${FIELDS}${JSON.stringify(fields)}` : `${UNKNOWN}${unreadable}`;
-  return recordShown(file, { at, session, tool: 'ArtifactData', call, subject: SUMMARY_SUBJECT, decision: 'shown', reason }, fileSystem);
+  return recordShown(file, { at, session, tool: 'ArtifactData', call, subject: SUMMARY_SUBJECT, decision: 'shown', reason, yours }, fileSystem);
+}
+
+/** The `yours` of the last summary write in `lines` that says it: an array, `null` when it was not known, `undefined`
+ * when no line says it. */
+export function lastYours(lines) {
+  const line = lines.findLast((one) => isSummaryWrite(one) && Object.hasOwn(one, 'yours'));
+  return line === undefined ? undefined : line.yours;
 }
 
 /** Whether a line of the shown record is a write of the summary, as `recordSummary` writes it. */

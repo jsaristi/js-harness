@@ -49,20 +49,75 @@ export function pageTarget(tool, input) {
 const WRITES = ['set', 'update', 'str_replace', 'delete'];
 const isSummary = (write) => write?.collection === 'board' && write.doc_id === 'summary';
 
-/** What a call of `tool` with `input` writes to the board's summary (collection `board`, document `summary`): the source
- * of each write, `{ data }` (its object), `{ file }` (a local JSON file), `{ field }` (a `str_replace`'s) or `{}` (a
- * delete), a `batch`'s entries in order; `null` when the call writes no summary (a read, another document). */
-export function summaryWrites(tool, input) {
+/** What a call of `tool` with `input` writes to the board's summary (collection `board`, document `summary`): each
+ * write's `action` and its source, `data` (its object), `file` (a local JSON file), `field` (a `str_replace`'s) or none
+ * (a delete), a `batch`'s entries in order; `null` when the call writes no summary (a read, another document). */
+export function summaryChanges(tool, input) {
   if (tool !== 'ArtifactData' || input === null || typeof input !== 'object') return null;
   const writes = input.action === 'batch' ? (Array.isArray(input.writes) ? input.writes.map((entry) => ({ ...entry, action: entry?.op })) : [])
     : [input];
-  const sources = writes.filter((write) => isSummary(write) && WRITES.includes(write.action)).map((write) => {
-    if (write.action === 'str_replace') return { field: write.field };
-    if (write.action === 'delete') return {};
-    if (write.data !== null && typeof write.data === 'object') return { data: write.data };
-    return typeof write.file_path === 'string' ? { file: write.file_path } : {};
+  const changes = writes.filter((write) => isSummary(write) && WRITES.includes(write.action)).map(({ action, ...write }) => {
+    if (action === 'str_replace') return { action, field: write.field };
+    if (action === 'delete') return { action };
+    if (write.data !== null && typeof write.data === 'object') return { action, data: write.data };
+    return typeof write.file_path === 'string' ? { action, file: write.file_path } : { action };
   });
-  return sources.length > 0 ? sources : null;
+  return changes.length > 0 ? changes : null;
+}
+
+// The directives audit, C4 (odd/tasks/audit-cement.md, spec 6): an item of the summary's `yours`, what is his on the
+// board, left it with no word of why. The gate reads each write of the summary before the call and lets an item leave
+// only when the same write names it in `yoursDropped: [{ item, reason }]`.
+
+/** The level the board shows an item of `yours` under (`yoursLevel` of docs/live-board.html, held to it by a test). */
+export const YOURS_LEVEL = /^(urgente|prioritario|opciones)\s*[·:\-–]\s*(\S[\s\S]*)$/i;
+
+/** The shortest reason that lets an item leave `yours`. */
+export const DROP_REASON_CHARS = 10;
+
+/** An item of `yours` as the gate tells items apart: its text without the level, trimmed. */
+export const yoursKey = (item) => (YOURS_LEVEL.exec(String(item))?.[2] ?? String(item)).trim();
+
+/** What the summary changes `changes` (`summaryChanges`, each `file` read into `data` or into `unreadable`, why not)
+ * leave of `yours`: `{ yours, named }`. `yours` is the list after them, its strings, as the board lists them;
+ * `undefined` when none touched it, `null` when it cannot be known (a `str_replace` of it, a file not read). A `set`
+ * without it, or a `delete`, empties it. `named` is every `yoursDropped` entry they carry. */
+export function yoursAfter(changes) {
+  let yours;
+  const named = [];
+  for (const change of changes) {
+    if (change.action === 'delete') yours = [];
+    else if (change.action === 'str_replace') yours = change.field === 'yours' ? null : yours;
+    else if (change.unreadable !== undefined) yours = null;
+    else {
+      const data = change.data !== null && typeof change.data === 'object' ? change.data : {};
+      if (Array.isArray(data.yoursDropped)) named.push(...data.yoursDropped);
+      if (Object.hasOwn(data, 'yours')) yours = Array.isArray(data.yours) ? data.yours.filter((item) => typeof item === 'string') : [];
+      else if (change.action === 'set') yours = [];
+    }
+  }
+  return { yours, named };
+}
+
+/** The decision on a call's writes of the summary, `{ decision, yours, reason }`: `admitted` when they leave `yours` as
+ * it was or every item of `previous` that leaves is named in their `yoursDropped` with a reason of
+ * `DROP_REASON_CHARS` or more; `refused` otherwise, with the text that names each; `unchecked` when the list before or
+ * after cannot be known. `previous` is the last list recorded (`lastYours`): `undefined` when none was, `null` when
+ * it is not known, and then `previousWhy` says why. */
+export function decideSummary({ changes, previous, previousWhy = 'the last recorded yours is not known' }) {
+  const { yours, named } = yoursAfter(changes);
+  if (yours === undefined || previous === undefined) return { decision: 'admitted', yours, reason: null };
+  if (previous === null || yours === null) {
+    const why = previous === null ? previousWhy : (changes.find((change) => change.unreadable !== undefined)?.unreadable ?? 'a str_replace of yours');
+    return { decision: 'unchecked', yours, reason: `${why}, so what this write of board/summary takes from yours is not known; the call goes through unchecked` };
+  }
+  const kept = new Set(yours.map(yoursKey));
+  const given = new Set(named.filter((entry) => typeof entry?.item === 'string' && typeof entry.reason === 'string'
+    && entry.reason.trim().length >= DROP_REASON_CHARS).map((entry) => yoursKey(entry.item)));
+  const dropped = [...new Set(previous.map(yoursKey))].filter((key) => key !== '' && !kept.has(key) && !given.has(key));
+  if (dropped.length === 0) return { decision: 'admitted', yours, reason: null };
+  const reason = [say('dropped', { items: dropped.map((key) => JSON.stringify(key)).join('; ') }), say('reason', { chars: String(DROP_REASON_CHARS) })].join(' ');
+  return { decision: 'refused', yours, reason };
 }
 
 const fresh = (line, now) => now - Date.parse(line.at) <= RENDERED_FRESH_HOURS * 3600 * 1000;
@@ -80,6 +135,8 @@ export const GATE_SAYS = Object.freeze({
   free: 'If no record holds what it shows, mark it free: <mark>.',
   asked: 'js-harness template gate: this question is not one of the record as its template makes it (<why>; the record is <file>).',
   ask: 'Record it with js-harness notify --to orchestrator --kind question, then ask it with the input js-harness template ask <n> prints, unchanged.',
+  dropped: 'js-harness template gate: this write of board/summary takes from yours what it gives no reason for: <items>.',
+  reason: 'Keep each in yours, or name it in the same write\'s yoursDropped: [{ item, reason }], a reason of <chars> characters or more; an item reworded leaves as the old one.',
 });
 
 /** The sentences of `GATE_SAYS` as one text, a paragraph each, as the coverage cuts it. */

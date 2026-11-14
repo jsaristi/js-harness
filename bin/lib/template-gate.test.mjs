@@ -1,7 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { GATE_MESSAGES, GATE_SAYS, RENDERED_FRESH_HOURS, askTarget, decideAsk, decidePage, freeReason, pageTarget, shownReport, summaryWrites } from './template-gate.mjs';
+import fs from 'node:fs';
+import {
+  DROP_REASON_CHARS, GATE_MESSAGES, GATE_SAYS, RENDERED_FRESH_HOURS, YOURS_LEVEL, askTarget, decideAsk, decidePage, decideSummary, freeReason,
+  pageTarget, shownReport, summaryChanges, yoursAfter, yoursKey,
+} from './template-gate.mjs';
 import { cutSpans } from './rules-coverage.mjs';
 import { RENDERED_SCHEMA, normalText, sha256 } from './template-record.mjs';
 
@@ -42,17 +46,17 @@ test('an Artifact call that shows no page is not the gate\'s', () => {
 });
 
 // The board summary's writes (odd/tasks/board-summary-stale.md, S2): what an ArtifactData call writes to board/summary.
-test('summaryWrites reads each set, update, str_replace or batch entry of board/summary, and its source', () => {
+test('summaryChanges reads each set, update, str_replace or batch entry of board/summary, its action and its source', () => {
   const base = { url: 'u', collection: 'board', doc_id: 'summary' };
-  assert.deepEqual(summaryWrites('ArtifactData', { ...base, action: 'update', data: { now: 'x' } }), [{ data: { now: 'x' } }]);
-  assert.deepEqual(summaryWrites('ArtifactData', { ...base, action: 'set', file_path: 'b.json' }), [{ file: 'b.json' }]);
-  assert.deepEqual(summaryWrites('ArtifactData', { ...base, action: 'str_replace', field: 'status', old_str: 'a', new_str: 'b' }), [{ field: 'status' }]);
-  assert.deepEqual(summaryWrites('ArtifactData', { ...base, action: 'delete' }), [{}]);
+  assert.deepEqual(summaryChanges('ArtifactData', { ...base, action: 'update', data: { now: 'x' } }), [{ action: 'update', data: { now: 'x' } }]);
+  assert.deepEqual(summaryChanges('ArtifactData', { ...base, action: 'set', file_path: 'b.json' }), [{ action: 'set', file: 'b.json' }]);
+  assert.deepEqual(summaryChanges('ArtifactData', { ...base, action: 'str_replace', field: 'status', old_str: 'a', new_str: 'b' }), [{ action: 'str_replace', field: 'status' }]);
+  assert.deepEqual(summaryChanges('ArtifactData', { ...base, action: 'delete' }), [{ action: 'delete' }]);
   const batch = { url: 'u', action: 'batch', writes: [
     { op: 'set', collection: 'events', doc_id: 'e1', data: { rows: [] } },
     { op: 'update', collection: 'board', doc_id: 'summary', file_path: 'c.json' },
   ] };
-  assert.deepEqual(summaryWrites('ArtifactData', batch), [{ file: 'c.json' }]);
+  assert.deepEqual(summaryChanges('ArtifactData', batch), [{ action: 'update', file: 'c.json' }]);
 });
 
 test('a call that writes no board/summary is not a summary write', () => {
@@ -64,7 +68,57 @@ test('a call that writes no board/summary is not a summary write', () => {
     ['ArtifactData', { url: 'u', action: 'batch', writes: [{ op: 'set', collection: 'events', doc_id: 'e1', data: {} }] }],
     ['ArtifactData', { url: 'u', action: 'batch', writes: 'no list' }], ['ArtifactData', null],
     ['Artifact', { ...base, action: 'update', data: { now: 'x' } }],
-  ]) assert.equal(summaryWrites(tool, input), null, JSON.stringify([tool, input]));
+  ]) assert.equal(summaryChanges(tool, input), null, JSON.stringify([tool, input]));
+});
+
+// The directives audit, C4 (odd/tasks/audit-cement.md, spec 6): an item leaves the board's yours only with a reason.
+test('yoursKey is an item without the level the board shows it with, as docs/live-board.html reads it', () => {
+  assert.equal(yoursKey('URGENTE · Revisa el PR 867 '), 'Revisa el PR 867');
+  assert.equal(yoursKey('opciones: elige'), 'elige');
+  assert.equal(yoursKey('  sin nivel '), 'sin nivel');
+  const board = fs.readFileSync(new URL('../../docs/live-board.html', import.meta.url), 'utf8');
+  const regex = /function yoursLevel\(item\) \{\s*const match = (\/.+\/i)\.exec\(item\);/.exec(board)?.[1];
+  assert.equal(regex, String(YOURS_LEVEL), 'the gate and the board read a level the same way');
+});
+
+test('yoursAfter is the list a call leaves: a set or update that carries it, a set without it or a delete empties it, and what is not known is null', () => {
+  const after = (...changes) => yoursAfter(changes);
+  assert.deepEqual(after({ action: 'update', data: { now: 'x' } }), { yours: undefined, named: [] });
+  assert.deepEqual(after({ action: 'update', data: { yours: ['a', 3, 'b'] } }).yours, ['a', 'b']);
+  assert.deepEqual(after({ action: 'update', data: { yours: 'a' } }).yours, [], 'a yours the board cannot list shows nothing');
+  assert.deepEqual(after({ action: 'set', data: { now: 'x' } }).yours, []);
+  assert.deepEqual(after({ action: 'delete' }).yours, []);
+  assert.equal(after({ action: 'str_replace', field: 'yours' }).yours, null);
+  assert.equal(after({ action: 'str_replace', field: 'status' }).yours, undefined);
+  assert.equal(after({ action: 'update', unreadable: 'cannot read b.json (ENOENT)' }).yours, null);
+  assert.deepEqual(after({ action: 'delete' }, { action: 'update', data: { yours: ['a'] } }).yours, ['a'], 'a batch in order');
+  const named = { item: 'a', reason: 'decided in PR 867' };
+  assert.deepEqual(after({ action: 'update', data: { yours: [], yoursDropped: [named] } }).named, [named]);
+});
+
+test('decideSummary refuses a write that drops an item of the last recorded yours without a reason in yoursDropped', () => {
+  const update = (data) => [{ action: 'update', data }];
+  const previous = ['URGENTE · Revisa el PR 867', 'Elige el nombre'];
+  assert.equal(decideSummary({ changes: update({ now: 'x' }), previous }).decision, 'admitted', 'yours untouched');
+  assert.equal(decideSummary({ changes: update({ yours: [] }), previous: undefined }).decision, 'admitted', 'no list recorded yet');
+  assert.equal(decideSummary({ changes: update({ yours: ['Revisa el PR 867', 'Elige el nombre', 'nuevo'] }), previous }).decision, 'admitted', 'a level changed is the same item');
+  const refused = decideSummary({ changes: update({ yours: ['Elige el nombre'] }), previous });
+  assert.equal(refused.decision, 'refused');
+  assert.ok(refused.reason.includes('"Revisa el PR 867"'), refused.reason);
+  assert.ok(refused.reason.includes('yoursDropped: [{ item, reason }]'), refused.reason);
+  assert.ok(refused.reason.includes(`${DROP_REASON_CHARS} characters`), refused.reason);
+  const dropped = (reason) => update({ yours: ['Elige el nombre'], yoursDropped: [{ item: 'URGENTE · Revisa el PR 867', reason }] });
+  assert.equal(decideSummary({ changes: dropped('merged as 96ce3c9'), previous }).decision, 'admitted');
+  assert.equal(decideSummary({ changes: dropped('done'), previous }).decision, 'refused', 'a reason under the length');
+  assert.equal(decideSummary({ changes: [{ action: 'delete' }], previous }).decision, 'refused', 'a delete drops all');
+  assert.equal(decideSummary({ changes: [{ action: 'set', data: { now: 'x' } }], previous }).decision, 'refused', 'a set without yours drops all');
+  const reworded = decideSummary({ changes: update({ yours: ['Revisa el PR 868', 'Elige el nombre'] }), previous });
+  assert.equal(reworded.decision, 'refused', 'a reworded item leaves as the old one');
+  for (const [changes, prior] of [[[{ action: 'str_replace', field: 'yours' }], previous], [update({ yours: [] }), null], [[{ action: 'set', unreadable: 'cannot read b.json (ENOENT)' }], previous]]) {
+    const unknown = decideSummary({ changes, previous: prior, previousWhy: 'the record could not be read' });
+    assert.equal(unknown.decision, 'unchecked', JSON.stringify(changes));
+    assert.match(unknown.reason, /goes through unchecked/);
+  }
 });
 
 test('a page whose bytes a template command recorded within the hours is admitted as that template', () => {
@@ -168,6 +222,7 @@ test('every refusal is sentences of GATE_SAYS with their slots filled, and GATE_
     decide({ widget: '<p>x</p>' }).reason,
     decideAsk({ asked: { question: '¿Seguimos?', options: [] }, questions: [], recordPath: CHANNEL }).reason,
     decideAsk({ asked: { question: 'Pregunta 4: ¿Seguimos?', options: [] }, questions: [], recordPath: CHANNEL }).reason,
+    decideSummary({ changes: [{ action: 'delete' }], previous: ['a', 'b'] }).reason,
   ];
   for (const reason of reasons) assert.match(reason, whole);
   assert.deepEqual(cutSpans(GATE_MESSAGES).map((span) => span.text.trim()), Object.values(GATE_SAYS));
