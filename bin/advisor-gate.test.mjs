@@ -393,5 +393,7 @@ test('each of the five acts is refused when uncovered, by a session and by a sub
       assert.match(r.answer.hookSpecificOutput.permissionDecisionReason, new RegExp(`act \\(${act}\\)`));
     }
   }
-  assert.equal(decisions(home).filter((d) => d.decision === 'flagged' && d.mode === 'refuse').length, acts.length * 2);
+  const flagged = decisions(home).filter((d) => d.decision === 'flagged' && d.mode === 'refuse');
+  assert.equal(flagged.length, acts.length * 2);
+  assert.equal(flagged.filter((d) => d.agent === 'a3').length, acts.length, 'a sub-agent refusal is recorded as its own');
 });
