@@ -1,30 +1,33 @@
 # codex-spend: no Codex waste, no review weakened
 
 ## State
-The lead's OK is in (L7). Next: the plan's double review (Claude first, Codex on the version Claude passed), then
-T1, T2, T3, T5, and T4 last, after JH 198's T6 lands; each its own PR through the lead's merge-queue. Q1's draft
-after T1.
+v2 after the Claude read (L9): spec 1 keeps every check and runs it in the snapshot, spec 3 reviews only the gap,
+spec 4 became a measure, spec 7 always ends with a Codex read. Next: a confirming Claude read of v2, then Codex on the
+version it passed; then T1, T2, T3, T5, and T4 last, after JH 198's T6 lands. Q1's draft after T1.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
 
 ## Why
-On 2026-11-14 Codex's five-hour window reached 100%. About 22% of that day's 3.05M Codex input tokens (L3) bought
-nothing: runs refused after Codex read, a review whose record was then refused, and a 435-line review of commits that
-had been reviewed. He asked for the waste to go ("aplica las mejoras para que no haya ningun desperdicio", L1), not
-for fewer reviews.
+On 2026-11-14 Codex's five-hour window reached 100%. Of PRs 864-868's 3,053,278 Codex input tokens that day,
+593,573 (19.4%; 17.3% of the uncached input) went to runs or reviews a snapshot of the head would not have needed,
+and about 150k more (an estimate) to code of main re-read after a merge (L3, L9). Since 2026-10-07, 25 runs refused
+for a live-folder change cost 3,992,076. He asked for the waste to go ("aplica las mejoras para que no haya ningun
+desperdicio", L1), not for fewer reviews.
 
 ## Done when
 - `node --test bin/codex-review.test.mjs bin/codex-review.second.test.mjs bin/lib/codex-review-turns.test.mjs` exits 0
+- `node --test bin/lib/codex-review-recheck.test.mjs bin/merge-queue.test.mjs` exits 0
 - `node --test bin/double-review.test.mjs` exits 0
-- `node --test bin/codex-meter.test.mjs bin/lib/codex-meter.test.mjs` exits 0
+- `node --test bin/lib/land-records.test.mjs bin/codex-meter.test.mjs bin/lib/codex-meter.test.mjs` exits 0
 - `js-harness rules check` exits 0
 - `npm run check` exits 0
-- `js-harness codex-meter --per-pr --since 2026-11-14` prints the 2026-11-14 baseline beside the runs after it
+- `js-harness codex-meter --per-pr` exits 0
+- the per-PR table shows PRs 864-868 as the baseline beside the PRs landed after it (read by a person)
 - Each slice landed through the lead's merge-queue
 
 ## In scope / Out of scope
-- In: `bin/codex-review.mjs` and `bin/lib/codex-review-*.mjs` with their tests; the files the lead clears below.
+- In: `bin/codex-review.mjs` and `bin/lib/codex-review-*.mjs` with their tests; the files the lead cleared (L7).
 - Out: skipping or weakening any review, check or test; the advisor gate (its question is with him); Codex model or
   effort; reset credits (his rule: one only when more than 3 are left); `bin/lib/manifest.mjs` and JH 198's files
   without the lead's clearance.
@@ -32,24 +35,19 @@ for fewer reviews.
 ## Constraints
 - `codex-review` is what the pre-push hook and the merge door read: high risk (contracts others consume, and item 6:
   a refusal path that no test catches if it regresses). Each code slice gets a verifier, Codex and the lenses.
+- No check is removed: a check that read the live folder reads the snapshot instead.
+- A snapshot is removed without following any link out of it; nothing outside `<common>/js-harness/` is deleted.
 - No edit while a review of this branch runs; one commit per round — the habits this feature is about.
 - Sub-agents get an explicit model, never Fable.
 
 ## Ask me before
 - A change of the protocol text (§1, §3), which is his: through the lead, as `rules change` with his words.
-- Lenses before Codex on code (question for him, "For the lead's OK", Q1): not built unless he says yes.
+- Lenses before Codex on code (Q1, his): not built unless he says yes.
+- Clearance of `bin/lib/land-records.mjs` + test (T5) and of `bin/lib/pull-request.mjs` if spec 5 needs it.
 
 ## For the lead's OK
-Clearances asked (files outside the brief's surface):
-1. `bin/lib/codex-review-coverage.mjs` is in the surface; `bin/lib/codex-review-turns.mjs` too. Nothing more for T1-T2.
-2. T3: `bin/lib/lens-reviews.mjs` (read only, import) — no edit. `bin/merge-queue.mjs`: one next line on a conflict.
-3. T4: `bin/double-review.mjs` + test; `docs/rule-sources.json`, `bin/lib/protocols-skill.mjs` §1 through
-   `js-harness rules change double-review` on `rule/double-review-sequence`. JH 198's T6 also edits
-   `protocols-skill.mjs` (§7 text): whichever lands second merges main; the lead orders them.
-4. T5: `bin/codex-meter.mjs`, `bin/lib/codex-meter.mjs` + tests.
-5. The depth pass's own double review (`rule:double-review`, §9): a Claude read (~25k Claude tokens) and, if it
-   passes, a Codex read (~60-90k Codex input). Codex's five-hour window is at 0% now, weekly at 68%, 3 reset
-   credits (none usable under his rule). Say whether to run it before T1, or skip it with his words.
+Given in L7. Asked now: `bin/lib/land-records.mjs` + test for T5 (the Claude read found it already joins lands and
+Codex runs, L9 item 10); `bin/lib/pull-request.mjs` only if T3's line for GitHub's CONFLICTING answer lives there.
 
 Q1 (his, to put through the lead): lenses first on code, Codex only on the head the lenses passed — the code
 analogue of item 4. Eight fresh Codex reviews of small follow-ups on 2026-11-14 (L5) came after a clean Codex pass
@@ -59,53 +57,54 @@ estimated (not measured) half of those runs; a no keeps today's parallel order.
 ## Depth pass
 - 1. Method: the discipline is build-system cost engineering: never pay twice for the same input, make the unit of
   work hermetic (a review reads a fixed snapshot, as a build reads a fixed tree), and measure per delivered unit,
-  not per run. Reuse first (searched with codegraph and grep, `rule:reuse-first`): `addTurnWorktree` /
-  `sweepTurnWorktrees` (`bin/lib/codex-review-turns.mjs:150-173`) already review a merge from a detached worktree
-  under `<git common dir>/js-harness/`; `mergeTurn` (`codex-review-turns.mjs:24`) already cuts a range in two
-  turns; `lands.jsonl` already names each landed PR and candidate; `codex-meter` is where the lead reads Codex.
-  Smallest changes: run every review's Codex session in a snapshot at `head`; extend the turn cut to the mirror case;
-  join runs to lands for the measure; make `double-review read` sequential.
+  not per run. Reuse first (codegraph, grep, `rule:reuse-first`): `addTurnWorktree` / `sweepTurnWorktrees`
+  (`bin/lib/codex-review-turns.mjs:150-173`) already review a merge from a detached worktree under
+  `<git common dir>/js-harness/`; `mergeTurn` (`codex-review-turns.mjs:24`) already cuts a range in two turns with
+  its guards; `bin/lib/land-records.mjs:37,56` (`landFacts`, `codexFacts`) already joins `lands.jsonl` and the run
+  log. Smallest changes: run each review's Codex session in a snapshot at `head` with the same checks pointed at it;
+  cut the gap below a merge of main as a turn; extend `land-records` for the measure; make `double-review read`
+  sequential with a Codex read at the end.
 - 2. Raw material:
-  - Run log `<common>/js-harness/codex-review-runs.jsonl` and records `codex-reviews.jsonl` (2026-11-14 lines).
-  - `bin/codex-review.mjs:1795-1805` (`notTheRange`, the mid-run check per part), `:2198-2224` (the post-review
-    check that refuses the record), `:1868-1874` (Codex spawned with `cwd: root`, the live folder).
-  - `bin/lib/codex-review-coverage.mjs:351-367` (`reviewStart`: from must be an ancestor of the oldest uncovered
-    commit's parent, else the range as given), `:492-526` (`mergeStart`: needs every code commit up to the first
-    parent recorded).
+  - Run log `<common>/js-harness/codex-review-runs.jsonl` and records `codex-reviews.jsonl`.
+  - `bin/codex-review.mjs:1795-1805` (`notTheRange`, the check per part), `:1539-1543` (the check after a merge
+    turn), `:2198-2224` (the check after the review), `:1868-1874` (Codex spawned with `cwd: root`), `:1900`
+    (finding paths made relative to `root`), `:1569` (the dirty-tree refusal at the start).
+  - `bin/lib/codex-review-coverage.mjs:351-367` (`reviewStart`), `:492-526` (`mergeStart`, null for a merge that
+    writes no line at `:511`); `bin/lib/codex-review-recheck.mjs:136,152` (the last record at a head decides).
   - JH 198's transcript `D--js-harness--claude-worktrees-audit-cement/b1a32f3f-….jsonl`: 09:31:54Z it ran
-    `codex-review --base f71380ea … > file; tail -3` in the background; 09:32:17Z it rewrote
-    `odd/tasks/audit-cement.md`'s State while that run read; 10:12:25Z the pre-push printed
-    `FAIL codex-review 1 of 5 code commits since origin/main have no Codex review record … next: js-harness
-    codex-review --base 6ba747e38fcc --at 4977072eb1f9`.
-  - `bin/double-review.mjs:17-19` ("Both readers are started at once"); `bin/lib/protocols-skill.mjs:43` (§1).
-  - `bin/merge-queue.mjs:7` (ready = no conflict with the candidate; stacked PRs are retargeted, `:9`).
+    `codex-review --base f71380ea … > file; tail -3` in the background; f983eab9 was committed at 09:32:18Z inside
+    that run (`git log -1 --format=%cI f983eab9`); 10:12:25Z the pre-push printed `FAIL codex-review 1 of 5 code
+    commits since origin/main have no Codex review record … next: js-harness codex-review --base 6ba747e38fcc --at
+    4977072eb1f9`.
+  - `git log --graph cc54678..af986f0`: one branch commit, 1de6ed65, then a merge of main (PRs 858-863).
+  - `bin/lib/rules-reach.mjs:117` (a branch reads old rules "until main is merged into it");
+    `bin/merge-queue.mjs:900-907,942` (the three ways a conflict leaves a PR out).
+  - `bin/double-review.mjs:11-19` (blind by sequence; both readers at once); `bin/lib/protocols-skill.mjs:43` (§1);
+    `bin/lib/rules-data.mjs:231` (double-review's review date 2026-11-16).
   - The lead's analysis, transcript 69918425 line 6346 (12:30:18Z).
 - 3. The bar (each spec's proof; today's result):
   spec 1: `node --test --test-name-pattern "snapshot" bin/codex-review.test.mjs`: none, new behaviour
-  spec 2: `node --test --test-name-pattern "kept across" bin/codex-review.test.mjs`: none, new behaviour
-  spec 3: `node --test --test-name-pattern "below a merge" bin/lib/codex-review-turns.test.mjs`: none, new behaviour
-  spec 4: `node --test --test-name-pattern "round" bin/codex-review.test.mjs`: none, new behaviour
-  spec 5: `node --test --test-name-pattern "conflict" bin/merge-queue.test.mjs`: none, new behaviour
-  spec 6: `js-harness rules check`: exits 0 today; the changed text is new
-  spec 7: `node --test --test-name-pattern "Claude first" bin/double-review.test.mjs`: none, new behaviour
-  spec 8: `js-harness codex-meter --per-pr --since 2026-11-14`: none, new behaviour (scratch script result in L3)
+  spec 2: `node --test --test-name-pattern "gap below a merge" bin/lib/codex-review-turns.test.mjs bin/codex-review.test.mjs`: none, new behaviour
+  spec 3: `node --test --test-name-pattern "conflict" bin/merge-queue.test.mjs`: none, new behaviour
+  spec 4: `js-harness rules check`: exits 0 today; the changed text is new
+  spec 5: `node --test --test-name-pattern "Claude first" bin/double-review.test.mjs`: none, new behaviour
+  spec 6: `node --test --test-name-pattern "per PR" bin/lib/land-records.test.mjs`: none, new behaviour (scratch result in L3)
 - 4. Refutation: the request holds only if the waste is avoidable without fewer reviews. Cheapest test: join the
   day's run lines to records and transcripts and ask whether each wasted run would have been needed had Codex read a
-  snapshot. Run (scratchpad `perpr.mjs`, `chain.mjs`, read-only): of 3,053,278 input tokens, 286,592 in two runs
-  refused for "tracked files differ" (both live edits during the run); 79,096 in a `reviewed` recheck of
-  f71380e..1d982b3 whose record the post-review check refused (the 09:32:17Z doc edit; the run's output went to a
-  file, so the refusal is inferred from the code path and the missing record, not read); 306,981 in the two passing
-  parts of 6ba747e..4977072, a range the push asked for only because 1d982b3 had no record (the merge's remerge-diff
-  is empty, `git show --remerge-diff 4977072`, and its other four code commits have records). All three would not
-  have been spent with a snapshot: 672,669 tokens, 22.0%. Without the merge of main, the cost of the missing record
-  would have been one 79k recheck, not 307k.
+  snapshot (scratchpad `perpr.mjs`, `chain.mjs`; rerun by the Claude reader, L9). Of 3,053,278 input tokens:
+  286,592 in two runs refused for a live-folder change; 306,981 in the passing parts of 6ba747e..4977072, a range
+  the push asked for only because 1d982b3's passing recheck (79,096) had its record refused when HEAD moved
+  (f983eab9). With a snapshot the recheck would still run and be the record, so the saving is 593,573 (19.4%); in
+  uncached tokens 17.3%. Not saved by a snapshot: cc54678..af986f0 read about 272 lines of main's code brought in by
+  a merge (about 150k, the reader's estimate), which spec 2 targets. History: 25 such refusals since 2026-10-07,
+  3,992,076 tokens.
   Verdict: supports
-- 5. Request: make a Codex review read a snapshot of the commit it records, so no edit in the session's folder
-  refuses a run or a record; review only what the records leave when a commit below a merge of main lacks a record,
-  and say a merge of main is needed only for a conflict the queue reports; make a round's fixes one commit and one
-  recheck something the command says; run the double review of a proposal Claude first and Codex only on the copy
-  Claude passed; show Codex input per landed PR with 2026-11-14 as the baseline.
-  Q1 is put to him, not built.
+- 5. Request: make a Codex review read a snapshot of the commit it records, with every check it makes today pointed
+  at that snapshot, so no edit or commit in the session's folder refuses a run or a record; when code commits below
+  a merge of main lack a record, review only them, never main's code again; name the fix when the queue leaves a PR
+  out for a conflict with main; run the double review of a proposal Claude first and end it always with a Codex read
+  of the version given; show Codex input per landed PR, with PRs 864-868 as the baseline, including spend that buys
+  no new reading. A round's fixes in one commit is measured (spec 6) and its lever is Q1, his.
   Adds: none
 
 ## Specs
@@ -113,37 +112,42 @@ His order for all of them: "hazme la pregunta de bloquear cuando pase y ademas a
 ningun desperdicio como lo mencionas y dices" (69918425:6379, typed), after "me gustaria saber si lo estamos
 utilizando optimizadamente o estamos utilizandolo a lo bestia y desproporcionadamente por favro revisa bien que no
 se este gastando por esto" (69918425:6293, queued).
-1. Every Codex session of `codex-review` runs in a detached worktree of `head` under `<common>/js-harness/`, made
-   once per run and removed however the run ends (swept like a turn's when killed); records and the run log stay in
-   the common git dir; a run whose `--cwd` is already such a worktree (a merge turn) makes none. The checks after a
-   part and after the review that compare the live folder with `head` go, since Codex never read it; the refusal of
-   a dirty tree at the start stays as it is.
-2. A part that passed is kept for the next run of the same range whatever the live folder did meanwhile; a rerun
-   repeats only the parts that did not pass.
-3. When the oldest code commits no record covers lie below a merge of the default branch at HEAD (the merge itself
-   writing no line, or reviewed by what was written in it), the run reviews them as a turn in a worktree of the
-   merge's first parent from where the records end, then the merge by `mergeStart`, as `mergeTurn` does for the
-   mirror case; never the merge's whole diff with main.
-4. At the end of a run with findings, and at the start of a recheck, `codex-review` says the round: the findings
-   open at that head, that they and the lens and verifier findings of the same head go in one commit, and that one
-   `codex-review --base <head>` rechecks them together.
-5. `merge-queue`'s line for a PR left out for a conflict names the fix: merge the default branch into it. Nothing
-   else asks for that merge; the protocol §3 line on the base after a merge stays.
-6. `rule:double-review` (§1) reads: the Claude reader first; the Codex reader reads only the frozen copy the Claude
-   reader passed, blind to its answer; a read goes through `js-harness double-review read`, so it is recorded.
-   Changed with `js-harness rules change double-review` on a `rule/` branch, quoting 6379.
-7. `double-review read` runs the Claude reader, records and stops when it finds something, and runs the Codex
-   reader on the same copy only when the Claude reader found nothing.
-8. `codex-meter --per-pr [--since <day>]` prints, for each landed PR (`lands.jsonl`), its Codex runs and input
-   tokens over all its days, the share in failed runs and in `reviewed` runs no record names, the runs of heads not
-   landed yet, and the 2026-11-14 baseline beside the days after it.
+1. Each Codex session of `codex-review` runs in a detached worktree made from the resolved `head` id under
+   `<common>/js-harness/`, named so `sweepTurnWorktrees` finds it, once per run, removed however the run ends; the
+   sweep runs at every run's start. The three checks that compared the live folder with `head` (after a part, after
+   a merge turn, after the review) compare the snapshot instead, word for word in their refusals; the dirty-tree
+   refusal at the start stays on the live folder. Finding paths are made relative to the snapshot, else to the live
+   root. A run whose `--cwd` is already a turn worktree makes none. In a turn of the gate lock (where Codex runs the
+   tests), when the live root holds a `node_modules` the snapshot lacks, the run reads the live folder as today and
+   says why. Proofs: a commit and an edit made in the live folder during a run leave the record written; a part that
+   passed is kept (existing behaviour, `keptPartFor`); a snapshot whose removal fails is a warning and is swept by
+   the next run.
+2. When the code commits no record covers all lie on the first-parent line below a merge of the default branch at
+   HEAD, the run reviews the gap alone, `<oldest uncovered>^..<newest uncovered>`, as a turn in a worktree at the
+   newest uncovered commit, with `mergeTurn`'s guards (the gap's start is a review or a recheck the records allow,
+   the marks match at the turn and at HEAD, the review switch is on at the turn), then the merge by `mergeStart`, or
+   nothing for a merge that writes no line. Never the merge's whole diff with main.
+3. Where `merge-queue` leaves a PR out because it conflicts with main itself (GitHub's CONFLICTING answer, or a merge
+   into the candidate while it is still main), its line names the fix: merge the default branch into the PR's
+   branch. A conflict with an earlier PR of the batch says it waits for that land. `rules-reach`'s line is unchanged.
+4. `rule:double-review` (§1) reads: the Claude reader first; the Codex reader reads the frozen copy the Claude reader
+   passed, or the version at the cap of three, blind to the Claude reader's answers; a read goes through `js-harness
+   double-review read`, so it is recorded. Changed with `js-harness rules change double-review` on a `rule/` branch,
+   quoting 6379, after JH 198's T6.
+5. `double-review read` runs the Claude reader; on findings it records the Claude read alone, marked as a sequenced
+   read, and stops; on none, or at the third read of the same material, it runs the Codex reader on the same copy
+   and writes one record of both once both have returned. The tally keeps sequenced reads apart.
+6. `land-records` gives, for each landed PR, its Codex runs and input tokens over all its days, and what bought no
+   new reading: failed runs, `reviewed` runs no record names, and runs whose range held a code commit an earlier
+   record covered; plus Codex runs after a clean pass on the same branch (the measure of rounds) and tokens per
+   reviewed line. `codex-meter --per-pr` prints it with PRs 864-868 as the baseline.
 
 ## Tasks
-- [ ] T1 (kind: build) specs 1, 2 — `bin/codex-review.mjs`, `bin/lib/codex-review-turns.mjs` + tests — commit `fix(codex-review): read a snapshot of the head, not the live folder`
-- [ ] T2 (kind: build) spec 3 — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review below a merge of main in turns`
-- [ ] T3 (kind: build) specs 4, 5, and the senior-model name of L7 — `bin/codex-review.mjs`, `bin/lib/codex-review-recheck.mjs`, `bin/merge-queue.mjs` + tests — commit `feat(codex-review): say the round: one commit, one recheck`
-- [ ] T4 (kind: build) specs 6, 7 — `rules change double-review` on `rule/double-review-sequence`, `bin/double-review.mjs` + test — commits `chore(rules): double review reads Claude first` and `feat(double-review): Codex reads only what Claude passed`
-- [ ] T5 (kind: build) spec 8 — `bin/codex-meter.mjs`, `bin/lib/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
+- [ ] T1 (kind: build) spec 1 — `bin/codex-review.mjs`, `bin/lib/codex-review-turns.mjs` + tests — commit `fix(codex-review): read a snapshot of the head, not the live folder`
+- [ ] T2 (kind: build) spec 2 — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review the gap below a merge of main alone`
+- [ ] T3 (kind: build) spec 3, and the lead's assignment of L7 (the recheck refusal names `senior-model` where declared) — `bin/merge-queue.mjs`, `bin/lib/codex-review-recheck.mjs` + tests — commit `fix(merge-queue): a conflict with main names its fix`
+- [ ] T4 (kind: build) specs 4, 5 — `rules change double-review` on `rule/double-review-sequence`, `bin/double-review.mjs` + test — commits `chore(rules): double review reads Claude first` and `feat(double-review): Codex reads what Claude passed`
+- [ ] T5 (kind: build) spec 6 — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
 - [ ] T6 (kind: verify) — the measure after the slices land, against the baseline; result in the Log
 
 ## Log
@@ -184,3 +188,19 @@ se este gastando por esto" (69918425:6293, queued).
 - L8 2026-11-14, the gate that ran on this document's tree (gate log id 0138eeb6, 18:38-18:45Z) passed in 437 s:
   tests, docs, workshop spec. The commit fc917938 went in with `--no-verify` after that gate had started; the tree
   it read differed from the commit only in the two contract lines fixed in the document.
+- L9 2026-11-14T19:09Z, the plan's Claude read (sub-agent on `opus`, blind, frozen copy v1 sha256 a311aa7e…, 210k
+  Claude tokens, 19 min; not through `double-review read`, which starts both readers at once). Taken, each checked:
+  three blocking: spec 1 removed three checks, so they now run in the snapshot (and the merge-turn check at `:1539`
+  was missing); spec 3 as written re-read covered commits and could override a recheck chain, so it reviews the gap
+  with `mergeTurn`'s guards; spec 7 could end with no Codex read, so Codex reads at the clean pass or at the cap.
+  Should-fix taken: the saving is 593,573 (19.4%), not 22%: the 79,096 recheck would still run; 1d982b3's record was
+  refused because HEAD moved (f983eab9 at 09:32:18Z, checked), not an edit; cc54678..af986f0 re-read main's code
+  (checked: one branch commit 1de6ed65, then a merge of PRs 858-863), a class spec 2 targets; `node_modules` absent
+  from a snapshot in a gate turn (spec 1's fallback); snapshots named for the sweep and swept at each start; finding
+  paths; spec 4 (a printed round line) dropped for a measure (spec 6), since L5's extra runs follow clean passes;
+  spec 5's premise was false (`rules-reach.mjs:117`, checked) and a conflict with an earlier PR is not fixed by a
+  merge of main; the measure extends `land-records.mjs` (checked: `landFacts`, `codexFacts`) and fixes the baseline
+  to PRs 864-868, since the day's total moves (a run at 18:58Z). Minor taken: old spec 2 is existing behaviour,
+  folded into spec 1's proofs; Done-when lists the tests T3 touches and a command that exits 0. Not taken: none.
+  What made JH 198 merge main is inferred, not read whole: its state line said "merge origin/main in if 865
+  landed", to open its PR on main after its stacked base landed; merge-queue would have retargeted it.
