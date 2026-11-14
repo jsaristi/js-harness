@@ -721,7 +721,10 @@ test('progress --pace outside a git repository exits 1 with one line, and git th
     const notRepo = () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository (or any of the parent directories): .git\n' });
     const outside = await runProgress(['--cwd', project, '--pace'], { now: () => NOW, spawn: notRepo });
     assert.deepEqual([outside.code, outside.stdout], [1, '']);
-    assert.equal(outside.stderr, `js-harness progress: --pace and --baseline read the history of a git repository, and ${project} is in none`);
+    assert.equal(outside.stderr, `js-harness progress: --pace reads the history of a git repository, and ${project} is in none`);
+    // --baseline names itself, not --pace.
+    const baselineOutside = await runProgress(['--cwd', project, '--baseline', '2026-10-01'], { spawn: notRepo });
+    assert.equal(baselineOutside.stderr, `js-harness progress: --baseline reads the history of a git repository, and ${project} is in none`);
     const timedOut = () => ({ error: Object.assign(new Error('spawnSync git ETIMEDOUT'), { code: 'ETIMEDOUT' }) });
     const slow = await runProgress(['--cwd', project, '--pace'], { now: () => NOW, spawn: timedOut });
     assert.deepEqual([slow.code, slow.stderr], [1, 'js-harness progress: git for-each-ref took longer than 30 s']);
@@ -785,6 +788,9 @@ test('progress --baseline says how many steps open at the last commit before the
     const json = JSON.parse((await runProgress(['--cwd', root, '--baseline', day, '--json'])).stdout);
     assert.deepEqual(Object.keys(json), ['root', 'branch', 'ref', 'date', 'base', 'openThen', 'closed', 'stillOpen', 'leftOpen', 'added', 'addedClosed', 'stepsThen', 'stepsNow', 'openNow']);
     assert.equal(json.base, git(['rev-parse', 'main~2']).trim());
+    // A day whose last commit held no plan file: nothing was open then, and all of today's plan is added.
+    const bare = JSON.parse((await runProgress(['--cwd', root, '--baseline', dayKey(daysAgo(7)), '--json'])).stdout);
+    assert.deepEqual([bare.openThen, bare.stepsThen, bare.added, bare.stepsNow], [0, 0, 5, 5]);
     // A day before the first commit has no plan to compare.
     const earlyDay = dayKey(daysAgo(20));
     const early = await runProgress(['--cwd', root, '--baseline', earlyDay]);

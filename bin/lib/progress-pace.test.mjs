@@ -291,4 +291,6 @@ test('git is asked for the last first-parent commit before the day, the empty tr
     'diff --git a/docs/ROADMAP.md b/docs/ROADMAP.md', 'new file mode 100644', 'index 0000000..2222222', '--- /dev/null', '+++ b/docs/ROADMAP.md', '@@ -0,0 +1 @@', '+# R',
   ].join('\n');
   assert.deepEqual([...parseTree(text)], [['odd/tasks/f.md', '# F\n- [ ] T1 a'], ['docs/ROADMAP.md', '# R']]);
+  // A tree with no plan file gives git's empty output, which is an empty plan.
+  assert.deepEqual([...parseTree('')], []);
 });

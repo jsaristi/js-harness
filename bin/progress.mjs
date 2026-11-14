@@ -84,8 +84,9 @@ function parseArgs(argv) {
   return { cwd, json, pace, days: days ?? PACE_DAYS, baseline };
 }
 
-/** Runs one git process of `--pace` in `root`: `{ stdout }`, or `{ error }`, the one line that says why not. */
-function gitRead(spawn, root, args, input) {
+/** Runs one git process of `flag`'s report in `root`, given `input` on its standard input when there is one:
+ * `{ stdout }`, or `{ error }`, the one line that says why not. */
+function gitRead(spawn, root, args, { flag = '--pace', input } = {}) {
   const result = spawn('git', args, { cwd: root, encoding: 'utf8', timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_MAX_BUFFER, windowsHide: true, ...(input === undefined ? {} : { input }) });
   const name = `git ${args.find((arg) => !arg.startsWith('-') && !arg.includes('='))}`;
   if (result.error) {
@@ -95,7 +96,7 @@ function gitRead(spawn, root, args, input) {
   }
   if (result.status !== 0) {
     const said = String(result.stderr ?? '').trim().split('\n')[0];
-    if (/not a git repository/.test(said)) return { error: `--pace and --baseline read the history of a git repository, and ${root} is in none` };
+    if (/not a git repository/.test(said)) return { error: `${flag} reads the history of a git repository, and ${root} is in none` };
     return { error: `${name}: ${said || `exit ${result.status}`}` };
   }
   return { stdout: String(result.stdout) };
@@ -134,20 +135,20 @@ function baselineMain(root, parsed, { stdout, stderr, spawn }) {
     stderr(`js-harness progress: ${line}`);
     return 1;
   };
-  const named = gitRead(spawn, root, PACE_REF_ARGS);
+  const named = gitRead(spawn, root, PACE_REF_ARGS, { flag: '--baseline' });
   if (named.error) return fail(named.error);
   const { ref, name } = paceRef(named.stdout);
   const before = parsed.baseline.midnight.toISOString().replace(/\.\d{3}Z$/, 'Z');
-  const commit = gitRead(spawn, root, baselineCommitArgs({ ref, before }));
+  const commit = gitRead(spawn, root, baselineCommitArgs({ ref, before }), { flag: '--baseline' });
   if (commit.error) return fail(commit.error);
   const base = commit.stdout.trim();
   if (base === '') return fail(`${name} holds no commit before ${parsed.baseline.day}, so there is no plan of that day to compare`);
-  const empty = gitRead(spawn, root, EMPTY_TREE_ARGS, '');
+  const empty = gitRead(spawn, root, EMPTY_TREE_ARGS, { flag: '--baseline', input: '' });
   if (empty.error) return fail(empty.error);
   const from = empty.stdout.trim();
-  const then = gitRead(spawn, root, treeArgs({ from, to: base }));
+  const then = gitRead(spawn, root, treeArgs({ from, to: base }), { flag: '--baseline' });
   if (then.error) return fail(then.error);
-  const now = gitRead(spawn, root, treeArgs({ from, to: ref }));
+  const now = gitRead(spawn, root, treeArgs({ from, to: ref }), { flag: '--baseline' });
   if (now.error) return fail(now.error);
   const counts = baselineOf({ before: parseTree(then.stdout), after: parseTree(now.stdout) });
   const data = { root, branch: name, ref, date: parsed.baseline.day, base, ...counts };
