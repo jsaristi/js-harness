@@ -350,7 +350,7 @@ test('report: reconciles the decisions with the gated acts found in the transcri
     { at: '2026-11-14T10:00:00.000Z', act: 'plan', decision: 'covered' },
     { at: '2026-11-14T11:00:30.000Z', act: 'land', decision: 'covered', toolUseId: 'tX', transcript: path.join(home, 'other.jsonl') },
     { at: '2026-11-14T11:01:02.000Z', act: 'land', decision: 'covered', toolUseId: 'tA', transcript: t },
-    { at: '2026-11-14T11:02:03.000Z', act: 'question', decision: 'unchecked', transcript: t },
+    { at: '2026-11-14T11:02:03.000Z', act: 'question', decision: 'unchecked', transcript: t.split(path.sep).join('/') },
   ]);
   const r = advisorGateReport({ home });
   assert.deepEqual(r.acts, { found: 3, decided: 2, missing: [{ act: 'plan', tool: 'Write', at: at(4), transcript: t }], unread: 0 },

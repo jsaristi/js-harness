@@ -43,6 +43,6 @@ refuse; one consultation covers 60 calls or until his next message.
   Sebastián).
 
 ## Cost
-- From 2026-11-13 to 2026-11-14 10:50Z; two compactions; the context was about 40% at the end.
+- From 2026-11-13 to 2026-11-14 10:50Z; two compactions; the context share at the end is an estimate, about 40%.
 - Reviews: Codex on every code range (8 runs), the Claude lenses on every code range (8 runs, one refused for an
   unknown lens). Gate runs: the pre-commit check on every commit, three targeted suites through `js-harness gate`.

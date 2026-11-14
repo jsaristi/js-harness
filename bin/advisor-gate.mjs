@@ -326,6 +326,10 @@ function transcriptsUnder(folder, day) {
   return found;
 }
 
+/** Whether two paths name one file: the host writes `transcript_path` in its own spelling, and Windows ignores case and
+ * takes either slash. */
+const samePath = (a, b) => (process.platform === 'win32' ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b));
+
 /** The gated acts of the transcripts under `projects` from `from` on, each matched to a decision: by the tool call's
  * id when the decision recorded one, else by transcript, act and a decision within 120 s after the call, each
  * decision used once. A sub-agent's end is no tool call and is left out. */
@@ -360,7 +364,7 @@ function reconcile(projects, from, decisions) {
         if (act === null) continue;
         acts.found++;
         const limit = new Date(Date.parse(entry.timestamp) + 120_000).toISOString();
-        const match = byToolUse.get(block.id) ?? loose.find((d) => !used.has(d) && d.transcript === file && d.act === act && d.at >= entry.timestamp && d.at <= limit);
+        const match = byToolUse.get(block.id) ?? loose.find((d) => !used.has(d) && samePath(d.transcript, file) && d.act === act && d.at >= entry.timestamp && d.at <= limit);
         if (match === undefined) {
           acts.missing.push({ act, tool: block.name, at: entry.timestamp, transcript: file });
           continue;
