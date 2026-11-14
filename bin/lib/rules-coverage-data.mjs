@@ -471,6 +471,11 @@ export const COVERAGE = {
         "hash": "726952419d52",
         "context": "the three checks of the day before a switch of Codex's home (odd/tasks/one-model-home.md, spec 10): the lead's to do, no command holds them; bin/lib/manifest.test.mjs holds its wording"
       },
+      {
+        "hash": "d2ccc22abbcd",
+        "context": "the heading of the senior section (odd/tasks/audit-cement.md, T7); a title, no obligation"
+      },
+      "292f5fac6950",
       "6b400741e66a",
       "0c22c1e055da",
       "d8b56d3a7d5b",

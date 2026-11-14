@@ -3029,6 +3029,18 @@ test('the orchestrator skill reads the rules in force in the list, at its start 
   assert.ok(handover.startsWith('- When you start from that prompt, read the list (`js-harness rules`), the relief file, the board '), handover);
 });
 
+// T7 of odd/tasks/audit-cement.md: the senior is described where the lead reads, and a work session pushes what it
+// keeps before the ready that lets its pull request land, since the host may archive it on the land.
+test('the orchestrator skill describes the senior session and asks for the closing steps before the last ready', () => {
+  const text = components[1].content('0.1.0');
+  const senior = text.slice(text.indexOf('## The senior'), text.indexOf('## A work session'));
+  assert.ok(text.indexOf('## The senior') > 0 && senior.length > 0, 'the senior section stands before A work session');
+  for (const phrase of ['`rule:senior-model`', '`rule:senior-effort`', 'runs nothing until you send it a task', 'never inherit the senior\'s']) {
+    assert.ok(senior.includes(phrase), phrase);
+  }
+  assert.ok(text.includes('Before the `ready` of your last pull request, write your summary and commit and push it as the closing steps below say, keeping only their `closed` notice for after that `ready`'), 'the ready bullet');
+});
+
 // T9 of odd/tasks/session-channel.md: the handover ends with a `relieved` notice, which `sessions --measures` counts as a relief.
 test('the orchestrator skill has the one before append a relieved notice as the step after its handover', () => {
   const lines = components[1].content('0.1.0').split('\n');
@@ -3303,7 +3315,7 @@ test('the orchestrator skill says how a model or an effort is switched, beside t
   ]) at(line);
   // The two protocols come from a module of their own (./lead-protocols.mjs); the manifest writes their last full
   // stop, so the text ends them once and the next section follows as it did.
-  at('were measured on that model.\n\n## A work session\n');
+  at('it reports through the same notices as any work session.\n\n## A work session\n');
   // The lead's start line names no level: a start takes the home (spec 5), and a level typed there is one more copy.
   assert.ok(!text.includes('--brief <file> --effort'), 'the start line shows no --effort');
   // Step 4 has the lead make the commit the switch prints, so the one exception to "never commit" names the switch
