@@ -4,9 +4,10 @@
 // for every role since 2026-11-12, the lead consulted it before 6 of its 20 questions, and the host's own prompt
 // already asks (M2, Depth pass 1). Policy R: one advisor call with a result covers every gated act after it until his
 // next message (typed or queued), the next session event, or STRETCH_TOOL_CALLS tool calls.
-// This is the warning week (P3): an uncovered act gets a notice through `additionalContext` (probe 4, which showed it
-// reaches the model) and goes through; refusing is a one-line change of MODE after the report. It fails open: an
-// unreadable transcript or payload lets the act through, recorded unchecked. It acts only in a js-harness project
+// It refuses an uncovered act (his answer to question 285, which moved refusal ahead of the warning week of P3): the
+// reason says how to consult and retry, and the decision is recorded either way. A sub-agent's end is recorded and never
+// blocked, which his yes left apart. It fails open: an unreadable transcript or payload lets the act through, recorded
+// unchecked. It acts only in a js-harness project
 // (a `harness.json` at or above the cwd), since the entry is in the user's settings and runs everywhere.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,8 +20,8 @@ import { harnessHome } from './lib/home.mjs';
 export const STRETCH_TOOL_CALLS = 60;
 /** The Fable tokens a day the hook is estimated to add (odd/tasks/advisor-use.md, Depth pass), which the report weighs. */
 export const ESTIMATED_DAILY_TOKENS = 2_400_000;
-/** `warn` lets an uncovered act through with a notice; `refuse` denies it. The week of warnings is his answer to 282. */
-export const MODE = 'warn';
+/** `warn` lets an uncovered act through with a notice; `refuse` denies it. Refusing is his answer to question 285. */
+export const MODE = 'refuse';
 /** How much of a transcript's end is read: R needs at most STRETCH_TOOL_CALLS tool calls back, and the hook has 5 s. */
 const TAIL_BYTES = 4 * 1024 * 1024;
 const SCHEMA = 'js-harness.advisor-gate/v1';
@@ -30,8 +31,8 @@ const USAGE = `Usage: js-harness advisor-gate --hook    (PreToolUse: the hook pa
        js-harness advisor-gate --stop    (SubagentStop: the hook payload on standard input)
        js-harness advisor-gate report [--since <YYYY-MM-DD>]
   Holds the acts that decide to an advisor call with a result in the caller's stretch (policy R): since his last
-  message or the last session event, within ${STRETCH_TOOL_CALLS} tool calls. Mode ${MODE}: an uncovered act gets a notice and goes
-  through. Every decision is appended to <home>/.js-harness/advisor-gate/decisions.jsonl. It prints {} outside a
+  message or the last session event, within ${STRETCH_TOOL_CALLS} tool calls. Mode ${MODE}: an uncovered act is refused, its reason
+  saying how to consult and retry; a sub-agent's end (--stop) is recorded, never blocked. Every decision is appended to <home>/.js-harness/advisor-gate/decisions.jsonl. It prints {} outside a
   project with a harness.json, and fails open: what it cannot read lets the act through, recorded unchecked.
   report: the decisions by day, kind and act, and the Fable input tokens of the advisor calls that followed a flag in
   its stretch with a result (the calls the warnings prompted), against the estimate of ${ESTIMATED_DAILY_TOKENS} a day;
@@ -216,7 +217,7 @@ function record(home, decision, stderr) {
 }
 
 const NOTICE = (act) => [
-  advisorSay('missed', { act: act === 'end' ? 'sub-agent end' : `act (${act})`, calls: STRETCH_TOOL_CALLS }), advisorSay('how'), advisorSay('week'),
+  advisorSay('missed', { act: act === 'end' ? 'sub-agent end' : `act (${act})`, calls: STRETCH_TOOL_CALLS }), advisorSay('how'), advisorSay(MODE === 'refuse' ? 'refused' : 'week'),
 ].join(' ');
 
 /** Decides one act of `payload` and records it; returns the hook's answer object. */

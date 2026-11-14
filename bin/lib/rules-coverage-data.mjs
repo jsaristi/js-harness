@@ -214,6 +214,10 @@ export const COVERAGE = {
       {
         "hash": "e4412ae924f0",
         "context": "the advisor gate states its mode, his answer to question 282 (odd/tasks/advisor-use.md, P3); a fact of the call, no obligation"
+      },
+      {
+        "hash": "8e46ad6c1295",
+        "context": "the advisor gate states its refusal, his answer to question 285; the PreToolUse hook holds the retry on the act itself (bin/advisor-gate.test.mjs), so no prose rule carries it"
       }
     ],
     "chained-prs-skill": [

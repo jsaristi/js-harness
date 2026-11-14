@@ -7,7 +7,7 @@ proposal, through the double review and then the lead as a question; nothing is 
 `node --test`.
 
 ## State
-NEXT (2026-11-14 11:15Z): done. PR #866 pushed with every code commit reviewed (L11-L19), MERGEABLE and CLEAN; closed and ready sent to the lead. A week after the merge the lead runs `js-harness advisor-gate report` for the Done-when and the refusal decision.
+NEXT (2026-11-14 19:30Z): refuse now (Q285, L20) on branch claude/advisor-refuse: committed, then verifier, Codex and lenses, push, PR, notify ready --pr <n>. The lead lands and installs.
 2026-11-14: slice 1 on the branch (1de6ed65, fixes b3043fb9, 12942c95, and the quoted-path fix in the commit after them); main 236f720 merged (af986f03). Reviews: Codex cc54678..13fba26 and 13fba26..12942c9, lenses cc54678..b3043fb and b3043fb..12942c9, all recorded; every finding fixed or answered (L11, L12). Next: review the quoted-path fix (codex-review --base 12942c95; lens-review --base 12942c95 --lenses reliability), then push, open the PR, slice 2: `advisor-gate report` (decisions by day and act; added Fable tokens a day = advisor_message input tokens of calls after a flag in its stretch, against 2.4M, labelled as calls the warnings prompted), its reviews, then closing steps (summary, closed) before ready with --pr, since the app archives on PR close. Choices under the yes in L9; P4a moved to JH 198 (L10).
 
 ## Goal
@@ -81,6 +81,7 @@ sub-agents). (4) P4b, a rule change. (5) P6, a stricter question check. (6) P4a'
   spec 1: `node jh196-advisor-measure.mjs 2026-11-12T00:00:00Z`: lead questions covered 6 of 20 and sessions opened 3 of 9 (policy R); work sessions on Opus ready or closed 15 of 35 under R, 7 under E; sub-agents on Opus 3 of 5 ends. Target: every gated act covered, exempt, or recorded unchecked.
   spec 2: `node --test bin/advisor-gate.test.mjs`: none, new behaviour (no hook reads the advisor today).
   spec 3: `git grep -n "strongest model the rules name" bin/lib`: `bin/lib/protocols-skill.mjs:43`, `bin/lib/codex-review-recheck.mjs:21,41`, `bin/lib/protocols-skill.test.mjs:146` and `bin/lib/codex-review-recheck.test.mjs:224,234` send the hardest work to `rule:session-model`, Opus, while his `senior-model` names Fable for it.
+  spec 4: `node --test bin/advisor-gate.test.mjs`: before, an uncovered act went through with a notice (the warning week); now it is refused with how to retry, a sub-agent's act too, and a sub-agent's end is still never blocked.
 - 4. Refutation: the request would not hold if the roles already called the advisor before these acts, or did not
   have the tool. Run: `node jh196-advisor-measure.mjs 2026-11-12T00:00:00Z --rows`. Result: its "tool offered" column
   is yes for all 24 transcripts of the window (none without a shape line), and 14 of the lead's 20 questions went with
@@ -100,6 +101,8 @@ sub-agents). (4) P4b, a rule change. (5) P6, a stricter question check. (6) P4a'
    tener ese mismo problema con las sub agente y sesiones" (69918425, line 757, 2026-11-13).
 3. "y tambien no veo la sesion orquestadora senior que va a tener el fable para cosas de suma importancia o que
    necesiten mas potencia" (69918425, line 771, 2026-11-13).
+4. Question 285, answered "Bloquear desde ya (Recomendada)" (69918425, line 6944, 2026-11-14): the five PreToolUse
+   acts are refused when uncovered, from now, instead of after the week of warnings.
 
 ## Measurement
 Window: transcripts begun 2026-11-12 00:00Z to 2026-11-13 about 18:55Z (1.79 days). Read oldest first; each tool call
@@ -298,3 +301,4 @@ What the three reads left that this proposal does not settle, for him to weigh:
 - L17 (2026-11-14) Reviews of c88de835: Codex passed; the resilience and readability lenses rechecked L16 fixed. The reliability lens suggests a test of the unreadable-transcript count; answered: making `readFileSync` fail on a listed file needs a file past V8's string limit or a permission change on Windows, and a seam only for it costs more than the two lines it would pin.
 - L18 (2026-11-14) The advisor before closing: (1) the token half ran on this session's real transcript (a flag a second before advisor call msg_011Ch1N3XgmywtoMEfkRzJe3): followed 1, 129,253 tokens, the result in an assistant content block as `advisorFacts` reads it; (2) the time match compared paths as strings, fixed: one file whatever its slashes and, on Windows, its case; test; (3) T2 and T3 marked, T4 and T5 left to the lead, contract check PASS.
 - L19 (2026-11-14) Reviews of e9db94c0: Codex passed. The reliability lens: a decision with no string transcript reaching samePath cannot happen, since `loose` keeps only decisions whose transcript is a string (the filter in `reconcile`); the case half of samePath has no test of its own: off Windows the comparison is exact after resolve, as before, and on Windows the slash test runs the same expression; answered, not worth another review round.
+- L20 (2026-11-14) Question 285, his answer "Bloquear desde ya (Recomendada)" (69918425, line 6944; spec 4): refuse now. The yes covers MODE to refuse for the five PreToolUse acts (also a sub-agent's), the hook's texts, tests, SPEC and README; not the stretch, the exemptions, the fail-open cases, the SubagentStop path, the unchecked share or the heredoc false positives, which the lead starts apart. Built on branch claude/advisor-refuse from origin/main 67455a8.
