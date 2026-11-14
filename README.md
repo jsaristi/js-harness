@@ -967,6 +967,20 @@ lets the call through as unchecked.
 one alone. `check` exits 1 naming each template and its fault: a draft, a part missing, a sample whose
 bytes are not the approved ones, a scaffold body left, a skipped test, a surface no hook watches.
 
+### js-harness advisor-gate
+
+```bash
+echo '{"tool_name":"ExitPlanMode","cwd":".","transcript_path":"t.jsonl"}' | js-harness advisor-gate --hook
+```
+
+`advisor-gate --hook` and `advisor-gate --stop` are the hooks `install` registers: before an act that
+decides (a question to the user, a land, a session opened, a plan or a new task document, a piece said ready or
+closed) and at a sub-agent's end, they look for an advisor call with a result in the caller's stretch, since the
+user's last message or the last session event and within 60 tool calls. In the warning week an act with none goes
+through with a notice; every decision is appended to `~/.js-harness/advisor-gate/decisions.jsonl`. They act only
+in a project with a `harness.json` and let through, recorded unchecked, what they cannot read
+(odd/tasks/advisor-use.md).
+
 ### js-harness failures
 
 Reads the register of what went wrong, `docs/FAILURES.md`: the totals, the count by class and

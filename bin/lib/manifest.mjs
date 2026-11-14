@@ -26,7 +26,7 @@ import { replaceText, writeManifestAtomic } from './atomic-write.mjs';
 export { writeManifestAtomic };
 import { OUTPUT_STYLE_NAME, outputStyleContent } from './output-style.mjs';
 import { chainedPrsSkillContent, workUnitsSkillContent } from './ported-skills.mjs';
-import { RULES_RETOLD_MATCHER, backupHookEntry, fallbackHookEntry, guardHookEntry, hookEntry, pauseHookEntry, permitHookEntry, replyHookEntry, resumeHookEntry, rulesHookEntry, shareHookEntry, templateGateComponents, webFailureHookEntry } from './hook-entries.mjs';
+import { RULES_RETOLD_MATCHER, advisorGateComponents, backupHookEntry, fallbackHookEntry, guardHookEntry, hookEntry, pauseHookEntry, permitHookEntry, replyHookEntry, resumeHookEntry, rulesHookEntry, shareHookEntry, templateGateComponents, webFailureHookEntry } from './hook-entries.mjs';
 import { hygieneDir, purgeMarker } from './memory-hygiene.mjs';
 import { readLock } from './memory-pass.mjs';
 import { moveTrustRecords, planTrustMoves, withConfig } from './codex-trust.mjs';
@@ -375,7 +375,7 @@ export const entryComponents = [
     pointer: ['hooks', 'Stop'],
     entry: () => backupHookEntry(),
   },
-  ...templateGateComponents(),
+  ...templateGateComponents(), ...advisorGateComponents(),
   {
     id: 'claude-fallback-hook',
     target: (home) => path.join(home, '.claude', 'settings.json'),

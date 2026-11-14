@@ -141,6 +141,8 @@ reply and backup entries in `~/.codex/hooks.json`; the next `install` or `sync` 
 | SubagentStart | `claude-rules-subagent-hook` | `js-harness rules --hook` | as at start, for a sub-agent |
 | PreToolUse | `claude-guard-hook` | `js-harness guard --hook` | refuses a tool call that breaks a held rule |
 | PreToolUse | `claude-template-gate-hook` | `js-harness template gate --hook` | refuses an output to the owner no template command made |
+| PreToolUse | `claude-advisor-gate-hook` | `js-harness advisor-gate --hook` | flags an act that decides with no advisor call in its stretch (warning week) |
+| SubagentStop | `claude-advisor-stop-hook` | `js-harness advisor-gate --stop` | records whether a sub-agent consulted the advisor before it ended |
 | PermissionRequest | `claude-permit-hook` | `js-harness permit --hook` | relays another session's permission card to the orchestrator |
 | PostToolUse | `claude-pause-hook` | `js-harness resume --pause` | the context pause and the inbox |
 | PostToolUse | `claude-template-shown-hook` | `js-harness template gate --shown` | records what the template gate let through as shown |
@@ -229,6 +231,7 @@ family by folder and child names; the fields of each are in `docs/RECORDS.md`, a
 | Templates | `~/.js-harness/throughput/<project>/templates-rendered.jsonl`, `templates-shown.jsonl` | `bin/lib/template-record.mjs` `recordRendered` `recordShown` | `template`, `throughput` |
 | The remote server | `~/.js-harness/remote/`: `<id>.json`, `<id>.lock`, `<id>.log`, `<id>.stopped`, `<id>.task.xml` | `bin/remote.mjs` `remoteMain`; `bin/lib/remote.mjs` `supervise` | `remote status`, `remote stop` |
 | Refresh backups | `~/.js-harness/refresh-backups/settings-<stamp>.json`, and pnpm's global `package.json` | `bin/lib/refresh-copy.mjs` `refreshCopy` | the undo line that refresh prints |
+| The advisor gate's decisions | `~/.js-harness/advisor-gate/decisions.jsonl` | `bin/advisor-gate.mjs` `record` | the advisor gate's report |
 | Session env trims | `~/.js-harness/session-env-trims/`: `trims.jsonl` and the backups `<session>/sessionstart-hook-<n>.<stamp>.sh` | `bin/lib/session-env.mjs` `trimSessionEnv` | the undo of each record; the fallback hook |
 | The doctor's cache | `~/.js-harness/doctor.json` | `bin/lib/cache.mjs` `writeCache` | `doctor` and its hook |
 | The reviewed versions | `~/.js-harness/reviewed.json` | `bin/lib/cache.mjs` `recordReviewed` | `doctor`, its hook, `host-watch` |
@@ -990,6 +993,15 @@ The administrator install is `bin/lib/status-line-install.ps1`, run by hand in a
 **Proof:** `node --test bin/template.test.mjs`, `node --test bin/lib/template.test.mjs`, `node --test bin/lib/template-check.test.mjs`, `node --test bin/lib/template-scaffold.test.mjs`, `node --test bin/lib/template-gate.test.mjs`, `node --test bin/lib/template-record.test.mjs`, `node --test bin/lib/template-question.test.mjs`
 **Discarded:** A skeleton a session fills, as `contract template` prints: the model still writes what he sees. A checklist in a skill: nothing refuses an output that skips it.
 **Today:** `bin/template.mjs`, `bin/lib/template.mjs`, `bin/lib/template-check.mjs`, `bin/lib/template-scaffold.mjs`, `bin/lib/template-registry.mjs`, `bin/lib/template-gate.mjs`, `bin/lib/template-record.mjs`, `bin/lib/template-question.mjs`, `js-harness template`, `claude-template-gate-hook`, `claude-template-shown-hook`
+
+### Every role consults the advisor before the acts that decide
+
+**Problem:** On 2026-11-13 the owner saw the lead decide without once consulting the Fable advisor it had, and asked that it be fixed for the sub-agents and the sessions too (transcript `69918425`, lines 662 and 757; `odd/tasks/advisor-use.md`, Specs). With the tool on for every role, the lead consulted it before 6 of its 20 questions (M2).
+**Requirement:** Before a question to him, a land, a session opened, a plan left or a task document begun, a piece said ready or closed, and a sub-agent's end, the caller has an advisor call with a result in its stretch: since his last message or the last session event, within 60 tool calls (policy R). `js-harness advisor-gate --hook` and `--stop` read the caller's transcript tail, record every decision, and in the warning week (his answer to question 282) give an uncovered act a notice and let it through.
+**Reason:** The host's prompt already asks for the calls and they did not come; a hook that sees the act is a control, a line asking for it is not.
+**Proof:** `node --test bin/advisor-gate.test.mjs`
+**Discarded:** A protocols line alone: the host already asks. A Stop hook on every reply: it gates every turn at about 150,000 Fable tokens a call. Policy E, a call before each act: about 7.0 million tokens a day against R's 2.4 million.
+**Today:** `bin/advisor-gate.mjs`, `js-harness advisor-gate`, `claude-advisor-gate-hook`, `claude-advisor-stop-hook`
 
 ## After F8
 

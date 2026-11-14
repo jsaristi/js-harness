@@ -1466,6 +1466,7 @@ test('entryComponents declare the permit relay for Claude Code only: a Permissio
 
 const guardHook = hookById('claude-guard-hook');
 const templateGateHook = hookById('claude-template-gate-hook');
+const advisorGateHook = hookById('claude-advisor-gate-hook');
 
 test('entryComponents declare the guard hook for Claude Code only: a PreToolUse entry on Agent and the two message tools, guarded to exit 0', () => {
   assert.ok(guardHook, 'the claude-guard-hook component is declared');
@@ -1660,7 +1661,7 @@ test('install replaces its own entry left with an older matcher, in place, keeps
     fs.writeFileSync(target, `${JSON.stringify({ hooks: { PreToolUse: [theirs, older, sameMatcherTheirs, sharedWithTheirs] } }, null, 2)}\n`, 'utf8');
 
     const manifest = install(home, '0.2.0');
-    assert.deepEqual(readJson(target).hooks.PreToolUse, [theirs, guardHook.entry(), sameMatcherTheirs, sharedWithTheirs, templateGateHook.entry()]);
+    assert.deepEqual(readJson(target).hooks.PreToolUse, [theirs, guardHook.entry(), sameMatcherTheirs, sharedWithTheirs, templateGateHook.entry(), advisorGateHook.entry()]);
     assert.deepEqual(manifest.entries.filter((record) => record.path === target && record.pointer.at(-1) === 'PreToolUse').map((record) => record.entry), ourPreToolUse());
 
     const bytes = fs.readFileSync(target, 'utf8');
@@ -1683,7 +1684,7 @@ test('install takes out every older form of its own entry when the new one is al
     fs.writeFileSync(target, `${JSON.stringify({ hooks: { PreToolUse: [olderBash, theirs, guardHook.entry(), olderTimeout] } }, null, 2)}\n`, 'utf8');
 
     install(home, '0.2.0');
-    assert.deepEqual(readJson(target).hooks.PreToolUse, [theirs, guardHook.entry(), templateGateHook.entry()]);
+    assert.deepEqual(readJson(target).hooks.PreToolUse, [theirs, guardHook.entry(), templateGateHook.entry(), advisorGateHook.entry()]);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -1783,7 +1784,7 @@ test('an entry the user already had is still theirs when install takes an older 
     fs.writeFileSync(target, `${JSON.stringify({ hooks: { PreToolUse: [olderTimeout, guardHook.entry()] } }, null, 2)}\n`, 'utf8');
 
     const manifest = install(home, '0.1.0');
-    assert.deepEqual(readJson(target).hooks.PreToolUse, [guardHook.entry(), templateGateHook.entry()], 'the older form went, and the file was written');
+    assert.deepEqual(readJson(target).hooks.PreToolUse, [guardHook.entry(), templateGateHook.entry(), advisorGateHook.entry()], 'the older form went, and the file was written');
     assert.equal(manifest.entries.find((record) => record.path === target && deepEqualJson(record.entry, guardHook.entry())).createdEntry, false);
     uninstall(home);
     assert.deepEqual(readJson(target).hooks.PreToolUse, [guardHook.entry()]);
@@ -1812,7 +1813,7 @@ test('a user\'s entry equal to an older form of ours stays theirs when an update
     fs.writeFileSync(manifestPath(home), JSON.stringify({ ...older, entries: olderRecords }, null, 2), 'utf8');
 
     const manifest = install(home, '0.2.0');
-    assert.deepEqual(readJson(target).hooks.PreToolUse, [guardHook.entry(), templateGateHook.entry()], 'the new form in place of the older one, once');
+    assert.deepEqual(readJson(target).hooks.PreToolUse, [guardHook.entry(), templateGateHook.entry(), advisorGateHook.entry()], 'the new form in place of the older one, once');
     assert.equal(manifest.entries.find((record) => record.path === target && deepEqualJson(record.entry, guardHook.entry())).createdEntry, false);
     uninstall(home);
     assert.deepEqual(readJson(target).hooks.PreToolUse, [guardHook.entry()]);
@@ -4521,4 +4522,12 @@ test('no text js-harness ships carries engram\'s protocol: its tool names or its
   const protocol = /\bmem_[a-z_]+|PROACTIVE SAVE|topic_key|Persistent Memory/i;
   const carrying = texts.flatMap(([id, text]) => text.split('\n').filter((line) => protocol.test(line)).map((line) => `${id}: ${line}`));
   assert.deepEqual(carrying, []);
+});
+
+test('the advisor gate is registered before the acts that decide and at the end of a sub-agent (odd/tasks/advisor-use.md, P1, P2)', () => {
+  assert.deepEqual(advisorGateHook.pointer, ['hooks', 'PreToolUse']);
+  assert.deepEqual(advisorGateHook.entry(), { matcher: '^(AskUserQuestion|mcp__ccd_session__start_session|ExitPlanMode|Write|Bash)$', hooks: [{ type: 'command', command: 'js-harness advisor-gate --hook || exit 0', timeout: 5 }] });
+  const stop = hookById('claude-advisor-stop-hook');
+  assert.deepEqual(stop.pointer, ['hooks', 'SubagentStop']);
+  assert.deepEqual(stop.entry(), { hooks: [{ type: 'command', command: 'js-harness advisor-gate --stop || exit 0', timeout: 5 }] });
 });

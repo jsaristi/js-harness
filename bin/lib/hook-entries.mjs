@@ -218,3 +218,45 @@ export function templateGateComponents() {
     { id: 'claude-template-shown-hook', target, pointer: ['hooks', 'PostToolUse'], entry: () => templateShownEntry() },
   ];
 }
+
+/** The command of the advisor gate before a call, guarded to exit 0 like the template gate's: an older js-harness with
+ * no `advisor-gate` answers 2, which must never block a call. */
+export const ADVISOR_GATE_HOOK_COMMAND = 'js-harness advisor-gate --hook || exit 0';
+
+/** The command of the advisor gate at a sub-agent's end, guarded the same way: a `SubagentStop` hook that exits 2
+ * turns the end back. */
+export const ADVISOR_STOP_HOOK_COMMAND = 'js-harness advisor-gate --stop || exit 0';
+
+/** The tools that carry the acts that decide (odd/tasks/advisor-use.md, P1): a question, a session opened, a plan left,
+ * a task document written, and the Bash commands of `notify`, `merge-queue --land` and `sessions start`, which the
+ * command itself tells apart. Anchored, as the guard's matcher is. */
+export const ADVISOR_GATE_MATCHER = '^(AskUserQuestion|mcp__ccd_session__start_session|ExitPlanMode|Write|Bash)$';
+
+/** `advisor-gate --hook` (bin/advisor-gate.mjs) registered as a `PreToolUse` hook: an act that decides with no advisor
+ * call in its stretch gets a notice, the warning week of his answer to question 282, and is recorded. It acts only
+ * where a `harness.json` is at or above the cwd and prints `{}` everywhere else, before reading any transcript when the
+ * call is no gated act. Claude Code only. Five seconds, as the guard's: it reads the transcript's last 4 MB at most. */
+export function advisorGateEntry() {
+  return {
+    matcher: ADVISOR_GATE_MATCHER,
+    hooks: [{ type: 'command', command: ADVISOR_GATE_HOOK_COMMAND, timeout: 5 }],
+  };
+}
+
+/** `advisor-gate --stop` registered as a `SubagentStop` hook: a sub-agent's end is recorded covered or flagged (P2); in
+ * the warning week it never blocks. A `SubagentStop` entry takes no matcher. Five seconds, as `--hook`'s. */
+export function advisorStopEntry() {
+  return {
+    hooks: [{ type: 'command', command: ADVISOR_STOP_HOOK_COMMAND, timeout: 5 }],
+  };
+}
+
+/** The advisor gate's two entry components of `entryComponents` (./manifest.mjs), both in Claude Code's settings, kept
+ * here as the template gate's are. */
+export function advisorGateComponents() {
+  const target = (home) => path.join(home, '.claude', 'settings.json');
+  return [
+    { id: 'claude-advisor-gate-hook', target, pointer: ['hooks', 'PreToolUse'], entry: () => advisorGateEntry() },
+    { id: 'claude-advisor-stop-hook', target, pointer: ['hooks', 'SubagentStop'], entry: () => advisorStopEntry() },
+  ];
+}

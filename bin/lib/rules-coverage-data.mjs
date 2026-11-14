@@ -202,6 +202,20 @@ export const COVERAGE = {
       "76a29a20de94",
       "31fbf6069818"
     ],
+    "advisor-gate": [
+      {
+        "hash": "c73088dd2450",
+        "context": "the advisor gate states what it found in the caller's transcript; a fact of the call, no obligation"
+      },
+      {
+        "hash": "96c217f0cc40",
+        "context": "the advisor gate's instruction: the PreToolUse and SubagentStop hooks hold it on the act itself and record every decision (bin/advisor-gate.test.mjs), so no prose rule carries it"
+      },
+      {
+        "hash": "e4412ae924f0",
+        "context": "the advisor gate states its mode, his answer to question 282 (odd/tasks/advisor-use.md, P3); a fact of the call, no obligation"
+      }
+    ],
     "chained-prs-skill": [
       "e5434abb4e01",
       "c6881aaee5fb",

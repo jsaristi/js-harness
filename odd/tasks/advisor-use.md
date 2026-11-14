@@ -7,7 +7,7 @@ proposal, through the double review and then the lead as a question; nothing is 
 `node --test`.
 
 ## State
-Question 282 answered yes: build T3 only (the hook, its test, the report), a week of warnings then refusal, policy R. Not covered: P4b, P6, P4, choice (3). Lead clears: bin/advisor-gate.mjs and its test, one dispatch line in bin/js-harness.mjs, this document, the hook entries; not bin/lib/guard.mjs; manifest.mjs only its hook list, and tell the lead when that commit lands. Full surface asked of the lead at 21:2xZ: also bin/lib/hook-entries.mjs, bin/lib/manifest.test.mjs, scripts/practice-lib.mjs (HARNESS_HOOKS), docs/SPEC.md (hook table), docs/RECORDS.md (hooks list), README.md (one paragraph). Choices taken under the yes (advisor, L9): Fable callers recorded exempt, never flagged (choice 3 unanswered); SubagentStop during the week records and notifies, never blocks; the week counts from the first recorded decision, the flip to refuse is a one-line change after the report; the hook prints {} outside a js-harness project and before reading any transcript when the act is not gated, reads only the tail; the report labels added Fable tokens as calls the warnings prompted. Next: probe whether a PreToolUse notice without deny reaches the model; then slice 1 (decision, test, entries, dispatch), slice 2 (report).
+2026-11-14: slice 1 (hook, test, entries, HOOK_ENTRY_LIMIT 15 -> 17, SPEC capability, docs) is staged, not committed: the pre-commit refuses it on two registers, rules-sources.test (the notice must be a cut text source with spans in bin/lib/rules-coverage-data.mjs, as the template gate's GATE_SAYS) and the README section per command (### js-harness advisor-gate after ### js-harness template). Both files asked of the lead at 07:51Z. Then: commit, rebase on main 236f720, tell the lead the manifest change is committed, Codex and lens reviews, slice 2 (the report: added Fable tokens a day against 2.4M, labelled as calls the warnings prompted). Choices under the yes in L9; P4a moved to JH 198 (L10). Closing steps before ready (auto-archive on PR close).
 
 ## Goal
 Each of the lead, the work sessions and the sub-agents that has the advisor consults it (a call with a result, made
@@ -246,7 +246,7 @@ What the three reads left that this proposal does not settle, for him to weigh:
 - [ ] T2 (kind: design) the last read, then the question to him through the lead (specs 1-3) — route: here — commit: this document
 - [ ] T3 (kind: build) after his yes: `bin/advisor-gate.mjs`, its test (a queued-message fixture, a stale shape line, a broken stretch between notify and ask, two outage cases, a SubagentStop second stop), the hook entries, the report (specs 1, 2) — route: here
 - [ ] T4 (kind: build) after his yes: P6 in `bin/lib/channel.mjs` and its test (unrelated read, changed file, a failed reader, an untaken finding, a skip) — route: here
-- [ ] T5 (kind: build) after his yes: the senior's pieces P4 (spec 3) — route: here, or the lead's JH 192 diff
+- [ ] T5 (kind: build) after his yes: the senior's pieces P4 (spec 3), but P4a, moved to JH 198 (L10) — route: here, or the lead's JH 192 diff
 
 ## Log
 - L1 (2026-11-13) His request, as written: S1, S2, S3 above; the lead's brief: `js-harness sessions --opening 'JH 196
@@ -286,3 +286,4 @@ What the three reads left that this proposal does not settle, for him to weigh:
   second stop covered when a fresh call is there (C7, X4); M5's full list (C8); M1's equality premise (C9); the evidence
   copied into `odd/tasks/advisor-use-evidence/`, Edit dropped from P1 (C10); escapes found from git (X3).
 - L9 (2026-11-13) His yes to question 282 ("Sí, avisos primero (Recomendada)"), relayed by the lead with two constraints: the report measures added Fable tokens a day against 2.4M, and the edit surface goes to the lead first. Advisor before the build: the choices in State.
+- L10 (2026-11-13) Probe 4 (`odd/tasks/advisor-use-evidence/probe4-notice-seen.md`): a PreToolUse `additionalContext` without a deny reaches the model, so the warning week speaks. The lead moved P4a (the texts saying the senior runs with no advisor: `bin/lib/guard.mjs:109,115`, `bin/guard.mjs:168`, `bin/lib/home-sessions.mjs:51`) to JH 198, which holds those files: out of this scope. Slice 1 built: `bin/advisor-gate.mjs` (--hook, --stop), its test (21 cases), the entries in `bin/lib/hook-entries.mjs` and their registration; slice 2 is the report.

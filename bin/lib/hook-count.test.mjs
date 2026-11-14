@@ -33,7 +33,7 @@ test('install writes the limit of entries, every one of them js-harness, on the 
   assert.equal(entries.length, HOOK_ENTRY_LIMIT);
   assert.deepEqual([...new Set(entries.map(ownerOf))], ['js-harness']);
   const byEvent = Object.fromEntries([...new Set(entries.map((e) => e.event))].map((event) => [event, entries.filter((e) => e.event === event).length]));
-  assert.deepEqual(byEvent, { SessionStart: 4, PostToolUse: 2, PostToolUseFailure: 1, PreToolUse: 2, PermissionRequest: 1, Stop: 3, UserPromptSubmit: 1, SubagentStart: 1 });
+  assert.deepEqual(byEvent, { SessionStart: 4, PostToolUse: 2, PostToolUseFailure: 1, PreToolUse: 3, PermissionRequest: 1, Stop: 3, UserPromptSubmit: 1, SubagentStart: 1, SubagentStop: 1 });
 });
 
 test('the owner of an entry is its plugin, else the name of the program its command starts', () => {
@@ -95,7 +95,7 @@ test('in a project the row warns when the home holds more js-harness entries tha
     write(path.join(home, '.claude', 'settings.json'), settings({ Stop: many }));
     const row = hookEntriesRow(cwd, home, { own: false });
     assert.equal(row.pass, true);
-    assert.ok(row.lines.some((line) => /warning: js-harness has 16 entries in this home and project, over the limit of 15/.test(line)), row.lines.join('\n'));
+    assert.ok(row.lines.some((line) => /warning: js-harness has 18 entries in this home and project, over the limit of 17/.test(line)), row.lines.join('\n'));
   });
 });
 
@@ -105,7 +105,7 @@ test('in the harness repository one more entry than the limit in what install wr
     const row = hookEntriesRow(cwd, home, { own: true, installed });
     assert.equal(row.pass, false);
     assert.equal(row.info, false);
-    assert.ok(row.lines.some((line) => /install writes 16 entries.*limit 15/.test(line)), row.lines.join('\n'));
+    assert.ok(row.lines.some((line) => /install writes 18 entries.*limit 17/.test(line)), row.lines.join('\n'));
     assert.deepEqual(row.next, firstStep('take an entry out of what install writes, or raise HOOK_ENTRY_LIMIT in bin/lib/hook-count.mjs in a commit that says why'));
   });
 });
@@ -115,7 +115,7 @@ test('in the harness repository the row is green with what install writes today 
     write(path.join(cwd, '.claude', 'settings.json'), settings({ SessionStart: [command('node workshop/js-harness-workshop.mjs ticks --hook')] }));
     const row = hookEntriesRow(cwd, home, { own: true });
     assert.equal(row.pass, true, row.lines.join('\n'));
-    assert.ok(row.lines.some((line) => /install writes 15 entries \(limit 15\)/.test(line)), row.lines.join('\n'));
+    assert.ok(row.lines.some((line) => /install writes 17 entries \(limit 17\)/.test(line)), row.lines.join('\n'));
   });
 });
 
@@ -142,7 +142,7 @@ test('with "hookCount": true the row holds the machine to its ceilings and is gr
   const row = hookEntriesRow('.', '.', { ...counted, own: false, live: [...installEntries(), ...STACK_ENTRIES] });
   assert.equal(row.pass, true, row.lines.join('\n'));
   assert.equal(row.info, false, 'a project that turns the count on is held to it');
-  assert.match(row.detail, /26 entries/);
+  assert.match(row.detail, /28 entries/);
   assert.ok(row.lines.some((line) => line === 'engram@engram: PreToolUse 1/1, SessionStart 3/3, PostToolUse 1/1, SubagentStop 1/1, SessionEnd 1/1'), row.lines.join('\n'));
 });
 
@@ -186,7 +186,7 @@ test('"hookCount" set to anything but true fails the row, and the harness reposi
   assert.deepEqual(wrong.next, firstStep('set "hookCount" in harness.json to true, or take the key out'));
   const own = hookEntriesRow('.', '.', { ...counted, own: true, live: [...installEntries(), ...STACK_ENTRIES], installed: [...installEntries(), { event: 'Stop', command: 'js-harness x' }] });
   assert.equal(own.pass, false);
-  assert.ok(own.lines.some((line) => /install writes 16 entries.*limit 15/.test(line)), own.lines.join('\n'));
+  assert.ok(own.lines.some((line) => /install writes 18 entries.*limit 17/.test(line)), own.lines.join('\n'));
 });
 
 test('the owner of a command whose program is a single-quoted path with a space is that program', () => {

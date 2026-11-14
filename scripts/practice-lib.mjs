@@ -358,8 +358,8 @@ export const HARNESS_HOOKS = Object.freeze([
   Object.freeze({ event: 'SubagentStart', command: RULES_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'Stop', command: REPLY_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'Stop', command: BACKUP_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
-  Object.freeze({ event: 'PreToolUse', matcher: '^(Artifact|ArtifactData|AskUserQuestion|mcp__visualize__show_widget)$', command: 'js-harness template gate --hook || exit 0', hosts: Object.freeze(['claude']) }),
-  Object.freeze({ event: 'PostToolUse', matcher: '^(Artifact|ArtifactData|AskUserQuestion|mcp__visualize__show_widget)$', command: 'js-harness template gate --shown || exit 0', hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'PreToolUse', matcher: '^(Artifact|ArtifactData|AskUserQuestion|mcp__visualize__show_widget)$', command: 'js-harness template gate --hook || exit 0', hosts: Object.freeze(['claude']) }), Object.freeze({ event: 'PostToolUse', matcher: '^(Artifact|ArtifactData|AskUserQuestion|mcp__visualize__show_widget)$', command: 'js-harness template gate --shown || exit 0', hosts: Object.freeze(['claude']) }),
+  Object.freeze({ event: 'PreToolUse', matcher: '^(AskUserQuestion|mcp__ccd_session__start_session|ExitPlanMode|Write|Bash)$', command: 'js-harness advisor-gate --hook || exit 0', hosts: Object.freeze(['claude']) }), Object.freeze({ event: 'SubagentStop', command: 'js-harness advisor-gate --stop || exit 0', hosts: Object.freeze(['claude']) }),
   Object.freeze({ event: 'SessionStart', matcher: 'startup|resume|clear|compact', command: FALLBACK_HOOK_COMMAND, hosts: Object.freeze(['claude']) }),
 ]);
 
