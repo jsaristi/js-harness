@@ -236,12 +236,23 @@ itself is not limited to an absence: the skill text names it for any stretch.
   session, unrounded session-hours, "JH 19" taken as named by "JH 196: …", and a stale test name. A cold reader (Opus,
   read-only, only the page text of the real plan and of a copy closing S8) said what advances, item by item, and the
   rows that move and when, matching the plans; four phrases it found unclear were reworded. All fixed in 2c29560c;
-  rechecked: Codex 0.98, 2 of 2 fixed; lenses 0 findings, 4 of 4 fixed. What it still flagged and stays: the plan's
-  own titles use internal names (T1, pregunta 285), which is the plan's text, not the page's.
+  rechecked: Codex 0.98, 2 of 2 fixed; lenses 0 findings, 4 of 4 fixed. Open, the lead's call, out of this scope: the
+  cold reader said only JH 196's title says what he gets back ("aterrizado e instalado"); the other three name work,
+  not a result, so defect 6 (no item says what he will have) is closed only where the plan's title says it. Closing it
+  needs titles written as outcomes or a plan field, and the plan's format is outside spec 6. The English phase names
+  stay too (above). The titles also use internal names (T1, pregunta 285). On HEAD: 137 convention and stretch tests
+  pass (`js-harness gate --`); the departure from HEAD and the real closed stretch's return (a copy of the throughput
+  folder in a scratch home) read consistently. Not fixed, minor: a kind's factor of exactly 1 prints "ajustado ×1".
 
 ## Next step
-NOW (2026-11-14, JH 196, branch `feat/stretch-departure-clear`): T8 is built and reviewed (L9). What stays: push, open
-the PR, bind it, `js-harness notify --to orchestrator --kind ready --pr <n>`. Older state below.
+NOW (2026-11-14, JH 196, worktree `D:\js-harness\.claude\worktrees\advisor-refuse`, branch `feat/stretch-departure-clear`, head pushed): T8 built and
+reviewed (L9); PR 875 open and bound (872 unbound). Before ready, the advisor asked: (1) correct the PR body and L9:
+the cold reader said only JH 196 says what he gets back, so defect 6 (no item says what he will have) and the English
+phase names stay open, the lead's call (titles as outcomes, or a plan field out of scope); put both first in the
+ready; (2) CI showed 0 checks: run `js-harness gate -- node --test bin/conventions-*.test.mjs bin/stretch.test.mjs
+bin/lib/stretch*.test.mjs` on HEAD; (3) re-render dep-c from HEAD and a return from a copy of the throughput folder in a
+scratch home, read the forecast sections. Not blocking: factor 1 prints "ajustado ×1". Then
+`js-harness notify --to orchestrator --kind ready --pr 875`. Older state below.
 State at 2026-10-28 ~16:00Z (JH 71, worktree `D:\js-harness\.claude\worktrees\stretch`, branch `feat/stretch`):
 - Done and committed: T1 (12e954b6), T2 (838c9fe1, 765baf9a). T3+T4 staged with docs/SPEC.md "The stretch" entry;
   its commit (message in the job tmp `msg-t3.txt`) was running the gate; check `git log` for
