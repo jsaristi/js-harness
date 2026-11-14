@@ -4,7 +4,7 @@ Branch: worktree-audit-cement (the document), then one branch per slice from ori
 Delivery: ask-on-risk. Tests: `node --test`. Opened 2026-11-13 by JH 198 (Opus 5.5, medium) from the lead's brief.
 
 ## State
-T1-T6 and the 867 follow-up landed (main 83678e0). T7 is PR 876 (docs/audit-cement-skill, 6e66d710 reviewed, then a rewording of the ready bullet under review). Next: Codex+lenses on the rewording, push, advisor, ready; then T8 on its own branch from main, its summary committed and pushed before its ready, then closed. Wait: bhl5054ky runs js-harness wait --notice-to 198.
+T1-T6 and the 867 follow-up landed (main 83678e0). T7 is PR 876 (docs/audit-cement-skill), reviewed at da1669b0 and pushed; the lead drafted it until the ready notice. Next: ready notice, gh pr ready 876; then T8 on its own branch from main (PR opened as draft), its summary committed and pushed before its ready, then closed. Wait: b5a4m54j3 runs js-harness wait --notice-to 198.
 
 ## Goal
 Every correction the audit and its two blind reviews found is fixed where a check can hold it, and each of the
@@ -158,7 +158,7 @@ jamas vuelva a suceder" (69918425:2679).
 - [x] T4 (kind: build) spec 5 — `bin/sessions-background.mjs`, `bin/lib/background-close.mjs`, `bin/lib/background.mjs` (L8) + tests — commit `fix(sessions): remove-worktree copies or refuses`
 - [x] T5 (kind: build) spec 6 — template gate/record + tests, if cleared — commit `fix(template): yours drops only with a reason`
 - [x] T6 (kind: docs) specs 7 (texts), 8 — `CLAUDE.md`, `bin/lib/protocols-skill.mjs`, `docs/FAILURES.md` — commit `docs: throughput command, senior strongest, 2026-11-13 failures`
-- [x] T7 (kind: build) spec 9 — `bin/lib/manifest.mjs` after JH 196 — commit `docs(skill): senior section; close before ready` — 6e66d710, PR 876
+- [x] T7 (kind: build) spec 9 — `bin/lib/manifest.mjs` after JH 196 — commit `docs(skill): senior section; close before ready` — 6e66d710 and da1669b0, PR 876
 - [ ] T8 (kind: build) spec 10 — `bin/progress.mjs`, `bin/lib/progress-pace.mjs` + tests, its own PR last — commit `feat(progress): share of the plan done since a baseline`
 
 ## Log
@@ -280,3 +280,4 @@ jamas vuelva a suceder" (69918425:2679).
 - L28 Reviews on 58492d90: Codex incorrect 0.94, one P2; lenses risk, reliability, resilience one warning each on within(), resilience a second on the reflog. Fixed in one commit: within() reads a path by the real path of its nearest folder that is there, the rest appended, so a child not there yet (a copy destination, a deleted cwd) keeps its parent's form; the unborn path reads only the HEAD reflog's last entry, the tip, so commits an amend or a rebase left behind are not asked for one by one. Both tests seen failing without the fix.
 - L29 Verifier on 4187cb1..45143a4a: nothing blocking; M1, L1 and the missing-child fix hold, every within/sameFolder caller matches in the safe direction, each new test fails with its fix reverted (gate 114/114). Three low, answered: within no longer reads a child reached through a junction inside the worktree that points outside it as inside (git worktree remove leaves such a junction and its target, so no loss); realpath costs about 0.5 ms a call locally and about 340 ms on an unreachable UNC host, with no hot caller found; a branch ref moved from outside the worktree then deleted leaves its newer tip in no HEAD reflog, so the advice names an older commit, still refusing. FAILURES gains JH 196's ready of PR 871 with no advisor (the lead's request, a docs-only commit after the verified head, agreed with the lead).
 - L30 T7: the first commit was refused, manifest.mjs at 1648 lines over its ceiling of 1644 (bin/conventions-structure.test.mjs); the lead cleared bin/lib/lead-protocols.mjs, and the senior section is appended to LEAD_PROTOCOLS, after A new model, rather than before The status report; the manifest stays at 1644. Reviews on 6a3cd57d..6e66d710: Codex correct 0.88, lenses readability and reliability 0 findings. The advisor found that "take the closing steps below" would send closed before ready; the bullet now says to write, commit and push the summary first and keep only closed for after the ready.
+- L31 Reviews on 6e66d710..da1669b0 (the rewording): Codex correct 0.97, lenses readability and reliability 0 findings. FAILURES app-archive-cut-work gains its control, the T7 manifest test. The lead set PR 876 to draft, since the queue was about to take it with no ready notice.
