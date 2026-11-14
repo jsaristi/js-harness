@@ -62,6 +62,8 @@ test('gatedAct names the acts of P1 and nothing else', () => {
   assert.equal(gatedAct('Bash', { command: 'js-harness sessions start --title "JH 1 · x"' }, cwd), 'session');
   assert.equal(gatedAct('Bash', { command: 'js-harness sessions start --help' }, cwd), null);
   assert.equal(gatedAct('Bash', { command: 'js-harness notify --to orchestrator --kind note "a --kind question"' }, cwd), null);
+  assert.equal(gatedAct('Bash', { command: 'js-harness notify --to orchestrator --kind "ready" --pr 3 "done"' }, cwd), 'done');
+  assert.equal(gatedAct('Bash', { command: "js-harness notify --kind 'question'" }, cwd), 'question');
   assert.equal(gatedAct('Bash', { command: 'git status' }, cwd), null);
   assert.equal(gatedAct('Read', {}, cwd), null);
 });
@@ -251,4 +253,13 @@ test('a usage error exits 2', () => {
   assert.equal(advisorGateMain(['--nope'], { stdout: () => {}, stderr: (s) => err.push(s) }), 2);
   assert.match(err.join(''), /unknown argument: --nope/);
   assert.match(err.join(''), /Usage/);
+});
+
+test('without a home given, the record goes to JS_HARNESS_HOME, where the background record is read too', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'w.jsonl');
+  writeTranscript(t, [his(), toolCall()]);
+  const out = [];
+  advisorGateMain(['--hook'], { readStdin: () => JSON.stringify({ tool_name: 'ExitPlanMode', tool_input: {}, cwd: project, session_id: 's', transcript_path: t }), stdout: (x) => out.push(x), stderr: () => {}, env: { JS_HARNESS_HOME: home }, now: 0 });
+  assert.equal(decisions(home)[0].decision, 'flagged');
 });

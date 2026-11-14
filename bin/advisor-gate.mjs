@@ -9,11 +9,11 @@
 // unreadable transcript or payload lets the act through, recorded unchecked. It acts only in a js-harness project
 // (a `harness.json` at or above the cwd), since the entry is in the user's settings and runs everywhere.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { seniorTitle } from './lib/session-title-guard.mjs';
 import { advisorSay } from './lib/advisor-gate.mjs';
 import { recordFileOf } from './lib/background.mjs';
+import { harnessHome } from './lib/home.mjs';
 
 /** The stretch's bound in tool calls (policy R, P1). */
 export const STRETCH_TOOL_CALLS = 60;
@@ -34,8 +34,9 @@ const USAGE = `Usage: js-harness advisor-gate --hook    (PreToolUse: the hook pa
 
 /** A command runs js-harness (installed or `node bin/js-harness.mjs`) with `verb` somewhere after it. */
 const runs = (command, verb) => new RegExp(`js-harness(?:\\.mjs)?\\b[^\\n]*?\\s${verb}\\b`).test(command);
-/** The value of `--kind`, read outside quoted text so a note that quotes `--kind question` is not one. */
-const kindOf = (command) => /--kind\s+(\w+)/.exec(command.replace(/"[^"]*"|'[^']*'/g, '""'))?.[1] ?? null;
+/** The value of `--kind`, read outside quoted text so a note that quotes `--kind question` is not one; a value that is
+ * itself quoted (`--kind "ready"`) keeps its text, as the shell passes it. */
+const kindOf = (command) => /--kind\s+(\w+)/.exec(command.replace(/(--kind\s+)?("[^"]*"|'[^']*')/g, (quoted, option, text) => (option ? option + text.slice(1, -1) : '""')))?.[1] ?? null;
 
 /** The act a tool call is, or `null` when it is not gated: `question`, `land`, `session`, `plan` or `done`. */
 export function gatedAct(tool, input, cwd) {
@@ -244,7 +245,7 @@ class AdvisorGateArgError extends Error {}
 /** `js-harness advisor-gate --hook | --stop`. Seams for the tests: `readStdin`, `home`, `cwd`, `now`. */
 export function advisorGateMain(argv, {
   stdout = (s) => process.stdout.write(s), stderr = console.error, readStdin = () => fs.readFileSync(0, 'utf8'),
-  home = os.homedir(), cwd = process.cwd(), now = Date.now(),
+  home, env = process.env, cwd = process.cwd(), now = Date.now(),
 } = {}) {
   if (argv.length === 1 && (argv[0] === '--help' || argv[0] === '-h')) {
     stdout(`${USAGE}\n`);
@@ -268,7 +269,7 @@ export function advisorGateMain(argv, {
     return 0;
   }
   try {
-    stdout(JSON.stringify(decide(argv[0], payload ?? {}, { home, cwd, now, stderr })));
+    stdout(JSON.stringify(decide(argv[0], payload ?? {}, { home: harnessHome({ given: home, env, cwd }), cwd, now, stderr })));
   } catch (err) {
     stderr(`js-harness advisor-gate: ${err.message}; the act goes through unchecked`);
     stdout('{}');
