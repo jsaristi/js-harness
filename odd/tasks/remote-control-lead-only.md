@@ -1,12 +1,12 @@
 # JH 200 · Remote Control only in the orchestrator
 
-Locator: `odd/tasks/remote-control-lead-only.md` · Engram mirror: `odd/remote-control-lead-only/tasks` · Branches:
+Locator: `odd/tasks/remote-control-lead-only.md` · Branches:
 `feat/remote-control-lead-only` (slice 1, worktree `D:/js-harness-worktrees/remote-control-lead-only`, landed as
-pull request 870) and `rule/remote-control-orchestrator` for slice 2 · Delivery: one pull request a slice, landed by the lead · Test runner:
+pull request 870) and `rule/remote-control-yes` for slice 2 · Delivery: one pull request a slice, landed by the lead · Test runner:
 `node --test`
 
 ## State
-Done: T1 (pull request 870, landed) and T2 (d853a8c2, 7a7df32f on `rule/remote-control-orchestrator` from main
+Done: T1 (pull request 870, landed) and T2 (d853a8c2, 7a7df32f on `rule/remote-control-yes` from main
 83678e06), each reviewed by Codex, the three lenses and a verifier with no finding to fix (L5, L7). Next: slice 2's
 pull request and its ready notice; the lead lands it. Open: nothing of this task.
 
@@ -32,7 +32,8 @@ process ends stays in his sidebar as an offline Remote Control row (two JH SR ro
 - both pull requests are landed by the lead
 
 ## In scope / Out of scope
-- In: `bin/sessions-background.mjs` and its test; `bin/lib/host-update.mjs` and its test; `bin/doctor.test.mjs`
+- In: `bin/lib/rules-coverage-data.mjs` (one stale span, `rules coverage --refresh`) and the rule
+  `sessions-open-in-sidebar`'s reading (L6); `bin/sessions-background.mjs` and its test; `bin/lib/host-update.mjs` and its test; `bin/doctor.test.mjs`
   (it asserts the step's words); `bin/lib/manifest.mjs` and its test (the orchestrator skill's resume step); the rule
   `remote-control-yes` through `js-harness rules change` (`docs/rule-sources.json`, `bin/lib/rules-data.mjs`,
   `docs/RULES.md`); README and `docs/SPEC.md` where they state the default; this document.
@@ -109,7 +110,7 @@ requests.
 - [x] T1 (kind: build) spec 1, 2: `parseStart` off by default, `--remote-control` opt-in, resume by the flag, the
   printed line and usage; tests first; README and SPEC. Route: slice 1, `feat/remote-control-lead-only`, 88c92216.
 - [x] T2 (kind: build) spec 3, 4: `rules change remote-control-yes` with L1; `remoteControlStep`; host-update,
-  doctor and manifest tests; the manifest line; README 648-652. Route: slice 2, `rule/remote-control-orchestrator`, d853a8c2 and
+  doctor and manifest tests; the manifest line; README 648-652. Route: slice 2, `rule/remote-control-yes`, d853a8c2 and
   7a7df32f, after the lead cleared the rule files (L4, L6).
 
 ## Log
@@ -138,9 +139,11 @@ requests.
   and guard unchanged: he sees every session through the board and the lead, and the sidebar for start_session sessions.
 - L7 (evidence, slice 2's reviews, range 83678e06..7a7df32f): Codex (79,932 input tokens, confidence 0.96) and the
   risk, readability and reliability lenses (about 48,000 input tokens) found nothing. The verifier ran the host-update
-  (21 pass) and manifest (219 pass) tests, `rules check` and `rules coverage --strict`, and found two low points, both
-  answered and not changed: the ask branch names an orchestrator that a project without one lacks, which L4 accepted
+  (21 pass) and manifest (219 pass) tests, `rules check` and `rules coverage --strict`, and found two low points and a note,
+  all answered and not changed: the ask branch names an orchestrator that a project without one lacks, which L4 accepted
   since `sessions start` gives no work session Remote Control anywhere and the sessions a user opens himself follow
   the app's own setting, outside these words; and "the sessions it tasks have none" passes over one started with
-  `--remote-control`, which by L3 is a lead's opt-in, not a session the lead tasks. Slice 2 was cherry-picked onto a
+  `--remote-control`, which by L3 is a lead's opt-in, not a session the lead tasks. The other low point, that the step does not say
+  how to find the orchestrator: the step is the orchestrator's own on its return (`bin/lib/manifest.mjs:202` gives
+  it to the lead for its own session), and a host-watch session tells the lead, as the step's head says. Slice 2 was cherry-picked onto a
   straight branch from main so its review reads only its own two commits; the tree equals the earlier merge branch's.
