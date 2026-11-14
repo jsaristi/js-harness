@@ -1413,8 +1413,10 @@ figures are measured against `--context-window`, with the pause at `--context-pa
 `js-harness sessions start --title <title> --brief <file>` starts a work session in the background
 with `claude --bg`, from any turn: the desktop app's `start_session` starts one only on a turn the
 user typed, and leaves a card the user must tap on a turn a notice or a compaction started. The lead uses
-it only there, since a background session is not a row in the user's sidebar; Remote Control is on unless
-`--no-remote-control`, so claude.ai/code and the user's phone reach it. The session reads a copy of the
+it only there, since a background session is not a row in the user's sidebar; Remote Control is off unless
+`--remote-control` (a resume too, whatever its record holds): the user talks only to the lead, the
+sessions it tasks report by notices and messages, and one that ends with Remote Control on stays an
+offline row in the user's sidebar (his words of 2026-11-14); `--no-remote-control` is still taken. The session reads a copy of the
 brief under `~/.js-harness/background/briefs/` that ends by telling it to report through
 `js-harness notify --to orchestrator`; `--worktree <name>`, `--model` and `--effort` go to `claude`,
 and the title and effort are held to the rules `session-title` and `session-effort` (`lead-effort` for a title of a lead) where they are
@@ -1445,7 +1447,7 @@ recorded it; `--watch` returns when one starts waiting.
 $ js-harness sessions start --title "JH 45 · thing" --brief brief.md --worktree thing
 started 0db8bc5e · JH 45 · thing
   js-harness sessions stop 0db8bc5e removes it; claude attach 0db8bc5e opens it here; js-harness sessions lists it
-  Remote Control is on: claude.ai/code and the user's phone reach it
+  Remote Control is off: only --remote-control turns it on
 ```
 
 A start that names no `--model` or no `--effort` takes the rules `session-model` and `session-effort`

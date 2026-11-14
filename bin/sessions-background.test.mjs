@@ -177,14 +177,16 @@ function withWorld(body, options) {
   };
 }
 
-test('sessions start starts claude --bg with the title, a pointer to the brief and Remote Control, and records it', withWorld((world) => {
+// JH 200 (odd/tasks/remote-control-lead-only.md, spec 1): the sessions the lead tasks need no Remote Control, his words
+// of 2026-11-14, so a start asks for none unless --remote-control is given.
+test('sessions start starts claude --bg with the title and a pointer to the brief, with no Remote Control, and records it', withWorld((world) => {
   const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing', '--model', 'haiku', '--effort', 'high', '--advisor', 'fable']);
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /^started 0db8bc5e · Build the thing$/m);
   assert.match(result.stdout, /js-harness sessions stop 0db8bc5e/);
   const [call] = actions(world);
   const briefs = path.join(world.home, '.js-harness', 'background', 'briefs');
-  assert.deepEqual(call.slice(0, -1), ['--bg', '--add-dir', briefs, '-n', 'Build the thing', '-w', 'thing', '--model', 'haiku', '--effort', 'high', '--advisor', 'fable', '--remote-control', 'Build the thing']);
+  assert.deepEqual(call.slice(0, -1), ['--bg', '--add-dir', briefs, '-n', 'Build the thing', '-w', 'thing', '--model', 'haiku', '--effort', 'high', '--advisor', 'fable']);
   const prompt = call.at(-1);
   assert.doesNotMatch(prompt, /\n/);
   const [record] = recordLines(world);
@@ -192,7 +194,8 @@ test('sessions start starts claude --bg with the title, a pointer to the brief a
   assert.equal(record.id, '0db8bc5e');
   assert.equal(record.title, 'Build the thing');
   assert.equal(record.worktree, 'thing');
-  assert.equal(record.remoteControl, true);
+  assert.equal(record.remoteControl, false);
+  assert.match(result.stdout, /^  Remote Control is off: only --remote-control turns it on$/m);
   assert.equal(record.advisor, 'fable');
   assert.equal(path.dirname(record.brief), briefs);
   assert.ok(prompt.includes(record.brief), prompt);
@@ -259,11 +262,21 @@ test('a start whose first row cannot be written keeps the session and says so', 
   assert.equal(recordLines(world).length, 1);
 }));
 
-test('sessions start --no-remote-control leaves Remote Control off', withWorld((world) => {
-  const result = js(world, ['sessions', 'start', '--title', 'Quiet one', '--brief', world.brief, '--no-remote-control']);
-  assert.equal(result.code, 0, result.stderr);
-  assert.ok(!actions(world)[0].includes('--remote-control'));
-  assert.equal(recordLines(world)[0].remoteControl, false);
+test('sessions start --remote-control turns Remote Control on, --no-remote-control is still taken, and both together are refused', withWorld((world) => {
+  const on = js(world, ['sessions', 'start', '--title', 'Lead two', '--brief', world.brief, '--remote-control']);
+  assert.equal(on.code, 0, on.stderr);
+  assert.deepEqual(actions(world)[0].slice(-3, -1), ['--remote-control', 'Lead two']);
+  assert.equal(recordLines(world)[0].remoteControl, true);
+  assert.match(on.stdout, /^  Remote Control is on: claude\.ai\/code and the user's phone reach it$/m);
+  patchState(world, { nextId: 'c779ed44' });
+  const off = js(world, ['sessions', 'start', '--title', 'Quiet one', '--brief', world.brief, '--no-remote-control']);
+  assert.equal(off.code, 0, off.stderr);
+  assert.ok(!actions(world)[1].includes('--remote-control'));
+  assert.equal(recordLines(world)[1].remoteControl, false);
+  const both = js(world, ['sessions', 'start', '--title', 'Torn', '--brief', world.brief, '--remote-control', '--no-remote-control']);
+  assert.equal(both.code, 2);
+  assert.match(both.stderr, /--remote-control and --no-remote-control/);
+  assert.equal(actions(world).length, 2);
 }));
 
 test('a start claude refuses prints its words, records nothing and keeps no copy of the brief', withWorld((world) => {
@@ -826,6 +839,27 @@ const endJob = (world, id) => {
   Object.assign(state.agents.find((agent) => agent.id === id), { status: undefined, state: 'failed', pid: undefined });
   writeState(world, state);
 };
+
+// JH 200, spec 2: every record written before the default changed holds remoteControl true, so a resume takes Remote
+// Control only from its own --remote-control, never from the record.
+test('sessions start --resume turns Remote Control on only when the resume asks for it, whatever the record holds', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--remote-control']).code, 0);
+  assert.equal(recordLines(world)[0].remoteControl, true);
+  endJob(world, '0db8bc5e');
+  patchState(world, { nextId: 'c779ed44' });
+  const plain = js(world, ['sessions', 'start', '--resume', '0db8bc5e']);
+  assert.equal(plain.code, 0, plain.stderr);
+  assert.ok(!actions(world).at(-1).includes('--remote-control'));
+  assert.equal(recordLines(world).at(-1).remoteControl, false);
+  assert.match(plain.stdout, /Remote Control is off/);
+  endJob(world, 'c779ed44');
+  patchState(world, { nextId: 'a1b2c3d4' });
+  const asked = js(world, ['sessions', 'start', '--resume', 'c779ed44', '--remote-control']);
+  assert.equal(asked.code, 0, asked.stderr);
+  assert.deepEqual(actions(world).at(-1).slice(-3, -1), ['--remote-control', 'Build the thing']);
+  assert.equal(recordLines(world).at(-1).remoteControl, true);
+  assert.match(asked.stdout, /Remote Control is on/);
+}));
 
 // The review of slice C of JH 72 (7d8db831..73fc8cf7): resume paths that no test held.
 test('sessions start --resume resumes a job claude no longer lists, with --model and --no-remote-control and the recorded --advisor, and refuses a claude that refuses or a folder that is gone', withWorld((world) => {
