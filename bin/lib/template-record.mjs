@@ -119,11 +119,17 @@ export function recordSummary(file, { at, session, call, fields = [], unreadable
   return recordShown(file, { at, session, tool: 'ArtifactData', call, subject: SUMMARY_SUBJECT, decision: 'shown', reason, board, yours, dropped }, fileSystem);
 }
 
-/** The `yours` of the last summary write to the artifact `board` in `lines` that knew it, `undefined` when none did. A
- * write that left it not known (`null`) is passed over, so the next write is held to the last list known rather than
- * to nothing (the reliability lens on 36bde347): what that write took from it asks its reason again. */
+/** The `yours` of the last summary write to the artifact `board` in `lines` that knew it; `null` when only writes
+ * that left it not known are there, `undefined` when no write said it. A write that left it not known is passed over
+ * for a list known before it, so the next write is held to that list rather than to nothing (the reliability lens on
+ * 36bde347): what that write took from it asks its reason again. A board none of whose lines says it reads the lines
+ * that name no board, as recorded before each line named its board. */
 export function lastYours(lines, board = null) {
-  return lines.findLast((one) => isSummaryWrite(one) && Array.isArray(one.yours) && (one.board ?? null) === board)?.yours;
+  const said = lines.filter((one) => isSummaryWrite(one) && Object.hasOwn(one, 'yours'));
+  const own = said.filter((one) => (one.board ?? null) === board);
+  const these = own.length > 0 || board === null ? own : said.filter((one) => (one.board ?? null) === null);
+  if (these.length === 0) return undefined;
+  return these.findLast((one) => Array.isArray(one.yours))?.yours ?? null;
 }
 
 /** Whether a line of the shown record is a write of the summary, as `recordSummary` writes it. */

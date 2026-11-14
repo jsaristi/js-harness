@@ -120,7 +120,12 @@ test('recordSummary keeps the yours a write left, and lastYours reads the last l
     recordSummary(file, { at: '2026-10-31T05:00:00.000Z', session: 's', call: 'c5', board: 'u', yours: ['c'], dropped: [{ item: 'a', reason: 'merged as 96ce3c9' }] });
     assert.deepEqual(lastYours(readRecord(file, SHOWN_SCHEMA), 'u'), ['c'], 'each board its own');
     assert.deepEqual(lastYours(readRecord(file, SHOWN_SCHEMA)), ['a', 'b']);
-    assert.deepEqual(readRecord(file, SHOWN_SCHEMA).at(-1).dropped, [{ item: 'a', reason: 'merged as 96ce3c9' }]);
+    // The lenses on b46b65ac: a board none of whose lines says it reads the lines that name none, and a board whose only
+    // write left it not known is not known, not new.
+    assert.deepEqual(lastYours(readRecord(file, SHOWN_SCHEMA), 'w'), ['a', 'b']);
+    recordSummary(file, { at: '2026-10-31T06:00:00.000Z', session: 's', call: 'c6', board: 'v', yours: null });
+    assert.equal(lastYours(readRecord(file, SHOWN_SCHEMA), 'v'), null);
+    assert.deepEqual(readRecord(file, SHOWN_SCHEMA).find((line) => line.call === 'c5').dropped, [{ item: 'a', reason: 'merged as 96ce3c9' }]);
   });
 });
 
